@@ -1,0 +1,99 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "Guava Engine Sample"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Guava Pyramid Scene",
+      "nodes": [0]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "GuavaPyramid",
+      "mesh": 0
+    }
+  ],
+  "meshes": [
+    {
+      "name": "GuavaPyramidMesh",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "COLOR_0": 1,
+            "TEXCOORD_0": 2
+          },
+          "indices": 3,
+          "material": 0,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "name": "GuavaStone",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [1.0, 0.96, 0.92, 1.0]
+      }
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5121,
+      "count": 5,
+      "type": "VEC4",
+      "normalized": true
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 5,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5123,
+      "count": 18,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 60
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 60,
+      "byteLength": 20
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 80,
+      "byteLength": 40
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 120,
+      "byteLength": 36
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 156,
+      "uri": "data:application/octet-stream;base64,mpkZvwAAAACamRm/mpkZPwAAAACamRm/mpkZPwAAAACamRk/mpkZvwAAAACamRk/AAAAAAAAgD8AAAAA3L54/9y+eP/cvnj/3L54/3jcoP8AAAAAAACAPwAAgD8AAIA/AACAPwAAAAAAAAAAAAAAAAAAAD8AAAA/AAABAAQAAQACAAQAAgADAAQAAwAAAAQAAAADAAIAAAACAAEA"
+    }
+  ]
+}

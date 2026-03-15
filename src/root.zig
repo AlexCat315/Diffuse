@@ -68,6 +68,20 @@ pub const render = struct {
     pub const graphicsApiName = @import("engine/render/types.zig").graphicsApiName;
 };
 
+pub const assets = struct {
+    pub const ResourceLibrary = @import("engine/assets/library.zig").ResourceLibrary;
+    pub const MeshHandle = @import("engine/assets/handles.zig").MeshHandle;
+    pub const MaterialHandle = @import("engine/assets/handles.zig").MaterialHandle;
+    pub const TextureHandle = @import("engine/assets/handles.zig").TextureHandle;
+    pub const MeshResource = @import("engine/assets/mesh_resource.zig").MeshResource;
+    pub const MeshResourceDesc = @import("engine/assets/mesh_resource.zig").MeshResourceDesc;
+    pub const MaterialResource = @import("engine/assets/material_resource.zig").MaterialResource;
+    pub const MaterialResourceDesc = @import("engine/assets/material_resource.zig").MaterialResourceDesc;
+    pub const TextureResource = @import("engine/assets/texture_resource.zig").TextureResource;
+    pub const TextureResourceDesc = @import("engine/assets/texture_resource.zig").TextureResourceDesc;
+    pub const GltfImportReport = @import("engine/assets/gltf_import.zig").ImportReport;
+};
+
 pub const scene = struct {
     pub const Scene = @import("engine/scene/scene.zig").Scene;
     pub const Entity = @import("engine/scene/scene.zig").Entity;

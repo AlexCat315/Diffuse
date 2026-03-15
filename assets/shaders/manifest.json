@@ -1,0 +1,9 @@
+{
+  "programs": [
+    {
+      "name": "mesh",
+      "vertex": "assets/shaders/mesh.vert.glsl",
+      "fragment": "assets/shaders/mesh.frag.glsl"
+    }
+  ]
+}

@@ -10,6 +10,18 @@ pub fn build(b: *std.Build) void {
     };
     const sdl_prefix = b.option([]const u8, "sdl-prefix", "Prefix path for an SDL3 installation") orelse default_sdl_prefix;
 
+    const shader_codegen = b.addExecutable(.{
+        .name = "shader-codegen",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("tools/shader_codegen.zig"),
+            .target = b.graph.host,
+            .optimize = .ReleaseSafe,
+        }),
+    });
+    const run_shader_codegen = b.addRunArtifact(shader_codegen);
+    run_shader_codegen.addFileArg(b.path("assets/shaders/manifest.json"));
+    run_shader_codegen.addFileArg(b.path("src/engine/generated/shaders.zig"));
+
     const engine_mod = b.addModule("guava", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
@@ -28,6 +40,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     exe.linkLibC();
+    exe.step.dependOn(&run_shader_codegen.step);
     b.installArtifact(exe);
 
     const run_cmd = b.addRunArtifact(exe);
@@ -43,11 +56,13 @@ pub fn build(b: *std.Build) void {
         .root_module = engine_mod,
     });
     mod_tests.linkLibC();
+    mod_tests.step.dependOn(&run_shader_codegen.step);
 
     const exe_tests = b.addTest(.{
         .root_module = exe.root_module,
     });
     exe_tests.linkLibC();
+    exe_tests.step.dependOn(&run_shader_codegen.step);
 
     const run_mod_tests = b.addRunArtifact(mod_tests);
     const run_exe_tests = b.addRunArtifact(exe_tests);
@@ -55,6 +70,9 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
+
+    const shaders_step = b.step("shaders", "Compile shaders and regenerate reflection metadata");
+    shaders_step.dependOn(&run_shader_codegen.step);
 }
 
 fn configureEngineModule(

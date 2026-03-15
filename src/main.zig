@@ -1,6 +1,16 @@
 const std = @import("std");
 const engine = @import("guava");
 
+const CliOptions = struct {
+    frame_count: usize = 180,
+    backend_order: [3]engine.render.GraphicsAPI = .{ .vulkan, .dx12, .metal },
+    backend_count: usize = 3,
+
+    fn backends(self: *const CliOptions) []const engine.render.GraphicsAPI {
+        return self.backend_order[0..self.backend_count];
+    }
+};
+
 const SandboxLayer = struct {
     spinning_entity: ?engine.scene.EntityId = null,
 
@@ -17,15 +27,29 @@ const SandboxLayer = struct {
 
     fn onAttach(context: *anyopaque, layer_context: *engine.core.LayerContext) anyerror!void {
         const self: *SandboxLayer = @ptrCast(@alignCast(context));
+        const cube_mesh = try layer_context.scene.resources.ensurePrimitiveMesh(.cube);
+        const default_material = try layer_context.scene.resources.ensureDefaultMaterial();
         self.spinning_entity = try layer_context.scene.createEntity(.{
             .name = "Spinner",
-            .mesh = .{ .primitive = .cube },
-            .material = .{ .shading = .pbr_metallic_roughness },
+            .mesh = .{
+                .handle = cube_mesh,
+                .primitive = .cube,
+            },
+            .material = .{
+                .handle = default_material,
+            },
             .transform = .{
                 .translation = .{ 2.0, 1.0, 0.0 },
                 .scale = .{ 1.0, 1.5, 1.0 },
             },
         });
+
+        _ = try layer_context.scene.importGltfStaticModel(
+            "assets/models/guava_pyramid/guava_pyramid.gltf",
+            .{
+                .translation = .{ -2.4, 0.0, 0.0 },
+            },
+        );
     }
 
     fn onUpdate(context: *anyopaque, layer_context: *engine.core.LayerContext) anyerror!void {
@@ -43,20 +67,21 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     const allocator = gpa.allocator();
+    const options = try parseCliOptions(allocator);
 
     var app = try engine.core.Application.init(allocator, .{
         .name = "Guava Engine",
         .window_width = 1440,
         .window_height = 900,
         .frame_delay_ms = 16,
-        .preferred_backends = &.{ .vulkan, .dx12, .metal },
+        .preferred_backends = options.backends(),
     });
     defer app.deinit();
 
     var sandbox_layer = SandboxLayer{};
     try app.pushLayer(sandbox_layer.asLayer());
 
-    const report = try app.run(180);
+    const report = try app.run(options.frame_count);
     const device_name = if (report.runtime.deviceName().len == 0) "Unknown Device" else report.runtime.deviceName();
     const driver_name = if (report.runtime.driverName().len == 0) "Unknown Driver" else report.runtime.driverName();
     const driver_info = if (report.runtime.driverInfo().len == 0) "n/a" else report.runtime.driverInfo();
@@ -92,4 +117,48 @@ pub fn main() !void {
 
 test "main boots the engine skeleton" {
     try std.testing.expect(true);
+}
+
+fn parseCliOptions(allocator: std.mem.Allocator) !CliOptions {
+    var options = CliOptions{};
+    const args = try std.process.argsAlloc(allocator);
+    defer std.process.argsFree(allocator, args);
+
+    var index: usize = 1;
+    while (index < args.len) : (index += 1) {
+        const arg = args[index];
+        if (std.mem.eql(u8, arg, "--backend")) {
+            index += 1;
+            if (index >= args.len) {
+                return error.InvalidArguments;
+            }
+            options.backend_order = backendOrderForName(args[index]) orelse return error.InvalidArguments;
+            options.backend_count = options.backend_order.len;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--frames")) {
+            index += 1;
+            if (index >= args.len) {
+                return error.InvalidArguments;
+            }
+            options.frame_count = try std.fmt.parseUnsigned(usize, args[index], 10);
+            continue;
+        }
+        return error.InvalidArguments;
+    }
+
+    return options;
+}
+
+fn backendOrderForName(name: []const u8) ?[3]engine.render.GraphicsAPI {
+    if (std.mem.eql(u8, name, "vulkan")) {
+        return .{ .vulkan, .metal, .dx12 };
+    }
+    if (std.mem.eql(u8, name, "metal")) {
+        return .{ .metal, .vulkan, .dx12 };
+    }
+    if (std.mem.eql(u8, name, "dx12")) {
+        return .{ .dx12, .vulkan, .metal };
+    }
+    return null;
 }
