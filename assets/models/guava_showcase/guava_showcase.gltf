@@ -1,0 +1,182 @@
+{
+  "asset": {
+    "version": "2.0",
+    "generator": "Guava Engine Sample"
+  },
+  "scene": 0,
+  "scenes": [
+    {
+      "name": "Guava Showcase Scene",
+      "nodes": [
+        0
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "name": "GuavaShowcase",
+      "mesh": 0
+    }
+  ],
+  "meshes": [
+    {
+      "name": "GuavaShowcaseMesh",
+      "primitives": [
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TANGENT": 2,
+            "COLOR_0": 3,
+            "TEXCOORD_0": 4
+          },
+          "indices": 5,
+          "material": 0,
+          "mode": 4
+        },
+        {
+          "attributes": {
+            "POSITION": 0,
+            "NORMAL": 1,
+            "TANGENT": 2,
+            "COLOR_0": 3,
+            "TEXCOORD_0": 4
+          },
+          "indices": 6,
+          "material": 1,
+          "mode": 4
+        }
+      ]
+    }
+  ],
+  "materials": [
+    {
+      "name": "GuavaFloor",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "baseColorTexture": {
+          "index": 0
+        }
+      }
+    },
+    {
+      "name": "GuavaAccent",
+      "pbrMetallicRoughness": {
+        "baseColorFactor": [
+          1.0,
+          0.85,
+          0.9,
+          1.0
+        ],
+        "baseColorTexture": {
+          "index": 0
+        }
+      }
+    }
+  ],
+  "textures": [
+    {
+      "name": "GuavaChecker",
+      "source": 0
+    }
+  ],
+  "images": [
+    {
+      "name": "GuavaCheckerImage",
+      "uri": "checker.png"
+    }
+  ],
+  "accessors": [
+    {
+      "bufferView": 0,
+      "componentType": 5126,
+      "count": 7,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 1,
+      "componentType": 5126,
+      "count": 7,
+      "type": "VEC3"
+    },
+    {
+      "bufferView": 2,
+      "componentType": 5126,
+      "count": 7,
+      "type": "VEC4"
+    },
+    {
+      "bufferView": 3,
+      "componentType": 5121,
+      "count": 7,
+      "type": "VEC4",
+      "normalized": true
+    },
+    {
+      "bufferView": 4,
+      "componentType": 5126,
+      "count": 7,
+      "type": "VEC2"
+    },
+    {
+      "bufferView": 5,
+      "componentType": 5123,
+      "count": 6,
+      "type": "SCALAR"
+    },
+    {
+      "bufferView": 6,
+      "componentType": 5123,
+      "count": 3,
+      "type": "SCALAR"
+    }
+  ],
+  "bufferViews": [
+    {
+      "buffer": 0,
+      "byteOffset": 0,
+      "byteLength": 84
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 84,
+      "byteLength": 84
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 168,
+      "byteLength": 112
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 280,
+      "byteLength": 28
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 308,
+      "byteLength": 56
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 364,
+      "byteLength": 12
+    },
+    {
+      "buffer": 0,
+      "byteOffset": 376,
+      "byteLength": 6
+    }
+  ],
+  "buffers": [
+    {
+      "byteLength": 384,
+      "uri": "guava_showcase.bin"
+    }
+  ]
+}

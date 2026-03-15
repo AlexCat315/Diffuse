@@ -84,6 +84,7 @@ pub const assets = struct {
 
 pub const scene = struct {
     pub const Scene = @import("engine/scene/scene.zig").Scene;
+    pub const World = @import("engine/scene/scene.zig").World;
     pub const Entity = @import("engine/scene/scene.zig").Entity;
     pub const EntityId = @import("engine/scene/scene.zig").EntityId;
     pub const EntityDesc = @import("engine/scene/scene.zig").EntityDesc;

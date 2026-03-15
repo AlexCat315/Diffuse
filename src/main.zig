@@ -27,9 +27,9 @@ const SandboxLayer = struct {
 
     fn onAttach(context: *anyopaque, layer_context: *engine.core.LayerContext) anyerror!void {
         const self: *SandboxLayer = @ptrCast(@alignCast(context));
-        const cube_mesh = try layer_context.scene.resources.ensurePrimitiveMesh(.cube);
-        const default_material = try layer_context.scene.resources.ensureDefaultMaterial();
-        self.spinning_entity = try layer_context.scene.createEntity(.{
+        const cube_mesh = try layer_context.world.assets().ensurePrimitiveMesh(.cube);
+        const default_material = try layer_context.world.assets().ensureDefaultMaterial();
+        self.spinning_entity = try layer_context.world.createEntity(.{
             .name = "Spinner",
             .mesh = .{
                 .handle = cube_mesh,
@@ -44,8 +44,8 @@ const SandboxLayer = struct {
             },
         });
 
-        _ = try layer_context.scene.importGltfStaticModel(
-            "assets/models/guava_pyramid/guava_pyramid.gltf",
+        _ = try layer_context.world.importGltfStaticModel(
+            "assets/models/guava_showcase/guava_showcase.gltf",
             .{
                 .translation = .{ -2.4, 0.0, 0.0 },
             },
@@ -55,7 +55,7 @@ const SandboxLayer = struct {
     fn onUpdate(context: *anyopaque, layer_context: *engine.core.LayerContext) anyerror!void {
         const self: *SandboxLayer = @ptrCast(@alignCast(context));
         if (self.spinning_entity) |entity_id| {
-            if (layer_context.scene.getEntity(entity_id)) |entity| {
+            if (layer_context.world.getEntity(entity_id)) |entity| {
                 entity.transform.rotation_euler[1] += 0.75 * layer_context.delta_seconds;
             }
         }

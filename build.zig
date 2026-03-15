@@ -85,6 +85,7 @@ fn configureEngineModule(
     const sdl_library_path = b.pathJoin(&.{ sdl_prefix, "lib" });
 
     module.addIncludePath(.{ .cwd_relative = sdl_include_path });
+    module.addIncludePath(.{ .cwd_relative = "third_party/stb" });
     module.addLibraryPath(.{ .cwd_relative = sdl_library_path });
     if (os_tag != .windows) {
         module.addRPath(.{ .cwd_relative = sdl_library_path });
