@@ -1,0 +1,102 @@
+# Guava Engine 架构设计
+
+Guava Engine 的目标不是“只做游戏引擎”，而是做一个覆盖实时游戏、影视动画预览、DCC 工具、虚拟制片预演以及离线工作流前端的通用引擎。
+
+
+
+- `src/engine/core`
+  应用生命周期、Layer 抽象、平台识别。
+- `src/engine/platform`
+  SDL3 窗口和事件循环，相当于一个轻量的 `DisplayServer` 起点。
+- `src/engine/render`
+  Renderer 和 RenderGraph，负责把场景快照变成一组明确的渲染阶段。
+- `src/engine/rhi`
+  明确的资源层，负责 `Device / Buffer / Texture / TransferBuffer / CommandBuffer / Swapchain`。
+- `src/engine/scene`
+  3D 场景数据，当前包含 `Transform / Camera / Mesh / Material / Light`。
+
+## 当前已经打通的真实闭环
+
+统一到了 `Guava RHI -> SDL3 GPU` 这一层：
+
+1. `SDL3` 创建高 DPI 窗口。
+2. `Guava RHI` 按后端顺序尝试创建设备。
+3. 当前设备实现来自 `SDL3 GPU`，它原生承接 `Metal / Vulkan / D3D12`。
+4. RHI 负责创建 depth texture、获取 swapchain texture、申请 command buffer、开启 render pass、clear、present。
+5. 上层 `Renderer` 只编排 RenderGraph 和场景快照，不再直接持有某个 API 的专属对象。
+6. 当前 Vulkan 路径已经补齐 `ShaderModule / GraphicsPipeline / Sampler / BindGroup / VertexBuffer / IndexBuffer / Texture Upload`，并打通了一个真实的 triangle + cube 绘制闭环。
+
+现在 `zig build run` 会真实打开窗口，并输出：
+
+- 当前图形后端
+- 当前图形设备名
+- 当前 RHI driver 名
+- 当前 drawable 尺寸
+- depth buffer 是否已就绪
+- 当前 draw call 数和三角形提交数
+
+## 当前后端策略
+
+- 默认显式顺序：`Vulkan -> DX12 -> Metal`
+- macOS / iOS 当前实际回退：`Vulkan(MoltenVK) -> Metal`
+- Windows 目标顺序：`Vulkan -> DX12`
+- Linux / Android 目标顺序：`Vulkan`
+
+这个顺序是故意的。Guava Engine 作为通用引擎，需要优先保证跨平台资源模型一致，而不是每个平台都先走最原生但最分裂的 API。
+
+当前的“先接 Vulkan，再接 DX12”并不是写两套完全重复的引擎代码，而是先把 `RHI` 资源模型定稳，再让 SDL3 GPU 的 `vulkan` 和 `direct3d12` driver 成为第一阶段可运行后端。后续如果要把 Vulkan/DX12 下探成自研后端，也可以保持同一套 RHI 资源接口不变。
+
+
+## 当前运行边界
+
+现在主路径是：
+
+`Application -> Window -> Renderer -> PrimitiveStage -> RHI Device`
+
+- `Application` 管生命周期、Layer、主循环。
+- `Window` 只管 SDL3 窗口和平台事件。
+- `Renderer` 管 RenderGraph、场景快照和每帧提交策略。
+- `PrimitiveStage` 管当前最小几何管线、shader、纹理采样和 draw call 组织。
+- `RHI` 管 GPU 设备、资源、swapchain、command buffer 和 render pass。
+
+这意味着旧的 `RenderingServer` 中间层已经从运行路径移除。对 Layer 而言，如果需要直接申请 GPU 资源，拿到的是 `LayerContext.rhi()`，不是某个高层服务单例。
+
+## 为什么这更适合影视动画
+
+- 游戏运行时和影视预览都需要同一套世界数据、材质和摄像机系统。
+- DCC/编辑器工具更需要稳定的资源生命周期和可重放的命令提交，而不是临时拼接 draw call。
+- 离线工作流前端同样需要 RenderGraph、资源编排和明确的后端边界，只是调度目标会从“实时帧”扩到“镜头/批任务”。
+- 当资源层明确下来之后，后面接资产系统、缓存系统、序列化、渲染农场前端，成本会比“纯游戏引擎再硬改”低得多。
+
+## 当前 Vulkan 几何通路
+
+- GLSL 源文件放在 `assets/shaders/vulkan`，离线编译成 SPIR-V 后嵌入 `src/engine/render/shaders/vulkan`。
+- Vertex shader 当前使用一个 set=1/binding=0 的统一矩阵块，负责 `view_projection / model / tint`。
+- Fragment shader 当前使用一个 set=2/binding=0 的采样纹理，走 `Sampler + BindGroup`。
+- 运行时会绘制 1 个诊断 triangle，以及场景中所有 `Primitive.cube` 实体。
+- 这条路径证明了 SDL3 GPU 背后的 Vulkan driver 已经不只是“能开窗 clear”，而是能稳定创建 pipeline、上传 buffer/texture、绑定资源并提交 draw。
+
+## 下一阶段建议
+
+优先级建议如下：
+
+1. 把现在的 SDL3 GPU 实现继续封装成更完整的 Guava RHI
+   补 `Sampler / GraphicsPipeline / ComputePipeline / Fence / ShaderModule / BindGroup` 这类资源。
+2. 把 Vulkan 作为 Guava RHI 的第一优先运行后端继续做深
+   接上 SPIR-V shader 工作流、离线反射和更明确的资源布局策略。
+3. 再把 DX12 补成第二优先后端
+   重点是资源绑定模型、PSO 缓存、工具链和 Windows 调试工作流。
+4. 把当前 clear pass 扩成真正的几何管线
+   补 vertex/index buffer、shader library、render pipeline、depth test、最小三角形/立方体绘制。
+5. 把 Scene 升级成 ECS 或更明确的 World/Entity 层
+   这样更适合后续编辑器、脚本和批处理。
+6. 再往上做编辑器和 DCC/影视工具链接口
+
+
+## 推荐原则
+
+- Core 层不依赖具体图形 API。
+- Platform 层只负责窗口、输入、系统事件。
+- Renderer 负责编排场景与渲染阶段，RHI 只关心 GPU 能力、资源生命周期和提交。
+- Scene 只产出渲染世界数据，不直接发 draw call。
+- 游戏、影视动画、工具链三类需求应该在同一套世界数据和资源层上汇合，而不是分裂成三套引擎。
