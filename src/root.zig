@@ -65,6 +65,12 @@ pub const render = struct {
     pub const Renderer = @import("engine/render/renderer.zig").Renderer;
     pub const RendererConfig = @import("engine/render/renderer.zig").RendererConfig;
     pub const FrameReport = @import("engine/render/renderer.zig").FrameReport;
+    pub const MeshSceneCache = @import("engine/render/mesh_pass.zig").MeshSceneCache;
+    pub const PreparedScene = @import("engine/render/mesh_pass.zig").PreparedScene;
+    pub const IdPass = @import("engine/render/id_pass.zig").IdPass;
+    pub const BasePass = @import("engine/render/base_pass.zig").BasePass;
+    pub const DepthPrepass = @import("engine/render/depth_prepass.zig").DepthPrepass;
+    pub const OutlinePass = @import("engine/render/outline_pass.zig").OutlinePass;
     pub const graphicsApiName = @import("engine/render/types.zig").graphicsApiName;
 };
 

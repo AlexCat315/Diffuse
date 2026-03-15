@@ -1,9 +1,24 @@
 {
   "programs": [
     {
+      "name": "depth_prepass",
+      "vertex": "assets/shaders/depth_prepass.vert.glsl",
+      "fragment": "assets/shaders/depth_prepass.frag.glsl"
+    },
+    {
+      "name": "id_pass",
+      "vertex": "assets/shaders/depth_prepass.vert.glsl",
+      "fragment": "assets/shaders/id_pass.frag.glsl"
+    },
+    {
       "name": "mesh",
       "vertex": "assets/shaders/mesh.vert.glsl",
       "fragment": "assets/shaders/mesh.frag.glsl"
+    },
+    {
+      "name": "outline",
+      "vertex": "assets/shaders/outline.vert.glsl",
+      "fragment": "assets/shaders/outline.frag.glsl"
     }
   ]
 }
