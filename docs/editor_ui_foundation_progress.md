@@ -80,6 +80,24 @@
 - 支持纹理预览、模型信息、材质信息
 - 支持缩略图大小调节
 
+### 菜单栏增强
+
+**File 菜单**：
+- 新增 New Scene (Ctrl+N)
+- 保留 Save Scene (Ctrl+S)、Load Scene (Ctrl+O)
+
+**Edit 菜单**：
+- 新增 Undo (Ctrl+Z)
+- 新增 Redo (Ctrl+Y)
+- 保留 Duplicate、Delete、Parent/Unparent
+
+**Rendering 菜单**：
+- 新增 Snap 快捷开关：
+  - Translation Snap (Ctrl+Shift+T)
+  - Rotation Snap (Ctrl+Shift+R)
+  - Scale Snap (Ctrl+Shift+S)
+- 保留 Editor/Scene Camera Mode、Focus
+
 ## 提交4已完成：Viewport 吸附(Snapping)
 
 ### 已完成
