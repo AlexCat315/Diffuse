@@ -1,6 +1,11 @@
 const std = @import("std");
 const engine = @import("guava");
 const editor_layer_mod = @import("editor/core/layer.zig");
+const editor_console = @import("editor/ui/windows/console.zig");
+
+pub const std_options = std.Options{
+    .logFn = editor_console.logFn,
+};
 
 const CliOptions = struct {
     frame_count: usize = 0,
@@ -120,7 +125,6 @@ pub fn main() !void {
 }
 
 fn runEngine(allocator: std.mem.Allocator, options: CliOptions) !void {
-
     var app = try engine.core.Application.init(allocator, .{
         .name = "Guava Engine",
         .window_width = 1440,
