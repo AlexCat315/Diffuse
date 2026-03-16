@@ -102,3 +102,34 @@
 - **Viewport Overlay 菜单**：
   - 新增 Snap 子菜单
   - 可独立控制 Translation/Rotation/Scale 吸附开关
+
+## 修复"伪完成项"
+
+### 已完成
+
+- **Viewport Overlay 图标化**：
+  - 将 View、Render Mode、Grid、Snap 按钮从 beginMenu 文本改为图标按钮
+  - 新增 viewport 图标路径（perspective、top、side、textured、wireframe、unlit、grid）
+  - 实现点击循环切换功能
+- **吸附改为相对 manipulation origin**：
+  - 平移吸附改为相对 origin 平滑吸附
+  - 旋转吸附改为相对 origin 平滑吸附
+  - 缩放吸附改为相对 origin 平滑吸附
+- **Place Actors 点击触发 spawn**：
+  - 点击 Place Actors 条目现在会 spawn 对应实体
+  - 支持所有类型：Empty、Camera、Cube、Sphere、Plane、Point Light、Spot Light、Directional Light
+- **菜单快捷键绑定**：
+  - Ctrl+N: 新建场景
+  - Ctrl+Shift+T: 切换平移吸附
+  - Ctrl+Shift+R: 切换旋转吸附
+  - Ctrl+Shift+S: 切换缩放吸附
+  - 新增 Key 枚举：t、n
+- **模型拖放改为按落点放置**：
+  - 新增 `importModelPathAt` 函数支持指定 transform
+  - viewport.zig 拖放处理改为使用 calculateSpawnTransformFromPixel
+- **移除 Global Toolbar**：
+  - 清理 build_default_dock_layout 和 build_animation_dock_layout 中的 Global Toolbar dock target
+- **True Folder 实现**：
+  - Folder 实体现在设置 editor_only = true
+  - icons.zig 新增 folder 图标路径
+  - entityIconPath 逻辑增加 folder 检测（editor_only + 无组件 + 名称以 Folder 开头）
