@@ -62,10 +62,23 @@
 
 按主实施文档当前顺序，后续工作可包括：
 
-- Scene Hierarchy 升级为 Outliner（支持 folder/group）
-- 资产预览增强
-- 材质编辑器基础
+- 材质编辑器独立窗口
+- Scene Hierarchy 树形视图增强
 - 其他 UI 优化
+
+## 额外完成
+
+### Scene Hierarchy 增强：Folder 创建
+
+- 在 Scene Hierarchy 右键菜单 Create 中添加 Folder 选项
+- Folder 本质上是一个空实体，用于组织场景层级
+- 用户可以将实体拖拽到 Folder 下进行分组
+
+### 资产预览
+
+- 资产预览功能已相当完善
+- 支持纹理预览、模型信息、材质信息
+- 支持缩略图大小调节
 
 ## 提交4已完成：Viewport 吸附(Snapping)
 
