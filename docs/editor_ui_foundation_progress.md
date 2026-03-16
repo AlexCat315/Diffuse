@@ -43,3 +43,10 @@
 - Viewport 接收 `place_actor_drag_payload`
 - 地平面求交 / 失败回退逻辑
 - `history` 中新增 `...At(transform)` 生成入口
+
+## 额外完成（本次提交）
+
+- Inspector 面板按钮紧凑化：
+  - 全宽按钮改为小按钮
+  - 使用 sameLine 紧凑排列
+  - 优化 item_spacing 间距
