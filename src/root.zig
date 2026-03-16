@@ -76,6 +76,7 @@ pub const render = struct {
     pub const IdPass = @import("engine/render/id_pass.zig").IdPass;
     pub const BasePass = @import("engine/render/base_pass.zig").BasePass;
     pub const DepthPrepass = @import("engine/render/depth_prepass.zig").DepthPrepass;
+    pub const GizmoPass = @import("engine/render/gizmo_pass.zig").GizmoPass;
     pub const OutlinePass = @import("engine/render/outline_pass.zig").OutlinePass;
     pub const SelectionHistory = @import("engine/render/selection_history.zig").SelectionHistory;
     pub const SelectionUpdateMode = @import("engine/render/selection_history.zig").SelectionUpdateMode;

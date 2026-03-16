@@ -19,6 +19,11 @@
       "name": "outline",
       "vertex": "assets/shaders/outline.vert.glsl",
       "fragment": "assets/shaders/outline.frag.glsl"
+    },
+    {
+      "name": "gizmo",
+      "vertex": "assets/shaders/gizmo.vert.glsl",
+      "fragment": "assets/shaders/gizmo.frag.glsl"
     }
   ]
 }
