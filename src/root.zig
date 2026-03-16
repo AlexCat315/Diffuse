@@ -98,6 +98,8 @@ pub const assets = struct {
     pub const MaterialResourceDesc = @import("engine/assets/material_resource.zig").MaterialResourceDesc;
     pub const TextureResource = @import("engine/assets/texture_resource.zig").TextureResource;
     pub const TextureResourceDesc = @import("engine/assets/texture_resource.zig").TextureResourceDesc;
+    pub const DecodedImage = @import("engine/assets/image_decoder.zig").DecodedImage;
+    pub const decodeImageRgba8 = @import("engine/assets/image_decoder.zig").decodeRgba8;
     pub const GltfImportReport = @import("engine/assets/gltf_import.zig").ImportReport;
 };
 
