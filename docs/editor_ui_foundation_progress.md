@@ -4,6 +4,29 @@
 
 本文记录 `docs/editor_ui_implementation_plan.md` 中各提交的已落地部分。
 
+## 提交3已完成：Viewport 投放工作流
+
+### 已完成
+
+- **history.zig 新增 spawnAt 函数**：
+  - `spawnEmptyEntityAt(transform)`
+  - `spawnCameraEntityAt(transform)`
+  - `spawnPrimitiveAt(primitive, transform)`
+  - `spawnPointLightAt(transform)`
+  - `spawnSpotLightAt(transform)`
+  - `spawnDirectionalLightAt(transform)`
+- **viewport.zig 拖放处理**：
+  - 添加 `place_actor_drag_payload` 接收
+  - 实现基于地平面 (y=0) 的射线相交计算投放位置
+  - 失败时回退到默认 spawnTransform 逻辑
+- **修复样式变量类型错误**：
+  - `item_spacing` 需要 Vec2 类型
+
+### 本提交未做
+
+- Snapping 真正作用到 manipulation
+- Overlay 图标化 popup 改造
+
 ## 提交2已完成：Place Actors + 新默认布局
 
 ### 已完成
@@ -25,28 +48,21 @@
 - 新增 i18n 翻译：
   - `spot_light`、`directional_light` 消息 ID
   - 对应中英文翻译
-- `layout.zig` 新增 Inspector 双列属性表辅助函数：
-  - `beginInspectorPropertyTable()`
-  - `endInspectorPropertyTable()`
-  - `drawInspectorPropertyRow()`
+- `layout.zig` 新增 Inspector 双列属性表辅助函数
+- Inspector 面板按钮紧凑化：
+  - 全宽按钮改为小按钮
+  - 使用 sameLine 紧凑排列
 
 ### 本提交未做
 
-- Viewport 接收 `place_actor_drag_payload` 投放逻辑
-- Inspector 双列排版完整改造（大按钮移到右键菜单）
+- Viewport 接收 `place_actor_drag_payload` 投放逻辑（已在提交3完成）
 - snapping 真正作用到 manipulation
 
 ## 下一步
 
-按主实施文档当前顺序，下一步是"提交 3：Viewport 投放工作流"：
+按主实施文档当前顺序，下一步是"提交 4：Viewport 紧凑 Overlay 与 Snapping"：
 
-- Viewport 接收 `place_actor_drag_payload`
-- 地平面求交 / 失败回退逻辑
-- `history` 中新增 `...At(transform)` 生成入口
-
-## 额外完成（本次提交）
-
-- Inspector 面板按钮紧凑化：
-  - 全宽按钮改为小按钮
-  - 使用 sameLine 紧凑排列
-  - 优化 item_spacing 间距
+- 图标化 Overlay 菜单
+- Snapping toggle
+- `manipulation.zig` 中平移 / 旋转 / 缩放吸附
+- ViewPreset 与自由视角状态联动
