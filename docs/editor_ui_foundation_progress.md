@@ -60,9 +60,21 @@
 
 ## 下一步
 
-按主实施文档当前顺序，下一步是"提交 4：Viewport 紧凑 Overlay 与 Snapping"：
+按主实施文档当前顺序，后续工作可包括：
 
-- 图标化 Overlay 菜单
-- Snapping toggle
-- `manipulation.zig` 中平移 / 旋转 / 缩放吸附
-- ViewPreset 与自由视角状态联动
+- Scene Hierarchy 升级为 Outliner（支持 folder/group）
+- 资产预览增强
+- 材质编辑器基础
+- 其他 UI 优化
+
+## 提交4已完成：Viewport 吸附(Snapping)
+
+### 已完成
+
+- **manipulation.zig 吸附功能**：
+  - 平移吸附 (translation_snap_enabled)：按 translation_snap_step 整数倍对齐
+  - 旋转吸附 (rotation_snap_enabled)：按 rotation_snap_step_degrees 整数倍对齐
+  - 缩放吸附 (scale_snap_enabled)：按 scale_snap_step 整数倍对齐
+- **Viewport Overlay 菜单**：
+  - 新增 Snap 子菜单
+  - 可独立控制 Translation/Rotation/Scale 吸附开关
