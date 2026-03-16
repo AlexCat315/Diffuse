@@ -109,5 +109,30 @@ fn configureEngineModule(
             "-std=c++17",
         },
     });
+    if (os_tag == .macos) {
+        module.addCSourceFiles(.{
+            .files = &.{
+                "src/engine/platform/window_native_macos.mm",
+            },
+            .flags = &.{
+                "-std=c++17",
+                "-fobjc-arc",
+            },
+        });
+        module.linkFramework("AppKit", .{});
+    }
+    if (os_tag == .windows) {
+        module.addCSourceFiles(.{
+            .files = &.{
+                "src/engine/platform/window_native_windows.cpp",
+            },
+            .flags = &.{
+                "-std=c++17",
+            },
+        });
+        module.linkSystemLibrary("comctl32", .{});
+        module.linkSystemLibrary("dwmapi", .{});
+        module.linkSystemLibrary("uxtheme", .{});
+    }
     module.linkSystemLibrary("SDL3", .{});
 }

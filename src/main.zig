@@ -90,6 +90,8 @@ pub fn main() !void {
         .name = "Guava Engine",
         .window_width = 1440,
         .window_height = 900,
+        .window_borderless = true,
+        .window_native_titlebar_controls = true,
         .frame_delay_ms = 16,
         .preferred_backends = options.backends(),
     });
