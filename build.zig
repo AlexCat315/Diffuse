@@ -41,6 +41,10 @@ pub fn build(b: *std.Build) void {
     });
     exe.linkLibC();
     exe.linkLibCpp();
+    // When cross-linking against a prebuilt system SDL3 shared library (e.g. Arch),
+    // we don't want the link to fail due to unresolved glibc symbol versions that
+    // will be provided by the target runtime.
+    exe.linker_allow_shlib_undefined = true;
     exe.step.dependOn(&run_shader_codegen.step);
     b.installArtifact(exe);
 
