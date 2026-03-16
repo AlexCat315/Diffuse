@@ -22,6 +22,8 @@ pub const rhi = struct {
     pub const Device = @import("engine/rhi/device.zig").RhiDevice;
     pub const Buffer = @import("engine/rhi/device.zig").Buffer;
     pub const BindGroup = @import("engine/rhi/device.zig").BindGroup;
+    pub const CopyPass = @import("engine/rhi/device.zig").CopyPass;
+    pub const Fence = @import("engine/rhi/device.zig").Fence;
     pub const Frame = @import("engine/rhi/device.zig").Frame;
     pub const GraphicsPipeline = @import("engine/rhi/device.zig").GraphicsPipeline;
     pub const GraphicsPipelineDesc = @import("engine/rhi/device.zig").GraphicsPipelineDesc;
@@ -71,6 +73,8 @@ pub const render = struct {
     pub const BasePass = @import("engine/render/base_pass.zig").BasePass;
     pub const DepthPrepass = @import("engine/render/depth_prepass.zig").DepthPrepass;
     pub const OutlinePass = @import("engine/render/outline_pass.zig").OutlinePass;
+    pub const SelectionHistory = @import("engine/render/selection_history.zig").SelectionHistory;
+    pub const SelectionUpdateMode = @import("engine/render/selection_history.zig").SelectionUpdateMode;
     pub const graphicsApiName = @import("engine/render/types.zig").graphicsApiName;
 };
 
