@@ -1,8 +1,9 @@
 const std = @import("std");
 const engine = @import("guava");
+const editor_layer_mod = @import("editor/editor_layer.zig");
 
 const CliOptions = struct {
-    frame_count: usize = 180,
+    frame_count: usize = 0,
     backend_order: [3]engine.render.GraphicsAPI = .{ .vulkan, .dx12, .metal },
     backend_count: usize = 3,
 
@@ -80,6 +81,8 @@ pub fn main() !void {
 
     var sandbox_layer = SandboxLayer{};
     try app.pushLayer(sandbox_layer.asLayer());
+    var editor_layer = editor_layer_mod.EditorLayer{};
+    try app.pushOverlay(editor_layer.asLayer());
 
     const report = try app.run(options.frame_count);
     const device_name = if (report.runtime.deviceName().len == 0) "Unknown Device" else report.runtime.deviceName();
