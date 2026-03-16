@@ -103,6 +103,13 @@ pub const assets = struct {
     pub const GltfImportReport = @import("engine/assets/gltf_import.zig").ImportReport;
 };
 
+pub const math = struct {
+    pub const angle = @import("engine/math/angle.zig");
+    pub const axis = @import("engine/math/axis.zig");
+    pub const mat4 = @import("engine/math/mat4.zig");
+    pub const vec3 = @import("engine/math/vec3.zig");
+};
+
 pub const scene = struct {
     pub const Scene = @import("engine/scene/scene.zig").Scene;
     pub const World = @import("engine/scene/scene.zig").World;

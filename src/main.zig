@@ -1,6 +1,6 @@
 const std = @import("std");
 const engine = @import("guava");
-const editor_layer_mod = @import("editor/editor_layer.zig");
+const editor_layer_mod = @import("editor/core/layer.zig");
 
 const CliOptions = struct {
     frame_count: usize = 0,
