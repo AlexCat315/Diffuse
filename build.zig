@@ -40,6 +40,7 @@ pub fn build(b: *std.Build) void {
         }),
     });
     exe.linkLibC();
+    exe.linkLibCpp();
     exe.step.dependOn(&run_shader_codegen.step);
     b.installArtifact(exe);
 
@@ -56,12 +57,14 @@ pub fn build(b: *std.Build) void {
         .root_module = engine_mod,
     });
     mod_tests.linkLibC();
+    mod_tests.linkLibCpp();
     mod_tests.step.dependOn(&run_shader_codegen.step);
 
     const exe_tests = b.addTest(.{
         .root_module = exe.root_module,
     });
     exe_tests.linkLibC();
+    exe_tests.linkLibCpp();
     exe_tests.step.dependOn(&run_shader_codegen.step);
 
     const run_mod_tests = b.addRunArtifact(mod_tests);
@@ -86,9 +89,25 @@ fn configureEngineModule(
 
     module.addIncludePath(.{ .cwd_relative = sdl_include_path });
     module.addIncludePath(.{ .cwd_relative = "third_party/stb" });
+    module.addIncludePath(.{ .cwd_relative = "third_party/imgui" });
+    module.addIncludePath(.{ .cwd_relative = "src/engine/ui" });
     module.addLibraryPath(.{ .cwd_relative = sdl_library_path });
     if (os_tag != .windows) {
         module.addRPath(.{ .cwd_relative = sdl_library_path });
     }
+    module.addCSourceFiles(.{
+        .files = &.{
+            "third_party/imgui/imgui.cpp",
+            "third_party/imgui/imgui_draw.cpp",
+            "third_party/imgui/imgui_tables.cpp",
+            "third_party/imgui/imgui_widgets.cpp",
+            "third_party/imgui/backends/imgui_impl_sdl3.cpp",
+            "third_party/imgui/backends/imgui_impl_sdlgpu3.cpp",
+            "src/engine/ui/imgui_bridge.cpp",
+        },
+        .flags = &.{
+            "-std=c++17",
+        },
+    });
     module.linkSystemLibrary("SDL3", .{});
 }

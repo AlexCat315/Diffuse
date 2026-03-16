@@ -45,6 +45,22 @@ const SandboxLayer = struct {
             },
         });
 
+        _ = try layer_context.world.createEntity(.{
+            .name = "SpinnerChild",
+            .parent = self.spinning_entity,
+            .mesh = .{
+                .handle = cube_mesh,
+                .primitive = .cube,
+            },
+            .material = .{
+                .handle = default_material,
+            },
+            .transform = .{
+                .translation = .{ 1.1, 0.9, 0.0 },
+                .scale = .{ 0.35, 0.35, 0.35 },
+            },
+        });
+
         _ = try layer_context.world.importGltfStaticModel(
             "assets/models/guava_showcase/guava_showcase.gltf",
             .{

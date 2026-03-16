@@ -22,6 +22,10 @@ pub const platform = struct {
     pub const WindowEventKind = @import("engine/platform/window.zig").EventKind;
 };
 
+pub const ui = struct {
+    pub const ImGui = @import("engine/ui/imgui.zig");
+};
+
 pub const rhi = struct {
     pub const Device = @import("engine/rhi/device.zig").RhiDevice;
     pub const Buffer = @import("engine/rhi/device.zig").Buffer;
