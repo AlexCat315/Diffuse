@@ -12,6 +12,32 @@ const CliOptions = struct {
     }
 };
 
+const ValidateOptions = struct {
+    root_path: []u8,
+    asset_query: ?[]u8 = null,
+    write_snapshot: bool = true,
+
+    fn deinit(self: *ValidateOptions, allocator: std.mem.Allocator) void {
+        allocator.free(self.root_path);
+        if (self.asset_query) |query| {
+            allocator.free(query);
+        }
+        self.* = undefined;
+    }
+};
+
+const Command = union(enum) {
+    run: CliOptions,
+    validate: ValidateOptions,
+
+    fn deinit(self: *Command, allocator: std.mem.Allocator) void {
+        switch (self.*) {
+            .run => self.* = undefined,
+            .validate => |*options| options.deinit(allocator),
+        }
+    }
+};
+
 const SandboxLayer = struct {
     spinning_entity: ?engine.scene.EntityId = null,
 
@@ -84,7 +110,16 @@ pub fn main() !void {
     defer _ = gpa.deinit();
 
     const allocator = gpa.allocator();
-    const options = try parseCliOptions(allocator);
+    var command = try parseCommandAlloc(allocator);
+    defer command.deinit(allocator);
+
+    switch (command) {
+        .run => |options| try runEngine(allocator, options),
+        .validate => |options| try runValidate(allocator, options),
+    }
+}
+
+fn runEngine(allocator: std.mem.Allocator, options: CliOptions) !void {
 
     var app = try engine.core.Application.init(allocator, .{
         .name = "Guava Engine",
@@ -136,16 +171,60 @@ pub fn main() !void {
     try stdout.flush();
 }
 
+fn runValidate(allocator: std.mem.Allocator, options: ValidateOptions) !void {
+    var stdout_buffer: [1024]u8 = undefined;
+    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    const stdout = &stdout_writer.interface;
+
+    var registry = engine.assets.AssetRegistry.init(allocator);
+    defer registry.deinit();
+
+    var report = report: {
+        registry.refreshProject(options.root_path) catch {
+            break :report try engine.assets.validateProjectAssetsAlloc(allocator, options.root_path);
+        };
+        if (options.write_snapshot) {
+            registry.writeSnapshotToPath("assets/derived/asset_registry.json") catch {};
+        }
+        break :report try engine.assets.validateRegistryAssetsAlloc(
+            allocator,
+            &registry,
+            options.asset_query,
+        );
+    };
+    defer report.deinit(allocator);
+
+    try stdout.print(
+        "资产验证: assets={d}, outputs={d}, deps={d}, issues={d}\n",
+        .{ report.asset_count, report.validated_output_count, report.dependency_edge_count, report.issues.len },
+    );
+    for (report.issues) |issue| {
+        try stdout.print("- {s}: {s} ({s})\n", .{ issue.source_path, issue.message, issue.asset_id });
+    }
+    try stdout.flush();
+
+    if (!report.ok()) {
+        return error.ValidationFailed;
+    }
+}
+
 test "main boots the engine skeleton" {
     try std.testing.expect(true);
 }
 
-fn parseCliOptions(allocator: std.mem.Allocator) !CliOptions {
-    var options = CliOptions{};
+fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
-    var index: usize = 1;
+    if (args.len > 1 and std.mem.eql(u8, args[1], "validate")) {
+        return .{ .validate = try parseValidateOptionsAlloc(allocator, args[2..]) };
+    }
+    return .{ .run = try parseRunOptions(args[1..]) };
+}
+
+fn parseRunOptions(args: []const []const u8) !CliOptions {
+    var options = CliOptions{};
+    var index: usize = 0;
     while (index < args.len) : (index += 1) {
         const arg = args[index];
         if (std.mem.eql(u8, arg, "--backend")) {
@@ -163,6 +242,45 @@ fn parseCliOptions(allocator: std.mem.Allocator) !CliOptions {
                 return error.InvalidArguments;
             }
             options.frame_count = try std.fmt.parseUnsigned(usize, args[index], 10);
+            continue;
+        }
+        return error.InvalidArguments;
+    }
+
+    return options;
+}
+
+fn parseValidateOptionsAlloc(allocator: std.mem.Allocator, args: []const []const u8) !ValidateOptions {
+    var options = ValidateOptions{
+        .root_path = try allocator.dupe(u8, "assets"),
+    };
+    errdefer options.deinit(allocator);
+
+    var index: usize = 0;
+    while (index < args.len) : (index += 1) {
+        const arg = args[index];
+        if (std.mem.eql(u8, arg, "--root")) {
+            index += 1;
+            if (index >= args.len) {
+                return error.InvalidArguments;
+            }
+            allocator.free(options.root_path);
+            options.root_path = try allocator.dupe(u8, args[index]);
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--asset")) {
+            index += 1;
+            if (index >= args.len) {
+                return error.InvalidArguments;
+            }
+            if (options.asset_query) |query| {
+                allocator.free(query);
+            }
+            options.asset_query = try allocator.dupe(u8, args[index]);
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--no-snapshot")) {
+            options.write_snapshot = false;
             continue;
         }
         return error.InvalidArguments;

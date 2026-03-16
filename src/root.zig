@@ -79,6 +79,7 @@ pub const render = struct {
     pub const PreparedScene = @import("engine/render/mesh_pass.zig").PreparedScene;
     pub const IdPass = @import("engine/render/id_pass.zig").IdPass;
     pub const BasePass = @import("engine/render/base_pass.zig").BasePass;
+    pub const BasePassGolden = @import("engine/render/base_pass_golden.zig");
     pub const DepthPrepass = @import("engine/render/depth_prepass.zig").DepthPrepass;
     pub const GizmoPass = @import("engine/render/gizmo_pass.zig").GizmoPass;
     pub const OutlinePass = @import("engine/render/outline_pass.zig").OutlinePass;
@@ -88,7 +89,17 @@ pub const render = struct {
 };
 
 pub const assets = struct {
+    pub const AssetRegistry = @import("engine/assets/registry.zig").AssetRegistry;
+    pub const AssetRecord = @import("engine/assets/registry.zig").AssetRecord;
+    pub const AssetType = @import("engine/assets/registry.zig").AssetType;
+    pub const AssetOutput = @import("engine/assets/registry.zig").AssetOutput;
+    pub const AssetMetadata = @import("engine/assets/registry.zig").AssetMetadata;
+    pub const makeDerivedAssetIdAlloc = @import("engine/assets/registry.zig").makeDerivedAssetIdAlloc;
     pub const ResourceLibrary = @import("engine/assets/library.zig").ResourceLibrary;
+    pub const AssetValidationIssue = @import("engine/assets/validator.zig").ValidationIssue;
+    pub const AssetValidationReport = @import("engine/assets/validator.zig").ValidationReport;
+    pub const validateProjectAssetsAlloc = @import("engine/assets/validator.zig").validateProjectAlloc;
+    pub const validateRegistryAssetsAlloc = @import("engine/assets/validator.zig").validateRegistryAlloc;
     pub const MeshHandle = @import("engine/assets/handles.zig").MeshHandle;
     pub const MaterialHandle = @import("engine/assets/handles.zig").MaterialHandle;
     pub const TextureHandle = @import("engine/assets/handles.zig").TextureHandle;
@@ -100,7 +111,14 @@ pub const assets = struct {
     pub const TextureResourceDesc = @import("engine/assets/texture_resource.zig").TextureResourceDesc;
     pub const DecodedImage = @import("engine/assets/image_decoder.zig").DecodedImage;
     pub const decodeImageRgba8 = @import("engine/assets/image_decoder.zig").decodeRgba8;
+    pub const ensureCookedTexture = @import("engine/assets/texture_import.zig").ensureCookedTexture;
+    pub const validateCookedTextureAsset = @import("engine/assets/texture_import.zig").validateCookedTextureAsset;
+    pub const loadTextureAsset = @import("engine/assets/texture_import.zig").loadTextureAsset;
     pub const GltfImportReport = @import("engine/assets/gltf_import.zig").ImportReport;
+    pub const ensureCookedModelAsset = @import("engine/assets/gltf_import.zig").ensureCookedModelAsset;
+    pub const validateCookedModelAsset = @import("engine/assets/gltf_import.zig").validateCookedModelAsset;
+    pub const importGltfStaticModelAsset = @import("engine/assets/gltf_import.zig").importStaticModelAsset;
+    pub const importGltfStaticModelAssetInstance = @import("engine/assets/gltf_import.zig").importStaticModelAssetInstance;
 };
 
 pub const math = struct {

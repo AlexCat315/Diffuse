@@ -57,6 +57,16 @@ pub fn build(b: *std.Build) void {
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
 
+    const validate_cmd = b.addRunArtifact(exe);
+    validate_cmd.step.dependOn(b.getInstallStep());
+    validate_cmd.addArg("validate");
+    if (b.args) |args| {
+        validate_cmd.addArgs(args);
+    }
+
+    const validate_step = b.step("validate", "Validate project assets");
+    validate_step.dependOn(&validate_cmd.step);
+
     const mod_tests = b.addTest(.{
         .root_module = engine_mod,
     });
