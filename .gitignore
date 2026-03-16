@@ -47,6 +47,7 @@ app.*.map.json
 dist/
 .zig-cache/
 zig-out/
+compile_commands.json
 assets/derived/
 assets/scenes/editor_autosave.guava_scene
 assets/scenes/editor_autosave.guava_scene.meta

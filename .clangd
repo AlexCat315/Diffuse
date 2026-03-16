@@ -1,6 +1,0 @@
-CompileFlags:
-  Add:
-    - "-I/opt/homebrew/include"
-    - "-Ithird_party/stb"
-    - "-Ithird_party/imgui"
-    - "-Isrc/engine/ui"
