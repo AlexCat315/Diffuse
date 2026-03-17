@@ -134,6 +134,7 @@ pub const math = struct {
     pub const axis = @import("engine/math/axis.zig");
     pub const mat4 = @import("engine/math/mat4.zig");
     pub const vec3 = @import("engine/math/vec3.zig");
+    pub const quat = @import("engine/math/quat.zig");
 };
 
 pub const scene = struct {

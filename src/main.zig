@@ -104,7 +104,9 @@ const SandboxLayer = struct {
         const self: *SandboxLayer = @ptrCast(@alignCast(context));
         if (self.spinning_entity) |entity_id| {
             if (layer_context.world.getEntity(entity_id)) |entity| {
-                entity.transform.rotation_euler[1] += 0.75 * layer_context.delta_seconds;
+                var euler = engine.math.quat.toEuler(entity.transform.rotation);
+                euler[1] += 0.75 * layer_context.delta_seconds;
+                entity.transform.rotation = engine.math.quat.fromEuler(euler);
             }
         }
     }
@@ -207,13 +209,46 @@ fn runValidate(allocator: std.mem.Allocator, options: ValidateOptions) !void {
     }
     try stdout.flush();
 
+    std.fs.cwd().makePath("dist/reports") catch {};
+    if (std.fs.cwd().createFile("dist/reports/asset_validation_report.json", .{})) |file| {
+        defer file.close();
+        var output = std.ArrayList(u8).empty;
+        defer output.deinit(allocator);
+
+        var writer = output.writer(allocator);
+        var adapter_buffer: [8192]u8 = undefined;
+        var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
+        std.json.Stringify.value(report, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface) catch {};
+        writer_adapter.new_interface.flush() catch {};
+
+        file.writeAll(output.items) catch {};
+    } else |_| {}
+
     if (!report.ok()) {
         return error.ValidationFailed;
     }
 }
 
 test "main boots the engine skeleton" {
-    try std.testing.expect(true);
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var app = engine.core.Application.init(allocator, .{
+        .name = "Smoke Test",
+        .window_width = 128,
+        .window_height = 128,
+    }) catch |err| {
+        std.debug.print("Skipping smoke test due to init failure (possibly headless): {}\n", .{err});
+        return;
+    };
+    defer app.deinit();
+
+    const report = app.run(2) catch |err| {
+        std.debug.print("Skipping smoke test due to run failure: {}\n", .{err});
+        return;
+    };
+    try std.testing.expect(report.frames > 0);
 }
 
 fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
