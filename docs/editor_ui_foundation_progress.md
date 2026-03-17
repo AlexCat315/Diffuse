@@ -7,6 +7,7 @@
 ## 已完成：提交 2 Place Actors + 新默认布局
 
 - 新增 `src/editor/ui/windows/place_actors.zig` 面板，包含分类、搜索、拖拽和点击生成入口。
+- `Place Actors` 行项目现在使用自适应“动作区 + 说明区”布局，窄栏下会自动堆叠，右侧描述文字不再被满宽按钮遮挡。
 - 默认 DockBuilder 布局已切到经典编辑器布局：
   - 左侧 `Place Actors`
   - 右侧上方 `Scene`
