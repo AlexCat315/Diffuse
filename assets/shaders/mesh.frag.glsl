@@ -19,6 +19,16 @@ layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     vec4 u_ambient_color;
 } material_uniforms;
 
+// ACES Filmic Tonemapping - maps HDR values to LDR smoothly
+vec3 ACESFilm(vec3 x) {
+    float a = 2.51;
+    float b = 0.03;
+    float c = 2.43;
+    float d = 0.59;
+    float e = 0.14;
+    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
 void main() {
     vec4 base = texture(u_base_color, v_uv);
     vec3 normal = normalize(v_world_normal);
@@ -46,5 +56,9 @@ void main() {
         material_uniforms.u_point_light_color_intensity.rgb * (material_uniforms.u_point_light_color_intensity.w * point_diffuse) +
         material_uniforms.u_point_light_color_intensity.rgb * point_specular;
 
-    out_color = vec4(albedo * lighting, base.a * v_color.a * material_uniforms.u_base_color_factor.a);
+    vec3 hdr_color = albedo * lighting;
+    // Apply ACES tonemapping to prevent overexposure
+    vec3 ldr_color = ACESFilm(hdr_color);
+    
+    out_color = vec4(ldr_color, base.a * v_color.a * material_uniforms.u_base_color_factor.a);
 }
