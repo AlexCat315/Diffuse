@@ -19,7 +19,29 @@
 - 显示 Base Color RGB 值
 - 显示 Texture 状态（Assigned/None）
 - 显示 Apply 按钮（当选中实体时）
-- 待实现：真正的实时渲染缩略图（需要渲染器支持 offscreen rendering）
+- 新增 `material_thumbnail_queue` 状态字段用于缩略图渲染调度
+
+### 完整离屏渲染链路（待实现）
+
+实现真正的实时缩略图需要：
+
+1. **独立 thumbnail render target**
+   - 创建专用 128x128 渲染纹理
+   - 在 renderer 中添加 thumbnail pass
+
+2. **专用 preview scene/camera/light**
+   - 预置一个简单球体网格用于材质预览
+   - 专用 thumbnail camera（固定角度）
+   - 专用 thumbnail light（3点布光）
+
+3. **缩略图缓存与失效策略**
+   - 内存缓存已渲染缩略图
+   - 材质属性变化时标记失效
+   - LRU 淘汰策略
+
+4. **渲染调度**
+   - 每帧最多渲染 N 个待处理缩略图
+   - 避免卡顿
 
 ## 已完成：提交 2 Place Actors + 新默认布局
 
