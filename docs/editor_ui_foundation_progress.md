@@ -4,6 +4,19 @@
 
 本文同步 `docs/editor_ui_implementation_plan.md` 的真实落地状态，只记录当前分支已经实现并验证过的内容。
 
+## 新增：完整场景表面 Raycast
+
+- `engine.scene` 现在提供真实的 CPU 场景表面射线检测，而不是只和固定地平面求交。
+- Raycast 会遍历当前 world 中可见、非 `editor_only` 的 mesh 实体，并返回最近命中的：
+  - entity id
+  - hit distance
+  - hit position
+  - hit normal
+- Viewport 投放链路现在先走真实场景表面命中，再回退到 `y = 0` 地平面；这意味着模型、基础体和灯光都可以直接吸附到已有表面，而不是永远落到地板。
+- 视口像素到射线的构造也已改成读取当前活动相机的真实投影：
+  - perspective 相机按 FOV 投射
+  - orthographic 相机按视锥尺寸投射
+
 ## 新增：Browser 多视图模式
 
 - 新增 `BrowserViewMode` 枚举（grid / list）
@@ -71,8 +84,8 @@
 ## 已完成：提交 3 Viewport 投放工作流
 
 - `src/editor/actions/history.zig` 已提供 `spawn...At(transform)` 系列入口。
-- Viewport 已接收 `place_actor_drag_payload`，并基于地平面求交优先决定投放位置。
-- 交点不可用时会回退到默认 `spawnTransform()`。
+- Viewport 已接收 `place_actor_drag_payload`，并优先使用完整场景表面 Raycast 决定投放位置。
+- 场景表面未命中时，会回退到 `y = 0` 地平面；地平面也失败时，最终回退到默认 `spawnTransform()`。
 - 模型拖放也已经改成按落点放置，而不是固定出生点。
 - 生成动作接入 undo/redo 快照链路。
 
