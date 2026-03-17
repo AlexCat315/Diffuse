@@ -4,6 +4,18 @@
 
 本文同步 `docs/editor_ui_implementation_plan.md` 的真实落地状态，只记录当前分支已经实现并验证过的内容。
 
+## 新增：Browser 多视图模式
+
+- 新增 `BrowserViewMode` 枚举（grid / list）
+- 工具栏新增 Grid / List 切换按钮
+- Grid 视图：原有卡片式布局
+- List 视图：图标 + 名称的紧凑行布局
+- 支持拖拽、选中
+
+## 新增：材质球实时缩略图
+
+- 待实现：需要渲染器支持 offscreen rendering
+
 ## 已完成：提交 2 Place Actors + 新默认布局
 
 - 新增 `src/editor/ui/windows/place_actors.zig` 面板，包含分类、搜索、拖拽和点击生成入口。
