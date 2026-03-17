@@ -4,6 +4,36 @@
 
 本文同步 `docs/editor_ui_implementation_plan.md` 的真实落地状态，只记录当前分支已经实现并验证过的内容。
 
+## 新增：VFX 运行时支持
+
+- `engine.scene.Entity` 现在包含显式 `vfx` 组件，不再只是 Place Actors 里空分类占位。
+- 当前提供两套内置 VFX 预设：
+  - `喷泉 / Fountain`
+  - `环绕 / Orbit`
+- `Place Actors`、Scene Hierarchy 右键创建、Viewport 拖放和 Inspector `Add Component` 都已经接到真实生成入口。
+- VFX 根实体会保留一个可选中的可视锚点球体；运行时粒子则作为 `editor_only` 子实体动态生成。
+- 运行时行为按 playback controller 真正受控：
+  - `Playing` 时连续模拟
+  - `Step` 时推进一帧
+  - `Paused` 时冻结当前粒子状态
+  - `Stopped` 时清空运行时粒子，不把临时粒子留在 world 里
+- Inspector 已新增 `VFX` section，可编辑：
+  - 类型
+  - 循环
+  - 发射率
+  - 粒子寿命
+  - 速度
+  - 最大粒子数
+  - 半径 / 扩散 / 尺寸 / 颜色
+- VFX 运行时粒子不会污染编辑工作流：
+  - hierarchy 里仍然隐藏
+  - scene 序列化会跳过
+  - CPU scene surface raycast 会跳过
+  - ID pass 也会跳过，不会把临时粒子选中成主对象
+- 当前真实边界：
+  - 运行时粒子仍复用现有 mesh/base pass，不是单独的 GPU 粒子管线
+  - 当前是两套内置 emitter preset，不是通用 Niagara/节点式 VFX 编辑器
+
 ## 新增：完整场景表面 Raycast
 
 - `engine.scene` 现在提供真实的 CPU 场景表面射线检测，而不是只和固定地平面求交。
@@ -177,7 +207,7 @@
 
 `docs/editor_ui_implementation_plan.md` 中提交 2 到提交 8 的开发项已经在当前分支全部落地。
 
-如果继续推进，建议优先做两件事：
+如果继续推进，下一项应是“多套用户自定义布局模板”：
 
-- 补一轮 headed UI 人工验收，确认 Content Browser / Hierarchy / Viewport 的材质拖拽交互在桌面环境下手感稳定。
-- 如果要继续增强资产工作流，下一项应是“通用 material importer”，让未载入当前 world 的 material 资源也能直接从 registry 进入当前场景；这一步当前还没有实现，也没有被伪装成已完成。
+- 当前只有默认布局 / 动画布局 / 保存当前布局
+- 还没有用户命名模板的保存、加载、删除和持久化管理
