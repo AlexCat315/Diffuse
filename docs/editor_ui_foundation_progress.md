@@ -12,9 +12,14 @@
 - List 视图：图标 + 名称的紧凑行布局
 - 支持拖拽、选中
 
-## 新增：材质球实时缩略图
+## 新增：材质球预览
 
-- 待实现：需要渲染器支持 offscreen rendering
+- 选中材质资源时显示详细信息面板
+- 显示 Shading 模型（Unlit/Lambert/PBR）
+- 显示 Base Color RGB 值
+- 显示 Texture 状态（Assigned/None）
+- 显示 Apply 按钮（当选中实体时）
+- 待实现：真正的实时渲染缩略图（需要渲染器支持 offscreen rendering）
 
 ## 已完成：提交 2 Place Actors + 新默认布局
 
