@@ -19,29 +19,38 @@
 - 显示 Base Color RGB 值
 - 显示 Texture 状态（Assigned/None）
 - 显示 Apply 按钮（当选中实体时）
-- 新增 `material_thumbnail_queue` 状态字段用于缩略图渲染调度
+- Browser 的 material 卡片、list icon 和详情预览现在都接入了真实缩略图，不再只显示静态占位 icon。
+- `EditorState.material_thumbnail_queue` 现在会在 UI 帧内收集当前可见/被选中的 material 资产，再在 `EditorLayer.onUpdate()` 末尾统一 flush 到 renderer。
 
-### 完整离屏渲染链路（待实现）
+### 完整离屏渲染链路（已实现）
 
-实现真正的实时缩略图需要：
+1. **独立 128x128 thumbnail render target**
+   - renderer 为每个缓存条目创建独立 `128x128` color/depth 纹理
+   - color target 采用 `color_target | sampler`，可直接被 ImGui 采样显示
 
-1. **独立 thumbnail render target**
-   - 创建专用 128x128 渲染纹理
-   - 在 renderer 中添加 thumbnail pass
-
-2. **专用 preview scene/camera/light**
-   - 预置一个简单球体网格用于材质预览
-   - 专用 thumbnail camera（固定角度）
-   - 专用 thumbnail light（3点布光）
+2. **专用 preview scene / camera / light**
+   - renderer 内部维护独立 preview world
+   - 预置球体 mesh、固定相机和专用灯光 rig
+   - 当前光照 rig 为 `1 directional + 1 point fill`；这是当前 base pass 光照模型真实支持的上限，不伪装成 3-light shader
 
 3. **缩略图缓存与失效策略**
-   - 内存缓存已渲染缩略图
-   - 材质属性变化时标记失效
-   - LRU 淘汰策略
+   - renderer 维护内存缓存，key 为 material asset id
+   - 失效判断基于材质签名：
+     - shading
+     - base color
+     - base color texture handle / width / height / format
+   - 同一 asset 只会排队一次
+   - 缓存上限为固定条目数，并按最近请求时间做 LRU 淘汰
+   - 场景重置时会清空缓存，避免旧 world 的材质缩略图串场
 
 4. **渲染调度**
-   - 每帧最多渲染 N 个待处理缩略图
-   - 避免卡顿
+   - 每帧最多处理 `2` 个待渲染 material thumbnail job
+   - 缩略图渲染发生在主场景 pass 之后、UI pass 之前
+   - 首次请求时本帧仍可能先看到 fallback icon，下一帧开始显示真实缩略图；这是当前调度模型下的真实表现
+
+5. **当前边界**
+   - 只有“已经载入当前 world，并且能通过 `materialHandleByAssetId()` 解析到句柄”的材质资源可以生成缩略图
+   - 未载入当前 world 的材质仍会回退到静态 material icon，不伪装成已实现通用 importer
 
 ## 已完成：提交 2 Place Actors + 新默认布局
 
