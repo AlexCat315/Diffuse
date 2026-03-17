@@ -34,6 +34,11 @@ const ValidateOptions = struct {
 const Command = union(enum) {
     run: CliOptions,
     validate: ValidateOptions,
+    benchmark: struct {
+        scene_path: []const u8,
+        update_golden: bool = false,
+        allocated: bool = false,
+    },
     @"generate-benchmark": struct {
         output_path: []const u8,
         allocated: bool = false,
@@ -48,6 +53,7 @@ const Command = union(enum) {
         switch (self.*) {
             .run => self.* = undefined,
             .validate => |*options| options.deinit(allocator),
+            .benchmark => |options| if (options.allocated) allocator.free(options.scene_path),
             .@"generate-benchmark" => |options| if (options.allocated) allocator.free(options.output_path),
             .@"compare-render" => |options| if (options.allocated) {
                 allocator.free(options.scene_path);
@@ -137,9 +143,79 @@ pub fn main() !void {
     switch (command) {
         .run => |options| try runEngine(allocator, options),
         .validate => |options| try runValidate(allocator, options),
+        .benchmark => |options| try runBenchmark(allocator, options.scene_path, options.update_golden),
         .@"generate-benchmark" => |options| try runGenerateBenchmark(allocator, options.output_path),
         .@"compare-render" => |options| try runCompareRender(allocator, options.scene_path, options.output_dir),
     }
+}
+
+fn runBenchmark(allocator: std.mem.Allocator, scene_path: []const u8, update_golden: bool) !void {
+    const width = 1280;
+    const height = 720;
+    const benchmark_frames = 100;
+
+    var app = try engine.core.Application.init(allocator, .{
+        .name = "Benchmark Mode",
+        .window_width = width,
+        .window_height = height,
+        .window_borderless = true,
+        .frame_delay_ms = 0, // Unlocked
+    });
+    defer app.deinit();
+
+    try engine.scene.loadWorldFromPath(allocator, &app.world, scene_path);
+    try app.renderer.setSceneViewportSize(width, height);
+
+    std.log.info("Starting benchmark for scene: {s} (frames={d})", .{ scene_path, benchmark_frames });
+
+    // Run for 100 frames
+    const report = try app.run(benchmark_frames);
+
+    // Capture final frame
+    const frame_ppm = try app.renderer.downloadFinalFrameAlloc(allocator);
+    defer allocator.free(frame_ppm);
+
+    const scene_basename = std.fs.path.basename(scene_path);
+    const scene_name = if (std.mem.lastIndexOfScalar(u8, scene_basename, '.')) |idx| scene_basename[0..idx] else scene_basename;
+
+    std.fs.cwd().makePath("assets/benchmarks/golden") catch {};
+    const golden_path = try std.fmt.allocPrint(allocator, "assets/benchmarks/golden/{s}.ppm", .{scene_name});
+    defer allocator.free(golden_path);
+
+    if (update_golden) {
+        try std.fs.cwd().writeFile(.{ .sub_path = golden_path, .data = frame_ppm });
+        std.log.info("Golden image updated: {s}", .{golden_path});
+    } else {
+        const golden_ppm = std.fs.cwd().readFileAlloc(allocator, golden_path, 10 * 1024 * 1024) catch |err| {
+            if (err == error.FileNotFound) {
+                std.log.err("Golden image not found: {s}. Run with --update-golden to create it.", .{golden_path});
+                return err;
+            }
+            return err;
+        };
+        defer allocator.free(golden_ppm);
+
+        // Simple binary comparison for now (SSIM/PSNR can be added later)
+        if (std.mem.eql(u8, frame_ppm, golden_ppm)) {
+            std.log.info("Benchmark PASSED: Render output matches golden image.", .{});
+        } else {
+            std.log.err("Benchmark FAILED: Render output differs from golden image.", .{});
+            
+            std.fs.cwd().makePath("dist/reports/benchmark_diff") catch {};
+            const diff_path = try std.fmt.allocPrint(allocator, "dist/reports/benchmark_diff/{s}_failed.ppm", .{scene_name});
+            defer allocator.free(diff_path);
+            try std.fs.cwd().writeFile(.{ .sub_path = diff_path, .data = frame_ppm });
+            std.log.info("Failed frame saved to: {s}", .{diff_path});
+            
+            return error.BenchmarkValidationFailed;
+        }
+    }
+
+    std.log.info("Benchmark report: frames={d}, triangles={d}, entities={d}", .{
+        report.frames,
+        report.triangles_drawn,
+        report.scene.entity_count,
+    });
 }
 
 fn runCompareRender(allocator: std.mem.Allocator, scene_path: []const u8, output_dir: []const u8) !void {
@@ -357,6 +433,24 @@ fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
     if (args.len > 1) {
         if (std.mem.eql(u8, args[1], "validate")) {
             return .{ .validate = try parseValidateOptionsAlloc(allocator, args[2..]) };
+        }
+        if (std.mem.eql(u8, args[1], "benchmark")) {
+            var scene_path: []const u8 = "assets/benchmarks/material_p0.json";
+            var update_golden = false;
+            var index: usize = 2;
+            while (index < args.len) : (index += 1) {
+                if (std.mem.eql(u8, args[index], "--scene")) {
+                    index += 1;
+                    if (index < args.len) scene_path = args[index];
+                } else if (std.mem.eql(u8, args[index], "--update-golden")) {
+                    update_golden = true;
+                }
+            }
+            return .{ .benchmark = .{
+                .scene_path = try allocator.dupe(u8, scene_path),
+                .update_golden = update_golden,
+                .allocated = true,
+            } };
         }
         if (std.mem.eql(u8, args[1], "generate-benchmark")) {
              if (args.len > 2) {
