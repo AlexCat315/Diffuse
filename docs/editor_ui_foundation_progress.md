@@ -71,6 +71,26 @@
 - 当前仓库尚未提交 `assets/ui/fonts` 实际字体文件，因此本分支运行时会落到“系统字体或 ImGui 默认字体”分支；这是当前真实状态，不是已内置完成。
 - `Reset Dock Layout` 和 `Load Default Layout` 入口已统一走同一 helper，Settings 与 Menu Bar 不再各自分叉逻辑。
 
+## 已完成：提交 8 辅助增强
+
+- Browser 中 `material` 现在已经是可交互的一等资产：
+  - 资产卡会发起 `asset_material_drag_payload`
+  - 预览区在“当前 world 已加载该材质”时会显示 `Apply Material` 按钮
+- Material 拖拽链路已打通到两条真实目标：
+  - 拖到 Scene Hierarchy 实体节点会把该材质应用到目标实体
+  - 拖到 Viewport 会先做目标实体 readback，再把材质应用到命中的对象
+- Browser / Viewport / Hierarchy 现在共用同一条材质应用 helper：
+  - 会同步 `handle`
+  - 会把 `shading` 和 `base_color_factor` 回写到实体组件
+  - 会接入 undo/redo 快照
+- Browser 面包屑已做视觉收口：
+  - 当前路径会高亮
+  - 面包屑按钮 roundings / padding 已与当前 toolbar 风格统一
+- 当前真实限制也已经显式暴露：
+  - 只有“已经载入当前 world 并且能通过 `materialHandleByAssetId()` 解析到句柄”的材质资源可以直接应用
+  - 对于只存在于 project registry、但尚未载入当前 world 的材质，预览区会明确提示“当前 world 里还没有加载这个材质资源”
+  - 这次没有伪装成“任意 material 资源都能直接拖上去生效”
+
 ## 验证状态
 
 2026-03-17 已重新执行：
@@ -90,8 +110,9 @@
 
 ## 下一步
 
-下一项应进入 `提交 8：辅助增强`，优先完成：
+`docs/editor_ui_implementation_plan.md` 中提交 2 到提交 8 的开发项已经在当前分支全部落地。
 
-- Browser material 一等资产支持
-- Material 拖拽到实体 / Viewport 的工作流
-- 面包屑与资产工作流细节收口
+如果继续推进，建议优先做两件事：
+
+- 补一轮 headed UI 人工验收，确认 Content Browser / Hierarchy / Viewport 的材质拖拽交互在桌面环境下手感稳定。
+- 如果要继续增强资产工作流，下一项应是“通用 material importer”，让未载入当前 world 的 material 资源也能直接从 registry 进入当前场景；这一步当前还没有实现，也没有被伪装成已完成。
