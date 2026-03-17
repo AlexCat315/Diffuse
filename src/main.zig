@@ -70,7 +70,7 @@ const SandboxLayer = struct {
             .material = .{
                 .handle = default_material,
             },
-            .transform = .{
+            .local_transform = .{
                 .translation = .{ 2.0, 1.0, 0.0 },
                 .scale = .{ 1.0, 1.5, 1.0 },
             },
@@ -86,7 +86,7 @@ const SandboxLayer = struct {
             .material = .{
                 .handle = default_material,
             },
-            .transform = .{
+            .local_transform = .{
                 .translation = .{ 1.1, 0.9, 0.0 },
                 .scale = .{ 0.35, 0.35, 0.35 },
             },
@@ -104,9 +104,9 @@ const SandboxLayer = struct {
         const self: *SandboxLayer = @ptrCast(@alignCast(context));
         if (self.spinning_entity) |entity_id| {
             if (layer_context.world.getEntity(entity_id)) |entity| {
-                var euler = engine.math.quat.toEuler(entity.transform.rotation);
+                var euler = engine.math.quat.toEuler(entity.local_transform.rotation);
                 euler[1] += 0.75 * layer_context.delta_seconds;
-                entity.transform.rotation = engine.math.quat.fromEuler(euler);
+                entity.local_transform.rotation = engine.math.quat.fromEuler(euler);
             }
         }
     }
