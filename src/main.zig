@@ -34,11 +34,25 @@ const ValidateOptions = struct {
 const Command = union(enum) {
     run: CliOptions,
     validate: ValidateOptions,
+    @"generate-benchmark": struct {
+        output_path: []const u8,
+        allocated: bool = false,
+    },
+    @"compare-render": struct {
+        scene_path: []const u8,
+        output_dir: []const u8,
+        allocated: bool = false,
+    },
 
     fn deinit(self: *Command, allocator: std.mem.Allocator) void {
         switch (self.*) {
             .run => self.* = undefined,
             .validate => |*options| options.deinit(allocator),
+            .@"generate-benchmark" => |options| if (options.allocated) allocator.free(options.output_path),
+            .@"compare-render" => |options| if (options.allocated) {
+                allocator.free(options.scene_path);
+                allocator.free(options.output_dir);
+            },
         }
     }
 };
@@ -123,7 +137,92 @@ pub fn main() !void {
     switch (command) {
         .run => |options| try runEngine(allocator, options),
         .validate => |options| try runValidate(allocator, options),
+        .@"generate-benchmark" => |options| try runGenerateBenchmark(allocator, options.output_path),
+        .@"compare-render" => |options| try runCompareRender(allocator, options.scene_path, options.output_dir),
     }
+}
+
+fn runCompareRender(allocator: std.mem.Allocator, scene_path: []const u8, output_dir: []const u8) !void {
+    const width = 800;
+    const height = 600;
+
+    var app = try engine.core.Application.init(allocator, .{
+        .name = "Render Comparison",
+        .window_width = width,
+        .window_height = height,
+        .window_borderless = true,
+    });
+    defer app.deinit();
+
+    try engine.scene.loadWorldFromPath(allocator, &app.world, scene_path);
+
+    try app.renderer.setSceneViewportSize(width, height);
+
+    // 1. GPU Render
+    _ = try app.renderer.drawFrame(&app.world);
+    const gpu_ppm = try app.renderer.downloadFinalFrameAlloc(allocator);
+    defer allocator.free(gpu_ppm);
+
+    // 2. Software Render (Golden)
+    const software_ppm = try engine.render.BasePassGolden.renderScenePpmAlloc(allocator, &app.world, width, height);
+    defer allocator.free(software_ppm);
+
+    // 3. Save and Report
+    try std.fs.cwd().makePath(output_dir);
+    const gpu_path = try std.fmt.allocPrint(allocator, "{s}/gpu.ppm", .{output_dir});
+    defer allocator.free(gpu_path);
+    const software_path = try std.fmt.allocPrint(allocator, "{s}/software.ppm", .{output_dir});
+    defer allocator.free(software_path);
+
+    try std.fs.cwd().writeFile(.{ .sub_path = gpu_path, .data = gpu_ppm });
+    try std.fs.cwd().writeFile(.{ .sub_path = software_path, .data = software_ppm });
+
+    std.log.info("Comparison completed. GPU and Software images saved to {s}", .{output_dir});
+}
+
+fn runGenerateBenchmark(allocator: std.mem.Allocator, output_path: []const u8) !void {
+    var world = engine.scene.World.init(allocator);
+    defer world.deinit();
+    try world.bootstrap3D();
+
+    const cube_mesh = try world.assets().ensurePrimitiveMesh(.cube);
+    const default_material = try world.assets().ensureDefaultMaterial();
+
+    _ = try world.createEntity(.{
+        .name = "BenchmarkCube",
+        .mesh = .{
+            .handle = cube_mesh,
+            .primitive = .cube,
+        },
+        .material = .{
+            .handle = default_material,
+        },
+        .local_transform = .{
+            .translation = .{ 0.0, 1.0, 0.0 },
+            .scale = .{ 1.0, 1.0, 1.0 },
+        },
+    });
+
+    _ = try world.createEntity(.{
+        .name = "BenchmarkCamera",
+        .camera = .{
+            .projection = .{
+                .perspective = .{
+                    .fov_y_radians = 60.0 * (std.math.pi / 180.0),
+                    .near_clip = 0.1,
+                    .far_clip = 100.0,
+                },
+            },
+            .is_primary = true,
+        },
+        .local_transform = .{
+            .translation = .{ 0.0, 2.0, 5.0 },
+            .rotation = engine.math.quat.fromEuler(.{ -0.2, 0.0, 0.0 }),
+        },
+    });
+
+    try engine.scene.saveWorldToPath(allocator, &world, output_path);
+    std.log.info("Benchmark scene generated: {s}", .{output_path});
 }
 
 fn runEngine(allocator: std.mem.Allocator, options: CliOptions) !void {
@@ -255,10 +354,32 @@ fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
     const args = try std.process.argsAlloc(allocator);
     defer std.process.argsFree(allocator, args);
 
-    if (args.len > 1 and std.mem.eql(u8, args[1], "validate")) {
-        return .{ .validate = try parseValidateOptionsAlloc(allocator, args[2..]) };
-    }
-    return .{ .run = try parseRunOptions(args[1..]) };
+    if (args.len > 1) {
+        if (std.mem.eql(u8, args[1], "validate")) {
+            return .{ .validate = try parseValidateOptionsAlloc(allocator, args[2..]) };
+        }
+        if (std.mem.eql(u8, args[1], "generate-benchmark")) {
+             if (args.len > 2) {
+                 return .{ .@"generate-benchmark" = .{
+                     .output_path = try allocator.dupe(u8, args[2]),
+                     .allocated = true,
+                 } };
+             } else {
+                 return .{ .@"generate-benchmark" = .{
+                     .output_path = "assets/scenes/benchmark_p0.json",
+                     .allocated = false,
+                 } };
+             }
+         }
+         if (std.mem.eql(u8, args[1], "compare-render")) {
+               return .{ .@"compare-render" = .{
+                   .scene_path = try allocator.dupe(u8, if (args.len > 2) args[2] else "assets/scenes/benchmark_p0.json"),
+                   .output_dir = try allocator.dupe(u8, if (args.len > 3) args[3] else "dist/reports/render_comparison"),
+                   .allocated = true,
+               } };
+           }
+     }
+     return .{ .run = try parseRunOptions(args[1..]) };
 }
 
 fn parseRunOptions(args: []const []const u8) !CliOptions {
