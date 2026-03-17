@@ -56,6 +56,21 @@
 - 树节点首列图标槽已经固定宽度，避免不同类型节点文本起点抖动。
 - `visible / frozen / locked` 三列现在使用统一按钮外框尺寸和列宽，行对齐更稳定。
 
+## 已完成：提交 7 主题与字体校准
+
+- ImGui 全局 style 已收敛到更克制的冷灰参数：
+  - `WindowRounding = 4`
+  - `ChildRounding = 4`
+  - `FrameRounding = 3`
+- `WindowPadding` / `FramePadding` / `CellPadding` / `ItemSpacing` / `IndentSpacing` 已统一收口，不再维持上一版偏圆偏松的数值。
+- Viewport、Outliner 和 Asset Browser 中几个局部按钮 roundings 已降到同一档位，避免全局样式和局部控件割裂。
+- 字体加载策略已整理为：
+  - 优先查找 `assets/ui/fonts` 下的项目字体
+  - 找不到时回退系统 UI / CJK 字体
+  - 最后兜底 ImGui 默认字体
+- 当前仓库尚未提交 `assets/ui/fonts` 实际字体文件，因此本分支运行时会落到“系统字体或 ImGui 默认字体”分支；这是当前真实状态，不是已内置完成。
+- `Reset Dock Layout` 和 `Load Default Layout` 入口已统一走同一 helper，Settings 与 Menu Bar 不再各自分叉逻辑。
+
 ## 验证状态
 
 2026-03-17 已重新执行：
@@ -69,17 +84,14 @@
 - 三条命令全部通过。
 - `validate` 输出为 `资产验证: assets=35, outputs=20, deps=1, issues=0`。
 
-## 下一步
-
 备注：
 
-- 本轮已完成代码级对齐收尾。
 - 当前会话未做 headed UI 截图回放，因此视觉结论仍建议在后续桌面验收里补一轮人工确认。
 
 ## 下一步
 
-下一项应进入 `提交 7：主题与字体校准`，优先完成：
+下一项应进入 `提交 8：辅助增强`，优先完成：
 
-- rounding / spacing / style 统一
-- 内置字体优先和字体加载策略整理
-- Reset Layout 全入口回归验证
+- Browser material 一等资产支持
+- Material 拖拽到实体 / Viewport 的工作流
+- 面包屑与资产工作流细节收口
