@@ -163,6 +163,12 @@ fn runBenchmark(allocator: std.mem.Allocator, scene_path: []const u8, update_gol
     });
     defer app.deinit();
 
+    // Test async loading during benchmark
+    const handle = try app.world.importGltfAsync("assets/models/guava_showcase/guava_showcase.gltf", .{
+        .translation = .{ 0.0, 0.0, 0.0 },
+    }, null);
+    handle.wait();
+
     try engine.scene.loadWorldFromPath(allocator, &app.world, scene_path);
     try app.renderer.setSceneViewportSize(width, height);
 
@@ -257,7 +263,7 @@ fn runCompareRender(allocator: std.mem.Allocator, scene_path: []const u8, output
 }
 
 fn runGenerateBenchmark(allocator: std.mem.Allocator, output_path: []const u8) !void {
-    var world = engine.scene.World.init(allocator);
+    var world = engine.scene.World.init(allocator, null);
     defer world.deinit();
     try world.bootstrap3D();
 
