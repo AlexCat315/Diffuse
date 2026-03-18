@@ -36,6 +36,11 @@
       "fragment": "assets/shaders/tonemap.frag.glsl"
     },
     {
+      "name": "bloom",
+      "vertex": "assets/shaders/tonemap.vert.glsl",
+      "fragment": "assets/shaders/bloom.frag.glsl"
+    },
+    {
       "name": "skybox",
       "vertex": "assets/shaders/skybox.vert.glsl",
       "fragment": "assets/shaders/skybox.frag.glsl"

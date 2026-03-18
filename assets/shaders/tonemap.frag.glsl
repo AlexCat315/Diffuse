@@ -4,9 +4,12 @@ layout(location = 0) in vec2 v_uv;
 layout(location = 0) out vec4 out_color;
 
 layout(set = 2, binding = 0) uniform sampler2D u_hdr_map;
+layout(set = 2, binding = 1) uniform sampler2D u_bloom_map;
 layout(set = 3, binding = 0, std140) uniform TonemapUniforms {
     // x: 启用手动曝光，y: 曝光倍率
     vec4 u_exposure_params;
+    // x: 启用 Bloom，y: Bloom 强度
+    vec4 u_bloom_params;
 } tonemap_uniforms;
 
 // ACES tonemap curve
@@ -21,6 +24,9 @@ vec3 ACESFilm(vec3 x) {
 
 void main() {
     vec3 hdr_color = texture(u_hdr_map, v_uv).rgb;
+    if (tonemap_uniforms.u_bloom_params.x > 0.5) {
+        hdr_color += texture(u_bloom_map, v_uv).rgb * max(tonemap_uniforms.u_bloom_params.y, 0.0);
+    }
     float exposure = tonemap_uniforms.u_exposure_params.x > 0.5 ? max(tonemap_uniforms.u_exposure_params.y, 0.0) : 1.0;
     hdr_color *= exposure;
 
