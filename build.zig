@@ -156,8 +156,15 @@ pub fn build(b: *std.Build) void {
     const validate_step = b.step("validate", "Validate project assets");
     validate_step.dependOn(&validate_cmd.step);
 
+    // 为 engine_mod 测试创建一个带日志配置的自定义根
+    const test_mod = b.createModule(.{
+        .root_source_file = b.path("src/test_main.zig"),
+        .target = target,
+    });
+    configureEngineModule(b, test_mod, target.result.os.tag, sdl_prefix);
+    
     const mod_tests = b.addTest(.{
-        .root_module = engine_mod,
+        .root_module = test_mod,
     });
     mod_tests.linkLibC();
     mod_tests.linkLibCpp();
@@ -176,6 +183,24 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
+
+    const console_test_mod = b.createModule(.{
+        .root_source_file = b.path("src/test_console.zig"),
+        .target = target,
+    });
+    configureEngineModule(b, console_test_mod, target.result.os.tag, sdl_prefix);
+    
+    const console_test_exe = b.addExecutable(.{
+        .name = "test-console",
+        .root_module = console_test_mod,
+    });
+    console_test_exe.linkLibC();
+    console_test_exe.linkLibCpp();
+    console_test_exe.step.dependOn(&run_shader_codegen.step);
+    
+    const console_test_cmd = b.addRunArtifact(console_test_exe);
+    const console_test_step = b.step("test-console", "Test console logging");
+    console_test_step.dependOn(&console_test_cmd.step);
 
     const shaders_step = b.step("shaders", "Compile shaders and regenerate reflection metadata");
     shaders_step.dependOn(&run_shader_codegen.step);
