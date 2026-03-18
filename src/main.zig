@@ -133,7 +133,7 @@ const SandboxLayer = struct {
     }
 };
 
-pub fn main() !void {
+pub fn main() !u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
     
@@ -151,7 +151,8 @@ pub fn main() !void {
     defer {
         const leaked = gpa.deinit();
         if (leaked == .leak) {
-            std.debug.print("GPA detected memory leaks\n", .{});
+            std.debug.print("❌ 致命错误：检测到 GPA 内存泄漏！程序将以错误码 1 退出。\n", .{});
+            std.process.exit(1);
         }
     }
 
@@ -162,6 +163,8 @@ pub fn main() !void {
         .@"generate-benchmark" => |options| try runGenerateBenchmark(allocator, options.output_path),
         .@"compare-render" => |options| try runCompareRender(allocator, options.scene_path, options.output_dir),
     }
+    
+    return 0; // 正常退出返回 0
 }
 
 fn runBenchmark(allocator: std.mem.Allocator, scene_path: []const u8, update_golden: bool) !void {
@@ -207,11 +210,18 @@ fn runBenchmark(allocator: std.mem.Allocator, scene_path: []const u8, update_gol
         try std.fs.cwd().writeFile(.{ .sub_path = golden_path, .data = frame_ppm });
         std.log.info("Golden image updated: {s}", .{golden_path});
     } else {
-        const golden_ppm = std.fs.cwd().readFileAlloc(allocator, golden_path, 10 * 1024 * 1024) catch |err| {
+        // 动态获取文件真实大小，移除硬编码的 10MB 限制
+        const file_stat = std.fs.cwd().statFile(golden_path) catch |err| {
             if (err == error.FileNotFound) {
                 std.log.err("Golden image not found: {s}. Run with --update-golden to create it.", .{golden_path});
                 return err;
             }
+            std.log.err("无法获取基准文件状态: {s}", .{@errorName(err)});
+            return err;
+        };
+        
+        const golden_ppm = std.fs.cwd().readFileAlloc(allocator, golden_path, file_stat.size) catch |err| {
+            std.log.err("读取基准文件失败: {s}", .{@errorName(err)});
             return err;
         };
         defer allocator.free(golden_ppm);
@@ -405,20 +415,20 @@ fn runValidate(allocator: std.mem.Allocator, options: ValidateOptions) !void {
     }
     try stdout.flush();
 
-    std.fs.cwd().makePath("dist/reports") catch {};
-    if (std.fs.cwd().createFile("dist/reports/asset_validation_report.json", .{})) |file| {
-        defer file.close();
-        var output = std.ArrayList(u8).empty;
-        defer output.deinit(allocator);
+    try std.fs.cwd().makePath("dist/reports");
+    const file = try std.fs.cwd().createFile("dist/reports/asset_validation_report.json", .{});
+    defer file.close();
+    var output = std.ArrayList(u8).empty;
+    defer output.deinit(allocator);
 
-        var writer = output.writer(allocator);
-        var adapter_buffer: [8192]u8 = undefined;
-        var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
-        std.json.Stringify.value(report, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface) catch {};
-        writer_adapter.new_interface.flush() catch {};
+    var writer = output.writer(allocator);
+    var adapter_buffer: [8192]u8 = undefined;
+    var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
+    try std.json.Stringify.value(report, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
+    try writer_adapter.new_interface.flush();
 
-        file.writeAll(output.items) catch {};
-    } else |_| {}
+    try file.writeAll(output.items);
+    std.debug.print("✅ 资产验证报告已成功生成: dist/reports/asset_validation_report.json\n", .{});
 
     if (!report.ok()) {
         return error.ValidationFailed;
