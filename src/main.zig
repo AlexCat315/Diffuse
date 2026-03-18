@@ -125,9 +125,17 @@ const SandboxLayer = struct {
         const self: *SandboxLayer = @ptrCast(@alignCast(context));
         if (self.spinning_entity) |entity_id| {
             if (layer_context.world.getEntity(entity_id)) |entity| {
-                var euler = engine.math.quat.toEuler(entity.local_transform.rotation);
-                euler[1] += 0.75 * layer_context.delta_seconds;
-                entity.local_transform.rotation = engine.math.quat.fromEuler(euler);
+                // 计算这一帧的旋转增量（弧度）
+                const delta_angle = 0.75 * layer_context.delta_seconds;
+                
+                // 构造绕Y轴的增量旋转四元数（避免万向节死锁，效率更高）
+                const delta_rotation = engine.math.quat.fromAxisAngle(.{ 0.0, 1.0, 0.0 }, delta_angle);
+                
+                // 使用四元数乘法叠加旋转（这是3D图形学标准做法）
+                entity.local_transform.rotation = engine.math.quat.mul(entity.local_transform.rotation, delta_rotation);
+                
+                // 归一化防止浮点误差累积
+                entity.local_transform.rotation = engine.math.quat.normalize(entity.local_transform.rotation);
             }
         }
     }
@@ -202,7 +210,7 @@ fn runBenchmark(allocator: std.mem.Allocator, scene_path: []const u8, update_gol
     const scene_basename = std.fs.path.basename(scene_path);
     const scene_name = if (std.mem.lastIndexOfScalar(u8, scene_basename, '.')) |idx| scene_basename[0..idx] else scene_basename;
 
-    std.fs.cwd().makePath("assets/benchmarks/golden") catch {};
+    try std.fs.cwd().makePath("assets/benchmarks/golden");
     const golden_path = try std.fmt.allocPrint(allocator, "assets/benchmarks/golden/{s}.ppm", .{scene_name});
     defer allocator.free(golden_path);
 
@@ -232,7 +240,7 @@ fn runBenchmark(allocator: std.mem.Allocator, scene_path: []const u8, update_gol
         } else {
             std.log.err("Benchmark FAILED: Render output differs from golden image.", .{});
 
-            std.fs.cwd().makePath("dist/reports/benchmark_diff") catch {};
+            try std.fs.cwd().makePath("dist/reports/benchmark_diff");
             const diff_path = try std.fmt.allocPrint(allocator, "dist/reports/benchmark_diff/{s}_failed.ppm", .{scene_name});
             defer allocator.free(diff_path);
             try std.fs.cwd().writeFile(.{ .sub_path = diff_path, .data = frame_ppm });
