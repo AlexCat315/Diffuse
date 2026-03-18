@@ -35,7 +35,7 @@
 
 未实现或部分实现的核心功能：
 
-- **P7**: 剔除、BVH与射线检测重构 - 有Frustum基础，未完整集成
+- **P7**: 剔除、BVH与射线检测重构 - 主场景 Scene Extraction 级视锥剔除与 raycast broad phase BVH 已接入，完整 BVH 复用仍未完成
 - **P8**: 动画系统 - 未实现（无Skeleton、Clip、Skinning）
 - **P9**: 物理系统 - 未实现（无Rigidbody、Collider、物理模拟）
 - **P10**: 脚本与Gameplay - 未实现（无脚本组件、热重载）
@@ -125,6 +125,12 @@
 ### 目标
 
 让大场景 CPU 提交与编辑器选择成本进入可控范围。
+
+当前进展：
+
+- 已完成主场景 `Scene Extraction` 级视锥剔除接线，并移除 `mesh_pass` 内重复的 mesh 剔除。
+- 已完成 `raycast` 的静态 mesh bounds BVH broad phase，选择命中从“逐实体全扫”收敛为 “BVH broad phase + triangle narrow phase”。
+- `BVH` 复用到更多可见性路径、碰撞可视化复用与更细粒度增量更新仍未开始封账。
 
 ### 主要任务
 
