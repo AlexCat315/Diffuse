@@ -1,365 +1,101 @@
-# Guava Engine 核心缺口补齐落地计划
+# Guava Engine 核心缺口补齐落地计划（已更新 - 删除已实现部分）
 
 本文基于当前仓库实现状态编写，目标是把已经识别出的核心缺口转成可执行的实施顺序。本文不提供时间估算，只定义依赖关系、阶段目标、交付物、完成标准与延后策略。
 
-本文关注的缺口包括：
-- 渲染管线完整性。
-- 动画系统。
-- 场景剔除与空间结构。
-- 物理与碰撞后端。
-- 异步资产加载。
-- 脚本与 Gameplay。
+## 已实现阶段总结
 
-## 1. 总体目标
+截至最新更新，以下阶段已经**完整实现**：
 
-目标不是“把功能名录补齐”，而是把引擎从当前的编辑器原型态推进到可持续演进的运行时架构。所有阶段都必须服务于以下约束：
+- ✅ **P0**: 验收基线与回归骨架 - 已完成（基准测试、黄金图像、报告系统）
+- ✅ **P1**: 运行时数据层重构 - 已完成（Transform、层级缓存、包围体、glTF导入语义修正）
+- ✅ **P2**: 场景提取与渲染数据模型重构 - 已完成（Scene Extraction、RenderWorld、PreparedScene结构）
+- ✅ **P3**: 异步资产管线与JobSystem - 已完成（后台加载、GPU上传队列、资产状态管理）
+- ✅ **P6**: 阴影系统 - 已完成（方向光ShadowPass、CSM基础框架）
 
-- 运行时与编辑器数据模型一致，不允许为了编辑器便利破坏运行时结构。
-- 新系统必须通过可验证的验收条件进入主干。
-- 新功能不能继续堆叠在同步 IO、欧拉角层级合成、扁平场景提交流程之上。
-- 每一阶段结束后，仓库都必须保持可编译、可回归、可诊断。
+## 剩余缺口清单
 
-## 2. 当前状态结论
+未实现或部分实现的核心功能：
 
-当前实现的关键结论如下：
+- **P4**: 材质系统2.0 - 数据结构完成，Shader和后处理链不完整
+- **P5**: IBL、Skybox、HDR与后处理 - 未实现
+- **P7**: 剔除、BVH与射线检测重构 - 有Frustum基础，未完整集成
+- **P8**: 动画系统 - 未实现（无Skeleton、Clip、Skinning）
+- **P9**: 物理系统 - 未实现（无Rigidbody、Collider、物理模拟）
+- **P10**: 脚本与Gameplay - 未实现（无脚本组件、热重载）
 
-- `render_graph.zig` 已经有 `ShadowMap / Lighting / PostProcess` 等逻辑名词，但运行时实际执行链路仍以 `ID / DepthPrepass / BasePass / Outline / Gizmo / UI` 为主。
-- 材质数据仍只有 `base_color_factor + base_color_texture`，`pbr_metallic_roughness` 目前只是命名，不是完整物理材质工作流。
-- `mesh.frag.glsl` 仍是单方向光、单点光和环境项的简化直接光照，ACES 也直接写在材质 shader 内，不是真正的后处理链。
-- glTF 导入器目前只覆盖静态网格通路，且会把节点变换 bake 进顶点，未保留可供骨骼动画、实例化和精确剔除使用的原始节点结构。
-- 场景仍以扁平 `ArrayList(Entity)` 为核心，提交渲染与射线检测都缺少正式的 broad phase。
-- 资产导入、cook、解码、加载目前都在调用线程同步执行。
-- 物理、通用脚本与热重载尚未进入正式运行时架构。
+## 当前状态结论（精简）
 
-因此，正确顺序不是“先加阴影或动画”，而是先补基础运行时层，再做渲染、动画、物理和脚本。
+- 渲染管线具备基础结构（DepthPrepass、BasePass、ShadowPass），但缺少完整的PBR后处理链
+- 材质数据结构已扩展为完整PBR（base_color、normal、metallic_roughness、occlusion、emissive），但Shader实现不完整
+- glTF导入保留节点层级，支持骨骼动画所需数据结构，但运行时动画系统未实现
+- 场景提取已完成，具备RenderWorld和PreparedScene，但缺少BVH加速结构
+- 资产系统完全异步化，具备JobSystem和GPU上传管理
+- 物理、脚本系统完全未实现
 
-## 3. 执行顺序概览
+## 剩余执行顺序
 
-建议按照以下顺序推进：
+建议按照以下顺序推进剩余工作：
 
-1. `P0` 验收基线与回归骨架。
-2. `P1` 运行时数据层重构：Transform、层级缓存、包围体、导入语义修正。
-3. `P2` 场景提取与渲染数据模型重构。
-4. `P3` 异步资产管线与主线程 GPU 上传。
-5. `P4` 材质系统 2.0 与真实 PBR 基线。
-6. `P5` IBL、Skybox、HDR 与后处理。
-7. `P6` 阴影系统。
-8. `P7` 剔除、BVH 与射线检测重构。
-9. `P8` 动画系统 MVP。
-10. `P9` 物理系统 MVP。
-11. `P10` 脚本与 Gameplay MVP。
+### 下一阶段（高优先级）
 
-并行原则：
+1. **P4**: 材质系统2.0与真实PBR基线
+   - 完成Shader实现：标准PBR BRDF、纹理色彩空间处理
+   - 移除材质Shader内部硬编码的Tonemap
+   - 实现材质实例化与BindGroup布局稳定接口
 
-- `P0` 必须最先完成。
-- `P1` 完成前，不进入动画与物理实现。
-- `P2` 和 `P3` 可以局部并行，但都必须先于完整渲染扩展。
-- `P4-P6` 共同构成渲染可用线，必须连续推进。
-- `P7` 可以在 `P4` 之后提前插入，但不能早于 `P1`。
-- `P8` 依赖 `P1` 与 `P2`，并受益于 `P7` 的 bounds/BVH 基础。
-- `P9` 依赖 `P1`，且要求 `Application` 主循环已经具备固定步长接口。
-- `P10` 最好在 `P9` 之后执行，避免脚本 API 反复变更。
+2. **P5**: IBL、Skybox、HDR与后处理
+   - 环境贴图资源通路
+   - Skybox绘制
+   - 生成并缓存irradiance map、prefiltered env map、BRDF LUT
+   - HDR颜色缓冲与后处理链（Bloom、Exposure、Tonemap、FXAA）
 
-## 4. 跨阶段工程规则
+### 中期阶段
+
+3. **P7**: 剔除、BVH与射线检测重构
+   - 基于Scene Extraction的视锥体剔除
+   - 静态BVH构建（服务剔除与射线检测）
+   - Raycast升级为broad phase + narrow phase
+
+4. **P8**: 动画系统MVP
+   - SkeletonResource、SkinResource、AnimationClipResource
+   - SkinnedMesh、Animator、AnimationState组件
+   - glTF导入skin、joints、inverseBindMatrices、animations
+   - GPU Vertex Skinning实现
+   - 基础Clip混合与Cross-fade
+
+### 后期阶段
+
+5. **P9**: 物理系统MVP
+   - 物理抽象层设计（不直接暴露第三方库API）
+   - Rigidbody、BoxCollider、SphereCollider、MeshCollider组件
+   - Application固定步长更新（累积器、多tick消化）
+   - Jolt物理引擎适配层
+   - 物理世界与场景树同步
+
+6. **P10**: 脚本与Gameplay MVP
+   - Script组件与Script资源
+   - 脚本生命周期（OnInit、OnUpdate、OnDestroy）
+   - 基础场景API暴露
+   - 脚本热重载机制
+   - 错误隔离与日志系统
+
+## 跨阶段工程规则（保持不变）
 
 所有阶段统一遵守以下规则：
 
-- 每个阶段必须有单独的设计说明或章节补充，记录数据结构变化与迁移策略。
-- 每个阶段必须更新自动化验证，至少覆盖一个回归路径。
-- 每个阶段必须保留 feature flag 或明确的开关，避免半成品影响主流程。
-- 每个阶段必须输出至少一个基准场景或测试样例。
-- 每个阶段必须把日志、统计、错误上下文接入现有报告链路。
+- 每个阶段必须有单独的设计说明或章节补充，记录数据结构变化与迁移策略
+- 每个阶段必须更新自动化验证，至少覆盖一个回归路径
+- 每个阶段必须保留feature flag或明确的开关，避免半成品影响主流程
+- 每个阶段必须输出至少一个基准场景或测试样例
+- 每个阶段必须把日志、统计、错误上下文接入现有报告链路
 
 建议新增的跨阶段产物：
 
-- `dist/reports/` 下统一输出渲染、导入、动画与物理报告。
-- `assets/benchmarks/` 或等价目录，收纳材质球、阴影、动画、物理基准场景。
-- `docs/` 下追加每阶段设计决策与兼容性说明。
+- `dist/reports/` 下统一输出渲染、导入、动画与物理报告
+- `assets/benchmarks/` 或等价目录，收纳材质球、阴影、动画、物理基准场景
+- `docs/` 下追加每阶段设计决策与兼容性说明
 
 ## 5. 详细阶段计划
-
-### P0 验收基线与回归骨架
-
-### 目标
-
-把后续所有改动挂到可验证的基线上，避免“功能做了，但无法判断是不是变差”。
-
-### 主要任务
-
-- 建立三类基准场景：
-- 材质与光照基准场景。
-- 阴影基准场景。
-- 导入与动画基准场景占位。
-- 固化当前渲染输出的黄金图与差分阈值。
-- 固化当前资产导入与场景加载的报告输出。
-- 补充 `zig build test` 必经的系统级 smoke test。
-- 明确每个阶段的验收入口命令与报告路径。
-
-### 主要改动范围
-
-- `docs/architecture_acceptance.md`
-- `src/engine/render/renderer.zig`
-- `src/engine/assets/validator.zig`
-- `src/main.zig`
-
-### 完成定义
-
-- 仓库可以稳定输出渲染报告、资产验证报告与黄金图差分结果。
-- 至少存在一组固定场景可用于后续每阶段回归。
-- 任何阶段结束后，都能直接对比“改动前后渲染与统计差异”。
-
-### 本阶段不做
-
-- 不修功能缺口本身。
-- 不引入新渲染特性。
-
-### P1 运行时数据层重构
-
-### 目标
-
-为动画、物理、剔除和稳定渲染建立正确的数据底座。
-
-### 主要任务
-
-- 将运行时 Transform 从“仅欧拉角表示”升级为适合组合、插值与同步的形式：
-- 运行时建议使用 `translation + quaternion + scale`。
-- 编辑器 UI 仍可保留欧拉角显示与编辑，但不能作为运行时真值。
-- 为世界层级建立 `world transform cache` 与 dirty 传播。
-- 为网格资源建立 `local bounds`。
-- 为实体建立 `world bounds` 计算与缓存。
-- 修正 glTF 导入语义：
-- 不再把节点局部变换直接 bake 到顶点后丢失节点结构。
-- 导入后保留节点层级与局部变换。
-- 调整序列化与反序列化，支持新 Transform 结构与 bounds 缓存策略。
-
-### 主要改动范围
-
-- `src/engine/scene/components.zig`
-- `src/engine/scene/world.zig`
-- `src/engine/math/`
-- `src/engine/assets/mesh_resource.zig`
-- `src/engine/assets/gltf_import.zig`
-- `src/engine/scene/scene_io.zig`
-
-### 完成定义
-
-- 层级变换不再通过欧拉角直接相加得到最终姿态。
-- 运行时可稳定产出 world matrix。
-- 网格与实体都可查询本地/世界包围盒。
-- glTF 导入后的节点层级、局部姿态与资源引用可保留，不再退化成 baked 静态结果。
-
-### 风险与注意事项
-
-- 这是全局性结构变化，必须优先处理兼容与迁移。
-- 如果此阶段处理不彻底，后面的动画、物理与阴影都会返工。
-
-### P2 场景提取与渲染数据模型重构
-
-### 目标
-
-把“Scene/World 的编辑数据”与“Render 提交数据”分层，避免继续在 `prepareScene()` 内直接混合遍历、光照选择、资源解析和 draw item 组装。
-
-### 主要任务
-
-- 引入明确的 Scene Extraction 阶段。
-- 定义 `RenderWorld`、`RenderableProxy` 或等价结构。
-- 把相机、灯光、可渲染对象、调试对象从 `World` 提取到帧级只读结构。
-- 把 `PreparedScene` 从简单 draw item 数组提升为明确的提交数据块：
-- 相机块。
-- 灯光块。
-- 不透明对象块。
-- 透明对象块。
-- 调试可视化块。
-- 为后续剔除、阴影、动画 skinning 与多 pass 重用留出接口。
-
-### 主要改动范围
-
-- `src/engine/render/mesh_pass.zig`
-- `src/engine/render/renderer.zig`
-- `src/engine/scene/world.zig`
-- 新增 `src/engine/render/scene_extraction.zig` 或等价模块
-
-### 完成定义
-
-- `Renderer` 不再直接从 `World.entities` 临时拼装渲染提交数据。
-- 后续增加阴影、IBL、动画 skinning 时，不需要再改写整个提交流程。
-
-### 本阶段不做
-
-- 不引入新画面特性。
-- 不在本阶段完成剔除算法，只建立提取边界。
-
-### P3 异步资产管线与 GPU 上传
-
-### 目标
-
-把同步导入和解码从主线程移出，让编辑器在加载中大型资源时仍能交互。
-
-### 主要任务
-
-- 实现 `TaskSystem` 或 `JobSystem`。
-- 将以下工作移到后台线程：
-- 纹理解码。
-- glTF JSON 解析。
-- buffer/image 读取。
-- cook 与 cache 命中检测。
-- 定义后台结果结构：
-- CPU 解码结果。
-- 导入日志与错误。
-- 依赖解析结果。
-- 定义主线程上传队列：
-- 统一提交 buffer/image 上传。
-- 统一管理 staging 生命周期。
-- 引入加载状态与占位资源。
-- 为资产浏览器与 inspector 提供“正在导入/等待上传/失败”状态。
-
-### 主要改动范围
-
-- `src/engine/assets/registry.zig`
-- `src/engine/assets/texture_import.zig`
-- `src/engine/assets/gltf_import.zig`
-- `src/engine/assets/library.zig`
-- `src/engine/render/renderer.zig`
-- `src/editor/assets/browser.zig`
-
-### 完成定义
-
-- 导入大型 glTF 与高分辨率贴图时，主线程不再长时间阻塞。
-- GPU 上传有统一入口，而不是散落在各资源创建路径中。
-- 资产失败时，编辑器可见失败原因与阶段。
-
-### 风险与注意事项
-
-- 资源库需要明确线程边界；后台线程不得直接写 GPU 对象。
-- 必须先定义上传所有权与错误回收路径。
-
-### P4 材质系统 2.0 与真实 PBR 基线
-
-### 目标
-
-把当前“材质名义上是 PBR，运行时实际上不是”的状态修正为完整最小 PBR。
-
-### 主要任务
-
-- 扩展材质资源定义：
-- `base_color`
-- `normal`
-- `metallic_roughness`
-- `ao`
-- `emissive`
-- `alpha mode`
-- `double sided`
-- 规定纹理色彩空间：
-- BaseColor/Emissive 走 sRGB。
-- Normal/MetallicRoughness/AO 走 Linear。
-- 扩展 glTF 导入器：
-- 读取 `normalTexture`。
-- 读取 `metallicRoughnessTexture`。
-- 读取 `occlusionTexture`。
-- 读取 `emissiveTexture` 与 emissive factor。
-- 改写基础 shader：
-- 引入标准 PBR BRDF 计算。
-- 去掉材质 shader 内部直接做的 tonemap。
-- 让 `shading model` 真正参与运行时分支或变体。
-- 为材质实例化与 bind group 布局留出稳定接口。
-
-### 主要改动范围
-
-- `src/engine/assets/material_resource.zig`
-- `src/engine/assets/gltf_import.zig`
-- `src/engine/render/mesh_pass.zig`
-- `assets/shaders/mesh.vert.glsl`
-- `assets/shaders/mesh.frag.glsl`
-- `src/editor/ui/windows/material_editor.zig`
-
-### 完成定义
-
-- 粗糙度与金属度对高光响应真实有效。
-- 法线贴图与 AO 能进入渲染路径。
-- 材质资源不再只围绕 base color 组织。
-- “PBR Metallic Roughness” 不再只是 UI 名词。
-
-### 本阶段不做
-
-- 不引入 Shader Graph。
-- 不处理完整材质节点系统。
-
-### P5 IBL、Skybox、HDR 与后处理
-
-### 目标
-
-建立现代画面质量的基础链路，让材质和光照表现进入正确空间。
-
-### 主要任务
-
-- 引入环境贴图资产或等价资源通路。
-- 支持 Skybox 绘制。
-- 生成并缓存：
-- `irradiance map`
-- `prefiltered env map`
-- `BRDF LUT`
-- 将主颜色缓冲升级为 HDR 格式。
-- 正式引入后处理链：
-- Bloom
-- Exposure
-- Tonemap
-- FXAA
-- 允许后续插入 Color Grading、LUT、TAA。
-- 把 ACES 从材质 shader 移到后处理 pass。
-
-### 主要改动范围
-
-- `src/engine/render/render_graph.zig`
-- `src/engine/render/renderer.zig`
-- 新增 `src/engine/render/post_*.zig`
-- 新增 `src/engine/render/skybox_*.zig`
-- 新增环境贴图处理模块
-
-### 完成定义
-
-- 场景主渲染进入 HDR，再由后处理输出到 swapchain。
-- 环境反射、粗糙度响应与间接光照表现合理。
-- 后处理效果具备独立开关与明确顺序。
-
-### 风险与注意事项
-
-- 如果在真实 HDR 与 IBL 之前先上 Bloom 或 TAA，会制造后续重写。
-
-### P6 阴影系统
-
-### 目标
-
-建立可控、稳定、可调试的阴影通路。
-
-### 主要任务
-
-- 先实现方向光 shadow pass。
-- 再扩展为 `CSM`：
-- cascade 划分策略。
-- 稳定化相机。
-- 偏移与过滤。
-- 提供阴影调试可视化：
-- cascade 边界。
-- shadow map 预览。
-- 深度 bias 与过滤参数。
-- 点光 Cube Shadow 放在本阶段尾部或后续扩展，不作为先决条件。
-
-### 主要改动范围
-
-- `src/engine/render/render_graph.zig`
-- `src/engine/render/renderer.zig`
-- 新增 `src/engine/render/shadow_pass.zig`
-- 相关 shader 与资源布局
-
-### 完成定义
-
-- 户外基准场景具备稳定方向光阴影。
-- 阴影参数可调、结果可诊断。
-- 渲染图中的 `ShadowMap` 不再只是概念资源。
-
-
-- 不以点光阴影完备性为阻塞项。
-- 不在此阶段引入复杂 GI。
 
 ### P7 剔除、BVH 与射线检测重构
 
@@ -557,14 +293,5 @@
 - 一份报告输出，能够证明阶段能力已进入可诊断状态。
 
 如果某阶段无法同时交付以上内容，则视为未完成，不进入下一阶段。
-
-## 8. 首个执行批次
-
-建议第一个执行批次只覆盖以下内容：
-
-- `P0` 全部。
-- `P1` 全部。
-- `P2` 的边界建立。
-
 
 ---
