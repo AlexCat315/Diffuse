@@ -448,53 +448,92 @@ test "main boots the engine skeleton" {
 }
 
 fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
+    var args = try std.process.argsWithAllocator(allocator);
+    defer args.deinit();
 
-    if (args.len > 1) {
-        if (std.mem.eql(u8, args[1], "validate")) {
-            return .{ .validate = try parseValidateOptionsAlloc(allocator, args[2..]) };
-        }
-        if (std.mem.eql(u8, args[1], "benchmark")) {
-            var scene_path: []const u8 = "assets/benchmarks/material_p0.json";
-            var update_golden = false;
-            var index: usize = 2;
-            while (index < args.len) : (index += 1) {
-                if (std.mem.eql(u8, args[index], "--scene")) {
-                    index += 1;
-                    if (index < args.len) scene_path = args[index];
-                } else if (std.mem.eql(u8, args[index], "--update-golden")) {
-                    update_golden = true;
-                }
-            }
-            return .{ .benchmark = .{
-                .scene_path = try allocator.dupe(u8, scene_path),
-                .update_golden = update_golden,
-                .allocated = true,
-            } };
-        }
-        if (std.mem.eql(u8, args[1], "generate-benchmark")) {
-            if (args.len > 2) {
-                return .{ .@"generate-benchmark" = .{
-                    .output_path = try allocator.dupe(u8, args[2]),
-                    .allocated = true,
-                } };
-            } else {
-                return .{ .@"generate-benchmark" = .{
-                    .output_path = "assets/scenes/benchmark_p0.json",
-                    .allocated = false,
-                } };
-            }
-        }
-        if (std.mem.eql(u8, args[1], "compare-render")) {
-            return .{ .@"compare-render" = .{
-                .scene_path = try allocator.dupe(u8, if (args.len > 2) args[2] else "assets/scenes/benchmark_p0.json"),
-                .output_dir = try allocator.dupe(u8, if (args.len > 3) args[3] else "dist/reports/render_comparison"),
-                .allocated = true,
-            } };
-        }
+    // 跳过程序名称
+    _ = args.next();
+
+    const command_name = args.next();
+    if (command_name == null) {
+        // 没有提供命令，默认为 run
+        return .{ .run = try parseRunOptions(&.{}) };
     }
-    return .{ .run = try parseRunOptions(args[1..]) };
+
+    if (std.mem.eql(u8, command_name.?, "validate")) {
+        // 收集剩余参数作为切片
+        var remaining = try std.ArrayList([]const u8).initCapacity(allocator, 0);
+        defer remaining.deinit(allocator);
+        while (args.next()) |arg| {
+            try remaining.append(allocator, arg);
+        }
+        return .{ .validate = try parseValidateOptionsAlloc(allocator, remaining.items) };
+    }
+
+    if (std.mem.eql(u8, command_name.?, "benchmark")) {
+        var scene_path: []const u8 = "assets/benchmarks/material_p0.json";
+        var update_golden = false;
+        while (args.next()) |arg| {
+            if (std.mem.eql(u8, arg, "--scene")) {
+                const next_arg = args.next();
+                if (next_arg) |next| {
+                    scene_path = next;
+                } else {
+                    return error.MissingArgument;
+                }
+            } else if (std.mem.eql(u8, arg, "--update-golden")) {
+                update_golden = true;
+            } else {
+                return error.InvalidArgument;
+            }
+        }
+        return .{ .benchmark = .{
+            .scene_path = try allocator.dupe(u8, scene_path),
+            .update_golden = update_golden,
+            .allocated = true,
+        } };
+    }
+
+    if (std.mem.eql(u8, command_name.?, "generate-benchmark")) {
+        const output_path_arg = args.next();
+        const output_path = if (output_path_arg) |path| path else "assets/scenes/benchmark_p0.json";
+        // 确保没有多余参数
+        if (args.next()) |extra| {
+            std.debug.print("Unexpected argument: {s}\n", .{extra});
+            return error.InvalidArgument;
+        }
+        return .{ .@"generate-benchmark" = .{
+            .output_path = try allocator.dupe(u8, output_path),
+            .allocated = output_path_arg != null,
+        } };
+    }
+
+    if (std.mem.eql(u8, command_name.?, "compare-render")) {
+        const scene_path_arg = args.next();
+        const output_dir_arg = args.next();
+        const scene_path = if (scene_path_arg) |path| path else "assets/scenes/benchmark_p0.json";
+        const output_dir = if (output_dir_arg) |dir| dir else "dist/reports/render_comparison";
+        // 确保没有多余参数
+        if (args.next()) |extra| {
+            std.debug.print("Unexpected argument: {s}\n", .{extra});
+            return error.InvalidArgument;
+        }
+        return .{ .@"compare-render" = .{
+            .scene_path = try allocator.dupe(u8, scene_path),
+            .output_dir = try allocator.dupe(u8, output_dir),
+            .allocated = true,
+        } };
+    }
+
+    // 如果不是上述命令，则视为 run 命令，并将 command_name 作为第一个参数传递给 parseRunOptions
+    // 我们需要将 command_name 和剩余参数收集起来
+    var run_args = try std.ArrayList([]const u8).initCapacity(allocator, 0);
+    defer run_args.deinit(allocator);
+    try run_args.append(allocator, command_name.?);
+    while (args.next()) |arg| {
+        try run_args.append(allocator, arg);
+    }
+    return .{ .run = try parseRunOptions(run_args.items) };
 }
 
 fn parseRunOptions(args: []const []const u8) !CliOptions {
