@@ -141,9 +141,66 @@ const SandboxLayer = struct {
     }
 };
 
+fn ensureProjectRootAsCwd(allocator: std.mem.Allocator) !void {
+    std.fs.cwd().access("assets", .{}) catch |err| switch (err) {
+        error.FileNotFound => {
+            const resolved_root = try resolveProjectRootAlloc(allocator);
+            defer if (resolved_root) |root| allocator.free(root);
+
+            if (resolved_root) |root| {
+                try std.process.changeCurDir(root);
+            }
+        },
+        else => return err,
+    };
+}
+
+fn resolveProjectRootAlloc(allocator: std.mem.Allocator) !?[]u8 {
+    const cwd_path = try std.fs.cwd().realpathAlloc(allocator, ".");
+    defer allocator.free(cwd_path);
+    if (try findProjectRootFromAbsoluteAlloc(allocator, cwd_path)) |root| {
+        return root;
+    }
+
+    const exe_dir = try std.fs.selfExeDirPathAlloc(allocator);
+    defer allocator.free(exe_dir);
+    return try findProjectRootFromAbsoluteAlloc(allocator, exe_dir);
+}
+
+fn findProjectRootFromAbsoluteAlloc(allocator: std.mem.Allocator, start_path: []const u8) !?[]u8 {
+    var current = try allocator.dupe(u8, start_path);
+    errdefer allocator.free(current);
+
+    while (true) {
+        const assets_path = try std.fs.path.join(allocator, &.{ current, "assets" });
+        defer allocator.free(assets_path);
+
+        if (std.fs.accessAbsolute(assets_path, .{})) |_| {
+            return current;
+        } else |err| switch (err) {
+            error.FileNotFound => {},
+            else => return err,
+        }
+
+        const parent = std.fs.path.dirname(current) orelse break;
+        if (parent.len == 0 or parent.len == current.len) {
+            break;
+        }
+
+        const next = try allocator.dupe(u8, parent);
+        allocator.free(current);
+        current = next;
+    }
+
+    allocator.free(current);
+    return null;
+}
+
 pub fn main() !u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
+
+    try ensureProjectRootAsCwd(allocator);
 
     // 尽早初始化日志系统 - 必须在任何日志调用之前
     try editor_console.initLogFile();
