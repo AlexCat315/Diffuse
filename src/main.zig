@@ -5,6 +5,7 @@ const editor_console = @import("editor/ui/windows/console.zig");
 
 pub const std_options = std.Options{
     .logFn = editor_console.logFn,
+    .log_level = .debug,  // 设置日志级别为 debug，以便显示所有日志
 };
 
 const CliOptions = struct {
@@ -134,11 +135,25 @@ const SandboxLayer = struct {
 
 pub fn main() !void {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-
     const allocator = gpa.allocator();
+    
+    // 尽早初始化日志系统 - 必须在任何日志调用之前
+    try editor_console.initLogFile();
+    defer editor_console.deinitLogFile();
+    
+    // 测试日志：用于验证 ImGui 控制台是否正常工作
+    std.log.info("Guava Engine initialized successfully", .{});
+    std.log.debug("Debug logging enabled", .{});
+    
     var command = try parseCommandAlloc(allocator);
     defer command.deinit(allocator);
+
+    defer {
+        const leaked = gpa.deinit();
+        if (leaked == .leak) {
+            std.debug.print("GPA detected memory leaks\n", .{});
+        }
+    }
 
     switch (command) {
         .run => |options| try runEngine(allocator, options),
@@ -206,13 +221,13 @@ fn runBenchmark(allocator: std.mem.Allocator, scene_path: []const u8, update_gol
             std.log.info("Benchmark PASSED: Render output matches golden image.", .{});
         } else {
             std.log.err("Benchmark FAILED: Render output differs from golden image.", .{});
-            
+
             std.fs.cwd().makePath("dist/reports/benchmark_diff") catch {};
             const diff_path = try std.fmt.allocPrint(allocator, "dist/reports/benchmark_diff/{s}_failed.ppm", .{scene_name});
             defer allocator.free(diff_path);
             try std.fs.cwd().writeFile(.{ .sub_path = diff_path, .data = frame_ppm });
             std.log.info("Failed frame saved to: {s}", .{diff_path});
-            
+
             return error.BenchmarkValidationFailed;
         }
     }
@@ -459,27 +474,27 @@ fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
             } };
         }
         if (std.mem.eql(u8, args[1], "generate-benchmark")) {
-             if (args.len > 2) {
-                 return .{ .@"generate-benchmark" = .{
-                     .output_path = try allocator.dupe(u8, args[2]),
-                     .allocated = true,
-                 } };
-             } else {
-                 return .{ .@"generate-benchmark" = .{
-                     .output_path = "assets/scenes/benchmark_p0.json",
-                     .allocated = false,
-                 } };
-             }
-         }
-         if (std.mem.eql(u8, args[1], "compare-render")) {
-               return .{ .@"compare-render" = .{
-                   .scene_path = try allocator.dupe(u8, if (args.len > 2) args[2] else "assets/scenes/benchmark_p0.json"),
-                   .output_dir = try allocator.dupe(u8, if (args.len > 3) args[3] else "dist/reports/render_comparison"),
-                   .allocated = true,
-               } };
-           }
-     }
-     return .{ .run = try parseRunOptions(args[1..]) };
+            if (args.len > 2) {
+                return .{ .@"generate-benchmark" = .{
+                    .output_path = try allocator.dupe(u8, args[2]),
+                    .allocated = true,
+                } };
+            } else {
+                return .{ .@"generate-benchmark" = .{
+                    .output_path = "assets/scenes/benchmark_p0.json",
+                    .allocated = false,
+                } };
+            }
+        }
+        if (std.mem.eql(u8, args[1], "compare-render")) {
+            return .{ .@"compare-render" = .{
+                .scene_path = try allocator.dupe(u8, if (args.len > 2) args[2] else "assets/scenes/benchmark_p0.json"),
+                .output_dir = try allocator.dupe(u8, if (args.len > 3) args[3] else "dist/reports/render_comparison"),
+                .allocated = true,
+            } };
+        }
+    }
+    return .{ .run = try parseRunOptions(args[1..]) };
 }
 
 fn parseRunOptions(args: []const []const u8) !CliOptions {
