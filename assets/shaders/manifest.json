@@ -24,6 +24,11 @@
       "name": "gizmo",
       "vertex": "assets/shaders/gizmo.vert.glsl",
       "fragment": "assets/shaders/gizmo.frag.glsl"
+    },
+    {
+      "name": "shadow_pass",
+      "vertex": "assets/shaders/shadow_pass.vert.glsl",
+      "fragment": "assets/shaders/shadow_pass.frag.glsl"
     }
   ]
 }

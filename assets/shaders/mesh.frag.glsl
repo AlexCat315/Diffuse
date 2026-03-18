@@ -12,6 +12,7 @@ layout(set = 2, binding = 1) uniform sampler2D u_metallic_roughness_map;
 layout(set = 2, binding = 2) uniform sampler2D u_normal_map;
 layout(set = 2, binding = 3) uniform sampler2D u_occlusion_map;
 layout(set = 2, binding = 4) uniform sampler2D u_emissive_map;
+layout(set = 2, binding = 5) uniform sampler2DShadow u_shadow_map;
 
 layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     vec4 u_base_color_factor;
@@ -21,9 +22,11 @@ layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     vec4 u_camera_world_position;
     vec4 u_light_direction;
     vec4 u_light_color_intensity;
+    mat4 u_light_space_matrix;
     vec4 u_point_light_position_radius;
     vec4 u_point_light_color_intensity;
     vec4 u_ambient_color;
+    vec4 u_shadow_params; // x: bias
 } material_uniforms;
 
 const float PI = 3.14159265359;
@@ -100,6 +103,27 @@ void main() {
     vec3 F0 = vec3(0.04); 
     F0 = mix(F0, albedo, metallic);
 
+    // Shadow calculation
+    float shadow = 1.0;
+    if (material_uniforms.u_shadow_params.x > 0.0) {
+        vec4 frag_pos_light_space = material_uniforms.u_light_space_matrix * vec4(v_world_position, 1.0);
+        vec3 proj_coords = frag_pos_light_space.xyz / frag_pos_light_space.w;
+        proj_coords = proj_coords * 0.5 + 0.5;
+        
+        float current_depth = proj_coords.z;
+        float bias = material_uniforms.u_shadow_params.x;
+        
+        // Simple PCF
+        shadow = 0.0;
+        vec2 texel_size = 1.0 / textureSize(u_shadow_map, 0);
+        for(int x = -1; x <= 1; ++x) {
+            for(int y = -1; y <= 1; ++y) {
+                shadow += texture(u_shadow_map, vec3(proj_coords.xy + vec2(x, y) * texel_size, current_depth - bias));
+            }    
+        }
+        shadow /= 9.0;
+    }
+
     // Reflectance equation
     vec3 Lo = vec3(0.0);
 
@@ -125,7 +149,7 @@ void main() {
         vec3 specular = numerator / denominator;
 
         float NdotL = max(dot(N, L), 0.0);
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadow;
     }
 
     // Point Light
