@@ -10,6 +10,8 @@ layout(set = 3, binding = 0, std140) uniform TonemapUniforms {
     vec4 u_exposure_params;
     // x: 启用 Bloom，y: Bloom 强度
     vec4 u_bloom_params;
+    // x: 启用 Color Grading，y: 饱和度，z: 对比度，w: Gamma
+    vec4 u_color_grading_params;
 } tonemap_uniforms;
 
 // ACES tonemap curve
@@ -22,6 +24,18 @@ vec3 ACESFilm(vec3 x) {
     return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
 }
 
+vec3 applyColorGrading(vec3 color) {
+    float saturation = max(tonemap_uniforms.u_color_grading_params.y, 0.0);
+    float contrast = max(tonemap_uniforms.u_color_grading_params.z, 0.0);
+    float gamma = max(tonemap_uniforms.u_color_grading_params.w, 0.001);
+
+    float luma = dot(color, vec3(0.2126, 0.7152, 0.0722));
+    color = mix(vec3(luma), color, saturation);
+    color = (color - 0.5) * contrast + 0.5;
+    color = pow(max(color, vec3(0.0)), vec3(1.0 / gamma));
+    return clamp(color, 0.0, 1.0);
+}
+
 void main() {
     vec3 hdr_color = texture(u_hdr_map, v_uv).rgb;
     if (tonemap_uniforms.u_bloom_params.x > 0.5) {
@@ -32,6 +46,9 @@ void main() {
 
     // Tonemapping
     vec3 ldr_color = ACESFilm(hdr_color);
+    if (tonemap_uniforms.u_color_grading_params.x > 0.5) {
+        ldr_color = applyColorGrading(ldr_color);
+    }
 
     // Gamma correction (if the target isn't SRGB, we need to do it manually)
     // Assuming UI texture target is UNORM, we apply standard 2.2 gamma

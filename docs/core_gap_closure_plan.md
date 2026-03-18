@@ -34,7 +34,7 @@
 
 未实现或部分实现的核心功能：
 
-- **P5**: IBL、Skybox、HDR与后处理 - 部分实现（IBL资源链、Skybox、Tonemap、手动Exposure、Bloom MVP 已落地，Color Grading/LUT/FXAA待补）
+- **P5**: IBL、Skybox、HDR与后处理 - 部分实现（IBL资源链、Skybox、Tonemap、手动Exposure、Bloom MVP、Color Grading MVP 已落地，LUT/FXAA待补）
 - **P7**: 剔除、BVH与射线检测重构 - 有Frustum基础，未完整集成
 - **P8**: 动画系统 - 未实现（无Skeleton、Clip、Skinning）
 - **P9**: 物理系统 - 未实现（无Rigidbody、Collider、物理模拟）
@@ -79,7 +79,8 @@
    - ✅ HDR颜色缓冲与后处理链（Tonemap已实现为单Pass）
    - ✅ 手动 Exposure（视口级开关与倍率调节）
    - ✅ Bloom MVP（单 pass 亮部提取 + 邻域模糊）
-   - Color Grading、LUT、FXAA 待补
+   - ✅ Color Grading MVP（视口级 Saturation / Contrast / Gamma）
+   - LUT、FXAA 待补
 
 ### 中期阶段
 
