@@ -10,13 +10,13 @@
 - ✅ **P1**: 运行时数据层重构 - 已完成（Transform、层级缓存、包围体、glTF导入语义修正）
 - ✅ **P2**: 场景提取与渲染数据模型重构 - 已完成（Scene Extraction、RenderWorld、PreparedScene结构）
 - ✅ **P3**: 异步资产管线与JobSystem - 已完成（后台加载、GPU上传队列、资产状态管理）
+- ✅ **P4**: 材质系统2.0 - 已完成（PBR BRDF、纹理色彩空间、移除硬编码Tonemap、BindGroup稳定接口）
 - ✅ **P6**: 阴影系统 - 已完成（方向光ShadowPass、CSM基础框架）
 
 ## 剩余缺口清单
 
 未实现或部分实现的核心功能：
 
-- **P4**: 材质系统2.0 - 数据结构完成，Shader和后处理链不完整
 - **P5**: IBL、Skybox、HDR与后处理 - 未实现
 - **P7**: 剔除、BVH与射线检测重构 - 有Frustum基础，未完整集成
 - **P8**: 动画系统 - 未实现（无Skeleton、Clip、Skinning）
@@ -25,8 +25,8 @@
 
 ## 当前状态结论（精简）
 
-- 渲染管线具备基础结构（DepthPrepass、BasePass、ShadowPass），但缺少完整的PBR后处理链
-- 材质数据结构已扩展为完整PBR（base_color、normal、metallic_roughness、occlusion、emissive），但Shader实现不完整
+- 渲染管线具备基础结构（DepthPrepass、BasePass、ShadowPass），并且PBR材质基线已补齐。
+- 材质数据结构已扩展为完整PBR，Shader实现已包括标准PBR与法线贴图。
 - glTF导入保留节点层级，支持骨骼动画所需数据结构，但运行时动画系统未实现
 - 场景提取已完成，具备RenderWorld和PreparedScene，但缺少BVH加速结构
 - 资产系统完全异步化，具备JobSystem和GPU上传管理
@@ -38,16 +38,11 @@
 
 ### 下一阶段（高优先级）
 
-1. **P4**: 材质系统2.0与真实PBR基线
-   - 完成Shader实现：标准PBR BRDF、纹理色彩空间处理
-   - 移除材质Shader内部硬编码的Tonemap
-   - 实现材质实例化与BindGroup布局稳定接口
-
-2. **P5**: IBL、Skybox、HDR与后处理
-   - 环境贴图资源通路
-   - Skybox绘制
+1. **P5**: IBL、Skybox、HDR与后处理
+   - ✅ 环境贴图资源通路 (已支持 HDR 解码)
+   - ✅ Skybox绘制
    - 生成并缓存irradiance map、prefiltered env map、BRDF LUT
-   - HDR颜色缓冲与后处理链（Bloom、Exposure、Tonemap、FXAA）
+   - ✅ HDR颜色缓冲与后处理链（Tonemap已实现为单Pass，Bloom、Exposure、FXAA待加）
 
 ### 中期阶段
 

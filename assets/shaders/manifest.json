@@ -29,6 +29,16 @@
       "name": "shadow_pass",
       "vertex": "assets/shaders/shadow_pass.vert.glsl",
       "fragment": "assets/shaders/shadow_pass.frag.glsl"
+    },
+    {
+      "name": "tonemap",
+      "vertex": "assets/shaders/tonemap.vert.glsl",
+      "fragment": "assets/shaders/tonemap.frag.glsl"
+    },
+    {
+      "name": "skybox",
+      "vertex": "assets/shaders/skybox.vert.glsl",
+      "fragment": "assets/shaders/skybox.frag.glsl"
     }
   ]
 }

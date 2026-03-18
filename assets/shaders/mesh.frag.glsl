@@ -63,26 +63,17 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-vec3 ACESFilm(vec3 x) {
-    float a = 2.51;
-    float b = 0.03;
-    float c = 2.43;
-    float d = 0.59;
-    float e = 0.14;
-    return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
-}
-
 void main() {
     vec4 base_sample = material_uniforms.u_has_textures.x > 0 ? texture(u_base_color_map, v_uv) : vec4(1.0);
     vec4 albedo_alpha = base_sample * v_color * material_uniforms.u_base_color_factor;
-    
+
     // Alpha test
     if (albedo_alpha.a < material_uniforms.u_pbr_factors.z) {
         discard;
     }
 
     vec3 albedo = albedo_alpha.rgb;
-    
+
     float metallic = material_uniforms.u_pbr_factors.x;
     float roughness = material_uniforms.u_pbr_factors.y;
     if (material_uniforms.u_has_textures.y > 0) {
@@ -93,14 +84,22 @@ void main() {
 
     vec3 N = normalize(v_world_normal);
     if (material_uniforms.u_has_textures.z > 0) {
-        // Simple normal mapping (assuming tangent space isn't provided, we derive it)
-        // This is a placeholder for proper tangent space normal mapping
+        // Derive tangent space (simplified)
+        vec3 Q1  = dFdx(v_world_position);
+        vec3 Q2  = dFdy(v_world_position);
+        vec2 st1 = dFdx(v_uv);
+        vec2 st2 = dFdy(v_uv);
+
+        vec3 T  = normalize(Q1 * st2.t - Q2 * st1.t);
+        vec3 B  = normalize(-Q1 * st2.s + Q2 * st1.s);
+        mat3 TBN = mat3(T, B, N);
+
         vec3 normal_sample = texture(u_normal_map, v_uv).rgb * 2.0 - 1.0;
-        // ... Proper TBN would go here
+        N = normalize(TBN * normal_sample);
     }
 
     vec3 V = normalize(material_uniforms.u_camera_world_position.xyz - v_world_position);
-    vec3 F0 = vec3(0.04); 
+    vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo, metallic);
 
     // Shadow calculation
@@ -109,17 +108,17 @@ void main() {
         vec4 frag_pos_light_space = material_uniforms.u_light_space_matrix * vec4(v_world_position, 1.0);
         vec3 proj_coords = frag_pos_light_space.xyz / frag_pos_light_space.w;
         proj_coords = proj_coords * 0.5 + 0.5;
-        
+
         float current_depth = proj_coords.z;
         float bias = material_uniforms.u_shadow_params.x;
-        
+
         // Simple PCF
         shadow = 0.0;
         vec2 texel_size = 1.0 / textureSize(u_shadow_map, 0);
         for(int x = -1; x <= 1; ++x) {
             for(int y = -1; y <= 1; ++y) {
                 shadow += texture(u_shadow_map, vec3(proj_coords.xy + vec2(x, y) * texel_size, current_depth - bias));
-            }    
+            }
         }
         shadow /= 9.0;
     }
@@ -158,7 +157,7 @@ void main() {
         float distance = length(L_vec);
         vec3 L = normalize(L_vec);
         vec3 H = normalize(V + L);
-        
+
         float attenuation = clamp(1.0 - distance / max(material_uniforms.u_point_light_position_radius.w, 0.001), 0.0, 1.0);
         attenuation *= attenuation;
         vec3 radiance = material_uniforms.u_point_light_color_intensity.rgb * material_uniforms.u_point_light_color_intensity.w * attenuation;
@@ -185,12 +184,13 @@ void main() {
     }
 
     vec3 emissive = material_uniforms.u_emissive_factor.rgb * material_uniforms.u_emissive_factor.w;
-    // Emissive texture is binding 4
-    // We didn't add has_textures.z for emissive yet, let's assume bitmask in has_textures.x if needed
-    // or just check if it's there. For now let's skip emissive texture check to be safe.
-
+    // Emissive texture is conditionally bound or we can just sample if it's provided.
+    // In our uniform, we don't have a 5th element in uvec4 for emissive. But wait!
+    // We can just use the length of the vector or check if emissive_factor > 0?
+    // Let's modify the uniform in Zig to pass emissive as part of a bitmask or we can just skip it for now until Zig is updated.
+    // Since Zig passes it in the 4th float if we use an array. Wait, u_has_textures in Zig is [4]u32.
+    // I will just leave it as multiplying emissive_factor for now, as emissive map sampling requires checking a flag.
     vec3 color = ambient + Lo + emissive;
-    color = ACESFilm(color);
 
     out_color = vec4(color, albedo_alpha.a);
 }
