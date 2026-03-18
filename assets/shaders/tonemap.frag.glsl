@@ -5,6 +5,7 @@ layout(location = 0) out vec4 out_color;
 
 layout(set = 2, binding = 0) uniform sampler2D u_hdr_map;
 layout(set = 2, binding = 1) uniform sampler2D u_bloom_map;
+layout(set = 2, binding = 2) uniform sampler2D u_lut_map;
 layout(set = 3, binding = 0, std140) uniform TonemapUniforms {
     // x: 启用手动曝光，y: 曝光倍率
     vec4 u_exposure_params;
@@ -12,7 +13,11 @@ layout(set = 3, binding = 0, std140) uniform TonemapUniforms {
     vec4 u_bloom_params;
     // x: 启用 Color Grading，y: 饱和度，z: 对比度，w: Gamma
     vec4 u_color_grading_params;
+    // x: 启用 LUT，y: LUT 强度
+    vec4 u_lut_params;
 } tonemap_uniforms;
+
+const float LUT_SIZE = 16.0;
 
 // ACES tonemap curve
 vec3 ACESFilm(vec3 x) {
@@ -36,6 +41,29 @@ vec3 applyColorGrading(vec3 color) {
     return clamp(color, 0.0, 1.0);
 }
 
+vec3 sampleColorLUT(vec3 color) {
+    color = clamp(color, 0.0, 1.0);
+
+    float blue = color.b * (LUT_SIZE - 1.0);
+    float blue0 = floor(blue);
+    float blue1 = min(blue0 + 1.0, LUT_SIZE - 1.0);
+    float red = color.r * (LUT_SIZE - 1.0);
+    float green = color.g * (LUT_SIZE - 1.0);
+
+    vec2 uv0 = vec2(
+        (blue0 * LUT_SIZE + red + 0.5) / (LUT_SIZE * LUT_SIZE),
+        (green + 0.5) / LUT_SIZE
+    );
+    vec2 uv1 = vec2(
+        (blue1 * LUT_SIZE + red + 0.5) / (LUT_SIZE * LUT_SIZE),
+        (green + 0.5) / LUT_SIZE
+    );
+
+    vec3 graded0 = texture(u_lut_map, uv0).rgb;
+    vec3 graded1 = texture(u_lut_map, uv1).rgb;
+    return mix(graded0, graded1, fract(blue));
+}
+
 void main() {
     vec3 hdr_color = texture(u_hdr_map, v_uv).rgb;
     if (tonemap_uniforms.u_bloom_params.x > 0.5) {
@@ -48,6 +76,10 @@ void main() {
     vec3 ldr_color = ACESFilm(hdr_color);
     if (tonemap_uniforms.u_color_grading_params.x > 0.5) {
         ldr_color = applyColorGrading(ldr_color);
+    }
+    if (tonemap_uniforms.u_lut_params.x > 0.5) {
+        vec3 lut_color = sampleColorLUT(ldr_color);
+        ldr_color = mix(ldr_color, lut_color, clamp(tonemap_uniforms.u_lut_params.y, 0.0, 1.0));
     }
 
     // Gamma correction (if the target isn't SRGB, we need to do it manually)

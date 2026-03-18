@@ -14,6 +14,7 @@
 - ✅ **P2**: 场景提取与渲染数据模型重构 - 已完成（Scene Extraction、RenderWorld、PreparedScene结构）
 - ✅ **P3**: 异步资产管线与JobSystem - 已完成（后台加载、GPU上传队列、资产状态管理）
 - ✅ **P4**: 材质系统2.0 - 已完成（PBR BRDF、纹理色彩空间、移除硬编码Tonemap、BindGroup稳定接口）
+- ✅ **P5**: IBL、Skybox、HDR与后处理 - 已完成（IBL资源链、Skybox、Tonemap、Exposure、Bloom、Color Grading、LUT、FXAA）
 - ✅ **P6**: 阴影系统 - 已完成（方向光ShadowPass、CSM基础框架）
 
 ## 已完成专项收敛（不单列阶段）
@@ -34,7 +35,6 @@
 
 未实现或部分实现的核心功能：
 
-- **P5**: IBL、Skybox、HDR与后处理 - 部分实现（IBL资源链、Skybox、Tonemap、手动Exposure、Bloom MVP、Color Grading MVP、FXAA MVP 已落地，LUT待补）
 - **P7**: 剔除、BVH与射线检测重构 - 有Frustum基础，未完整集成
 - **P8**: 动画系统 - 未实现（无Skeleton、Clip、Skinning）
 - **P9**: 物理系统 - 未实现（无Rigidbody、Collider、物理模拟）
@@ -72,25 +72,14 @@
 
 ### 下一阶段（高优先级）
 
-1. **P5**: IBL、Skybox、HDR与后处理
-   - ✅ 环境贴图资源通路 (已支持 HDR 解码)
-   - ✅ Skybox绘制
-   - ✅ 生成并缓存 irradiance map、prefiltered env map、BRDF LUT
-   - ✅ HDR颜色缓冲与后处理链（Tonemap已实现为单Pass）
-   - ✅ 手动 Exposure（视口级开关与倍率调节）
-   - ✅ Bloom MVP（单 pass 亮部提取 + 邻域模糊）
-   - ✅ Color Grading MVP（视口级 Saturation / Contrast / Gamma）
-   - ✅ FXAA MVP（LDR fullscreen pass，叠加层绘制前执行）
-   - LUT 待补
-
-### 中期阶段
-
-3. **P7**: 剔除、BVH与射线检测重构
+1. **P7**: 剔除、BVH与射线检测重构
    - 基于Scene Extraction的视锥体剔除
    - 静态BVH构建（服务剔除与射线检测）
    - Raycast升级为broad phase + narrow phase
 
-4. **P8**: 动画系统MVP
+### 中期阶段
+
+2. **P8**: 动画系统MVP
    - SkeletonResource、SkinResource、AnimationClipResource
    - SkinnedMesh、Animator、AnimationState组件
    - glTF导入skin、joints、inverseBindMatrices、animations
@@ -99,14 +88,14 @@
 
 ### 后期阶段
 
-5. **P9**: 物理系统MVP
+3. **P9**: 物理系统MVP
    - 物理抽象层设计（不直接暴露第三方库API）
    - Rigidbody、BoxCollider、SphereCollider、MeshCollider组件
    - Application固定步长更新（累积器、多tick消化）
    - Jolt物理引擎适配层
    - 物理世界与场景树同步
 
-6. **P10**: 脚本与Gameplay MVP
+4. **P10**: 脚本与Gameplay MVP
    - Script组件与Script资源
    - 脚本生命周期（OnInit、OnUpdate、OnDestroy）
    - 基础场景API暴露

@@ -79,6 +79,7 @@ pub const render = struct {
     pub const defaultPreferredBackends = @import("engine/render/types.zig").defaultPreferredBackends;
     pub const defaultBackendOrder = @import("engine/render/types.zig").defaultBackendOrder;
     pub const EditorViewportRenderMode = @import("engine/render/types.zig").EditorViewportRenderMode;
+    pub const EditorViewportLutPreset = @import("engine/render/types.zig").EditorViewportLutPreset;
     pub const EditorViewportState = @import("engine/render/types.zig").EditorViewportState;
     pub const Renderer = @import("engine/render/renderer.zig").Renderer;
     pub const RendererConfig = @import("engine/render/renderer.zig").RendererConfig;
