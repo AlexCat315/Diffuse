@@ -5,7 +5,7 @@ const editor_console = @import("editor/ui/windows/console.zig");
 
 pub const std_options = std.Options{
     .logFn = editor_console.logFn,
-    .log_level = .debug,  // 设置日志级别为 debug，以便显示所有日志
+    .log_level = .debug, // 设置日志级别为 debug，以便显示所有日志
 };
 
 const CliOptions = struct {
@@ -127,13 +127,13 @@ const SandboxLayer = struct {
             if (layer_context.world.getEntity(entity_id)) |entity| {
                 // 计算这一帧的旋转增量（弧度）
                 const delta_angle = 0.75 * layer_context.delta_seconds;
-                
+
                 // 构造绕Y轴的增量旋转四元数（避免万向节死锁，效率更高）
                 const delta_rotation = engine.math.quat.fromAxisAngle(.{ 0.0, 1.0, 0.0 }, delta_angle);
-                
+
                 // 使用四元数乘法叠加旋转（这是3D图形学标准做法）
                 entity.local_transform.rotation = engine.math.quat.mul(entity.local_transform.rotation, delta_rotation);
-                
+
                 // 归一化防止浮点误差累积
                 entity.local_transform.rotation = engine.math.quat.normalize(entity.local_transform.rotation);
             }
@@ -144,15 +144,15 @@ const SandboxLayer = struct {
 pub fn main() !u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
-    
+
     // 尽早初始化日志系统 - 必须在任何日志调用之前
     try editor_console.initLogFile();
     defer editor_console.deinitLogFile();
-    
+
     // 测试日志：用于验证 ImGui 控制台是否正常工作
     std.log.info("Guava Engine initialized successfully", .{});
     std.log.debug("Debug logging enabled", .{});
-    
+
     var command = try parseCommandAlloc(allocator);
     defer command.deinit(allocator);
 
@@ -171,7 +171,7 @@ pub fn main() !u8 {
         .@"generate-benchmark" => |options| try runGenerateBenchmark(allocator, options.output_path),
         .@"compare-render" => |options| try runCompareRender(allocator, options.scene_path, options.output_dir),
     }
-    
+
     return 0; // 正常退出返回 0
 }
 
@@ -227,7 +227,7 @@ fn runBenchmark(allocator: std.mem.Allocator, scene_path: []const u8, update_gol
             std.log.err("无法获取基准文件状态: {s}", .{@errorName(err)});
             return err;
         };
-        
+
         const golden_ppm = std.fs.cwd().readFileAlloc(allocator, golden_path, file_stat.size) catch |err| {
             std.log.err("读取基准文件失败: {s}", .{@errorName(err)});
             return err;
@@ -596,8 +596,9 @@ fn parseValidateOptionsAlloc(allocator: std.mem.Allocator, args: []const []const
             if (index >= args.len) {
                 return error.InvalidArguments;
             }
+            const next_root_path = try allocator.dupe(u8, args[index]);
             allocator.free(options.root_path);
-            options.root_path = try allocator.dupe(u8, args[index]);
+            options.root_path = next_root_path;
             continue;
         }
         if (std.mem.eql(u8, arg, "--asset")) {
@@ -605,10 +606,11 @@ fn parseValidateOptionsAlloc(allocator: std.mem.Allocator, args: []const []const
             if (index >= args.len) {
                 return error.InvalidArguments;
             }
+            const next_query = try allocator.dupe(u8, args[index]);
             if (options.asset_query) |query| {
                 allocator.free(query);
             }
-            options.asset_query = try allocator.dupe(u8, args[index]);
+            options.asset_query = next_query;
             continue;
         }
         if (std.mem.eql(u8, arg, "--no-snapshot")) {
