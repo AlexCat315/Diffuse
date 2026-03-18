@@ -41,6 +41,11 @@
       "fragment": "assets/shaders/bloom.frag.glsl"
     },
     {
+      "name": "fxaa",
+      "vertex": "assets/shaders/tonemap.vert.glsl",
+      "fragment": "assets/shaders/fxaa.frag.glsl"
+    },
+    {
       "name": "skybox",
       "vertex": "assets/shaders/skybox.vert.glsl",
       "fragment": "assets/shaders/skybox.frag.glsl"
