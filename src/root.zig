@@ -22,6 +22,7 @@ pub const platform = struct {
     pub const WindowConfig = @import("engine/platform/window.zig").WindowConfig;
     pub const WindowEvent = @import("engine/platform/window.zig").Event;
     pub const WindowEventKind = @import("engine/platform/window.zig").EventKind;
+    pub const sdl = @import("engine/platform/sdl.zig");
     pub const processResidentMemoryBytes = @import("engine/platform/process.zig").residentMemoryBytes;
 };
 
