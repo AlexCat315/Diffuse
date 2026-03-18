@@ -10,7 +10,7 @@ pub const std_options = std.Options{
 
 const CliOptions = struct {
     frame_count: usize = 0,
-    backend_order: [3]engine.render.GraphicsAPI = .{ .vulkan, .dx12, .metal },
+    backend_order: [3]engine.render.GraphicsAPI = engine.render.defaultBackendOrder(),
     backend_count: usize = 3,
 
     fn backends(self: *const CliOptions) []const engine.render.GraphicsAPI {

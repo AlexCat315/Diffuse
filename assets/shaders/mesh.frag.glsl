@@ -14,6 +14,12 @@ layout(set = 2, binding = 3) uniform sampler2D u_occlusion_map;
 layout(set = 2, binding = 4) uniform sampler2D u_emissive_map;
 layout(set = 2, binding = 5) uniform sampler2DShadow u_shadow_map;
 
+// IBL textures
+layout(set = 2, binding = 6) uniform sampler2D u_irradiance_map;
+layout(set = 2, binding = 7) uniform sampler2D u_prefiltered_env_map;
+layout(set = 2, binding = 8) uniform sampler2D u_brdf_lut;
+layout(set = 2, binding = 9) uniform sampler2D u_environment_map; // Fallback for debugging
+
 layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     vec4 u_base_color_factor;
     vec4 u_emissive_factor;
@@ -27,9 +33,31 @@ layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     vec4 u_point_light_color_intensity;
     vec4 u_ambient_color;
     vec4 u_shadow_params; // x: bias
+    vec4 u_ibl_params; // x: use_ibl, y: ibl_intensity, z: reserved, w: reserved
 } material_uniforms;
 
 const float PI = 3.14159265359;
+const vec2 INV_ATAN = vec2(0.1591, 0.3183);
+
+// IBL Helper functions
+vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
+    return F0 + (max(vec3(1.0 - roughness), F0) - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+vec2 sampleSphericalMap(vec3 direction) {
+    vec2 uv = vec2(atan(direction.z, direction.x), asin(direction.y));
+    uv *= INV_ATAN;
+    uv += 0.5;
+    return uv;
+}
+
+vec3 sampleEquirectangularMap(sampler2D map, vec3 direction) {
+    return texture(map, sampleSphericalMap(normalize(direction))).rgb;
+}
+
+vec3 sampleEquirectangularMapLod(sampler2D map, vec3 direction, float lod) {
+    return textureLod(map, sampleSphericalMap(normalize(direction)), lod).rgb;
+}
 
 // Cook-Torrance BRDF functions
 float DistributionGGX(vec3 N, vec3 H, float roughness) {
@@ -190,7 +218,33 @@ void main() {
     // Let's modify the uniform in Zig to pass emissive as part of a bitmask or we can just skip it for now until Zig is updated.
     // Since Zig passes it in the 4th float if we use an array. Wait, u_has_textures in Zig is [4]u32.
     // I will just leave it as multiplying emissive_factor for now, as emissive map sampling requires checking a flag.
-    vec3 color = ambient + Lo + emissive;
+
+    // IBL (Image-Based Lighting) calculation
+    vec3 ibl_contribution = vec3(0.0);
+    if (material_uniforms.u_ibl_params.x > 0.5) { // use_ibl
+        vec3 F0_ibl = mix(vec3(0.04), albedo, metallic);
+        // IBL diffuse using irradiance map
+        vec3 irradiance = sampleEquirectangularMap(u_irradiance_map, N);
+        vec3 diffuse_ibl = irradiance * albedo;
+
+        // IBL specular using prefiltered environment map
+        vec3 R = reflect(-V, N);
+        float lod = roughness * 4.0;
+        vec3 prefiltered_color = sampleEquirectangularMapLod(u_prefiltered_env_map, R, lod);
+
+        // Sample BRDF LUT
+        float NdotV = max(dot(N, V), 0.0);
+        vec2 brdf = texture(u_brdf_lut, vec2(NdotV, roughness)).rg;
+
+        vec3 specular_ibl = prefiltered_color * (F0_ibl * brdf.x + brdf.y);
+
+        // Energy conservation
+        vec3 F_ibl = fresnelSchlickRoughness(NdotV, F0_ibl, roughness);
+        vec3 kD_ibl = (1.0 - metallic) * (vec3(1.0) - F_ibl);
+        ibl_contribution = (kD_ibl * diffuse_ibl + specular_ibl) * material_uniforms.u_ibl_params.y; // ibl_intensity
+    }
+
+    vec3 color = ambient + Lo + emissive + ibl_contribution;
 
     out_color = vec4(color, albedo_alpha.a);
 }

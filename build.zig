@@ -23,6 +23,7 @@ const plutovg_c_sources = [_][]const u8{
     "third_party/lunasvg/plutovg/source/plutovg-path.c",
     "third_party/lunasvg/plutovg/source/plutovg-rasterize.c",
     "third_party/lunasvg/plutovg/source/plutovg-surface.c",
+    "src/engine/assets/stb_image_impl.c",
 };
 
 const engine_cpp_sources = [_][]const u8{
