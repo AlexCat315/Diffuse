@@ -34,7 +34,7 @@
 未实现或部分实现的核心功能：
 
 - **P8**: 动画系统 - 已完成 MVP（已接入 Skeleton/Skin/AnimationClip 资源、SkinnedMesh/Animator 组件、glTF `skins/animations/JOINTS_0/WEIGHTS_0` 基础导入、clip 采样/播放、skinned mesh 顶点变形，以及基础 clip 切换 / Cross-fade）
-- **P9**: 物理系统 - 部分实现（已接入 `Rigidbody / BoxCollider / SphereCollider / MeshCollider`、`Application` 固定步长累积器、场景序列化 v5 与内建 bounds-based 物理解算 MVP；Jolt 适配层、Trigger 事件、碰撞层过滤与更完整约束仍未完成）
+- **P9**: 物理系统 - 部分实现（已接入 `Rigidbody / BoxCollider / SphereCollider / MeshCollider`、`Application` 固定步长累积器、场景序列化 v5、内建 bounds-based 物理解算 MVP，以及 Jolt backend 初版；当前仍缺 Trigger 事件、碰撞层过滤、更完整约束、debug draw 与持久化 Jolt world）
 - **P10**: 脚本与Gameplay - 未实现（无脚本组件、热重载）
 
 ## 仍需继续补齐的编辑器专项
@@ -62,7 +62,7 @@
 - 场景提取、可见性剔除、射线检测与调试 bounds 复用已经统一在 renderable BVH / bounds 查询层上
 - 资产系统完全异步化，具备JobSystem和GPU上传管理
 - 动画运行时已具备基础 clip 采样/播放、skinned mesh 顶点变形，以及基础 clip 切换 / cross-fade
-- 物理系统已具备基础组件、固定步长步进、场景同步与 bounds-based 碰撞 MVP；Jolt 适配层与完整物理能力仍未完成
+- 物理系统已具备基础组件、固定步长步进、场景同步、bounds-based 碰撞 MVP，以及 Jolt backend 初版；完整物理能力仍缺 Trigger / Filter / Constraint / Debug Draw 与更稳定的持久化后端状态
 
 ## 剩余执行顺序
 
@@ -74,8 +74,8 @@
    - 已完成：物理抽象层首版、`Rigidbody / BoxCollider / SphereCollider / MeshCollider` 组件
    - 已完成：`Application` 固定步长更新（累积器、多 tick 消化）
    - 已完成：物理世界与场景树同步，以及场景序列化 v5
-   - 未完成：Jolt 物理引擎适配层
-   - 未完成：更完整碰撞、触发器事件、过滤层与约束
+   - 已完成：Jolt backend 初版接入，默认走 Jolt，内建 solver 保留为 fallback / debug 路径
+   - 未完成：更完整碰撞、触发器事件、过滤层、约束与 debug draw
 
 2. **P10**: 脚本与Gameplay MVP
    - Script组件与Script资源
@@ -207,7 +207,9 @@
 - 已完成 `Rigidbody / BoxCollider / SphereCollider / MeshCollider` 组件，以及 `Application` 固定步长累积器。
 - 已完成基础场景同步：物理步进后通过 `setEntityWorldTransform()` 回写世界变换，默认 bootstrap 场景已带 Ground/Hero 样例。
 - 已完成场景序列化 v5，对物理组件做 round-trip 兼容。
-- 当前 solver 仍是 bounds-based MVP，只覆盖动态体与静态/运动学碰撞体的基础接触解算。
+- 已完成 Jolt backend 初版接入：`physics/system.zig` 默认走 Jolt，内建 solver 收敛为 fallback / debug 路径。
+- 当前 Jolt backend 仍是桥接型实现：每次 step 重建一次 Jolt world，`MeshCollider` 先以 bounds proxy box 进入 Jolt，而不是完整三角网格上传。
+- 当前 solver 仍只覆盖 MVP 范围，Trigger / Filter / Constraint / Debug Draw 还未补齐。
 
 ### 主要任务
 
@@ -222,7 +224,7 @@
 - 多 tick 消化。
 - 渲染插值接口占位。
 - 集成物理后端：
-- 实现 Jolt Physics 适配层。
+- 完成 Jolt Physics backend，并逐步把当前桥接型实现收敛成持久化 world / body 缓存。
 - 实现物理世界与场景树同步：
 - 从场景写入物理初始化。
 - 物理 tick 后回写位置与旋转。
@@ -230,7 +232,7 @@
 
 当前剩余收尾：
 
-- 接入 Jolt 适配层，并把当前内建 solver 收敛成 debug / fallback 路径。
+- 把当前桥接型 Jolt backend 收敛成持久化 world / body 缓存，并继续压缩 builtin fallback 的职责面。
 - 增加 trigger 事件、碰撞层过滤与更完整约束。
 - 把 collider / rigidbody debug draw 接进编辑器视口开关。
 

@@ -76,6 +76,7 @@
         "build.zig.zon",
         "docs",
         "src",
+        "third_party",
         // For example...
         //"LICENSE",
         //"README.md",

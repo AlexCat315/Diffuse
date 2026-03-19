@@ -3,6 +3,7 @@ const std = @import("std");
 const engine_include_paths = [_][]const u8{
     "third_party/stb",
     "third_party/imgui",
+    "third_party/jolt",
     "third_party/lunasvg/include",
     "third_party/lunasvg/source",
     "third_party/lunasvg/plutovg/include",
@@ -45,6 +46,7 @@ const engine_cpp_sources = [_][]const u8{
     "third_party/lunasvg/source/svgtextelement.cpp",
     "src/engine/assets/svg_raster_bridge.cpp",
     "src/engine/ui/imgui_bridge.cpp",
+    "src/engine/physics/jolt_bridge.cpp",
 };
 
 const macos_objcpp_sources = [_][]const u8{
@@ -163,7 +165,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     configureEngineModule(b, test_mod, target.result.os.tag, sdl_prefix);
-    
+
     const mod_tests = b.addTest(.{
         .root_module = test_mod,
     });
@@ -190,7 +192,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
     });
     configureEngineModule(b, console_test_mod, target.result.os.tag, sdl_prefix);
-    
+
     const console_test_exe = b.addExecutable(.{
         .name = "test-console",
         .root_module = console_test_mod,
@@ -198,7 +200,7 @@ pub fn build(b: *std.Build) void {
     console_test_exe.linkLibC();
     console_test_exe.linkLibCpp();
     console_test_exe.step.dependOn(&run_shader_codegen.step);
-    
+
     const console_test_cmd = b.addRunArtifact(console_test_exe);
     const console_test_step = b.step("test-console", "Test console logging");
     console_test_step.dependOn(&console_test_cmd.step);
@@ -240,6 +242,11 @@ fn configureEngineModule(
     });
     module.addCSourceFiles(.{
         .files = &engine_cpp_sources,
+        .flags = &engine_cpp_flags,
+    });
+    const jolt_cpp_sources = collectSourceFiles(b, "third_party/jolt/Jolt", ".cpp");
+    module.addCSourceFiles(.{
+        .files = jolt_cpp_sources,
         .flags = &engine_cpp_flags,
     });
     if (os_tag == .macos) {
@@ -295,6 +302,17 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &engine_cpp_flags,
         &engine_cpp_sources,
+    );
+    const jolt_cpp_sources = collectSourceFiles(b, "third_party/jolt/Jolt", ".cpp");
+    appendCompileCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        cpp_compiler,
+        &engine_cpp_flags,
+        jolt_cpp_sources,
     );
 
     if (os_tag == .macos) {
@@ -403,4 +421,36 @@ fn captureCommandOutput(b: *std.Build, argv: []const []const u8) ?[]const u8 {
 
     const trimmed = std.mem.trimEnd(u8, result.stdout, "\r\n");
     return b.allocator.dupe(u8, trimmed) catch @panic("OOM");
+}
+
+fn collectSourceFiles(b: *std.Build, root: []const u8, extension: []const u8) []const []const u8 {
+    var list: std.ArrayList([]const u8) = .empty;
+    defer list.deinit(b.allocator);
+
+    var dir = std.fs.cwd().openDir(root, .{ .iterate = true }) catch |err| {
+        std.debug.panic("failed to open source root {s}: {s}", .{ root, @errorName(err) });
+    };
+    defer dir.close();
+
+    var walker = dir.walk(b.allocator) catch |err| {
+        std.debug.panic("failed to walk source root {s}: {s}", .{ root, @errorName(err) });
+    };
+    defer walker.deinit();
+
+    while (walker.next() catch |err| {
+        std.debug.panic("failed to iterate source root {s}: {s}", .{ root, @errorName(err) });
+    }) |entry| {
+        if (entry.kind != .file or !std.mem.endsWith(u8, entry.path, extension)) {
+            continue;
+        }
+        list.append(b.allocator, b.pathJoin(&.{ root, entry.path })) catch @panic("OOM");
+    }
+
+    std.mem.sort([]const u8, list.items, {}, struct {
+        fn lessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
+            return std.mem.lessThan(u8, lhs, rhs);
+        }
+    }.lessThan);
+
+    return list.toOwnedSlice(b.allocator) catch @panic("OOM");
 }
