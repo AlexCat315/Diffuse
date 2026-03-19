@@ -152,6 +152,7 @@ pub const physics = struct {
     pub const Backend = @import("engine/physics/system.zig").Backend;
     pub const Config = @import("engine/physics/system.zig").Config;
     pub const StepStats = @import("engine/physics/system.zig").StepStats;
+    pub const deinitWorld = @import("engine/physics/system.zig").deinitWorld;
     pub const step = @import("engine/physics/system.zig").step;
 };
 
