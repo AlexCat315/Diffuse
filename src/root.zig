@@ -153,6 +153,7 @@ pub const animation = struct {
 };
 
 pub const physics = struct {
+    pub const AABB = @import("engine/math/aabb.zig").AABB;
     pub const Backend = @import("engine/physics/system.zig").Backend;
     pub const Config = @import("engine/physics/system.zig").Config;
     pub const StepStats = @import("engine/physics/system.zig").StepStats;
@@ -161,6 +162,7 @@ pub const physics = struct {
     pub const RaycastHit = @import("engine/physics/system.zig").RaycastHit;
     pub const OverlapHit = @import("engine/physics/system.zig").OverlapHit;
     pub const SweepHit = @import("engine/physics/system.zig").SweepHit;
+    pub const aabbFromCenterHalfExtents = @import("engine/physics/system.zig").aabbFromCenterHalfExtents;
     pub const deinitWorld = @import("engine/physics/system.zig").deinitWorld;
     pub const raycast = @import("engine/physics/system.zig").raycast;
     pub const overlapAabb = @import("engine/physics/system.zig").overlapAabb;
