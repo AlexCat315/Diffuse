@@ -197,6 +197,7 @@ pub const scene = struct {
     pub const Primitive = @import("engine/scene/components.zig").Primitive;
     pub const ShadingModel = @import("engine/scene/components.zig").ShadingModel;
     pub const LightKind = @import("engine/scene/components.zig").LightKind;
+    pub const prefab = @import("engine/scene/prefab.zig");
 };
 
 test {
