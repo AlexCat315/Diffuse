@@ -112,12 +112,21 @@ pub const assets = struct {
     pub const MeshHandle = @import("engine/assets/handles.zig").MeshHandle;
     pub const MaterialHandle = @import("engine/assets/handles.zig").MaterialHandle;
     pub const TextureHandle = @import("engine/assets/handles.zig").TextureHandle;
+    pub const SkeletonHandle = @import("engine/assets/handles.zig").SkeletonHandle;
+    pub const SkinHandle = @import("engine/assets/handles.zig").SkinHandle;
+    pub const AnimationClipHandle = @import("engine/assets/handles.zig").AnimationClipHandle;
     pub const MeshResource = @import("engine/assets/mesh_resource.zig").MeshResource;
     pub const MeshResourceDesc = @import("engine/assets/mesh_resource.zig").MeshResourceDesc;
     pub const MaterialResource = @import("engine/assets/material_resource.zig").MaterialResource;
     pub const MaterialResourceDesc = @import("engine/assets/material_resource.zig").MaterialResourceDesc;
     pub const TextureResource = @import("engine/assets/texture_resource.zig").TextureResource;
     pub const TextureResourceDesc = @import("engine/assets/texture_resource.zig").TextureResourceDesc;
+    pub const SkeletonResource = @import("engine/assets/skeleton_resource.zig").SkeletonResource;
+    pub const SkeletonResourceDesc = @import("engine/assets/skeleton_resource.zig").SkeletonResourceDesc;
+    pub const SkinResource = @import("engine/assets/skin_resource.zig").SkinResource;
+    pub const SkinResourceDesc = @import("engine/assets/skin_resource.zig").SkinResourceDesc;
+    pub const AnimationClipResource = @import("engine/assets/animation_clip_resource.zig").AnimationClipResource;
+    pub const AnimationClipResourceDesc = @import("engine/assets/animation_clip_resource.zig").AnimationClipResourceDesc;
     pub const DecodedImage = @import("engine/assets/image_decoder.zig").DecodedImage;
     pub const decodeImageRgba8 = @import("engine/assets/image_decoder.zig").decodeRgba8;
     pub const RasterizedSvg = @import("engine/assets/svg_decoder.zig").RasterizedSvg;
@@ -131,6 +140,10 @@ pub const assets = struct {
     pub const validateCookedModelAsset = @import("engine/assets/gltf_import.zig").validateCookedModelAsset;
     pub const importGltfStaticModelAsset = @import("engine/assets/gltf_import.zig").importStaticModelAsset;
     pub const importGltfStaticModelAssetInstance = @import("engine/assets/gltf_import.zig").importStaticModelAssetInstance;
+};
+
+pub const animation = struct {
+    pub const updateAnimators = @import("engine/animation/animator_system.zig").update;
 };
 
 pub const math = struct {
@@ -157,6 +170,8 @@ pub const scene = struct {
     pub const Transform = @import("engine/scene/components.zig").Transform;
     pub const Camera = @import("engine/scene/components.zig").Camera;
     pub const Mesh = @import("engine/scene/components.zig").Mesh;
+    pub const SkinnedMesh = @import("engine/scene/components.zig").SkinnedMesh;
+    pub const Animator = @import("engine/scene/components.zig").Animator;
     pub const Material = @import("engine/scene/components.zig").Material;
     pub const Light = @import("engine/scene/components.zig").Light;
     pub const Vfx = @import("engine/scene/components.zig").Vfx;
