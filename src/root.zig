@@ -156,7 +156,15 @@ pub const physics = struct {
     pub const Backend = @import("engine/physics/system.zig").Backend;
     pub const Config = @import("engine/physics/system.zig").Config;
     pub const StepStats = @import("engine/physics/system.zig").StepStats;
+    pub const RayQuery = @import("engine/physics/system.zig").RayQuery;
+    pub const QueryFilter = @import("engine/physics/system.zig").QueryFilter;
+    pub const RaycastHit = @import("engine/physics/system.zig").RaycastHit;
+    pub const OverlapHit = @import("engine/physics/system.zig").OverlapHit;
+    pub const SweepHit = @import("engine/physics/system.zig").SweepHit;
     pub const deinitWorld = @import("engine/physics/system.zig").deinitWorld;
+    pub const raycast = @import("engine/physics/system.zig").raycast;
+    pub const overlapAabb = @import("engine/physics/system.zig").overlapAabb;
+    pub const sweepAabb = @import("engine/physics/system.zig").sweepAabb;
     pub const step = @import("engine/physics/system.zig").step;
 };
 
