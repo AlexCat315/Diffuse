@@ -1,3 +1,4 @@
+//!guava builtin=rotate axis=y speed_rad=1.0 local=true
 const script = @import("../../src/engine/script/script.zig");
 
 /// 旋转脚本 - 让实体绕 Y 轴旋转
@@ -16,7 +17,7 @@ pub fn onInit(ctx: *script.ScriptContext) void {
 /// 脚本入口 - 每帧更新
 pub fn onUpdate(ctx: *script.ScriptContext, dt: f32) void {
     const self = ctx.getUserData(RotateScript) orelse return;
-    
+
     if (self.local_space) {
         // 局部空间旋转
         if (ctx.getRotation()) |rot| {

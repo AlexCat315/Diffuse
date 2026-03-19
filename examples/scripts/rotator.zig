@@ -1,4 +1,6 @@
+//!guava builtin=rotate axis=y speed_deg=45 local=true
 /// Rotator Script - 让实体旋转的简单示例
+const std = @import("std");
 const script = @import("../../src/engine/script/script.zig");
 const context = @import("../../src/engine/script/context.zig");
 
@@ -11,12 +13,12 @@ const RotatorData = struct {
 pub fn onInit(ctx: *context.ScriptContext) void {
     // 分配用户数据
     const data = ctx.allocator.create(RotatorData) catch {
-        ctx.error("Failed to allocate RotatorData");
+        ctx.logError("Failed to allocate RotatorData");
         return;
     };
     data.rotation_speed = 45.0;
     ctx.setUserData(data);
-    
+
     ctx.log("Rotator script initialized");
 }
 
@@ -24,21 +26,21 @@ pub fn onInit(ctx: *context.ScriptContext) void {
 pub fn onUpdate(ctx: *context.ScriptContext, dt: f32) void {
     // 获取用户数据
     const data = ctx.getUserData(RotatorData) orelse {
-        ctx.error("RotatorData not found");
+        ctx.logError("RotatorData not found");
         return;
     };
-    
+
     // 获取当前旋转
     const current_rot = ctx.getRotation() orelse {
-        ctx.error("Failed to get rotation");
+        ctx.logError("Failed to get rotation");
         return;
     };
-    
+
     // 计算新的旋转（简单绕Y轴旋转）
     const rotation_radians = data.rotation_speed * std.math.pi / 180.0 * dt;
     const quat = @import("../../src/engine/math/quat.zig");
     const new_rot = quat.mul(current_rot, quat.fromAxisAngle(.{ 0, 1, 0 }, rotation_radians));
-    
+
     // 应用新旋转
     ctx.setRotation(new_rot);
 }
