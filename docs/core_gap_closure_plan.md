@@ -34,7 +34,7 @@
 未实现或部分实现的核心功能：
 
 - **P8**: 动画系统 - 已完成 MVP（已接入 Skeleton/Skin/AnimationClip 资源、SkinnedMesh/Animator 组件、glTF `skins/animations/JOINTS_0/WEIGHTS_0` 基础导入、clip 采样/播放、skinned mesh 顶点变形，以及基础 clip 切换 / Cross-fade）
-- **P9**: 物理系统 - 未实现（无Rigidbody、Collider、物理模拟）
+- **P9**: 物理系统 - 部分实现（已接入 `Rigidbody / BoxCollider / SphereCollider / MeshCollider`、`Application` 固定步长累积器、场景序列化 v5 与内建 bounds-based 物理解算 MVP；Jolt 适配层、Trigger 事件、碰撞层过滤与更完整约束仍未完成）
 - **P10**: 脚本与Gameplay - 未实现（无脚本组件、热重载）
 
 ## 仍需继续补齐的编辑器专项
@@ -61,7 +61,8 @@
 - glTF 导入已保留节点层级，并已写入 Skeleton/Skin/AnimationClip cooked 数据与 `JOINTS_0/WEIGHTS_0`
 - 场景提取、可见性剔除、射线检测与调试 bounds 复用已经统一在 renderable BVH / bounds 查询层上
 - 资产系统完全异步化，具备JobSystem和GPU上传管理
-- 动画运行时已具备基础 clip 采样/播放、skinned mesh 顶点变形，以及基础 clip 切换 / cross-fade；物理与脚本系统仍未完成
+- 动画运行时已具备基础 clip 采样/播放、skinned mesh 顶点变形，以及基础 clip 切换 / cross-fade
+- 物理系统已具备基础组件、固定步长步进、场景同步与 bounds-based 碰撞 MVP；Jolt 适配层与完整物理能力仍未完成
 
 ## 剩余执行顺序
 
@@ -70,11 +71,11 @@
 ### 下一阶段（高优先级）
 
 1. **P9**: 物理系统MVP
-   - 物理抽象层设计（不直接暴露第三方库API）
-   - Rigidbody、BoxCollider、SphereCollider、MeshCollider组件
-   - Application固定步长更新（累积器、多tick消化）
-   - Jolt物理引擎适配层
-   - 物理世界与场景树同步
+   - 已完成：物理抽象层首版、`Rigidbody / BoxCollider / SphereCollider / MeshCollider` 组件
+   - 已完成：`Application` 固定步长更新（累积器、多 tick 消化）
+   - 已完成：物理世界与场景树同步，以及场景序列化 v5
+   - 未完成：Jolt 物理引擎适配层
+   - 未完成：更完整碰撞、触发器事件、过滤层与约束
 
 2. **P10**: 脚本与Gameplay MVP
    - Script组件与Script资源
@@ -200,6 +201,14 @@
 
 建立基础物理仿真、碰撞查询与运行时同步链路。
 
+当前进展：
+
+- 已完成物理抽象层首版与 `physics/system.zig` 内建求解器，避免把第三方库 API 直接扩散到引擎核心。
+- 已完成 `Rigidbody / BoxCollider / SphereCollider / MeshCollider` 组件，以及 `Application` 固定步长累积器。
+- 已完成基础场景同步：物理步进后通过 `setEntityWorldTransform()` 回写世界变换，默认 bootstrap 场景已带 Ground/Hero 样例。
+- 已完成场景序列化 v5，对物理组件做 round-trip 兼容。
+- 当前 solver 仍是 bounds-based MVP，只覆盖动态体与静态/运动学碰撞体的基础接触解算。
+
 ### 主要任务
 
 - 先定义物理抽象层，不把第三方库 API 直接扩散到引擎核心。
@@ -218,6 +227,12 @@
 - 从场景写入物理初始化。
 - 物理 tick 后回写位置与旋转。
 - 复用现有调试绘制链路做 collider/刚体可视化。
+
+当前剩余收尾：
+
+- 接入 Jolt 适配层，并把当前内建 solver 收敛成 debug / fallback 路径。
+- 增加 trigger 事件、碰撞层过滤与更完整约束。
+- 把 collider / rigidbody debug draw 接进编辑器视口开关。
 
 ### 主要改动范围
 

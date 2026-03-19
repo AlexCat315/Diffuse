@@ -148,6 +148,12 @@ pub const animation = struct {
     pub const playClip = @import("engine/animation/animator_system.zig").playClip;
 };
 
+pub const physics = struct {
+    pub const Config = @import("engine/physics/system.zig").Config;
+    pub const StepStats = @import("engine/physics/system.zig").StepStats;
+    pub const step = @import("engine/physics/system.zig").step;
+};
+
 pub const math = struct {
     pub const angle = @import("engine/math/angle.zig");
     pub const axis = @import("engine/math/axis.zig");
@@ -174,6 +180,11 @@ pub const scene = struct {
     pub const Mesh = @import("engine/scene/components.zig").Mesh;
     pub const SkinnedMesh = @import("engine/scene/components.zig").SkinnedMesh;
     pub const Animator = @import("engine/scene/components.zig").Animator;
+    pub const Rigidbody = @import("engine/scene/components.zig").Rigidbody;
+    pub const RigidbodyMotionType = @import("engine/scene/components.zig").RigidbodyMotionType;
+    pub const BoxCollider = @import("engine/scene/components.zig").BoxCollider;
+    pub const SphereCollider = @import("engine/scene/components.zig").SphereCollider;
+    pub const MeshCollider = @import("engine/scene/components.zig").MeshCollider;
     pub const Material = @import("engine/scene/components.zig").Material;
     pub const Light = @import("engine/scene/components.zig").Light;
     pub const Vfx = @import("engine/scene/components.zig").Vfx;
