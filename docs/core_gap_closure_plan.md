@@ -35,7 +35,7 @@
 
 未实现或部分实现的核心功能：
 
-- **P7**: 剔除、BVH与射线检测重构 - 主场景 Scene Extraction 已复用 renderable BVH，并加入动态分区 BVH、叶 refit 与稳定后回收；完整增量更新仍未完成
+- **P7**: 剔除、BVH与射线检测重构 - 主场景 Scene Extraction、Raycast 与碰撞可视化已复用 renderable BVH，并加入动态分区 BVH、叶 refit 与稳定后回收；完整增量更新仍未完成
 - **P8**: 动画系统 - 未实现（无Skeleton、Clip、Skinning）
 - **P9**: 物理系统 - 未实现（无Rigidbody、Collider、物理模拟）
 - **P10**: 脚本与Gameplay - 未实现（无脚本组件、热重载）
@@ -131,7 +131,7 @@
 - 已完成主场景 `Scene Extraction` 级视锥剔除接线，并复用统一的 renderable BVH 做 frustum candidate broad phase。
 - 已完成 `raycast` 的 renderable BVH broad phase，选择命中从“逐实体全扫”收敛为 “BVH broad phase + triangle narrow phase”。
 - 已加入“被移动过的 renderable 进入动态分区 BVH”的第一版分层，并支持动态叶 refit 与稳定若干次查询后回收到静态 BVH，避免高频拖拽持续触发静态 BVH 全量重建，也避免动态对象查询退化成线性扫。
-- `BVH` 的更细粒度增量更新、碰撞可视化复用与其他可见性路径复用仍未开始封账。
+- `BVH` 的更细粒度增量更新仍未完成，碰撞可视化已改为复用 bounds/BVH，其它可见性与调试路径复用仍未封账。
 
 ### 主要任务
 
