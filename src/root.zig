@@ -146,6 +146,7 @@ pub const animation = struct {
     pub const updateAnimators = @import("engine/animation/animator_system.zig").update;
     pub const PlayClipOptions = @import("engine/animation/animator_system.zig").PlayClipOptions;
     pub const playClip = @import("engine/animation/animator_system.zig").playClip;
+    pub const animation_graph = @import("engine/animation/animation_graph.zig");
 };
 
 pub const physics = struct {

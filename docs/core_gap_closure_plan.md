@@ -34,7 +34,7 @@
 未实现或部分实现的核心功能：
 
 - **P8**: 动画系统 - 已完成 MVP（已接入 Skeleton/Skin/AnimationClip 资源、SkinnedMesh/Animator 组件、glTF `skins/animations/JOINTS_0/WEIGHTS_0` 基础导入、clip 采样/播放、skinned mesh 顶点变形，以及基础 clip 切换 / Cross-fade）
-- **P9**: 物理系统 - 大部分完成（已接入 `Rigidbody / BoxCollider / SphereCollider / MeshCollider`、`Application` 固定步长累积器、场景序列化 v5、Jolt backend；已完成：持久化 Body 缓存、Trigger 事件、Layer 基础架构；剩余：Debug Draw、Constraints）
+- **P9**: 物理系统 - 已完成（已接入 `Rigidbody / BoxCollider / SphereCollider / MeshCollider`、`Application` 固定步长累积器、场景序列化 v5、Jolt backend；已完成：持久化 Body 缓存、Trigger 事件、Layer 基础架构、Debug Draw、Constraints）
 - **P10**: 脚本与Gameplay - 未实现（无脚本组件、热重载）
 
 ## 仍需继续补齐的编辑器专项
@@ -233,13 +233,13 @@
 - 物理 tick 后回写位置与旋转。
 - 复用现有调试绘制链路做 collider/刚体可视化。
 
-当前剩余收尾（已部分完成）：
+当前剩余收尾（已全部完成）：
 
 - ✅ 持久化 Body 缓存 - 已完成（事件驱动的增量更新架构）
 - ✅ Trigger 事件 - 已完成（enter/stay/exit 回调和轮询）
 - ✅ Layer 碰撞层过滤 - 已完成（layer_id/layer_group 字段基础架构）
-- ⏳ Debug Draw - 待完成
-- ⏳ Constraints (约束) - 待完成
+- ✅ Debug Draw - 已完成（物理形状可视化，Trigger/Solid 颜色区分）
+- ✅ Constraints (约束) - 已完成（Point-to-Point、Hinge、Slider、Distance 约束）
 
 ### 主要改动范围
 

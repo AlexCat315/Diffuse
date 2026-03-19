@@ -211,6 +211,33 @@ struct GuavaJoltBodyDesc {
 
 **TODO**：完整的 Layer 过滤需要在 C++ 层实现自定义 `ObjectLayerPairFilter` 和 `BroadPhaseLayerInterface`，根据 `layer_id` 和 `layer_group` 计算碰撞掩码。
 
+### Constraints 层
+
+添加约束描述结构：
+```cpp
+struct GuavaJoltConstraintDesc {
+  uint64_t entity_id;
+  uint8_t constraint_type;  // 0=point-to-point, 1=hinge, 2=slider, 3=distance
+  uint64_t entity_a;
+  uint64_t entity_b;
+  float pivot_a[3];
+  float pivot_b[3];
+  float axis_a[3];
+  float axis_b[3];
+  float min_limit;
+  float max_limit;
+  uint8_t is_enabled;
+};
+```
+
+在 `GuavaJoltContext` 中添加约束管理：
+```cpp
+std::unordered_map<uint64_t, JPH::TwoBodyConstraint *> constraint_records;
+
+bool AddOrUpdateConstraint(const GuavaJoltConstraintDesc &desc);
+bool RemoveConstraint(uint64_t entity_id);
+```
+
 ### 使用方式
 
 ```zig
@@ -301,10 +328,12 @@ void GuavaJoltEnqueueTriggerEvent(const GuavaTriggerEvent* event);
 
 ### 修改的文件
 
-- `src/engine/physics/system.zig` - 核心物理系统，事件驱动架构
-- `src/engine/physics/jolt_bridge.cpp` - Jolt C++ 桥接层，增量更新
-- `src/engine/scene/components.zig` - Collider 组件扩展 Layer 字段
+- `src/engine/physics/system.zig` - 核心物理系统，事件驱动架构，添加约束支持
+- `src/engine/physics/jolt_bridge.cpp` - Jolt C++ 桥接层，增量更新，约束管理
+- `src/engine/scene/components.zig` - Collider 组件扩展 Layer 字段，添加 Constraint 组件
+- `src/engine/render/renderer.zig` - 渲染器集成物理调试绘制
 - `docs/physics_mvp_design.md` - 更新文档状态
+- `docs/physics_p9_implementation.md` - P9 实现总结文档
 
 ### 新增文件
 
@@ -324,33 +353,51 @@ n = 总实体数, m = 动态实体数
 ## 已知问题
 
 1. **Layer 过滤不完整**：C++ 层还需实现自定义 `ObjectLayerPairFilter`，目前仅 Zig 层收集了 layer 数据
-2. **Debug Draw 未实现**：需要集成 Jolt DebugRenderer
-3. **Constraints 未实现**：需要添加 Point-to-Point、Hinge 等基础约束
+
+## 已完成功能
+
+### Debug Draw 实现
+
+- ✅ **物理形状可视化**：通过 `collectDebugShapes` 收集物理碰撞体信息
+- ✅ **多形状支持**：支持 Box 和 Sphere 形状的线框绘制
+- ✅ **Trigger 区分**：Trigger 碰撞体使用橙色 (0.92, 0.70, 0.30) 绘制，Solid 碰撞体使用绿色 (0.30, 0.92, 0.52) 绘制
+- ✅ **集成渲染管线**：在渲染器的 `appendCollisionLines` 中集成物理调试绘制
+
+### Constraints 实现
+
+- ✅ **基础约束组件**：在 `components.zig` 中添加 `Constraint` 组件，支持四种类型：
+  - Point-to-Point Constraint (0)
+  - Hinge Constraint (1)
+  - Slider Constraint (2)
+  - Distance Constraint (3)
+- ✅ **约束数据描述**：添加 `JoltConstraintDesc` 结构，包含约束参数（pivot、axis、limits 等）
+- ✅ **C++ 桥接层**：在 `jolt_bridge.cpp` 中实现约束的创建、更新和删除
+- ✅ **事件驱动管理**：在 `system.zig` 中添加约束事件（`constraint_added`/`constraint_removed`）
+- ✅ **持久化管理**：约束随实体生命周期自动管理，支持动态启用/禁用
 
 ## 后续工作
 
 ### P10 计划
 
-1. **Debug Draw**
-   - 集成 Jolt DebugRenderer
-   - 可视化物理形状、碰撞体、约束
-   - 支持线框和实体显示模式
-
-2. **Constraints**
-   - Point-to-Point Constraint
-   - Hinge Constraint
-   - Slider Constraint
-   - 提供 Zig 层 API
-
-3. **完整 Layer 实现**
+1. **完整 Layer 实现**
    - C++ 层实现碰撞过滤
    - 提供 Layer 配置 API
    - 优化 BroadPhase
 
-4. **性能优化**
+2. **性能优化**
    - 更细粒度的事件过滤
    - Body 池化管理
    - 减少锁竞争
+
+3. **高级约束功能**
+   - 约束马达和驱动
+   - 弹簧设置
+   - 约束可视化
+
+4. **物理查询 API**
+   - 射线检测
+   - 形状投射
+   - 重叠检测
 
 ## 总结
 
