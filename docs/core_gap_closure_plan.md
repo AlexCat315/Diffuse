@@ -16,6 +16,7 @@
 - ✅ **P4**: 材质系统2.0 - 已完成（PBR BRDF、纹理色彩空间、移除硬编码Tonemap、BindGroup稳定接口）
 - ✅ **P5**: IBL、Skybox、HDR与后处理 - 已完成（IBL资源链、Skybox、Tonemap、Exposure、Bloom、Color Grading、LUT、FXAA）
 - ✅ **P6**: 阴影系统 - 已完成（方向光ShadowPass、CSM基础框架）
+- ✅ **P7**: 剔除、BVH与射线检测重构 - 已完成（Scene Extraction/Collision Overlay/Raycast 统一复用 renderable BVH 与 bounds 查询层，含动态分区、叶 refit、局部旋转重平衡与射线候选提前截断）
 
 ## 已完成专项收敛（不单列阶段）
 
@@ -32,7 +33,6 @@
 
 未实现或部分实现的核心功能：
 
-- **P7**: 剔除、BVH与射线检测重构 - 主场景 Scene Extraction、Raycast 与碰撞可视化已复用 renderable BVH，并加入动态分区 BVH、叶 refit、分区缓存局部同步、BVH 叶分裂/合并级局部结构更新、活跃 root 跟踪与局部旋转/重平衡，以及稳定后回收；更激进的全树质量优化仍未完成
 - **P8**: 动画系统 - 未实现（无Skeleton、Clip、Skinning）
 - **P9**: 物理系统 - 未实现（无Rigidbody、Collider、物理模拟）
 - **P10**: 脚本与Gameplay - 未实现（无脚本组件、热重载）
@@ -59,7 +59,7 @@
 - 渲染管线具备基础结构（DepthPrepass、BasePass、ShadowPass），并且PBR材质基线已补齐。
 - 材质数据结构已扩展为完整PBR，Shader实现已包括标准PBR与法线贴图。
 - glTF导入保留节点层级，支持骨骼动画所需数据结构，但运行时动画系统未实现
-- 场景提取已完成，具备RenderWorld和PreparedScene，但缺少BVH加速结构
+- 场景提取、可见性剔除、射线检测与调试 bounds 复用已经统一在 renderable BVH / bounds 查询层上
 - 资产系统完全异步化，具备JobSystem和GPU上传管理
 - 物理、脚本系统完全未实现
 
@@ -69,14 +69,7 @@
 
 ### 下一阶段（高优先级）
 
-1. **P7**: 剔除、BVH与射线检测重构
-   - 基于Scene Extraction的视锥体剔除
-   - 静态BVH构建（服务剔除与射线检测）
-   - Raycast升级为broad phase + narrow phase
-
-### 中期阶段
-
-2. **P8**: 动画系统MVP
+1. **P8**: 动画系统MVP
    - SkeletonResource、SkinResource、AnimationClipResource
    - SkinnedMesh、Animator、AnimationState组件
    - glTF导入skin、joints、inverseBindMatrices、animations
@@ -85,14 +78,14 @@
 
 ### 后期阶段
 
-3. **P9**: 物理系统MVP
+2. **P9**: 物理系统MVP
    - 物理抽象层设计（不直接暴露第三方库API）
    - Rigidbody、BoxCollider、SphereCollider、MeshCollider组件
    - Application固定步长更新（累积器、多tick消化）
    - Jolt物理引擎适配层
    - 物理世界与场景树同步
 
-4. **P10**: 脚本与Gameplay MVP
+3. **P10**: 脚本与Gameplay MVP
    - Script组件与Script资源
    - 脚本生命周期（OnInit、OnUpdate、OnDestroy）
    - 基础场景API暴露
@@ -126,10 +119,10 @@
 
 当前进展：
 
-- 已完成主场景 `Scene Extraction` 级视锥剔除接线，并复用统一的 renderable BVH 做 frustum candidate broad phase。
-- 已完成 `raycast` 的 renderable BVH broad phase，选择命中从“逐实体全扫”收敛为 “BVH broad phase + triangle narrow phase”。
-- 已加入“被移动过的 renderable 进入动态分区 BVH”的第一版分层，并支持动态叶 refit 与稳定若干次查询后回收到静态 BVH，避免高频拖拽持续触发静态 BVH 全量重建，也避免动态对象查询退化成线性扫。
-- `BVH` 的更细粒度增量更新已推进到静态/动态 renderable 分区缓存、脏实体局部同步、面向 create/destroy/分区迁移 的叶分裂/合并级局部结构更新，以及活跃 root 跟踪与局部旋转/重平衡，避免树 dirty 时重新线性扫描整个 `World`；碰撞可视化已改为复用 bounds/BVH，其它可见性与调试路径复用仍未封账。
+- 已完成主场景 `Scene Extraction` 级视锥剔除接线，并复用统一的 renderable BVH / bounds 查询层做 frustum candidate broad phase。
+- 已完成 `raycast` 的 renderable BVH broad phase，选择命中从“逐实体全扫”收敛为 “BVH broad phase + triangle narrow phase”，并补上按 AABB 入射距离排序的候选与窄相位提前截断。
+- 已完成“被移动过的 renderable 进入动态分区 BVH”的分层，并支持动态叶 refit 与稳定若干次查询后回收到静态 BVH，避免高频拖拽持续触发静态 BVH 全量重建，也避免动态对象查询退化成线性扫。
+- 已完成 `BVH` 的更细粒度增量更新，包括静态/动态 renderable 分区缓存、脏实体局部同步、面向 create/destroy/分区迁移 的叶分裂/合并级局部结构更新，以及活跃 root 跟踪与局部旋转/重平衡；碰撞可视化也已复用同一套 bounds/BVH 查询层，`P7` 封账。
 
 ### 主要任务
 
