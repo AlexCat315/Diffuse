@@ -33,7 +33,7 @@
 
 未实现或部分实现的核心功能：
 
-- **P8**: 动画系统 - 部分实现（已接入 Skeleton/Skin/AnimationClip 资源、SkinnedMesh/Animator 组件、glTF `skins/animations/JOINTS_0/WEIGHTS_0` 基础导入、基础 clip 采样/播放，以及 skinned mesh 顶点变形；未完成基础混合与 Cross-fade）
+- **P8**: 动画系统 - 已完成 MVP（已接入 Skeleton/Skin/AnimationClip 资源、SkinnedMesh/Animator 组件、glTF `skins/animations/JOINTS_0/WEIGHTS_0` 基础导入、clip 采样/播放、skinned mesh 顶点变形，以及基础 clip 切换 / Cross-fade）
 - **P9**: 物理系统 - 未实现（无Rigidbody、Collider、物理模拟）
 - **P10**: 脚本与Gameplay - 未实现（无脚本组件、热重载）
 
@@ -61,7 +61,7 @@
 - glTF 导入已保留节点层级，并已写入 Skeleton/Skin/AnimationClip cooked 数据与 `JOINTS_0/WEIGHTS_0`
 - 场景提取、可见性剔除、射线检测与调试 bounds 复用已经统一在 renderable BVH / bounds 查询层上
 - 资产系统完全异步化，具备JobSystem和GPU上传管理
-- 动画运行时已具备基础 clip 采样/播放和 skinned mesh 顶点变形；基础 cross-fade/blend，以及物理、脚本系统仍未完成
+- 动画运行时已具备基础 clip 采样/播放、skinned mesh 顶点变形，以及基础 clip 切换 / cross-fade；物理与脚本系统仍未完成
 
 ## 剩余执行顺序
 
@@ -69,24 +69,14 @@
 
 ### 下一阶段（高优先级）
 
-1. **P8**: 动画系统MVP
-   - 已完成：SkeletonResource、SkinResource、AnimationClipResource
-   - 已完成：SkinnedMesh、Animator 组件
-   - 已完成：glTF 导入 `skins`、`joints`、`inverseBindMatrices`、`animations`、`JOINTS_0`、`WEIGHTS_0` 的资源烘焙与 cooked 实例化接线
-   - 已完成：运行时动画基础采样、Clip 播放
-   - 已完成：Skinned Mesh Vertex Skinning
-   - 未完成：基础 Clip 混合与 Cross-fade
-
-### 后期阶段
-
-2. **P9**: 物理系统MVP
+1. **P9**: 物理系统MVP
    - 物理抽象层设计（不直接暴露第三方库API）
    - Rigidbody、BoxCollider、SphereCollider、MeshCollider组件
    - Application固定步长更新（累积器、多tick消化）
    - Jolt物理引擎适配层
    - 物理世界与场景树同步
 
-3. **P10**: 脚本与Gameplay MVP
+2. **P10**: 脚本与Gameplay MVP
    - Script组件与Script资源
    - 脚本生命周期（OnInit、OnUpdate、OnDestroy）
    - 基础场景API暴露
