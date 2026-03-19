@@ -33,7 +33,7 @@
 
 未实现或部分实现的核心功能：
 
-- **P8**: 动画系统 - 未实现（无Skeleton、Clip、Skinning）
+- **P8**: 动画系统 - 部分实现（已接入 Skeleton/Skin/AnimationClip 资源、SkinnedMesh/Animator 组件、glTF `skins/animations/JOINTS_0/WEIGHTS_0` 基础导入；未完成 GPU skinning、运行时采样播放与混合）
 - **P9**: 物理系统 - 未实现（无Rigidbody、Collider、物理模拟）
 - **P10**: 脚本与Gameplay - 未实现（无脚本组件、热重载）
 
@@ -58,10 +58,10 @@
 
 - 渲染管线具备基础结构（DepthPrepass、BasePass、ShadowPass），并且PBR材质基线已补齐。
 - 材质数据结构已扩展为完整PBR，Shader实现已包括标准PBR与法线贴图。
-- glTF导入保留节点层级，支持骨骼动画所需数据结构，但运行时动画系统未实现
+- glTF 导入已保留节点层级，并已开始写入 Skeleton/Skin/AnimationClip cooked 数据与 `JOINTS_0/WEIGHTS_0`
 - 场景提取、可见性剔除、射线检测与调试 bounds 复用已经统一在 renderable BVH / bounds 查询层上
 - 资产系统完全异步化，具备JobSystem和GPU上传管理
-- 物理、脚本系统完全未实现
+- 动画运行时的 GPU skinning、clip 采样/播放/混合，和物理、脚本系统仍未完成
 
 ## 剩余执行顺序
 
@@ -70,11 +70,12 @@
 ### 下一阶段（高优先级）
 
 1. **P8**: 动画系统MVP
-   - SkeletonResource、SkinResource、AnimationClipResource
-   - SkinnedMesh、Animator、AnimationState组件
-   - glTF导入skin、joints、inverseBindMatrices、animations
-   - GPU Vertex Skinning实现
-   - 基础Clip混合与Cross-fade
+   - 已完成：SkeletonResource、SkinResource、AnimationClipResource
+   - 已完成：SkinnedMesh、Animator 组件
+   - 已完成：glTF 导入 `skins`、`joints`、`inverseBindMatrices`、`animations`、`JOINTS_0`、`WEIGHTS_0` 的资源烘焙与 cooked 实例化接线
+   - 未完成：GPU Vertex Skinning
+   - 未完成：运行时动画采样、Clip 播放
+   - 未完成：基础 Clip 混合与 Cross-fade
 
 ### 后期阶段
 
