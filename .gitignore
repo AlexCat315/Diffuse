@@ -51,3 +51,20 @@ compile_commands.json
 assets/derived/
 assets/scenes/editor_autosave.guava_scene
 assets/scenes/editor_autosave.guava_scene.meta
+
+# Temporary files
+*.orig
+*.rej
+*.diff
+patch*.py
+patch*.diff
+test_*.zig
+test_*.cpp
+test_*.c
+test_*
+!test_*/
+*.spv
+*.spv.meta
+
+# Backup directories
+assets_backup_*/
