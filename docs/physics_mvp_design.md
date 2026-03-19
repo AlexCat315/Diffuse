@@ -10,35 +10,52 @@
 - 场景序列化能保存与恢复物理组件
 - 后续能平滑演进 Jolt backend，而不是把第三方 API 直接扩散进核心模块
 
-## 当前实现边界
+## 当前实现边界 (P9 完成)
 
 当前 `src/engine/physics/system.zig` 已经是双 backend 结构：
 
 - 默认 `backend = .jolt`
 - 保留 `backend = .builtin` 作为 fallback / debug 路径
 
+### P9 完成的核心优化
+
+1. **持久化 Body 缓存** ✅
+   - 将桥接型 Jolt step 收敛为持久化 world/body 缓存
+   - 事件驱动的增量更新机制
+   - 避免每帧重建 Body 的开销
+
+2. **Trigger 事件系统** ✅
+   - 实现 OnContact 回调机制
+   - 支持 TriggerEnter/Stay/Exit 事件
+   - 线程安全的事件队列
+
+3. **Layer 系统扩展** ✅
+   - Collider 组件新增 `layer_id` 和 `layer_group` 字段
+   - 支持自定义 Layer 和碰撞矩阵
+   - 为后续完整 Layer 过滤做准备
+
 当前能力边界如下：
 
-- `Rigidbody`
-- `BoxCollider`
-- `SphereCollider`
-- `MeshCollider`
+- `Rigidbody` (static/dynamic/kinematic)
+- `BoxCollider` (支持 trigger 和 layer)
+- `SphereCollider` (支持 trigger 和 layer)
+- `MeshCollider` (支持 trigger 和 layer)
 - Jolt 刚体步进与结果回写
 - builtin solver 下的 dynamic 刚体积分
 - builtin solver 下的 dynamic 对 static / kinematic / 纯 collider 目标的基础 AABB 接触解算
 - 固定步长调度与场景同步
+- Trigger 事件回调
+- Layer 基础架构
+- 持久化 Jolt world / body 缓存
 
 当前明确**不覆盖**：
 
-- trigger 事件回调
 - 约束、关节、连续碰撞检测
-- layer / mask 过滤
 - collider / rigidbody debug draw
-- 持久化 Jolt world / body 缓存
+- 完整 Layer 过滤（C++ 层实现）
 
 当前已知限制：
 
-- Jolt backend 初版采用桥接型实现，每次 `step` 会从 `World` 重建一次 Jolt world，再把结果回写。
 - `MeshCollider` 在 Jolt 路径里暂时以 bounds proxy box 进入后端，不是完整 triangle mesh shape。
 - 因为保留了 builtin fallback，Jolt 初始化失败时仍能回退到最小可运行路径。
 
@@ -54,8 +71,11 @@
   - `linear_damping`
   - `allow_sleep`
 - `BoxCollider`
+  - `layer_id` / `layer_group` (P9 新增)
 - `SphereCollider`
+  - `layer_id` / `layer_group` (P9 新增)
 - `MeshCollider`
+  - `layer_id` / `layer_group` (P9 新增)
 
 这些字段直接挂在 `World.Entity` 上，并跟随 `EntityDesc`、复制、统计、bootstrap 一起流转。
 
@@ -80,6 +100,16 @@
 
 这样后续继续优化 Jolt backend，只需要收敛 `physics/system.zig` 内部状态管理，不需要改 `Application` 调度层。
 
+## 事件驱动架构 (P9 新增)
+
+物理系统现在采用事件驱动的增量更新机制：
+
+- `PhysicsEvent` 枚举：entity_created/destroyed, rigidbody/collider 添加/移除, transform 变更
+- `enqueuePhysicsEvent()`：实体变更时入队
+- `processPhysicsEvents()`：每帧处理事件队列，增量更新 Jolt World
+- `TriggerEvent` 结构：entity_a, entity_b, kind (enter/stay/exit)
+- `setTriggerCallback()`：用户可注册触发器回调
+
 ## 场景兼容性
 
 场景序列化版本已升到 `v5`。
@@ -87,9 +117,9 @@
 新增可保存字段：
 
 - `rigidbody`
-- `box_collider`
-- `sphere_collider`
-- `mesh_collider`
+- `box_collider` (含 layer 信息)
+- `sphere_collider` (含 layer 信息)
+- `mesh_collider` (含 layer 信息)
 
 旧版本兼容策略：
 
@@ -109,7 +139,8 @@
 
 下一步按优先级建议：
 
-1. 把当前桥接型 Jolt step 收敛成持久化 world / body 缓存
-2. 增加 trigger 与 layer/filter
+1. ✅ 把当前桥接型 Jolt step 收敛成持久化 world / body 缓存 (P9 完成)
+2. ✅ 增加 trigger 与 layer/filter 基础架构 (P9 完成)
 3. 做 collider / rigidbody debug draw
 4. 增加约束与更完整查询接口
+5. 完成 C++ 层 Layer 过滤实现
