@@ -98,6 +98,7 @@ pub const render = struct {
 };
 
 pub const assets = struct {
+    pub const handles = @import("engine/assets/handles.zig");
     pub const AssetRegistry = @import("engine/assets/registry.zig").AssetRegistry;
     pub const AssetRecord = @import("engine/assets/registry.zig").AssetRecord;
     pub const AssetType = @import("engine/assets/registry.zig").AssetType;
@@ -115,6 +116,7 @@ pub const assets = struct {
     pub const SkeletonHandle = @import("engine/assets/handles.zig").SkeletonHandle;
     pub const SkinHandle = @import("engine/assets/handles.zig").SkinHandle;
     pub const AnimationClipHandle = @import("engine/assets/handles.zig").AnimationClipHandle;
+    pub const ScriptHandle = @import("engine/assets/handles.zig").ScriptHandle;
     pub const MeshResource = @import("engine/assets/mesh_resource.zig").MeshResource;
     pub const MeshResourceDesc = @import("engine/assets/mesh_resource.zig").MeshResourceDesc;
     pub const MaterialResource = @import("engine/assets/material_resource.zig").MaterialResource;
@@ -127,6 +129,7 @@ pub const assets = struct {
     pub const SkinResourceDesc = @import("engine/assets/skin_resource.zig").SkinResourceDesc;
     pub const AnimationClipResource = @import("engine/assets/animation_clip_resource.zig").AnimationClipResource;
     pub const AnimationClipResourceDesc = @import("engine/assets/animation_clip_resource.zig").AnimationClipResourceDesc;
+    pub const AnimationInterpolation = @import("engine/assets/animation_clip_resource.zig").Interpolation;
     pub const DecodedImage = @import("engine/assets/image_decoder.zig").DecodedImage;
     pub const decodeImageRgba8 = @import("engine/assets/image_decoder.zig").decodeRgba8;
     pub const RasterizedSvg = @import("engine/assets/svg_decoder.zig").RasterizedSvg;
