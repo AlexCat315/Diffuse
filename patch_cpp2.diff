@@ -1,0 +1,11 @@
+--- src/engine/physics/jolt_bridge.cpp
++++ src/engine/physics/jolt_bridge.cpp
+@@ -754,7 +754,7 @@
+                                           rotation);
+     const JPH::Vec3 linear_velocity =
+         body_interface.GetLinearVelocity(entry.second.body_id);
+-    // printf("Jolt Body ID %llu, x: %f, v: %f\n", entry.first, position.GetX(), linear_velocity.GetX());
++    printf("Jolt Body ID %llu, x: %f, v: %f\n", entry.first, position.GetX(), linear_velocity.GetX());
+ 
+     if (out_index < in_state_capacity) {
+       GuavaJoltBodyState &state = out_states[out_index++];
