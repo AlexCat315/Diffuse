@@ -34,7 +34,7 @@
 未实现或部分实现的核心功能：
 
 - **P8**: 动画系统 - 已完成 MVP（已接入 Skeleton/Skin/AnimationClip 资源、SkinnedMesh/Animator 组件、glTF `skins/animations/JOINTS_0/WEIGHTS_0` 基础导入、clip 采样/播放、skinned mesh 顶点变形，以及基础 clip 切换 / Cross-fade）
-- **P9**: 物理系统 - 部分实现（已接入 `Rigidbody / BoxCollider / SphereCollider / MeshCollider`、`Application` 固定步长累积器、场景序列化 v5、内建 bounds-based 物理解算 MVP，以及 Jolt backend 初版；当前仍缺 Trigger 事件、碰撞层过滤、更完整约束、debug draw 与持久化 Jolt world）
+- **P9**: 物理系统 - 大部分完成（已接入 `Rigidbody / BoxCollider / SphereCollider / MeshCollider`、`Application` 固定步长累积器、场景序列化 v5、Jolt backend；已完成：持久化 Body 缓存、Trigger 事件、Layer 基础架构；剩余：Debug Draw、Constraints）
 - **P10**: 脚本与Gameplay - 未实现（无脚本组件、热重载）
 
 ## 仍需继续补齐的编辑器专项
@@ -208,8 +208,11 @@
 - 已完成基础场景同步：物理步进后通过 `setEntityWorldTransform()` 回写世界变换，默认 bootstrap 场景已带 Ground/Hero 样例。
 - 已完成场景序列化 v5，对物理组件做 round-trip 兼容。
 - 已完成 Jolt backend 初版接入：`physics/system.zig` 默认走 Jolt，内建 solver 收敛为 fallback / debug 路径。
-- 当前 Jolt backend 仍是桥接型实现：每次 step 重建一次 Jolt world，`MeshCollider` 先以 bounds proxy box 进入 Jolt，而不是完整三角网格上传。
-- 当前 solver 仍只覆盖 MVP 范围，Trigger / Filter / Constraint / Debug Draw 还未补齐。
+- ✅ 已完成持久化 Body 缓存架构：事件驱动的增量更新（add/update/remove），替代每帧全量重建。
+- ✅ 已完成 Trigger 事件系统：enter/stay/exit 回调和轮询接口。
+- ✅ 已完成 Layer 基础架构：Collider 新增 layer_id/layer_group 字段，支持碰撞过滤。
+- ⏳ `MeshCollider` 仍以 bounds proxy box 进入 Jolt（简化实现）。
+- ⏳ Debug Draw / Constraints 还未补齐。
 
 ### 主要任务
 
@@ -230,11 +233,13 @@
 - 物理 tick 后回写位置与旋转。
 - 复用现有调试绘制链路做 collider/刚体可视化。
 
-当前剩余收尾：
+当前剩余收尾（已部分完成）：
 
-- 把当前桥接型 Jolt backend 收敛成持久化 world / body 缓存，并继续压缩 builtin fallback 的职责面。
-- 增加 trigger 事件、碰撞层过滤与更完整约束。
-- 把 collider / rigidbody debug draw 接进编辑器视口开关。
+- ✅ 持久化 Body 缓存 - 已完成（事件驱动的增量更新架构）
+- ✅ Trigger 事件 - 已完成（enter/stay/exit 回调和轮询）
+- ✅ Layer 碰撞层过滤 - 已完成（layer_id/layer_group 字段基础架构）
+- ⏳ Debug Draw - 待完成
+- ⏳ Constraints (约束) - 待完成
 
 ### 主要改动范围
 
