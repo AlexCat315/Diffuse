@@ -1,215 +1,634 @@
 //! Guava Engine: a Zig runtime for games, film/animation, and tooling.
+//!
+//! Guava Engine 是一个基于 Zig 语言的游戏引擎运行时，专注于以下领域：
+//! - 游戏开发（Game Development）
+//! - 影视动画制作（Film/Animation Production）
+//! - 可视化工具（Visualization Tooling）
+//!
+//! ## 核心架构
+//!
+//! 引擎采用模块化设计，主要包含以下子系统：
+//!
+//! - **core** - 核心系统（应用管理、输入、层栈、平台抽象）
+//! - **platform** - 平台层（窗口管理、进程管理）
+//! - **rhi** - 渲染硬件接口（RHI，Render Hardware Interface）
+//! - **render** - 渲染系统（渲染管线、后处理、Gizmo）
+//! - **scene** - 场景系统（ECS、实体管理、组件系统）
+//! - **assets** - 资源系统（资源注册表、导入、管理）
+//! - **animation** - 动画系统（动画图、动画状态机）
+//! - **physics** - 物理系统（刚体、碰撞检测、射线检测）
+//! - **math** - 数学库（向量、矩阵、四元数）
+//! - **ui** - UI 系统（基于 Dear ImGui）
+//!
+//! ## 快速开始
+//!
+//! ```zig
+//! const guava = @import("guava");
+//!
+//! // 创建应用配置
+//! const config = guava.core.ApplicationConfig{
+//!     .window_title = "My Game",
+//!     .window_width = 1280,
+//!     .window_height = 720,
+//! };
+//!
+//! // 初始化并运行应用
+//! var app = guava.core.Application.init(config);
+//! defer app.deinit();
+//! app.run();
+//! ```
+
 const std = @import("std");
 
+/// 核心系统模块
+/// 
+/// 提供应用程序生命周期管理、输入处理、层栈管理和平台抽象。
+/// 这是构建 Guava Engine 应用的基础模块。
 pub const core = struct {
+    /// 应用程序主类，管理引擎生命周期和主循环
     pub const Application = @import("engine/core/application.zig").Application;
+    /// 应用程序配置结构体
     pub const ApplicationConfig = @import("engine/core/application.zig").ApplicationConfig;
+    /// 输入状态管理
     pub const InputState = @import("engine/core/input.zig").InputState;
+    /// 键盘按键枚举
     pub const InputKey = @import("engine/core/input.zig").Key;
+    /// 鼠标按钮枚举
     pub const MouseButton = @import("engine/core/input.zig").MouseButton;
+    /// 输入修饰键（Shift、Ctrl、Alt 等）
     pub const InputModifiers = @import("engine/core/input.zig").Modifiers;
+    /// 层接口，用于构建应用逻辑
     pub const Layer = @import("engine/core/layer.zig").Layer;
+    /// 层上下文，提供给层的运行时信息
     pub const LayerContext = @import("engine/core/layer.zig").LayerContext;
+    /// 播放状态（用于动画/游戏时间控制）
     pub const PlaybackState = @import("engine/core/layer.zig").PlaybackState;
+    /// 播放控制器接口
     pub const PlaybackController = @import("engine/core/layer.zig").PlaybackController;
+    /// 平台抽象
     pub const Platform = @import("engine/core/platform.zig").Platform;
+    /// 检测当前运行平台
     pub const detectPlatform = @import("engine/core/platform.zig").detect;
+    /// 获取平台名称
     pub const platformName = @import("engine/core/platform.zig").name;
 };
 
+/// 平台层模块
+///
+/// 提供跨平台的窗口管理和进程管理功能。
+/// 支持 Windows、macOS 和 Linux 平台。
 pub const platform = struct {
+    /// 窗口管理类
     pub const Window = @import("engine/platform/window.zig").Window;
+    /// 窗口配置结构体
     pub const WindowConfig = @import("engine/platform/window.zig").WindowConfig;
+    /// 窗口事件枚举
     pub const WindowEvent = @import("engine/platform/window.zig").Event;
+    /// 窗口事件类型
     pub const WindowEventKind = @import("engine/platform/window.zig").EventKind;
+    /// SDL 平台支持
     pub const sdl = @import("engine/platform/sdl.zig");
+    /// 获取进程驻留内存大小（字节）
     pub const processResidentMemoryBytes = @import("engine/platform/process.zig").residentMemoryBytes;
 };
 
+/// UI 系统模块
+///
+/// 基于 Dear ImGui 的即时模式 UI 系统。
+/// 用于构建编辑器界面和调试工具。
 pub const ui = struct {
+    /// Dear ImGui 绑定
     pub const ImGui = @import("engine/ui/imgui.zig");
 };
 
+/// 渲染硬件接口（RHI）模块
+///
+/// 提供跨平台的 GPU 资源管理抽象。
+/// 支持 Vulkan、Metal 和 DirectX 12 后端。
+///
+/// ## 主要功能
+///
+/// - 设备管理（Device）
+/// - 缓冲区管理（Buffer）
+/// - 纹理管理（Texture）
+/// - 渲染管线（GraphicsPipeline）
+/// - 着色器模块（ShaderModule）
+/// - 采样器（Sampler）
+/// - 绑定组（BindGroup）
+///
+/// ## 使用示例
+///
+/// ```zig
+/// // 创建设备
+/// var device = try rhi.Device.create(.{
+///     .preferred_backends = &.{.vulkan, .metal},
+/// });
+///
+/// // 创建纹理
+/// const texture = try device.createTexture(.{
+///     .width = 1024,
+///     .height = 1024,
+///     .format = .rgba8_unorm,
+/// });
+/// ```
 pub const rhi = struct {
+    /// RHI 设备，GPU 资源管理的主入口
     pub const Device = @import("engine/rhi/device.zig").RhiDevice;
+    /// GPU 缓冲区
     pub const Buffer = @import("engine/rhi/device.zig").Buffer;
+    /// 绑定组，用于绑定资源到着色器
     pub const BindGroup = @import("engine/rhi/device.zig").BindGroup;
+    /// 拷贝通道，用于资源拷贝操作
     pub const CopyPass = @import("engine/rhi/device.zig").CopyPass;
+    /// GPU 围栏，用于同步
     pub const Fence = @import("engine/rhi/device.zig").Fence;
+    /// 帧对象，表示一帧的渲染
     pub const Frame = @import("engine/rhi/device.zig").Frame;
+    /// 图形渲染管线
     pub const GraphicsPipeline = @import("engine/rhi/device.zig").GraphicsPipeline;
+    /// 图形渲染管线描述
     pub const GraphicsPipelineDesc = @import("engine/rhi/device.zig").GraphicsPipelineDesc;
+    /// 纹理采样器
     pub const Sampler = @import("engine/rhi/device.zig").Sampler;
+    /// 采样器描述
     pub const SamplerDesc = @import("engine/rhi/device.zig").SamplerDesc;
+    /// 着色器模块
     pub const ShaderModule = @import("engine/rhi/device.zig").ShaderModule;
+    /// 着色器模块描述
     pub const ShaderModuleDesc = @import("engine/rhi/device.zig").ShaderModuleDesc;
+    /// GPU 纹理
     pub const Texture = @import("engine/rhi/device.zig").Texture;
+    /// 纹理-采样器绑定
     pub const TextureSamplerBinding = @import("engine/rhi/device.zig").TextureSamplerBinding;
+    /// 传输缓冲区，用于 CPU-GPU 数据传输
     pub const TransferBuffer = @import("engine/rhi/device.zig").TransferBuffer;
+    /// 后端选择策略
     pub const BackendSelectionPolicy = @import("engine/rhi/types.zig").BackendSelectionPolicy;
+    /// 比较操作（用于深度/模板测试）
     pub const CompareOp = @import("engine/rhi/types.zig").CompareOp;
+    /// 剔除模式
     pub const CullMode = @import("engine/rhi/types.zig").CullMode;
+    /// 填充模式
     pub const FillMode = @import("engine/rhi/types.zig").FillMode;
+    /// 正面朝向定义
     pub const FrontFace = @import("engine/rhi/types.zig").FrontFace;
+    /// 图形 API 枚举
     pub const GraphicsAPI = @import("engine/rhi/types.zig").GraphicsAPI;
+    /// 设备配置
     pub const DeviceConfig = @import("engine/rhi/types.zig").DeviceConfig;
+    /// 缓冲区用途
     pub const BufferUsage = @import("engine/rhi/types.zig").BufferUsage;
+    /// 索引元素大小
     pub const IndexElementSize = @import("engine/rhi/types.zig").IndexElementSize;
+    /// 图元类型
     pub const PrimitiveType = @import("engine/rhi/types.zig").PrimitiveType;
+    /// 采样器寻址模式
     pub const SamplerAddressMode = @import("engine/rhi/types.zig").SamplerAddressMode;
+    /// 采样器过滤模式
     pub const SamplerFilter = @import("engine/rhi/types.zig").SamplerFilter;
+    /// 采样器 Mipmap 模式
     pub const SamplerMipmapMode = @import("engine/rhi/types.zig").SamplerMipmapMode;
+    /// 着色器格式
     pub const ShaderFormat = @import("engine/rhi/types.zig").ShaderFormat;
+    /// 着色器阶段
     pub const ShaderStage = @import("engine/rhi/types.zig").ShaderStage;
+    /// 纹理用途
     pub const TextureUsage = @import("engine/rhi/types.zig").TextureUsage;
+    /// 缓冲区描述
     pub const BufferDesc = @import("engine/rhi/types.zig").BufferDesc;
+    /// 纹理描述
     pub const TextureDesc = @import("engine/rhi/types.zig").TextureDesc;
+    /// 传输缓冲区描述
     pub const TransferBufferDesc = @import("engine/rhi/types.zig").TransferBufferDesc;
+    /// 顶点元素格式
     pub const VertexElementFormat = @import("engine/rhi/types.zig").VertexElementFormat;
+    /// 顶点输入速率
     pub const VertexInputRate = @import("engine/rhi/types.zig").VertexInputRate;
+    /// 清除状态
     pub const ClearState = @import("engine/rhi/types.zig").ClearState;
+    /// 运行时信息
     pub const RuntimeInfo = @import("engine/rhi/types.zig").RuntimeInfo;
+    /// 获取图形 API 名称
     pub const graphicsApiName = @import("engine/rhi/types.zig").graphicsApiName;
 };
 
+/// 渲染系统模块
+///
+/// 提供完整的渲染管线实现，包括：
+/// - 基础渲染通道（Base Pass）
+/// - 阴影渲染（Shadow Pass）
+/// - 后处理效果（Bloom、FXAA、色调映射）
+/// - Gizmo 渲染
+/// - ID 拾取（用于编辑器选择）
+///
+/// ## 渲染管线流程
+///
+/// 1. Depth Prepass - 深度预通道
+/// 2. Shadow Pass - 阴影贴图渲染
+/// 3. Base Pass - 主渲染通道
+/// 4. Post Processing - 后处理（Bloom、FXAA、色调映射）
+/// 5. Gizmo Pass - Gizmo 渲染（仅编辑器）
+/// 6. Outline Pass - 选中物体轮廓（仅编辑器）
 pub const render = struct {
+    /// 图形 API 枚举
     pub const GraphicsAPI = @import("engine/render/types.zig").GraphicsAPI;
+    /// 后端选择策略
     pub const BackendSelectionPolicy = @import("engine/render/types.zig").BackendSelectionPolicy;
+    /// 运行时信息
     pub const RuntimeInfo = @import("engine/render/types.zig").RuntimeInfo;
+    /// 默认首选后端列表
     pub const defaultPreferredBackends = @import("engine/render/types.zig").defaultPreferredBackends;
+    /// 默认后端顺序
     pub const defaultBackendOrder = @import("engine/render/types.zig").defaultBackendOrder;
+    /// 编辑器视口渲染模式
     pub const EditorViewportRenderMode = @import("engine/render/types.zig").EditorViewportRenderMode;
+    /// 编辑器视口 LUT 预设
     pub const EditorViewportLutPreset = @import("engine/render/types.zig").EditorViewportLutPreset;
+    /// 编辑器视口状态
     pub const EditorViewportState = @import("engine/render/types.zig").EditorViewportState;
+    /// 渲染器主类，管理整个渲染管线
     pub const Renderer = @import("engine/render/renderer.zig").Renderer;
+    /// 渲染器配置
     pub const RendererConfig = @import("engine/render/renderer.zig").RendererConfig;
+    /// 帧报告，包含渲染统计信息
     pub const FrameReport = @import("engine/render/renderer.zig").FrameReport;
+    /// 网格场景缓存
     pub const MeshSceneCache = @import("engine/render/mesh_pass.zig").MeshSceneCache;
+    /// 准备好的场景数据
     pub const PreparedScene = @import("engine/render/mesh_pass.zig").PreparedScene;
+    /// ID 拾取通道（用于编辑器物体选择）
     pub const IdPass = @import("engine/render/id_pass.zig").IdPass;
+    /// 基础渲染通道
     pub const BasePass = @import("engine/render/base_pass.zig").BasePass;
+    /// 基础渲染通道（Golden 测试版本）
     pub const BasePassGolden = @import("engine/render/base_pass_golden.zig");
+    /// 深度预通道
     pub const DepthPrepass = @import("engine/render/depth_prepass.zig").DepthPrepass;
+    /// Gizmo 渲染通道
     pub const GizmoPass = @import("engine/render/gizmo_pass.zig").GizmoPass;
+    /// 轮廓渲染通道（用于选中物体高亮）
     pub const OutlinePass = @import("engine/render/outline_pass.zig").OutlinePass;
+    /// 选择历史管理
     pub const SelectionHistory = @import("engine/render/selection_history.zig").SelectionHistory;
+    /// 选择更新模式
     pub const SelectionUpdateMode = @import("engine/render/selection_history.zig").SelectionUpdateMode;
+    /// 获取图形 API 名称
     pub const graphicsApiName = @import("engine/render/types.zig").graphicsApiName;
 };
 
+/// 资源系统模块
+///
+/// 提供完整的资源管理功能，包括：
+/// - 资源注册表（Asset Registry）
+/// - 资源导入（GLTF、纹理、材质等）
+/// - 资源句柄（类型安全的资源引用）
+/// - 资源验证
+///
+/// ## 资源类型
+///
+/// - Mesh - 网格
+/// - Material - 材质
+/// - Texture - 纹理
+/// - Skeleton - 骨骼
+/// - Skin - 蒙皮
+/// - AnimationClip - 动画片段
+/// - Script - 脚本
+///
+/// ## 使用示例
+///
+/// ```zig
+/// // 获取资源库
+/// var library = world.resources;
+///
+/// // 加载网格
+/// const mesh_handle = library.ensurePrimitiveMesh(.cube);
+///
+/// // 加载材质
+/// const material_handle = library.ensureDefaultMaterial();
+/// ```
 pub const assets = struct {
+    /// 资源句柄定义
     pub const handles = @import("engine/assets/handles.zig");
+    /// 资源注册表，管理所有资源元数据
     pub const AssetRegistry = @import("engine/assets/registry.zig").AssetRegistry;
+    /// 资源记录
     pub const AssetRecord = @import("engine/assets/registry.zig").AssetRecord;
+    /// 资源类型枚举
     pub const AssetType = @import("engine/assets/registry.zig").AssetType;
+    /// 资源输出信息
     pub const AssetOutput = @import("engine/assets/registry.zig").AssetOutput;
+    /// 资源元数据
     pub const AssetMetadata = @import("engine/assets/registry.zig").AssetMetadata;
+    /// 创建派生资源 ID
     pub const makeDerivedAssetIdAlloc = @import("engine/assets/registry.zig").makeDerivedAssetIdAlloc;
+    /// 资源库，运行时资源管理
     pub const ResourceLibrary = @import("engine/assets/library.zig").ResourceLibrary;
+    /// 资源验证问题
     pub const AssetValidationIssue = @import("engine/assets/validator.zig").ValidationIssue;
+    /// 资源验证报告
     pub const AssetValidationReport = @import("engine/assets/validator.zig").ValidationReport;
+    /// 验证项目资源
     pub const validateProjectAssetsAlloc = @import("engine/assets/validator.zig").validateProjectAlloc;
+    /// 验证注册表资源
     pub const validateRegistryAssetsAlloc = @import("engine/assets/validator.zig").validateRegistryAlloc;
+    /// 网格句柄
     pub const MeshHandle = @import("engine/assets/handles.zig").MeshHandle;
+    /// 材质句柄
     pub const MaterialHandle = @import("engine/assets/handles.zig").MaterialHandle;
+    /// 纹理句柄
     pub const TextureHandle = @import("engine/assets/handles.zig").TextureHandle;
+    /// 骨骼句柄
     pub const SkeletonHandle = @import("engine/assets/handles.zig").SkeletonHandle;
+    /// 蒙皮句柄
     pub const SkinHandle = @import("engine/assets/handles.zig").SkinHandle;
+    /// 动画片段句柄
     pub const AnimationClipHandle = @import("engine/assets/handles.zig").AnimationClipHandle;
+    /// 脚本句柄
     pub const ScriptHandle = @import("engine/assets/handles.zig").ScriptHandle;
+    /// 网格资源
     pub const MeshResource = @import("engine/assets/mesh_resource.zig").MeshResource;
+    /// 网格资源描述
     pub const MeshResourceDesc = @import("engine/assets/mesh_resource.zig").MeshResourceDesc;
+    /// 材质资源
     pub const MaterialResource = @import("engine/assets/material_resource.zig").MaterialResource;
+    /// 材质资源描述
     pub const MaterialResourceDesc = @import("engine/assets/material_resource.zig").MaterialResourceDesc;
+    /// 纹理资源
     pub const TextureResource = @import("engine/assets/texture_resource.zig").TextureResource;
+    /// 纹理资源描述
     pub const TextureResourceDesc = @import("engine/assets/texture_resource.zig").TextureResourceDesc;
+    /// 骨骼资源
     pub const SkeletonResource = @import("engine/assets/skeleton_resource.zig").SkeletonResource;
+    /// 骨骼资源描述
     pub const SkeletonResourceDesc = @import("engine/assets/skeleton_resource.zig").SkeletonResourceDesc;
+    /// 蒙皮资源
     pub const SkinResource = @import("engine/assets/skin_resource.zig").SkinResource;
+    /// 蒙皮资源描述
     pub const SkinResourceDesc = @import("engine/assets/skin_resource.zig").SkinResourceDesc;
+    /// 动画片段资源
     pub const AnimationClipResource = @import("engine/assets/animation_clip_resource.zig").AnimationClipResource;
+    /// 动画片段资源描述
     pub const AnimationClipResourceDesc = @import("engine/assets/animation_clip_resource.zig").AnimationClipResourceDesc;
+    /// 动画插值模式
     pub const AnimationInterpolation = @import("engine/assets/animation_clip_resource.zig").Interpolation;
+    /// 解码后的图像
     pub const DecodedImage = @import("engine/assets/image_decoder.zig").DecodedImage;
+    /// 解码图像为 RGBA8
     pub const decodeImageRgba8 = @import("engine/assets/image_decoder.zig").decodeRgba8;
+    /// 光栅化后的 SVG
     pub const RasterizedSvg = @import("engine/assets/svg_decoder.zig").RasterizedSvg;
+    /// SVG 光栅化选项
     pub const SvgRasterizeOptions = @import("engine/assets/svg_decoder.zig").RasterizeOptions;
+    /// 光栅化 SVG 为 BGRA8
     pub const rasterizeSvgBgra8 = @import("engine/assets/svg_decoder.zig").rasterizeBgra8;
+    /// 确保纹理已烹饪
     pub const ensureCookedTexture = @import("engine/assets/texture_import.zig").ensureCookedTexture;
+    /// 验证已烹饪的纹理资源
     pub const validateCookedTextureAsset = @import("engine/assets/texture_import.zig").validateCookedTextureAsset;
+    /// 加载纹理资源
     pub const loadTextureAsset = @import("engine/assets/texture_import.zig").loadTextureAsset;
+    /// GLTF 导入报告
     pub const GltfImportReport = @import("engine/assets/gltf_import.zig").ImportReport;
+    /// 确保模型资源已烹饪
     pub const ensureCookedModelAsset = @import("engine/assets/gltf_import.zig").ensureCookedModelAsset;
+    /// 验证已烹饪的模型资源
     pub const validateCookedModelAsset = @import("engine/assets/gltf_import.zig").validateCookedModelAsset;
+    /// 导入 GLTF 静态模型资源
     pub const importGltfStaticModelAsset = @import("engine/assets/gltf_import.zig").importStaticModelAsset;
+    /// 导入 GLTF 静态模型资源实例
     pub const importGltfStaticModelAssetInstance = @import("engine/assets/gltf_import.zig").importStaticModelAssetInstance;
 };
 
+/// 动画系统模块
+///
+/// 提供动画播放和管理功能：
+/// - 动画状态机
+/// - 动画混合
+/// - 动画事件
+///
+/// ## 使用示例
+///
+/// ```zig
+/// // 播放动画片段
+/// try guava.animation.playClip(animator, .{
+///     .clip = clip_handle,
+///     .loop = true,
+///     .speed = 1.0,
+/// });
+/// ```
 pub const animation = struct {
+    /// 更新所有动画器
     pub const updateAnimators = @import("engine/animation/animator_system.zig").update;
+    /// 播放动画选项
     pub const PlayClipOptions = @import("engine/animation/animator_system.zig").PlayClipOptions;
+    /// 播放动画片段
     pub const playClip = @import("engine/animation/animator_system.zig").playClip;
+    /// 动画图模块
     pub const animation_graph = @import("engine/animation/animation_graph.zig");
 };
 
+/// 物理系统模块
+///
+/// 提供物理模拟功能：
+/// - 刚体动力学
+/// - 碰撞检测
+/// - 射线检测
+/// - AABB 查询
+///
+/// ## 支持的后端
+///
+/// - Builtin - 内置轻量级物理
+/// - Jolt - Jolt Physics（完整物理模拟）
+///
+/// ## 使用示例
+///
+/// ```zig
+/// // 配置物理
+/// const physics_config = guava.physics.Config{
+///     .backend = .jolt,
+///     .gravity = .{ 0, -9.8, 0 },
+/// };
+///
+/// // 执行物理步进
+/// const stats = guava.physics.step(world, delta_time, physics_config);
+///
+/// // 射线检测
+/// const hit = guava.physics.raycast(world, .{
+///     .origin = .{ 0, 10, 0 },
+///     .direction = .{ 0, -1, 0 },
+/// });
+/// ```
 pub const physics = struct {
+    /// 轴对齐包围盒
     pub const AABB = @import("engine/math/aabb.zig").AABB;
+    /// 物理后端枚举
     pub const Backend = @import("engine/physics/system.zig").Backend;
+    /// 物理配置
     pub const Config = @import("engine/physics/system.zig").Config;
+    /// 物理步进统计
     pub const StepStats = @import("engine/physics/system.zig").StepStats;
+    /// 射线查询
     pub const RayQuery = @import("engine/physics/system.zig").RayQuery;
+    /// 查询过滤器
     pub const QueryFilter = @import("engine/physics/system.zig").QueryFilter;
+    /// 射线检测结果
     pub const RaycastHit = @import("engine/physics/system.zig").RaycastHit;
+    /// 重叠检测结果
     pub const OverlapHit = @import("engine/physics/system.zig").OverlapHit;
+    /// 扫掠检测结果
     pub const SweepHit = @import("engine/physics/system.zig").SweepHit;
+    /// 从中心和半尺寸创建 AABB
     pub const aabbFromCenterHalfExtents = @import("engine/physics/system.zig").aabbFromCenterHalfExtents;
+    /// 释放世界的物理资源
     pub const deinitWorld = @import("engine/physics/system.zig").deinitWorld;
+    /// 执行射线检测
     pub const raycast = @import("engine/physics/system.zig").raycast;
+    /// 执行 AABB 重叠查询
     pub const overlapAabb = @import("engine/physics/system.zig").overlapAabb;
+    /// 执行 AABB 扫掠查询
     pub const sweepAabb = @import("engine/physics/system.zig").sweepAabb;
+    /// 执行物理步进
     pub const step = @import("engine/physics/system.zig").step;
 };
 
+/// 数学库模块
+///
+/// 提供游戏开发常用的数学类型和运算：
+/// - 向量（Vec3）
+/// - 矩阵（Mat4）
+/// - 四元数（Quat）
+/// - 角度转换
+/// - 坐标轴定义
+///
+/// ## 使用示例
+///
+/// ```zig
+/// // 向量运算
+/// const v1 = guava.math.vec3.new(1, 2, 3);
+/// const v2 = guava.math.vec3.new(4, 5, 6);
+/// const v3 = guava.math.vec3.add(v1, v2);
+///
+/// // 矩阵变换
+/// const m = guava.math.mat4.identity();
+/// const translated = guava.math.mat4.translate(m, .{ 1, 2, 3 });
+///
+/// // 四元数旋转
+/// const q = guava.math.quat.fromEuler(.{ 0, std.math.pi / 2, 0 });
+/// ```
 pub const math = struct {
+    /// 角度转换工具
     pub const angle = @import("engine/math/angle.zig");
+    /// 坐标轴定义
     pub const axis = @import("engine/math/axis.zig");
+    /// 4x4 矩阵
     pub const mat4 = @import("engine/math/mat4.zig");
+    /// 3D 向量
     pub const vec3 = @import("engine/math/vec3.zig");
+    /// 四元数
     pub const quat = @import("engine/math/quat.zig");
 };
 
+/// 场景系统模块
+///
+/// 提供 ECS（Entity-Component-System）架构的场景管理：
+/// - 实体（Entity）管理
+/// - 组件（Component）系统
+/// - 场景序列化/反序列化
+/// - Prefab 系统
+///
+/// ## 核心概念
+///
+/// - **World** - 场景世界，包含所有实体
+/// - **Entity** - 实体，组件的容器
+/// - **Component** - 组件，存储数据（Transform、Mesh、Light 等）
+/// - **Prefab** - 预制体，可复用的实体模板
+///
+/// ## 使用示例
+///
+/// ```zig
+/// // 创建世界
+/// var world = guava.scene.World.init(allocator, null);
+/// defer world.deinit();
+///
+/// // 创建实体
+/// const entity = try world.createEntity(.{
+///     .name = "Player",
+///     .local_transform = .{
+///         .translation = .{ 0, 1, 0 },
+///     },
+/// });
+///
+/// // 添加组件
+/// try world.addMeshComponent(entity, .{ .handle = mesh_handle });
+/// try world.addRigidbodyComponent(entity, .{ .motion_type = .dynamic });
+///
+/// // 保存场景
+/// try guava.scene.saveWorldToPath(&world, "scene.guava");
+/// ```
 pub const scene = struct {
+    /// 场景类
     pub const Scene = @import("engine/scene/scene.zig").Scene;
+    /// 场景世界
     pub const World = @import("engine/scene/scene.zig").World;
+    /// 实体
     pub const Entity = @import("engine/scene/scene.zig").Entity;
+    /// 实体 ID
     pub const EntityId = @import("engine/scene/scene.zig").EntityId;
+    /// 实体描述
     pub const EntityDesc = @import("engine/scene/scene.zig").EntityDesc;
+    /// 场景摘要
     pub const Summary = @import("engine/scene/scene.zig").Summary;
+    /// 射线
     pub const Ray = @import("engine/scene/scene.zig").Ray;
+    /// 表面射线检测结果
     pub const SurfaceRaycastHit = @import("engine/scene/scene.zig").SurfaceRaycastHit;
+    /// 序列化世界
     pub const serializeWorldAlloc = @import("engine/scene/scene.zig").serializeWorldAlloc;
+    /// 从字节切片反序列化世界
     pub const deserializeWorldFromSlice = @import("engine/scene/scene.zig").deserializeWorldFromSlice;
+    /// 保存世界到路径
     pub const saveWorldToPath = @import("engine/scene/scene.zig").saveWorldToPath;
+    /// 从路径加载世界
     pub const loadWorldFromPath = @import("engine/scene/scene.zig").loadWorldFromPath;
+    /// 变换组件
     pub const Transform = @import("engine/scene/components.zig").Transform;
+    /// 相机组件
     pub const Camera = @import("engine/scene/components.zig").Camera;
+    /// 网格组件
     pub const Mesh = @import("engine/scene/components.zig").Mesh;
+    /// 蒙皮网格组件
     pub const SkinnedMesh = @import("engine/scene/components.zig").SkinnedMesh;
+    /// 动画器组件
     pub const Animator = @import("engine/scene/components.zig").Animator;
+    /// 刚体组件
     pub const Rigidbody = @import("engine/scene/components.zig").Rigidbody;
+    /// 刚体运动类型
     pub const RigidbodyMotionType = @import("engine/scene/components.zig").RigidbodyMotionType;
+    /// 盒碰撞器组件
     pub const BoxCollider = @import("engine/scene/components.zig").BoxCollider;
+    /// 球碰撞器组件
     pub const SphereCollider = @import("engine/scene/components.zig").SphereCollider;
+    /// 网格碰撞器组件
     pub const MeshCollider = @import("engine/scene/components.zig").MeshCollider;
+    /// 材质组件
     pub const Material = @import("engine/scene/components.zig").Material;
+    /// 光源组件
     pub const Light = @import("engine/scene/components.zig").Light;
+    /// 特效组件
     pub const Vfx = @import("engine/scene/components.zig").Vfx;
+    /// 特效类型
     pub const VfxKind = @import("engine/scene/components.zig").VfxKind;
+    /// 运行时粒子
     pub const VfxRuntimeParticle = @import("engine/scene/scene.zig").VfxRuntimeParticle;
+    /// 运行时发射器
     pub const VfxRuntimeEmitter = @import("engine/scene/scene.zig").VfxRuntimeEmitter;
+    /// 几何体类型
     pub const Primitive = @import("engine/scene/components.zig").Primitive;
+    /// 着色模型
     pub const ShadingModel = @import("engine/scene/components.zig").ShadingModel;
+    /// 光源类型
     pub const LightKind = @import("engine/scene/components.zig").LightKind;
+    /// Prefab 系统
     pub const prefab = @import("engine/scene/prefab.zig");
 };
 
