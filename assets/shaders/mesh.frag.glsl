@@ -23,7 +23,7 @@ layout(set = 2, binding = 9) uniform sampler2D u_environment_map; // Fallback fo
 layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     vec4 u_base_color_factor;
     vec4 u_emissive_factor;
-    vec4 u_pbr_factors; // x: metallic, y: roughness, z: alpha_cutoff
+    vec4 u_pbr_factors; // x: metallic, y: roughness, z: alpha_cutoff, w: output_alpha_multiplier
     uvec4 u_has_textures; // x: base_color, y: metallic_roughness, z: normal, w: occlusion
     vec4 u_camera_world_position;
     vec4 u_light_direction;
@@ -32,8 +32,8 @@ layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     vec4 u_point_light_position_radius;
     vec4 u_point_light_color_intensity;
     vec4 u_ambient_color;
-    vec4 u_shadow_params; // x: bias
-    vec4 u_ibl_params; // x: use_ibl, y: ibl_intensity, z: reserved, w: reserved
+    vec4 u_shadow_params; // x: bias, yzw: preview_tint_color
+    vec4 u_ibl_params; // x: use_ibl, y: ibl_intensity, z: preview_tint_strength, w: reserved
 } material_uniforms;
 
 const float PI = 3.14159265359;
@@ -245,6 +245,12 @@ void main() {
     }
 
     vec3 color = ambient + Lo + emissive + ibl_contribution;
+    float preview_tint_strength = clamp(material_uniforms.u_ibl_params.z, 0.0, 1.0);
+    if (preview_tint_strength > 0.0) {
+        vec3 preview_tint = material_uniforms.u_shadow_params.yzw;
+        color = mix(color, color * 0.6 + preview_tint * 0.4, preview_tint_strength);
+    }
 
-    out_color = vec4(color, albedo_alpha.a);
+    float output_alpha_multiplier = material_uniforms.u_pbr_factors.w > 0.0 ? material_uniforms.u_pbr_factors.w : 1.0;
+    out_color = vec4(color, clamp(albedo_alpha.a * output_alpha_multiplier, 0.0, 1.0));
 }
