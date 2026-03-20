@@ -57,7 +57,7 @@
 4. `tools/list` 已暴露最小实体编辑工具集，以及 staged transaction 工具：`create_entity`、`delete_entity`、`rename_entity`、`set_parent`、`set_local_transform`、`set_world_transform`、`set_visible`、`stage_transaction`、`apply_staged_transaction`、`discard_staged_transaction`。
 5. 引擎级 `CommandQueue` 已存在，已覆盖最小实体编辑闭环。
 6. Inspector、Hierarchy、基础创建路径已复用 `CommandQueue`；编辑器已开始把 selection / camera / drag payload / pending drop 注入协作上下文。
-7. Viewport 已有 staged ghost preview overlay：显示 preview pins、apply / discard 卡片，并已进入同视口的 staged wireframe ghost pass。
+7. Viewport 已有 staged ghost preview overlay：显示 preview pins、apply / discard 卡片，并已进入同视口的 staged wireframe ghost pass；人类已可直接选中 ghost，并用 gizmo 调整 staged transform。
 8. 当前仍未完成“真正的双世界材质/半透明混合渲染”；现阶段 preview 更接近可交互的几何预览层，而不是完整的第二世界着色结果。
 9. `scene_io.zig` 当前场景格式版本为 JSON v6。
 
@@ -117,7 +117,7 @@ AI Client
 2. AI 先读取 `scene://hierarchy` 和 `selection://current`，确认当前场景上下文。
 3. 如果需要看具体实体，再读取 `entity://{id}`。
 4. AI 已可直接通过 MCP tools 发最小实体编辑命令，或先发 `stage_transaction` 进入隔离预览区。
-5. 人类可在编辑器 viewport 中看到 ghost preview，并通过 apply / discard 决定是否提交到主世界。
+5. 人类可在编辑器 viewport 中看到 ghost preview，直接选中 ghost 用 gizmo 微调 staged transform，再通过 apply / discard 决定是否提交到主世界。
 6. 修改完成后，AI 立即再次读取资源做验证。
 
 这条链路决定了整个计划的优先级：先把“读”做稳，再把“写”做稳，最后才是更复杂的脚本和查询扩展。
@@ -835,6 +835,7 @@ Week 1 不暴露写工具。Week 4 之后才逐步开放：
 - [x] `editor://context` / `editor://intent-log` / `preview://staged` 已暴露
 - [x] `stage_transaction` / `apply_staged_transaction` / `discard_staged_transaction` 已打通
 - [x] viewport 已显示 staged ghost preview pins 与 apply / discard overlay
+- [x] viewport 已支持选中 staged ghost，并将 gizmo transform 回写到 staged transaction
 
 ### Week 5
 - [ ] WasmVM 作为新 backend 接入 ScriptRuntime
