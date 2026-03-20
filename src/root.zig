@@ -25,23 +25,27 @@
 //! ```zig
 //! const guava = @import("guava");
 //!
+//! var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+//! defer _ = gpa.deinit();
+//! const allocator = gpa.allocator();
+//!
 //! // 创建应用配置
 //! const config = guava.core.ApplicationConfig{
-//!     .window_title = "My Game",
+//!     .name = "My Game",
 //!     .window_width = 1280,
 //!     .window_height = 720,
 //! };
 //!
 //! // 初始化并运行应用
-//! var app = guava.core.Application.init(config);
+//! var app = try guava.core.Application.init(allocator, config);
 //! defer app.deinit();
-//! app.run();
+//! _ = try app.run(0);
 //! ```
 
 const std = @import("std");
 
 /// 核心系统模块
-/// 
+///
 /// 提供应用程序生命周期管理、输入处理、层栈管理和平台抽象。
 /// 这是构建 Guava Engine 应用的基础模块。
 pub const core = struct {
