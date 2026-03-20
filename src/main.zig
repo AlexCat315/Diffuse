@@ -12,10 +12,16 @@ const CliOptions = struct {
     frame_count: usize = 0,
     backend_order: [3]engine.render.GraphicsAPI = engine.render.defaultBackendOrder(),
     backend_count: usize = 3,
+    mcp_enabled: bool = false,
+    mcp_transport: McpTransport = .stdio,
 
     fn backends(self: *const CliOptions) []const engine.render.GraphicsAPI {
         return self.backend_order[0..self.backend_count];
     }
+};
+
+const McpTransport = enum {
+    stdio,
 };
 
 const ValidateOptions = struct {
@@ -222,7 +228,13 @@ pub fn main() !u8 {
     }
 
     switch (command) {
-        .run => |options| try runEngine(allocator, options),
+        .run => |options| {
+            if (options.mcp_enabled) {
+                try runMcp(allocator, options);
+            } else {
+                try runEngine(allocator, options);
+            }
+        },
         .validate => |options| try runValidate(allocator, options),
         .benchmark => |options| try runBenchmark(allocator, options.scene_path, options.update_golden),
         .@"generate-benchmark" => |options| try runGenerateBenchmark(allocator, options.output_path),
@@ -449,6 +461,48 @@ fn runEngine(allocator: std.mem.Allocator, options: CliOptions) !void {
     try stdout.flush();
 }
 
+fn runMcp(allocator: std.mem.Allocator, options: CliOptions) !void {
+    if (options.mcp_transport != .stdio) {
+        return error.UnsupportedTransport;
+    }
+
+    var app = try engine.core.Application.init(allocator, .{
+        .name = "Guava Engine MCP",
+        .window_width = 1440,
+        .window_height = 900,
+        .window_borderless = true,
+        .window_native_titlebar_controls = true,
+        .frame_delay_ms = 16,
+        .preferred_backends = options.backends(),
+    });
+    defer app.deinit();
+
+    var sandbox_layer = SandboxLayer{};
+    try app.pushLayer(sandbox_layer.asLayer());
+    var editor_layer = editor_layer_mod.EditorLayer{};
+    try app.pushOverlay(editor_layer.asLayer());
+
+    var snapshot_store = engine.mcp.resources.SnapshotStore.init(allocator);
+    defer snapshot_store.deinit();
+
+    var exit_requested = std.atomic.Value(bool).init(false);
+    var sync_layer = engine.mcp.server.SyncLayer{
+        .store = &snapshot_store,
+        .exit_requested = &exit_requested,
+    };
+    try app.pushOverlay(sync_layer.asLayer());
+
+    var server_thread = try engine.mcp.server.spawn(&snapshot_store, &exit_requested);
+    defer {
+        exit_requested.store(true, .release);
+        std.posix.close(std.posix.STDIN_FILENO);
+        server_thread.join();
+    }
+
+    std.log.info("MCP stdio transport ready", .{});
+    _ = try app.run(options.frame_count);
+}
+
 fn runValidate(allocator: std.mem.Allocator, options: ValidateOptions) !void {
     var stdout_buffer: [1024]u8 = undefined;
     var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
@@ -546,6 +600,16 @@ fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
         return .{ .validate = try parseValidateOptionsAlloc(allocator, remaining.items) };
     }
 
+    if (std.mem.eql(u8, command_name.?, "mcp")) {
+        var remaining = try std.ArrayList([]const u8).initCapacity(allocator, 0);
+        defer remaining.deinit(allocator);
+        try remaining.append(allocator, "--mcp");
+        while (args.next()) |arg| {
+            try remaining.append(allocator, arg);
+        }
+        return .{ .run = try parseRunOptions(remaining.items) };
+    }
+
     if (std.mem.eql(u8, command_name.?, "benchmark")) {
         var scene_path: []const u8 = "assets/benchmarks/material_p0.json";
         var update_golden = false;
@@ -614,9 +678,14 @@ fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
 
 fn parseRunOptions(args: []const []const u8) !CliOptions {
     var options = CliOptions{};
+    var transport_specified = false;
     var index: usize = 0;
     while (index < args.len) : (index += 1) {
         const arg = args[index];
+        if (std.mem.eql(u8, arg, "--mcp")) {
+            options.mcp_enabled = true;
+            continue;
+        }
         if (std.mem.eql(u8, arg, "--backend")) {
             index += 1;
             if (index >= args.len) {
@@ -634,10 +703,30 @@ fn parseRunOptions(args: []const []const u8) !CliOptions {
             options.frame_count = try std.fmt.parseUnsigned(usize, args[index], 10);
             continue;
         }
+        if (std.mem.eql(u8, arg, "--transport")) {
+            index += 1;
+            if (index >= args.len) {
+                return error.InvalidArguments;
+            }
+            options.mcp_transport = parseMcpTransport(args[index]) orelse return error.InvalidArguments;
+            transport_specified = true;
+            continue;
+        }
+        return error.InvalidArguments;
+    }
+
+    if (transport_specified and !options.mcp_enabled) {
         return error.InvalidArguments;
     }
 
     return options;
+}
+
+fn parseMcpTransport(name: []const u8) ?McpTransport {
+    if (std.mem.eql(u8, name, "stdio")) {
+        return .stdio;
+    }
+    return null;
 }
 
 fn parseValidateOptionsAlloc(allocator: std.mem.Allocator, args: []const []const u8) !ValidateOptions {

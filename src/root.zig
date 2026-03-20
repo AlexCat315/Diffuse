@@ -105,6 +105,11 @@ pub const ui = struct {
     pub const ImGui = @import("engine/ui/imgui.zig");
 };
 
+/// MCP 模块
+///
+/// 提供面向 AI 客户端的协议层、资源快照与服务端实现。
+pub const mcp = @import("engine/mcp/mod.zig");
+
 /// 渲染硬件接口（RHI）模块
 ///
 /// 提供跨平台的 GPU 资源管理抽象。
