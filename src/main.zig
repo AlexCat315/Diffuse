@@ -247,9 +247,10 @@ fn runBenchmark(allocator: std.mem.Allocator, scene_path: []const u8, update_gol
     defer app.deinit();
 
     // Test async loading during benchmark
-    const handle = try app.world.importGltfAsync("assets/models/guava_showcase/guava_showcase.gltf", .{
+    var handle = try app.world.importGltfAsync("assets/models/guava_showcase/guava_showcase.gltf", .{
         .translation = .{ 0.0, 0.0, 0.0 },
     }, null);
+    defer handle.deinit();
     handle.wait();
 
     try engine.scene.loadWorldFromPath(allocator, &app.world, scene_path);
