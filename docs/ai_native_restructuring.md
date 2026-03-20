@@ -1,6 +1,6 @@
 # Guava Engine AI-Native 重构执行计划
 
-> 状态：执行计划 v4，已同步当前已落地的 MCP 可写闭环、编辑器上下文总线与 staged ghost preview 基座（2026-03-20）
+> 状态：执行计划 v4，已同步当前已落地的 MCP 可写闭环、编辑器上下文总线与 staged ghost preview 基座 / wireframe 预览通路（2026-03-20）
 >
 > 目标：把 Guava Engine 演进为对 AI 友好的引擎与编辑器，而不是推倒现有系统重来。
 >
@@ -57,8 +57,9 @@
 4. `tools/list` 已暴露最小实体编辑工具集，以及 staged transaction 工具：`create_entity`、`delete_entity`、`rename_entity`、`set_parent`、`set_local_transform`、`set_world_transform`、`set_visible`、`stage_transaction`、`apply_staged_transaction`、`discard_staged_transaction`。
 5. 引擎级 `CommandQueue` 已存在，已覆盖最小实体编辑闭环。
 6. Inspector、Hierarchy、基础创建路径已复用 `CommandQueue`；编辑器已开始把 selection / camera / drag payload / pending drop 注入协作上下文。
-7. Viewport 已有 staged ghost preview overlay：显示 preview pins 与 apply / discard 卡片，但尚未进入真正的双世界几何混合渲染。
-8. `scene_io.zig` 当前场景格式版本为 JSON v6。
+7. Viewport 已有 staged ghost preview overlay：显示 preview pins、apply / discard 卡片，并已进入同视口的 staged wireframe ghost pass。
+8. 当前仍未完成“真正的双世界材质/半透明混合渲染”；现阶段 preview 更接近可交互的几何预览层，而不是完整的第二世界着色结果。
+9. `scene_io.zig` 当前场景格式版本为 JSON v6。
 
 后续对话若讨论“现在做到哪一步”，应以这组事实为起点，而不是再把 Week 1 当成完全未开始。
 
