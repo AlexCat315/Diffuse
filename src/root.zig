@@ -55,6 +55,16 @@ pub const core = struct {
     pub const ApplicationConfig = @import("engine/core/application.zig").ApplicationConfig;
     /// 输入状态管理
     pub const InputState = @import("engine/core/input.zig").InputState;
+    /// 引擎级命令定义
+    pub const Command = @import("engine/core/command.zig").Command;
+    /// 引擎级命令错误
+    pub const CommandError = @import("engine/core/command.zig").CommandError;
+    /// 创建实体命令参数
+    pub const CreateEntitySpec = @import("engine/core/command.zig").CreateEntitySpec;
+    /// 命令执行结果
+    pub const CommandExecutionResult = @import("engine/core/command.zig").ExecutionResult;
+    /// 引擎级命令队列
+    pub const CommandQueue = @import("engine/core/command_queue.zig").CommandQueue;
     /// 键盘按键枚举
     pub const InputKey = @import("engine/core/input.zig").Key;
     /// 鼠标按钮枚举
