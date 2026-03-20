@@ -8,6 +8,7 @@ const engine_include_paths = [_][]const u8{
     "third_party/lunasvg/source",
     "third_party/lunasvg/plutovg/include",
     "third_party/lunasvg/plutovg/source",
+    "third_party/wasm3/source",
     "src/engine/assets",
     "src/engine/ui",
 };
@@ -25,6 +26,20 @@ const plutovg_c_sources = [_][]const u8{
     "third_party/lunasvg/plutovg/source/plutovg-rasterize.c",
     "third_party/lunasvg/plutovg/source/plutovg-surface.c",
     "src/engine/assets/stb_image_impl.c",
+};
+
+const wasm3_c_sources = [_][]const u8{
+    "third_party/wasm3/source/m3_bind.c",
+    "third_party/wasm3/source/m3_code.c",
+    "third_party/wasm3/source/m3_compile.c",
+    "third_party/wasm3/source/m3_core.c",
+    "third_party/wasm3/source/m3_env.c",
+    "third_party/wasm3/source/m3_exec.c",
+    "third_party/wasm3/source/m3_function.c",
+    "third_party/wasm3/source/m3_info.c",
+    "third_party/wasm3/source/m3_module.c",
+    "third_party/wasm3/source/m3_parse.c",
+    "src/engine/script/wasm_vm_bridge.c",
 };
 
 const engine_cpp_sources = [_][]const u8{
@@ -61,6 +76,10 @@ const plutovg_c_flags = [_][]const u8{
     "-std=c11",
     "-DPLUTOVG_BUILD=1",
     "-DPLUTOVG_BUILD_STATIC=1",
+};
+
+const wasm3_c_flags = [_][]const u8{
+    "-std=c11",
 };
 
 const engine_cpp_flags = [_][]const u8{
@@ -241,6 +260,10 @@ fn configureEngineModule(
         .flags = &plutovg_c_flags,
     });
     module.addCSourceFiles(.{
+        .files = &wasm3_c_sources,
+        .flags = &wasm3_c_flags,
+    });
+    module.addCSourceFiles(.{
         .files = &engine_cpp_sources,
         .flags = &engine_cpp_flags,
     });
@@ -292,6 +315,16 @@ fn generateCompileCommandsJson(
         c_compiler,
         &plutovg_c_flags,
         &plutovg_c_sources,
+    );
+    appendCompileCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        c_compiler,
+        &wasm3_c_flags,
+        &wasm3_c_sources,
     );
     appendCompileCommands(
         b,
