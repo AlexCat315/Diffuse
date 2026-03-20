@@ -1,6 +1,6 @@
 # Guava Engine AI-Native 重构执行计划
 
-> 状态：可执行草案 v3
+> 状态：执行计划 v3，已同步当前已落地的只读 MCP 基座（2026-03-20）
 >
 > 目标：把 Guava Engine 演进为对 AI 友好的引擎与编辑器，而不是推倒现有系统重来。
 >
@@ -46,6 +46,19 @@
    - `tags`、`topology_version`、`data_version` 等 schema，只有在真实落地后才进入 API。
 
 一句话概括：这是一份“把现有引擎变成 AI 能稳定读取、编辑、验证”的迁移计划，不是一份推倒重来的架构蓝图。
+
+### 1.1 与当前代码同步的进展快照
+
+以下条目是这份计划之外、但对继续对话非常重要的“当前事实”：
+
+1. `zig build` 与 `zig build test` 当前都可通过。
+2. `src/engine/mcp/server.zig`、`src/engine/mcp/resources/mod.zig` 已实现只读 MCP `stdio` 基座。
+3. 当前已可读取 `scene://hierarchy`、`selection://current`、`entity://{id}`。
+4. `tools/list` 目前为空，说明 MCP 写工具还没有开始真正落地。
+5. 引擎级 `CommandQueue` 仍不存在，因此 UI 与 AI 还没有共享统一写入口。
+6. `scene_io.zig` 当前场景格式版本为 JSON v6。
+
+后续对话若讨论“现在做到哪一步”，应以这组事实为起点，而不是再把 Week 1 当成完全未开始。
 
 ---
 
@@ -136,11 +149,11 @@ stdio 是最稳的第一步，原因很直接：
 
 | 能力 | 当前状态 |
 |------|----------|
-| MCP Server | 不存在 |
+| MCP Server | 已有只读 `stdio` 基座，tools 仍为空 |
 | 引擎级写命令总线 | 不存在 |
 | WASM 脚本 VM | 不存在 |
 | 语义查询 API | 不存在 |
-| 面向 AI 的只读快照资源 | 不存在 |
+| 面向 AI 的只读快照资源 | 已存在：`scene://hierarchy` / `selection://current` / `entity://{id}` |
 | `tags` / `topology_version` / `data_version` | 数据模型中不存在 |
 
 这张表很重要，因为它决定了计划不能建立在“理应有这些字段”的假设上。文档里凡是写到这些能力，都必须区分为“已有”、“新建”或“后置”。
