@@ -58,7 +58,7 @@
 5. 引擎级 `CommandQueue` 已存在，已覆盖最小实体编辑闭环。
 6. Inspector、Hierarchy、基础创建路径已复用 `CommandQueue`；编辑器已开始把 selection / camera / drag payload / pending drop 注入协作上下文。
 7. Viewport 已有 staged ghost preview overlay：显示 preview pins、apply / discard 卡片，并已进入同视口 HDR 第二世界 shaded ghost pass；staged preview 保留材质着色、透明物体混合，并可直接选中 ghost 后用 gizmo 调整 staged transform。
-8. 当前已完成 Phase 1 到 Phase 5 的首版基座；真正剩余的大块工作集中在 Phase 6（schema 资源）、Phase 7（Query API），以及 Phase 5 尾项中的参数反射与编辑器工具化。
+8. 当前已完成 Phase 1 到 Phase 7 的首版骨架：`schema://components` 与分页 `query_entities` 已落地；真正剩余的大块工作集中在更完整的 schema 资源族、Query 扩展，以及 Phase 5 尾项中的参数反射与编辑器工具化。
 9. `scene_io.zig` 当前场景格式版本为 JSON v6。
 10. `build.zig` 已接入 WAMR（WebAssembly Micro Runtime）；`src/engine/script/wasm_vm.zig`、`src/engine/script/wasm_compiler.zig`、`src/engine/mcp/tools.zig` 已打通 `compile_script` 与 `script://runtime-status`。
 
@@ -267,9 +267,9 @@ stdio 是最稳的第一步，原因很直接：
 | MCP Server | 已有 `stdio` 基座，已支持最小写工具闭环与 `compile_script` |
 | 引擎级写命令总线 | 已存在最小闭环，editor 高频路径已接入 |
 | WASM 脚本 VM | 已落地首版：WAMR / `WasmVM` / `wasm_compiler` / hot reload / `script://runtime-status` |
-| 语义查询 API | 不存在 |
-| `schema://...` 资源 | 不存在 |
-| 面向 AI 的只读快照资源 | 已存在：`scene://hierarchy` / `selection://current` / `entity://{id}` / `editor://context` / `preview://staged` / `script://runtime-status` |
+| 语义查询 API | 已有首版：`query_entities`，支持 `id` / `name_contains` / `has_component` / `parent_id` / `visible` / 半径过滤 / `count_only` / `limit` / `offset` / `truncated` |
+| `schema://...` 资源 | 已有首版：`schema://components` |
+| 面向 AI 的只读快照资源 | 已存在：`scene://hierarchy` / `selection://current` / `entity://{id}` / `schema://components` / `editor://context` / `preview://staged` / `script://runtime-status` |
 | `tags` / `topology_version` / `data_version` | 数据模型中不存在 |
 
 这张表很重要，因为它决定了计划不能建立在“理应有这些字段”的假设上。文档里凡是写到这些能力，都必须区分为“已有”、“新建”或“后置”。
@@ -1087,12 +1087,14 @@ Week 1 不暴露写工具。Week 4 之后才逐步开放：
 ### Week 6
 - [ ] Scene / Prefab / Material 文本 schema 有稳定版本
 - [ ] 读写一致性测试通过
-- [ ] `schema://...` 资源可读，能约束 AI 写入格式
+- [x] `schema://components` 已可读，且明确约束向量/枚举/组件字段格式
+- [ ] 继续补 `schema://scene-json-v6` / `schema://prefab` / `schema://material`
 
 ### Week 7
-- [ ] Query API 支持基础过滤与空间查询
-- [ ] 查询结果与场景状态一致
-- [ ] 查询接口具备 `count_only` / `limit` / `offset` / `truncated` 防爆机制
+- [x] `query_entities` 已支持基础过滤与半径空间查询
+- [x] 查询结果与场景状态一致
+- [x] 查询接口具备 `count_only` / `limit` / `offset` / `truncated` 防爆机制
+- [ ] 继续扩展更重的 physics / BVH / scene-text 查询
 
 ---
 

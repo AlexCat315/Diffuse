@@ -65,6 +65,8 @@ pub const core = struct {
     pub const CommandExecutionResult = @import("engine/core/command.zig").ExecutionResult;
     /// 引擎级命令队列
     pub const CommandQueue = @import("engine/core/command_queue.zig").CommandQueue;
+    /// 轻量级实体查询引擎
+    pub const QueryEngine = @import("engine/core/query_engine.zig");
     /// 键盘按键枚举
     pub const InputKey = @import("engine/core/input.zig").Key;
     /// 鼠标按钮枚举
