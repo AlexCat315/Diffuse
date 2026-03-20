@@ -637,6 +637,8 @@ pub const scene = struct {
     pub const Vfx = @import("engine/scene/components.zig").Vfx;
     /// 特效类型
     pub const VfxKind = @import("engine/scene/components.zig").VfxKind;
+    /// 默认特效参数
+    pub const defaultVfx = @import("engine/scene/components.zig").defaultVfx;
     /// 运行时粒子
     pub const VfxRuntimeParticle = @import("engine/scene/scene.zig").VfxRuntimeParticle;
     /// 运行时发射器

@@ -54,9 +54,10 @@
 1. `zig build` 与 `zig build test` 当前都可通过。
 2. `src/engine/mcp/server.zig`、`src/engine/mcp/resources/mod.zig` 已实现只读 MCP `stdio` 基座。
 3. 当前已可读取 `scene://hierarchy`、`selection://current`、`entity://{id}`。
-4. `tools/list` 目前为空，说明 MCP 写工具还没有开始真正落地。
-5. 引擎级 `CommandQueue` 仍不存在，因此 UI 与 AI 还没有共享统一写入口。
-6. `scene_io.zig` 当前场景格式版本为 JSON v6。
+4. `tools/list` 目前为空，说明 MCP 写工具还没有真正落地。
+5. 引擎级 `CommandQueue` 已存在，已覆盖最小实体编辑闭环。
+6. Inspector、Hierarchy、基础创建路径已开始复用 `CommandQueue`，但 editor 仍未完全迁移完。
+7. `scene_io.zig` 当前场景格式版本为 JSON v6。
 
 后续对话若讨论“现在做到哪一步”，应以这组事实为起点，而不是再把 Week 1 当成完全未开始。
 
@@ -150,7 +151,7 @@ stdio 是最稳的第一步，原因很直接：
 | 能力 | 当前状态 |
 |------|----------|
 | MCP Server | 已有只读 `stdio` 基座，tools 仍为空 |
-| 引擎级写命令总线 | 不存在 |
+| 引擎级写命令总线 | 已存在最小闭环，editor 正在接入 |
 | WASM 脚本 VM | 不存在 |
 | 语义查询 API | 不存在 |
 | 面向 AI 的只读快照资源 | 已存在：`scene://hierarchy` / `selection://current` / `entity://{id}` |
