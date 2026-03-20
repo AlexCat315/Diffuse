@@ -54,7 +54,7 @@
 1. `zig build` 与 `zig build test` 当前都可通过。
 2. `src/engine/mcp/server.zig`、`src/engine/mcp/resources/mod.zig` 已实现只读 MCP `stdio` 基座。
 3. 当前已可读取 `scene://hierarchy`、`selection://current`、`entity://{id}`。
-4. `tools/list` 目前为空，说明 MCP 写工具还没有真正落地。
+4. `tools/list` 已暴露最小实体编辑工具集：`create_entity`、`delete_entity`、`rename_entity`、`set_parent`、`set_local_transform`、`set_world_transform`、`set_visible`。
 5. 引擎级 `CommandQueue` 已存在，已覆盖最小实体编辑闭环。
 6. Inspector、Hierarchy、基础创建路径已开始复用 `CommandQueue`，但 editor 仍未完全迁移完。
 7. `scene_io.zig` 当前场景格式版本为 JSON v6。
@@ -150,7 +150,7 @@ stdio 是最稳的第一步，原因很直接：
 
 | 能力 | 当前状态 |
 |------|----------|
-| MCP Server | 已有只读 `stdio` 基座，tools 仍为空 |
+| MCP Server | 已有 `stdio` 基座，已支持最小写工具闭环 |
 | 引擎级写命令总线 | 已存在最小闭环，editor 正在接入 |
 | WASM 脚本 VM | 不存在 |
 | 语义查询 API | 不存在 |
@@ -825,8 +825,8 @@ Week 1 不暴露写工具。Week 4 之后才逐步开放：
 - [ ] Undo/Redo 不回退
 
 ### Week 4
-- [ ] MCP tools 可写场景
-- [ ] 写后可立即读回验证
+- [x] MCP tools 可写场景（最小实体编辑闭环）
+- [x] 写后可立即读回验证
 
 ### Week 5
 - [ ] WasmVM 作为新 backend 接入 ScriptRuntime

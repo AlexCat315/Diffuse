@@ -484,16 +484,20 @@ fn runMcp(allocator: std.mem.Allocator, options: CliOptions) !void {
 
     var snapshot_store = engine.mcp.resources.SnapshotStore.init(allocator);
     defer snapshot_store.deinit();
+    var tool_bridge = engine.mcp.tools.Bridge.init(allocator);
+    defer tool_bridge.deinit();
 
     var exit_requested = std.atomic.Value(bool).init(false);
     var sync_layer = engine.mcp.server.SyncLayer{
         .store = &snapshot_store,
+        .tool_bridge = &tool_bridge,
         .exit_requested = &exit_requested,
     };
     try app.pushOverlay(sync_layer.asLayer());
 
-    var server_thread = try engine.mcp.server.spawn(&snapshot_store, &exit_requested);
+    var server_thread = try engine.mcp.server.spawn(&snapshot_store, &tool_bridge, &exit_requested);
     defer {
+        tool_bridge.shutdown();
         exit_requested.store(true, .release);
         std.posix.close(std.posix.STDIN_FILENO);
         server_thread.join();
