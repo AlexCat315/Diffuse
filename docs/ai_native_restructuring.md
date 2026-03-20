@@ -127,6 +127,53 @@
 
 如果只让实习生带着这份文档做一件事，默认应该从 Phase 6 开始，或者接 Phase 5 尾项，而不是再回头重做 Phase 1 到 Phase 5 基座。
 
+### 1.5 下一条基础架构路线：参考 Bevy，但按当前代码渐进落地
+
+你提到的方向是对的，尤其是两点：
+
+1. `src/engine/scene/world.zig` 现在仍是胖实体（AoS）布局。
+   - 这对编辑器开发很直接，但对大规模后台模拟、物理批处理和 AI 无头验证不友好。
+   - 高频系统在遍历时会把大量无关组件一起带进缓存。
+
+2. `src/engine/core/application.zig` 现在仍深度绑定窗口、渲染器、脚本、输入和主循环。
+   - 这让“直接起一个无头沙盒只跑物理/脚本 5000 帧”这类需求不够干净。
+
+后续的基础架构演进，可以明确参考 Bevy 的两条原则：
+
+1. **数据导向 ECS**
+   - 热路径组件从胖实体里逐步拆到独立存储。
+   - 第一阶段优先考虑 `SparseSet`，不是马上全仓切 Archetype。
+
+2. **Plugin / Schedule-First 的 App Shell**
+   - `Application` 逐步退化成调度总线。
+   - 渲染、编辑器、脚本、物理、MCP 以插件或 feature module 方式挂接。
+
+建议的落地顺序是：
+
+1. 先保留现有 `Entity` 外观和 scene IO，不在同一轮里同时改序列化格式。
+2. 新建通用 `SparseSet(T)`，先承载热路径组件：
+   - `Transform`
+   - `Rigidbody`
+   - `BoxCollider` / `SphereCollider`
+   - 未来的 `Velocity` / `AngularVelocity`
+3. `World` 先进入“混合期”：
+   - 冷数据继续留在 `Entity`
+   - 热数据转到 `SparseSet`
+   - 对外 API 暂时保持兼容
+4. `Application` 再拆成：
+   - `CorePlugin`
+   - `PhysicsPlugin`
+   - `ScriptPlugin`
+   - `RenderPlugin`
+   - `EditorPlugin`
+   - `McpPlugin`
+5. 在插件化之后，再引入真正的 headless profile：
+   - 只加载 `Core + Physics + Script + Mcp`
+   - 不初始化 `Window` / `Renderer` / ImGui
+6. 等 headless 和 query 跑稳后，再评估是否需要从 `SparseSet` 继续推进到更激进的 Archetype/Relation 方案。
+
+这个方向很重要，但它属于 **v1 之后的引擎内核重构主线**。不要把它和当前的 Phase 6 / Phase 7 混在同一轮做，否则 schema、query、headless、ECS 内存布局会同时爆开。
+
 ---
 
 ## 二、架构愿景
