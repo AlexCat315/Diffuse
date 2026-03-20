@@ -1,6 +1,6 @@
 # Guava Engine AI-Native 重构执行计划
 
-> 状态：执行计划 v4，已同步当前已落地的 MCP 可写闭环、编辑器上下文总线、staged collaboration 基座、完整第二世界着色预览通路，以及首版 WASM 脚本编译/运行闭环（2026-03-20）
+> 状态：执行计划 v4，已同步当前已落地的 MCP 可写闭环、编辑器上下文总线、staged collaboration 基座、完整第二世界着色预览通路、首版 WASM 脚本编译/运行闭环，以及 Inspector 参数反射与读写一致性测试（2026-03-21）
 >
 > 目标：把 Guava Engine 演进为对 AI 友好的引擎与编辑器，而不是推倒现有系统重来。
 >
@@ -58,9 +58,10 @@
 5. 引擎级 `CommandQueue` 已存在，已覆盖最小实体编辑闭环。
 6. Inspector、Hierarchy、基础创建路径已复用 `CommandQueue`；编辑器已开始把 selection / camera / drag payload / pending drop 注入协作上下文。
 7. Viewport 已有 staged ghost preview overlay：显示 preview pins、apply / discard 卡片，并已进入同视口 HDR 第二世界 shaded ghost pass；staged preview 保留材质着色、透明物体混合，并可直接选中 ghost 后用 gizmo 调整 staged transform。
-8. 当前已完成 Phase 1 到 Phase 7 的首版骨架：分页 `query_entities` 与首版 schema 资源族都已落地；真正剩余的大块工作集中在 Phase 6 的读写一致性测试、Query 扩展，以及 Phase 5 尾项中的参数反射与编辑器工具化。
+8. 当前已完成 Phase 1 到 Phase 7 的首版骨架：分页 `query_entities`、首版 schema 资源族、Scene / Prefab / Material save-load-resave 一致性测试，以及 WASM 参数反射 Inspector UI 都已落地。
 9. `scene_io.zig` 当前场景格式版本为 JSON v6。
 10. `build.zig` 已接入 WAMR（WebAssembly Micro Runtime）；`src/engine/script/wasm_vm.zig`、`src/engine/script/wasm_compiler.zig`、`src/engine/mcp/tools.zig` 已打通 `compile_script` 与 `script://runtime-status`。
+11. 当前 WASM 参数反射已能驱动 Inspector 灰盒调参与运行时热应用，但 `scene_io.zig` / `prefab.zig` 还没有把 Script 组件作为稳定文本 schema 正式保存，这仍是后续收口项。
 
 后续对话若讨论“现在做到哪一步”，应以这组事实为起点，而不是再把 Week 1 当成完全未开始。
 
@@ -112,20 +113,20 @@
 
 ### 1.4 当前剩余工作怎么读
 
-截至 2026-03-20，这份文档里 Phase 1 到 Phase 4.5 更适合作为“现状说明 + 约束来源”阅读，而不是待开发清单。
+截至 2026-03-21，这份文档里 Phase 1 到 Phase 6 的大部分内容更适合作为“现状说明 + 约束来源”阅读，而不是待开发清单。
 
 新同学真正要执行的剩余任务，按优先级读这三段：
 
-1. **Phase 6 / Week 6：schema:// 资源**
-   - 这是“AI 能不能稳定按正确 JSON/结构写东西”的前置护栏。
+1. **脚本资产 schema / 持久化**
+   - 这是把当前 Inspector 参数反射从“运行时可调”收口成“可保存、可加载、可迁移”的关键缺口。
 
-2. **Phase 7 / Week 7：Query API**
-   - 这是“AI 能不能低成本验证自己修改结果”的验证层。
+2. **Phase 7 / Week 7：Query API 扩展**
+   - 当前分页查询已存在，但更高层的语义查询与验证组合还没做完。
 
-3. **Phase 5 尾项：WASM 参数反射 / Inspector 灰盒化 / Editor Utility UI**
-   - 这是“AI 写完逻辑后，人类如何不看代码直接接管参数和工具”的体验层。
+3. **Phase 5 尾项：Editor Utility UI**
+   - 参数反射已完成，真正剩下的是让 AI 能生成编辑器专用面板，而不只是业务逻辑脚本。
 
-如果只让实习生带着这份文档做一件事，默认应该从 Phase 6 开始，或者接 Phase 5 尾项，而不是再回头重做 Phase 1 到 Phase 5 基座。
+如果只让实习生带着这份文档做一件事，默认应该从“脚本资产 schema / 持久化”或 Query 扩展开始，而不是再回头重做 Phase 1 到 Phase 5 基座。
 
 ### 1.5 下一条基础架构路线：参考 Bevy，但按当前代码渐进落地
 
@@ -1082,11 +1083,11 @@ Week 1 不暴露写工具。Week 4 之后才逐步开放：
 - [x] `compile_script` / `script://runtime-status` 闭环可用
 - [x] 编译错误与运行时错误可结构化上报
 - [x] Guest 模板中的 `panic` 注入与 `host_report_panic` message 通路打通
-- [ ] WASM 公共变量反射到 Inspector 参数 UI
+- [x] WASM 公共变量反射到 Inspector 参数 UI
 
 ### Week 6
 - [x] Scene / Prefab / Material 文本 schema 有稳定版本
-- [ ] 读写一致性测试通过
+- [x] 读写一致性测试通过
 - [x] `schema://components` 已可读，且明确约束向量/枚举/组件字段格式
 - [x] `schema://scene-json-v6` / `schema://prefab` / `schema://material` / `schema://tools` 已可读
 

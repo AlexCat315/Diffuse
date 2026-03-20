@@ -122,6 +122,11 @@ pub const ui = struct {
 /// 提供面向 AI 客户端的协议层、资源快照与服务端实现。
 pub const mcp = @import("engine/mcp/mod.zig");
 
+/// 脚本模块
+///
+/// 提供脚本运行时、WASM 后端和参数反射工具。
+pub const script = @import("engine/script/script.zig");
+
 /// 渲染硬件接口（RHI）模块
 ///
 /// 提供跨平台的 GPU 资源管理抽象。
@@ -374,6 +379,14 @@ pub const assets = struct {
     pub const MaterialResource = @import("engine/assets/material_resource.zig").MaterialResource;
     /// 材质资源描述
     pub const MaterialResourceDesc = @import("engine/assets/material_resource.zig").MaterialResourceDesc;
+    /// 序列化材质资源到文本
+    pub const serializeMaterialAlloc = @import("engine/assets/material_resource.zig").serializeAlloc;
+    /// 从文本反序列化材质资源
+    pub const deserializeMaterialFromSlice = @import("engine/assets/material_resource.zig").deserializeFromSlice;
+    /// 保存材质资源到路径
+    pub const saveMaterialToPath = @import("engine/assets/material_resource.zig").saveToPath;
+    /// 从路径加载材质资源
+    pub const loadMaterialFromPath = @import("engine/assets/material_resource.zig").loadFromPath;
     /// 纹理资源
     pub const TextureResource = @import("engine/assets/texture_resource.zig").TextureResource;
     /// 纹理资源描述
@@ -637,6 +650,10 @@ pub const scene = struct {
     pub const Light = @import("engine/scene/components.zig").Light;
     /// 特效组件
     pub const Vfx = @import("engine/scene/components.zig").Vfx;
+    /// 脚本组件
+    pub const Script = @import("engine/scene/components.zig").Script;
+    /// 脚本语言
+    pub const ScriptLanguage = @import("engine/scene/components.zig").ScriptLanguage;
     /// 特效类型
     pub const VfxKind = @import("engine/scene/components.zig").VfxKind;
     /// 默认特效参数
