@@ -480,23 +480,30 @@ fn runMcp(allocator: std.mem.Allocator, options: CliOptions) !void {
     var sandbox_layer = SandboxLayer{};
     try app.pushLayer(sandbox_layer.asLayer());
     var editor_layer = editor_layer_mod.EditorLayer{};
+    var collaboration_store = engine.mcp.collaboration.Store.init(allocator);
+    defer collaboration_store.deinit();
+    editor_layer.state.ai_collaboration = &collaboration_store;
     try app.pushOverlay(editor_layer.asLayer());
 
-    var snapshot_store = engine.mcp.resources.SnapshotStore.init(allocator);
+    var snapshot_store = engine.mcp.resources.SnapshotStore.init(allocator, &collaboration_store);
     defer snapshot_store.deinit();
     var tool_bridge = engine.mcp.tools.Bridge.init(allocator);
     defer tool_bridge.deinit();
+    var collaboration_bridge = engine.mcp.collaboration.Bridge.init(allocator, &collaboration_store);
+    defer collaboration_bridge.deinit();
 
     var exit_requested = std.atomic.Value(bool).init(false);
     var sync_layer = engine.mcp.server.SyncLayer{
         .store = &snapshot_store,
         .tool_bridge = &tool_bridge,
+        .collaboration_bridge = &collaboration_bridge,
         .exit_requested = &exit_requested,
     };
     try app.pushOverlay(sync_layer.asLayer());
 
-    var server_thread = try engine.mcp.server.spawn(&snapshot_store, &tool_bridge, &exit_requested);
+    var server_thread = try engine.mcp.server.spawn(&snapshot_store, &tool_bridge, &collaboration_bridge, &exit_requested);
     defer {
+        collaboration_bridge.shutdown();
         tool_bridge.shutdown();
         exit_requested.store(true, .release);
         std.posix.close(std.posix.STDIN_FILENO);

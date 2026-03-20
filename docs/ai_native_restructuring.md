@@ -1,6 +1,6 @@
 # Guava Engine AI-Native 重构执行计划
 
-> 状态：执行计划 v3，已同步当前已落地的只读 MCP 基座（2026-03-20）
+> 状态：执行计划 v4，已同步当前已落地的 MCP 可写闭环、编辑器上下文总线与 staged ghost preview 基座（2026-03-20）
 >
 > 目标：把 Guava Engine 演进为对 AI 友好的引擎与编辑器，而不是推倒现有系统重来。
 >
@@ -52,12 +52,13 @@
 以下条目是这份计划之外、但对继续对话非常重要的“当前事实”：
 
 1. `zig build` 与 `zig build test` 当前都可通过。
-2. `src/engine/mcp/server.zig`、`src/engine/mcp/resources/mod.zig` 已实现只读 MCP `stdio` 基座。
-3. 当前已可读取 `scene://hierarchy`、`selection://current`、`entity://{id}`。
-4. `tools/list` 已暴露最小实体编辑工具集：`create_entity`、`delete_entity`、`rename_entity`、`set_parent`、`set_local_transform`、`set_world_transform`、`set_visible`。
+2. `src/engine/mcp/server.zig`、`src/engine/mcp/resources/mod.zig`、`src/engine/mcp/collaboration.zig` 已实现 MCP `stdio` 基座与协作存储。
+3. 当前已可读取 `scene://hierarchy`、`selection://current`、`entity://{id}`、`editor://context`、`editor://intent-log`、`preview://staged`。
+4. `tools/list` 已暴露最小实体编辑工具集，以及 staged transaction 工具：`create_entity`、`delete_entity`、`rename_entity`、`set_parent`、`set_local_transform`、`set_world_transform`、`set_visible`、`stage_transaction`、`apply_staged_transaction`、`discard_staged_transaction`。
 5. 引擎级 `CommandQueue` 已存在，已覆盖最小实体编辑闭环。
-6. Inspector、Hierarchy、基础创建路径已开始复用 `CommandQueue`，但 editor 仍未完全迁移完。
-7. `scene_io.zig` 当前场景格式版本为 JSON v6。
+6. Inspector、Hierarchy、基础创建路径已复用 `CommandQueue`；编辑器已开始把 selection / camera / drag payload / pending drop 注入协作上下文。
+7. Viewport 已有 staged ghost preview overlay：显示 preview pins 与 apply / discard 卡片，但尚未进入真正的双世界几何混合渲染。
+8. `scene_io.zig` 当前场景格式版本为 JSON v6。
 
 后续对话若讨论“现在做到哪一步”，应以这组事实为起点，而不是再把 Week 1 当成完全未开始。
 
@@ -114,8 +115,9 @@ AI Client
 1. AI 客户端通过 MCP `initialize` 与引擎建立连接。
 2. AI 先读取 `scene://hierarchy` 和 `selection://current`，确认当前场景上下文。
 3. 如果需要看具体实体，再读取 `entity://{id}`。
-4. 后续写能力接入后，AI 通过 MCP tools 发送结构化命令，而不是“模拟点按钮”。
-5. 修改完成后，AI 立即再次读取资源做验证。
+4. AI 已可直接通过 MCP tools 发最小实体编辑命令，或先发 `stage_transaction` 进入隔离预览区。
+5. 人类可在编辑器 viewport 中看到 ghost preview，并通过 apply / discard 决定是否提交到主世界。
+6. 修改完成后，AI 立即再次读取资源做验证。
 
 这条链路决定了整个计划的优先级：先把“读”做稳，再把“写”做稳，最后才是更复杂的脚本和查询扩展。
 
@@ -810,23 +812,28 @@ Week 1 不暴露写工具。Week 4 之后才逐步开放：
 ## 十五、每周验收清单
 
 ### Week 1
-- [ ] MCP stdio 可连接
-- [ ] 可读取场景树
-- [ ] 可读取单实体详情
-- [ ] 可读取当前选择
+- [x] MCP stdio 可连接
+- [x] 可读取场景树
+- [x] 可读取单实体详情
+- [x] 可读取当前选择
 
 ### Week 2
-- [ ] 命令队列可执行最小实体编辑命令
-- [ ] transform 命令具备合并能力
+- [x] 命令队列可执行最小实体编辑命令
+- [x] transform 命令具备合并能力
 
 ### Week 3
-- [ ] Inspector 变换走命令队列
-- [ ] Scene Hierarchy 基础写操作走命令队列
-- [ ] Undo/Redo 不回退
+- [x] Inspector 变换走命令队列
+- [x] Scene Hierarchy 基础写操作走命令队列
+- [x] Undo/Redo 不回退
 
 ### Week 4
 - [x] MCP tools 可写场景（最小实体编辑闭环）
 - [x] 写后可立即读回验证
+
+### Week 4.5
+- [x] `editor://context` / `editor://intent-log` / `preview://staged` 已暴露
+- [x] `stage_transaction` / `apply_staged_transaction` / `discard_staged_transaction` 已打通
+- [x] viewport 已显示 staged ghost preview pins 与 apply / discard overlay
 
 ### Week 5
 - [ ] WasmVM 作为新 backend 接入 ScriptRuntime
