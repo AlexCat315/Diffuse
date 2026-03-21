@@ -26,14 +26,19 @@ const SandboxLayer = struct {
 
     fn onAttach(context: *anyopaque, layer_context: *engine.core.LayerContext) anyerror!void {
         const self: *SandboxLayer = @ptrCast(@alignCast(context));
-        _ = self; // Will be used for spinning_entity if needed
+        self.spinning_entity = null;
+
+        // Keep bootstrap camera/light/ground, but remove the default hero cube.
+        if (layer_context.world.findEntityByName("Hero")) |hero| {
+            _ = layer_context.world.destroyEntity(hero.id);
+        }
 
         // Load high-quality checkerboard model instead of hardcoded cubes
         _ = try layer_context.world.importGltfStaticModel(
             "assets/textures/curly_teddy_checkered_4k_gltf/curly_teddy_checkered_4k.gltf",
             .{
-                .translation = .{ 0.0, 0.0, 0.0 },
-                .scale = .{ 1.0, 1.0, 1.0 },
+                .translation = .{ 0.0, 1.0, 0.0 },
+                .scale = .{ 2.0, 2.0, 2.0 },
             },
         );
 

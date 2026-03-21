@@ -140,15 +140,24 @@ void main() {
         float current_depth = proj_coords.z;
         float bias = material_uniforms.u_shadow_params.x;
 
-        // Simple PCF
-        shadow = 0.0;
-        vec2 texel_size = 1.0 / textureSize(u_shadow_map, 0);
-        for(int x = -1; x <= 1; ++x) {
-            for(int y = -1; y <= 1; ++y) {
-                shadow += texture(u_shadow_map, vec3(proj_coords.xy + vec2(x, y) * texel_size, current_depth - bias));
+        bool inside_shadow_map =
+            proj_coords.x >= 0.0 && proj_coords.x <= 1.0 &&
+            proj_coords.y >= 0.0 && proj_coords.y <= 1.0 &&
+            current_depth >= 0.0 && current_depth <= 1.0;
+
+        if (inside_shadow_map) {
+            // Simple PCF
+            shadow = 0.0;
+            vec2 texel_size = 1.0 / textureSize(u_shadow_map, 0);
+            for(int x = -1; x <= 1; ++x) {
+                for(int y = -1; y <= 1; ++y) {
+                    shadow += texture(u_shadow_map, vec3(proj_coords.xy + vec2(x, y) * texel_size, current_depth - bias));
+                }
             }
+            shadow /= 9.0;
+        } else {
+            shadow = 1.0;
         }
-        shadow /= 9.0;
     }
 
     // Reflectance equation
