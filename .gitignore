@@ -69,3 +69,6 @@ test_*
 # Backup directories
 assets_backup_*/
 .zig-global-cache/
+
+# Generated code
+src/engine/generated/
