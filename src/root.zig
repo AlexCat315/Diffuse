@@ -457,6 +457,8 @@ pub const animation = struct {
     pub const PlayClipOptions = @import("engine/animation/animator_system.zig").PlayClipOptions;
     /// 播放动画片段
     pub const playClip = @import("engine/animation/animator_system.zig").playClip;
+    /// 在编辑器中按指定时间预览动画（不推进时间轴，用于动画编辑器 scrub/play 预览）
+    pub const sampleEntityAtTime = @import("engine/animation/animator_system.zig").sampleEntityAtTime;
     /// 动画图模块
     pub const animation_graph = @import("engine/animation/animation_graph.zig");
 };

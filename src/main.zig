@@ -27,31 +27,81 @@ const SandboxLayer = struct {
     fn onAttach(context: *anyopaque, layer_context: *engine.core.LayerContext) anyerror!void {
         const self: *SandboxLayer = @ptrCast(@alignCast(context));
         self.spinning_entity = null;
+        const world = layer_context.world;
+        const library = world.assets();
+        const registry = &library.asset_registry;
+        const allocator = library.allocator;
 
         // Frame teddy at startup so scene camera mode also opens with a close textured view.
-        if (layer_context.world.findEntityByName("MainCamera")) |main_camera_ref| {
-            if (layer_context.world.getEntity(main_camera_ref.id)) |main_camera| {
+        if (world.findEntityByName("MainCamera")) |main_camera_ref| {
+            if (world.getEntity(main_camera_ref.id)) |main_camera| {
                 main_camera.local_transform.translation = .{ 0.0, 1.35, 3.2 };
                 main_camera.local_transform.rotation = engine.math.quat.fromEuler(.{ -0.08, 0.0, 0.0 });
-                layer_context.world.markDirty(main_camera_ref.id);
+                world.markDirty(main_camera_ref.id);
             }
         }
 
         // Keep bootstrap camera/light/ground, but remove the default hero cube.
-        if (layer_context.world.findEntityByName("Hero")) |hero| {
-            _ = layer_context.world.destroyEntity(hero.id);
+        if (world.findEntityByName("Hero")) |hero| {
+            _ = world.destroyEntity(hero.id);
         }
 
-        // Load high-quality checkerboard model instead of hardcoded cubes.
-        _ = try layer_context.world.importGltfStaticModel(
-            "assets/textures/curly_teddy_checkered_4k_gltf/curly_teddy_checkered_4k.gltf",
-            .{
-                .translation = .{ 0.0, 1.0, 0.0 },
-                .scale = .{ 2.0, 2.0, 2.0 },
-            },
+        // 1) Register texture asset and ensure cooked payload exists.
+        // Fallback to an existing project texture if example.png is not present.
+        const texture_source_path = texture_path: {
+            const preferred = "assets/textures/example.png";
+            std.fs.cwd().access(preferred, .{}) catch break :texture_path "assets/models/guava_showcase/checker.png";
+            break :texture_path preferred;
+        };
+        const texture_record = try registry.ensureProjectAsset(texture_source_path);
+
+        // 2) Load cooked texture into runtime resource library and get handle.
+        const tex_handle = try engine.assets.loadTextureAsset(
+            allocator,
+            library,
+            registry,
+            texture_record.id,
         );
 
-        // Keep startup scene focused on teddy so texture detail is immediately visible.
+        // 3) Build a PBR material with texture bound to base-color slot.
+        const mat_handle = try library.createMaterial(.{
+            .name = "DefaultTexturedMaterial",
+            .shading = .pbr_metallic_roughness,
+            .base_color_factor = .{ 1.0, 1.0, 1.0, 1.0 },
+            .base_color_texture = tex_handle,
+        });
+
+        // 4) Create mesh entity and attach textured material.
+        const cube_mesh = try library.ensurePrimitiveMesh(.cube);
+        self.spinning_entity = try world.createEntity(.{
+            .name = "TexturedCube",
+            .mesh = .{
+                .handle = cube_mesh,
+                .primitive = .cube,
+            },
+            .material = .{
+                .handle = mat_handle,
+            },
+            .local_transform = .{
+                .translation = .{ 0.0, 1.0, 0.0 },
+                .scale = .{ 1.0, 1.0, 1.0 },
+            },
+        });
+
+        // Ensure directional light exists so textured PBR material is visible.
+        if (world.findEntityByName("Sun") == null) {
+            _ = try world.createEntity(.{
+                .name = "DefaultSunLight",
+                .light = .{
+                    .kind = .directional,
+                    .color = .{ 1.0, 0.98, 0.95 },
+                    .intensity = 3.0,
+                },
+                .local_transform = .{
+                    .rotation = engine.math.quat.fromEuler(.{ -0.78, 0.78, 0.0 }),
+                },
+            });
+        }
     }
 
     fn onUpdate(context: *anyopaque, layer_context: *engine.core.LayerContext) anyerror!void {
