@@ -176,7 +176,7 @@
 1. ~~先保留现有 `Entity` 外观和 scene IO，不在同一轮里同时改序列化格式。~~ ✅ 保持兼容
 2. ~~新建通用 `SparseSet(T)`，先承载热路径组件：~~ ✅ 已完成 (2026-03-21)
    - `Transform` ✅ 已迁移
-   - `Rigidbody` ⏳ 待迁移
+   - `Rigidbody` ✅ 已迁移
    - `BoxCollider` / `SphereCollider` ⏳ 待迁移
    - 未来的 `Velocity` / `AngularVelocity`
 3. `World` 先进入"混合期"：
