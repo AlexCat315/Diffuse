@@ -1152,6 +1152,7 @@ Week 1 不暴露写工具。Week 4 之后才逐步开放：
 - [x] `query_entities` 已支持基础过滤与半径空间查询
 - [x] 查询结果与场景状态一致
 - [x] 查询接口具备 `count_only` / `limit` / `offset` / `truncated` 防爆机制
+- [x] `query_entities` 已新增 AABB 空间过滤（`aabb_min` / `aabb_max`）
 - [ ] 继续扩展更重的 physics / BVH / scene-text 查询
 
 ---
