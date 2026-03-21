@@ -344,7 +344,7 @@ fn runCompareRender(allocator: std.mem.Allocator, scene_path: []const u8, output
     try app.renderer.setSceneViewportSize(width, height);
 
     // 1. GPU Render
-    _ = try app.renderer.drawFrame(&app.world);
+    _ = try app.renderer.drawFrame(&app.world, &app.physics_state);
     const gpu_ppm = try app.renderer.downloadFinalFrameAlloc(allocator);
     defer allocator.free(gpu_ppm);
 
