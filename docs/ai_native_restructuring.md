@@ -127,10 +127,13 @@
    - 新增窗口管理、布局控件、交互检测等 API
    - AI 现在可以生成完整的编辑器专用面板
 
-3. **脚本持久化尾项与错误映射**
-   - Scene / Prefab 已能保存 Script 组件与参数，但 prefab 级脚本资源是否继续走目标 world 解析还是变成自包含资源，还需要明确策略；Guest `source_location` 的精细错误回传也还没补完。
+3. **脚本持久化尾项与错误映射** ✅ 已完成 (2026-03-21)
+   - 新增 SourceLocation 类型用于错误定位
+   - 新增 guava_wasm_host_report_panic_with_location API
+   - 错误消息现在包含完整位置信息（file:line:column in function）
+   - Prefab 级脚本资源策略仍需明确
 
-如果只让实习生带着这份文档做一件事，默认应该从脚本持久化尾项开始，Query API 和 Editor Utility UI 已完成。
+如果只让实习生带着这份文档做一件事，默认应该从动画图作者工具开始，核心脚本功能已完成。
 
 ### 1.5 下一条基础架构路线：参考 Bevy，但按当前代码渐进落地
 
