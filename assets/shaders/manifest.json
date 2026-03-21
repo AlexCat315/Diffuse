@@ -59,6 +59,11 @@
       "name": "ssr",
       "vertex": "assets/shaders/ssr.vert.glsl",
       "fragment": "assets/shaders/ssr.frag.glsl"
+    },
+    {
+      "name": "taa",
+      "vertex": "assets/shaders/taa.vert.glsl",
+      "fragment": "assets/shaders/taa.frag.glsl"
     }
   ]
 }
