@@ -16,6 +16,11 @@
       "fragment": "assets/shaders/mesh.frag.glsl"
     },
     {
+      "name": "wireframe",
+      "vertex": "assets/shaders/wireframe.vert.glsl",
+      "fragment": "assets/shaders/wireframe.frag.glsl"
+    },
+    {
       "name": "outline",
       "vertex": "assets/shaders/outline.vert.glsl",
       "fragment": "assets/shaders/outline.frag.glsl"

@@ -52,7 +52,7 @@ const SandboxLayer = struct {
             if (std.fs.cwd().access("assets/textures/example.png", .{})) {
                 break :texture_path "assets/textures/example.png";
             } else |_| {}
-            
+
             break :texture_path "assets/models/guava_showcase/checker.png";
         };
         const texture_record = try registry.ensureProjectAsset(texture_source_path);
