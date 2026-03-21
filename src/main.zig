@@ -485,7 +485,12 @@ fn runMcp(allocator: std.mem.Allocator, options: CliOptions) !void {
     editor_layer.state.ai_collaboration = &collaboration_store;
     try app.pushOverlay(editor_layer.asLayer());
 
-    var snapshot_store = engine.mcp.resources.SnapshotStore.init(allocator, &collaboration_store, &app.script_runtime);
+    var snapshot_store = engine.mcp.resources.SnapshotStore.init(
+        allocator,
+        &collaboration_store,
+        &app.script_runtime,
+        &app.editor_utility_runtime,
+    );
     defer snapshot_store.deinit();
     var tool_bridge = engine.mcp.tools.Bridge.init(allocator);
     defer tool_bridge.deinit();

@@ -68,3 +68,4 @@ test_*
 
 # Backup directories
 assets_backup_*/
+.zig-global-cache/
