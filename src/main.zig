@@ -47,11 +47,13 @@ const SandboxLayer = struct {
         }
 
         // 1) Register texture asset and ensure cooked payload exists.
-        // Fallback to an existing project texture if example.png is not present.
+        // Try to use a project texture if available, otherwise use checker.png
         const texture_source_path = texture_path: {
-            const preferred = "assets/textures/example.png";
-            std.fs.cwd().access(preferred, .{}) catch break :texture_path "assets/models/guava_showcase/checker.png";
-            break :texture_path preferred;
+            if (std.fs.cwd().access("assets/textures/example.png", .{})) {
+                break :texture_path "assets/textures/example.png";
+            } else |_| {}
+            
+            break :texture_path "assets/models/guava_showcase/checker.png";
         };
         const texture_record = try registry.ensureProjectAsset(texture_source_path);
 

@@ -6,28 +6,24 @@ layout(set = 0, binding = 0, std140) uniform VertexUniforms {
     mat4 projection;
     mat4 view;
     vec4 camera_position;
-    mat4 inv_vp; // Precomputed inverse of (projection * view_rot_only)
+    mat4 inv_vp;
 } uniforms;
 
 void main() {
-    // Generate a fullscreen triangle
-    // Vertex indices: 0, 1, 2
-    // Map to positions: (-1,-1), (3,-1), (-1,3)
-    // This creates a triangle that covers the entire screen
-    vec2 vertex_positions[3] = vec2[](
+    vec2 positions[3] = vec2[](
         vec2(-1.0, -1.0),
         vec2( 3.0, -1.0),
         vec2(-1.0,  3.0)
     );
     
-    vec2 pos = vertex_positions[gl_VertexIndex];
+    vec2 pos = positions[gl_VertexIndex];
     vec4 clip_pos = vec4(pos, 1.0, 1.0);
 
-    // Use precomputed inverse view-projection matrix
     vec4 world_pos = uniforms.inv_vp * clip_pos;
     v_world_dir = normalize(world_pos.xyz);
 
-    // Output standard position with Y-flip for Vulkan/SDL_GPU clip space.
-    // Use a local variable to avoid reading back from gl_Position output (SPIRV-Cross MSL issue).
-    gl_Position = vec4(clip_pos.x, -clip_pos.y, clip_pos.z, clip_pos.w);
+    gl_Position = vec4(pos.x, -pos.y, 1.0, 1.0);
 }
+
+
+
