@@ -48,7 +48,7 @@ vec3 clipAABB(vec3 color, vec3 min_color, vec3 max_color) {
 
 void main() {
     float depth = texture(u_depth, v_uv).r;
-    vec2 velocity = texture(u_velocity, v_uv).rg * u_motion_blur_scale;
+    vec2 velocity = texture(u_velocity, v_uv).rg * taa.u_motion_blur_scale;
     vec2 uv_history = v_uv - velocity;
 
     if (uv_history.x < 0.0 || uv_history.x > 1.0 || uv_history.y < 0.0 || uv_history.y > 1.0) {
@@ -65,7 +65,7 @@ void main() {
     vec3 min_color = current_color;
     vec3 max_color = current_color;
 
-    vec2 texel_size = 1.0 / u_resolution;
+    vec2 texel_size = 1.0 / taa.u_resolution;
     min_color = min(min_color, RGBToYCoCg(texture(u_current, v_uv + vec2(-texel_size.x, -texel_size.y)).rgb));
     min_color = min(min_color, RGBToYCoCg(texture(u_current, v_uv + vec2(0.0, -texel_size.y)).rgb));
     min_color = min(min_color, RGBToYCoCg(texture(u_current, v_uv + vec2(texel_size.x, -texel_size.y)).rgb));
@@ -87,7 +87,7 @@ void main() {
     history_color = clipAABB(history_color, min_color, max_color);
 
     float motion_length = length(velocity);
-    float feedback = mix(u_feedback_max, u_feedback_min, min(motion_length * 100.0, 1.0));
+    float feedback = mix(taa.u_feedback_max, taa.u_feedback_min, min(motion_length * 100.0, 1.0));
 
     vec3 result = mix(current_color, history_color, feedback);
     result = YCoCgToRGB(result);
