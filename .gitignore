@@ -70,5 +70,6 @@ test_*
 assets_backup_*/
 .zig-global-cache/
 .github/
+.cache/
 # Generated code
 src/engine/generated/

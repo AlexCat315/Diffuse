@@ -27,8 +27,7 @@ void main() {
     vec4 world_pos = uniforms.inv_vp * clip_pos;
     v_world_dir = normalize(world_pos.xyz);
 
-    // Output standard position
-    gl_Position = clip_pos;
-    // Flip Y for Vulkan/SDL_GPU typical clip space vs texture coordinates
-    gl_Position.y = -gl_Position.y;
+    // Output standard position with Y-flip for Vulkan/SDL_GPU clip space.
+    // Use a local variable to avoid reading back from gl_Position output (SPIRV-Cross MSL issue).
+    gl_Position = vec4(clip_pos.x, -clip_pos.y, clip_pos.z, clip_pos.w);
 }
