@@ -120,13 +120,15 @@
 1. **Phase 7 / Week 7：Query API 扩展**
    - 当前分页查询已存在，但更高层的语义查询、组合验证和更深的 physics / scene-text 查询还没做完。
 
-2. **Phase 5 尾项：Editor Utility UI**
-   - 参数反射已完成，真正剩下的是让 AI 能生成编辑器专用面板，而不只是业务逻辑脚本。
+2. **Phase 5 尾项：Editor Utility UI** ✅ 已完成 (2026-03-21)
+   - 参数反射已完成，WASM ImGui API 已从 22 个扩展到 34 个 native symbols
+   - 新增窗口管理、布局控件、交互检测等 API
+   - AI 现在可以生成完整的编辑器专用面板
 
 3. **脚本持久化尾项与错误映射**
    - Scene / Prefab 已能保存 Script 组件与参数，但 prefab 级脚本资源是否继续走目标 world 解析还是变成自包含资源，还需要明确策略；Guest `source_location` 的精细错误回传也还没补完。
 
-如果只让实习生带着这份文档做一件事，默认应该从 Query 扩展或 Editor Utility UI 开始，而不是再回头重做 Phase 1 到 Phase 6 基座。
+如果只让实习生带着这份文档做一件事，默认应该从 Query 扩展开始，Editor Utility UI 已完成。
 
 ### 1.5 下一条基础架构路线：参考 Bevy，但按当前代码渐进落地
 
@@ -151,13 +153,13 @@
 
 建议的落地顺序是：
 
-1. 先保留现有 `Entity` 外观和 scene IO，不在同一轮里同时改序列化格式。
-2. 新建通用 `SparseSet(T)`，先承载热路径组件：
-   - `Transform`
-   - `Rigidbody`
-   - `BoxCollider` / `SphereCollider`
+1. ~~先保留现有 `Entity` 外观和 scene IO，不在同一轮里同时改序列化格式。~~ ✅ 保持兼容
+2. ~~新建通用 `SparseSet(T)`，先承载热路径组件：~~ ✅ 已完成 (2026-03-21)
+   - `Transform` ✅ 已迁移
+   - `Rigidbody` ⏳ 待迁移
+   - `BoxCollider` / `SphereCollider` ⏳ 待迁移
    - 未来的 `Velocity` / `AngularVelocity`
-3. `World` 先进入“混合期”：
+3. `World` 先进入"混合期"：
    - 冷数据继续留在 `Entity`
    - 热数据转到 `SparseSet`
    - 对外 API 暂时保持兼容
