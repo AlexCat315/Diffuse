@@ -64,6 +64,21 @@
       "name": "taa",
       "vertex": "assets/shaders/taa.vert.glsl",
       "fragment": "assets/shaders/taa.frag.glsl"
+    },
+    {
+      "name": "dof_coc",
+      "vertex": "assets/shaders/dof_coc.vert.glsl",
+      "fragment": "assets/shaders/dof_coc.frag.glsl"
+    },
+    {
+      "name": "dof_blur",
+      "vertex": "assets/shaders/dof_coc.vert.glsl",
+      "fragment": "assets/shaders/dof_blur.frag.glsl"
+    },
+    {
+      "name": "dof_composite",
+      "vertex": "assets/shaders/dof_coc.vert.glsl",
+      "fragment": "assets/shaders/dof_composite.frag.glsl"
     }
   ]
 }
