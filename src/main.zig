@@ -26,39 +26,18 @@ const SandboxLayer = struct {
 
     fn onAttach(context: *anyopaque, layer_context: *engine.core.LayerContext) anyerror!void {
         const self: *SandboxLayer = @ptrCast(@alignCast(context));
-        const cube_mesh = try layer_context.world.assets().ensurePrimitiveMesh(.cube);
-        const default_material = try layer_context.world.assets().ensureDefaultMaterial();
-        self.spinning_entity = try layer_context.world.createEntity(.{
-            .name = "Spinner",
-            .mesh = .{
-                .handle = cube_mesh,
-                .primitive = .cube,
-            },
-            .material = .{
-                .handle = default_material,
-            },
-            .local_transform = .{
-                .translation = .{ 2.0, 1.0, 0.0 },
-                .scale = .{ 1.0, 1.5, 1.0 },
-            },
-        });
+        _ = self; // Will be used for spinning_entity if needed
 
-        _ = try layer_context.world.createEntity(.{
-            .name = "SpinnerChild",
-            .parent = self.spinning_entity,
-            .mesh = .{
-                .handle = cube_mesh,
-                .primitive = .cube,
+        // Load high-quality checkerboard model instead of hardcoded cubes
+        _ = try layer_context.world.importGltfStaticModel(
+            "assets/textures/curly_teddy_checkered_4k_gltf/curly_teddy_checkered_4k.gltf",
+            .{
+                .translation = .{ 0.0, 0.0, 0.0 },
+                .scale = .{ 1.0, 1.0, 1.0 },
             },
-            .material = .{
-                .handle = default_material,
-            },
-            .local_transform = .{
-                .translation = .{ 1.1, 0.9, 0.0 },
-                .scale = .{ 0.35, 0.35, 0.35 },
-            },
-        });
+        );
 
+        // Also load the showcase model
         _ = try layer_context.world.importGltfStaticModel(
             "assets/models/guava_showcase/guava_showcase.gltf",
             .{

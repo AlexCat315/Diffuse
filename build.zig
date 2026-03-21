@@ -16,6 +16,7 @@ const engine_include_paths = [_][]const u8{
     "third_party/wamr/core/shared/platform/include",
     "third_party/wamr/core/shared/platform/common/libc-util",
     "third_party/wamr/core/shared/utils",
+    "third_party/soloud/include",
     "src/engine/assets",
     "src/engine/ui",
 };
@@ -113,6 +114,46 @@ const wamr_bridge_c_sources = [_][]const u8{
     "src/engine/script/wasm_vm_bridge.c",
 };
 
+/// SoLoud audio engine core implementation
+const soloud_core_cpp_sources = [_][]const u8{
+    "third_party/soloud/src/core/soloud.cpp",
+    "third_party/soloud/src/core/soloud_audiosource.cpp",
+    "third_party/soloud/src/core/soloud_bus.cpp",
+    "third_party/soloud/src/core/soloud_core_3d.cpp",
+    "third_party/soloud/src/core/soloud_core_basicops.cpp",
+    "third_party/soloud/src/core/soloud_core_faderops.cpp",
+    "third_party/soloud/src/core/soloud_core_filterops.cpp",
+    "third_party/soloud/src/core/soloud_core_getters.cpp",
+    "third_party/soloud/src/core/soloud_core_setters.cpp",
+    "third_party/soloud/src/core/soloud_core_voicegroup.cpp",
+    "third_party/soloud/src/core/soloud_core_voiceops.cpp",
+    "third_party/soloud/src/core/soloud_fader.cpp",
+    "third_party/soloud/src/core/soloud_fft.cpp",
+    "third_party/soloud/src/core/soloud_fft_lut.cpp",
+    "third_party/soloud/src/core/soloud_file.cpp",
+    "third_party/soloud/src/core/soloud_filter.cpp",
+    "third_party/soloud/src/core/soloud_misc.cpp",
+    "third_party/soloud/src/core/soloud_queue.cpp",
+    "third_party/soloud/src/core/soloud_thread.cpp",
+};
+
+/// SoLoud WAV audio format support (PCM, OGG Vorbis, MP3, FLAC via dr_libs and stb_vorbis)
+const soloud_wav_cpp_sources = [_][]const u8{
+    "third_party/soloud/src/audiosource/wav/soloud_wav.cpp",
+    "third_party/soloud/src/audiosource/wav/soloud_wavstream.cpp",
+    "third_party/soloud/src/audiosource/wav/dr_impl.cpp",
+};
+
+/// SoLoud MiniAudio backend (portable audio across Windows/macOS/Linux)
+const soloud_backend_cpp_sources = [_][]const u8{
+    "third_party/soloud/src/backend/miniaudio/soloud_miniaudio.cpp",
+};
+
+/// SoLoud C language API wrapper (for potential WASM/scripting integration)
+const soloud_c_api_cpp_sources = [_][]const u8{
+    "third_party/soloud/src/c_api/soloud_c.cpp",
+};
+
 const engine_cpp_sources = [_][]const u8{
     "third_party/imgui/imgui.cpp",
     "third_party/imgui/imgui_draw.cpp",
@@ -174,6 +215,12 @@ const engine_cpp_flags = [_][]const u8{
     "-DLUNASVG_BUILD_STATIC=1",
     "-DPLUTOVG_BUILD=1",
     "-DPLUTOVG_BUILD_STATIC=1",
+};
+
+/// SoLoud specific compilation flags for MiniAudio backend
+const soloud_cpp_flags = [_][]const u8{
+    "-std=c++17",
+    "-DWITH_MINIAUDIO=1",
 };
 
 const macos_objcpp_flags = [_][]const u8{
@@ -356,6 +403,25 @@ fn configureEngineModule(
         .files = &engine_cpp_sources,
         .flags = &engine_cpp_flags,
     });
+
+    // Add SoLoud audio engine sources
+    module.addCSourceFiles(.{
+        .files = &soloud_core_cpp_sources,
+        .flags = &soloud_cpp_flags,
+    });
+    module.addCSourceFiles(.{
+        .files = &soloud_wav_cpp_sources,
+        .flags = &soloud_cpp_flags,
+    });
+    module.addCSourceFiles(.{
+        .files = &soloud_backend_cpp_sources,
+        .flags = &soloud_cpp_flags,
+    });
+    module.addCSourceFiles(.{
+        .files = &soloud_c_api_cpp_sources,
+        .flags = &soloud_cpp_flags,
+    });
+
     const jolt_cpp_sources = collectSourceFiles(b, "third_party/jolt/Jolt", ".cpp");
     module.addCSourceFiles(.{
         .files = jolt_cpp_sources,
