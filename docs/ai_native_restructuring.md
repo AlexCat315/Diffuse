@@ -177,7 +177,7 @@
 2. ~~新建通用 `SparseSet(T)`，先承载热路径组件：~~ ✅ 已完成 (2026-03-21)
    - `Transform` ✅ 已迁移
    - `Rigidbody` ✅ 已迁移
-   - `BoxCollider` / `SphereCollider` ⏳ 待迁移
+   - `BoxCollider` / `SphereCollider` ✅ 已迁移
    - 未来的 `Velocity` / `AngularVelocity`
 3. `World` 先进入"混合期"：
    - 冷数据继续留在 `Entity`
