@@ -31,6 +31,11 @@
       "fragment": "assets/shaders/shadow_pass.frag.glsl"
     },
     {
+      "name": "omni_shadow_pass",
+      "vertex": "assets/shaders/omni_shadow_pass.vert.glsl",
+      "fragment": "assets/shaders/omni_shadow_pass.frag.glsl"
+    },
+    {
       "name": "tonemap",
       "vertex": "assets/shaders/tonemap.vert.glsl",
       "fragment": "assets/shaders/tonemap.frag.glsl"
