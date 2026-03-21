@@ -117,8 +117,10 @@
 
 新同学真正要执行的剩余任务，按优先级读这三段：
 
-1. **Phase 7 / Week 7：Query API 扩展**
-   - 当前分页查询已存在，但更高层的语义查询、组合验证和更深的 physics / scene-text 查询还没做完。
+1. **Phase 7 / Week 7：Query API 扩展** ✅ 已完成 (2026-03-21)
+   - 新增语义过滤器：has_components、is_dynamic、is_root、has_collider、has_rigidbody
+   - 新增排序功能：sort_by 支持 distance/name_asc/name_desc/id_asc
+   - MCP tools.zig 同步更新 QueryRequest 解析逻辑
 
 2. **Phase 5 尾项：Editor Utility UI** ✅ 已完成 (2026-03-21)
    - 参数反射已完成，WASM ImGui API 已从 22 个扩展到 34 个 native symbols
@@ -128,7 +130,7 @@
 3. **脚本持久化尾项与错误映射**
    - Scene / Prefab 已能保存 Script 组件与参数，但 prefab 级脚本资源是否继续走目标 world 解析还是变成自包含资源，还需要明确策略；Guest `source_location` 的精细错误回传也还没补完。
 
-如果只让实习生带着这份文档做一件事，默认应该从 Query 扩展开始，Editor Utility UI 已完成。
+如果只让实习生带着这份文档做一件事，默认应该从脚本持久化尾项开始，Query API 和 Editor Utility UI 已完成。
 
 ### 1.5 下一条基础架构路线：参考 Bevy，但按当前代码渐进落地
 
