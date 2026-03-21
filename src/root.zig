@@ -525,6 +525,12 @@ pub const physics = struct {
     pub const step = @import("engine/physics/system.zig").step;
 };
 
+/// 音频系统模块
+///
+/// 提供完整的音频播放、3D 空间音效、混音器控制和 WASM 脚本接口。
+/// 基于 SoLoud 音频引擎，支持 WAV/OGG 格式。
+pub const audio = @import("engine/audio/mod.zig");
+
 /// 数学库模块
 ///
 /// 提供游戏开发常用的数学类型和运算：
@@ -659,6 +665,12 @@ pub const scene = struct {
     /// 默认特效参数
     pub const defaultVfx = @import("engine/scene/components.zig").defaultVfx;
     /// 运行时粒子
+    /// 音频源组件
+    pub const AudioSource = @import("engine/scene/components.zig").AudioSource;
+    /// 音频监听器组件
+    pub const AudioListener = @import("engine/scene/components.zig").AudioListener;
+    /// 音频剪辑句柄类型
+    pub const AudioClipHandle = @import("engine/scene/components.zig").AudioClipHandle;
     pub const VfxRuntimeParticle = @import("engine/scene/scene.zig").VfxRuntimeParticle;
     /// 运行时发射器
     pub const VfxRuntimeEmitter = @import("engine/scene/scene.zig").VfxRuntimeEmitter;
