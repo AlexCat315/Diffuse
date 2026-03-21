@@ -23,6 +23,7 @@ zig build run
 zig build run -- --frames 120
 zig build run -- mcp --transport stdio
 zig build run -- validate --root assets
+zig build run -- --backend vulkan
 zig build compile-commands
 ```
 
