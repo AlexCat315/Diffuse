@@ -28,6 +28,15 @@ const SandboxLayer = struct {
         const self: *SandboxLayer = @ptrCast(@alignCast(context));
         self.spinning_entity = null;
 
+        // Frame teddy at startup so scene camera mode also opens with a close textured view.
+        if (layer_context.world.findEntityByName("MainCamera")) |main_camera_ref| {
+            if (layer_context.world.getEntity(main_camera_ref.id)) |main_camera| {
+                main_camera.local_transform.translation = .{ 0.0, 1.35, 3.2 };
+                main_camera.local_transform.rotation = engine.math.quat.fromEuler(.{ -0.08, 0.0, 0.0 });
+                layer_context.world.markDirty(main_camera_ref.id);
+            }
+        }
+
         // Keep bootstrap camera/light/ground, but remove the default hero cube.
         if (layer_context.world.findEntityByName("Hero")) |hero| {
             _ = layer_context.world.destroyEntity(hero.id);
