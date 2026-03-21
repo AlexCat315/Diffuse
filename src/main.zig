@@ -42,7 +42,7 @@ const SandboxLayer = struct {
             _ = layer_context.world.destroyEntity(hero.id);
         }
 
-        // Load high-quality checkerboard model instead of hardcoded cubes
+        // Load high-quality checkerboard model instead of hardcoded cubes.
         _ = try layer_context.world.importGltfStaticModel(
             "assets/textures/curly_teddy_checkered_4k_gltf/curly_teddy_checkered_4k.gltf",
             .{
@@ -51,13 +51,7 @@ const SandboxLayer = struct {
             },
         );
 
-        // Also load the showcase model
-        _ = try layer_context.world.importGltfStaticModel(
-            "assets/models/guava_showcase/guava_showcase.gltf",
-            .{
-                .translation = .{ -2.4, 0.0, 0.0 },
-            },
-        );
+        // Keep startup scene focused on teddy so texture detail is immediately visible.
     }
 
     fn onUpdate(context: *anyopaque, layer_context: *engine.core.LayerContext) anyerror!void {
