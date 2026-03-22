@@ -89,6 +89,11 @@
       "name": "dof_composite",
       "vertex": "assets/shaders/dof_coc.vert.glsl",
       "fragment": "assets/shaders/dof_composite.frag.glsl"
+    },
+    {
+      "name": "volumetric_fog",
+      "vertex": "assets/shaders/volumetric_fog.vert.glsl",
+      "fragment": "assets/shaders/volumetric_fog.frag.glsl"
     }
   ]
 }

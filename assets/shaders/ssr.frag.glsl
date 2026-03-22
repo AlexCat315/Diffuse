@@ -29,17 +29,40 @@ vec3 getViewPos(vec2 uv, float depth) {
     return viewPos.xyz / viewPos.w;
 }
 
-vec3 getWorldPos(vec2 uv, float depth) {
-    vec4 clipPos = vec4(uv * 2.0 - 1.0, depth, 1.0);
-    vec4 viewPos = ssr.u_inv_projection * clipPos;
-    vec4 worldPos = ssr.u_inv_view * viewPos;
-    return worldPos.xyz / worldPos.w;
-}
-
 vec2 getScreenPos(vec3 viewPos) {
     vec4 clipPos = ssr.u_projection * vec4(viewPos, 1.0);
     vec3 ndc = clipPos.xyz / clipPos.w;
     return ndc.xy * 0.5 + 0.5;
+}
+
+// Binary search refinement for precise hit location
+vec2 binarySearch(vec3 rayStart, vec3 rayDir, float tHit) {
+    float lo = tHit - 1.0;
+    float hi = tHit;
+
+    for (int i = 0; i < 8; ++i) {
+        float mid = (lo + hi) * 0.5;
+        vec3 pos = rayStart + rayDir * mid;
+        vec2 screenPos = getScreenPos(pos);
+
+        if (screenPos.x < 0.0 || screenPos.x > 1.0 || screenPos.y < 0.0 || screenPos.y > 1.0) {
+            hi = mid;
+            continue;
+        }
+
+        float sampleDepth = texture(u_depth, screenPos).r;
+        vec3 sampleViewPos = getViewPos(screenPos, sampleDepth);
+        float depthDiff = sampleViewPos.z - pos.z;
+
+        if (depthDiff > 0.0 && depthDiff < ssr.u_ray_thickness) {
+            hi = mid; // We're behind surface, reduce t
+        } else {
+            lo = mid; // We're in front, increase t
+        }
+    }
+
+    vec3 finalPos = rayStart + rayDir * ((lo + hi) * 0.5);
+    return getScreenPos(finalPos);
 }
 
 void main() {
@@ -61,28 +84,21 @@ void main() {
         return;
     }
 
-    vec3 rayStart = viewPos;
-    vec3 rayEnd = viewPos + reflectDir * ssr.u_ray_max_distance;
-
-    vec2 startScreen = getScreenPos(rayStart);
-    vec2 endScreen = getScreenPos(rayEnd);
-
-    if (endScreen.x < 0.0 || endScreen.x > 1.0 || endScreen.y < 0.0 || endScreen.y > 1.0) {
-        out_reflection = vec4(0.0);
-        return;
-    }
-
+    // Adaptive-stride ray marching: large steps far away, fine steps up close
     float stepCount = ssr.u_stride;
-    vec3 rayStep = (rayEnd - rayStart) / stepCount;
-    vec3 rayPos = rayStart;
+    float baseStep = ssr.u_ray_max_distance / stepCount;
 
+    vec3 rayPos = viewPos;
     vec2 hitUV = vec2(0.0);
     bool hit = false;
+    float hitT = 0.0;
 
     for (float i = 0.0; i < stepCount; i += 1.0) {
-        rayPos += rayStep;
-        vec2 screenPos = getScreenPos(rayPos);
+        // Accelerating step size: larger steps at greater distances
+        float stepScale = 1.0 + i * 0.15;
+        rayPos += reflectDir * baseStep * stepScale;
 
+        vec2 screenPos = getScreenPos(rayPos);
         if (screenPos.x < 0.0 || screenPos.x > 1.0 || screenPos.y < 0.0 || screenPos.y > 1.0) {
             break;
         }
@@ -93,7 +109,7 @@ void main() {
         float depthDiff = sampleViewPos.z - rayPos.z;
         if (depthDiff > 0.0 && depthDiff < ssr.u_ray_thickness) {
             hit = true;
-            hitUV = screenPos;
+            hitT = i;
             break;
         }
     }
@@ -103,15 +119,28 @@ void main() {
         return;
     }
 
+    // Binary search refinement for sub-pixel precision
+    hitUV = binarySearch(viewPos, reflectDir, hitT * baseStep * (1.0 + hitT * 0.15));
+    if (hitUV.x < 0.0 || hitUV.x > 1.0 || hitUV.y < 0.0 || hitUV.y > 1.0) {
+        out_reflection = vec4(0.0);
+        return;
+    }
+
     vec3 reflectionColor = texture(u_color, hitUV).rgb;
 
+    // Screen edge fade (all 4 edges)
     float fade = 1.0;
-    fade *= 1.0 - smoothstep(0.0, ssr.u_edge_fade, hitUV.x);
-    fade *= 1.0 - smoothstep(1.0 - ssr.u_edge_fade, 1.0, hitUV.x);
-    fade *= 1.0 - smoothstep(0.0, ssr.u_edge_fade, hitUV.y);
-    fade *= 1.0 - smoothstep(1.0 - ssr.u_edge_fade, 1.0, hitUV.y);
+    fade *= smoothstep(0.0, ssr.u_edge_fade, hitUV.x);
+    fade *= smoothstep(0.0, ssr.u_edge_fade, 1.0 - hitUV.x);
+    fade *= smoothstep(0.0, ssr.u_edge_fade, hitUV.y);
+    fade *= smoothstep(0.0, ssr.u_edge_fade, 1.0 - hitUV.y);
 
+    // Distance attenuation
     float distanceFade = 1.0 - smoothstep(ssr.u_fade_distance * 0.5, ssr.u_fade_distance, length(viewPos));
 
-    out_reflection = vec4(reflectionColor * ssr.u_intensity * fade * distanceFade, 1.0);
+    // Fresnel-weighted intensity: stronger reflections at grazing angles
+    float NdotV = max(dot(normal, viewDir), 0.0);
+    float fresnelFade = 1.0 - NdotV * 0.5;
+
+    out_reflection = vec4(reflectionColor * ssr.u_intensity * fade * distanceFade * fresnelFade, 1.0);
 }

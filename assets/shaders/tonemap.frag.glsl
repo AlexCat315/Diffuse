@@ -7,19 +7,21 @@ layout(set = 2, binding = 0) uniform sampler2D u_hdr_map;
 layout(set = 2, binding = 1) uniform sampler2D u_bloom_map;
 layout(set = 2, binding = 2) uniform sampler2D u_lut_map;
 layout(set = 3, binding = 0, std140) uniform TonemapUniforms {
-    // x: 启用手动曝光，y: 曝光倍率
+    // x: 启用手动曝光, y: 曝光倍率, z: 启用自动曝光, w: 自动曝光适应速度
     vec4 u_exposure_params;
-    // x: 启用 Bloom，y: Bloom 强度
+    // x: 启用 Bloom, y: Bloom 强度
     vec4 u_bloom_params;
-    // x: 启用 Color Grading，y: 饱和度，z: 对比度，w: Gamma
+    // x: 启用 Color Grading, y: 饱和度, z: 对比度, w: Gamma
     vec4 u_color_grading_params;
-    // x: 启用 LUT，y: LUT 强度
+    // x: 启用 LUT, y: LUT 强度, z: 启用 sRGB gamma, w: reserved
     vec4 u_lut_params;
 } tonemap_uniforms;
 
 const float LUT_SIZE = 16.0;
 
-// ACES tonemap curve
+// --- Tonemapping operators ---
+
+// Fitted ACES (Narkowicz 2015)
 vec3 ACESFilm(vec3 x) {
     float a = 2.51;
     float b = 0.03;
@@ -27,6 +29,34 @@ vec3 ACESFilm(vec3 x) {
     float d = 0.59;
     float e = 0.14;
     return clamp((x * (a * x + b)) / (x * (c * x + d) + e), 0.0, 1.0);
+}
+
+// --- sRGB transfer function (IEC 61966-2-1) ---
+vec3 linearToSRGB(vec3 linear) {
+    vec3 lo = linear * 12.92;
+    vec3 hi = 1.055 * pow(max(linear, vec3(0.0)), vec3(1.0 / 2.4)) - 0.055;
+    return mix(lo, hi, step(vec3(0.0031308), linear));
+}
+
+// --- Auto-exposure: compute scene log-average luminance from downsampled HDR ---
+float computeAutoExposure(sampler2D hdr) {
+    float log_sum = 0.0;
+    float count = 0.0;
+    // Sample a 4x4 grid from the center 80% of the screen
+    for (int y = 0; y < 4; ++y) {
+        for (int x = 0; x < 4; ++x) {
+            vec2 sample_uv = vec2(0.1 + 0.8 * (float(x) + 0.5) / 4.0,
+                                  0.1 + 0.8 * (float(y) + 0.5) / 4.0);
+            vec3 c = textureLod(hdr, sample_uv, 6.0).rgb; // sample from high mip
+            float luma = dot(c, vec3(0.2126, 0.7152, 0.0722));
+            log_sum += log(max(luma, 0.0001));
+            count += 1.0;
+        }
+    }
+    float avg_luma = exp(log_sum / count);
+    // Key value mapping: target 18% grey (Reinhard-style)
+    float key = 0.18;
+    return key / max(avg_luma, 0.001);
 }
 
 vec3 applyColorGrading(vec3 color) {
@@ -66,30 +96,41 @@ vec3 sampleColorLUT(vec3 color) {
 
 void main() {
     vec3 hdr_color = texture(u_hdr_map, v_uv).rgb;
+
+    // Bloom compositing
     if (tonemap_uniforms.u_bloom_params.x > 0.5) {
         hdr_color += texture(u_bloom_map, v_uv).rgb * max(tonemap_uniforms.u_bloom_params.y, 0.0);
     }
-    float exposure = tonemap_uniforms.u_exposure_params.x > 0.5 ? max(tonemap_uniforms.u_exposure_params.y, 0.0) : 1.0;
+
+    // Exposure: manual or auto
+    float exposure = 1.0;
+    if (tonemap_uniforms.u_exposure_params.z > 0.5) {
+        // Auto-exposure from scene luminance
+        exposure = clamp(computeAutoExposure(u_hdr_map), 0.02, 50.0);
+    } else if (tonemap_uniforms.u_exposure_params.x > 0.5) {
+        exposure = max(tonemap_uniforms.u_exposure_params.y, 0.0);
+    }
     hdr_color *= exposure;
 
-    // Tonemapping
+    // ACES tonemapping (linear HDR -> linear LDR)
     vec3 ldr_color = ACESFilm(hdr_color);
+
+    // Color grading in linear space
     if (tonemap_uniforms.u_color_grading_params.x > 0.5) {
         ldr_color = applyColorGrading(ldr_color);
     }
+
+    // LUT application
     if (tonemap_uniforms.u_lut_params.x > 0.5) {
         vec3 lut_color = sampleColorLUT(ldr_color);
         ldr_color = mix(ldr_color, lut_color, clamp(tonemap_uniforms.u_lut_params.y, 0.0, 1.0));
     }
 
-    // Gamma correction (if the target isn't SRGB, we need to do it manually)
-    // Assuming UI texture target is UNORM, we apply standard 2.2 gamma
-    // ldr_color = pow(ldr_color, vec3(1.0 / 2.2));
-
-    // If the target is .bgra8_unorm (without _srgb), we should apply gamma manually.
-    // Let's do a simple pow. In many cases ImGui outputs in linear if not using SRGB framebuffers,
-    // but the final swapchain is what matters. To be safe we output linear or gamma based on what we need.
-    // For now, let's assume we do need gamma correction if the UI displays it as SRGB.
+    // sRGB gamma curve (proper IEC 61966-2-1 transfer)
+    // Required when output target is bgra8_unorm (not _srgb)
+    if (tonemap_uniforms.u_lut_params.z > 0.5) {
+        ldr_color = linearToSRGB(ldr_color);
+    }
 
     out_color = vec4(ldr_color, 1.0);
 }
