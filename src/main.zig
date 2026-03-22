@@ -7,7 +7,7 @@ const commands = @import("commands.zig");
 
 pub const std_options = std.Options{
     .logFn = editor_console.logFn,
-    .log_level = .debug,
+    .log_level = .info,
 };
 
 const SandboxLayer = struct {
