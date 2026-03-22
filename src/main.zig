@@ -56,7 +56,7 @@ const SandboxLayer = struct {
 
         // ── 3. Textured cube: load diffuse JPG via asset pipeline ────────
         const diff_record = try registry.ensureProjectAsset(
-            "assets/textures/brick_4_4k_gltf/textures/brick_4_4k_diff_4k.jpg",
+            "assets/textures/brick_4_4k_gltf/textures/brick_4_diff_4k.jpg",
         );
         const diff_tex = try engine.assets.loadTextureAsset(
             allocator,
