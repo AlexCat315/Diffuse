@@ -41,22 +41,22 @@ const SandboxLayer = struct {
         // The renderer auto-discovers .hdr files in the registry for IBL.
         _ = try registry.ensureProjectAsset("assets/textures/ticknock_04_4k.hdr");
 
-        // ── 2. Import glTF teddy bear (full PBR: diffuse + ARM + normal) ─
-        const teddy_report = try world.importGltfStaticModel(
-            "assets/textures/curly_teddy_checkered_4k_gltf/curly_teddy_checkered_4k.gltf",
+        // ── 2. Import glTF brick model (full PBR: diffuse + ARM + normal) ─
+        const brick_report = try world.importGltfStaticModel(
+            "assets/textures/brick_4_4k_gltf/brick_4_4k.gltf",
             .{
                 .translation = .{ -1.5, 0.0, 0.0 },
                 .scale = .{ 1.0, 1.0, 1.0 },
             },
         );
-        // Slow-spin the imported teddy root entity.
-        if (teddy_report.root_entity) |root_id| {
+        // Slow-spin the imported brick root entity.
+        if (brick_report.root_entity) |root_id| {
             self.spinning_entity = root_id;
         }
 
         // ── 3. Textured cube: load diffuse JPG via asset pipeline ────────
         const diff_record = try registry.ensureProjectAsset(
-            "assets/textures/curly_teddy_checkered_4k_gltf/textures/curly_teddy_checkered_diff_4k.jpg",
+            "assets/textures/brick_4_4k_gltf/textures/brick_4_4k_diff_4k.jpg",
         );
         const diff_tex = try engine.assets.loadTextureAsset(
             allocator,
@@ -214,7 +214,7 @@ pub fn main() !u8 {
     defer {
         const leaked = gpa.deinit();
         if (leaked == .leak) {
-            std.debug.print("❌ 致命错误：检测到 GPA 内存泄漏！程序将以错误码 1 退出。\n", .{});
+            std.debug.print("程序将以错误码 1 退出。\n", .{});
             std.process.exit(1);
         }
     }
