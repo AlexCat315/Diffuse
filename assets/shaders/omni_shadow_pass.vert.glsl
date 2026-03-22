@@ -41,5 +41,4 @@ mat4 resolve_skin_matrix() {
 void main() {
     vec4 world_position = vertex_uniforms.u_model * (resolve_skin_matrix() * vec4(in_position, 1.0));
     gl_Position = vertex_uniforms.u_view_projection * world_position;
-    gl_Position.y = -gl_Position.y;
 }

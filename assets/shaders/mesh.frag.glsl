@@ -130,7 +130,7 @@ void main() {
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo, metallic);
 
-    // Shadow calculation - 4-cascade CSM with Poisson disk PCF
+    // Shadow calculation - single-map Poisson disk PCF soft shadows
     float shadow = 1.0;
     if (material_uniforms.u_shadow_params.x > 0.0) {
         vec4 frag_pos_light_space = material_uniforms.u_light_space_matrix * vec4(v_world_position, 1.0);

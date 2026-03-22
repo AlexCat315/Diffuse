@@ -32,77 +32,92 @@ const SandboxLayer = struct {
         const registry = &library.asset_registry;
         const allocator = library.allocator;
 
-        // Frame teddy at startup so scene camera mode also opens with a close textured view.
-        if (world.findEntityByName("MainCamera")) |main_camera_ref| {
-            if (world.getEntity(main_camera_ref.id)) |main_camera| {
-                main_camera.local_transform.translation = .{ 0.0, 1.35, 3.2 };
-                main_camera.local_transform.rotation = engine.math.quat.fromEuler(.{ -0.08, 0.0, 0.0 });
-                world.markDirty(main_camera_ref.id);
-            }
-        }
-
-        // Keep bootstrap camera/light/ground, but remove the default hero cube.
+        // Remove the default Hero cube from bootstrap3D.
         if (world.findEntityByName("Hero")) |hero| {
             _ = world.destroyEntity(hero.id);
         }
 
-        // 1) Register texture asset and ensure cooked payload exists.
-        // Try to use a project texture if available, otherwise use checker.png
-        const texture_source_path = texture_path: {
-            if (std.fs.cwd().access("assets/textures/example.png", .{})) {
-                break :texture_path "assets/textures/example.png";
-            } else |_| {}
+        // ── 1. Register HDR environment for IBL ─────────────────────────
+        // The renderer auto-discovers .hdr files in the registry for IBL.
+        _ = try registry.ensureProjectAsset("assets/textures/ticknock_04_4k.hdr");
 
-            break :texture_path "assets/models/guava_showcase/checker.png";
-        };
-        const texture_record = try registry.ensureProjectAsset(texture_source_path);
+        // ── 2. Import glTF teddy bear (full PBR: diffuse + ARM + normal) ─
+        const teddy_report = try world.importGltfStaticModel(
+            "assets/textures/curly_teddy_checkered_4k_gltf/curly_teddy_checkered_4k.gltf",
+            .{
+                .translation = .{ -1.5, 0.0, 0.0 },
+                .scale = .{ 1.0, 1.0, 1.0 },
+            },
+        );
+        // Slow-spin the imported teddy root entity.
+        if (teddy_report.root_entity) |root_id| {
+            self.spinning_entity = root_id;
+        }
 
-        // 2) Load cooked texture into runtime resource library and get handle.
-        const tex_handle = try engine.assets.loadTextureAsset(
+        // ── 3. Textured cube: load diffuse JPG via asset pipeline ────────
+        const diff_record = try registry.ensureProjectAsset(
+            "assets/textures/curly_teddy_checkered_4k_gltf/textures/curly_teddy_checkered_diff_4k.jpg",
+        );
+        const diff_tex = try engine.assets.loadTextureAsset(
             allocator,
             library,
             registry,
-            texture_record.id,
+            diff_record.id,
         );
-
-        // 3) Build a PBR material with texture bound to base-color slot.
-        const mat_handle = try library.createMaterial(.{
-            .name = "DefaultTexturedMaterial",
-            .shading = .pbr_metallic_roughness,
-            .base_color_factor = .{ 1.0, 1.0, 1.0, 1.0 },
-            .base_color_texture = tex_handle,
+        const cube_mat = try library.createMaterial(.{
+            .name = "CheckeredDiffuseMaterial",
+            .base_color_texture = diff_tex,
+            .metallic_factor = 0.0,
+            .roughness_factor = 0.6,
         });
-
-        // 4) Create mesh entity and attach textured material.
         const cube_mesh = try library.ensurePrimitiveMesh(.cube);
-        self.spinning_entity = try world.createEntity(.{
+        _ = try world.createEntity(.{
             .name = "TexturedCube",
-            .mesh = .{
-                .handle = cube_mesh,
-                .primitive = .cube,
-            },
-            .material = .{
-                .handle = mat_handle,
-            },
+            .mesh = .{ .handle = cube_mesh, .primitive = .cube },
+            .material = .{ .handle = cube_mat },
             .local_transform = .{
-                .translation = .{ 0.0, 1.0, 0.0 },
-                .scale = .{ 1.0, 1.0, 1.0 },
+                .translation = .{ 1.5, 0.5, 0.0 },
             },
         });
 
-        // Ensure directional light exists so textured PBR material is visible.
-        if (world.findEntityByName("Sun") == null) {
-            _ = try world.createEntity(.{
-                .name = "DefaultSunLight",
-                .light = .{
+        // ── 4. Reflective sphere: pure PBR metal to show IBL reflections ─
+        const sphere_mat = try library.createMaterial(.{
+            .name = "ChromeSphereMaterial",
+            .base_color_factor = .{ 0.95, 0.93, 0.88, 1.0 },
+            .metallic_factor = 1.0,
+            .roughness_factor = 0.08,
+        });
+        const sphere_mesh = try library.ensurePrimitiveMesh(.sphere);
+        _ = try world.createEntity(.{
+            .name = "ChromeSphere",
+            .mesh = .{ .handle = sphere_mesh, .primitive = .sphere },
+            .material = .{ .handle = sphere_mat },
+            .local_transform = .{
+                .translation = .{ 0.0, 0.7, 1.8 },
+                .scale = .{ 0.7, 0.7, 0.7 },
+            },
+        });
+
+        // ── 5. Adjust camera ─────────────────────────────────────────────
+        if (world.findEntityByName("MainCamera")) |cam_ref| {
+            if (world.getEntity(cam_ref.id)) |cam| {
+                cam.local_transform.translation = .{ 0.0, 2.0, 5.5 };
+                cam.local_transform.rotation = engine.math.quat.fromEuler(.{ -0.18, 0.0, 0.0 });
+                world.markDirty(cam_ref.id);
+            }
+        }
+
+        // ── 6. Adjust Sun light ──────────────────────────────────────────
+        if (world.findEntityByName("Sun")) |sun_ref| {
+            if (world.getEntity(sun_ref.id)) |sun| {
+                sun.light = .{
                     .kind = .directional,
                     .color = .{ 1.0, 0.98, 0.95 },
-                    .intensity = 3.0,
-                },
-                .local_transform = .{
-                    .rotation = engine.math.quat.fromEuler(.{ -0.78, 0.78, 0.0 }),
-                },
-            });
+                    .intensity = 3.5,
+                };
+                sun.local_transform.rotation = engine.math.quat.fromEuler(.{ -0.78, 0.78, 0.0 });
+                world.markDirty(sun_ref.id);
+            }
         }
     }
 

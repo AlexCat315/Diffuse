@@ -61,5 +61,4 @@ void main() {
     v_world_position = world_position.xyz;
     v_world_normal = normalize((vertex_uniforms.u_model * vec4(local_normal, 0.0)).xyz);
     gl_Position = vertex_uniforms.u_view_projection * world_position;
-    gl_Position.y = -gl_Position.y;
 }

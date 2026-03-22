@@ -22,7 +22,7 @@ void main() {
     vec4 world_pos = uniforms.inv_vp * clip_pos;
     v_world_dir = normalize(world_pos.xyz);
 
-    gl_Position = vec4(pos.x, -pos.y, 1.0, 1.0);
+    gl_Position = vec4(pos.x, pos.y, 1.0, 1.0);
 }
 
 
