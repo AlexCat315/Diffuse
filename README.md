@@ -25,6 +25,23 @@ zig build run -- mcp --transport stdio
 zig build run -- validate --root assets
 zig build run -- --backend vulkan
 zig build compile-commands
+# 基线测试（标准光栅化）
+zig build render-test
+
+# RT 阴影测试
+zig build render-test -- --rt-shadows
+
+# 路径追踪测试
+zig build render-test -- --path-trace
+
+# 多特性组合
+zig build render-test -- --rt-shadows --fxaa --bloom
+
+# 更新 golden 基准图（第一次或确认改动正确后）
+zig build render-test -- --rt-shadows --update-golden
+
+# 导出渲染帧（PPM 格式，可查看）
+zig build render-test -- --rt-shadows --export-png
 ```
 
 ## 文档

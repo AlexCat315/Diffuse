@@ -231,6 +231,7 @@ pub fn main() !u8 {
         .benchmark => |options| try commands.runBenchmark(allocator, options.scene_path, options.update_golden),
         .@"generate-benchmark" => |options| try commands.runGenerateBenchmark(allocator, options.output_path),
         .@"compare-render" => |options| try commands.runCompareRender(allocator, options.scene_path, options.output_dir),
+        .@"render-test" => |options| try commands.runRenderTest(allocator, options),
     }
 
     return 0;

@@ -313,6 +313,16 @@ pub fn build(b: *std.Build) void {
     const validate_step = b.step("validate", "Validate project assets");
     validate_step.dependOn(&validate_cmd.step);
 
+    const render_test_cmd = b.addRunArtifact(exe);
+    render_test_cmd.step.dependOn(b.getInstallStep());
+    render_test_cmd.addArg("render-test");
+    if (b.args) |args| {
+        render_test_cmd.addArgs(args);
+    }
+
+    const render_test_step = b.step("render-test", "Run automated render tests with pixel analysis");
+    render_test_step.dependOn(&render_test_cmd.step);
+
     // 为 engine_mod 测试创建一个带日志配置的自定义根
     const test_mod = b.createModule(.{
         .root_source_file = b.path("src/test_main.zig"),

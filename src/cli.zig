@@ -35,6 +35,36 @@ pub const ValidateOptions = struct {
     }
 };
 
+pub const RenderTestOptions = struct {
+    scene_path: []const u8 = "assets/benchmarks/shadow_p0.json",
+    frames: usize = 10,
+    update_golden: bool = false,
+    rt_shadows: bool = false,
+    path_trace: bool = false,
+    fxaa: bool = false,
+    bloom: bool = false,
+    ssao: bool = false,
+    export_png: bool = false,
+    allocated_scene: bool = false,
+
+    pub fn deinit(self: *RenderTestOptions, allocator: std.mem.Allocator) void {
+        if (self.allocated_scene) allocator.free(self.scene_path);
+        self.* = undefined;
+    }
+
+    pub fn goldenSuffix(self: *const RenderTestOptions, allocator: std.mem.Allocator) ![]u8 {
+        var parts = std.ArrayList(u8).empty;
+        defer parts.deinit(allocator);
+        if (self.rt_shadows) try parts.appendSlice(allocator, "_rtshadow");
+        if (self.path_trace) try parts.appendSlice(allocator, "_pathtrace");
+        if (self.fxaa) try parts.appendSlice(allocator, "_fxaa");
+        if (self.bloom) try parts.appendSlice(allocator, "_bloom");
+        if (self.ssao) try parts.appendSlice(allocator, "_ssao");
+        if (parts.items.len == 0) try parts.appendSlice(allocator, "_baseline");
+        return parts.toOwnedSlice(allocator);
+    }
+};
+
 pub const Command = union(enum) {
     run: CliOptions,
     validate: ValidateOptions,
@@ -52,6 +82,7 @@ pub const Command = union(enum) {
         output_dir: []const u8,
         allocated: bool = false,
     },
+    @"render-test": RenderTestOptions,
 
     pub fn deinit(self: *Command, allocator: std.mem.Allocator) void {
         switch (self.*) {
@@ -63,6 +94,7 @@ pub const Command = union(enum) {
                 allocator.free(options.scene_path);
                 allocator.free(options.output_dir);
             },
+            .@"render-test" => |*options| options.deinit(allocator),
         }
     }
 };
@@ -150,6 +182,10 @@ pub fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
         } };
     }
 
+    if (std.mem.eql(u8, command_name.?, "render-test")) {
+        return .{ .@"render-test" = try parseRenderTestOptionsAlloc(allocator, &args) };
+    }
+
     var run_args = try std.ArrayList([]const u8).initCapacity(allocator, 0);
     defer run_args.deinit(allocator);
     try run_args.append(allocator, command_name.?);
@@ -230,6 +266,38 @@ fn parseValidateOptionsAlloc(allocator: std.mem.Allocator, args: []const []const
             continue;
         }
         return error.InvalidArguments;
+    }
+    return options;
+}
+
+fn parseRenderTestOptionsAlloc(allocator: std.mem.Allocator, args: anytype) !RenderTestOptions {
+    var options = RenderTestOptions{};
+    while (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "--scene")) {
+            const next = args.next() orelse return error.MissingArgument;
+            options.scene_path = try allocator.dupe(u8, next);
+            options.allocated_scene = true;
+        } else if (std.mem.eql(u8, arg, "--frames")) {
+            const next = args.next() orelse return error.MissingArgument;
+            options.frames = try std.fmt.parseUnsigned(usize, next, 10);
+        } else if (std.mem.eql(u8, arg, "--update-golden")) {
+            options.update_golden = true;
+        } else if (std.mem.eql(u8, arg, "--rt-shadows")) {
+            options.rt_shadows = true;
+        } else if (std.mem.eql(u8, arg, "--path-trace")) {
+            options.path_trace = true;
+        } else if (std.mem.eql(u8, arg, "--fxaa")) {
+            options.fxaa = true;
+        } else if (std.mem.eql(u8, arg, "--bloom")) {
+            options.bloom = true;
+        } else if (std.mem.eql(u8, arg, "--ssao")) {
+            options.ssao = true;
+        } else if (std.mem.eql(u8, arg, "--export-png")) {
+            options.export_png = true;
+        } else {
+            std.debug.print("Unknown render-test argument: {s}\n", .{arg});
+            return error.InvalidArgument;
+        }
     }
     return options;
 }
