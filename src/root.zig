@@ -236,6 +236,23 @@ pub const rhi = struct {
     pub const RuntimeInfo = @import("engine/rhi/types.zig").RuntimeInfo;
     /// 获取图形 API 名称
     pub const graphicsApiName = @import("engine/rhi/types.zig").graphicsApiName;
+
+    /// RHI v2 设备抽象（显式队列 + 软件命令缓冲）
+    pub const DeviceV2 = @import("engine/rhi/rhi.zig").Device;
+    /// RHI v2 能力查询
+    pub const CapabilitiesV2 = @import("engine/rhi/rhi.zig").Capabilities;
+    /// RHI v2 软件命令缓冲
+    pub const CommandBufferV2 = @import("engine/rhi/rhi.zig").CommandBuffer;
+    /// RHI v2 资源状态追踪
+    pub const StateTrackerV2 = @import("engine/rhi/rhi.zig").StateTracker;
+    /// RHI v2 队列类型
+    pub const QueueClassV2 = @import("engine/rhi/rhi.zig").QueueClass;
+    /// RHI v2 提交描述
+    pub const SubmitDescV2 = @import("engine/rhi/rhi.zig").SubmitDesc;
+    /// RHI v2 上传环分配器
+    pub const UploadRingV2 = @import("engine/rhi/upload_ring.zig").UploadRing;
+    /// Metal 原生后端骨架
+    pub const MetalBackendV2 = @import("engine/rhi/metal/metal_backend.zig").MetalBackend;
 };
 
 /// 渲染系统模块

@@ -105,5 +105,28 @@
       "vertex": "assets/shaders/contact_shadow.vert.glsl",
       "fragment": "assets/shaders/contact_shadow.frag.glsl"
     }
+  ],
+  "compute_programs": [
+    {
+      "name": "ssao_compute",
+      "compute": "assets/shaders/ssao_compute.comp.glsl",
+      "threadcount_x": 8,
+      "threadcount_y": 8,
+      "threadcount_z": 1
+    },
+    {
+      "name": "brdf_lut",
+      "compute": "assets/shaders/brdf_lut.comp.glsl",
+      "threadcount_x": 8,
+      "threadcount_y": 8,
+      "threadcount_z": 1
+    },
+    {
+      "name": "irradiance_convolve",
+      "compute": "assets/shaders/irradiance_convolve.comp.glsl",
+      "threadcount_x": 8,
+      "threadcount_y": 8,
+      "threadcount_z": 1
+    }
   ]
 }
