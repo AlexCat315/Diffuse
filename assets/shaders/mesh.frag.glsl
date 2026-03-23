@@ -29,11 +29,12 @@ layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     vec4 u_pbr_factors; // x: metallic, y: roughness, z: alpha_cutoff, w: output_alpha_multiplier
     uvec4 u_has_textures; // x: base_color, y: metallic_roughness, z: normal, w: occlusion
     vec4 u_camera_world_position;
-    vec4 u_light_direction;
-    vec4 u_light_color_intensity;
+    vec4 u_dir_light_directions[4]; // xyz = direction
+    vec4 u_dir_light_colors[4]; // rgb = color, w = intensity
     mat4 u_light_space_matrix;
-    vec4 u_point_light_position_radius;
-    vec4 u_point_light_color_intensity;
+    vec4 u_point_light_positions[16]; // xyz = position, w = range
+    vec4 u_point_light_colors[16]; // rgb = color, w = intensity
+    uvec4 u_light_counts; // x: dir_count, y: point_count
     vec4 u_ambient_color;
     vec4 u_shadow_params; // x: bias, yzw: preview_tint_color
     vec4 u_ibl_params; // x: use_ibl, y: ibl_intensity, z: preview_tint_strength, w: reserved
@@ -163,7 +164,7 @@ void main() {
 
         // Slope-scaled bias: steeper surfaces get more bias to avoid acne
         // Closer cascades use less bias since they have higher texel density
-        float NdotL_bias = max(dot(normalize(v_world_normal), normalize(-material_uniforms.u_light_direction.xyz)), 0.0);
+        float NdotL_bias = max(dot(normalize(v_world_normal), normalize(-material_uniforms.u_dir_light_directions[0].xyz)), 0.0);
         float cascade_bias_scale = 1.0 + float(cascade_idx) * 0.5; // far cascades get more bias
         bias = max(bias * (1.0 - NdotL_bias) * cascade_bias_scale, bias * 0.1);
 
@@ -225,13 +226,12 @@ void main() {
     // Reflectance equation
     vec3 Lo = vec3(0.0);
 
-    // Directional Light
-    {
-        vec3 L = normalize(-material_uniforms.u_light_direction.xyz);
+    // Directional Lights (up to 4)
+    int dir_count = int(material_uniforms.u_light_counts.x);
+    for (int i = 0; i < dir_count; ++i) {
+        vec3 L = normalize(-material_uniforms.u_dir_light_directions[i].xyz);
         vec3 H = normalize(V + L);
-        float distance = 1.0;
-        float attenuation = 1.0;
-        vec3 radiance = material_uniforms.u_light_color_intensity.rgb * material_uniforms.u_light_color_intensity.w;
+        vec3 radiance = material_uniforms.u_dir_light_colors[i].rgb * material_uniforms.u_dir_light_colors[i].w;
 
         // Cook-Torrance BRDF
         float NDF = DistributionGGX(N, H, roughness);
@@ -247,19 +247,22 @@ void main() {
         vec3 specular = numerator / denominator;
 
         float NdotL = max(dot(N, L), 0.0);
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL * shadow;
+        // CSM shadow only applies to the primary directional light (index 0)
+        float light_shadow = (i == 0) ? shadow : 1.0;
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL * light_shadow;
     }
 
-    // Point Light
-    {
-        vec3 L_vec = material_uniforms.u_point_light_position_radius.xyz - v_world_position;
+    // Point Lights (up to 16)
+    int point_count = int(material_uniforms.u_light_counts.y);
+    for (int i = 0; i < point_count; ++i) {
+        vec3 L_vec = material_uniforms.u_point_light_positions[i].xyz - v_world_position;
         float distance = length(L_vec);
         vec3 L = normalize(L_vec);
         vec3 H = normalize(V + L);
 
-        float attenuation = clamp(1.0 - distance / max(material_uniforms.u_point_light_position_radius.w, 0.001), 0.0, 1.0);
+        float attenuation = clamp(1.0 - distance / max(material_uniforms.u_point_light_positions[i].w, 0.001), 0.0, 1.0);
         attenuation *= attenuation;
-        vec3 radiance = material_uniforms.u_point_light_color_intensity.rgb * material_uniforms.u_point_light_color_intensity.w * attenuation;
+        vec3 radiance = material_uniforms.u_point_light_colors[i].rgb * material_uniforms.u_point_light_colors[i].w * attenuation;
 
         float NDF = DistributionGGX(N, H, roughness);
         float G = GeometrySmith(N, V, L, roughness);
