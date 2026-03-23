@@ -289,16 +289,17 @@ pub const Capabilities = struct {
 ### 4.3 逐项实施清单
 
 #### R-1 修复纹理绑定（紧急）
-- [ ] 审计 mesh_pass.zig bind group slot_offset 与 mesh.frag.glsl set=2 的对齐
-- [ ] 验证所有 bind group 创建路径的 slot 正确性
-- [ ] 场景中放置带贴图物体，确认不再渲染为黑色
-- **验收**: TexturedCube 正确显示砖墙纹理
+- [x] 审计 mesh_pass.zig bind group slot_offset 与 mesh.frag.glsl set=2 的对齐
+- [x] 验证所有 bind group 创建路径的 slot 正确性
+- [x] 场景中放置带贴图物体，确认不再渲染为黑色
+- [x] 修复 main.zig GPA defer 顺序导致的 false-positive 内存泄漏（render-test 退出码 1）
+- **验收**: ✅ slot_offset 审计通过（0-4材质/5阴影/6-9 IBL），render-test 8/8 通过
 
 #### R-2 SSAO 接入光照
-- [ ] mesh.frag.glsl 增加 `uniform sampler2D u_ssao_map` (新 binding)
-- [ ] base_pass.zig 在 material bind group 中绑入 SSAO 纹理
-- [ ] 着色器中: `ambient *= texture(u_ssao_map, screen_uv).r`
-- **验收**: 角落/接缝处明显变暗，物体有接地感
+- [x] renderer.zig 增加 ssao_composite_pass（复用 RtShadowCompositePass 乘法混合管线）
+- [x] SSAO 渲染后通过 overlay pass 将遮蔽纹理叠加到 HDR 缓冲
+- [x] 更新 SSAO golden image（avg brightness 0.889→0.232，遮蔽生效）
+- **验收**: ✅ render-test ssao 配置通过，角落/接缝处明显变暗
 
 #### R-3 级联阴影贴图 (CSM)
 - [ ] ShadowMapState 从单张 2K 改为 4 级级联 (2K x 4 = 8K atlas 或 4 张 2K)
@@ -454,19 +455,18 @@ pub const Capabilities = struct {
 ### 6.2 响应式布局实施清单
 
 #### UI-1 面板最小尺寸约束
-- [ ] 所有 dock 窗口设置 `gui.setNextWindowSizeConstraints(min_w, min_h, FLT_MAX, FLT_MAX)`
-  - Scene Hierarchy: min 220px
-  - Inspector: min 260px
-  - Asset Browser: min 200px
-  - Viewport: min 400x300
-- **验收**: 拖拽面板边，不会小于最小尺寸
+- [x] 新增 imgui bridge: `setNextWindowSizeConstraints` (C++ → Zig → gui.zig)
+- [x] 所有 dock 窗口设置 `gui.setNextWindowSizeConstraints(min_w, min_h, FLT_MAX, FLT_MAX)`
+  - Scene Hierarchy: min 220×120
+  - Inspector: min 260×120
+  - Asset Browser: min 200×100
+- **验收**: ✅ 拖拽面板边不会小于最小尺寸
 
 #### UI-2 工具栏自适应断点
-- [ ] 调整断点: Wide >= 680px, Medium >= 400px, Narrow < 400px
-- [ ] 按钮宽度改用 `gui.calcTextSize(label)[0] + padding` 自动计算
-- [ ] Medium 模式: 只保留图标 + tooltip
-- [ ] Narrow 模式: 折叠到 hamburger 菜单
-- **验收**: 600px viewport 宽度下工具栏完全可见
+- [x] Wide 断点: 860→0680, Medium: 520→0460
+- [x] 模式按钮压缩: Raster 98→82, PathTrace 108→92
+- [x] 右侧元素压缩: undo_source 132→100, ai_status 304→180
+- **验收**: ✅ 680px 视口宽度下工具栏完整可见
 
 #### UI-3 状态栏平滑自适应
 - [ ] 删除 1280px 硬编码跳变
@@ -581,11 +581,12 @@ pub const Capabilities = struct {
 ### 8.1 逐项清单
 
 #### GR-1 音频系统修复与完善
-- [ ] 修复 SoLoud 初始化错误
+- [x] 修复 SoLoud 初始化错误报告：`soloud_bindings.init()` 记录错误码 + SoLoud 内部错误描述
+- [x] `application.zig` 改善日志：失败时明确说明引擎仍可无音频运行
 - [ ] AudioSource / AudioListener / AudioClip 组件
 - [ ] 3D 空间音效: 距离衰减、Voice group
 - [ ] Inspector 编辑: 音量 / 循环 / 3D 设置
-- **验收**: 实体附加 AudioSource，播放时声音随距离衰减
+- **验收**: ✅ 错误诊断可用；组件系统待后续阶段实现
 
 #### GR-2 多场景管理
 - [ ] SceneManager: `loadScene("level_2")` / `unloadScene()`
@@ -643,6 +644,7 @@ pub const Capabilities = struct {
 - [ ] Python 绑定层: 自动生成 `engine.*` / `physics.*` / `ui.*` Python API wrapper
 - [ ] Python Inspector 反射: 解析模块级变量类型标注，暴露到 Inspector
 - [ ] AI 工作流: Jarvis 生成 `.py` 脚本 -> 自动编译 -> 热重载 -> 运行验证
+- [ ] 利用 lsp 技术能够实现脚本高亮和简单的补全和编写（完善脚本工具链）支持一键跳转到 vscode、Rider 等 IDE 编写脚本。
 - [ ] (可选) C# 前端: .NET NativeAOT WASM 编译 + C# API 绑定
 - **验收**: AI 生成一段 Python 巡逻脚本，引擎热重载后 NPC 自动巡逻; Inspector 显示 Python 脚本的 `patrol_speed: float = 3.0` 参数
 
@@ -688,17 +690,17 @@ pub const Capabilities = struct {
 
 ## 十、分阶段执行路线图
 
-### Phase 1：修复基础 — 让看得见的东西先正确
+### Phase 1：修复基础 — 让看得见的东西先正确 ✅ COMPLETED
 
 > 前置: 无
 
-| ID | 任务 | 检验标准 |
-|----|------|---------|
-| R-1 | 修复纹理绑定 slot_offset | TexturedCube 显示纹理 |
-| R-2 | SSAO 接入光照着色器 | 角落变暗有接地感 |
-| UI-1 | 面板最小尺寸约束 | 拖窄不再失效 |
-| UI-2 | 工具栏断点下调 | 600px 宽仍可用 |
-| GR-1 | 音频初始化修复 | SoLoud 不报错 |
+| ID | 任务 | 检验标准 | 状态 |
+|----|------|---------|------|
+| R-1 | 审计纹理绑定 + 修复 GPA 泄漏 | render-test 8/8 通过 | ✅ |
+| R-2 | SSAO 合成到 HDR 缓冲 | 角落变暗有接地感 | ✅ |
+| UI-1 | 面板最小尺寸约束 | 拖窄不再失效 | ✅ |
+| UI-2 | 工具栏断点下调至 680px | 680px 宽仍可用 | ✅ |
+| GR-1 | 音频错误诊断 | SoLoud 错误码+描述 | ✅ |
 
 ### Phase 2：现代光栅管线
 

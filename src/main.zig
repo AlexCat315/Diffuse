@@ -200,6 +200,16 @@ pub fn main() !u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
 
+    // GPA leak check must be the FIRST defer registered so it runs LAST (LIFO),
+    // after all other defers have freed their allocations.
+    defer {
+        const leaked = gpa.deinit();
+        if (leaked == .leak) {
+            std.debug.print("程序将以错误码 1 退出。\n", .{});
+            std.process.exit(1);
+        }
+    }
+
     try ensureProjectRootAsCwd(allocator);
 
     try editor_console.initLogFile();
@@ -210,14 +220,6 @@ pub fn main() !u8 {
 
     var command = try cli.parseCommandAlloc(allocator);
     defer command.deinit(allocator);
-
-    defer {
-        const leaked = gpa.deinit();
-        if (leaked == .leak) {
-            std.debug.print("程序将以错误码 1 退出。\n", .{});
-            std.process.exit(1);
-        }
-    }
 
     switch (command) {
         .run => |options| {
