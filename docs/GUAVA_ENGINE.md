@@ -152,67 +152,125 @@
 | **仅 2D 纹理** | 立方体贴图用 6 张 2D 模拟，浪费内存 |
 | **仅 Vertex + Fragment** | 无 Mesh Shader / Tessellation |
 | **隐式同步** | 每帧 GPU 同步边界，compute dispatch 不可能异步 |
+| **隐式 Pipeline Layout** | SDL3 自动推断 Descriptor Set 布局，引擎无法精确控制 GPU 资源绑定 |
+| **隐式 Image Layout Transition** | SDL3 隐藏纹理状态转换，引擎无法插入显式 barrier |
+
+> SDL3 将 Pipeline Layout 推断、Descriptor Set 分配、Image Layout Transition 全部藏在「驱动魔法」里。迁移到原生 API 意味着引擎必须**亲手管理**这三件事——这不是简单的 API 替换，而是一次架构升级。
 
 ### 3.2 新 RHI 架构
 
 ```
 GuavaRHI (src/engine/rhi/)
-├── rhi.zig              — 公共接口定义 (trait / vtable)
-├── types.zig            — 统一类型 (Buffer, Texture, Pipeline, ...)
+├── rhi.zig                — 公共接口定义 (trait / vtable)
+├── types.zig              — 统一类型 (Buffer, Texture, Pipeline, BindGroup, ...)
+├── command_buffer.zig     — 软件命令缓冲区 (ArrayList(u8) opcode stream)
+├── queue.zig              — 多队列抽象 (Graphics / Compute / Transfer)
 ├── metal/
-│   ├── metal_device.zig — MTLDevice 封装 (Zig 调用 ObjC)
-│   ├── metal_cmd.zig    — MTLCommandBuffer / Encoder
-│   ├── metal_rt.zig     — Metal Ray Tracing (已有基础)
-│   └── metal_shader.zig — MTLLibrary / MSL 编译
-├── vulkan/              — (Phase 2)
+│   ├── metal_device.zig   — MTLDevice 封装 (Zig 调用 ObjC)
+│   ├── metal_cmd.zig      — 软件 CommandBuffer → MTLCommandBuffer 翻译层
+│   ├── metal_rt.zig       — Metal Ray Tracing (已有基础)
+│   └── metal_shader.zig   — MTLLibrary / MSL 编译
+├── vulkan/                — (Phase 2)
 │   ├── vk_device.zig
-│   ├── vk_cmd.zig
-│   ├── vk_rt.zig        — VK_KHR_ray_tracing_pipeline
-│   └── vk_shader.zig    — SPIR-V
-└── dx12/                — (Phase 3，可选)
+│   ├── vk_cmd.zig         — 软件 CommandBuffer → VkCommandBuffer 翻译层
+│   ├── vk_rt.zig          — VK_KHR_ray_tracing_pipeline
+│   └── vk_shader.zig      — SPIR-V
+└── dx12/                  — (Phase 3，可选)
 ```
+
+**关键新增**：`command_buffer.zig` 和 `queue.zig`。前者使 CommandBuffer 变为轻量软件对象而非硬件句柄（详见 3.6），后者暴露显式多队列（详见 3.7）。
 
 ### 3.3 RHI 公共接口
 
 ```zig
 pub const RhiDevice = struct {
-    // === 资源创建 ===
+    // ============================================================
+    //  A — 资源创建
+    // ============================================================
     createBuffer:           *const fn(BufferDesc) Error!Buffer,
     createTexture:          *const fn(TextureDesc) Error!Texture,       // 支持 2D/3D/Cube/Array
     createSampler:          *const fn(SamplerDesc) Error!Sampler,
-    createGraphicsPipeline: *const fn(GraphicsPipelineDesc) Error!GraphicsPipeline,
-    createComputePipeline:  *const fn(ComputePipelineDesc) Error!ComputePipeline,  // 新增
     createShaderModule:     *const fn(ShaderModuleDesc) Error!ShaderModule,
 
-    // === 命令录制 ===
-    beginFrame:       *const fn() Error!CommandBuffer,
-    beginRenderPass:  *const fn(CommandBuffer, RenderPassDesc) Error!RenderPass,
-    beginComputePass: *const fn(CommandBuffer) Error!ComputePass,      // 新增
-    beginCopyPass:    *const fn(CommandBuffer) Error!CopyPass,
-    endRenderPass:    *const fn(RenderPass) void,
-    endComputePass:   *const fn(ComputePass) void,                     // 新增
-    endCopyPass:      *const fn(CopyPass) void,
-    submitFrame:      *const fn(CommandBuffer) Error!void,
+    // ============================================================
+    //  B — 管线 & 绑定模型
+    //    没有这些，GPU 不知道 slot 0 绑的是哪张纹理。
+    //    SDL3 在内部自动推断 Pipeline Layout / Descriptor Set，
+    //    原生 API 必须由引擎显式创建。
+    // ============================================================
+    createPipelineLayout:   *const fn(PipelineLayoutDesc) Error!PipelineLayout,
+    createGraphicsPipeline: *const fn(GraphicsPipelineDesc) Error!GraphicsPipeline,
+    createComputePipeline:  *const fn(ComputePipelineDesc) Error!ComputePipeline,
+    createBindGroup:        *const fn(BindGroupDesc) Error!BindGroup,
+    // RenderPass / ComputePass 录制时：
+    setBindGroup:           *const fn(CommandBuffer, u32, BindGroup) void,  // slot, group
 
-    // === 绘制 ===
-    drawIndexed:         *const fn(RenderPass, DrawIndexedArgs) void,
-    drawIndirect:        *const fn(RenderPass, Buffer, u32, u32) void,  // 新增
-    dispatch:            *const fn(ComputePass, u32, u32, u32) void,    // 新增
-    dispatchIndirect:    *const fn(ComputePass, Buffer, u32) void,      // 新增
+    // ============================================================
+    //  C — 命令录制
+    //    CommandBuffer 是软件 opcode 流（ArrayList(u8)），
+    //    不是硬件句柄。见 3.6 节。
+    // ============================================================
+    createCommandBuffer:  *const fn() Error!CommandBuffer,
+    beginRenderPass:      *const fn(CommandBuffer, RenderPassDesc) Error!RenderPassEncoder,
+    beginComputePass:     *const fn(CommandBuffer) Error!ComputePassEncoder,
+    beginCopyPass:        *const fn(CommandBuffer) Error!CopyPassEncoder,
+    endRenderPass:        *const fn(RenderPassEncoder) void,
+    endComputePass:       *const fn(ComputePassEncoder) void,
+    endCopyPass:          *const fn(CopyPassEncoder) void,
 
-    // === Ray Tracing (可选能力) ===
+    // ============================================================
+    //  D — 同步 & 屏障
+    //    SDL3 隐藏了所有 Image Layout Transition。
+    //    原生 API 中，如果 SSAO 写完 texture 后
+    //    直接被 base_pass 采样而不插 barrier → GPU 崩溃。
+    //    低层 RHI 提供此原语；Render Graph 负责自动生成。
+    // ============================================================
+    pipelineBarrier:     *const fn(CommandBuffer, BarrierDesc) void,
+
+    // ============================================================
+    //  E — Swapchain & 呈现
+    //    SDL3 的 submitFrame 在内部完成了
+    //    CAMetalLayer drawable 获取 + present。
+    //    原生 API 必须拆成三步。
+    // ============================================================
+    acquireSwapchainImage: *const fn() Error!SwapchainImage,
+    submitCommandBuffer:   *const fn(Queue, CommandBuffer, SubmitDesc) Error!void,
+    present:               *const fn(SwapchainImage) Error!void,
+
+    // ============================================================
+    //  F — 绘制 & Dispatch
+    // ============================================================
+    drawIndexed:         *const fn(RenderPassEncoder, DrawIndexedArgs) void,
+    drawIndirect:        *const fn(RenderPassEncoder, Buffer, u32, u32) void,
+    dispatch:            *const fn(ComputePassEncoder, u32, u32, u32) void,
+    dispatchIndirect:    *const fn(ComputePassEncoder, Buffer, u32) void,
+
+    // ============================================================
+    //  G — Ray Tracing（可选能力）
+    // ============================================================
     createAccelStructure:  *const fn(AccelStructureDesc) Error!AccelStructure,
     buildAccelStructure:   *const fn(CommandBuffer, AccelStructure) void,
-    traceRays:             *const fn(ComputePass, RtPipelineState, u32, u32) void,
+    traceRays:             *const fn(ComputePassEncoder, RtPipelineState, u32, u32) void,
 
-    // === 资源更新 ===
+    // ============================================================
+    //  H — 资源上传 / 回读
+    // ============================================================
     uploadBufferData:  *const fn(Buffer, []const u8) void,
     uploadTextureData: *const fn(Texture, []const u8, u32) void,
     readbackTexture:   *const fn(Texture) Error![]u8,
 
-    // === 能力查询 ===
+    // ============================================================
+    //  I — 队列获取（见 3.7 多队列）
+    // ============================================================
+    getQueue: *const fn(QueueClass) Error!Queue,
+
+    // ============================================================
+    //  J — 能力查询
+    // ============================================================
     capabilities: Capabilities,
 };
+
+pub const QueueClass = enum { graphics, compute, transfer };
 
 pub const Capabilities = struct {
     compute: bool,
@@ -221,24 +279,186 @@ pub const Capabilities = struct {
     mesh_shaders: bool,
     texture_3d: bool,
     texture_cube_native: bool,
+    max_queues: [3]u8,   // [graphics, compute, transfer] 各有几条硬件队列
 };
 ```
 
-### 3.4 迁移策略
+**与旧版差异总结：**
 
-**关键原则：18 个渲染 Pass 零修改**。新 RHI 保持与现有 `device.zig` 完全相同的调用接口，仅底层实现从 SDL3 切换到 Metal/Vulkan 原生 API。
+| 旧 3.3 | 新 3.3 | 原因 |
+|---------|--------|------|
+| 无绑定模型 | `createPipelineLayout` / `createBindGroup` / `setBindGroup` | GPU 需要知道 slot→资源映射 |
+| `submitFrame` 包办一切 | `acquireSwapchainImage` → `submitCommandBuffer` → `present` 三步 | 必须拆开才能控制 Metal drawable / Vulkan swapchain |
+| 无 barrier | `pipelineBarrier(CommandBuffer, BarrierDesc)` | 纹理状态转换是 Vulkan/Metal 生存线 |
+| 无队列概念 | `getQueue(.graphics / .compute / .transfer)` | 多队列并行是性能基础 |
+| `beginFrame` 返回 CommandBuffer | `createCommandBuffer` 独立于帧 | 软件 cmd buf 可在任意线程录制 |
 
-| 阶段 | 内容 | 依赖 |
-|------|------|------|
-| **RHI-1** | Metal Graphics Backend | 无 — 替换 SDL3 GPU 调用为 MTLDevice |
-| **RHI-2** | Metal Compute Backend | RHI-1 — MTLComputeCommandEncoder |
-| **RHI-3** | Metal RT 统一 | RHI-2 — 将 metal_rt_bridge.mm 收归 RHI |
-| **RHI-4** | Vulkan Graphics Backend | RHI-1 完成后并行 |
-| **RHI-5** | Vulkan Compute + RT | RHI-4 — VK_KHR_ray_tracing |
+### 3.4 软件命令缓冲区（Software Command Buffer）
+
+**核心设计**：`CommandBuffer` 不是硬件句柄（`VkCommandBuffer` / `MTLCommandBuffer`），而是一个 `ArrayList(u8)` opcode 流。
+
+```zig
+// command_buffer.zig — 平台无关
+pub const CommandBuffer = struct {
+    opcodes: std.ArrayList(u8),   // 编码后的指令流
+    arena: std.mem.Allocator,     // 帧级 arena，帧末批量释放
+
+    pub fn encodeBeginRenderPass(self: *CommandBuffer, desc: RenderPassDesc) void { ... }
+    pub fn encodeSetBindGroup(self: *CommandBuffer, slot: u32, group: BindGroup) void { ... }
+    pub fn encodeDrawIndexed(self: *CommandBuffer, args: DrawIndexedArgs) void { ... }
+    pub fn encodePipelineBarrier(self: *CommandBuffer, desc: BarrierDesc) void { ... }
+    pub fn encodeDispatch(self: *CommandBuffer, x: u32, y: u32, z: u32) void { ... }
+    // ... 更多 encode 方法
+};
+```
+
+**提交时（平台后端）**才翻译为硬件调用：
+
+```zig
+// metal/metal_cmd.zig
+pub fn translateAndSubmit(queue: MTLCommandQueue, soft_buf: *const CommandBuffer) void {
+    const hw_buf = queue.commandBuffer();
+    var decoder = OpcodeDecoder.init(soft_buf.opcodes.items);
+    while (decoder.next()) |op| {
+        switch (op) {
+            .begin_render_pass => |desc| { ... },  // MTLRenderCommandEncoder
+            .set_bind_group    => |b|    { ... },  // setFragmentTexture / setVertexBuffer
+            .draw_indexed      => |args| { ... },  // drawIndexedPrimitives
+            .pipeline_barrier  => |b|    { ... },  // MTLFence / memoryBarrier
+            .dispatch          => |d|    { ... },  // MTLComputeCommandEncoder.dispatch
+            // ...
+        }
+    }
+    hw_buf.commit();
+}
+```
+
+**为什么这很重要？**
+
+1. **并行录制** — `job_system.zig` 的 worker 线程各自录制独立的软件 CommandBuffer，无锁。录制完毕后，主线程按顺序将它们提交给后端翻译线程。
+2. **跨平台统一** — 上层只看到 `CommandBuffer`（一段 bytes），不区分 Metal / Vulkan / DX12。
+3. **可调试** — opcode stream 是纯数据，可以序列化、回放、diff，做 render replay 天然简单。
+
+### 3.5 迁移策略 — Render Graph 驱动的架构升级
+
+> ⚠️ "18 个渲染 Pass 零修改"是危险的幻想。SDL3 在幕后做了 Pipeline Layout 推断、Descriptor Set 分配、Image Layout Transition 三件大事。切到原生 API 时，这三件事全部暴露出来——18 个 Pass **全部需要适配**。
+>
+> 正确姿势：**把迁移视为一次 Render Graph 全面升级**，而非 API 表面替换。
+
+#### 3.5.1 Render Graph 已有基础
+
+当前 `render_graph.zig` 已实现：
+
+| 能力 | 状态 |
+|------|------|
+| `QueueClass`（graphics / compute / copy） | ✅ 已有 |
+| `ResourceAccess`（read / write / read_write） | ✅ 已有 |
+| `DependencyEdge` + `cross_queue` 标记 | ✅ 已有 |
+| `ResourceLifetime`（first_use_pass / last_use_pass） | ✅ 已有 |
+| `compile()` 拓扑排序 + 依赖计算 | ✅ 已有 |
+| DOT / JSON 图导出 | ✅ 已有 |
+| **自动 barrier 插入** | ❌ 缺失 — 编译出依赖边但未翻译为 `pipelineBarrier` |
+| **transient 资源别名分配** | ❌ 缺失 — lifetime 已计算但未用于内存复用 |
+
+#### 3.5.2 升级路线
+
+| 阶段 | 内容 | 核心工作 |
+|------|------|---------|
+| **RHI-0** | Render Graph barrier 生成 | `compile()` 输出的 `DependencyEdge` → 自动生成 `BarrierDesc`，插入 soft CommandBuffer |
+| **RHI-1** | Metal Graphics Backend + 绑定模型 | `MTLDevice` 封装；每个 Pass 声明 `BindGroupDesc`（替代 SDL3 隐式推断）；`PipelineLayout` 静态定义 |
+| **RHI-2** | Metal Compute Backend | `MTLComputeCommandEncoder`；IBL/SSAO 迁移到 Compute Queue |
+| **RHI-3** | Metal RT 统一 | 将 `metal_rt_bridge.mm` 收归 RHI，复用 soft CommandBuffer |
+| **RHI-4** | Vulkan Graphics Backend | 与 RHI-1 并行；`VkPipelineLayout` / `VkDescriptorSet` 映射 `BindGroup` |
+| **RHI-5** | Vulkan Compute + RT | `VK_KHR_ray_tracing_pipeline` |
+
+**每个 Pass 的适配清单**（以 `base_pass` 为例）：
+
+```
+1. 声明 PipelineLayoutDesc:
+   - set 0: 全局 UBO (camera, lights)
+   - set 1: 材质 BindGroup (albedo, normal, metallic_roughness)
+   - set 2: per-object UBO (model matrix)
+
+2. 在 Render Graph 声明 inputs / outputs:
+   - inputs:  [shadow_map: read, depth: read]
+   - outputs: [scene_color: write]
+
+3. Render Graph compile() 自动插入 barrier:
+   - shadow_map: write→read transition (在 shadow_pass 之后)
+   - depth: write→read transition (在 depth_prepass 之后)
+```
 
 **SDL3 保留范围**：窗口创建、输入事件、音频设备、文件对话框。**不再用于任何图形调用。**
 
-### 3.5 着色器编译策略
+### 3.6 显式多队列（Explicit Multi-Queue）
+
+```zig
+// queue.zig
+pub const Queue = struct {
+    class: QueueClass,
+    handle: *anyopaque,  // MTLCommandQueue* / VkQueue
+
+    pub fn submit(self: Queue, cmd: CommandBuffer, desc: SubmitDesc) Error!void { ... }
+};
+
+pub const SubmitDesc = struct {
+    wait_semaphores:   []const Semaphore = &.{},  // 提交前等待
+    signal_semaphores: []const Semaphore = &.{},  // 提交后通知
+};
+```
+
+典型帧流水线：
+
+```
+Graphics Queue ──┬── shadow_pass ── depth_prepass ── base_pass ── post_process ── present
+                 │
+Compute Queue  ──┴── IBL_prefilter ──── SSAO_compute ───▶ signal semaphore
+                                                              │
+                 (Graphics Queue base_pass wait ◀─────────────┘)
+                 │
+Transfer Queue ── texture_upload (streaming) ── signal fence for next frame
+```
+
+**实际调度**：`render_graph.zig` 的 `compile()` 输出带 `queue: QueueClass` 的 `CompiledPass`。运行时按 queue 分组，每组生成独立 soft CommandBuffer，提交到对应硬件队列，跨队列依赖用 `Semaphore` 同步。
+
+**收益**：Path Tracer / IBL 预计算在 Compute Queue 运行时，Graphics Queue 保持 60fps 不卡顿。纹理流式加载在 Transfer Queue 异步进行。
+
+### 3.7 Render Graph 驱动的自动 Barrier
+
+没有 Render Graph 的辅佐，原生的 Vulkan/Metal RHI 在大型项目中根本无法存活——手动管理 18+ Pass 之间的资源状态转换是不现实的。
+
+**自动化流程**：
+
+```
+Pass 声明 (inputs / outputs)
+        │
+        ▼
+compile() 拓扑排序 + 依赖边计算
+        │
+        ▼
+DependencyEdge[] — 每条边包含:
+  from_pass, to_pass, resource, previous_access, next_access, cross_queue
+        │
+        ▼
+Barrier 翻译器（新增）:
+  对每条 DependencyEdge 生成 BarrierDesc:
+    - read→write:  { src_stage: fragment, dst_stage: color_output, transition: shader_read → color_attachment }
+    - write→read:  { src_stage: color_output, dst_stage: fragment, transition: color_attachment → shader_read }
+    - cross_queue:  额外插入 queue_ownership_transfer + semaphore
+        │
+        ▼
+编码到 soft CommandBuffer (encodePipelineBarrier)
+        │
+        ▼
+后端翻译:
+  Metal  → MTLFence + memoryBarrier scope
+  Vulkan → vkCmdPipelineBarrier2
+  DX12   → ResourceBarrier
+```
+
+**Pass 作者不需要知道 barrier 存在** — 他们只声明 "我读 shadow_map，我写 scene_color"，Render Graph 处理一切。
+
+### 3.8 着色器编译策略
 
 | 平台 | 着色器源 | 编译路径 |
 |------|---------|---------|
