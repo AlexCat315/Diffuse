@@ -1,640 +1,835 @@
-# Guava Engine 开发规划
+# Guava Engine — 功能推进文档
 
-> **基线日期**: 2026-03-21 | **引擎语言**: Zig | **目标**: AI-Native 实时 + 离线双轨渲染引擎
-
----
-
-## 一、项目愿景
-
-Guava Engine 是基于 Zig 构建的现代游戏引擎，终极目标是成为业界首个 **AI 与人类同为一等公民** 的 3D 创作平台：
-
-> **一个用户和 AI 都是一等公民的游戏/影视引擎，兼具实时光栅化和离线路径追踪，追求极致的物理真实渲染。**
-
-### 1.1 核心架构原则
-
-1. **场景感知** — AI 通过 MCP 协议直接读懂 3D 世界、实体关系和空间属性。
-2. **安全修改闭环** — AI 的修改进入 Staged Transaction 预览沙盒，由人类审查后再应用。
-3. **即时反馈** — WASM 虚拟机实现毫秒级代码热重载与结构化错误自愈。
-4. **双轨渲染** — 实时光栅化用于创作迭代，离线路径追踪用于影视级出图，共享同一场景数据。
-5. **视觉反馈回路** — 引擎频繁回传视口截图给 AI Vision Model，AI 可判断操作结果是否符合审美预期。
-
-### 1.2 Jarvis（AI 助手）的定位
-
-Jarvis **不是取代人类的自动机**，而是一个「拥有无限带宽的高级技术美术 + 引擎客户端」：
-
-- 它能**读取所有 JSON 文本**，知道世界由哪些节点构成
-- 它通过 **MCP 接口**直接向引擎发送「创建对象」「修改参数」「编译 Shader」指令
-- 它能**看见**——引擎将视口截图回传给 Vision Model，让 AI 通过视觉判断操作是否正确
-- 它能**主动提问**——当意图模糊时，AI 返回 `intent_preview` 请求确认，而非盲目执行
-
-### 1.3 人类独立生产力保障
-
-即使完全不使用 AI，这套架构对纯人类开发者同样是生产力提升：
-- 编辑器布局遵循 20 年 3D 软件工业标准（Outliner / Viewport / Inspector），无学习成本
-- Command System 带来可视化撤销时间线，优于传统的黑盒 Undo 栈
-- 异步 UI 渲染解耦——场景卡顿时面板仍满帧响应
-- 数据驱动的 Inspector 与 JSON 双向绑定，杜绝面板与场景不同步的幽灵 Bug
-
-当前 AI 基础设施已基本建成，核心任务是**补齐让 AI 能完整管理「概念→资产→逻辑→出图」四阶段工作流的基础设施**。
+> **引擎语言**: Zig 0.15 | **平台**: macOS (Metal) → Windows (Vulkan/DX12) → Linux (Vulkan)
+> **定位**: AI-Native 实时游戏引擎 + 离线物理渲染器（对标 Unity 编辑体验 + Blender Cycles 渲染品质）
+> **上次更新**: 2025-07-13
 
 ---
 
-## 二、当前状态（已落地能力）
+## 目录
 
-### 2.1 AI-Native 基础设施 ✅
-| 能力 | 说明 |
-|------|------|
-| MCP 协议基座 | `stdio` 传输，稳定运行 |
-| 只读场景感知 | `scene://hierarchy`、`entity://{id}`、`selection://current` |
-| 编辑器上下文 | `editor://context`、`editor://intent-log` |
-| Schema 资源族 | `schema://components`、`schema://scene-json-v6`、`schema://prefab`、`schema://material`、`schema://tools` |
-| 统一写入口 | `CommandQueue` 覆盖实体 CRUD、变换、父子层级、显隐 |
-| Staged Transaction | `stage/apply/discard` + 同视口 HDR 第二世界着色预览（Ghost Pass） |
-| 查询 API | `query_entities` 支持分页、多条件过滤、半径/AABB 空间过滤、BVH 候选加速 |
-| WASM 脚本闭环 | WAMR 接入、Zig→WASM 编译、Guest panic 结构化回传（含 source_location） |
-| Inspector 反射 | 编译期 comptime 数据驱动 + WASM 公共变量动态灰盒调参 |
+- [一、项目架构总览](#一项目架构总览)
+- [二、已落地能力基线](#二已落地能力基线)
+- [三、RHI 层重构 — 脱离 SDL3 图形 API](#三rhi-层重构--脱离-sdl3-图形-api)
+- [四、光栅渲染管线 — 追平现代引擎基线](#四光栅渲染管线--追平现代引擎基线)
+- [五、路径追踪渲染器 — 从 Demo 到生产品质](#五路径追踪渲染器--从-demo-到生产品质)
+- [六、编辑器 UX — 响应式布局与创作工作流](#六编辑器-ux--响应式布局与创作工作流)
+- [七、3D 创作工具链 — 对标 Blender 基础能力](#七3d-创作工具链--对标-blender-基础能力)
+- [八、游戏运行时系统](#八游戏运行时系统)
+- [九、AI-Native 基础设施](#九ai-native-基础设施)
+- [十、分阶段执行路线图](#十分阶段执行路线图)
+- [十一、开发纪律](#十一开发纪律)
+- [十二、术语表](#十二术语表)
 
-### 2.2 渲染系统 ✅ (95%)
-| 功能 | 状态 |
-|------|------|
-| RenderGraph 架构 | ✅ |
-| PBR + IBL 环境光 | ✅ |
-| 级联阴影 + 点光 Cube Shadow | ✅ |
-| Depth Prepass / Skybox | ✅ |
-| Bloom / Tonemap / FXAA | ✅ |
-| SSAO | ✅ 已接入 drawFrame，r8_unorm 输出 |
-| SSR / DOF | ✅ 管线存在，未接入 |
-| TAA | ✅ 管线已修复，未接入 drawFrame（需 Jitter） |
-| Gizmo / Outline / ID Pass | ✅ |
-| 体积雾 | ✅ |
+---
 
-### 2.3 物理系统 ✅ (80%)
-| 功能 | 状态 |
-|------|------|
-| Jolt Physics 集成 | ✅ |
-| Rigidbody (static/dynamic/kinematic) | ✅ |
-| Box/Sphere/Mesh Collider | ✅ |
-| 固定步长更新 | ✅ |
-| Trigger 事件 (enter/stay/exit) | ✅ |
-| Constraints (Point/Hinge/Slider/Distance) | ✅ |
-| Debug Draw 可视化 | ✅ |
-| Physics BVH 空间查询 | ✅ |
+## 一、项目架构总览
 
-### 2.4 动画系统 ✅ (60%)
-| 功能 | 状态 |
-|------|------|
-| 骨骼动画导入 / GPU Skinning | ✅ |
-| Animation Graph + 状态机 | ✅ |
-| Cross-fade 混合 | ✅ |
-| BlendTree 基础实现 | ✅ |
+### 1.1 系统分层
 
-### 2.5 脚本系统 ✅
-| 功能 | 状态 |
-|------|------|
-| ScriptVM 多语言抽象 | ✅ |
-| ZigVM 内置脚本 | ✅ |
-| WasmVM (WAMR) | ✅ |
-| 生命周期回调 (OnInit/OnUpdate/OnDestroy) | ✅ |
-| 热重载 | ✅ |
-| 参数反射 Inspector | ✅ |
+```
+┌─────────────────────────────────────────────────────────────────┐
+│                        Editor Shell                             │
+│  Scene Hierarchy │ 3D Viewport │ Inspector │ AI Terminal        │
+│  Asset Browser   │ Timeline    │ Node Editor │ Render Settings  │
+├────────────────────────────┬────────────────────────────────────┤
+│       Game Runtime         │         Creation Tools            │
+│  SceneManager / GameState  │  Material Editor / Anim Graph     │
+│  ScriptVM (WASM/Zig)       │  UV Editor / Node Shader Editor   │
+│  Physics (Jolt)            │  Camera Sequencer                 │
+│  Audio (SoLoud)            │  Post-Process Stack               │
+│  Navigation (Recast)       │  Render Test / Golden Compare     │
+├────────────────────────────┴────────────────────────────────────┤
+│                     Rendering Engine                            │
+│  ┌──────────────────────┐  ┌──────────────────────────────┐    │
+│  │  Raster Pipeline     │  │  Path Tracer (Offline)       │    │
+│  │  PBR + CSM + SSGI    │  │  GGX + MIS + NEE + OIDN     │    │
+│  │  Bloom/TAA/FXAA/DOF  │  │  HDR Env + Principled BSDF  │    │
+│  └──────────┬───────────┘  └──────────────┬───────────────┘    │
+│             │      Shared Scene Data       │                    │
+│  ┌──────────┴──────────────────────────────┴───────────────┐   │
+│  │              RHI — 渲染硬件接口层 (自研)                 │   │
+│  │   Metal Backend │ Vulkan Backend │ DX12 Backend         │   │
+│  │   + Compute     │ + Ray Tracing  │ + Indirect Draw      │   │
+│  └─────────────────────────────────────────────────────────┘   │
+├─────────────────────────────────────────────────────────────────┤
+│  Platform │ Window (SDL3) │ Input (SDL3) │ File I/O │ Thread   │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-### 2.6 资产 & 场景 ✅
-| 功能 | 状态 |
-|------|------|
-| AssetRegistry + 异步加载 | ✅ |
-| glTF / 纹理 / 材质 / 环境贴图导入 | ✅ |
-| 场景序列化 JSON v6 | ✅ |
-| Prefab 序列化 (含 Script) | ✅ |
-| ECS + 层级变换 + BVH 空间索引 | ✅ |
+### 1.2 核心设计原则
 
-### 2.7 编辑器 ✅
-| 功能 | 状态 |
+1. **RHI 自研** — 图形通信用自己的抽象层直通 Metal/Vulkan/DX12，SDL3 只保留窗口/输入/音频
+2. **双轨渲染** — 实时光栅用于创作迭代，离线路径追踪用于影视级出图，共享同一场景数据
+3. **AI 一等公民** — AI 通过 MCP 协议直接读写场景，所有操作进 Command 管道
+4. **数据驱动** — 场景 JSON v6 序列化，Inspector 双向绑定，编译期反射
+5. **渐进式品质** — 每个渲染特性可独立开关，degradation graceful
+
+### 1.3 目标参照
+
+| 参照系 | 对标能力 | 不做的事 |
+|--------|---------|---------|
+| **Unity** | 编辑器布局、组件工作流、Play/Pause/Stop、Asset Pipeline | C# 脚本生态、Asset Store |
+| **Blender** | 路径追踪品质（Cycles）、材质节点、相机动画、渲染输出 (4K 图片+视频) | 雕刻、绘制、流体模拟、视频编辑器 |
+| **UE5** | 级联阴影、Lumen-级 GI 品质、多光源 | Nanite、World Partition、蓝图 |
+
+---
+
+## 二、已落地能力基线
+
+### 2.1 渲染系统
+
+| 能力 | 状态 | 说明 |
+|------|------|------|
+| RHI 层 | ✅ SDL3 GPU | 仅光栅图形管线，无 Compute/RT |
+| RenderGraph | ✅ | 通道依赖管理 |
+| PBR + Cook-Torrance BRDF | ✅ | mesh.frag.glsl |
+| IBL 环境光 (辐照度图 + BRDF LUT) | ✅ | CPU 预计算 |
+| 阴影 | ⚠️ 单 2K shadow map | 非级联，40x40 正交 |
+| Depth Prepass / Skybox | ✅ | |
+| Bloom / Tonemap / FXAA | ✅ | |
+| SSAO | ⚠️ 32 样本已计算 | **未接入光照着色器** |
+| SSR | ⚠️ 二进制搜索 | 无粗糙度模糊 |
+| DOF | ✅ CoC + 模糊 + 合成 | |
+| TAA | ⚠️ 管线已修复 | 未接入 drawFrame（需 jitter 注入） |
+| 体积雾 | ✅ | |
+| 光源 | ⚠️ max 1 方向光 + 1 点光 | LightBlock 数组已有但未启用 |
+| GPU RT (Metal) | ✅ 影子 + 路径追踪 | 仅 macOS，已绕过 SDL3 |
+| CPU Path Tracer | ✅ | 均匀采样，无 MIS/NEE/降噪 |
+| Gizmo / Outline / ID Pass | ✅ | |
+| 自动化渲染测试 | ✅ | 8 配置套件，Golden 对比 |
+
+### 2.2 编辑器
+
+| 能力 | 状态 |
 |------|------|
-| Dock 布局 / Scene Hierarchy / Inspector | ✅ |
-| Gizmo 变换工具 (平移/旋转/缩放) | ✅ |
-| Material Editor / Animation Editor | ✅ |
+| ImGui Docking 布局 | ✅ |
+| Scene Hierarchy + Inspector | ✅ |
+| Gizmo 变换工具 | ✅ |
+| Material / Animation Editor | ✅ |
+| Render Settings Panel | ✅ |
+| Post-Process Editor | ✅ |
 | Undo/Redo | ✅ |
 | 多语言 i18n | ✅ |
-| 多视口 / 相机书签 | ✅ |
-| Editor Utility UI (WASM ImGui 35 API) | ✅ |
+| 响应式布局 | ⚠️ 3 级断点，但阈值偏高，面板无最小约束 |
+
+### 2.3 运行时系统
+
+| 能力 | 状态 |
+|------|------|
+| Jolt Physics | ✅ 刚体/碰撞器/触发器/约束/Debug Draw |
+| ScriptVM (WASM + Zig) | ✅ 热重载 + Inspector 参数反射，待扩展 Python/C# 前端 |
+| 骨骼动画 + Animation Graph | ✅ 60% |
+| Audio (SoLoud) | ⚠️ 集成但初始化有问题 |
+| AssetRegistry + glTF 导入 | ✅ |
+| 场景序列化 JSON v6 | ✅ |
+| Prefab + ECS + BVH 空间索引 | ✅ |
+
+### 2.4 AI-Native 基础设施
+
+| 能力 | 状态 |
+|------|------|
+| MCP 协议 (stdio) | ✅ |
+| 只读场景感知 | ✅ scene/entity/selection/editor context |
+| CommandQueue 统一写入 | ✅ CRUD + 变换 + 层级 + 显隐 |
+| Staged Transaction + Ghost Preview | ✅ |
+| Query API (语义/空间/BVH) | ✅ |
+| Schema 资源族 | ✅ |
 
 ---
 
-## 三、创作者工作流愿景（四阶段）
+## 三、RHI 层重构 — 脱离 SDL3 图形 API
 
-以下是创作者在引擎中最核心的四个工作流阶段，以及 Jarvis 在其中扮演的角色。
+### 3.1 为什么必须重构
 
-### 阶段 A：概念构建与场景 Blockout（灰模白盒）
+当前 RHI 层封装 SDL3 GPU API，存在根本性限制：
 
-**痛点**：脑中有画面，但手动搭建立方体、摆放光源、调整坐标非常消磨灵感。
+| 限制 | 影响 |
+|------|------|
+| **无 Compute Shader** | IBL 预计算困在 CPU，SSAO/SSGI/GPU 剔除无法实现 |
+| **无 Ray Tracing API** | Metal RT 被迫绕过 SDL3 独立实现，Vulkan/DX12 RT 无法接入 |
+| **无 Indirect Draw** | GPU 驱动渲染不可能，大场景 draw call 无法压缩 |
+| **仅 2D 纹理** | 立方体贴图用 6 张 2D 模拟，浪费内存 |
+| **仅 Vertex + Fragment** | 无 Mesh Shader / Tessellation |
+| **隐式同步** | 每帧 GPU 同步边界，compute dispatch 不可能异步 |
 
-**Jarvis 流程**：
-1. 人类输入：「搭建一个赛博朋克小巷白盒场景。长 50 米，两边高楼，地面有积水坑。冷蓝月光，深处放红色霓虹灯。」
-2. AI 通过 Command API 实例化基础 Mesh（立方体/平面），计算空间坐标，注入 Light 组件
-3. 引擎实时热重载，视口瞬间出现灰模场景
-4. 人类反馈：「路太宽，收窄一半。霓虹灯亮度翻倍。」→ AI 修改 → 引擎即时更新
-
-**关键价值**：AI 替代了数值试探和坐标计算，创作者像导演一样用自然语言调度场景。
-
-### 阶段 B：资产填充与材质魔法（PBR/Shader）
-
-**痛点**：灰模变真实场景需要找模型、调 PBR 参数、手写 GLSL 特效。
-
-**Jarvis 流程**：
-1. 人类选中地面平面：「加上湿润沥青材质，粗糙度调低，反射霓虹灯。」
-2. AI 获取选中 Entity ID，修改 Material 参数（roughness=0.1, metallic=0.2）
-3. 人类：「我想要雨水涟漪效果，但不会写 Shader。」
-4. AI 编写 `water_ripple.frag.glsl`，编译并挂载到材质上，引擎实时应用
-
-**关键价值**：AI 突破技术壁垒。只要有审美和方向，AI 用 Shader/参数将其物理化。
-
-### 阶段 C：逻辑与交互（脚本与系统）
-
-**痛点**：场景好看但是死的，需要角色控制器、寻路、状态机，容易出错。
-
-**Jarvis 流程**：
-1. 人类：「让角色在小巷里巡逻，在垃圾桶之间绕开障碍物。」
-2. AI 生成 NavMesh 烘焙指令，编写 Zig/WASM 巡逻脚本并挂载到 Entity
-3. 运行时角色卡住 → 人类：「修复碰撞逻辑。」
-4. AI 读取 Debug Log，发现碰撞体 Radius 过大，修改参数并重启场景
-
-**关键价值**：AI 充当不知疲倦的 Gameplay 程序员。
-
-### 阶段 D：极致渲染与出片（双轨引擎真正威力）
-
-**痛点**：实时很流畅，但导出影视级短片时光栅化反射太假、阴影不够柔和。
-
-**Jarvis 流程**：
-1. 人类：「场景确认，切换离线路径追踪，渲染 10 秒镜头，从巷口推进到霓虹灯下。全局光照。」
-2. AI 切换 `render_settings.mode = path_trace`
-3. AI 生成 Camera Animation 关键帧轨迹
-4. 触发 Progressive Path Tracer，逐帧累积光线追踪采样
-5. 输出 HDR EXR 序列
-
-**关键价值**：实时模式极速搭建试错，离线模式 AI 管理繁重的光追出图任务。
-
----
-
-## 四、AI 协同编辑器 UI 设计
-
-### 4.1 布局总览
+### 3.2 新 RHI 架构
 
 ```
-┌─────────────────────────────────────────────────────────────────────────────┐
-│ 📁 File  ⚙️ Edit  🏠 View  | 🔄 Raster ⇌ 🔮 PathTrace | ⏪ Undo (AI: Move) ⏩ │
-├────────────┬───────────────────────────────────────────┬────────────────────┤
-│            │ [AI State: 🧠 "正在烘焙寻路网格..."]     │                    │
-│ 🌳 OUTLINER│                                           │ 🎛️ INSPECTOR      │
-│ ────────── │                                           │ ──────────         │
-│ ▽ Scene    │                                           │ 📦 entity: "Hero"  │
-│  ├─ Camera │                                           │                    │
-│  ├─ Light  │           [ 3D VIEWPORT ]                 │ Transform / Mat    │
-│  ├─ Hero   │          高帧率 3D 渲染画面               │ (数据驱动滑块)     │
-│  └─ Ground │          🧑 选中: 黄色高亮                │                    │
-│            │          🤖 AI 操作: 紫色高亮             │                    │
-├────────────┤                                           ├────────────────────┤
-│ 📁 ASSETS  │                                           │ 💬 JARVIS TERMINAL │
-│ ────────── │                                           │ ──────────         │
-│ 🗂️ Models  │                                           │ JSON Diff 预览     │
-│ 🗂️ Textures│                                           │ [✓ Apply] [✗]      │
-│ 🗂️ Shaders │                                           │ 渐进式授权控制     │
-├────────────┴───────────────────────────────────────────┴────────────────────┤
-│ ⏱️ COMMAND TIMELINE  [🧑 Create Cube]─[🤖 Set Material]─[🧑 Change Light]  │
-└─────────────────────────────────────────────────────────────────────────────┘
+GuavaRHI (src/engine/rhi/)
+├── rhi.zig              — 公共接口定义 (trait / vtable)
+├── types.zig            — 统一类型 (Buffer, Texture, Pipeline, ...)
+├── metal/
+│   ├── metal_device.zig — MTLDevice 封装 (Zig 调用 ObjC)
+│   ├── metal_cmd.zig    — MTLCommandBuffer / Encoder
+│   ├── metal_rt.zig     — Metal Ray Tracing (已有基础)
+│   └── metal_shader.zig — MTLLibrary / MSL 编译
+├── vulkan/              — (Phase 2)
+│   ├── vk_device.zig
+│   ├── vk_cmd.zig
+│   ├── vk_rt.zig        — VK_KHR_ray_tracing_pipeline
+│   └── vk_shader.zig    — SPIR-V
+└── dx12/                — (Phase 3，可选)
 ```
 
-### 4.2 核心模块
+### 3.3 RHI 公共接口
 
-#### 💬 Jarvis Terminal（AI 协同中枢）— 右下角
-
-不仅是聊天框，是 AI 沟通修改意图的地方：
-
-| 功能 | 说明 |
-|------|------|
-| **Intent → Command 映射** | 自然语言通过 LLM function calling 生成结构化 Command JSON，不直接拼原始 scene JSON |
-| **JSON Diff 确认** | 修改前高亮显示变更的 JSON 节点，类似 Git Diff |
-| **渐进式授权** | 简单修改（调颜色）可自动应用；破坏性修改（删除实体、替换 Shader）强制显示 Apply/Reject |
-| **AI 主动提问** | 意图模糊时 AI 返回 `intent_preview` 请求人类确认再执行 |
-
-#### 👁️ 3D Viewport（双态视口）— 正中央
-
-| 功能 | 说明 |
-|------|------|
-| **Ghost Highlight** | AI 正在读取/操作的物体显示紫色呼吸灯轮廓（复用 `outline_pass`，增加 `ai_focus_entities` 列表） |
-| **AI 状态悬浮窗** | 视口正上方半透明胶囊 UI，实时显示 AI 状态（「👀 分析截图...」「⚙️ 编译 GLSL...」） |
-| **双轨切换** | 顶部按钮一键 Raster ⇌ PathTrace，Path Tracer 清空采样重新累积 |
-
-#### ⏱️ Command Timeline（命令时间线）— 最底部
-
-| 功能 | 说明 |
-|------|------|
-| **可视化撤销栈** | 每次操作生成节点，人类=蓝色、AI=紫色 |
-| **时间穿越** | 点击任意历史节点，场景 JSON 和画面瞬间回滚 |
-| **安全网** | AI 搞砸时只需点上一个蓝色节点即可恢复 |
-
-数据结构：
 ```zig
-const TimelineEntry = struct {
-    index: u32,
-    command: Command,
-    timestamp: i64,
-    source: enum { human, ai },
-    label: []const u8,        // "Set Roughness: 0.8 → 0.05"
-    snapshot_hash: u64,       // 场景状态快速哈希，用于 time travel 验证
+pub const RhiDevice = struct {
+    // === 资源创建 ===
+    createBuffer:           *const fn(BufferDesc) Error!Buffer,
+    createTexture:          *const fn(TextureDesc) Error!Texture,       // 支持 2D/3D/Cube/Array
+    createSampler:          *const fn(SamplerDesc) Error!Sampler,
+    createGraphicsPipeline: *const fn(GraphicsPipelineDesc) Error!GraphicsPipeline,
+    createComputePipeline:  *const fn(ComputePipelineDesc) Error!ComputePipeline,  // 新增
+    createShaderModule:     *const fn(ShaderModuleDesc) Error!ShaderModule,
+
+    // === 命令录制 ===
+    beginFrame:       *const fn() Error!CommandBuffer,
+    beginRenderPass:  *const fn(CommandBuffer, RenderPassDesc) Error!RenderPass,
+    beginComputePass: *const fn(CommandBuffer) Error!ComputePass,      // 新增
+    beginCopyPass:    *const fn(CommandBuffer) Error!CopyPass,
+    endRenderPass:    *const fn(RenderPass) void,
+    endComputePass:   *const fn(ComputePass) void,                     // 新增
+    endCopyPass:      *const fn(CopyPass) void,
+    submitFrame:      *const fn(CommandBuffer) Error!void,
+
+    // === 绘制 ===
+    drawIndexed:         *const fn(RenderPass, DrawIndexedArgs) void,
+    drawIndirect:        *const fn(RenderPass, Buffer, u32, u32) void,  // 新增
+    dispatch:            *const fn(ComputePass, u32, u32, u32) void,    // 新增
+    dispatchIndirect:    *const fn(ComputePass, Buffer, u32) void,      // 新增
+
+    // === Ray Tracing (可选能力) ===
+    createAccelStructure:  *const fn(AccelStructureDesc) Error!AccelStructure,
+    buildAccelStructure:   *const fn(CommandBuffer, AccelStructure) void,
+    traceRays:             *const fn(ComputePass, RtPipelineState, u32, u32) void,
+
+    // === 资源更新 ===
+    uploadBufferData:  *const fn(Buffer, []const u8) void,
+    uploadTextureData: *const fn(Texture, []const u8, u32) void,
+    readbackTexture:   *const fn(Texture) Error![]u8,
+
+    // === 能力查询 ===
+    capabilities: Capabilities,
+};
+
+pub const Capabilities = struct {
+    compute: bool,
+    ray_tracing: bool,
+    indirect_draw: bool,
+    mesh_shaders: bool,
+    texture_3d: bool,
+    texture_cube_native: bool,
 };
 ```
 
-#### 🎛️ Inspector（数据驱动属性面板）— 右上角
+### 3.4 迁移策略
 
-- 每个输入框/滑块双向绑定 JSON 文本，不与 C/Zig 指针直接绑定
-- AI 在 Jarvis Terminal 修改数值时，Inspector 滑块伴随动画自动滑动到新位置
-- 所见数据 = `scene.guava` 文本中的真实数据
+**关键原则：18 个渲染 Pass 零修改**。新 RHI 保持与现有 `device.zig` 完全相同的调用接口，仅底层实现从 SDL3 切换到 Metal/Vulkan 原生 API。
 
-### 4.3 截图反馈回路
+| 阶段 | 内容 | 依赖 |
+|------|------|------|
+| **RHI-1** | Metal Graphics Backend | 无 — 替换 SDL3 GPU 调用为 MTLDevice |
+| **RHI-2** | Metal Compute Backend | RHI-1 — MTLComputeCommandEncoder |
+| **RHI-3** | Metal RT 统一 | RHI-2 — 将 metal_rt_bridge.mm 收归 RHI |
+| **RHI-4** | Vulkan Graphics Backend | RHI-1 完成后并行 |
+| **RHI-5** | Vulkan Compute + RT | RHI-4 — VK_KHR_ray_tracing |
 
-| 规则 | 说明 |
-|------|------|
-| **触发时机** | Command 完成后的稳态帧（非每帧），Path Tracer 累积到一定 SPP 后 |
-| **分辨率** | 发给 AI 的截图 512×512 足够构图/光照判断 |
-| **差异对比** | 可同时发送修改前/后截图，让 AI 判断变化是否符合意图 |
+**SDL3 保留范围**：窗口创建、输入事件、音频设备、文件对话框。**不再用于任何图形调用。**
+
+### 3.5 着色器编译策略
+
+| 平台 | 着色器源 | 编译路径 |
+|------|---------|---------|
+| Metal | GLSL → SPIR-V → MSL (spirv-cross) | 离线编译，打包 .metallib |
+| Vulkan | GLSL → SPIR-V (glslang) | 离线编译，打包 .spv |
+| DX12 | HLSL → DXIL (dxc) | 离线编译 |
+
+统一着色器源使用 GLSL，通过 `zig build shaders` 编译为各平台格式。manifest.json 管理所有 shader variant。
 
 ---
 
-## 五、AI-Native 架构标准
+## 四、光栅渲染管线 — 追平现代引擎基线
 
-所有新系统的开发必须遵循以下准则：
+### 4.1 当前差距诊断
 
-### 3.1 读写分离 (MCP 契约)
-- **读 (Resource)**: 新系统状态必须可抓取为静态快照，通过 MCP Resource 暴露。`schema://components` 必须更新新组件字段。
-- **写 (Command)**: 所有场景状态修改必须通过 `CommandQueue`，禁止越过总线直接写内存。
+| 问题 | 根因 | 视觉影响 |
+|------|------|---------|
+| 画面"平"，无空间感 | 全局 ambient 是常量，无间接光 | 致命 — 缺少颜色溢出和反弹光 |
+| 远处阴影块状 | 单 2K shadow map，40 unit 正交 | 严重 — 远景阴影马赛克 |
+| 无环境遮蔽 | SSAO 已计算但未接入着色器 | 严重 — 物体不接地 |
+| 场景光照单调 | max 1 方向光 + 1 点光 | 严重 — 无法搭建复杂场景 |
+| 锯齿明显 | TAA 管线存在但未启用 | 中等 |
+| 纹理物体黑色 | bind group slot_offset 问题 | 致命 — 基础功能损坏 |
 
-### 3.2 安全隔离预览 (Staged Transaction)
-- 修改指令必须能运行在 `PreviewWorld` 快照中。
-- `apply` 前主世界数据不可被污染。
-- `PreviewWorld` 不注册真实物理刚体。
+### 4.2 光栅管线目标状态
 
-### 3.3 脚本沙盒隔离
-- 暴露给 WASM 的新 API 必须有严格安全边界。
-- Host 捕获 trap，Guest 承担 panic 定位与回传责任。
-
-### 3.4 数据格式稳定
-- 场景序列化保持 JSON v6。添加新组件时更新对应 Schema，不另起新格式。
-
-### 5.5 协议边界
-- MCP v1 只做 `stdio`。stdout 只给 MCP 消息，普通日志走 stderr 和文件。
-- 协议线程不直接写 `World`，只读资源来自主线程快照。
-
-### 5.6 Command System（所有协同功能的基石）
-
-Command Pattern 是 Timeline、JSON Diff、AI/人类双轨撤销的前提。**所有状态变更必须经过统一的 Command 管道**：
+达到 **2022 年主流引擎** 画面品质：
 
 ```
-人类 Inspector 操作 ──→ Command ──→ Scene JSON ──→ 渲染
-AI Jarvis 指令    ──→ Command ──→ Scene JSON ──→ 渲染
+渲染 Pass 顺序:
+1. Shadow Map (4-级 CSM + 点光 Cube Shadow)
+2. Depth Prepass
+3. G-Buffer / Base Pass (PBR + 多光源 + SSAO 接入 + CSM 阴影)
+4. SSAO (32 样本 → 写入 AO 纹理)
+5. SSGI (屏幕空间 GI — 补充间接光)
+6. SSR (分层模糊 — 粗糙度驱动)
+7. Volumetric Fog
+8. Skybox
+9. RT Shadow Composite (可选)
+10. TAA (Halton jitter + history blend + velocity)
+11. Bloom
+12. DOF
+13. Tonemap + Color Grading
+14. FXAA (TAA 关闭时的后备)
+15. Gizmo / Outline / UI Overlay
 ```
 
-最小实现：
-- `Command { kind, entity_id, component, field, old_value, new_value, source: enum { human, ai } }`
-- `CommandHistory` 支持 undo/redo 栈
-- Inspector 每个滑块操作产生 Command，而非直接写 ECS
+### 4.3 逐项实施清单
 
-> **注意**：当前 `CommandQueue` 已覆盖实体 CRUD / 变换 / 父子层级。需进一步扩展到材质参数、渲染设置、动画状态等所有可编辑属性，并增加 `source` 标记以区分人类/AI 来源。
+#### R-1 修复纹理绑定（紧急）
+- [ ] 审计 mesh_pass.zig bind group slot_offset 与 mesh.frag.glsl set=2 的对齐
+- [ ] 验证所有 bind group 创建路径的 slot 正确性
+- [ ] 场景中放置带贴图物体，确认不再渲染为黑色
+- **验收**: TexturedCube 正确显示砖墙纹理
 
-### 5.7 MCP API 三层设计
+#### R-2 SSAO 接入光照
+- [ ] mesh.frag.glsl 增加 `uniform sampler2D u_ssao_map` (新 binding)
+- [ ] base_pass.zig 在 material bind group 中绑入 SSAO 纹理
+- [ ] 着色器中: `ambient *= texture(u_ssao_map, screen_uv).r`
+- **验收**: 角落/接缝处明显变暗，物体有接地感
 
-MCP/WebSocket 接口分为三层，AI 不应直接写 JSON 文件等 hot-reload：
+#### R-3 级联阴影贴图 (CSM)
+- [ ] ShadowMapState 从单张 2K 改为 4 级级联 (2K x 4 = 8K atlas 或 4 张 2K)
+- [ ] 计算每级投影矩阵：基于视锥体分割 (practical split scheme)
+- [ ] mesh.frag.glsl: 根据片元深度选择级联层级采样
+- [ ] shadow_pass.zig: 4 次渲染（每级一次）
+- **验收**: 近处阴影锐利，100m 外物体阴影仍清晰; render-test golden 更新
 
-| 层级 | 用途 | 示例 |
+#### R-4 多光源支持
+- [ ] BasePassUniforms 改用数组: `directional_lights[4]`, `point_lights[16]`, `spot_lights[8]`
+- [ ] mesh.frag.glsl: 循环遍历活跃光源累加 radiance
+- [ ] PreparedScene 收集场景中所有灯光，按距离/强度排序截断
+- **验收**: 场景中放 4 盏点光，各区域被不同颜色照亮
+
+#### R-5 TAA 完整接入
+- [ ] 投影矩阵注入 Halton 2,3 序列 jitter (每帧不同)
+- [ ] 历史纹理管理: ping-pong 双缓冲
+- [ ] taa_pass.zig: reprojection + neighborhood clamp + history blend (alpha=0.1)
+- [ ] 运动向量 Pass：静态场景可用 depth+VP 反推，动态场景需 velocity buffer
+- [ ] 渲染顺序: 在 Tonemap 之前
+- **验收**: 细线/围栏边缘无闪烁，移动相机时画面稳定
+
+#### R-6 屏幕空间 GI (SSGI)
+- [ ] 新 Pass: ssgi_pass.zig + ssgi.frag.glsl
+- [ ] 从 depth buffer 重建世界坐标，在屏幕空间 trace 短距离光线
+- [ ] 采样命中点的颜色作为间接光贡献
+- [ ] 输出混合到 base pass ambient 项
+- **验收**: 红墙旁的白物体有红色溢出; 角落有颜色反弹
+
+#### R-7 SSR 粗糙度模糊
+- [ ] SSR pass 输出 hit distance + screen UV
+- [ ] 根据 roughness 对 SSR 结果做 cone tracing 模糊 (mip chain)
+- [ ] 光滑表面清晰反射，粗糙表面模糊反射
+- **验收**: roughness=0.0 镜面反射，roughness=0.5 模糊反射
+
+#### R-8 Contact Shadows
+- [ ] mesh.frag.glsl 中对每个片元沿光源方向做短距离 screen-space ray march
+- [ ] 只检测前 0.5m，补充 CSM 在小尺度的细节
+- **验收**: 石头放在地面上，底部有紧密的接触阴影
+
+---
+
+## 五、路径追踪渲染器 — 从 Demo 到生产品质
+
+### 5.1 当前差距诊断
+
+| 问题 | 根因 | 对比 Blender Cycles |
+|------|------|-------------------|
+| 4 SPP 纯噪声 | 均匀半球采样，无重要性采样 | Cycles: GGX IS, 同 SPP 噪声低 100x |
+| 间接光极慢收敛 | 无 NEE（下一事件估计） | Cycles: 多光源直接采样 + MIS |
+| 金属/玻璃不正确 | 假 Blinn-Phong，无 Fresnel | Cycles: Principled BSDF |
+| 无降噪 | 原始输出 | Cycles: OIDN 32 SPP 约等于干净成品 |
+| 天空假 | 线性渐变 | Cycles: HDR 环境贴图 / Nishita |
+| 间接光偏暗 | 0.02 硬截止（有偏） | Cycles: 俄罗斯轮盘（无偏概率终止） |
+
+### 5.2 路径追踪目标状态
+
+达到 **32 SPP + OIDN = 干净影视画面**：
+
+```
+光线路径:
+  Camera -> Surface Hit
+    |- Direct Lighting (NEE): 随机采样光源 + shadow ray
+    |- BRDF Sampling: GGX IS (specular) / cosine IS (diffuse)
+    |- MIS: balance heuristic 组合 NEE + BRDF
+    |- Russian Roulette: 概率终止低贡献路径
+    +- Bounce -> next surface (递归)
+
+材质模型:
+    Principled BSDF
+    |- Diffuse: Lambertian / Oren-Nayar
+    |- Specular: GGX microfacet (Cook-Torrance)
+    |- Fresnel: Schlick approximation
+    |- Metallic: 线性插值 diffuse <-> specular
+    |- Transmission: 折射 (Snell) + 全内反射
+    +- Emission: 自发光面光源
+
+后处理:
+    OIDN 降噪 (albedo + normal AOV 辅助)
+    -> Tonemap -> 输出 EXR/PNG
+```
+
+### 5.3 逐项实施清单
+
+#### PT-1 GGX 重要性采样
+- [ ] 替换 `random_hemisphere()` 为 GGX 分布采样 (`sampleGGX_VNDF`)
+- [ ] 漫射面用 cosine-weighted 半球采样
+- [ ] 根据 metallic 概率选择 specular 或 diffuse lobe
+- [ ] CPU 和 Metal kernel 同步修改
+- **验收**: 4 SPP 金属球可辨认形状（当前是纯噪声）
+
+#### PT-2 NEE + MIS
+- [ ] 每次命中点额外采样一条 shadow ray 直连光源
+- [ ] 光源采样 PDF: 方向光=delta, 面光源=面积采样
+- [ ] BRDF 采样 PDF: GGX/cosine 对应值
+- [ ] MIS balance heuristic: `w_light = pdfL^2 / (pdfL^2 + pdfB^2)`
+- **验收**: 4 SPP 直接光照区域基本收敛
+
+#### PT-3 Principled BSDF
+- [ ] Schlick Fresnel: `F0 + (1-F0) * (1-cosTheta)^5`
+- [ ] 金属: F0 = albedo; 电介质: F0 = 0.04
+- [ ] Transmission lobe: Snell 折射 + 全内反射判断
+- [ ] Roughness -> GGX alpha 映射: `alpha = roughness^2`
+- [ ] 能量守恒: diffuse *= (1 - metallic) * (1 - F)
+- **验收**: 玻璃球折射背景; 金属球正确反射环境
+
+#### PT-4 HDR 环境贴图采样
+- [ ] 支持 .hdr / .exr 天空纹理
+- [ ] 环境光 NEE: 根据亮度分布做 importance sampling (alias method)
+- [ ] 替换线性渐变 sky fallback
+- **验收**: HDRI 照明下物体有真实环境反射
+
+#### PT-5 俄罗斯轮盘 (无偏终止)
+- [ ] 替换 `if (length(throughput) < 0.02) break` 为概率终止:
+  `survival_prob = min(max_component(throughput), 0.95); if (rand > survival_prob) break; throughput /= survival_prob;`
+- [ ] CPU 和 Metal kernel 同步
+- **验收**: 间接光不再系统性偏暗
+
+#### PT-6 自适应采样
+- [ ] 每个 tile (8x8) 追踪方差
+- [ ] 高方差区域继续采样，低方差区域提前终止
+- [ ] 全局 SPP budget 动态分配
+- **验收**: 同等总采样数下，噪声分布更均匀
+
+#### PT-7 OIDN 降噪器集成
+- [ ] 集成 Intel Open Image Denoise (C API, 跨平台)
+- [ ] 输出辅助 AOV: albedo buffer, normal buffer
+- [ ] 32 SPP + OIDN = 干净成品
+- [ ] Metal GPU 路径: 可选 MPS denoiser (Apple Silicon 加速)
+- **验收**: 32 SPP 渲染后降噪无可见噪点
+
+#### PT-8 EXR 序列帧输出
+- [ ] 支持 OpenEXR 格式写入 (半精度 RGBA16F)
+- [ ] Camera Animation 驱动帧序列渲染
+- [ ] 输出路径: `renders/{scene}_{frame:04d}.exr`
+- **验收**: 10 帧动画序列正确输出
+
+---
+
+## 六、编辑器 UX — 响应式布局与创作工作流
+
+### 6.1 当前布局问题
+
+| 问题 | 根因 | 位置 |
 |------|------|------|
-| **Scene API** | 读写场景图 | `create_entity`, `set_component`, `delete_entity` |
-| **Asset API** | 管理资产 | `import_texture`, `compile_shader`, `bake_navmesh` |
-| **Render API** | 控制渲染 | `screenshot`, `switch_mode(path_trace)`, `render_sequence` |
+| 工具栏在窄窗口被截断 | 860px breakpoint 太高 | viewport.zig toolbar |
+| 面板可拖到不可用宽度 | 无最小尺寸约束 | ImGui docking |
+| 按钮文本溢出 | 硬编码宽度 (132px/304px) | toolbar buttons |
+| 状态栏 1280px 处突变 | 硬编码分割比 | status bar |
+| Inspector 窄时静默失败 | beginPropertyTable 返回 false 无回退 | inspector.zig |
+| 图标不随面板缩放 | 固定 16px | hierarchy icons |
 
-AI 通过 Command API 发送结构化指令 → 引擎执行 Command → 同时更新内存 ECS 和持久化 JSON。Hot-reload 只作为外部文件变更的兜底机制。
+### 6.2 响应式布局实施清单
 
-### 5.8 Ghost Highlight 实现路径
+#### UI-1 面板最小尺寸约束
+- [ ] 所有 dock 窗口设置 `gui.setNextWindowSizeConstraints(min_w, min_h, FLT_MAX, FLT_MAX)`
+  - Scene Hierarchy: min 220px
+  - Inspector: min 260px
+  - Asset Browser: min 200px
+  - Viewport: min 400x300
+- **验收**: 拖拽面板边，不会小于最小尺寸
 
-复用现有 `outline_pass`（选中物体黄色轮廓），增加 AI 紫色通道：
-- `OutlinePass` 增加 `ai_focus_entities: []EntityId`
-- 渲染时用紫色 + 呼吸灯 alpha 脉冲
-- AI 每次发 Command 时附带 `target_entity_id`，引擎自动设置高亮
+#### UI-2 工具栏自适应断点
+- [ ] 调整断点: Wide >= 680px, Medium >= 400px, Narrow < 400px
+- [ ] 按钮宽度改用 `gui.calcTextSize(label)[0] + padding` 自动计算
+- [ ] Medium 模式: 只保留图标 + tooltip
+- [ ] Narrow 模式: 折叠到 hamburger 菜单
+- **验收**: 600px viewport 宽度下工具栏完全可见
+
+#### UI-3 状态栏平滑自适应
+- [ ] 删除 1280px 硬编码跳变
+- [ ] 使用比例分配: context 区 60%, metrics 区 40%, 根据内容截断
+- [ ] 狭窄时隐藏低优先级指标 (内存/进程RSS)
+- **验收**: 任意窗口宽度下状态栏内容可读
+
+#### UI-4 Inspector 窄面板优雅降级
+- [ ] panel 宽度 < 260px 时切换为 stacked 布局 (label 上 + value 下)
+- [ ] 属性网格列宽比例自适应: `label_width = clamp(width * 0.34, 80, 160)`
+- **验收**: Inspector 260px 时所有属性可编辑
+
+#### UI-5 带纹理预设物体
+- [ ] Place Actors 面板增加: "Textured Cube"、"Textured Sphere"、"Textured Plane"
+- [ ] 点击后弹出文件选择对话框选择纹理
+- [ ] 自动创建实体 + 材质实例 + 赋予纹理
+- **验收**: 3 次点击将带纹理立方体放入场景
+
+#### UI-6 拖拽纹理到 Inspector 材质字段
+- [ ] Inspector 材质区域的 texture slot 支持拖拽 payload 接收
+- [ ] Asset Browser 中纹理条目可拖出
+- **验收**: 从 Asset Browser 拖拽 .png 到 Inspector 的 Base Color 区域完成赋值
 
 ---
 
-## 六、待建核心系统
+## 七、3D 创作工具链 — 对标 Blender 基础能力
 
-### 6.1 音频系统 🔴
-**目标**: 集成 OpenAL-soft 或 SoLoud，实现完整音频能力。
+### 7.1 对标范围
 
-| 交付物 | 规格 |
-|--------|------|
-| AudioSource / AudioListener / AudioClip 组件 | 场景序列化、Inspector 编辑 |
-| 格式支持 | WAV / OGG |
-| 3D 空间音效 | 距离衰减、多普勒效应 |
-| 混音器 | 主音量 / 音乐 / 音效三组控制 |
-| MCP 资源 | `audio://mixer-status` |
-| WASM API | `AudioSource.play()` / `stop()` / `setVolume()` |
+| Blender 能力 | 对标 | 不做 |
+|-------------|------|------|
+| 3D 视口导航 | ✅ 已有 | -- |
+| 物体变换/层级 | ✅ 已有 | -- |
+| 材质编辑器 | ✅ 已有参数面板 | 节点着色器编辑器 (Phase 2) |
+| 相机动画 | 需要 | -- |
+| 渲染输出 (Cycles 品质) | 路径追踪重写后 | -- |
+| UV 编辑 | 基础 UV 查看/编辑 | 高级 UV 展开算法 |
+| 灯光系统 | 多光源 + 面光源 | IES 灯光 |
+| 渲染设置面板 | ✅ 已有 | -- |
+| Outliner (层级管理) | ✅ 已有 | -- |
+| Properties Panel | ✅ 已有 | -- |
+| Timeline (关键帧) | 需要 | 曲线编辑器 (Phase 2) |
+| 渲染视图 / 材质预览 | 需要 | -- |
+| 合成器 (Compositor) | 不做 | -- |
+| 雕刻 / 绘制 | 不做 | -- |
+| 流体/布料模拟 | 不做 | -- |
+| 视频编辑 | 不做 | -- |
+| 4K 图片/视频输出 | 需要 (FFmpeg 编码) | 专业后期彩色管理 |
 
-### 6.2 游戏内 UI 系统 🔴
-**目标**: 实现轻量级顶点缓存 Runtime UI，集成 stb_truetype 字体渲染。
+### 7.2 创作工具实施清单
 
-| 交付物 | 规格 |
-|--------|------|
-| Canvas 系统 | 分辨率自适应缩放与对齐 |
-| 核心控件 | Button / ProgressBar / Text (SDF) / Image / 九宫格 |
-| 交互逻辑 | UI 输入捕获（点击 UI 不触发游戏内事件） |
-| WASM API | AI 可通过指令生成和排版运行时 UI 组件 |
+#### CT-1 节点式材质编辑器
+- [ ] 节点系统: PBR 参数节点 -> 输出节点
+- [ ] 内置节点: Texture Sample, Color, Float, Mix, Normal Map, Noise, Voronoi
+- [ ] 实时预览球体
+- [ ] 编译为 GLSL fragment shader (光栅) + path tracer eval 函数 (离线)
+- **验收**: 用节点编辑器创建带有噪声纹理混合的材质, 光栅和路径追踪渲染一致
 
-### 6.3 场景管理 🔴
-**目标**: 实现多场景运行时管理。
+#### CT-2 关键帧动画系统
+- [ ] 属性关键帧: 任意 float/vec3 属性可设置关键帧 (Transform, Light intensity, ...)
+- [ ] 插值类型: 线性 / 贝塞尔 / 阶梯
+- [ ] Timeline UI: 底部时间线面板，显示关键帧菱形标记
+- [ ] 播放控制: Play / Pause / 帧步进 / 跳转
+- **验收**: 创建 5 秒相机飞行动画，可以帧步进预览
 
-| 交付物 | 规格 |
-|--------|------|
-| SceneManager API | `load("level_2")` / `unload()` |
-| 异步加载 | Loading 界面、不阻塞主线程 |
-| 叠加加载 | 动态加载/卸载子区域 |
-| 全局对象 | 跨场景不销毁对象（玩家数据、全局管理器） |
-| WASM API | 场景生命周期控制 |
+#### CT-3 Camera Sequencer (相机切换器)
+- [ ] 多相机: 场景中放置多个 Camera 实体
+- [ ] 序列器: 时间线上分段标记使用哪个 Camera
+- [ ] 渲染输出: 按序列器定义的相机顺序渲染帧序列
+- **验收**: 两个相机在 3 秒处切换，渲染输出正确
 
-### 6.4 游戏生命周期 🔴
-**目标**: 明确的 Play/Pause/Stop 状态机。
+#### CT-4 面光源 (Area Light)
+- [ ] 新光源类型: Rectangle / Disk
+- [ ] 光栅: 近似为点光 + soft shadow
+- [ ] 路径追踪: 真正面光源采样 (NEE)
+- **验收**: 面光源在路径追踪模式下产生物理正确的软阴影
 
-| 交付物 | 规格 |
-|--------|------|
-| GameState 状态机 | GameStart / Playing / Paused / GameOver / Quit |
-| 时间控制 | Time Scale（暂停、慢动作） |
-| 脚本生命周期 | 明确的 onStart / onUpdate / onDestroy 执行顺序 |
+#### CT-5 基础 UV 编辑器
+- [ ] 2D UV 视图面板 (新 editor window)
+- [ ] 显示当前选中 mesh 的 UV 展开
+- [ ] 支持选择 UV 顶点/边/面，基础平移缩放
+- [ ] 自动 UV 投影: Box / Planar / Cylindrical
+- **验收**: 查看 glTF 导入模型的 UV，调整后纹理映射更新
 
-### 6.5 物理查询 WASM 接口 🟡
-**目标**: 将底层物理查询暴露给 WASM 脚本层。
+#### CT-6 渲染输出面板
+- [ ] 输出设置: 分辨率预设 (1080p / 2K / 4K) + 自定义分辨率 / 帧范围 / 输出格式 (PNG / EXR) / 输出路径
+- [ ] 采样设置: SPP / 降噪开关 / 自适应采样
+- [ ] 一键渲染: "Render Image" / "Render Animation" / "Render Video"
+- [ ] 进度显示: 当前帧/总帧 + 累积 SPP + 预计剩余时间
+- [ ] 4K 支持: 3840x2160 渲染，分 tile 渲染避免显存溢出 (每 tile 512x512)
+- **验收**: 设置 3840x2160 (4K), 128 SPP, 渲染单帧输出 EXR，文件大小 ~60MB
 
-| 交付物 | 规格 |
-|--------|------|
-| Raycast API | 射线检测，返回 hit 信息 |
-| OverlapSphere / OverlapAABB | 区域重叠检测 |
-| Trigger 事件回调 | `onTriggerEnter` / `onTriggerExit` |
+#### CT-7 视频编码输出 (FFmpeg)
 
-### 6.6 动画事件系统 🟡
-**目标**: 动画关键帧驱动脚本回调。
+引擎不做视频编辑器，但必须能将渲染帧序列编码为标准视频格式。策略：渲染器输出帧序列 -> FFmpeg 子进程编码 -> 输出 MP4/MOV。
 
-| 交付物 | 规格 |
-|--------|------|
-| 关键帧回调 | 动画播放到指定帧触发脚本（攻击判定、脚步声） |
-| 1D/2D Blend Tree | 复杂状态混合（Idle→Walk→Run） |
-| Upper/Lower Body 分层 | 上下半身独立动画 |
+- [ ] FFmpeg 子进程调用封装 (不链接 libav，仅调用 ffmpeg CLI)
+- [ ] 支持编码格式: H.264 (兼容性最佳) / H.265 (4K 体积减半) / ProRes (影视后期交换)
+- [ ] 渲染流水线: Path Tracer 渲染帧 -> EXR 暂存 -> OIDN 降噪 -> Tonemap -> FFmpeg 编码
+- [ ] 音频混合: 场景 AudioSource 混音轨道合并到视频 (SoLoud -> WAV -> FFmpeg mux)
+- [ ] 输出预设:
+  - **Web**: 1080p H.264 CRF18, 30fps
+  - **4K Cinema**: 3840x2160 H.265 CRF15, 24fps
+  - **Post-Production**: 4K ProRes 422, 24fps (供 DaVinci/Premiere 后期)
+- [ ] 编辑器 UI: 渲染输出面板增加 "输出格式" 下拉 + 编码质量滑块
+- **验收**: 10 秒相机动画 -> 一键渲染 -> 输出 4K H.265 MP4 视频文件，可在播放器中流畅播放
 
-### 6.7 导航寻路 🟡
-**目标**: 集成 Recast/Detour，实现 NavMesh 烘焙与自动避障。
+---
 
-| 交付物 | 规格 |
-|--------|------|
-| NavMesh 生成 | 静态/动态网格烘焙 |
-| 寻路代理 | AI 自动避障、路径点追踪 |
-| 编辑器可视化 | NavMesh 调试覆盖层 |
+## 八、游戏运行时系统
 
-### 6.8 资源打包 🟡
-**目标**: 将资源压缩打包为发布格式。
+### 8.1 逐项清单
 
-| 交付物 | 规格 |
-|--------|------|
-| Packer | 压缩打包为 `.pak` 二进制文件 |
-| 平台适配 | 纹理自动转换为 BC7/ASTC |
-| 依赖管理 | 仅打包场景引用的资源 |
+#### GR-1 音频系统修复与完善
+- [ ] 修复 SoLoud 初始化错误
+- [ ] AudioSource / AudioListener / AudioClip 组件
+- [ ] 3D 空间音效: 距离衰减、Voice group
+- [ ] Inspector 编辑: 音量 / 循环 / 3D 设置
+- **验收**: 实体附加 AudioSource，播放时声音随距离衰减
 
-### 6.9 开发工具补齐
-| 工具 | 规格 |
+#### GR-2 多场景管理
+- [ ] SceneManager: `loadScene("level_2")` / `unloadScene()`
+- [ ] 异步加载 + 加载界面回调
+- [ ] 全局不销毁对象标记 (`DontDestroyOnLoad`)
+- **验收**: 从主菜单场景加载游戏场景，玩家数据跨场景保留
+
+#### GR-3 GameState 状态机
+- [ ] 状态: Editor / Playing / Paused / Stopped
+- [ ] Play 时克隆场景，Stop 时恢复 (与 Unity Play Mode 一致)
+- [ ] Time.deltaTime / Time.timeScale
+- **验收**: 按 Play, 物理运行, 按 Stop, 场景恢复到 Play 前状态
+
+#### GR-4 Physics WASM API
+- [ ] Raycast: `physics.raycast(origin, direction, maxDist) -> HitInfo`
+- [ ] OverlapSphere / OverlapAABB
+- [ ] TriggerEnter / TriggerExit 回调到 WASM 脚本
+- **验收**: WASM 脚本发射射线检测碰撞，返回碰撞实体 ID
+
+#### GR-5 导航寻路
+- [ ] 集成 Recast/Detour
+- [ ] NavMesh 从场景 static mesh 烘焙
+- [ ] Agent 组件: 自动寻路 + 避障
+- [ ] 编辑器可视化 NavMesh 覆盖层
+- **验收**: AI Agent 自动绕过障碍物到达目标点
+
+#### GR-6 输入映射系统
+- [ ] Action -> Key/Gamepad 映射表 (JSON 配置)
+- [ ] `input.isActionPressed("jump")` / `input.getAxis("move_x")`
+- [ ] Editor 中可视化映射编辑
+- **验收**: 空格键和手柄 A 键都触发 "jump" action
+
+#### GR-7 游戏内 UI 系统
+- [ ] Canvas 组件: 分辨率自适应
+- [ ] 控件: Button / Text / Image / ProgressBar / 九宫格
+- [ ] UI 事件系统: 射线 vs UI 碰撞
+- [ ] WASM 绑定: `ui.createButton("Start")` / `ui.setText(id, "HP: 100")`
+- **验收**: 屏幕上方显示血条，血量变化时进度条更新
+
+#### GR-8 多语言脚本前端 (Python / C#)
+
+当前 ScriptVM 已支持 Zig 和 WASM。WASM 是语言无关的字节码层，任何能编译到 WASM 的语言都可以接入，无需嵌入独立解释器/运行时，性能由 WAMR JIT 保证。
+
+| 语言 | 编译路径 | 适用场景 |
+|------|---------|----------|
+| **Zig** | 直接编译到 WASM (已有) | 高性能游戏逻辑、引擎插件 |
+| **Python** | MicroPython -> WASM (wasm32-wasi) | AI 生成脚本、快速原型、工具脚本 |
+| **C#** | .NET NativeAOT -> WASM 或 Mono WASM | 传统游戏开发者、Unity 迁移用户 |
+
+**为什么优先 Python**：AI (LLM) 生成 Python 代码的准确率远高于其他语言，且 Python 语法简洁适合非程序员。通过 MicroPython→WASM 路径，脚本运行在 WAMR 沙盒中，性能接近原生 WASM（比 CPython 解释器快 10-50x），同时保持热重载和 Inspector 反射。
+
+实施清单:
+- [ ] MicroPython 交叉编译到 wasm32-wasi 目标
+- [ ] ScriptVM 增加 Python 前端: `.py` 文件 -> MicroPython WASM 模块
+- [ ] Python 绑定层: 自动生成 `engine.*` / `physics.*` / `ui.*` Python API wrapper
+- [ ] Python Inspector 反射: 解析模块级变量类型标注，暴露到 Inspector
+- [ ] AI 工作流: Jarvis 生成 `.py` 脚本 -> 自动编译 -> 热重载 -> 运行验证
+- [ ] (可选) C# 前端: .NET NativeAOT WASM 编译 + C# API 绑定
+- **验收**: AI 生成一段 Python 巡逻脚本，引擎热重载后 NPC 自动巡逻; Inspector 显示 Python 脚本的 `patrol_speed: float = 3.0` 参数
+
+---
+
+## 九、AI-Native 基础设施
+
+### 9.1 已完成
+
+| 能力 | 状态 |
 |------|------|
-| 存档系统 | 持久化全局状态框架 |
-| 输入映射 | Action-Key 映射（Space + Gamepad A → Jump） |
-| 性能分析器 | 帧内 GPU/CPU 时间线 + 内存用量可视化 |
+| MCP stdio 协议 | ✅ |
+| 只读场景/实体/选择感知 | ✅ |
+| CommandQueue 统一写入 | ✅ |
+| Staged Transaction + Ghost Preview | ✅ |
+| Query API (语义/空间/BVH) | ✅ |
+| Schema 资源族 | ✅ |
+| WASM 脚本 + Inspector 反射 | ✅ |
+| Editor Utility UI (35 ImGui API) | ✅ |
+
+### 9.2 待建
+
+#### AI-1 Command 扩展
+- [ ] 覆盖材质参数、渲染设置、动画状态
+- [ ] Command 增加 `source: enum { human, ai }` 标记
+- [ ] 可视化 Command Timeline UI
+
+#### AI-2 MCP 三层 API
+- [ ] Scene API: `create_entity`, `set_component`, `delete_entity`
+- [ ] Asset API: `import_texture`, `compile_shader`, `bake_navmesh`
+- [ ] Render API: `screenshot`, `switch_mode`, `render_sequence`
+
+#### AI-3 截图反馈回路
+- [ ] Command 完成后的稳态帧自动截图
+- [ ] 512x512 base64 编码回传
+- [ ] 支持修改前/后对比
+
+#### AI-4 Ghost Highlight
+- [ ] 复用 outline_pass 增加 AI 紫色通道
+- [ ] AI 操作的物体呼吸灯脉冲
 
 ---
 
-## 七、内核演进路线
+## 十、分阶段执行路线图
 
-### 7.1 数据导向 ECS (SparseSet → Archetype 评估)
+### Phase 1：修复基础 — 让看得见的东西先正确
 
-当前 `World` 采用胖实体 (AoS) + SparseSet 混合布局：
+> 前置: 无
 
-| 组件 | 存储位置 |
-|------|----------|
-| Transform | ✅ SparseSet |
-| Rigidbody | ✅ SparseSet |
-| BoxCollider / SphereCollider | ✅ SparseSet |
-| 其余冷数据 | Entity (AoS) |
+| ID | 任务 | 检验标准 |
+|----|------|---------|
+| R-1 | 修复纹理绑定 slot_offset | TexturedCube 显示纹理 |
+| R-2 | SSAO 接入光照着色器 | 角落变暗有接地感 |
+| UI-1 | 面板最小尺寸约束 | 拖窄不再失效 |
+| UI-2 | 工具栏断点下调 | 600px 宽仍可用 |
+| GR-1 | 音频初始化修复 | SoLoud 不报错 |
 
-后续路线：冷热分离完成后，等 Query/Physics 稳定运行，再评估是否向 Archetype 模型推进。
+### Phase 2：现代光栅管线
 
-### 7.2 Plugin / Headless App Shell
+> 前置: Phase 1
 
-将 `Application` 拆分为可组合插件：
+| ID | 任务 | 检验标准 |
+|----|------|---------|
+| R-3 | 级联阴影 (4-CSM) | 远处阴影清晰 |
+| R-4 | 多光源 (dir x4 + point x16) | 4 盏点光照亮不同区域 |
+| R-5 | TAA 完整接入 | 围栏边缘无闪烁 |
+| R-6 | SSGI | 红墙旁白物体有红色溢出 |
+| R-8 | Contact Shadows | 物体底部有接触阴影 |
 
-| 插件 | 职责 |
-|------|------|
-| CorePlugin | 主循环、时间、输入 |
-| PhysicsPlugin | Jolt 步进、碰撞 |
-| ScriptPlugin | WASM / Zig VM |
-| RenderPlugin | 渲染管线 |
-| EditorPlugin | ImGui UI |
-| McpPlugin | MCP 协议 |
+### Phase 3：RHI 重构 — Metal 原生 Backend
 
-**最终目标**: 纯正 Headless Profile，AI 可在后台静默运行物理/脚本沙盒 5000 帧验证逻辑，无需初始化渲染和窗口。
+> 前置: Phase 2 (光栅管线稳定后再换底层)
 
----
+| ID | 任务 | 检验标准 |
+|----|------|---------|
+| RHI-1 | Metal Graphics Backend | 18 个 Pass 在新 RHI 上渲染一致 |
+| RHI-2 | Metal Compute Backend | IBL 改 GPU 计算，SSAO dispatch |
+| RHI-3 | Metal RT 统一到 RHI | RT Shadow 和 Path Trace 走统一接口 |
 
-## 七-B、渲染系统演进路线
+### Phase 4：路径追踪器重写
 
-### 当前状态
+> 前置: RHI-2 (Compute)
 
-| 项目 | 状态 |
-|------|------|
-| RHI 层 | SDL3 GPU API，仅图形管线（无 Compute） |
-| 后处理 | Bloom + Tonemap + FXAA ✅，SSAO ✅（已接入 drawFrame），TAA ✅（管线已修复，未接入 drawFrame） |
-| 纹理格式 | 新增 r8_unorm（SSAO 单通道输出） |
-| Cooked 资产 | JSON hex-encoded，4K HDR 产生 ~256MB。已提高 readFileAlloc 限制到 512MB |
-| **光线追踪** | **SDL3 GPU API 不支持 Ray Tracing** |
+| ID | 任务 | 检验标准 |
+|----|------|---------|
+| PT-1 | GGX 重要性采样 | 4 SPP 金属球可辨认 |
+| PT-2 | NEE + MIS | 直接光 4 SPP 基本收敛 |
+| PT-3 | Principled BSDF | 玻璃球折射正确 |
+| PT-4 | HDR 环境贴图 | HDRI 照明下物体有环境反射 |
+| PT-5 | 俄罗斯轮盘 | 间接光亮度不再偏暗 |
+| PT-7 | OIDN 降噪 | 32 SPP + 降噪 = 干净画面 |
 
-### 渲染演进路径
+### Phase 5：创作工具链
 
-| 方案 | 优点 | 缺点 |
-|------|------|------|
-| **CPU Path Tracer（纯 Zig）** | 不依赖 GPU RT 硬件，可立即开始 | 慢（4K 一帧可能数分钟） |
-| **Metal Ray Tracing API** | GPU 加速，Apple Silicon 原生 | 需绕过 SDL3，写原生 Metal 代码 |
+> 前置: Phase 2 (多光源), Phase 4 (PT)
 
-**策略**：先做 CPU Path Tracer 作为 MVP，证明双轨切换的 UI 和数据流可以跑通。CPU 版本也适合 CI 自动化 golden image 测试。稳定后用 Metal RT 替换内核提速。
+| ID | 任务 | 检验标准 |
+|----|------|---------|
+| CT-2 | 关键帧动画 + Timeline | 5 秒相机飞行动画 |
+| CT-3 | Camera Sequencer | 多相机切换渲染 |
+| CT-4 | 面光源 | PT 模式下物理正确软阴影 |
+| CT-6 | 渲染输出面板 (含 4K) | 一键渲染 4K EXR |
+| CT-7 | FFmpeg 视频编码 | 4K H.265 MP4 输出 |
+| PT-8 | EXR 序列帧输出 | 10 帧动画序列正确输出 |
 
-### TAA 完整接入待办
+### Phase 6：游戏运行时补全
 
-TAA 管线和初始化已修复，但未接入 `drawFrame()`。完整接入需要：
-1. **Jitter 注入**：将 Halton 序列偏移加到投影矩阵，影响所有几何 Pass
-2. **History Texture 管理**：每帧将当前结果写入 history，下帧对比融合
-3. **Velocity Buffer**：可选，静态场景可省略，动态场景需要 motion vector pass
-4. **渲染顺序**：TAA 应在 HDR Tonemap 之前运行（HDR 空间保留更多细节）
+> 可与 Phase 5 并行
 
-### Cooked 资产二进制格式迁移
+| ID | 任务 | 检验标准 |
+|----|------|---------|
+| GR-2 | 多场景管理 | 跨场景保留玩家数据 |
+| GR-3 | GameState (Play/Stop) | Stop 后场景恢复 |
+| GR-4 | Physics WASM API | 脚本中 raycast 工作 |
+| GR-5 | 导航寻路 | Agent 自动避障 |
+| GR-6 | 输入映射 | 键盘+手柄映射同一 action |
+| GR-7 | 游戏内 UI | 血条随数值变化 |
+| GR-8 | Python 脚本前端 | AI 生成 .py 脚本热重载运行 |
 
-当前 hex-encoded JSON 严重膨胀。迁移计划：
-- **场景元数据**：保持 JSON（AI 可读，通常几 KB）
-- **GPU 二进制资产**（纹理/网格）：迁移到 `.guava_bin` 二进制格式 + 元数据 JSON 分离
-- 分离后 4K HDR 从 ~256MB 降到 ~34MB，IBL 从 ~192MB 降到 ~25MB
+### Phase 7：跨平台 + 创作工具扩展
 
----
+> 前置: Phase 3
 
-## 八、执行路线图
-
-### Phase 0：Command System 基石（最高优先级）
-
-> 所有后续 AI 协同功能的前提。
-
-1. 扩展 `CommandQueue` 覆盖材质参数、渲染设置等所有可编辑属性
-2. Command 增加 `source: enum { human, ai }` 标记
-3. `CommandHistory` 支持可视化 undo/redo 栈
-4. Inspector 每个滑块产生 Command，不再直接写 ECS
-
-### Phase 1：MCP Scene API + 截图回传
-
-1. MCP 三层 API 实现（Scene / Asset / Render）
-2. `render_api.screenshot()` → base64 PNG 回传接口
-3. Jarvis Terminal（ImGui）：文本输入 + JSON Diff 显示 + Apply/Reject
-
-### Phase 2：协同编辑器 UI
-
-1. Ghost Highlight（复用 outline_pass 加紫色通道）
-2. Command Timeline UI（ImGui 横向节点渲染）
-3. Inspector 双向绑定 JSON，AI 修改实时联动滑块
-4.重构 editor 整个界面，确保和 UI 产品设计一致
-
-### Phase 3：补全游戏生命线
-
-1. 音频系统集成（SoLoud 已在 third_party）
-2. 物理查询 API 暴露到 WASM
-3. GameState 状态机 + 场景生命周期
-4. 游戏内 2D/3D UI 系统
-
-### Phase 4：双轨渲染
-
-1. CPU Path Tracer MVP（BVH + 蒙特卡洛积分）
-2. Raster ⇌ PathTrace 一键切换 UI
-3. EXR 序列帧输出
-4. TAA 完整接入（Jitter + History + Velocity）
-5. Cooked 资产二进制格式迁移
-
-### Phase 5：架构与分发
-
-1. Application Headless 插件化重构
-2. 资源打包 Asset Cooking（.pak）
-3. 性能分析器
-
-### Phase 6：Metal Ray Tracing（远期）
-
-1. Metal RT API 替换 CPU Path Tracer 内核
-2. 保留 SDL3 做窗口/输入/音频，仅渲染走原生 API
-3. 导航寻路、动画事件、BlendTree 等交互系统补全
+| ID | 任务 | 检验标准 |
+|----|------|---------|
+| RHI-4 | Vulkan Graphics Backend | Linux/Windows 下渲染一致 |
+| RHI-5 | Vulkan Compute + RT | Vulkan RT 阴影工作 |
+| CT-1 | 节点材质编辑器 | 噪声混合材质可编辑 |
+| CT-5 | UV 编辑器 | 查看/调整 UV 映射 |
+| PT-6 | 自适应采样 | 渲染时间减半 |
+| R-7 | SSR 粗糙度模糊 | 粗糙表面模糊反射 |
 
 ---
 
-## 九、开发纪律
+## 十一、开发纪律
 
-### 9.1 日常流程
-1. 改最小模块 → 跑单测 → 跑集成验证 → 跑全量 `zig build` / `zig build test`/`zig build run -- --frames 120`。
-2. 不要同时大面积改 MCP 协议和 Editor UI —— 问题来源不可分辨。
+### 11.1 日常流程
+1. 改最小模块 -> 跑 `zig build` -> 跑 `zig build render-test -- --suite --frames 3` -> 跑 `zig build run -- --frames 120`
+2. 不要同时大面积改 RHI 和渲染 Pass — 问题来源不可分辨
+3. RHI 重构期间保持 SDL3 Backend 可切换回退
 
-### 9.2 验收方式
-每个功能至少保留三种验证：编译验证、单元测试、手工 smoke test。
+### 11.2 验收方式
+- 编译验证 + render-test 套件 (8 配置 golden 对比) + 手工 smoke test
+- 每个新渲染特性必须在 render-test 套件中有对应配置
+- Golden image 更新需附说明
 
-### 9.3 Staged Transaction 约束
-- v1 只允许单活跃事务，新的 `stage_transaction` 替换旧事务。
-- 内存模型：命令列表 + 预览世界快照 + 轻量摘要三层。
-- apply = 重放命令到主世界；discard = 销毁预览，不改主世界。
-- PreviewWorld 不向主物理系统注册真实刚体。
+### 11.3 着色器开发
+- 源码: `assets/shaders/*.glsl`
+- 编译: `zig build shaders` -> SPIR-V + MSL (manifest.json)
+- 新 Pass: 必须在 render_graph.zig 注册依赖关系
 
-### 9.4 线程安全
-- 协议线程不直接写 `World`。只读资源来自主线程快照。退出信号用原子变量传递。
+### 11.4 RHI 切换检查清单
+切换到新 RHI Backend 前，逐项验证:
+- [ ] 所有 18 个 Pass 渲染正确
+- [ ] render-test 8 配置全部 PASS
+- [ ] GPU 内存不泄漏 (运行 120 帧后 RSS 稳定)
+- [ ] 帧率不回退 (60 FPS baseline scene)
 
-### 9.5 新系统 Runbook
-接手新模块时，先读这 6 个文件再动手：
-1. `src/engine/mcp/server.zig`
-2. `src/engine/mcp/collaboration.zig`
-3. `src/engine/core/command_queue.zig`
-4. `src/editor/ai_native/collaboration.zig`
-5. `src/engine/render/renderer.zig`
-6. `src/engine/script/runtime.zig`
+### 11.5 线程安全
+- MCP 协议线程不直接写 `World`，只读快照
+- 渲染线程不写 ECS，只读 PreparedScene
+- 退出信号用原子变量
 
 ---
 
-## 十、术语表
+## 十二、术语表
 
 | 术语 | 含义 |
 |------|------|
+| RHI | Rendering Hardware Interface — 渲染硬件接口抽象层 |
+| CSM | Cascaded Shadow Maps — 级联阴影贴图 |
+| SSAO | Screen Space Ambient Occlusion — 屏幕空间环境遮蔽 |
+| SSGI | Screen Space Global Illumination — 屏幕空间全局照明 |
+| SSR | Screen Space Reflections — 屏幕空间反射 |
+| TAA | Temporal Anti-Aliasing — 时间抗锯齿 |
+| NEE | Next Event Estimation — 下一事件估计（直接光源采样） |
+| MIS | Multiple Importance Sampling — 多重重要性采样 |
+| GGX | 微面元分布模型（Trowbridge-Reitz） |
+| BSDF | Bidirectional Scattering Distribution Function — 双向散射分布函数 |
+| OIDN | Intel Open Image Denoise — 开源 AI 降噪器 |
+| SPP | Samples Per Pixel — 每像素采样数 |
+| AOV | Arbitrary Output Variable — 辅助渲染通道 (albedo/normal/depth) |
+| EXR | OpenEXR — HDR 图像格式 |
 | `World` | 引擎主场景世界，ECS 容器 |
 | `CommandQueue` | AI 与编辑器共享的统一写入口 |
-| MCP Resource | 只读资源（不执行修改） |
-| MCP Tool | 可执行动作（通过 CommandQueue） |
-| Staged Transaction | 待确认的协作修改（需 apply/discard） |
-| `PreviewWorld` | Staged 对应的预览世界（渲染/选中/gizmo） |
-| `ScriptVM` | 脚本运行时抽象层（WasmVM 挂载于下） |
-| `Jarvis` | AI 助手，通过 MCP 读写场景的「无限带宽技术美术」 |
-| `Command Timeline` | 可视化的 Undo/Redo 时间线，区分人类/AI 操作 |
-| `Ghost Highlight` | AI 正在操作的物体在视口中显示紫色呼吸灯轮廓 |
-| `Path Tracer` | 离线路径追踪渲染器（双轨制的「离线轨」） |
-
----
-
-## 十一、已完成的历史开发阶段
-
-以下为 AI-Native 重构已完成的各阶段记录，作为架构约束的来源参考。
-
-| 阶段 | 内容 | 状态 |
-|------|------|------|
-| Phase 0 | 基线收口：编译/测试恢复绿色，删除 HTTP 旧叙事 | ✅ |
-| Phase 1 | MCP `stdio` 只读基座：scene/entity/selection 资源 | ✅ |
-| Phase 2 | CommandQueue 最小闭环：实体 CRUD + 变换 + coalescing | ✅ |
-| Phase 3 | Editor 写路径接入 Command：Inspector/Hierarchy/Manipulation | ✅ |
-| Phase 4 | MCP 写工具 + Staged Transaction + Ghost Preview | ✅ |
-| Phase 5 | WASM 脚本 + Editor Utility UI (35 native symbols) | ✅ |
-| Phase 6 | Schema 资源族 + Scene/Prefab/Material 一致性测试 | ✅ |
-| Phase 7 | Query API：语义过滤 + 排序 + 半径/AABB + BVH 加速 | ✅ |
-
----
-
-## 十二、文件索引
-
-| 模块 | 关键文件 |
-|------|----------|
-| MCP 服务器 | `src/engine/mcp/server.zig` / `tools.zig` / `resources/mod.zig` |
-| 命令总线 | `src/engine/core/command.zig` / `command_queue.zig` |
-| 查询引擎 | `src/engine/core/query_engine.zig` |
-| 协作层 | `src/engine/mcp/collaboration.zig` / `src/editor/ai_native/collaboration.zig` |
-| 渲染管线 | `src/engine/render/renderer.zig` / `base_pass.zig` / `mesh_pass.zig` |
-| 物理系统 | `src/engine/physics/system.zig` / `physics_bvh.zig` |
-| 脚本系统 | `src/engine/script/runtime.zig` / `wasm_vm.zig` / `wasm_compiler.zig` |
-| 场景 IO | `src/engine/scene/scene_io.zig` / `world.zig` / `prefab.zig` |
-| 编辑器 | `src/editor/core/layer.zig` / `ui/viewport.zig` |
-
----
-
-## 十三、FAQ
-
-**Q: 为什么 v1 只做 stdio？**
-A: stdio 最容易对接桌面 MCP 客户端，不需要先解决网络服务和端口管理。协议层跑通比传输层更优先。
-
-**Q: 为什么不删 `vm.zig`？**
-A: `ScriptVM` 是稳定抽象层。正确方向是把 WasmVM 作为新 backend 挂进来，而不是拆掉抽象层导致脚本系统和热重载一起打散。
-
-**Q: 为什么不上 `tags` / `topology_version` / `data_version`？**
-A: 这些字段不是当前数据模型的真实基础设施。读写闭环稳定后再决定是否需要，避免契约与实现脱节。
-
-**Q: 资源为什么做快照？**
-A: 协议线程和主线程职责不同。跨线程直接读可变状态会把线程安全问题带进协议层。快照多一层但边界清晰。
-
-**Q: 最终判断标准是什么？**
-A: 当 AI 能完成"读场景 → 改实体 → 读回验证 → 运行脚本 → 再验证"这个闭环时，引擎进入真正可用阶段。当你能对 AI 说"帮我创建一个带有 UI 血条和音效的主角，当点击鼠标时通过射线检测开火，并打包发布"且 AI 能在无崩溃的反馈循环中完成这一切时，Guava Engine 达到完全体。
-
-**Q: 为什么先做 CPU Path Tracer 而不是直接上 Metal RT？**
-A: CPU 版本零硬件依赖、可立即开始、适合 CI golden image 测试。它先验证双轨切换的 UI 和数据流是否跑通，再用 Metal RT 替换内核提速。
-
-**Q: AI 应该直接写 JSON 文件还是走 Command API？**
-A: 走 Command API。直接写 JSON 再等 hot-reload 太慢且有竞态。AI 发结构化 Command → 引擎执行 → 同时更新内存 ECS 和持久化 JSON。Hot-reload 只作为外部文件变更的兜底。
-
-**Q: 截图多久发一次给 AI？**
-A: 不是每帧，而是 Command 完成后的稳态帧。Path Tracer 需要累积到一定 SPP 后再截图。发 512×512 分辨率即可。可同时发修改前/后对比。
+| MCP | Model Context Protocol — AI 读写场景的协议 |
+| Staged Transaction | 待确认的 AI 修改（需 apply/discard） |
+| `PreviewWorld` | Staged 对应的预览世界 |
+| `ScriptVM` | 脚本运行时抽象层 (WasmVM / ZigVM) |
+| Principled BSDF | 统一材质模型（对标 Blender / Disney） |
