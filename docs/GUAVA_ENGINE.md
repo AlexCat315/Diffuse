@@ -1029,16 +1029,16 @@ pub const SubAlloc = struct {
 | UI-2 | 工具栏断点下调至 680px | 680px 宽仍可用 | ✅ |
 | GR-1 | 音频错误诊断 | SoLoud 错误码+描述 | ✅ |
 
-### Phase 2：光栅管线增强（纯 Fragment 可完成）
+### Phase 2：光栅管线增强（纯 Fragment 可完成） ✅ COMPLETED
 
 > 前置: Phase 1
 > 限定范围: 仅含不依赖 Compute Shader 的光栅改进。
 
-| ID | 任务 | 检验标准 |
-|----|------|---------|
-| R-3 | 级联阴影 (4-CSM) | 远处阴影清晰 |
-| R-4 | 多光源 (dir x4 + point x16) | 4 盏点光照亮不同区域 |
-| R-8 | Contact Shadows | 物体底部有接触阴影 |
+| ID | 任务 | 检验标准 | 状态 |
+|----|------|---------|------|
+| R-3 | 级联阴影 (4-CSM) | 远处阴影清晰 | ✅ |
+| R-4 | 多光源 (dir x4 + point x16) | 4 盏点光照亮不同区域 | ✅ |
+| R-8 | Contact Shadows | 物体底部有接触阴影 | ✅ |
 
 ### Phase 3：RHI 重构 — Metal 原生 Backend + Compute
 
