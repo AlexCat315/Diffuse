@@ -162,8 +162,10 @@
 ```
 GuavaRHI (src/engine/rhi/)
 ├── rhi.zig                — 公共接口定义 (trait / vtable)
-├── types.zig              — 统一类型 (Buffer, Texture, Pipeline, BindGroup, ...)
+├── types.zig              — 统一类型 (Buffer, Texture, Pipeline, BindingSet, ResourceStates, ...)
 ├── command_buffer.zig     — 软件命令缓冲区 (ArrayList(u8) opcode stream)
+├── state_tracker.zig      — 声明式资源状态追踪 (参考 NVRHI CommandListResourceStateTracker)
+├── upload_ring.zig        — 分块子分配上传环 (staging buffer 管理)
 ├── queue.zig              — 多队列抽象 (Graphics / Compute / Transfer)
 ├── metal/
 │   ├── metal_device.zig   — MTLDevice 封装 (Zig 调用 ObjC)
@@ -178,7 +180,11 @@ GuavaRHI (src/engine/rhi/)
 └── dx12/                  — (Phase 3，可选)
 ```
 
-**关键新增**：`command_buffer.zig` 和 `queue.zig`。前者使 CommandBuffer 变为轻量软件对象而非硬件句柄（详见 3.6），后者暴露显式多队列（详见 3.7）。
+**关键新增**：
+- `command_buffer.zig` — CommandBuffer 为轻量软件对象而非硬件句柄（详见 3.4）
+- `state_tracker.zig` — 声明式资源状态追踪，Pass 只声明目标状态，tracker 自动计算 barrier（参考 NVRHI，详见 3.7）
+- `upload_ring.zig` — 分块子分配 staging buffer，版本化回收（参考 NVRHI UploadManager，详见 3.9）
+- `queue.zig` — 显式多队列 + Timeline Semaphore 同步（详见 3.6）
 
 ### 3.3 RHI 公共接口
 
@@ -193,17 +199,20 @@ pub const RhiDevice = struct {
     createShaderModule:     *const fn(ShaderModuleDesc) Error!ShaderModule,
 
     // ============================================================
-    //  B — 管线 & 绑定模型
-    //    没有这些，GPU 不知道 slot 0 绑的是哪张纹理。
+    //  B — 管线 & 绑定模型（三层架构，参考 NVRHI）
+    //    Layer 1: BindingLayout — 编译期接口声明（对应 VkDescriptorSetLayout / D3D12 Root Signature）
+    //    Layer 2: BindingSet    — 运行时资源绑定（对应 VkDescriptorSet / Descriptor Table）
+    //    Layer 3: Bindless      — 可选动态数组（对应 Descriptor Indexing / ResourceDescriptorHeap）
     //    SDL3 在内部自动推断 Pipeline Layout / Descriptor Set，
     //    原生 API 必须由引擎显式创建。
     // ============================================================
-    createPipelineLayout:   *const fn(PipelineLayoutDesc) Error!PipelineLayout,
+    createBindingLayout:    *const fn(BindingLayoutDesc) Error!BindingLayout,   // Layer 1: slot 布局声明
+    createBindingSet:       *const fn(BindingSetDesc, BindingLayout) Error!BindingSet,  // Layer 2: 需要 layout 参数
+    createPipelineLayout:   *const fn(PipelineLayoutDesc) Error!PipelineLayout, // 组合多个 BindingLayout
     createGraphicsPipeline: *const fn(GraphicsPipelineDesc) Error!GraphicsPipeline,
     createComputePipeline:  *const fn(ComputePipelineDesc) Error!ComputePipeline,
-    createBindGroup:        *const fn(BindGroupDesc) Error!BindGroup,
-    // RenderPass / ComputePass 录制时：
-    setBindGroup:           *const fn(CommandBuffer, u32, BindGroup) void,  // slot, group
+    // 命令录制时绑定资源：
+    setBindingSet:          *const fn(CommandBuffer, u32, BindingSet) void,  // slot, set
 
     // ============================================================
     //  C — 命令录制
@@ -223,7 +232,10 @@ pub const RhiDevice = struct {
     //    SDL3 隐藏了所有 Image Layout Transition。
     //    原生 API 中，如果 SSAO 写完 texture 后
     //    直接被 base_pass 采样而不插 barrier → GPU 崩溃。
-    //    低层 RHI 提供此原语；Render Graph 负责自动生成。
+    //
+    //    双层设计（参考 NVRHI）：
+    //    低层: pipelineBarrier — RHI 原语，Render Graph 内部使用
+    //    高层: StateTracker — 声明式 API，Pass 作者使用（见 3.7）
     // ============================================================
     pipelineBarrier:     *const fn(CommandBuffer, BarrierDesc) void,
 
@@ -272,6 +284,29 @@ pub const RhiDevice = struct {
 
 pub const QueueClass = enum { graphics, compute, transfer };
 
+/// 统一资源状态位标志（参考 NVRHI ResourceStates）。
+/// 抽象了 Vulkan 的 VkImageLayout + VkAccessFlags2 + VkPipelineStageFlags2 三个概念，
+/// 后端用集中式查找表将每个位映射到平台三元组 (stage, access, layout)。
+pub const ResourceStates = packed struct(u32) {
+    constant_buffer:    bool = false,
+    vertex_buffer:      bool = false,
+    index_buffer:       bool = false,
+    indirect_argument:  bool = false,
+    shader_resource:    bool = false,
+    unordered_access:   bool = false,
+    render_target:      bool = false,
+    depth_write:        bool = false,
+    depth_read:         bool = false,
+    copy_dest:          bool = false,
+    copy_source:        bool = false,
+    present:            bool = false,
+    accel_struct_read:  bool = false,
+    accel_struct_write: bool = false,
+    resolve_dest:       bool = false,
+    resolve_source:     bool = false,
+    _padding: u16 = 0,
+};
+
 pub const Capabilities = struct {
     compute: bool,
     ray_tracing: bool,
@@ -287,9 +322,10 @@ pub const Capabilities = struct {
 
 | 旧 3.3 | 新 3.3 | 原因 |
 |---------|--------|------|
-| 无绑定模型 | `createPipelineLayout` / `createBindGroup` / `setBindGroup` | GPU 需要知道 slot→资源映射 |
+| 无绑定模型 | 三层：`BindingLayout`(布局) → `BindingSet`(绑定) → Bindless(可选) | 参考 NVRHI 三层架构；Layout 不变性允许后端激进缓存 |
 | `submitFrame` 包办一切 | `acquireSwapchainImage` → `submitCommandBuffer` → `present` 三步 | 必须拆开才能控制 Metal drawable / Vulkan swapchain |
-| 无 barrier | `pipelineBarrier(CommandBuffer, BarrierDesc)` | 纹理状态转换是 Vulkan/Metal 生存线 |
+| 无 barrier | `pipelineBarrier` (低层) + `StateTracker` (高层声明式) | 参考 NVRHI 双层 barrier 设计 |
+| 无状态枚举 | `ResourceStates` 位标志统一抽象 stage/access/layout | 参考 NVRHI；后端用查找表映射到平台三元组 |
 | 无队列概念 | `getQueue(.graphics / .compute / .transfer)` | 多队列并行是性能基础 |
 | `beginFrame` 返回 CommandBuffer | `createCommandBuffer` 独立于帧 | 软件 cmd buf 可在任意线程录制 |
 
@@ -467,6 +503,74 @@ Barrier 翻译器（新增）:
 | DX12 | HLSL → DXIL (dxc) | 离线编译 |
 
 统一着色器源使用 GLSL，通过 `zig build shaders` 编译为各平台格式。manifest.json 管理所有 shader variant。
+
+### 3.9 工业参考：NVRHI 设计模式借鉴
+
+> [NVRHI](https://github.com/NVIDIAGameWorks/nvrhi) 是 NVIDIA 开源的工业级 RHI 抽象层（D3D11 / D3D12 / Vulkan），被 RTX Remix 等项目使用。以下是 Guava RHI 从中提取的关键设计模式。
+
+#### 3.9.1 采纳的设计
+
+| NVRHI 模式 | Guava 对应 | 说明 |
+|---|---|---|
+| **三层绑定模型**：`BindingLayout` → `BindingSet` → Bindless | `createBindingLayout` → `createBindingSet(desc, layout)` | Layout 不变性允许后端激进缓存 VkPipelineLayout / Root Signature |
+| **声明式状态追踪**：`setTextureState` + `commitBarriers` | `StateTracker.requireTextureState` + `commitBarriers` | Pass 只声明目标状态，tracker 自动计算 barrier |
+| **`ResourceStates` 位标志** | `types.zig` 中的 `ResourceStates` packed struct | 统一抽象 Vulkan 三元组 (stage, access, layout)，后端用集中式查找表映射 |
+| **`keepInitialState` / `permanentState`** | `TextureDesc.keep_initial_state` | 减少无谓 barrier：帧末自动恢复 / 静态资源零 barrier |
+| **Barrier 合并** | `StateTracker` 同资源多次请求自动 OR 合并 | 减少 `vkCmdPipelineBarrier2` 调用次数 |
+| **统一 CommandList + 队列类型参数** | 统一 `CommandBuffer` soft opcode stream + `QueueClass` | NVRHI 用一个 ICommandList，队列类型决定可用方法 |
+| **分块上传管理器**（UploadManager） | `upload_ring.zig` | 64KB 分块子分配 + 版本化回收，Timeline Semaphore 驱动 |
+| **Per-subresource 状态追踪** | `StateTracker` 支持 `SubresourceSet` 粒度 | Bloom downsample chain 可以 mip 0 写/mip 1-N 读 |
+
+#### 3.9.2 上传环设计（参考 NVRHI UploadManager）
+
+```zig
+// upload_ring.zig
+pub const UploadRing = struct {
+    const Chunk = struct {
+        buffer: Buffer,             // staging buffer (CPU-visible)
+        cpu_ptr: [*]u8,             // mapped pointer
+        offset: usize,              // current write cursor
+        capacity: usize,            // chunk size (default 64KB)
+        version: u64,               // frame version when last used
+    };
+
+    chunks: std.ArrayList(Chunk),
+    free_chunks: std.ArrayList(*Chunk),
+    current: ?*Chunk,
+    frame_version: u64,
+    chunk_size: usize = 64 * 1024,
+
+    /// 从当前 chunk 子分配 size 字节。如果当前 chunk 空间不足，
+    /// 尝试复用空闲 chunk，否则创建新 chunk。
+    pub fn suballocate(self: *UploadRing, size: usize, alignment: usize) Error!SubAlloc {
+        // 1. 尝试 current chunk
+        // 2. 尝试 free_chunks (version <= completed_version)
+        // 3. 创建新 chunk
+    }
+
+    /// 帧结束时调用。通过 Timeline Semaphore 查询已完成的帧版本，
+    /// 将对应 chunk 回收到 free_chunks。
+    pub fn onFrameComplete(self: *UploadRing, completed_version: u64) void { ... }
+};
+
+pub const SubAlloc = struct {
+    cpu_ptr: [*]u8,     // CPU 写入地址
+    gpu_offset: u64,    // GPU 端偏移（用于 copy 命令）
+    buffer: Buffer,     // 所在的 staging buffer
+};
+```
+
+#### 3.9.3 与 NVRHI 的差异
+
+| 方面 | NVRHI | Guava | 选择理由 |
+|------|-------|-------|----------|
+| **生命周期管理** | `RefCountPtr` 引用计数 | 确定性 `destroy` + 帧级 arena | Zig 无 GC，确定性释放更可预测 |
+| **Descriptor Pool 策略** | Vulkan: 每 BindingSet 1 个 pool | 全局 pool + free list 回收 | 1:1 策略浪费内存，全局 pool 复用率更高 |
+| **Swapchain** | 不在核心接口 | `acquireSwapchainImage` / `present` 在核心接口 | 避免各平台碎片化处理 |
+| **CommandBuffer** | 直接映射硬件 CommandBuffer | 软件 opcode stream | 支持并行录制 + render replay |
+| **跨队列 barrier** | `VK_QUEUE_FAMILY_IGNORED` | Render Graph `cross_queue` 边生成 ownership transfer | NVRHI 不做队列所有权转移是简化；Guava 需要多队列 |
+| **Bindless** | 完整 DescriptorTable 支持 | Phase 2 实现 | 逐步演进，先满足当前 18 Pass |
+| **状态映射表** | `g_ResourceStateMap[]` 集中式查找表 | 同样用 comptime 查找表 | Zig comptime 可在编译期生成映射，零运行时开销 |
 
 ---
 
