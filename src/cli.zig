@@ -45,6 +45,7 @@ pub const RenderTestOptions = struct {
     bloom: bool = false,
     ssao: bool = false,
     export_png: bool = false,
+    suite: bool = false,
     allocated_scene: bool = false,
 
     pub fn deinit(self: *RenderTestOptions, allocator: std.mem.Allocator) void {
@@ -294,6 +295,8 @@ fn parseRenderTestOptionsAlloc(allocator: std.mem.Allocator, args: anytype) !Ren
             options.ssao = true;
         } else if (std.mem.eql(u8, arg, "--export-png")) {
             options.export_png = true;
+        } else if (std.mem.eql(u8, arg, "--suite")) {
+            options.suite = true;
         } else {
             std.debug.print("Unknown render-test argument: {s}\n", .{arg});
             return error.InvalidArgument;

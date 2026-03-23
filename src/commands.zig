@@ -449,6 +449,67 @@ pub fn runRenderTest(allocator: std.mem.Allocator, options: cli.RenderTestOption
     std.debug.print("RENDER TEST PASSED\n\n", .{});
 }
 
+/// 批量测试套件 — 运行预定义的特征组合，汇总通过/失败。
+pub fn runRenderTestSuite(allocator: std.mem.Allocator, base_options: cli.RenderTestOptions) !void {
+    const SuiteCase = struct {
+        label: []const u8,
+        rt_shadows: bool = false,
+        path_trace: bool = false,
+        fxaa: bool = false,
+        bloom: bool = false,
+        ssao: bool = false,
+    };
+
+    const cases = [_]SuiteCase{
+        .{ .label = "baseline" },
+        .{ .label = "rt_shadows", .rt_shadows = true },
+        .{ .label = "path_trace", .path_trace = true },
+        .{ .label = "fxaa", .fxaa = true },
+        .{ .label = "bloom", .bloom = true },
+        .{ .label = "ssao", .ssao = true },
+        .{ .label = "rt_shadows+fxaa", .rt_shadows = true, .fxaa = true },
+        .{ .label = "rt_shadows+bloom+fxaa", .rt_shadows = true, .bloom = true, .fxaa = true },
+    };
+
+    var passed: usize = 0;
+    var failed: usize = 0;
+    var results: [cases.len]bool = undefined;
+
+    std.debug.print("\n======== Render Test Suite ({d} configurations) ========\n\n", .{cases.len});
+
+    for (cases, 0..) |tc, i| {
+        const opts = cli.RenderTestOptions{
+            .scene_path = base_options.scene_path,
+            .frames = base_options.frames,
+            .update_golden = base_options.update_golden,
+            .export_png = base_options.export_png,
+            .rt_shadows = tc.rt_shadows,
+            .path_trace = tc.path_trace,
+            .fxaa = tc.fxaa,
+            .bloom = tc.bloom,
+            .ssao = tc.ssao,
+        };
+
+        runRenderTest(allocator, opts) catch {
+            results[i] = false;
+            failed += 1;
+            continue;
+        };
+
+        results[i] = true;
+        passed += 1;
+    }
+
+    std.debug.print("\n======== Suite Summary ========\n", .{});
+    for (cases, 0..) |tc, i| {
+        const status: []const u8 = if (results[i]) "PASS" else "FAIL";
+        std.debug.print("  [{s}] {s}\n", .{ status, tc.label });
+    }
+    std.debug.print("\n{d}/{d} test configurations passed\n\n", .{ passed, cases.len });
+
+    if (failed > 0) return error.RenderTestFailed;
+}
+
 const PixelAnalysis = struct {
     avg_brightness: f64,
     min_brightness: f64,
