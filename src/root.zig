@@ -158,8 +158,8 @@ pub const script = @import("engine/script/script.zig");
 /// });
 /// ```
 pub const rhi = struct {
-    /// RHI 设备，GPU 资源管理的主入口
-    pub const Device = @import("engine/rhi/device.zig").RhiDevice;
+    /// 旧版 RHI 设备（基于 SDL3 GPU API，逐步迁移中）
+    pub const LegacyDevice = @import("engine/rhi/device.zig").RhiDevice;
     /// GPU 缓冲区
     pub const Buffer = @import("engine/rhi/device.zig").Buffer;
     /// 绑定组，用于绑定资源到着色器
@@ -237,22 +237,22 @@ pub const rhi = struct {
     /// 获取图形 API 名称
     pub const graphicsApiName = @import("engine/rhi/types.zig").graphicsApiName;
 
-    /// RHI v2 设备抽象（显式队列 + 软件命令缓冲）
-    pub const DeviceV2 = @import("engine/rhi/rhi.zig").Device;
-    /// RHI v2 能力查询
-    pub const CapabilitiesV2 = @import("engine/rhi/rhi.zig").Capabilities;
-    /// RHI v2 软件命令缓冲
-    pub const CommandBufferV2 = @import("engine/rhi/rhi.zig").CommandBuffer;
-    /// RHI v2 资源状态追踪
-    pub const StateTrackerV2 = @import("engine/rhi/rhi.zig").StateTracker;
-    /// RHI v2 队列类型
-    pub const QueueClassV2 = @import("engine/rhi/rhi.zig").QueueClass;
-    /// RHI v2 提交描述
-    pub const SubmitDescV2 = @import("engine/rhi/rhi.zig").SubmitDesc;
-    /// RHI v2 上传环分配器
-    pub const UploadRingV2 = @import("engine/rhi/upload_ring.zig").UploadRing;
-    /// Metal 原生后端骨架
-    pub const MetalBackendV2 = @import("engine/rhi/metal/metal_backend.zig").MetalBackend;
+    /// RHI 设备抽象（显式队列 + 软件命令缓冲）
+    pub const Device = @import("engine/rhi/rhi.zig").Device;
+    /// RHI 能力查询
+    pub const Capabilities = @import("engine/rhi/rhi.zig").Capabilities;
+    /// RHI 软件命令缓冲
+    pub const CommandBuffer = @import("engine/rhi/rhi.zig").CommandBuffer;
+    /// RHI 资源状态追踪
+    pub const StateTracker = @import("engine/rhi/rhi.zig").StateTracker;
+    /// RHI 队列类型
+    pub const QueueClass = @import("engine/rhi/rhi.zig").QueueClass;
+    /// RHI 提交描述
+    pub const SubmitDesc = @import("engine/rhi/rhi.zig").SubmitDesc;
+    /// RHI 上传环分配器
+    pub const UploadRing = @import("engine/rhi/upload_ring.zig").UploadRing;
+    /// Metal 原生后端
+    pub const MetalBackend = @import("engine/rhi/metal/metal_backend.zig").MetalBackend;
 };
 
 /// 渲染系统模块

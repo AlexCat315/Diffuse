@@ -13,5 +13,5 @@ pub const std_options = std.Options{
 test {
     std.testing.refAllDecls(@import("root.zig"));
     std.testing.refAllDecls(physics_system);
-    std.testing.refAllDecls(@import("engine/rhi_v2_integration_test.zig"));
+    std.testing.refAllDecls(@import("engine/rhi_integration_test.zig"));
 }
