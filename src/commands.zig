@@ -342,6 +342,56 @@ pub fn runRenderTest(allocator: std.mem.Allocator, options: cli.RenderTestOption
         }
     }
 
+    // Shadow delta check: compare RT shadow frame vs baseline golden to quantify darkening
+    if (options.rt_shadows) delta: {
+        const scene_bn = std.fs.path.basename(options.scene_path);
+        const sn = if (std.mem.lastIndexOfScalar(u8, scene_bn, '.')) |idx| scene_bn[0..idx] else scene_bn;
+        const baseline_path = try std.fmt.allocPrint(allocator, "dist/reports/render_test/{s}_baseline.ppm", .{sn});
+        defer allocator.free(baseline_path);
+
+        const baseline_ppm = std.fs.cwd().readFileAlloc(allocator, baseline_path, 32 * 1024 * 1024) catch {
+            std.debug.print("DELTA [SKIP]: No baseline golden for comparison ({s})\n", .{baseline_path});
+            break :delta;
+        };
+        defer allocator.free(baseline_ppm);
+
+        const baseline_pixels = parsePpmPixels(baseline_ppm) orelse break :delta;
+        if (baseline_pixels.len != pixel_data.len) break :delta;
+
+        var darkened_count: usize = 0;
+        var total_darkening: f64 = 0.0;
+        var max_darkening: f64 = 0.0;
+        const npx = pixel_data.len / 3;
+        for (0..npx) |i| {
+            const base_r: f64 = @as(f64, @floatFromInt(baseline_pixels[i * 3])) / 255.0;
+            const base_g: f64 = @as(f64, @floatFromInt(baseline_pixels[i * 3 + 1])) / 255.0;
+            const base_b: f64 = @as(f64, @floatFromInt(baseline_pixels[i * 3 + 2])) / 255.0;
+            const cur_r: f64 = @as(f64, @floatFromInt(pixel_data[i * 3])) / 255.0;
+            const cur_g: f64 = @as(f64, @floatFromInt(pixel_data[i * 3 + 1])) / 255.0;
+            const cur_b: f64 = @as(f64, @floatFromInt(pixel_data[i * 3 + 2])) / 255.0;
+            const base_lum = 0.299 * base_r + 0.587 * base_g + 0.114 * base_b;
+            const cur_lum = 0.299 * cur_r + 0.587 * cur_g + 0.114 * cur_b;
+            const dark = base_lum - cur_lum;
+            if (dark > 0.01) {
+                darkened_count += 1;
+                total_darkening += dark;
+                if (dark > max_darkening) max_darkening = dark;
+            }
+        }
+
+        const darkened_pct: f64 = if (npx > 0) @as(f64, @floatFromInt(darkened_count)) / @as(f64, @floatFromInt(npx)) * 100.0 else 0.0;
+        const avg_darkening: f64 = if (darkened_count > 0) total_darkening / @as(f64, @floatFromInt(darkened_count)) else 0.0;
+        std.debug.print("DELTA: {d:.1}% pixels darkened, avg_dark={d:.3}, max_dark={d:.3}\n", .{ darkened_pct, avg_darkening, max_darkening });
+
+        checks_total += 1;
+        if (darkened_pct > 0.5) {
+            checks_passed += 1;
+            std.debug.print("CHECK [PASS]: RT shadows produce measurable darkening ({d:.1}%)\n", .{darkened_pct});
+        } else {
+            std.debug.print("CHECK [FAIL]: RT shadows produce no measurable darkening ({d:.1}%)\n", .{darkened_pct});
+        }
+    }
+
     // Export frame image if requested
     if (options.export_png) {
         try std.fs.cwd().makePath("dist/reports/render_test");
