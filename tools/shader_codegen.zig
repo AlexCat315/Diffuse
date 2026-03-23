@@ -105,10 +105,12 @@ fn generateShaderModule(
         \\            .vulkan => switch (stage) {
         \\                .vertex => self.vertex_spirv,
         \\                .fragment => self.fragment_spirv,
+        \\                .compute => null,
         \\            },
         \\            .metal => switch (stage) {
         \\                .vertex => self.vertex_msl,
         \\                .fragment => self.fragment_msl,
+        \\                .compute => null,
         \\            },
         \\            .dx12 => null,
         \\        };
