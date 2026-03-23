@@ -12,13 +12,16 @@ layout(set = 2, binding = 1) uniform sampler2D u_metallic_roughness_map;
 layout(set = 2, binding = 2) uniform sampler2D u_normal_map;
 layout(set = 2, binding = 3) uniform sampler2D u_occlusion_map;
 layout(set = 2, binding = 4) uniform sampler2D u_emissive_map;
-layout(set = 2, binding = 5) uniform sampler2DShadow u_shadow_map;
+layout(set = 2, binding = 5) uniform sampler2DShadow u_shadow_map_0;
+layout(set = 2, binding = 6) uniform sampler2DShadow u_shadow_map_1;
+layout(set = 2, binding = 7) uniform sampler2DShadow u_shadow_map_2;
+layout(set = 2, binding = 8) uniform sampler2DShadow u_shadow_map_3;
 
 // IBL textures
-layout(set = 2, binding = 6) uniform sampler2D u_irradiance_map;
-layout(set = 2, binding = 7) uniform sampler2D u_prefiltered_env_map;
-layout(set = 2, binding = 8) uniform sampler2D u_brdf_lut;
-layout(set = 2, binding = 9) uniform sampler2D u_environment_map; // Fallback for debugging
+layout(set = 2, binding = 9) uniform sampler2D u_irradiance_map;
+layout(set = 2, binding = 10) uniform sampler2D u_prefiltered_env_map;
+layout(set = 2, binding = 11) uniform sampler2D u_brdf_lut;
+layout(set = 2, binding = 12) uniform sampler2D u_environment_map; // Fallback for debugging
 
 layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     vec4 u_base_color_factor;
@@ -34,6 +37,9 @@ layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     vec4 u_ambient_color;
     vec4 u_shadow_params; // x: bias, yzw: preview_tint_color
     vec4 u_ibl_params; // x: use_ibl, y: ibl_intensity, z: preview_tint_strength, w: reserved
+    mat4 u_cascade_matrices[4];
+    vec4 u_cascade_splits; // view-space far distance per cascade
+    mat4 u_view_matrix;
 } material_uniforms;
 
 const float PI = 3.14159265359;
@@ -130,10 +136,25 @@ void main() {
     vec3 F0 = vec3(0.04);
     F0 = mix(F0, albedo, metallic);
 
-    // Shadow calculation - single-map Poisson disk PCF soft shadows
+    // CSM: Cascaded Shadow Map calculation
     float shadow = 1.0;
     if (material_uniforms.u_shadow_params.x > 0.0) {
-        vec4 frag_pos_light_space = material_uniforms.u_light_space_matrix * vec4(v_world_position, 1.0);
+        // Compute view-space depth for cascade selection
+        vec4 view_pos = material_uniforms.u_view_matrix * vec4(v_world_position, 1.0);
+        float view_depth = -view_pos.z; // positive distance from camera
+
+        // Select cascade based on view depth
+        int cascade_idx = 3; // default to farthest
+        for (int i = 0; i < 4; ++i) {
+            if (view_depth < material_uniforms.u_cascade_splits[i]) {
+                cascade_idx = i;
+                break;
+            }
+        }
+
+        // Project into selected cascade's light space
+        mat4 cascade_matrix = material_uniforms.u_cascade_matrices[cascade_idx];
+        vec4 frag_pos_light_space = cascade_matrix * vec4(v_world_position, 1.0);
         vec3 proj_coords = frag_pos_light_space.xyz / frag_pos_light_space.w;
         proj_coords = proj_coords * 0.5 + 0.5;
 
@@ -141,8 +162,10 @@ void main() {
         float bias = material_uniforms.u_shadow_params.x;
 
         // Slope-scaled bias: steeper surfaces get more bias to avoid acne
+        // Closer cascades use less bias since they have higher texel density
         float NdotL_bias = max(dot(normalize(v_world_normal), normalize(-material_uniforms.u_light_direction.xyz)), 0.0);
-        bias = max(bias * (1.0 - NdotL_bias), bias * 0.1);
+        float cascade_bias_scale = 1.0 + float(cascade_idx) * 0.5; // far cascades get more bias
+        bias = max(bias * (1.0 - NdotL_bias) * cascade_bias_scale, bias * 0.1);
 
         bool inside_shadow_map =
             proj_coords.x >= 0.0 && proj_coords.x <= 1.0 &&
@@ -163,12 +186,29 @@ void main() {
             );
 
             shadow = 0.0;
-            vec2 texel_size = 1.0 / textureSize(u_shadow_map, 0);
-            float spread = 1.5; // PCF spread radius in texels
+            // PCF spread widens for farther cascades (lower texel density)
+            float spread = 1.5 + float(cascade_idx) * 0.5;
 
+            // Sample the correct cascade shadow map
             for (int i = 0; i < 16; ++i) {
-                vec2 offset = poissonDisk[i] * texel_size * spread;
-                shadow += texture(u_shadow_map, vec3(proj_coords.xy + offset, current_depth - bias));
+                vec3 sample_coord;
+                if (cascade_idx == 0) {
+                    vec2 texel_size = 1.0 / textureSize(u_shadow_map_0, 0);
+                    sample_coord = vec3(proj_coords.xy + poissonDisk[i] * texel_size * spread, current_depth - bias);
+                    shadow += texture(u_shadow_map_0, sample_coord);
+                } else if (cascade_idx == 1) {
+                    vec2 texel_size = 1.0 / textureSize(u_shadow_map_1, 0);
+                    sample_coord = vec3(proj_coords.xy + poissonDisk[i] * texel_size * spread, current_depth - bias);
+                    shadow += texture(u_shadow_map_1, sample_coord);
+                } else if (cascade_idx == 2) {
+                    vec2 texel_size = 1.0 / textureSize(u_shadow_map_2, 0);
+                    sample_coord = vec3(proj_coords.xy + poissonDisk[i] * texel_size * spread, current_depth - bias);
+                    shadow += texture(u_shadow_map_2, sample_coord);
+                } else {
+                    vec2 texel_size = 1.0 / textureSize(u_shadow_map_3, 0);
+                    sample_coord = vec3(proj_coords.xy + poissonDisk[i] * texel_size * spread, current_depth - bias);
+                    shadow += texture(u_shadow_map_3, sample_coord);
+                }
             }
             shadow /= 16.0;
 

@@ -1014,6 +1014,9 @@ pub const SubAlloc = struct {
 
 ## 十、分阶段执行路线图
 
+> **架构原则：先打地基，再精装修。** 所有依赖 Compute Shader 的现代特效（TAA、SSGI、
+> 多光源剔除）必须在 RHI 重构完成后实施，避免在 SDL3 纯 Fragment 管线上重复造轮子。
+
 ### Phase 1：修复基础 — 让看得见的东西先正确 ✅ COMPLETED
 
 > 前置: 无
@@ -1026,21 +1029,23 @@ pub const SubAlloc = struct {
 | UI-2 | 工具栏断点下调至 680px | 680px 宽仍可用 | ✅ |
 | GR-1 | 音频错误诊断 | SoLoud 错误码+描述 | ✅ |
 
-### Phase 2：现代光栅管线
+### Phase 2：光栅管线增强（纯 Fragment 可完成）
 
 > 前置: Phase 1
+> 限定范围: 仅含不依赖 Compute Shader 的光栅改进。
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|
 | R-3 | 级联阴影 (4-CSM) | 远处阴影清晰 |
 | R-4 | 多光源 (dir x4 + point x16) | 4 盏点光照亮不同区域 |
-| R-5 | TAA 完整接入 | 围栏边缘无闪烁 |
-| R-6 | SSGI | 红墙旁白物体有红色溢出 |
 | R-8 | Contact Shadows | 物体底部有接触阴影 |
 
-### Phase 3：RHI 重构 — Metal 原生 Backend
+### Phase 3：RHI 重构 — Metal 原生 Backend + Compute
 
-> 前置: Phase 2 (光栅管线稳定后再换底层)
+> 前置: Phase 2（光栅管线基本功能稳定后换底层）
+>
+> ⚠️ **这是后续所有现代特效的基石。** 没有 Compute Queue 和显式 Barrier，
+> TAA 的历史缓冲读写、SSGI 的降采样/升采样链、多光源剔除 Tile 分配全部无法高效实现。
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|
@@ -1048,7 +1053,21 @@ pub const SubAlloc = struct {
 | RHI-2 | Metal Compute Backend | IBL 改 GPU 计算，SSAO dispatch |
 | RHI-3 | Metal RT 统一到 RHI | RT Shadow 和 Path Trace 走统一接口 |
 
-### Phase 4：路径追踪器重写
+### Phase 4：Compute 加持的现代光栅特效
+
+> 前置: Phase 3（RHI-2 Compute 已就绪）
+>
+> 这些特效在纯 Fragment 管线上虽然能跑，但性能和质量均不可接受。
+> 有了 Compute Shader 后：TAA 的时域累积用 Compute 写历史缓冲，SSGI 的
+> 降噪/降采样链用 Compute dispatch，多光源剔除用 Tile-based Compute 分配。
+
+| ID | 任务 | 检验标准 |
+|----|------|---------|
+| R-5 | TAA (Compute temporal resolve) | 围栏边缘无闪烁 |
+| R-6 | SSGI (Compute downsample + denoise) | 红墙旁白物体有红色溢出 |
+| R-7 | SSR 粗糙度模糊 | 粗糙表面模糊反射 |
+
+### Phase 5：路径追踪器重写
 
 > 前置: RHI-2 (Compute)
 
@@ -1061,9 +1080,9 @@ pub const SubAlloc = struct {
 | PT-5 | 俄罗斯轮盘 | 间接光亮度不再偏暗 |
 | PT-7 | OIDN 降噪 | 32 SPP + 降噪 = 干净画面 |
 
-### Phase 5：创作工具链
+### Phase 6：创作工具链
 
-> 前置: Phase 2 (多光源), Phase 4 (PT)
+> 前置: Phase 2 (多光源), Phase 5 (PT)
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|
@@ -1074,9 +1093,9 @@ pub const SubAlloc = struct {
 | CT-7 | FFmpeg 视频编码 | 4K H.265 MP4 输出 |
 | PT-8 | EXR 序列帧输出 | 10 帧动画序列正确输出 |
 
-### Phase 6：游戏运行时补全
+### Phase 7：游戏运行时补全
 
-> 可与 Phase 5 并行
+> 可与 Phase 6 并行
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|
@@ -1088,7 +1107,7 @@ pub const SubAlloc = struct {
 | GR-7 | 游戏内 UI | 血条随数值变化 |
 | GR-8 | Python 脚本前端 | AI 生成 .py 脚本热重载运行 |
 
-### Phase 7：跨平台 + 创作工具扩展
+### Phase 8：跨平台 + 创作工具扩展
 
 > 前置: Phase 3
 
@@ -1099,7 +1118,50 @@ pub const SubAlloc = struct {
 | CT-1 | 节点材质编辑器 | 噪声混合材质可编辑 |
 | CT-5 | UV 编辑器 | 查看/调整 UV 映射 |
 | PT-6 | 自适应采样 | 渲染时间减半 |
-| R-7 | SSR 粗糙度模糊 | 粗糙表面模糊反射 |
+
+### 技术深水区预警
+
+以下三项在纸面上清晰，实际编码时复杂度指数级膨胀，需提前设计。
+
+#### ⚠️ 1. 节点材质的双向编译 (CT-1)
+
+计划中提到"编译为 GLSL fragment shader（光栅）+ path tracer eval 函数（离线）"。
+跨越两种截然不同的渲染范式共享一套节点图极其困难。
+
+**破局策略：** 不要尝试从节点图直接生成目标代码字符串。必须设计严谨的内部中间层
+（Material AST），提取 BaseColor / Normal / Roughness / Metallic 等纯物理属性，
+然后分别喂给光栅化管线的 Uber Shader 和路径追踪的 Material 闭包。
+
+```
+NodeGraph → Material AST → ┬→ GLSL Uber Shader (raster)
+                           └→ BSDF Closure (path tracer)
+```
+
+#### ⚠️ 2. Render Graph 瞬态内存复用 (Transient Memory Aliasing)
+
+Section 3.5.1 中此项标记为 ❌ 缺失。当管线膨胀到 15+ Pass（Bloom 降采样链、
+SSAO 模糊、TAA 历史等），1440p 分辨率下不做瞬态显存复用，VRAM 占用轻松突破
+2 GB，Mac 统一内存带宽吃紧。
+
+**破局策略：** 利用已有的 `ResourceLifetime`（first\_use / last\_use），在 RHI 重构
+（Phase 3）完成后立刻接入内存池算法——基于时间的堆栈分配，让无生命周期交集的
+Render Target 物理复用同一块显存。
+
+#### ⚠️ 3. Jolt Physics 固定步长与变帧率撕裂 (GR-3)
+
+Jolt Physics 极度依赖固定步长（Fixed Timestep）。在实现 GameState 时，必须严格
+分离渲染帧（可变 delta + 插值）和物理逻辑帧（固定频率 60 Hz），否则 AI 寻路和
+物理碰撞会产生不可复现的幽灵 Bug。
+
+```
+game_loop:
+  accumulator += delta_time
+  while accumulator >= FIXED_DT:
+      physics.step(FIXED_DT)
+      accumulator -= FIXED_DT
+  alpha = accumulator / FIXED_DT
+  render(lerp(prev_state, curr_state, alpha))
+```
 
 ---
 
