@@ -94,6 +94,11 @@
       "name": "volumetric_fog",
       "vertex": "assets/shaders/volumetric_fog.vert.glsl",
       "fragment": "assets/shaders/volumetric_fog.frag.glsl"
+    },
+    {
+      "name": "rt_shadow_composite",
+      "vertex": "assets/shaders/tonemap.vert.glsl",
+      "fragment": "assets/shaders/rt_shadow_composite.frag.glsl"
     }
   ]
 }
