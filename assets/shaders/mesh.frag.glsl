@@ -58,7 +58,7 @@ vec3 fresnelSchlickRoughness(float cosTheta, vec3 F0, float roughness) {
 }
 
 vec2 sampleSphericalMap(vec3 direction) {
-    vec2 uv = vec2(atan(direction.z, direction.x), asin(direction.y));
+    vec2 uv = vec2(atan(direction.z, direction.x), asin(clamp(direction.y, -1.0, 1.0)));
     uv *= INV_ATAN;
     uv += 0.5;
     // Metal texture origin is top-left; flip Y to match equirectangular layout.
