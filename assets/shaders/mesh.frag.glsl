@@ -22,6 +22,7 @@ layout(set = 2, binding = 9) uniform sampler2D u_irradiance_map;
 layout(set = 2, binding = 10) uniform sampler2D u_prefiltered_env_map;
 layout(set = 2, binding = 11) uniform sampler2D u_brdf_lut;
 layout(set = 2, binding = 12) uniform sampler2D u_environment_map; // Fallback for debugging
+layout(set = 2, binding = 13) uniform sampler2D u_rt_shadow_mask;
 
 layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     vec4 u_base_color_factor;
@@ -37,6 +38,7 @@ layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     uvec4 u_light_counts; // x: dir_count, y: point_count
     vec4 u_ambient_color;
     vec4 u_shadow_params; // x: bias, yzw: preview_tint_color
+    vec4 u_rt_shadow_params; // x: enabled, y: strength, z: ambient_floor
     vec4 u_ibl_params; // x: use_ibl, y: ibl_intensity, z: preview_tint_strength, w: reserved
     mat4 u_cascade_matrices[4];
     vec4 u_cascade_splits; // view-space far distance per cascade
@@ -102,6 +104,21 @@ float GeometrySmith(vec3 N, vec3 V, vec3 L, float roughness) {
 
 vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
+}
+
+float sampleRtShadowFiltered(vec2 uv) {
+    vec2 texel = 1.0 / vec2(textureSize(u_rt_shadow_mask, 0));
+    float accum = 0.0;
+    float weight_sum = 0.0;
+    for (int y = -1; y <= 1; ++y) {
+        for (int x = -1; x <= 1; ++x) {
+            vec2 offset = vec2(float(x), float(y)) * texel;
+            float weight = (x == 0 && y == 0) ? 0.36 : ((x == 0 || y == 0) ? 0.12 : 0.07);
+            accum += texture(u_rt_shadow_mask, clamp(uv + offset, vec2(0.0), vec2(1.0))).r * weight;
+            weight_sum += weight;
+        }
+    }
+    return accum / max(weight_sum, 0.0001);
 }
 
 bool shadowMapContains(vec3 proj_coords) {
@@ -213,7 +230,13 @@ void main() {
 
     // CSM: Cascaded Shadow Map calculation
     float shadow = 1.0;
-    if (material_uniforms.u_shadow_params.x > 0.0 && material_uniforms.u_light_counts.x > 0u) {
+    if (material_uniforms.u_rt_shadow_params.x > 0.5) {
+        vec2 rt_size = vec2(textureSize(u_rt_shadow_mask, 0));
+        vec2 rt_uv = clamp(gl_FragCoord.xy / max(rt_size, vec2(1.0)), vec2(0.0), vec2(1.0));
+        float rt_visibility = sampleRtShadowFiltered(rt_uv);
+        rt_visibility = mix(1.0, rt_visibility, clamp(material_uniforms.u_rt_shadow_params.y, 0.0, 1.0));
+        shadow = max(rt_visibility, material_uniforms.u_rt_shadow_params.z);
+    } else if (material_uniforms.u_shadow_params.x > 0.0 && material_uniforms.u_light_counts.x > 0u) {
         // Compute view-space depth for cascade selection
         vec4 view_pos = material_uniforms.u_view_matrix * vec4(v_world_position, 1.0);
         float view_depth = -view_pos.z; // positive distance from camera
