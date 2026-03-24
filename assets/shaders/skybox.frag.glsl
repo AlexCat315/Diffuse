@@ -24,11 +24,5 @@ void main() {
 
     vec3 color = texture(u_environment_map, uv).rgb;
 
-    // Simple exposure + Reinhard tonemapping for LDR output.
-    // Without this, HDR environment values > 1.0 clip to pure white.
-    float exposure = 1.0;
-    color *= exposure;
-    color = color / (color + vec3(1.0)); // Reinhard
-
     out_color = vec4(color, 1.0);
 }
