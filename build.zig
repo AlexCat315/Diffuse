@@ -145,6 +145,48 @@ const soloud_wav_cpp_sources = [_][]const u8{
     "third_party/soloud/src/audiosource/wav/dr_impl.cpp",
 };
 
+const soloud_extra_audiosource_cpp_sources = [_][]const u8{
+    "third_party/soloud/src/audiosource/ay/chipplayer.cpp",
+    "third_party/soloud/src/audiosource/ay/sndbuffer.cpp",
+    "third_party/soloud/src/audiosource/ay/sndchip.cpp",
+    "third_party/soloud/src/audiosource/ay/sndrender.cpp",
+    "third_party/soloud/src/audiosource/ay/soloud_ay.cpp",
+    "third_party/soloud/src/audiosource/monotone/soloud_monotone.cpp",
+    "third_party/soloud/src/audiosource/noise/soloud_noise.cpp",
+    "third_party/soloud/src/audiosource/openmpt/soloud_openmpt.cpp",
+    "third_party/soloud/src/audiosource/sfxr/soloud_sfxr.cpp",
+    "third_party/soloud/src/audiosource/speech/darray.cpp",
+    "third_party/soloud/src/audiosource/speech/klatt.cpp",
+    "third_party/soloud/src/audiosource/speech/resonator.cpp",
+    "third_party/soloud/src/audiosource/speech/soloud_speech.cpp",
+    "third_party/soloud/src/audiosource/speech/tts.cpp",
+    "third_party/soloud/src/audiosource/tedsid/sid.cpp",
+    "third_party/soloud/src/audiosource/tedsid/soloud_tedsid.cpp",
+    "third_party/soloud/src/audiosource/tedsid/ted.cpp",
+    "third_party/soloud/src/audiosource/vic/soloud_vic.cpp",
+    "third_party/soloud/src/audiosource/vizsn/soloud_vizsn.cpp",
+};
+
+const soloud_filter_cpp_sources = [_][]const u8{
+    "third_party/soloud/src/filter/soloud_bassboostfilter.cpp",
+    "third_party/soloud/src/filter/soloud_biquadresonantfilter.cpp",
+    "third_party/soloud/src/filter/soloud_dcremovalfilter.cpp",
+    "third_party/soloud/src/filter/soloud_duckfilter.cpp",
+    "third_party/soloud/src/filter/soloud_echofilter.cpp",
+    "third_party/soloud/src/filter/soloud_eqfilter.cpp",
+    "third_party/soloud/src/filter/soloud_fftfilter.cpp",
+    "third_party/soloud/src/filter/soloud_flangerfilter.cpp",
+    "third_party/soloud/src/filter/soloud_freeverbfilter.cpp",
+    "third_party/soloud/src/filter/soloud_lofifilter.cpp",
+    "third_party/soloud/src/filter/soloud_robotizefilter.cpp",
+    "third_party/soloud/src/filter/soloud_waveshaperfilter.cpp",
+};
+
+const soloud_support_c_sources = [_][]const u8{
+    "third_party/soloud/src/audiosource/wav/stb_vorbis.c",
+    "src/engine/audio/openmpt_stub.c",
+};
+
 /// SoLoud MiniAudio backend (portable audio across Windows/macOS/Linux)
 const soloud_backend_cpp_sources = [_][]const u8{
     "third_party/soloud/src/backend/miniaudio/soloud_miniaudio.cpp",
@@ -225,6 +267,10 @@ const engine_cpp_flags = [_][]const u8{
 const soloud_cpp_flags = [_][]const u8{
     "-std=c++17",
     "-DWITH_MINIAUDIO=1",
+};
+
+const soloud_c_flags = [_][]const u8{
+    "-std=c11",
 };
 
 const macos_objcpp_flags = [_][]const u8{
@@ -428,12 +474,24 @@ fn configureEngineModule(
         .flags = &soloud_cpp_flags,
     });
     module.addCSourceFiles(.{
+        .files = &soloud_extra_audiosource_cpp_sources,
+        .flags = &soloud_cpp_flags,
+    });
+    module.addCSourceFiles(.{
+        .files = &soloud_filter_cpp_sources,
+        .flags = &soloud_cpp_flags,
+    });
+    module.addCSourceFiles(.{
         .files = &soloud_backend_cpp_sources,
         .flags = &soloud_cpp_flags,
     });
     module.addCSourceFiles(.{
         .files = &soloud_c_api_cpp_sources,
         .flags = &soloud_cpp_flags,
+    });
+    module.addCSourceFiles(.{
+        .files = &soloud_support_c_sources,
+        .flags = &soloud_c_flags,
     });
 
     const jolt_cpp_sources = collectSourceFiles(b, "third_party/jolt/Jolt", ".cpp");
@@ -448,6 +506,7 @@ fn configureEngineModule(
         });
         module.linkFramework("AppKit", .{});
         module.linkFramework("Metal", .{});
+        module.linkFramework("QuartzCore", .{});
     }
     if (os_tag == .windows) {
         module.addCSourceFiles(.{
@@ -510,6 +569,83 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &engine_cpp_flags,
         &engine_cpp_sources,
+        &.{wamr_platform_include_path},
+    );
+    appendCompileCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        cpp_compiler,
+        &soloud_cpp_flags,
+        &soloud_core_cpp_sources,
+        &.{wamr_platform_include_path},
+    );
+    appendCompileCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        cpp_compiler,
+        &soloud_cpp_flags,
+        &soloud_wav_cpp_sources,
+        &.{wamr_platform_include_path},
+    );
+    appendCompileCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        cpp_compiler,
+        &soloud_cpp_flags,
+        &soloud_extra_audiosource_cpp_sources,
+        &.{wamr_platform_include_path},
+    );
+    appendCompileCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        cpp_compiler,
+        &soloud_cpp_flags,
+        &soloud_filter_cpp_sources,
+        &.{wamr_platform_include_path},
+    );
+    appendCompileCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        cpp_compiler,
+        &soloud_cpp_flags,
+        &soloud_backend_cpp_sources,
+        &.{wamr_platform_include_path},
+    );
+    appendCompileCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        cpp_compiler,
+        &soloud_cpp_flags,
+        &soloud_c_api_cpp_sources,
+        &.{wamr_platform_include_path},
+    );
+    appendCompileCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        c_compiler,
+        &soloud_c_flags,
+        &soloud_support_c_sources,
         &.{wamr_platform_include_path},
     );
     const jolt_cpp_sources = collectSourceFiles(b, "third_party/jolt/Jolt", ".cpp");
