@@ -176,6 +176,9 @@ float sampleCascadeShadow(int cascade_idx, vec3 world_position, vec3 N, vec3 lig
 
 void main() {
     vec4 base_sample = material_uniforms.u_has_textures.x > 0 ? texture(u_base_color_map, v_uv) : vec4(1.0);
+    // sRGB → linear conversion: loaded textures (JPG/PNG) are sRGB-encoded but
+    // the GPU format is rgba8_unorm (linear), so we linearise for correct PBR.
+    base_sample.rgb = pow(base_sample.rgb, vec3(2.2));
     vec4 albedo_alpha = base_sample * v_color * material_uniforms.u_base_color_factor;
 
     // Alpha test

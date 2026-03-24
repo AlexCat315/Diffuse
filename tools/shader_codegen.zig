@@ -390,6 +390,7 @@ fn compileStage(
         "spirv-cross",
         spirv_path,
         "--msl",
+        "--msl-decoration-binding",
         "--rename-entry-point",
         "main",
         msl_entry,
