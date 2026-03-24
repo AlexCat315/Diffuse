@@ -161,7 +161,6 @@ const engine_cpp_sources = [_][]const u8{
     "third_party/imgui/imgui_tables.cpp",
     "third_party/imgui/imgui_widgets.cpp",
     "third_party/imgui/backends/imgui_impl_sdl3.cpp",
-    "third_party/imgui/backends/imgui_impl_sdlgpu3.cpp",
     "third_party/lunasvg/source/graphics.cpp",
     "third_party/lunasvg/source/lunasvg.cpp",
     "third_party/lunasvg/source/svgelement.cpp",
@@ -181,6 +180,8 @@ const macos_objcpp_sources = [_][]const u8{
     "src/engine/platform/window_native_macos.mm",
     "src/engine/rt/metal_rt_bridge.mm",
     "src/engine/rhi/metal/metal_rhi_bridge.mm",
+    "third_party/imgui/backends/imgui_impl_metal.mm",
+    "src/engine/ui/imgui_metal_backend.mm",
 };
 
 const windows_cpp_sources = [_][]const u8{
