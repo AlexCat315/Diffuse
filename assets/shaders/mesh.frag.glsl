@@ -55,6 +55,8 @@ vec2 sampleSphericalMap(vec3 direction) {
     vec2 uv = vec2(atan(direction.z, direction.x), asin(direction.y));
     uv *= INV_ATAN;
     uv += 0.5;
+    // Metal texture origin is top-left; flip Y to match equirectangular layout.
+    uv.y = 1.0 - uv.y;
     return uv;
 }
 

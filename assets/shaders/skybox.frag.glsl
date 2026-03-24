@@ -11,6 +11,10 @@ vec2 sampleSphericalMap(vec3 v) {
     vec2 uv = vec2(atan(v.z, v.x), asin(v.y));
     uv *= invAtan;
     uv += 0.5;
+    // Metal texture origin is top-left (uv.y=0 = top of image).
+    // Standard equirectangular maps store sky at top row.
+    // Without this flip, +Y (sky) maps to uv.y=1 (bottom) → upside-down.
+    uv.y = 1.0 - uv.y;
     return uv;
 }
 
@@ -18,13 +22,13 @@ void main() {
     vec3 dir = normalize(v_world_dir);
     vec2 uv = sampleSphericalMap(dir);
 
-    // In many engines, environment maps are flipped horizontally or vertically.
-    // If it's flipped, we can adjust here.
-
     vec3 color = texture(u_environment_map, uv).rgb;
 
-    // No tonemapping here, since we are rendering to an HDR buffer
-    // and the tonemap pass will handle it later!
+    // Simple exposure + Reinhard tonemapping for LDR output.
+    // Without this, HDR environment values > 1.0 clip to pure white.
+    float exposure = 1.0;
+    color *= exposure;
+    color = color / (color + vec3(1.0)); // Reinhard
 
     out_color = vec4(color, 1.0);
 }
