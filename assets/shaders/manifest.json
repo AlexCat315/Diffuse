@@ -101,6 +101,11 @@
       "fragment": "assets/shaders/rt_shadow_composite.frag.glsl"
     },
     {
+      "name": "rt_shadow_denoise",
+      "vertex": "assets/shaders/tonemap.vert.glsl",
+      "fragment": "assets/shaders/rt_shadow_denoise.frag.glsl"
+    },
+    {
       "name": "contact_shadow",
       "vertex": "assets/shaders/contact_shadow.vert.glsl",
       "fragment": "assets/shaders/contact_shadow.frag.glsl"

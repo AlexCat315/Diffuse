@@ -106,21 +106,6 @@ vec3 fresnelSchlick(float cosTheta, vec3 F0) {
     return F0 + (1.0 - F0) * pow(clamp(1.0 - cosTheta, 0.0, 1.0), 5.0);
 }
 
-float sampleRtShadowFiltered(vec2 uv) {
-    vec2 texel = 1.0 / vec2(textureSize(u_rt_shadow_mask, 0));
-    float accum = 0.0;
-    float weight_sum = 0.0;
-    for (int y = -1; y <= 1; ++y) {
-        for (int x = -1; x <= 1; ++x) {
-            vec2 offset = vec2(float(x), float(y)) * texel;
-            float weight = (x == 0 && y == 0) ? 0.36 : ((x == 0 || y == 0) ? 0.12 : 0.07);
-            accum += texture(u_rt_shadow_mask, clamp(uv + offset, vec2(0.0), vec2(1.0))).r * weight;
-            weight_sum += weight;
-        }
-    }
-    return accum / max(weight_sum, 0.0001);
-}
-
 bool shadowMapContains(vec3 proj_coords) {
     return proj_coords.x >= 0.0 && proj_coords.x <= 1.0 &&
         proj_coords.y >= 0.0 && proj_coords.y <= 1.0 &&
@@ -233,7 +218,7 @@ void main() {
     if (material_uniforms.u_rt_shadow_params.x > 0.5) {
         vec2 rt_size = vec2(textureSize(u_rt_shadow_mask, 0));
         vec2 rt_uv = clamp(gl_FragCoord.xy / max(rt_size, vec2(1.0)), vec2(0.0), vec2(1.0));
-        float rt_visibility = sampleRtShadowFiltered(rt_uv);
+        float rt_visibility = texture(u_rt_shadow_mask, rt_uv).r;
         rt_visibility = mix(1.0, rt_visibility, clamp(material_uniforms.u_rt_shadow_params.y, 0.0, 1.0));
         shadow = max(rt_visibility, material_uniforms.u_rt_shadow_params.z);
     } else if (material_uniforms.u_shadow_params.x > 0.0 && material_uniforms.u_light_counts.x > 0u) {
@@ -341,14 +326,14 @@ void main() {
         vec3 F0_ibl = mix(vec3(0.04), albedo, metallic);
         // IBL diffuse using irradiance map
         vec3 irradiance = sampleEquirectangularMap(u_irradiance_map, N);
-        irradiance = mix(vec3(luminance(irradiance)), irradiance, 0.18);
+        irradiance = mix(vec3(luminance(irradiance)), irradiance, 0.06);
         vec3 diffuse_ibl = irradiance * albedo;
 
         // IBL specular using prefiltered environment map
         vec3 R = reflect(-V, N);
         float lod = roughness * 4.0;
         vec3 prefiltered_color = sampleEquirectangularMapLod(u_prefiltered_env_map, R, lod);
-        prefiltered_color = mix(vec3(luminance(prefiltered_color)), prefiltered_color, 0.28);
+        prefiltered_color = mix(vec3(luminance(prefiltered_color)), prefiltered_color, 0.1);
 
         // Sample BRDF LUT
         float NdotV = max(dot(N, V), 0.0);
