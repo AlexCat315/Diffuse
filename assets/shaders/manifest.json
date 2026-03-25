@@ -109,6 +109,11 @@
       "name": "contact_shadow",
       "vertex": "assets/shaders/contact_shadow.vert.glsl",
       "fragment": "assets/shaders/contact_shadow.frag.glsl"
+    },
+    {
+      "name": "ssgi_composite",
+      "vertex": "assets/shaders/tonemap.vert.glsl",
+      "fragment": "assets/shaders/ssgi_composite.frag.glsl"
     }
   ],
   "compute_programs": [
@@ -129,6 +134,13 @@
     {
       "name": "irradiance_convolve",
       "compute": "assets/shaders/irradiance_convolve.comp.glsl",
+      "threadcount_x": 8,
+      "threadcount_y": 8,
+      "threadcount_z": 1
+    },
+    {
+      "name": "ssgi_compute",
+      "compute": "assets/shaders/ssgi_compute.comp.glsl",
       "threadcount_x": 8,
       "threadcount_y": 8,
       "threadcount_z": 1
