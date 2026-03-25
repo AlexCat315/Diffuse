@@ -239,6 +239,11 @@ const vulkan_c_flags = [_][]const u8{
     "-std=c11",
 };
 
+const vulkan_cpp_sources = [_][]const u8{
+    "third_party/imgui/backends/imgui_impl_vulkan.cpp",
+    "src/engine/ui/imgui_vulkan_backend.cpp",
+};
+
 const plutovg_c_flags = [_][]const u8{
     "-std=c11",
     "-DPLUTOVG_BUILD=1",
@@ -525,14 +530,17 @@ fn configureEngineModule(
         module.linkSystemLibrary("dwmapi", .{});
         module.linkSystemLibrary("uxtheme", .{});
     }
-    // Vulkan C bridge — compiled on all platforms (macOS uses MoltenVK)
-    if (os_tag != .macos) {
-        module.addCSourceFiles(.{
-            .files = &vulkan_c_sources,
-            .flags = &vulkan_c_flags,
-        });
-        module.linkSystemLibrary("vulkan", .{});
-    }
+    // Vulkan C bridge + ImGui Vulkan backend — all platforms (macOS uses MoltenVK)
+    module.addCSourceFiles(.{
+        .files = &vulkan_c_sources,
+        .flags = &vulkan_c_flags,
+    });
+    module.addCSourceFiles(.{
+        .files = &vulkan_cpp_sources,
+        .flags = &engine_cpp_flags,
+    });
+    module.linkSystemLibrary("vulkan", .{});
+
     module.linkSystemLibrary("SDL3", .{});
 }
 
