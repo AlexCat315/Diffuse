@@ -41,10 +41,13 @@ pub const RenderTestOptions = struct {
     update_golden: bool = false,
     rt_shadows: bool = false,
     path_trace: bool = false,
+    path_trace_samples: u32 = 4,
+    force_cpu_path_trace: bool = false,
     fxaa: bool = false,
     bloom: bool = false,
     ssao: bool = false,
     export_png: bool = false,
+    export_exr: bool = false,
     suite: bool = false,
     allocated_scene: bool = false,
 
@@ -287,6 +290,11 @@ fn parseRenderTestOptionsAlloc(allocator: std.mem.Allocator, args: anytype) !Ren
             options.rt_shadows = true;
         } else if (std.mem.eql(u8, arg, "--path-trace")) {
             options.path_trace = true;
+        } else if (std.mem.eql(u8, arg, "--path-trace-samples")) {
+            const next = args.next() orelse return error.MissingArgument;
+            options.path_trace_samples = try std.fmt.parseUnsigned(u32, next, 10);
+        } else if (std.mem.eql(u8, arg, "--force-cpu-path-trace")) {
+            options.force_cpu_path_trace = true;
         } else if (std.mem.eql(u8, arg, "--fxaa")) {
             options.fxaa = true;
         } else if (std.mem.eql(u8, arg, "--bloom")) {
@@ -295,6 +303,8 @@ fn parseRenderTestOptionsAlloc(allocator: std.mem.Allocator, args: anytype) !Ren
             options.ssao = true;
         } else if (std.mem.eql(u8, arg, "--export-png")) {
             options.export_png = true;
+        } else if (std.mem.eql(u8, arg, "--export-exr")) {
+            options.export_exr = true;
         } else if (std.mem.eql(u8, arg, "--suite")) {
             options.suite = true;
         } else {

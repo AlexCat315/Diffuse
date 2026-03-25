@@ -6,6 +6,20 @@ const std = @import("std");
 const engine = @import("guava");
 const cli = @import("cli.zig");
 
+fn buildRenderTestExportSuffix(allocator: std.mem.Allocator, options: cli.RenderTestOptions) ![]u8 {
+    const base_suffix = try options.goldenSuffix(allocator);
+    defer allocator.free(base_suffix);
+
+    var suffix = std.ArrayList(u8).empty;
+    defer suffix.deinit(allocator);
+    try suffix.appendSlice(allocator, base_suffix);
+    if (options.force_cpu_path_trace) try suffix.appendSlice(allocator, "_cpupt");
+    if (options.path_trace and options.path_trace_samples != 4) {
+        try std.fmt.format(suffix.writer(allocator), "_pts{d}", .{options.path_trace_samples});
+    }
+    return suffix.toOwnedSlice(allocator);
+}
+
 pub fn runBenchmark(allocator: std.mem.Allocator, scene_path: []const u8, update_golden: bool) !void {
     const width = 1280;
     const height = 720;
@@ -211,6 +225,11 @@ pub fn runRenderTest(allocator: std.mem.Allocator, options: cli.RenderTestOption
     const width: u32 = 1280;
     const height: u32 = 720;
 
+    if (options.force_cpu_path_trace and !options.path_trace) {
+        std.debug.print("ERROR: --force-cpu-path-trace requires --path-trace\n", .{});
+        return error.InvalidArgument;
+    }
+
     var app = try engine.core.Application.init(allocator, .{
         .name = "Render Test",
         .window_width = width,
@@ -227,6 +246,8 @@ pub fn runRenderTest(allocator: std.mem.Allocator, options: cli.RenderTestOption
     // Configure viewport state based on feature flags
     var vp_state = engine.render.EditorViewportState{};
     if (options.path_trace) vp_state.pipeline_mode = .path_trace;
+    vp_state.path_trace_samples = options.path_trace_samples;
+    vp_state.path_trace_force_cpu = options.force_cpu_path_trace;
     if (options.rt_shadows) vp_state.rt_shadows_enabled = true;
     if (options.fxaa) vp_state.fxaa_enabled = true;
     if (options.bloom) vp_state.bloom_enabled = true;
@@ -245,7 +266,7 @@ pub fn runRenderTest(allocator: std.mem.Allocator, options: cli.RenderTestOption
     }
     if (options.path_trace) {
         if (feature_count > 0) fw.writeAll(", ") catch {};
-        fw.writeAll("path_trace") catch {};
+        fw.writeAll(if (options.force_cpu_path_trace) "path_trace_cpu" else "path_trace") catch {};
         feature_count += 1;
     }
     if (options.fxaa) {
@@ -393,14 +414,24 @@ pub fn runRenderTest(allocator: std.mem.Allocator, options: cli.RenderTestOption
     }
 
     // Export frame image if requested
-    if (options.export_png) {
+    if (options.export_png or options.export_exr) {
         try std.fs.cwd().makePath("dist/reports/render_test");
-        const png_suffix = try options.goldenSuffix(allocator);
-        defer allocator.free(png_suffix);
-        const out_path = try std.fmt.allocPrint(allocator, "dist/reports/render_test/frame{s}.ppm", .{png_suffix});
-        defer allocator.free(out_path);
-        try std.fs.cwd().writeFile(.{ .sub_path = out_path, .data = frame_ppm });
-        std.debug.print("Exported frame: {s}\n", .{out_path});
+        const export_suffix = try buildRenderTestExportSuffix(allocator, options);
+        defer allocator.free(export_suffix);
+
+        if (options.export_png) {
+            const ppm_path = try std.fmt.allocPrint(allocator, "dist/reports/render_test/frame{s}.ppm", .{export_suffix});
+            defer allocator.free(ppm_path);
+            try std.fs.cwd().writeFile(.{ .sub_path = ppm_path, .data = frame_ppm });
+            std.debug.print("Exported frame: {s}\n", .{ppm_path});
+        }
+
+        if (options.export_exr) {
+            const exr_path = try std.fmt.allocPrint(allocator, "dist/reports/render_test/frame{s}.exr", .{export_suffix});
+            defer allocator.free(exr_path);
+            try app.renderer.exportFrameExr(allocator, exr_path);
+            std.debug.print("Exported HDR frame: {s}\n", .{exr_path});
+        }
     }
 
     // Golden image comparison
@@ -483,6 +514,9 @@ pub fn runRenderTestSuite(allocator: std.mem.Allocator, base_options: cli.Render
             .frames = base_options.frames,
             .update_golden = base_options.update_golden,
             .export_png = base_options.export_png,
+            .export_exr = base_options.export_exr,
+            .path_trace_samples = base_options.path_trace_samples,
+            .force_cpu_path_trace = base_options.force_cpu_path_trace and tc.path_trace,
             .rt_shadows = tc.rt_shadows,
             .path_trace = tc.path_trace,
             .fxaa = tc.fxaa,
