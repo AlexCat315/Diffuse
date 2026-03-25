@@ -2,7 +2,7 @@
 
 > **引擎语言**: Zig 0.15 | **平台**: macOS (Metal) → Windows (Vulkan/DX12) → Linux (Vulkan)
 > **定位**: AI-Native 实时游戏引擎 + 离线物理渲染器（对标 Unity 编辑体验 + Blender Cycles 渲染品质）
-> **上次更新**: 2025-07-13
+> **上次更新**: 2026-03-25
 
 ---
 
@@ -59,7 +59,7 @@
 
 ### 1.2 核心设计原则
 
-1. **RHI 自研** — 图形通信用自己的抽象层直通 Metal/Vulkan/DX12，SDL3 只保留窗口/输入/音频
+1. **RHI 自研** — 图形通信用自己的抽象层直通 Metal/Vulkan/DX12，SDL3 只保留窗口/输入
 2. **双轨渲染** — 实时光栅用于创作迭代，离线路径追踪用于影视级出图，共享同一场景数据
 3. **AI 一等公民** — AI 通过 MCP 协议直接读写场景，所有操作进 Command 管道
 4. **数据驱动** — 场景 JSON v6 序列化，Inspector 双向绑定，编译期反射
@@ -81,20 +81,20 @@
 
 | 能力 | 状态 | 说明 |
 |------|------|------|
-| RHI 层 | ✅ SDL3 GPU | 仅光栅图形管线，无 Compute/RT |
+| RHI 层 | ✅ 自研 RHI | Metal / Vulkan 已接入，SDL3 仅保留窗口与输入 |
 | RenderGraph | ✅ | 通道依赖管理 |
 | PBR + Cook-Torrance BRDF | ✅ | mesh.frag.glsl |
 | IBL 环境光 (辐照度图 + BRDF LUT) | ✅ | CPU 预计算 |
-| 阴影 | ⚠️ 单 2K shadow map | 非级联，40x40 正交 |
+| 阴影 | ✅ 4-CSM + RT Shadow | 级联阴影已落地，RT 阴影已接入 |
 | Depth Prepass / Skybox | ✅ | |
 | Bloom / Tonemap / FXAA | ✅ | |
-| SSAO | ⚠️ 32 样本已计算 | **未接入光照着色器** |
-| SSR | ⚠️ 二进制搜索 | 无粗糙度模糊 |
+| SSAO | ✅ Compute/Fragment 双路径 | 计算与片元路径均可回退，HDR 合成已接入 |
+| SSR | ✅ 屏幕空间反射 | 已接入渲染管线，支持参数化调节 |
 | DOF | ✅ CoC + 模糊 + 合成 | |
-| TAA | ⚠️ 管线已修复 | 未接入 drawFrame（需 jitter 注入） |
+| TAA | ✅ 时域抗锯齿 | jitter 注入与 history resolve 已接入 drawFrame |
 | 体积雾 | ✅ | |
-| 光源 | ⚠️ max 1 方向光 + 1 点光 | LightBlock 数组已有但未启用 |
-| GPU RT (Metal) | ✅ 影子 + 路径追踪 | 仅 macOS，已绕过 SDL3 |
+| 光源 | ✅ 多光源 | 方向光 / 点光已在渲染路径中工作 |
+| GPU RT | ✅ 影子 + 路径追踪 | Metal 路径已接入，自研 RHI 承载 |
 | CPU Path Tracer | ✅ | 均匀采样，无 MIS/NEE/降噪 |
 | Gizmo / Outline / ID Pass | ✅ | |
 | 自动化渲染测试 | ✅ | 8 配置套件，Golden 对比 |
@@ -111,7 +111,7 @@
 | Post-Process Editor | ✅ |
 | Undo/Redo | ✅ |
 | 多语言 i18n | ✅ |
-| 响应式布局 | ⚠️ 3 级断点，但阈值偏高，面板无最小约束 |
+| 响应式布局 | ✅ 状态栏平滑自适应 + 窄 Inspector 降级已落地 |
 
 ### 2.3 运行时系统
 
@@ -120,7 +120,7 @@
 | Jolt Physics | ✅ 刚体/碰撞器/触发器/约束/Debug Draw |
 | ScriptVM (WASM + Zig) | ✅ 热重载 + Inspector 参数反射，待扩展 Python/C# 前端 |
 | 骨骼动画 + Animation Graph | ✅ 60% |
-| Audio (SoLoud) | ⚠️ 集成但初始化有问题 |
+| Audio (SoLoud) | ⚠️ 集成完成但仍有边界问题 | 初始化诊断已可用，仍需持续修复回归 |
 | AssetRegistry + glTF 导入 | ✅ |
 | 场景序列化 JSON v6 | ✅ |
 | Prefab + ECS + BVH 空间索引 | ✅ |
@@ -142,7 +142,7 @@
 
 ### 3.1 为什么必须重构
 
-当前 RHI 层封装 SDL3 GPU API，存在根本性限制：
+当前 RHI 已经从 SDL3 GPU 适配层中抽离出来；下面这段保留的是当初迁移时的目标与必须保留的约束：
 
 | 限制 | 影响 |
 |------|------|
@@ -581,15 +581,15 @@ pub const SubAlloc = struct {
 | 问题 | 根因 | 视觉影响 |
 |------|------|---------|
 | 画面"平"，无空间感 | 全局 ambient 是常量，无间接光 | 致命 — 缺少颜色溢出和反弹光 |
-| 远处阴影块状 | 单 2K shadow map，40 unit 正交 | 严重 — 远景阴影马赛克 |
-| 无环境遮蔽 | SSAO 已计算但未接入着色器 | 严重 — 物体不接地 |
-| 场景光照单调 | max 1 方向光 + 1 点光 | 严重 — 无法搭建复杂场景 |
-| 锯齿明显 | TAA 管线存在但未启用 | 中等 |
+| 远处阴影块状 | 已切换为 4-CSM，仍可继续优化远景稳定性 | 中等 — 级联边界和精度仍需打磨 |
+| 无环境遮蔽 | SSAO 已接入主渲染链并合成到 HDR | 低 — 已有接地感，仍可继续优化质量 |
+| 场景光照单调 | 多光源已接入渲染路径 | 低 — 复杂灯光布局仍需继续完善 |
+| 锯齿明显 | TAA 已接入 drawFrame，仍需继续优化 ghosting/rejection | 低 — 边缘闪烁已缓解 |
 | 纹理物体黑色 | bind group slot_offset 问题 | 致命 — 基础功能损坏 |
 
-### 4.2 光栅管线目标状态
+### 4.2 光栅主链（已落地）
 
-达到 **2022 年主流引擎** 画面品质：
+当前主渲染顺序如下：
 
 ```
 渲染 Pass 顺序:
@@ -792,16 +792,16 @@ pub const SubAlloc = struct {
 - [x] 右侧元素压缩: undo_source 132→100, ai_status 304→180
 - **验收**: ✅ 680px 视口宽度下工具栏完整可见
 
-#### UI-3 状态栏平滑自适应
-- [ ] 删除 1280px 硬编码跳变
-- [ ] 使用比例分配: context 区 60%, metrics 区 40%, 根据内容截断
-- [ ] 狭窄时隐藏低优先级指标 (内存/进程RSS)
-- **验收**: 任意窗口宽度下状态栏内容可读
+#### UI-3 状态栏平滑自适应 ✅ COMPLETED
+- [x] 删除 1280px 硬编码跳变
+- [x] 使用比例分配: context 区 / metrics 区按窗口宽度平滑插值，并根据内容预算截断
+- [x] 狭窄时隐藏低优先级指标 (内存/进程RSS)
+- **验收**: ✅ 任意窗口宽度下状态栏内容可读
 
-#### UI-4 Inspector 窄面板优雅降级
-- [ ] panel 宽度 < 260px 时切换为 stacked 布局 (label 上 + value 下)
-- [ ] 属性网格列宽比例自适应: `label_width = clamp(width * 0.34, 80, 160)`
-- **验收**: Inspector 260px 时所有属性可编辑
+#### UI-4 Inspector 窄面板优雅降级 ✅ COMPLETED
+- [x] panel 宽度不足时切换为 stacked 布局 (label 上 + value 下)
+- [x] 属性网格按可用宽度在 table / stacked 间切换，Transform 编辑器同步降级
+- **验收**: ✅ Inspector 260px 时所有属性可编辑
 
 #### UI-5 带纹理预设物体
 - [ ] Place Actors 面板增加: "Textured Cube"、"Textured Sphere"、"Textured Plane"
@@ -809,10 +809,11 @@ pub const SubAlloc = struct {
 - [ ] 自动创建实体 + 材质实例 + 赋予纹理
 - **验收**: 3 次点击将带纹理立方体放入场景
 
-#### UI-6 拖拽纹理到 Inspector 材质字段
-- [ ] Inspector 材质区域的 texture slot 支持拖拽 payload 接收
-- [ ] Asset Browser 中纹理条目可拖出
-- **验收**: 从 Asset Browser 拖拽 .png 到 Inspector 的 Base Color 区域完成赋值
+#### UI-6 拖拽纹理到 Inspector 材质字段 ✅ COMPLETED
+- [x] Inspector 材质区域的 texture slot 支持拖拽 payload 接收
+- [x] Asset Browser 中纹理条目可拖出
+- [x] Material Editor 同步支持点击赋值与拖拽落槽
+- **验收**: ✅ 从 Asset Browser 拖拽 .png 到 Inspector 的 Base Color 区域完成赋值
 
 ---
 
@@ -1015,7 +1016,7 @@ pub const SubAlloc = struct {
 ## 十、分阶段执行路线图
 
 > **架构原则：先打地基，再精装修。** 所有依赖 Compute Shader 的现代特效（TAA、SSGI、
-> 多光源剔除）必须在 RHI 重构完成后实施，避免在 SDL3 纯 Fragment 管线上重复造轮子。
+> 多光源剔除）必须在具备 Compute Queue / 显式 Barrier 的后端上实施，避免在缺少这些能力的管线上重复造轮子。
 
 ### Phase 1：修复基础 — 让看得见的东西先正确 ✅ COMPLETED
 
@@ -1040,12 +1041,12 @@ pub const SubAlloc = struct {
 | R-4 | 多光源 (dir x4 + point x16) | 4 盏点光照亮不同区域 | ✅ |
 | R-8 | Contact Shadows | 物体底部有接触阴影 | ✅ |
 
-### Phase 3：RHI 重构 — Metal 原生 Backend + Compute
+### Phase 3：RHI 重构 — Metal / Vulkan 原生 Backend + Compute ✅ COMPLETED
 
 > 前置: Phase 2（光栅管线基本功能稳定后换底层）
 >
-> ⚠️ **这是后续所有现代特效的基石。** 没有 Compute Queue 和显式 Barrier，
-> TAA 的历史缓冲读写、SSGI 的降采样/升采样链、多光源剔除 Tile 分配全部无法高效实现。
+> 这一阶段已经在当前代码里落地为自研 RHI：Metal / Vulkan 后端可用，
+> SDL3 只负责窗口与输入，Compute / RT 路径也已接入主渲染链。
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|
@@ -1053,13 +1054,12 @@ pub const SubAlloc = struct {
 | RHI-2 | Metal Compute Backend | IBL 改 GPU 计算，SSAO dispatch |
 | RHI-3 | Metal RT 统一到 RHI | RT Shadow 和 Path Trace 走统一接口 |
 
-### Phase 4：Compute 加持的现代光栅特效
+### Phase 4：Compute 加持的现代光栅特效 ✅ COMPLETED
 
 > 前置: Phase 3（RHI-2 Compute 已就绪）
 >
-> 这些特效在纯 Fragment 管线上虽然能跑，但性能和质量均不可接受。
-> 有了 Compute Shader 后：TAA 的时域累积用 Compute 写历史缓冲，SSGI 的
-> 降噪/降采样链用 Compute dispatch，多光源剔除用 Tile-based Compute 分配。
+> 当前代码已把 TAA / SSAO / SSGI / SSR / Contact Shadows 接入主渲染链，
+> 其中 SSAO 保留 compute + fragment 双路径回退，TAA 使用 jitter + history resolve。
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|
@@ -1113,8 +1113,7 @@ pub const SubAlloc = struct {
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|
-| RHI-4 | Vulkan Graphics Backend | Linux/Windows 下渲染一致 |
-| RHI-5 | Vulkan Compute + RT | Vulkan RT 阴影工作 |
+| RHI-4 | DX12 Backend | Windows 平台完成后端补齐 |
 | CT-1 | 节点材质编辑器 | 噪声混合材质可编辑 |
 | CT-5 | UV 编辑器 | 查看/调整 UV 映射 |
 | PT-6 | 自适应采样 | 渲染时间减半 |
