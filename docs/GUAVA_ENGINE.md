@@ -803,10 +803,10 @@ pub const SubAlloc = struct {
 - [x] 属性网格按可用宽度在 table / stacked 间切换，Transform 编辑器同步降级
 - **验收**: ✅ Inspector 260px 时所有属性可编辑
 
-#### UI-5 带纹理预设物体
-- [ ] Place Actors 面板增加: "Textured Cube"、"Textured Sphere"、"Textured Plane"
-- [ ] 点击后弹出文件选择对话框选择纹理
-- [ ] 自动创建实体 + 材质实例 + 赋予纹理
+#### UI-5 带纹理预设物体 ✅ COMPLETED
+- [x] Place Actors 面板增加: "Textured Cube"、"Textured Sphere"、"Textured Plane"
+- [x] 点击后弹出纹理选择对话框选择纹理
+- [x] 自动创建实体 + 材质实例 + 赋予纹理
 - **验收**: 3 次点击将带纹理立方体放入场景
 
 #### UI-6 拖拽纹理到 Inspector 材质字段 ✅ COMPLETED
