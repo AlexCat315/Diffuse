@@ -877,12 +877,14 @@ pub const SubAlloc = struct {
 - **验收**: 查看 glTF 导入模型的 UV，调整后纹理映射更新
 
 #### CT-6 渲染输出面板
-- [ ] 输出设置: 分辨率预设 (1080p / 2K / 4K) + 自定义分辨率 / 帧范围 / 输出格式 (PNG / EXR) / 输出路径
-- [ ] 采样设置: SPP / 降噪开关 / 自适应采样
-- [ ] 一键渲染: "Render Image" / "Render Animation" / "Render Video"
+- [x] 首版离线单帧输出: 分辨率预设 (Viewport / 1080p / 2K / 4K) + 自定义分辨率 / PNG 输出路径 / "Render Image"
+- [x] 采样设置（首版）: PathTrace 导出 SPP / Bounces，导出时自动切换到全分辨率 tracing
+- [ ] 输出设置: 帧范围 / 输出格式 EXR
+- [ ] 采样设置: 降噪开关 / 自适应采样
+- [ ] 一键渲染: "Render Animation" / "Render Video"
 - [ ] 进度显示: 当前帧/总帧 + 累积 SPP + 预计剩余时间
 - [ ] 4K 支持: 3840x2160 渲染，分 tile 渲染避免显存溢出 (每 tile 512x512)
-- **验收**: 设置 3840x2160 (4K), 128 SPP, 渲染单帧输出 EXR，文件大小 ~60MB
+- **验收**: 首版已可设置 3840x2160 (4K) 并导出 PNG 单帧；EXR / 动画 / Video 验收留待后续
 
 #### CT-7 视频编码输出 (FFmpeg)
 
