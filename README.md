@@ -18,6 +18,7 @@ Guava Engine 是基于 Zig 构建的 AI-Native 游戏引擎与编辑器。
 
 ```bash
 zig build
+zig build -Doptimize=ReleaseFast
 zig build test
 zig build run
 zig build run -- --frames 120
