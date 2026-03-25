@@ -81,6 +81,8 @@ pub const core = struct {
     pub const PlaybackState = @import("engine/core/layer.zig").PlaybackState;
     /// 播放控制器接口
     pub const PlaybackController = @import("engine/core/layer.zig").PlaybackController;
+    /// 游戏运行时状态
+    pub const GameState = @import("engine/core/layer.zig").GameState;
     /// 平台抽象
     pub const Platform = @import("engine/core/platform.zig").Platform;
     /// 检测当前运行平台
@@ -643,12 +645,20 @@ pub const scene = struct {
     pub const SurfaceRaycastHit = @import("engine/scene/scene.zig").SurfaceRaycastHit;
     /// 序列化世界
     pub const serializeWorldAlloc = @import("engine/scene/scene.zig").serializeWorldAlloc;
+    /// 序列化世界及运行时状态
+    pub const serializeWorldWithRuntimeStateAlloc = @import("engine/scene/scene.zig").serializeWorldWithRuntimeStateAlloc;
     /// 从字节切片反序列化世界
     pub const deserializeWorldFromSlice = @import("engine/scene/scene.zig").deserializeWorldFromSlice;
+    /// 从字节切片反序列化世界及运行时状态
+    pub const deserializeWorldWithRuntimeStateFromSlice = @import("engine/scene/scene.zig").deserializeWorldWithRuntimeStateFromSlice;
     /// 保存世界到路径
     pub const saveWorldToPath = @import("engine/scene/scene.zig").saveWorldToPath;
+    /// 保存世界及运行时状态到路径
+    pub const saveWorldWithRuntimeStateToPath = @import("engine/scene/scene.zig").saveWorldWithRuntimeStateToPath;
     /// 从路径加载世界
     pub const loadWorldFromPath = @import("engine/scene/scene.zig").loadWorldFromPath;
+    /// 从路径加载世界及运行时状态
+    pub const loadWorldWithRuntimeStateFromPath = @import("engine/scene/scene.zig").loadWorldWithRuntimeStateFromPath;
     /// 变换组件
     pub const Transform = @import("engine/scene/components.zig").Transform;
     /// 相机组件
@@ -690,6 +700,8 @@ pub const scene = struct {
     pub const AudioListener = @import("engine/scene/components.zig").AudioListener;
     /// 音频剪辑句柄类型
     pub const AudioClipHandle = @import("engine/scene/components.zig").AudioClipHandle;
+    /// 场景运行时状态快照
+    pub const SceneRuntimeState = @import("engine/scene/scene.zig").SceneRuntimeState;
     pub const VfxRuntimeParticle = @import("engine/scene/scene.zig").VfxRuntimeParticle;
     /// 运行时发射器
     pub const VfxRuntimeEmitter = @import("engine/scene/scene.zig").VfxRuntimeEmitter;
