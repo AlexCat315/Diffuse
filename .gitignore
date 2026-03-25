@@ -74,3 +74,4 @@ assets_backup_*/
 # Generated code
 src/engine/generated/
 nohup.out
+renders_test_out/
