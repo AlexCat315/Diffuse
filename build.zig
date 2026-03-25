@@ -231,6 +231,14 @@ const windows_cpp_sources = [_][]const u8{
     "src/engine/platform/window_native_windows.cpp",
 };
 
+const vulkan_c_sources = [_][]const u8{
+    "src/engine/rhi/vulkan/vk_bridge.c",
+};
+
+const vulkan_c_flags = [_][]const u8{
+    "-std=c11",
+};
+
 const plutovg_c_flags = [_][]const u8{
     "-std=c11",
     "-DPLUTOVG_BUILD=1",
@@ -516,6 +524,14 @@ fn configureEngineModule(
         module.linkSystemLibrary("comctl32", .{});
         module.linkSystemLibrary("dwmapi", .{});
         module.linkSystemLibrary("uxtheme", .{});
+    }
+    // Vulkan C bridge — compiled on all platforms (macOS uses MoltenVK)
+    if (os_tag != .macos) {
+        module.addCSourceFiles(.{
+            .files = &vulkan_c_sources,
+            .flags = &vulkan_c_flags,
+        });
+        module.linkSystemLibrary("vulkan", .{});
     }
     module.linkSystemLibrary("SDL3", .{});
 }
