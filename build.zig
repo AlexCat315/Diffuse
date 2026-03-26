@@ -220,6 +220,7 @@ const engine_cpp_sources = [_][]const u8{
 
 const macos_objcpp_sources = [_][]const u8{
     "src/engine/platform/window_native_macos.mm",
+    "src/engine/render/path_trace_denoise_bridge.mm",
     "src/engine/rt/metal_rt_bridge.mm",
     "src/engine/rhi/metal/metal_rhi_bridge.mm",
     "third_party/imgui/backends/imgui_impl_metal.mm",
@@ -519,6 +520,7 @@ fn configureEngineModule(
         });
         module.linkFramework("AppKit", .{});
         module.linkFramework("Metal", .{});
+        module.linkFramework("MetalPerformanceShaders", .{});
         module.linkFramework("QuartzCore", .{});
     }
     if (os_tag == .windows) {
