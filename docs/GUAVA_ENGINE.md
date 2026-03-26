@@ -670,7 +670,7 @@ pub const SubAlloc = struct {
 
 ### 5.1 重写进度与剩余差距
 
-> 2026-03 代码状态：CPU/Metal 路径追踪已完成 GGX VNDF 采样、cosine diffuse、NEE + power heuristic MIS、Principled BSDF（metallic / roughness / transmission / emissive）、normal / metallic-roughness / AO / emissive 贴图链路、HDR `.hdr` 环境重要性采样、俄罗斯轮盘、8x8 tile 自适应采样。编辑器 PathTrace PNG 导出已可输出 `albedo / normal` AOV sidecar，并按 `OIDN(动态加载) -> MPS Guided -> CPU Guided` 自动选择降噪后端；无 HDR 时仍保留渐变 sky fallback，OpenEXR 仅支持单帧导出，动画序列输出仍待补。
+> 2026-03 代码状态：CPU/Metal 路径追踪已完成 GGX VNDF 采样、cosine diffuse、NEE + power heuristic MIS、Principled BSDF（metallic / roughness / transmission / emissive）、normal / metallic-roughness / AO / emissive 贴图链路、HDR `.hdr` 环境重要性采样、俄罗斯轮盘、8x8 tile 自适应采样。编辑器 PathTrace PNG 导出已可输出 `albedo / normal` AOV sidecar，并按 `OIDN(动态加载) -> MPS Guided -> CPU Guided` 自动选择降噪后端；无 HDR 时仍保留渐变 sky fallback，Render Output 已可在停止态下按固定步长输出 PNG / OpenEXR 序列。
 
 | 状态 | 项目 | 说明 |
 |------|------|------|
@@ -680,7 +680,7 @@ pub const SubAlloc = struct {
 | 部分完成 | HDR 环境照明 | `.hdr` 资源发现、环境 alias importance sampling 已完成；无环境时仍保留渐变天空 |
 | 已完成 | 自适应采样 | CPU progressive 与 Metal RT PathTrace 都已按 8x8 tile 噪声估计分配 target samples |
 | 已完成 | 降噪 | PathTrace PNG 导出已支持 albedo / normal AOV sidecar，并自动按 `OIDN(动态加载) -> MPS Guided -> CPU Guided` 选择降噪后端 |
-| 部分完成 | EXR 输出 | 已支持单帧 OpenEXR 导出，缺少相机动画驱动的序列渲染 |
+| 已完成 | 序列输出 | Render Output 已支持固定步长驱动的 PNG / OpenEXR 帧序列导出，PathTrace EXR 走线性 beauty 输出 |
 
 ### 5.2 路径追踪目标状态
 
@@ -713,6 +713,7 @@ pub const SubAlloc = struct {
 - Editor PathTrace PNG 导出已可输出 `beauty + albedo + normal`
 - `albedo / normal` 已接到导出级降噪链路，优先使用 OIDN，缺库时自动回退到 MPS Guided / CPU Guided
 - 为了缩短主渲染文件，路径追踪公共类型/降噪/图像导出已拆到 `path_trace_common.zig`、`path_trace_denoise.zig`、`image_export.zig`
+- Render Output 已支持固定步长序列导出，路径会自动生成为 `{base}_{frame:04d}.png/.exr`
 
 ### 5.3 逐项实施清单
 
@@ -768,9 +769,10 @@ pub const SubAlloc = struct {
 
 #### PT-8 EXR 序列帧输出
 - [x] 支持 OpenEXR 单帧写入
-- [ ] Camera Animation 驱动帧序列渲染
-- [ ] 输出路径: `renders/{scene}_{frame:04d}.exr`
-- **验收**: 10 帧动画序列正确输出（当前仅单帧 EXR 已完成）
+- [x] Camera Animation / 脚本 / 物理 / VFX 由固定步长 playback 驱动帧序列渲染
+- [x] 输出路径自动生成 `{base}_{frame:04d}.png/.exr`
+- [x] PathTrace EXR 导出补齐线性 beauty 链路
+- **验收**: 10 帧动画序列可正确输出；路径追踪支持 PNG / OpenEXR 序列
 
 ---
 
