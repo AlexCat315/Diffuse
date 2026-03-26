@@ -670,7 +670,7 @@ pub const SubAlloc = struct {
 
 ### 5.1 重写进度与剩余差距
 
-> 2026-03 代码状态：CPU/Metal 路径追踪已完成 GGX VNDF 采样、cosine diffuse、NEE + power heuristic MIS、Principled BSDF（metallic / roughness / transmission / emissive）、normal / metallic-roughness / AO / emissive 贴图链路、HDR `.hdr` 环境重要性采样、俄罗斯轮盘、8x8 tile 自适应采样。当前剩余缺口主要是 OIDN 降噪与动画序列输出；无 HDR 时仍保留渐变 sky fallback，OpenEXR 仅支持单帧导出。
+> 2026-03 代码状态：CPU/Metal 路径追踪已完成 GGX VNDF 采样、cosine diffuse、NEE + power heuristic MIS、Principled BSDF（metallic / roughness / transmission / emissive）、normal / metallic-roughness / AO / emissive 贴图链路、HDR `.hdr` 环境重要性采样、俄罗斯轮盘、8x8 tile 自适应采样。编辑器 PathTrace PNG 导出已可输出 `albedo / normal` AOV sidecar，并基于 AOV 做 CPU 引导降噪；当前剩余缺口主要是 OIDN / MPS 级降噪与动画序列输出；无 HDR 时仍保留渐变 sky fallback，OpenEXR 仅支持单帧导出。
 
 | 状态 | 项目 | 说明 |
 |------|------|------|
@@ -679,7 +679,7 @@ pub const SubAlloc = struct {
 | 已完成 | Principled BSDF | Schlick Fresnel、metallic F0、transmission / refraction、能量守恒都已接通 |
 | 部分完成 | HDR 环境照明 | `.hdr` 资源发现、环境 alias importance sampling 已完成；无环境时仍保留渐变天空 |
 | 已完成 | 自适应采样 | CPU progressive 与 Metal RT PathTrace 都已按 8x8 tile 噪声估计分配 target samples |
-| 未完成 | 降噪 | 尚未接入 OIDN / MPS denoiser |
+| 部分完成 | 降噪 | PathTrace PNG 导出已支持 albedo / normal AOV sidecar + CPU AOV-guided denoise；OIDN / MPS denoiser 尚未接入 |
 | 部分完成 | EXR 输出 | 已支持单帧 OpenEXR 导出，缺少相机动画驱动的序列渲染 |
 
 ### 5.2 路径追踪目标状态
@@ -708,6 +708,11 @@ pub const SubAlloc = struct {
     OIDN 降噪 (albedo + normal AOV 辅助)
     -> Tonemap -> 输出 EXR/PNG
 ```
+
+当前实现补充：
+- Editor PathTrace PNG 导出已可输出 `beauty + albedo + normal`
+- `albedo / normal` 已接入导出级 CPU 引导降噪
+- OIDN / MPS 仍属于后续目标状态，尚未接到运行时代码
 
 ### 5.3 逐项实施清单
 
@@ -755,10 +760,11 @@ pub const SubAlloc = struct {
 
 #### PT-7 OIDN 降噪器集成
 - [ ] 集成 Intel Open Image Denoise (C API, 跨平台)
-- [ ] 输出辅助 AOV: albedo buffer, normal buffer
+- [x] 输出辅助 AOV: albedo buffer, normal buffer
+- [x] Editor PathTrace PNG 导出：生成 `albedo / normal` sidecar，并用 AOV 做 CPU 引导降噪
 - [ ] 32 SPP + OIDN = 干净成品
 - [ ] Metal GPU 路径: 可选 MPS denoiser (Apple Silicon 加速)
-- **验收**: 32 SPP 渲染后降噪无可见噪点
+- **验收**: 当前导出链路已能输出 `beauty + albedo + normal` 并完成一次 AOV-guided denoise；OIDN / MPS 级别收尾仍待补
 
 #### PT-8 EXR 序列帧输出
 - [x] 支持 OpenEXR 单帧写入
@@ -1078,7 +1084,7 @@ pub const SubAlloc = struct {
 
 > 前置: RHI-2 (Compute)
 
-> 当前状态：PT-1 / PT-2 / PT-3 / PT-5 / PT-6 已完成；PT-4 部分完成（`.hdr` + importance sampling 已就绪，渐变 sky fallback 仍保留）；PT-7 / PT-8 仍待收尾。
+> 当前状态：PT-1 / PT-2 / PT-3 / PT-5 / PT-6 已完成；PT-4 部分完成（`.hdr` + importance sampling 已就绪，渐变 sky fallback 仍保留）；PT-7 部分完成（`albedo / normal` AOV + Editor PNG 导出级引导降噪已接通，OIDN / MPS 仍待接入）；PT-8 仍待收尾。
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|
