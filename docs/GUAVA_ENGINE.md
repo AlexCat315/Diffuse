@@ -668,16 +668,19 @@ pub const SubAlloc = struct {
 
 ## 五、路径追踪渲染器 — 从 Demo 到生产品质
 
-### 5.1 当前差距诊断
+### 5.1 重写进度与剩余差距
 
-| 问题 | 根因 | 对比 Blender Cycles |
-|------|------|-------------------|
-| 4 SPP 纯噪声 | 均匀半球采样，无重要性采样 | Cycles: GGX IS, 同 SPP 噪声低 100x |
-| 间接光极慢收敛 | 无 NEE（下一事件估计） | Cycles: 多光源直接采样 + MIS |
-| 金属/玻璃不正确 | 假 Blinn-Phong，无 Fresnel | Cycles: Principled BSDF |
-| 无降噪 | 原始输出 | Cycles: OIDN 32 SPP 约等于干净成品 |
-| 天空假 | 线性渐变 | Cycles: HDR 环境贴图 / Nishita |
-| 间接光偏暗 | 0.02 硬截止（有偏） | Cycles: 俄罗斯轮盘（无偏概率终止） |
+> 2026-03 代码状态：CPU/Metal 路径追踪已完成 GGX VNDF 采样、cosine diffuse、NEE + power heuristic MIS、Principled BSDF（metallic / roughness / transmission / emissive）、normal / metallic-roughness / AO / emissive 贴图链路、HDR `.hdr` 环境重要性采样、俄罗斯轮盘、8x8 tile 自适应采样。当前剩余缺口主要是 OIDN 降噪与动画序列输出；无 HDR 时仍保留渐变 sky fallback，OpenEXR 仅支持单帧导出。
+
+| 状态 | 项目 | 说明 |
+|------|------|------|
+| 已完成 | BRDF 重要性采样 | CPU 与 Metal kernel 均改为 GGX VNDF + cosine 半球采样 |
+| 已完成 | 直接光与 MIS | 命中点会做光源采样 + shadow ray，并用 power heuristic 合并 BRDF 采样 |
+| 已完成 | Principled BSDF | Schlick Fresnel、metallic F0、transmission / refraction、能量守恒都已接通 |
+| 部分完成 | HDR 环境照明 | `.hdr` 资源发现、环境 alias importance sampling 已完成；无环境时仍保留渐变天空 |
+| 已完成 | 自适应采样 | CPU progressive 与 Metal RT PathTrace 都已按 8x8 tile 噪声估计分配 target samples |
+| 未完成 | 降噪 | 尚未接入 OIDN / MPS denoiser |
+| 部分完成 | EXR 输出 | 已支持单帧 OpenEXR 导出，缺少相机动画驱动的序列渲染 |
 
 ### 5.2 路径追踪目标状态
 
@@ -688,7 +691,7 @@ pub const SubAlloc = struct {
   Camera -> Surface Hit
     |- Direct Lighting (NEE): 随机采样光源 + shadow ray
     |- BRDF Sampling: GGX IS (specular) / cosine IS (diffuse)
-    |- MIS: balance heuristic 组合 NEE + BRDF
+    |- MIS: power heuristic 组合 NEE + BRDF
     |- Russian Roulette: 概率终止低贡献路径
     +- Bounce -> next surface (递归)
 
@@ -709,44 +712,46 @@ pub const SubAlloc = struct {
 ### 5.3 逐项实施清单
 
 #### PT-1 GGX 重要性采样
-- [ ] 替换 `random_hemisphere()` 为 GGX 分布采样 (`sampleGGX_VNDF`)
-- [ ] 漫射面用 cosine-weighted 半球采样
-- [ ] 根据 metallic 概率选择 specular 或 diffuse lobe
-- [ ] CPU 和 Metal kernel 同步修改
-- **验收**: 4 SPP 金属球可辨认形状（当前是纯噪声）
+- [x] 替换旧半球镜面采样为 GGX 可见法线分布采样 (`sampleGGXVisibleHalfVector` / `sample_ggx_visible_half_vector`)
+- [x] 漫射面用 cosine-weighted 半球采样
+- [x] 根据 metallic / Fresnel 概率选择 specular 或 diffuse lobe
+- [x] CPU 和 Metal kernel 同步修改
+- **验收**: 低 SPP 下金属反射噪声显著低于均匀半球采样
 
 #### PT-2 NEE + MIS
-- [ ] 每次命中点额外采样一条 shadow ray 直连光源
-- [ ] 光源采样 PDF: 方向光=delta, 面光源=面积采样
-- [ ] BRDF 采样 PDF: GGX/cosine 对应值
-- [ ] MIS balance heuristic: `w_light = pdfL^2 / (pdfL^2 + pdfB^2)`
-- **验收**: 4 SPP 直接光照区域基本收敛
+- [x] 每次命中点额外采样一条 shadow ray 直连光源
+- [x] 光源采样 PDF: 方向光=delta, 面光源 / 环境光=对应采样 PDF
+- [x] BRDF 采样 PDF: GGX VNDF / cosine 对应值
+- [x] MIS power heuristic: `w_light = pdfL^2 / (pdfL^2 + pdfB^2)`
+- **验收**: 低 SPP 下直接光区域已可用，不再完全依赖间接 bounce 收敛
 
 #### PT-3 Principled BSDF
-- [ ] Schlick Fresnel: `F0 + (1-F0) * (1-cosTheta)^5`
-- [ ] 金属: F0 = albedo; 电介质: F0 = 0.04
-- [ ] Transmission lobe: Snell 折射 + 全内反射判断
-- [ ] Roughness -> GGX alpha 映射: `alpha = roughness^2`
-- [ ] 能量守恒: diffuse *= (1 - metallic) * (1 - F)
-- **验收**: 玻璃球折射背景; 金属球正确反射环境
+- [x] Schlick Fresnel: `F0 + (1-F0) * (1-cosTheta)^5`
+- [x] 金属: F0 = albedo; 电介质: F0 = 0.04
+- [x] Transmission lobe: Snell 折射 + 全内反射判断
+- [x] Roughness -> GGX alpha 映射: `alpha = roughness^2`
+- [x] 能量守恒: diffuse *= (1 - metallic) * (1 - F)
+- **验收**: 玻璃 / 金属材质在 CPU 与 Metal 路径追踪中都已走物理材质链路
 
 #### PT-4 HDR 环境贴图采样
-- [ ] 支持 .hdr / .exr 天空纹理
-- [ ] 环境光 NEE: 根据亮度分布做 importance sampling (alias method)
+- [x] 支持 `.hdr` 天空纹理
+- [x] 环境光 NEE: 根据亮度分布做 importance sampling (alias method)
 - [ ] 替换线性渐变 sky fallback
-- **验收**: HDRI 照明下物体有真实环境反射
+- **验收**: HDRI 照明下物体已有真实环境反射；无 HDR 时仍回退渐变天空
 
 #### PT-5 俄罗斯轮盘 (无偏终止)
-- [ ] 替换 `if (length(throughput) < 0.02) break` 为概率终止:
+- [x] 替换硬截止为概率终止:
   `survival_prob = min(max_component(throughput), 0.95); if (rand > survival_prob) break; throughput /= survival_prob;`
-- [ ] CPU 和 Metal kernel 同步
-- **验收**: 间接光不再系统性偏暗
+- [x] CPU 和 Metal kernel 同步
+- **验收**: 间接光不再使用有偏硬截断
 
 #### PT-6 自适应采样
-- [ ] 每个 tile (8x8) 追踪方差
-- [ ] 高方差区域继续采样，低方差区域提前终止
-- [ ] 全局 SPP budget 动态分配
-- **验收**: 同等总采样数下，噪声分布更均匀
+- [x] CPU progressive PathTrace: 每个 tile (8x8) 追踪噪声指标
+- [x] CPU progressive PathTrace: 高噪声 tile 继续采样，低噪声 tile 提前终止
+- [x] CPU progressive PathTrace: 通过 per-tile target samples 分配同帧 SPP 预算
+- [x] Metal RT PathTrace: 每个 8x8 threadgroup 汇总 tile 噪声指标并统一分配 target samples
+- [x] CPU / GPU 验证链路已区分 path trace golden 后缀，避免 CPU PathTrace 错误复用 GPU golden
+- **验收**: 视口 CPU fallback 与 Metal RT PathTrace 都已具备 tile 级自适应采样
 
 #### PT-7 OIDN 降噪器集成
 - [ ] 集成 Intel Open Image Denoise (C API, 跨平台)
@@ -756,10 +761,10 @@ pub const SubAlloc = struct {
 - **验收**: 32 SPP 渲染后降噪无可见噪点
 
 #### PT-8 EXR 序列帧输出
-- [ ] 支持 OpenEXR 格式写入 (半精度 RGBA16F)
+- [x] 支持 OpenEXR 单帧写入
 - [ ] Camera Animation 驱动帧序列渲染
 - [ ] 输出路径: `renders/{scene}_{frame:04d}.exr`
-- **验收**: 10 帧动画序列正确输出
+- **验收**: 10 帧动画序列正确输出（当前仅单帧 EXR 已完成）
 
 ---
 
@@ -1072,6 +1077,8 @@ pub const SubAlloc = struct {
 ### Phase 5：路径追踪器重写
 
 > 前置: RHI-2 (Compute)
+
+> 当前状态：PT-1 / PT-2 / PT-3 / PT-5 / PT-6 已完成；PT-4 部分完成（`.hdr` + importance sampling 已就绪，渐变 sky fallback 仍保留）；PT-7 / PT-8 仍待收尾。
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|

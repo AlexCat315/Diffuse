@@ -61,6 +61,7 @@ pub const RenderTestOptions = struct {
         defer parts.deinit(allocator);
         if (self.rt_shadows) try parts.appendSlice(allocator, "_rtshadow");
         if (self.path_trace) try parts.appendSlice(allocator, "_pathtrace");
+        if (self.force_cpu_path_trace and self.path_trace) try parts.appendSlice(allocator, "_cpupt");
         if (self.fxaa) try parts.appendSlice(allocator, "_fxaa");
         if (self.bloom) try parts.appendSlice(allocator, "_bloom");
         if (self.ssao) try parts.appendSlice(allocator, "_ssao");
@@ -320,4 +321,17 @@ pub fn backendOrderForName(name: []const u8) ?[3]engine.render.GraphicsAPI {
     if (std.mem.eql(u8, name, "metal")) return .{ .metal, .vulkan, .dx12 };
     if (std.mem.eql(u8, name, "dx12")) return .{ .dx12, .vulkan, .metal };
     return null;
+}
+
+test "render test golden suffix distinguishes cpu path trace" {
+    const gpu_suffix = try (RenderTestOptions{ .path_trace = true }).goldenSuffix(std.testing.allocator);
+    defer std.testing.allocator.free(gpu_suffix);
+    try std.testing.expectEqualStrings("_pathtrace", gpu_suffix);
+
+    const cpu_suffix = try (RenderTestOptions{
+        .path_trace = true,
+        .force_cpu_path_trace = true,
+    }).goldenSuffix(std.testing.allocator);
+    defer std.testing.allocator.free(cpu_suffix);
+    try std.testing.expectEqualStrings("_pathtrace_cpupt", cpu_suffix);
 }

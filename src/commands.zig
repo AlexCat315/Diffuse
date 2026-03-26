@@ -13,7 +13,6 @@ fn buildRenderTestExportSuffix(allocator: std.mem.Allocator, options: cli.Render
     var suffix = std.ArrayList(u8).empty;
     defer suffix.deinit(allocator);
     try suffix.appendSlice(allocator, base_suffix);
-    if (options.force_cpu_path_trace) try suffix.appendSlice(allocator, "_cpupt");
     if (options.path_trace and options.path_trace_samples != 4) {
         try std.fmt.format(suffix.writer(allocator), "_pts{d}", .{options.path_trace_samples});
     }
