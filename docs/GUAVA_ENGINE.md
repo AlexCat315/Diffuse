@@ -1,8 +1,8 @@
 # Guava Engine — 功能推进文档
 
-> **引擎语言**: Zig 0.15 | **平台**: macOS (Metal) → Windows (Vulkan/DX12) → Linux (Vulkan)
+> **引擎语言**: Zig 0.15 | **平台**: macOS (Metal) → Windows (Vulkan/DX12 目标) → Linux (Vulkan 目标)
 > **定位**: AI-Native 实时游戏引擎 + 离线物理渲染器（对标 Unity 编辑体验 + Blender Cycles 渲染品质）
-> **上次更新**: 2026-03-25
+> **上次更新**: 2026-03-26
 
 ---
 
@@ -31,11 +31,11 @@
 ┌─────────────────────────────────────────────────────────────────┐
 │                        Editor Shell                             │
 │  Scene Hierarchy │ 3D Viewport │ Inspector │ AI Terminal        │
-│  Asset Browser   │ Timeline    │ Node Editor │ Render Settings  │
+│  Asset Browser   │ Timeline    │ Post-Process │ Render Settings  │
 ├────────────────────────────┬────────────────────────────────────┤
 │       Game Runtime         │         Creation Tools            │
 │  SceneManager / GameState  │  Material Editor / Anim Graph     │
-│  ScriptVM (WASM/Zig)       │  UV Editor / Node Shader Editor   │
+│  ScriptVM (WASM/Zig)       │  UV Editor / Material Editor      │
 │  Physics (Jolt)            │  Camera Sequencer                 │
 │  Audio (SoLoud)            │  Post-Process Stack               │
 │  Navigation (Recast)       │  Render Test / Golden Compare     │
@@ -49,8 +49,8 @@
 │             │      Shared Scene Data       │                    │
 │  ┌──────────┴──────────────────────────────┴───────────────┐   │
 │  │              RHI — 渲染硬件接口层 (自研)                 │   │
-│  │   Metal Backend │ Vulkan Backend │ DX12 Backend         │   │
-│  │   + Compute     │ + Ray Tracing  │ + Indirect Draw      │   │
+│  │   Metal Backend │ Vulkan Backend │ DX12 Backend (planned)│  │
+│  │   + Compute     │ + Ray Tracing (Metal) │ + Indirect Draw│  │
 │  └─────────────────────────────────────────────────────────┘   │
 ├─────────────────────────────────────────────────────────────────┤
 │  Platform │ Window (SDL3) │ Input (SDL3) │ File I/O │ Thread   │
@@ -59,7 +59,7 @@
 
 ### 1.2 核心设计原则
 
-1. **RHI 自研** — 图形通信用自己的抽象层直通 Metal/Vulkan/DX12，SDL3 只保留窗口/输入
+1. **RHI 自研** — 图形通信用自己的抽象层面向 Metal/Vulkan/DX12，SDL3 只保留窗口/输入
 2. **双轨渲染** — 实时光栅用于创作迭代，离线路径追踪用于影视级出图，共享同一场景数据
 3. **AI 一等公民** — AI 通过 MCP 协议直接读写场景，所有操作进 Command 管道
 4. **数据驱动** — 场景 JSON v6 序列化，Inspector 双向绑定，编译期反射
@@ -70,7 +70,7 @@
 | 参照系 | 对标能力 | 不做的事 |
 |--------|---------|---------|
 | **Unity** | 编辑器布局、组件工作流、Play/Pause/Stop、Asset Pipeline | C# 脚本生态、Asset Store |
-| **Blender** | 路径追踪品质（Cycles）、材质节点、相机动画、渲染输出 (4K 图片+视频) | 雕刻、绘制、流体模拟、视频编辑器 |
+| **Blender** | 路径追踪品质（Cycles）、材质编辑、相机动画、渲染输出 (4K 图片+视频) | 雕刻、绘制、流体模拟、视频编辑器 |
 | **UE5** | 级联阴影、Lumen-级 GI 品质、多光源 | Nanite、World Partition、蓝图 |
 
 ---
@@ -81,10 +81,10 @@
 
 | 能力 | 状态 | 说明 |
 |------|------|------|
-| RHI 层 | ✅ 自研 RHI | Metal / Vulkan 已接入，SDL3 仅保留窗口与输入 |
+| RHI 层 | ✅ 自研 RHI | Metal / Vulkan 主路径已接入，SDL3 仅保留窗口与输入 |
 | RenderGraph | ✅ | 通道依赖管理 |
 | PBR + Cook-Torrance BRDF | ✅ | mesh.frag.glsl |
-| IBL 环境光 (辐照度图 + BRDF LUT) | ✅ | CPU 预计算 |
+| IBL 环境光 (辐照度图 + BRDF LUT) | ✅ | CPU 为主，BRDF LUT 已有 GPU 路径 |
 | 阴影 | ✅ 4-CSM + RT Shadow | 级联阴影已落地，RT 阴影已接入 |
 | Depth Prepass / Skybox | ✅ | |
 | Bloom / Tonemap / FXAA | ✅ | |
@@ -94,8 +94,8 @@
 | TAA | ✅ 时域抗锯齿 | jitter 注入与 history resolve 已接入 drawFrame |
 | 体积雾 | ✅ | |
 | 光源 | ✅ 多光源 | 方向光 / 点光已在渲染路径中工作 |
-| GPU RT | ✅ 影子 + 路径追踪 | Metal 路径已接入，自研 RHI 承载 |
-| CPU Path Tracer | ✅ | 均匀采样，无 MIS/NEE/降噪 |
+| GPU RT | ✅ 影子 + 路径追踪 | Metal 路径已接入；其他平台仍在规划/回退 |
+| CPU Path Tracer | ✅ | GGX VNDF + NEE/MIS + Principled BSDF + 俄罗斯轮盘 + 自适应 tile 采样 + 降噪导出 |
 | Gizmo / Outline / ID Pass | ✅ | |
 | 自动化渲染测试 | ✅ | 8 配置套件，Golden 对比 |
 
@@ -133,7 +133,7 @@
 | 只读场景感知 | ✅ scene/entity/selection/editor context |
 | CommandQueue 统一写入 | ✅ CRUD + 变换 + 层级 + 显隐 |
 | Staged Transaction + Ghost Preview | ✅ |
-| Query API (语义/空间/BVH) | ✅ |
+| Query API (文本/组件/空间/BVH) | ✅ |
 | Schema 资源族 | ✅ |
 
 ---
@@ -147,7 +147,7 @@
 | 限制 | 影响 |
 |------|------|
 | **无 Compute Shader** | IBL 预计算困在 CPU，SSAO/SSGI/GPU 剔除无法实现 |
-| **无 Ray Tracing API** | Metal RT 被迫绕过 SDL3 独立实现，Vulkan/DX12 RT 无法接入 |
+| **无 Ray Tracing API** | Metal RT 走独立实现；Vulkan/DX12 RT 仍是后续目标 |
 | **无 Indirect Draw** | GPU 驱动渲染不可能，大场景 draw call 无法压缩 |
 | **仅 2D 纹理** | 立方体贴图用 6 张 2D 模拟，浪费内存 |
 | **仅 Vertex + Fragment** | 无 Mesh Shader / Tessellation |
@@ -393,16 +393,16 @@ pub fn translateAndSubmit(queue: MTLCommandQueue, soft_buf: *const CommandBuffer
 | `ResourceLifetime`（first_use_pass / last_use_pass） | ✅ 已有 |
 | `compile()` 拓扑排序 + 依赖计算 | ✅ 已有 |
 | DOT / JSON 图导出 | ✅ 已有 |
-| **自动 barrier 插入** | ❌ 缺失 — 编译出依赖边但未翻译为 `pipelineBarrier` |
+| **自动 barrier 插入** | ✅ 已有 `BarrierPlan`，并可编码为 `pipelineBarrier` |
 | **transient 资源别名分配** | ❌ 缺失 — lifetime 已计算但未用于内存复用 |
 
 #### 3.5.2 升级路线
 
 | 阶段 | 内容 | 核心工作 |
 |------|------|---------|
-| **RHI-0** | Render Graph barrier 生成 | `compile()` 输出的 `DependencyEdge` → 自动生成 `BarrierDesc`，插入 soft CommandBuffer |
+| **RHI-0** | Render Graph barrier 生成 | `compile()` 输出的 `DependencyEdge` → 自动生成 `BarrierDesc`，编码进 soft CommandBuffer |
 | **RHI-1** | Metal Graphics Backend + 绑定模型 | `MTLDevice` 封装；每个 Pass 声明 `BindGroupDesc`（替代 SDL3 隐式推断）；`PipelineLayout` 静态定义 |
-| **RHI-2** | Metal Compute Backend | `MTLComputeCommandEncoder`；IBL/SSAO 迁移到 Compute Queue |
+| **RHI-2** | Metal Compute Backend | `MTLComputeCommandEncoder`；IBL/SSAO 部分迁移到 Compute Queue |
 | **RHI-3** | Metal RT 统一 | 将 `metal_rt_bridge.mm` 收归 RHI，复用 soft CommandBuffer |
 | **RHI-4** | Vulkan Graphics Backend | 与 RHI-1 并行；`VkPipelineLayout` / `VkDescriptorSet` 映射 `BindGroup` |
 | **RHI-5** | Vulkan Compute + RT | `VK_KHR_ray_tracing_pipeline` |
@@ -617,7 +617,7 @@ pub const SubAlloc = struct {
 - [x] 验证所有 bind group 创建路径的 slot 正确性
 - [x] 场景中放置带贴图物体，确认不再渲染为黑色
 - [x] 修复 main.zig GPA defer 顺序导致的 false-positive 内存泄漏（render-test 退出码 1）
-- **验收**: ✅ slot_offset 审计通过（0-4材质/5阴影/6-9 IBL），render-test 8/8 通过
+- **验收**: ✅ slot_offset 审计通过（0-4材质/5阴影/6-9 IBL），render-test 套件存在，golden 需维护
 
 #### R-2 SSAO 接入光照
 - [x] renderer.zig 增加 ssao_composite_pass（复用 RtShadowCompositePass 乘法混合管线）
@@ -1000,10 +1000,10 @@ pub const SubAlloc = struct {
 | 只读场景/实体/选择感知 | ✅ |
 | CommandQueue 统一写入 | ✅ |
 | Staged Transaction + Ghost Preview | ✅ |
-| Query API (语义/空间/BVH) | ✅ |
+| Query API (文本/组件/空间/BVH) | ✅ |
 | Schema 资源族 | ✅ |
 | WASM 脚本 + Inspector 反射 | ✅ |
-| Editor Utility UI (35 ImGui API) | ✅ |
+| Editor Utility UI (21 host_ui API) | ✅ |
 
 ### 9.2 待建
 
@@ -1033,13 +1033,13 @@ pub const SubAlloc = struct {
 > **架构原则：先打地基，再精装修。** 所有依赖 Compute Shader 的现代特效（TAA、SSGI、
 > 多光源剔除）必须在具备 Compute Queue / 显式 Barrier 的后端上实施，避免在缺少这些能力的管线上重复造轮子。
 
-### Phase 1：修复基础 — 让看得见的东西先正确 ✅ COMPLETED
+### Phase 1：修复基础 — 让看得见的东西先正确
 
 > 前置: 无
 
 | ID | 任务 | 检验标准 | 状态 |
 |----|------|---------|------|
-| R-1 | 审计纹理绑定 + 修复 GPA 泄漏 | render-test 8/8 通过 | ✅ |
+| R-1 | 审计纹理绑定 + 修复 GPA 泄漏 | render-test 套件存在，golden 需维护 | ✅ |
 | R-2 | SSAO 合成到 HDR 缓冲 | 角落变暗有接地感 | ✅ |
 | UI-1 | 面板最小尺寸约束 | 拖窄不再失效 | ✅ |
 | UI-2 | 工具栏断点下调至 680px | 680px 宽仍可用 | ✅ |
@@ -1056,18 +1056,18 @@ pub const SubAlloc = struct {
 | R-4 | 多光源 (dir x4 + point x16) | 4 盏点光照亮不同区域 | ✅ |
 | R-8 | Contact Shadows | 物体底部有接触阴影 | ✅ |
 
-### Phase 3：RHI 重构 — Metal / Vulkan 原生 Backend + Compute ✅ COMPLETED
+### Phase 3：RHI 重构 — Metal / Vulkan 原生 Backend + Compute
 
 > 前置: Phase 2（光栅管线基本功能稳定后换底层）
 >
-> 这一阶段已经在当前代码里落地为自研 RHI：Metal / Vulkan 后端可用，
-> SDL3 只负责窗口与输入，Compute / RT 路径也已接入主渲染链。
+> 这一阶段已经在当前代码里落地为自研 RHI：Metal 主路径可用，Vulkan / DX12 仍以目标态描述，
+> SDL3 只负责窗口与输入，Compute / RT 路径为部分接通并带回退。
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|
 | RHI-1 | Metal Graphics Backend | 18 个 Pass 在新 RHI 上渲染一致 |
-| RHI-2 | Metal Compute Backend | IBL 改 GPU 计算，SSAO dispatch |
-| RHI-3 | Metal RT 统一到 RHI | RT Shadow 和 Path Trace 走统一接口 |
+| RHI-2 | Metal Compute Backend | BRDF LUT 已有 GPU 路径，SSAO dispatch 部分接通 |
+| RHI-3 | Metal RT 统一到 RHI | RT Shadow 和 Path Trace 走统一接口；其他平台仍待补齐 |
 
 ### Phase 4：Compute 加持的现代光栅特效 ✅ COMPLETED
 
@@ -1130,8 +1130,8 @@ pub const SubAlloc = struct {
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|
-| RHI-4 | DX12 Backend | Windows 平台完成后端补齐 |
-| CT-1 | 节点材质编辑器 | 噪声混合材质可编辑 |
+| RHI-4 | DX12 Backend | Windows 平台完成后端补齐（目标态） |
+| CT-1 | 材质编辑器 | 噪声混合材质参数可编辑 |
 | CT-5 | UV 编辑器 | 查看/调整 UV 映射 |
 | PT-6 | 自适应采样 | 渲染时间减半 |
 
@@ -1139,18 +1139,18 @@ pub const SubAlloc = struct {
 
 以下三项在纸面上清晰，实际编码时复杂度指数级膨胀，需提前设计。
 
-#### ⚠️ 1. 节点材质的双向编译 (CT-1)
+#### ⚠️ 1. 材质编辑的双向编译 (CT-1)
 
 计划中提到"编译为 GLSL fragment shader（光栅）+ path tracer eval 函数（离线）"。
-跨越两种截然不同的渲染范式共享一套节点图极其困难。
+跨越两种截然不同的渲染范式共享一套参数图极其困难。
 
-**破局策略：** 不要尝试从节点图直接生成目标代码字符串。必须设计严谨的内部中间层
+**破局策略：** 不要尝试从编辑器 UI 直接生成目标代码字符串。必须设计严谨的内部中间层
 （Material AST），提取 BaseColor / Normal / Roughness / Metallic 等纯物理属性，
 然后分别喂给光栅化管线的 Uber Shader 和路径追踪的 Material 闭包。
 
 ```
-NodeGraph → Material AST → ┬→ GLSL Uber Shader (raster)
-                           └→ BSDF Closure (path tracer)
+Material UI → Material AST → ┬→ GLSL Uber Shader (raster)
+                            └→ BSDF Closure (path tracer)
 ```
 
 #### ⚠️ 2. Render Graph 瞬态内存复用 (Transient Memory Aliasing)
@@ -1201,7 +1201,7 @@ game_loop:
 ### 11.4 RHI 切换检查清单
 切换到新 RHI Backend 前，逐项验证:
 - [ ] 所有 18 个 Pass 渲染正确
-- [ ] render-test 8 配置全部 PASS
+- [ ] render-test 8 配置 golden 对比通过
 - [ ] GPU 内存不泄漏 (运行 120 帧后 RSS 稳定)
 - [ ] 帧率不回退 (60 FPS baseline scene)
 

@@ -8,12 +8,12 @@ Guava Engine 是基于 Zig 构建的 AI-Native 游戏引擎与编辑器。
 - 场景序列化 `JSON v6`
 - MCP `stdio` 协议：只读资源 + 实体写工具 + Staged Transaction + Ghost Preview
 - AI 与编辑器共享 `CommandQueue`，支持 `stage/apply/discard`
-- `query_entities` 支持分页、语义过滤、半径/AABB 空间过滤 + BVH 候选加速
+- `query_entities` 支持分页、文本/组件/空间过滤 + BVH 候选加速
 - WASM 脚本闭环：Zig→WASM 编译、热重载、Guest panic 结构化回传
 - 渲染管线：自研 RHI（Metal / Vulkan）+ PBR + IBL + 级联阴影 + Bloom + FXAA + SSAO（Compute/Fragment 双路径）+ SSR + SSGI + TAA + DOF + Contact Shadows
 - 路径追踪重写：CPU / Metal 已同步 GGX VNDF + NEE / MIS + Principled BSDF + HDR `.hdr` 环境重要性采样 + 俄罗斯轮盘 + 8x8 tile adaptive sampling；Editor PathTrace 导出已支持 `albedo / normal` AOV sidecar + 自动降噪后端 `OIDN(动态加载) -> MPS Guided -> CPU Guided`，并可在停止态下按固定步长输出 PNG / OpenEXR 序列
 - Jolt Physics：刚体、碰撞体、Trigger 事件、Constraints、Debug Draw
-- 编辑器：Inspector 编译期反射 + WASM 灰盒调参 + Animation Graph + 多视口 + Post-Process Pipeline Editor + 响应式状态栏/窄 Inspector 降级
+- 编辑器：Inspector 编译期反射 + WASM 灰盒调参 + Animation Graph + Post-Process 参数/效果编辑器 + 响应式状态栏/窄 Inspector 降级
 
 ## 常用命令
 
