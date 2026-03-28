@@ -261,7 +261,16 @@ fn runEngine(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
     var sandbox_layer = SandboxLayer{};
     try app.pushLayer(sandbox_layer.asLayer());
     var editor_layer = editor_layer_mod.EditorLayer{};
+    const mcp_runtime = try engine.mcp.runtime.Runtime.init(allocator, &app, .{
+        .enable_stdio_server = false,
+    });
+    defer mcp_runtime.deinit();
+    editor_layer.state.ai_collaboration = mcp_runtime.collaborationStore();
+    editor_layer.state.ai_snapshot_store = mcp_runtime.snapshotStore();
+    editor_layer.state.ai_tool_bridge = mcp_runtime.toolBridge();
+    editor_layer.state.ai_collaboration_bridge = mcp_runtime.collaborationBridge();
     try app.pushOverlay(editor_layer.asLayer());
+    try app.pushOverlay(mcp_runtime.syncLayer().asLayer());
 
     const report = try app.run(options.frame_count);
     const device_name = if (report.runtime.deviceName().len == 0) "Unknown Device" else report.runtime.deviceName();
@@ -316,40 +325,17 @@ fn runMcp(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
     var sandbox_layer = SandboxLayer{};
     try app.pushLayer(sandbox_layer.asLayer());
     var editor_layer = editor_layer_mod.EditorLayer{};
-    var collaboration_store = engine.mcp.collaboration.Store.init(allocator);
-    defer collaboration_store.deinit();
-    editor_layer.state.ai_collaboration = &collaboration_store;
+    const mcp_runtime = try engine.mcp.runtime.Runtime.init(allocator, &app, .{
+        .enable_stdio_server = true,
+        .close_stdin_on_shutdown = true,
+    });
+    defer mcp_runtime.deinit();
+    editor_layer.state.ai_collaboration = mcp_runtime.collaborationStore();
+    editor_layer.state.ai_snapshot_store = mcp_runtime.snapshotStore();
+    editor_layer.state.ai_tool_bridge = mcp_runtime.toolBridge();
+    editor_layer.state.ai_collaboration_bridge = mcp_runtime.collaborationBridge();
     try app.pushOverlay(editor_layer.asLayer());
-
-    var snapshot_store = engine.mcp.resources.SnapshotStore.init(
-        allocator,
-        &collaboration_store,
-        &app.script_runtime,
-        &app.editor_utility_runtime,
-    );
-    defer snapshot_store.deinit();
-    var tool_bridge = engine.mcp.tools.Bridge.init(allocator);
-    defer tool_bridge.deinit();
-    var collaboration_bridge = engine.mcp.collaboration.Bridge.init(allocator, &collaboration_store);
-    defer collaboration_bridge.deinit();
-
-    var exit_requested = std.atomic.Value(bool).init(false);
-    var sync_layer = engine.mcp.server.SyncLayer{
-        .store = &snapshot_store,
-        .tool_bridge = &tool_bridge,
-        .collaboration_bridge = &collaboration_bridge,
-        .exit_requested = &exit_requested,
-    };
-    try app.pushOverlay(sync_layer.asLayer());
-
-    var server_thread = try engine.mcp.server.spawn(&snapshot_store, &tool_bridge, &collaboration_bridge, &exit_requested);
-    defer {
-        collaboration_bridge.shutdown();
-        tool_bridge.shutdown();
-        exit_requested.store(true, .release);
-        std.posix.close(std.posix.STDIN_FILENO);
-        server_thread.join();
-    }
+    try app.pushOverlay(mcp_runtime.syncLayer().asLayer());
 
     std.log.info("MCP stdio transport ready", .{});
     _ = try app.run(options.frame_count);
