@@ -1026,6 +1026,29 @@ pub const SubAlloc = struct {
 - [ ] 复用 outline_pass 增加 AI 紫色通道
 - [ ] AI 操作的物体呼吸灯脉冲
 
+
+目前 `runMcp`（外部控制）与 `runEngine`（内部编辑器含 `ai_chat`）处于割裂状态。`ai_chat` 拥有不安全的直写特权，且未复用 MCP 的工具链；MCP 服务强制绑定 `stdio`，导致无法在常规编辑器启动时后台常驻，且每帧全局快照严重拖拽光栅化管线性能。
+
+### 9.3 终极进化目标：In-Memory MCP 双轨架构
+将引擎重构为**内嵌式 AI 服务总线**，使 MCP 成为全引擎唯一的 AI 交互标准接口。无论是外部 Claude Desktop 还是内置 `ai_chat` 面板，均作为 Client 接入同一个 In-Memory MCP Server。
+
+**核心改造路线图：**
+
+#### AI-1：下沉基础组件与 I/O 抽象
+- [ ] 将 `ToolBridge`、`SnapshotStore` 从 `runMcp` 解耦，下沉至引擎核心，使 `runEngine` 默认初始化。
+- [ ] 抽象 `Server.handleMessage` 的输出流：支持 `std.fs.File.writer()` (外部 stdio) 和 `std.ArrayList(u8).writer()` (内部内存回调)。
+
+#### AI-2：状态同步懒加载 (Lazy Sync)
+- [ ] 移除 `SyncLayer` 中每帧强制执行的 `world.updateHierarchy()` 和 `replaceFromRenderer()`。
+- [ ] 引入按需快照机制：仅在 `ai_chat` 提交请求前，或场景发生实质性变更（Dirty Flag）且后台存在活跃 MCP 客户端时，才触发一次快照。
+
+#### AI-3：内部 UI 接入 MCP
+- [ ] `ai_chat` 面板剥离特权操作代码，全面改用 In-Memory MCP 协议。
+- [ ] 引入异步 Job System：`ai_chat` 的网络请求与 MCP JSON 解析必须放入后台 Job，防止阻塞 ImGui 渲染主线程。
+- [ ] 特权上下文注入：`ai_chat` 在发起 LLM 请求前，直接读取内存中的 `selection://current` 等资源作为隐式 Prompt。
+
+#### AI-4：网络化扩展 (可选)
+- [ ] 实现 SSE (Server-Sent Events) 或 WebSocket 传输层，彻底摆脱 `stdio` 独占问题，允许编辑器在正常打印 log 的同时，后台静默伺服外部网络 AI Agent 请求。
 ---
 
 ## 十、分阶段执行路线图

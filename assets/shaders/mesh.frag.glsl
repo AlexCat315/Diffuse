@@ -35,7 +35,11 @@ layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     mat4 u_light_space_matrix;
     vec4 u_point_light_positions[16]; // xyz = position, w = range
     vec4 u_point_light_colors[16]; // rgb = color, w = intensity
-    uvec4 u_light_counts; // x: dir_count, y: point_count
+    vec4 u_spot_light_positions[16]; // xyz = position, w = range
+    vec4 u_spot_light_directions[16]; // xyz = direction, w = inner cone cos
+    vec4 u_spot_light_colors[16]; // rgb = color, w = intensity
+    vec4 u_spot_light_angles[16]; // x = outer cone cos
+    uvec4 u_light_counts; // x: dir_count, y: point_count, z: spot_count
     vec4 u_ambient_color;
     vec4 u_shadow_params; // x: bias, yzw: preview_tint_color
     vec4 u_rt_shadow_params; // x: enabled, y: strength, z: ambient_floor
@@ -287,12 +291,59 @@ void main() {
     for (int i = 0; i < point_count; ++i) {
         vec3 L_vec = material_uniforms.u_point_light_positions[i].xyz - v_world_position;
         float distance = length(L_vec);
+        if (distance <= 0.0001) {
+            continue;
+        }
         vec3 L = normalize(L_vec);
         vec3 H = normalize(V + L);
 
         float attenuation = clamp(1.0 - distance / max(material_uniforms.u_point_light_positions[i].w, 0.001), 0.0, 1.0);
         attenuation *= attenuation;
         vec3 radiance = material_uniforms.u_point_light_colors[i].rgb * material_uniforms.u_point_light_colors[i].w * attenuation;
+
+        float NDF = DistributionGGX(N, H, roughness);
+        float G = GeometrySmith(N, V, L, roughness);
+        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+        vec3 kS = F;
+        vec3 kD = vec3(1.0) - kS;
+        kD *= 1.0 - metallic;
+
+        vec3 numerator = NDF * G * F;
+        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+        vec3 specular = numerator / denominator;
+
+        float NdotL = max(dot(N, L), 0.0);
+        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
+    }
+
+    int spot_count = int(material_uniforms.u_light_counts.z);
+    for (int i = 0; i < spot_count; ++i) {
+        vec3 L_vec = material_uniforms.u_spot_light_positions[i].xyz - v_world_position;
+        float distance = length(L_vec);
+        if (distance <= 0.0001) {
+            continue;
+        }
+
+        vec3 L = normalize(L_vec);
+        vec3 light_forward = normalize(material_uniforms.u_spot_light_directions[i].xyz);
+        float cone_cos = dot(light_forward, -L);
+        float inner_cos = material_uniforms.u_spot_light_directions[i].w;
+        float outer_cos = material_uniforms.u_spot_light_angles[i].x;
+        if (cone_cos <= outer_cos) {
+            continue;
+        }
+
+        vec3 H = normalize(V + L);
+        float attenuation = clamp(1.0 - distance / max(material_uniforms.u_spot_light_positions[i].w, 0.001), 0.0, 1.0);
+        attenuation *= attenuation;
+        float cone_factor = (cone_cos >= inner_cos)
+            ? 1.0
+            : clamp((cone_cos - outer_cos) / max(inner_cos - outer_cos, 0.0001), 0.0, 1.0);
+        vec3 radiance = material_uniforms.u_spot_light_colors[i].rgb *
+            material_uniforms.u_spot_light_colors[i].w *
+            attenuation *
+            cone_factor;
 
         float NDF = DistributionGGX(N, H, roughness);
         float G = GeometrySmith(N, V, L, roughness);
