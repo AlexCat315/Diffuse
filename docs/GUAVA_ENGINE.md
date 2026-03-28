@@ -670,14 +670,14 @@ pub const SubAlloc = struct {
 
 ### 5.1 重写进度与剩余差距
 
-> 2026-03 代码状态：CPU/Metal 路径追踪已完成 GGX VNDF 采样、cosine diffuse、NEE + power heuristic MIS、Principled BSDF（metallic / roughness / transmission / emissive）、normal / metallic-roughness / AO / emissive 贴图链路、HDR `.hdr` 环境重要性采样、俄罗斯轮盘、8x8 tile 自适应采样。编辑器 PathTrace PNG 导出已可输出 `albedo / normal` AOV sidecar，并按 `OIDN(动态加载) -> MPS Guided -> CPU Guided` 自动选择降噪后端；无 HDR 时仍保留渐变 sky fallback，Render Output 已可在停止态下按固定步长输出 PNG / OpenEXR 序列。
+> 2026-03 代码状态：CPU/Metal 路径追踪已完成 GGX VNDF 采样、cosine diffuse、NEE + power heuristic MIS、Principled BSDF（metallic / roughness / transmission / emissive）、normal / metallic-roughness / AO / emissive 贴图链路、HDR `.hdr` 环境重要性采样、俄罗斯轮盘、8x8 tile 自适应采样。编辑器 PathTrace PNG 导出已可输出 `albedo / normal` AOV sidecar，并按 `OIDN(动态加载) -> MPS Guided -> CPU Guided` 自动选择降噪后端；无 HDR 时环境贡献归零，Render Output 已可在停止态下按固定步长输出 PNG / OpenEXR 序列。
 
 | 状态 | 项目 | 说明 |
 |------|------|------|
 | 已完成 | BRDF 重要性采样 | CPU 与 Metal kernel 均改为 GGX VNDF + cosine 半球采样 |
 | 已完成 | 直接光与 MIS | 命中点会做光源采样 + shadow ray，并用 power heuristic 合并 BRDF 采样 |
 | 已完成 | Principled BSDF | Schlick Fresnel、metallic F0、transmission / refraction、能量守恒都已接通 |
-| 部分完成 | HDR 环境照明 | `.hdr` 资源发现、环境 alias importance sampling 已完成；无环境时仍保留渐变天空 |
+| 已完成 | HDR 环境照明 | `.hdr` 资源发现、环境 alias importance sampling 已完成；无环境时环境贡献归零 |
 | 已完成 | 自适应采样 | CPU progressive 与 Metal RT PathTrace 都已按 8x8 tile 噪声估计分配 target samples |
 | 已完成 | 降噪 | PathTrace PNG 导出已支持 albedo / normal AOV sidecar，并自动按 `OIDN(动态加载) -> MPS Guided -> CPU Guided` 选择降噪后端 |
 | 已完成 | 序列输出 | Render Output 已支持固定步长驱动的 PNG / OpenEXR 帧序列导出，PathTrace EXR 走线性 beauty 输出 |
@@ -742,8 +742,8 @@ pub const SubAlloc = struct {
 #### PT-4 HDR 环境贴图采样
 - [x] 支持 `.hdr` 天空纹理
 - [x] 环境光 NEE: 根据亮度分布做 importance sampling (alias method)
-- [ ] 替换线性渐变 sky fallback
-- **验收**: HDRI 照明下物体已有真实环境反射；无 HDR 时仍回退渐变天空
+- [x] 移除线性渐变 sky fallback（无 HDR 时环境贡献归零）
+- **验收**: HDRI 照明下物体已有真实环境反射；无 HDR 时环境贡献为黑
 
 #### PT-5 俄罗斯轮盘 (无偏终止)
 - [x] 替换硬截止为概率终止:
@@ -1086,7 +1086,7 @@ pub const SubAlloc = struct {
 
 > 前置: RHI-2 (Compute)
 
-> 当前状态：PT-1 / PT-2 / PT-3 / PT-5 / PT-6 / PT-7 已完成；PT-4 部分完成（`.hdr` + importance sampling 已就绪，渐变 sky fallback 仍保留）；PT-8 仍待收尾。
+> 当前状态：PT-1 / PT-2 / PT-3 / PT-4 / PT-5 / PT-6 / PT-7 已完成；PT-8 仍待收尾。
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|
