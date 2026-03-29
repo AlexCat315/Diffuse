@@ -2,7 +2,7 @@
 
 > **引擎语言**: Zig 0.15 | **平台**: macOS (Metal) → Windows (Vulkan/DX12 目标) → Linux (Vulkan 目标)
 > **定位**: AI-Native 实时游戏引擎 + 离线物理渲染器（对标 Unity 编辑体验 + Blender Cycles 渲染品质）
-> **上次更新**: 2026-03-26
+> **上次更新**: 2026-03-30
 
 ---
 
@@ -88,7 +88,7 @@
 | 阴影 | ✅ 4-CSM + RT Shadow | 级联阴影已落地，RT 阴影已接入 |
 | Depth Prepass / Skybox | ✅ | |
 | Bloom / Tonemap / FXAA | ✅ | |
-| SSAO | ✅ Compute/Fragment 双路径 | 计算与片元路径均可回退，HDR 合成已接入 |
+| SSAO | ✅ Compute | 已统一为 Compute 路径，HDR 合成已接入 |
 | SSR | ✅ 屏幕空间反射 | 已接入渲染管线，支持参数化调节 |
 | DOF | ✅ CoC + 模糊 + 合成 | |
 | TAA | ✅ 时域抗锯齿 | jitter 注入与 history resolve 已接入 drawFrame |
@@ -834,85 +834,141 @@ pub const SubAlloc = struct {
 
 ### 7.1 对标范围
 
-| Blender 能力 | 对标 | 不做 |
-|-------------|------|------|
-| 3D 视口导航 | ✅ 已有 | -- |
-| 物体变换/层级 | ✅ 已有 | -- |
-| 材质编辑器 | ✅ 已有参数面板 | 节点着色器编辑器 (Phase 2) |
-| 相机动画 | 需要 | -- |
-| 渲染输出 (Cycles 品质) | 路径追踪重写后 | -- |
-| UV 编辑 | 基础 UV 查看/编辑 | 高级 UV 展开算法 |
-| 灯光系统 | 多光源 + 面光源 | IES 灯光 |
-| 渲染设置面板 | ✅ 已有 | -- |
-| Outliner (层级管理) | ✅ 已有 | -- |
-| Properties Panel | ✅ 已有 | -- |
-| Timeline (关键帧) | 需要 | 曲线编辑器 (Phase 2) |
-| 渲染视图 / 材质预览 | 需要 | -- |
-| 合成器 (Compositor) | 不做 | -- |
-| 雕刻 / 绘制 | 不做 | -- |
-| 流体/布料模拟 | 不做 | -- |
-| 视频编辑 | 不做 | -- |
-| 4K 图片/视频输出 | 需要 (FFmpeg 编码) | 专业后期彩色管理 |
+| Blender 基础环节 | Guava 当前基线 | Guava 目标能力 | 暂不做 / 延后 |
+|----------------|----------------|---------------|---------------|
+| 3D 视口导航 / 选择 / 变换 | ✅ 已有 | 补齐吸附、枢轴、局部/全局坐标、数值输入 | -- |
+| Object Mode / Outliner / Inspector | ✅ 已有 | 对齐 Blender 的对象工作流 | -- |
+| Mesh Edit Mode | ❌ 缺失 | 顶点/边/面编辑 + 常用建模操作 | 高级布线、重拓扑 |
+| 材质 LookDev | ✅ 参数面板已有 | 参数材质 + 节点材质两阶段 | 几何节点 |
+| UV 编辑 | ❌ 缺失 | UV 查看、选择、平移缩放、基础投影 | 高级展开 / 缝线求解 |
+| 相机 / 灯光 / 布光 | ⚠️ 部分已有 | 多相机、面光源、摄影灯光工作流 | IES、体积灯光编辑 |
+| 动画 / 时间线 | ❌ 缺失 | 关键帧、Dope Sheet、相机序列器 | 完整 Graph Editor |
+| 渲染预览 | ⚠️ 部分已有 | Solid / Material / Rendered 三档预览 | Compositor |
+| 渲染输出 | ⚠️ 单帧 PNG 已有 | 图片序列 / EXR / 视频 / 4K | 专业调色与剪辑 |
+| 雕刻 / 绘制 / 模拟 | 不做 | -- | 雕刻、纹理绘制、流体、布料 |
+| 视频编辑 | 不做 | -- | NLE / 时间轴剪辑 |
 
-### 7.2 创作工具实施清单
+### 7.2 创作工作流闭环
 
-#### CT-1 节点式材质编辑器
+Guava 对标 Blender 的策略，不是一次性追全功能，而是先做四条真正可闭环的创作链路：
+
+| 工作流 | 用户要完成的事 | 当前已有 | 关键缺口 | 闭环验收 |
+|--------|---------------|---------|---------|---------|
+| **Blockout 建模** | 从 primitive 搭场景、改体块、布置层级 | Primitive 放置 / Gizmo / Scene Hierarchy | Mesh Edit Mode、吸附、数值输入 | 10 分钟内从 Cube 搭出简单房间与门洞 |
+| **LookDev** | 给模型赋材质、看预览、切换渲染模式 | Inspector 材质参数 / Path Trace / PostFX | 材质预览模式、节点材质、UV 编辑 | 一个 glTF 模型能完成贴图、粗糙度、法线调整并预览 |
+| **Layout + 动画** | 相机飞行、物体关键帧、镜头切换 | Camera 实体 / Timeline 面板基础壳子 | 关键帧系统、Dope Sheet、Sequencer | 做出 5 秒镜头并可逐帧预览 |
+| **Final Render** | 导出海报图或短视频 | PNG 单帧输出 / PT 采样控制 | EXR、帧序列、视频编码、进度反馈 | 一键导出 4K PNG / EXR / MP4 |
+
+### 7.3 实施原则
+
+1. **先闭环，再追功能面**：优先补齐“建模 -> 材质 -> 动画 -> 输出”最短链路，避免只堆零散面板。
+2. **一份数据，多种视图**：Object Mode、Edit Mode、UV Editor、Timeline 共享同一份场景/资源数据，不复制编辑状态。
+3. **实时与离线共用材质语义**：材质编辑输出统一 AST/参数层，再分别喂给光栅与路径追踪，不让 UI 直接拼 shader 字符串。
+4. **编辑器工作流优先于 DCC 全覆盖**：优先支持游戏/影视预演常用能力，复杂 DCC 功能保持延后。
+5. **每项工具都有可录像的验收脚本**：每个 CT 条目都必须能被稳定复现和演示，而不是停留在“面板存在”。
+
+### 7.4 创作工具实施清单
+
+#### CT-1 Mesh Edit Mode（基础建模）
+- [ ] Mode 切换: Object / Edit
+- [ ] 元素选择: 顶点 / 边 / 面
+- [ ] 基础操作: Extrude / Inset / Bevel / Loop Cut / Merge / Delete
+- [ ] 常用辅助: Duplicate / Separate / Recalculate Normal / Pivot to Selection
+- [ ] Undo/Redo 与 Inspector / Hierarchy 正确同步
+- **验收**: 从一个 Cube 编辑出带门洞和窗洞的简单房间白模
+
+#### CT-2 变换约束 / 吸附 / 数值输入
+- [ ] 坐标空间: World / Local
+- [ ] 枢轴模式: Median / Active / Individual Origins / 3D Cursor（首版可退化为 Selection Pivot + Cursor Pivot）
+- [ ] 吸附: Grid / Vertex / Surface
+- [ ] 键盘约束: `G/R/S` 后接 `X/Y/Z`
+- [ ] 数值输入: 位置 / 旋转 / 缩放支持直接输入
+- **验收**: 将多个物体按网格和顶点吸附精确拼装，不依赖肉眼微调
+
+#### CT-3 材质编辑器（两阶段）
+
+**Phase 1: 参数材质增强**
+- [ ] 统一 Principled 参数面板: BaseColor / Metallic / Roughness / Normal / Emissive / Alpha
+- [ ] 预览球体、预览平面、贴图 checker
+- [ ] 材质实例与共享母材质
+
+**Phase 2: 节点式材质编辑器**
 - [ ] 节点系统: PBR 参数节点 -> 输出节点
 - [ ] 内置节点: Texture Sample, Color, Float, Mix, Normal Map, Noise, Voronoi
-- [ ] 实时预览球体
-- [ ] 编译为 GLSL fragment shader (光栅) + path tracer eval 函数 (离线)
-- **验收**: 用节点编辑器创建带有噪声纹理混合的材质, 光栅和路径追踪渲染一致
+- [ ] 编译为光栅 Uber Shader 参数图 + Path Tracer BSDF 闭包
+- **验收**: 用节点编辑器创建噪声混合材质，光栅与路径追踪观感一致
 
-#### CT-2 关键帧动画系统
-- [ ] 属性关键帧: 任意 float/vec3 属性可设置关键帧 (Transform, Light intensity, ...)
-- [ ] 插值类型: 线性 / 贝塞尔 / 阶梯
-- [ ] Timeline UI: 底部时间线面板，显示关键帧菱形标记
+#### CT-4 关键帧动画系统 + Dope Sheet
+- [ ] 属性关键帧: 任意 float / vec3 属性可设置关键帧（Transform、Light Intensity、Camera FOV 等）
+- [ ] 插值类型: Linear / Bezier / Step
+- [ ] Timeline UI: 菱形关键帧标记、拖动、框选
 - [ ] 播放控制: Play / Pause / 帧步进 / 跳转
-- **验收**: 创建 5 秒相机飞行动画，可以帧步进预览
+- [ ] Dope Sheet 首版: 按对象和属性分组列出关键帧
+- **验收**: 创建 5 秒相机飞行动画并可逐帧检查轨迹
 
-#### CT-3 Camera Sequencer (相机切换器)
+#### CT-5 Camera Sequencer（镜头轨）
 - [ ] 多相机: 场景中放置多个 Camera 实体
-- [ ] 序列器: 时间线上分段标记使用哪个 Camera
-- [ ] 渲染输出: 按序列器定义的相机顺序渲染帧序列
-- **验收**: 两个相机在 3 秒处切换，渲染输出正确
+- [ ] Shot Track: 时间线上分段标记使用哪个 Camera
+- [ ] 镜头参数: Cut / Hold；Blend 留待后续
+- [ ] 渲染输出: 按 Sequencer 相机顺序导出帧序列
+- **验收**: 两个相机在 3 秒处切换，导出结果与时间线一致
 
-#### CT-4 面光源 (Area Light)
+#### CT-6 面光源（Area Light）
 - [ ] 新光源类型: Rectangle / Disk
-- [ ] 光栅: 近似为点光 + soft shadow
-- [ ] 路径追踪: 真正面光源采样 (NEE)
-- **验收**: 面光源在路径追踪模式下产生物理正确的软阴影
+- [ ] 编辑器表现: 尺寸、方向、颜色、强度、温度
+- [ ] 光栅: 近似面光 + soft shadow
+- [ ] 路径追踪: 真正面光源采样（NEE）
+- **验收**: 路径追踪下获得物理正确软阴影，Raster 预览方向和范围一致
 
-#### CT-5 基础 UV 编辑器
-- [ ] 2D UV 视图面板 (新 editor window)
+#### CT-7 基础 UV 编辑器
+- [ ] 独立 2D UV 视图面板
 - [ ] 显示当前选中 mesh 的 UV 展开
-- [ ] 支持选择 UV 顶点/边/面，基础平移缩放
+- [ ] 支持选择 UV 顶点 / 边 / 面，基础平移 / 旋转 / 缩放
 - [ ] 自动 UV 投影: Box / Planar / Cylindrical
-- **验收**: 查看 glTF 导入模型的 UV，调整后纹理映射更新
+- [ ] Checker 预览与 texel density 粗略反馈
+- **验收**: 查看 glTF 导入模型 UV，调整后纹理映射正确更新
 
-#### CT-6 渲染输出面板
-- [x] 首版离线单帧输出: 分辨率预设 (Viewport / 1080p / 2K / 4K) + 自定义分辨率 / PNG 输出路径 / "Render Image"
+#### CT-8 渲染视图 / LookDev 预览
+- [ ] 视口着色模式: Solid / Material / Rendered
+- [ ] Matcap / Checker / HDRI 预览开关
+- [ ] 选中物体隔离预览与材质球预览同步
+- [ ] Path Trace 预览可降采样 / 限时迭代，避免编辑器卡死
+- **验收**: 同一模型可在三种视图间秒切，材质判断一致
+
+#### CT-9 渲染输出面板
+- [x] 首版离线单帧输出: 分辨率预设（Viewport / 1080p / 2K / 4K）+ 自定义分辨率 / PNG 输出路径 / `Render Image`
 - [x] 采样设置（首版）: PathTrace 导出 SPP / Bounces，导出时自动切换到全分辨率 tracing
-- [ ] 输出设置: 帧范围 / 输出格式 EXR
+- [ ] 输出设置: 帧范围 / 输出格式 EXR / PNG Sequence
 - [ ] 采样设置: 降噪开关 / 自适应采样
-- [ ] 一键渲染: "Render Animation" / "Render Video"
-- [ ] 进度显示: 当前帧/总帧 + 累积 SPP + 预计剩余时间
-- [ ] 4K 支持: 3840x2160 渲染，分 tile 渲染避免显存溢出 (每 tile 512x512)
-- **验收**: 首版已可设置 3840x2160 (4K) 并导出 PNG 单帧；EXR / 动画 / Video 验收留待后续
+- [ ] 一键渲染: `Render Animation`
+- [ ] 进度显示: 当前帧 / 总帧 + 累积 SPP + 预计剩余时间
+- [ ] 4K 支持: 3840x2160 渲染，分 tile 避免显存溢出（每 tile 512x512）
+- **验收**: 可设置 3840x2160 输出 EXR 序列，并稳定完成 10 帧动画导出
 
-#### CT-7 视频编码输出 (FFmpeg)
+#### CT-10 视频编码输出（FFmpeg）
 
 引擎不做视频编辑器，但必须能将渲染帧序列编码为标准视频格式。策略：渲染器输出帧序列 -> FFmpeg 子进程编码 -> 输出 MP4/MOV。
 
-- [ ] FFmpeg 子进程调用封装 (不链接 libav，仅调用 ffmpeg CLI)
-- [ ] 支持编码格式: H.264 (兼容性最佳) / H.265 (4K 体积减半) / ProRes (影视后期交换)
+- [ ] FFmpeg 子进程调用封装（不链接 libav，仅调用 ffmpeg CLI）
+- [ ] 支持编码格式: H.264 / H.265 / ProRes
 - [ ] 渲染流水线: Path Tracer 渲染帧 -> EXR 暂存 -> OIDN 降噪 -> Tonemap -> FFmpeg 编码
-- [ ] 音频混合: 场景 AudioSource 混音轨道合并到视频 (SoLoud -> WAV -> FFmpeg mux)
+- [ ] 音频混合: 场景 AudioSource 混音轨道合并到视频（SoLoud -> WAV -> FFmpeg mux）
 - [ ] 输出预设:
   - **Web**: 1080p H.264 CRF18, 30fps
   - **4K Cinema**: 3840x2160 H.265 CRF15, 24fps
-  - **Post-Production**: 4K ProRes 422, 24fps (供 DaVinci/Premiere 后期)
-- [ ] 编辑器 UI: 渲染输出面板增加 "输出格式" 下拉 + 编码质量滑块
-- **验收**: 10 秒相机动画 -> 一键渲染 -> 输出 4K H.265 MP4 视频文件，可在播放器中流畅播放
+  - **Post-Production**: 4K ProRes 422, 24fps（供 DaVinci/Premiere 后期）
+- [ ] 编辑器 UI: 渲染输出面板增加 `输出格式` 下拉 + 编码质量滑块
+- **验收**: 10 秒相机动画 -> 一键渲染 -> 输出 4K H.265 MP4，可在播放器中流畅播放
+
+### 7.5 优先级与落地顺序
+
+| 优先级 | 目标 | 对应条目 | 说明 |
+|--------|------|---------|------|
+| **P0** | 建立 Blender 式基础创作闭环 | CT-1 / CT-2 / CT-4 / CT-5 / CT-8 / CT-9 | 先让用户能建模、打镜头、预览、导出 |
+| **P1** | 补齐 LookDev 与布光 | CT-3 / CT-6 / CT-7 | 材质、面光源、UV 构成第二层闭环 |
+| **P2** | 交付影视向输出 | CT-10 + PT-8 | 视频编码、序列输出、降噪整合 |
+
+> 判断标准：如果某能力无法直接缩短“从空场景到 5 秒镜头 + 4K 导出”的路径，就不进入 P0。
 
 ---
 
@@ -1097,7 +1153,7 @@ pub const SubAlloc = struct {
 > 前置: Phase 3（RHI-2 Compute 已就绪）
 >
 > 当前代码已把 TAA / SSAO / SSGI / SSR / Contact Shadows 接入主渲染链，
-> 其中 SSAO 保留 compute + fragment 双路径回退，TAA 使用 jitter + history resolve。
+> SSAO 已统一为 compute 路径，TAA 使用 jitter + history resolve。
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|
@@ -1126,11 +1182,13 @@ pub const SubAlloc = struct {
 
 | ID | 任务 | 检验标准 |
 |----|------|---------|
-| CT-2 | 关键帧动画 + Timeline | 5 秒相机飞行动画 |
-| CT-3 | Camera Sequencer | 多相机切换渲染 |
-| CT-4 | 面光源 | PT 模式下物理正确软阴影 |
-| CT-6 | 渲染输出面板 (含 4K) | 一键渲染 4K EXR |
-| CT-7 | FFmpeg 视频编码 | 4K H.265 MP4 输出 |
+| CT-1 | Mesh Edit Mode | 从 Cube 建出简单房间白模 |
+| CT-2 | 吸附 / 约束 / 数值输入 | 物体可精确拼装 |
+| CT-4 | 关键帧动画 + Dope Sheet | 5 秒相机飞行动画 |
+| CT-5 | Camera Sequencer | 多相机切换渲染 |
+| CT-8 | 渲染视图 / LookDev | Solid / Material / Rendered 秒切 |
+| CT-9 | 渲染输出面板 (含 4K) | 一键渲染 4K EXR |
+| CT-10 | FFmpeg 视频编码 | 4K H.265 MP4 输出 |
 | PT-8 | EXR 序列帧输出 | 10 帧动画序列正确输出 |
 
 ### Phase 7：游戏运行时补全
@@ -1154,15 +1212,16 @@ pub const SubAlloc = struct {
 | ID | 任务 | 检验标准 |
 |----|------|---------|
 | RHI-4 | DX12 Backend | Windows 平台完成后端补齐（目标态） |
-| CT-1 | 材质编辑器 | 噪声混合材质参数可编辑 |
-| CT-5 | UV 编辑器 | 查看/调整 UV 映射 |
+| CT-3 | 材质编辑器 | 噪声混合材质参数可编辑 |
+| CT-6 | 面光源 | PT 与 Raster 预览方向一致 |
+| CT-7 | UV 编辑器 | 查看/调整 UV 映射 |
 | PT-6 | 自适应采样 | 渲染时间减半 |
 
 ### 技术深水区预警
 
 以下三项在纸面上清晰，实际编码时复杂度指数级膨胀，需提前设计。
 
-#### ⚠️ 1. 材质编辑的双向编译 (CT-1)
+#### ⚠️ 1. 材质编辑的双向编译 (CT-3)
 
 计划中提到"编译为 GLSL fragment shader（光栅）+ path tracer eval 函数（离线）"。
 跨越两种截然不同的渲染范式共享一套参数图极其困难。
