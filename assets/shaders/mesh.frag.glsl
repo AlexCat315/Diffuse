@@ -122,7 +122,7 @@ vec3 projectCascadePosition(int cascade_idx, vec3 world_position) {
     return proj_coords * 0.5 + 0.5;
 }
 
-float sampleCascadeShadow(int cascade_idx, vec3 world_position, vec3 N, vec3 light_dir) {
+float sampleCascadeShadow(int cascade_idx, vec3 world_position, vec3 receiver_normal, vec3 light_dir) {
     const vec2 poissonDisk[16] = vec2[](
         vec2(-0.94201624, -0.39906216), vec2( 0.94558609, -0.76890725),
         vec2(-0.09418410, -0.92938870), vec2( 0.34495938,  0.29387760),
@@ -134,17 +134,18 @@ float sampleCascadeShadow(int cascade_idx, vec3 world_position, vec3 N, vec3 lig
         vec2( 0.19984126,  0.78641367), vec2( 0.14383161, -0.14100790)
     );
 
-    float NdotL = max(dot(N, light_dir), 0.0);
-    float normal_offset = (0.0022 + float(cascade_idx) * 0.0008) * (1.2 - 0.75 * NdotL);
-    vec3 offset_world_position = world_position + N * normal_offset;
+    float NdotL = max(dot(receiver_normal, light_dir), 0.0);
+    float grazing = 1.0 - NdotL;
+    float normal_offset = (0.0056 + float(cascade_idx) * 0.0018) * (0.95 + grazing * 1.05);
+    vec3 offset_world_position = world_position + receiver_normal * normal_offset;
     vec3 proj_coords = projectCascadePosition(cascade_idx, offset_world_position);
     if (!shadowMapContains(proj_coords)) {
         return 1.0;
     }
 
     float bias = max(
-        material_uniforms.u_shadow_params.x * (0.65 + float(cascade_idx) * 0.18) * (1.1 - 0.55 * NdotL),
-        0.00005 * (1.0 + float(cascade_idx) * 0.22)
+        material_uniforms.u_shadow_params.x * (1.0 + float(cascade_idx) * 0.26) * (0.92 + grazing * 1.25),
+        0.0003 * (1.0 + float(cascade_idx) * 0.32)
     );
     float compare_depth = proj_coords.z - bias;
     float spread = 0.58 + float(cascade_idx) * 0.16;
@@ -201,6 +202,7 @@ void main() {
     }
 
     vec3 N = normalize(v_world_normal);
+    vec3 shadow_receiver_normal = N;
     if (material_uniforms.u_has_textures.z > 0) {
         // Derive tangent space (simplified)
         vec3 Q1  = dFdx(v_world_position);
@@ -243,7 +245,7 @@ void main() {
         }
 
         vec3 primary_light_dir = normalize(-material_uniforms.u_dir_light_directions[0].xyz);
-        shadow = sampleCascadeShadow(cascade_idx, v_world_position, N, primary_light_dir);
+        shadow = sampleCascadeShadow(cascade_idx, v_world_position, shadow_receiver_normal, primary_light_dir);
 
         if (cascade_idx < 3) {
             float cascade_start = cascade_idx == 0 ? 0.0 : material_uniforms.u_cascade_splits[cascade_idx - 1];
@@ -251,7 +253,7 @@ void main() {
             float blend_band = max(0.75, (cascade_end - cascade_start) * 0.08);
             float blend = smoothstep(cascade_end - blend_band, cascade_end, view_depth);
             if (blend > 0.0) {
-                float next_shadow = sampleCascadeShadow(cascade_idx + 1, v_world_position, N, primary_light_dir);
+                float next_shadow = sampleCascadeShadow(cascade_idx + 1, v_world_position, shadow_receiver_normal, primary_light_dir);
                 shadow = mix(shadow, next_shadow, blend);
             }
         }
