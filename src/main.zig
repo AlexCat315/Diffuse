@@ -10,137 +10,6 @@ pub const std_options = std.Options{
     .log_level = .info,
 };
 
-const SandboxLayer = struct {
-    spinning_entity: ?engine.scene.EntityId = null,
-
-    pub fn asLayer(self: *SandboxLayer) engine.core.Layer {
-        return .{
-            .name = "Sandbox3D",
-            .context = self,
-            .hooks = .{
-                .on_attach = onAttach,
-                .on_update = onUpdate,
-            },
-        };
-    }
-
-    fn onAttach(context: *anyopaque, layer_context: *engine.core.LayerContext) anyerror!void {
-        const self: *SandboxLayer = @ptrCast(@alignCast(context));
-        self.spinning_entity = null;
-        const world = layer_context.world;
-        const library = world.assets();
-        const registry = &library.asset_registry;
-        const allocator = library.allocator;
-
-        // Remove the default Hero cube from bootstrap3D.
-        if (world.findEntityByName("Hero")) |hero| {
-            _ = world.destroyEntity(hero.id);
-        }
-
-        // ── 1. Register HDR environment for IBL ─────────────────────────
-        // The renderer auto-discovers .hdr files in the registry for IBL.
-        _ = try registry.ensureProjectAsset("assets/textures/ticknock_04_4k.hdr");
-
-        // ── 2. Import glTF brick model (full PBR: diffuse + ARM + normal) ─
-        const brick_report = try world.importGltfStaticModel(
-            "assets/textures/brick_4_4k_gltf/brick_4_4k.gltf",
-            .{
-                .translation = .{ -1.5, 0.0, 0.0 },
-                .scale = .{ 1.0, 1.0, 1.0 },
-            },
-        );
-        // Slow-spin the imported brick root entity.
-        if (brick_report.root_entity) |root_id| {
-            self.spinning_entity = root_id;
-        }
-
-        // ── 3. Textured cube: load diffuse JPG via asset pipeline ────────
-        const diff_record = try registry.ensureProjectAsset(
-            "assets/textures/brick_4_4k_gltf/textures/brick_4_diff_4k.jpg",
-        );
-        const diff_tex = try engine.assets.loadTextureAsset(
-            allocator,
-            library,
-            registry,
-            diff_record.id,
-        );
-        const cube_mat = try library.createMaterial(.{
-            .name = "CheckeredDiffuseMaterial",
-            .base_color_texture = diff_tex,
-            .metallic_factor = 0.0,
-            .roughness_factor = 0.6,
-        });
-        const cube_mesh = try library.ensurePrimitiveMesh(.cube);
-        _ = try world.createEntity(.{
-            .name = "TexturedCube",
-            .mesh = .{ .handle = cube_mesh, .primitive = .cube },
-            .material = .{ .handle = cube_mat },
-            .local_transform = .{
-                .translation = .{ 1.5, 0.5, 0.0 },
-            },
-        });
-
-        // ── 4. Reflective sphere: pure PBR metal to show IBL reflections ─
-        const sphere_mat = try library.createMaterial(.{
-            .name = "ChromeSphereMaterial",
-            .base_color_factor = .{ 0.95, 0.93, 0.88, 1.0 },
-            .metallic_factor = 1.0,
-            .roughness_factor = 0.08,
-        });
-        const sphere_mesh = try library.ensurePrimitiveMesh(.sphere);
-        _ = try world.createEntity(.{
-            .name = "ChromeSphere",
-            .mesh = .{ .handle = sphere_mesh, .primitive = .sphere },
-            .material = .{ .handle = sphere_mat },
-            .local_transform = .{
-                .translation = .{ 0.0, 0.7, 1.8 },
-                .scale = .{ 0.7, 0.7, 0.7 },
-            },
-        });
-
-        // ── 5. Adjust camera ─────────────────────────────────────────────
-        if (world.findEntityByName("MainCamera")) |cam_ref| {
-            if (world.getEntity(cam_ref.id)) |cam| {
-                cam.local_transform.translation = .{ 0.0, 2.0, 5.5 };
-                cam.local_transform.rotation = engine.math.quat.fromEuler(.{ -0.18, 0.0, 0.0 });
-                world.markDirty(cam_ref.id);
-            }
-        }
-
-        // ── 6. Adjust Sun light ──────────────────────────────────────────
-        if (world.findEntityByName("Sun")) |sun_ref| {
-            if (world.getEntity(sun_ref.id)) |sun| {
-                sun.light = .{
-                    .kind = .directional,
-                    .color = .{ 1.0, 0.98, 0.95 },
-                    .intensity = 3.5,
-                };
-                sun.local_transform.rotation = engine.math.quat.fromEuler(.{ -0.78, 0.78, 0.0 });
-                world.markDirty(sun_ref.id);
-            }
-        }
-    }
-
-    fn onUpdate(context: *anyopaque, layer_context: *engine.core.LayerContext) anyerror!void {
-        const self: *SandboxLayer = @ptrCast(@alignCast(context));
-        if (self.spinning_entity) |entity_id| {
-            if (layer_context.world.getEntity(entity_id)) |entity| {
-                // 计算这一帧的旋转增量（弧度）
-                const delta_angle = 0.75 * layer_context.delta_seconds;
-
-                // 构造绕Y轴的增量旋转四元数（避免万向节死锁，效率更高）
-                const delta_rotation = engine.math.quat.fromAxisAngle(.{ 0.0, 1.0, 0.0 }, delta_angle);
-
-                // 使用四元数乘法叠加旋转（这是3D图形学标准做法）
-                entity.local_transform.rotation = engine.math.quat.mul(entity.local_transform.rotation, delta_rotation);
-
-                // 归一化防止浮点误差累积
-                entity.local_transform.rotation = engine.math.quat.normalize(entity.local_transform.rotation);
-            }
-        }
-    }
-};
-
 fn ensureProjectRootAsCwd(allocator: std.mem.Allocator) !void {
     std.fs.cwd().access("assets", .{}) catch |err| switch (err) {
         error.FileNotFound => {
@@ -258,8 +127,6 @@ fn runEngine(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
     });
     defer app.deinit();
 
-    var sandbox_layer = SandboxLayer{};
-    try app.pushLayer(sandbox_layer.asLayer());
     var editor_layer = editor_layer_mod.EditorLayer{};
     const mcp_runtime = try engine.mcp.runtime.Runtime.init(allocator, &app, .{
         .enable_stdio_server = false,
@@ -322,8 +189,6 @@ fn runMcp(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
     });
     defer app.deinit();
 
-    var sandbox_layer = SandboxLayer{};
-    try app.pushLayer(sandbox_layer.asLayer());
     var editor_layer = editor_layer_mod.EditorLayer{};
     const mcp_runtime = try engine.mcp.runtime.Runtime.init(allocator, &app, .{
         .enable_stdio_server = true,
