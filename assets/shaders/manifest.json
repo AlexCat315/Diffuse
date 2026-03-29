@@ -2,8 +2,7 @@
   "programs": [
     {
       "name": "depth_prepass",
-      "vertex": "assets/shaders/depth_prepass.vert.glsl",
-      "fragment": "assets/shaders/depth_prepass.frag.glsl"
+      "vertex": "assets/shaders/depth_prepass.vert.glsl"
     },
     {
       "name": "id_pass",
@@ -32,8 +31,7 @@
     },
     {
       "name": "shadow_pass",
-      "vertex": "assets/shaders/shadow_pass.vert.glsl",
-      "fragment": "assets/shaders/shadow_pass.frag.glsl"
+      "vertex": "assets/shaders/shadow_pass.vert.glsl"
     },
     {
       "name": "omni_shadow_pass",

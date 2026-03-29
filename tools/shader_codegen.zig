@@ -8,7 +8,7 @@ const Manifest = struct {
 const Program = struct {
     name: []const u8,
     vertex: []const u8,
-    fragment: []const u8,
+    fragment: ?[]const u8 = null,
 };
 
 const ComputeProgram = struct {
@@ -92,9 +92,9 @@ fn generateShaderModule(
         \\pub const ShaderProgram = struct {
         \\    name: []const u8,
         \\    vertex_spirv: ShaderVariant,
-        \\    fragment_spirv: ShaderVariant,
+        \\    fragment_spirv: ?ShaderVariant = null,
         \\    vertex_msl: ShaderVariant,
-        \\    fragment_msl: ShaderVariant,
+        \\    fragment_msl: ?ShaderVariant = null,
         \\
         \\    pub fn stageForBackend(
         \\        self: *const ShaderProgram,
@@ -146,22 +146,25 @@ fn generateShaderModule(
             allocator.free(vertex_stage.msl_bytes);
         }
 
-        const fragment_stage = try compileStage(allocator, identifier, program, .fragment);
-        defer {
-            allocator.free(fragment_stage.spirv_bytes);
-            allocator.free(fragment_stage.msl_bytes);
+        var fragment_stage: ?CompiledStage = null;
+        defer if (fragment_stage) |compiled_stage| {
+            allocator.free(compiled_stage.spirv_bytes);
+            allocator.free(compiled_stage.msl_bytes);
+        };
+
+        if (program.fragment) |_| {
+            fragment_stage = try compileStage(allocator, identifier, program, .fragment);
         }
 
         try emitByteArray(&writer, identifier, "vertex_spirv", vertex_stage.spirv_bytes);
-        try emitByteArray(&writer, identifier, "fragment_spirv", fragment_stage.spirv_bytes);
         try emitByteArray(&writer, identifier, "vertex_msl", vertex_stage.msl_bytes);
-        try emitByteArray(&writer, identifier, "fragment_msl", fragment_stage.msl_bytes);
+        if (fragment_stage) |compiled_stage| {
+            try emitByteArray(&writer, identifier, "fragment_spirv", compiled_stage.spirv_bytes);
+            try emitByteArray(&writer, identifier, "fragment_msl", compiled_stage.msl_bytes);
+        }
 
         const vertex_msl_entry = try std.fmt.allocPrint(allocator, "guava_{s}_vertex_main", .{identifier});
         defer allocator.free(vertex_msl_entry);
-        const fragment_msl_entry = try std.fmt.allocPrint(allocator, "guava_{s}_fragment_main", .{identifier});
-        defer allocator.free(fragment_msl_entry);
-
         try writer.print(
             \\pub const {s} = ShaderProgram{{
             \\    .name = "{s}",
@@ -171,25 +174,6 @@ fn generateShaderModule(
             \\        .code = {s}_vertex_spirv_code[0..],
             \\        .reflection = .{{ .num_samplers = {d}, .num_storage_textures = {d}, .num_storage_buffers = {d}, .num_uniform_buffers = {d} }},
             \\    }},
-            \\    .fragment_spirv = .{{
-            \\        .format = .spirv,
-            \\        .entry_point = "main",
-            \\        .code = {s}_fragment_spirv_code[0..],
-            \\        .reflection = .{{ .num_samplers = {d}, .num_storage_textures = {d}, .num_storage_buffers = {d}, .num_uniform_buffers = {d} }},
-            \\    }},
-            \\    .vertex_msl = .{{
-            \\        .format = .msl,
-            \\        .entry_point = "{s}",
-            \\        .code = {s}_vertex_msl_code[0..],
-            \\        .reflection = .{{ .num_samplers = {d}, .num_storage_textures = {d}, .num_storage_buffers = {d}, .num_uniform_buffers = {d} }},
-            \\    }},
-            \\    .fragment_msl = .{{
-            \\        .format = .msl,
-            \\        .entry_point = "{s}",
-            \\        .code = {s}_fragment_msl_code[0..],
-            \\        .reflection = .{{ .num_samplers = {d}, .num_storage_textures = {d}, .num_storage_buffers = {d}, .num_uniform_buffers = {d} }},
-            \\    }},
-            \\}};
             \\
         ,
             .{
@@ -200,25 +184,78 @@ fn generateShaderModule(
                 vertex_stage.reflection.num_storage_textures,
                 vertex_stage.reflection.num_storage_buffers,
                 vertex_stage.reflection.num_uniform_buffers,
-                identifier,
-                fragment_stage.reflection.num_samplers,
-                fragment_stage.reflection.num_storage_textures,
-                fragment_stage.reflection.num_storage_buffers,
-                fragment_stage.reflection.num_uniform_buffers,
-                vertex_msl_entry,
-                identifier,
-                vertex_stage.reflection.num_samplers,
-                vertex_stage.reflection.num_storage_textures,
-                vertex_stage.reflection.num_storage_buffers,
-                vertex_stage.reflection.num_uniform_buffers,
-                fragment_msl_entry,
-                identifier,
-                fragment_stage.reflection.num_samplers,
-                fragment_stage.reflection.num_storage_textures,
-                fragment_stage.reflection.num_storage_buffers,
-                fragment_stage.reflection.num_uniform_buffers,
             },
         );
+
+        if (fragment_stage) |compiled_stage| {
+            const fragment_msl_entry = try std.fmt.allocPrint(allocator, "guava_{s}_fragment_main", .{identifier});
+            defer allocator.free(fragment_msl_entry);
+
+            try writer.print(
+                \\    .fragment_spirv = .{{
+                \\        .format = .spirv,
+                \\        .entry_point = "main",
+                \\        .code = {s}_fragment_spirv_code[0..],
+                \\        .reflection = .{{ .num_samplers = {d}, .num_storage_textures = {d}, .num_storage_buffers = {d}, .num_uniform_buffers = {d} }},
+                \\    }},
+                \\    .vertex_msl = .{{
+                \\        .format = .msl,
+                \\        .entry_point = "{s}",
+                \\        .code = {s}_vertex_msl_code[0..],
+                \\        .reflection = .{{ .num_samplers = {d}, .num_storage_textures = {d}, .num_storage_buffers = {d}, .num_uniform_buffers = {d} }},
+                \\    }},
+                \\    .fragment_msl = .{{
+                \\        .format = .msl,
+                \\        .entry_point = "{s}",
+                \\        .code = {s}_fragment_msl_code[0..],
+                \\        .reflection = .{{ .num_samplers = {d}, .num_storage_textures = {d}, .num_storage_buffers = {d}, .num_uniform_buffers = {d} }},
+                \\    }},
+                \\}};
+                \\
+            ,
+                .{
+                    identifier,
+                    compiled_stage.reflection.num_samplers,
+                    compiled_stage.reflection.num_storage_textures,
+                    compiled_stage.reflection.num_storage_buffers,
+                    compiled_stage.reflection.num_uniform_buffers,
+                    vertex_msl_entry,
+                    identifier,
+                    vertex_stage.reflection.num_samplers,
+                    vertex_stage.reflection.num_storage_textures,
+                    vertex_stage.reflection.num_storage_buffers,
+                    vertex_stage.reflection.num_uniform_buffers,
+                    fragment_msl_entry,
+                    identifier,
+                    compiled_stage.reflection.num_samplers,
+                    compiled_stage.reflection.num_storage_textures,
+                    compiled_stage.reflection.num_storage_buffers,
+                    compiled_stage.reflection.num_uniform_buffers,
+                },
+            );
+        } else {
+            try writer.print(
+                \\    .fragment_spirv = null,
+                \\    .vertex_msl = .{{
+                \\        .format = .msl,
+                \\        .entry_point = "{s}",
+                \\        .code = {s}_vertex_msl_code[0..],
+                \\        .reflection = .{{ .num_samplers = {d}, .num_storage_textures = {d}, .num_storage_buffers = {d}, .num_uniform_buffers = {d} }},
+                \\    }},
+                \\    .fragment_msl = null,
+                \\}};
+                \\
+            ,
+                .{
+                    vertex_msl_entry,
+                    identifier,
+                    vertex_stage.reflection.num_samplers,
+                    vertex_stage.reflection.num_storage_textures,
+                    vertex_stage.reflection.num_storage_buffers,
+                    vertex_stage.reflection.num_uniform_buffers,
+                },
+            );
+        }
     }
 
     try writer.writeAll("pub const programs = [_]*const ShaderProgram{\n");
@@ -349,7 +386,7 @@ fn compileStage(
     };
     const source_path = switch (stage) {
         .vertex => program.vertex,
-        .fragment => program.fragment,
+        .fragment => program.fragment orelse return error.MissingFragmentStage,
         .compute => unreachable, // use compileComputeStage
     };
 
