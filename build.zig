@@ -233,6 +233,7 @@ const windows_cpp_sources = [_][]const u8{
 };
 
 const vulkan_c_sources = [_][]const u8{
+    "src/engine/platform/window_vulkan_sdl.c",
     "src/engine/rhi/vulkan/vk_bridge.c",
 };
 
