@@ -118,8 +118,8 @@ bool shadowMapContains(vec3 proj_coords) {
 
 vec3 projectCascadePosition(int cascade_idx, vec3 world_position) {
     vec4 frag_pos_light_space = material_uniforms.u_cascade_matrices[cascade_idx] * vec4(world_position, 1.0);
-    vec3 proj_coords = frag_pos_light_space.xyz / max(frag_pos_light_space.w, 0.00001);
-    return proj_coords * 0.5 + 0.5;
+    vec3 ndc = frag_pos_light_space.xyz / max(frag_pos_light_space.w, 0.00001);
+    return vec3(ndc.xy * 0.5 + 0.5, ndc.z);
 }
 
 float sampleCascadeShadow(int cascade_idx, vec3 world_position, vec3 receiver_normal, vec3 light_dir) {
