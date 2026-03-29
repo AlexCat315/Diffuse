@@ -59,6 +59,10 @@ pub const core = struct {
     pub const Command = @import("engine/core/command.zig").Command;
     /// 引擎级命令错误
     pub const CommandError = @import("engine/core/command.zig").CommandError;
+    /// 命令审批状态（auto / previewed / user_approved / rejected）
+    pub const CommandApprovalState = @import("engine/core/command.zig").ApprovalState;
+    /// 命令审计元数据（actor/client/session/request/trace/base_revision）
+    pub const CommandMeta = @import("engine/core/command.zig").CommandMeta;
     /// 创建实体命令参数
     pub const CreateEntitySpec = @import("engine/core/command.zig").CreateEntitySpec;
     /// 命令执行结果
