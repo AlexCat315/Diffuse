@@ -302,21 +302,21 @@ pub const render = struct {
     /// 帧报告，包含渲染统计信息
     pub const FrameReport = @import("engine/render/renderer.zig").FrameReport;
     /// 网格场景缓存
-    pub const MeshSceneCache = @import("engine/render/mesh_pass.zig").MeshSceneCache;
+    pub const MeshSceneCache = @import("engine/render/passes/mesh_pass.zig").MeshSceneCache;
     /// 准备好的场景数据
-    pub const PreparedScene = @import("engine/render/mesh_pass.zig").PreparedScene;
+    pub const PreparedScene = @import("engine/render/passes/mesh_pass.zig").PreparedScene;
     /// ID 拾取通道（用于编辑器物体选择）
-    pub const IdPass = @import("engine/render/id_pass.zig").IdPass;
+    pub const IdPass = @import("engine/render/passes/id_pass.zig").IdPass;
     /// 基础渲染通道
-    pub const BasePass = @import("engine/render/base_pass.zig").BasePass;
+    pub const BasePass = @import("engine/render/passes/base_pass.zig").BasePass;
     /// 基础渲染通道（Golden 测试版本）
-    pub const BasePassGolden = @import("engine/render/base_pass_golden.zig");
+    pub const BasePassGolden = @import("engine/render/passes/base_pass_golden.zig");
     /// 深度预通道
-    pub const DepthPrepass = @import("engine/render/depth_prepass.zig").DepthPrepass;
+    pub const DepthPrepass = @import("engine/render/passes/depth_prepass.zig").DepthPrepass;
     /// Gizmo 渲染通道
-    pub const GizmoPass = @import("engine/render/gizmo_pass.zig").GizmoPass;
+    pub const GizmoPass = @import("engine/render/passes/gizmo_pass.zig").GizmoPass;
     /// 轮廓渲染通道（用于选中物体高亮）
-    pub const OutlinePass = @import("engine/render/outline_pass.zig").OutlinePass;
+    pub const OutlinePass = @import("engine/render/passes/outline_pass.zig").OutlinePass;
     /// 选择历史管理
     pub const SelectionHistory = @import("engine/render/selection_history.zig").SelectionHistory;
     /// 选择更新模式
