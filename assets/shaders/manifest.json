@@ -59,11 +59,6 @@
       "fragment": "assets/shaders/skybox.frag.glsl"
     },
     {
-      "name": "ssao",
-      "vertex": "assets/shaders/ssao.vert.glsl",
-      "fragment": "assets/shaders/ssao.frag.glsl"
-    },
-    {
       "name": "ssr",
       "vertex": "assets/shaders/ssr.vert.glsl",
       "fragment": "assets/shaders/ssr.frag.glsl"

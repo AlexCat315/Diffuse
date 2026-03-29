@@ -5,9 +5,9 @@
 
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
-layout(set = 1, binding = 0, rg16f) writeonly uniform image2D u_output;
+layout(set = 0, binding = 0, rg16f) writeonly uniform image2D u_output;
 
-layout(set = 2, binding = 0) uniform BRDFParams {
+layout(set = 1, binding = 0) uniform BRDFParams {
     uint size;
     uint sample_count;
     vec2 padding;

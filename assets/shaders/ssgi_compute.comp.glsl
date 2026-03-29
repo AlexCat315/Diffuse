@@ -3,12 +3,11 @@
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) uniform sampler2D u_depth;
-layout(set = 0, binding = 1) uniform sampler2D u_hdr_color;
-layout(set = 0, binding = 2) uniform sampler2D u_noise;
+layout(set = 0, binding = 1, rgba16f) uniform writeonly image2D u_output;
+layout(set = 0, binding = 2) uniform sampler2D u_hdr_color;
+layout(set = 0, binding = 3) uniform sampler2D u_noise;
 
-layout(set = 1, binding = 0, rgba16f) uniform writeonly image2D u_output;
-
-layout(set = 2, binding = 0, std140) uniform SSGIUniforms {
+layout(set = 1, binding = 0, std140) uniform SSGIUniforms {
     mat4 u_projection;
     mat4 u_inv_projection;
     mat4 u_view;

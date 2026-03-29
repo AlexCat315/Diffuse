@@ -6,10 +6,9 @@
 layout(local_size_x = 8, local_size_y = 8, local_size_z = 1) in;
 
 layout(set = 0, binding = 0) uniform sampler2D u_environment;
+layout(set = 0, binding = 1, rgba16f) writeonly uniform image2D u_output;
 
-layout(set = 1, binding = 0, rgba16f) writeonly uniform image2D u_output;
-
-layout(set = 2, binding = 0) uniform IrradianceParams {
+layout(set = 1, binding = 0) uniform IrradianceParams {
     uint output_size;
     uint sample_count;
     vec2 padding;
