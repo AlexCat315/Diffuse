@@ -721,6 +721,8 @@ pub const scene = struct {
     pub const LightKind = @import("engine/scene/components.zig").LightKind;
     /// Prefab 系统
     pub const prefab = @import("engine/scene/prefab.zig");
+    /// 插件系统
+    pub const plugin = @import("engine/plugin/plugin.zig");
 };
 
 test {
