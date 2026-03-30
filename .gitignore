@@ -75,3 +75,6 @@ assets_backup_*/
 src/engine/generated/
 nohup.out
 renders_test_out/
+zig-cache/
+examples/csharp/**/bin/
+examples/csharp/**/obj/

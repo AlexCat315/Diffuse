@@ -414,6 +414,28 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
 
+    const script_vm_test_mod = b.createModule(.{
+        .root_source_file = b.path("src/script_vm_test_main.zig"),
+        .target = target,
+    });
+    configureEngineModule(b, script_vm_test_mod, target.result.os.tag, sdl_prefix);
+
+    const script_vm_tests = b.addTest(.{
+        .root_module = script_vm_test_mod,
+    });
+    script_vm_tests.linkLibC();
+    script_vm_tests.linkLibCpp();
+    script_vm_tests.step.dependOn(&run_shader_codegen.step);
+
+    const run_script_vm_tests = b.addRunArtifact(script_vm_tests);
+    const script_vm_test_step = b.step("test-script-vm", "Run script VM tests");
+    script_vm_test_step.dependOn(&run_script_vm_tests.step);
+
+    const run_csharp_nativeaot_tests = b.addRunArtifact(script_vm_tests);
+    run_csharp_nativeaot_tests.setEnvironmentVariable("GUAVA_RUN_NATIVEAOT_TESTS", "1");
+    const csharp_nativeaot_test_step = b.step("test-csharp-nativeaot", "Run C# NativeAOT script VM integration tests");
+    csharp_nativeaot_test_step.dependOn(&run_csharp_nativeaot_tests.step);
+
     const console_test_mod = b.createModule(.{
         .root_source_file = b.path("src/test_console.zig"),
         .target = target,
