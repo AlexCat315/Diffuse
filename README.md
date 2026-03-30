@@ -49,6 +49,7 @@ zig build render-test -- --rt-shadows --export-png
 ## 文档
 
 - [开发规划](docs/GUAVA_ENGINE.md)
+- [Hybrid Renderer 升级路线](docs/HYBRID_RENDERER_UPGRADE.md)
 
 ## 协作须知
 
