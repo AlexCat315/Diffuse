@@ -396,8 +396,12 @@ pub const assets = struct {
     pub const ScriptHandle = @import("engine/assets/handles.zig").ScriptHandle;
     /// 网格资源
     pub const MeshResource = @import("engine/assets/mesh_resource.zig").MeshResource;
+    /// 网格顶点格式
+    pub const MeshVertex = @import("engine/assets/mesh_resource.zig").Vertex;
     /// 网格资源描述
     pub const MeshResourceDesc = @import("engine/assets/mesh_resource.zig").MeshResourceDesc;
+    /// 计算网格局部包围盒
+    pub const computeMeshLocalBounds = @import("engine/assets/mesh_resource.zig").computeLocalBounds;
     /// 材质资源
     pub const MaterialResource = @import("engine/assets/material_resource.zig").MaterialResource;
     /// 材质资源描述
