@@ -49,7 +49,7 @@ vec3 clipAABB(vec3 color, vec3 min_color, vec3 max_color) {
 void main() {
     float depth = texture(u_depth, v_uv).r;
     vec2 velocity = texture(u_velocity, v_uv).rg * taa.u_motion_blur_scale;
-    vec2 uv_history = v_uv - velocity;
+    vec2 uv_history = v_uv_history - velocity;
 
     if (uv_history.x < 0.0 || uv_history.x > 1.0 || uv_history.y < 0.0 || uv_history.y > 1.0) {
         out_color = texture(u_current, v_uv);

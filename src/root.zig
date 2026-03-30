@@ -130,7 +130,7 @@ pub const mcp = @import("engine/mcp/mod.zig");
 
 /// 脚本模块
 ///
-/// 提供脚本运行时、WASM 后端和参数反射工具。
+/// 提供脚本运行时、C# NativeAOT gameplay VM、WASM plugin VM 与参数反射工具。
 pub const script = @import("engine/script/script.zig");
 
 /// 渲染硬件接口（RHI）模块

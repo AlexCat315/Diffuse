@@ -10,6 +10,11 @@
       "fragment": "assets/shaders/id_pass.frag.glsl"
     },
     {
+      "name": "velocity",
+      "vertex": "assets/shaders/velocity.vert.glsl",
+      "fragment": "assets/shaders/velocity.frag.glsl"
+    },
+    {
       "name": "mesh",
       "vertex": "assets/shaders/mesh.vert.glsl",
       "fragment": "assets/shaders/mesh.frag.glsl"

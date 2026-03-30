@@ -5,7 +5,6 @@ layout(location = 0) out vec4 out_reflection;
 
 layout(set = 2, binding = 0) uniform sampler2D u_color;
 layout(set = 2, binding = 1) uniform sampler2D u_depth;
-layout(set = 2, binding = 2) uniform sampler2D u_normal;
 
 layout(set = 3, binding = 0, std140) uniform SSRUniforms {
     mat4 u_projection;
@@ -27,6 +26,29 @@ vec3 getViewPos(vec2 uv, float depth) {
     vec4 clipPos = vec4(uv * 2.0 - 1.0, depth, 1.0);
     vec4 viewPos = ssr.u_inv_projection * clipPos;
     return viewPos.xyz / viewPos.w;
+}
+
+vec3 reconstructNormal(vec3 viewPos, vec2 uv) {
+    vec2 texel = 1.0 / ssr.u_resolution;
+
+    float dL = texture(u_depth, uv + vec2(-texel.x, 0.0)).r;
+    float dR = texture(u_depth, uv + vec2(texel.x, 0.0)).r;
+    float dT = texture(u_depth, uv + vec2(0.0, -texel.y)).r;
+    float dB = texture(u_depth, uv + vec2(0.0, texel.y)).r;
+
+    vec3 posL = getViewPos(uv + vec2(-texel.x, 0.0), dL);
+    vec3 posR = getViewPos(uv + vec2(texel.x, 0.0), dR);
+    vec3 posT = getViewPos(uv + vec2(0.0, -texel.y), dT);
+    vec3 posB = getViewPos(uv + vec2(0.0, texel.y), dB);
+
+    vec3 dx = (abs(posL.z - viewPos.z) < abs(posR.z - viewPos.z))
+        ? (viewPos - posL)
+        : (posR - viewPos);
+    vec3 dy = (abs(posT.z - viewPos.z) < abs(posB.z - viewPos.z))
+        ? (viewPos - posT)
+        : (posB - viewPos);
+
+    return normalize(cross(dx, dy));
 }
 
 vec2 getScreenPos(vec3 viewPos) {
@@ -73,8 +95,7 @@ void main() {
     }
 
     vec3 viewPos = getViewPos(v_uv, depth);
-    vec3 normal = texture(u_normal, v_uv).rgb * 2.0 - 1.0;
-    normal = normalize(mat3(ssr.u_view) * normal);
+    vec3 normal = reconstructNormal(viewPos, v_uv);
 
     vec3 viewDir = normalize(-viewPos);
     vec3 reflectDir = reflect(-viewDir, normal);
