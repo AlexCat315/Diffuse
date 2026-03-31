@@ -215,6 +215,7 @@ const engine_cpp_sources = [_][]const u8{
     "third_party/lunasvg/source/svgtextelement.cpp",
     "src/engine/assets/svg_raster_bridge.cpp",
     "src/engine/ui/imgui_bridge.cpp",
+    "src/engine/ui/imgui_widgets.cpp",
     "src/engine/physics/jolt_bridge.cpp",
 };
 
