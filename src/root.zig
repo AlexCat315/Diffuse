@@ -406,6 +406,10 @@ pub const assets = struct {
     pub const MaterialResource = @import("engine/assets/material_resource.zig").MaterialResource;
     /// 材质资源描述
     pub const MaterialResourceDesc = @import("engine/assets/material_resource.zig").MaterialResourceDesc;
+    /// 材质 AST 纹理槽
+    pub const MaterialAstTextureSlots = @import("engine/assets/material_ast.zig").TextureSlots;
+    /// 材质 AST（渲染器无关中间层）
+    pub const MaterialAst = @import("engine/assets/material_ast.zig").MaterialAst;
     /// 序列化材质资源到文本
     pub const serializeMaterialAlloc = @import("engine/assets/material_resource.zig").serializeAlloc;
     /// 从文本反序列化材质资源
