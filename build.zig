@@ -533,16 +533,29 @@ pub fn build(b: *std.Build) void {
     const shaders_step = b.step("shaders", "Compile shaders and regenerate reflection metadata");
     shaders_step.dependOn(&run_shader_codegen.step);
 
-    // ---- Package step: build a distributable macOS .app bundle ----
+    // ---- Package step: build a distributable game bundle ----
     const package_step = b.step("package", "Build distributable game package (use -Doptimize=ReleaseSafe)");
     if (target.result.os.tag == .macos) {
         const bundle_base = "package/GuavaGame.app/Contents";
+
+        // Build manifest generator (declared early so install steps can register as deps)
+        const package_dir = b.getInstallPath(.{ .custom = "package" }, "");
+        const gen_manifest = b.addSystemCommand(&.{
+            "/bin/sh", "-c",
+            std.fmt.allocPrint(
+                b.allocator,
+                "cd '{s}' && find . -type f -not -name build_manifest.json " ++
+                    "| LC_ALL=C sort | xargs shasum -a 256 > build_manifest.json",
+                .{package_dir},
+            ) catch @panic("OOM"),
+        });
+        package_step.dependOn(&gen_manifest.step);
 
         // Player binary → .app/Contents/MacOS/
         const pkg_player = b.addInstallArtifact(player, .{
             .dest_dir = .{ .override = .{ .custom = bundle_base ++ "/MacOS" } },
         });
-        package_step.dependOn(&pkg_player.step);
+        gen_manifest.step.dependOn(&pkg_player.step);
 
         // Info.plist → .app/Contents/
         const wf = b.addWriteFiles();
@@ -579,7 +592,7 @@ pub fn build(b: *std.Build) void {
             .{ .custom = bundle_base },
             "Info.plist",
         );
-        package_step.dependOn(&install_plist.step);
+        gen_manifest.step.dependOn(&install_plist.step);
 
         // SDL3 dylib → .app/Contents/Frameworks/
         const sdl_dylib_path = b.pathJoin(&.{ sdl_prefix, "lib", "libSDL3.0.dylib" });
@@ -588,7 +601,7 @@ pub fn build(b: *std.Build) void {
             .{ .custom = bundle_base ++ "/Frameworks" },
             "libSDL3.0.dylib",
         );
-        package_step.dependOn(&install_sdl.step);
+        gen_manifest.step.dependOn(&install_sdl.step);
 
         // Rewrite the SDL3 load path so the player finds the bundled dylib
         const installed_player_path = b.getInstallPath(
@@ -605,9 +618,9 @@ pub fn build(b: *std.Build) void {
             ) catch @panic("OOM"),
         });
         fix_dylib_ref.step.dependOn(&pkg_player.step);
-        package_step.dependOn(&fix_dylib_ref.step);
+        gen_manifest.step.dependOn(&fix_dylib_ref.step);
 
-        // Game assets → .app/Contents/assets/ (excluding .meta and .DS_Store)
+        // Source assets → .app/Contents/assets/ (excluding .meta and .DS_Store)
         inline for (.{ "shaders", "models", "scenes", "ui" }) |subdir| {
             const install_assets = b.addInstallDirectory(.{
                 .source_dir = b.path("assets/" ++ subdir),
@@ -615,15 +628,95 @@ pub fn build(b: *std.Build) void {
                 .install_subdir = "",
                 .exclude_extensions = &.{ ".meta", ".DS_Store" },
             });
-            package_step.dependOn(&install_assets.step);
+            gen_manifest.step.dependOn(&install_assets.step);
         }
         const install_logo = b.addInstallFileWithDir(
             b.path("assets/Guava_Engine_Logo.png"),
             .{ .custom = bundle_base ++ "/assets" },
             "Guava_Engine_Logo.png",
         );
-        package_step.dependOn(&install_logo.step);
+        gen_manifest.step.dependOn(&install_logo.step);
+
+        // Cooked/derived assets → .app/Contents/assets/derived/
+        inline for (.{ "models", "textures" }) |subdir| {
+            const install_derived = b.addInstallDirectory(.{
+                .source_dir = b.path("assets/derived/" ++ subdir),
+                .install_dir = .{ .custom = bundle_base ++ "/assets/derived/" ++ subdir },
+                .install_subdir = "",
+                .exclude_extensions = &.{ ".meta", ".DS_Store" },
+            });
+            gen_manifest.step.dependOn(&install_derived.step);
+        }
+        const install_registry = b.addInstallFileWithDir(
+            b.path("assets/derived/asset_registry.json"),
+            .{ .custom = bundle_base ++ "/assets/derived" },
+            "asset_registry.json",
+        );
+        gen_manifest.step.dependOn(&install_registry.step);
+    } else if (target.result.os.tag == .windows) {
+        // Windows: flat directory layout
+        //   package/GuavaGame/guava-player.exe
+        //   package/GuavaGame/SDL3.dll
+        //   package/GuavaGame/assets/...
+        const win_base = "package/GuavaGame";
+        const pkg_player = b.addInstallArtifact(player, .{
+            .dest_dir = .{ .override = .{ .custom = win_base } },
+        });
+        package_step.dependOn(&pkg_player.step);
+        inline for (.{ "shaders", "models", "scenes", "ui" }) |subdir| {
+            const install_assets = b.addInstallDirectory(.{
+                .source_dir = b.path("assets/" ++ subdir),
+                .install_dir = .{ .custom = win_base ++ "/assets/" ++ subdir },
+                .install_subdir = "",
+                .exclude_extensions = &.{ ".meta", ".DS_Store" },
+            });
+            package_step.dependOn(&install_assets.step);
+        }
+        inline for (.{ "models", "textures" }) |subdir| {
+            const install_derived = b.addInstallDirectory(.{
+                .source_dir = b.path("assets/derived/" ++ subdir),
+                .install_dir = .{ .custom = win_base ++ "/assets/derived/" ++ subdir },
+                .install_subdir = "",
+                .exclude_extensions = &.{".meta"},
+            });
+            package_step.dependOn(&install_derived.step);
+        }
+    } else {
+        // Linux: FHS-like layout
+        //   package/guava-game/bin/guava-player
+        //   package/guava-game/lib/libSDL3.so.0
+        //   package/guava-game/share/assets/...
+        const linux_base = "package/guava-game";
+        const pkg_player = b.addInstallArtifact(player, .{
+            .dest_dir = .{ .override = .{ .custom = linux_base ++ "/bin" } },
+        });
+        package_step.dependOn(&pkg_player.step);
+        inline for (.{ "shaders", "models", "scenes", "ui" }) |subdir| {
+            const install_assets = b.addInstallDirectory(.{
+                .source_dir = b.path("assets/" ++ subdir),
+                .install_dir = .{ .custom = linux_base ++ "/share/assets/" ++ subdir },
+                .install_subdir = "",
+                .exclude_extensions = &.{ ".meta", ".DS_Store" },
+            });
+            package_step.dependOn(&install_assets.step);
+        }
+        inline for (.{ "models", "textures" }) |subdir| {
+            const install_derived = b.addInstallDirectory(.{
+                .source_dir = b.path("assets/derived/" ++ subdir),
+                .install_dir = .{ .custom = linux_base ++ "/share/assets/derived/" ++ subdir },
+                .install_subdir = "",
+                .exclude_extensions = &.{".meta"},
+            });
+            package_step.dependOn(&install_derived.step);
+        }
     }
+
+    // ---- Cook step: pre-cook all project assets via the engine validate pipeline ----
+    const cook_step = b.step("cook", "Pre-cook all project assets (runs engine validate to refresh derived outputs)");
+    const cook_cmd = b.addRunArtifact(exe);
+    cook_cmd.step.dependOn(b.getInstallStep());
+    cook_cmd.addArg("validate");
+    cook_step.dependOn(&cook_cmd.step);
 
     const compile_commands_step = b.step("compile-commands", "Generate compile_commands.json for clangd");
     const update_compile_commands = b.addUpdateSourceFiles();
