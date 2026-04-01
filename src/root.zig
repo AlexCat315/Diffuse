@@ -81,6 +81,12 @@ pub const core = struct {
     pub const Layer = @import("engine/core/layer.zig").Layer;
     /// 层上下文，提供给层的运行时信息
     pub const LayerContext = @import("engine/core/layer.zig").LayerContext;
+    /// 多场景管理器
+    pub const SceneManager = @import("engine/core/scene_manager.zig").SceneManager;
+    /// 多场景管理回调
+    pub const SceneManagerCallbacks = @import("engine/core/scene_manager.zig").Callbacks;
+    /// 多场景加载状态快照
+    pub const SceneLoadingState = @import("engine/core/scene_manager.zig").LoadingState;
     /// 播放状态（用于动画/游戏时间控制）
     pub const PlaybackState = @import("engine/core/layer.zig").PlaybackState;
     /// 播放控制器接口
