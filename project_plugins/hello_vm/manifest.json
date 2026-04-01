@@ -1,0 +1,7 @@
+{
+    "name": "hello_vm",
+    "version": "1.0.0",
+    "plugin_type": "script_vm",
+    "source": "project",
+    "capabilities": ["script_handler"]
+}
