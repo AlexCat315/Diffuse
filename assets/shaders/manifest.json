@@ -69,6 +69,11 @@
       "fragment": "assets/shaders/ssr.frag.glsl"
     },
     {
+      "name": "ssr_blur",
+      "vertex": "assets/shaders/tonemap.vert.glsl",
+      "fragment": "assets/shaders/ssr_blur.frag.glsl"
+    },
+    {
       "name": "taa",
       "vertex": "assets/shaders/taa.vert.glsl",
       "fragment": "assets/shaders/taa.frag.glsl"
