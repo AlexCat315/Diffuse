@@ -785,11 +785,14 @@ guava_engine/
 
 **当前实现状态**:
 - `StyleRegistry` 已注册 2 个内置风格: `default_pbr`（PBR）、`unlit_flat`（Unlit Flat）
-- `StylePluginManifest` 当前已支持 `mesh_program`、`shadow_program`、`disabled_passes`、`config_schema`
-- `StyleParamValues` 运行时参数存储已就绪
-- `isPassDisabledByActiveStyle()` 已可供渲染管线查询当前风格是否禁用某 Pass
-- `loadUserPlugin()` / `scanPluginDirectory()` 接口已声明，但尚未接入 JSON 解析与目录扫描
-- 当前尚未支持用户自定义 `post_chain` 加载；风格切换也不应假定存在 `RenderGraph.rebuild()`
+- `StylePluginManifest` 已支持: `source`（PluginSource）、`mesh_program`、`shadow_program`、`disabled_passes`、`config_schema`、`post_chain`（StylePostPassDescriptor 数组）
+- `StylePostPassDescriptor` 已定义: name、shader_program、stage（StylePassStage）、reads/writes、order_after/order_before
+- `StylePassStage` 枚举: post_lighting、post_tonemap、pre_ui
+- `StyleParamValues` 运行时参数存储已就绪（per-style HashMap）
+- `isPassDisabledByActiveStyle()` 已可供渲染管线查询
+- `rollbackStyle()` 已实现：风格切换失败时可回滚到上一个有效风格
+- `loadUserPlugin()` / `scanPluginDirectory()` 接口已声明，待 Phase B 接入 JSON 解析与目录扫描
+- `post_chain` 字段已可从 manifest 加载但尚未注入 RenderGraph（Phase C）
 
 #### R-10 通用插件系统基础设施
 
@@ -900,16 +903,18 @@ pub const PluginRegistry = struct {
 - [x] `PluginType` / `PluginCapability` / `PluginSource` 枚举定义完成
 - [x] `PluginRegistry` 支持按类型和能力查询
 - [x] 插件依赖版本兼容性检查
-- [ ] 生命周期管理（load / enable / disable / unload）
+- [x] 生命周期管理（load / enable / disable / unload）
 - [ ] Editor Plugin Manager 面板显示所有已发现插件
-- [ ] `PluginRegistry` 与类型化 loader 完成接线，不再把专有字段塞进平面 `PluginManifest`
+- [x] `PluginManifest` 重构为公共外壳，`PluginRecord` 替代原 `Plugin`
 
 **当前实现状态**:
 - `PluginType`、`PluginCapability`、`PluginSource`、`PluginLifecycle` 已完成（`src/engine/plugin/types.zig`）
 - `PluginVersion.parse()` + `compatible()` 主版本兼容性检查已完成（含单元测试）
-- `PluginRegistry` 已支持按 name、type、capability 查询（含单元测试）
-- 当前 `PluginManifest` 仍偏扁平，尚未演进到“公共外壳 + 类型化载荷”模型
-- 当前 `PluginRegistry` 还未接入统一发现、启停、卸载流转，也未接入 `render_style` 的真实运行时加载路径
+- `PluginManifest` 已重构为公共外壳：移除了 `shaders`/`post_passes` 等类型化字段，保留 name、version、plugin_type、capabilities、source、path、dependencies、hooks
+- `PluginRecord` 已新增（替代原 `Plugin`）：包含 manifest + lifecycle + last_error，附带 `hasError()` 查询
+- `PluginRegistry` 已支持：按 name/type/capability 查询、`enable()`/`disable()`/`unload()` 生命周期流转、`discover()` 接口（待实现）
+- `Plugin` 类型保留为 `PluginRecord` 别名，确保向下兼容
+- 待实现：`discover()` 目录扫描、与 `StyleRegistry` 的类型化 loader 接线、Editor Plugin Manager UI
 
 #### R-11 渲染风格作为插件系统首个用例
 
@@ -955,11 +960,15 @@ pub const unlit_flat_style = StylePluginManifest{
 **当前实现状态**:
 - `Renderer` 持有 `style_registry` 字段，初始化时自动注册 2 个内置风格
 - Viewport → View 菜单 → Render Style 区域动态列出所有已注册风格
+- `StylePluginManifest` 已新增 `source`（PluginSource）、`post_chain`（StylePostPassDescriptor 数组）字段
+- `StylePostPassDescriptor` + `StylePassStage` 类型已就绪，为 Phase C post_chain 注入做准备
 - `isPassDisabledByActiveStyle(pass_name)` 已可供渲染管线按风格禁用/启用 Pass
+- `rollbackStyle()` 已实现：风格切换失败时可回滚到上一个有效风格
 - `StyleParamValues` per-style 参数运行时存储已就绪
-- `loadUserPlugin()` / `scanPluginDirectory()` 仍待实现
-- `PluginRegistry` 与 `StyleRegistry` 还未真正接线；当前 `render_style` 仍是独立运行时路径
-- 用户自定义 `post_chain` 与风格切换拓扑重建延期到 `RenderGraph` 执行器成熟之后再做
+- `PluginManifest` 已重构为公共外壳，`PluginRecord` 已替代原 `Plugin`
+- `PluginRegistry` 已新增 `enable()`/`disable()`/`unload()` 生命周期流转
+- `loadUserPlugin()` / `scanPluginDirectory()` / `discover()` 接口已声明，待 Phase B 实现
+- `PluginRegistry` → `StyleRegistry` 的类型化 loader 接线待完成
 
 ---
 
