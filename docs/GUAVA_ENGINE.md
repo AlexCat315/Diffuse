@@ -905,29 +905,62 @@ pub const InkWashStylePlugin = struct {
 这样用户风格插件可以**自由组合**渲染效果，而不是被绑定在引擎默认管线。
 
 **验收标准**:
-- [ ] PluginType / PluginCapability 枚举定义完成
-- [ ] PluginRegistry 支持按类型和能力查询
-- [ ] 插件依赖版本兼容性检查
+- [x] PluginType / PluginCapability 枚举定义完成
+- [x] PluginRegistry 支持按类型和能力查询
+- [x] 插件依赖版本兼容性检查
 - [ ] 生命周期管理 (load / enable / disable / unload)
 - [ ] Editor Plugin Manager 面板显示所有已加载插件
+
+**当前实现状态**:
+- `PluginType` 枚举: render_style, audio_effect, physics_ext, terrain_gen, ai_behavior, ui_extension, script_vm — 已完成 (`src/engine/plugin/types.zig`)
+- `PluginCapability` 枚举: shader, compute_pass, render_pass, audio_processor, script_handler — 已完成
+- `PluginSource` 枚举: builtin, user, project — 已完成
+- `PluginLifecycle` 枚举: unloaded, loaded, enabled, load_error — 已完成
+- `PluginVersion.parse()` + `compatible()` 主版本兼容性检查 — 已完成（含单元测试）
+- `PluginManifest` 完整结构: name, version, plugin_type, capabilities, source, path, shaders, post_passes, dependencies, on_load/unload/enable hooks — 已完成
+- `PluginRegistry`: 按 name 查询(`getByName`)、按 type 查询(`getByType`)、按 capability 查询(`getWithCapability`) — 已完成（含单元测试）
+- **待实现**: `load()` 统一加载（解析 manifest.json → 创建 Plugin 实例）、`enable/disable/unload` 生命周期流转、Editor Plugin Manager UI 面板
 
 #### R-11 渲染风格作为插件系统首个用例
 
 基于 R-10 通用插件框架，将 R-9 渲染风格插件化为第一个具体实现：
 
 ```zig
-// 注册内置默认PBR风格
-try registry.registerBuiltin(.{
-    .name = "default_pbr",
-    .plugin_type = .render_style,
-    .capabilities = &.{ .shader, .render_pass },
-    .builtin = true,
-});
+// src/engine/render/style_plugin.zig 中的实际实现
 
-// 加载用户卡通风格插件
-const cartoon = try registry.load("user://plugins/cartoon_style", .user);
-try registry.enablePlugin("cartoon_style");
+// 内置PBR风格 — 引擎默认
+pub const default_pbr_style = StylePluginManifest{
+    .name = "default_pbr",
+    .display_name = "PBR (Default)",
+    .builtin = true,
+    .mesh_program = "mesh",
+    .shadow_program = "shadow_pass",
+};
+
+// 内置Unlit Flat风格 — 禁用bloom/ssr，无光照
+pub const unlit_flat_style = StylePluginManifest{
+    .name = "unlit_flat",
+    .display_name = "Unlit Flat",
+    .builtin = true,
+    .mesh_program = "mesh",
+    .shadow_program = null,
+    .disabled_passes = &.{ "bloom", "ssr" },
+    .config_schema = &.{
+        .{ .name = "opacity", .display_name = "Opacity", .default_value = 1.0 },
+    },
+};
+
+// StyleRegistry 初始化时自动注册所有内置风格
+// renderers.zig init → StyleRegistry.init(allocator) → put default_pbr + unlit_flat
 ```
+
+**当前实现状态**:
+- Renderer 持有 `style_registry` 字段，init 时自动注册 2 个内置风格
+- Viewport → View 菜单 → Render Style 区域动态列出所有已注册风格
+- 切换风格同步更新 `EditorViewportState.active_render_style` 和 `StyleRegistry.active_style_name`
+- `isPassDisabledByActiveStyle(pass_name)` 可供渲染管线按风格禁用/启用 Pass
+- `StyleParamValues` per-style 参数运行时存储已就绪
+- **待实现**: 用户插件目录扫描加载（`loadUserPlugin` / `scanPluginDirectory`）、Inspector 参数面板 UI、`RenderGraph.rebuild()` 风格切换重建
 
 ---
 
