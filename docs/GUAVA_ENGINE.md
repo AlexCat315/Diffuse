@@ -671,264 +671,266 @@ pub const SubAlloc = struct {
 - **验收**: ✅ 物体底部已有额外接触阴影，可在后处理面板里直接调参数
 
 #### R-9 渲染风格插件化系统
-- [x] **设计目标**: 将渲染风格抽象为可插拔插件，用户可导入自定义风格（如卡通 Cel Shading、中国水墨丹青），与内置默认 PBR 渲染同等对待
+- [x] **设计目标**: 将渲染风格抽象为可插拔扩展，用户可导入自定义风格（如卡通 Cel Shading、中国水墨丹青），与内置默认 PBR 渲染并列管理。
+- [x] **设计约束**: 渲染风格先以“类型化渲染扩展”落地，而不是直接与 `WASM VM` 共享 ABI、生命周期和运行时对象模型。
 
-**架构设计**:
-```
-┌─────────────────────────────────────────────────────────────┐
-│                    Plugin Type System                        │
-├─────────────────────────────────────────────────────────────┤
-│   ┌─────────────────────────────────────────────────────┐   │
-│   │     Built-in Plugin (Default PBR Renderer)          │   │
-│   │     path: "engine://default_pbr"                    │   │
-│   │     built_in: true                                  │   │
-│   └─────────────────────────────────────────────────────┘   │
-│                          │                                   │
-│   ┌─────────────────────────────────────────────────────┐   │
-│   │     User Plugin (Cartoon/Ink Wash Style)            │   │
-│   │     path: "user://plugins/cartoon_style"            │   │
-│   │     built_in: false                                 │   │
-│   └─────────────────────────────────────────────────────┘   │
-└─────────────────────────────────────────────────────────────┘
-```
+**分层原则**:
+1. `PluginRegistry` 只负责插件来源、发现、版本/依赖检查、启停状态、错误记录。
+2. `StyleRegistry` 负责 `render_style` 的类型化运行时数据，包括 shader program 选择、参数 schema、运行时参数值，以及与 `Renderer` 的绑定。
+3. `Renderer` 仍是 GPU 资源与 Pass 执行的 owner；风格切换不能绕过 `Renderer` 直接改渲染拓扑。
+4. `RenderGraph` 只有在执行器和资源语义成熟后，才承接用户自定义 `post_chain`；当前阶段只承担内置 Pass 的依赖表达，不承担任意用户 Pass 注入。
 
-**统一接口**:
+**风格描述结构（类型化载荷）**:
 ```zig
 // src/engine/render/style_plugin.zig
 pub const StylePluginManifest = struct {
     name: []const u8,
     display_name: []const u8 = "",
     version: []const u8 = "1.0.0",
-    builtin: bool = false,
+    source: plugin_types.PluginSource = .builtin,
+    path: ?[]const u8 = null,
+
     mesh_program: []const u8 = "mesh",
     shadow_program: ?[]const u8 = null,
-    post_passes: []const []const u8 = &.{},
     disabled_passes: []const []const u8 = &.{},
     config_schema: []const StyleParam = &.{},
-    path: ?[]const u8 = null,
+    post_chain: []const StylePostPassDescriptor = &.{},
 };
 
-pub const StyleRegistry = struct {
-    pub fn register(manifest: StylePluginManifest) !void
-    pub fn setActiveStyle(name: []const u8) bool
-    pub fn getActiveStyle() StylePluginManifest
-    pub fn isPassDisabledByActiveStyle(pass_name: []const u8) bool
-    pub fn getParamValues(style_name: []const u8) !*StyleParamValues
-    pub fn loadUserPlugin(dir_path: []const u8) !void  // TODO
-    pub fn scanPluginDirectory(root_path: []const u8) !void  // TODO
+pub const StylePostPassDescriptor = struct {
+    name: []const u8,
+    shader_program: []const u8,
+    stage: StylePassStage = .post_lighting,
+    reads: []const []const u8 = &.{},
+    writes: []const []const u8 = &.{},
+    order_after: ?[]const u8 = null,
+    order_before: ?[]const u8 = null,
 };
 ```
 
-**用户插件文件结构**:
-```
-user_project/plugins/
-├── cartoon_style/
-│   ├── manifest.json    { name, version, shaders, post_passes }
-│   ├── shaders/
-│   │   ├── cel_shading.frag.glsl
-│   │   └── edge_detection.comp.glsl
-│   └── config.json      (可选参数配置)
-│
-└── ink_wash/
-    ├── manifest.json
-    └── shaders/
-        ├── ink_diffusion.frag.glsl
-        └── paper_texture.frag.glsl
+`post_chain` 不是简单的 pass 名字列表；它至少要声明执行阶段、读写资源和排序约束，否则 `RenderGraph` 无法安全推导 barrier、资源别名和调度顺序。
+
+**目录与来源约定**:
+- `engine://<name>`: 内置风格。可由代码直接注册，也可由 `engine_plugins/<name>/` 提供 manifest。
+- `user://<name>`: 用户本地实验插件，对应 `user_plugins/<name>/`，默认不随项目分发。
+- `project://<name>`: 项目级插件，对应 `project_plugins/<name>/`，应随项目版本控制与打包。
+
+```text
+guava_engine/
+├── engine_plugins/
+│   └── default_pbr/
+│       └── manifest.json
+├── user_plugins/
+│   └── cartoon_style/
+│       ├── manifest.json
+│       └── shaders/
+└── project_plugins/
+    └── ink_wash/
+        ├── manifest.json
+        └── shaders/
 ```
 
-**核心机制**:
-1. **RenderGraph Pass 注入**: 风格插件通过声明 `post_passes` 向渲染图注入自定义 Pass，编译时自动插入 barrier 和调度
-2. **着色器热加载**: 用户 Shader 放在 `user_project/plugins/*/shaders/`，与 `assets/shaders/` 独立
-3. **Editor UI 暴露**: Viewport 工具栏添加风格选择下拉框，切换时触发 `RenderGraph.rebuild()`
+**Render Style Manifest 示例**:
+```json
+{
+    "name": "cartoon_style",
+    "version": "1.0.0",
+    "plugin_type": "render_style",
+    "source": "project",
+    "dependencies": [],
+    "render_style": {
+        "display_name": "Cartoon Style",
+        "mesh_program": "cartoon_mesh",
+        "shadow_program": "shadow_pass",
+        "disabled_passes": ["bloom", "taa"],
+        "style_params": [
+            {
+                "name": "outline_width",
+                "type": "float",
+                "default": 1.5,
+                "min": 0.0,
+                "max": 4.0
+            }
+        ],
+        "post_chain": [
+            {
+                "name": "edge_detection",
+                "shader_program": "edge_detection",
+                "stage": "post_lighting",
+                "reads": ["hdr_color", "depth"],
+                "writes": ["style_color"],
+                "order_after": "ssr"
+            }
+        ]
+    }
+}
+```
+
+**阶段划分**:
+1. **Phase A（当前阶段）**: 内置风格注册、风格切换、`disabled_passes` 查询、参数存储。
+2. **Phase B**: 用户目录扫描、manifest 解析、shader 热重载、Inspector 参数面板。
+3. **Phase C**: 基于 `StylePostPassDescriptor` 的自定义 `post_chain` 注入。该阶段依赖 `RenderGraph` 执行器与资源语义成熟后再做。
 
 **与现有 WASM VM 关系**:
-- `WASM VM` 定位为 plugins mods tools（见 Section 8 GR-8）
-- 渲染风格插件是另一类插件（type: render_style），本质是 Shader + Pass 定义，不走 WASM
-- 二者统一由 `PluginRegistry` 管理，按 `plugin_type` 区分加载逻辑
+- `render_style` 不默认走 `WASM VM`；它是渲染扩展，不是脚本运行时实例。
+- `WASM VM` 继续用于 plugins / mods / tools，尤其是逻辑、工具和编辑器扩展。
+- 如需脚本参与风格工作流，脚本只作为导入、生成、调试工具，不直接持有 render pass 生命周期。
 
 **验收标准**:
 - [x] 引擎内置默认风格（等同于当前 PBR 渲染）
-- [ ] 用户插件通过设置中的插件设置，可以导入。
+- [ ] 用户插件可从 `user_plugins/` 或 `project_plugins/` 被扫描并导入
 - [x] Viewport 工具栏可切换风格，实时重绘
-- [ ] 自带卡通描边 / 水墨扩散滤镜的参数可通过 Inspector 调节
+- [ ] 风格参数可通过 Inspector 调节并持久化
+- [ ] 风格切换失败时可回滚到上一个有效风格
 
 **当前实现状态**:
-- `StyleRegistry` 注册 2 个内置风格: `default_pbr`（PBR）、`unlit_flat`（Unlit Flat）
-- `StylePluginManifest` 支持 `disabled_passes` 字段，允许风格禁用内置 Pass（如 bloom、ssr）
-- `StyleParamValues` 运行时参数存储，支持 Inspector 调参（per-style HashMap）
-- `isPassDisabledByActiveStyle()` 供渲染管线查询当前风格是否禁用某 Pass
-- `loadUserPlugin()` / `scanPluginDirectory()` 接口已声明，待接入 JSON 解析和 asset 系统
-- Viewport → View 菜单 → Render Style 下拉列表，实时切换已注册风格
+- `StyleRegistry` 已注册 2 个内置风格: `default_pbr`（PBR）、`unlit_flat`（Unlit Flat）
+- `StylePluginManifest` 当前已支持 `mesh_program`、`shadow_program`、`disabled_passes`、`config_schema`
+- `StyleParamValues` 运行时参数存储已就绪
+- `isPassDisabledByActiveStyle()` 已可供渲染管线查询当前风格是否禁用某 Pass
+- `loadUserPlugin()` / `scanPluginDirectory()` 接口已声明，但尚未接入 JSON 解析与目录扫描
+- 当前尚未支持用户自定义 `post_chain` 加载；风格切换也不应假定存在 `RenderGraph.rebuild()`
 
 #### R-10 通用插件系统基础设施
 
-> R-9 渲染风格插件是第一类插件。R-10 将插件能力抽象为通用框架，支持多种插件类型（渲染风格/音频特效/物理扩展/AI行为等）。
+> R-10 的目标不是“所有插件共用一个扁平 Manifest 和一个统一 ABI”，而是“统一公共外壳 + 类型化载荷 + 子系统持有运行时对象”。
 
-**设计目标**: 构建统一的插件加载、依赖管理、生命周期控制框架，使引擎能力を模块化方式扩展。
+**设计目标**: 统一插件来源、发现、依赖、版本兼容、生命周期与错误呈现，同时避免把渲染、音频、脚本 VM 的专有字段硬塞进一个平面结构。
 
 **核心类型定义**:
 ```zig
 // src/engine/plugin/types.zig
 
 pub const PluginType = enum {
-    render_style,    // 渲染风格（卡通/水墨/...）
-    audio_effect,    // 音频特效
-    physics_ext,     // 物理扩展
-    terrain_gen,     // 地形生成
-    ai_behavior,     // AI行为
-    ui_extension,    // UI扩展
-    script_vm,       // 脚本VM（复用现有WASM VM）
+    render_style,
+    audio_effect,
+    physics_ext,
+    terrain_gen,
+    ai_behavior,
+    ui_extension,
+    script_vm,
 };
 
 pub const PluginCapability = enum {
-    shader,          // 提供着色器
-    compute_pass,    // 提供compute pass
-    render_pass,     // 提供render pass  
-    audio_processor, // 提供音频处理
-    script_handler,  // 提供脚本逻辑
+    shader,
+    compute_pass,
+    render_pass,
+    audio_processor,
+    script_handler,
 };
 
 pub const PluginSource = enum {
-    builtin,   // 引擎内置 (path: "engine://")
-    user,      // 用户插件 (path: "user://plugins/")
-    project,   // 项目特定 (path: "project://plugins/")
+    builtin,
+    user,
+    project,
 };
 ```
 
-**统一 Manifest 格式**:
-```json
-// 通用插件 manifest.json
-{
-    "name": "cartoon_style",
-    "version": "1.0.0",
-    "plugin_type": "render_style",
-    "capabilities": ["shader", "render_pass"],
-    "shaders": ["cel_shading", "edge_detection"],
-    "post_passes": ["cartoon_tonemap"],
-    "dependencies": ["base_effects"],
-    "on_load": "init_plugin",
-    "on_enable": "enable_plugin"
-}
+**统一公共外壳，类型化载荷单独承载**:
+```zig
+// 公共外壳：所有插件共享
+pub const PluginManifest = struct {
+    name: []u8,
+    version: PluginVersion,
+    plugin_type: PluginType,
+    capabilities: []const PluginCapability = &.{},
+    source: PluginSource = .user,
+    path: []u8 = &.{},
+    dependencies: []const []const u8 = &.{},
+};
+
+// 类型化载荷：按 plugin_type 分发解析
+pub const PluginPayload = union(PluginType) {
+    render_style: StylePluginManifest,
+    script_vm: WasmPluginManifest,
+    audio_effect: AudioEffectManifest,
+    physics_ext: PhysicsPluginManifest,
+    terrain_gen: TerrainPluginManifest,
+    ai_behavior: AiBehaviorManifest,
+    ui_extension: UiExtensionManifest,
+};
+
+pub const PluginRecord = struct {
+    manifest: PluginManifest,
+    lifecycle: PluginLifecycle,
+    last_error: ?[]const u8 = null,
+};
 ```
 
-**插件注册表**:
+`PluginCapability` 是查询标签，不是类型 schema 的替代品。比如 `render_style` 仍然必须走 `StylePluginManifest`，不能只靠 `capabilities = [shader, render_pass]` 描述完整语义。
+
+**推荐加载流程**:
+1. 扫描 `engine_plugins/`、`user_plugins/`、`project_plugins/`，构建候选清单。
+2. 解析公共 `PluginManifest`，完成版本和依赖检查。
+3. 按 `plugin_type` 分发到类型化 loader，解析 `PluginPayload`。
+4. `PluginRegistry` 注册 `PluginRecord`，记录状态、错误和来源。
+5. 对应子系统接管运行时对象。
+   - `StyleRegistry` 持有 render style 的 shader/参数/激活状态。
+   - 脚本子系统持有 `WasmPlugin` 或其他 VM 实例。
+   - 音频/物理等各自子系统持有本类型运行时对象。
+
+**插件注册表职责**:
 ```zig
 // src/engine/plugin/registry.zig
 pub const PluginRegistry = struct {
-    plugins: std.StringHashMap(*const Plugin),
-    by_type: std.AutoArrayHashMap(PluginType, std.ArrayList(*const Plugin)),
-    capabilities: std.AutoArrayHashMap(PluginCapability, std.ArrayList(*const Plugin)),
+    plugins: std.StringHashMap(*PluginRecord),
+    by_type: std.AutoArrayHashMap(PluginType, std.ArrayList(*PluginRecord)),
+    capabilities: std.AutoArrayHashMap(PluginCapability, std.ArrayList(*PluginRecord)),
 
-    // 统一加载接口 - 自动识别类型
-    pub fn load(self: *PluginRegistry, path: []const u8, source: PluginSource) !*const Plugin { ... }
-    
-    // 按能力查询
-    pub fn getPluginsWithCapability(self: *PluginRegistry, cap: PluginCapability) []const *const Plugin { ... }
+    pub fn discover(self: *PluginRegistry, root_path: []const u8) !void { ... }
+    pub fn enable(self: *PluginRegistry, name: []const u8) !void { ... }
+    pub fn disable(self: *PluginRegistry, name: []const u8) !void { ... }
+    pub fn unload(self: *PluginRegistry, name: []const u8) !void { ... }
+    pub fn getByType(self: *const PluginRegistry, plugin_type: PluginType) []const *PluginRecord { ... }
+    pub fn getWithCapability(self: *const PluginRegistry, cap: PluginCapability) []const *PluginRecord { ... }
 };
 ```
 
-**类型化插件结构**:
-```zig
-// 插件基类
-pub const Plugin = struct {
-    manifest: PluginManifest,
-    source: PluginSource,
-    path: []const u8,
-    lifecycle: PluginLifecycle,
-};
-
-// RenderStyle 插件 - 第一个实现用例
-pub const RenderStylePlugin = struct {
-    base: *Plugin,
-    shaders: std.StringHashMap([]const u8),
-    post_passes: []const RenderPass,
-    
-    pub fn apply(self: *RenderStylePlugin, graph: *RenderGraph) void { ... }
-};
-
-// WASM 插件 - 复用现有WASM VM（见Section 8 GR-8）
-pub const WasmPlugin = struct {
-    base: *Plugin,
-    bytecode: []u8,
-    exported_functions: []const ExportedFunction,
-    
-    pub fn instantiate(self: *WasmPlugin, ctx: *ScriptContext) !*WasmInstance { ... }
-};
-```
-
-**插件存储结构**:
-```
-guava_engine/
-├── engine_plugins/           # 引擎内置插件（不暴露给用户）
-│   └── default_pbr/
-│       └── manifest.json
-│
-├── user_plugins/             # 用户插件目录
-│   ├── cartoon_style/
-│   ├── ink_wash/
-│   └── custom_ai_behavior/
-│
-└── project_plugins/          # 项目特定插件（随项目分发）
-    └── my_game_mode/
-```
+`PluginRegistry` 不直接拥有 GPU Pass、Shader Module、WASM Instance 这类重资源对象；它管理的是插件元数据、状态和跨类型查询。
 
 **与现有系统关系**:
-| 现有系统 | 在新插件架构中的角色 |
+| 现有系统 | 在插件架构中的角色 |
 |---------|-------------------|
-| WASM VM | 类型为 `.script_vm` 的插件，复用现有 `WasmPlugin` 实现 |
-| RenderGraph Pass | 由 `.render_style` 插件声明为 `render_pass` 能力 |
-| Asset Library | 扫描逻辑可复用 |
-
-**后插式 Pass 设计**:
-> 核心原则：**不要把 SSAO、TAA、Bloom 等 Pass 死死写在引擎核心里**，把它们也视为内置插件。
-
-```zig
-// 水墨风格插件可以：
-// 1. 禁用内置的 TAA pass
-// 2. 禁用内置的 Bloom pass  
-// 3. 插入自己的边缘检测 pass (edge_detection)
-// 4. 插入自己的宣纸纹理叠加 pass (paper_texture)
-pub const InkWashStylePlugin = struct {
-    base: *Plugin,
-    
-    // 覆盖内置 pass
-    disabled_passes: []const PassKind = &.{ .post_process },
-    
-    // 注入自定义 pass
-    injected_passes: []const RenderPass = &.{
-        .{ .name = "ink_diffusion", .kind = .post_process },
-        .{ .name = "paper_overlay", .kind = .post_process },
-    },
-};
-```
-
-这样用户风格插件可以**自由组合**渲染效果，而不是被绑定在引擎默认管线。
+| `WASM VM` | `script_vm` 类型的 loader 与运行时宿主 |
+| `StyleRegistry` | `render_style` 的运行时 owner |
+| Asset Library | 目录扫描、文件监听、热重载基础设施 |
+| `RenderGraph` | 未来为 `render_style.post_chain` 提供执行后端；当前不作为统一插件运行时 |
 
 **验收标准**:
-- [x] PluginType / PluginCapability 枚举定义完成
-- [x] PluginRegistry 支持按类型和能力查询
+- [x] `PluginType` / `PluginCapability` / `PluginSource` 枚举定义完成
+- [x] `PluginRegistry` 支持按类型和能力查询
 - [x] 插件依赖版本兼容性检查
-- [ ] 生命周期管理 (load / enable / disable / unload)
-- [ ] Editor Plugin Manager 面板显示所有已加载插件
+- [ ] 生命周期管理（load / enable / disable / unload）
+- [ ] Editor Plugin Manager 面板显示所有已发现插件
+- [ ] `PluginRegistry` 与类型化 loader 完成接线，不再把专有字段塞进平面 `PluginManifest`
 
 **当前实现状态**:
-- `PluginType` 枚举: render_style, audio_effect, physics_ext, terrain_gen, ai_behavior, ui_extension, script_vm — 已完成 (`src/engine/plugin/types.zig`)
-- `PluginCapability` 枚举: shader, compute_pass, render_pass, audio_processor, script_handler — 已完成
-- `PluginSource` 枚举: builtin, user, project — 已完成
-- `PluginLifecycle` 枚举: unloaded, loaded, enabled, load_error — 已完成
-- `PluginVersion.parse()` + `compatible()` 主版本兼容性检查 — 已完成（含单元测试）
-- `PluginManifest` 完整结构: name, version, plugin_type, capabilities, source, path, shaders, post_passes, dependencies, on_load/unload/enable hooks — 已完成
-- `PluginRegistry`: 按 name 查询(`getByName`)、按 type 查询(`getByType`)、按 capability 查询(`getWithCapability`) — 已完成（含单元测试）
-- **待实现**: `load()` 统一加载（解析 manifest.json → 创建 Plugin 实例）、`enable/disable/unload` 生命周期流转、Editor Plugin Manager UI 面板
+- `PluginType`、`PluginCapability`、`PluginSource`、`PluginLifecycle` 已完成（`src/engine/plugin/types.zig`）
+- `PluginVersion.parse()` + `compatible()` 主版本兼容性检查已完成（含单元测试）
+- `PluginRegistry` 已支持按 name、type、capability 查询（含单元测试）
+- 当前 `PluginManifest` 仍偏扁平，尚未演进到“公共外壳 + 类型化载荷”模型
+- 当前 `PluginRegistry` 还未接入统一发现、启停、卸载流转，也未接入 `render_style` 的真实运行时加载路径
 
 #### R-11 渲染风格作为插件系统首个用例
 
-基于 R-10 通用插件框架，将 R-9 渲染风格插件化为第一个具体实现：
+R-11 的目标不是把 `StyleRegistry` 删除后硬塞进 `PluginRegistry`，而是把二者按职责正确接线。
 
+**推荐接线方式**:
+1. `PluginRegistry` 负责扫描目录并发现 `render_style` 类型插件。
+2. `render_style` 类型化 loader 把 manifest 解析成 `StylePluginManifest`。
+3. `Renderer` / `StyleRegistry` 接管运行时对象，注册风格、维护参数和值、处理激活切换。
+4. Viewport 和 Inspector 通过 `StyleRegistry` 查询风格；Plugin Manager 通过 `PluginRegistry` 展示来源、状态、错误。
+5. 只有当 `RenderGraph` 执行器真正成为权威调度器时，才接入用户自定义 `post_chain`。
+
+**风格状态真源规则**:
+- `StyleRegistry.active_style_name` 是运行时真源。
+- `EditorViewportState.active_render_style` 是编辑器持久化缓存，用于保存上次选择。
+- 编辑器启动或项目加载时，应从 `EditorViewportState` 回填到 `StyleRegistry`。
+- UI 切换时，应先更新 `StyleRegistry`，再镜像回 `EditorViewportState`。
+
+**当前代码形态**:
 ```zig
-// src/engine/render/style_plugin.zig 中的实际实现
-
-// 内置PBR风格 — 引擎默认
+// src/engine/render/style_plugin.zig
 pub const default_pbr_style = StylePluginManifest{
     .name = "default_pbr",
     .display_name = "PBR (Default)",
@@ -937,7 +939,6 @@ pub const default_pbr_style = StylePluginManifest{
     .shadow_program = "shadow_pass",
 };
 
-// 内置Unlit Flat风格 — 禁用bloom/ssr，无光照
 pub const unlit_flat_style = StylePluginManifest{
     .name = "unlit_flat",
     .display_name = "Unlit Flat",
@@ -949,18 +950,16 @@ pub const unlit_flat_style = StylePluginManifest{
         .{ .name = "opacity", .display_name = "Opacity", .default_value = 1.0 },
     },
 };
-
-// StyleRegistry 初始化时自动注册所有内置风格
-// renderers.zig init → StyleRegistry.init(allocator) → put default_pbr + unlit_flat
 ```
 
 **当前实现状态**:
-- Renderer 持有 `style_registry` 字段，init 时自动注册 2 个内置风格
+- `Renderer` 持有 `style_registry` 字段，初始化时自动注册 2 个内置风格
 - Viewport → View 菜单 → Render Style 区域动态列出所有已注册风格
-- 切换风格同步更新 `EditorViewportState.active_render_style` 和 `StyleRegistry.active_style_name`
-- `isPassDisabledByActiveStyle(pass_name)` 可供渲染管线按风格禁用/启用 Pass
+- `isPassDisabledByActiveStyle(pass_name)` 已可供渲染管线按风格禁用/启用 Pass
 - `StyleParamValues` per-style 参数运行时存储已就绪
-- **待实现**: 用户插件目录扫描加载（`loadUserPlugin` / `scanPluginDirectory`）、Inspector 参数面板 UI、`RenderGraph.rebuild()` 风格切换重建
+- `loadUserPlugin()` / `scanPluginDirectory()` 仍待实现
+- `PluginRegistry` 与 `StyleRegistry` 还未真正接线；当前 `render_style` 仍是独立运行时路径
+- 用户自定义 `post_chain` 与风格切换拓扑重建延期到 `RenderGraph` 执行器成熟之后再做
 
 ---
 
@@ -1687,8 +1686,8 @@ pub fn getEntityTransformRef(entity: EntityId) *Transform  // 仅在确认 entit
 | `PreviewWorld` | Staged 对应的预览世界 |
 | `ScriptVM` | 文档中的泛称；当前已拆分为 `C# Script VM`（gameplay / NativeAOT）与 `WASM VM`（plugins） |
 | Principled BSDF | 统一材质模型（对标 Blender / Disney） |
-| RenderGraph | 渲染图 - 声明式 Pass 依赖管理 + 自动 Barrier 插入 |
-| StylePlugin | 渲染风格插件 - 可插拔的渲染效果扩展（Cel Shading / Ink Wash 等） |
-| PluginRegistry | 插件注册表 - 统一管理所有类型插件的加载、查询、生命周期 |
-| PluginLifecycle | 插件生命周期状态 (unloaded / loaded / enabled / error) |
+| RenderGraph | 渲染图 - 当前主要用于声明式 Pass 依赖与统计；执行仍以 `renderer.drawFrame()` 手工调度为主 |
+| StylePlugin | `render_style` 类型化渲染扩展；运行时由 `StyleRegistry` / `Renderer` 持有 |
+| PluginRegistry | 插件注册表 - 管理插件元数据、来源、查询、生命周期；不直接拥有 GPU / VM 运行时对象 |
+| PluginLifecycle | 插件生命周期状态 (`unloaded` / `loaded` / `enabled` / `load_error`) |
 | PluginCapability | 插件能力枚举 (shader / compute_pass / render_pass / audio_processor) |
