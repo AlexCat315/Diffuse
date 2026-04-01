@@ -63,6 +63,13 @@ const LauncherAction = enum {
     create_new,
 };
 
+fn replaceOwnedArg(allocator: std.mem.Allocator, slot: *?[]u8, value: []const u8) !void {
+    if (slot.*) |existing| {
+        allocator.free(existing);
+    }
+    slot.* = try allocator.dupe(u8, value);
+}
+
 pub fn main() !u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -116,22 +123,22 @@ fn parseArgsAlloc(allocator: std.mem.Allocator) !LauncherArgs {
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "--open")) {
             const next = args.next() orelse return error.MissingArgument;
-            result.open_path = try allocator.dupe(u8, next);
+            try replaceOwnedArg(allocator, &result.open_path, next);
             continue;
         }
         if (std.mem.eql(u8, arg, "--create")) {
             const next = args.next() orelse return error.MissingArgument;
-            result.create_path = try allocator.dupe(u8, next);
+            try replaceOwnedArg(allocator, &result.create_path, next);
             continue;
         }
         if (std.mem.eql(u8, arg, "--name")) {
             const next = args.next() orelse return error.MissingArgument;
-            result.name = try allocator.dupe(u8, next);
+            try replaceOwnedArg(allocator, &result.name, next);
             continue;
         }
         if (std.mem.eql(u8, arg, "--engine")) {
             const next = args.next() orelse return error.MissingArgument;
-            result.engine_path = try allocator.dupe(u8, next);
+            try replaceOwnedArg(allocator, &result.engine_path, next);
             continue;
         }
         if (std.mem.eql(u8, arg, "--no-launch")) {
@@ -196,16 +203,11 @@ fn selectProjectInteractiveAlloc(allocator: std.mem.Allocator) !?ProjectSelectio
 }
 
 fn chooseLauncherActionAlloc(allocator: std.mem.Allocator, has_recents: bool) !LauncherAction {
-    const message = try appleScriptQuotedAlloc(allocator, "Open or create a Guava project.");
-    defer allocator.free(message);
+    const recent_choices = [_][]const u8{ "Open Recent", "Open Existing", "Create Project" };
+    const default_choices = [_][]const u8{ "Open Existing", "Create Project" };
+    const choices: []const []const u8 = if (has_recents) recent_choices[0..] else default_choices[0..];
 
-    const line = if (has_recents)
-        try std.fmt.allocPrint(allocator, "return button returned of (display dialog {s} buttons {{\"Cancel\", \"Create Project\", \"Open Existing\", \"Open Recent\"}} default button \"Open Recent\")", .{message})
-    else
-        try std.fmt.allocPrint(allocator, "return button returned of (display dialog {s} buttons {{\"Cancel\", \"Create Project\", \"Open Existing\"}} default button \"Open Existing\")", .{message});
-    defer allocator.free(line);
-
-    const result = try runAppleScriptAlloc(allocator, &.{line});
+    const result = try chooseFromListAlloc(allocator, choices, "Open or create a Guava project");
     defer allocator.free(result);
 
     if (std.mem.eql(u8, result, "Open Recent")) return .open_recent;

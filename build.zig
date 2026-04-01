@@ -376,16 +376,33 @@ pub fn build(b: *std.Build) void {
     });
     b.installArtifact(launcher);
 
-    const run_cmd = b.addRunArtifact(exe);
+    const engine_binary_name = if (target.result.os.tag == .windows) "guava-engine.exe" else "guava-engine";
+    const installed_engine_path = b.getInstallPath(.bin, engine_binary_name);
+
+    const run_cmd = b.addRunArtifact(launcher);
     run_cmd.step.dependOn(b.getInstallStep());
+    run_cmd.addArg("--engine");
+    run_cmd.addArg(installed_engine_path);
     if (b.args) |args| {
         run_cmd.addArgs(args);
     }
 
-    const run_step = b.step("run", "Run the app");
+    const run_step = b.step("run", "Run the project launcher");
     run_step.dependOn(&run_cmd.step);
 
+    const run_engine_cmd = b.addRunArtifact(exe);
+    run_engine_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        run_engine_cmd.addArgs(args);
+    }
+
+    const run_engine_step = b.step("run-engine", "Run the engine directly");
+    run_engine_step.dependOn(&run_engine_cmd.step);
+
     const run_launcher_cmd = b.addRunArtifact(launcher);
+    run_launcher_cmd.step.dependOn(b.getInstallStep());
+    run_launcher_cmd.addArg("--engine");
+    run_launcher_cmd.addArg(installed_engine_path);
     if (b.args) |args| {
         run_launcher_cmd.addArgs(args);
     }
