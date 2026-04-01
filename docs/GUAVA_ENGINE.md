@@ -778,10 +778,10 @@ guava_engine/
 
 **验收标准**:
 - [x] 引擎内置默认风格（等同于当前 PBR 渲染）
-- [ ] 用户插件可从 `user_plugins/` 或 `project_plugins/` 被扫描并导入
+- [x] 用户插件可从 `user_plugins/` 或 `project_plugins/` 被扫描并导入
 - [x] Viewport 工具栏可切换风格，实时重绘
 - [ ] 风格参数可通过 Inspector 调节并持久化
-- [ ] 风格切换失败时可回滚到上一个有效风格
+- [x] 风格切换失败时可回滚到上一个有效风格
 
 **当前实现状态**:
 - `StyleRegistry` 已注册 2 个内置风格: `default_pbr`（PBR）、`unlit_flat`（Unlit Flat）
@@ -791,7 +791,9 @@ guava_engine/
 - `StyleParamValues` 运行时参数存储已就绪（per-style HashMap）
 - `isPassDisabledByActiveStyle()` 已可供渲染管线查询
 - `rollbackStyle()` 已实现：风格切换失败时可回滚到上一个有效风格
-- `loadUserPlugin()` / `scanPluginDirectory()` 接口已声明，待 Phase B 接入 JSON 解析与目录扫描
+- `loadUserPlugin()` / `scanPluginDirectory()` 已完成 Phase B 实现：JSON 解析（`std.json.parseFromSlice`）、目录扫描（`PluginRegistry.discover()`）、类型化 loader 分发（`dispatchStylePlugins` / `dispatchScriptVmPlugins`）
+- `StyleRegistry.unregister()` 已实现：per-style 内存释放（`StyleAlloc`）、活跃风格自动回退 `default_pbr`、参数值清理
+- Per-style allocation tracking（`style_allocs: StringHashMap(StyleAlloc)`）已就绪，`unregister()` 和 `deinit()` 均正确释放
 - `post_chain` 字段已可从 manifest 加载但尚未注入 RenderGraph（Phase C）
 
 #### R-10 通用插件系统基础设施
@@ -904,17 +906,23 @@ pub const PluginRegistry = struct {
 - [x] `PluginRegistry` 支持按类型和能力查询
 - [x] 插件依赖版本兼容性检查
 - [x] 生命周期管理（load / enable / disable / unload）
-- [ ] Editor Plugin Manager 面板显示所有已发现插件
+- [x] Editor Plugin Manager 面板显示所有已发现插件
 - [x] `PluginManifest` 重构为公共外壳，`PluginRecord` 替代原 `Plugin`
 
 **当前实现状态**:
 - `PluginType`、`PluginCapability`、`PluginSource`、`PluginLifecycle` 已完成（`src/engine/plugin/types.zig`）
 - `PluginVersion.parse()` + `compatible()` 主版本兼容性检查已完成（含单元测试）
 - `PluginManifest` 已重构为公共外壳：移除了 `shaders`/`post_passes` 等类型化字段，保留 name、version、plugin_type、capabilities、source、path、dependencies、hooks
-- `PluginRecord` 已新增（替代原 `Plugin`）：包含 manifest + lifecycle + last_error，附带 `hasError()` 查询
-- `PluginRegistry` 已支持：按 name/type/capability 查询、`enable()`/`disable()`/`unload()` 生命周期流转、`discover()` 接口（待实现）
+- `PluginRecord` 已新增（替代原 `Plugin`）：包含 manifest + lifecycle + last_error，附带 `setLastError()` / `clearLastError()` / `hasError()` 查询
+- `PluginRegistry` 已支持：按 name/type/capability 查询、`enable()`/`disable()`/`unload()` 生命周期流转
+- `PluginRegistry.discover()` 已实现目录扫描：遍历子目录、读取 `manifest.json`、调用 `parseManifest()` 并注册 `PluginRecord`
+- `manifest.zig` 提供统一 `parseManifest()` 解析入口，使用 `std.json.parseFromSlice` API
 - `Plugin` 类型保留为 `PluginRecord` 别名，确保向下兼容
-- 待实现：`discover()` 目录扫描、与 `StyleRegistry` 的类型化 loader 接线、Editor Plugin Manager UI
+- `Renderer` 作为统一插件编排层：`discoverPlugins()` → `dispatchStylePlugins()` + `dispatchScriptVmPlugins()`
+- `Renderer.enablePlugin()` / `disablePlugin()` / `unloadPlugin()` / `rescanPlugins()` 生命周期方法已完成，含错误回写
+- `script_vm` 类型已接入：`ScriptVmPluginLoader` 负责验证（检查 `main.zig` / `main.wasm`），实际加载由应用层驱动
+- Editor Plugin Manager 面板已完成：6 列表格（Name/Type/Source/State/Actions/Error）、Enable/Disable/Unload 按钮（deferred action 安全模式）、Rescan 按钮
+- 插件系统单元测试已覆盖：manifest 解析（valid/invalid JSON/missing fields/unknown type/unknown cap/extra fields）、registry 生命周期（register/enable/disable/unload）、error state、StyleRegistry（builtins/setActive/rollback/register/unregister/fallback/isPassDisabled）
 
 #### R-11 渲染风格作为插件系统首个用例
 
@@ -967,8 +975,13 @@ pub const unlit_flat_style = StylePluginManifest{
 - `StyleParamValues` per-style 参数运行时存储已就绪
 - `PluginManifest` 已重构为公共外壳，`PluginRecord` 已替代原 `Plugin`
 - `PluginRegistry` 已新增 `enable()`/`disable()`/`unload()` 生命周期流转
-- `loadUserPlugin()` / `scanPluginDirectory()` / `discover()` 接口已声明，待 Phase B 实现
-- `PluginRegistry` → `StyleRegistry` 的类型化 loader 接线待完成
+- `PluginRegistry.discover()` 已实现目录扫描并自动注册
+- `ScriptVmPluginLoader` 已接入 `Renderer.dispatchScriptVmPlugins()`，验证 `script_vm` 插件
+- `Renderer` 作为统一编排层：`enablePlugin` / `disablePlugin` / `unloadPlugin` / `rescanPlugins` 均已完成
+- `PluginRegistry` → `StyleRegistry` 的类型化 loader 接线已完成（`dispatchStylePlugins` → `loadFromDiscoveredPlugin`）
+- `StyleRegistry.unregister()` 已实现：per-style 内存释放 + 活跃风格回退
+- Editor Plugin Manager 面板已完成：Rescan / Enable / Disable / Unload 按钮（deferred action 安全模式避免迭代时变更 HashMap）
+- 插件系统单元测试已就绪（manifest 解析、registry 生命周期、style registry）
 
 ---
 
