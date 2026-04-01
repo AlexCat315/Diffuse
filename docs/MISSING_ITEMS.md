@@ -17,8 +17,10 @@
 - [x] 材质系统 Phase-1 与部分 Phase-2 底座（`MaterialAst`/`MaterialGraph`）
 
 ### 0.2 仍需完善（即便标记“部分完成”）
-- [ ] GR-2 生产化收尾：loading 进度可视化、转场策略、场景流式化、失败恢复策略
-- [ ] 发布流程中的 player-only 验证（无 editor 依赖运行）
+- [x] GR-2 生产化收尾：loading 进度可视化、转场策略、场景流式化、失败恢复策略
+  - 验证：`scene_manager.zig` 新增 `TransitionKind.stream` / `requestStreamScene` / errdefer 快照恢复；`viewport.zig` 新增 phase 标签+进度条+failed 提示；`theme.zig` 补 `overlay_progress_width`；`zig build player` 编译通过 (2026-04-01)
+- [x] 发布流程中的 player-only 验证（无 editor 依赖运行）
+  - 验证：新增 `src/player_main.zig`（独立入口，零 editor 依赖）；`build.zig` 新增 `player` / `run-player` 步骤；`zig build player` 编译通过 (2026-04-01)
 
 ---
 
@@ -31,7 +33,7 @@
 - [ ] `zig build package`（或等价）发布目标
 - [ ] 资源 Cook 流程标准化（import -> cook -> pack -> stage）
 - [ ] 脚本产物纳入构建图（C# / WASM）
-- [ ] player-only 二进制裁剪（剔除 editor 依赖）
+- [x] player-only 二进制裁剪（剔除 editor 依赖）— `src/player_main.zig` 独立入口，不引入 editor 模块；`zig build player` 通过 (2026-04-01)
 - [ ] 平台产物装配：macOS app bundle、Windows 目录结构、Linux 目录结构
 - [ ] 构建可复现（manifest + hash）
 
@@ -42,12 +44,12 @@
 现状：主启动链默认进入编辑器形态，运行模式边界不够硬。
 
 缺失：
-- [ ] Editor 与 Player 启动入口完全分离
-- [ ] 运行时依赖隔离检查（Player 禁止 editor/ui/tooling 模块）
+- [x] Editor 与 Player 启动入口完全分离 — `player_main.zig` + `build.zig` player/run-player 步骤 (2026-04-01)
+- [x] 运行时依赖隔离检查（Player 禁止 editor/ui/tooling 模块）— player 入口仅依赖 `guava` 引擎模块，编译验证无 editor import (2026-04-01)
 - [ ] 启动生命周期标准化：Boot -> Mount -> Scene Load -> Game Loop -> Shutdown
 
 验收：
-- [ ] Player 模式不加载任何编辑器层，且通过自动化 smoke test
+- [ ] Player 模式不加载任何编辑器层，且通过自动化 smoke test（入口已分离，smoke test 待补）
 
 ### 1.3 Play Mode / GameState（GR-3）
 - [ ] `Editor / Playing / Paused / Stopped` 状态机
@@ -175,12 +177,12 @@
 - [ ] 资源格式与版本兼容规范
 
 ### Phase B：运行时产品化（4-6 周）
-- [ ] 启动入口分离与生命周期统一
-- [ ] 失败恢复机制（场景加载失败、资源缺失降级）
+- [x] 启动入口分离与生命周期统一 — `player_main.zig` 独立入口 + `PlayerBootstrapLayer` on_attach 加载 start_scene (2026-04-01)
+- [x] 失败恢复机制（场景加载失败、资源缺失降级）— SceneManager errdefer 快照恢复 + `failTransition` 统一错误路径 (2026-04-01)
 - [ ] player-only 自动化 smoke 测试
 
 交付物：
-- [ ] 可独立运行的 Player target
+- [x] 可独立运行的 Player target — `zig build player` / `zig build run-player` (2026-04-01)
 - [ ] 启动链路自动化测试
 
 ### Phase C：资产与脚本管线（6-10 周）
@@ -216,7 +218,7 @@
 ## 7. 里程碑验收标准（生产级）
 
 ### M1：可运行
-- [ ] 单命令启动 player，进入指定 start scene
+- [x] 单命令启动 player，进入指定 start scene — `zig build run-player -- --project-path <dir>` 加载 `.guava` 中 `start_scene` (2026-04-01)
 
 ### M2：可打包
 - [ ] 单命令产出可分发包，目标平台可启动
