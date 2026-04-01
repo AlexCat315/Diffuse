@@ -363,6 +363,23 @@ pub fn build(b: *std.Build) void {
     exe.step.dependOn(&run_shader_codegen.step);
     b.installArtifact(exe);
 
+    const player = b.addExecutable(.{
+        .name = "guava-player",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/player_main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "guava", .module = engine_mod },
+            },
+        }),
+    });
+    player.linkLibC();
+    player.linkLibCpp();
+    player.linker_allow_shlib_undefined = true;
+    player.step.dependOn(&run_shader_codegen.step);
+    b.installArtifact(player);
+
     const launcher = b.addExecutable(.{
         .name = "guava-launcher",
         .root_module = b.createModule(.{
@@ -398,6 +415,18 @@ pub fn build(b: *std.Build) void {
 
     const run_engine_step = b.step("run-engine", "Run the engine directly");
     run_engine_step.dependOn(&run_engine_cmd.step);
+
+    const run_player_cmd = b.addRunArtifact(player);
+    run_player_cmd.step.dependOn(b.getInstallStep());
+    if (b.args) |args| {
+        run_player_cmd.addArgs(args);
+    }
+
+    const build_player_step = b.step("player", "Build the standalone player runtime");
+    build_player_step.dependOn(&player.step);
+
+    const run_player_step = b.step("run-player", "Run the standalone player runtime");
+    run_player_step.dependOn(&run_player_cmd.step);
 
     const run_launcher_cmd = b.addRunArtifact(launcher);
     run_launcher_cmd.step.dependOn(b.getInstallStep());
