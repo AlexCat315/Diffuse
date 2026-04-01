@@ -533,6 +533,98 @@ pub fn build(b: *std.Build) void {
     const shaders_step = b.step("shaders", "Compile shaders and regenerate reflection metadata");
     shaders_step.dependOn(&run_shader_codegen.step);
 
+    // ---- Package step: build a distributable macOS .app bundle ----
+    const package_step = b.step("package", "Build distributable game package (use -Doptimize=ReleaseSafe)");
+    if (target.result.os.tag == .macos) {
+        const bundle_base = "package/GuavaGame.app/Contents";
+
+        // Player binary → .app/Contents/MacOS/
+        const pkg_player = b.addInstallArtifact(player, .{
+            .dest_dir = .{ .override = .{ .custom = bundle_base ++ "/MacOS" } },
+        });
+        package_step.dependOn(&pkg_player.step);
+
+        // Info.plist → .app/Contents/
+        const wf = b.addWriteFiles();
+        const plist_source = wf.add("Info.plist",
+            \\<?xml version="1.0" encoding="UTF-8"?>
+            \\<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN"
+            \\  "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+            \\<plist version="1.0">
+            \\<dict>
+            \\  <key>CFBundleExecutable</key>
+            \\  <string>guava-player</string>
+            \\  <key>CFBundleIdentifier</key>
+            \\  <string>com.guava.game</string>
+            \\  <key>CFBundleInfoDictionaryVersion</key>
+            \\  <string>6.0</string>
+            \\  <key>CFBundleName</key>
+            \\  <string>GuavaGame</string>
+            \\  <key>CFBundlePackageType</key>
+            \\  <string>APPL</string>
+            \\  <key>CFBundleVersion</key>
+            \\  <string>1.0</string>
+            \\  <key>CFBundleShortVersionString</key>
+            \\  <string>1.0</string>
+            \\  <key>LSMinimumSystemVersion</key>
+            \\  <string>12.0</string>
+            \\  <key>NSHighResolutionCapable</key>
+            \\  <true/>
+            \\</dict>
+            \\</plist>
+            \\
+        );
+        const install_plist = b.addInstallFileWithDir(
+            plist_source,
+            .{ .custom = bundle_base },
+            "Info.plist",
+        );
+        package_step.dependOn(&install_plist.step);
+
+        // SDL3 dylib → .app/Contents/Frameworks/
+        const sdl_dylib_path = b.pathJoin(&.{ sdl_prefix, "lib", "libSDL3.0.dylib" });
+        const install_sdl = b.addInstallFileWithDir(
+            .{ .cwd_relative = sdl_dylib_path },
+            .{ .custom = bundle_base ++ "/Frameworks" },
+            "libSDL3.0.dylib",
+        );
+        package_step.dependOn(&install_sdl.step);
+
+        // Rewrite the SDL3 load path so the player finds the bundled dylib
+        const installed_player_path = b.getInstallPath(
+            .{ .custom = bundle_base ++ "/MacOS" },
+            "guava-player",
+        );
+        const fix_dylib_ref = b.addSystemCommand(&.{
+            "/bin/sh", "-c",
+            std.fmt.allocPrint(
+                b.allocator,
+                "OLD=$(/usr/bin/otool -L '{s}' | grep libSDL3 | head -1 | awk '{{print $1}}') && " ++
+                    "/usr/bin/install_name_tool -change \"$OLD\" '@executable_path/../Frameworks/libSDL3.0.dylib' '{s}'",
+                .{ installed_player_path, installed_player_path },
+            ) catch @panic("OOM"),
+        });
+        fix_dylib_ref.step.dependOn(&pkg_player.step);
+        package_step.dependOn(&fix_dylib_ref.step);
+
+        // Game assets → .app/Contents/assets/ (excluding .meta and .DS_Store)
+        inline for (.{ "shaders", "models", "scenes", "ui" }) |subdir| {
+            const install_assets = b.addInstallDirectory(.{
+                .source_dir = b.path("assets/" ++ subdir),
+                .install_dir = .{ .custom = bundle_base ++ "/assets/" ++ subdir },
+                .install_subdir = "",
+                .exclude_extensions = &.{ ".meta", ".DS_Store" },
+            });
+            package_step.dependOn(&install_assets.step);
+        }
+        const install_logo = b.addInstallFileWithDir(
+            b.path("assets/Guava_Engine_Logo.png"),
+            .{ .custom = bundle_base ++ "/assets" },
+            "Guava_Engine_Logo.png",
+        );
+        package_step.dependOn(&install_logo.step);
+    }
+
     const compile_commands_step = b.step("compile-commands", "Generate compile_commands.json for clangd");
     const update_compile_commands = b.addUpdateSourceFiles();
     update_compile_commands.addBytesToSource(
