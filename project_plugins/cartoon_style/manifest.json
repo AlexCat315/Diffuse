@@ -1,0 +1,12 @@
+{
+    "name": "cartoon_style",
+    "version": "1.0.0",
+    "plugin_type": "render_style",
+    "source": "project",
+    "render_style": {
+        "display_name": "Cartoon Style",
+        "mesh_program": "mesh",
+        "shadow_program": "shadow_pass",
+        "disabled_passes": ["bloom"]
+    }
+}
