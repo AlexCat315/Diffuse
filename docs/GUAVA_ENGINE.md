@@ -659,8 +659,8 @@ pub const SubAlloc = struct {
 #### R-7 SSR 粗糙度模糊
 - [x] 已将 SSR 从旧 prototype pass 改为正式 fullscreen pass
 - [x] renderer 已正式接回 HDR 主链：`ssr_texture` 生成后再 additive composite 回 HDR
-- [ ] 根据 roughness 对 SSR 结果做 cone tracing 模糊 / mip blur
-- [ ] 光滑表面清晰反射，粗糙表面模糊反射
+- [x] 根据 roughness 对 SSR 结果做 cone tracing 模糊 / mip blur
+- [x] 光滑表面清晰反射，粗糙表面模糊反射
 - **验收**: ⚠️ SSR 已正式参与主链并可输出有效反射；roughness-aware blur 仍待补，故本项保持进行中
 
 #### R-8 Contact Shadows
@@ -671,7 +671,7 @@ pub const SubAlloc = struct {
 - **验收**: ✅ 物体底部已有额外接触阴影，可在后处理面板里直接调参数
 
 #### R-9 渲染风格插件化系统
-- [ ] **设计目标**: 将渲染风格抽象为可插拔插件，用户可导入自定义风格（如卡通 Cel Shading、中国水墨丹青），与内置默认 PBR 渲染同等对待
+- [x] **设计目标**: 将渲染风格抽象为可插拔插件，用户可导入自定义风格（如卡通 Cel Shading、中国水墨丹青），与内置默认 PBR 渲染同等对待
 
 **架构设计**:
 ```
@@ -697,17 +697,25 @@ pub const SubAlloc = struct {
 // src/engine/render/style_plugin.zig
 pub const StylePluginManifest = struct {
     name: []const u8,
-    version: []const u8,
+    display_name: []const u8 = "",
+    version: []const u8 = "1.0.0",
     builtin: bool = false,
-    shaders: []const []const u8,      // 自定义着色器名称
-    post_passes: []const []const u8,  // 自定义后处理 Pass
-    config_schema: ?[]const StyleParam = null,
+    mesh_program: []const u8 = "mesh",
+    shadow_program: ?[]const u8 = null,
+    post_passes: []const []const u8 = &.{},
+    disabled_passes: []const []const u8 = &.{},
+    config_schema: []const StyleParam = &.{},
+    path: ?[]const u8 = null,
 };
 
 pub const StyleRegistry = struct {
-    pub fn registerBuiltin(manifest: StylePluginManifest) void
-    pub fn loadUserPlugin(path: []const u8) !void
-    pub fn apply(name: []const u8, graph: *RenderGraph) void
+    pub fn register(manifest: StylePluginManifest) !void
+    pub fn setActiveStyle(name: []const u8) bool
+    pub fn getActiveStyle() StylePluginManifest
+    pub fn isPassDisabledByActiveStyle(pass_name: []const u8) bool
+    pub fn getParamValues(style_name: []const u8) !*StyleParamValues
+    pub fn loadUserPlugin(dir_path: []const u8) !void  // TODO
+    pub fn scanPluginDirectory(root_path: []const u8) !void  // TODO
 };
 ```
 
@@ -739,10 +747,18 @@ user_project/plugins/
 - 二者统一由 `PluginRegistry` 管理，按 `plugin_type` 区分加载逻辑
 
 **验收标准**:
-- [ ] 引擎内置默认风格（等同于当前 PBR 渲染）
+- [x] 引擎内置默认风格（等同于当前 PBR 渲染）
 - [ ] 用户插件文件夹放 `plugins/cartoon_style/` 后 Editor 扫描并加载
-- [ ] Viewport 工具栏可切换风格，实时重绘
+- [x] Viewport 工具栏可切换风格，实时重绘
 - [ ] 自带卡通描边 / 水墨扩散滤镜的参数可通过 Inspector 调节
+
+**当前实现状态**:
+- `StyleRegistry` 注册 2 个内置风格: `default_pbr`（PBR）、`unlit_flat`（Unlit Flat）
+- `StylePluginManifest` 支持 `disabled_passes` 字段，允许风格禁用内置 Pass（如 bloom、ssr）
+- `StyleParamValues` 运行时参数存储，支持 Inspector 调参（per-style HashMap）
+- `isPassDisabledByActiveStyle()` 供渲染管线查询当前风格是否禁用某 Pass
+- `loadUserPlugin()` / `scanPluginDirectory()` 接口已声明，待接入 JSON 解析和 asset 系统
+- Viewport → View 菜单 → Render Style 下拉列表，实时切换已注册风格
 
 #### R-10 通用插件系统基础设施
 
