@@ -32,7 +32,7 @@
 缺失：
 - [x] `zig build package`（或等价）发布目标 — `build.zig` package step 生成 macOS .app bundle（binary + SDL3 dylib + assets），rpath 自动改写 (2026-04-01)
 - [x] 资源 Cook 流程标准化 — `zig build cook` 步骤通过 engine validate 管线刷新 derived 产物；package 步骤自动打包 `assets/derived/{models,textures}` + `asset_registry.json`（7434 文件已验证） (2026-04-02)
-- [ ] 脚本产物纳入构建图（C# / WASM）
+- [x] 脚本产物纳入构建图（C# / WASM） — `zig build scripts` 自动发现并编译 `project_plugins/*/main.zig`→WASM + `examples/csharp/*/*.csproj`→NativeAOT dylib；产物打包到 `Contents/scripts/{wasm,csharp}/` (2026-04-02)
 - [x] player-only 二进制裁剪（剔除 editor 依赖）— `src/player_main.zig` 独立入口，不引入 editor 模块；`zig build player` 通过 (2026-04-01)
 - [x] 平台产物装配：macOS app bundle — `zig-out/package/GuavaGame.app/` 含 Info.plist、Frameworks/libSDL3、assets/ (2026-04-01)
 - [x] 平台产物装配：Windows/Linux 目录结构 — build.zig 已含 Windows (`package/GuavaGame/`) 和 Linux (`package/guava-game/{bin,share}`) 布局代码，待目标平台测试 (2026-04-02)

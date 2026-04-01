@@ -653,6 +653,21 @@ pub fn build(b: *std.Build) void {
             "asset_registry.json",
         );
         gen_manifest.step.dependOn(&install_registry.step);
+
+        // Pre-compiled scripts → .app/Contents/scripts/ (WASM + NativeAOT)
+        // These are staged from zig-out/scripts/ which is populated by `zig build scripts`
+        inline for (.{ "wasm", "csharp" }) |subdir| {
+            const scripts_source_dir = b.getInstallPath(.{ .custom = "scripts/" ++ subdir }, "");
+            if (std.fs.cwd().access(scripts_source_dir, .{})) |_| {
+                const install_scripts = b.addInstallDirectory(.{
+                    .source_dir = .{ .cwd_relative = scripts_source_dir },
+                    .install_dir = .{ .custom = bundle_base ++ "/scripts/" ++ subdir },
+                    .install_subdir = "",
+                    .exclude_extensions = &.{".dSYM"},
+                });
+                gen_manifest.step.dependOn(&install_scripts.step);
+            } else |_| {}
+        }
     } else if (target.result.os.tag == .windows) {
         // Windows: flat directory layout
         //   package/GuavaGame/guava-player.exe
@@ -717,6 +732,91 @@ pub fn build(b: *std.Build) void {
     cook_cmd.step.dependOn(b.getInstallStep());
     cook_cmd.addArg("validate");
     cook_step.dependOn(&cook_cmd.step);
+
+    // ---- Scripts step: compile project scripts into distributable artifacts ----
+    const scripts_step = b.step("scripts", "Compile project scripts (Zig plugins→WASM, C#→NativeAOT)");
+    {
+        // Discover and compile WASM plugins from project_plugins/
+        var found_wasm_plugins = false;
+        if (std.fs.cwd().openDir("project_plugins", .{ .iterate = true })) |dir| {
+            var iter = dir.iterate();
+            while (iter.next() catch null) |entry| {
+                if (entry.kind != .directory) continue;
+                const main_zig_path = b.pathJoin(&.{ "project_plugins", entry.name, "main.zig" });
+                if (std.fs.cwd().access(main_zig_path, .{})) |_| {
+                    // wasm32-freestanding dynamic is not supported by addLibrary;
+                    // invoke zig build-lib directly (same as wasm_compiler.zig does at runtime)
+                    const wasm_output_dir = b.getInstallPath(.{ .custom = "scripts/wasm" }, "");
+                    const emit_arg = std.fmt.allocPrint(b.allocator, "-femit-bin={s}/{s}.wasm", .{
+                        wasm_output_dir, entry.name,
+                    }) catch @panic("OOM");
+                    const mkdir_wasm = b.addSystemCommand(&.{ "mkdir", "-p", wasm_output_dir });
+                    const compile_wasm = b.addSystemCommand(&.{
+                        b.graph.zig_exe,       "build-exe",
+                        main_zig_path,         "-target",
+                        "wasm32-freestanding", "-fno-entry",
+                        "-O",                  "ReleaseFast",
+                        emit_arg,
+                    });
+                    compile_wasm.step.dependOn(&mkdir_wasm.step);
+                    scripts_step.dependOn(&compile_wasm.step);
+                    found_wasm_plugins = true;
+                } else |_| {}
+            }
+        } else |_| {}
+        if (!found_wasm_plugins) {
+            std.log.info("scripts: no WASM plugins found in project_plugins/", .{});
+        }
+
+        // Discover and compile C# NativeAOT projects from examples/csharp/
+        const rid: ?[]const u8 = switch (target.result.os.tag) {
+            .macos => switch (target.result.cpu.arch) {
+                .aarch64 => "osx-arm64",
+                .x86_64 => "osx-x64",
+                else => null,
+            },
+            .linux => switch (target.result.cpu.arch) {
+                .aarch64 => "linux-arm64",
+                .x86_64 => "linux-x64",
+                else => null,
+            },
+            .windows => switch (target.result.cpu.arch) {
+                .aarch64 => "win-arm64",
+                .x86_64 => "win-x64",
+                else => null,
+            },
+            else => null,
+        };
+        if (rid) |runtime_id| {
+            const csharp_output_dir = b.getInstallPath(.{ .custom = "scripts/csharp" }, "");
+            if (std.fs.cwd().openDir("examples/csharp", .{ .iterate = true })) |dir| {
+                var iter = dir.iterate();
+                while (iter.next() catch null) |entry| {
+                    if (entry.kind != .directory) continue;
+                    const csproj_glob = b.pathJoin(&.{ "examples/csharp", entry.name });
+                    // Look for .csproj files in the subdirectory
+                    if (std.fs.cwd().openDir(csproj_glob, .{ .iterate = true })) |subdir| {
+                        var sub_iter = subdir.iterate();
+                        while (sub_iter.next() catch null) |sub_entry| {
+                            if (sub_entry.kind != .file) continue;
+                            const name = sub_entry.name;
+                            if (name.len > 7 and std.mem.eql(u8, name[name.len - 7 ..], ".csproj")) {
+                                const csproj_path = b.pathJoin(&.{ "examples/csharp", entry.name, name });
+                                const dotnet_cmd = b.addSystemCommand(&.{
+                                    "dotnet",             "publish",             csproj_path,
+                                    "-c",                 "Release",             "-r",
+                                    runtime_id,           "-o",                  csharp_output_dir,
+                                    "-p:PublishAot=true", "-p:NativeLib=Shared", "-p:SelfContained=true",
+                                });
+                                scripts_step.dependOn(&dotnet_cmd.step);
+                                break; // one csproj per directory
+                            }
+                        }
+                    } else |_| {}
+                }
+            } else |_| {}
+        }
+    }
 
     const compile_commands_step = b.step("compile-commands", "Generate compile_commands.json for clangd");
     const update_compile_commands = b.addUpdateSourceFiles();
