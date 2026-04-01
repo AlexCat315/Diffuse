@@ -406,6 +406,18 @@ pub const assets = struct {
     pub const MaterialResource = @import("engine/assets/material_resource.zig").MaterialResource;
     /// 材质资源描述
     pub const MaterialResourceDesc = @import("engine/assets/material_resource.zig").MaterialResourceDesc;
+    /// 材质实例父链元数据
+    pub const MaterialInheritanceInfo = @import("engine/assets/material_model.zig").MaterialInheritanceInfo;
+    /// 材质图通道语义
+    pub const MaterialGraphChannel = @import("engine/assets/material_model.zig").MaterialChannel;
+    /// 材质图节点
+    pub const MaterialGraphNode = @import("engine/assets/material_model.zig").MaterialGraphNode;
+    /// 材质图
+    pub const MaterialGraph = @import("engine/assets/material_model.zig").MaterialGraph;
+    /// 复制材质图
+    pub const cloneMaterialGraphAlloc = @import("engine/assets/material_model.zig").cloneGraphAlloc;
+    /// 销毁材质图
+    pub const deinitMaterialGraph = @import("engine/assets/material_model.zig").deinitGraph;
     /// 材质 AST 纹理槽
     pub const MaterialAstTextureSlots = @import("engine/assets/material_ast.zig").TextureSlots;
     /// 材质 AST（渲染器无关中间层）
@@ -706,6 +718,8 @@ pub const scene = struct {
     /// 默认特效参数
     pub const defaultVfx = @import("engine/scene/components.zig").defaultVfx;
     /// 运行时粒子
+    /// 音频总线
+    pub const AudioBus = @import("engine/scene/components.zig").AudioBus;
     /// 音频源组件
     pub const AudioSource = @import("engine/scene/components.zig").AudioSource;
     /// 音频监听器组件
