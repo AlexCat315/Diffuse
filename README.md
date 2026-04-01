@@ -23,9 +23,13 @@ zig build -Doptimize=ReleaseFast
 zig build test
 zig build run
 zig build run -- --frames 120
+zig build run -- --project-path /absolute/path/to/MyGame
 zig build run -- mcp --transport stdio
 zig build run -- validate --root assets
 zig build run -- --backend vulkan
+zig build launcher
+zig build run-launcher
+zig build run-launcher -- --create /absolute/path/to/MyGame --name MyGame --no-launch
 zig build compile-commands
 # 基线测试（标准光栅化）
 zig build render-test
@@ -50,6 +54,12 @@ zig build render-test -- --rt-shadows --export-png
 
 - [开发规划](docs/GUAVA_ENGINE.md)
 - [Hybrid Renderer 升级路线](docs/HYBRID_RENDERER_UPGRADE.md)
+
+## 项目启动器
+
+- `guava-launcher` 是独立入口，用于创建、选择和打开带 `.guava` 标记文件的游戏项目目录。
+- 启动器当前会创建基础结构：`.guava`、`Content/Scenes` 和 `Derived`。
+- 启动器通过 `--project-path` 把项目根路径传给编辑器，这也是后续项目隔离和资源面板重构的入口。
 
 ## 协作须知
 

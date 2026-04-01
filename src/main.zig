@@ -4,6 +4,7 @@ const editor_layer_mod = @import("editor/core/layer.zig");
 const editor_console = @import("editor/ui/panels/debug/console.zig");
 const cli = @import("cli.zig");
 const commands = @import("commands.zig");
+const project_mod = @import("project.zig");
 
 pub const std_options = std.Options{
     .logFn = editor_console.logFn,
@@ -65,6 +66,38 @@ fn findProjectRootFromAbsoluteAlloc(allocator: std.mem.Allocator, start_path: []
     return null;
 }
 
+const LoadedProject = struct {
+    root_path: []u8,
+    file: project_mod.ProjectFile,
+
+    fn deinit(self: *LoadedProject, allocator: std.mem.Allocator) void {
+        allocator.free(self.root_path);
+        self.file.deinit(allocator);
+        self.* = undefined;
+    }
+};
+
+fn loadConfiguredProjectAlloc(allocator: std.mem.Allocator, options: cli.CliOptions) !?LoadedProject {
+    const raw_project_path = options.project_path orelse return null;
+    const resolved_root = try std.fs.cwd().realpathAlloc(allocator, raw_project_path);
+    errdefer allocator.free(resolved_root);
+
+    var project_file = try project_mod.loadAlloc(allocator, resolved_root);
+    errdefer project_file.deinit(allocator);
+
+    return .{
+        .root_path = resolved_root,
+        .file = project_file,
+    };
+}
+
+fn applicationNameAlloc(allocator: std.mem.Allocator, base_name: []const u8, loaded_project: ?*const LoadedProject) ![]u8 {
+    if (loaded_project) |project| {
+        return std.fmt.allocPrint(allocator, "{s} - {s}", .{ base_name, project.file.name });
+    }
+    return allocator.dupe(u8, base_name);
+}
+
 pub fn main() !u8 {
     var gpa = std.heap.GeneralPurposeAllocator(.{}){};
     const allocator = gpa.allocator();
@@ -115,8 +148,14 @@ pub fn main() !u8 {
 }
 
 fn runEngine(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
+    var loaded_project = try loadConfiguredProjectAlloc(allocator, options);
+    defer if (loaded_project) |*project| project.deinit(allocator);
+
+    const app_name = try applicationNameAlloc(allocator, "Guava Engine", if (loaded_project) |*project| project else null);
+    defer allocator.free(app_name);
+
     var app = try engine.core.Application.init(allocator, .{
-        .name = "Guava Engine",
+        .name = app_name,
         .window_width = 1440,
         .window_height = 900,
         .window_borderless = true,
@@ -128,6 +167,11 @@ fn runEngine(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
     defer app.deinit();
 
     var editor_layer = editor_layer_mod.EditorLayer{};
+    if (loaded_project) |*project| {
+        editor_layer.state.setProjectContext(project.root_path, project.file.name, project.file.content_dir, project.file.start_scene);
+        std.log.info("opening project '{s}' at {s}", .{ project.file.name, project.root_path });
+    }
+
     const mcp_runtime = try engine.mcp.runtime.Runtime.init(allocator, &app, .{
         .enable_stdio_server = false,
     });
@@ -178,8 +222,14 @@ fn runMcp(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
         return error.UnsupportedTransport;
     }
 
+    var loaded_project = try loadConfiguredProjectAlloc(allocator, options);
+    defer if (loaded_project) |*project| project.deinit(allocator);
+
+    const app_name = try applicationNameAlloc(allocator, "Guava Engine MCP", if (loaded_project) |*project| project else null);
+    defer allocator.free(app_name);
+
     var app = try engine.core.Application.init(allocator, .{
-        .name = "Guava Engine MCP",
+        .name = app_name,
         .window_width = 1440,
         .window_height = 900,
         .window_borderless = true,
@@ -190,6 +240,11 @@ fn runMcp(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
     defer app.deinit();
 
     var editor_layer = editor_layer_mod.EditorLayer{};
+    if (loaded_project) |*project| {
+        editor_layer.state.setProjectContext(project.root_path, project.file.name, project.file.content_dir, project.file.start_scene);
+        std.log.info("opening project '{s}' at {s}", .{ project.file.name, project.root_path });
+    }
+
     const mcp_runtime = try engine.mcp.runtime.Runtime.init(allocator, &app, .{
         .enable_stdio_server = true,
         .close_stdin_on_shutdown = true,

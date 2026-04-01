@@ -338,6 +338,11 @@ pub fn build(b: *std.Build) void {
     });
     configureEngineModule(b, engine_mod, target.result.os.tag, sdl_prefix);
 
+    const project_mod = b.addModule("guava_project", .{
+        .root_source_file = b.path("src/project.zig"),
+        .target = target,
+    });
+
     const exe = b.addExecutable(.{
         .name = "guava-engine",
         .root_module = b.createModule(.{
@@ -358,6 +363,19 @@ pub fn build(b: *std.Build) void {
     exe.step.dependOn(&run_shader_codegen.step);
     b.installArtifact(exe);
 
+    const launcher = b.addExecutable(.{
+        .name = "guava-launcher",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/launcher/main.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "guava_project", .module = project_mod },
+            },
+        }),
+    });
+    b.installArtifact(launcher);
+
     const run_cmd = b.addRunArtifact(exe);
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
@@ -366,6 +384,17 @@ pub fn build(b: *std.Build) void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+
+    const run_launcher_cmd = b.addRunArtifact(launcher);
+    if (b.args) |args| {
+        run_launcher_cmd.addArgs(args);
+    }
+
+    const build_launcher_step = b.step("launcher", "Build the project launcher");
+    build_launcher_step.dependOn(&launcher.step);
+
+    const run_launcher_step = b.step("run-launcher", "Run the project launcher");
+    run_launcher_step.dependOn(&run_launcher_cmd.step);
 
     const validate_cmd = b.addRunArtifact(exe);
     validate_cmd.step.dependOn(b.getInstallStep());

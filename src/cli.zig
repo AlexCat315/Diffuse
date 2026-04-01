@@ -15,9 +15,17 @@ pub const CliOptions = struct {
     backend_count: usize = 3,
     mcp_enabled: bool = false,
     mcp_transport: McpTransport = .stdio,
+    project_path: ?[]u8 = null,
 
     pub fn backends(self: *const CliOptions) []const engine.render.GraphicsAPI {
         return self.backend_order[0..self.backend_count];
+    }
+
+    pub fn deinit(self: *CliOptions, allocator: std.mem.Allocator) void {
+        if (self.project_path) |project_path| {
+            allocator.free(project_path);
+        }
+        self.* = undefined;
     }
 };
 
@@ -91,7 +99,7 @@ pub const Command = union(enum) {
 
     pub fn deinit(self: *Command, allocator: std.mem.Allocator) void {
         switch (self.*) {
-            .run => self.* = undefined,
+            .run => |*options| options.deinit(allocator),
             .validate => |*options| options.deinit(allocator),
             .benchmark => |options| if (options.allocated) allocator.free(options.scene_path),
             .@"generate-benchmark" => |options| if (options.allocated) allocator.free(options.output_path),
@@ -112,7 +120,7 @@ pub fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
 
     const command_name = args.next();
     if (command_name == null) {
-        return .{ .run = try parseRunOptions(&.{}) };
+        return .{ .run = try parseRunOptionsAlloc(allocator, &.{}) };
     }
 
     if (std.mem.eql(u8, command_name.?, "validate")) {
@@ -131,7 +139,7 @@ pub fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
         while (args.next()) |arg| {
             try remaining.append(allocator, arg);
         }
-        return .{ .run = try parseRunOptions(remaining.items) };
+        return .{ .run = try parseRunOptionsAlloc(allocator, remaining.items) };
     }
 
     if (std.mem.eql(u8, command_name.?, "benchmark")) {
@@ -197,11 +205,12 @@ pub fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
     while (args.next()) |arg| {
         try run_args.append(allocator, arg);
     }
-    return .{ .run = try parseRunOptions(run_args.items) };
+    return .{ .run = try parseRunOptionsAlloc(allocator, run_args.items) };
 }
 
-fn parseRunOptions(args: []const []const u8) !CliOptions {
+fn parseRunOptionsAlloc(allocator: std.mem.Allocator, args: []const []const u8) !CliOptions {
     var options = CliOptions{};
+    errdefer options.deinit(allocator);
     var transport_specified = false;
     var index: usize = 0;
     while (index < args.len) : (index += 1) {
@@ -228,6 +237,15 @@ fn parseRunOptions(args: []const []const u8) !CliOptions {
             if (index >= args.len) return error.InvalidArguments;
             options.mcp_transport = parseMcpTransport(args[index]) orelse return error.InvalidArguments;
             transport_specified = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--project-path")) {
+            index += 1;
+            if (index >= args.len) return error.InvalidArguments;
+            if (options.project_path) |project_path| {
+                allocator.free(project_path);
+            }
+            options.project_path = try allocator.dupe(u8, args[index]);
             continue;
         }
         return error.InvalidArguments;
