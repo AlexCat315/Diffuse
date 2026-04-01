@@ -748,7 +748,7 @@ user_project/plugins/
 
 **验收标准**:
 - [x] 引擎内置默认风格（等同于当前 PBR 渲染）
-- [ ] 用户插件文件夹放 `plugins/cartoon_style/` 后 Editor 扫描并加载
+- [ ] 用户插件通过设置中的插件设置，可以导入。
 - [x] Viewport 工具栏可切换风格，实时重绘
 - [ ] 自带卡通描边 / 水墨扩散滤镜的参数可通过 Inspector 调节
 
