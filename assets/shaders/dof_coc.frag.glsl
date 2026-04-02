@@ -1,7 +1,7 @@
 #version 450
 
 layout(location = 0) in vec2 v_uv;
-layout(location = 0) out float out_coc;
+layout(location = 0) out vec4 out_coc;
 
 layout(set = 2, binding = 0) uniform sampler2D u_color;
 layout(set = 2, binding = 1) uniform sampler2D u_depth;
@@ -39,5 +39,5 @@ void main() {
         coc = 1.0;
     }
 
-    out_coc = coc * dof.u_bokeh_radius;
+    out_coc = vec4(coc * dof.u_bokeh_radius, 0.0, 0.0, 1.0);
 }
