@@ -1,73 +1,76 @@
 # Guava Engine — MISSING ITEMS（统一缺失与生产计划）
 
-> 目标：将当前对话给出的“生产级计划”与 `GUAVA_ENGINE.md` 中**所有未完成项**统一收敛到此文档。
-> 最后更新：2026-04-01
+> 目标：将"生产级计划"与 `GUAVA_ENGINE.md` 中**所有未完成项**统一收敛到此文档。
+> 最后更新：2026-04-02
 > 维护原则：
 > - 本文件是缺失项唯一清单（Single Source of Truth）
 > - `GUAVA_ENGINE.md` 保留架构说明与阶段叙事，缺失项状态以本文件为准
+> - 已完成项收归 §0 归档；正文只保留**未完成**条目
 
 ---
 
-## 0. 状态基线（已完成 / 已验证）
+## 0. 已完成归档
 
-### 0.1 已完成（近期）
-- [x] GR-2 多场景基础闭环：SceneManager / async scene read / `DontDestroyOnLoad` / 脚本 API 桥接
-- [x] GR-2 回归测试覆盖：简称场景路径解析、回调、持久对象保留、unload 行为
-- [x] GR-1 音频 bus 与 Inspector 路由能力
-- [x] 材质系统 Phase-1 与部分 Phase-2 底座（`MaterialAst`/`MaterialGraph`）
+> 折叠区：仅记录"做了什么 + 验证日期"，不再占据正文视觉空间。
 
-### 0.2 仍需完善（即便标记“部分完成”）
-- [x] GR-2 生产化收尾：loading 进度可视化、转场策略、场景流式化、失败恢复策略
-  - 验证：`scene_manager.zig` 新增 `TransitionKind.stream` / `requestStreamScene` / errdefer 快照恢复；`viewport.zig` 新增 phase 标签+进度条+failed 提示；`theme.zig` 补 `overlay_progress_width`；`zig build player` 编译通过 (2026-04-01)
-- [x] 发布流程中的 player-only 验证（无 editor 依赖运行）
-  - 验证：新增 `src/player_main.zig`（独立入口，零 editor 依赖）；`build.zig` 新增 `player` / `run-player` 步骤；`zig build player` 编译通过 (2026-04-01)
+<details><summary>展开已完成项（点击）</summary>
+
+| 完成日期 | 条目 |
+|----------|------|
+| — | GR-2 多场景基础闭环：SceneManager / async scene read / `DontDestroyOnLoad` / 脚本 API 桥接 |
+| — | GR-2 回归测试覆盖：场景路径解析、回调、持久对象保留、unload 行为 |
+| — | GR-1 音频 bus 与 Inspector 路由能力 |
+| — | 材质系统 Phase-1 与部分 Phase-2 底座（`MaterialAst`/`MaterialGraph`） |
+| 2026-04-01 | GR-2 生产化收尾：`TransitionKind.stream` / `requestStreamScene` / errdefer 快照恢复；viewport phase 标签+进度条 |
+| 2026-04-01 | Player-only 验证：`player_main.zig` 独立入口 + `build.zig` player/run-player 步骤 |
+| 2026-04-01 | `zig build package` macOS .app bundle（binary + SDL3 dylib + assets + rpath 改写） |
+| 2026-04-02 | `zig build cook` 通过 engine validate 刷新 derived 产物（7434 文件已验证） |
+| 2026-04-02 | `zig build scripts` 编译 WASM + NativeAOT，产物打包到 `Contents/scripts/` |
+| 2026-04-01 | player-only 二进制裁剪：`player_main.zig` 不引入 editor 模块 |
+| 2026-04-01 | macOS app bundle：`zig-out/package/GuavaGame.app/` 含 Info.plist、Frameworks/libSDL3、assets/ |
+| 2026-04-02 | Windows/Linux 目录结构布局代码（待目标平台测试） |
+| 2026-04-02 | `build_manifest.json`（SHA256 × 全部打包文件，LC_ALL=C 排序） |
+| 2026-04-01 | Editor 与 Player 启动入口完全分离 |
+| 2026-04-01 | Player 运行时依赖隔离检查通过 |
+| 2026-04-01 | `PlayerBootstrapLayer` on_attach 加载 start_scene |
+| 2026-04-01 | SceneManager errdefer 快照恢复 + `failTransition` 统一错误路径 |
+| 2026-04-01 | M1 验收：`zig build run-player` 启动并加载 start_scene |
+| — | C# 与 WASM 职责边界确立（gameplay vs plugin） |
+
+</details>
 
 ---
 
-## 1. P0 阻断项（不完成就无法“生产级一键运行游戏”）
+## 1. P0 — 游戏运行时基础（阻断项）
 
-### 1.1 Build / Cook / Package 全链路（发布工程）
-现状：`build.zig` 仅有开发/测试/运行目标，无发布级打包流水线。
+> 不完成就无法"一键运行一个可玩游戏"。按依赖顺序排列。
 
-缺失：
-- [x] `zig build package`（或等价）发布目标 — `build.zig` package step 生成 macOS .app bundle（binary + SDL3 dylib + assets），rpath 自动改写 (2026-04-01)
-- [x] 资源 Cook 流程标准化 — `zig build cook` 步骤通过 engine validate 管线刷新 derived 产物；package 步骤自动打包 `assets/derived/{models,textures}` + `asset_registry.json`（7434 文件已验证） (2026-04-02)
-- [x] 脚本产物纳入构建图（C# / WASM） — `zig build scripts` 自动发现并编译 `project_plugins/*/main.zig`→WASM + `examples/csharp/*/*.csproj`→NativeAOT dylib；产物打包到 `Contents/scripts/{wasm,csharp}/` (2026-04-02)
-- [x] player-only 二进制裁剪（剔除 editor 依赖）— `src/player_main.zig` 独立入口，不引入 editor 模块；`zig build player` 通过 (2026-04-01)
-- [x] 平台产物装配：macOS app bundle — `zig-out/package/GuavaGame.app/` 含 Info.plist、Frameworks/libSDL3、assets/ (2026-04-01)
-- [x] 平台产物装配：Windows/Linux 目录结构 — build.zig 已含 Windows (`package/GuavaGame/`) 和 Linux (`package/guava-game/{bin,share}`) 布局代码，待目标平台测试 (2026-04-02)
-- [x] 构建可复现（manifest + hash） — package 步骤自动生成 `build_manifest.json`（SHA256 × 全部打包文件，LC_ALL=C 排序） (2026-04-02)
-
-验收：
-- [x] 单命令产出可分发包，并可在无源码环境直接启动游戏窗口 — `zig build package` 一键生成 .app，从 /tmp 启动验证 OK (2026-04-01)
-
-### 1.2 Player / Editor 启动分层
-现状：主启动链默认进入编辑器形态，运行模式边界不够硬。
-
-缺失：
-- [x] Editor 与 Player 启动入口完全分离 — `player_main.zig` + `build.zig` player/run-player 步骤 (2026-04-01)
-- [x] 运行时依赖隔离检查（Player 禁止 editor/ui/tooling 模块）— player 入口仅依赖 `guava` 引擎模块，编译验证无 editor import (2026-04-01)
-- [ ] 启动生命周期标准化：Boot -> Mount -> Scene Load -> Game Loop -> Shutdown
-
-验收：
-- [ ] Player 模式不加载任何编辑器层，且通过自动化 smoke test（入口已分离，smoke test 待补）
-
-### 1.3 Play Mode / GameState（GR-3）
-- [ ] `Editor / Playing / Paused / Stopped` 状态机
-- [ ] Play 时克隆场景、Stop 时恢复
+### 1.1 Play Mode / GameState（GR-3）⭐ 最高优先
+- [ ] `Editor / Playing / Paused / Stopped` 状态机完善（已有 `playback_session.zig` 基础骨架）
+- [ ] Play 时克隆场景、Stop 时恢复（已有 snapshot 机制，需验证完整性）
 - [ ] `Time.deltaTime` / `Time.timeScale` 统一语义
 - [ ] 固定步长物理 + 渲染帧插值隔离
 
-验收：
-- [ ] Play/Stop 反复切换无状态泄漏，场景稳定回滚
+验收：Play/Stop 反复切换无状态泄漏，场景稳定回滚
 
-### 1.4 输入映射系统（GR-6）
+### 1.2 启动生命周期
+- [ ] 标准化：Boot → Mount → Scene Load → Game Loop → Shutdown
+- [ ] player-only 自动化 smoke test
+
+验收：Player 模式不加载任何编辑器层，通过 smoke test
+
+### 1.3 输入映射系统（GR-6）
 - [ ] Action 映射层（键鼠/手柄统一）
 - [ ] 运行时查询 API：`isActionPressed/getAxis`
 - [ ] 编辑器映射配置与重绑定
 
-验收：
-- [ ] 键盘 + 手柄可映射到同一 action 且可重绑定
+验收：键盘 + 手柄可映射到同一 action 且可重绑定
+
+### 1.4 物理脚本宿主 API（GR-4）
+- [ ] `raycast/overlap` 脚本接口
+- [ ] Trigger / Collision 回调通路
+
+验收：脚本可完成射击检测、触发区、碰撞响应
 
 ### 1.5 游戏内 UI（GR-7）
 - [ ] Canvas 体系（分辨率自适应）
@@ -75,67 +78,152 @@
 - [ ] UI 事件系统（阻止点击穿透）
 - [ ] 脚本 UI 宿主 API
 
-验收：
-- [ ] 菜单/HUD/血条可在 player 中稳定运行
-
-### 1.6 物理脚本宿主 API（GR-4）
-- [ ] `raycast/overlap` 脚本接口
-- [ ] Trigger / Collision 回调通路
-
-验收：
-- [ ] 脚本可完成射击检测、触发区、碰撞响应
+验收：菜单/HUD/血条可在 player 中稳定运行
 
 ---
 
-## 2. P1 核心能力缺口（可做 demo，但不可稳定交付）
+## 2. P1 — Sequencer 与影视创作管线
 
-### 2.1 导航寻路（GR-5）
+> 统一 Sequencer 模型：不做"游戏模式 vs 影视模式"，而是让 Sequencer 成为游戏过场与影视渲染共用的脊柱。
+> 设计详情见 [附录 A](#附录-a统一-sequencer-架构设计)。
+
+### 2.1 Sequence 数据模型 + 资产类型
+- [ ] `engine/cinematic/` 模块：`sequence.zig` / `track.zig` / `keyframe.zig` / `evaluator.zig` / `camera_path.zig`
+- [ ] `.guava_sequence` 资产格式（JSON，含 camera_path / animation / audio / event / property 轨道）
+- [ ] Evaluator：给定时间 t → 求值所有轨道 → 驱动 World
+- [ ] Camera Path 插值（Bézier / Catmull-Rom）
+
+### 2.2 Sequencer UI 面板
+- [ ] 主面板：时间刻度尺 + 轨道列表 + 播放头（基于 `animation_editor.zig` 扩展）
+- [ ] 轨道行 UI：彩色条 + 关键帧菱形 + 拖拽
+- [ ] 关键帧属性编辑面板
+- [ ] Easing 曲线可视化编辑器
+- [ ] 3D Viewport 中相机路径样条 Gizmo
+
+### 2.3 离线渲染管线增强
+- [ ] Sequencer 驱动的 RenderOutputJob 模式（`evaluate(frame/fps)` → 路径追踪 → 导出）
+- [ ] Render Queue 面板（选择 Sequence + 渲染配置，批量排队）
+- [ ] FFmpeg 视频编码输出（H.264/H.265/ProRes）
+- [ ] EXR 序列输出完善
+
+### 2.4 游戏内序列触发 API
+- [ ] 运行时 `world.loadSequence()` / `seq.play()` / `seq.onComplete()` 接口
+- [ ] 过场动画 = Sequence 在游戏运行时播放；影视渲染 = 同一 Sequence 在 Render Queue 离线渲染
+
+---
+
+## 3. P1 — 核心引擎能力
+
+> 可做 demo 但不可稳定交付。
+
+### 3.1 导航寻路（GR-5）
 - [ ] Recast/Detour 集成
 - [ ] NavMesh bake 与可视化
 - [ ] Agent 避障
 
-### 2.2 存档系统
+### 3.2 存档系统
 - [ ] 游戏状态序列化（排除纯运行时噪声字段）
 - [ ] 存档槽位与元数据
 - [ ] 快速存读档
 
-### 2.3 脚本调试器
+### 3.3 脚本调试器
 - [ ] C#/WASM 调试适配（断点/单步/变量/调用栈）
 
-### 2.4 性能分析体系
+### 3.4 性能分析体系
 - [ ] CPU/GPU profiler、frame timeline、内存追踪、drawcall 分析
 
-### 2.5 发布运维基础
+---
+
+## 4. P2 — 内容工具链与渲染增强
+
+### 4.1 材质与内容工具
+- [ ] CT-3 节点材质编辑器 Phase-2（节点图 UI + 双后端编译）
+- [ ] CT-7 UV 编辑器
+- [ ] CT-6 面光源（raster + PT 一致）
+- [ ] CT-8 LookDev 模式增强
+
+### 4.2 渲染增强
+- [ ] R-7 SSR 粗糙度感知模糊
+- [ ] R-9/R-10/R-11 渲染风格插件化系统收尾
+
+---
+
+## 5. P2 — 发布运维与构建管线
+
+### 5.1 构建管线深化
+- [ ] BuildGraph：代码、脚本、资源统一 DAG
+- [ ] 增量构建与缓存（指纹 + 依赖）
+- [ ] 脚本产物稳定化（ABI/versioning）
+
+### 5.2 发布运维
+- [ ] 平台打包签名（Mac 签名 / Windows MSIX / Linux AppImage）
 - [ ] 符号分离与崩溃收集（minidump）
 - [ ] 自动版本回滚
 - [ ] 差量补丁（chunk/manifest）
 
 ---
 
-## 3. P2 内容创作链缺口（影响画面质量与生产效率）
+## 6. P2 — AI-Native 与插件系统
 
-### 3.1 材质与内容工具链
-- [ ] CT-3 节点材质编辑器 Phase-2（节点图 UI + 双后端编译）
-- [ ] CT-7 UV 编辑器
-- [ ] CT-6 面光源（raster + PT 一致）
-- [ ] CT-8 LookDev 模式增强
+### 6.1 MCP 与 AI 工具链
+- [ ] AI-1 Command 扩展（材质/渲染/动画域）
+- [ ] AI-2 三层 API（Scene/Asset/Render）
+- [ ] AI-3 截图反馈闭环
+- [ ] AI-4 Ghost Highlight
 
-### 3.2 动画与镜头
-- [ ] CT-4 关键帧动画 + Dope Sheet
-- [ ] CT-5 Camera Sequencer
+### 6.2 In-Memory MCP 双轨架构
+- [ ] 下沉 ToolBridge/SnapshotStore 到引擎核心
+- [ ] stdio 与内存通道统一抽象
+- [ ] lazy sync（按需快照）
+- [ ] `ai_chat` 与外部 MCP client 共用同一协议栈
 
-### 3.3 输出链
-- [ ] CT-9 渲染输出面板完善（序列/4K/tile/progress）
-- [ ] CT-10 FFmpeg 视频编码输出（H.264/H.265/ProRes）
-- [ ] PT-8 EXR 序列输出完善
+### 6.3 脚本分层（GR-8）
+- [ ] 编辑器中 scripts/plugins 独立加载与调试入口
+- [ ] IDE 一键跳转与工具链完整打通
 
-### 3.4 渲染增强残项
-- [ ] R-7 SSR 粗糙度感知模糊
-- [ ] R-9/R-10/R-11 渲染风格插件化系统收尾
+---
 
+## 7. P3 — 平台与后端
 
-集成架构：统一 Sequencer 模型
-核心思想：不是做两个模式，而是让 Sequencer 成为游戏和影视共用的脊柱。
+- [ ] RHI-4 DX12 backend 补齐（Windows 目标态落地）
+- [ ] Vulkan 路径完整性验证（不仅是可编译骨架）
+- [ ] RT 路径跨平台一致性（非 Metal 平台）
+
+---
+
+## 8. 架构冻结检查清单
+
+> 在大规模实施前执行，冻结接口避免返工。
+
+- [ ] 运行模式冻结：Editor / Player / Tooling
+- [ ] 模块依赖白名单（Player 禁 editor 依赖）
+- [ ] 资源契约冻结：源格式、cook 格式、manifest 版本策略
+- [ ] 架构 RFC（依赖图 + 禁止依赖规则）
+- [ ] 资源格式与版本兼容规范
+
+---
+
+## 9. 里程碑验收标准
+
+| 里程碑 | 条件 | 状态 |
+|--------|------|------|
+| M1 可运行 | 单命令启动 player，进入 start scene | ✅ 2026-04-01 |
+| M2 可打包 | 单命令产出可分发包，目标平台可启动 | ⬜ |
+| M3 可回滚 | 发布失败可自动回滚到上一版本 | ⬜ |
+| M4 可定位 | 崩溃后可符号化到函数与源码位置 | ⬜ |
+| M5 可持续迭代 | 增量构建可控，核心回归自动化覆盖 | ⬜ |
+
+---
+
+## 附录 A：统一 Sequencer 架构设计
+
+> 此节为设计参考，可操作条目已提取到 §2。
+
+### 核心思想
+
+不是做两个模式，而是让 Sequencer 成为游戏和影视共用的脊柱。
+
+```
 ┌─────────────────────────────────────────────────────────────┐
 │                    Guava Editor                              │
 │  ┌──────────────────────────────────────────────────────┐   │
@@ -155,27 +243,38 @@
 │  │  [◀] [▶ Play] [⏸] [◼ Stop] [🔴 Record] │ 30fps │     │   │
 │  └──────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────┘
-为什么是同一个 Sequencer 而不是"游戏模式 + 影视模式"
-UE 的经验	Guava 的对应
-UE 的 Level Sequence 既用于过场动画也用于游戏内脚本触发	Guava 的 Sequence 资产同理
-UE 的 Play 按钮 = 模拟，Sequencer Play = 时间轴驱动	Guava viewport Play = 模拟，Sequencer Play = 时间轴驱动
-UE 影视用户用 Movie Render Queue 离线渲染	Guava 已有 RenderOutputJob（PNG/EXR 序列导出）直接复用
-关键设计决策：Sequencer 和 Viewport Play 是正交的两套时钟：
+```
 
-Viewport Play = 物理 + 脚本 + AI 全部推进（游戏运行时）
-Sequencer Play = 只推进时间线上的轨道（影视预览 / 过场动画编辑）
-两者可以同时激活（在游戏运行中触发一段过场序列）
-落地路线图
-Phase 0：Sequence 数据模型 + 资产类型（1-2 周）
-新增 src/engine/cinematic/ 模块：
+### Sequencer vs Viewport Play：正交的两套时钟
+
+| | Viewport Play | Sequencer Play |
+|---|---|---|
+| 驱动内容 | 物理 + 脚本 + AI 全部推进 | 只推进时间线上的轨道 |
+| 用途 | 游戏运行时 | 影视预览 / 过场动画编辑 |
+| 可同时激活 | ✅ 游戏运行中触发过场序列 | ✅ |
+
+### UE 经验对照
+
+| UE 的经验 | Guava 的对应 |
+|-----------|-------------|
+| Level Sequence 既用于过场动画也用于游戏内脚本触发 | Guava 的 Sequence 资产同理 |
+| Play 按钮 = 模拟，Sequencer Play = 时间轴驱动 | Viewport Play = 模拟，Sequencer Play = 时间轴 |
+| Movie Render Queue 离线渲染 | 已有 RenderOutputJob（PNG/EXR 序列导出）直接复用 |
+
+### 引擎模块结构
+
+```
 engine/cinematic/
 ├── sequence.zig          # Sequence 资产：轨道列表 + 时长 + 帧率
-├── track.zig             # 轨道类型：Camera / Animation / Audio / Event / Property
-├── keyframe.zig          # 关键帧：time + value + easing curve
+├── track.zig             # Camera / Animation / Audio / Event / Property
+├── keyframe.zig          # time + value + easing curve
 ├── evaluator.zig         # 给定时间 t → 求值所有轨道 → 驱动 World
-└── camera_path.zig       # 相机轨道：Bézier/Catmull-Rom 路径插值
+└── camera_path.zig       # Bézier / Catmull-Rom 路径插值
+```
 
-Sequence 资产格式 (.guava_sequence)：
+### Sequence 资产格式 (.guava_sequence)
+
+```json
 {
   "name": "Opening Cinematic",
   "fps": 30,
@@ -193,9 +292,7 @@ Sequence 资产格式 (.guava_sequence)：
       "type": "animation",
       "target": "Character",
       "clip": "assets/animations/walk.gltf",
-      "start_time": 0.0,
-      "end_time": 5.0,
-      "blend_in": 0.2
+      "start_time": 0.0, "end_time": 5.0, "blend_in": 0.2
     },
     {
       "type": "property",
@@ -208,138 +305,24 @@ Sequence 资产格式 (.guava_sequence)：
     }
   ]
 }
-Phase 1：Sequencer UI 面板（2-3 周）
-基于你已有的 animation_editor.zig（1937 行，含 TimelineTrack + Keyframe），扩展为通用 Sequencer：
-src/editor/ui/panels/tools/sequencer/
+```
+
+### 编辑器 UI 结构
+
+```
+editor/ui/panels/tools/sequencer/
 ├── sequencer_panel.zig     # 主面板：时间尺 + 轨道列表 + 播放头
 ├── timeline_ruler.zig      # 时间刻度尺 + 帧编号
-├── track_row.zig           # 每条轨道的 UI 行（彩色条 + 关键帧菱形）
-├── keyframe_editor.zig     # 选中关键帧 → 右侧属性面板
-├── curve_editor.zig        # easing 曲线可视化编辑
-└── camera_path_gizmo.zig   # 3D 视口中绘制相机路径样条
-与 Viewport 的交互：
-
-Sequencer 播放头移动 → evaluator.evaluate(t) → 驱动世界状态 → Viewport 实时刷新
-在 Sequencer 录制模式下，拖动 3D gizmo → 自动在当前帧插入关键帧
-Viewport overlay 增加「相机轨迹线」可视化
-Phase 2：离线渲染管线增强（1-2 周）
-复用已有的 RenderOutputJob，增加 Sequencer 驱动模式：
-现有流程：  Play → 固定Δt推进 → 每帧导出 PNG/EXR
-新增流程：  Sequencer.evaluate(frame/fps) → 世界状态就位 → 路径追踪 → 导出
-新增 Render Queue 面板（类似 UE Movie Render Queue）：
-
-选择 Sequence 资产
-选择渲染配置（分辨率 / 路径追踪采样数 / 输出格式）
-批量排队（一次渲染多个序列）
-自动 FFmpeg 合成（PNG 序列 → MP4/ProRes）
-Phase 3：游戏内序列触发（1 周）
-// 游戏脚本中
-const seq = world.loadSequence("assets/sequences/opening.guava_sequence");
-seq.play();            // 非阻塞，序列与游戏循环并行
-seq.onComplete(fn() { 
-    world.enablePlayerControl();
-});
-这就是「游戏引擎 + 影视」的集成点：
-
-过场动画 = Sequence 在游戏运行时播放
-影视渲染 = 同一个 Sequence 在 Render Queue 中离线渲染
----
-
-## 4. AI-Native 与插件系统缺口
-
-### 4.1 MCP 与 AI 工具链
-- [ ] AI-1 Command 扩展（材质/渲染/动画域）
-- [ ] AI-2 三层 API（Scene/Asset/Render）
-- [ ] AI-3 截图反馈闭环
-- [ ] AI-4 Ghost Highlight
-
-### 4.2 In-Memory MCP 双轨架构
-- [ ] 下沉 ToolBridge/SnapshotStore 到引擎核心
-- [ ] stdio 与内存通道统一抽象
-- [ ] lazy sync（按需快照）
-- [ ] `ai_chat` 与外部 MCP client 共用同一协议栈
-
-### 4.3 脚本分层（GR-8）
-- [x] C# 与 WASM 职责边界确立（gameplay vs plugin）
-- [ ] 编辑器中 scripts/plugins 独立加载与调试入口
-- [ ] IDE 一键跳转与工具链完整打通
+├── track_row.zig           # 每条轨道的 UI 行
+├── keyframe_editor.zig     # 关键帧属性面板
+├── curve_editor.zig        # easing 曲线可视化
+└── camera_path_gizmo.zig   # 3D 视口相机路径样条
+```
 
 ---
 
-## 5. 平台与后端缺口
-
-- [ ] RHI-4 DX12 backend 补齐（Windows 目标态落地）
-- [ ] Vulkan 路径完整性验证（不仅是可编译骨架）
-- [ ] RT 路径跨平台一致性（非 Metal 平台）
-
----
-
-## 6. 生产级落地计划（重构后统一版）
-
-> 这一节是“怎么做到生产级”，用于替代临时最小闭环方案。执行时按阶段冻结接口，避免反复返工。
-
-### Phase A：架构冻结（2-3 周）
-- [ ] 运行模式冻结：Editor / Player / Tooling
-- [ ] 模块依赖白名单（Player 禁 editor 依赖）
-- [ ] 资源契约冻结：源格式、cook 格式、manifest 版本策略
-
-交付物：
-- [ ] 架构 RFC（依赖图 + 禁止依赖规则）
-- [ ] 资源格式与版本兼容规范
-
-### Phase B：运行时产品化（4-6 周）
-- [x] 启动入口分离与生命周期统一 — `player_main.zig` 独立入口 + `PlayerBootstrapLayer` on_attach 加载 start_scene (2026-04-01)
-- [x] 失败恢复机制（场景加载失败、资源缺失降级）— SceneManager errdefer 快照恢复 + `failTransition` 统一错误路径 (2026-04-01)
-- [ ] player-only 自动化 smoke 测试
-
-交付物：
-- [x] 可独立运行的 Player target — `zig build player` / `zig build run-player` (2026-04-01)
-- [ ] 启动链路自动化测试
-
-### Phase C：资产与脚本管线（6-10 周）
-- [ ] BuildGraph：代码、脚本、资源统一 DAG
-- [ ] 增量构建与缓存（指纹 + 依赖）
-- [ ] Cook/Pack/Stage 标准命令
-- [ ] 脚本产物稳定化（ABI/versioning）
-
-交付物：
-- [ ] 一键构建命令（dev/release）
-- [ ] 增量构建报告（耗时与命中率）
-
-### Phase D：发布与运维（6-10 周）
-- [ ] 平台打包（mac/win/linux）
-- [ ] 签名、符号、崩溃回传
-- [ ] 版本回滚与差量补丁
-
-交付物：
-- [ ] 可分发安装包
-- [ ] 崩溃符号化与回滚手册
-
-
-## 7. 里程碑验收标准（生产级）
-
-### M1：可运行
-- [x] 单命令启动 player，进入指定 start scene — `zig build run-player -- --project-path <dir>` 加载 `.guava` 中 `start_scene` (2026-04-01)
-
-### M2：可打包
-- [ ] 单命令产出可分发包，目标平台可启动
-
-### M3：可回滚
-- [ ] 发布失败可自动回滚到上一版本
-
-### M4：可定位
-- [ ] 崩溃后可符号化到函数与源码位置
-
-### M5：可持续迭代
-- [ ] 增量构建可控，核心回归自动化覆盖
-
----
-
-## 8. 与 `GUAVA_ENGINE.md` 的关系（避免重复维护）
+## 附录 B：与 `GUAVA_ENGINE.md` 的关系
 
 - `GUAVA_ENGINE.md`：保留架构、阶段叙事、方案说明。
-- `MISSING_ITEMS.md`（本文件）：仅维护“未完成项 + 优先级 + 验收标准 + 生产计划执行状态”。
-- 当某项完成时：
-  1. 在本文件打钩并补“验证证据（测试/命令/截图）”
-  2. 在 `GUAVA_ENGINE.md` 仅更新结果摘要，不再重复维护完整 checklist
-
+- `MISSING_ITEMS.md`（本文件）：仅维护"未完成项 + 优先级 + 验收标准"。
+- 完成时：移入 §0 归档并补验证日期；`GUAVA_ENGINE.md` 仅更新结果摘要。
