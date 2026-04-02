@@ -46,37 +46,37 @@
 > 不完成就无法"一键运行一个可玩游戏"。按依赖顺序排列。
 
 ### 1.1 Play Mode / GameState（GR-3）⭐ 最高优先
-- [ ] `Editor / Playing / Paused / Stopped` 状态机完善（已有 `playback_session.zig` 基础骨架）
-- [ ] Play 时克隆场景、Stop 时恢复（已有 snapshot 机制，需验证完整性）
-- [ ] `Time.deltaTime` / `Time.timeScale` 统一语义
-- [ ] 固定步长物理 + 渲染帧插值隔离
++ [x] `Editor / Playing / Paused / Stopped` 状态机完善（已有 `playback_session.zig` 基础骨架）
++ [x] Play 时克隆场景、Stop 时恢复（已有 snapshot 机制，需验证完整性）
++ [x] `Time.deltaTime` / `Time.timeScale` 统一语义（`delta_seconds * time_scale`，已在 `application.zig` 修复）
++ [x] 固定步长物理 + 渲染帧插值隔离
 
 验收：Play/Stop 反复切换无状态泄漏，场景稳定回滚
 
 ### 1.2 启动生命周期
-- [ ] 标准化：Boot → Mount → Scene Load → Game Loop → Shutdown
-- [ ] player-only 自动化 smoke test
++ [x] 标准化：Boot → Mount → Scene Load → Game Loop → Shutdown
++ [ ] player-only 自动化 smoke test
 
 验收：Player 模式不加载任何编辑器层，通过 smoke test
 
 ### 1.3 输入映射系统（GR-6）
-- [ ] Action 映射层（键鼠/手柄统一）
-- [ ] 运行时查询 API：`isActionPressed/getAxis`
-- [ ] 编辑器映射配置与重绑定
++ [x] Action 映射层（键鼠/手柄统一）— `engine/core/input_action.zig`，含 JSON 持久化
++ [x] 运行时查询 API：`isActionPressed/getAxis` — 已集成到 `ScriptContext`
++ [ ] 编辑器映射配置与重绑定（ImGui 重绑定面板）
 
 验收：键盘 + 手柄可映射到同一 action 且可重绑定
 
 ### 1.4 物理脚本宿主 API（GR-4）
-- [ ] `raycast/overlap` 脚本接口
-- [ ] Trigger / Collision 回调通路
++ [x] `raycast/overlap` 脚本接口 — 已在 `ScriptContext` 暴露
++ [x] Trigger / Collision 回调通路 — `vm_interface.zig` vtable 扩展 + `application.zig` 派发循环
 
 验收：脚本可完成射击检测、触发区、碰撞响应
 
 ### 1.5 游戏内 UI（GR-7）
-- [ ] Canvas 体系（分辨率自适应）
-- [ ] 运行时控件（Button/Text/Image/Progress）
-- [ ] UI 事件系统（阻止点击穿透）
-- [ ] 脚本 UI 宿主 API
++ [x] Canvas 体系（分辨率自适应）— `engine/runtime_ui/canvas.zig`（scale_to_fit / constant_pixel_size）
++ [x] 运行时控件（Button/Text/Image/Progress）— `engine/runtime_ui/widget.zig` + `canvas.zig` 工厂方法
++ [x] UI 事件系统（阻止点击穿透）— `processPointerEvent()` 逆序命中测试，`blocks_pointer` 标志
++ [x] 脚本 UI 宿主 API — `ScriptContext.uiAddText/uiAddButton/uiSetProgress/uiClear` 等方法
 
 验收：菜单/HUD/血条可在 player 中稳定运行
 

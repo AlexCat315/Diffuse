@@ -93,6 +93,12 @@ pub const core = struct {
     pub const PlaybackController = @import("engine/core/layer.zig").PlaybackController;
     /// 游戏运行时状态
     pub const GameState = @import("engine/core/layer.zig").GameState;
+    /// 输入动作映射系统 (GR-6)
+    pub const ActionMap = @import("engine/core/input_action.zig").ActionMap;
+    /// 输入动作绑定
+    pub const ActionBinding = @import("engine/core/input_action.zig").ActionBinding;
+    /// 输入动作每帧状态
+    pub const ActionFrameState = @import("engine/core/input_action.zig").ActionFrameState;
     /// 平台抽象
     pub const Platform = @import("engine/core/platform.zig").Platform;
     /// 检测当前运行平台
@@ -128,6 +134,12 @@ pub const ui = struct {
     /// Dear ImGui 绑定
     pub const ImGui = @import("engine/ui/imgui.zig");
 };
+
+/// 游戏运行时 UI 模块（GR-7）
+///
+/// 基于 Canvas/Widget 的游戏内 UI 系统。
+/// 支持文本、按钮、进度条、面板、图片控件。
+pub const runtime_ui = @import("engine/runtime_ui/mod.zig");
 
 /// MCP 模块
 ///
