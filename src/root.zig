@@ -143,6 +143,13 @@ pub const ui = struct {
 /// 支持文本、按钮、进度条、面板、图片控件。
 pub const runtime_ui = @import("engine/runtime_ui/mod.zig");
 
+/// 影视/过场动画模块
+///
+/// 提供 Sequence 资产模型、轨道（Camera/Animation/Audio/Event/Property）、
+/// 关键帧插值（Easing, Bézier, Catmull-Rom）、以及求值器（Evaluator）。
+/// `.guava_sequence` 同时服务于游戏过场与离线影视渲染。
+pub const cinematic = @import("engine/cinematic/mod.zig");
+
 /// MCP 模块
 ///
 /// 提供面向 AI 客户端的协议层、资源快照与服务端实现。

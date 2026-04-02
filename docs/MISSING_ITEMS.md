@@ -88,14 +88,14 @@
 > 设计详情见 [附录 A](#附录-a统一-sequencer-架构设计)。
 
 ### 2.1 Sequence 数据模型 + 资产类型
-- [ ] `engine/cinematic/` 模块：`sequence.zig` / `track.zig` / `keyframe.zig` / `evaluator.zig` / `camera_path.zig`
-- [ ] `.guava_sequence` 资产格式（JSON，含 camera_path / animation / audio / event / property 轨道）
-- [ ] Evaluator：给定时间 t → 求值所有轨道 → 驱动 World
-- [ ] Camera Path 插值（Bézier / Catmull-Rom）
+- [x] `engine/cinematic/` 模块：`sequence.zig` / `track.zig` / `keyframe.zig` / `evaluator.zig` / `camera_path.zig`
+- [x] `.guava_sequence` 资产格式（JSON，含 camera_path / animation / audio / event / property 轨道）
+- [x] Evaluator：给定时间 t → 求值所有轨道 → 驱动 World
+- [x] Camera Path 插值（Bézier / Catmull-Rom）
 
 ### 2.2 Sequencer UI 面板
-- [ ] 主面板：时间刻度尺 + 轨道列表 + 播放头（基于 `animation_editor.zig` 扩展）
-- [ ] 轨道行 UI：彩色条 + 关键帧菱形 + 拖拽
+- [x] 主面板：时间刻度尺 + 轨道列表 + 播放头（基于 `animation_editor.zig` 扩展）
+- [x] 轨道行 UI：彩色条 + 关键帧菱形 + 拖拽
 - [ ] 关键帧属性编辑面板
 - [ ] Easing 曲线可视化编辑器
 - [ ] 3D Viewport 中相机路径样条 Gizmo
