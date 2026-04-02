@@ -96,9 +96,9 @@
 ### 2.2 Sequencer UI 面板
 - [x] 主面板：时间刻度尺 + 轨道列表 + 播放头（基于 `animation_editor.zig` 扩展）
 - [x] 轨道行 UI：彩色条 + 关键帧菱形 + 拖拽
-- [ ] 关键帧属性编辑面板
-- [ ] Easing 曲线可视化编辑器
-- [ ] 3D Viewport 中相机路径样条 Gizmo
+- [x] 关键帧属性编辑面板
+- [x] Easing 曲线可视化编辑器
+- [x] 3D Viewport 中相机路径样条 Gizmo
 
 ### 2.3 离线渲染管线增强
 - [ ] Sequencer 驱动的 RenderOutputJob 模式（`evaluate(frame/fps)` → 路径追踪 → 导出）
