@@ -8,14 +8,6 @@ const engine_include_paths = [_][]const u8{
     "third_party/lunasvg/source",
     "third_party/lunasvg/plutovg/include",
     "third_party/lunasvg/plutovg/source",
-    "third_party/wamr/core",
-    "third_party/wamr/core/iwasm/include",
-    "third_party/wamr/core/iwasm/common",
-    "third_party/wamr/core/iwasm/interpreter",
-    "third_party/wamr/core/shared/mem-alloc",
-    "third_party/wamr/core/shared/platform/include",
-    "third_party/wamr/core/shared/platform/common/libc-util",
-    "third_party/wamr/core/shared/utils",
     "third_party/soloud/include",
     "third_party/recast/Recast/Include",
     "third_party/recast/Detour/Include",
@@ -39,84 +31,6 @@ const plutovg_c_sources = [_][]const u8{
     "third_party/lunasvg/plutovg/source/plutovg-surface.c",
     "src/engine/assets/stb_image_impl.c",
     "src/engine/assets/stb_image_write_impl.c",
-};
-
-const wamr_mem_alloc_c_sources = [_][]const u8{
-    "third_party/wamr/core/shared/mem-alloc/mem_alloc.c",
-    "third_party/wamr/core/shared/mem-alloc/ems/ems_alloc.c",
-    "third_party/wamr/core/shared/mem-alloc/ems/ems_gc.c",
-    "third_party/wamr/core/shared/mem-alloc/ems/ems_hmu.c",
-    "third_party/wamr/core/shared/mem-alloc/ems/ems_kfc.c",
-};
-
-const wamr_utils_c_sources = [_][]const u8{
-    "third_party/wamr/core/shared/utils/bh_assert.c",
-    "third_party/wamr/core/shared/utils/bh_bitmap.c",
-    "third_party/wamr/core/shared/utils/bh_common.c",
-    "third_party/wamr/core/shared/utils/bh_hashmap.c",
-    "third_party/wamr/core/shared/utils/bh_leb128.c",
-    "third_party/wamr/core/shared/utils/bh_list.c",
-    "third_party/wamr/core/shared/utils/bh_log.c",
-    "third_party/wamr/core/shared/utils/bh_queue.c",
-    "third_party/wamr/core/shared/utils/bh_vector.c",
-    "third_party/wamr/core/shared/utils/runtime_timer.c",
-};
-
-const wamr_common_c_sources = [_][]const u8{
-    "third_party/wamr/core/iwasm/common/arch/invokeNative_general.c",
-    "third_party/wamr/core/iwasm/common/wasm_blocking_op.c",
-    "third_party/wamr/core/iwasm/common/wasm_c_api.c",
-    "third_party/wamr/core/iwasm/common/wasm_exec_env.c",
-    "third_party/wamr/core/iwasm/common/wasm_loader_common.c",
-    "third_party/wamr/core/iwasm/common/wasm_memory.c",
-    "third_party/wamr/core/iwasm/common/wasm_native.c",
-    "third_party/wamr/core/iwasm/common/wasm_runtime_common.c",
-    "third_party/wamr/core/iwasm/common/wasm_shared_memory.c",
-};
-
-const wamr_interpreter_c_sources = [_][]const u8{
-    "third_party/wamr/core/iwasm/interpreter/wasm_interp_classic.c",
-    "third_party/wamr/core/iwasm/interpreter/wasm_loader.c",
-    "third_party/wamr/core/iwasm/interpreter/wasm_runtime.c",
-};
-
-const wamr_posix_platform_c_sources = [_][]const u8{
-    "third_party/wamr/core/shared/platform/common/libc-util/libc_errno.c",
-    "third_party/wamr/core/shared/platform/common/math/math.c",
-    "third_party/wamr/core/shared/platform/common/memory/mremap.c",
-    "third_party/wamr/core/shared/platform/common/posix/posix_blocking_op.c",
-    "third_party/wamr/core/shared/platform/common/posix/posix_clock.c",
-    "third_party/wamr/core/shared/platform/common/posix/posix_file.c",
-    "third_party/wamr/core/shared/platform/common/posix/posix_malloc.c",
-    "third_party/wamr/core/shared/platform/common/posix/posix_memmap.c",
-    "third_party/wamr/core/shared/platform/common/posix/posix_sleep.c",
-    "third_party/wamr/core/shared/platform/common/posix/posix_socket.c",
-    "third_party/wamr/core/shared/platform/common/posix/posix_thread.c",
-    "third_party/wamr/core/shared/platform/common/posix/posix_time.c",
-};
-
-const wamr_linux_platform_c_sources = [_][]const u8{
-    "third_party/wamr/core/shared/platform/linux/platform_init.c",
-};
-
-const wamr_darwin_platform_c_sources = [_][]const u8{
-    "third_party/wamr/core/shared/platform/darwin/platform_init.c",
-};
-
-const wamr_windows_platform_c_sources = [_][]const u8{
-    "third_party/wamr/core/shared/platform/windows/platform_init.c",
-    "third_party/wamr/core/shared/platform/windows/win_clock.c",
-    "third_party/wamr/core/shared/platform/windows/win_file.c",
-    "third_party/wamr/core/shared/platform/windows/win_malloc.c",
-    "third_party/wamr/core/shared/platform/windows/win_memmap.c",
-    "third_party/wamr/core/shared/platform/windows/win_socket.c",
-    "third_party/wamr/core/shared/platform/windows/win_thread.c",
-    "third_party/wamr/core/shared/platform/windows/win_time.c",
-    "third_party/wamr/core/shared/platform/windows/win_util.c",
-};
-
-const wamr_bridge_c_sources = [_][]const u8{
-    "src/engine/script/wasm_vm_bridge.c",
 };
 
 /// SoLoud audio engine core implementation
@@ -196,7 +110,7 @@ const soloud_backend_cpp_sources = [_][]const u8{
     "third_party/soloud/src/backend/miniaudio/soloud_miniaudio.cpp",
 };
 
-/// SoLoud C language API wrapper (for potential WASM/scripting integration)
+/// SoLoud C language API wrapper
 const soloud_c_api_cpp_sources = [_][]const u8{
     "third_party/soloud/src/c_api/soloud_c.cpp",
 };
@@ -234,7 +148,6 @@ const macos_objcpp_sources = [_][]const u8{
 };
 
 const windows_cpp_sources = [_][]const u8{
-    "third_party/wamr/core/shared/platform/windows/win_atomic.cpp",
     "src/engine/platform/window_native_windows.cpp",
 };
 
@@ -256,27 +169,6 @@ const plutovg_c_flags = [_][]const u8{
     "-std=c11",
     "-DPLUTOVG_BUILD=1",
     "-DPLUTOVG_BUILD_STATIC=1",
-};
-
-const wamr_base_c_flags = [_][]const u8{
-    "-std=c11",
-    "-DBH_MALLOC=wasm_runtime_malloc",
-    "-DBH_FREE=wasm_runtime_free",
-    "-DWAMR_BUILD_INVOKE_NATIVE_GENERAL=1",
-    "-DWAMR_DISABLE_APP_ENTRY=1",
-    "-DWASM_ENABLE_INTERP=1",
-    "-DWASM_ENABLE_FAST_INTERP=0",
-    "-DWASM_ENABLE_AOT=0",
-    "-DWASM_ENABLE_JIT=0",
-    "-DWASM_ENABLE_FAST_JIT=0",
-    "-DWASM_ENABLE_LIBC_BUILTIN=0",
-    "-DWASM_ENABLE_LIBC_WASI=0",
-    "-DWASM_ENABLE_MULTI_MODULE=0",
-    "-DWASM_ENABLE_SHARED_MEMORY=0",
-    "-DWASM_ENABLE_BULK_MEMORY=1",
-    "-DWASM_ENABLE_DUMP_CALL_STACK=1",
-    "-DWASM_ENABLE_CUSTOM_NAME_SECTION=1",
-    "-DWASM_ENABLE_LOAD_CUSTOM_SECTION=1",
 };
 
 const engine_cpp_flags = [_][]const u8{
@@ -683,9 +575,9 @@ pub fn build(b: *std.Build) void {
         );
         gen_manifest.step.dependOn(&install_registry.step);
 
-        // Pre-compiled scripts → .app/Contents/scripts/ (WASM + NativeAOT)
+        // Pre-compiled scripts → .app/Contents/scripts/ (NativeAOT)
         // These are staged from zig-out/scripts/ which is populated by `zig build scripts`
-        inline for (.{ "wasm", "csharp" }) |subdir| {
+        inline for (.{"csharp"}) |subdir| {
             const scripts_source_dir = b.getInstallPath(.{ .custom = "scripts/" ++ subdir }, "");
             if (std.fs.cwd().access(scripts_source_dir, .{})) |_| {
                 const install_scripts = b.addInstallDirectory(.{
@@ -763,40 +655,8 @@ pub fn build(b: *std.Build) void {
     cook_step.dependOn(&cook_cmd.step);
 
     // ---- Scripts step: compile project scripts into distributable artifacts ----
-    const scripts_step = b.step("scripts", "Compile project scripts (Zig plugins→WASM, C#→NativeAOT)");
+    const scripts_step = b.step("scripts", "Compile project scripts (C# NativeAOT)");
     {
-        // Discover and compile WASM plugins from project_plugins/
-        var found_wasm_plugins = false;
-        if (std.fs.cwd().openDir("project_plugins", .{ .iterate = true })) |dir| {
-            var iter = dir.iterate();
-            while (iter.next() catch null) |entry| {
-                if (entry.kind != .directory) continue;
-                const main_zig_path = b.pathJoin(&.{ "project_plugins", entry.name, "main.zig" });
-                if (std.fs.cwd().access(main_zig_path, .{})) |_| {
-                    // wasm32-freestanding dynamic is not supported by addLibrary;
-                    // invoke zig build-lib directly (same as wasm_compiler.zig does at runtime)
-                    const wasm_output_dir = b.getInstallPath(.{ .custom = "scripts/wasm" }, "");
-                    const emit_arg = std.fmt.allocPrint(b.allocator, "-femit-bin={s}/{s}.wasm", .{
-                        wasm_output_dir, entry.name,
-                    }) catch @panic("OOM");
-                    const mkdir_wasm = b.addSystemCommand(&.{ "mkdir", "-p", wasm_output_dir });
-                    const compile_wasm = b.addSystemCommand(&.{
-                        b.graph.zig_exe,       "build-exe",
-                        main_zig_path,         "-target",
-                        "wasm32-freestanding", "-fno-entry",
-                        "-O",                  "ReleaseFast",
-                        emit_arg,
-                    });
-                    compile_wasm.step.dependOn(&mkdir_wasm.step);
-                    scripts_step.dependOn(&compile_wasm.step);
-                    found_wasm_plugins = true;
-                } else |_| {}
-            }
-        } else |_| {}
-        if (!found_wasm_plugins) {
-            std.log.info("scripts: no WASM plugins found in project_plugins/", .{});
-        }
-
         // Discover and compile C# NativeAOT projects from examples/csharp/
         const rid: ?[]const u8 = switch (target.result.os.tag) {
             .macos => switch (target.result.cpu.arch) {
@@ -864,14 +724,11 @@ fn configureEngineModule(
 ) void {
     const sdl_include_path = b.pathJoin(&.{ sdl_prefix, "include" });
     const sdl_library_path = b.pathJoin(&.{ sdl_prefix, "lib" });
-    const wamr_c_sources = wamrCSources(b, os_tag);
-    const wamr_c_flags = wamrCFlags(b, os_tag);
 
     module.addIncludePath(.{ .cwd_relative = sdl_include_path });
     for (engine_include_paths) |include_path| {
         module.addIncludePath(.{ .cwd_relative = include_path });
     }
-    module.addIncludePath(.{ .cwd_relative = wamrPlatformIncludePath(os_tag) });
 
     module.addLibraryPath(.{ .cwd_relative = sdl_library_path });
     if (os_tag != .windows) {
@@ -881,10 +738,6 @@ fn configureEngineModule(
     module.addCSourceFiles(.{
         .files = &plutovg_c_sources,
         .flags = &plutovg_c_flags,
-    });
-    module.addCSourceFiles(.{
-        .files = wamr_c_sources,
-        .flags = wamr_c_flags,
     });
     module.addCSourceFiles(.{
         .files = &engine_cpp_sources,
@@ -986,9 +839,6 @@ fn generateCompileCommandsJson(
     const c_compiler = compilerPath(b, .c, os_tag);
     const cpp_compiler = compilerPath(b, .cpp, os_tag);
     const objcpp_compiler = compilerPath(b, .objcpp, os_tag);
-    const wamr_c_sources = wamrCSources(b, os_tag);
-    const wamr_c_flags = wamrCFlags(b, os_tag);
-    const wamr_platform_include_path = b.pathFromRoot(wamrPlatformIncludePath(os_tag));
 
     var entries: std.ArrayList(CompileCommand) = .empty;
     defer entries.deinit(b.allocator);
@@ -1002,18 +852,7 @@ fn generateCompileCommandsJson(
         c_compiler,
         &plutovg_c_flags,
         &plutovg_c_sources,
-        &.{wamr_platform_include_path},
-    );
-    appendCompileCommands(
-        b,
-        &entries,
-        root_dir,
-        sdl_include_path,
-        sysroot,
-        c_compiler,
-        wamr_c_flags,
-        wamr_c_sources,
-        &.{wamr_platform_include_path},
+        &.{},
     );
     appendCompileCommands(
         b,
@@ -1024,7 +863,7 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &engine_cpp_flags,
         &engine_cpp_sources,
-        &.{wamr_platform_include_path},
+        &.{},
     );
     appendCompileCommands(
         b,
@@ -1035,7 +874,7 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &soloud_cpp_flags,
         &soloud_core_cpp_sources,
-        &.{wamr_platform_include_path},
+        &.{},
     );
     appendCompileCommands(
         b,
@@ -1046,7 +885,7 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &soloud_cpp_flags,
         &soloud_wav_cpp_sources,
-        &.{wamr_platform_include_path},
+        &.{},
     );
     appendCompileCommands(
         b,
@@ -1057,7 +896,7 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &soloud_cpp_flags,
         &soloud_extra_audiosource_cpp_sources,
-        &.{wamr_platform_include_path},
+        &.{},
     );
     appendCompileCommands(
         b,
@@ -1068,7 +907,7 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &soloud_cpp_flags,
         &soloud_filter_cpp_sources,
-        &.{wamr_platform_include_path},
+        &.{},
     );
     appendCompileCommands(
         b,
@@ -1079,7 +918,7 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &soloud_cpp_flags,
         &soloud_backend_cpp_sources,
-        &.{wamr_platform_include_path},
+        &.{},
     );
     appendCompileCommands(
         b,
@@ -1090,7 +929,7 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &soloud_cpp_flags,
         &soloud_c_api_cpp_sources,
-        &.{wamr_platform_include_path},
+        &.{},
     );
     appendCompileCommands(
         b,
@@ -1101,7 +940,7 @@ fn generateCompileCommandsJson(
         c_compiler,
         &soloud_c_flags,
         &soloud_support_c_sources,
-        &.{wamr_platform_include_path},
+        &.{},
     );
     const jolt_cpp_sources = collectSourceFiles(b, "third_party/jolt/Jolt", ".cpp");
     appendCompileCommands(
@@ -1113,7 +952,7 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &engine_cpp_flags,
         jolt_cpp_sources,
-        &.{wamr_platform_include_path},
+        &.{},
     );
     const recast_cpp_sources = collectSourceFiles(b, "third_party/recast/Recast/Source", ".cpp");
     appendCompileCommands(
@@ -1125,7 +964,7 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &engine_cpp_flags,
         recast_cpp_sources,
-        &.{wamr_platform_include_path},
+        &.{},
     );
     const detour_cpp_sources = collectSourceFiles(b, "third_party/recast/Detour/Source", ".cpp");
     appendCompileCommands(
@@ -1137,7 +976,7 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &engine_cpp_flags,
         detour_cpp_sources,
-        &.{wamr_platform_include_path},
+        &.{},
     );
     const detour_crowd_cpp_sources = collectSourceFiles(b, "third_party/recast/DetourCrowd/Source", ".cpp");
     appendCompileCommands(
@@ -1149,7 +988,7 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &engine_cpp_flags,
         detour_crowd_cpp_sources,
-        &.{wamr_platform_include_path},
+        &.{},
     );
 
     if (os_tag == .macos) {
@@ -1162,7 +1001,7 @@ fn generateCompileCommandsJson(
             objcpp_compiler,
             &macos_objcpp_flags,
             &macos_objcpp_sources,
-            &.{wamr_platform_include_path},
+            &.{},
         );
     }
     if (os_tag == .windows) {
@@ -1175,7 +1014,7 @@ fn generateCompileCommandsJson(
             cpp_compiler,
             &windows_platform_cpp_flags,
             &windows_cpp_sources,
-            &.{wamr_platform_include_path},
+            &.{},
         );
     }
 
@@ -1225,58 +1064,6 @@ fn appendCompileCommands(
             .arguments = arguments.toOwnedSlice(b.allocator) catch @panic("OOM"),
         }) catch @panic("OOM");
     }
-}
-
-fn wamrPlatformIncludePath(os_tag: std.Target.Os.Tag) []const u8 {
-    return switch (os_tag) {
-        .macos => "third_party/wamr/core/shared/platform/darwin",
-        .linux => "third_party/wamr/core/shared/platform/linux",
-        .windows => "third_party/wamr/core/shared/platform/windows",
-        else => @panic("unsupported WAMR host platform"),
-    };
-}
-
-fn wamrCFlags(b: *std.Build, os_tag: std.Target.Os.Tag) []const []const u8 {
-    var list: std.ArrayList([]const u8) = .empty;
-    defer list.deinit(b.allocator);
-
-    list.appendSlice(b.allocator, &wamr_base_c_flags) catch @panic("OOM");
-    list.append(b.allocator, switch (os_tag) {
-        .macos => "-DBH_PLATFORM_DARWIN",
-        .linux => "-DBH_PLATFORM_LINUX",
-        .windows => "-DBH_PLATFORM_WINDOWS",
-        else => @panic("unsupported WAMR host platform"),
-    }) catch @panic("OOM");
-
-    return list.toOwnedSlice(b.allocator) catch @panic("OOM");
-}
-
-fn wamrCSources(b: *std.Build, os_tag: std.Target.Os.Tag) []const []const u8 {
-    var list: std.ArrayList([]const u8) = .empty;
-    defer list.deinit(b.allocator);
-
-    list.appendSlice(b.allocator, &wamr_mem_alloc_c_sources) catch @panic("OOM");
-    list.appendSlice(b.allocator, &wamr_utils_c_sources) catch @panic("OOM");
-    list.appendSlice(b.allocator, &wamr_common_c_sources) catch @panic("OOM");
-    list.appendSlice(b.allocator, &wamr_interpreter_c_sources) catch @panic("OOM");
-    list.appendSlice(b.allocator, &wamr_bridge_c_sources) catch @panic("OOM");
-
-    switch (os_tag) {
-        .macos => {
-            list.appendSlice(b.allocator, &wamr_posix_platform_c_sources) catch @panic("OOM");
-            list.appendSlice(b.allocator, &wamr_darwin_platform_c_sources) catch @panic("OOM");
-        },
-        .linux => {
-            list.appendSlice(b.allocator, &wamr_posix_platform_c_sources) catch @panic("OOM");
-            list.appendSlice(b.allocator, &wamr_linux_platform_c_sources) catch @panic("OOM");
-        },
-        .windows => {
-            list.appendSlice(b.allocator, &wamr_windows_platform_c_sources) catch @panic("OOM");
-        },
-        else => @panic("unsupported WAMR host platform"),
-    }
-
-    return list.toOwnedSlice(b.allocator) catch @panic("OOM");
 }
 
 fn compilerPath(b: *std.Build, language: Language, os_tag: std.Target.Os.Tag) []const u8 {

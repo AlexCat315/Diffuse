@@ -157,7 +157,7 @@ pub const mcp = @import("engine/mcp/mod.zig");
 
 /// 脚本模块
 ///
-/// 提供脚本运行时、C# NativeAOT gameplay VM、WASM plugin VM 与参数反射工具。
+/// 提供脚本运行时、C# NativeAOT gameplay VM 与参数反射工具。
 pub const script = @import("engine/script/script.zig");
 
 /// 渲染硬件接口（RHI）模块
@@ -611,7 +611,7 @@ pub const navigation = struct {
 
 /// 音频系统模块
 ///
-/// 提供完整的音频播放、3D 空间音效、混音器控制和 WASM 脚本接口。
+/// 提供完整的音频播放、3D 空间音效、混音器控制和脚本接口。
 /// 基于 SoLoud 音频引擎，支持 WAV/OGG 格式。
 pub const audio = @import("engine/audio/mod.zig");
 
