@@ -597,6 +597,18 @@ pub const physics = struct {
     pub const step = @import("engine/physics/system.zig").step;
 };
 
+/// 导航寻路模块
+///
+/// 提供 NavMesh 构建、寻路查询和群体避障功能。
+/// 基于 Recast/Detour 导航库。
+pub const navigation = struct {
+    pub const NavMesh = @import("engine/navigation/navigation.zig").NavMesh;
+    pub const NavMeshParams = @import("engine/navigation/navigation.zig").NavMeshParams;
+    pub const Crowd = @import("engine/navigation/navigation.zig").Crowd;
+    pub const AgentParams = @import("engine/navigation/navigation.zig").AgentParams;
+    pub const NavSystem = @import("engine/navigation/nav_system.zig").NavSystem;
+};
+
 /// 音频系统模块
 ///
 /// 提供完整的音频播放、3D 空间音效、混音器控制和 WASM 脚本接口。
@@ -710,6 +722,12 @@ pub const scene = struct {
     pub const loadWorldFromPath = @import("engine/scene/scene.zig").loadWorldFromPath;
     /// 从路径加载世界及运行时状态
     pub const loadWorldWithRuntimeStateFromPath = @import("engine/scene/scene.zig").loadWorldWithRuntimeStateFromPath;
+    /// 存档系统
+    pub const SaveSystem = @import("engine/scene/save_system.zig").SaveSystem;
+    /// 存档元数据
+    pub const SaveMeta = @import("engine/scene/save_system.zig").SaveMeta;
+    /// 存档选项
+    pub const SaveOptions = @import("engine/scene/save_system.zig").SaveOptions;
     /// 变换组件
     pub const Transform = @import("engine/scene/components.zig").Transform;
     /// 相机组件
@@ -753,6 +771,8 @@ pub const scene = struct {
     pub const AudioListener = @import("engine/scene/components.zig").AudioListener;
     /// 音频剪辑句柄类型
     pub const AudioClipHandle = @import("engine/scene/components.zig").AudioClipHandle;
+    /// 导航代理组件
+    pub const NavAgent = @import("engine/scene/components.zig").NavAgent;
     /// 场景运行时状态快照
     pub const SceneRuntimeState = @import("engine/scene/scene.zig").SceneRuntimeState;
     pub const VfxRuntimeParticle = @import("engine/scene/scene.zig").VfxRuntimeParticle;

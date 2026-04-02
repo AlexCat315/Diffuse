@@ -101,14 +101,14 @@
 - [x] 3D Viewport 中相机路径样条 Gizmo
 
 ### 2.3 离线渲染管线增强
-- [ ] Sequencer 驱动的 RenderOutputJob 模式（`evaluate(frame/fps)` → 路径追踪 → 导出）
-- [ ] Render Queue 面板（选择 Sequence + 渲染配置，批量排队）
-- [ ] FFmpeg 视频编码输出（H.264/H.265/ProRes）
-- [ ] EXR 序列输出完善
+- [x] Sequencer 驱动的 RenderOutputJob 模式（`evaluate(frame/fps)` → 路径追踪 → 导出）
+- [x] Render Queue 面板（选择 Sequence + 渲染配置，批量排队）
+- [x] FFmpeg 视频编码输出（H.264/H.265/ProRes）
+- [x] EXR 序列输出完善
 
 ### 2.4 游戏内序列触发 API
-- [ ] 运行时 `world.loadSequence()` / `seq.play()` / `seq.onComplete()` 接口
-- [ ] 过场动画 = Sequence 在游戏运行时播放；影视渲染 = 同一 Sequence 在 Render Queue 离线渲染
+- [x] 运行时 `CutscenePlayer.load()` / `.play()` / `.onComplete()` 接口（cinematic/cutscene_player.zig）
+- [x] 过场动画 = Sequence 在游戏运行时播放（CutscenePlayer）；影视渲染 = 同一 Sequence 在 Render Queue 离线渲染（RenderOutputJob）
 
 ---
 
@@ -117,14 +117,14 @@
 > 可做 demo 但不可稳定交付。
 
 ### 3.1 导航寻路（GR-5）
-- [ ] Recast/Detour 集成
-- [ ] NavMesh bake 与可视化
-- [ ] Agent 避障
+- [x] Recast/Detour 集成（third_party/recast/ + recast_bridge.cpp）
+- [x] NavMesh bake 与可视化（NavSystem.bake + getDebugMesh）
+- [x] Agent 避障（DetourCrowd 集成 + NavAgent 组件）
 
 ### 3.2 存档系统
-- [ ] 游戏状态序列化（排除纯运行时噪声字段）
-- [ ] 存档槽位与元数据
-- [ ] 快速存读档
+- [x] 游戏状态序列化（排除纯运行时噪声字段）
+- [x] 存档槽位与元数据
+- [x] 快速存读档
 
 ### 3.3 脚本调试器
 - [ ] C#/WASM 调试适配（断点/单步/变量/调用栈）

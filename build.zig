@@ -17,7 +17,11 @@ const engine_include_paths = [_][]const u8{
     "third_party/wamr/core/shared/platform/common/libc-util",
     "third_party/wamr/core/shared/utils",
     "third_party/soloud/include",
+    "third_party/recast/Recast/Include",
+    "third_party/recast/Detour/Include",
+    "third_party/recast/DetourCrowd/Include",
     "src/engine/assets",
+    "src/engine/navigation",
     "src/engine/ui",
 };
 
@@ -217,6 +221,7 @@ const engine_cpp_sources = [_][]const u8{
     "src/engine/ui/imgui_bridge.cpp",
     "src/engine/ui/imgui_widgets.cpp",
     "src/engine/physics/jolt_bridge.cpp",
+    "src/engine/navigation/recast_bridge.cpp",
 };
 
 const macos_objcpp_sources = [_][]const u8{
@@ -916,6 +921,22 @@ fn configureEngineModule(
     const jolt_cpp_sources = collectSourceFiles(b, "third_party/jolt/Jolt", ".cpp");
     module.addCSourceFiles(.{
         .files = jolt_cpp_sources,
+        .flags = &engine_cpp_flags,
+    });
+
+    const recast_cpp_sources = collectSourceFiles(b, "third_party/recast/Recast/Source", ".cpp");
+    module.addCSourceFiles(.{
+        .files = recast_cpp_sources,
+        .flags = &engine_cpp_flags,
+    });
+    const detour_cpp_sources = collectSourceFiles(b, "third_party/recast/Detour/Source", ".cpp");
+    module.addCSourceFiles(.{
+        .files = detour_cpp_sources,
+        .flags = &engine_cpp_flags,
+    });
+    const detour_crowd_cpp_sources = collectSourceFiles(b, "third_party/recast/DetourCrowd/Source", ".cpp");
+    module.addCSourceFiles(.{
+        .files = detour_crowd_cpp_sources,
         .flags = &engine_cpp_flags,
     });
     if (os_tag == .macos) {
