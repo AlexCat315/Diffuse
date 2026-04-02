@@ -11,6 +11,7 @@ const LauncherArgs = struct {
     create_path: ?[]u8 = null,
     name: ?[]u8 = null,
     engine_path: ?[]u8 = null,
+    extra_args: std.ArrayList([]u8) = .empty,
     no_launch: bool = false,
     help: bool = false,
 
@@ -19,6 +20,8 @@ const LauncherArgs = struct {
         if (self.create_path) |value| allocator.free(value);
         if (self.name) |value| allocator.free(value);
         if (self.engine_path) |value| allocator.free(value);
+        for (self.extra_args.items) |arg| allocator.free(arg);
+        self.extra_args.deinit(allocator);
         self.* = undefined;
     }
 };
@@ -110,12 +113,13 @@ pub fn main() !u8 {
         try resolveEngineExecutableAlloc(allocator);
     defer allocator.free(engine_path);
 
-    try launchEngine(allocator, engine_path, selection.?.root_path);
+    try launchEngine(allocator, engine_path, selection.?.root_path, args.extra_args.items);
     return 0;
 }
 
 fn parseArgsAlloc(allocator: std.mem.Allocator) !LauncherArgs {
     var result = LauncherArgs{};
+    errdefer result.deinit(allocator);
     var args = try std.process.argsWithAllocator(allocator);
     defer args.deinit();
 
@@ -149,7 +153,8 @@ fn parseArgsAlloc(allocator: std.mem.Allocator) !LauncherArgs {
             result.help = true;
             continue;
         }
-        return error.InvalidArguments;
+        // Forward unknown args to the engine process.
+        try result.extra_args.append(allocator, try allocator.dupe(u8, arg));
     }
 
     if (result.open_path != null and result.create_path != null) {
@@ -465,14 +470,13 @@ fn resolveEngineExecutableAlloc(allocator: std.mem.Allocator) ![]u8 {
     return engine_path;
 }
 
-fn launchEngine(allocator: std.mem.Allocator, engine_path: []const u8, project_root: []const u8) !void {
-    const argv = [_][]const u8{
-        engine_path,
-        "--project-path",
-        project_root,
-    };
+fn launchEngine(allocator: std.mem.Allocator, engine_path: []const u8, project_root: []const u8, extra_args: []const []u8) !void {
+    var argv_list = std.ArrayList([]const u8).empty;
+    defer argv_list.deinit(allocator);
+    try argv_list.appendSlice(allocator, &.{ engine_path, "--project-path", project_root });
+    try argv_list.appendSlice(allocator, extra_args);
 
-    var child = std.process.Child.init(&argv, allocator);
+    var child = std.process.Child.init(argv_list.items, allocator);
     child.stdin_behavior = .Ignore;
     child.stdout_behavior = .Inherit;
     child.stderr_behavior = .Inherit;
