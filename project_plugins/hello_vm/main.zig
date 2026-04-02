@@ -1,13 +1,31 @@
-// Minimal script_vm plugin for Guava Engine.
+// Spinning Cube Demo Plugin for Guava Engine.
 //
-// Exports the three required entry points that the WasmVM looks for:
-//   guava_on_init, guava_on_update, guava_on_destroy
-//
-// When compiled to WASM (via wasm_compiler), the ScriptRuntime can
-// load and instantiate this module.
+// Attach to any entity — it will spin around the Y axis automatically.
+// Press Space to toggle rotation on/off.
 
-export fn guava_on_init() void {}
+const std = @import("std");
 
-export fn guava_on_update() void {}
+var angle: f32 = 0.0;
+var spinning: bool = true;
+var spin_speed: f32 = 2.0;
 
-export fn guava_on_destroy() void {}
+pub fn onInit() void {
+    guava.log("Spinning Cube plugin loaded! Press Space to toggle spin.");
+}
+
+pub fn onUpdate(dt: f32) void {
+    // Toggle spinning with Space key
+    if (guava.wasKeyPressed(guava.Key.space)) {
+        spinning = !spinning;
+    }
+
+    if (spinning) {
+        angle += spin_speed * dt;
+        const half = angle * 0.5;
+        _ = guava.setRotation(.{ 0.0, std.math.sin(half), 0.0, std.math.cos(half) });
+    }
+}
+
+pub fn onDestroy() void {
+    guava.log("Spinning Cube plugin unloaded.");
+}
