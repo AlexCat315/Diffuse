@@ -16,6 +16,7 @@ pub const CliOptions = struct {
     mcp_enabled: bool = false,
     mcp_transport: McpTransport = .stdio,
     project_path: ?[]u8 = null,
+    scene_path: ?[]u8 = null,
 
     pub fn backends(self: *const CliOptions) []const engine.render.GraphicsAPI {
         return self.backend_order[0..self.backend_count];
@@ -24,6 +25,9 @@ pub const CliOptions = struct {
     pub fn deinit(self: *CliOptions, allocator: std.mem.Allocator) void {
         if (self.project_path) |project_path| {
             allocator.free(project_path);
+        }
+        if (self.scene_path) |sp| {
+            allocator.free(sp);
         }
         self.* = undefined;
     }
@@ -246,6 +250,15 @@ fn parseRunOptionsAlloc(allocator: std.mem.Allocator, args: []const []const u8) 
                 allocator.free(project_path);
             }
             options.project_path = try allocator.dupe(u8, args[index]);
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--scene")) {
+            index += 1;
+            if (index >= args.len) return error.InvalidArguments;
+            if (options.scene_path) |sp| {
+                allocator.free(sp);
+            }
+            options.scene_path = try allocator.dupe(u8, args[index]);
             continue;
         }
         return error.InvalidArguments;

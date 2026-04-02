@@ -182,6 +182,9 @@ pub fn main() !u8 {
     if (loaded_project) |*project| {
         bootstrap.start_scene_path = try resolveStartScenePathAlloc(allocator, project.root_path, project.file.start_scene);
         std.log.info("player opening project '{s}' at {s}", .{ project.file.name, project.root_path });
+    } else if (options.scene_path) |sp| {
+        bootstrap.start_scene_path = try allocator.dupe(u8, sp);
+        std.log.info("player opening scene '{s}'", .{sp});
     }
 
     try app.pushLayer(bootstrap.asLayer());
