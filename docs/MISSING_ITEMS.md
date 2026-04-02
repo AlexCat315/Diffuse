@@ -133,6 +133,116 @@
 - [ ] R-7 SSR 粗糙度感知模糊
 - [ ] R-9/R-10/R-11 渲染风格插件化系统收尾
 
+
+集成架构：统一 Sequencer 模型
+核心思想：不是做两个模式，而是让 Sequencer 成为游戏和影视共用的脊柱。
+┌─────────────────────────────────────────────────────────────┐
+│                    Guava Editor                              │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │              Viewport (不变)                          │   │
+│  │    Play/Pause/Stop = 全局模拟控制                     │   │
+│  └──────────────────────────────────────────────────────┘   │
+│  ┌──────────────────────────────────────────────────────┐   │
+│  │           Sequencer (新增核心面板)                     │   │
+│  │  ┌─ 时间尺  0s ──── 5s ──── 10s ──── 15s ────┐      │   │
+│  │  │  🎥 Camera Track   ●────●────●              │      │   │
+│  │  │  🦴 Anim: Walk     ▓▓▓▓▓▓▓▓                │      │   │
+│  │  │  🦴 Anim: Run            ▓▓▓▓▓▓▓▓          │      │   │
+│  │  │  🔊 Audio: BGM     ▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓▓     │      │   │
+│  │  │  ⚡ Event: Spawn         ●                  │      │   │
+│  │  │  📜 Script: Effect              ●───●       │      │   │
+│  │  └────────────────────────────────────────────┘      │   │
+│  │  [◀] [▶ Play] [⏸] [◼ Stop] [🔴 Record] │ 30fps │     │   │
+│  └──────────────────────────────────────────────────────┘   │
+└─────────────────────────────────────────────────────────────┘
+为什么是同一个 Sequencer 而不是"游戏模式 + 影视模式"
+UE 的经验	Guava 的对应
+UE 的 Level Sequence 既用于过场动画也用于游戏内脚本触发	Guava 的 Sequence 资产同理
+UE 的 Play 按钮 = 模拟，Sequencer Play = 时间轴驱动	Guava viewport Play = 模拟，Sequencer Play = 时间轴驱动
+UE 影视用户用 Movie Render Queue 离线渲染	Guava 已有 RenderOutputJob（PNG/EXR 序列导出）直接复用
+关键设计决策：Sequencer 和 Viewport Play 是正交的两套时钟：
+
+Viewport Play = 物理 + 脚本 + AI 全部推进（游戏运行时）
+Sequencer Play = 只推进时间线上的轨道（影视预览 / 过场动画编辑）
+两者可以同时激活（在游戏运行中触发一段过场序列）
+落地路线图
+Phase 0：Sequence 数据模型 + 资产类型（1-2 周）
+新增 src/engine/cinematic/ 模块：
+engine/cinematic/
+├── sequence.zig          # Sequence 资产：轨道列表 + 时长 + 帧率
+├── track.zig             # 轨道类型：Camera / Animation / Audio / Event / Property
+├── keyframe.zig          # 关键帧：time + value + easing curve
+├── evaluator.zig         # 给定时间 t → 求值所有轨道 → 驱动 World
+└── camera_path.zig       # 相机轨道：Bézier/Catmull-Rom 路径插值
+
+Sequence 资产格式 (.guava_sequence)：
+{
+  "name": "Opening Cinematic",
+  "fps": 30,
+  "duration": 15.0,
+  "tracks": [
+    {
+      "type": "camera_path",
+      "target": "CinematicCamera",
+      "keyframes": [
+        { "time": 0.0, "position": [0,5,-10], "look_at": [0,1,0], "fov": 45, "easing": "ease_in_out" },
+        { "time": 5.0, "position": [5,3,-5],  "look_at": [0,1,0], "fov": 60, "easing": "linear" }
+      ]
+    },
+    {
+      "type": "animation",
+      "target": "Character",
+      "clip": "assets/animations/walk.gltf",
+      "start_time": 0.0,
+      "end_time": 5.0,
+      "blend_in": 0.2
+    },
+    {
+      "type": "property",
+      "target": "Sun",
+      "property": "intensity",
+      "keyframes": [
+        { "time": 0.0, "value": 1.0 },
+        { "time": 10.0, "value": 0.3, "easing": "ease_out" }
+      ]
+    }
+  ]
+}
+Phase 1：Sequencer UI 面板（2-3 周）
+基于你已有的 animation_editor.zig（1937 行，含 TimelineTrack + Keyframe），扩展为通用 Sequencer：
+src/editor/ui/panels/tools/sequencer/
+├── sequencer_panel.zig     # 主面板：时间尺 + 轨道列表 + 播放头
+├── timeline_ruler.zig      # 时间刻度尺 + 帧编号
+├── track_row.zig           # 每条轨道的 UI 行（彩色条 + 关键帧菱形）
+├── keyframe_editor.zig     # 选中关键帧 → 右侧属性面板
+├── curve_editor.zig        # easing 曲线可视化编辑
+└── camera_path_gizmo.zig   # 3D 视口中绘制相机路径样条
+与 Viewport 的交互：
+
+Sequencer 播放头移动 → evaluator.evaluate(t) → 驱动世界状态 → Viewport 实时刷新
+在 Sequencer 录制模式下，拖动 3D gizmo → 自动在当前帧插入关键帧
+Viewport overlay 增加「相机轨迹线」可视化
+Phase 2：离线渲染管线增强（1-2 周）
+复用已有的 RenderOutputJob，增加 Sequencer 驱动模式：
+现有流程：  Play → 固定Δt推进 → 每帧导出 PNG/EXR
+新增流程：  Sequencer.evaluate(frame/fps) → 世界状态就位 → 路径追踪 → 导出
+新增 Render Queue 面板（类似 UE Movie Render Queue）：
+
+选择 Sequence 资产
+选择渲染配置（分辨率 / 路径追踪采样数 / 输出格式）
+批量排队（一次渲染多个序列）
+自动 FFmpeg 合成（PNG 序列 → MP4/ProRes）
+Phase 3：游戏内序列触发（1 周）
+// 游戏脚本中
+const seq = world.loadSequence("assets/sequences/opening.guava_sequence");
+seq.play();            // 非阻塞，序列与游戏循环并行
+seq.onComplete(fn() { 
+    world.enablePlayerControl();
+});
+这就是「游戏引擎 + 影视」的集成点：
+
+过场动画 = Sequence 在游戏运行时播放
+影视渲染 = 同一个 Sequence 在 Render Queue 中离线渲染
 ---
 
 ## 4. AI-Native 与插件系统缺口
