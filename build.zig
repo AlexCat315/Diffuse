@@ -274,6 +274,9 @@ const wamr_base_c_flags = [_][]const u8{
     "-DWASM_ENABLE_MULTI_MODULE=0",
     "-DWASM_ENABLE_SHARED_MEMORY=0",
     "-DWASM_ENABLE_BULK_MEMORY=1",
+    "-DWASM_ENABLE_DUMP_CALL_STACK=1",
+    "-DWASM_ENABLE_CUSTOM_NAME_SECTION=1",
+    "-DWASM_ENABLE_LOAD_CUSTOM_SECTION=1",
 };
 
 const engine_cpp_flags = [_][]const u8{
@@ -1110,6 +1113,42 @@ fn generateCompileCommandsJson(
         cpp_compiler,
         &engine_cpp_flags,
         jolt_cpp_sources,
+        &.{wamr_platform_include_path},
+    );
+    const recast_cpp_sources = collectSourceFiles(b, "third_party/recast/Recast/Source", ".cpp");
+    appendCompileCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        cpp_compiler,
+        &engine_cpp_flags,
+        recast_cpp_sources,
+        &.{wamr_platform_include_path},
+    );
+    const detour_cpp_sources = collectSourceFiles(b, "third_party/recast/Detour/Source", ".cpp");
+    appendCompileCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        cpp_compiler,
+        &engine_cpp_flags,
+        detour_cpp_sources,
+        &.{wamr_platform_include_path},
+    );
+    const detour_crowd_cpp_sources = collectSourceFiles(b, "third_party/recast/DetourCrowd/Source", ".cpp");
+    appendCompileCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        cpp_compiler,
+        &engine_cpp_flags,
+        detour_crowd_cpp_sources,
         &.{wamr_platform_include_path},
     );
 
