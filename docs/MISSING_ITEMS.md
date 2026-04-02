@@ -30,6 +30,10 @@
 | 2026-04-01 | macOS app bundle：`zig-out/package/GuavaGame.app/` 含 Info.plist、Frameworks/libSDL3、assets/ |
 | 2026-04-02 | Windows/Linux 目录结构布局代码（待目标平台测试） |
 | 2026-04-02 | `build_manifest.json`（SHA256 × 全部打包文件，LC_ALL=C 排序） |
+| 2026-04-02 | 编辑器 Window 菜单补全：Script Editor / Script Debugger / Particle Editor / Physics Visualization / Audio Mixer 入口 |
+| 2026-04-02 | 工具栏 Build Game 按钮（调用 `zig build package`，显示构建进度）+ File 菜单 Ctrl+B 快捷键 |
+| 2026-04-02 | Audio Mixer UI 面板（Master/Music/SFX 音量控制 + 活跃声音统计） |
+| 2026-04-02 | DAP 调试适配器 `dap_adapter.zig`（DAP JSON wire protocol 完整实现）+ 编辑器 TCP 服务端集成 |
 | 2026-04-01 | Editor 与 Player 启动入口完全分离 |
 | 2026-04-01 | Player 运行时依赖隔离检查通过 |
 | 2026-04-01 | `PlayerBootstrapLayer` on_attach 加载 start_scene |
@@ -127,7 +131,7 @@
 - [x] 快速存读档
 
 ### 3.3 脚本调试器
-- [ ] C#/WASM 调试适配（断点/单步/变量/调用栈）
+- [x] C#/WASM 调试适配（断点/单步/变量/调用栈）— DAP 协议适配器 `dap_adapter.zig` + TCP 服务端集成
 
 ### 3.4 性能分析体系
 - [ ] CPU/GPU profiler、frame timeline、内存追踪、drawcall 分析
