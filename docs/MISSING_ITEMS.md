@@ -55,14 +55,14 @@
 
 ### 1.2 启动生命周期
 + [x] 标准化：Boot → Mount → Scene Load → Game Loop → Shutdown
-+ [ ] player-only 自动化 smoke test
++ [x] player-only 自动化 smoke test — `zig build test-player`（binary 5 帧启停）+ `zig build test-player-unit`（嵌入式单元测试）
 
 验收：Player 模式不加载任何编辑器层，通过 smoke test
 
 ### 1.3 输入映射系统（GR-6）
 + [x] Action 映射层（键鼠/手柄统一）— `engine/core/input_action.zig`，含 JSON 持久化
 + [x] 运行时查询 API：`isActionPressed/getAxis` — 已集成到 `ScriptContext`
-+ [ ] 编辑器映射配置与重绑定（ImGui 重绑定面板）
++ [x] 编辑器映射配置与重绑定 — 设置面板「快捷键」tab 新增 Game Input Actions 区域（注册/删除动作、录制键鼠绑定、Save/Load JSON）
 
 验收：键盘 + 手柄可映射到同一 action 且可重绑定
 

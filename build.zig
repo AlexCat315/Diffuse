@@ -428,6 +428,15 @@ pub fn build(b: *std.Build) void {
     const run_player_step = b.step("run-player", "Run the standalone player runtime");
     run_player_step.dependOn(&run_player_cmd.step);
 
+    // ---- Player smoke test: boot → 5 frames → shutdown (no project) ----
+    const player_smoke_cmd = b.addRunArtifact(player);
+    player_smoke_cmd.step.dependOn(b.getInstallStep());
+    player_smoke_cmd.addArgs(&.{ "--frames", "5" });
+    player_smoke_cmd.setCwd(b.path(".")); // ensure cwd is workspace root (has assets/)
+
+    const test_player_step = b.step("test-player", "Run player-only smoke test (boot → 5 frames → shutdown)");
+    test_player_step.dependOn(&player_smoke_cmd.step);
+
     const run_launcher_cmd = b.addRunArtifact(launcher);
     run_launcher_cmd.step.dependOn(b.getInstallStep());
     run_launcher_cmd.addArg("--engine");
@@ -489,6 +498,18 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run tests");
     test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
+
+    const player_tests = b.addTest(.{
+        .root_module = player.root_module,
+    });
+    player_tests.linkLibC();
+    player_tests.linkLibCpp();
+    player_tests.step.dependOn(&run_shader_codegen.step);
+
+    const run_player_tests = b.addRunArtifact(player_tests);
+    const test_player_unit_step = b.step("test-player-unit", "Run player module unit tests");
+    test_player_unit_step.dependOn(&run_player_tests.step);
+    test_step.dependOn(&run_player_tests.step);
 
     const script_vm_test_mod = b.createModule(.{
         .root_source_file = b.path("src/script_vm_test_main.zig"),

@@ -97,6 +97,8 @@ pub const core = struct {
     pub const ActionMap = @import("engine/core/input_action.zig").ActionMap;
     /// 输入动作绑定
     pub const ActionBinding = @import("engine/core/input_action.zig").ActionBinding;
+    /// 输入动作绑定类别
+    pub const BindingKind = @import("engine/core/input_action.zig").BindingKind;
     /// 输入动作每帧状态
     pub const ActionFrameState = @import("engine/core/input_action.zig").ActionFrameState;
     /// 平台抽象

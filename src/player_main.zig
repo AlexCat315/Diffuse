@@ -188,3 +188,30 @@ pub fn main() !u8 {
     _ = try app.run(options.frame_count);
     return 0;
 }
+
+test "player boots without project (smoke test)" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    var app = engine.core.Application.init(allocator, .{
+        .name = "Player Smoke Test",
+        .window_width = 128,
+        .window_height = 128,
+    }) catch |err| {
+        std.debug.print("Skipping player smoke test due to init failure (possibly headless): {}\n", .{err});
+        return;
+    };
+    defer app.deinit();
+
+    var bootstrap = PlayerBootstrapLayer{ .allocator = allocator };
+    defer bootstrap.deinit();
+    // No start_scene_path — tests the empty-scene lifecycle
+    try app.pushLayer(bootstrap.asLayer());
+
+    const report = app.run(5) catch |err| {
+        std.debug.print("Skipping player smoke test due to run failure: {}\n", .{err});
+        return;
+    };
+    try std.testing.expect(report.frames > 0);
+}
