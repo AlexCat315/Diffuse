@@ -99,12 +99,38 @@ vec3 ImportanceSampleGGX(vec2 Xi, float roughness, vec3 N) {
     return tangent * H.x + bitangent * H.y + N * H.z;
 }
 
+// Evaluate order-2 (L2) Spherical Harmonics irradiance from 9 RGB coefficients
+// Reference: "An Efficient Representation for Irradiance Environment Maps" (Ramamoorthi & Hanrahan 2001)
+vec3 evaluateSH9(vec3 N, vec3 sh[9]) {
+    // Band 0 (L=0)
+    vec3 result = sh[0] * 0.282095;
+    // Band 1 (L=1)
+    result += sh[1] * (-0.488603 * N.y);
+    result += sh[2] * ( 0.488603 * N.z);
+    result += sh[3] * (-0.488603 * N.x);
+    // Band 2 (L=2)
+    result += sh[4] * ( 1.092548 * N.x * N.y);
+    result += sh[5] * (-1.092548 * N.y * N.z);
+    result += sh[6] * ( 0.315392 * (3.0 * N.z * N.z - 1.0));
+    result += sh[7] * (-1.092548 * N.x * N.z);
+    result += sh[8] * ( 0.546274 * (N.x * N.x - N.y * N.y));
+    return max(result, vec3(0.0));
+}
+
 // IBL Diffuse (Irradiance) using Spherical Harmonics
-vec3 IBL_Diffuse_SH(vec3 N, vec3 albedo) {
-    // Simple SH evaluation for diffuse
-    // In a real implementation, use precomputed SH coefficients from environment map
-    vec3 irradiance = vec3(0.5); // Placeholder - should come from SH evaluation
+// NOTE: The main mesh shader uses texture-based irradiance (u_irradiance_map) instead.
+// This function is provided for SH-based fallback or alternative pipelines.
+vec3 IBL_Diffuse_SH(vec3 N, vec3 albedo, vec3 sh_coeffs[9]) {
+    vec3 irradiance = evaluateSH9(N, sh_coeffs);
     return albedo * irradiance;
+}
+
+// Convenience overload with default neutral ambient (no SH data available)
+vec3 IBL_Diffuse_SH(vec3 N, vec3 albedo) {
+    vec3 sh_default[9];
+    sh_default[0] = vec3(0.886227); // L00 = 1/(2*sqrt(pi)) * pi ≈ neutral hemisphere
+    for (int i = 1; i < 9; i++) sh_default[i] = vec3(0.0);
+    return IBL_Diffuse_SH(N, albedo, sh_default);
 }
 
 // IBL Specular using Prefiltered Environment Map
