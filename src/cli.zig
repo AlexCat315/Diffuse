@@ -203,6 +203,15 @@ pub fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
         return .{ .@"render-test" = try parseRenderTestOptionsAlloc(allocator, &args) };
     }
 
+    if (std.mem.eql(u8, command_name.?, "run")) {
+        var remaining = try std.ArrayList([]const u8).initCapacity(allocator, 0);
+        defer remaining.deinit(allocator);
+        while (args.next()) |arg| {
+            try remaining.append(allocator, arg);
+        }
+        return .{ .run = try parseRunOptionsAlloc(allocator, remaining.items) };
+    }
+
     var run_args = try std.ArrayList([]const u8).initCapacity(allocator, 0);
     defer run_args.deinit(allocator);
     try run_args.append(allocator, command_name.?);
