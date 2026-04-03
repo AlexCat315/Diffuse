@@ -1030,6 +1030,50 @@ fn generateCompileCommandsJson(
         );
     }
 
+    // ── Electron native addon (N-API) ──────────────────────────────
+    // Detect node-addon-api and Node.js header include paths for clangd.
+    const napi_include = captureCommandOutput(b, &.{
+        "node",                                                                                "-e",
+        "console.log(require('path').resolve('editor-electron/node_modules/node-addon-api'))",
+    });
+    const node_include = captureCommandOutput(b, &.{
+        "node",                                                                              "-e",
+        "console.log(require('path').resolve(process.execPath,'..','..','include','node'))",
+    });
+    if (napi_include != null or node_include != null) {
+        var napi_extra_includes: std.ArrayList([]const u8) = .empty;
+        defer napi_extra_includes.deinit(b.allocator);
+        if (napi_include) |p| napi_extra_includes.append(b.allocator, p) catch @panic("OOM");
+        if (node_include) |p| napi_extra_includes.append(b.allocator, p) catch @panic("OOM");
+        const napi_includes = napi_extra_includes.toOwnedSlice(b.allocator) catch @panic("OOM");
+
+        // Include both macOS and Linux addon sources for clangd completeness.
+        if (os_tag == .macos) {
+            appendCompileCommands(
+                b,
+                &entries,
+                root_dir,
+                sdl_include_path,
+                sysroot,
+                objcpp_compiler,
+                &macos_objcpp_flags,
+                &.{"editor-electron/native/src/iosurface_view.mm"},
+                napi_includes,
+            );
+        }
+        appendCompileCommands(
+            b,
+            &entries,
+            root_dir,
+            sdl_include_path,
+            sysroot,
+            cpp_compiler,
+            &engine_cpp_flags,
+            &.{"editor-electron/native/src/shm_view.cpp"},
+            napi_includes,
+        );
+    }
+
     var out: std.io.Writer.Allocating = .init(b.allocator);
     defer out.deinit();
 
