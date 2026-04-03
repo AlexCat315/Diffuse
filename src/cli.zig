@@ -15,6 +15,8 @@ pub const CliOptions = struct {
     backend_count: usize = 3,
     mcp_enabled: bool = false,
     mcp_transport: McpTransport = .stdio,
+    editor_server: bool = false,
+    editor_port: u16 = 9100,
     project_path: ?[]u8 = null,
     scene_path: ?[]u8 = null,
 
@@ -230,6 +232,16 @@ fn parseRunOptionsAlloc(allocator: std.mem.Allocator, args: []const []const u8) 
         const arg = args[index];
         if (std.mem.eql(u8, arg, "--mcp")) {
             options.mcp_enabled = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--editor-server")) {
+            options.editor_server = true;
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--editor-port")) {
+            index += 1;
+            if (index >= args.len) return error.InvalidArguments;
+            options.editor_port = try std.fmt.parseUnsigned(u16, args[index], 10);
             continue;
         }
         if (std.mem.eql(u8, arg, "--backend")) {

@@ -125,7 +125,9 @@ pub fn main() !u8 {
 
     switch (command) {
         .run => |options| {
-            if (options.mcp_enabled) {
+            if (options.editor_server) {
+                try runEditorServer(allocator, options);
+            } else if (options.mcp_enabled) {
                 try runMcp(allocator, options);
             } else {
                 try runEngine(allocator, options);
@@ -215,6 +217,46 @@ fn runEngine(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
     try stdout.print("RHI driver: {s}\n", .{driver_name});
     try stdout.print("Driver info: {s}\n", .{driver_info});
     try stdout.flush();
+}
+
+fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
+    var loaded_project = try loadConfiguredProjectAlloc(allocator, options);
+    defer if (loaded_project) |*project| project.deinit(allocator);
+
+    const app_name = try applicationNameAlloc(allocator, "Guava Engine (Editor Server)", if (loaded_project) |*project| project else null);
+    defer allocator.free(app_name);
+
+    // In editor-server mode, the window is managed by Electron.
+    // The engine creates a regular window that Electron can embed as a child.
+    var app = try engine.core.Application.init(allocator, .{
+        .name = app_name,
+        .window_width = 1280,
+        .window_height = 720,
+        .window_borderless = false,
+        .window_maximized = false,
+        .window_native_titlebar_controls = false,
+        .frame_delay_ms = 16,
+        .preferred_backends = options.backends(),
+    });
+    defer app.deinit();
+
+    // Start the Editor RPC WebSocket server (replaces ImGui editor overlay)
+    const editor_rpc = @import("guava").editor_rpc;
+    var rpc_server = editor_rpc.server.Server.init(allocator, options.editor_port);
+    defer rpc_server.deinit();
+
+    try app.pushOverlay(rpc_server.asLayer());
+
+    // Also start MCP runtime for AI collaboration support
+    const mcp_runtime = try engine.mcp.runtime.Runtime.init(allocator, &app, .{
+        .enable_stdio_server = false,
+    });
+    defer mcp_runtime.deinit();
+    try app.pushOverlay(mcp_runtime.syncLayer().asLayer());
+
+    std.log.info("Editor server mode: RPC on port {d}", .{options.editor_port});
+
+    _ = try app.run(options.frame_count);
 }
 
 fn runMcp(allocator: std.mem.Allocator, options: cli.CliOptions) !void {

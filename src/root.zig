@@ -155,6 +155,12 @@ pub const cinematic = @import("engine/cinematic/mod.zig");
 /// 提供面向 AI 客户端的协议层、资源快照与服务端实现。
 pub const mcp = @import("engine/mcp/mod.zig");
 
+/// Editor RPC 模块
+///
+/// WebSocket JSON-RPC 2.0 服务器，供 Electron 编辑器前端连接。
+/// 提供场景查询/修改、状态订阅、视口控制等 RPC 方法。
+pub const editor_rpc = @import("engine/editor_rpc/mod.zig");
+
 /// 脚本模块
 ///
 /// 提供脚本运行时、C# NativeAOT gameplay VM 与参数反射工具。
