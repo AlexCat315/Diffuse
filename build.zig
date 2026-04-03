@@ -351,6 +351,18 @@ pub fn build(b: *std.Build) void {
     const run_launcher_step = b.step("run-launcher", "Run the project launcher");
     run_launcher_step.dependOn(&run_launcher_cmd.step);
 
+    // ---- Electron Editor: build engine + run electron dev server ----
+    const run_editor_cmd = b.addSystemCommand(&.{
+        "npm", "run", "dev",
+    });
+    run_editor_cmd.setCwd(b.path("editor-electron"));
+    run_editor_cmd.step.dependOn(b.getInstallStep());
+    // Pass through VITE_DEV_SERVER_URL so Electron uses the Vite dev server
+    run_editor_cmd.setEnvironmentVariable("NODE_ENV", "development");
+
+    const run_editor_step = b.step("run-editor", "Build engine & launch the Electron editor (dev mode)");
+    run_editor_step.dependOn(&run_editor_cmd.step);
+
     const validate_cmd = b.addRunArtifact(exe);
     validate_cmd.step.dependOn(b.getInstallStep());
     validate_cmd.addArg("validate");
