@@ -235,10 +235,20 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
         .window_borderless = false,
         .window_maximized = false,
         .window_native_titlebar_controls = false,
+        .window_hidden = true,
         .frame_delay_ms = 16,
         .preferred_backends = options.backends(),
     });
     defer app.deinit();
+
+    // In editor-server mode, the engine is a background process managed by
+    // Electron.  Hide from Dock / Cmd-Tab so users don't accidentally interact
+    // with or close the engine process directly.
+    engine.platform.Window.setBackgroundApp();
+
+    // In editor-server mode, use IOSurface-backed viewport textures so
+    // Electron can display the rendered frame via CALayer (zero-copy).
+    app.renderer.scene_viewport.use_iosurface = true;
 
     // Start the Editor RPC WebSocket server (replaces ImGui editor overlay)
     const editor_rpc = @import("guava").editor_rpc;

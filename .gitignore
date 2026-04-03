@@ -79,3 +79,7 @@ renders_test_out/
 zig-cache/
 examples/csharp/**/bin/
 examples/csharp/**/obj/
+
+# Electron native addon build artifacts
+editor-electron/native/build/
+editor-electron/native/bin/
