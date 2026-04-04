@@ -181,7 +181,7 @@ bool guava_vk_rhi_blit_shared_texture(void* ctx, uint32_t texture_id);
 // Destroy a shared texture and its associated staging buffer / shm.
 void guava_vk_rhi_destroy_shared_texture(void* ctx, uint32_t texture_id);
 
-// ── Vulkan handle getters (for ImGui Vulkan backend) ──────────────────────
+// ── Vulkan handle getters ─────────────────────────────────────────────────
 void*    guava_vk_rhi_get_instance(void* ctx);
 void*    guava_vk_rhi_get_physical_device(void* ctx);
 void*    guava_vk_rhi_get_vk_device(void* ctx);
@@ -189,11 +189,6 @@ uint32_t guava_vk_rhi_get_graphics_queue_family(void* ctx);
 void*    guava_vk_rhi_get_graphics_queue(void* ctx);
 uint32_t guava_vk_rhi_get_swapchain_image_count(void* ctx);
 void*    guava_vk_rhi_get_swapchain_render_pass(void* ctx);
-
-// ── ImGui Vulkan integration ──────────────────────────────────────────────
-bool guava_imgui_vulkan_backend_init(void* vk_bridge_ctx);
-void guava_imgui_vulkan_backend_shutdown(void);
-bool guava_imgui_vulkan_backend_render(void* vk_command_buffer);
 
 #ifdef __cplusplus
 }

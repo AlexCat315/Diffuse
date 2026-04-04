@@ -18,7 +18,6 @@
 //! - **animation** - 动画系统（动画图、动画状态机）
 //! - **physics** - 物理系统（刚体、碰撞检测、射线检测）
 //! - **math** - 数学库（向量、矩阵、四元数）
-//! - **ui** - UI 系统（基于 Dear ImGui）
 //!
 //! ## 快速开始
 //!
@@ -127,21 +126,6 @@ pub const platform = struct {
     /// 获取进程驻留内存大小（字节）
     pub const processResidentMemoryBytes = @import("engine/platform/process.zig").residentMemoryBytes;
 };
-
-/// UI 系统模块
-///
-/// 基于 Dear ImGui 的即时模式 UI 系统。
-/// 用于构建编辑器界面和调试工具。
-pub const ui = struct {
-    /// Dear ImGui 绑定
-    pub const ImGui = @import("engine/ui/imgui.zig");
-};
-
-/// 游戏运行时 UI 模块（GR-7）
-///
-/// 基于 Canvas/Widget 的游戏内 UI 系统。
-/// 支持文本、按钮、进度条、面板、图片控件。
-pub const runtime_ui = @import("engine/runtime_ui/mod.zig");
 
 /// 影视/过场动画模块
 ///

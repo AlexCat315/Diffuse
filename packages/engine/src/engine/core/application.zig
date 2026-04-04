@@ -57,12 +57,10 @@ const scene_manager_mod = @import("scene_manager.zig");
 const platform_mod = @import("platform.zig");
 const renderer_mod = @import("../render/renderer.zig");
 const render_types = @import("../render/types.zig");
-const imgui_mod = @import("../ui/imgui.zig");
 const window_mod = @import("../platform/window.zig");
 const scene_mod = @import("../scene/scene.zig");
 const job_system_mod = @import("job_system.zig");
 const audio_mod = @import("../audio/mod.zig");
-const runtime_ui_mod = @import("../runtime_ui/mod.zig");
 
 /// 应用程序配置
 ///
@@ -184,8 +182,6 @@ pub const Application = struct {
     play_mode_snapshot: ?PlayModeSnapshot = null,
     /// 输入动作映射（GR-6）
     action_map: input_action_mod.ActionMap,
-    /// 游戏内 UI Canvas（GR-7）
-    canvas: runtime_ui_mod.Canvas,
     /// 物理时间累积器
     physics_accumulator_seconds: f32 = 0.0,
     /// 物理状态实例（替代全局变量）
@@ -270,7 +266,6 @@ pub const Application = struct {
             .nav_system = nav_system_mod.NavSystem.init(allocator),
             .debug_session = debug_session_mod.DebugSession.init(allocator),
             .action_map = input_action_mod.ActionMap.init(allocator),
-            .canvas = runtime_ui_mod.Canvas.init(allocator, .{ .reference_width = 1920, .reference_height = 1080 }),
         };
     }
 
@@ -308,7 +303,6 @@ pub const Application = struct {
         self.editor_utility_runtime.deinit();
         self.script_runtime.deinit();
         self.action_map.deinit();
-        self.canvas.deinit();
         if (audio_mod.get() catch null) |audio_runtime| {
             audio_runtime.deinit();
         }
@@ -387,7 +381,6 @@ pub const Application = struct {
         while ((frame_count == 0 or frames_rendered < frame_count) and !self.window.should_close) : (frames_rendered += 1) {
             self.input.beginFrame();
             try self.pumpEvents();
-            imgui_mod.newFrame();
 
             // 每帧刷新输入动作映射状态（GR-6）
             self.action_map.update(&self.input);
@@ -459,35 +452,6 @@ pub const Application = struct {
                 self.playback_controller.consumeAdvance();
             }
 
-            // 渲染游戏内 UI Canvas（GR-7）
-            if (should_advance_simulation) {
-                const screen_w: f32 = @floatFromInt(self.window.drawable_width);
-                const screen_h: f32 = @floatFromInt(self.window.drawable_height);
-                const mx = self.input.mouse_position[0];
-                const my = self.input.mouse_position[1];
-                // 处理鼠标指针事件（down / up / move）
-                if (self.input.wasMousePressed(.left)) {
-                    self.canvas.processPointerEvent(
-                        .{ .kind = .down, .x = mx, .y = my },
-                        screen_w,
-                        screen_h,
-                    );
-                } else if (self.input.wasMouseReleased(.left)) {
-                    self.canvas.processPointerEvent(
-                        .{ .kind = .up, .x = mx, .y = my },
-                        screen_w,
-                        screen_h,
-                    );
-                } else {
-                    self.canvas.processPointerEvent(
-                        .{ .kind = .move, .x = mx, .y = my },
-                        screen_w,
-                        screen_h,
-                    );
-                }
-                runtime_ui_mod.render.renderCanvas(&self.canvas, screen_w, screen_h);
-            }
-
             last_frame = try self.renderer.drawFrame(&self.world, &self.physics_state);
         }
 
@@ -537,7 +501,6 @@ pub const Application = struct {
     /// 处理窗口事件
     fn pumpEvents(self: *Application) !void {
         while (try self.window.pollEvent()) |event| {
-            imgui_mod.processEvent(&event.raw);
             switch (event.kind) {
                 .resized, .pixel_size_changed, .metal_view_resized, .exposed => {
                     try self.renderer.handleResize(event.width, event.height);
@@ -561,9 +524,6 @@ pub const Application = struct {
                 },
                 .mouse_moved => {
                     self.input.setModifiers(event.modifiers);
-                    // Editor viewport interactions decide their own hover/capture rules.
-                    // Always forwarding raw mouse motion keeps orbit, gizmo drag, selection,
-                    // and view-cube interactions responsive even inside ImGui windows.
                     self.input.addMouseDelta(event.x, event.y, event.delta_x, event.delta_y);
                 },
                 .mouse_wheel => {
@@ -583,10 +543,7 @@ pub const Application = struct {
                         self.input.setKey(key, false);
                     }
                 },
-                .text_input => {
-                    // Already forwarded to ImGui via processEvent() above.
-                    // Nothing to do in application layer.
-                },
+                .text_input => {},
                 .gamepad_added => {
                     self.input.gamepad_connected = true;
                 },
@@ -716,7 +673,6 @@ pub const Application = struct {
                     .time_scale_ptr = &self.time_scale,
                     .game_state_ptr = @ptrCast(&self.game_state),
                     .action_map = &self.action_map,
-                    .canvas = &self.canvas,
                     .scene_manager_api = .{
                         .context = self,
                         .load_scene = scriptLoadScene,

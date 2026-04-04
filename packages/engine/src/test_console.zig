@@ -10,7 +10,7 @@ pub fn main() !void {
     try editor_console.initLogFile();
     defer editor_console.deinitLogFile();
 
-    std.log.info("Test: This should appear in ImGui console", .{});
+    std.log.info("Test: This should appear in console", .{});
     std.log.debug("Test: Debug message", .{});
     std.log.warn("Test: Warning message", .{});
     std.log.err("Test: Error message", .{});

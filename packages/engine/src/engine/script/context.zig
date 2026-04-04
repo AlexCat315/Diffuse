@@ -6,7 +6,6 @@ const types = @import("./types.zig");
 const input_mod = @import("../core/input.zig");
 const physics_mod = @import("../physics/system.zig");
 const action_map_mod = @import("../core/input_action.zig");
-const runtime_ui_mod = @import("../runtime_ui/mod.zig");
 const AABB = @import("../math/aabb.zig").AABB;
 
 /// 实体类型别名
@@ -16,10 +15,6 @@ pub const EditorSelectionApi = struct {
     context: *anyopaque,
     select_entity: *const fn (context: *anyopaque, entity_id: EntityId, additive: bool) void,
     clear_selection: *const fn (context: *anyopaque) void,
-};
-
-pub const EditorUiState = struct {
-    last_item_changed: bool = false,
 };
 
 pub const SceneManagerApi = struct {
@@ -64,12 +59,8 @@ pub const ScriptContext = struct {
     editor_selection: []const EntityId = &.{},
     /// 编辑器选择回调（Editor Utility UI 使用）
     editor_selection_api: ?EditorSelectionApi = null,
-    /// 编辑器 ImGui 控件瞬时状态（Editor Utility UI 使用）
-    editor_ui_state: ?*EditorUiState = null,
     /// 输入动作映射（GR-6；可选）
     action_map: ?*const action_map_mod.ActionMap = null,
-    /// 游戏内 UI Canvas（GR-7；可选；Editor Layer 在 Play 时注入）
-    canvas: ?*runtime_ui_mod.Canvas = null,
 
     /// 获取实体的名称
     pub fn getName(self: *ScriptContext) []const u8 {
@@ -505,69 +496,6 @@ pub const ScriptContext = struct {
         return am.getAxis(action);
     }
 
-    // -----------------------------------------------------------------------
-    // 游戏内 UI API (GR-7)
-    // -----------------------------------------------------------------------
-
-    /// 向 Canvas 添加文本控件，返回 WidgetId（0 = 失败/无 Canvas）
-    pub fn uiAddText(
-        self: *ScriptContext,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-        text: []const u8,
-    ) runtime_ui_mod.WidgetId {
-        const c = self.canvas orelse return 0;
-        return c.addText(.{ .x = x, .y = y, .w = w, .h = h }, text, runtime_ui_mod.Color.white) catch 0;
-    }
-
-    /// 向 Canvas 添加按钮控件
-    pub fn uiAddButton(
-        self: *ScriptContext,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-        label: []const u8,
-    ) runtime_ui_mod.WidgetId {
-        const c = self.canvas orelse return 0;
-        return c.addButton(.{ .x = x, .y = y, .w = w, .h = h }, label) catch 0;
-    }
-
-    /// 向 Canvas 添加进度条控件
-    pub fn uiAddProgressBar(
-        self: *ScriptContext,
-        x: f32,
-        y: f32,
-        w: f32,
-        h: f32,
-        value: f32,
-    ) runtime_ui_mod.WidgetId {
-        const c = self.canvas orelse return 0;
-        return c.addProgressBar(.{ .x = x, .y = y, .w = w, .h = h }, value) catch 0;
-    }
-
-    /// 查询按钮本帧是否被点击
-    pub fn uiWasButtonClicked(self: *ScriptContext, id: runtime_ui_mod.WidgetId) bool {
-        const c = self.canvas orelse return false;
-        return c.wasButtonClicked(id);
-    }
-
-    /// 更新进度条值
-    pub fn uiSetProgress(self: *ScriptContext, id: runtime_ui_mod.WidgetId, value: f32) void {
-        if (self.canvas) |c| c.setProgress(id, value);
-    }
-
-    /// 设置控件可见性
-    pub fn uiSetVisible(self: *ScriptContext, id: runtime_ui_mod.WidgetId, visible: bool) void {
-        if (self.canvas) |c| c.setVisible(id, visible);
-    }
-
-    /// 清空 Canvas 所有控件（建议在 onInit 结束后重建 UI 布局）
-    pub fn uiClear(self: *ScriptContext) void {
-        if (self.canvas) |c| c.clear();
-    }
 };
 
 // 扩展 Entity 添加 hasComponent 和 getComponent 方法

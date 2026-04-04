@@ -40,7 +40,6 @@ pub const createVM = vm.createVM;
 pub const csharp_toolchain_mod = csharp_toolchain;
 pub const parameter_reflection_mod = parameter_reflection;
 pub const EditorUtilityRuntime = editor_utility_runtime.EditorUtilityRuntime;
-pub const EditorUtilityDrawContext = editor_utility_runtime.DrawContext;
 pub const EditorUtilityStatus = editor_utility_runtime.Status;
 pub const freeEditorUtilitySnapshots = editor_utility_runtime.freeSnapshots;
 

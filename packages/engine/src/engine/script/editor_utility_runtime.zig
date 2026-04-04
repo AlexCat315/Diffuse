@@ -2,7 +2,6 @@ const std = @import("std");
 const handles = @import("../assets/handles.zig");
 const script_resource_mod = @import("../assets/script_resource.zig");
 const command_queue_mod = @import("../core/command_queue.zig");
-const ui = @import("../ui/imgui.zig");
 const world_mod = @import("../scene/world.zig");
 const context_mod = @import("./context.zig");
 const types = @import("./types.zig");
@@ -71,25 +70,6 @@ pub fn freeSnapshots(allocator: std.mem.Allocator, snapshots: []Snapshot) void {
     allocator.free(snapshots);
 }
 
-/// 编辑器工具的绘制上下文
-///
-/// 包含绘制工具UI所需的所有运行时信息和资源引用。
-/// 每帧绘制时传入，提供对引擎核心系统的访问。
-pub const DrawContext = struct {
-    /// 游戏世界实例，用于访问实体和资源
-    world: *world_mod.World,
-    /// 内存分配器，用于临时分配
-    allocator: std.mem.Allocator,
-    /// 命令队列，用于执行编辑器操作（可选）
-    command_queue: ?*command_queue_mod.CommandQueue = null,
-    /// 上一帧到当前帧的时间间隔（秒）
-    delta_seconds: f32 = 0.0,
-    /// 当前在编辑器中选中的实体ID列表
-    selection: []const world_mod.EntityId = &.{},
-    /// 编辑器选择API，用于修改选中状态（可选）
-    selection_api: ?context_mod.EditorSelectionApi = null,
-};
-
 /// 内部使用的工具条目
 ///
 /// 存储单个编辑器工具的完整运行时状态，包括元数据和VM实例。
@@ -136,8 +116,7 @@ const UtilityEntry = struct {
 /// 使用流程:
 /// 1. 调用 init() 创建实例
 /// 2. 调用 upsertCompiled() 注册和更新工具
-/// 3. 调用 drawUtilityInCurrentWindow() 绘制工具UI
-/// 4. 调用 deinit() 销毁实例
+/// 3. 调用 deinit() 销毁实例
 pub const EditorUtilityRuntime = struct {
     /// 内存分配器，用于所有内部分配
     allocator: std.mem.Allocator,
@@ -431,88 +410,6 @@ pub const EditorUtilityRuntime = struct {
         return try allocator.dupe(u8, out.written());
     }
 
-    /// 在当前窗口中绘制指定的编辑器工具
-    ///
-    /// 调用工具脚本的 update 函数，传递绘制上下文。
-    /// 如果工具加载失败或不存在，显示错误信息。
-    ///
-    /// 参数:
-    ///   self: 运行时实例指针
-    ///   handle: 要绘制的工具句柄
-    ///   draw_context: 绘制上下文，包含世界、选择等信息
-    ///
-    /// 返回:
-    ///   如果找到工具并开始绘制则返回 true，否则返回 false
-    pub fn drawUtilityInCurrentWindow(
-        self: *EditorUtilityRuntime,
-        handle: handles.ScriptHandle,
-        draw_context: DrawContext,
-    ) bool {
-        self.mutex.lock();
-        defer self.mutex.unlock();
-
-        const index = findIndexByHandle(self.utilities.items, handle) orelse return false;
-        self.drawUtilityWindow(&self.utilities.items[index], draw_context);
-        return true;
-    }
-
-    /// 绘制单个工具窗口的内部实现
-    ///
-    /// 处理工具的加载状态检查、上下文设置、update 调用和错误显示。
-    /// 此方法假设调用者已持有 mutex 锁。
-    ///
-    /// 参数:
-    ///   self: 运行时实例指针
-    ///   entry: 要绘制的工具条目
-    ///   draw_context: 绘制上下文
-    fn drawUtilityWindow(self: *EditorUtilityRuntime, entry: *UtilityEntry, draw_context: DrawContext) void {
-        // 检查工具是否成功加载
-        if (entry.vm == null or entry.instance == null) {
-            // 显示加载失败信息
-            const message = if (entry.last_error.len != 0)
-                entry.last_error
-            else
-                "Editor utility is not loaded.";
-            ui.textWrapped(message);
-            return;
-        }
-
-        // 准备脚本上下文
-        var ui_state = context_mod.EditorUiState{};
-        var bootstrap_instance: types.ScriptInstance = undefined;
-        var script_context = context_mod.ScriptContext{
-            .entity = primarySelection(draw_context.selection) orelse 0,
-            .world = draw_context.world,
-            .instance = &bootstrap_instance,
-            .allocator = draw_context.allocator,
-            .command_queue = draw_context.command_queue,
-            .delta_time = draw_context.delta_seconds,
-            .editor_selection = draw_context.selection,
-            .editor_selection_api = draw_context.selection_api,
-            .editor_ui_state = &ui_state,
-        };
-        // 设置实际的脚本实例
-        script_context.instance = entry.instance.?;
-
-        // 调用脚本的 update 函数
-        entry.vm.?.callUpdate(entry.instance.?, &script_context, draw_context.delta_seconds) catch {
-            // 更新失败，记录错误状态
-            entry.status = .update_error;
-            replaceOwnedSlice(self.allocator, &entry.last_error, entry.vm.?.getError()) catch {};
-            // 显示错误信息
-            if (entry.last_error.len != 0) {
-                ui.separator();
-                ui.textWrapped(entry.last_error);
-            }
-            return;
-        };
-
-        // 如果之前有错误但现在状态正常，显示错误信息
-        if (entry.last_error.len != 0 and entry.status == .ready) {
-            ui.separator();
-            ui.textWrapped(entry.last_error);
-        }
-    }
 };
 
 /// 获取选择列表中的主要（第一个）实体

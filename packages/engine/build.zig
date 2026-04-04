@@ -2,7 +2,6 @@ const std = @import("std");
 
 const engine_include_paths = [_][]const u8{
     "third_party/stb",
-    "third_party/imgui",
     "third_party/jolt",
     "third_party/lunasvg/include",
     "third_party/lunasvg/source",
@@ -14,7 +13,6 @@ const engine_include_paths = [_][]const u8{
     "third_party/recast/DetourCrowd/Include",
     "src/engine/assets",
     "src/engine/navigation",
-    "src/engine/ui",
 };
 
 const plutovg_c_sources = [_][]const u8{
@@ -116,11 +114,6 @@ const soloud_c_api_cpp_sources = [_][]const u8{
 };
 
 const engine_cpp_sources = [_][]const u8{
-    "third_party/imgui/imgui.cpp",
-    "third_party/imgui/imgui_draw.cpp",
-    "third_party/imgui/imgui_tables.cpp",
-    "third_party/imgui/imgui_widgets.cpp",
-    "third_party/imgui/backends/imgui_impl_sdl3.cpp",
     "third_party/lunasvg/source/graphics.cpp",
     "third_party/lunasvg/source/lunasvg.cpp",
     "third_party/lunasvg/source/svgelement.cpp",
@@ -132,8 +125,6 @@ const engine_cpp_sources = [_][]const u8{
     "third_party/lunasvg/source/svgrenderstate.cpp",
     "third_party/lunasvg/source/svgtextelement.cpp",
     "src/engine/assets/svg_raster_bridge.cpp",
-    "src/engine/ui/imgui_bridge.cpp",
-    "src/engine/ui/imgui_widgets.cpp",
     "src/engine/physics/jolt_bridge.cpp",
     "src/engine/navigation/recast_bridge.cpp",
 };
@@ -143,8 +134,6 @@ const macos_objcpp_sources = [_][]const u8{
     "src/engine/render/path_trace/path_trace_denoise_bridge.mm",
     "src/engine/rt/metal_rt_bridge.mm",
     "src/engine/rhi/metal/metal_rhi_bridge.mm",
-    "third_party/imgui/backends/imgui_impl_metal.mm",
-    "src/engine/ui/imgui_metal_backend.mm",
 };
 
 const windows_cpp_sources = [_][]const u8{
@@ -161,8 +150,6 @@ const vulkan_c_flags = [_][]const u8{
 };
 
 const vulkan_cpp_sources = [_][]const u8{
-    "third_party/imgui/backends/imgui_impl_vulkan.cpp",
-    "src/engine/ui/imgui_vulkan_backend.cpp",
 };
 
 const plutovg_c_flags = [_][]const u8{
@@ -826,7 +813,7 @@ fn configureEngineModule(
         module.linkSystemLibrary("dwmapi", .{});
         module.linkSystemLibrary("uxtheme", .{});
     }
-    // Vulkan C bridge + ImGui Vulkan backend — all platforms (macOS uses MoltenVK)
+    // Vulkan C bridge — all platforms (macOS uses MoltenVK)
     module.addCSourceFiles(.{
         .files = &vulkan_c_sources,
         .flags = &vulkan_c_flags,

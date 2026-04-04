@@ -1178,78 +1178,20 @@ fn zigDylibHostAnimIsPlaying(userdata: ?*anyopaque, entity_id: u64) callconv(.c)
 }
 
 // ---------------------------------------------------------------------------
-// Canvas / UI host functions
+// Canvas / UI host functions (no-op stubs — runtime_ui removed)
+// Kept for ZigDylibHostApi ABI compatibility with pre-compiled plugins.
 // ---------------------------------------------------------------------------
 
-fn zigDylibHostCanvasClear(userdata: ?*anyopaque) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    ctx_ptr.uiClear();
-}
-
-fn zigDylibHostCanvasAddText(userdata: ?*anyopaque, x: f32, y: f32, w: f32, h: f32, ptr: [*]const u8, len: usize, r: u8, g: u8, b: u8, a: u8) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const canvas = ctx_ptr.canvas orelse return 0;
-    const runtime_ui_mod = @import("../runtime_ui/mod.zig");
-    return canvas.addText(
-        .{ .x = x, .y = y, .w = w, .h = h },
-        ptr[0..len],
-        runtime_ui_mod.Color{ .r = r, .g = g, .b = b, .a = a },
-    ) catch 0;
-}
-
-fn zigDylibHostCanvasAddPanel(userdata: ?*anyopaque, x: f32, y: f32, w: f32, h: f32, r: u8, g: u8, b: u8, a: u8) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const canvas = ctx_ptr.canvas orelse return 0;
-    const runtime_ui_mod = @import("../runtime_ui/mod.zig");
-    return canvas.addPanel(
-        .{ .x = x, .y = y, .w = w, .h = h },
-        runtime_ui_mod.Color{ .r = r, .g = g, .b = b, .a = a },
-    ) catch 0;
-}
-
-fn zigDylibHostCanvasAddButton(userdata: ?*anyopaque, x: f32, y: f32, w: f32, h: f32, ptr: [*]const u8, len: usize) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const canvas = ctx_ptr.canvas orelse return 0;
-    return canvas.addButton(.{ .x = x, .y = y, .w = w, .h = h }, ptr[0..len]) catch 0;
-}
-
-fn zigDylibHostCanvasAddProgressBar(userdata: ?*anyopaque, x: f32, y: f32, w: f32, h: f32, value: f32) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const canvas = ctx_ptr.canvas orelse return 0;
-    return canvas.addProgressBar(.{ .x = x, .y = y, .w = w, .h = h }, value) catch 0;
-}
-
-fn zigDylibHostCanvasSetText(userdata: ?*anyopaque, widget_id: u32, ptr: [*]const u8, len: usize) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const canvas = ctx_ptr.canvas orelse return;
-    canvas.setText(@intCast(widget_id), ptr[0..len]) catch |err| {
-        log.err("failed to set canvas text for widget {d}: {s}", .{ widget_id, @errorName(err) });
-    };
-}
-
-fn zigDylibHostCanvasSetProgress(userdata: ?*anyopaque, widget_id: u32, value: f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const canvas = ctx_ptr.canvas orelse return;
-    canvas.setProgress(@intCast(widget_id), value);
-}
-
-fn zigDylibHostCanvasSetVisible(userdata: ?*anyopaque, widget_id: u32, visible: u32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const canvas = ctx_ptr.canvas orelse return;
-    canvas.setVisible(@intCast(widget_id), visible != 0);
-}
-
-fn zigDylibHostCanvasRemoveWidget(userdata: ?*anyopaque, widget_id: u32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const canvas = ctx_ptr.canvas orelse return;
-    canvas.removeWidget(@intCast(widget_id));
-}
-
-fn zigDylibHostCanvasWasButtonClicked(userdata: ?*anyopaque, widget_id: u32) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const canvas = ctx_ptr.canvas orelse return 0;
-    return if (canvas.wasButtonClicked(@intCast(widget_id))) @as(u32, 1) else @as(u32, 0);
-}
+fn zigDylibHostCanvasClear(_: ?*anyopaque) callconv(.c) void {}
+fn zigDylibHostCanvasAddText(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: [*]const u8, _: usize, _: u8, _: u8, _: u8, _: u8) callconv(.c) u32 { return 0; }
+fn zigDylibHostCanvasAddPanel(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: u8, _: u8, _: u8, _: u8) callconv(.c) u32 { return 0; }
+fn zigDylibHostCanvasAddButton(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: [*]const u8, _: usize) callconv(.c) u32 { return 0; }
+fn zigDylibHostCanvasAddProgressBar(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: f32) callconv(.c) u32 { return 0; }
+fn zigDylibHostCanvasSetText(_: ?*anyopaque, _: u32, _: [*]const u8, _: usize) callconv(.c) void {}
+fn zigDylibHostCanvasSetProgress(_: ?*anyopaque, _: u32, _: f32) callconv(.c) void {}
+fn zigDylibHostCanvasSetVisible(_: ?*anyopaque, _: u32, _: u32) callconv(.c) void {}
+fn zigDylibHostCanvasRemoveWidget(_: ?*anyopaque, _: u32) callconv(.c) void {}
+fn zigDylibHostCanvasWasButtonClicked(_: ?*anyopaque, _: u32) callconv(.c) u32 { return 0; }
 
 const csharp_native_aot_api_version: u32 = 1;
 const csharp_native_aot_user_data_tag: u32 = 0x43534E41;
