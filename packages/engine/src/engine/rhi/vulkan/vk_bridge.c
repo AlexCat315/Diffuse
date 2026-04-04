@@ -25,9 +25,6 @@
 // Vulkan headers — SDK must be installed; build.zig links libvulkan
 #include <vulkan/vulkan.h>
 
-// ImGui Vulkan backend render (implemented in imgui_vulkan_backend.cpp)
-extern bool guava_imgui_vulkan_backend_render(void* vk_command_buffer);
-
 // ---------------------------------------------------------------------------
 // Command buffer opcodes — must match command_buffer.zig OpCode enum(u8)
 // ---------------------------------------------------------------------------
@@ -51,7 +48,6 @@ enum GuavaOpCode {
     OP_PUSH_UNIFORM        = 16,
     OP_SET_VIEWPORT        = 17,
     OP_SET_SCISSOR         = 18,
-    OP_IMGUI_DRAW          = 19,
 };
 
 // ---------------------------------------------------------------------------
@@ -2479,12 +2475,6 @@ bool guava_vk_rhi_submit(void* raw, uint32_t queue_class,
                 vkCmdSetScissor(cmd, 0, 1, &scissor);
                 break;
             }
-            case OP_IMGUI_DRAW: {
-                if (in_render_pass) {
-                    guava_imgui_vulkan_backend_render((void*)cmd);
-                }
-                break;
-            }
             default:
                 fprintf(stderr, "[Guava VK] Unknown opcode: %u at offset %u\n", opcode, offset - 1);
                 goto end_recording;
@@ -2612,7 +2602,7 @@ const char* guava_vk_rhi_get_device_name(void* raw) {
 }
 
 // ===========================================================================
-// Vulkan handle getters (for ImGui Vulkan backend integration)
+// Vulkan handle getters
 // ===========================================================================
 
 void* guava_vk_rhi_get_instance(void* raw) {

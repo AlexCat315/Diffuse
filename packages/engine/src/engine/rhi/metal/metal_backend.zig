@@ -95,7 +95,6 @@ pub const MetalBackend = struct {
                 .push_uniform => |_| {},
                 .set_viewport => |_| {},
                 .set_scissor => |_| {},
-                .imgui_draw => {},
                 .pipeline_barrier => |b| {
                     const pass_scope = std.meta.intToEnum(rhi.BarrierPassScope, b.pass_scope) catch return error.SubmitFailed;
                     if (inside_pass and pass_scope != .outside_pass) {

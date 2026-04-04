@@ -18,10 +18,6 @@ const GizmoDragSession = state_mod.GizmoDragSession;
 pub fn handleEditingShortcuts(state: *EditorState, layer_context: *engine.core.LayerContext) !void {
     const input = layer_context.input;
 
-    // Use wantsTextInput() instead of wantsCaptureKeyboard(): with
-    // When text input is active (e.g. rename field), skip keyboard shortcuts.
-    // With imgui removed, this guard is no longer needed.
-
     if (input.modifiers.ctrl and input.wasKeyPressed(.z)) {
         try history.undo(state, layer_context);
         return;

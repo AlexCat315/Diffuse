@@ -6,7 +6,6 @@
 #include <unordered_map>
 #include <vector>
 #include "metal_rhi_bridge.h"
-#include "../../ui/imgui_bridge.h"
 
 // ---------------------------------------------------------------------------
 // Metal RHI Bridge — real Metal API implementation
@@ -229,7 +228,6 @@ enum RhiOpCode : uint8_t {
     OP_PUSH_UNIFORM       = 16,
     OP_SET_VIEWPORT       = 17,
     OP_SET_SCISSOR        = 18,
-    OP_IMGUI_DRAW         = 19,
 };
 
 // Packed command structs (must match command_buffer.zig extern struct layout)
@@ -1203,16 +1201,6 @@ bool guava_metal_rhi_submit(void* raw, uint32_t queue_class,
                 if (renderEnc) {
                     MTLScissorRect sr = { cmd.x, cmd.y, cmd.w, cmd.h };
                     [renderEnc setScissorRect:sr];
-                }
-                break;
-            }
-            case OP_IMGUI_DRAW: {
-                if (renderEnc && current_rpd) {
-                    (void)guava_imgui_metal_backend_render(
-                        (__bridge void*)mtlCmd,
-                        (__bridge void*)renderEnc,
-                        (__bridge void*)current_rpd
-                    );
                 }
                 break;
             }

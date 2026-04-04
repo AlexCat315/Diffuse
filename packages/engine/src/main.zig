@@ -250,7 +250,7 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
     // Electron can display the rendered frame via CALayer (zero-copy).
     app.renderer.scene_viewport.use_iosurface = true;
 
-    // Start the Editor RPC WebSocket server (replaces ImGui editor overlay)
+    // Start the Editor RPC WebSocket server
     const editor_rpc = @import("guava").editor_rpc;
     var rpc_server = editor_rpc.server.Server.init(allocator, options.editor_port);
     defer rpc_server.deinit();

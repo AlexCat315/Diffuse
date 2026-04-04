@@ -78,7 +78,6 @@ const fullscreen_post_mod = @import("passes/fullscreen_post_pass.zig");
 const fxaa_pass_mod = @import("passes/fxaa_pass.zig");
 const platform_mod = @import("../core/platform.zig");
 const selection_history_mod = @import("selection_history.zig");
-const imgui_mod = @import("../ui/imgui.zig");
 const window_mod = @import("../platform/window.zig");
 const graph_mod = @import("render_graph.zig");
 const mesh_pass_mod = @import("passes/mesh_pass.zig");
@@ -2421,7 +2420,6 @@ pub const Renderer = struct {
 
             if (has_swapchain) {
                 const ui_cmd = self.rhi.activeCommandBuffer() orelse return error.CommandBufferAcquireFailed;
-                imgui_mod.prepare(ui_cmd);
                 const ui_pass = try self.rhi.beginRenderPassWithDesc(frame, .{
                     .color = .{
                         .target = .swapchain,
@@ -2432,7 +2430,7 @@ pub const Renderer = struct {
                     .depth = null,
                 });
                 const ui_start = std.time.nanoTimestamp();
-                imgui_mod.render(ui_cmd, &ui_pass);
+                _ = ui_cmd;
                 self.graph.recordPassStat(pass_stats, .ui_overlay, durationNs(ui_start, std.time.nanoTimestamp()), 0, 0);
                 self.rhi.endRenderPass(ui_pass);
             }

@@ -1,7 +1,7 @@
 ///! handlers/material.zig — material editing via RPC.
 ///!
 ///! Reads/writes Material component + MaterialResource for the selected entity.
-///! Follows the same ensureEditable pattern as the ImGui material editor.
+///! Follows the same ensureEditable pattern as the old material editor.
 const std = @import("std");
 const ctx_mod = @import("../ctx.zig");
 const Ctx = ctx_mod.Ctx;
