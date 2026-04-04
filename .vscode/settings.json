@@ -5,5 +5,4 @@
         "test",
         "-Dtest-filter=${filter}"
     ],
-    "commentTranslate.source": "Copilot"
 }
