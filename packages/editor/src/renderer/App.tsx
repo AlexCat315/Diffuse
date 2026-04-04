@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useCallback, useRef } from "react";
 import { Layout, Model, Actions, type IJsonModel, type TabNode } from "flexlayout-react";
 import "flexlayout-react/style/light.css";
 import "./flexlayout-dark.css";
@@ -27,7 +27,13 @@ import { PostProcessEditor } from "./panels/PostProcessEditor";
 import { SequencerPanel } from "./panels/SequencerPanel";
 import { SettingsPanel } from "./panels/Settings";
 import { useI18n } from "./i18n";
-import type { EntityNode, LogEntry, GizmoMode } from "../shared/rpc-types";
+import {
+  useConnectionStore,
+  useSceneStore,
+  useConsoleStore,
+  useEditorStore,
+  initRpcBridge,
+} from "./store";
 
 declare global {
   interface Window {
@@ -143,13 +149,12 @@ function loadSavedLayout(): IJsonModel {
 
 export function App() {
   const { t } = useI18n();
-  const [connected, setConnected] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [settingsOpen, setSettingsOpen] = useState(false);
-  const [hierarchy, setHierarchy] = useState<EntityNode[]>([]);
-  const [selectedEntity, setSelectedEntity] = useState<number | null>(null);
-  const [logs, setLogs] = useState<LogEntry[]>([]);
-  const [gizmoMode, setGizmoMode] = useState<GizmoMode>("translate");
+  const connected = useConnectionStore((s) => s.connected);
+  const error = useConnectionStore((s) => s.error);
+  const selectedEntity = useSceneStore((s) => s.selectedEntity);
+  const settingsOpen = useEditorStore((s) => s.settingsOpen);
+  const setSettingsOpen = useEditorStore((s) => s.setSettingsOpen);
+
   const modelRef = useRef<Model>(Model.fromJson(loadSavedLayout()));
 
   // Persist layout on every model change (debounced).
@@ -165,50 +170,17 @@ export function App() {
     }, 500);
   }, []);
 
+  // Initialize RPC bridge + keyboard shortcuts
   useEffect(() => {
-    const cleanupConnected = window.guavaEngine.onConnected(() => {
-      setConnected(true);
-      refreshHierarchy();
-    });
+    const cleanupBridge = initRpcBridge();
 
-    const cleanupError = window.guavaEngine.onError((err) => {
-      setError(err);
-    });
-
-    const cleanupEvents = window.guavaEngine.onEvent((event, data) => {
-      switch (event) {
-        case "on:scene.changed":
-          refreshHierarchy();
-          break;
-        case "on:selection.changed": {
-          const d = data as { entityIds: number[] };
-          setSelectedEntity(d.entityIds[0] ?? null);
-          break;
-        }
-        case "on:console.log":
-          setLogs((prev) => [...prev.slice(-499), data as LogEntry]);
-          break;
-      }
-    });
-
-    // Check if already connected
-    window.guavaEngine.getStatus().then((status) => {
-      if (status.rpcConnected) {
-        setConnected(true);
-        refreshHierarchy();
-      }
-    });
-
-    // Keyboard shortcuts
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      // Ctrl/Cmd+S → Save scene
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
         window.guavaEngine.call("scene.save", {}).catch(() => {});
         return;
       }
-      // Ctrl/Cmd+Z → Undo, Ctrl/Cmd+Shift+Z → Redo
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         if (e.shiftKey) {
@@ -218,16 +190,17 @@ export function App() {
         }
         return;
       }
+      const { changeGizmoMode, selectedEntity: sel, refreshHierarchy: refresh } = useSceneStore.getState();
       switch (e.key.toLowerCase()) {
-        case "w": setGizmoMode("translate"); handleGizmoChange("translate"); break;
-        case "e": setGizmoMode("rotate"); handleGizmoChange("rotate"); break;
-        case "r": setGizmoMode("scale"); handleGizmoChange("scale"); break;
+        case "w": changeGizmoMode("translate"); break;
+        case "e": changeGizmoMode("rotate"); break;
+        case "r": changeGizmoMode("scale"); break;
         case "delete":
         case "backspace":
-          if (selectedEntity != null) {
-            window.guavaEngine.call("scene.deleteEntity", { entityId: selectedEntity });
-            setSelectedEntity(null);
-            refreshHierarchy();
+          if (sel != null) {
+            window.guavaEngine.call("scene.deleteEntity", { entityId: sel });
+            useSceneStore.getState().setSelectedEntity(null);
+            refresh();
           }
           break;
       }
@@ -235,106 +208,47 @@ export function App() {
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
-      cleanupConnected();
-      cleanupError();
-      cleanupEvents();
+      cleanupBridge();
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, []);
-
-  const refreshHierarchy = useCallback(async () => {
-    try {
-      const result = await window.guavaEngine.call("scene.getHierarchy", {});
-      setHierarchy(result.roots);
-    } catch (e) {
-      console.error("Failed to fetch hierarchy:", e);
-    }
-  }, []);
-
-  const handleSelectEntity = useCallback(async (entityId: number) => {
-    setSelectedEntity(entityId);
-    try {
-      await window.guavaEngine.call("editor.setSelection", {
-        entityIds: [entityId],
-      });
-    } catch (e) {
-      console.error("Failed to set selection:", e);
-    }
-  }, []);
-
-  const handleGizmoChange = useCallback((mode: GizmoMode) => {
-    setGizmoMode(mode);
-    window.guavaEngine.call("viewport.setGizmoMode", { mode }).catch(() => {});
-  }, []);
-
-  const handleClearLogs = useCallback(() => {
-    setLogs([]);
-    window.guavaEngine.call("console.clear", {}).catch(() => {});
   }, []);
 
   // Reset layout to default
   const handleResetLayout = useCallback(() => {
     localStorage.removeItem(LAYOUT_STORAGE_KEY);
     modelRef.current = Model.fromJson(defaultLayout);
-    // Force re-render
-    setLogs((prev) => [...prev]);
+    // Force re-render by toggling a trivial store field
+    useEditorStore.getState().setSettingsOpen(useEditorStore.getState().settingsOpen);
   }, []);
 
   // ── Panel factory: maps component id → React element ──
   const factory = useCallback((node: TabNode) => {
     const component = node.getComponent();
     switch (component) {
-      case "viewport":
-        return <Viewport connected={connected} />;
-      case "hierarchy":
-        return (
-          <SceneHierarchy
-            roots={hierarchy}
-            selectedId={selectedEntity}
-            onSelect={handleSelectEntity}
-            onRefresh={refreshHierarchy}
-          />
-        );
-      case "inspector":
-        return <Inspector entityId={selectedEntity} />;
-      case "material":
-        return <MaterialEditor entityId={selectedEntity} />;
-      case "rendersettings":
-        return <RenderSettingsPanel connected={connected} />;
-      case "console":
-        return <Console logs={logs} onClear={handleClearLogs} />;
-      case "assets":
-        return <AssetBrowser connected={connected} />;
-      case "timeline":
-        return <CommandTimeline connected={connected} />;
-      case "utilities":
-        return <EditorUtilities connected={connected} />;
-      case "camera":
-        return <CameraBookmarks connected={connected} />;
-      case "rhistats":
-        return <RhiStats connected={connected} />;
-      case "audio":
-        return <AudioMixer connected={connected} />;
-      case "plugins":
-        return <PluginManager connected={connected} />;
-      case "style":
-        return <StyleInspector connected={connected} />;
-      case "placeactors":
-        return <PlaceActors connected={connected} />;
-      case "renderqueue":
-        return <RenderQueue connected={connected} />;
-      case "physicsviz":
-        return <PhysicsVisualization connected={connected} />;
-      case "postprocess":
-        return <PostProcessEditor connected={connected} />;
-      case "sequencer":
-        return <SequencerPanel connected={connected} />;
-      case "settings":
-        return <SettingsPanel connected={connected} />;
+      case "viewport":        return <Viewport />;
+      case "hierarchy":       return <SceneHierarchy />;
+      case "inspector":       return <Inspector />;
+      case "material":        return <MaterialEditor />;
+      case "rendersettings":  return <RenderSettingsPanel />;
+      case "console":         return <Console />;
+      case "assets":          return <AssetBrowser />;
+      case "timeline":        return <CommandTimeline />;
+      case "utilities":       return <EditorUtilities />;
+      case "camera":          return <CameraBookmarks />;
+      case "rhistats":        return <RhiStats />;
+      case "audio":           return <AudioMixer />;
+      case "plugins":         return <PluginManager />;
+      case "style":           return <StyleInspector />;
+      case "placeactors":     return <PlaceActors />;
+      case "renderqueue":     return <RenderQueue />;
+      case "physicsviz":      return <PhysicsVisualization />;
+      case "postprocess":     return <PostProcessEditor />;
+      case "sequencer":       return <SequencerPanel />;
+      case "settings":        return <SettingsPanel />;
       default:
         return <div style={{ padding: 12, color: "#6c7086" }}>Unknown panel: {component}</div>;
     }
-  }, [connected, hierarchy, selectedEntity, logs, handleSelectEntity, refreshHierarchy, handleClearLogs]);
+  }, []);
 
   if (error) {
     return (
@@ -360,9 +274,6 @@ export function App() {
   return (
     <div style={styles.root}>
       <Toolbar
-        gizmoMode={gizmoMode}
-        onGizmoModeChange={handleGizmoChange}
-        onRefreshHierarchy={refreshHierarchy}
         onResetLayout={handleResetLayout}
         onOpenSettings={() => setSettingsOpen(true)}
       />
@@ -374,7 +285,7 @@ export function App() {
           realtimeResize
         />
       </div>
-      <ViewportStatus connected={connected} />
+      <ViewportStatus />
       {settingsOpen && (
         <div style={styles.modalBackdrop} onClick={() => setSettingsOpen(false)}>
           <div style={styles.modalPanel} onClick={(e) => e.stopPropagation()}>
@@ -383,7 +294,7 @@ export function App() {
               <button style={styles.modalClose} onClick={() => setSettingsOpen(false)}>✕</button>
             </div>
             <div style={styles.modalBody}>
-              <SettingsPanel connected={connected} />
+              <SettingsPanel />
             </div>
           </div>
         </div>

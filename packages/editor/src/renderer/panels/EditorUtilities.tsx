@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useI18n } from "../i18n";
 import { IconClose, IconRefresh } from "../components/Icons";
 import { rpc } from "../rpc";
+import { useConnectionStore } from "../store";
 
 type EditorUtilityStatus = "ready" | "load_error" | "init_error" | "update_error";
 
@@ -15,11 +16,9 @@ interface EditorUtilitySnapshot {
   lastError: string;
 }
 
-interface EditorUtilitiesProps {
-  connected: boolean;
-}
 
-export function EditorUtilities({ connected }: EditorUtilitiesProps) {
+export function EditorUtilities() {
+  const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
   const [utilities, setUtilities] = useState<EditorUtilitySnapshot[]>([]);
   const [runtimeAvailable, setRuntimeAvailable] = useState(true);

@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useI18n } from "../i18n";
 import { ViewCube } from "./ViewCube";
+import { useConnectionStore } from "../store";
 
 type ShadingMode = "solid" | "material" | "rendered" | "wireframe";
 
@@ -11,9 +12,6 @@ const SHADING_ICONS: Record<ShadingMode, string> = {
   wireframe: "▦",
 };
 
-interface ViewportProps {
-  connected: boolean;
-}
 
 /**
  * Viewport panel — cross-platform engine viewport display.
@@ -30,7 +28,8 @@ interface ViewportProps {
  *  4. Main process calls refresh() at ~60 fps, pushes pixels via "viewport:pixels".
  *  5. On resize, re-notify the engine and poll for the new surface id.
  */
-export function Viewport({ connected }: ViewportProps) {
+export function Viewport() {
+  const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -400,7 +399,7 @@ export function Viewport({ connected }: ViewportProps) {
             ))}
           </div>
           <div style={styles.viewCubeOverlay}>
-            <ViewCube connected={connected} />
+            <ViewCube />
           </div>
         </>
       )}

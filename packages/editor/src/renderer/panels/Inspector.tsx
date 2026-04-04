@@ -3,12 +3,10 @@ import type { Transform, ComponentInfo, Vec3 } from "../../shared/rpc-types";
 import type { ComponentField } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
 import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
+import { useSceneStore, useEntityCacheStore } from "../store";
 
-interface InspectorProps {
-  entityId: number | null;
-}
-
-export function Inspector({ entityId }: InspectorProps) {
+export function Inspector() {
+  const entityId = useSceneStore((s) => s.selectedEntity);
   const { t } = useI18n();
   const [transform, setTransform] = useState<Transform | null>(null);
   const [components, setComponents] = useState<ComponentInfo[]>([]);
@@ -16,15 +14,10 @@ export function Inspector({ entityId }: InspectorProps) {
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
 
   const fetchEntityData = useCallback(async (eid: number) => {
-    try {
-      const [t, c] = await Promise.all([
-        window.guavaEngine.call("entity.getTransform", { entityId: eid }),
-        window.guavaEngine.call("entity.getComponents", { entityId: eid }),
-      ]);
-      setTransform(t);
-      setComponents(c.components);
-    } catch {
-      // Entity may have been removed
+    const data = await useEntityCacheStore.getState().fetchEntity(eid, true);
+    if (data) {
+      setTransform(data.transform);
+      setComponents(data.components);
     }
   }, []);
 

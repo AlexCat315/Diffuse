@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { rpc } from "../rpc";
+import { useConnectionStore } from "../store";
 
 interface PhysicsVizSettings {
   drawMode: string;
@@ -62,11 +63,9 @@ function hexToRgba(hex: string, alpha: number): [number, number, number, number]
   return [r, g, b, alpha];
 }
 
-interface PhysicsVisualizationProps {
-  connected: boolean;
-}
 
-export function PhysicsVisualization({ connected }: PhysicsVisualizationProps) {
+export function PhysicsVisualization() {
+  const connected = useConnectionStore((s) => s.connected);
   const [settings, setSettings] = useState<PhysicsVizSettings | null>(null);
 
   const refresh = useCallback(async () => {

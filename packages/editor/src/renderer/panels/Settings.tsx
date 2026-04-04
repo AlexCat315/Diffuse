@@ -1,12 +1,10 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { useI18n, type Locale } from "../i18n";
+import { useConnectionStore } from "../store";
 
 type SettingsTab = "general" | "shortcuts" | "remote";
 type FpsDisplay = "viewport" | "none";
 
-interface SettingsProps {
-  connected: boolean;
-}
 
 // ── Local preferences (stored in localStorage) ───────────────────
 
@@ -80,7 +78,8 @@ function saveShortcuts(shortcuts: Record<string, ShortcutBinding>) {
 
 // ── Component ────────────────────────────────────────────────────
 
-export function SettingsPanel({ connected }: SettingsProps) {
+export function SettingsPanel() {
+  const connected = useConnectionStore((s) => s.connected);
   const { locale, setLocale, t } = useI18n();
   const [tab, setTab] = useState<SettingsTab>("general");
   const [prefs, setPrefs] = useState<EditorPrefs>(loadPrefs);

@@ -1,4 +1,5 @@
 import React, { useState, useCallback } from "react";
+import { useConnectionStore } from "../store";
 
 /** Actor categories with static entries — no RPC needed for the catalog. */
 const categories = [
@@ -42,11 +43,9 @@ const categories = [
   },
 ] as const;
 
-interface PlaceActorsProps {
-  connected: boolean;
-}
 
-export function PlaceActors({ connected }: PlaceActorsProps) {
+export function PlaceActors() {
+  const connected = useConnectionStore((s) => s.connected);
   const [activeCategory, setActiveCategory] = useState("basics");
   const [filter, setFilter] = useState("");
   const [spawning, setSpawning] = useState(false);

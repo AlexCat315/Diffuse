@@ -1,8 +1,6 @@
 import React, { useRef, useEffect, useCallback, useState, useMemo } from "react";
+import { useConnectionStore } from "../store";
 
-interface ViewCubeProps {
-  connected: boolean;
-}
 
 type Quat = [number, number, number, number]; // x,y,z,w
 type Vec3 = [number, number, number];
@@ -55,7 +53,8 @@ function applyMat3(m: number[], v: Vec3): Vec3 {
 
 // ── Component ────────────────────────────────────────────────────────────
 
-export function ViewCube({ connected }: ViewCubeProps) {
+export function ViewCube() {
+  const connected = useConnectionStore((s) => s.connected);
   const [rot, setRot] = useState<Quat>([0, 0, 0, 1]);
   const [hovered, setHovered] = useState<string | null>(null);
   const dragRef = useRef<{ sx: number; sy: number; dragging: boolean }>({

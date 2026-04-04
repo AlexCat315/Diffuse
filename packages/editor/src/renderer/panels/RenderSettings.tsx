@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import type { RpcResult } from "../../shared/rpc-types";
 import { rpc } from "../rpc";
 import { useI18n } from "../i18n";
+import { useConnectionStore } from "../store";
 
 type RenderSettings = RpcResult<"viewport.getRenderSettings">;
 type ShadingMode = "solid" | "material" | "rendered" | "wireframe";
@@ -20,11 +21,9 @@ interface RenderOutputState {
   path: string;
 }
 
-interface RenderSettingsProps {
-  connected: boolean;
-}
 
-export function RenderSettingsPanel({ connected }: RenderSettingsProps) {
+export function RenderSettingsPanel() {
+  const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
   const [settings, setSettings] = useState<RenderSettings | null>(null);
   const [pathTrace, setPathTrace] = useState<PathTraceState>({ samples: 256, bounces: 8, resolutionScale: 1.0 });

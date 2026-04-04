@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useConnectionStore } from "../store";
 
 interface BusInfo {
   id: string;
@@ -7,11 +8,9 @@ interface BusInfo {
   playing: number;
 }
 
-interface AudioMixerProps {
-  connected: boolean;
-}
 
-export function AudioMixer({ connected }: AudioMixerProps) {
+export function AudioMixer() {
+  const connected = useConnectionStore((s) => s.connected);
   const [available, setAvailable] = useState(false);
   const [activeVoices, setActiveVoices] = useState(0);
   const [buses, setBuses] = useState<BusInfo[]>([]);

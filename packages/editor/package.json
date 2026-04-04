@@ -16,7 +16,9 @@
   },
   "dependencies": {
     "flexlayout-react": "^0.8.19",
-    "ws": "^8.20.0"
+    "immer": "^11.1.4",
+    "ws": "^8.20.0",
+    "zustand": "^5.0.12"
   },
   "devDependencies": {
     "@types/node": "^24.11.1",

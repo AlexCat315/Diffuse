@@ -2,15 +2,13 @@ import React, { useState, useCallback, useRef, useEffect } from "react";
 import type { EntityNode } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
 import { IconClose } from "../components/Icons";
+import { useSceneStore } from "../store";
 
-interface SceneHierarchyProps {
-  roots: EntityNode[];
-  selectedId: number | null;
-  onSelect: (entityId: number) => void;
-  onRefresh: () => void;
-}
-
-export function SceneHierarchy({ roots, selectedId, onSelect, onRefresh }: SceneHierarchyProps) {
+export function SceneHierarchy() {
+  const roots = useSceneStore((s) => s.hierarchy);
+  const selectedId = useSceneStore((s) => s.selectedEntity);
+  const onSelect = useSceneStore((s) => s.selectEntity);
+  const onRefresh = useSceneStore((s) => s.refreshHierarchy);
   const { t } = useI18n();
   const [search, setSearch] = useState("");
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entityId: number | null } | null>(null);
