@@ -69,6 +69,9 @@ pub const Server = struct {
     // Subscription state tracking
     sub_state: subscriptions.SubscriptionState = .{},
 
+    // Shared editor settings (viewport, physics viz, camera bookmarks, material preview)
+    settings: @import("settings.zig").EditorSettings = .{},
+
     pub fn init(allocator: std.mem.Allocator, port: u16) Server {
         return .{
             .allocator = allocator,
@@ -143,7 +146,7 @@ pub const Server = struct {
         for (batch[0..count]) |*msg| {
             defer msg.deinit(self.allocator);
 
-            const response_json = methods.dispatch(self.allocator, msg.payload, layer_context) catch |err| {
+            const response_json = methods.dispatch(self.allocator, msg.payload, layer_context, &self.settings) catch |err| {
                 log.warn("RPC dispatch error: {s}", .{@errorName(err)});
                 continue;
             };

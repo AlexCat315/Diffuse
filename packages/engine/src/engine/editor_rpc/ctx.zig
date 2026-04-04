@@ -6,6 +6,7 @@
 const std = @import("std");
 const core = @import("../core/layer.zig");
 const world_mod = @import("../scene/world.zig");
+const settings_mod = @import("settings.zig");
 
 pub const World = world_mod.World;
 pub const Entity = world_mod.Entity;
@@ -15,6 +16,7 @@ pub const Ctx = struct {
     allocator: std.mem.Allocator,
     params: ?std.json.Value,
     layer: *core.LayerContext,
+    settings: *settings_mod.EditorSettings,
     _result: ?[]u8 = null,
 
     // ── Parameter readers ───────────────────────────────────────

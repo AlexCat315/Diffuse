@@ -5,28 +5,13 @@
 const std = @import("std");
 const ctx_mod = @import("../ctx.zig");
 const Ctx = ctx_mod.Ctx;
-
-// ── Bookmark storage (process-lifetime, shared across RPC calls) ────
-
-const Bookmark = struct {
-    name: [64]u8 = [_]u8{0} ** 64,
-    name_len: usize = 0,
-    translation: [3]f32 = .{ 0, 0, 0 },
-    rotation: [4]f32 = .{ 0, 0, 0, 1 }, // quaternion xyzw
-    fov: f32 = 1.0471976, // ~60 degrees in radians
-
-    fn getName(self: *const Bookmark) []const u8 {
-        return self.name[0..self.name_len];
-    }
-};
-
-const max_bookmarks = 64;
-var bookmark_buf: [max_bookmarks]Bookmark = undefined;
-var bookmark_len: usize = 0;
+const EditorSettings = @import("../settings.zig").EditorSettings;
+const Bookmark = EditorSettings.Bookmark;
 
 // ── RPC handlers ────────────────────────────────────────────────
 
 pub fn listBookmarks(ctx: *Ctx) !void {
+    const cam = &ctx.settings.camera;
     const Info = struct {
         index: u64,
         name: []const u8,
@@ -38,7 +23,7 @@ pub fn listBookmarks(ctx: *Ctx) !void {
     var list = std.ArrayList(Info).empty;
     defer list.deinit(ctx.allocator);
 
-    for (bookmark_buf[0..bookmark_len], 0..) |*b, i| {
+    for (cam.bookmark_buf[0..cam.bookmark_len], 0..) |*b, i| {
         try list.append(ctx.allocator, .{
             .index = @intCast(i),
             .name = b.getName(),
@@ -52,7 +37,8 @@ pub fn listBookmarks(ctx: *Ctx) !void {
 }
 
 pub fn addBookmark(ctx: *Ctx) !void {
-    if (bookmark_len >= max_bookmarks) return error.OutOfMemory;
+    const cam = &ctx.settings.camera;
+    if (cam.bookmark_len >= EditorSettings.CameraState.max_bookmarks) return error.OutOfMemory;
     const name = (try ctx.paramOpt([]const u8, "name")) orelse "Bookmark";
 
     // Get current camera transform from the world
@@ -61,7 +47,7 @@ pub fn addBookmark(ctx: *Ctx) !void {
     const camera_entity = world.getEntityConst(camera_id) orelse return error.NotAvailable;
     const transform = if (world.worldTransformConst(camera_id)) |wt| wt else camera_entity.local_transform;
 
-    const fov: f32 = if (camera_entity.camera) |cam| switch (cam.projection) {
+    const fov: f32 = if (camera_entity.camera) |c| switch (c.projection) {
         .perspective => |p| p.fov_y_radians,
         else => 1.0471976,
     } else 1.0471976;
@@ -74,28 +60,30 @@ pub fn addBookmark(ctx: *Ctx) !void {
     b.name_len = @min(name.len, 63);
     @memcpy(b.name[0..b.name_len], name[0..b.name_len]);
 
-    bookmark_buf[bookmark_len] = b;
-    bookmark_len += 1;
-    try ctx.reply(.{ .index = @as(u64, @intCast(bookmark_len - 1)) });
+    cam.bookmark_buf[cam.bookmark_len] = b;
+    cam.bookmark_len += 1;
+    try ctx.reply(.{ .index = @as(u64, @intCast(cam.bookmark_len - 1)) });
 }
 
 pub fn removeBookmark(ctx: *Ctx) !void {
+    const cam = &ctx.settings.camera;
     const idx_raw = try ctx.param(u64, "index");
     const idx: usize = @intCast(idx_raw);
-    if (idx >= bookmark_len) return error.InvalidArguments;
+    if (idx >= cam.bookmark_len) return error.InvalidArguments;
     // Shift elements down
-    if (idx + 1 < bookmark_len) {
-        std.mem.copyForwards(Bookmark, bookmark_buf[idx .. bookmark_len - 1], bookmark_buf[idx + 1 .. bookmark_len]);
+    if (idx + 1 < cam.bookmark_len) {
+        std.mem.copyForwards(Bookmark, cam.bookmark_buf[idx .. cam.bookmark_len - 1], cam.bookmark_buf[idx + 1 .. cam.bookmark_len]);
     }
-    bookmark_len -= 1;
+    cam.bookmark_len -= 1;
     try ctx.reply(.{});
 }
 
 pub fn applyBookmark(ctx: *Ctx) !void {
+    const cam = &ctx.settings.camera;
     const idx_raw = try ctx.param(u64, "index");
     const idx: usize = @intCast(idx_raw);
-    if (idx >= bookmark_len) return error.InvalidArguments;
-    const b = &bookmark_buf[idx];
+    if (idx >= cam.bookmark_len) return error.InvalidArguments;
+    const b = &cam.bookmark_buf[idx];
 
     const world = ctx.layer.world;
     const camera_id = world.primaryCameraEntity() orelse return error.NotAvailable;
@@ -108,11 +96,12 @@ pub fn applyBookmark(ctx: *Ctx) !void {
 }
 
 pub fn renameBookmark(ctx: *Ctx) !void {
+    const cam = &ctx.settings.camera;
     const idx_raw = try ctx.param(u64, "index");
     const name = try ctx.param([]const u8, "name");
     const idx: usize = @intCast(idx_raw);
-    if (idx >= bookmark_len) return error.InvalidArguments;
-    var b = &bookmark_buf[idx];
+    if (idx >= cam.bookmark_len) return error.InvalidArguments;
+    var b = &cam.bookmark_buf[idx];
     b.name_len = @min(name.len, 63);
     @memset(&b.name, 0);
     @memcpy(b.name[0..b.name_len], name[0..b.name_len]);
