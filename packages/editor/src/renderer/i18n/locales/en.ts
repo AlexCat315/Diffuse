@@ -560,6 +560,27 @@ export const en = {
     enableEdit: "Enable editing",
     disableEdit: "Lock (read-only)",
   },
+
+  // ── AI Chat ──────────────────────────────────────────────────
+  aiChat: {
+    title: "AI Chat",
+    settings: "Settings",
+    clear: "Clear History",
+    send: "Send",
+    stop: "Stop",
+    placeholder: "Type a message… (Enter to send, Shift+Enter for newline)",
+    emptyChat: "Start a conversation with AI.",
+    configureFirst: "Configure an AI provider in Settings to begin.",
+    providerSettings: "AI Provider Settings",
+    backToChat: "Back to Chat",
+    addProvider: "Add Provider",
+    name: "Name",
+    endpoint: "Endpoint",
+    model: "Model",
+    testConnection: "Test Connection",
+    activate: "Activate",
+    noProviders: "No providers configured. Add one to get started.",
+  },
 };
 
 type DeepStringRecord<T> = {
