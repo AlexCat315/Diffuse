@@ -12,6 +12,10 @@ pub const @"on:selection.changed" = struct {
 
 pub const @"on:console.log" = types.LogEntry;
 
+pub const @"on:console.logs" = struct {
+    entries: []const types.LogEntry,
+};
+
 pub const @"on:viewport.metrics" = struct {
     fps: u32,
     frameTimeMs: u32,

@@ -227,6 +227,7 @@ function setupSubscriptionForwarding(): void {
     "on:selection.changed",
     "on:viewport.metrics",
     "on:console.log",
+    "on:console.logs",
     "on:playback.stateChanged",
     "on:asset.changed",
     "on:editor.historyChanged",

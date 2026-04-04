@@ -464,30 +464,42 @@ pub const Server = struct {
             }
         }
 
-        // Send to clients (outside lock)
-        self.clients_mutex.lock();
-        defer self.clients_mutex.unlock();
+        if (count == 0) return;
 
+        // Snapshot live client handles so we can write outside the mutex.
+        const ClientSnapshot = struct { stream: std.net.Stream, alive: bool, id: u32 };
+        var snap_buf: [max_clients]?ClientSnapshot = undefined;
+        {
+            self.clients_mutex.lock();
+            defer self.clients_mutex.unlock();
+            for (&self.clients, 0..) |*slot, i| {
+                if (slot.*) |c| {
+                    snap_buf[i] = .{ .stream = c.stream, .alive = c.alive, .id = c.id };
+                } else {
+                    snap_buf[i] = null;
+                }
+            }
+        }
+
+        // Write to clients WITHOUT holding the mutex
         for (batch_buf[0..count]) |*msg| {
             defer self.allocator.free(msg.payload);
 
             if (msg.client_id == 0) {
                 // Broadcast
-                for (&self.clients) |*slot| {
-                    if (slot.*) |client| {
-                        if (client.alive) {
-                            ws.writeTextFrame(client.stream, msg.payload) catch {
-                                // Client write error — will be cleaned up on next read
-                            };
+                for (&snap_buf) |snap| {
+                    if (snap) |c| {
+                        if (c.alive) {
+                            ws.writeTextFrame(c.stream, msg.payload) catch {};
                         }
                     }
                 }
             } else {
                 // Targeted send
-                for (&self.clients) |*slot| {
-                    if (slot.*) |client| {
-                        if (client.id == msg.client_id and client.alive) {
-                            ws.writeTextFrame(client.stream, msg.payload) catch {};
+                for (&snap_buf) |snap| {
+                    if (snap) |c| {
+                        if (c.id == msg.client_id and c.alive) {
+                            ws.writeTextFrame(c.stream, msg.payload) catch {};
                             break;
                         }
                     }

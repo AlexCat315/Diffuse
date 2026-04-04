@@ -34,6 +34,14 @@ export function initRpcBridge(): () => void {
       case "on:console.log":
         useConsoleStore.getState().appendLog(data as LogEntry);
         break;
+      case "on:console.logs": {
+        const d = data as { entries: LogEntry[] };
+        const store = useConsoleStore.getState();
+        for (const entry of d.entries) {
+          store.appendLog(entry);
+        }
+        break;
+      }
     }
   });
 
