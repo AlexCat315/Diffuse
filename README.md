@@ -22,17 +22,13 @@ zig build
 zig build -Doptimize=ReleaseFast
 zig build test
 zig build run
-zig build run -- --create /absolute/path/to/MyGame --name MyGame
-zig build run -- --open /absolute/path/to/MyGame
-zig build run-engine
-zig build run-engine -- --frames 120
-zig build run-engine -- --project-path /absolute/path/to/MyGame
-zig build run-engine -- mcp --transport stdio
-zig build run-engine -- validate --root assets
-zig build run-engine -- --backend vulkan
-zig build launcher
-zig build run-launcher
-zig build run-launcher -- --create /absolute/path/to/MyGame --name MyGame --no-launch
+zig build run -- --project-path /absolute/path/to/MyGame
+zig build run -- --frames 120
+zig build run -- mcp --transport stdio
+zig build run -- validate --root assets
+zig build run -- --backend vulkan
+zig build run-player
+zig build run-editor           # 构建引擎 + 启动 Electron 编辑器 (dev)
 zig build compile-commands
 # 基线测试（标准光栅化）
 zig build render-test
@@ -57,14 +53,6 @@ zig build render-test -- --rt-shadows --export-png
 
 - [开发规划](docs/GUAVA_ENGINE.md)
 - [Hybrid Renderer 升级路线](docs/HYBRID_RENDERER_UPGRADE.md)
-
-## 项目启动器
-
-- `zig build run` 现在默认先启动 `guava-launcher`，创建或选择项目后再拉起引擎。
-- `zig build run-engine` 保留为直接进入编辑器/引擎的入口，适合跳过启动器时使用。
-- `guava-launcher` 是独立入口，用于创建、选择和打开带 `.guava` 标记文件的游戏项目目录。
-- 启动器当前会创建基础结构：`.guava`、`Content/Scenes` 和 `Derived`。
-- 启动器通过 `--project-path` 把项目根路径传给编辑器，这也是后续项目隔离和资源面板重构的入口。
 
 ## 协作须知
 
