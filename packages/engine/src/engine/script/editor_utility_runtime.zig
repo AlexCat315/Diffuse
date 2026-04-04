@@ -409,7 +409,6 @@ pub const EditorUtilityRuntime = struct {
         try out.writer.writeByte('\n');
         return try allocator.dupe(u8, out.written());
     }
-
 };
 
 /// 获取选择列表中的主要（第一个）实体

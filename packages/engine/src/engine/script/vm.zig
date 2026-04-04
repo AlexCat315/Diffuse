@@ -1183,15 +1183,25 @@ fn zigDylibHostAnimIsPlaying(userdata: ?*anyopaque, entity_id: u64) callconv(.c)
 // ---------------------------------------------------------------------------
 
 fn zigDylibHostCanvasClear(_: ?*anyopaque) callconv(.c) void {}
-fn zigDylibHostCanvasAddText(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: [*]const u8, _: usize, _: u8, _: u8, _: u8, _: u8) callconv(.c) u32 { return 0; }
-fn zigDylibHostCanvasAddPanel(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: u8, _: u8, _: u8, _: u8) callconv(.c) u32 { return 0; }
-fn zigDylibHostCanvasAddButton(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: [*]const u8, _: usize) callconv(.c) u32 { return 0; }
-fn zigDylibHostCanvasAddProgressBar(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: f32) callconv(.c) u32 { return 0; }
+fn zigDylibHostCanvasAddText(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: [*]const u8, _: usize, _: u8, _: u8, _: u8, _: u8) callconv(.c) u32 {
+    return 0;
+}
+fn zigDylibHostCanvasAddPanel(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: u8, _: u8, _: u8, _: u8) callconv(.c) u32 {
+    return 0;
+}
+fn zigDylibHostCanvasAddButton(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: [*]const u8, _: usize) callconv(.c) u32 {
+    return 0;
+}
+fn zigDylibHostCanvasAddProgressBar(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: f32) callconv(.c) u32 {
+    return 0;
+}
 fn zigDylibHostCanvasSetText(_: ?*anyopaque, _: u32, _: [*]const u8, _: usize) callconv(.c) void {}
 fn zigDylibHostCanvasSetProgress(_: ?*anyopaque, _: u32, _: f32) callconv(.c) void {}
 fn zigDylibHostCanvasSetVisible(_: ?*anyopaque, _: u32, _: u32) callconv(.c) void {}
 fn zigDylibHostCanvasRemoveWidget(_: ?*anyopaque, _: u32) callconv(.c) void {}
-fn zigDylibHostCanvasWasButtonClicked(_: ?*anyopaque, _: u32) callconv(.c) u32 { return 0; }
+fn zigDylibHostCanvasWasButtonClicked(_: ?*anyopaque, _: u32) callconv(.c) u32 {
+    return 0;
+}
 
 const csharp_native_aot_api_version: u32 = 1;
 const csharp_native_aot_user_data_tag: u32 = 0x43534E41;

@@ -495,7 +495,6 @@ pub const ScriptContext = struct {
         const am = self.action_map orelse return 0.0;
         return am.getAxis(action);
     }
-
 };
 
 // 扩展 Entity 添加 hasComponent 和 getComponent 方法
