@@ -1,0 +1,1527 @@
+{
+	"archive" : {},
+	"artifacts" : 
+	[
+		{
+			"path" : "libTestFramework.a"
+		}
+	],
+	"backtrace" : 3,
+	"backtraceGraph" : 
+	{
+		"commands" : 
+		[
+			"add_library",
+			"include",
+			"target_link_libraries",
+			"target_include_directories",
+			"target_precompile_headers"
+		],
+		"files" : 
+		[
+			"/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/TestFramework.cmake",
+			"CMakeLists.txt"
+		],
+		"nodes" : 
+		[
+			{
+				"file" : 1
+			},
+			{
+				"command" : 1,
+				"file" : 1,
+				"line" : 432,
+				"parent" : 0
+			},
+			{
+				"file" : 0,
+				"parent" : 1
+			},
+			{
+				"command" : 0,
+				"file" : 0,
+				"line" : 292,
+				"parent" : 2
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 299,
+				"parent" : 2
+			},
+			{
+				"command" : 2,
+				"file" : 0,
+				"line" : 314,
+				"parent" : 2
+			},
+			{
+				"command" : 3,
+				"file" : 0,
+				"line" : 293,
+				"parent" : 2
+			},
+			{
+				"command" : 3,
+				"file" : 0,
+				"line" : 298,
+				"parent" : 2
+			},
+			{
+				"command" : 4,
+				"file" : 0,
+				"line" : 294,
+				"parent" : 2
+			}
+		]
+	},
+	"codemodelVersion" : 
+	{
+		"major" : 2,
+		"minor" : 9
+	},
+	"compileDependencies" : 
+	[
+		{
+			"backtrace" : 4,
+			"id" : "Jolt::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 5,
+			"id" : "Jolt::@6890427a1f51a3e7e1df"
+		}
+	],
+	"compileGroups" : 
+	[
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : " -Wall -Werror -g -fno-rtti -fno-exceptions -ffp-model=precise -std=c++17 -arch arm64"
+				},
+				{
+					"backtrace" : 4,
+					"fragment" : "-pthread"
+				},
+				{
+					"fragment" : "-Winvalid-pch -fpch-instantiate-templates -Xclang -emit-pch -Xclang -include -Xclang \"/Users/alex/dev/zig/Guava Engine/build/CMakeFiles/TestFramework.dir/cmake_pch.hxx\" -x c++-header"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"backtrace" : 4,
+					"define" : "JPH_DEBUG_RENDERER"
+				},
+				{
+					"backtrace" : 4,
+					"define" : "JPH_OBJECT_STREAM"
+				},
+				{
+					"backtrace" : 4,
+					"define" : "JPH_PROFILE_ENABLED"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 6,
+					"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Build/../TestFramework"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/opt/homebrew/include"
+				},
+				{
+					"backtrace" : 4,
+					"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Build/.."
+				}
+			],
+			"language" : "CXX",
+			"languageStandard" : 
+			{
+				"backtraces" : 
+				[
+					3
+				],
+				"standard" : "17"
+			},
+			"precompileHeaders" : 
+			[
+				{
+					"backtrace" : 8,
+					"header" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Build/..//TestFramework/TestFramework.h"
+				}
+			],
+			"sourceIndexes" : 
+			[
+				0
+			]
+		},
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : " -Wall -Werror -g -fno-rtti -fno-exceptions -ffp-model=precise -std=c++17 -arch arm64"
+				},
+				{
+					"backtrace" : 4,
+					"fragment" : "-pthread"
+				},
+				{
+					"fragment" : "-Winvalid-pch -Xclang -include-pch -Xclang \"/Users/alex/dev/zig/Guava Engine/build/CMakeFiles/TestFramework.dir/cmake_pch.hxx.pch\" -Xclang -include -Xclang \"/Users/alex/dev/zig/Guava Engine/build/CMakeFiles/TestFramework.dir/cmake_pch.hxx\""
+				}
+			],
+			"defines" : 
+			[
+				{
+					"backtrace" : 4,
+					"define" : "JPH_DEBUG_RENDERER"
+				},
+				{
+					"backtrace" : 4,
+					"define" : "JPH_OBJECT_STREAM"
+				},
+				{
+					"backtrace" : 4,
+					"define" : "JPH_PROFILE_ENABLED"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 6,
+					"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Build/../TestFramework"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/opt/homebrew/include"
+				},
+				{
+					"backtrace" : 4,
+					"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Build/.."
+				}
+			],
+			"language" : "CXX",
+			"languageStandard" : 
+			{
+				"backtraces" : 
+				[
+					3
+				],
+				"standard" : "17"
+			},
+			"precompileHeaders" : 
+			[
+				{
+					"backtrace" : 8,
+					"header" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Build/..//TestFramework/TestFramework.h"
+				}
+			],
+			"sourceIndexes" : 
+			[
+				1,
+				3,
+				6,
+				9,
+				11,
+				13,
+				15,
+				17,
+				21,
+				23,
+				28,
+				31,
+				37,
+				39,
+				41,
+				43,
+				45,
+				47,
+				50,
+				52,
+				54,
+				56,
+				58,
+				60,
+				63,
+				65,
+				69,
+				95,
+				97,
+				99,
+				102,
+				104,
+				106,
+				108
+			]
+		},
+		{
+			"compileCommandFragments" : 
+			[
+				{
+					"fragment" : " -Wall -Werror -g -fno-rtti -fno-exceptions -ffp-model=precise -std=c++17 -arch arm64"
+				},
+				{
+					"backtrace" : 4,
+					"fragment" : "-pthread"
+				}
+			],
+			"defines" : 
+			[
+				{
+					"backtrace" : 4,
+					"define" : "JPH_DEBUG_RENDERER"
+				},
+				{
+					"backtrace" : 4,
+					"define" : "JPH_OBJECT_STREAM"
+				},
+				{
+					"backtrace" : 4,
+					"define" : "JPH_PROFILE_ENABLED"
+				}
+			],
+			"includes" : 
+			[
+				{
+					"backtrace" : 6,
+					"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Build/../TestFramework"
+				},
+				{
+					"backtrace" : 7,
+					"path" : "/opt/homebrew/include"
+				},
+				{
+					"backtrace" : 4,
+					"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Build/.."
+				}
+			],
+			"language" : "CXX",
+			"languageStandard" : 
+			{
+				"backtraces" : 
+				[
+					3
+				],
+				"standard" : "17"
+			},
+			"precompileHeaders" : 
+			[
+				{
+					"backtrace" : 8,
+					"header" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Build/..//TestFramework/TestFramework.h"
+				}
+			],
+			"sourceIndexes" : 
+			[
+				72,
+				74,
+				77,
+				79,
+				81,
+				83,
+				86,
+				88,
+				90,
+				91,
+				92
+			]
+		}
+	],
+	"dependencies" : 
+	[
+		{
+			"backtrace" : 4,
+			"id" : "Jolt::@6890427a1f51a3e7e1df"
+		}
+	],
+	"id" : "TestFramework::@6890427a1f51a3e7e1df",
+	"interfaceCompileDependencies" : 
+	[
+		{
+			"backtrace" : 4,
+			"id" : "Jolt::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 5,
+			"id" : "Jolt::@6890427a1f51a3e7e1df"
+		}
+	],
+	"interfaceLinkLibraries" : 
+	[
+		{
+			"backtrace" : 4,
+			"id" : "Jolt::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 4,
+			"fragment" : "/opt/homebrew/lib/libvulkan.dylib"
+		},
+		{
+			"backtrace" : 5,
+			"id" : "Jolt::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 5,
+			"fragment" : "-framework Cocoa -framework Metal -framework MetalKit -framework GameController"
+		}
+	],
+	"linkLibraries" : 
+	[
+		{
+			"backtrace" : 4,
+			"id" : "Jolt::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 4,
+			"fragment" : "/opt/homebrew/lib/libvulkan.dylib"
+		},
+		{
+			"backtrace" : 5,
+			"id" : "Jolt::@6890427a1f51a3e7e1df"
+		},
+		{
+			"backtrace" : 5,
+			"fragment" : "-framework Cocoa -framework Metal -framework MetalKit -framework GameController"
+		}
+	],
+	"name" : "TestFramework",
+	"nameOnDisk" : "libTestFramework.a",
+	"paths" : 
+	{
+		"build" : ".",
+		"source" : "."
+	},
+	"sourceGroups" : 
+	[
+		{
+			"name" : "Source Files",
+			"sourceIndexes" : 
+			[
+				0
+			]
+		},
+		{
+			"name" : "Application",
+			"sourceIndexes" : 
+			[
+				1,
+				2,
+				3,
+				4,
+				5
+			]
+		},
+		{
+			"name" : "External",
+			"sourceIndexes" : 
+			[
+				6,
+				7,
+				8
+			]
+		},
+		{
+			"name" : "Image",
+			"sourceIndexes" : 
+			[
+				9,
+				10,
+				11,
+				12,
+				13,
+				14,
+				15,
+				16,
+				17,
+				18
+			]
+		},
+		{
+			"name" : "Input",
+			"sourceIndexes" : 
+			[
+				19,
+				20
+			]
+		},
+		{
+			"name" : "Renderer",
+			"sourceIndexes" : 
+			[
+				21,
+				22,
+				23,
+				24,
+				25,
+				26,
+				27,
+				28,
+				29,
+				30,
+				31,
+				32,
+				33,
+				34
+			]
+		},
+		{
+			"name" : "",
+			"sourceIndexes" : 
+			[
+				35,
+				36
+			]
+		},
+		{
+			"name" : "UI",
+			"sourceIndexes" : 
+			[
+				37,
+				38,
+				39,
+				40,
+				41,
+				42,
+				43,
+				44,
+				45,
+				46,
+				47,
+				48,
+				49,
+				50,
+				51,
+				52,
+				53,
+				54,
+				55,
+				56,
+				57,
+				58,
+				59,
+				60,
+				61,
+				62,
+				63,
+				64
+			]
+		},
+		{
+			"name" : "Utils",
+			"sourceIndexes" : 
+			[
+				65,
+				66,
+				67,
+				68,
+				69,
+				70,
+				90,
+				91
+			]
+		},
+		{
+			"name" : "Window",
+			"sourceIndexes" : 
+			[
+				71,
+				92,
+				93
+			]
+		},
+		{
+			"name" : "Renderer\\MTL",
+			"sourceIndexes" : 
+			[
+				72,
+				73,
+				74,
+				75,
+				76,
+				77,
+				78,
+				79,
+				80,
+				81,
+				82,
+				83,
+				84,
+				85
+			]
+		},
+		{
+			"name" : "Input\\MacOS",
+			"sourceIndexes" : 
+			[
+				86,
+				87,
+				88,
+				89
+			]
+		},
+		{
+			"name" : "Renderer\\VK",
+			"sourceIndexes" : 
+			[
+				94,
+				95,
+				96,
+				97,
+				98,
+				99,
+				100,
+				101,
+				102,
+				103,
+				104,
+				105,
+				106,
+				107,
+				108,
+				109,
+				110
+			]
+		},
+		{
+			"name" : "Assets\\Shaders\\MTL",
+			"sourceIndexes" : 
+			[
+				111,
+				135,
+				136,
+				137,
+				138
+			]
+		},
+		{
+			"name" : "Assets\\Shaders\\VK",
+			"sourceIndexes" : 
+			[
+				112,
+				113,
+				114,
+				115,
+				116,
+				117,
+				118,
+				119,
+				120,
+				121,
+				122,
+				123
+			]
+		},
+		{
+			"name" : "Intermediate",
+			"sourceIndexes" : 
+			[
+				124,
+				125,
+				126,
+				127,
+				128,
+				129,
+				130,
+				131,
+				132,
+				133,
+				134,
+				139
+			]
+		},
+		{
+			"name" : "Precompile Header File",
+			"sourceIndexes" : 
+			[
+				140
+			]
+		},
+		{
+			"name" : "CMake Rules",
+			"sourceIndexes" : 
+			[
+				141,
+				142,
+				143,
+				144,
+				145,
+				146,
+				147,
+				148,
+				149,
+				150,
+				151,
+				152,
+				153,
+				154,
+				155,
+				156
+			]
+		}
+	],
+	"sources" : 
+	[
+		{
+			"backtrace" : 0,
+			"compileGroupIndex" : 0,
+			"path" : "/Users/alex/dev/zig/Guava Engine/build/CMakeFiles/TestFramework.dir/cmake_pch.hxx.cxx",
+			"sourceGroupIndex" : 0
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Application/Application.cpp",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Application/Application.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Application/DebugUI.cpp",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Application/DebugUI.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Application/EntryPoint.h",
+			"sourceGroupIndex" : 1
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/External/Perlin.cpp",
+			"sourceGroupIndex" : 2
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/External/Perlin.h",
+			"sourceGroupIndex" : 2
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/External/stb_truetype.h",
+			"sourceGroupIndex" : 2
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Image/BlitSurface.cpp",
+			"sourceGroupIndex" : 3
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Image/BlitSurface.h",
+			"sourceGroupIndex" : 3
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Image/LoadBMP.cpp",
+			"sourceGroupIndex" : 3
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Image/LoadBMP.h",
+			"sourceGroupIndex" : 3
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Image/LoadTGA.cpp",
+			"sourceGroupIndex" : 3
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Image/LoadTGA.h",
+			"sourceGroupIndex" : 3
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Image/Surface.cpp",
+			"sourceGroupIndex" : 3
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Image/Surface.h",
+			"sourceGroupIndex" : 3
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Image/ZoomImage.cpp",
+			"sourceGroupIndex" : 3
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Image/ZoomImage.h",
+			"sourceGroupIndex" : 3
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Input/Keyboard.h",
+			"sourceGroupIndex" : 4
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Input/Mouse.h",
+			"sourceGroupIndex" : 4
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/DebugRendererImp.cpp",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/DebugRendererImp.h",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/Font.cpp",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/Font.h",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/Frustum.h",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/PipelineState.h",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/PixelShader.h",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/Renderer.cpp",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/Renderer.h",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/RenderInstances.h",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/RenderPrimitive.cpp",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/RenderPrimitive.h",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/Texture.h",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VertexShader.h",
+			"sourceGroupIndex" : 5
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/TestFramework.cmake",
+			"sourceGroupIndex" : 6
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/TestFramework.h",
+			"sourceGroupIndex" : 6
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIAnimation.cpp",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIAnimation.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIAnimationSlide.cpp",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIAnimationSlide.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIButton.cpp",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIButton.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UICheckBox.cpp",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UICheckBox.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIComboBox.cpp",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIComboBox.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIElement.cpp",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIElement.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIEventListener.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIHorizontalStack.cpp",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIHorizontalStack.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIImage.cpp",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIImage.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIManager.cpp",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIManager.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UISlider.cpp",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UISlider.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIStaticText.cpp",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIStaticText.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UITextButton.cpp",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UITextButton.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UITexturedQuad.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIVerticalStack.cpp",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/UI/UIVerticalStack.h",
+			"sourceGroupIndex" : 7
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Utils/CustomMemoryHook.cpp",
+			"sourceGroupIndex" : 8
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Utils/CustomMemoryHook.h",
+			"sourceGroupIndex" : 8
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Utils/AssetStream.h",
+			"sourceGroupIndex" : 8
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Utils/Log.h",
+			"sourceGroupIndex" : 8
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Utils/ReadData.cpp",
+			"sourceGroupIndex" : 8
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Utils/ReadData.h",
+			"sourceGroupIndex" : 8
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Window/ApplicationWindow.h",
+			"sourceGroupIndex" : 9
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 2,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/FatalErrorIfFailedMTL.mm",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/FatalErrorIfFailedMTL.h",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 2,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/PipelineStateMTL.mm",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/PipelineStateMTL.h",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/PixelShaderMTL.h",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 2,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/RendererMTL.mm",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/RendererMTL.h",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 2,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/RenderInstancesMTL.mm",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/RenderInstancesMTL.h",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 2,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/RenderPrimitiveMTL.mm",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/RenderPrimitiveMTL.h",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 2,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/TextureMTL.mm",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/TextureMTL.h",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/MTL/VertexShaderMTL.h",
+			"sourceGroupIndex" : 10
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 2,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Input/MacOS/KeyboardMacOS.mm",
+			"sourceGroupIndex" : 11
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Input/MacOS/KeyboardMacOS.h",
+			"sourceGroupIndex" : 11
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 2,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Input/MacOS/MouseMacOS.mm",
+			"sourceGroupIndex" : 11
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Input/MacOS/MouseMacOS.h",
+			"sourceGroupIndex" : 11
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 2,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Utils/AssetStream.mm",
+			"sourceGroupIndex" : 8
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 2,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Utils/Log.mm",
+			"sourceGroupIndex" : 8
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 2,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Window/ApplicationWindowMacOS.mm",
+			"sourceGroupIndex" : 9
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Window/ApplicationWindowMacOS.h",
+			"sourceGroupIndex" : 9
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/BufferVK.h",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/ConstantBufferVK.cpp",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/ConstantBufferVK.h",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/FatalErrorIfFailedVK.cpp",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/FatalErrorIfFailedVK.h",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/PipelineStateVK.cpp",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/PipelineStateVK.h",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/PixelShaderVK.h",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/RendererVK.cpp",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/RendererVK.h",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/RenderInstancesVK.cpp",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/RenderInstancesVK.h",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/RenderPrimitiveVK.cpp",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/RenderPrimitiveVK.h",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"compileGroupIndex" : 1,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/TextureVK.cpp",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/TextureVK.h",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/TestFramework/Renderer/VK/VertexShaderVK.h",
+			"sourceGroupIndex" : 12
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/MTL/VertexConstants.h",
+			"sourceGroupIndex" : 13
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/VertexConstants.h",
+			"sourceGroupIndex" : 14
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/FontVertexShader.vert",
+			"sourceGroupIndex" : 14
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/LineVertexShader.vert",
+			"sourceGroupIndex" : 14
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/TriangleDepthVertexShader.vert",
+			"sourceGroupIndex" : 14
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/TriangleVertexShader.vert",
+			"sourceGroupIndex" : 14
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/UIVertexShader.vert",
+			"sourceGroupIndex" : 14
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/FontPixelShader.frag",
+			"sourceGroupIndex" : 14
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/LinePixelShader.frag",
+			"sourceGroupIndex" : 14
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/TriangleDepthPixelShader.frag",
+			"sourceGroupIndex" : 14
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/TrianglePixelShader.frag",
+			"sourceGroupIndex" : 14
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/UIPixelShader.frag",
+			"sourceGroupIndex" : 14
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/UIPixelShaderUntextured.frag",
+			"sourceGroupIndex" : 14
+		},
+		{
+			"backtrace" : 3,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/FontVertexShader.vert.spv",
+			"sourceGroupIndex" : 15
+		},
+		{
+			"backtrace" : 3,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/LineVertexShader.vert.spv",
+			"sourceGroupIndex" : 15
+		},
+		{
+			"backtrace" : 3,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/TriangleDepthVertexShader.vert.spv",
+			"sourceGroupIndex" : 15
+		},
+		{
+			"backtrace" : 3,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/TriangleVertexShader.vert.spv",
+			"sourceGroupIndex" : 15
+		},
+		{
+			"backtrace" : 3,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/UIVertexShader.vert.spv",
+			"sourceGroupIndex" : 15
+		},
+		{
+			"backtrace" : 3,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/FontPixelShader.frag.spv",
+			"sourceGroupIndex" : 15
+		},
+		{
+			"backtrace" : 3,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/LinePixelShader.frag.spv",
+			"sourceGroupIndex" : 15
+		},
+		{
+			"backtrace" : 3,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/TriangleDepthPixelShader.frag.spv",
+			"sourceGroupIndex" : 15
+		},
+		{
+			"backtrace" : 3,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/TrianglePixelShader.frag.spv",
+			"sourceGroupIndex" : 15
+		},
+		{
+			"backtrace" : 3,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/UIPixelShader.frag.spv",
+			"sourceGroupIndex" : 15
+		},
+		{
+			"backtrace" : 3,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/UIPixelShaderUntextured.frag.spv",
+			"sourceGroupIndex" : 15
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/MTL/FontShader.metal",
+			"sourceGroupIndex" : 13
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/MTL/LineShader.metal",
+			"sourceGroupIndex" : 13
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/MTL/TriangleShader.metal",
+			"sourceGroupIndex" : 13
+		},
+		{
+			"backtrace" : 3,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/MTL/UIShader.metal",
+			"sourceGroupIndex" : 13
+		},
+		{
+			"backtrace" : 3,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/MTL/Shaders.metallib",
+			"sourceGroupIndex" : 15
+		},
+		{
+			"backtrace" : 0,
+			"path" : "/Users/alex/dev/zig/Guava Engine/build/CMakeFiles/TestFramework.dir/cmake_pch.hxx",
+			"sourceGroupIndex" : 16
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/FontVertexShader.vert.spv.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/LineVertexShader.vert.spv.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/TriangleDepthVertexShader.vert.spv.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/TriangleVertexShader.vert.spv.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/UIVertexShader.vert.spv.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/FontPixelShader.frag.spv.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/LinePixelShader.frag.spv.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/TriangleDepthPixelShader.frag.spv.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/TrianglePixelShader.frag.spv.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/UIPixelShader.frag.spv.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/VK/UIPixelShaderUntextured.frag.spv.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Assets/Shaders/MTL/Shaders.metallib.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/build/FontShader.metal.air.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/build/LineShader.metal.air.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/build/TriangleShader.metal.air.rule",
+			"sourceGroupIndex" : 17
+		},
+		{
+			"backtrace" : 0,
+			"isGenerated" : true,
+			"path" : "/Users/alex/dev/zig/Guava Engine/build/UIShader.metal.air.rule",
+			"sourceGroupIndex" : 17
+		}
+	],
+	"type" : "STATIC_LIBRARY"
+}
