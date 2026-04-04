@@ -46,6 +46,18 @@ contextBridge.exposeInMainWorld("guavaEngine", {
     return () => ipcRenderer.removeListener("engine:error", handler);
   },
 
+  /** Engine disconnected notification (crash or unexpected exit) */
+  onDisconnected: (
+    callback: (info: { code: number | null; restarting: boolean }) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      info: { code: number | null; restarting: boolean },
+    ) => callback(info);
+    ipcRenderer.on("engine:disconnected", handler);
+    return () => ipcRenderer.removeListener("engine:disconnected", handler);
+  },
+
   // ── Viewport (cross-platform) ───────────────────────────────────
 
   /** Attach a viewport surface to the Electron window at the given rect */
@@ -101,6 +113,7 @@ export interface GuavaEngineAPI {
   onEvent(callback: (event: string, data: unknown) => void): () => void;
   onConnected(callback: () => void): () => void;
   onError(callback: (error: string) => void): () => void;
+  onDisconnected(callback: (info: { code: number | null; restarting: boolean }) => void): () => void;
   viewportAttachSurface(surfaceId: number, x: number, y: number, w: number, h: number, shmName?: string): Promise<boolean>;
   viewportUpdateSurface(surfaceId: number, shmName?: string, width?: number, height?: number): Promise<void>;
   viewportDetach(): Promise<void>;
