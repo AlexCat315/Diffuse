@@ -75,7 +75,8 @@ pub fn handleCameraControls(state: *EditorState, layer_context: *engine.core.Lay
     }
     // 拖拽状态转变时切换相对鼠标模式：
     // 开始拖拽→锁定光标，鼠标增量不受屏幕边缘限制，摄像机可连续旋转/平移任意距离。
-    if (state.camera_drag_active != prev_drag_active) {
+    // editor_server_mode 下跳过 — 指针由 Electron 管理，SDL 锁定不生效。
+    if (state.camera_drag_active != prev_drag_active and !state.editor_server_mode) {
         layer_context.window.setRelativeMouseMode(state.camera_drag_active);
     }
 
