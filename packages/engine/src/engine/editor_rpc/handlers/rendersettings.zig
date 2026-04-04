@@ -3,8 +3,9 @@ const std = @import("std");
 const ctx_mod = @import("../ctx.zig");
 const Ctx = ctx_mod.Ctx;
 
-const ShadingMode = enum { solid, material, rendered, wireframe };
-const TransformSpace = enum { local, world };
+const schema_types = @import("../schema/types.zig");
+const ShadingMode = schema_types.ViewportShadingMode;
+const TransformSpace = schema_types.TransformSpace;
 const ResolutionPreset = enum { viewport, hd_1080, dci_2k, uhd_4k, custom };
 
 const OutputFormat = enum { png, exr, jpg };

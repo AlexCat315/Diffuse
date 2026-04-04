@@ -71,10 +71,7 @@ pub const ManipulationMode = enum {
 
 pub const PlaybackState = engine.core.PlaybackState;
 
-pub const TransformSpace = enum {
-    local,
-    world,
-};
+pub const TransformSpace = @import("guava").editor_rpc.schema.types.TransformSpace;
 
 pub const TransformPivotMode = enum {
     origin,
@@ -276,12 +273,7 @@ pub const LaunchGameStatus = enum {
     failed,
 };
 
-pub const ViewportShadingMode = enum {
-    solid,
-    material,
-    rendered,
-    wireframe,
-};
+pub const ViewportShadingMode = @import("guava").editor_rpc.schema.types.ViewportShadingMode;
 
 pub fn viewportShadingMode(state: *const EditorState) ViewportShadingMode {
     if (state.viewport_pipeline_mode == .path_trace) {
