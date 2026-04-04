@@ -217,18 +217,18 @@ export function MaterialEditor() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <span>Material</span>
+        <span>{t.material.title}</span>
         {state.isShared && (
-          <button style={styles.sharedBadge} onClick={makeUnique} title="Material is shared — click to make unique">
-            Shared
+          <button style={styles.sharedBadge} onClick={makeUnique} title={t.material.sharedTooltip}>
+            {t.material.sharedBadge}
           </button>
         )}
       </div>
 
       {/* ── Shading ────────────────────────────────────────── */}
-      <Section title="Shading" collapsed={collapsed.has("shading")} onToggle={() => toggle("shading")}>
+      <Section title={t.material.shading} collapsed={collapsed.has("shading")} onToggle={() => toggle("shading")}>
         <div style={styles.field}>
-          <label style={styles.label}>Mode</label>
+          <label style={styles.label}>{t.material.mode}</label>
           <select
             value={state.shading ?? "pbr_metallic_roughness"}
             onChange={(e) => {
@@ -247,7 +247,7 @@ export function MaterialEditor() {
       </Section>
 
       {/* ── Colors ─────────────────────────────────────────── */}
-      <Section title="Colors" collapsed={collapsed.has("colors")} onToggle={() => toggle("colors")}>
+      <Section title={t.material.colors} collapsed={collapsed.has("colors")} onToggle={() => toggle("colors")}>
         {state.baseColor && (
           <ColorRow
             label="Base Color"
