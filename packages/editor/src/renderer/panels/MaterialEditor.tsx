@@ -36,6 +36,7 @@ interface TextureEntry {
 }
 
 import { useSceneStore } from "../store";
+import { useI18n } from "../i18n";
 
 // ── Constants ───────────────────────────────────────────────────
 
@@ -82,6 +83,14 @@ function fromHex(hex: string, alpha?: number): number[] {
 
 export function MaterialEditor() {
   const entityId = useSceneStore((s) => s.selectedEntity);
+  const { t } = useI18n();
+  const textureSlotLabels: Record<string, string> = {
+    base_color: t.material.textureBaseColor,
+    metallic_roughness: t.material.textureMetallicRoughness,
+    normal: t.material.textureNormal,
+    occlusion: t.material.textureOcclusion,
+    emissive: t.material.textureEmissive,
+  };
   const [state, setState] = useState<MaterialState | null>(null);
   const [textures, setTextures] = useState<TextureEntry[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -188,8 +197,8 @@ export function MaterialEditor() {
   if (entityId == null) {
     return (
       <div style={styles.container}>
-        <div style={styles.header}>Material</div>
-        <div style={styles.empty}>No entity selected</div>
+        <div style={styles.header}>{t.material.title}</div>
+        <div style={styles.empty}>{t.common.noEntitySelected}</div>
       </div>
     );
   }
@@ -197,8 +206,8 @@ export function MaterialEditor() {
   if (!state || !state.hasMaterial) {
     return (
       <div style={styles.container}>
-        <div style={styles.header}>Material</div>
-        <div style={styles.empty}>No material component</div>
+        <div style={styles.header}>{t.material.title}</div>
+        <div style={styles.empty}>{t.material.noComponent}</div>
       </div>
     );
   }

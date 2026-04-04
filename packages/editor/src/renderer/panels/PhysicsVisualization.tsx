@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { rpc } from "../rpc";
+import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
 
 interface PhysicsVizSettings {
@@ -66,6 +67,7 @@ function hexToRgba(hex: string, alpha: number): [number, number, number, number]
 
 export function PhysicsVisualization() {
   const connected = useConnectionStore((s) => s.connected);
+  const { t } = useI18n();
   const [settings, setSettings] = useState<PhysicsVizSettings | null>(null);
 
   const refresh = useCallback(async () => {
@@ -106,12 +108,31 @@ export function PhysicsVisualization() {
     refresh();
   };
 
+  const toggleLabels: Record<string, string> = {
+    wireframeOnly: t.physics.wireframeOnly,
+    showCollisionShapes: t.physics.collisionShapes,
+    showRigidbodies: t.physics.rigidbodies,
+    showTriggers: t.physics.triggers,
+    showConstraints: t.physics.constraints,
+    showVelocityVectors: t.physics.velocityVectors,
+    showSleepState: t.physics.sleepState,
+    showAabbs: t.physics.aabbs,
+  };
+  const colorLabels: Record<string, string> = {
+    static: t.physics.colorStatic,
+    dynamic: t.physics.colorDynamic,
+    kinematic: t.physics.colorKinematic,
+    trigger: t.physics.colorTrigger,
+    sleeping: t.physics.colorSleeping,
+    constraint: t.physics.colorConstraint,
+  };
+
   const active = settings.drawMode !== "off";
 
   return (
     <div style={{ padding: 8, fontSize: 13 }}>
       <div style={{ marginBottom: 8 }}>
-        <label style={{ marginRight: 8 }}>Draw Mode</label>
+        <label style={{ marginRight: 8 }}>{t.physics.drawMode}</label>
         <select value={settings.drawMode} onChange={(e) => setDrawMode(e.target.value)}>
           {drawModes.map((m) => (
             <option key={m} value={m}>{drawModeLabels[m]}</option>
@@ -122,7 +143,7 @@ export function PhysicsVisualization() {
       {active && (
         <>
           <div style={{ marginBottom: 6 }}>
-            <label>Opacity</label>
+            <label>{t.physics.opacity}</label>
             <input
               type="range" min={0} max={1} step={0.01}
               value={settings.opacity}
@@ -132,7 +153,7 @@ export function PhysicsVisualization() {
             <span style={{ float: "right" }}>{settings.opacity.toFixed(2)}</span>
           </div>
 
-          <h4 style={{ margin: "8px 0 4px" }}>Show</h4>
+          <h4 style={{ margin: "8px 0 4px" }}>{t.physics.show}</h4>
           {toggleKeys.map(({ key, label }) => (
             <label key={key} style={{ display: "block", marginBottom: 2 }}>
               <input
@@ -140,13 +161,13 @@ export function PhysicsVisualization() {
                 checked={(settings as unknown as Record<string, unknown>)[key] as boolean}
                 onChange={(e) => setToggle(key, e.target.checked)}
               />
-              {" "}{label}
+              {" "}{toggleLabels[key] ?? label}
             </label>
           ))}
 
           {settings.showVelocityVectors && (
             <div style={{ marginTop: 4 }}>
-              <label>Velocity Scale</label>
+              <label>{t.physics.velocityScale}</label>
               <input
                 type="range" min={0.1} max={10} step={0.1}
                 value={settings.velocityScale}
@@ -157,7 +178,7 @@ export function PhysicsVisualization() {
             </div>
           )}
 
-          <h4 style={{ margin: "8px 0 4px" }}>Colors</h4>
+          <h4 style={{ margin: "8px 0 4px" }}>{t.physics.colors}</h4>
           {colorKeys.map(({ key, label }) => {
             const c = (settings as unknown as Record<string, number[]>)[`color${key.charAt(0).toUpperCase() + key.slice(1)}`] ?? [0, 0, 0, 1];
             return (
@@ -168,7 +189,7 @@ export function PhysicsVisualization() {
                   onChange={(e) => setColor(key, e.target.value, c[3] ?? 0.8)}
                   style={{ marginRight: 6 }}
                 />
-                <span>{label}</span>
+                <span>{colorLabels[key] ?? label}</span>
               </div>
             );
           })}

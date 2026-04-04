@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useConnectionStore } from "../store";
+import { useI18n } from "../i18n";
 
 interface RenderJobInfo {
   index: number;
@@ -22,6 +23,7 @@ interface RenderJobInfo {
 
 export function RenderQueue() {
   const connected = useConnectionStore((s) => s.connected);
+  const { t } = useI18n();
   const [jobs, setJobs] = useState<RenderJobInfo[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -134,9 +136,9 @@ export function RenderQueue() {
     <div style={styles.container}>
       {/* Add Job Form */}
       <div style={styles.section}>
-        <div style={styles.sectionTitle}>Add Render Job</div>
+        <div style={styles.sectionTitle}>{t.renderQueue.addJobTitle}</div>
         <div style={styles.formRow}>
-          <label style={styles.formLabel}>Sequence</label>
+          <label style={styles.formLabel}>{t.renderQueue.sequenceLabel}</label>
           <input
             style={styles.input}
             value={seqPath}
@@ -145,7 +147,7 @@ export function RenderQueue() {
           />
         </div>
         <div style={styles.formRow}>
-          <label style={styles.formLabel}>Output Dir</label>
+          <label style={styles.formLabel}>{t.renderQueue.outputDirLabel}</label>
           <input
             style={styles.input}
             value={outDir}
@@ -153,7 +155,7 @@ export function RenderQueue() {
           />
         </div>
         <div style={styles.formRow}>
-          <label style={styles.formLabel}>Resolution</label>
+          <label style={styles.formLabel}>{t.renderQueue.resolutionLabel}</label>
           <input
             type="number"
             style={{ ...styles.input, width: 80 }}
@@ -169,7 +171,7 @@ export function RenderQueue() {
           />
         </div>
         <div style={styles.formRow}>
-          <label style={styles.formLabel}>Format</label>
+          <label style={styles.formLabel}>{t.renderQueue.formatLabel}</label>
           <select
             style={styles.select}
             value={format}
@@ -186,13 +188,13 @@ export function RenderQueue() {
               checked={usePathTrace}
               onChange={(e) => setUsePathTrace(e.target.checked)}
             />{" "}
-            Path Trace
+            {t.renderQueue.pathTraceLabel}
           </label>
         </div>
         {usePathTrace && (
           <>
             <div style={styles.formRow}>
-              <label style={styles.formLabel}>Samples</label>
+              <label style={styles.formLabel}>{t.renderQueue.samplesLabel}</label>
               <input
                 type="number"
                 style={{ ...styles.input, width: 80 }}
@@ -201,7 +203,7 @@ export function RenderQueue() {
               />
             </div>
             <div style={styles.formRow}>
-              <label style={styles.formLabel}>Bounces</label>
+              <label style={styles.formLabel}>{t.renderQueue.bouncesLabel}</label>
               <input
                 type="number"
                 style={{ ...styles.input, width: 80 }}
@@ -218,12 +220,12 @@ export function RenderQueue() {
               checked={encodeVideo}
               onChange={(e) => setEncodeVideo(e.target.checked)}
             />{" "}
-            Encode Video
+            {t.renderQueue.encodeVideoLabel}
           </label>
         </div>
         {encodeVideo && (
           <div style={styles.formRow}>
-            <label style={styles.formLabel}>Codec</label>
+            <label style={styles.formLabel}>{t.renderQueue.videoCodecLabel}</label>
             <select
               style={styles.select}
               value={videoCodec}
@@ -236,18 +238,18 @@ export function RenderQueue() {
           </div>
         )}
         <button style={styles.addBtn} onClick={handleAddJob} disabled={!seqPath.trim()}>
-          Add to Queue
+          {t.renderQueue.addButton}
         </button>
       </div>
 
       {/* Job Queue */}
       <div style={styles.section}>
         <div style={styles.sectionTitle}>
-          Render Queue ({jobs.length} jobs)
+          {t.renderQueue.queueTitle} ({jobs.length} {t.renderQueue.jobsSuffix})
         </div>
         {jobs.length === 0 ? (
           <div style={styles.empty}>
-            No jobs in queue. Add a job above to get started.
+            {t.renderQueue.emptyState}
           </div>
         ) : (
           jobs.map((job) => (
@@ -287,7 +289,7 @@ export function RenderQueue() {
                   style={styles.removeBtn}
                   onClick={() => handleRemoveJob(job.index)}
                 >
-                  Remove
+                  {t.renderQueue.removeButton}
                 </button>
               )}
             </div>
@@ -299,19 +301,19 @@ export function RenderQueue() {
       <div style={styles.controls}>
         {isRunning ? (
           <button style={styles.cancelBtn} onClick={handleCancel}>
-            Cancel
+            {t.renderQueue.cancelButton}
           </button>
         ) : (
           <>
             {jobs.some((j) => j.status === "queued") && (
               <button style={styles.startBtn} onClick={handleStart}>
-                Start Queue
+                {t.renderQueue.startButton}
               </button>
             )}
           </>
         )}
         <button style={styles.clearBtn} onClick={handleClearCompleted}>
-          Clear Completed
+          {t.renderQueue.clearButton}
         </button>
       </div>
     </div>

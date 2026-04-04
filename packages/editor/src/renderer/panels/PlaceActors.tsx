@@ -1,5 +1,6 @@
 import React, { useState, useCallback } from "react";
 import { useConnectionStore } from "../store";
+import { useI18n } from "../i18n";
 
 /** Actor categories with static entries — no RPC needed for the catalog. */
 const categories = [
@@ -46,6 +47,7 @@ const categories = [
 
 export function PlaceActors() {
   const connected = useConnectionStore((s) => s.connected);
+  const { t } = useI18n();
   const [activeCategory, setActiveCategory] = useState("basics");
   const [filter, setFilter] = useState("");
   const [spawning, setSpawning] = useState(false);
@@ -82,6 +84,37 @@ export function PlaceActors() {
       )
     : category.entries;
 
+  const catLabels: Record<string, string> = {
+    basics: t.placeActors.categoryBasics,
+    lights: t.placeActors.categoryLights,
+    shapes: t.placeActors.categoryShapes,
+    vfx: t.placeActors.categoryVfx,
+  };
+  const entryLabels: Record<string, string> = {
+    empty: t.placeActors.actorEmpty,
+    camera: t.placeActors.actorCamera,
+    point_light: t.placeActors.lightPoint,
+    spot_light: t.placeActors.lightSpot,
+    directional_light: t.placeActors.lightDirectional,
+    cube: t.placeActors.shapeCube,
+    sphere: t.placeActors.shapeSphere,
+    plane: t.placeActors.shapePlane,
+    vfx_fountain: t.placeActors.vfxParticle,
+    vfx_orbit: t.placeActors.vfxParticle,
+  };
+  const entryDescs: Record<string, string> = {
+    empty: t.placeActors.descEmpty,
+    camera: t.placeActors.descCamera,
+    point_light: t.placeActors.descLightPoint,
+    spot_light: t.placeActors.descLightSpot,
+    directional_light: t.placeActors.descLightDirectional,
+    cube: t.placeActors.descShapeCube,
+    sphere: t.placeActors.descShapeSphere,
+    plane: t.placeActors.descShapePlane,
+    vfx_fountain: t.placeActors.descVfxParticle,
+    vfx_orbit: t.placeActors.descVfxParticle,
+  };
+
   return (
     <div style={styles.container}>
       {/* Category tabs */}
@@ -95,7 +128,7 @@ export function PlaceActors() {
             }}
             onClick={() => setActiveCategory(cat.id)}
           >
-            {cat.label}
+            {catLabels[cat.id] ?? cat.label}
           </button>
         ))}
       </div>
@@ -103,7 +136,7 @@ export function PlaceActors() {
       {/* Search */}
       <input
         type="text"
-        placeholder="Filter..."
+        placeholder={t.placeActors.searchPlaceholder}
         value={filter}
         onChange={(e) => setFilter(e.target.value)}
         style={styles.search}
@@ -118,8 +151,8 @@ export function PlaceActors() {
             onClick={() => handleSpawn(entry.kind)}
             disabled={spawning}
           >
-            <div style={styles.cardLabel}>{entry.label}</div>
-            <div style={styles.cardDesc}>{entry.desc}</div>
+            <div style={styles.cardLabel}>{entryLabels[entry.kind] ?? entry.label}</div>
+            <div style={styles.cardDesc}>{entryDescs[entry.kind] ?? entry.desc}</div>
           </button>
         ))}
         {filtered.length === 0 && (

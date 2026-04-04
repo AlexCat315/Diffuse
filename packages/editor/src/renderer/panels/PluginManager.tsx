@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
 
 interface PluginInfo {
@@ -12,6 +13,7 @@ interface PluginInfo {
 
 export function PluginManager() {
   const connected = useConnectionStore((s) => s.connected);
+  const { t } = useI18n();
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -88,19 +90,19 @@ export function PluginManager() {
     <div style={styles.container}>
       <div style={styles.toolbar}>
         <button style={styles.button} onClick={handleRescan}>
-          Rescan project_plugins
+          {t.plugins.rescanButton}
         </button>
-        <span style={styles.count}>{plugins.length} plugins</span>
+        <span style={styles.count}>{plugins.length} {t.plugins.countSuffix}</span>
       </div>
       <table style={styles.table}>
         <thead>
           <tr>
-            <th style={styles.th}>Name</th>
-            <th style={styles.th}>Type</th>
-            <th style={styles.th}>Source</th>
-            <th style={styles.th}>State</th>
-            <th style={styles.th}>Actions</th>
-            <th style={styles.th}>Error</th>
+            <th style={styles.th}>{t.plugins.columnName}</th>
+            <th style={styles.th}>{t.plugins.columnType}</th>
+            <th style={styles.th}>{t.plugins.columnSource}</th>
+            <th style={styles.th}>{t.plugins.columnState}</th>
+            <th style={styles.th}>{t.plugins.columnActions}</th>
+            <th style={styles.th}>{t.plugins.columnError}</th>
           </tr>
         </thead>
         <tbody>
@@ -120,7 +122,7 @@ export function PluginManager() {
                     style={styles.actionBtn}
                     onClick={() => handleEnable(p.name)}
                   >
-                    Enable
+                    {t.plugins.enable}
                   </button>
                 )}
                 {p.lifecycle === "enabled" && (
@@ -128,7 +130,7 @@ export function PluginManager() {
                     style={styles.actionBtn}
                     onClick={() => handleDisable(p.name)}
                   >
-                    Disable
+                    {t.plugins.disable}
                   </button>
                 )}
                 {p.lifecycle !== "load_error" && (
@@ -136,7 +138,7 @@ export function PluginManager() {
                     style={styles.actionBtn}
                     onClick={() => handleUnload(p.name)}
                   >
-                    Unload
+                    {t.plugins.unload}
                   </button>
                 )}
               </td>
@@ -148,7 +150,7 @@ export function PluginManager() {
           {plugins.length === 0 && (
             <tr>
               <td colSpan={6} style={{ ...styles.td, textAlign: "center" }}>
-                No plugins discovered
+                {t.plugins.noPluginsFound}
               </td>
             </tr>
           )}

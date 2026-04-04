@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
 
 interface BusInfo {
@@ -11,6 +12,7 @@ interface BusInfo {
 
 export function AudioMixer() {
   const connected = useConnectionStore((s) => s.connected);
+  const { t } = useI18n();
   const [available, setAvailable] = useState(false);
   const [activeVoices, setActiveVoices] = useState(0);
   const [buses, setBuses] = useState<BusInfo[]>([]);
@@ -48,19 +50,19 @@ export function AudioMixer() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <span style={styles.title}>Audio Mixer</span>
-        <span style={styles.count}>{activeVoices} voices</span>
-        {!available && <span style={styles.badge}>Offline</span>}
+        <span style={styles.title}>{t.audio.title}</span>
+        <span style={styles.count}>{activeVoices} {t.audio.voices}</span>
+        {!available && <span style={styles.badge}>{t.audio.offline}</span>}
       </div>
       <div style={styles.content}>
         {buses.length === 0 ? (
-          <div style={styles.empty}>{available ? "No buses" : "Audio runtime not available"}</div>
+          <div style={styles.empty}>{available ? t.audio.noBuses : t.audio.runtimeUnavailable}</div>
         ) : (
           buses.map((bus) => (
             <div key={bus.id} style={styles.busRow}>
               <div style={styles.busHeader}>
                 <span style={styles.busLabel}>{bus.label}</span>
-                <span style={styles.busPlaying}>{bus.playing} playing</span>
+                <span style={styles.busPlaying}>{bus.playing} {t.audio.playing}</span>
               </div>
               <div style={styles.sliderRow}>
                 <input

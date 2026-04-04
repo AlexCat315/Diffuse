@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
 
 interface BindingCacheStats {
@@ -26,6 +27,7 @@ interface RhiStatsData {
 
 export function RhiStats() {
   const connected = useConnectionStore((s) => s.connected);
+  const { t } = useI18n();
   const [data, setData] = useState<RhiStatsData | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -57,21 +59,21 @@ export function RhiStats() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <span style={styles.title}>RHI Stats</span>
+        <span style={styles.title}>{t.rhi.title}</span>
         <div style={{ flex: 1 }} />
         <button style={styles.resetBtn} onClick={handleReset}>
-          Reset
+          {t.rhi.resetButton}
         </button>
       </div>
       <div style={styles.content}>
         {/* Binding Cache Section */}
         <div style={styles.section}>
-          <div style={styles.sectionTitle}>Binding Set Cache</div>
+          <div style={styles.sectionTitle}>{t.rhi.bindingSetCache}</div>
           {c ? (
             <>
               <div style={styles.barContainer}>
                 <div style={styles.barLabel}>
-                  Hit Rate: {c.hitRate.toFixed(1)}%
+                  {t.rhi.hitRate}: {c.hitRate.toFixed(1)}%
                 </div>
                 <div style={styles.barBg}>
                   <div
@@ -85,7 +87,7 @@ export function RhiStats() {
               </div>
               <div style={styles.barContainer}>
                 <div style={styles.barLabel}>
-                  Entries: {c.entries} / {c.maxEntries}
+                  {t.rhi.entries}: {c.entries} / {c.maxEntries}
                 </div>
                 <div style={styles.barBg}>
                   <div
@@ -98,22 +100,22 @@ export function RhiStats() {
                 </div>
               </div>
               <div style={styles.statsGrid}>
-                <StatCell label="Hits" value={c.hits} />
-                <StatCell label="Misses" value={c.misses} />
-                <StatCell label="Evictions" value={c.evictions} />
-                <StatCell label="Frame Hits" value={c.frameHits} color="#a6e3a1" />
-                <StatCell label="Frame Miss" value={c.frameMisses} color="#f9e2af" />
-                <StatCell label="Frame Evict" value={c.frameEvictions} color="#f38ba8" />
+                <StatCell label={t.rhi.hits} value={c.hits} />
+                <StatCell label={t.rhi.misses} value={c.misses} />
+                <StatCell label={t.rhi.evictions} value={c.evictions} />
+                <StatCell label={t.rhi.frameHits} value={c.frameHits} color="#a6e3a1" />
+                <StatCell label={t.rhi.frameMisses} value={c.frameMisses} color="#f9e2af" />
+                <StatCell label={t.rhi.frameEvictions} value={c.frameEvictions} color="#f38ba8" />
               </div>
             </>
           ) : (
-            <div style={styles.empty}>No data</div>
+            <div style={styles.empty}>{t.rhi.noData}</div>
           )}
         </div>
 
         {/* Render Passes Section */}
         <div style={styles.section}>
-          <div style={styles.sectionTitle}>Render Passes ({data?.passes.length ?? 0})</div>
+          <div style={styles.sectionTitle}>{t.rhi.renderPasses} ({data?.passes.length ?? 0})</div>
           <div style={styles.passList}>
             {data?.passes.map((p) => (
               <div key={p.name} style={styles.passRow}>

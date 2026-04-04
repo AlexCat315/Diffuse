@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { rpc } from "../rpc";
 import { useConnectionStore } from "../store";
+import { useI18n } from "../i18n";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -85,6 +86,7 @@ const TRACK_HEIGHT = 28;
 
 export function SequencerPanel() {
   const connected = useConnectionStore((s) => s.connected);
+  const { t } = useI18n();
   const [state, setState] = useState<SeqState | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<number | null>(null);
   const [selectedKf, setSelectedKf] = useState<number | null>(null);
@@ -378,23 +380,23 @@ export function SequencerPanel() {
   // ── Render ─────────────────────────────────────────────────
 
   if (!connected) {
-    return <div style={S.empty}>Not connected</div>;
+    return <div style={S.empty}>{t.sequencer.notConnected}</div>;
   }
 
   if (!state?.loaded) {
     return (
       <div style={S.empty}>
         <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "center" }}>
-          <span style={{ color: "#a6adc8" }}>No Sequence Loaded</span>
+          <span style={{ color: "#a6adc8" }}>{t.sequencer.noSequence}</span>
           <div style={{ display: "flex", gap: 8 }}>
-            <button style={S.btn} onClick={create}>New Sequence</button>
+            <button style={S.btn} onClick={create}>{t.sequencer.newSequence}</button>
             <input
               style={S.input}
               value={filePathBuf}
               onChange={(e) => setFilePathBuf(e.target.value)}
               placeholder="path/to/sequence.guava_sequence"
             />
-            <button style={S.btn} onClick={handleLoad}>Load</button>
+            <button style={S.btn} onClick={handleLoad}>{t.sequencer.loadSequence}</button>
           </div>
         </div>
       </div>
@@ -405,15 +407,15 @@ export function SequencerPanel() {
     <div style={S.root}>
       {/* Toolbar */}
       <div style={S.toolbar}>
-        <button style={S.btn} onClick={create} title="New">New</button>
+        <button style={S.btn} onClick={create} title={t.sequencer.newSequence}>{t.sequencer.newSequence}</button>
         <input
           style={{ ...S.input, width: 200 }}
           value={filePathBuf}
           onChange={(e) => setFilePathBuf(e.target.value)}
           placeholder="File path"
         />
-        <button style={S.btn} onClick={handleLoad}>Load</button>
-        <button style={S.btn} onClick={handleSave}>Save</button>
+        <button style={S.btn} onClick={handleLoad}>{t.sequencer.loadSequence}</button>
+        <button style={S.btn} onClick={handleSave}>{t.sequencer.saveSequence}</button>
         <span style={S.sep} />
         <button style={S.btn} onClick={handleStop} title="Stop">⏹</button>
         <button
@@ -426,19 +428,19 @@ export function SequencerPanel() {
           {formatTime(state.currentTime)} / {formatTime(state.duration ?? 0)}
         </span>
         <span style={S.sep} />
-        <label style={S.label}>Name</label>
+        <label style={S.label}>{t.sequencer.name}</label>
         <input
           style={{ ...S.input, width: 120 }}
           value={nameBuf}
           onChange={(e) => { setNameBuf(e.target.value); commitProps(); }}
         />
-        <label style={S.label}>FPS</label>
+        <label style={S.label}>{t.sequencer.fps}</label>
         <input
           style={{ ...S.input, width: 40 }}
           value={fpsBuf}
           onChange={(e) => { setFpsBuf(e.target.value); commitProps(); }}
         />
-        <label style={S.label}>Dur</label>
+        <label style={S.label}>{t.sequencer.duration}</label>
         <input
           style={{ ...S.input, width: 60 }}
           value={durationBuf}
@@ -450,7 +452,7 @@ export function SequencerPanel() {
       <div style={S.body}>
         {/* Track list */}
         <div style={S.trackList}>
-          <div style={S.trackListHeader}>Tracks</div>
+          <div style={S.trackListHeader}>{t.sequencer.tracks}</div>
           {tracks.map((track, i) => (
             <div
               key={i}
@@ -479,7 +481,7 @@ export function SequencerPanel() {
               placeholder="Target entity"
               onKeyDown={(e) => e.key === "Enter" && handleAddTrack()}
             />
-            <button style={{ ...S.btn, width: "100%", marginTop: 2 }} onClick={handleAddTrack}>+ Add Track</button>
+            <button style={{ ...S.btn, width: "100%", marginTop: 2 }} onClick={handleAddTrack}>+ {t.sequencer.addTrack}</button>
           </div>
         </div>
 
@@ -498,12 +500,12 @@ export function SequencerPanel() {
 
         {/* Properties */}
         <div style={S.propsPanel}>
-          <div style={S.trackListHeader}>Properties</div>
+          <div style={S.trackListHeader}>{t.sequencer.properties}</div>
           {selTrack ? (
             <div style={{ padding: "4px 6px" }}>
-              <PropLabel>Kind</PropLabel>
+              <PropLabel>{t.sequencer.kind}</PropLabel>
               <span style={S.propValue}>{selTrack.kind}</span>
-              <PropLabel>Target</PropLabel>
+              <PropLabel>{t.sequencer.target}</PropLabel>
               <span style={S.propValue}>{selTrack.target}</span>
 
               {/* Track-type specific props */}
@@ -520,7 +522,7 @@ export function SequencerPanel() {
               {/* Keyframe section */}
               <div style={{ marginTop: 8, borderTop: "1px solid #313244", paddingTop: 6 }}>
                 <div style={{ display: "flex", gap: 4, marginBottom: 4 }}>
-                  <button style={S.btn} onClick={handleAddKeyframe}>+ Keyframe</button>
+                  <button style={S.btn} onClick={handleAddKeyframe}>+ {t.sequencer.addKeyframe}</button>
                   {selectedKf !== null && (
                     <button style={{ ...S.btn, background: "#f38ba833", color: "#f38ba8" }} onClick={handleRemoveKeyframe}>
                       − Delete KF
