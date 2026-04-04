@@ -29,6 +29,7 @@ export function RenderSettingsPanel() {
   const [pathTrace, setPathTrace] = useState<PathTraceState>({ samples: 256, bounces: 8, resolutionScale: 1.0 });
   const [renderOutput, setRenderOutput] = useState<RenderOutputState>({ preset: "1080p", width: 1920, height: 1080, format: "png", path: "render_output" });
   const [transformSpace, setTransformSpace] = useState<"local" | "world">("local");
+  const [fpsLimit, setFpsLimit] = useState<number>(120);
   const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const fetchSettings = useCallback(async () => {
@@ -36,6 +37,12 @@ export function RenderSettingsPanel() {
     try {
       const result = await window.guavaEngine.call("viewport.getRenderSettings", {});
       setSettings(result);
+    } catch {
+      // ignore
+    }
+    try {
+      const fpsResult = await window.guavaEngine.call("viewport.getFrameRate", {});
+      if (fpsResult.fps != null) setFpsLimit(Number(fpsResult.fps));
     } catch {
       // ignore
     }
@@ -94,6 +101,32 @@ export function RenderSettingsPanel() {
               {shadingLabels[mode]}
             </button>
           ))}
+        </div>
+      </Section>
+
+      {/* Frame Rate Limit */}
+      <Section title={t.renderSettings.frameRate ?? "Frame Rate"}>
+        <div style={styles.buttonGroup}>
+          {([30, 60, 120, 0] as const).map((fps) => {
+            const label = fps === 0 ? "∞" : `${fps}`;
+            const title = fps === 0 ? "Unlimited (VSync)" : `${fps} FPS`;
+            return (
+              <button
+                key={fps}
+                title={title}
+                style={{
+                  ...styles.modeButton,
+                  ...(fpsLimit === fps ? styles.modeButtonActive : {}),
+                }}
+                onClick={() => {
+                  setFpsLimit(fps);
+                  window.guavaEngine.call("viewport.setFrameRate", { fps }).catch(() => {});
+                }}
+              >
+                {label}
+              </button>
+            );
+          })}
         </div>
       </Section>
 

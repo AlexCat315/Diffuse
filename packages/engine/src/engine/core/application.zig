@@ -453,6 +453,7 @@ pub const Application = struct {
             }
 
             last_frame = try self.renderer.drawFrame(&self.world, &self.physics_state);
+            self.renderer.last_frame_report = last_frame;
 
             // Consume pending frame delay change from RPC.
             if (self.renderer.pending_frame_delay_ms) |new_delay| {

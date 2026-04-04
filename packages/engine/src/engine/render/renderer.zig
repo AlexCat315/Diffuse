@@ -411,6 +411,14 @@ pub const Renderer = struct {
     pending_frame_delay_ms: ?u32 = null,
     /// 当前生效的帧延迟（由 Application 写入，供 RPC 读取）。
     current_frame_delay_ms: u32 = 16,
+    /// 上一帧渲染统计（由 Application 在 drawFrame 后写入，供 RPC metrics 广播读取）。
+    last_frame_report: FrameReport = .{
+        .backend = .metal,
+        .passes_executed = 0,
+        .graph_resources = 0,
+        .scene = .{},
+        .runtime = .{},
+    },
     /// 编辑器变换枢轴覆盖（例如 bounds center）
     editor_gizmo_transform_override: ?components.Transform = null,
     /// staged preview 的自定义 gizmo 目标

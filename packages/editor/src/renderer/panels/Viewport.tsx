@@ -39,7 +39,6 @@ export function Viewport() {
   const shmNameRef = useRef<string | undefined>(undefined);
   const lastSizeRef = useRef({ w: 0, h: 0 });
   const [shadingMode, setShadingMode] = useState<ShadingMode>("material");
-  const [fpsLimit, setFpsLimit] = useState<number>(120);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const selectedEntity = useSceneStore((s) => s.selectedEntity);
 
@@ -59,19 +58,11 @@ export function Viewport() {
     window.guavaEngine.call("viewport.getRenderSettings", {})
       .then((res) => { if (res.shadingMode) setShadingMode(res.shadingMode as ShadingMode); })
       .catch(() => {});
-    window.guavaEngine.call("viewport.getFrameRate", {})
-      .then((res) => { if (res.fps != null) setFpsLimit(Number(res.fps)); })
-      .catch(() => {});
   }, [connected]);
 
   const handleShadingChange = useCallback((mode: ShadingMode) => {
     setShadingMode(mode);
     window.guavaEngine.call("viewport.setRenderSettings", { shadingMode: mode } as never).catch(() => {});
-  }, []);
-
-  const handleFpsChange = useCallback((fps: number) => {
-    setFpsLimit(fps);
-    window.guavaEngine.call("viewport.setFrameRate", { fps }).catch(() => {});
   }, []);
 
   // ── Input forwarding to the engine ─────────────────────────────
@@ -640,27 +631,8 @@ export function Viewport() {
                 {SHADING_ICONS[mode]}
               </button>
             ))}
-            <span style={styles.toolbarSeparator} />
-            {([30, 60, 120, 0] as const).map((fps) => {
-              const label = fps === 0 ? "∞" : `${fps}`;
-              const title = fps === 0 ? "Unlimited (VSync)" : `${fps} FPS`;
-              return (
-                <button
-                  key={fps}
-                  title={title}
-                  style={{
-                    ...styles.shadingButton,
-                    ...(fpsLimit === fps ? styles.shadingButtonActive : {}),
-                    fontSize: 11,
-                    minWidth: fps === 0 ? 24 : 30,
-                  }}
-                  onClick={() => handleFpsChange(fps)}
-                >
-                  {label}
-                </button>
-              );
-            })}
           </div>
+          <ViewportMetricsOverlay />
           <div style={styles.viewCubeOverlay}>
             <ViewCube />
           </div>
@@ -677,6 +649,73 @@ export function Viewport() {
     </div>
   );
 }
+
+// ── Viewport FPS / Frame Time Overlay ────────────────────────────
+
+function ViewportMetricsOverlay() {
+  const [metrics, setMetrics] = useState<{ fps: number; frameTimeMs: number; drawCalls: number; triangles: number } | null>(null);
+
+  useEffect(() => {
+    const cleanup = window.guavaEngine.onEvent((event, data) => {
+      if (event === "on:viewport.metrics") {
+        setMetrics(data as { fps: number; frameTimeMs: number; drawCalls: number; triangles: number });
+      }
+    });
+    return cleanup;
+  }, []);
+
+  if (!metrics) return null;
+
+  const fpsColor = metrics.fps >= 55 ? "#a6e3a1" : metrics.fps >= 30 ? "#f9e2af" : "#f38ba8";
+
+  return (
+    <div style={metricsStyles.container}>
+      <span style={{ ...metricsStyles.value, color: fpsColor }}>{metrics.fps}</span>
+      <span style={metricsStyles.label}>FPS</span>
+      <span style={metricsStyles.sep} />
+      <span style={metricsStyles.value}>{metrics.frameTimeMs}</span>
+      <span style={metricsStyles.label}>ms</span>
+      <span style={metricsStyles.sep} />
+      <span style={metricsStyles.value}>{formatK(metrics.drawCalls)}</span>
+      <span style={metricsStyles.label}>DC</span>
+      <span style={metricsStyles.sep} />
+      <span style={metricsStyles.value}>{formatK(metrics.triangles)}</span>
+      <span style={metricsStyles.label}>Tri</span>
+    </div>
+  );
+}
+
+function formatK(n: number): string {
+  if (n >= 1_000_000) return (n / 1_000_000).toFixed(1) + "M";
+  if (n >= 1_000) return (n / 1_000).toFixed(1) + "K";
+  return String(n);
+}
+
+const metricsStyles: Record<string, React.CSSProperties> = {
+  container: {
+    position: "absolute",
+    bottom: 8,
+    left: 8,
+    zIndex: 10,
+    display: "flex",
+    alignItems: "baseline",
+    gap: 3,
+    background: "rgba(24, 24, 37, 0.75)",
+    backdropFilter: "blur(8px)",
+    WebkitBackdropFilter: "blur(8px)",
+    borderRadius: 6,
+    padding: "3px 8px",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
+    border: "1px solid rgba(69, 71, 90, 0.4)",
+    fontFamily: "monospace",
+    fontSize: 11,
+    color: "#a6adc8",
+    pointerEvents: "none",
+  },
+  value: { fontWeight: 600, fontSize: 12 },
+  label: { fontSize: 9, opacity: 0.6, marginRight: 2 },
+  sep: { width: 1, height: 10, background: "rgba(69, 71, 90, 0.6)", margin: "0 2px", alignSelf: "center" },
+};
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
