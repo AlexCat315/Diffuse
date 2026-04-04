@@ -624,6 +624,33 @@ export const en = {
     sampledSize: "Sampled Size",
     applyToBase: "Apply to Base",
   },
+
+  // ── Prefab Editor ────────────────────────────────────────────
+  prefab: {
+    title: "Prefab Editor",
+    notConnected: "Not connected to engine.",
+    search: "Search prefabs…",
+    noPrefabs: "No prefabs in library.",
+    selectPrefab: "Select a prefab to inspect.",
+    refresh: "Refresh",
+    create: "Create",
+    createFromEntity: "Create prefab from selected entity",
+    instantiate: "Instantiate",
+    save: "Save",
+    delete: "Delete",
+    confirmDelete: "Are you sure you want to delete this prefab?",
+    enterName: "Enter prefab name:",
+    entityTree: "Entity Hierarchy",
+    inspector: "Inspector",
+    name: "Name",
+    visible: "Visible",
+    transform: "Transform",
+    position: "Position",
+    rotation: "Rotation",
+    scale: "Scale",
+    components: "Components",
+    noComponents: "No components",
+  },
 };
 
 type DeepStringRecord<T> = {

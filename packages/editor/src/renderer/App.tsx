@@ -30,6 +30,7 @@ import { MaterialGraphEditor } from "./panels/MaterialGraphEditor";
 import { ScriptViewer } from "./panels/ScriptViewer";
 import { AiChat } from "./panels/AiChat";
 import { ParticleEditor } from "./panels/ParticleEditor";
+import { PrefabEditor } from "./panels/PrefabEditor";
 import { SettingsPanel } from "./panels/Settings";
 import { useI18n } from "./i18n";
 import {
@@ -139,6 +140,7 @@ const defaultLayout: IJsonModel = {
               { type: "tab", name: "Scripts", component: "scriptviewer" },
               { type: "tab", name: "AI Chat", component: "aichat" },
               { type: "tab", name: "Particles", component: "particleeditor" },
+              { type: "tab", name: "Prefabs", component: "prefabeditor" },
             ],
           },
         ],
@@ -259,6 +261,7 @@ export function App() {
       case "scriptviewer":    return <ScriptViewer />;
       case "aichat":          return <AiChat />;
       case "particleeditor":  return <ParticleEditor />;
+      case "prefabeditor":    return <PrefabEditor />;
       case "settings":        return <SettingsPanel />;
       default:
         return <div style={{ padding: 12, color: "#6c7086" }}>Unknown panel: {component}</div>;
