@@ -44,6 +44,7 @@ const handler_modules = [_]HandlerModule{
     .{ .prefix = "rendersettings", .mod = @import("handlers/rendersettings.zig") },
     .{ .prefix = "material", .mod = @import("handlers/material.zig") },
     .{ .prefix = "sequencer", .mod = @import("handlers/sequencer.zig") },
+    .{ .prefix = "animation", .mod = @import("handlers/animation.zig") },
 };
 
 // Subscriptions (push events — detection logic in subscriptions.zig)

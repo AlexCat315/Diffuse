@@ -73,6 +73,52 @@ export interface SequencerTrack {
   target: string;
 }
 
+export interface AnimGraphState {
+  index: number;
+  name: string;
+  clipName?: string;
+  speed: number;
+  loop: boolean;
+  duration: number;
+  isDefault: boolean;
+  isCurrent: boolean;
+  isNext: boolean;
+}
+
+export interface AnimGraphTransition {
+  index: number;
+  fromState: number;
+  toState: number;
+  fromStateName: string;
+  toStateName: string;
+  duration: number;
+  conditions: AnimTransitionCondition[];
+}
+
+export interface AnimTransitionCondition {
+  index: number;
+  conditionType: string;
+  threshold: number;
+  parameterName?: string;
+  comparison?: string;
+}
+
+export interface AnimGraphParameter {
+  index: number;
+  name: string;
+  paramType: string;
+  floatValue?: number;
+  boolValue?: boolean;
+  intValue?: number;
+}
+
+export interface AnimClipTrack {
+  index: number;
+  name: string;
+  trackType: string;
+  keyframeCount: number;
+}
+
 // ── RPC Method Signatures ──────────────────────────────────
 
 export interface RpcMethods {
@@ -167,6 +213,19 @@ export interface RpcMethods {
   "material.listTextures": { params: Record<string, never>; result: { textures: { handle: number; name: string; width: number; height: number }[] } };
   "material.setPreviewPrimitive": { params: { primitive: string }; result: Record<string, never> };
   "sequencer.getState": { params: Record<string, never>; result: { loaded: boolean; name?: string; fps?: number; duration?: number; currentTime: number; isPlaying: boolean; speed: number; filePath?: string; tracks?: SequencerTrack[] } };
+  "animation.getState": { params: { entityId: number }; result: { hasAnimator: boolean; hasGraph: boolean; graphName?: string; currentState?: number; nextState?: number; blendFactor?: number; transitionTime?: number; transitionDuration?: number; defaultState?: number; states?: AnimGraphState[]; transitions?: AnimGraphTransition[]; parameters?: AnimGraphParameter[]; clipTracks?: AnimClipTrack[]; clipDuration?: number; sampleTime?: number } };
+  "animation.addState": { params: { entityId: number; name?: string }; result: { index: number } };
+  "animation.updateState": { params: { entityId: number; stateIndex: number; name?: string; clip?: string; speed?: number; loop?: boolean; duration?: number }; result: Record<string, never> };
+  "animation.removeState": { params: { entityId: number; stateIndex: number }; result: Record<string, never> };
+  "animation.setDefaultState": { params: { entityId: number; stateIndex: number }; result: Record<string, never> };
+  "animation.activateState": { params: { entityId: number; stateIndex: number }; result: Record<string, never> };
+  "animation.addTransition": { params: { entityId: number; fromState: number; toState: number; duration?: number; triggerTime?: number }; result: { index: number } };
+  "animation.updateTransition": { params: { entityId: number; transitionIndex: number; fromState?: number; toState?: number; duration?: number }; result: Record<string, never> };
+  "animation.removeTransition": { params: { entityId: number; transitionIndex: number }; result: Record<string, never> };
+  "animation.addCondition": { params: { entityId: number; transitionIndex: number; conditionType: string; threshold?: number; parameterName?: string; comparison?: string }; result: { index: number } };
+  "animation.updateCondition": { params: { entityId: number; transitionIndex: number; conditionIndex: number; conditionType?: string; threshold?: number; parameterName?: string; comparison?: string }; result: Record<string, never> };
+  "animation.removeCondition": { params: { entityId: number; transitionIndex: number; conditionIndex: number }; result: Record<string, never> };
+  "animation.setParameter": { params: { entityId: number; parameterIndex: number; floatValue?: number; boolValue?: boolean; intValue?: number }; result: Record<string, never> };
   "sequencer.create": { params: { name?: string; fps?: number }; result: { ok: boolean } };
   "sequencer.load": { params: { path: string }; result: { ok: boolean; error?: string } };
   "sequencer.save": { params: { path?: string }; result: { ok: boolean; error?: string } };
