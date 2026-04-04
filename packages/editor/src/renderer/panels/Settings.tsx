@@ -465,7 +465,7 @@ function RemoteServerTab({ connected, isZh }: { connected: boolean; isZh: boolea
           <div style={{
             ...styles.testResult,
             color: testStatus === "success" ? "#a6e3a1" : "#f38ba8",
-            borderColor: testStatus === "success" ? "rgba(166,227,161,0.3)" : "rgba(243,139,168,0.3)",
+            border: testStatus === "success" ? "1px solid rgba(166,227,161,0.3)" : "1px solid rgba(243,139,168,0.3)",
           }}>
             <span style={{ marginRight: 6 }}>{testStatus === "success" ? "✓" : "✕"}</span>
             {testResult}
@@ -562,8 +562,8 @@ const styles: Record<string, React.CSSProperties> = {
   tabButtonActive: {
     background: "#313244",
     color: "#cdd6f4",
-    borderColor: "#45475a",
-    borderBottomColor: "transparent",
+    border: "1px solid #45475a",
+    borderBottom: "1px solid transparent",
   },
   content: {
     // scrollable content area
@@ -598,7 +598,7 @@ const styles: Record<string, React.CSSProperties> = {
   optionButtonActive: {
     background: "#89b4fa",
     color: "#1e1e2e",
-    borderColor: "#89b4fa",
+    border: "1px solid #89b4fa",
     fontWeight: 600,
   },
   toggleRow: {

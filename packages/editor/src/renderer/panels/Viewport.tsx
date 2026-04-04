@@ -656,7 +656,7 @@ const styles: Record<string, React.CSSProperties> = {
   },
   shadingButtonActive: {
     background: "rgba(69, 71, 90, 0.8)",
-    borderColor: "#89b4fa",
+    border: "1px solid #89b4fa",
     color: "#89b4fa",
   },
   placeholder: {

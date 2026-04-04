@@ -188,7 +188,7 @@ const styles: Record<string, React.CSSProperties> = {
   tabActive: {
     background: "#3a5a8a",
     color: "#fff",
-    borderColor: "#4a7abf",
+    border: "1px solid #4a7abf",
   },
   search: {
     width: "100%",

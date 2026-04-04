@@ -49,7 +49,7 @@ export function Console() {
                 ...styles.filterBtn,
                 color: levelColors[level],
                 opacity: activeFilters.has(level) ? 1 : 0.3,
-                borderColor: activeFilters.has(level) ? levelColors[level] : "transparent",
+                border: activeFilters.has(level) ? `1px solid ${levelColors[level]}` : "1px solid transparent",
               }}
               onClick={() => toggleFilter(level)}
               title={`Toggle ${level}`}
