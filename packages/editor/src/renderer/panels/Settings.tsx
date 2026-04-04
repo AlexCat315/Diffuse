@@ -1,10 +1,8 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useI18n, type Locale } from "../i18n";
 import { useConnectionStore } from "../store";
 
-type SettingsTab = "general" | "shortcuts" | "remote";
 type FpsDisplay = "viewport" | "none";
-
 
 // ── Local preferences (stored in localStorage) ───────────────────
 
@@ -49,15 +47,15 @@ interface ShortcutDef {
 }
 
 const MESH_SHORTCUTS: ShortcutDef[] = [
-  { id: "extrude",         label: "Extrude",              labelZh: "挤出",           default: { key: "E", ctrl: false, shift: false, alt: false } },
-  { id: "inset",           label: "Inset",                labelZh: "内嵌",           default: { key: "I", ctrl: false, shift: false, alt: false } },
-  { id: "bevel",           label: "Bevel",                labelZh: "倒角",           default: { key: "B", ctrl: false, shift: false, alt: false } },
-  { id: "loopCut",         label: "Loop Cut",             labelZh: "环切",           default: { key: "R", ctrl: true,  shift: false, alt: false } },
-  { id: "merge",           label: "Merge",                labelZh: "合并",           default: { key: "M", ctrl: false, shift: false, alt: false } },
-  { id: "duplicateFaces",  label: "Duplicate Faces",      labelZh: "复制面",         default: { key: "D", ctrl: false, shift: true,  alt: false } },
-  { id: "separateFaces",   label: "Separate Faces",       labelZh: "分离面",         default: { key: "P", ctrl: false, shift: false, alt: false } },
-  { id: "recalcNormals",   label: "Recalculate Normals",  labelZh: "重算法线",       default: { key: "N", ctrl: false, shift: true,  alt: false } },
-  { id: "pivotToSelection",label: "Pivot To Selection",   labelZh: "轴心到选区",     default: { key: ".", ctrl: false, shift: false, alt: false } },
+  { id: "extrude",         label: "Extrude",              labelZh: "挤出",       default: { key: "E", ctrl: false, shift: false, alt: false } },
+  { id: "inset",           label: "Inset",                labelZh: "内嵌",       default: { key: "I", ctrl: false, shift: false, alt: false } },
+  { id: "bevel",           label: "Bevel",                labelZh: "倒角",       default: { key: "B", ctrl: false, shift: false, alt: false } },
+  { id: "loopCut",         label: "Loop Cut",             labelZh: "环切",       default: { key: "R", ctrl: true,  shift: false, alt: false } },
+  { id: "merge",           label: "Merge",                labelZh: "合并",       default: { key: "M", ctrl: false, shift: false, alt: false } },
+  { id: "duplicateFaces",  label: "Duplicate Faces",      labelZh: "复制面",     default: { key: "D", ctrl: false, shift: true,  alt: false } },
+  { id: "separateFaces",   label: "Separate Faces",       labelZh: "分离面",     default: { key: "P", ctrl: false, shift: false, alt: false } },
+  { id: "recalcNormals",   label: "Recalculate Normals",  labelZh: "重算法线",   default: { key: "N", ctrl: false, shift: true,  alt: false } },
+  { id: "pivotToSelection",label: "Pivot To Selection",   labelZh: "轴心到选区", default: { key: ".", ctrl: false, shift: false, alt: false } },
 ];
 
 const SHORTCUTS_KEY = "guava-editor-shortcuts";
@@ -76,18 +74,56 @@ function saveShortcuts(shortcuts: Record<string, ShortcutBinding>) {
   localStorage.setItem(SHORTCUTS_KEY, JSON.stringify(shortcuts));
 }
 
-// ── Component ────────────────────────────────────────────────────
+// ── Section nav definitions ──────────────────────────────────────
+
+interface SectionDef {
+  id: string;
+  label: string;
+  labelZh: string;
+  icon: string;
+  keywords: string[];
+}
+
+const SECTIONS: SectionDef[] = [
+  { id: "language",   label: "Language",    labelZh: "语言",       icon: "🌐", keywords: ["language", "locale", "english", "中文", "语言"] },
+  { id: "appearance", label: "Appearance",  labelZh: "外观",       icon: "◉",  keywords: ["fps", "display", "vsync", "overlay", "显示", "垂直同步"] },
+  { id: "layout",     label: "Layout",      labelZh: "布局",       icon: "⊞",  keywords: ["layout", "panel", "reset", "布局", "面板", "重置"] },
+  { id: "shortcuts",  label: "Shortcuts",   labelZh: "快捷键",     icon: "⌨",  keywords: ["shortcut", "key", "binding", "mesh", "extrude", "bevel", "快捷键", "网格"] },
+  { id: "remote",     label: "Remote",      labelZh: "远程服务器", icon: "☁",  keywords: ["remote", "server", "local", "websocket", "connect", "远程", "服务器", "连接"] },
+  { id: "about",      label: "About",       labelZh: "关于",       icon: "ⓘ",  keywords: ["version", "engine", "status", "about", "版本", "关于"] },
+];
+
+// ── Remote server constants ──────────────────────────────────────
+
+type TestStatus = "idle" | "testing" | "success" | "fail";
+type ConnectMode = "local" | "remote";
+
+const REMOTE_URL_KEY = "guava-editor-remote-url";
+const CONNECT_MODE_KEY = "guava-editor-connect-mode";
+
+// ── Main Component ───────────────────────────────────────────────
 
 export function SettingsPanel() {
   const connected = useConnectionStore((s) => s.connected);
   const { locale, setLocale, t } = useI18n();
-  const [tab, setTab] = useState<SettingsTab>("general");
+  const isZh = locale === "zh-CN";
+
   const [prefs, setPrefs] = useState<EditorPrefs>(loadPrefs);
   const [shortcuts, setShortcuts] = useState<Record<string, ShortcutBinding>>(loadShortcuts);
   const [recording, setRecording] = useState<string | null>(null);
   const [engineVersion, setEngineVersion] = useState<string>("");
+  const [search, setSearch] = useState("");
+  const [activeSection, setActiveSection] = useState("language");
+  const contentRef = useRef<HTMLDivElement>(null);
+  const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  // Fetch engine version
+  const [remoteUrl, setRemoteUrl] = useState(() => localStorage.getItem(REMOTE_URL_KEY) || "ws://192.168.1.100:9100");
+  const [connectMode, setConnectMode] = useState<ConnectMode>(() => (localStorage.getItem(CONNECT_MODE_KEY) as ConnectMode) || "local");
+  const [testStatus, setTestStatus] = useState<TestStatus>("idle");
+  const [testResult, setTestResult] = useState("");
+  const [connecting, setConnecting] = useState(false);
+  const [connectError, setConnectError] = useState("");
+
   useEffect(() => {
     if (!connected) return;
     window.guavaEngine.call("editor.getCapabilities", {})
@@ -123,7 +159,7 @@ export function SettingsPanel() {
     e.preventDefault();
     e.stopPropagation();
     const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
-    if (["Control", "Shift", "Alt", "Meta"].includes(key)) return; // modifier-only, wait for real key
+    if (["Control", "Shift", "Alt", "Meta"].includes(key)) return;
     updateShortcut(recording, {
       key,
       ctrl: e.ctrlKey || e.metaKey,
@@ -133,176 +169,6 @@ export function SettingsPanel() {
     setRecording(null);
   }, [recording, updateShortcut]);
 
-  const isZh = locale === "zh-CN";
-
-  return (
-    <div style={styles.container} onKeyDown={handleKeyRecord} tabIndex={0}>
-      <div style={styles.header}>{isZh ? "设置" : "Settings"}</div>
-
-      {/* Tab bar */}
-      <div style={styles.tabBar}>
-        {(["general", "shortcuts", "remote"] as SettingsTab[]).map((t) => (
-          <button
-            key={t}
-            style={{ ...styles.tabButton, ...(tab === t ? styles.tabButtonActive : {}) }}
-            onClick={() => setTab(t)}
-          >
-            {t === "general" ? (isZh ? "通用" : "General")
-              : t === "shortcuts" ? (isZh ? "快捷键" : "Shortcuts")
-              : (isZh ? "远程服务器" : "Remote Server")}
-          </button>
-        ))}
-      </div>
-
-      <div style={styles.content}>
-        {tab === "general" && (
-          <GeneralTab
-            locale={locale}
-            setLocale={setLocale}
-            prefs={prefs}
-            updatePref={updatePref}
-            engineVersion={engineVersion}
-            connected={connected}
-            isZh={isZh}
-          />
-        )}
-        {tab === "shortcuts" && (
-          <ShortcutsTab
-            shortcuts={shortcuts}
-            recording={recording}
-            setRecording={setRecording}
-            resetShortcuts={resetShortcuts}
-            isZh={isZh}
-          />
-        )}
-        {tab === "remote" && (
-          <RemoteServerTab connected={connected} isZh={isZh} />
-        )}
-      </div>
-    </div>
-  );
-}
-
-// ── General Tab ──────────────────────────────────────────────────
-
-function GeneralTab({
-  locale,
-  setLocale,
-  prefs,
-  updatePref,
-  engineVersion,
-  connected,
-  isZh,
-}: {
-  locale: Locale;
-  setLocale: (l: Locale) => void;
-  prefs: EditorPrefs;
-  updatePref: <K extends keyof EditorPrefs>(key: K, value: EditorPrefs[K]) => void;
-  engineVersion: string;
-  connected: boolean;
-  isZh: boolean;
-}) {
-  const handleResetLayout = useCallback(() => {
-    localStorage.removeItem("guava-editor-layout-v1");
-    window.location.reload();
-  }, []);
-
-  return (
-    <>
-      {/* Language */}
-      <Section title={isZh ? "语言" : "Language"}>
-        <div style={styles.buttonGroup}>
-          <button
-            style={{ ...styles.optionButton, ...(locale === "en" ? styles.optionButtonActive : {}) }}
-            onClick={() => setLocale("en")}
-          >
-            English
-          </button>
-          <button
-            style={{ ...styles.optionButton, ...(locale === "zh-CN" ? styles.optionButtonActive : {}) }}
-            onClick={() => setLocale("zh-CN")}
-          >
-            中文
-          </button>
-        </div>
-      </Section>
-
-      {/* FPS Display */}
-      <Section title={isZh ? "FPS 显示" : "FPS Display"}>
-        <div style={styles.buttonGroup}>
-          <button
-            style={{ ...styles.optionButton, ...(prefs.fpsDisplay === "viewport" ? styles.optionButtonActive : {}) }}
-            onClick={() => updatePref("fpsDisplay", "viewport")}
-          >
-            {isZh ? "视口内显示" : "Viewport"}
-          </button>
-          <button
-            style={{ ...styles.optionButton, ...(prefs.fpsDisplay === "none" ? styles.optionButtonActive : {}) }}
-            onClick={() => updatePref("fpsDisplay", "none")}
-          >
-            {isZh ? "隐藏" : "None"}
-          </button>
-        </div>
-      </Section>
-
-      {/* VSync */}
-      <Section title="VSync">
-        <label style={styles.toggleRow}>
-          <input
-            type="checkbox"
-            checked={prefs.vsyncEnabled}
-            onChange={(e) => updatePref("vsyncEnabled", e.target.checked)}
-          />
-          <span>{isZh ? "启用垂直同步" : "Enable VSync"}</span>
-        </label>
-        <div style={styles.hint}>
-          {isZh ? "需要引擎端 RPC 支持（即将推出）" : "Requires engine RPC support (coming soon)"}
-        </div>
-      </Section>
-
-      {/* Layout */}
-      <Section title={isZh ? "布局" : "Layout"}>
-        <button style={styles.actionButton} onClick={handleResetLayout}>
-          {isZh ? "重置面板布局" : "Reset Panel Layout"}
-        </button>
-      </Section>
-
-      {/* About */}
-      <Section title={isZh ? "关于" : "About"}>
-        <div style={styles.aboutRow}>
-          <span style={styles.aboutLabel}>Guava Engine</span>
-          <span style={styles.aboutValue}>{engineVersion || "—"}</span>
-        </div>
-        <div style={styles.aboutRow}>
-          <span style={styles.aboutLabel}>{isZh ? "编辑器" : "Editor"}</span>
-          <span style={styles.aboutValue}>Electron</span>
-        </div>
-        <div style={styles.aboutRow}>
-          <span style={styles.aboutLabel}>{isZh ? "连接状态" : "Status"}</span>
-          <span style={{ ...styles.aboutValue, color: connected ? "#a6e3a1" : "#f38ba8" }}>
-            {connected ? (isZh ? "已连接" : "Connected") : (isZh ? "未连接" : "Disconnected")}
-          </span>
-        </div>
-      </Section>
-    </>
-  );
-}
-
-// ── Shortcuts Tab ────────────────────────────────────────────────
-
-function ShortcutsTab({
-  shortcuts,
-  recording,
-  setRecording,
-  resetShortcuts,
-  isZh,
-}: {
-  shortcuts: Record<string, ShortcutBinding>;
-  recording: string | null;
-  setRecording: (id: string | null) => void;
-  resetShortcuts: () => void;
-  isZh: boolean;
-}) {
   const formatBinding = (b: ShortcutBinding): string => {
     const parts: string[] = [];
     if (b.ctrl) parts.push("Ctrl");
@@ -312,72 +178,16 @@ function ShortcutsTab({
     return parts.join("+");
   };
 
-  return (
-    <>
-      <Section title={isZh ? "网格编辑快捷键" : "Mesh Edit Shortcuts"}>
-        <div style={styles.shortcutTable}>
-          <div style={styles.shortcutHeaderRow}>
-            <span style={styles.shortcutAction}>{isZh ? "操作" : "Action"}</span>
-            <span style={styles.shortcutKey}>{isZh ? "快捷键" : "Shortcut"}</span>
-            <span style={styles.shortcutRecord} />
-          </div>
-          {MESH_SHORTCUTS.map((def) => {
-            const binding = shortcuts[def.id] || def.default;
-            const isRecording = recording === def.id;
-            return (
-              <div key={def.id} style={{ ...styles.shortcutRow, ...(isRecording ? styles.shortcutRowRecording : {}) }}>
-                <span style={styles.shortcutAction}>{isZh ? def.labelZh : def.label}</span>
-                <span style={styles.shortcutKey}>
-                  {isRecording ? (
-                    <span style={styles.recordingBadge}>{isZh ? "录制中..." : "Recording..."}</span>
-                  ) : (
-                    <code style={styles.keyCode}>{formatBinding(binding)}</code>
-                  )}
-                </span>
-                <span style={styles.shortcutRecord}>
-                  <button
-                    style={styles.recordButton}
-                    onClick={() => setRecording(isRecording ? null : def.id)}
-                  >
-                    {isRecording ? "✕" : "⌨"}
-                  </button>
-                </span>
-              </div>
-            );
-          })}
-        </div>
-        <button style={{ ...styles.actionButton, marginTop: 8 }} onClick={resetShortcuts}>
-          {isZh ? "恢复默认快捷键" : "Reset to Defaults"}
-        </button>
-        <div style={styles.hint}>
-          {isZh ? "快捷键保存在本地，后续将同步到引擎端" : "Shortcuts saved locally; engine sync coming soon"}
-        </div>
-      </Section>
-    </>
-  );
-}
-
-// ── Remote Server Tab ────────────────────────────────────────────
-
-type TestStatus = "idle" | "testing" | "success" | "fail";
-type ConnectMode = "local" | "remote";
-
-const REMOTE_URL_KEY = "guava-editor-remote-url";
-const CONNECT_MODE_KEY = "guava-editor-connect-mode";
-
-function RemoteServerTab({ connected, isZh }: { connected: boolean; isZh: boolean }) {
-  const [url, setUrl] = useState(() => localStorage.getItem(REMOTE_URL_KEY) || "ws://192.168.1.100:9100");
-  const [mode, setMode] = useState<ConnectMode>(() => (localStorage.getItem(CONNECT_MODE_KEY) as ConnectMode) || "local");
-  const [testStatus, setTestStatus] = useState<TestStatus>("idle");
-  const [testResult, setTestResult] = useState("");
-  const [connecting, setConnecting] = useState(false);
-  const [connectError, setConnectError] = useState("");
+  const handleResetLayout = useCallback(() => {
+    localStorage.removeItem("guava-editor-layout-v1");
+    window.location.reload();
+  }, []);
 
   const handleTest = useCallback(async () => {
     setTestStatus("testing");
     setTestResult("");
     try {
-      const res = await window.guavaEngine.testRemoteConnection(url);
+      const res = await window.guavaEngine.testRemoteConnection(remoteUrl);
       if (res.ok) {
         setTestStatus("success");
         setTestResult(res.version ? `Guava Engine v${res.version}` : "Connected");
@@ -389,19 +199,19 @@ function RemoteServerTab({ connected, isZh }: { connected: boolean; isZh: boolea
       setTestStatus("fail");
       setTestResult(String(err));
     }
-  }, [url]);
+  }, [remoteUrl]);
 
   const handleConnect = useCallback(async (targetMode: ConnectMode) => {
     setConnecting(true);
     setConnectError("");
     try {
-      const targetUrl = targetMode === "local" ? "local" : url;
+      const targetUrl = targetMode === "local" ? "local" : remoteUrl;
       const res = await window.guavaEngine.connectToServer(targetUrl);
       if (res.ok) {
-        setMode(targetMode);
+        setConnectMode(targetMode);
         localStorage.setItem(CONNECT_MODE_KEY, targetMode);
         if (targetMode === "remote") {
-          localStorage.setItem(REMOTE_URL_KEY, url);
+          localStorage.setItem(REMOTE_URL_KEY, remoteUrl);
         }
       } else {
         setConnectError(res.error || "Failed to connect");
@@ -411,236 +221,461 @@ function RemoteServerTab({ connected, isZh }: { connected: boolean; isZh: boolea
     } finally {
       setConnecting(false);
     }
-  }, [url]);
+  }, [remoteUrl]);
+
+  const q = search.toLowerCase().trim();
+  const visibleSections = useMemo(() => {
+    if (!q) return SECTIONS;
+    return SECTIONS.filter((s) =>
+      s.label.toLowerCase().includes(q) ||
+      s.labelZh.includes(q) ||
+      s.keywords.some((kw) => kw.includes(q)),
+    );
+  }, [q]);
+  const visibleIds = useMemo(() => new Set(visibleSections.map((s) => s.id)), [visibleSections]);
+
+  const scrollToSection = useCallback((id: string) => {
+    setActiveSection(id);
+    sectionRefs.current[id]?.scrollIntoView({ behavior: "smooth", block: "start" });
+  }, []);
+
+  useEffect(() => {
+    const el = contentRef.current;
+    if (!el) return;
+    const handler = () => {
+      const scrollTop = el.scrollTop;
+      let closest = SECTIONS[0]?.id;
+      for (const s of SECTIONS) {
+        const ref = sectionRefs.current[s.id];
+        if (ref && ref.offsetTop - el.offsetTop <= scrollTop + 40) {
+          closest = s.id;
+        }
+      }
+      if (closest) setActiveSection(closest);
+    };
+    el.addEventListener("scroll", handler, { passive: true });
+    return () => el.removeEventListener("scroll", handler);
+  }, []);
 
   return (
-    <>
-      {/* Connection Mode */}
-      <Section title={isZh ? "连接模式" : "Connection Mode"}>
-        <div style={styles.buttonGroup}>
-          <button
-            style={{ ...styles.optionButton, ...(mode === "local" ? styles.optionButtonActive : {}) }}
-            onClick={() => mode !== "local" && handleConnect("local")}
-            disabled={connecting}
-          >
-            {isZh ? "本地引擎" : "Local Engine"}
-          </button>
-          <button
-            style={{ ...styles.optionButton, ...(mode === "remote" ? styles.optionButtonActive : {}) }}
-            onClick={() => mode !== "remote" && handleConnect("remote")}
-            disabled={connecting}
-          >
-            {isZh ? "远程服务器" : "Remote Server"}
-          </button>
-        </div>
-        {connecting && (
-          <div style={{ ...styles.hint, color: "#89b4fa" }}>
-            {isZh ? "正在切换连接..." : "Switching connection..."}
-          </div>
+    <div style={S.root} onKeyDown={handleKeyRecord} tabIndex={0}>
+      {/* Search bar */}
+      <div style={S.searchBar}>
+        <span style={S.searchIcon}>&#x2315;</span>
+        <input
+          style={S.searchInput}
+          placeholder={(isZh ? "搜索设置" : "Search settings") + "..."}
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+        />
+        {search && (
+          <button style={S.searchClear} onClick={() => setSearch("")}>&#x2715;</button>
         )}
-        {connectError && (
-          <div style={{ ...styles.hint, color: "#f38ba8" }}>{connectError}</div>
-        )}
-      </Section>
+      </div>
 
-      {/* Remote Server URL */}
-      <Section title={isZh ? "服务器地址" : "Server URL"}>
-        <div style={styles.inputRow}>
-          <input
-            type="text"
-            value={url}
-            onChange={(e) => setUrl(e.target.value)}
-            placeholder="ws://192.168.1.100:9100"
-            style={styles.textInput}
-          />
-        </div>
-        <div style={{ display: "flex", gap: 6, marginTop: 6 }}>
-          <button style={styles.actionButton} onClick={handleTest} disabled={testStatus === "testing"}>
-            {testStatus === "testing"
-              ? (isZh ? "测试中..." : "Testing...")
-              : (isZh ? "测试连接" : "Test Connection")}
-          </button>
-        </div>
-        {testStatus !== "idle" && testStatus !== "testing" && (
-          <div style={{
-            ...styles.testResult,
-            color: testStatus === "success" ? "#a6e3a1" : "#f38ba8",
-            border: testStatus === "success" ? "1px solid rgba(166,227,161,0.3)" : "1px solid rgba(243,139,168,0.3)",
-          }}>
-            <span style={{ marginRight: 6 }}>{testStatus === "success" ? "✓" : "✕"}</span>
-            {testResult}
-          </div>
-        )}
-      </Section>
+      <div style={S.body}>
+        {/* Left nav */}
+        <nav style={S.nav}>
+          {SECTIONS.map((s) => {
+            const visible = visibleIds.has(s.id);
+            if (!visible && q) return null;
+            return (
+              <button
+                key={s.id}
+                style={{
+                  ...S.navItem,
+                  ...(activeSection === s.id ? S.navItemActive : {}),
+                  ...(visible ? {} : { opacity: 0.3 }),
+                }}
+                onClick={() => scrollToSection(s.id)}
+              >
+                <span style={S.navIcon}>{s.icon}</span>
+                <span style={S.navLabel}>{isZh ? s.labelZh : s.label}</span>
+              </button>
+            );
+          })}
+        </nav>
 
-      {/* Architecture info */}
-      <Section title={isZh ? "架构说明" : "Architecture Notes"}>
-        <div style={styles.infoBox}>
-          <p style={styles.infoParagraph}>
-            {isZh
-              ? "远程模式通过 WebSocket RPC 连接到远端引擎服务器。所有面板（层级、检查器、控制台等）均可正常工作。"
-              : "Remote mode connects to a remote engine via WebSocket RPC. All panels (hierarchy, inspector, console, etc.) work normally."}
-          </p>
-          <p style={styles.infoParagraph}>
-            {isZh
-              ? "⚠️ 视口渲染目前仅支持本地模式（通过共享内存/IOSurface 传输像素）。远程像素流传输（帧编码 + 网络推送）将在后续版本中实现。"
-              : "⚠️ Viewport rendering currently works in local mode only (via shared memory/IOSurface). Remote pixel streaming (frame encoding + network push) is planned for a future release."}
-          </p>
-        </div>
-      </Section>
+        {/* Center content */}
+        <div ref={contentRef} style={S.content}>
 
-      {/* Status */}
-      <Section title={isZh ? "当前状态" : "Current Status"}>
-        <div style={styles.aboutRow}>
-          <span style={styles.aboutLabel}>{isZh ? "模式" : "Mode"}</span>
-          <span style={styles.aboutValue}>
-            {mode === "local" ? (isZh ? "本地" : "Local") : (isZh ? "远程" : "Remote")}
-          </span>
+          {visibleIds.has("language") && (
+            <div ref={(el) => { sectionRefs.current["language"] = el; }} style={S.section}>
+              <div style={S.sectionHeader}>{isZh ? "语言" : "Language"}</div>
+              <SettingRow label={isZh ? "界面语言" : "Interface Language"} desc={isZh ? "选择编辑器显示语言" : "Editor display language"}>
+                <div style={S.btnGroup}>
+                  <button style={{ ...S.btn, ...(locale === "en" ? S.btnActive : {}) }} onClick={() => setLocale("en")}>English</button>
+                  <button style={{ ...S.btn, ...(locale === "zh-CN" ? S.btnActive : {}) }} onClick={() => setLocale("zh-CN")}>中文</button>
+                </div>
+              </SettingRow>
+            </div>
+          )}
+
+          {visibleIds.has("appearance") && (
+            <div ref={(el) => { sectionRefs.current["appearance"] = el; }} style={S.section}>
+              <div style={S.sectionHeader}>{isZh ? "外观" : "Appearance"}</div>
+              <SettingRow label={isZh ? "FPS 显示" : "FPS Display"} desc={isZh ? "在视口中显示帧率叠加层" : "Show frame rate overlay in viewport"}>
+                <div style={S.btnGroup}>
+                  <button style={{ ...S.btn, ...(prefs.fpsDisplay === "viewport" ? S.btnActive : {}) }} onClick={() => updatePref("fpsDisplay", "viewport")}>{isZh ? "视口内" : "Viewport"}</button>
+                  <button style={{ ...S.btn, ...(prefs.fpsDisplay === "none" ? S.btnActive : {}) }} onClick={() => updatePref("fpsDisplay", "none")}>{isZh ? "隐藏" : "None"}</button>
+                </div>
+              </SettingRow>
+              <SettingRow label="VSync" desc={isZh ? "启用垂直同步（需引擎端支持）" : "Enable vertical sync (requires engine support)"}>
+                <Toggle checked={prefs.vsyncEnabled} onChange={(v) => updatePref("vsyncEnabled", v)} />
+              </SettingRow>
+            </div>
+          )}
+
+          {visibleIds.has("layout") && (
+            <div ref={(el) => { sectionRefs.current["layout"] = el; }} style={S.section}>
+              <div style={S.sectionHeader}>{isZh ? "布局" : "Layout"}</div>
+              <SettingRow label={isZh ? "面板布局" : "Panel Layout"} desc={isZh ? "恢复默认面板排列方式" : "Restore default panel arrangement"}>
+                <button style={S.actionBtn} onClick={handleResetLayout}>{isZh ? "重置布局" : "Reset Layout"}</button>
+              </SettingRow>
+            </div>
+          )}
+
+          {visibleIds.has("shortcuts") && (
+            <div ref={(el) => { sectionRefs.current["shortcuts"] = el; }} style={S.section}>
+              <div style={S.sectionHeader}>{isZh ? "快捷键" : "Shortcuts"}</div>
+              <div style={S.subsectionTitle}>{isZh ? "网格编辑" : "Mesh Editing"}</div>
+              <div style={S.shortcutTable}>
+                <div style={S.shortcutHeaderRow}>
+                  <span style={S.shortcutAction}>{isZh ? "操作" : "Action"}</span>
+                  <span style={S.shortcutKey}>{isZh ? "快捷键" : "Shortcut"}</span>
+                  <span style={S.shortcutRecord} />
+                </div>
+                {MESH_SHORTCUTS.map((def) => {
+                  const binding = shortcuts[def.id] || def.default;
+                  const isRec = recording === def.id;
+                  return (
+                    <div key={def.id} style={{ ...S.shortcutRow, ...(isRec ? S.shortcutRowRecording : {}) }}>
+                      <span style={S.shortcutAction}>{isZh ? def.labelZh : def.label}</span>
+                      <span style={S.shortcutKey}>
+                        {isRec ? (
+                          <span style={S.recordingBadge}>{isZh ? "录制中..." : "Recording..."}</span>
+                        ) : (
+                          <code style={S.keyCode}>{formatBinding(binding)}</code>
+                        )}
+                      </span>
+                      <span style={S.shortcutRecord}>
+                        <button style={S.recordBtn} onClick={() => setRecording(isRec ? null : def.id)}>
+                          {isRec ? "\u2715" : "\u2328"}
+                        </button>
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
+                <button style={S.actionBtn} onClick={resetShortcuts}>{isZh ? "恢复默认" : "Reset to Defaults"}</button>
+                <span style={S.hint}>{isZh ? "快捷键保存在本地" : "Saved locally"}</span>
+              </div>
+            </div>
+          )}
+
+          {visibleIds.has("remote") && (
+            <div ref={(el) => { sectionRefs.current["remote"] = el; }} style={S.section}>
+              <div style={S.sectionHeader}>{isZh ? "远程服务器" : "Remote Server"}</div>
+              <SettingRow label={isZh ? "连接模式" : "Connection Mode"} desc={isZh ? "选择本地引擎或远端服务器" : "Local engine or remote server"}>
+                <div style={S.btnGroup}>
+                  <button style={{ ...S.btn, ...(connectMode === "local" ? S.btnActive : {}) }} onClick={() => connectMode !== "local" && handleConnect("local")} disabled={connecting}>{isZh ? "本地" : "Local"}</button>
+                  <button style={{ ...S.btn, ...(connectMode === "remote" ? S.btnActive : {}) }} onClick={() => connectMode !== "remote" && handleConnect("remote")} disabled={connecting}>{isZh ? "远程" : "Remote"}</button>
+                </div>
+              </SettingRow>
+              {connecting && <div style={{ ...S.hint, color: "#89b4fa" }}>{isZh ? "正在切换连接..." : "Switching..."}</div>}
+              {connectError && <div style={{ ...S.hint, color: "#f38ba8" }}>{connectError}</div>}
+              <SettingRow label={isZh ? "服务器地址" : "Server URL"}>
+                <div style={{ display: "flex", gap: 6 }}>
+                  <input type="text" value={remoteUrl} onChange={(e) => setRemoteUrl(e.target.value)} placeholder="ws://192.168.1.100:9100" style={S.textInput} />
+                  <button style={S.actionBtn} onClick={handleTest} disabled={testStatus === "testing"}>
+                    {testStatus === "testing" ? (isZh ? "测试..." : "Test...") : (isZh ? "测试" : "Test")}
+                  </button>
+                </div>
+              </SettingRow>
+              {testStatus !== "idle" && testStatus !== "testing" && (
+                <div style={{ ...S.testResult, color: testStatus === "success" ? "#a6e3a1" : "#f38ba8", borderColor: testStatus === "success" ? "rgba(166,227,161,0.3)" : "rgba(243,139,168,0.3)" }}>
+                  <span style={{ marginRight: 6 }}>{testStatus === "success" ? "\u2713" : "\u2715"}</span>
+                  {testResult}
+                </div>
+              )}
+              <div style={S.infoBox}>
+                <p style={S.infoParagraph}>
+                  {isZh ? "远程模式通过 WebSocket RPC 连接到远端引擎服务器。所有面板均可正常工作。" : "Remote mode connects via WebSocket RPC. All panels work normally."}
+                </p>
+                <p style={S.infoParagraph}>
+                  {isZh ? "⚠️ 视口渲染仅支持本地模式（IOSurface）。远程像素流传输计划于后续版本实现。" : "⚠️ Viewport rendering is local-only (IOSurface). Remote streaming is planned."}
+                </p>
+              </div>
+            </div>
+          )}
+
+          {visibleIds.has("about") && (
+            <div ref={(el) => { sectionRefs.current["about"] = el; }} style={S.section}>
+              <div style={S.sectionHeader}>{isZh ? "关于" : "About"}</div>
+              <div style={S.aboutGrid}>
+                <AboutRow label="Guava Engine" value={engineVersion || "\u2014"} />
+                <AboutRow label={isZh ? "编辑器" : "Editor"} value="Electron" />
+                <AboutRow label={isZh ? "连接状态" : "Status"} value={connected ? (isZh ? "已连接" : "Connected") : (isZh ? "未连接" : "Disconnected")} valueColor={connected ? "#a6e3a1" : "#f38ba8"} />
+                {connectMode === "remote" && <AboutRow label={isZh ? "地址" : "URL"} value={remoteUrl} mono />}
+              </div>
+            </div>
+          )}
+
+          {visibleSections.length === 0 && (
+            <div style={S.empty}>{isZh ? "没有匹配的设置" : "No matching settings"}</div>
+          )}
         </div>
-        {mode === "remote" && (
-          <div style={styles.aboutRow}>
-            <span style={styles.aboutLabel}>{isZh ? "地址" : "URL"}</span>
-            <span style={{ ...styles.aboutValue, fontFamily: "monospace", fontSize: 11 }}>{url}</span>
-          </div>
-        )}
-        <div style={styles.aboutRow}>
-          <span style={styles.aboutLabel}>{isZh ? "连接" : "Status"}</span>
-          <span style={{ ...styles.aboutValue, color: connected ? "#a6e3a1" : "#f38ba8" }}>
-            {connected ? (isZh ? "已连接" : "Connected") : (isZh ? "未连接" : "Disconnected")}
-          </span>
-        </div>
-      </Section>
-    </>
+      </div>
+    </div>
   );
 }
 
 // ── Sub-components ───────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function SettingRow({ label, desc, children }: { label: string; desc?: string; children: React.ReactNode }) {
   return (
-    <div style={styles.section}>
-      <div style={styles.sectionTitle}>{title}</div>
-      {children}
+    <div style={S.settingRow}>
+      <div style={S.settingMeta}>
+        <span style={S.settingLabel}>{label}</span>
+        {desc && <span style={S.settingDesc}>{desc}</span>}
+      </div>
+      <div style={S.settingControl}>{children}</div>
+    </div>
+  );
+}
+
+function Toggle({ checked, onChange }: { checked: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      style={{ ...S.toggle, ...(checked ? S.toggleOn : {}) }}
+      onClick={() => onChange(!checked)}
+      role="switch"
+      aria-checked={checked}
+    >
+      <span style={{ ...S.toggleThumb, ...(checked ? S.toggleThumbOn : {}) }} />
+    </button>
+  );
+}
+
+function AboutRow({ label, value, valueColor, mono }: { label: string; value: string; valueColor?: string; mono?: boolean }) {
+  return (
+    <div style={S.aboutRow}>
+      <span style={S.aboutLabel}>{label}</span>
+      <span style={{ ...S.aboutValue, ...(valueColor ? { color: valueColor } : {}), ...(mono ? { fontFamily: "monospace", fontSize: 11 } : {}) }}>{value}</span>
     </div>
   );
 }
 
 // ── Styles ───────────────────────────────────────────────────────
 
-const styles: Record<string, React.CSSProperties> = {
-  container: {
-    padding: 8,
+const S: Record<string, React.CSSProperties> = {
+  root: {
+    display: "flex",
+    flexDirection: "column",
+    height: "100%",
     color: "#cdd6f4",
     fontSize: 13,
-    overflow: "auto",
-    height: "100%",
+    background: "#1e1e2e",
     outline: "none",
   },
-  header: {
-    fontSize: 14,
-    fontWeight: 600,
-    marginBottom: 8,
-    color: "#89b4fa",
+  empty: {
+    opacity: 0.4,
+    textAlign: "center",
+    padding: 32,
+    fontSize: 12,
   },
-  tabBar: {
+  searchBar: {
     display: "flex",
-    gap: 2,
-    marginBottom: 10,
+    alignItems: "center",
+    gap: 6,
+    padding: "6px 10px",
     borderBottom: "1px solid #313244",
-    paddingBottom: 6,
+    background: "#181825",
+    flexShrink: 0,
   },
-  tabButton: {
-    padding: "5px 14px",
-    border: "1px solid transparent",
-    borderRadius: "4px 4px 0 0",
+  searchIcon: {
+    fontSize: 14,
+    color: "#6c7086",
+    flexShrink: 0,
+  },
+  searchInput: {
+    flex: 1,
+    background: "transparent",
+    border: "none",
+    outline: "none",
+    color: "#cdd6f4",
+    fontSize: 12,
+    padding: 0,
+  },
+  searchClear: {
+    background: "transparent",
+    border: "none",
+    color: "#6c7086",
+    cursor: "pointer",
+    fontSize: 11,
+    padding: "0 2px",
+  },
+  body: {
+    display: "flex",
+    flex: 1,
+    overflow: "hidden",
+  },
+  nav: {
+    width: 140,
+    flexShrink: 0,
+    borderRight: "1px solid #313244",
+    padding: "6px 0",
+    overflowY: "auto" as const,
+    background: "#181825",
+  },
+  navItem: {
+    display: "flex",
+    alignItems: "center",
+    gap: 6,
+    width: "100%",
+    padding: "5px 12px",
+    border: "none",
     background: "transparent",
     color: "#a6adc8",
     cursor: "pointer",
-    fontSize: 12,
-    fontWeight: 500,
+    fontSize: 11,
+    textAlign: "left" as const,
+    borderLeft: "2px solid transparent",
+    transition: "all 0.1s",
   },
-  tabButtonActive: {
-    background: "#313244",
-    color: "#cdd6f4",
-    border: "1px solid #45475a",
-    borderBottom: "1px solid transparent",
+  navItemActive: {
+    color: "#89b4fa",
+    background: "rgba(137, 180, 250, 0.08)",
+    borderLeftColor: "#89b4fa",
+  },
+  navIcon: {
+    fontSize: 13,
+    width: 16,
+    textAlign: "center" as const,
+    flexShrink: 0,
+  },
+  navLabel: {
+    overflow: "hidden",
+    textOverflow: "ellipsis",
+    whiteSpace: "nowrap" as const,
   },
   content: {
-    // scrollable content area
+    flex: 1,
+    overflowY: "auto" as const,
+    padding: "0 16px 24px",
   },
   section: {
-    marginBottom: 12,
-    borderBottom: "1px solid #313244",
-    paddingBottom: 8,
+    paddingTop: 14,
+    marginBottom: 4,
   },
-  sectionTitle: {
+  sectionHeader: {
     fontSize: 11,
+    fontWeight: 700,
     textTransform: "uppercase" as const,
-    color: "#6c7086",
     letterSpacing: 1,
-    marginBottom: 6,
+    color: "#89b4fa",
+    marginBottom: 8,
+    paddingBottom: 4,
+    borderBottom: "1px solid #313244",
   },
-  buttonGroup: {
-    display: "flex",
-    gap: 4,
-  },
-  optionButton: {
-    flex: 1,
-    padding: "5px 10px",
-    border: "1px solid #45475a",
-    borderRadius: 4,
-    background: "#1e1e2e",
-    color: "#cdd6f4",
-    cursor: "pointer",
-    fontSize: 12,
-    textAlign: "center" as const,
-  },
-  optionButtonActive: {
-    background: "#89b4fa",
-    color: "#1e1e2e",
-    border: "1px solid #89b4fa",
+  subsectionTitle: {
+    fontSize: 11,
+    color: "#a6adc8",
     fontWeight: 600,
+    marginBottom: 4,
   },
-  toggleRow: {
+  settingRow: {
     display: "flex",
     alignItems: "center",
-    gap: 8,
-    padding: "3px 0",
-    cursor: "pointer",
+    justifyContent: "space-between",
+    padding: "7px 0",
+    minHeight: 32,
+    borderBottom: "1px solid rgba(49, 50, 68, 0.4)",
   },
-  hint: {
+  settingMeta: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 1,
+    flex: 1,
+    minWidth: 0,
+  },
+  settingLabel: {
+    fontSize: 12,
+    color: "#cdd6f4",
+  },
+  settingDesc: {
     fontSize: 10,
-    color: "#585b70",
-    marginTop: 4,
-    fontStyle: "italic",
+    color: "#6c7086",
+    lineHeight: "1.3",
   },
-  actionButton: {
-    padding: "5px 14px",
+  settingControl: {
+    flexShrink: 0,
+    marginLeft: 12,
+  },
+  btnGroup: {
+    display: "flex",
+    gap: 2,
+  },
+  btn: {
+    padding: "3px 10px",
     border: "1px solid #45475a",
     borderRadius: 4,
     background: "#1e1e2e",
     color: "#cdd6f4",
     cursor: "pointer",
-    fontSize: 12,
+    fontSize: 11,
+    transition: "all 0.1s",
+    whiteSpace: "nowrap" as const,
   },
-  aboutRow: {
-    display: "flex",
-    justifyContent: "space-between",
-    padding: "3px 0",
+  btnActive: {
+    background: "#89b4fa",
+    color: "#1e1e2e",
+    borderColor: "#89b4fa",
+    fontWeight: 600,
   },
-  aboutLabel: {
-    color: "#a6adc8",
-    fontSize: 12,
-  },
-  aboutValue: {
+  actionBtn: {
+    padding: "4px 12px",
+    border: "1px solid #45475a",
+    borderRadius: 4,
+    background: "#1e1e2e",
     color: "#cdd6f4",
-    fontSize: 12,
-    fontWeight: 500,
+    cursor: "pointer",
+    fontSize: 11,
+    whiteSpace: "nowrap" as const,
   },
-  // ── Shortcuts table ───────────────────────────────────
+  toggle: {
+    position: "relative" as const,
+    width: 32,
+    height: 18,
+    borderRadius: 9,
+    border: "1px solid #45475a",
+    background: "#313244",
+    cursor: "pointer",
+    padding: 0,
+    transition: "all 0.15s",
+  },
+  toggleOn: {
+    background: "#89b4fa",
+    borderColor: "#89b4fa",
+  },
+  toggleThumb: {
+    position: "absolute" as const,
+    top: 2,
+    left: 2,
+    width: 12,
+    height: 12,
+    borderRadius: "50%",
+    background: "#6c7086",
+    transition: "all 0.15s",
+  },
+  toggleThumbOn: {
+    left: 16,
+    background: "#1e1e2e",
+  },
   shortcutTable: {
     display: "flex",
-    flexDirection: "column",
+    flexDirection: "column" as const,
     gap: 1,
   },
   shortcutHeaderRow: {
@@ -648,7 +683,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
     padding: "4px 0",
     borderBottom: "1px solid #45475a",
-    fontSize: 11,
+    fontSize: 10,
     color: "#6c7086",
     textTransform: "uppercase" as const,
     letterSpacing: 0.5,
@@ -687,7 +722,7 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 11,
     fontWeight: 600,
   },
-  recordButton: {
+  recordBtn: {
     background: "transparent",
     border: "1px solid #45475a",
     borderRadius: 3,
@@ -697,25 +732,26 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "1px 5px",
     lineHeight: "1",
   },
-  // ── Remote server ─────────────────────────────────────
-  inputRow: {
-    display: "flex",
-    gap: 6,
+  hint: {
+    fontSize: 10,
+    color: "#585b70",
+    fontStyle: "italic",
   },
   textInput: {
     flex: 1,
-    padding: "5px 8px",
+    padding: "4px 8px",
     border: "1px solid #45475a",
     borderRadius: 4,
     background: "#1e1e2e",
     color: "#cdd6f4",
-    fontSize: 12,
+    fontSize: 11,
     fontFamily: "monospace",
     outline: "none",
+    minWidth: 180,
   },
   testResult: {
-    marginTop: 6,
-    padding: "4px 8px",
+    marginTop: 4,
+    padding: "3px 8px",
     borderRadius: 4,
     border: "1px solid",
     fontSize: 11,
@@ -723,6 +759,7 @@ const styles: Record<string, React.CSSProperties> = {
     alignItems: "center",
   },
   infoBox: {
+    marginTop: 8,
     background: "rgba(49,50,68,0.3)",
     border: "1px solid rgba(69,71,90,0.4)",
     borderRadius: 4,
@@ -733,5 +770,24 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#a6adc8",
     margin: "3px 0",
     lineHeight: 1.5,
+  },
+  aboutGrid: {
+    display: "flex",
+    flexDirection: "column" as const,
+    gap: 2,
+  },
+  aboutRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    padding: "3px 0",
+  },
+  aboutLabel: {
+    color: "#a6adc8",
+    fontSize: 12,
+  },
+  aboutValue: {
+    color: "#cdd6f4",
+    fontSize: 12,
+    fontWeight: 500,
   },
 };
