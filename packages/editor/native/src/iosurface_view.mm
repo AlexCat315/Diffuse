@@ -4,17 +4,30 @@
 // return it as a Buffer — the renderer then draws it on a <canvas> element
 // just like the Linux shm path.
 //
-// This approach:
-//  1) Eliminates all CALayer / DOM z-ordering issues
-//  2) Works identically to the Linux shared-memory path
-//  3) Naturally supports DOM overlays (ViewCube, shading bar)
-//  4) Enables future remote rendering (swap pixel source for WebRTC)
+// Two modes of operation:
+//  A) Legacy (IPC-based): refresh() → allocates Buffer, returns pixels + dims
+//  B) SharedArrayBuffer: setSharedBuffer(sab) then refreshShared() → writes
+//     pixels directly into the SAB; renderer polls via Atomics, zero IPC.
+//
+// SAB layout (all uint32 at 4-byte offsets):
+//   [0]  width
+//   [4]  height
+//   [8]  generation (monotonic counter, use Atomics)
+//   [12] reserved
+//   [16] BGRA pixel data (width * height * 4 bytes)
 
 #import <IOSurface/IOSurface.h>
 #include <napi.h>
 #include <cstring>
+#include <atomic>
 
 static IOSurfaceRef g_surface = nullptr;
+
+// ── SharedArrayBuffer state ──────────────────────────────────────────────
+static uint8_t* g_sab_data = nullptr;   // pointer into SAB backing store
+static size_t   g_sab_size = 0;         // total SAB size in bytes
+static uint32_t g_sab_generation = 0;   // monotonic frame counter
+static constexpr size_t SAB_HEADER_BYTES = 16;
 
 // ── attach(nativeHandle, surfaceId, x, y, w, h) ─────────────────────────
 // Opens the IOSurface by ID and stores the reference for pixel readback.
@@ -118,13 +131,81 @@ static Napi::Value Refresh(const Napi::CallbackInfo& info) {
     return result;
 }
 
+// ── setSharedBuffer(sab: SharedArrayBuffer) ──────────────────────────────
+// Stores a pointer to the SAB's backing store so refreshShared() can write
+// directly into shared memory visible to the renderer process.
+static Napi::Value SetSharedBuffer(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 1 || !info[0].IsArrayBuffer()) {
+        // SharedArrayBuffer appears as ArrayBuffer in N-API
+        Napi::Error::New(env, "setSharedBuffer: expected SharedArrayBuffer")
+            .ThrowAsJavaScriptException();
+        return env.Undefined();
+    }
+    auto ab = info[0].As<Napi::ArrayBuffer>();
+    g_sab_data = static_cast<uint8_t*>(ab.Data());
+    g_sab_size = ab.ByteLength();
+    g_sab_generation = 0;
+    return env.Undefined();
+}
+
+// ── refreshShared() → boolean ────────────────────────────────────────────
+// Reads IOSurface pixels into the pre-registered SharedArrayBuffer.
+// Returns true if a new frame was written, false otherwise.
+// The renderer process polls the generation counter via Atomics.load().
+static Napi::Value RefreshShared(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (!g_surface || !g_sab_data) return Napi::Boolean::New(env, false);
+
+    size_t width  = IOSurfaceGetWidth(g_surface);
+    size_t height = IOSurfaceGetHeight(g_surface);
+    if (width == 0 || height == 0) return Napi::Boolean::New(env, false);
+
+    size_t bytesPerRow = IOSurfaceGetBytesPerRow(g_surface);
+    size_t rowBytes    = width * 4;
+    size_t dataSize    = width * height * 4;
+
+    // Ensure SAB is large enough for header + pixels
+    if (SAB_HEADER_BYTES + dataSize > g_sab_size) return Napi::Boolean::New(env, false);
+
+    kern_return_t kr = IOSurfaceLock(g_surface, kIOSurfaceLockReadOnly, nullptr);
+    if (kr != kIOReturnSuccess) return Napi::Boolean::New(env, false);
+
+    void* base = IOSurfaceGetBaseAddress(g_surface);
+    uint8_t* dst = g_sab_data + SAB_HEADER_BYTES;
+    const uint8_t* src = static_cast<const uint8_t*>(base);
+
+    if (bytesPerRow == rowBytes) {
+        std::memcpy(dst, src, dataSize);
+    } else {
+        for (size_t y = 0; y < height; y++) {
+            std::memcpy(dst + y * rowBytes, src + y * bytesPerRow, rowBytes);
+        }
+    }
+
+    IOSurfaceUnlock(g_surface, kIOSurfaceLockReadOnly, nullptr);
+
+    // Write header: width, height, then generation (with release semantics
+    // so the pixel data is visible before the generation counter update).
+    auto* header = reinterpret_cast<uint32_t*>(g_sab_data);
+    header[0] = static_cast<uint32_t>(width);
+    header[1] = static_cast<uint32_t>(height);
+    // Atomic store with release ordering for the generation counter.
+    ++g_sab_generation;
+    __atomic_store_n(&header[2], g_sab_generation, __ATOMIC_RELEASE);
+
+    return Napi::Boolean::New(env, true);
+}
+
 // ── Module init ──────────────────────────────────────────────────────────
 static Napi::Object Init(Napi::Env env, Napi::Object exports) {
-    exports.Set("attach",        Napi::Function::New(env, Attach));
-    exports.Set("updateFrame",   Napi::Function::New(env, UpdateFrame));
-    exports.Set("updateSurface", Napi::Function::New(env, UpdateSurface));
-    exports.Set("detach",        Napi::Function::New(env, Detach));
-    exports.Set("refresh",       Napi::Function::New(env, Refresh));
+    exports.Set("attach",          Napi::Function::New(env, Attach));
+    exports.Set("updateFrame",     Napi::Function::New(env, UpdateFrame));
+    exports.Set("updateSurface",   Napi::Function::New(env, UpdateSurface));
+    exports.Set("detach",          Napi::Function::New(env, Detach));
+    exports.Set("refresh",         Napi::Function::New(env, Refresh));
+    exports.Set("setSharedBuffer", Napi::Function::New(env, SetSharedBuffer));
+    exports.Set("refreshShared",   Napi::Function::New(env, RefreshShared));
     return exports;
 }
 

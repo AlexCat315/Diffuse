@@ -181,6 +181,9 @@ uint32_t guava_metal_rhi_create_iosurface_texture(void* ctx,
 // ── Debug ─────────────────────────────────────────────────────────────────
 const char* guava_metal_rhi_get_device_name(void* ctx);
 
+// ── GPU synchronization ───────────────────────────────────────────────────
+void guava_metal_rhi_wait_for_gpu(void* ctx);
+
 #ifdef __cplusplus
 }
 #endif

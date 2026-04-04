@@ -376,6 +376,23 @@ fn mapMouseButton(name: []const u8) ?input_mod.MouseButton {
 ///   deltaX, deltaY: f64 — wheel delta
 ///   key: string         — key name (for keyboard events)
 ///   shift, ctrl, alt: bool — modifier state
+/// Set the engine frame rate limit.
+/// Params:
+///   fps: u64 — target FPS (0 = unlimited/VSync, 30/60/120 etc.)
+pub fn setFrameRate(ctx: *Ctx) !void {
+    const fps = try ctx.param(u64, "fps");
+    const delay: u32 = if (fps == 0) 0 else @intCast(@max(1, 1000 / fps));
+    ctx.layer.renderer.pending_frame_delay_ms = delay;
+    try ctx.reply(.{});
+}
+
+/// Get the current frame rate limit.
+pub fn getFrameRate(ctx: *Ctx) !void {
+    const delay = ctx.layer.renderer.current_frame_delay_ms;
+    const fps: u64 = if (delay == 0) 0 else 1000 / @as(u64, delay);
+    try ctx.reply(.{ .fps = fps, .frameDelayMs = delay });
+}
+
 pub fn sendInput(ctx: *Ctx) !void {
     const input = ctx.layer.input;
     const event_type = try ctx.param([]const u8, "type");

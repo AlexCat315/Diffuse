@@ -19,9 +19,12 @@ interface ViewportAddon {
   updateSurface(surfaceId: number, shmName?: string, width?: number, height?: number): void;
   detach(): void;
   refresh(): { pixels: Buffer; width: number; height: number } | void;
+  setSharedBuffer?(sab: SharedArrayBuffer): void;
+  refreshShared?(): boolean;
 }
 
 let ioSurfaceView: ViewportAddon | null = null;
+let viewportSAB: SharedArrayBuffer | null = null;
 const isMac = process.platform === "darwin";
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -247,22 +250,47 @@ ipcMain.handle(
       ioSurfaceView.updateSurface(0, shmName, w, h);
     }
 
-    // Both platforms use the same pixel streaming path:
-    // refresh() returns { pixels, width, height } which we forward to the renderer.
     if (surfaceRefreshTimer) clearInterval(surfaceRefreshTimer);
-    surfaceRefreshTimer = setInterval(() => {
-      if (!ioSurfaceView || !mainWindow) return;
-      // Guard against sending to a destroyed webContents (e.g. during HMR reload)
-      if (mainWindow.webContents.isDestroyed()) {
-        clearInterval(surfaceRefreshTimer!);
-        surfaceRefreshTimer = null;
-        return;
-      }
-      const result = ioSurfaceView.refresh();
-      if (result && result.pixels) {
-        mainWindow.webContents.send("viewport:pixels", result.pixels, result.width, result.height);
-      }
-    }, 16);
+
+    // Prefer SharedArrayBuffer path: zero-IPC pixel delivery.
+    // The renderer polls the SAB directly via Atomics; we only need to
+    // memcpy IOSurface → SAB on each tick here in the main process.
+    const useSAB = isMac && typeof ioSurfaceView.setSharedBuffer === "function";
+    if (useSAB) {
+      // Allocate SAB for up to 4K viewport: 3840×2160×4 + 16 byte header
+      const maxPixelBytes = 3840 * 2160 * 4;
+      const sabSize = 16 + maxPixelBytes;
+      viewportSAB = new SharedArrayBuffer(sabSize);
+      ioSurfaceView.setSharedBuffer!(viewportSAB);
+
+      // Send SAB to renderer (one-time, zero-copy share)
+      mainWindow.webContents.postMessage("viewport:shared-buffer", viewportSAB);
+
+      // Fast polling: just memcpy into SAB, no IPC per frame
+      surfaceRefreshTimer = setInterval(() => {
+        if (!ioSurfaceView || !mainWindow) return;
+        if (mainWindow.webContents.isDestroyed()) {
+          clearInterval(surfaceRefreshTimer!);
+          surfaceRefreshTimer = null;
+          return;
+        }
+        ioSurfaceView.refreshShared!();
+      }, 8);
+    } else {
+      // Fallback: IPC-based pixel delivery (Linux / no SAB support)
+      surfaceRefreshTimer = setInterval(() => {
+        if (!ioSurfaceView || !mainWindow) return;
+        if (mainWindow.webContents.isDestroyed()) {
+          clearInterval(surfaceRefreshTimer!);
+          surfaceRefreshTimer = null;
+          return;
+        }
+        const result = ioSurfaceView.refresh();
+        if (result && result.pixels) {
+          mainWindow.webContents.send("viewport:pixels", result.pixels, result.width, result.height);
+        }
+      }, 16);
+    }
 
     return true;
   },

@@ -163,7 +163,7 @@ fn runEngine(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
         .window_borderless = true,
         .window_maximized = true,
         .window_native_titlebar_controls = true,
-        .frame_delay_ms = 16,
+        .frame_delay_ms = 0, // standalone mode — VSync handles frame pacing
         .preferred_backends = options.backends(),
     });
     defer app.deinit();
@@ -236,7 +236,7 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
         .window_maximized = false,
         .window_native_titlebar_controls = false,
         .window_hidden = true,
-        .frame_delay_ms = 16,
+        .frame_delay_ms = 8, // ~120fps target for editor-server mode
         .preferred_backends = options.backends(),
     });
     defer app.deinit();

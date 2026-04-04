@@ -1096,13 +1096,15 @@ pub const RhiDevice = struct {
     }
 
     /// Blit a shared texture's content to the associated shared memory region.
-    /// On macOS this is a no-op (IOSurface is zero-copy). On Linux Vulkan this
-    /// performs a GPU→CPU readback into the POSIX shm segment.
+    /// On macOS Metal, waits for the GPU to finish writing the IOSurface.
+    /// On Linux Vulkan, performs a GPU→CPU readback into the POSIX shm segment.
     pub fn blitSharedTexture(self: *RhiDevice, texture: Texture) void {
         if (self.owned_vulkan_device) |vk| {
             _ = vk.blitSharedTexture(texture.id);
         }
-        // macOS Metal: no-op — GPU writes directly to IOSurface.
+        if (self.owned_metal_device) |md| {
+            md.waitForGpu();
+        }
     }
 
     pub fn releaseTexture(self: *RhiDevice, texture: *Texture) void {

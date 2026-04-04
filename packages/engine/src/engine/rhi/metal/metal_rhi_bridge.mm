@@ -49,6 +49,9 @@ struct GuavaMetalRhiContext {
     // IOSurface references keyed by texture_id (to prevent premature deallocation)
     std::unordered_map<uint32_t, IOSurfaceRef>                 iosurfaces;
 
+    // Last committed command buffer — used for GPU completion sync
+    id<MTLCommandBuffer> last_command_buffer = nil;
+
     // Shader libraries cached per shader module (for Metal library compilation)
     std::unordered_map<uint32_t, id<MTLLibrary>>              shader_libraries;
 };
@@ -1224,6 +1227,7 @@ bool guava_metal_rhi_submit(void* raw, uint32_t queue_class,
         }
 
         [mtlCmd commit];
+        ctx->last_command_buffer = mtlCmd;
         return true;
     }
 }
@@ -1377,4 +1381,18 @@ bool guava_metal_rhi_present(void* raw, uint32_t /*swapchain_id*/) {
 const char* guava_metal_rhi_get_device_name(void* raw) {
     auto* ctx = static_cast<GuavaMetalRhiContext*>(raw);
     return [[ctx->device name] UTF8String];
+}
+
+// ---------------------------------------------------------------------------
+// GPU synchronization — wait for last committed command buffer to complete
+// ---------------------------------------------------------------------------
+
+void guava_metal_rhi_wait_for_gpu(void* raw) {
+    @autoreleasepool {
+        auto* ctx = static_cast<GuavaMetalRhiContext*>(raw);
+        if (ctx->last_command_buffer) {
+            [ctx->last_command_buffer waitUntilCompleted];
+            ctx->last_command_buffer = nil;
+        }
+    }
 }

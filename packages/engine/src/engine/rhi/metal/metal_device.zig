@@ -46,6 +46,8 @@ pub const MetalDevice = struct {
         extern fn guava_metal_rhi_present(ctx: *anyopaque, swapchain_id: u32) bool;
         // IOSurface
         extern fn guava_metal_rhi_create_iosurface_texture(ctx: *anyopaque, width: u32, height: u32, format: u32, usage_bits: u32, out_surface_id: *u32, label: ?[*:0]const u8) u32;
+        // GPU synchronization
+        extern fn guava_metal_rhi_wait_for_gpu(ctx: *anyopaque) void;
         // Debug
         extern fn guava_metal_rhi_get_device_name(ctx: *anyopaque) ?[*:0]const u8;
     };
@@ -170,6 +172,13 @@ pub const MetalDevice = struct {
     pub fn getDeviceName(self: *const MetalDevice) []const u8 {
         const name = bridge.guava_metal_rhi_get_device_name(self.bridge_ctx) orelse return "Unknown Metal Device";
         return std.mem.sliceTo(name, 0);
+    }
+
+    /// Wait for the last submitted command buffer to finish on the GPU.
+    /// Used in editor-server mode to ensure IOSurface contents are stable
+    /// before the Electron frontend reads them.
+    pub fn waitForGpu(self: *MetalDevice) void {
+        bridge.guava_metal_rhi_wait_for_gpu(self.bridge_ctx);
     }
 
     pub fn getTextureHandle(self: *const MetalDevice, texture_id: u32) ?*anyopaque {

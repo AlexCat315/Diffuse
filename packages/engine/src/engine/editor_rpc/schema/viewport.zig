@@ -231,6 +231,19 @@ pub const @"viewport.boxSelect" = struct {
     };
 };
 
+pub const @"viewport.setFrameRate" = struct {
+    pub const Params = struct { fps: u64 };
+    pub const Result = struct {};
+};
+
+pub const @"viewport.getFrameRate" = struct {
+    pub const Params = struct {};
+    pub const Result = struct {
+        fps: u64,
+        frameDelayMs: u32,
+    };
+};
+
 // ── rendersettings namespace ─────────────────────────────────────
 
 pub const @"rendersettings.getSettings" = struct {

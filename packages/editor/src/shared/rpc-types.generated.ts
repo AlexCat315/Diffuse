@@ -1,6 +1,6 @@
 // ╔═══════════════════════════════════════════════════════════╗
 // ║  AUTO-GENERATED — do not edit manually.                  ║
-// ║  Source of truth: src/engine/editor_rpc/rpc_schema.zig   ║
+// ║  Source of truth: src/engine/editor_rpc/schema/           ║
 // ║  Regenerate:                                             ║
 // ║    zig run src/engine/editor_rpc/gen_types.zig \        ║
 // ║      2> ../editor/src/shared/rpc-types.generated.ts      ║
@@ -65,6 +65,13 @@ export interface AssetEntry {
   isDirectory: boolean;
   assetType?: string;
   size?: number;
+}
+
+export interface ScriptFileInfo {
+  path: string;
+  name: string;
+  language: string;
+  sizeBytes: number;
 }
 
 export interface SequencerTrack {
@@ -147,13 +154,6 @@ export interface MaterialGraphOutputInfo {
   sourceSlot: number;
 }
 
-export interface ScriptFileInfo {
-  path: string;
-  name: string;
-  language: string;
-  sizeBytes: number;
-}
-
 export interface VfxEntityInfo {
   entityId: number;
   name: string;
@@ -233,6 +233,7 @@ export interface RpcMethods {
   "scene.save": { params: { path?: string }; result: { path: string } };
   "scene.load": { params: { path: string }; result: { path: string } };
   "scene.listScenes": { params: Record<string, never>; result: { scenes: string[] } };
+  "scene.spawnActor": { params: { kind: string }; result: { entityId: number } };
   "entity.getTransform": { params: { entityId: number }; result: Transform };
   "entity.setTransform": { params: { entityId: number; transform: TransformPartial }; result: Record<string, never> };
   "entity.setName": { params: { entityId: number; name: string }; result: Record<string, never> };
@@ -243,6 +244,7 @@ export interface RpcMethods {
   "playback.play": { params: Record<string, never>; result: Record<string, never> };
   "playback.pause": { params: Record<string, never>; result: Record<string, never> };
   "playback.stop": { params: Record<string, never>; result: Record<string, never> };
+  "console.clear": { params: Record<string, never>; result: Record<string, never> };
   "viewport.setGizmoMode": { params: { mode: string }; result: Record<string, never> };
   "viewport.setRect": { params: { x: number; y: number; width: number; height: number }; result: Record<string, never> };
   "viewport.getWindowInfo": { params: Record<string, never>; result: { x: number; y: number; width: number; height: number; drawableWidth: number; drawableHeight: number; nativeHandle: number; platform: string } };
@@ -254,8 +256,15 @@ export interface RpcMethods {
   "viewport.sendInput": { params: { type: string; x?: number; y?: number; deltaX?: number; deltaY?: number; button?: string; clicks?: number; key?: string; shift?: boolean; ctrl?: boolean; alt?: boolean }; result: Record<string, never> };
   "viewport.pick": { params: { x: number; y: number; mode?: string }; result: Record<string, never> };
   "viewport.boxSelect": { params: { x1: number; y1: number; x2: number; y2: number; mode?: string }; result: { selectedIds: number[] } };
-  "console.clear": { params: Record<string, never>; result: Record<string, never> };
-  "assets.list": { params: { path?: string }; result: { path: string; entries: AssetEntry[] } };
+  "viewport.setFrameRate": { params: { fps: number }; result: Record<string, never> };
+  "viewport.getFrameRate": { params: Record<string, never>; result: { fps: number; frameDelayMs: number } };
+  "rendersettings.getSettings": { params: Record<string, never>; result: { shadingMode: string; transformSpace: string; showGrid: boolean; showBones: boolean; showCollision: boolean; pathTrace: { samples: number; bounces: number; resolutionScale: number }; viewportSize: { width: number; height: number }; renderOutput: { preset: string; width: number; height: number; format: string; path: string } } };
+  "rendersettings.setShadingMode": { params: { mode: string }; result: Record<string, never> };
+  "rendersettings.setTransformSpace": { params: { space: string }; result: Record<string, never> };
+  "rendersettings.setOverlay": { params: { key: string; value: boolean }; result: Record<string, never> };
+  "rendersettings.setPathTrace": { params: { samples?: number; bounces?: number; resolutionScale?: number }; result: Record<string, never> };
+  "rendersettings.applyPtPreset": { params: { preset: string }; result: Record<string, never> };
+  "rendersettings.setRenderOutput": { params: { preset?: string; width?: number; height?: number; format?: string; path?: string }; result: Record<string, never> };
   "camera.listBookmarks": { params: Record<string, never>; result: { bookmarks: { index: number; name: string; position: Vec3; rotation: Quat; fov: number }[] } };
   "camera.addBookmark": { params: { name?: string }; result: { index: number } };
   "camera.removeBookmark": { params: { index: number }; result: Record<string, never> };
@@ -264,41 +273,31 @@ export interface RpcMethods {
   "camera.getState": { params: Record<string, never>; result: { position: Vec3; rotation: Quat } };
   "camera.lookAlongAxis": { params: { axisX: number; axisY: number; axisZ: number; distance?: number; targetX?: number; targetY?: number; targetZ?: number }; result: Record<string, never> };
   "camera.orbit": { params: { deltaYaw: number; deltaPitch: number }; result: Record<string, never> };
-  "debug.getRhiStats": { params: Record<string, never>; result: { bindingCache: { hits: number; misses: number; evictions: number; entries: number; maxEntries: number; hitRate: number; frameHits: number; frameMisses: number; frameEvictions: number }; passes: { name: string; status: string }[] } };
-  "debug.resetRhiStats": { params: Record<string, never>; result: Record<string, never> };
-  "audio.getMixerStatus": { params: Record<string, never>; result: { available: boolean; activeVoices: number; buses: { id: string; label: string; volume: number; playing: number }[] } };
-  "audio.setBusVolume": { params: { busId: string; volume: number }; result: Record<string, never> };
+  "assets.list": { params: { path?: string }; result: { path: string; entries: AssetEntry[] } };
+  "script.listScripts": { params: Record<string, never>; result: { scripts: ScriptFileInfo[] } };
+  "script.getContent": { params: { path: string }; result: { content: string; language: string; readOnly: boolean } };
+  "script.saveContent": { params: { path: string; content: string }; result: { success: boolean } };
+  "utilities.list": { params: Record<string, never>; result: { utilities: { handle: number; name: string; description: string; sourcePath: string; status: string; open: boolean; lastError: string }[] } };
+  "utilities.setOpen": { params: { handle: number; open: boolean }; result: Record<string, never> };
+  "utilities.remove": { params: { handle: number }; result: Record<string, never> };
   "plugin.list": { params: Record<string, never>; result: { plugins: { name: string; pluginType: string; source: string; lifecycle: string; lastError?: string }[] } };
   "plugin.enable": { params: { name: string }; result: Record<string, never> };
   "plugin.disable": { params: { name: string }; result: Record<string, never> };
   "plugin.unload": { params: { name: string }; result: Record<string, never> };
   "plugin.rescan": { params: { path?: string }; result: Record<string, never> };
-  "style.getActiveStyle": { params: Record<string, never>; result: { name: string; displayName: string; meshProgram: string; shadowProgram?: string; source: string; path?: string; disabledPasses: string[]; configSchema: { name: string; displayName: string; paramType: string; defaultValue: number; minValue: number; maxValue: number }[]; paramValues: { name: string; value: number }[] } };
-  "style.listStyles": { params: Record<string, never>; result: { styles: { name: string; displayName: string; source: string; isActive: boolean }[] } };
-  "style.setActiveStyle": { params: { name: string }; result: Record<string, never> };
-  "style.setParam": { params: { styleName: string; paramName: string; value: number }; result: Record<string, never> };
-  "scene.spawnActor": { params: { kind: string }; result: { entityId: number } };
-  "renderqueue.listJobs": { params: Record<string, never>; result: { jobs: { index: number; sequencePath: string; outputDir: string; width: number; height: number; format: string; samples: number; bounces: number; usePathTrace: boolean; encodeVideo: boolean; videoCodec: string; status: string; totalFrames: number; currentFrame: number; statusMessage: string }[]; isRunning: boolean } };
-  "renderqueue.addJob": { params: { sequencePath: string; outputDir?: string; width?: number; height?: number; format?: string; samples?: number; bounces?: number; usePathTrace?: boolean; encodeVideo?: boolean; videoCodec?: string }; result: { index: number } };
-  "renderqueue.removeJob": { params: { index: number }; result: Record<string, never> };
-  "renderqueue.startQueue": { params: Record<string, never>; result: Record<string, never> };
-  "renderqueue.cancelQueue": { params: Record<string, never>; result: Record<string, never> };
-  "renderqueue.clearCompleted": { params: Record<string, never>; result: Record<string, never> };
-  "physicsviz.getSettings": { params: Record<string, never>; result: { drawMode: string; opacity: number; velocityScale: number; wireframeOnly: boolean; showCollisionShapes: boolean; showRigidbodies: boolean; showTriggers: boolean; showConstraints: boolean; showVelocityVectors: boolean; showSleepState: boolean; showAabbs: boolean; colorStatic: unknown /* [4]f32 */; colorDynamic: unknown /* [4]f32 */; colorKinematic: unknown /* [4]f32 */; colorTrigger: unknown /* [4]f32 */; colorSleeping: unknown /* [4]f32 */; colorConstraint: unknown /* [4]f32 */ } };
-  "physicsviz.setDrawMode": { params: { mode: string }; result: Record<string, never> };
-  "physicsviz.setToggle": { params: { key: string; value: boolean }; result: Record<string, never> };
-  "physicsviz.setFloat": { params: { key: string; value: number }; result: Record<string, never> };
-  "physicsviz.setColor": { params: { key: string; r: number; g: number; b: number; a: number }; result: Record<string, never> };
-  "utilities.list": { params: Record<string, never>; result: { utilities: { handle: number; name: string; description: string; sourcePath: string; status: string; open: boolean; lastError: string }[] } };
-  "utilities.setOpen": { params: { handle: number; open: boolean }; result: Record<string, never> };
-  "utilities.remove": { params: { handle: number }; result: Record<string, never> };
-  "rendersettings.getSettings": { params: Record<string, never>; result: { shadingMode: string; transformSpace: string; showGrid: boolean; showBones: boolean; showCollision: boolean; pathTrace: { samples: number; bounces: number; resolutionScale: number }; viewportSize: { width: number; height: number }; renderOutput: { preset: string; width: number; height: number; format: string; path: string } } };
-  "rendersettings.setShadingMode": { params: { mode: string }; result: Record<string, never> };
-  "rendersettings.setTransformSpace": { params: { space: string }; result: Record<string, never> };
-  "rendersettings.setOverlay": { params: { key: string; value: boolean }; result: Record<string, never> };
-  "rendersettings.setPathTrace": { params: { samples?: number; bounces?: number; resolutionScale?: number }; result: Record<string, never> };
-  "rendersettings.applyPtPreset": { params: { preset: string }; result: Record<string, never> };
-  "rendersettings.setRenderOutput": { params: { preset?: string; width?: number; height?: number; format?: string; path?: string }; result: Record<string, never> };
+  "prefab.list": { params: Record<string, never>; result: { prefabs: PrefabInfo[] } };
+  "prefab.getEntities": { params: { prefabId: string }; result: { found: boolean; entities: PrefabEntityNode[] } };
+  "prefab.getEntityDetail": { params: { prefabId: string; prefabEntityId: number }; result: { found: boolean; entity?: PrefabEntityDetail } };
+  "prefab.setEntityTransform": { params: { prefabId: string; prefabEntityId: number; posX?: number; posY?: number; posZ?: number; rotX?: number; rotY?: number; rotZ?: number; rotW?: number; scaleX?: number; scaleY?: number; scaleZ?: number }; result: { success: boolean } };
+  "prefab.setEntityField": { params: { prefabId: string; prefabEntityId: number; field: string; value: string }; result: { success: boolean } };
+  "prefab.create": { params: { entityId: number; name: string }; result: { success: boolean; prefabId?: string } };
+  "prefab.instantiate": { params: { prefabId: string; posX?: number; posY?: number; posZ?: number }; result: { success: boolean; entityId?: number } };
+  "prefab.save": { params: { prefabId: string }; result: { success: boolean } };
+  "prefab.delete": { params: { prefabId: string }; result: { success: boolean } };
+  "particle.listVfxEntities": { params: Record<string, never>; result: { entities: VfxEntityInfo[] } };
+  "particle.getConfig": { params: { entityId: number }; result: { found: boolean; config?: VfxConfig } };
+  "particle.setConfig": { params: { entityId: number; kind?: string; looping?: boolean; emissionRate?: number; particleLifetime?: number; speed?: number; maxParticles?: number; radius?: number; spread?: number; size?: number; colorR?: number; colorG?: number; colorB?: number }; result: { success: boolean } };
+  "particle.applyPreset": { params: { entityId: number; preset: string }; result: { success: boolean } };
   "material.getState": { params: { entityId: number }; result: { hasMaterial: boolean; name?: string; shading?: string; baseColor?: unknown /* [4]f32 */; emissive?: unknown /* [3]f32 */; metallic?: number; roughness?: number; alphaCutoff?: number; doubleSided?: boolean; useIBL?: boolean; iblIntensity?: number; texBaseColor?: number; texMetallicRoughness?: number; texNormal?: number; texOcclusion?: number; texEmissive?: number; isShared?: boolean; materialHandle?: number; parentHandle?: number; generation?: number; previewPrimitive?: string } };
   "material.setShading": { params: { entityId: number; mode: string }; result: Record<string, never> };
   "material.setColor": { params: { entityId: number; property: string; value: unknown /* [4]f32 */ }; result: Record<string, never> };
@@ -319,22 +318,25 @@ export interface RpcMethods {
   "material.setGraphOutput": { params: { entityId: number; channel: string; sourceNodeId: number; sourceSlot: number }; result: Record<string, never> };
   "material.removeGraphOutput": { params: { entityId: number; channel: string }; result: Record<string, never> };
   "material.setNodePosition": { params: { entityId: number; nodeId: number; posX: number; posY: number }; result: Record<string, never> };
-  "script.listScripts": { params: Record<string, never>; result: { scripts: ScriptFileInfo[] } };
-  "script.getContent": { params: { path: string }; result: { content: string; language: string; readOnly: boolean } };
-  "script.saveContent": { params: { path: string; content: string }; result: { success: boolean } };
-  "particle.listVfxEntities": { params: Record<string, never>; result: { entities: VfxEntityInfo[] } };
-  "particle.getConfig": { params: { entityId: number }; result: { found: boolean; config?: VfxConfig } };
-  "particle.setConfig": { params: { entityId: number; kind?: string; looping?: boolean; emissionRate?: number; particleLifetime?: number; speed?: number; maxParticles?: number; radius?: number; spread?: number; size?: number; colorR?: number; colorG?: number; colorB?: number }; result: { success: boolean } };
-  "particle.applyPreset": { params: { entityId: number; preset: string }; result: { success: boolean } };
-  "prefab.list": { params: Record<string, never>; result: { prefabs: PrefabInfo[] } };
-  "prefab.getEntities": { params: { prefabId: string }; result: { found: boolean; entities: PrefabEntityNode[] } };
-  "prefab.getEntityDetail": { params: { prefabId: string; prefabEntityId: number }; result: { found: boolean; entity?: PrefabEntityDetail } };
-  "prefab.setEntityTransform": { params: { prefabId: string; prefabEntityId: number; posX?: number; posY?: number; posZ?: number; rotX?: number; rotY?: number; rotZ?: number; rotW?: number; scaleX?: number; scaleY?: number; scaleZ?: number }; result: { success: boolean } };
-  "prefab.setEntityField": { params: { prefabId: string; prefabEntityId: number; field: string; value: string }; result: { success: boolean } };
-  "prefab.create": { params: { entityId: number; name: string }; result: { success: boolean; prefabId?: string } };
-  "prefab.instantiate": { params: { prefabId: string; posX?: number; posY?: number; posZ?: number }; result: { success: boolean; entityId?: number } };
-  "prefab.save": { params: { prefabId: string }; result: { success: boolean } };
-  "prefab.delete": { params: { prefabId: string }; result: { success: boolean } };
+  "style.getActiveStyle": { params: Record<string, never>; result: { name: string; displayName: string; meshProgram: string; shadowProgram?: string; source: string; path?: string; disabledPasses: string[]; configSchema: { name: string; displayName: string; paramType: string; defaultValue: number; minValue: number; maxValue: number }[]; paramValues: { name: string; value: number }[] } };
+  "style.listStyles": { params: Record<string, never>; result: { styles: { name: string; displayName: string; source: string; isActive: boolean }[] } };
+  "style.setActiveStyle": { params: { name: string }; result: Record<string, never> };
+  "style.setParam": { params: { styleName: string; paramName: string; value: number }; result: Record<string, never> };
+  "renderqueue.listJobs": { params: Record<string, never>; result: { jobs: { index: number; sequencePath: string; outputDir: string; width: number; height: number; format: string; samples: number; bounces: number; usePathTrace: boolean; encodeVideo: boolean; videoCodec: string; status: string; totalFrames: number; currentFrame: number; statusMessage: string }[]; isRunning: boolean } };
+  "renderqueue.addJob": { params: { sequencePath: string; outputDir?: string; width?: number; height?: number; format?: string; samples?: number; bounces?: number; usePathTrace?: boolean; encodeVideo?: boolean; videoCodec?: string }; result: { index: number } };
+  "renderqueue.removeJob": { params: { index: number }; result: Record<string, never> };
+  "renderqueue.startQueue": { params: Record<string, never>; result: Record<string, never> };
+  "renderqueue.cancelQueue": { params: Record<string, never>; result: Record<string, never> };
+  "renderqueue.clearCompleted": { params: Record<string, never>; result: Record<string, never> };
+  "debug.getRhiStats": { params: Record<string, never>; result: { bindingCache: { hits: number; misses: number; evictions: number; entries: number; maxEntries: number; hitRate: number; frameHits: number; frameMisses: number; frameEvictions: number }; passes: { name: string; status: string }[] } };
+  "debug.resetRhiStats": { params: Record<string, never>; result: Record<string, never> };
+  "audio.getMixerStatus": { params: Record<string, never>; result: { available: boolean; activeVoices: number; buses: { id: string; label: string; volume: number; playing: number }[] } };
+  "audio.setBusVolume": { params: { busId: string; volume: number }; result: Record<string, never> };
+  "physicsviz.getSettings": { params: Record<string, never>; result: { drawMode: string; opacity: number; velocityScale: number; wireframeOnly: boolean; showCollisionShapes: boolean; showRigidbodies: boolean; showTriggers: boolean; showConstraints: boolean; showVelocityVectors: boolean; showSleepState: boolean; showAabbs: boolean; colorStatic: unknown /* [4]f32 */; colorDynamic: unknown /* [4]f32 */; colorKinematic: unknown /* [4]f32 */; colorTrigger: unknown /* [4]f32 */; colorSleeping: unknown /* [4]f32 */; colorConstraint: unknown /* [4]f32 */ } };
+  "physicsviz.setDrawMode": { params: { mode: string }; result: Record<string, never> };
+  "physicsviz.setToggle": { params: { key: string; value: boolean }; result: Record<string, never> };
+  "physicsviz.setFloat": { params: { key: string; value: number }; result: Record<string, never> };
+  "physicsviz.setColor": { params: { key: string; r: number; g: number; b: number; a: number }; result: Record<string, never> };
   "animation.getState": { params: { entityId: number }; result: { hasAnimator: boolean; hasGraph: boolean; graphName?: string; currentState?: number; nextState?: number; blendFactor?: number; transitionTime?: number; transitionDuration?: number; defaultState?: number; states?: AnimGraphState[]; transitions?: AnimGraphTransition[]; parameters?: AnimGraphParameter[]; clipTracks?: AnimClipTrack[]; clipDuration?: number; sampleTime?: number } };
   "animation.addState": { params: { entityId: number; name?: string }; result: { index: number } };
   "animation.updateState": { params: { entityId: number; stateIndex: number; name?: string; clip?: string; speed?: number; loop?: boolean; duration?: number }; result: Record<string, never> };
