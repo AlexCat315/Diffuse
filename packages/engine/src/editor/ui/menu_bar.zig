@@ -10,7 +10,6 @@ const preferences = @import("../core/preferences.zig");
 const reparenting = @import("../actions/reparenting.zig");
 const floating_window_blocker = @import("floating_window_blocker.zig");
 const layout = @import("layout.zig");
-const i18n = @import("../i18n/mod.zig");
 const toolbar = @import("toolbar.zig");
 
 var g_pending_top_bar_drag = false;
@@ -240,16 +239,6 @@ pub fn drawMenuBar(state: *EditorState, layer_context: *engine.core.LayerContext
             state.editor_utilities_open = !state.editor_utilities_open;
         }
         gui.separator();
-
-        for (i18n.available_languages) |language| {
-            const locale_info = i18n.locale(language);
-            if (gui.menuItem(locale_info.native_name, null, state.language == language, true)) {
-                state.language = language;
-                preferences.saveEditorPreferences(state) catch |err| {
-                    std.log.warn("Editor: failed to save editor preferences: {s}", .{@errorName(err)});
-                };
-            }
-        }
     }
 
     const trailing_button_reserve: f32 = if (native_titlebar_controls)

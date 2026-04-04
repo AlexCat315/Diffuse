@@ -1,6 +1,6 @@
 const std = @import("std");
 const engine = @import("guava");
-const i18n = @import("../i18n/mod.zig");
+const text_mod = @import("../common/text.zig");
 const command_mod = @import("../actions/command.zig");
 const input_mod = engine.core;
 
@@ -687,7 +687,6 @@ pub const EditorState = struct {
     console_show_info: bool = true,
     console_show_debug: bool = true,
     console_auto_scroll: bool = true,
-    language: i18n.Language = .zh_cn,
     dock_layout_initialized: bool = false,
     settings_open: bool = false,
     settings_category: SettingsCategory = .general,
@@ -854,16 +853,14 @@ pub const EditorState = struct {
     view_cube_transition_target_pitch: f32 = 0.0,
     view_cube_transition_target_orthographic: bool = false,
 
-    pub fn text(self: *const EditorState, id: i18n.MessageId) []const u8 {
-        return i18n.text(self.language, id);
+    pub fn text(self: *const EditorState, id: text_mod.MessageId) []const u8 {
+        _ = self;
+        return text_mod.text(id);
     }
 
-    pub fn windowLabel(self: *const EditorState, buffer: []u8, id: i18n.MessageId, stable_id: []const u8) ![]const u8 {
-        return i18n.panelLabel(self.language, buffer, id, stable_id);
-    }
-
-    pub fn languageInfo(self: *const EditorState) *const i18n.LocaleInfo {
-        return i18n.locale(self.language);
+    pub fn windowLabel(self: *const EditorState, buffer: []u8, id: text_mod.MessageId, stable_id: []const u8) ![]const u8 {
+        _ = self;
+        return text_mod.panelLabel(buffer, id, stable_id);
     }
 
     pub fn renderOutputPath(self: *const EditorState) []const u8 {
