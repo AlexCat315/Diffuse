@@ -12,7 +12,7 @@ type SubscriptionHandler<K extends keyof SubscriptionEvents> = (
 ) => void;
 
 /**
- * Type-safe WebSocket JSON-RPC 2.0 client for communicating with the engine.
+ * 用于与引擎通信的类型安全 WebSocket JSON-RPC 2.0 客户端。
  */
 export class EngineClient {
   private ws: WebSocket | null = null;
@@ -44,7 +44,7 @@ export class EngineClient {
   }
 
   /**
-   * Establish WebSocket connection to the engine RPC server.
+   * 建立到引擎RPC服务器的WebSocket连接。
    */
   async connect(): Promise<void> {
     return new Promise((resolve, reject) => {
