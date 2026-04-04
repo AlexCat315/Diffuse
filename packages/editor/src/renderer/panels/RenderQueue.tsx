@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useConnectionStore } from "../store";
 
 interface RenderJobInfo {
   index: number;
@@ -18,11 +19,9 @@ interface RenderJobInfo {
   statusMessage: string;
 }
 
-interface RenderQueueProps {
-  connected: boolean;
-}
 
-export function RenderQueue({ connected }: RenderQueueProps) {
+export function RenderQueue() {
+  const connected = useConnectionStore((s) => s.connected);
   const [jobs, setJobs] = useState<RenderJobInfo[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);

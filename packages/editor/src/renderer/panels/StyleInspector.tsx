@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useConnectionStore } from "../store";
 
 interface StyleParamSchema {
   name: string;
@@ -33,11 +34,9 @@ interface StyleListItem {
   isActive: boolean;
 }
 
-interface StyleInspectorProps {
-  connected: boolean;
-}
 
-export function StyleInspector({ connected }: StyleInspectorProps) {
+export function StyleInspector() {
+  const connected = useConnectionStore((s) => s.connected);
   const [active, setActive] = useState<ActiveStyleInfo | null>(null);
   const [styles, setStyles] = useState<StyleListItem[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);

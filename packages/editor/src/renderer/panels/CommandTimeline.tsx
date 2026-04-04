@@ -2,12 +2,11 @@ import React, { useEffect, useState, useCallback } from "react";
 import { useI18n } from "../i18n";
 import { IconUndo, IconRedo } from "../components/Icons";
 import type { HistoryEntry } from "../../shared/rpc-types";
+import { useConnectionStore } from "../store";
 
-interface CommandTimelineProps {
-  connected: boolean;
-}
 
-export function CommandTimeline({ connected }: CommandTimelineProps) {
+export function CommandTimeline() {
+  const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
   const [entries, setEntries] = useState<HistoryEntry[]>([]);
   const [cursor, setCursor] = useState<number>(0);

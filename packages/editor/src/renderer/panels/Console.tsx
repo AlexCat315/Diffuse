@@ -2,11 +2,7 @@ import React, { useRef, useEffect, useState } from "react";
 import type { LogEntry } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
 import { IconClose } from "../components/Icons";
-
-interface ConsoleProps {
-  logs: LogEntry[];
-  onClear: () => void;
-}
+import { useConsoleStore } from "../store";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -19,7 +15,9 @@ const levelColors: Record<string, string> = {
   error: "#f38ba8",
 };
 
-export function Console({ logs, onClear }: ConsoleProps) {
+export function Console() {
+  const logs = useConsoleStore((s) => s.logs);
+  const clearLogs = useConsoleStore((s) => s.clearLogs);
   const { t } = useI18n();
   const endRef = useRef<HTMLDivElement>(null);
   const [activeFilters, setActiveFilters] = useState<Set<LogLevel>>(new Set(LEVELS));
@@ -61,7 +59,7 @@ export function Console({ logs, onClear }: ConsoleProps) {
           ))}
         </div>
         <div style={{ flex: 1 }} />
-        <button style={styles.clearBtn} onClick={onClear} title={t.console.clearTooltip}>
+        <button style={styles.clearBtn} onClick={clearLogs} title={t.console.clearTooltip}>
           <IconClose size={12} />
         </button>
       </div>

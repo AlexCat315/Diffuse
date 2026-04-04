@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { useI18n } from "../i18n";
+import { useConnectionStore } from "../store";
 
 interface ViewportMetrics {
   fps: number;
@@ -7,11 +8,9 @@ interface ViewportMetrics {
   triangles: number;
 }
 
-interface ViewportStatusProps {
-  connected: boolean;
-}
 
-export function ViewportStatus({ connected }: ViewportStatusProps) {
+export function ViewportStatus() {
+  const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
   const [metrics, setMetrics] = useState<ViewportMetrics | null>(null);
 

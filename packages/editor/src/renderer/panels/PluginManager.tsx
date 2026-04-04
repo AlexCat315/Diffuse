@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useConnectionStore } from "../store";
 
 interface PluginInfo {
   name: string;
@@ -8,11 +9,9 @@ interface PluginInfo {
   lastError?: string;
 }
 
-interface PluginManagerProps {
-  connected: boolean;
-}
 
-export function PluginManager({ connected }: PluginManagerProps) {
+export function PluginManager() {
+  const connected = useConnectionStore((s) => s.connected);
   const [plugins, setPlugins] = useState<PluginInfo[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 

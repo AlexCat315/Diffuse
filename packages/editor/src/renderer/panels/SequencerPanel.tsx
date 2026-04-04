@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { rpc } from "../rpc";
+import { useConnectionStore } from "../store";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -82,7 +83,8 @@ const TRACK_HEIGHT = 28;
 
 // ── Main component ──────────────────────────────────────────────
 
-export function SequencerPanel({ connected }: { connected: boolean }) {
+export function SequencerPanel() {
+  const connected = useConnectionStore((s) => s.connected);
   const [state, setState] = useState<SeqState | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<number | null>(null);
   const [selectedKf, setSelectedKf] = useState<number | null>(null);

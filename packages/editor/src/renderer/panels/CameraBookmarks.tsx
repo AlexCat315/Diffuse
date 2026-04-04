@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useConnectionStore } from "../store";
 
 interface Bookmark {
   index: number;
@@ -8,11 +9,9 @@ interface Bookmark {
   fov: number;
 }
 
-interface CameraBookmarksProps {
-  connected: boolean;
-}
 
-export function CameraBookmarks({ connected }: CameraBookmarksProps) {
+export function CameraBookmarks() {
+  const connected = useConnectionStore((s) => s.connected);
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editName, setEditName] = useState("");

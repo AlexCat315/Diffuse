@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { rpc } from "../rpc";
 import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
+import { useConnectionStore } from "../store";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -80,15 +81,13 @@ interface PPState {
   rtShadowResolutionScale: number;
 }
 
-interface PostProcessEditorProps {
-  connected: boolean;
-}
 
 const LUT_PRESETS = ["neutral", "warm", "cool", "filmic"];
 
 // ── Main Component ──────────────────────────────────────────────
 
-export function PostProcessEditor({ connected }: PostProcessEditorProps) {
+export function PostProcessEditor() {
+  const connected = useConnectionStore((s) => s.connected);
   const [state, setState] = useState<PPState | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);

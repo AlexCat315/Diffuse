@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useConnectionStore } from "../store";
 
 interface BindingCacheStats {
   hits: number;
@@ -22,11 +23,9 @@ interface RhiStatsData {
   passes: PassInfo[];
 }
 
-interface RhiStatsProps {
-  connected: boolean;
-}
 
-export function RhiStats({ connected }: RhiStatsProps) {
+export function RhiStats() {
+  const connected = useConnectionStore((s) => s.connected);
   const [data, setData] = useState<RhiStatsData | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 

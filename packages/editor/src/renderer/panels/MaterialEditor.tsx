@@ -35,9 +35,7 @@ interface TextureEntry {
   height: number;
 }
 
-interface MaterialEditorProps {
-  entityId: number | null;
-}
+import { useSceneStore } from "../store";
 
 // ── Constants ───────────────────────────────────────────────────
 
@@ -82,7 +80,8 @@ function fromHex(hex: string, alpha?: number): number[] {
 
 // ── Main Component ──────────────────────────────────────────────
 
-export function MaterialEditor({ entityId }: MaterialEditorProps) {
+export function MaterialEditor() {
+  const entityId = useSceneStore((s) => s.selectedEntity);
   const [state, setState] = useState<MaterialState | null>(null);
   const [textures, setTextures] = useState<TextureEntry[]>([]);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());

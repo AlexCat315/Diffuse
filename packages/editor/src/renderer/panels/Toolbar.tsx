@@ -6,16 +6,17 @@ import {
   IconPlay, IconPause, IconStop,
   IconTranslate, IconRotate, IconScale,
 } from "../components/Icons";
+import { useSceneStore } from "../store";
 
 interface ToolbarProps {
-  gizmoMode: GizmoMode;
-  onGizmoModeChange: (mode: GizmoMode) => void;
-  onRefreshHierarchy?: () => void;
   onResetLayout?: () => void;
   onOpenSettings?: () => void;
 }
 
-export function Toolbar({ gizmoMode, onGizmoModeChange, onRefreshHierarchy, onResetLayout, onOpenSettings }: ToolbarProps) {
+export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
+  const gizmoMode = useSceneStore((s) => s.gizmoMode);
+  const onGizmoModeChange = useSceneStore((s) => s.changeGizmoMode);
+  const onRefreshHierarchy = useSceneStore((s) => s.refreshHierarchy);
   const { t } = useI18n();
   const [sceneMenuOpen, setSceneMenuOpen] = useState(false);
   const [scenes, setScenes] = useState<string[]>([]);

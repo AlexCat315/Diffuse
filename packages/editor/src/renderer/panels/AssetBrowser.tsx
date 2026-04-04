@@ -5,10 +5,8 @@ import {
   IconFolder, IconModel, IconTexture, IconShader, IconScene,
   IconScript, IconAudio, IconMaterial, IconFile, IconArrowUp, IconRefresh,
 } from "../components/Icons";
+import { useConnectionStore } from "../store";
 
-interface AssetBrowserProps {
-  connected: boolean;
-}
 
 const ASSET_ICONS: Record<string, React.ComponentType<{ size?: number; color?: string }>> = {
   folder: IconFolder,
@@ -22,7 +20,8 @@ const ASSET_ICONS: Record<string, React.ComponentType<{ size?: number; color?: s
   unknown: IconFile,
 };
 
-export function AssetBrowser({ connected }: AssetBrowserProps) {
+export function AssetBrowser() {
+  const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
   const [currentPath, setCurrentPath] = useState("assets");
   const [entries, setEntries] = useState<AssetEntry[]>([]);
