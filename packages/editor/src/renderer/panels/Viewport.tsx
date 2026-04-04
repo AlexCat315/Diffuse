@@ -42,6 +42,16 @@ export function Viewport() {
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const selectedEntity = useSceneStore((s) => s.selectedEntity);
 
+  // ── Box selection state ──────────────────────────────────────
+  const [boxSelect, setBoxSelect] = useState<{
+    startX: number; startY: number;  // viewport-pixel coords at mousedown
+    curX: number; curY: number;      // current viewport-pixel coords
+    cssStart: { x: number; y: number }; // CSS coords relative to container
+    cssCur: { x: number; y: number };
+    active: boolean;  // true once drag exceeds threshold
+    shift: boolean;   // toggle mode if shift held
+  } | null>(null);
+
   // Fetch current shading mode on connect
   useEffect(() => {
     if (!connected) return;
@@ -65,6 +75,13 @@ export function Viewport() {
     return { x: (e.clientX - rect.left) * dpr, y: (e.clientY - rect.top) * dpr };
   }, [dpr]);
 
+  const toCssCoords = useCallback((e: React.MouseEvent) => {
+    const el = ref.current;
+    if (!el) return { x: 0, y: 0 };
+    const rect = el.getBoundingClientRect();
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  }, []);
+
   const sendInput = useCallback((params: Record<string, unknown>) => {
     window.guavaEngine.call("viewport.sendInput", params as never).catch(() => {});
   }, []);
@@ -76,9 +93,23 @@ export function Viewport() {
     const { x, y } = toViewportCoords(e);
     const btn = e.button === 0 ? "left" : e.button === 2 ? "right" : e.button === 1 ? "middle" : null;
     if (!btn) return;
-    if (btn === "left") mouseDownPos.current = { x, y };
+    if (btn === "left") {
+      mouseDownPos.current = { x, y };
+      // Start tracking potential box select (LMB without Alt)
+      if (!e.altKey) {
+        const css = toCssCoords(e);
+        setBoxSelect({
+          startX: x, startY: y, curX: x, curY: y,
+          cssStart: css, cssCur: css,
+          active: false,
+          shift: e.shiftKey || e.ctrlKey || e.metaKey,
+        });
+      }
+    }
+    // Close context menu on any click
+    setContextMenu(null);
     sendInput({ type: "mousedown", x, y, button: btn, clicks: e.detail, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
-  }, [toViewportCoords, sendInput]);
+  }, [toViewportCoords, toCssCoords, sendInput]);
 
   const handleMouseUp = useCallback((e: React.MouseEvent) => {
     const { x, y } = toViewportCoords(e);
@@ -86,22 +117,48 @@ export function Viewport() {
     if (!btn) return;
     sendInput({ type: "mouseup", x, y, button: btn, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
 
-    // Click-to-pick: if LMB released close to where it was pressed, trigger entity pick
-    if (btn === "left" && mouseDownPos.current && !e.altKey) {
-      const dx = x - mouseDownPos.current.x;
-      const dy = y - mouseDownPos.current.y;
-      if (dx * dx + dy * dy < 16) { // < 4px movement
-        const mode = (e.shiftKey || e.ctrlKey || e.metaKey) ? "toggle" : "replace";
-        window.guavaEngine.call("viewport.pick", { x: Math.round(x), y: Math.round(y), mode } as never).catch(() => {});
+    if (btn === "left") {
+      // Finalise box selection or click-to-pick
+      if (boxSelect?.active) {
+        const mode = boxSelect.shift ? "toggle" : "replace";
+        window.guavaEngine.call("viewport.boxSelect", {
+          x1: Math.round(Math.min(boxSelect.startX, x)),
+          y1: Math.round(Math.min(boxSelect.startY, y)),
+          x2: Math.round(Math.max(boxSelect.startX, x)),
+          y2: Math.round(Math.max(boxSelect.startY, y)),
+          mode,
+        } as never).catch(() => {});
+        setBoxSelect(null);
+      } else {
+        setBoxSelect(null);
+        // Click-to-pick: if LMB released close to where it was pressed
+        if (mouseDownPos.current && !e.altKey) {
+          const dx = x - mouseDownPos.current.x;
+          const dy = y - mouseDownPos.current.y;
+          if (dx * dx + dy * dy < 16) {
+            const mode = (e.shiftKey || e.ctrlKey || e.metaKey) ? "toggle" : "replace";
+            window.guavaEngine.call("viewport.pick", { x: Math.round(x), y: Math.round(y), mode } as never).catch(() => {});
+          }
+        }
       }
       mouseDownPos.current = null;
     }
-  }, [toViewportCoords, sendInput]);
+  }, [toViewportCoords, sendInput, boxSelect]);
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const { x, y } = toViewportCoords(e);
     sendInput({ type: "mousemove", x, y, deltaX: e.movementX * dpr, deltaY: e.movementY * dpr, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
-  }, [toViewportCoords, sendInput, dpr]);
+
+    // Update box selection
+    setBoxSelect((prev) => {
+      if (!prev) return null;
+      const css = toCssCoords(e);
+      const dx = x - prev.startX;
+      const dy = y - prev.startY;
+      const active = prev.active || (dx * dx + dy * dy > 64); // > ~8px threshold
+      return { ...prev, curX: x, curY: y, cssCur: css, active };
+    });
+  }, [toViewportCoords, toCssCoords, sendInput, dpr]);
 
   const handleWheel = useCallback((e: React.WheelEvent) => {
     sendInput({ type: "wheel", deltaX: -e.deltaX / 120, deltaY: -e.deltaY / 120, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
@@ -462,6 +519,22 @@ export function Viewport() {
       onKeyUp={handleKeyUp}
     >
       <canvas ref={canvasRef} style={styles.canvas} />
+      {boxSelect?.active && (() => {
+        const left = Math.min(boxSelect.cssStart.x, boxSelect.cssCur.x);
+        const top = Math.min(boxSelect.cssStart.y, boxSelect.cssCur.y);
+        const w = Math.abs(boxSelect.cssCur.x - boxSelect.cssStart.x);
+        const h = Math.abs(boxSelect.cssCur.y - boxSelect.cssStart.y);
+        return (
+          <div style={{
+            position: "absolute",
+            left, top, width: w, height: h,
+            border: "1px solid rgba(137, 180, 250, 0.8)",
+            background: "rgba(137, 180, 250, 0.12)",
+            pointerEvents: "none",
+            zIndex: 20,
+          }} />
+        );
+      })()}
       {!attached && (
         <div style={styles.placeholder}>
           <p style={{ margin: 0, fontSize: 14 }}>{t.viewport.title}</p>

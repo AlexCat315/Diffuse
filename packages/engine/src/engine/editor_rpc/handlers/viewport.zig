@@ -462,3 +462,79 @@ pub fn pick(ctx: *Ctx) !void {
 
     try ctx.reply(.{});
 }
+
+/// Select all entities whose world-space position projects inside a
+/// screen-space rectangle.
+///
+/// Params:
+///   x1, y1, x2, y2: u32     — rectangle corners in physical (drawable) pixels
+///   mode: "replace"|"toggle" — selection mode (default: "replace")
+pub fn boxSelect(ctx: *Ctx) !void {
+    const x1: u32 = @intCast(try ctx.param(u64, "x1"));
+    const y1: u32 = @intCast(try ctx.param(u64, "y1"));
+    const x2: u32 = @intCast(try ctx.param(u64, "x2"));
+    const y2: u32 = @intCast(try ctx.param(u64, "y2"));
+
+    // Normalise so min <= max
+    const min_x: f32 = @floatFromInt(@min(x1, x2));
+    const min_y: f32 = @floatFromInt(@min(y1, y2));
+    const max_x: f32 = @floatFromInt(@max(x1, x2));
+    const max_y: f32 = @floatFromInt(@max(y1, y2));
+
+    const mode_str = (try ctx.paramOpt([]const u8, "mode")) orelse "replace";
+
+    const renderer = ctx.layer.renderer;
+    const vp = renderer.prev_view_projection;
+    const sv = &renderer.scene_viewport;
+    const vp_w: f32 = @floatFromInt(sv.width);
+    const vp_h: f32 = @floatFromInt(sv.height);
+
+    if (vp_w == 0 or vp_h == 0) {
+        try ctx.reply(.{ .selectedIds = &[_]u64{} });
+        return;
+    }
+
+    const world = ctx.layer.world;
+    var hits = std.ArrayList(u64).empty;
+    defer hits.deinit(ctx.allocator);
+
+    for (world.entities.items) |entity| {
+        // Skip editor-only entities (editor camera, grid helper, etc.)
+        if (entity.editor_only) continue;
+        // Skip folders
+        if (entity.is_folder) continue;
+
+        const pos = entity.world_transform_cache.translation;
+
+        // Multiply world position by view-projection matrix (column-major)
+        const clip_x = vp[0] * pos[0] + vp[4] * pos[1] + vp[8] * pos[2] + vp[12];
+        const clip_y = vp[1] * pos[0] + vp[5] * pos[1] + vp[9] * pos[2] + vp[13];
+        const clip_w = vp[3] * pos[0] + vp[7] * pos[1] + vp[11] * pos[2] + vp[15];
+
+        // Behind camera — skip
+        if (clip_w <= 0.0) continue;
+
+        // NDC → pixel
+        const ndc_x = clip_x / clip_w;
+        const ndc_y = clip_y / clip_w;
+        const screen_x = (ndc_x + 1.0) * 0.5 * vp_w;
+        const screen_y = (1.0 - ndc_y) * 0.5 * vp_h;
+
+        if (screen_x >= min_x and screen_x <= max_x and
+            screen_y >= min_y and screen_y <= max_y)
+        {
+            try hits.append(ctx.allocator, entity.id);
+        }
+    }
+
+    // Apply selection
+    if (std.mem.eql(u8, mode_str, "toggle")) {
+        for (hits.items) |hit_id| {
+            _ = try renderer.selection_history.applyPick(hit_id, .toggle);
+        }
+    } else {
+        _ = try renderer.selection_history.replaceSelection(hits.items);
+    }
+
+    try ctx.reply(.{ .selectedIds = hits.items });
+}

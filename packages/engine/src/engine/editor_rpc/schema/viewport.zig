@@ -218,6 +218,19 @@ pub const @"viewport.pick" = struct {
     pub const Result = struct {};
 };
 
+pub const @"viewport.boxSelect" = struct {
+    pub const Params = struct {
+        x1: u32,
+        y1: u32,
+        x2: u32,
+        y2: u32,
+        mode: ?[]const u8 = null,
+    };
+    pub const Result = struct {
+        selectedIds: []const u64,
+    };
+};
+
 // ── rendersettings namespace ─────────────────────────────────────
 
 pub const @"rendersettings.getSettings" = struct {
