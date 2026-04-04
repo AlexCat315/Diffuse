@@ -1,5 +1,5 @@
 const std = @import("std");
-const editor_console = @import("editor/ui/panels/debug/console.zig");
+const editor_console = @import("editor/core/logging.zig");
 
 pub const std_options = std.Options{
     .logFn = editor_console.logFn,
