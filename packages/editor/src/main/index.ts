@@ -3,6 +3,10 @@ import path from "path";
 import { EngineProcess } from "./engine-process";
 import { EngineClient } from "./engine-client";
 
+// Enable SharedArrayBuffer in the renderer process without COOP/COEP headers.
+// Required for file:// protocol where onHeadersReceived doesn't apply.
+app.commandLine.appendSwitch("enable-features", "SharedArrayBuffer");
+
 const DEFAULT_PORT = 9100;
 
 let mainWindow: BrowserWindow | null = null;
@@ -19,7 +23,7 @@ interface ViewportAddon {
   updateSurface(surfaceId: number, shmName?: string, width?: number, height?: number): void;
   detach(): void;
   refresh(): { pixels: Buffer; width: number; height: number } | void;
-  setSharedBuffer?(sab: SharedArrayBuffer): void;
+  setSharedBuffer?(sab: ArrayBufferLike | Uint8Array): void;
   refreshShared?(): boolean;
 }
 
@@ -256,27 +260,37 @@ ipcMain.handle(
     // The renderer polls the SAB directly via Atomics; we only need to
     // memcpy IOSurface → SAB on each tick here in the main process.
     const useSAB = isMac && typeof ioSurfaceView.setSharedBuffer === "function";
+    let sabActive = false;
     if (useSAB) {
-      // Allocate SAB for up to 4K viewport: 3840×2160×4 + 16 byte header
-      const maxPixelBytes = 3840 * 2160 * 4;
-      const sabSize = 16 + maxPixelBytes;
-      viewportSAB = new SharedArrayBuffer(sabSize);
-      ioSurfaceView.setSharedBuffer!(viewportSAB);
+      try {
+        // Allocate SAB for up to 4K viewport: 3840×2160×4 + 16 byte header
+        const maxPixelBytes = 3840 * 2160 * 4;
+        const sabSize = 16 + maxPixelBytes;
+        viewportSAB = new SharedArrayBuffer(sabSize);
+        // Pass a Uint8Array view — N-API can extract the backing ArrayBuffer from
+        // a TypedArray regardless of whether it's a regular or shared buffer.
+        ioSurfaceView.setSharedBuffer!(new Uint8Array(viewportSAB) as never);
 
-      // Send SAB to renderer (one-time, zero-copy share)
-      mainWindow.webContents.postMessage("viewport:shared-buffer", viewportSAB);
+        // Send SAB to renderer (one-time, zero-copy share)
+        mainWindow.webContents.postMessage("viewport:shared-buffer", viewportSAB);
 
-      // Fast polling: just memcpy into SAB, no IPC per frame
-      surfaceRefreshTimer = setInterval(() => {
-        if (!ioSurfaceView || !mainWindow) return;
-        if (mainWindow.webContents.isDestroyed()) {
-          clearInterval(surfaceRefreshTimer!);
-          surfaceRefreshTimer = null;
-          return;
-        }
-        ioSurfaceView.refreshShared!();
-      }, 8);
-    } else {
+        // Fast polling: just memcpy into SAB, no IPC per frame
+        surfaceRefreshTimer = setInterval(() => {
+          if (!ioSurfaceView || !mainWindow) return;
+          if (mainWindow.webContents.isDestroyed()) {
+            clearInterval(surfaceRefreshTimer!);
+            surfaceRefreshTimer = null;
+            return;
+          }
+          ioSurfaceView.refreshShared!();
+        }, 8);
+        sabActive = true;
+      } catch (e) {
+        console.warn("[Viewport] SAB path failed, falling back to IPC:", (e as Error).message);
+        viewportSAB = null;
+      }
+    }
+    if (!sabActive) {
       // Fallback: IPC-based pixel delivery (Linux / no SAB support)
       surfaceRefreshTimer = setInterval(() => {
         if (!ioSurfaceView || !mainWindow) return;
@@ -438,6 +452,9 @@ app.whenReady().then(async () => {
         "Content-Security-Policy": [
           `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* http://localhost:*; img-src 'self' data:`,
         ],
+        // Required for SharedArrayBuffer to be transferable via postMessage.
+        "Cross-Origin-Opener-Policy": ["same-origin"],
+        "Cross-Origin-Embedder-Policy": ["require-corp"],
       },
     });
   });

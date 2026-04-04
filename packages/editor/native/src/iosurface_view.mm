@@ -136,15 +136,41 @@ static Napi::Value Refresh(const Napi::CallbackInfo& info) {
 // directly into shared memory visible to the renderer process.
 static Napi::Value SetSharedBuffer(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
-    if (info.Length() < 1 || !info[0].IsArrayBuffer()) {
-        // SharedArrayBuffer appears as ArrayBuffer in N-API
-        Napi::Error::New(env, "setSharedBuffer: expected SharedArrayBuffer")
-            .ThrowAsJavaScriptException();
-        return env.Undefined();
+
+    // Accept either ArrayBuffer or SharedArrayBuffer.
+    // In N-API, SharedArrayBuffer is NOT an ArrayBuffer — we must extract the
+    // backing store from a TypedArray view if the raw value isn't an ArrayBuffer.
+    uint8_t* data = nullptr;
+    size_t   size = 0;
+
+    if (info.Length() >= 1 && info[0].IsArrayBuffer()) {
+        auto ab = info[0].As<Napi::ArrayBuffer>();
+        data = static_cast<uint8_t*>(ab.Data());
+        size = ab.ByteLength();
+    } else if (info.Length() >= 1 && info[0].IsTypedArray()) {
+        auto ta = info[0].As<Napi::TypedArray>();
+        auto ab = ta.ArrayBuffer();
+        data = static_cast<uint8_t*>(ab.Data());
+        size = ab.ByteLength();
+    } else {
+        // Try napi_get_arraybuffer_info directly — works for SharedArrayBuffer
+        // in some Node.js versions.
+        napi_value val = info[0];
+        void* rawData = nullptr;
+        size_t rawLen = 0;
+        napi_status st = napi_get_arraybuffer_info(env, val, &rawData, &rawLen);
+        if (st == napi_ok && rawData && rawLen > 0) {
+            data = static_cast<uint8_t*>(rawData);
+            size = rawLen;
+        } else {
+            Napi::Error::New(env, "setSharedBuffer: expected SharedArrayBuffer or ArrayBuffer")
+                .ThrowAsJavaScriptException();
+            return env.Undefined();
+        }
     }
-    auto ab = info[0].As<Napi::ArrayBuffer>();
-    g_sab_data = static_cast<uint8_t*>(ab.Data());
-    g_sab_size = ab.ByteLength();
+
+    g_sab_data = data;
+    g_sab_size = size;
     g_sab_generation = 0;
     return env.Undefined();
 }
