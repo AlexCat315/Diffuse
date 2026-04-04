@@ -8,6 +8,20 @@ const Ctx = ctx_mod.Ctx;
 const animation_graph_mod = @import("../../animation/animation_graph.zig");
 const handles = @import("../../assets/handles.zig");
 
+// Extract the comparison enum type from TransitionCondition.parameter.comparison at comptime.
+const Comparison = blk: {
+    const union_info = @typeInfo(animation_graph_mod.TransitionCondition).@"union";
+    for (union_info.fields) |f| {
+        if (std.mem.eql(u8, f.name, "parameter")) {
+            const struct_info = @typeInfo(f.type).@"struct";
+            for (struct_info.fields) |sf| {
+                if (std.mem.eql(u8, sf.name, "comparison")) break :blk sf.type;
+            }
+        }
+    }
+    unreachable;
+};
+
 // ── Helpers ─────────────────────────────────────────────────────
 
 fn strEql(a: []const u8, b: []const u8) bool {
@@ -41,7 +55,7 @@ fn writeInt(buf: *std.ArrayList(u8), a: std.mem.Allocator, v: usize) !void {
     try buf.appendSlice(a, s);
 }
 
-fn parseComparison(s: []const u8) animation_graph_mod.TransitionCondition.Comparison {
+fn parseComparison(s: []const u8) Comparison {
     if (strEql(s, "<") or strEql(s, "less")) return .less;
     if (strEql(s, ">") or strEql(s, "greater")) return .greater;
     return .equal;
@@ -62,8 +76,8 @@ fn comparisonStr(c: anytype) []const u8 {
 /// animation.getState(entityId) → full snapshot of animation graph state.
 pub fn getState(ctx: *Ctx) !void {
     const entity_id_raw: u64 = try ctx.param(u64, "entityId");
-    const entity_id: ctx_mod.World.EntityId = @enumFromInt(entity_id_raw);
-    const world = &ctx.layer.world;
+    const entity_id = entity_id_raw;
+    const world = ctx.layer.world;
 
     const entity = world.getEntityConst(entity_id) orelse {
         try ctx.reply(.{ .hasAnimator = false, .hasGraph = false });
@@ -296,7 +310,7 @@ pub fn getState(ctx: *Ctx) !void {
 /// animation.addState(entityId, name?) → add a new state to the graph.
 pub fn addState(ctx: *Ctx) !void {
     const entity_id_raw: u64 = try ctx.param(u64, "entityId");
-    const entity_id: ctx_mod.World.EntityId = @enumFromInt(entity_id_raw);
+    const entity_id = entity_id_raw;
 
     const graph = ctx.layer.world.animatorGraphMutable(entity_id) orelse return error.InvalidArguments;
     const name = (try ctx.paramOpt([]const u8, "name")) orelse blk: {
@@ -312,7 +326,7 @@ pub fn addState(ctx: *Ctx) !void {
 /// animation.updateState(entityId, stateIndex, ...) → update state properties.
 pub fn updateState(ctx: *Ctx) !void {
     const entity_id_raw: u64 = try ctx.param(u64, "entityId");
-    const entity_id: ctx_mod.World.EntityId = @enumFromInt(entity_id_raw);
+    const entity_id = entity_id_raw;
     const state_index: usize = @intCast(try ctx.param(u64, "stateIndex"));
 
     const graph = ctx.layer.world.animatorGraphMutable(entity_id) orelse return error.InvalidArguments;
@@ -354,7 +368,7 @@ pub fn updateState(ctx: *Ctx) !void {
 /// animation.removeState(entityId, stateIndex) → remove a state.
 pub fn removeState(ctx: *Ctx) !void {
     const entity_id_raw: u64 = try ctx.param(u64, "entityId");
-    const entity_id: ctx_mod.World.EntityId = @enumFromInt(entity_id_raw);
+    const entity_id = entity_id_raw;
     const state_index: usize = @intCast(try ctx.param(u64, "stateIndex"));
 
     const graph = ctx.layer.world.animatorGraphMutable(entity_id) orelse return error.InvalidArguments;
@@ -397,7 +411,7 @@ pub fn removeState(ctx: *Ctx) !void {
 /// animation.setDefaultState(entityId, stateIndex) → set default state.
 pub fn setDefaultState(ctx: *Ctx) !void {
     const entity_id_raw: u64 = try ctx.param(u64, "entityId");
-    const entity_id: ctx_mod.World.EntityId = @enumFromInt(entity_id_raw);
+    const entity_id = entity_id_raw;
     const state_index: u32 = @intCast(try ctx.param(u64, "stateIndex"));
 
     const graph = ctx.layer.world.animatorGraphMutable(entity_id) orelse return error.InvalidArguments;
@@ -410,10 +424,10 @@ pub fn setDefaultState(ctx: *Ctx) !void {
 /// animation.activateState(entityId, stateIndex) → instantly switch to state.
 pub fn activateState(ctx: *Ctx) !void {
     const entity_id_raw: u64 = try ctx.param(u64, "entityId");
-    const entity_id: ctx_mod.World.EntityId = @enumFromInt(entity_id_raw);
+    const entity_id = entity_id_raw;
     const state_index: u32 = @intCast(try ctx.param(u64, "stateIndex"));
 
-    const world = &ctx.layer.world;
+    const world = ctx.layer.world;
     const graph = world.animatorGraph(entity_id) orelse return error.InvalidArguments;
     if (state_index >= graph.states.items.len) return error.InvalidArguments;
 
@@ -430,7 +444,7 @@ pub fn activateState(ctx: *Ctx) !void {
 /// animation.addTransition(entityId, fromState, toState, duration?, triggerTime?)
 pub fn addTransition(ctx: *Ctx) !void {
     const entity_id_raw: u64 = try ctx.param(u64, "entityId");
-    const entity_id: ctx_mod.World.EntityId = @enumFromInt(entity_id_raw);
+    const entity_id = entity_id_raw;
     const from_state: u32 = @intCast(try ctx.param(u64, "fromState"));
     const to_state: u32 = @intCast(try ctx.param(u64, "toState"));
     const duration: f32 = @floatCast((try ctx.paramOpt(f64, "duration")) orelse 0.2);
@@ -449,7 +463,7 @@ pub fn addTransition(ctx: *Ctx) !void {
 /// animation.updateTransition(entityId, transitionIndex, ...) → update transition properties.
 pub fn updateTransition(ctx: *Ctx) !void {
     const entity_id_raw: u64 = try ctx.param(u64, "entityId");
-    const entity_id: ctx_mod.World.EntityId = @enumFromInt(entity_id_raw);
+    const entity_id = entity_id_raw;
     const transition_index: usize = @intCast(try ctx.param(u64, "transitionIndex"));
 
     const graph = ctx.layer.world.animatorGraphMutable(entity_id) orelse return error.InvalidArguments;
@@ -466,7 +480,7 @@ pub fn updateTransition(ctx: *Ctx) !void {
 /// animation.removeTransition(entityId, transitionIndex)
 pub fn removeTransition(ctx: *Ctx) !void {
     const entity_id_raw: u64 = try ctx.param(u64, "entityId");
-    const entity_id: ctx_mod.World.EntityId = @enumFromInt(entity_id_raw);
+    const entity_id = entity_id_raw;
     const transition_index: usize = @intCast(try ctx.param(u64, "transitionIndex"));
 
     const graph = ctx.layer.world.animatorGraphMutable(entity_id) orelse return error.InvalidArguments;
@@ -480,7 +494,7 @@ pub fn removeTransition(ctx: *Ctx) !void {
 /// animation.addCondition(entityId, transitionIndex, conditionType, threshold?, parameterName?, comparison?)
 pub fn addCondition(ctx: *Ctx) !void {
     const entity_id_raw: u64 = try ctx.param(u64, "entityId");
-    const entity_id: ctx_mod.World.EntityId = @enumFromInt(entity_id_raw);
+    const entity_id = entity_id_raw;
     const transition_index: usize = @intCast(try ctx.param(u64, "transitionIndex"));
     const condition_type = try ctx.param([]const u8, "conditionType");
     const threshold: f32 = @floatCast((try ctx.paramOpt(f64, "threshold")) orelse 0.0);
@@ -509,7 +523,7 @@ pub fn addCondition(ctx: *Ctx) !void {
 /// animation.updateCondition(entityId, transitionIndex, conditionIndex, ...)
 pub fn updateCondition(ctx: *Ctx) !void {
     const entity_id_raw: u64 = try ctx.param(u64, "entityId");
-    const entity_id: ctx_mod.World.EntityId = @enumFromInt(entity_id_raw);
+    const entity_id = entity_id_raw;
     const transition_index: usize = @intCast(try ctx.param(u64, "transitionIndex"));
     const condition_index: usize = @intCast(try ctx.param(u64, "conditionIndex"));
 
@@ -577,7 +591,7 @@ pub fn updateCondition(ctx: *Ctx) !void {
 /// animation.removeCondition(entityId, transitionIndex, conditionIndex)
 pub fn removeCondition(ctx: *Ctx) !void {
     const entity_id_raw: u64 = try ctx.param(u64, "entityId");
-    const entity_id: ctx_mod.World.EntityId = @enumFromInt(entity_id_raw);
+    const entity_id = entity_id_raw;
     const transition_index: usize = @intCast(try ctx.param(u64, "transitionIndex"));
     const condition_index: usize = @intCast(try ctx.param(u64, "conditionIndex"));
 
@@ -592,10 +606,10 @@ pub fn removeCondition(ctx: *Ctx) !void {
 /// animation.setParameter(entityId, parameterIndex, floatValue?, boolValue?, intValue?)
 pub fn setParameter(ctx: *Ctx) !void {
     const entity_id_raw: u64 = try ctx.param(u64, "entityId");
-    const entity_id: ctx_mod.World.EntityId = @enumFromInt(entity_id_raw);
+    const entity_id = entity_id_raw;
     const param_index: u32 = @intCast(try ctx.param(u64, "parameterIndex"));
 
-    const world = &ctx.layer.world;
+    const world = ctx.layer.world;
 
     if (try ctx.paramOpt(f64, "floatValue")) |v| {
         try world.setAnimatorGraphParameter(entity_id, param_index, .{ .float = @floatCast(v) });
