@@ -12,9 +12,8 @@ const material_ast_mod = @import("../../assets/material_ast.zig");
 const material_model = @import("../../assets/material_model.zig");
 const components = @import("../../scene/components.zig");
 
-// ── Preview state (static — no EditorState in RPC ctx) ─────────
-const PreviewPrimitive = enum { sphere, plane };
-var preview_primitive: PreviewPrimitive = .sphere;
+// ── Preview state (shared via EditorSettings) ──────────────────
+const PreviewPrimitive = @import("../settings.zig").EditorSettings.PreviewPrimitive;
 
 // ── Helpers ─────────────────────────────────────────────────────
 
@@ -143,7 +142,7 @@ pub fn getState(ctx: *Ctx) !void {
         .materialHandle = handleToU32(handles.MaterialHandle, mat.handle),
         .parentHandle = parent_handle,
         .generation = generation,
-        .previewPrimitive = @tagName(preview_primitive),
+        .previewPrimitive = @tagName(ctx.settings.material.preview_primitive),
     });
 }
 
@@ -402,9 +401,9 @@ pub fn listTextures(ctx: *Ctx) !void {
 pub fn setPreviewPrimitive(ctx: *Ctx) !void {
     const prim_str = try ctx.param([]const u8, "primitive");
     if (strEql(prim_str, "sphere")) {
-        preview_primitive = .sphere;
+        ctx.settings.material.preview_primitive = .sphere;
     } else if (strEql(prim_str, "plane")) {
-        preview_primitive = .plane;
+        ctx.settings.material.preview_primitive = .plane;
     } else return error.InvalidArguments;
     try ctx.reply(.{});
 }

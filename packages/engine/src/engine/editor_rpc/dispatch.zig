@@ -13,6 +13,7 @@ const std = @import("std");
 const core = @import("../core/layer.zig");
 const ctx_mod = @import("ctx.zig");
 const Ctx = ctx_mod.Ctx;
+const settings_mod = @import("settings.zig");
 
 const log = std.log.scoped(.editor_rpc);
 
@@ -113,7 +114,7 @@ fn dispatchToHandler(method_str: []const u8, ctx: *Ctx) !void {
 //  Public API — called from server.zig
 // ═══════════════════════════════════════════════════════════════════
 
-pub fn dispatch(allocator: std.mem.Allocator, payload: []const u8, layer_context: *core.LayerContext) !?[]u8 {
+pub fn dispatch(allocator: std.mem.Allocator, payload: []const u8, layer_context: *core.LayerContext, settings: *settings_mod.EditorSettings) !?[]u8 {
     const parsed = std.json.parseFromSlice(std.json.Value, allocator, payload, .{}) catch {
         return try errorResponse(allocator, null, -32700, "Parse error");
     };
@@ -143,6 +144,7 @@ pub fn dispatch(allocator: std.mem.Allocator, payload: []const u8, layer_context
         .allocator = allocator,
         .params = params,
         .layer = layer_context,
+        .settings = settings,
     };
 
     dispatchToHandler(method_str, &ctx) catch |err| {
