@@ -1,6 +1,6 @@
 // Test entry point with console logging configuration
 const std = @import("std");
-const editor_console = @import("editor/core/logging.zig");
+const editor_console = @import("editor_backend/core/logging.zig");
 const physics_system = @import("engine/physics/system.zig");
 
 // 配置测试日志输出到编辑器控制台
