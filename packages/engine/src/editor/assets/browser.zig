@@ -7,8 +7,6 @@ const state_mod = @import("../core/state.zig");
 const utils = @import("../common/utils.zig");
 const history = @import("../actions/history.zig");
 const asset_preview = @import("preview.zig");
-const console = @import("../ui/panels/debug/console.zig");
-const command_timeline = @import("../ui/panels/debug/command_timeline.zig");
 const ui_icons = @import("../ui/icons.zig");
 const layout = @import("../ui/layout.zig");
 const theme = @import("../ui/theme.zig");
@@ -104,8 +102,8 @@ pub fn drawBottomDrawer(state: *EditorState, layer_context: *engine.core.LayerCo
 
         switch (state.bottom_workspace_tab) {
             .content_browser => try drawProjectPanel(state, layer_context),
-            .console => try console.drawConsolePanel(state),
-            .command_timeline => try command_timeline.drawCommandTimelinePanel(state, layer_context),
+            .console => {}, // Migrated to Electron: Console.tsx
+            .command_timeline => {}, // Migrated to Electron: CommandTimeline.tsx
             .ai_assistant => try drawAiAssistantTab(state),
         }
     }

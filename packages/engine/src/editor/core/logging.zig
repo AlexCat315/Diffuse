@@ -1,8 +1,4 @@
 const std = @import("std");
-const engine = @import("guava");
-const gui = @import("../../gui.zig");
-const EditorState = @import("../../../core/state.zig").EditorState;
-const sdl = engine.platform.sdl.c;
 
 const max_entries = 256;
 const max_scope_len = 48;
@@ -69,7 +65,6 @@ fn writeToLogFile(level: std.log.Level, scope: []const u8, message: []const u8) 
     if (g_log_file) |file| {
         const level_str = levelLabel(level);
 
-        // 使用简单的 writeAll 而不是 writer
         file.writeAll("[") catch {};
         file.writeAll(level_str) catch {};
         file.writeAll("] ") catch {};
@@ -106,7 +101,6 @@ pub fn logFn(
 
     var message_buffer: [max_message_len]u8 = undefined;
     const message_text = std.fmt.bufPrint(&message_buffer, format, args) catch blk: {
-        // 格式化失败时的简单回退
         const fallback = "log formatting failed (buffer too small or invalid format)";
         const len = @min(fallback.len, message_buffer.len);
         @memcpy(message_buffer[0..len], fallback[0..len]);
@@ -148,107 +142,22 @@ pub fn snapshot(buffer: []Entry) usize {
         cursor = (cursor + 1) % max_entries;
     }
 
-    // 注意：不要更新 g_entry_read，这样日志会一直保留在缓冲区中
-    // 直到被新的日志覆盖（环形缓冲区的特性）
     return index;
 }
 
-pub fn drawConsolePanel(state: *EditorState) !void {
-    const width = gui.contentRegionAvail()[0];
-    const clear_width = if (width >= 520.0) 82.0 else width;
-    if (gui.buttonEx(state.text(.clear), clear_width, 0.0)) {
-        clear();
-    }
-    if (width >= 520.0) {
-        gui.sameLine();
-    }
-
-    const toggle_columns: usize = if (width >= 520.0)
-        5
-    else if (width >= 320.0)
-        2
-    else
-        1;
-    var toggle_index: usize = 0;
-    beginResponsiveToggle(toggle_index, toggle_columns);
-    _ = gui.checkbox(state.text(.errors), &state.console_show_errors);
-    toggle_index += 1;
-    beginResponsiveToggle(toggle_index, toggle_columns);
-    _ = gui.checkbox(state.text(.warnings), &state.console_show_warnings);
-    toggle_index += 1;
-    beginResponsiveToggle(toggle_index, toggle_columns);
-    _ = gui.checkbox(state.text(.info), &state.console_show_info);
-    toggle_index += 1;
-    beginResponsiveToggle(toggle_index, toggle_columns);
-    _ = gui.checkbox(state.text(.debug), &state.console_show_debug);
-    toggle_index += 1;
-    beginResponsiveToggle(toggle_index, toggle_columns);
-    _ = gui.checkbox(state.text(.auto_scroll), &state.console_auto_scroll);
-    gui.separator();
-
-    _ = gui.beginChild("console_messages", 0.0, 0.0, true);
-    defer gui.endChild();
-
-    // 直接读取环形缓冲区，而不是使用 snapshot
-    g_mutex.lock();
-    defer g_mutex.unlock();
-
-    if (g_entry_count > 0) {
-        var cursor = g_entry_read;
-        const end = g_entry_write;
-        var displayed_count: usize = 0;
-
-        while (displayed_count < max_entries and cursor != end) {
-            const entry = g_entries[cursor];
-
-            if (shouldDisplayEntry(state, entry.level)) {
-                gui.pushStyleColor(.text, levelColor(entry.level));
-                defer gui.popStyleColor(1);
-
-                var line_buffer: [512]u8 = undefined;
-                const line = std.fmt.bufPrint(
-                    &line_buffer,
-                    "[{s}] {s}: {s}",
-                    .{ levelLabel(entry.level), entry.scopeText(), entry.messageText() },
-                ) catch continue;
-
-                _ = gui.selectable(line, false, false, 0.0, 0.0);
-                var popup_id_buf: [32]u8 = undefined;
-                const popup_id = std.fmt.bufPrint(&popup_id_buf, "##console_ctx_{d}", .{displayed_count}) catch continue;
-                if (gui.beginPopupContextItem(popup_id)) {
-                    if (gui.menuItem(state.text(.copy), null, false, true)) {
-                        copyTextToClipboard(line);
-                    }
-                    gui.endPopup();
-                }
-                displayed_count += 1;
-            }
-
-            cursor = (cursor + 1) % max_entries;
-        }
-    }
-
-    if (state.console_auto_scroll) {
-        gui.setScrollHereY(1.0);
-    }
-}
-
-fn beginResponsiveToggle(index: usize, columns: usize) void {
-    if (index == 0 or columns == 0) {
-        return;
-    }
-    if (index % columns == 0) {
-        gui.dummy(0.0, 4.0);
-    } else {
-        gui.sameLine();
-    }
+pub fn levelLabel(level: std.log.Level) []const u8 {
+    return switch (level) {
+        .err => "ERR",
+        .warn => "WRN",
+        .info => "INF",
+        .debug => "DBG",
+    };
 }
 
 fn appendEntry(level: std.log.Level, scope: []const u8, message: []const u8) void {
     g_mutex.lock();
     defer g_mutex.unlock();
 
-    // 分离的写入逻辑：防止读取时游标移动
     const slot = if (g_entry_count < max_entries) blk: {
         const value = g_entry_count;
         g_entry_count += 1;
@@ -269,39 +178,4 @@ fn appendEntry(level: std.log.Level, scope: []const u8, message: []const u8) voi
     @memcpy(entry.scope[0..entry.scope_len], scope[0..entry.scope_len]);
     @memcpy(entry.message[0..entry.message_len], message[0..entry.message_len]);
     g_entries[slot] = entry;
-}
-
-fn shouldDisplayEntry(state: *const EditorState, level: std.log.Level) bool {
-    return switch (level) {
-        .err => state.console_show_errors,
-        .warn => state.console_show_warnings,
-        .info => state.console_show_info,
-        .debug => state.console_show_debug,
-    };
-}
-
-fn levelColor(level: std.log.Level) [4]f32 {
-    return switch (level) {
-        .err => .{ 0.96, 0.42, 0.37, 1.0 },
-        .warn => .{ 0.98, 0.78, 0.36, 1.0 },
-        .info => .{ 0.74, 0.84, 0.97, 1.0 },
-        .debug => .{ 0.66, 0.70, 0.76, 1.0 },
-    };
-}
-
-fn levelLabel(level: std.log.Level) []const u8 {
-    return switch (level) {
-        .err => "ERR",
-        .warn => "WRN",
-        .info => "INF",
-        .debug => "DBG",
-    };
-}
-
-fn copyTextToClipboard(text: []const u8) void {
-    var buf: [512 + 1]u8 = undefined;
-    const len = @min(text.len, buf.len - 1);
-    @memcpy(buf[0..len], text[0..len]);
-    buf[len] = 0;
-    _ = sdl.SDL_SetClipboardText(&buf);
 }

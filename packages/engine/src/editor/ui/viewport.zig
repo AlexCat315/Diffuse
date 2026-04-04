@@ -13,15 +13,11 @@ const history = @import("../actions/history.zig");
 const camera = @import("../interaction/camera.zig");
 const mesh_edit = @import("../interaction/mesh_edit.zig");
 const manipulation = @import("../interaction/manipulation.zig");
-const scene_hierarchy = @import("panels/scene/scene_hierarchy.zig");
 const inspector = @import("panels/scene/inspector.zig");
 const content_browser = @import("../assets/browser.zig");
 const menu_bar = @import("menu_bar.zig");
 const floating_window_blocker = @import("floating_window_blocker.zig");
 const render_settings = @import("panels/rendering/render_settings.zig");
-const settings = @import("panels/rendering/settings.zig");
-const material_editor = @import("panels/assets/material_editor.zig");
-const ai_chat = @import("panels/ai/ai_chat.zig");
 const ui_icons = @import("icons.zig");
 const layout = @import("layout.zig");
 const playback_session = @import("../core/playback_session.zig");
@@ -1614,33 +1610,23 @@ pub fn drawEditorUi(
 
 /// Left sidebar: Scene Hierarchy (with Place Actors tab)
 fn drawLeftSidebar(state: *EditorState, layer_context: *engine.core.LayerContext) !void {
-    try scene_hierarchy.drawSceneWindow(state, layer_context);
+    // Migrated to Electron: SceneHierarchy.tsx
+    _ = state;
+    _ = layer_context;
 }
 
 /// Right sidebar: Inspector / Details
 fn drawRightSidebar(state: *EditorState, layer_context: *engine.core.LayerContext) !void {
-    try inspector.drawInspectorWindow(state, layer_context);
+    // Migrated to Electron: Inspector.tsx
+    _ = state;
+    _ = layer_context;
 }
 
 /// Auxiliary floating / tool windows (toggled via state flags)
 fn drawAuxiliaryWindows(state: *EditorState, layer_context: *engine.core.LayerContext) !void {
-    // AI assistant
-    try ai_chat.drawAiChatPanel(state, layer_context);
-
-    // Rendering tools
-    if (state.render_settings_open) {
-        try render_settings.drawRenderSettingsWindow(state, layer_context);
-    }
-
-    // Editor settings
-    if (state.settings_open) {
-        try settings.drawSettingsWindow(state, layer_context);
-    }
-
-    // Asset tools
-    if (state.material_editor_open) {
-        try material_editor.drawMaterialEditorWindow(state, layer_context);
-    }
+    // All auxiliary panels migrated to Electron React components.
+    _ = state;
+    _ = layer_context;
 }
 
 fn viewportPixelUnderMouse(state: *const EditorState, layer_context: *const engine.core.LayerContext) ?[2]u32 {
