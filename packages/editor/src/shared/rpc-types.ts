@@ -25,6 +25,7 @@ export type {
   MaterialGraphNodeInfo,
   MaterialGraphConnectionInfo,
   MaterialGraphOutputInfo,
+  ScriptFileInfo,
   RpcMethods,
   SubscriptionEvents,
   RpcMethodName,

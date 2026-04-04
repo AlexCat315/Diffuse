@@ -158,6 +158,13 @@ pub const SharedTypes = struct {
         sourceNodeId: u32,
         sourceSlot: u8,
     };
+
+    pub const ScriptFileInfo = struct {
+        path: []const u8,
+        name: []const u8,
+        language: []const u8,
+        sizeBytes: u64,
+    };
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1178,6 +1185,36 @@ pub const Methods = struct {
             posY: f64,
         };
         pub const Result = struct {};
+    };
+
+    // ── script ─────────────────────────────────────────────────
+
+    pub const @"script.listScripts" = struct {
+        pub const Params = struct {};
+        pub const Result = struct {
+            scripts: []const SharedTypes.ScriptFileInfo,
+        };
+    };
+
+    pub const @"script.getContent" = struct {
+        pub const Params = struct {
+            path: []const u8,
+        };
+        pub const Result = struct {
+            content: []const u8,
+            language: []const u8,
+            readOnly: bool,
+        };
+    };
+
+    pub const @"script.saveContent" = struct {
+        pub const Params = struct {
+            path: []const u8,
+            content: []const u8,
+        };
+        pub const Result = struct {
+            success: bool,
+        };
     };
 
     // ── animation ──────────────────────────────────────────────
