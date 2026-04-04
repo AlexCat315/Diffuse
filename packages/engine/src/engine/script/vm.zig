@@ -895,7 +895,6 @@ fn zigDylibActiveContext(userdata: ?*anyopaque) ?*context.ScriptContext {
 fn zigDylibHostLog(userdata: ?*anyopaque, ptr: [*]const u8, len: usize) callconv(.c) void {
     const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
     std.log.info("[ZigScript:{d}] {s}", .{ ctx_ptr.entity, ptr[0..len] });
-    @import("../editor_rpc/server.zig").consoleLog("info", ptr[0..len], "script");
 }
 
 fn zigDylibHostGetEntityId(userdata: ?*anyopaque) callconv(.c) u64 {
@@ -1571,7 +1570,6 @@ fn csharpNativeAotActiveContext(userdata: ?*anyopaque) ?*context.ScriptContext {
 fn csharpNativeAotHostLog(userdata: ?*anyopaque, ptr: [*]const u8, len: usize) callconv(.c) void {
     const ctx = csharpNativeAotActiveContext(userdata) orelse return;
     std.log.info("[CSharpScript:{d}] {s}", .{ ctx.entity, ptr[0..len] });
-    @import("../editor_rpc/server.zig").consoleLog("info", ptr[0..len], "script");
 }
 
 fn csharpNativeAotHostFindEntityByName(userdata: ?*anyopaque, ptr: [*]const u8, len: usize) callconv(.c) u64 {

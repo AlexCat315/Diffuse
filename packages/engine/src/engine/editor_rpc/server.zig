@@ -36,6 +36,11 @@ pub fn consoleLog(level: []const u8, message: []const u8, source: ?[]const u8) v
     srv.pushConsoleLog(level, message, source);
 }
 
+/// Callback trampoline for the logging system (matches the function pointer signature).
+pub fn consoleLogTrampoline(level: []const u8, message: []const u8, source: []const u8) void {
+    consoleLog(level, message, source);
+}
+
 /// A connected WebSocket client with its own send queue.
 const Client = struct {
     stream: std.net.Stream,

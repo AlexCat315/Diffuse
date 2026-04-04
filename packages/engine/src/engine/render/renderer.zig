@@ -401,6 +401,11 @@ pub const Renderer = struct {
     /// RPC 设置的待消费 gizmo 模式（由 EditorLayer.refreshGizmoState 消费）
     pending_gizmo_mode: ?EditorGizmoMode = null,
     pending_gizmo_space: ?EditorGizmoSpace = null,
+    /// RPC 设置的待消费相机操作（由 handleCameraControls 消费）
+    pending_camera_orbit: ?[2]f32 = null, // [deltaYaw, deltaPitch]
+    pending_camera_look_axis: ?[3]f32 = null, // look direction for ViewCube axis click
+    /// When true, resolveSelectionReadbacks skips applying picks (gizmo drag active).
+    suppress_entity_pick: bool = false,
     /// 编辑器变换枢轴覆盖（例如 bounds center）
     editor_gizmo_transform_override: ?components.Transform = null,
     /// staged preview 的自定义 gizmo 目标
@@ -4198,6 +4203,10 @@ pub const Renderer = struct {
 
             var batch = self.in_flight_selection_batches.orderedRemove(0);
             defer batch.deinit(self.allocator, &self.rhi);
+
+            // Skip applying picks when gizmo drag is active to prevent
+            // entity selection from overriding gizmo axis interaction.
+            if (self.suppress_entity_pick) continue;
 
             for (batch.readbacks) |readback| {
                 var pixel: [4]u8 = undefined;

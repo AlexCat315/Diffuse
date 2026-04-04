@@ -122,94 +122,28 @@ pub fn getState(ctx: *Ctx) !void {
 }
 
 /// Set camera to look along a world axis (for ViewCube face clicks).
-/// axis: [3]f32 direction vector; the camera moves to focus_distance along -axis.
+/// Uses the pending mechanism so EditorState.yaw/pitch/pivot stay in sync.
 pub fn lookAlongAxis(ctx: *Ctx) !void {
-    const ax = try ctx.param(f64, "axisX");
-    const ay = try ctx.param(f64, "axisY");
-    const az = try ctx.param(f64, "axisZ");
-
-    const world = ctx.layer.world;
-    const camera_id = world.primaryCameraEntity() orelse return error.NotAvailable;
-    var camera_entity = world.getEntity(camera_id) orelse return error.NotAvailable;
-
-    // Get current camera position to compute focus distance
-    const cur = camera_entity.local_transform.translation;
-    // Focus target: assume we're orbiting around a point `distance` units ahead
-    const distance_f64: f64 = (try ctx.paramOpt(f64, "distance")) orelse blk: {
-        // Default: keep current distance from origin projected onto look direction
-        const d = @sqrt(cur[0] * cur[0] + cur[1] * cur[1] + cur[2] * cur[2]);
-        break :blk if (d > 0.5) @as(f64, d) else 3.0;
-    };
-    const dist_f: f32 = @floatCast(distance_f64);
-
-    // Target point (focus pivot) — optionally provided, otherwise (0,0,0)
-    const tx: f32 = @floatCast((try ctx.paramOpt(f64, "targetX")) orelse 0);
-    const ty: f32 = @floatCast((try ctx.paramOpt(f64, "targetY")) orelse 0);
-    const tz: f32 = @floatCast((try ctx.paramOpt(f64, "targetZ")) orelse 0);
-
-    // Camera position = target - axis * distance
-    const axis: [3]f32 = .{
-        @floatCast(ax),
-        @floatCast(ay),
-        @floatCast(az),
-    };
-    const len = @sqrt(axis[0] * axis[0] + axis[1] * axis[1] + axis[2] * axis[2]);
-    const norm: [3]f32 = if (len > 0.001) .{ axis[0] / len, axis[1] / len, axis[2] / len } else .{ 0, 0, -1 };
-
-    camera_entity.local_transform.translation = .{
-        tx - norm[0] * dist_f,
-        ty - norm[1] * dist_f,
-        tz - norm[2] * dist_f,
-    };
-
-    // Compute rotation quaternion: look from camera toward target
-    // forward = norm (the direction the camera should face)
-    camera_entity.local_transform.rotation = quatFromForward(norm);
-
+    const ax: f32 = @floatCast(try ctx.param(f64, "axisX"));
+    const ay: f32 = @floatCast(try ctx.param(f64, "axisY"));
+    const az: f32 = @floatCast(try ctx.param(f64, "axisZ"));
+    const len = @sqrt(ax * ax + ay * ay + az * az);
+    ctx.layer.renderer.pending_camera_look_axis = if (len > 0.001) .{ ax / len, ay / len, az / len } else .{ 0, 0, -1 };
     try ctx.reply(.{});
 }
 
 /// Orbit camera around its focus target.
-/// deltaYaw/deltaPitch in radians.
+/// Uses the pending mechanism so EditorState.yaw/pitch stay in sync.
 pub fn orbit(ctx: *Ctx) !void {
     const deltaYaw: f32 = @floatCast(try ctx.param(f64, "deltaYaw"));
     const deltaPitch: f32 = @floatCast(try ctx.param(f64, "deltaPitch"));
-
-    const world = ctx.layer.world;
-    const camera_id = world.primaryCameraEntity() orelse return error.NotAvailable;
-    var camera_entity = world.getEntity(camera_id) orelse return error.NotAvailable;
-
-    const pos = camera_entity.local_transform.translation;
-    const rot = camera_entity.local_transform.rotation;
-
-    // Extract current yaw/pitch from quaternion
-    var yaw = std.math.atan2(2.0 * (rot[3] * rot[1] + rot[0] * rot[2]), 1.0 - 2.0 * (rot[1] * rot[1] + rot[2] * rot[2]));
-    var pitch = std.math.asin(std.math.clamp(2.0 * (rot[3] * rot[0] - rot[2] * rot[1]), -1.0, 1.0));
-
-    // Compute focus pivot (point `distance` units ahead of camera)
-    const fwd = forwardFromQuat(rot);
-    const dist = @sqrt(pos[0] * pos[0] + pos[1] * pos[1] + pos[2] * pos[2]);
-    const orbit_dist = if (dist > 0.5) dist else @as(f32, 3.0);
-    const pivot: [3]f32 = .{
-        pos[0] + fwd[0] * orbit_dist,
-        pos[1] + fwd[1] * orbit_dist,
-        pos[2] + fwd[2] * orbit_dist,
-    };
-
-    // Apply rotation deltas
-    yaw += deltaYaw;
-    pitch = std.math.clamp(pitch + deltaPitch, -std.math.pi / 2.0 + 0.01, std.math.pi / 2.0 - 0.01);
-
-    // Recompute camera position from pivot
-    const new_rot = quatFromEulerYP(yaw, pitch);
-    const new_fwd = forwardFromQuat(new_rot);
-    camera_entity.local_transform.translation = .{
-        pivot[0] - new_fwd[0] * orbit_dist,
-        pivot[1] - new_fwd[1] * orbit_dist,
-        pivot[2] - new_fwd[2] * orbit_dist,
-    };
-    camera_entity.local_transform.rotation = new_rot;
-
+    const renderer = ctx.layer.renderer;
+    if (renderer.pending_camera_orbit) |prev| {
+        // Accumulate multiple orbit deltas within the same frame
+        renderer.pending_camera_orbit = .{ prev[0] + deltaYaw, prev[1] + deltaPitch };
+    } else {
+        renderer.pending_camera_orbit = .{ deltaYaw, deltaPitch };
+    }
     try ctx.reply(.{});
 }
 

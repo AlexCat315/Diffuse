@@ -4,6 +4,10 @@ const max_entries = 256;
 const max_scope_len = 48;
 const max_message_len = 384;
 
+/// Optional callback to forward log entries to external systems (e.g., RPC console).
+/// Set by the editor RPC server on attach, cleared on detach.
+pub var g_console_callback: ?*const fn (level: []const u8, message: []const u8, source: []const u8) void = null;
+
 pub const Entry = struct {
     level: std.log.Level,
     scope_len: usize = 0,
@@ -109,6 +113,11 @@ pub fn logFn(
 
     appendEntry(message_level, scope_text, message_text);
     writeToLogFile(message_level, scope_text, message_text);
+
+    // Forward to RPC console log buffer for editor UI
+    if (g_console_callback) |cb| {
+        cb(levelLabel(message_level), message_text, scope_text);
+    }
 
     var stderr_buffer: [512]u8 = undefined;
     var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);

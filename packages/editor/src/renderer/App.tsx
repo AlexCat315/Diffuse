@@ -150,6 +150,7 @@ const defaultLayout: IJsonModel = {
             // Bottom: Console, Assets, and other tool tabs
             type: "tabset",
             weight: 30,
+            id: "bottom-tabset",
             children: [
               { type: "tab", name: "Console", component: "console", enableClose: false },
               { type: "tab", name: "Assets", component: "assets" },
@@ -279,17 +280,15 @@ export function App() {
   const handleAddPanel = useCallback((componentId: string) => {
     const panel = ALL_PANELS.find((p) => p.id === componentId);
     if (!panel) return;
-    // Find a tabset to add to — prefer a non-viewport tabset
+    // Prefer the bottom tabset
     let targetTabsetId: string | undefined;
-    modelRef.current.visitNodes((node) => {
-      if (node.getType() === "tabset" && node.getId() !== "viewport-tabset" && !targetTabsetId) {
-        targetTabsetId = node.getId();
-      }
-    });
-    if (!targetTabsetId) {
-      // Fallback: use any tabset
+    const bottomNode = modelRef.current.getNodeById("bottom-tabset");
+    if (bottomNode) {
+      targetTabsetId = "bottom-tabset";
+    } else {
+      // Fallback: find any non-viewport tabset
       modelRef.current.visitNodes((node) => {
-        if (node.getType() === "tabset" && !targetTabsetId) {
+        if (node.getType() === "tabset" && node.getId() !== "viewport-tabset" && !targetTabsetId) {
           targetTabsetId = node.getId();
         }
       });

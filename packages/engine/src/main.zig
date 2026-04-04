@@ -281,6 +281,12 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
     try app.pushOverlay(editor_layer.asLayer());
     try app.pushOverlay(mcp_runtime.syncLayer().asLayer());
 
+    // Wire logging callback so std.log entries flow into the RPC console buffer.
+    // Done here in main (root module) because server.zig (guava module) cannot
+    // import logging.zig (root module) without a cross-module conflict.
+    editor_console.g_console_callback = &editor_rpc.server.consoleLogTrampoline;
+    defer editor_console.g_console_callback = null;
+
     std.log.info("Editor server mode: RPC on port {d}", .{options.editor_port});
 
     _ = try app.run(options.frame_count);
