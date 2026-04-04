@@ -10,6 +10,7 @@ const handles = @import("../../assets/handles.zig");
 const material_resource_mod = @import("../../assets/material_resource.zig");
 const material_ast_mod = @import("../../assets/material_ast.zig");
 const material_model = @import("../../assets/material_model.zig");
+const material_editing = @import("../../assets/material_editing.zig");
 const components = @import("../../scene/components.zig");
 
 // ── Preview state (shared via EditorSettings) ──────────────────
@@ -39,38 +40,15 @@ fn getMaterialEntity(ctx: *Ctx) !struct { eid: u64, entity: *ctx_mod.Entity, mat
 }
 
 /// Ensure a mutable MaterialResource exists for the entity.
-/// If there's a handle, return the resource mutably (via constCast like the editor).
-/// If no handle, create a new embedded one.
-fn ensureEditableResource(ctx: *Ctx, entity: *ctx_mod.Entity, mat: *components.Material) !*material_resource_mod.MaterialResource {
-    if (mat.handle) |h| {
-        if (ctx.layer.world.assets().material(h)) |res| {
-            return @constCast(res);
-        }
-    }
-    // No handle or handle invalid → create new resource
-    const new_handle = try ctx.layer.world.assets().createMaterial(.{
-        .name = entity.name,
-        .shading = mat.shading,
-        .base_color_factor = mat.base_color_factor,
-        .emissive_factor = mat.emissive_factor,
-        .metallic_factor = mat.metallic_factor,
-        .roughness_factor = mat.roughness_factor,
-        .alpha_cutoff = mat.alpha_cutoff,
-        .double_sided = mat.double_sided,
-    });
-    mat.handle = new_handle;
-    return @constCast(ctx.layer.world.assets().material(new_handle).?);
+/// Delegates to the shared engine-level implementation which handles
+/// usage counting, cloning shared materials, and inheritance tracking.
+fn ensureEditableResource(ctx: *Ctx, entity: *ctx_mod.Entity, _: *components.Material) !*material_resource_mod.MaterialResource {
+    return try material_editing.ensureEditable(ctx.allocator, ctx.layer.world, entity) orelse error.NoMaterial;
 }
 
 /// Sync component fields from resource after a resource change.
 fn syncComponentFromResource(mat: *components.Material, res: *const material_resource_mod.MaterialResource) void {
-    mat.shading = res.shading;
-    mat.base_color_factor = res.base_color_factor;
-    mat.emissive_factor = res.emissive_factor;
-    mat.metallic_factor = res.metallic_factor;
-    mat.roughness_factor = res.roughness_factor;
-    mat.alpha_cutoff = res.alpha_cutoff;
-    mat.double_sided = res.double_sided;
+    material_editing.syncComponentFromResource(mat, res);
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -147,15 +125,7 @@ pub fn getState(ctx: *Ctx) !void {
 }
 
 fn countUsage(world: *ctx_mod.World, target: handles.MaterialHandle) usize {
-    var count: usize = 0;
-    for (world.entities.items) |entity| {
-        if (entity.material) |m| {
-            if (m.handle) |h| {
-                if (h == target) count += 1;
-            }
-        }
-    }
-    return count;
+    return material_editing.materialUsageCount(world, target);
 }
 
 /// material.setShading(entityId, mode)
