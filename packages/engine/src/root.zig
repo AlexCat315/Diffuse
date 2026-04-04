@@ -433,6 +433,8 @@ pub const assets = struct {
     pub const MaterialGraph = @import("engine/assets/material_model.zig").MaterialGraph;
     /// 复制材质图
     pub const cloneMaterialGraphAlloc = @import("engine/assets/material_model.zig").cloneGraphAlloc;
+    /// 材质编辑工具（usage count、ensure editable、sync component）
+    pub const material_editing = @import("engine/assets/material_editing.zig");
     /// 销毁材质图
     pub const deinitMaterialGraph = @import("engine/assets/material_model.zig").deinitGraph;
     /// 材质 AST 纹理槽
