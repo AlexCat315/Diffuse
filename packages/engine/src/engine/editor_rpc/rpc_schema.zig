@@ -186,6 +186,47 @@ pub const SharedTypes = struct {
         colorG: f64,
         colorB: f64,
     };
+
+    pub const PrefabInfo = struct {
+        id: []const u8,
+        name: []const u8,
+        version: u32,
+        entityCount: u32,
+        sourcePath: ?[]const u8 = null,
+    };
+
+    pub const PrefabEntityNode = struct {
+        prefabEntityId: u32,
+        name: []const u8,
+        parentId: ?u32 = null,
+        visible: bool,
+        isFolder: bool,
+        hasTransform: bool,
+        hasMesh: bool,
+        hasMaterial: bool,
+        hasLight: bool,
+        hasCamera: bool,
+        hasScript: bool,
+        hasVfx: bool,
+    };
+
+    pub const PrefabEntityDetail = struct {
+        prefabEntityId: u32,
+        name: []const u8,
+        visible: bool,
+        isFolder: bool,
+        posX: f64,
+        posY: f64,
+        posZ: f64,
+        rotX: f64,
+        rotY: f64,
+        rotZ: f64,
+        rotW: f64,
+        scaleX: f64,
+        scaleY: f64,
+        scaleZ: f64,
+        components: []const []const u8,
+    };
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1279,6 +1320,96 @@ pub const Methods = struct {
             entityId: u64,
             preset: []const u8,
         };
+        pub const Result = struct { success: bool };
+    };
+
+    // ── prefab ─────────────────────────────────────────────────
+
+    pub const @"prefab.list" = struct {
+        pub const Params = struct {};
+        pub const Result = struct {
+            prefabs: []const SharedTypes.PrefabInfo,
+        };
+    };
+
+    pub const @"prefab.getEntities" = struct {
+        pub const Params = struct { prefabId: []const u8 };
+        pub const Result = struct {
+            found: bool,
+            entities: []const SharedTypes.PrefabEntityNode,
+        };
+    };
+
+    pub const @"prefab.getEntityDetail" = struct {
+        pub const Params = struct {
+            prefabId: []const u8,
+            prefabEntityId: u32,
+        };
+        pub const Result = struct {
+            found: bool,
+            entity: ?SharedTypes.PrefabEntityDetail = null,
+        };
+    };
+
+    pub const @"prefab.setEntityTransform" = struct {
+        pub const Params = struct {
+            prefabId: []const u8,
+            prefabEntityId: u32,
+            posX: ?f64 = null,
+            posY: ?f64 = null,
+            posZ: ?f64 = null,
+            rotX: ?f64 = null,
+            rotY: ?f64 = null,
+            rotZ: ?f64 = null,
+            rotW: ?f64 = null,
+            scaleX: ?f64 = null,
+            scaleY: ?f64 = null,
+            scaleZ: ?f64 = null,
+        };
+        pub const Result = struct { success: bool };
+    };
+
+    pub const @"prefab.setEntityField" = struct {
+        pub const Params = struct {
+            prefabId: []const u8,
+            prefabEntityId: u32,
+            field: []const u8,
+            value: []const u8,
+        };
+        pub const Result = struct { success: bool };
+    };
+
+    pub const @"prefab.create" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            name: []const u8,
+        };
+        pub const Result = struct {
+            success: bool,
+            prefabId: ?[]const u8 = null,
+        };
+    };
+
+    pub const @"prefab.instantiate" = struct {
+        pub const Params = struct {
+            prefabId: []const u8,
+            posX: ?f64 = null,
+            posY: ?f64 = null,
+            posZ: ?f64 = null,
+        };
+        pub const Result = struct {
+            success: bool,
+            entityId: ?u64 = null,
+        };
+    };
+
+    pub const @"prefab.save" = struct {
+        pub const Params = struct { prefabId: []const u8 };
+        pub const Result = struct { success: bool };
+    };
+
+    pub const @"prefab.delete" = struct {
+        pub const Params = struct { prefabId: []const u8 };
         pub const Result = struct { success: bool };
     };
 

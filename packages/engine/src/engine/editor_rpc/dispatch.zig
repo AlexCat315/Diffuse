@@ -47,6 +47,7 @@ const handler_modules = [_]HandlerModule{
     .{ .prefix = "animation", .mod = @import("handlers/animation.zig") },
     .{ .prefix = "script", .mod = @import("handlers/script.zig") },
     .{ .prefix = "particle", .mod = @import("handlers/particle.zig") },
+    .{ .prefix = "prefab", .mod = @import("handlers/prefab.zig") },
 };
 
 // Subscriptions (push events — detection logic in subscriptions.zig)

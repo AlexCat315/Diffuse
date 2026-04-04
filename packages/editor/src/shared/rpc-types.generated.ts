@@ -175,6 +175,47 @@ export interface VfxConfig {
   colorB: number;
 }
 
+export interface PrefabInfo {
+  id: string;
+  name: string;
+  version: number;
+  entityCount: number;
+  sourcePath?: string;
+}
+
+export interface PrefabEntityNode {
+  prefabEntityId: number;
+  name: string;
+  parentId?: number;
+  visible: boolean;
+  isFolder: boolean;
+  hasTransform: boolean;
+  hasMesh: boolean;
+  hasMaterial: boolean;
+  hasLight: boolean;
+  hasCamera: boolean;
+  hasScript: boolean;
+  hasVfx: boolean;
+}
+
+export interface PrefabEntityDetail {
+  prefabEntityId: number;
+  name: string;
+  visible: boolean;
+  isFolder: boolean;
+  posX: number;
+  posY: number;
+  posZ: number;
+  rotX: number;
+  rotY: number;
+  rotZ: number;
+  rotW: number;
+  scaleX: number;
+  scaleY: number;
+  scaleZ: number;
+  components: string[];
+}
+
 // ── RPC Method Signatures ──────────────────────────────────
 
 export interface RpcMethods {
@@ -284,6 +325,15 @@ export interface RpcMethods {
   "particle.getConfig": { params: { entityId: number }; result: { found: boolean; config?: VfxConfig } };
   "particle.setConfig": { params: { entityId: number; kind?: string; looping?: boolean; emissionRate?: number; particleLifetime?: number; speed?: number; maxParticles?: number; radius?: number; spread?: number; size?: number; colorR?: number; colorG?: number; colorB?: number }; result: { success: boolean } };
   "particle.applyPreset": { params: { entityId: number; preset: string }; result: { success: boolean } };
+  "prefab.list": { params: Record<string, never>; result: { prefabs: PrefabInfo[] } };
+  "prefab.getEntities": { params: { prefabId: string }; result: { found: boolean; entities: PrefabEntityNode[] } };
+  "prefab.getEntityDetail": { params: { prefabId: string; prefabEntityId: number }; result: { found: boolean; entity?: PrefabEntityDetail } };
+  "prefab.setEntityTransform": { params: { prefabId: string; prefabEntityId: number; posX?: number; posY?: number; posZ?: number; rotX?: number; rotY?: number; rotZ?: number; rotW?: number; scaleX?: number; scaleY?: number; scaleZ?: number }; result: { success: boolean } };
+  "prefab.setEntityField": { params: { prefabId: string; prefabEntityId: number; field: string; value: string }; result: { success: boolean } };
+  "prefab.create": { params: { entityId: number; name: string }; result: { success: boolean; prefabId?: string } };
+  "prefab.instantiate": { params: { prefabId: string; posX?: number; posY?: number; posZ?: number }; result: { success: boolean; entityId?: number } };
+  "prefab.save": { params: { prefabId: string }; result: { success: boolean } };
+  "prefab.delete": { params: { prefabId: string }; result: { success: boolean } };
   "animation.getState": { params: { entityId: number }; result: { hasAnimator: boolean; hasGraph: boolean; graphName?: string; currentState?: number; nextState?: number; blendFactor?: number; transitionTime?: number; transitionDuration?: number; defaultState?: number; states?: AnimGraphState[]; transitions?: AnimGraphTransition[]; parameters?: AnimGraphParameter[]; clipTracks?: AnimClipTrack[]; clipDuration?: number; sampleTime?: number } };
   "animation.addState": { params: { entityId: number; name?: string }; result: { index: number } };
   "animation.updateState": { params: { entityId: number; stateIndex: number; name?: string; clip?: string; speed?: number; loop?: boolean; duration?: number }; result: Record<string, never> };
