@@ -86,6 +86,13 @@ export function Viewport() {
     window.guavaEngine.call("viewport.sendInput", params as never).catch(() => {});
   }, []);
 
+  // Track B key for box-select activation (Blender-style)
+  const bKeyHeld = useRef(false);
+
+  // Track last mouse position for delta calculation (movementX/Y is 0 without pointer lock)
+  const lastMousePos = useRef<{ x: number; y: number } | null>(null);
+  const dragging = useRef(false);
+
   // Track mousedown position for click-to-pick detection
   const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
 
@@ -95,8 +102,8 @@ export function Viewport() {
     if (!btn) return;
     if (btn === "left") {
       mouseDownPos.current = { x, y };
-      // Start tracking potential box select (LMB without Alt)
-      if (!e.altKey) {
+      // Start tracking box select only when B key is held (Blender-style)
+      if (bKeyHeld.current && !e.altKey) {
         const css = toCssCoords(e);
         setBoxSelect({
           startX: x, startY: y, curX: x, curY: y,
@@ -106,6 +113,8 @@ export function Viewport() {
         });
       }
     }
+    dragging.current = true;
+    lastMousePos.current = { x, y };
     // Close context menu on any click
     setContextMenu(null);
     sendInput({ type: "mousedown", x, y, button: btn, clicks: e.detail, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
@@ -116,6 +125,8 @@ export function Viewport() {
     const btn = e.button === 0 ? "left" : e.button === 2 ? "right" : e.button === 1 ? "middle" : null;
     if (!btn) return;
     sendInput({ type: "mouseup", x, y, button: btn, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
+    dragging.current = false;
+    lastMousePos.current = null;
 
     if (btn === "left") {
       // Finalise box selection or click-to-pick
@@ -147,7 +158,17 @@ export function Viewport() {
 
   const handleMouseMove = useCallback((e: React.MouseEvent) => {
     const { x, y } = toViewportCoords(e);
-    sendInput({ type: "mousemove", x, y, deltaX: e.movementX * dpr, deltaY: e.movementY * dpr, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
+
+    // Calculate delta: prefer movementX/Y, fall back to position diff when dragging
+    let deltaX = e.movementX * dpr;
+    let deltaY = e.movementY * dpr;
+    if (dragging.current && deltaX === 0 && deltaY === 0 && lastMousePos.current) {
+      deltaX = x - lastMousePos.current.x;
+      deltaY = y - lastMousePos.current.y;
+    }
+    lastMousePos.current = { x, y };
+
+    sendInput({ type: "mousemove", x, y, deltaX, deltaY, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
 
     // Update box selection
     setBoxSelect((prev) => {
@@ -266,12 +287,18 @@ export function Viewport() {
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     const key = mapKeyFn(e);
     if (!key) return;
+    if (key === "b") bKeyHeld.current = true;
     sendInput({ type: "keydown", key, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
   }, [sendInput]);
 
   const handleKeyUp = useCallback((e: React.KeyboardEvent) => {
     const key = mapKeyFn(e);
     if (!key) return;
+    if (key === "b") {
+      bKeyHeld.current = false;
+      // Cancel pending box select if B released before mouseup
+      setBoxSelect(null);
+    }
     sendInput({ type: "keyup", key, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
   }, [sendInput]);
 

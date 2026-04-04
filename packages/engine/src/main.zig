@@ -269,15 +269,17 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
     editor_layer.state.ai_snapshot_store = mcp_runtime.snapshotStore();
     editor_layer.state.ai_tool_bridge = mcp_runtime.toolBridge();
     editor_layer.state.ai_collaboration_bridge = mcp_runtime.collaborationBridge();
-    try app.pushOverlay(editor_layer.asLayer());
-    try app.pushOverlay(mcp_runtime.syncLayer().asLayer());
 
-    // Start the Editor RPC WebSocket server
+    // Start the Editor RPC WebSocket server — must be pushed BEFORE EditorLayer
+    // so that viewport.sendInput populates InputState before camera controls
+    // consume it in the same frame.
     const editor_rpc = @import("guava").editor_rpc;
     var rpc_server = editor_rpc.server.Server.init(allocator, options.editor_port);
     defer rpc_server.deinit();
 
     try app.pushOverlay(rpc_server.asLayer());
+    try app.pushOverlay(editor_layer.asLayer());
+    try app.pushOverlay(mcp_runtime.syncLayer().asLayer());
 
     std.log.info("Editor server mode: RPC on port {d}", .{options.editor_port});
 
