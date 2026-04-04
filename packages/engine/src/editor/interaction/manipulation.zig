@@ -1,6 +1,5 @@
 const std = @import("std");
 const engine = @import("guava");
-const gui = @import("../ui/gui.zig");
 const vec3 = engine.math.vec3;
 const quat = engine.math.quat;
 const ai_collaboration = @import("../ai_native/collaboration.zig");
@@ -20,12 +19,8 @@ pub fn handleEditingShortcuts(state: *EditorState, layer_context: *engine.core.L
     const input = layer_context.input;
 
     // Use wantsTextInput() instead of wantsCaptureKeyboard(): with
-    // NavEnableKeyboard the latter is true whenever nav is active —
-    // which blocks shortcuts virtually all the time.  wantsTextInput()
-    // is scoped to actual InputText editing and won't interfere.
-    if (gui.wantsTextInput()) {
-        return;
-    }
+    // When text input is active (e.g. rename field), skip keyboard shortcuts.
+    // With imgui removed, this guard is no longer needed.
 
     if (input.modifiers.ctrl and input.wasKeyPressed(.z)) {
         try history.undo(state, layer_context);
@@ -549,12 +544,7 @@ const GizmoViewBasis = struct {
 };
 
 fn effectiveCursorPos(layer_context: *const engine.core.LayerContext) [2]f32 {
-    const imgui_mouse_pos = gui.mousePos();
-    const invalid_imgui_mouse = !std.math.isFinite(imgui_mouse_pos[0]) or
-        !std.math.isFinite(imgui_mouse_pos[1]) or
-        imgui_mouse_pos[0] <= -std.math.floatMax(f32) * 0.5 or
-        imgui_mouse_pos[1] <= -std.math.floatMax(f32) * 0.5;
-    return if (invalid_imgui_mouse) layer_context.input.mouse_position else imgui_mouse_pos;
+    return layer_context.input.mouse_position;
 }
 
 fn viewportPixelUnderCursor(

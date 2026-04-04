@@ -1,100 +1,17 @@
 const std = @import("std");
 const engine = @import("guava");
-const gui = @import("../ui/gui.zig");
-const theme = @import("../ui/theme.zig");
 const EditorState = @import("state.zig").EditorState;
 const utils = @import("../common/utils.zig");
 const ai_collaboration = @import("../ai_native/collaboration.zig");
 const camera = @import("../interaction/camera.zig");
 const mesh_edit = @import("../interaction/mesh_edit.zig");
 const manipulation = @import("../interaction/manipulation.zig");
-const viewport = @import("../ui/viewport.zig");
-const icon_cache = @import("../ui/icon_cache.zig");
 const content_browser = @import("../assets/browser.zig");
 const asset_preview = @import("../assets/preview.zig");
 const history = @import("../actions/history.zig");
 const vfx_runtime = @import("../runtime/vfx.zig");
-const layout = @import("../ui/layout.zig");
 const render_queue = @import("../rendering/render_queue.zig");
 const preferences = @import("preferences.zig");
-
-fn initEditorStyle() void {
-    const p = theme.Palette;
-    const br = theme.BorderRadius;
-
-    // ── Text ──────────────────────────────────────────────────────────────
-    gui.setStyleColor(@intFromEnum(gui.Col.text), p.text_primary);
-    gui.setStyleColor(@intFromEnum(gui.Col.text_disabled), p.text_muted);
-
-    // ── Backgrounds ───────────────────────────────────────────────────────
-    gui.setStyleColor(@intFromEnum(gui.Col.window_bg), p.bg.panel);
-    gui.setStyleColor(@intFromEnum(gui.Col.child_bg), p.bg.child_bg);
-    gui.setStyleColor(@intFromEnum(gui.Col.popup_bg), p.bg.popup_bg);
-    gui.setStyleColor(@intFromEnum(gui.Col.modal_window_dim_bg), p.bg.modal_bg);
-
-    // ── Borders & Separators ──────────────────────────────────────────────
-    gui.setStyleColor(@intFromEnum(gui.Col.border), p.bg.panel_border);
-    gui.setStyleColor(@intFromEnum(gui.Col.separator), p.separator);
-    gui.setStyleColor(@intFromEnum(gui.Col.separator_hovered), p.interactive.accent_hovered);
-    gui.setStyleColor(@intFromEnum(gui.Col.separator_active), p.interactive.accent);
-
-    // ── Frames (inputs, combos, sliders) ──────────────────────────────────
-    gui.setStyleColor(@intFromEnum(gui.Col.frame_bg), p.interactive.frame_bg);
-    gui.setStyleColor(@intFromEnum(gui.Col.frame_bg_hovered), p.interactive.frame_hovered);
-    gui.setStyleColor(@intFromEnum(gui.Col.frame_bg_active), p.interactive.frame_active);
-
-    // ── Title Bars ────────────────────────────────────────────────────────
-    gui.setStyleColor(@intFromEnum(gui.Col.title_bg), p.bg.title_bar);
-    gui.setStyleColor(@intFromEnum(gui.Col.title_bg_active), p.bg.title_bar);
-    gui.setStyleColor(@intFromEnum(gui.Col.title_bg_collapsed), p.bg.menu_bar);
-
-    // ── Menu Bar ──────────────────────────────────────────────────────────
-    gui.setStyleColor(@intFromEnum(gui.Col.menu_bar_bg), p.bg.menu_bar);
-
-    // ── Scrollbars ────────────────────────────────────────────────────────
-    gui.setStyleColor(@intFromEnum(gui.Col.scrollbar_bg), p.bg.dock_area);
-    gui.setStyleColor(@intFromEnum(gui.Col.scrollbar_grab), p.layer.scrollbar_grab);
-    gui.setStyleColor(@intFromEnum(gui.Col.scrollbar_grab_hovered), p.layer.scrollbar_grab_hovered);
-    gui.setStyleColor(@intFromEnum(gui.Col.scrollbar_grab_active), p.layer.scrollbar_grab_active);
-
-    // ── Headers (tree nodes, collapsing headers) ──────────────────────────
-    gui.setStyleColor(@intFromEnum(gui.Col.header), p.selection.bg);
-    gui.setStyleColor(@intFromEnum(gui.Col.header_hovered), p.selection.hovered);
-    gui.setStyleColor(@intFromEnum(gui.Col.header_active), p.selection.border);
-
-    // ── Buttons ───────────────────────────────────────────────────────────
-    gui.setStyleColor(@intFromEnum(gui.Col.button), p.interactive.button_bg);
-    gui.setStyleColor(@intFromEnum(gui.Col.button_hovered), p.interactive.button_hovered);
-    gui.setStyleColor(@intFromEnum(gui.Col.button_active), p.interactive.accent);
-
-    // ── Tabs ──────────────────────────────────────────────────────────────
-    gui.setStyleColor(@intFromEnum(gui.Col.tab), p.layer.tab);
-    gui.setStyleColor(@intFromEnum(gui.Col.tab_hovered), p.layer.tab_hovered);
-    gui.setStyleColor(@intFromEnum(gui.Col.tab_active), p.layer.tab_active);
-    gui.setStyleColor(@intFromEnum(gui.Col.tab_unfocused), p.layer.tab_unfocused);
-    gui.setStyleColor(@intFromEnum(gui.Col.tab_unfocused_active), p.layer.tab_unfocused_active);
-
-    // ── Docking & Drag-Drop ───────────────────────────────────────────────
-    gui.setStyleColor(@intFromEnum(gui.Col.docking_preview), p.selection.bg);
-    gui.setStyleColor(@intFromEnum(gui.Col.drag_drop_target), p.ai.accent);
-    gui.setStyleColor(@intFromEnum(gui.Col.nav_highlight), p.ai.accent);
-    gui.setStyleColor(@intFromEnum(gui.Col.text_selected_bg), p.selection.bg);
-
-    // ── Widgets ───────────────────────────────────────────────────────────
-    gui.setStyleColor(@intFromEnum(gui.Col.slider_grab), p.interactive.accent);
-    gui.setStyleColor(@intFromEnum(gui.Col.slider_grab_active), p.interactive.accent_active);
-    gui.setStyleColor(@intFromEnum(gui.Col.check_mark), p.interactive.accent);
-
-    // ── Resize Grips ──────────────────────────────────────────────────────
-    gui.setStyleColor(@intFromEnum(gui.Col.resize_grip), p.layer.resize_grip);
-    gui.setStyleColor(@intFromEnum(gui.Col.resize_grip_hovered), p.interactive.accent_hovered);
-    gui.setStyleColor(@intFromEnum(gui.Col.resize_grip_active), p.ai.accent);
-
-    // ── Style Variables (UE style: tighter, squarer) ──────────────────────
-    gui.setStyleVarFloat(100, 1.0); // WindowBorderSize
-    gui.setStyleVarFloat(101, 1.0); // FrameBorderSize
-    gui.setStyleVarFloat(102, br.control); // FrameRounding
-}
 
 fn seedPostProcessViewportState(state: *const EditorState, viewport_state: *engine.render.EditorViewportState) void {
     viewport_state.exposure_enabled = state.viewport_exposure_enabled;
@@ -142,9 +59,6 @@ pub const EditorLayer = struct {
         self.state.preview_device = layer_context.rhi();
         self.state.icon_device = layer_context.rhi();
         self.state.asset_registry = engine.assets.AssetRegistry.init(layer_context.world.allocator);
-        try gui.init(layer_context.window, layer_context.rhi());
-
-        initEditorStyle();
         preferences.loadEditorPreferences(&self.state) catch |err| {
             std.log.warn("Editor: failed to load editor preferences: {s}", .{@errorName(err)});
         };
@@ -159,7 +73,6 @@ pub const EditorLayer = struct {
         // Default to Material preview on startup so imported model textures are visible immediately.
         _ = @import("state.zig").setViewportShadingMode(&self.state, .material);
 
-        self.state.dock_layout_initialized = false;
         self.state.scene_camera = layer_context.world.primaryCameraEntity();
         self.state.ai_chat_open = false;
 
@@ -189,7 +102,6 @@ pub const EditorLayer = struct {
         preferences.saveAiProviderSettings(&self.state) catch |err| {
             std.log.warn("Editor: failed to save AI provider settings: {s}", .{@errorName(err)});
         };
-        icon_cache.clearIconCache(&self.state);
         asset_preview.clearPreviewTexture(&self.state);
         self.state.preview_device = null;
         self.state.icon_device = null;
@@ -212,7 +124,6 @@ pub const EditorLayer = struct {
             }
         }
 
-        layout.releaseLayoutTemplates(&self.state);
         content_browser.clearAssetBrowser(&self.state);
         self.state.clearOwnedClipboards();
         if (self.state.asset_registry) |*registry| {
@@ -220,7 +131,6 @@ pub const EditorLayer = struct {
             self.state.asset_registry = null;
         }
         history.clearSnapshotHistory(&self.state);
-        gui.shutdown();
     }
 
     fn onUpdate(context: *anyopaque, layer_context: *engine.core.LayerContext) !void {
@@ -244,14 +154,6 @@ pub const EditorLayer = struct {
                 pending_ptr.* = null;
             }
         }
-        gui.beginDockspace();
-        if (!self.state.dock_layout_initialized) {
-            std.log.info("Editor: Initializing default dock layout", .{});
-            gui.resetDefaultLayout();
-            gui.saveLayout();
-            self.state.dock_layout_initialized = true;
-        }
-        try viewport.drawEditorUi(&self.state, &self.post_process_viewport_state, layer_context);
         try content_browser.flushMaterialThumbnailRequests(&self.state, layer_context);
         try content_browser.flushModelThumbnailRequests(&self.state, layer_context);
         const mesh_edit_consumed = try mesh_edit.handleEditingShortcuts(&self.state, layer_context);
@@ -260,7 +162,6 @@ pub const EditorLayer = struct {
         }
         manipulation.updateActiveTransform(&self.state, layer_context);
         camera.handleCameraControls(&self.state, layer_context);
-        try viewport.handleViewportSelection(&self.state, layer_context);
         try mesh_edit.syncSession(&self.state, layer_context);
         manipulation.refreshGizmoState(&self.state, layer_context);
         ai_collaboration.syncContext(&self.state, layer_context) catch |err| {
