@@ -1,13 +1,11 @@
-const types = @import("../types.zig");
+const std = @import("std");
+pub const MessageId = @import("message_id.zig").MessageId;
 
-pub const locale = blk: {
+pub const TranslationTable = std.EnumArray(MessageId, ?[]const u8);
+
+const en_table: TranslationTable = blk: {
     @setEvalBranchQuota(10000);
-    break :blk types.LocaleInfo{
-        .language = .en_us,
-        .code = "en-US",
-        .english_name = "English",
-        .native_name = "English",
-        .translations = types.TranslationTable.init(.{
+    break :blk TranslationTable.init(.{
             .camera = "Camera",
             .idle = "Idle",
             .move = "Move",
@@ -626,6 +624,13 @@ pub const locale = blk: {
             .anim_state_machine_transition_condition = "Condition",
             .anim_state_machine_blend_duration = "Blend Duration",
             .anim_state_machine_any_state = "Any State",
-        }),
-    };
+    });
 };
+
+pub fn text(id: MessageId) []const u8 {
+    return en_table.get(id) orelse "???";
+}
+
+pub fn panelLabel(buffer: []u8, id: MessageId, stable_id: []const u8) ![]const u8 {
+    return std.fmt.bufPrint(buffer, "{s}###{s}", .{ text(id), stable_id });
+}

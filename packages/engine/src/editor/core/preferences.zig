@@ -1,7 +1,6 @@
 const std = @import("std");
 const engine = @import("guava");
 const gui = @import("../ui/gui.zig");
-const i18n = @import("../i18n/mod.zig");
 
 const state_mod = @import("state.zig");
 
@@ -33,7 +32,6 @@ const PersistedPrefs = struct {
 
 const PersistedEditorPrefs = struct {
     version: u32 = 2,
-    language: ?[]const u8 = null,
     fps_display_mode: ?[]const u8 = null,
     vsync_enabled: ?bool = null,
     mesh_modal_drag_sensitivity: ?f32 = null,
@@ -400,9 +398,6 @@ fn loadEditorPreferencesFromPath(state: *EditorState, path: []const u8) !void {
     });
     defer parsed.deinit();
 
-    if (parsed.value.language) |language_name| {
-        state.language = std.meta.stringToEnum(i18n.Language, language_name) orelse state.language;
-    }
     if (parsed.value.fps_display_mode) |fps_mode_name| {
         state.fps_display_mode = std.meta.stringToEnum(FpsDisplayMode, fps_mode_name) orelse state.fps_display_mode;
     }
@@ -423,7 +418,6 @@ fn loadEditorPreferencesFromPath(state: *EditorState, path: []const u8) !void {
 fn saveEditorPreferencesToPath(state: *const EditorState, path: []const u8) !void {
     const allocator = state.allocator orelse return error.AllocatorNotInitialized;
     const payload = PersistedEditorPrefs{
-        .language = @tagName(state.language),
         .fps_display_mode = @tagName(state.fps_display_mode),
         .vsync_enabled = state.vsync_enabled,
         .mesh_modal_drag_sensitivity = state.mesh_modal_drag_sensitivity,

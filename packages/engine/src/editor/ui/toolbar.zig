@@ -54,8 +54,8 @@ pub fn drawToolbarWindow(state: *EditorState, layer_context: *engine.core.LayerC
     const session_active = state.play_mode_active or state.playback_state != .stopped;
     const is_playing = state.playback_state == .playing;
     const is_paused = state.playback_state == .paused;
-    const run_stop_tooltip_id: @import("../i18n/message_id.zig").MessageId = if (session_active) .stop else .run;
-    const pause_resume_tooltip_id: @import("../i18n/message_id.zig").MessageId = if (is_paused) .resume_playback else .pause;
+    const run_stop_tooltip_id: @import("../common/text.zig").MessageId = if (session_active) .stop else .run;
+    const pause_resume_tooltip_id: @import("../common/text.zig").MessageId = if (is_paused) .resume_playback else .pause;
     const run_stop_id = if (session_active) "toolbar_stop_toggle" else "toolbar_run_toggle";
     const run_stop_path = if (session_active) ui_icons.paths.toolbar.stop else ui_icons.paths.toolbar.play;
     const run_stop_palette = if (is_playing)
