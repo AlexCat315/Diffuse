@@ -1,5 +1,5 @@
 {
-    "cmake.sourceDirectory": "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Build",
+    "cmake.sourceDirectory": "${workspaceFolder}/packages/engine/third_party/jolt/Build",
     "zig.testArgs": [
         "build",
         "test",

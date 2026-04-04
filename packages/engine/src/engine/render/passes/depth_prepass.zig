@@ -1,0 +1,94 @@
+const std = @import("std");
+const mesh_pass_mod = @import("mesh_pass.zig");
+const rhi_mod = @import("../../rhi/device.zig");
+const shader_support = @import("../shader_support.zig");
+
+pub const DepthPrepass = struct {
+    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    vertex_stage: ?rhi_mod.ShaderModule = null,
+
+    pub fn init(device: *rhi_mod.RhiDevice) !DepthPrepass {
+        var pass = DepthPrepass{};
+        try pass.createResources(device);
+        return pass;
+    }
+
+    pub fn deinit(self: *DepthPrepass, device: *rhi_mod.RhiDevice) void {
+        if (self.pipeline) |*pipeline| {
+            device.releaseGraphicsPipeline(pipeline);
+        }
+        if (self.vertex_stage) |*vertex_stage| {
+            device.releaseShaderModule(vertex_stage);
+        }
+        self.* = undefined;
+    }
+
+    pub fn isReady(self: *const DepthPrepass) bool {
+        return self.pipeline != null;
+    }
+
+    pub fn draw(
+        self: *DepthPrepass,
+        device: *rhi_mod.RhiDevice,
+        frame: rhi_mod.Frame,
+        pass: rhi_mod.RenderPass,
+        prepared_scene: *const mesh_pass_mod.PreparedScene,
+    ) mesh_pass_mod.DrawStats {
+        var stats = mesh_pass_mod.DrawStats{};
+        if (!self.isReady()) {
+            return stats;
+        }
+
+        device.bindGraphicsPipeline(pass, &self.pipeline.?);
+        for (prepared_scene.opaque_meshes) |item| {
+            var vertex_uniforms = mesh_pass_mod.VertexUniforms{
+                .view_projection = prepared_scene.view_projection,
+                .model = item.model,
+                .skinning_meta = item.skinning_meta,
+                .skin_matrices = item.skin_matrices,
+            };
+            device.bindVertexBuffer(pass, 0, &item.vertex_buffer, 0);
+            device.bindIndexBuffer(pass, &item.index_buffer, .u32, 0);
+            device.pushVertexUniformData(frame, 0, std.mem.asBytes(&vertex_uniforms));
+            device.drawIndexedPrimitives(pass, item.index_count, 1, 0, 0, 0);
+            stats.draw_calls += 1;
+            stats.triangles_drawn += item.index_count / 3;
+        }
+
+        return stats;
+    }
+
+    fn createResources(self: *DepthPrepass, device: *rhi_mod.RhiDevice) !void {
+        self.vertex_stage = try shader_support.loadVertexStage(device, "depth_prepass");
+        errdefer if (self.vertex_stage) |*vertex_stage| {
+            device.releaseShaderModule(vertex_stage);
+        };
+
+        const vertex_layouts = mesh_pass_mod.gpuVertexBufferLayouts();
+        const vertex_attributes = mesh_pass_mod.gpuVertexAttributes();
+
+        self.pipeline = try self.createPipeline(device, vertex_layouts[0..], vertex_attributes[0..]);
+    }
+
+    fn createPipeline(
+        self: *DepthPrepass,
+        device: *rhi_mod.RhiDevice,
+        vertex_layouts: []const rhi_mod.VertexBufferLayoutDesc,
+        vertex_attributes: []const rhi_mod.VertexAttributeDesc,
+    ) !rhi_mod.GraphicsPipeline {
+        return device.createGraphicsPipeline(.{
+            .vertex_shader = &self.vertex_stage.?,
+            .vertex_buffer_layouts = vertex_layouts,
+            .vertex_attributes = vertex_attributes,
+            .color_format = null,
+            .depth_format = .d32_float,
+            .primitive_type = .triangle_list,
+            .fill_mode = .fill,
+            .cull_mode = .back,
+            .front_face = .counter_clockwise,
+            .depth_compare = .less_or_equal,
+            .depth_test = true,
+            .depth_write = true,
+        });
+    }
+};

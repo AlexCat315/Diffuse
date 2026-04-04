@@ -57,7 +57,7 @@
 - 新增 `--parent-window <handle>` 接受 Electron 传入的原生窗口句柄
 
 ### 0.3 Electron App Scaffold
-- `editor-electron/` 目录，独立 `package.json`
+- `packages/editor/` 目录，独立 `package.json`
 - Electron main process: 启动引擎子进程 + WebSocket 连接
 - React + TypeScript renderer process
 - 基础通信验证：ping/pong
@@ -201,7 +201,7 @@ on:console.log          → { level, message, timestamp }
 ## File Structure (new)
 
 ```
-editor-electron/                    # Electron editor (独立仓库/目录)
+packages/editor/                    # Electron editor (monorepo 子包)
 ├── package.json
 ├── tsconfig.json
 ├── electron-builder.yml
@@ -229,13 +229,13 @@ editor-electron/                    # Electron editor (独立仓库/目录)
 │       └── preload.ts              # Context bridge
 └── assets/                         # Editor icons, themes
 
-src/engine/editor_rpc/              # Engine 侧 RPC 服务 (new)
+packages/engine/src/engine/editor_rpc/   # Engine 侧 RPC 服务 (new)
 ├── server.zig                      # WebSocket server + dispatch
 ├── methods.zig                     # RPC method implementations
 ├── subscriptions.zig               # Push notification system
 └── websocket.zig                   # Minimal WebSocket protocol
 
-src/engine/web_surface/             # 游戏内 Web 渲染 (Phase 3, new)
+packages/engine/src/engine/web_surface/  # 游戏内 Web 渲染 (Phase 3, new)
 ├── cef_bridge.zig                  # CEF C API wrapper
 ├── web_surface_system.zig          # ECS system
 └── web_surface_component.zig       # Component definition

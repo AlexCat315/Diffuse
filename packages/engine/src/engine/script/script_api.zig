@@ -1,0 +1,507 @@
+//! Guava Engine 脚本 API
+//!
+//! 用户脚本通过 @import("guava") 获取此模块。
+//! 提供实体操作、输入查询、物理、日志等引擎 API。
+//!
+//! 用法示例：
+//!   const guava = @import("guava");
+//!
+//!   export fn guava_on_update(dt: f32) callconv(.c) void {
+//!       var pos = guava.getPosition();
+//!       if (guava.isKeyDown(.w)) pos[2] -= 5.0 * dt;
+//!       guava.setPosition(pos);
+//!   }
+
+const std = @import("std");
+
+// ---------------------------------------------------------------------------
+// Host API 函数表（C ABI，与引擎侧定义完全一致）
+// ---------------------------------------------------------------------------
+
+pub const HostApi = extern struct {
+    // Logging
+    log_fn: *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) void,
+    // Entity
+    get_entity_id: *const fn (?*anyopaque) callconv(.c) u64,
+    find_entity_by_name: *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) u64,
+    spawn_entity: *const fn (?*anyopaque) callconv(.c) u64,
+    destroy_entity: *const fn (?*anyopaque, u64) callconv(.c) void,
+    // Transform
+    get_position: *const fn (?*anyopaque, *f32, *f32, *f32) callconv(.c) void,
+    set_position: *const fn (?*anyopaque, f32, f32, f32) callconv(.c) void,
+    get_rotation: *const fn (?*anyopaque, *f32, *f32, *f32, *f32) callconv(.c) void,
+    set_rotation: *const fn (?*anyopaque, f32, f32, f32, f32) callconv(.c) void,
+    get_scale: *const fn (?*anyopaque, *f32, *f32, *f32) callconv(.c) void,
+    set_scale: *const fn (?*anyopaque, f32, f32, f32) callconv(.c) void,
+    // Input
+    is_key_down: *const fn (?*anyopaque, u32) callconv(.c) u32,
+    was_key_pressed: *const fn (?*anyopaque, u32) callconv(.c) u32,
+    was_key_released: *const fn (?*anyopaque, u32) callconv(.c) u32,
+    is_mouse_button_down: *const fn (?*anyopaque, u32) callconv(.c) u32,
+    get_mouse_position: *const fn (?*anyopaque, *f32, *f32) callconv(.c) void,
+    get_mouse_delta: *const fn (?*anyopaque, *f32, *f32) callconv(.c) void,
+    get_mouse_wheel: *const fn (?*anyopaque, *f32, *f32) callconv(.c) void,
+    // Time
+    get_delta_time: *const fn (?*anyopaque) callconv(.c) f32,
+    get_time: *const fn (?*anyopaque) callconv(.c) f32,
+    // Physics
+    raycast: *const fn (?*anyopaque, f32, f32, f32, f32, f32, f32, f32, *f32, *f32, *f32, *f32, *u64) callconv(.c) u32,
+    set_linear_velocity: *const fn (?*anyopaque, u64, f32, f32, f32) callconv(.c) void,
+    get_linear_velocity: *const fn (?*anyopaque, u64, *f32, *f32, *f32) callconv(.c) void,
+    add_impulse: *const fn (?*anyopaque, u64, f32, f32, f32) callconv(.c) void,
+    // Scene
+    load_scene: *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) void,
+    // Gamepad
+    is_gamepad_connected: *const fn (?*anyopaque) callconv(.c) u32,
+    is_gamepad_button_down: *const fn (?*anyopaque, u32) callconv(.c) u32,
+    was_gamepad_button_pressed: *const fn (?*anyopaque, u32) callconv(.c) u32,
+    get_gamepad_axis: *const fn (?*anyopaque, u32) callconv(.c) f32,
+    // Audio
+    audio_load_clip: *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) u32,
+    audio_play_2d: *const fn (?*anyopaque, u32, f32, u32) callconv(.c) u32,
+    audio_play_3d: *const fn (?*anyopaque, u32, f32, f32, f32, f32, u32) callconv(.c) u32,
+    audio_stop: *const fn (?*anyopaque, u32) callconv(.c) void,
+    audio_set_volume: *const fn (?*anyopaque, u32, f32) callconv(.c) void,
+    audio_pause: *const fn (?*anyopaque, u32, u32) callconv(.c) void,
+    audio_is_playing: *const fn (?*anyopaque, u32) callconv(.c) u32,
+    // Animation
+    anim_play: *const fn (?*anyopaque, u64, [*]const u8, usize, f32) callconv(.c) void,
+    anim_stop: *const fn (?*anyopaque, u64) callconv(.c) void,
+    anim_set_speed: *const fn (?*anyopaque, u64, f32) callconv(.c) void,
+    anim_is_playing: *const fn (?*anyopaque, u64) callconv(.c) u32,
+    // Canvas / UI
+    canvas_clear: *const fn (?*anyopaque) callconv(.c) void,
+    canvas_add_text: *const fn (?*anyopaque, f32, f32, f32, f32, [*]const u8, usize, u8, u8, u8, u8) callconv(.c) u32,
+    canvas_add_panel: *const fn (?*anyopaque, f32, f32, f32, f32, u8, u8, u8, u8) callconv(.c) u32,
+    canvas_add_button: *const fn (?*anyopaque, f32, f32, f32, f32, [*]const u8, usize) callconv(.c) u32,
+    canvas_add_progress_bar: *const fn (?*anyopaque, f32, f32, f32, f32, f32) callconv(.c) u32,
+    canvas_set_text: *const fn (?*anyopaque, u32, [*]const u8, usize) callconv(.c) void,
+    canvas_set_progress: *const fn (?*anyopaque, u32, f32) callconv(.c) void,
+    canvas_set_visible: *const fn (?*anyopaque, u32, u32) callconv(.c) void,
+    canvas_remove_widget: *const fn (?*anyopaque, u32) callconv(.c) void,
+    canvas_was_button_clicked: *const fn (?*anyopaque, u32) callconv(.c) u32,
+};
+
+// ---------------------------------------------------------------------------
+// 模块级别状态（每次回调前由引擎通过 guava_bind 设置）
+// ---------------------------------------------------------------------------
+
+var api: *const HostApi = undefined;
+var ctx: ?*anyopaque = null;
+var bound_entity: u64 = 0;
+
+/// 引擎在每次回调前调用此函数注入 API 与上下文
+export fn guava_bind(host_api: *const HostApi, host_ctx: ?*anyopaque, entity_id: u64) callconv(.c) void {
+    api = host_api;
+    ctx = host_ctx;
+    bound_entity = entity_id;
+}
+
+// ---------------------------------------------------------------------------
+// 类型
+// ---------------------------------------------------------------------------
+
+pub const Vec3 = [3]f32;
+pub const Quat = [4]f32;
+
+pub const Key = enum(u32) {
+    w = 0,
+    a = 1,
+    s = 2,
+    d = 3,
+    b = 4,
+    i = 5,
+    m = 6,
+    q = 7,
+    e = 8,
+    f = 9,
+    g = 10,
+    r = 11,
+    t = 12,
+    n = 13,
+    tab = 14,
+    delete = 15,
+    backspace = 16,
+    one = 17,
+    two = 18,
+    three = 19,
+    l = 20,
+    o = 21,
+    p = 22,
+    x = 23,
+    y = 24,
+    z = 25,
+    period = 26,
+    shift = 27,
+    ctrl = 28,
+    alt = 29,
+    space = 30,
+    escape = 31,
+    up = 32,
+    down = 33,
+    left = 34,
+    right = 35,
+    f1 = 36,
+    f2 = 37,
+    f3 = 38,
+    f4 = 39,
+    f5 = 40,
+    f6 = 41,
+    f7 = 42,
+    f8 = 43,
+    f9 = 44,
+    f10 = 45,
+    f11 = 46,
+    f12 = 47,
+};
+
+pub const MouseButton = enum(u32) {
+    left = 0,
+    right = 1,
+    middle = 2,
+};
+
+// ---------------------------------------------------------------------------
+// 公开 API
+// ---------------------------------------------------------------------------
+
+/// 当前脚本绑定的实体 ID
+pub fn entityId() u64 {
+    return bound_entity;
+}
+
+/// 打印日志
+pub fn log(msg: []const u8) void {
+    api.log_fn(ctx, msg.ptr, msg.len);
+}
+
+/// 通过名称查找实体，未找到返回 0
+pub fn findEntityByName(name: []const u8) u64 {
+    return api.find_entity_by_name(ctx, name.ptr, name.len);
+}
+
+/// 创建新实体，返回实体 ID
+pub fn spawnEntity() u64 {
+    return api.spawn_entity(ctx);
+}
+
+/// 销毁实体
+pub fn destroyEntity(id: u64) void {
+    api.destroy_entity(ctx, id);
+}
+
+/// 获取当前实体（或指定实体）的本地位置
+pub fn getPosition() Vec3 {
+    var x: f32 = 0;
+    var y: f32 = 0;
+    var z: f32 = 0;
+    api.get_position(ctx, &x, &y, &z);
+    return .{ x, y, z };
+}
+
+/// 设置当前实体的本地位置
+pub fn setPosition(pos: Vec3) void {
+    api.set_position(ctx, pos[0], pos[1], pos[2]);
+}
+
+/// 获取当前实体的旋转（四元数 xyzw）
+pub fn getRotation() Quat {
+    var x: f32 = 0;
+    var y: f32 = 0;
+    var z: f32 = 0;
+    var w: f32 = 1;
+    api.get_rotation(ctx, &x, &y, &z, &w);
+    return .{ x, y, z, w };
+}
+
+/// 设置当前实体的旋转（四元数 xyzw）
+pub fn setRotation(rot: Quat) void {
+    api.set_rotation(ctx, rot[0], rot[1], rot[2], rot[3]);
+}
+
+/// 获取当前实体的缩放
+pub fn getScale() Vec3 {
+    var x: f32 = 1;
+    var y: f32 = 1;
+    var z: f32 = 1;
+    api.get_scale(ctx, &x, &y, &z);
+    return .{ x, y, z };
+}
+
+/// 设置当前实体的缩放
+pub fn setScale(scale: Vec3) void {
+    api.set_scale(ctx, scale[0], scale[1], scale[2]);
+}
+
+/// 查询按键是否当前按下
+pub fn isKeyDown(key: Key) bool {
+    return api.is_key_down(ctx, @intFromEnum(key)) != 0;
+}
+
+/// 查询按键是否刚按下（本帧边沿）
+pub fn wasKeyPressed(key: Key) bool {
+    return api.was_key_pressed(ctx, @intFromEnum(key)) != 0;
+}
+
+/// 查询按键是否刚释放（本帧边沿）
+pub fn wasKeyReleased(key: Key) bool {
+    return api.was_key_released(ctx, @intFromEnum(key)) != 0;
+}
+
+/// 查询鼠标按钮是否按下
+pub fn isMouseButtonDown(button: MouseButton) bool {
+    return api.is_mouse_button_down(ctx, @intFromEnum(button)) != 0;
+}
+
+/// 获取鼠标位置
+pub fn getMousePosition() [2]f32 {
+    var x: f32 = 0;
+    var y: f32 = 0;
+    api.get_mouse_position(ctx, &x, &y);
+    return .{ x, y };
+}
+
+/// 获取鼠标本帧移动量
+pub fn getMouseDelta() [2]f32 {
+    var x: f32 = 0;
+    var y: f32 = 0;
+    api.get_mouse_delta(ctx, &x, &y);
+    return .{ x, y };
+}
+
+/// 获取鼠标滚轮值
+pub fn getMouseWheel() [2]f32 {
+    var x: f32 = 0;
+    var y: f32 = 0;
+    api.get_mouse_wheel(ctx, &x, &y);
+    return .{ x, y };
+}
+
+/// 获取帧间隔时间（秒）
+pub fn deltaTime() f32 {
+    return api.get_delta_time(ctx);
+}
+
+/// 获取游戏运行总时间（秒）
+pub fn time() f32 {
+    return api.get_time(ctx);
+}
+
+// ---------------------------------------------------------------------------
+// 物理查询 API
+// ---------------------------------------------------------------------------
+
+pub const RaycastHit = struct {
+    position: Vec3,
+    distance: f32,
+    entity_id: u64,
+};
+
+/// 射线检测，返回最近的碰撞点
+pub fn raycast(origin: Vec3, direction: Vec3, max_distance: f32) ?RaycastHit {
+    var hx: f32 = 0;
+    var hy: f32 = 0;
+    var hz: f32 = 0;
+    var dist: f32 = 0;
+    var eid: u64 = 0;
+    const hit = api.raycast(ctx, origin[0], origin[1], origin[2], direction[0], direction[1], direction[2], max_distance, &hx, &hy, &hz, &dist, &eid);
+    if (hit == 0) return null;
+    return .{ .position = .{ hx, hy, hz }, .distance = dist, .entity_id = eid };
+}
+
+/// 设置刚体线速度
+pub fn setLinearVelocity(entity_id: u64, velocity: Vec3) void {
+    api.set_linear_velocity(ctx, entity_id, velocity[0], velocity[1], velocity[2]);
+}
+
+/// 获取刚体线速度
+pub fn getLinearVelocity(entity_id: u64) Vec3 {
+    var x: f32 = 0;
+    var y: f32 = 0;
+    var z: f32 = 0;
+    api.get_linear_velocity(ctx, entity_id, &x, &y, &z);
+    return .{ x, y, z };
+}
+
+/// 对刚体施加冲量
+pub fn addImpulse(entity_id: u64, impulse: Vec3) void {
+    api.add_impulse(ctx, entity_id, impulse[0], impulse[1], impulse[2]);
+}
+
+/// 加载场景
+pub fn loadScene(path: []const u8) void {
+    api.load_scene(ctx, path.ptr, path.len);
+}
+
+// ---------------------------------------------------------------------------
+// Gamepad API
+// ---------------------------------------------------------------------------
+
+pub const GamepadButton = enum(u32) {
+    south = 0,
+    east = 1,
+    west = 2,
+    north = 3,
+    back = 4,
+    guide = 5,
+    start = 6,
+    left_stick = 7,
+    right_stick = 8,
+    left_shoulder = 9,
+    right_shoulder = 10,
+    dpad_up = 11,
+    dpad_down = 12,
+    dpad_left = 13,
+    dpad_right = 14,
+};
+
+pub const GamepadAxis = enum(u32) {
+    left_x = 0,
+    left_y = 1,
+    right_x = 2,
+    right_y = 3,
+    left_trigger = 4,
+    right_trigger = 5,
+};
+
+/// 检查是否有手柄连接
+pub fn isGamepadConnected() bool {
+    return api.is_gamepad_connected(ctx) != 0;
+}
+
+/// 查询手柄按钮是否按下
+pub fn isGamepadButtonDown(button: GamepadButton) bool {
+    return api.is_gamepad_button_down(ctx, @intFromEnum(button)) != 0;
+}
+
+/// 查询手柄按钮是否刚按下（本帧边沿）
+pub fn wasGamepadButtonPressed(button: GamepadButton) bool {
+    return api.was_gamepad_button_pressed(ctx, @intFromEnum(button)) != 0;
+}
+
+/// 获取手柄轴值（-1.0 ~ 1.0，trigger 为 0.0 ~ 1.0）
+pub fn getGamepadAxis(axis: GamepadAxis) f32 {
+    return api.get_gamepad_axis(ctx, @intFromEnum(axis));
+}
+
+// ---------------------------------------------------------------------------
+// Audio API
+// ---------------------------------------------------------------------------
+
+pub const AudioClipHandle = u32;
+pub const VoiceHandle = u32;
+
+/// 从文件路径加载音频片段，返回 clip handle（0 = 加载失败）
+pub fn audioLoadClip(path: []const u8) AudioClipHandle {
+    return api.audio_load_clip(ctx, path.ptr, path.len);
+}
+
+/// 播放 2D 音频（无空间化），返回 voice handle（0 = 播放失败）
+pub fn audioPlay2d(clip: AudioClipHandle, volume: f32, loop: bool) VoiceHandle {
+    return api.audio_play_2d(ctx, clip, volume, if (loop) @as(u32, 1) else @as(u32, 0));
+}
+
+/// 播放 3D 空间音频，返回 voice handle（0 = 播放失败）
+pub fn audioPlay3d(clip: AudioClipHandle, pos: Vec3, volume: f32, loop: bool) VoiceHandle {
+    return api.audio_play_3d(ctx, clip, pos[0], pos[1], pos[2], volume, if (loop) @as(u32, 1) else @as(u32, 0));
+}
+
+/// 停止播放指定 voice
+pub fn audioStop(voice: VoiceHandle) void {
+    api.audio_stop(ctx, voice);
+}
+
+/// 设置指定 voice 音量
+pub fn audioSetVolume(voice: VoiceHandle, volume: f32) void {
+    api.audio_set_volume(ctx, voice, volume);
+}
+
+/// 暂停/恢复指定 voice
+pub fn audioPause(voice: VoiceHandle, paused: bool) void {
+    api.audio_pause(ctx, voice, if (paused) @as(u32, 1) else @as(u32, 0));
+}
+
+/// 查询指定 voice 是否正在播放
+pub fn audioIsPlaying(voice: VoiceHandle) bool {
+    return api.audio_is_playing(ctx, voice) != 0;
+}
+
+// ---------------------------------------------------------------------------
+// Animation API
+// ---------------------------------------------------------------------------
+
+/// 播放动画片段（通过 asset ID），可指定混合过渡时间
+pub fn animPlay(entity_id: u64, clip_asset_id: []const u8, blend_duration: f32) void {
+    api.anim_play(ctx, entity_id, clip_asset_id.ptr, clip_asset_id.len, blend_duration);
+}
+
+/// 停止实体的动画播放
+pub fn animStop(entity_id: u64) void {
+    api.anim_stop(ctx, entity_id);
+}
+
+/// 设置动画播放速度
+pub fn animSetSpeed(entity_id: u64, speed: f32) void {
+    api.anim_set_speed(ctx, entity_id, speed);
+}
+
+/// 查询实体是否正在播放动画
+pub fn animIsPlaying(entity_id: u64) bool {
+    return api.anim_is_playing(ctx, entity_id) != 0;
+}
+
+// ---------------------------------------------------------------------------
+// Canvas / UI
+// ---------------------------------------------------------------------------
+
+pub const WidgetId = u32;
+
+/// 清空画布上所有控件
+pub fn canvasClear() void {
+    api.canvas_clear(ctx);
+}
+
+/// 添加文本控件，返回 WidgetId（0 = 失败）
+pub fn canvasAddText(x: f32, y: f32, w: f32, h: f32, text: []const u8, r: u8, g: u8, b: u8, a: u8) WidgetId {
+    return api.canvas_add_text(ctx, x, y, w, h, text.ptr, text.len, r, g, b, a);
+}
+
+/// 添加面板控件
+pub fn canvasAddPanel(x: f32, y: f32, w: f32, h: f32, r: u8, g: u8, b: u8, a: u8) WidgetId {
+    return api.canvas_add_panel(ctx, x, y, w, h, r, g, b, a);
+}
+
+/// 添加按钮控件
+pub fn canvasAddButton(x: f32, y: f32, w: f32, h: f32, label: []const u8) WidgetId {
+    return api.canvas_add_button(ctx, x, y, w, h, label.ptr, label.len);
+}
+
+/// 添加进度条控件
+pub fn canvasAddProgressBar(x: f32, y: f32, w: f32, h: f32, value: f32) WidgetId {
+    return api.canvas_add_progress_bar(ctx, x, y, w, h, value);
+}
+
+/// 更新文本内容
+pub fn canvasSetText(id: WidgetId, text: []const u8) void {
+    api.canvas_set_text(ctx, id, text.ptr, text.len);
+}
+
+/// 更新进度条值
+pub fn canvasSetProgress(id: WidgetId, value: f32) void {
+    api.canvas_set_progress(ctx, id, value);
+}
+
+/// 设置控件可见性
+pub fn canvasSetVisible(id: WidgetId, visible: bool) void {
+    api.canvas_set_visible(ctx, id, if (visible) 1 else 0);
+}
+
+/// 移除控件
+pub fn canvasRemoveWidget(id: WidgetId) void {
+    api.canvas_remove_widget(ctx, id);
+}
+
+/// 查询按钮本帧是否被点击
+pub fn canvasWasButtonClicked(id: WidgetId) bool {
+    return api.canvas_was_button_clicked(ctx, id) != 0;
+}

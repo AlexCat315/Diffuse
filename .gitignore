@@ -49,9 +49,9 @@ dist/
 .zig-cache/
 zig-out/
 compile_commands.json
-assets/derived/
-assets/scenes/editor_autosave.guava_scene
-assets/scenes/editor_autosave.guava_scene.meta
+packages/engine/assets/derived/
+packages/engine/assets/scenes/editor_autosave.guava_scene
+packages/engine/assets/scenes/editor_autosave.guava_scene.meta
 
 # Temporary files
 *.orig
@@ -73,7 +73,7 @@ assets_backup_*/
 .github/
 .cache/
 # Generated code
-src/engine/generated/
+packages/engine/src/engine/generated/
 nohup.out
 renders_test_out/
 zig-cache/
@@ -81,5 +81,5 @@ examples/csharp/**/bin/
 examples/csharp/**/obj/
 
 # Electron native addon build artifacts
-editor-electron/native/build/
-editor-electron/native/bin/
+packages/editor/native/build/
+packages/editor/native/bin/

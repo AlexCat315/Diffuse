@@ -1,0 +1,151 @@
+{
+	"configurations" : 
+	[
+		{
+			"abstractTargets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "Vulkan::Headers::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-Vulkan__Headers-Debug-511b14d53d9a7a4cb94e.json",
+					"name" : "Vulkan::Headers",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "Vulkan::Vulkan::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-Vulkan__Vulkan-Debug-f5375c1c2e490ddc7d7b.json",
+					"name" : "Vulkan::Vulkan",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "Vulkan::glslangValidator::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-Vulkan__glslangValidator-Debug-ff189664d982e7c4f55a.json",
+					"name" : "Vulkan::glslangValidator",
+					"projectIndex" : 0
+				}
+			],
+			"directories" : 
+			[
+				{
+					"abstractTargetIndexes" : 
+					[
+						0,
+						1,
+						2
+					],
+					"build" : ".",
+					"hasInstallRule" : true,
+					"jsonFile" : "directory-.-Debug-77798722435cfba07d50.json",
+					"minimumCMakeVersion" : 
+					{
+						"string" : "3.20"
+					},
+					"projectIndex" : 0,
+					"source" : ".",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6
+					]
+				}
+			],
+			"name" : "Debug",
+			"projects" : 
+			[
+				{
+					"abstractTargetIndexes" : 
+					[
+						0,
+						1,
+						2
+					],
+					"directoryIndexes" : 
+					[
+						0
+					],
+					"name" : "JoltPhysics",
+					"targetIndexes" : 
+					[
+						0,
+						1,
+						2,
+						3,
+						4,
+						5,
+						6
+					]
+				}
+			],
+			"targets" : 
+			[
+				{
+					"directoryIndex" : 0,
+					"id" : "HelloWorld::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-HelloWorld-Debug-8a28ba6453470b6d507c.json",
+					"name" : "HelloWorld",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "Jolt::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-Jolt-Debug-0b8a59b68d9a6b653612.json",
+					"name" : "Jolt",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "JoltViewer::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-JoltViewer-Debug-a3683c4c176a550b7307.json",
+					"name" : "JoltViewer",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "PerformanceTest::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-PerformanceTest-Debug-d4890f0c9ec39dab7476.json",
+					"name" : "PerformanceTest",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "Samples::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-Samples-Debug-0e981716d9092d11b219.json",
+					"name" : "Samples",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "TestFramework::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-TestFramework-Debug-f231d5ce90390f0ff0af.json",
+					"name" : "TestFramework",
+					"projectIndex" : 0
+				},
+				{
+					"directoryIndex" : 0,
+					"id" : "UnitTests::@6890427a1f51a3e7e1df",
+					"jsonFile" : "target-UnitTests-Debug-3561434b54bc30ad094c.json",
+					"name" : "UnitTests",
+					"projectIndex" : 0
+				}
+			]
+		}
+	],
+	"kind" : "codemodel",
+	"paths" : 
+	{
+		"build" : "/Users/alex/dev/zig/Guava Engine/build",
+		"source" : "/Users/alex/dev/zig/Guava Engine/third_party/jolt/Build"
+	},
+	"version" : 
+	{
+		"major" : 2,
+		"minor" : 9
+	}
+}

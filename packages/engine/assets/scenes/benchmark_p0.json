@@ -1,0 +1,1185 @@
+{
+  "version": 4,
+  "scene_id": "7961bf7a5033d7dde5b907bdae29bf28",
+  "asset_records": [
+    {
+      "id": "5abc6d42f33b5925ac842e7cd30728f1",
+      "type": "mesh",
+      "source_path": "builtin://mesh/plane",
+      "source_hash": "e0210e7227894cb425e45bd089f42027662d62f70669ed9c24e641cd2df0e242",
+      "import_settings_hash": "30b08ae5ad5ce2dcaf5f447ad85a72950eb91682dacfd37fdd843861d85b767d",
+      "import_version": 1,
+      "dependency_ids": [],
+      "outputs": [],
+      "metadata": {
+        "display_name": "BuiltinPlane",
+        "importer": "embedded-mesh-v1",
+        "source_extension": ""
+      },
+      "version": 2
+    },
+    {
+      "id": "cd5b72e7026102f74bfde60c2887ae78",
+      "type": "texture",
+      "source_path": "builtin://texture/white",
+      "source_hash": "53657bc3e8cf1412ba85e4b351f14ca3a2d8463916cb03939a41b83c091958ee",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [],
+      "metadata": {
+        "display_name": "White1x1",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ""
+      },
+      "version": 2
+    },
+    {
+      "id": "d937d658087cbf046899eb1d41ef4c33",
+      "type": "material",
+      "source_path": "builtin://material/default",
+      "source_hash": "f9c5a607c6d15d49fc28cd642b6b2d897c934816c24b0bd4e3752073c61df7f8",
+      "import_settings_hash": "8bbd2a2a1940c492da1b6ca785b34e93c963c9c4b2466cf561349186c1efe852",
+      "import_version": 1,
+      "dependency_ids": [],
+      "outputs": [],
+      "metadata": {
+        "display_name": "DefaultMaterial",
+        "importer": "embedded-material-v1",
+        "source_extension": ""
+      },
+      "version": 2
+    },
+    {
+      "id": "73fb2242ce62de11e55ad88c38c2644e",
+      "type": "mesh",
+      "source_path": "builtin://mesh/cube",
+      "source_hash": "8d997575e78ae4ef38fb34002a04b1d1144e90f7f05a7604267f607282cd7e90",
+      "import_settings_hash": "30b08ae5ad5ce2dcaf5f447ad85a72950eb91682dacfd37fdd843861d85b767d",
+      "import_version": 1,
+      "dependency_ids": [],
+      "outputs": [],
+      "metadata": {
+        "display_name": "BuiltinCube",
+        "importer": "embedded-mesh-v1",
+        "source_extension": ""
+      },
+      "version": 2
+    }
+  ],
+  "meshes": [
+    {
+      "asset_id": "5abc6d42f33b5925ac842e7cd30728f1",
+      "name": "BuiltinPlane",
+      "primitive_type": "triangle_list",
+      "vertices": [
+        {
+          "position": [
+            -0.5,
+            0,
+            -0.5
+          ],
+          "normal": [
+            0,
+            1,
+            0
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.8500000238418579,
+            0.8799999952316284,
+            0.8999999761581421,
+            1
+          ],
+          "uv": [
+            0,
+            1
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            0,
+            -0.5
+          ],
+          "normal": [
+            0,
+            1,
+            0
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.8500000238418579,
+            0.8799999952316284,
+            0.8999999761581421,
+            1
+          ],
+          "uv": [
+            1,
+            1
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            0,
+            0.5
+          ],
+          "normal": [
+            0,
+            1,
+            0
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.8500000238418579,
+            0.8799999952316284,
+            0.8999999761581421,
+            1
+          ],
+          "uv": [
+            1,
+            0
+          ]
+        },
+        {
+          "position": [
+            -0.5,
+            0,
+            0.5
+          ],
+          "normal": [
+            0,
+            1,
+            0
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.8500000238418579,
+            0.8799999952316284,
+            0.8999999761581421,
+            1
+          ],
+          "uv": [
+            0,
+            0
+          ]
+        }
+      ],
+      "indices": [
+        0,
+        1,
+        2,
+        0,
+        2,
+        3
+      ]
+    },
+    {
+      "asset_id": "73fb2242ce62de11e55ad88c38c2644e",
+      "name": "BuiltinCube",
+      "primitive_type": "triangle_list",
+      "vertices": [
+        {
+          "position": [
+            -0.5,
+            -0.5,
+            0.5
+          ],
+          "normal": [
+            0,
+            0,
+            1
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            1,
+            0.5,
+            0.4000000059604645,
+            1
+          ],
+          "uv": [
+            0,
+            1
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "normal": [
+            0,
+            0,
+            1
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            1,
+            0.5,
+            0.4000000059604645,
+            1
+          ],
+          "uv": [
+            1,
+            1
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "normal": [
+            0,
+            0,
+            1
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            1,
+            0.5,
+            0.4000000059604645,
+            1
+          ],
+          "uv": [
+            1,
+            0
+          ]
+        },
+        {
+          "position": [
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "normal": [
+            0,
+            0,
+            1
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            1,
+            0.5,
+            0.4000000059604645,
+            1
+          ],
+          "uv": [
+            0,
+            0
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "normal": [
+            0,
+            0,
+            -1
+          ],
+          "tangent": [
+            -1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.4000000059604645,
+            0.8999999761581421,
+            1,
+            1
+          ],
+          "uv": [
+            0,
+            1
+          ]
+        },
+        {
+          "position": [
+            -0.5,
+            -0.5,
+            -0.5
+          ],
+          "normal": [
+            0,
+            0,
+            -1
+          ],
+          "tangent": [
+            -1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.4000000059604645,
+            0.8999999761581421,
+            1,
+            1
+          ],
+          "uv": [
+            1,
+            1
+          ]
+        },
+        {
+          "position": [
+            -0.5,
+            0.5,
+            -0.5
+          ],
+          "normal": [
+            0,
+            0,
+            -1
+          ],
+          "tangent": [
+            -1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.4000000059604645,
+            0.8999999761581421,
+            1,
+            1
+          ],
+          "uv": [
+            1,
+            0
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            0.5,
+            -0.5
+          ],
+          "normal": [
+            0,
+            0,
+            -1
+          ],
+          "tangent": [
+            -1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.4000000059604645,
+            0.8999999761581421,
+            1,
+            1
+          ],
+          "uv": [
+            0,
+            0
+          ]
+        },
+        {
+          "position": [
+            -0.5,
+            -0.5,
+            -0.5
+          ],
+          "normal": [
+            -1,
+            0,
+            0
+          ],
+          "tangent": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "color": [
+            0.550000011920929,
+            0.6499999761581421,
+            1,
+            1
+          ],
+          "uv": [
+            0,
+            1
+          ]
+        },
+        {
+          "position": [
+            -0.5,
+            -0.5,
+            0.5
+          ],
+          "normal": [
+            -1,
+            0,
+            0
+          ],
+          "tangent": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "color": [
+            0.550000011920929,
+            0.6499999761581421,
+            1,
+            1
+          ],
+          "uv": [
+            1,
+            1
+          ]
+        },
+        {
+          "position": [
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "normal": [
+            -1,
+            0,
+            0
+          ],
+          "tangent": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "color": [
+            0.550000011920929,
+            0.6499999761581421,
+            1,
+            1
+          ],
+          "uv": [
+            1,
+            0
+          ]
+        },
+        {
+          "position": [
+            -0.5,
+            0.5,
+            -0.5
+          ],
+          "normal": [
+            -1,
+            0,
+            0
+          ],
+          "tangent": [
+            0,
+            0,
+            1,
+            1
+          ],
+          "color": [
+            0.550000011920929,
+            0.6499999761581421,
+            1,
+            1
+          ],
+          "uv": [
+            0,
+            0
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "normal": [
+            1,
+            0,
+            0
+          ],
+          "tangent": [
+            0,
+            0,
+            -1,
+            1
+          ],
+          "color": [
+            1,
+            0.8500000238418579,
+            0.4000000059604645,
+            1
+          ],
+          "uv": [
+            0,
+            1
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "normal": [
+            1,
+            0,
+            0
+          ],
+          "tangent": [
+            0,
+            0,
+            -1,
+            1
+          ],
+          "color": [
+            1,
+            0.8500000238418579,
+            0.4000000059604645,
+            1
+          ],
+          "uv": [
+            1,
+            1
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            0.5,
+            -0.5
+          ],
+          "normal": [
+            1,
+            0,
+            0
+          ],
+          "tangent": [
+            0,
+            0,
+            -1,
+            1
+          ],
+          "color": [
+            1,
+            0.8500000238418579,
+            0.4000000059604645,
+            1
+          ],
+          "uv": [
+            1,
+            0
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "normal": [
+            1,
+            0,
+            0
+          ],
+          "tangent": [
+            0,
+            0,
+            -1,
+            1
+          ],
+          "color": [
+            1,
+            0.8500000238418579,
+            0.4000000059604645,
+            1
+          ],
+          "uv": [
+            0,
+            0
+          ]
+        },
+        {
+          "position": [
+            -0.5,
+            0.5,
+            0.5
+          ],
+          "normal": [
+            0,
+            1,
+            0
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.699999988079071,
+            1,
+            0.550000011920929,
+            1
+          ],
+          "uv": [
+            0,
+            1
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            0.5,
+            0.5
+          ],
+          "normal": [
+            0,
+            1,
+            0
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.699999988079071,
+            1,
+            0.550000011920929,
+            1
+          ],
+          "uv": [
+            1,
+            1
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            0.5,
+            -0.5
+          ],
+          "normal": [
+            0,
+            1,
+            0
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.699999988079071,
+            1,
+            0.550000011920929,
+            1
+          ],
+          "uv": [
+            1,
+            0
+          ]
+        },
+        {
+          "position": [
+            -0.5,
+            0.5,
+            -0.5
+          ],
+          "normal": [
+            0,
+            1,
+            0
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.699999988079071,
+            1,
+            0.550000011920929,
+            1
+          ],
+          "uv": [
+            0,
+            0
+          ]
+        },
+        {
+          "position": [
+            -0.5,
+            -0.5,
+            -0.5
+          ],
+          "normal": [
+            0,
+            -1,
+            0
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.949999988079071,
+            0.5,
+            0.949999988079071,
+            1
+          ],
+          "uv": [
+            0,
+            1
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            -0.5,
+            -0.5
+          ],
+          "normal": [
+            0,
+            -1,
+            0
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.949999988079071,
+            0.5,
+            0.949999988079071,
+            1
+          ],
+          "uv": [
+            1,
+            1
+          ]
+        },
+        {
+          "position": [
+            0.5,
+            -0.5,
+            0.5
+          ],
+          "normal": [
+            0,
+            -1,
+            0
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.949999988079071,
+            0.5,
+            0.949999988079071,
+            1
+          ],
+          "uv": [
+            1,
+            0
+          ]
+        },
+        {
+          "position": [
+            -0.5,
+            -0.5,
+            0.5
+          ],
+          "normal": [
+            0,
+            -1,
+            0
+          ],
+          "tangent": [
+            1,
+            0,
+            0,
+            1
+          ],
+          "color": [
+            0.949999988079071,
+            0.5,
+            0.949999988079071,
+            1
+          ],
+          "uv": [
+            0,
+            0
+          ]
+        }
+      ],
+      "indices": [
+        0,
+        1,
+        2,
+        0,
+        2,
+        3,
+        4,
+        5,
+        6,
+        4,
+        6,
+        7,
+        8,
+        9,
+        10,
+        8,
+        10,
+        11,
+        12,
+        13,
+        14,
+        12,
+        14,
+        15,
+        16,
+        17,
+        18,
+        16,
+        18,
+        19,
+        20,
+        21,
+        22,
+        20,
+        22,
+        23
+      ]
+    }
+  ],
+  "textures": [
+    {
+      "asset_id": "cd5b72e7026102f74bfde60c2887ae78",
+      "name": "White1x1",
+      "width": 1,
+      "height": 1,
+      "format": "bgra8_unorm",
+      "pixels_hex": "ffffffff"
+    }
+  ],
+  "materials": [
+    {
+      "asset_id": "d937d658087cbf046899eb1d41ef4c33",
+      "name": "DefaultMaterial",
+      "shading": "pbr_metallic_roughness",
+      "base_color_factor": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "base_color_texture_asset_id": "cd5b72e7026102f74bfde60c2887ae78"
+    }
+  ],
+  "entities": [
+    {
+      "name": "MainCamera",
+      "parent": null,
+      "local_transform": {
+        "translation": [
+          0,
+          1.5,
+          5
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "camera": {
+        "projection": {
+          "perspective": {
+            "fov_y_radians": 1.0471975803375244,
+            "near_clip": 0.10000000149011612,
+            "far_clip": 1000
+          }
+        },
+        "is_primary": true
+      },
+      "mesh": null,
+      "material": null,
+      "light": null,
+      "vfx": null,
+      "visible": true,
+      "editor_only": false,
+      "is_folder": false
+    },
+    {
+      "name": "Sun",
+      "parent": null,
+      "local_transform": {
+        "translation": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          -0.4155384302139282,
+          0.26610031723976135,
+          0.12854111194610596,
+          0.860230028629303
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "camera": null,
+      "mesh": null,
+      "material": null,
+      "light": {
+        "kind": "directional",
+        "color": [
+          1,
+          1,
+          1
+        ],
+        "intensity": 4,
+        "range": 10
+      },
+      "vfx": null,
+      "visible": true,
+      "editor_only": false,
+      "is_folder": false
+    },
+    {
+      "name": "Ground",
+      "parent": null,
+      "local_transform": {
+        "translation": [
+          0,
+          0,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          10,
+          1,
+          10
+        ]
+      },
+      "camera": null,
+      "mesh": {
+        "asset_id": "5abc6d42f33b5925ac842e7cd30728f1",
+        "primitive": "plane"
+      },
+      "material": {
+        "asset_id": "d937d658087cbf046899eb1d41ef4c33",
+        "shading": "pbr_metallic_roughness",
+        "base_color_factor": [
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "light": null,
+      "vfx": null,
+      "visible": true,
+      "editor_only": false,
+      "is_folder": false
+    },
+    {
+      "name": "Hero",
+      "parent": null,
+      "local_transform": {
+        "translation": [
+          0,
+          1,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "camera": null,
+      "mesh": {
+        "asset_id": "73fb2242ce62de11e55ad88c38c2644e",
+        "primitive": "cube"
+      },
+      "material": {
+        "asset_id": "d937d658087cbf046899eb1d41ef4c33",
+        "shading": "pbr_metallic_roughness",
+        "base_color_factor": [
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "light": null,
+      "vfx": null,
+      "visible": true,
+      "editor_only": false,
+      "is_folder": false
+    },
+    {
+      "name": "BenchmarkCube",
+      "parent": null,
+      "local_transform": {
+        "translation": [
+          0,
+          1,
+          0
+        ],
+        "rotation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "camera": null,
+      "mesh": {
+        "asset_id": "73fb2242ce62de11e55ad88c38c2644e",
+        "primitive": "cube"
+      },
+      "material": {
+        "asset_id": "d937d658087cbf046899eb1d41ef4c33",
+        "shading": "pbr_metallic_roughness",
+        "base_color_factor": [
+          1,
+          1,
+          1,
+          1
+        ]
+      },
+      "light": null,
+      "vfx": null,
+      "visible": true,
+      "editor_only": false,
+      "is_folder": false
+    },
+    {
+      "name": "BenchmarkCamera",
+      "parent": null,
+      "local_transform": {
+        "translation": [
+          0,
+          2,
+          5
+        ],
+        "rotation": [
+          -0.0998334214091301,
+          0,
+          0,
+          0.9950041770935059
+        ],
+        "scale": [
+          1,
+          1,
+          1
+        ]
+      },
+      "camera": {
+        "projection": {
+          "perspective": {
+            "fov_y_radians": 1.0471975803375244,
+            "near_clip": 0.10000000149011612,
+            "far_clip": 100
+          }
+        },
+        "is_primary": true
+      },
+      "mesh": null,
+      "material": null,
+      "light": null,
+      "vfx": null,
+      "visible": true,
+      "editor_only": false,
+      "is_folder": false
+    }
+  ]
+}
