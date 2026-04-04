@@ -93,6 +93,22 @@ contextBridge.exposeInMainWorld("guavaEngine", {
     return () => ipcRenderer.removeListener("viewport:pixels", handler);
   },
 
+  /** Subscribe to SharedArrayBuffer for zero-copy viewport pixels (macOS) */
+  onViewportSharedBuffer: (
+    callback: (sab: SharedArrayBuffer) => void,
+  ): (() => void) => {
+    const handler = (
+      _event: Electron.IpcRendererEvent,
+      sab: SharedArrayBuffer,
+    ) => {
+      if (sab instanceof SharedArrayBuffer) {
+        callback(sab);
+      }
+    };
+    ipcRenderer.on("viewport:shared-buffer", handler);
+    return () => ipcRenderer.removeListener("viewport:shared-buffer", handler);
+  },
+
   /** Test connection to a remote engine server */
   testRemoteConnection: (url: string): Promise<{ ok: boolean; version?: string; error?: string }> =>
     ipcRenderer.invoke("settings:testRemoteConnection", url),
@@ -118,6 +134,7 @@ export interface GuavaEngineAPI {
   viewportUpdateSurface(surfaceId: number, shmName?: string, width?: number, height?: number): Promise<void>;
   viewportDetach(): Promise<void>;
   onViewportPixels(callback: (pixels: Buffer, width: number, height: number) => void): () => void;
+  onViewportSharedBuffer(callback: (sab: SharedArrayBuffer) => void): () => void;
   testRemoteConnection(url: string): Promise<{ ok: boolean; version?: string; error?: string }>;
   connectToServer(url: string): Promise<{ ok: boolean; error?: string }>;
 }

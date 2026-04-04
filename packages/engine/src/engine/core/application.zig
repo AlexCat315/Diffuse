@@ -453,6 +453,22 @@ pub const Application = struct {
             }
 
             last_frame = try self.renderer.drawFrame(&self.world, &self.physics_state);
+
+            // Consume pending frame delay change from RPC.
+            if (self.renderer.pending_frame_delay_ms) |new_delay| {
+                self.config.frame_delay_ms = new_delay;
+                self.renderer.pending_frame_delay_ms = null;
+            }
+            self.renderer.current_frame_delay_ms = self.config.frame_delay_ms;
+
+            // Frame rate limiting: sleep for the remainder of the target frame time.
+            if (self.config.frame_delay_ms > 0) {
+                const frame_ns = self.timer.read();
+                const target_ns: u64 = @as(u64, self.config.frame_delay_ms) * std.time.ns_per_ms;
+                if (frame_ns < target_ns) {
+                    std.Thread.sleep(target_ns - frame_ns);
+                }
+            }
         }
 
         const summary = self.world.summary();

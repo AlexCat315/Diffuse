@@ -39,6 +39,7 @@ export function Viewport() {
   const shmNameRef = useRef<string | undefined>(undefined);
   const lastSizeRef = useRef({ w: 0, h: 0 });
   const [shadingMode, setShadingMode] = useState<ShadingMode>("material");
+  const [fpsLimit, setFpsLimit] = useState<number>(120);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const selectedEntity = useSceneStore((s) => s.selectedEntity);
 
@@ -58,11 +59,19 @@ export function Viewport() {
     window.guavaEngine.call("viewport.getRenderSettings", {})
       .then((res) => { if (res.shadingMode) setShadingMode(res.shadingMode as ShadingMode); })
       .catch(() => {});
+    window.guavaEngine.call("viewport.getFrameRate", {})
+      .then((res) => { if (res.fps != null) setFpsLimit(Number(res.fps)); })
+      .catch(() => {});
   }, [connected]);
 
   const handleShadingChange = useCallback((mode: ShadingMode) => {
     setShadingMode(mode);
     window.guavaEngine.call("viewport.setRenderSettings", { shadingMode: mode } as never).catch(() => {});
+  }, []);
+
+  const handleFpsChange = useCallback((fps: number) => {
+    setFpsLimit(fps);
+    window.guavaEngine.call("viewport.setFrameRate", { fps }).catch(() => {});
   }, []);
 
   // ── Input forwarding to the engine ─────────────────────────────
@@ -448,6 +457,10 @@ export function Viewport() {
   // WebGL pixel rendering: subscribe to viewport:pixels and display via GPU.
   // Pixels arrive as BGRA from Vulkan/Metal readback; a fragment shader swaps
   // R↔B on the GPU, avoiding the slow per-pixel JS conversion.
+  //
+  // Two paths:
+  //   A) SharedArrayBuffer (macOS): renderer polls SAB via rAF + Atomics
+  //   B) IPC fallback (Linux): renderer receives pixels via IPC callback
   useEffect(() => {
     if (!attached) return;
     const canvas = canvasRef.current;
@@ -506,23 +519,63 @@ export function Viewport() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-    // ── Subscribe to pixel data ──────────────────────
-    const unsub = window.guavaEngine.onViewportPixels((pixels, width, height) => {
+    // ── Upload helper ────────────────────────────────
+    const uploadAndDraw = (pixels: Uint8Array, width: number, height: number) => {
       if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
         canvas.height = height;
         gl.viewport(0, 0, width, height);
       }
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    };
+
+    // ── Path A: SharedArrayBuffer (zero-IPC, rAF polling) ──
+    let sabRef: SharedArrayBuffer | null = null;
+    let sabHeader: Uint32Array | null = null;
+    let sabPixels: Uint8Array | null = null;
+    let lastGeneration = 0;
+    let raf = 0;
+
+    const unsubSAB = window.guavaEngine.onViewportSharedBuffer((sab) => {
+      sabRef = sab;
+      sabHeader = new Uint32Array(sab, 0, 4); // [width, height, generation, reserved]
+      sabPixels = new Uint8Array(sab, 16);     // pixel data starts at byte 16
+    });
+
+    const tick = () => {
+      if (sabHeader && sabPixels) {
+        const gen = Atomics.load(sabHeader, 2);
+        if (gen !== lastGeneration) {
+          lastGeneration = gen;
+          const width = sabHeader[0];
+          const height = sabHeader[1];
+          if (width > 0 && height > 0) {
+            // Create a view into the SAB pixel region (no copy)
+            const src = new Uint8Array(sabRef!, 16, width * height * 4);
+            uploadAndDraw(src, width, height);
+          }
+        }
+      }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+
+    // ── Path B: IPC fallback ─────────────────────────
+    const unsub = window.guavaEngine.onViewportPixels((pixels, width, height) => {
+      // Skip IPC path if SAB is active
+      if (sabHeader) return;
       const src = new Uint8Array(
         pixels.buffer ?? pixels,
         (pixels as { byteOffset?: number }).byteOffset ?? 0,
         (pixels as { byteLength?: number }).byteLength ?? (width * height * 4),
       );
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, src);
-      gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+      uploadAndDraw(src, width, height);
     });
 
     return () => {
+      cancelAnimationFrame(raf);
+      unsubSAB();
       unsub();
       gl.deleteTexture(tex);
       gl.deleteBuffer(buf);
@@ -587,6 +640,26 @@ export function Viewport() {
                 {SHADING_ICONS[mode]}
               </button>
             ))}
+            <span style={styles.toolbarSeparator} />
+            {([30, 60, 120, 0] as const).map((fps) => {
+              const label = fps === 0 ? "∞" : `${fps}`;
+              const title = fps === 0 ? "Unlimited (VSync)" : `${fps} FPS`;
+              return (
+                <button
+                  key={fps}
+                  title={title}
+                  style={{
+                    ...styles.shadingButton,
+                    ...(fpsLimit === fps ? styles.shadingButtonActive : {}),
+                    fontSize: 11,
+                    minWidth: fps === 0 ? 24 : 30,
+                  }}
+                  onClick={() => handleFpsChange(fps)}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
           <div style={styles.viewCubeOverlay}>
             <ViewCube />
@@ -658,6 +731,12 @@ const styles: Record<string, React.CSSProperties> = {
     background: "rgba(69, 71, 90, 0.8)",
     border: "1px solid #89b4fa",
     color: "#89b4fa",
+  },
+  toolbarSeparator: {
+    width: 1,
+    alignSelf: "stretch",
+    margin: "2px 4px",
+    background: "rgba(69, 71, 90, 0.6)",
   },
   placeholder: {
     position: "absolute",

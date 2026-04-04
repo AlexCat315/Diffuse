@@ -406,6 +406,11 @@ pub const Renderer = struct {
     pending_camera_look_axis: ?[3]f32 = null, // look direction for ViewCube axis click
     /// When true, resolveSelectionReadbacks skips applying picks (gizmo drag active).
     suppress_entity_pick: bool = false,
+    /// RPC 设置的待消费帧延迟（由 Application 主循环消费）。
+    /// null = 不变更，0 = 不限制（VSync），>0 = 目标帧间隔毫秒数。
+    pending_frame_delay_ms: ?u32 = null,
+    /// 当前生效的帧延迟（由 Application 写入，供 RPC 读取）。
+    current_frame_delay_ms: u32 = 16,
     /// 编辑器变换枢轴覆盖（例如 bounds center）
     editor_gizmo_transform_override: ?components.Transform = null,
     /// staged preview 的自定义 gizmo 目标
