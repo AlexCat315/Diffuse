@@ -8,7 +8,8 @@ const core = @import("../core/layer.zig");
 const log = std.log.scoped(.editor_rpc_sub);
 
 // Forward reference to Server (avoid circular import)
-const Server = @import("server.zig").Server;
+const server_mod = @import("server.zig");
+const Server = server_mod.Server;
 
 pub const SubscriptionState = struct {
     last_scene_revision: u64 = 0,
@@ -73,6 +74,22 @@ pub fn checkAndBroadcast(server: *Server, layer_context: *core.LayerContext) !vo
     if (entity_count != state.last_entity_count) {
         state.last_entity_count = entity_count;
         // Scene change notification already covers this via revision
+    }
+
+    // ── Console log entries ────────────────────────────────────
+    var log_buf: [64]server_mod.ConsoleLogEntry = undefined;
+    const log_count = server.drainConsoleLogs(&log_buf);
+    for (log_buf[0..log_count]) |entry| {
+        const notification = try buildNotification(
+            server.allocator,
+            "on:console.log",
+            .{
+                .level = entry.level[0..entry.level_len],
+                .message = entry.message[0..entry.message_len],
+                .source = if (entry.source_len > 0) entry.source[0..entry.source_len] else null,
+            },
+        );
+        server.broadcast(notification);
     }
 }
 

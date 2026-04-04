@@ -7,26 +7,22 @@ const sdl = @import("../../platform/sdl.zig").c;
 pub fn setGizmoMode(ctx: *Ctx) !void {
     const mode_str = try ctx.param([]const u8, "mode");
     const gizmo_pass = @import("../../render/passes/gizmo_pass.zig");
-    var state = ctx.layer.renderer.editor_gizmo_state;
-    if (std.mem.eql(u8, mode_str, "translate")) {
-        state.mode = .translate;
-    } else if (std.mem.eql(u8, mode_str, "rotate")) {
-        state.mode = .rotate;
-    } else if (std.mem.eql(u8, mode_str, "scale")) {
-        state.mode = .scale;
-    } else {
-        state.mode = .idle;
-    }
+    const mode: gizmo_pass.EditorGizmoMode = if (std.mem.eql(u8, mode_str, "translate"))
+        .translate
+    else if (std.mem.eql(u8, mode_str, "rotate"))
+        .rotate
+    else if (std.mem.eql(u8, mode_str, "scale"))
+        .scale
+    else
+        .idle;
+    ctx.layer.renderer.pending_gizmo_mode = mode;
     // Also update space if provided
     if (try ctx.paramOpt([]const u8, "space")) |space_str| {
-        if (std.mem.eql(u8, space_str, "world")) {
-            state.space = .world;
-        } else {
-            state.space = .local;
-        }
+        ctx.layer.renderer.pending_gizmo_space = if (std.mem.eql(u8, space_str, "world"))
+            .world
+        else
+            .local;
     }
-    ctx.layer.renderer.setEditorGizmoState(state);
-    _ = gizmo_pass;
     try ctx.reply(.{});
 }
 

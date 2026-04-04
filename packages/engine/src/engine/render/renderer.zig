@@ -139,6 +139,8 @@ pub const PathTraceRenderProgress = struct {
 };
 /// 编辑器 Gizmo 状态
 pub const EditorGizmoState = gizmo_pass_mod.EditorGizmoState;
+pub const EditorGizmoMode = gizmo_pass_mod.EditorGizmoMode;
+pub const EditorGizmoSpace = gizmo_pass_mod.EditorGizmoSpace;
 /// 编辑器视口状态
 pub const EditorViewportState = types.EditorViewportState;
 
@@ -396,6 +398,9 @@ pub const Renderer = struct {
     selection_seeded: bool = false,
     /// 编辑器 Gizmo 状态
     editor_gizmo_state: EditorGizmoState = .{},
+    /// RPC 设置的待消费 gizmo 模式（由 EditorLayer.refreshGizmoState 消费）
+    pending_gizmo_mode: ?EditorGizmoMode = null,
+    pending_gizmo_space: ?EditorGizmoSpace = null,
     /// 编辑器变换枢轴覆盖（例如 bounds center）
     editor_gizmo_transform_override: ?components.Transform = null,
     /// staged preview 的自定义 gizmo 目标

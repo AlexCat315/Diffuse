@@ -27,6 +27,7 @@ export const zhCN: TranslationKeys = {
     translate: "移动 (W)",
     rotate: "旋转 (E)",
     scale: "缩放 (R)",
+    select: "选择",
     brand: "Guava 编辑器",
     noScenesFound: "未找到场景",
     resetLayout: "重置布局",
