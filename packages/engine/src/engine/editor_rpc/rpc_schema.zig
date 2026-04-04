@@ -165,6 +165,27 @@ pub const SharedTypes = struct {
         language: []const u8,
         sizeBytes: u64,
     };
+
+    pub const VfxEntityInfo = struct {
+        entityId: u64,
+        name: []const u8,
+        kind: []const u8,
+    };
+
+    pub const VfxConfig = struct {
+        kind: []const u8,
+        looping: bool,
+        emissionRate: f64,
+        particleLifetime: f64,
+        speed: f64,
+        maxParticles: u32,
+        radius: f64,
+        spread: f64,
+        size: f64,
+        colorR: f64,
+        colorG: f64,
+        colorB: f64,
+    };
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1215,6 +1236,50 @@ pub const Methods = struct {
         pub const Result = struct {
             success: bool,
         };
+    };
+
+    // ── particle ───────────────────────────────────────────────
+
+    pub const @"particle.listVfxEntities" = struct {
+        pub const Params = struct {};
+        pub const Result = struct {
+            entities: []const SharedTypes.VfxEntityInfo,
+        };
+    };
+
+    pub const @"particle.getConfig" = struct {
+        pub const Params = struct { entityId: u64 };
+        pub const Result = struct {
+            found: bool,
+            config: ?SharedTypes.VfxConfig = null,
+        };
+    };
+
+    pub const @"particle.setConfig" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            kind: ?[]const u8 = null,
+            looping: ?bool = null,
+            emissionRate: ?f64 = null,
+            particleLifetime: ?f64 = null,
+            speed: ?f64 = null,
+            maxParticles: ?u32 = null,
+            radius: ?f64 = null,
+            spread: ?f64 = null,
+            size: ?f64 = null,
+            colorR: ?f64 = null,
+            colorG: ?f64 = null,
+            colorB: ?f64 = null,
+        };
+        pub const Result = struct { success: bool };
+    };
+
+    pub const @"particle.applyPreset" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            preset: []const u8,
+        };
+        pub const Result = struct { success: bool };
     };
 
     // ── animation ──────────────────────────────────────────────

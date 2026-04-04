@@ -26,6 +26,8 @@ export type {
   MaterialGraphConnectionInfo,
   MaterialGraphOutputInfo,
   ScriptFileInfo,
+  VfxEntityInfo,
+  VfxConfig,
   RpcMethods,
   SubscriptionEvents,
   RpcMethodName,
