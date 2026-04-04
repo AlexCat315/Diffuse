@@ -69,7 +69,6 @@ pub fn build(b: *std.Build) void {
     player.linkLibCpp();
     player.linker_allow_shlib_undefined = true;
     player.step.dependOn(&run_shader_codegen.step);
-    b.installArtifact(player);
 
     // ── Run steps ───────────────────────────────────────────────────────────
     const run_cmd = b.addRunArtifact(exe);
