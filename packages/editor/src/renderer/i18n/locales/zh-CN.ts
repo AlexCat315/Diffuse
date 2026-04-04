@@ -551,4 +551,15 @@ export const zhCN: TranslationKeys = {
     normalMap: "法线贴图",
     output: "输出节点",
   },
+
+  // ── Script Viewer ────────────────────────────────────────────
+  scriptViewer: {
+    title: "脚本",
+    search: "搜索脚本…",
+    noScripts: "未找到脚本文件。",
+    selectFile: "选择一个脚本文件查看。",
+    save: "保存",
+    enableEdit: "启用编辑",
+    disableEdit: "锁定（只读）",
+  },
 } as const;

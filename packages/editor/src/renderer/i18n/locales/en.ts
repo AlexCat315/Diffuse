@@ -549,6 +549,17 @@ export const en = {
     normalMap: "Normal Map",
     output: "Output",
   },
+
+  // ── Script Viewer ────────────────────────────────────
+  scriptViewer: {
+    title: "Scripts",
+    search: "Search scripts…",
+    noScripts: "No script files found.",
+    selectFile: "Select a script file to view.",
+    save: "Save",
+    enableEdit: "Enable editing",
+    disableEdit: "Lock (read-only)",
+  },
 };
 
 type DeepStringRecord<T> = {

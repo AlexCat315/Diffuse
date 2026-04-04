@@ -27,6 +27,7 @@ import { PostProcessEditor } from "./panels/PostProcessEditor";
 import { SequencerPanel } from "./panels/SequencerPanel";
 import { AnimationEditor } from "./panels/AnimationEditor";
 import { MaterialGraphEditor } from "./panels/MaterialGraphEditor";
+import { ScriptViewer } from "./panels/ScriptViewer";
 import { SettingsPanel } from "./panels/Settings";
 import { useI18n } from "./i18n";
 import {
@@ -133,6 +134,7 @@ const defaultLayout: IJsonModel = {
               { type: "tab", name: "Sequencer", component: "sequencer" },
               { type: "tab", name: "Animation", component: "animationeditor" },
               { type: "tab", name: "Material Graph", component: "materialgraph" },
+              { type: "tab", name: "Scripts", component: "scriptviewer" },
             ],
           },
         ],
@@ -250,6 +252,7 @@ export function App() {
       case "sequencer":       return <SequencerPanel />;
       case "animationeditor": return <AnimationEditor />;
       case "materialgraph":   return <MaterialGraphEditor />;
+      case "scriptviewer":    return <ScriptViewer />;
       case "settings":        return <SettingsPanel />;
       default:
         return <div style={{ padding: 12, color: "#6c7086" }}>Unknown panel: {component}</div>;

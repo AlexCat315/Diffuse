@@ -147,6 +147,13 @@ export interface MaterialGraphOutputInfo {
   sourceSlot: number;
 }
 
+export interface ScriptFileInfo {
+  path: string;
+  name: string;
+  language: string;
+  sizeBytes: number;
+}
+
 // ── RPC Method Signatures ──────────────────────────────────
 
 export interface RpcMethods {
@@ -249,6 +256,9 @@ export interface RpcMethods {
   "material.setGraphOutput": { params: { entityId: number; channel: string; sourceNodeId: number; sourceSlot: number }; result: Record<string, never> };
   "material.removeGraphOutput": { params: { entityId: number; channel: string }; result: Record<string, never> };
   "material.setNodePosition": { params: { entityId: number; nodeId: number; posX: number; posY: number }; result: Record<string, never> };
+  "script.listScripts": { params: Record<string, never>; result: { scripts: ScriptFileInfo[] } };
+  "script.getContent": { params: { path: string }; result: { content: string; language: string; readOnly: boolean } };
+  "script.saveContent": { params: { path: string; content: string }; result: { success: boolean } };
   "animation.getState": { params: { entityId: number }; result: { hasAnimator: boolean; hasGraph: boolean; graphName?: string; currentState?: number; nextState?: number; blendFactor?: number; transitionTime?: number; transitionDuration?: number; defaultState?: number; states?: AnimGraphState[]; transitions?: AnimGraphTransition[]; parameters?: AnimGraphParameter[]; clipTracks?: AnimClipTrack[]; clipDuration?: number; sampleTime?: number } };
   "animation.addState": { params: { entityId: number; name?: string }; result: { index: number } };
   "animation.updateState": { params: { entityId: number; stateIndex: number; name?: string; clip?: string; speed?: number; loop?: boolean; duration?: number }; result: Record<string, never> };
