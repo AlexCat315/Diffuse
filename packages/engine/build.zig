@@ -149,8 +149,7 @@ const vulkan_c_flags = [_][]const u8{
     "-std=c11",
 };
 
-const vulkan_cpp_sources = [_][]const u8{
-};
+const vulkan_cpp_sources = [_][]const u8{};
 
 const plutovg_c_flags = [_][]const u8{
     "-std=c11",
@@ -1020,7 +1019,7 @@ fn generateCompileCommandsJson(
     // ── Electron native addon (N-API) ──────────────────────────────
     // Detect node-addon-api and Node.js header include paths for clangd.
     const napi_include = captureCommandOutput(b, &.{
-        "node",                                                                                "-e",
+        "node",                                                                          "-e",
         "console.log(require('path').resolve('../editor/node_modules/node-addon-api'))",
     });
     const node_include = captureCommandOutput(b, &.{
