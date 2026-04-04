@@ -3,6 +3,7 @@ const rhi_mod = @import("../../rhi/device.zig");
 const shader_support = @import("../shader_support.zig");
 const math = @import("../../math/mat4.zig");
 const mesh_pass_mod = @import("mesh_pass.zig");
+const base_pass_mod = @import("base_pass.zig");
 
 const fullscreen_triangle_vertex_count: u32 = 3;
 
@@ -15,7 +16,8 @@ pub const SkyboxUniforms = extern struct {
 
 pub const SkyboxPass = struct {
     sampler: ?rhi_mod.Sampler = null,
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    pipeline_hdr: ?rhi_mod.GraphicsPipeline = null,
+    pipeline_ldr: ?rhi_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
     pub fn init(device: *rhi_mod.RhiDevice) !SkyboxPass {
@@ -28,7 +30,10 @@ pub const SkyboxPass = struct {
         if (self.sampler) |*sampler| {
             device.releaseSampler(sampler);
         }
-        if (self.pipeline) |*pipeline| {
+        if (self.pipeline_hdr) |*pipeline| {
+            device.releaseGraphicsPipeline(pipeline);
+        }
+        if (self.pipeline_ldr) |*pipeline| {
             device.releaseGraphicsPipeline(pipeline);
         }
         if (self.stages) |*stages| {
@@ -38,7 +43,7 @@ pub const SkyboxPass = struct {
     }
 
     pub fn isReady(self: *const SkyboxPass) bool {
-        return self.pipeline != null and self.sampler != null;
+        return self.pipeline_hdr != null and self.pipeline_ldr != null and self.sampler != null;
     }
 
     pub fn draw(
@@ -48,12 +53,17 @@ pub const SkyboxPass = struct {
         pass: rhi_mod.RenderPass,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
         env_map_texture: *const rhi_mod.Texture,
+        target: base_pass_mod.DrawTarget,
     ) void {
         if (!self.isReady()) {
             return;
         }
 
-        device.bindGraphicsPipeline(pass, &self.pipeline.?);
+        const pipeline = switch (target) {
+            .hdr => &self.pipeline_hdr.?,
+            .ldr => &self.pipeline_ldr.?,
+        };
+        device.bindGraphicsPipeline(pass, pipeline);
 
         // Extract view rotation only (remove translation)
         var view_rot_only = prepared_scene.view_matrix;
@@ -116,7 +126,7 @@ pub const SkyboxPass = struct {
         const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{};
         const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{};
 
-        self.pipeline = try device.createGraphicsPipeline(.{
+        self.pipeline_hdr = try device.createGraphicsPipeline(.{
             .vertex_shader = &self.stages.?.vertex,
             .fragment_shader = &self.stages.?.fragment,
             .vertex_buffer_layouts = vertex_layouts[0..],
@@ -128,6 +138,22 @@ pub const SkyboxPass = struct {
             .cull_mode = .none,
             .front_face = .counter_clockwise,
             .depth_compare = .less_or_equal, // Skybox is drawn at Z=1.0
+            .depth_test = true,
+            .depth_write = false,
+        });
+
+        self.pipeline_ldr = try device.createGraphicsPipeline(.{
+            .vertex_shader = &self.stages.?.vertex,
+            .fragment_shader = &self.stages.?.fragment,
+            .vertex_buffer_layouts = vertex_layouts[0..],
+            .vertex_attributes = vertex_attributes[0..],
+            .color_format = .bgra8_unorm_srgb,
+            .depth_format = .d32_float,
+            .primitive_type = .triangle_list,
+            .fill_mode = .fill,
+            .cull_mode = .none,
+            .front_face = .counter_clockwise,
+            .depth_compare = .less_or_equal,
             .depth_test = true,
             .depth_write = false,
         });

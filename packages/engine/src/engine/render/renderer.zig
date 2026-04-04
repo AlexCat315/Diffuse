@@ -1829,7 +1829,7 @@ pub const Renderer = struct {
                     if (self.skybox_pass) |*skybox_pass| {
                         if (active_render_mode != .wireframe and skybox_pass.isReady() and prepared_scene.environment_map != null) {
                             const skybox_start = std.time.nanoTimestamp();
-                            skybox_pass.draw(&self.rhi, frame, scene_pass, &prepared_scene, prepared_scene.environment_map.?);
+                            skybox_pass.draw(&self.rhi, frame, scene_pass, &prepared_scene, prepared_scene.environment_map.?, if (viewport_active) .hdr else .ldr);
                             self.graph.recordPassStat(pass_stats, .skybox_pass, durationNs(skybox_start, std.time.nanoTimestamp()), 1, 1);
                             draw_stats.draw_calls += 1;
                             draw_stats.triangles_drawn += 1;
