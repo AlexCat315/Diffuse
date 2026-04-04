@@ -76,25 +76,58 @@ pub fn checkAndBroadcast(server: *Server, layer_context: *core.LayerContext) !vo
         // Scene change notification already covers this via revision
     }
 
-    // ── Console log entries ────────────────────────────────────
+    // ── Console log entries (batched into one notification) ───
     var log_buf: [64]server_mod.ConsoleLogEntry = undefined;
     const log_count = server.drainConsoleLogs(&log_buf);
-    for (log_buf[0..log_count]) |entry| {
-        const notification = try buildNotification(
-            server.allocator,
-            "on:console.log",
-            .{
-                .level = entry.level[0..entry.level_len],
-                .message = entry.message[0..entry.message_len],
-                .source = if (entry.source_len > 0) entry.source[0..entry.source_len] else null,
-            },
-        );
-        server.broadcast(notification);
+    if (log_count > 0) {
+        // Build batched notification: {"jsonrpc":"2.0","method":"on:console.logs","params":{"entries":[...]}}
+        var batch_buf_arr = std.ArrayList(u8).empty;
+        defer batch_buf_arr.deinit(server.allocator);
+        {
+            var w = batch_buf_arr.writer(server.allocator);
+            var tmp: [4096]u8 = undefined;
+            var adapter = w.adaptToNewApi(&tmp);
+            try adapter.new_interface.writeAll("{\"jsonrpc\":\"2.0\",\"method\":\"on:console.logs\",\"params\":{\"entries\":[");
+            for (log_buf[0..log_count], 0..) |entry, i| {
+                if (i > 0) try adapter.new_interface.writeAll(",");
+                try adapter.new_interface.writeAll("{\"level\":\"");
+                try adapter.new_interface.writeAll(entry.level[0..entry.level_len]);
+                try adapter.new_interface.writeAll("\",\"message\":\"");
+                // Escape JSON special chars in message
+                for (entry.message[0..entry.message_len]) |ch| {
+                    switch (ch) {
+                        '"' => try adapter.new_interface.writeAll("\\\""),
+                        '\\' => try adapter.new_interface.writeAll("\\\\"),
+                        '\n' => try adapter.new_interface.writeAll("\\n"),
+                        '\r' => try adapter.new_interface.writeAll("\\r"),
+                        '\t' => try adapter.new_interface.writeAll("\\t"),
+                        else => {
+                            const byte: [1]u8 = .{ch};
+                            try adapter.new_interface.writeAll(&byte);
+                        },
+                    }
+                }
+                try adapter.new_interface.writeAll("\"");
+                if (entry.source_len > 0) {
+                    try adapter.new_interface.writeAll(",\"source\":\"");
+                    try adapter.new_interface.writeAll(entry.source[0..entry.source_len]);
+                    try adapter.new_interface.writeAll("\"");
+                }
+                try adapter.new_interface.writeAll("}");
+            }
+            try adapter.new_interface.writeAll("]}}");
+            try adapter.new_interface.flush();
+            if (adapter.err) |err| return err;
+        }
+        const owned = try batch_buf_arr.toOwnedSlice(server.allocator);
+        server.broadcast(owned);
     }
 
     // ── Viewport metrics (FPS, draw calls, triangles) ──────────
+    // Use stack buffer to avoid per-broadcast heap allocation.
+    // Interval of 60 frames (~1s @ 60fps) to minimise main-thread overhead.
     state.frames_since_metrics += 1;
-    if (state.frames_since_metrics >= 30) {
+    if (state.frames_since_metrics >= 60) {
         state.frames_since_metrics = 0;
         const renderer = layer_context.renderer;
         const report = renderer.last_frame_report;
@@ -104,18 +137,22 @@ pub fn checkAndBroadcast(server: *Server, layer_context: *core.LayerContext) !vo
         else
             0.0;
         const frame_time_ms: f64 = @as(f64, layer_context.delta_seconds) * 1000.0;
-        const notification = try buildNotification(
-            server.allocator,
-            "on:viewport.metrics",
+
+        var stack_buf: [512]u8 = undefined;
+        const json = std.fmt.bufPrint(
+            &stack_buf,
+            "{{\"jsonrpc\":\"2.0\",\"method\":\"on:viewport.metrics\",\"params\":{{\"fps\":{d},\"frameTimeMs\":{d},\"drawCalls\":{d},\"triangles\":{d},\"frameDelayMs\":{d}}}}}",
             .{
-                .fps = @as(u32, @intFromFloat(@min(fps, 9999.0))),
-                .frameTimeMs = @as(u32, @intFromFloat(@min(frame_time_ms + 0.5, 9999.0))),
-                .drawCalls = @as(u32, @intCast(@min(report.draw_calls, std.math.maxInt(u32)))),
-                .triangles = @as(u32, @intCast(@min(report.triangles_drawn, std.math.maxInt(u32)))),
-                .frameDelayMs = delay_ms,
+                @as(u32, @intFromFloat(@min(fps, 9999.0))),
+                @as(u32, @intFromFloat(@min(frame_time_ms + 0.5, 9999.0))),
+                @as(u32, @intCast(@min(report.draw_calls, std.math.maxInt(u32)))),
+                @as(u32, @intCast(@min(report.triangles_drawn, std.math.maxInt(u32)))),
+                delay_ms,
             },
-        );
-        server.broadcast(notification);
+        ) catch unreachable;
+        // Copy to heap for broadcast queue (single allocation)
+        const owned = server.allocator.dupe(u8, json) catch return;
+        server.broadcast(owned);
     }
 }
 
