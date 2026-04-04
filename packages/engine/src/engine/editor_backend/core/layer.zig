@@ -136,6 +136,17 @@ pub const EditorLayer = struct {
     fn onUpdate(context: *anyopaque, layer_context: *engine.core.LayerContext) !void {
         const self: *EditorLayer = @ptrCast(@alignCast(context));
 
+        // In editor-server mode, sync viewport state from the renderer since
+        // there is no imgui viewport panel to set these fields.
+        if (self.state.editor_server_mode) {
+            const sv = &layer_context.renderer.scene_viewport;
+            self.state.viewport_extent = .{
+                @floatFromInt(sv.width),
+                @floatFromInt(sv.height),
+            };
+            self.state.viewport_origin = .{ 0.0, 0.0 };
+        }
+
         ai_collaboration.beginFrame(&self.state);
         history.tickDeferredSnapshot(&self.state, layer_context.world);
         try mesh_edit.syncSession(&self.state, layer_context);

@@ -250,19 +250,34 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
     // Electron can display the rendered frame via CALayer (zero-copy).
     app.renderer.scene_viewport.use_iosurface = true;
 
+    // Push EditorLayer so camera controls, manipulation shortcuts, and
+    // gizmo interaction work through the input forwarding from Electron.
+    var editor_layer = editor_layer_mod.EditorLayer{};
+    editor_layer.state.editor_server_mode = true;
+    if (loaded_project) |*project| {
+        editor_layer.state.setProjectContext(project.root_path, project.file.name, project.file.content_dir, project.file.start_scene);
+        std.log.info("opening project '{s}' at {s}", .{ project.file.name, project.root_path });
+    }
+
+    // Start MCP runtime for AI collaboration support (before EditorLayer push
+    // so we can wire up the collaboration stores)
+    const mcp_runtime = try engine.mcp.runtime.Runtime.init(allocator, &app, .{
+        .enable_stdio_server = false,
+    });
+    defer mcp_runtime.deinit();
+    editor_layer.state.ai_collaboration = mcp_runtime.collaborationStore();
+    editor_layer.state.ai_snapshot_store = mcp_runtime.snapshotStore();
+    editor_layer.state.ai_tool_bridge = mcp_runtime.toolBridge();
+    editor_layer.state.ai_collaboration_bridge = mcp_runtime.collaborationBridge();
+    try app.pushOverlay(editor_layer.asLayer());
+    try app.pushOverlay(mcp_runtime.syncLayer().asLayer());
+
     // Start the Editor RPC WebSocket server
     const editor_rpc = @import("guava").editor_rpc;
     var rpc_server = editor_rpc.server.Server.init(allocator, options.editor_port);
     defer rpc_server.deinit();
 
     try app.pushOverlay(rpc_server.asLayer());
-
-    // Also start MCP runtime for AI collaboration support
-    const mcp_runtime = try engine.mcp.runtime.Runtime.init(allocator, &app, .{
-        .enable_stdio_server = false,
-    });
-    defer mcp_runtime.deinit();
-    try app.pushOverlay(mcp_runtime.syncLayer().asLayer());
 
     std.log.info("Editor server mode: RPC on port {d}", .{options.editor_port});
 

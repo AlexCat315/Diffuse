@@ -766,6 +766,9 @@ pub const EditorState = struct {
     viewport_focused: bool = false,
     viewport_has_image: bool = false,
     viewport_overlay_hovered: bool = false,
+    /// When true, viewport is managed by Electron — automatically assume
+    /// hovered/focused/has_image since Electron handles its own focus.
+    editor_server_mode: bool = false,
     viewport_origin: [2]f32 = .{ 0.0, 0.0 },
     viewport_extent: [2]f32 = .{ 1.0, 1.0 }, // 使用 1x1 作为安全默认值，防止除零错误
     viewport_selection_press_active: bool = false,
