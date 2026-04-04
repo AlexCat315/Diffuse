@@ -31,7 +31,7 @@ try {
 
 function getEngineBinaryPath(): string {
   // In development, use the sibling engine package's build output
-  const devPath = path.resolve(__dirname, "../../..", "../engine/zig-out/bin/guava-engine");
+  const devPath = path.resolve(__dirname, "../../..", "engine/zig-out/bin/guava-engine");
   return devPath;
 }
 
