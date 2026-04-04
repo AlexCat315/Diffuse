@@ -154,6 +154,27 @@ export interface ScriptFileInfo {
   sizeBytes: number;
 }
 
+export interface VfxEntityInfo {
+  entityId: number;
+  name: string;
+  kind: string;
+}
+
+export interface VfxConfig {
+  kind: string;
+  looping: boolean;
+  emissionRate: number;
+  particleLifetime: number;
+  speed: number;
+  maxParticles: number;
+  radius: number;
+  spread: number;
+  size: number;
+  colorR: number;
+  colorG: number;
+  colorB: number;
+}
+
 // ── RPC Method Signatures ──────────────────────────────────
 
 export interface RpcMethods {
@@ -259,6 +280,10 @@ export interface RpcMethods {
   "script.listScripts": { params: Record<string, never>; result: { scripts: ScriptFileInfo[] } };
   "script.getContent": { params: { path: string }; result: { content: string; language: string; readOnly: boolean } };
   "script.saveContent": { params: { path: string; content: string }; result: { success: boolean } };
+  "particle.listVfxEntities": { params: Record<string, never>; result: { entities: VfxEntityInfo[] } };
+  "particle.getConfig": { params: { entityId: number }; result: { found: boolean; config?: VfxConfig } };
+  "particle.setConfig": { params: { entityId: number; kind?: string; looping?: boolean; emissionRate?: number; particleLifetime?: number; speed?: number; maxParticles?: number; radius?: number; spread?: number; size?: number; colorR?: number; colorG?: number; colorB?: number }; result: { success: boolean } };
+  "particle.applyPreset": { params: { entityId: number; preset: string }; result: { success: boolean } };
   "animation.getState": { params: { entityId: number }; result: { hasAnimator: boolean; hasGraph: boolean; graphName?: string; currentState?: number; nextState?: number; blendFactor?: number; transitionTime?: number; transitionDuration?: number; defaultState?: number; states?: AnimGraphState[]; transitions?: AnimGraphTransition[]; parameters?: AnimGraphParameter[]; clipTracks?: AnimClipTrack[]; clipDuration?: number; sampleTime?: number } };
   "animation.addState": { params: { entityId: number; name?: string }; result: { index: number } };
   "animation.updateState": { params: { entityId: number; stateIndex: number; name?: string; clip?: string; speed?: number; loop?: boolean; duration?: number }; result: Record<string, never> };
