@@ -15,6 +15,7 @@
     "lint": "eslint src/"
   },
   "dependencies": {
+    "@xyflow/react": "^12.10.2",
     "flexlayout-react": "^0.8.19",
     "immer": "^11.1.4",
     "ws": "^8.20.0",

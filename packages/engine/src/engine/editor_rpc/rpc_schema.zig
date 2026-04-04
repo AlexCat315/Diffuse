@@ -128,6 +128,36 @@ pub const SharedTypes = struct {
         trackType: []const u8,
         keyframeCount: u64,
     };
+
+    // ── Material graph shared types ────────────────────────────
+
+    pub const MaterialGraphNodeInfo = struct {
+        id: u32,
+        kind: []const u8,
+        outputType: []const u8,
+        channel: ?[]const u8 = null,
+        valueKind: []const u8,
+        scalar: f64,
+        vec2: [2]f64,
+        vec3: [3]f64,
+        vec4: [4]f64,
+        textureHandle: ?u32 = null,
+        posX: f64,
+        posY: f64,
+    };
+
+    pub const MaterialGraphConnectionInfo = struct {
+        fromNodeId: u32,
+        fromSlot: u8,
+        toNodeId: u32,
+        toSlot: u8,
+    };
+
+    pub const MaterialGraphOutputInfo = struct {
+        channel: []const u8,
+        sourceNodeId: u32,
+        sourceSlot: u8,
+    };
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1057,6 +1087,96 @@ pub const Methods = struct {
 
     pub const @"material.setPreviewPrimitive" = struct {
         pub const Params = struct { primitive: []const u8 };
+        pub const Result = struct {};
+    };
+
+    // ── material graph editing ─────────────────────────────────
+
+    pub const @"material.getGraph" = struct {
+        pub const Params = struct { entityId: u64 };
+        pub const Result = struct {
+            hasGraph: bool,
+            nodes: ?[]const SharedTypes.MaterialGraphNodeInfo = null,
+            connections: ?[]const SharedTypes.MaterialGraphConnectionInfo = null,
+            outputs: ?[]const SharedTypes.MaterialGraphOutputInfo = null,
+        };
+    };
+
+    pub const @"material.addGraphNode" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            kind: []const u8,
+            posX: f64 = 0,
+            posY: f64 = 0,
+        };
+        pub const Result = struct { nodeId: u32 };
+    };
+
+    pub const @"material.removeGraphNode" = struct {
+        pub const Params = struct { entityId: u64, nodeId: u32 };
+        pub const Result = struct {};
+    };
+
+    pub const @"material.updateGraphNode" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            nodeId: u32,
+            channel: ?[]const u8 = null,
+            outputType: ?[]const u8 = null,
+            valueKind: ?[]const u8 = null,
+            scalar: ?f64 = null,
+            vec2: ?[2]f64 = null,
+            vec3: ?[3]f64 = null,
+            vec4: ?[4]f64 = null,
+            textureHandle: ?u32 = null,
+        };
+        pub const Result = struct {};
+    };
+
+    pub const @"material.addGraphConnection" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            fromNodeId: u32,
+            fromSlot: u8 = 0,
+            toNodeId: u32,
+            toSlot: u8 = 0,
+        };
+        pub const Result = struct {};
+    };
+
+    pub const @"material.removeGraphConnection" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            fromNodeId: u32,
+            fromSlot: u8 = 0,
+            toNodeId: u32,
+            toSlot: u8 = 0,
+        };
+        pub const Result = struct {};
+    };
+
+    pub const @"material.setGraphOutput" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            channel: []const u8,
+            sourceNodeId: u32,
+            sourceSlot: u8 = 0,
+        };
+        pub const Result = struct {};
+    };
+
+    pub const @"material.removeGraphOutput" = struct {
+        pub const Params = struct { entityId: u64, channel: []const u8 };
+        pub const Result = struct {};
+    };
+
+    pub const @"material.setNodePosition" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            nodeId: u32,
+            posX: f64,
+            posY: f64,
+        };
         pub const Result = struct {};
     };
 

@@ -515,6 +515,34 @@ export const en = {
     disconnect: "Disconnect",
     useLocal: "Use Local Engine",
   },
+
+  // ── Material Graph Editor ────────────────────────────
+  materialGraph: {
+    title: "Material Graph",
+    noEntity: "Select an entity with a material.",
+    noGraph: "No material graph available for this entity.",
+    addNode: "Add Node",
+    removeNode: "Remove Node",
+    outputs: "Outputs",
+    noOutputs: "No outputs defined.",
+    removeOutput: "Remove Output",
+    nodeProperties: "Node Properties",
+    kind: "Kind",
+    channel: "Channel",
+    value: "Value",
+    none: "none",
+    assignOutput: "Assign as Output",
+    selectChannel: "Select channel…",
+    nodeList: "Nodes",
+    inputParameter: "Input Parameter",
+    constant: "Constant",
+    textureSample: "Texture Sample",
+    mathAdd: "Math Add",
+    mathMultiply: "Math Multiply",
+    splitChannels: "Split Channels",
+    normalMap: "Normal Map",
+    output: "Output",
+  },
 };
 
 type DeepStringRecord<T> = {
