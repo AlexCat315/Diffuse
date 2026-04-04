@@ -7,7 +7,7 @@ const history = @import("../actions/history.zig");
 const camera = @import("../interaction/camera.zig");
 const content_browser = @import("../assets/browser.zig");
 const preferences = @import("../core/preferences.zig");
-const scene_hierarchy = @import("panels/scene/scene_hierarchy.zig");
+const reparenting = @import("../actions/reparenting.zig");
 const floating_window_blocker = @import("floating_window_blocker.zig");
 const layout = @import("layout.zig");
 const i18n = @import("../i18n/mod.zig");
@@ -95,10 +95,10 @@ pub fn drawMenuBar(state: *EditorState, layer_context: *engine.core.LayerContext
             try history.deleteSelection(state, layer_context);
         }
         if (gui.menuItem(state.text(.parent_to_active), "P", false, layer_context.renderer.selectedEntities().len > 1)) {
-            try scene_hierarchy.parentSelection(state, layer_context);
+            try reparenting.parentSelection(state, layer_context);
         }
         if (gui.menuItem(state.text(.unparent), "Shift+P", false, has_selection)) {
-            try scene_hierarchy.unparentSelection(state, layer_context);
+            try reparenting.unparentSelection(state, layer_context);
         }
     }
 

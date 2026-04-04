@@ -9,7 +9,7 @@ const state_mod = @import("../core/state.zig");
 const utils = @import("../common/utils.zig");
 const camera = @import("camera.zig");
 const history = @import("../actions/history.zig");
-const scene_hierarchy = @import("../ui/panels/scene/scene_hierarchy.zig");
+const reparenting = @import("../actions/reparenting.zig");
 
 const ManipulationMode = state_mod.ManipulationMode;
 const TransformSpace = state_mod.TransformSpace;
@@ -119,9 +119,9 @@ pub fn handleEditingShortcuts(state: *EditorState, layer_context: *engine.core.L
     }
     if (input.wasKeyPressed(.p)) {
         if (input.modifiers.shift) {
-            try scene_hierarchy.unparentSelection(state, layer_context);
+            try reparenting.unparentSelection(state, layer_context);
         } else {
-            try scene_hierarchy.parentSelection(state, layer_context);
+            try reparenting.parentSelection(state, layer_context);
         }
     }
     if (input.wasKeyPressed(.g)) {

@@ -2,7 +2,7 @@ const std = @import("std");
 const engine = @import("guava");
 const gui = @import("../ui/gui.zig");
 const i18n = @import("../i18n/mod.zig");
-const provider_support = @import("../ui/panels/ai/provider_support.zig");
+
 const state_mod = @import("state.zig");
 
 const EditorState = state_mod.EditorState;
@@ -73,7 +73,8 @@ const provider_defaults = [_]ProviderDefaults{
 };
 
 fn fixedBufferSlice(buffer: []const u8) []const u8 {
-    return provider_support.fixedBufferSlice(buffer);
+    const len = std.mem.indexOfScalar(u8, buffer, 0) orelse buffer.len;
+    return buffer[0..len];
 }
 
 fn persistedFieldSlice(value: []const u8) []const u8 {
@@ -82,7 +83,10 @@ fn persistedFieldSlice(value: []const u8) []const u8 {
 }
 
 fn writeFixedBuffer(buffer: []u8, value: []const u8) void {
-    provider_support.writeFixedBuffer(buffer, value);
+    @memset(buffer, 0);
+    if (buffer.len == 0) return;
+    const copy_len = @min(buffer.len - 1, value.len);
+    @memcpy(buffer[0..copy_len], value[0..copy_len]);
 }
 
 fn providerIsEmpty(provider: PersistedProvider) bool {
