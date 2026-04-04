@@ -1,13 +1,14 @@
 ///! Comptime TypeScript code generator.
 ///!
-///! Reads rpc_schema.zig at compile time and emits fully typed TypeScript
-///! definitions.  No runtime reflection — all work happens in comptime.
+///! Reads the schema/ modules at compile time and emits fully typed
+///! TypeScript definitions.  No runtime reflection — all work happens
+///! in comptime.
 ///!
 ///! Usage (from packages/engine/):
 ///!   zig run tools/gen_rpc_types.zig > ../editor/src/shared/rpc-types.generated.ts
 ///!
 const std = @import("std");
-const schema = @import("rpc_schema.zig");
+const schema = @import("schema/mod.zig");
 
 // Generate the entire file at comptime — O(1) runtime work.
 const output = generate();
@@ -26,7 +27,7 @@ fn generate() []const u8 {
     var r: []const u8 =
         \\// ╔═══════════════════════════════════════════════════════════╗
         \\// ║  AUTO-GENERATED — do not edit manually.                  ║
-        \\// ║  Source of truth: src/engine/editor_rpc/rpc_schema.zig   ║
+        \\// ║  Source of truth: src/engine/editor_rpc/schema/           ║
         \\// ║  Regenerate:                                             ║
         \\// ║    zig run src/engine/editor_rpc/gen_types.zig \        ║
         \\// ║      2> ../editor/src/shared/rpc-types.generated.ts      ║
@@ -37,25 +38,31 @@ fn generate() []const u8 {
 
     // ── Shared data types ────────────────────────────────────────
     r = r ++ "// ── Data Types ─────────────────────────────────────────────\n\n";
-    for (@typeInfo(schema.SharedTypes).@"struct".decls) |decl| {
+    for (@typeInfo(schema.types).@"struct".decls) |decl| {
         if (comptime std.mem.eql(u8, decl.name, "JsonValue")) continue;
-        r = r ++ emitInterface(decl.name, @field(schema.SharedTypes, decl.name));
+        // Skip enum types — they are represented as strings in the wire format.
+        if (comptime std.mem.eql(u8, decl.name, "TransformSpace")) continue;
+        if (comptime std.mem.eql(u8, decl.name, "ViewportShadingMode")) continue;
+        if (comptime std.mem.eql(u8, decl.name, "RenderJobStatus")) continue;
+        r = r ++ emitInterface(decl.name, @field(schema.types, decl.name));
     }
 
     // ── RPC method map ───────────────────────────────────────────
     r = r ++ "// ── RPC Method Signatures ──────────────────────────────────\n\n";
     r = r ++ "export interface RpcMethods {\n";
-    for (@typeInfo(schema.Methods).@"struct".decls) |decl| {
-        const M = @field(schema.Methods, decl.name);
-        r = r ++ "  \"" ++ decl.name ++ "\": { params: " ++ typeToTs(M.Params) ++ "; result: " ++ typeToTs(M.Result) ++ " };\n";
+    inline for (schema.method_modules) |mod| {
+        for (@typeInfo(mod).@"struct".decls) |decl| {
+            const M = @field(mod, decl.name);
+            r = r ++ "  \"" ++ decl.name ++ "\": { params: " ++ typeToTs(M.Params) ++ "; result: " ++ typeToTs(M.Result) ++ " };\n";
+        }
     }
     r = r ++ "}\n\n";
 
     // ── Subscription events ──────────────────────────────────────
     r = r ++ "// ── Subscription Events ───────────────────────────────────\n\n";
     r = r ++ "export interface SubscriptionEvents {\n";
-    for (@typeInfo(schema.Subscriptions).@"struct".decls) |decl| {
-        r = r ++ "  \"" ++ decl.name ++ "\": " ++ typeToTs(@field(schema.Subscriptions, decl.name)) ++ ";\n";
+    for (@typeInfo(schema.subscriptions).@"struct".decls) |decl| {
+        r = r ++ "  \"" ++ decl.name ++ "\": " ++ typeToTs(@field(schema.subscriptions, decl.name)) ++ ";\n";
     }
     r = r ++ "}\n\n";
 
@@ -96,11 +103,11 @@ fn generate() []const u8 {
 
 fn typeToTs(comptime T: type) []const u8 {
     // Opaque sentinel → unknown
-    if (T == schema.SharedTypes.JsonValue) return "unknown";
+    if (T == schema.types.JsonValue) return "unknown";
 
     // Named shared type?
-    for (@typeInfo(schema.SharedTypes).@"struct".decls) |decl| {
-        if (T == @field(schema.SharedTypes, decl.name)) return decl.name;
+    for (@typeInfo(schema.types).@"struct".decls) |decl| {
+        if (T == @field(schema.types, decl.name)) return decl.name;
     }
 
     return switch (@typeInfo(T)) {

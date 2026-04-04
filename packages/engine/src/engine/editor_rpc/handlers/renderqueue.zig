@@ -9,12 +9,7 @@ const Ctx = ctx_mod.Ctx;
 
 // ── Job storage (process-lifetime) ──────────────────────────────
 
-const RenderJobStatus = enum {
-    queued,
-    rendering,
-    complete,
-    failed,
-};
+const RenderJobStatus = @import("../schema/types.zig").RenderJobStatus;
 
 const RenderJob = struct {
     sequence_path: [256]u8 = [_]u8{0} ** 256,

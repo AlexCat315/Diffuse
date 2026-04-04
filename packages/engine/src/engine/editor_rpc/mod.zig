@@ -3,6 +3,7 @@ pub const dispatch = @import("dispatch.zig");
 pub const ctx = @import("ctx.zig");
 pub const subscriptions = @import("subscriptions.zig");
 pub const websocket = @import("websocket.zig");
+pub const schema = @import("schema/mod.zig");
 
 test {
     _ = @import("server.zig");
@@ -10,4 +11,5 @@ test {
     _ = @import("ctx.zig");
     _ = @import("subscriptions.zig");
     _ = @import("websocket.zig");
+    _ = @import("schema/mod.zig");
 }

@@ -10,12 +10,7 @@ const ffmpeg_encode = cinematic.ffmpeg_encode;
 // Render Queue data model
 // ---------------------------------------------------------------------------
 
-pub const RenderJobStatus = enum {
-    queued,
-    rendering,
-    complete,
-    failed,
-};
+pub const RenderJobStatus = @import("guava").editor_rpc.schema.types.RenderJobStatus;
 
 pub const RenderJobConfig = struct {
     sequence_path: [256]u8 = [_]u8{0} ** 256,

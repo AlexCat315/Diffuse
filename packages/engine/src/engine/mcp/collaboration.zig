@@ -25,10 +25,7 @@ pub const ManipulationMode = enum {
     scale,
 };
 
-pub const TransformSpace = enum {
-    local,
-    world,
-};
+pub const TransformSpace = @import("../editor_rpc/schema/types.zig").TransformSpace;
 
 pub const CameraProjectionKind = enum {
     perspective,
