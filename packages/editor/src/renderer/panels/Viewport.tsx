@@ -530,7 +530,7 @@ export function Viewport() {
 
     const unsubSAB = window.guavaEngine.onViewportSharedBuffer((sab) => {
       sabRef = sab;
-      sabHeader = new Uint32Array(sab, 0, 4); // [width, height, generation, reserved]
+      sabHeader = new Uint32Array(sab, 0, 4); // [width, height, generation, readIndex]
       sabPixels = new Uint8Array(sab, 16);     // pixel data starts at byte 16
     });
 
@@ -541,9 +541,12 @@ export function Viewport() {
           lastGeneration = gen;
           const width = sabHeader[0];
           const height = sabHeader[1];
+          const bufIdx = sabHeader[3]; // ping-pong: which buffer to read (0 or 1)
           if (width > 0 && height > 0) {
-            // Create a view into the SAB pixel region (no copy)
-            const src = new Uint8Array(sabRef!, 16, width * height * 4);
+            // Double-buffered: each buffer is half of the pixel region.
+            const maxPixelBytes = (sabRef!.byteLength - 16) / 2;
+            const offset = 16 + bufIdx * maxPixelBytes;
+            const src = new Uint8Array(sabRef!, offset, width * height * 4);
             uploadAndDraw(src, width, height);
           }
         }
