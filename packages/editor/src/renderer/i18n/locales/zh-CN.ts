@@ -129,6 +129,23 @@ export const zhCN: TranslationKeys = {
     waitingForEngine: "等待引擎连接…",
   },
 
+  // ── Viewport Context Menu ─────────────────────────────
+  contextMenu: {
+    focusSelection: "聚焦选中",
+    duplicate: "复制",
+    delete: "删除",
+    add: "添加",
+    addEmpty: "空实体",
+    addCube: "立方体",
+    addSphere: "球体",
+    addPlane: "平面",
+    addPointLight: "点光源",
+    addSpotLight: "聚光灯",
+    addDirLight: "方向光",
+    addCamera: "摄像机",
+    clearSelection: "取消选择",
+  },
+
   // ── Viewport Status ───────────────────────────────────
   viewportStatus: {
     fps: "FPS",

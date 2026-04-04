@@ -127,6 +127,23 @@ export const en = {
     waitingForEngine: "Waiting for engine connection…",
   },
 
+  // ── Viewport Context Menu ─────────────────────────────
+  contextMenu: {
+    focusSelection: "Focus Selection",
+    duplicate: "Duplicate",
+    delete: "Delete",
+    add: "Add",
+    addEmpty: "Empty",
+    addCube: "Cube",
+    addSphere: "Sphere",
+    addPlane: "Plane",
+    addPointLight: "Point Light",
+    addSpotLight: "Spot Light",
+    addDirLight: "Directional Light",
+    addCamera: "Camera",
+    clearSelection: "Clear Selection",
+  },
+
   // ── Viewport Status ───────────────────────────────────
   viewportStatus: {
     fps: "FPS",
