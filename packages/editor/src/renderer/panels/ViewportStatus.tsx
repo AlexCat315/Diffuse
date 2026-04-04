@@ -4,8 +4,10 @@ import { useConnectionStore } from "../store";
 
 interface ViewportMetrics {
   fps: number;
+  frameTimeMs: number;
   drawCalls: number;
   triangles: number;
+  frameDelayMs: number;
 }
 
 

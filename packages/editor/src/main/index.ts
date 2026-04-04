@@ -133,6 +133,10 @@ async function startEngine(): Promise<void> {
   });
   await engineClient.connect();
 
+  // Register subscription handlers BEFORE any RPC calls so buffered
+  // engine notifications (e.g. console logs) are not silently dropped.
+  setupSubscriptionForwarding();
+
   // Verify connection
   await engineClient.call("editor.getCapabilities", {});
 }
@@ -179,7 +183,6 @@ function monitorEngineProcess(): void {
     try {
       await startEngine();
       monitorEngineProcess(); // Re-attach to new process instance
-      setupSubscriptionForwarding();
       if (mainWindow && !mainWindow.isDestroyed()) {
         mainWindow.webContents.send("engine:connected");
       }
@@ -410,8 +413,8 @@ ipcMain.handle("settings:connectToServer", async (_event, url: string) => {
         },
       });
       await engineClient.connect();
-      await engineClient.call("editor.getCapabilities", {});
       setupSubscriptionForwarding();
+      await engineClient.call("editor.getCapabilities", {});
       mainWindow?.webContents.send("engine:connected");
       return { ok: true };
     }
@@ -427,8 +430,8 @@ ipcMain.handle("settings:connectToServer", async (_event, url: string) => {
       },
     });
     await engineClient.connect();
-    await engineClient.call("editor.getCapabilities", {});
     setupSubscriptionForwarding();
+    await engineClient.call("editor.getCapabilities", {});
     mainWindow?.webContents.send("engine:connected");
     return { ok: true };
   } catch (err) {
@@ -480,7 +483,6 @@ app.whenReady().then(async () => {
   try {
     await startEngine();
     monitorEngineProcess();
-    setupSubscriptionForwarding();
     mainWindow.webContents.send("engine:connected");
   } catch (err) {
     console.error("[Main] Failed to start engine:", err);

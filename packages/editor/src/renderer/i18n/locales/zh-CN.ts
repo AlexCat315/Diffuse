@@ -121,6 +121,7 @@ export const zhCN: TranslationKeys = {
     height: "高度",
     format: "格式",
     path: "路径",
+    frameRate: "帧率",
   },
 
   // ── Viewport ──────────────────────────────────────────

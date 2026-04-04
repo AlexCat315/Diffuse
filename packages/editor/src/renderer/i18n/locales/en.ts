@@ -119,6 +119,7 @@ export const en = {
     height: "Height",
     format: "Format",
     path: "Path",
+    frameRate: "Frame Rate",
   },
 
   // ── Viewport ──────────────────────────────────────────

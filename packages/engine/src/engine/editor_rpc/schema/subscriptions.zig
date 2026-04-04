@@ -13,9 +13,11 @@ pub const @"on:selection.changed" = struct {
 pub const @"on:console.log" = types.LogEntry;
 
 pub const @"on:viewport.metrics" = struct {
-    fps: f64,
-    drawCalls: u64,
-    triangles: u64,
+    fps: u32,
+    frameTimeMs: u32,
+    drawCalls: u32,
+    triangles: u32,
+    frameDelayMs: u32,
 };
 
 pub const @"on:playback.stateChanged" = struct {

@@ -91,6 +91,32 @@ pub fn checkAndBroadcast(server: *Server, layer_context: *core.LayerContext) !vo
         );
         server.broadcast(notification);
     }
+
+    // ── Viewport metrics (FPS, draw calls, triangles) ──────────
+    state.frames_since_metrics += 1;
+    if (state.frames_since_metrics >= 30) {
+        state.frames_since_metrics = 0;
+        const renderer = layer_context.renderer;
+        const report = renderer.last_frame_report;
+        const delay_ms = renderer.current_frame_delay_ms;
+        const fps: f64 = if (layer_context.delta_seconds > 0)
+            1.0 / @as(f64, layer_context.delta_seconds)
+        else
+            0.0;
+        const frame_time_ms: f64 = @as(f64, layer_context.delta_seconds) * 1000.0;
+        const notification = try buildNotification(
+            server.allocator,
+            "on:viewport.metrics",
+            .{
+                .fps = @as(u32, @intFromFloat(@min(fps, 9999.0))),
+                .frameTimeMs = @as(u32, @intFromFloat(@min(frame_time_ms + 0.5, 9999.0))),
+                .drawCalls = @as(u32, @intCast(@min(report.draw_calls, std.math.maxInt(u32)))),
+                .triangles = @as(u32, @intCast(@min(report.triangles_drawn, std.math.maxInt(u32)))),
+                .frameDelayMs = delay_ms,
+            },
+        );
+        server.broadcast(notification);
+    }
 }
 
 fn computeSelectionHash(primary: ?u64, multi: []const u64) u64 {

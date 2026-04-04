@@ -375,7 +375,7 @@ export interface SubscriptionEvents {
   "on:scene.changed": { revision: number; entityIds: number[] };
   "on:selection.changed": { entityIds: number[] };
   "on:console.log": LogEntry;
-  "on:viewport.metrics": { fps: number; drawCalls: number; triangles: number };
+  "on:viewport.metrics": { fps: number; frameTimeMs: number; drawCalls: number; triangles: number; frameDelayMs: number };
   "on:playback.stateChanged": { state: string };
   "on:asset.changed": { assetId: string; changeType: string };
   "on:editor.historyChanged": { cursor: number; totalEntries: number };
