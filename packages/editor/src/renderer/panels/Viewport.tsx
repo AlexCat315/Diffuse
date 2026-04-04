@@ -1,7 +1,8 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useI18n } from "../i18n";
 import { ViewCube } from "./ViewCube";
-import { useConnectionStore } from "../store";
+import { useConnectionStore, useSceneStore } from "../store";
+import { ContextMenu, type MenuItem } from "../components/ContextMenu";
 
 type ShadingMode = "solid" | "material" | "rendered" | "wireframe";
 
@@ -38,6 +39,8 @@ export function Viewport() {
   const shmNameRef = useRef<string | undefined>(undefined);
   const lastSizeRef = useRef({ w: 0, h: 0 });
   const [shadingMode, setShadingMode] = useState<ShadingMode>("material");
+  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  const selectedEntity = useSceneStore((s) => s.selectedEntity);
 
   // Fetch current shading mode on connect
   useEffect(() => {
@@ -104,7 +107,94 @@ export function Viewport() {
     sendInput({ type: "wheel", deltaX: -e.deltaX / 120, deltaY: -e.deltaY / 120, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
   }, [sendInput]);
 
-  const handleContextMenu = useCallback((e: React.MouseEvent) => { e.preventDefault(); }, []);
+  const handleContextMenu = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    const { x, y } = toViewportCoords(e);
+    const screenX = e.clientX;
+    const screenY = e.clientY;
+
+    // Pick entity at cursor position, then build menu
+    window.guavaEngine
+      .call("viewport.pick", { x: Math.round(x), y: Math.round(y), mode: "replace" } as never)
+      .then(() => {
+        // Give a tiny delay for selection state to propagate
+        setTimeout(() => buildContextMenu(screenX, screenY), 50);
+      })
+      .catch(() => {
+        buildContextMenu(screenX, screenY);
+      });
+  }, [toViewportCoords]);
+
+  const buildContextMenu = useCallback((screenX: number, screenY: number) => {
+    const entityId = useSceneStore.getState().selectedEntity;
+    const items: MenuItem[] = [];
+
+    // ── Entity operations (when an entity is selected) ──
+    if (entityId != null) {
+      items.push(
+        {
+          label: t.contextMenu.focusSelection,
+          shortcut: "F",
+          icon: "⊕",
+          onClick: () => sendInput({ type: "keydown", key: "f", shift: false, ctrl: false, alt: false }),
+        },
+        { label: "---" },
+        {
+          label: t.contextMenu.duplicate,
+          shortcut: "Ctrl+D",
+          icon: "❏",
+          onClick: () => {
+            window.guavaEngine.call("scene.duplicateEntity", { entityId } as never).catch(() => {});
+          },
+        },
+        {
+          label: t.contextMenu.delete,
+          shortcut: "Del",
+          icon: "✕",
+          onClick: () => {
+            window.guavaEngine.call("scene.deleteEntity", { entityId } as never).catch(() => {});
+          },
+        },
+        { label: "---" },
+      );
+    }
+
+    // ── Add submenu (always available) ──
+    items.push({
+      label: t.contextMenu.add,
+      icon: "+",
+      children: [
+        { label: t.contextMenu.addEmpty, icon: "○", onClick: () => spawnActor("empty") },
+        { label: "---" },
+        { label: t.contextMenu.addCube, icon: "□", onClick: () => spawnActor("cube") },
+        { label: t.contextMenu.addSphere, icon: "◎", onClick: () => spawnActor("sphere") },
+        { label: t.contextMenu.addPlane, icon: "▬", onClick: () => spawnActor("plane") },
+        { label: "---" },
+        { label: t.contextMenu.addPointLight, icon: "💡", onClick: () => spawnActor("point_light") },
+        { label: t.contextMenu.addSpotLight, icon: "🔦", onClick: () => spawnActor("spot_light") },
+        { label: t.contextMenu.addDirLight, icon: "☀", onClick: () => spawnActor("directional_light") },
+        { label: "---" },
+        { label: t.contextMenu.addCamera, icon: "📷", onClick: () => spawnActor("camera") },
+      ],
+    });
+
+    // ── Clear selection (when entity is selected) ──
+    if (entityId != null) {
+      items.push({ label: "---" });
+      items.push({
+        label: t.contextMenu.clearSelection,
+        onClick: () => {
+          window.guavaEngine.call("editor.setSelection", { entityIds: [] } as never).catch(() => {});
+        },
+      });
+    }
+
+    setContextMenu({ x: screenX, y: screenY, items });
+  }, [t, sendInput]);
+
+  const spawnActor = useCallback((kind: string) => {
+    window.guavaEngine.call("scene.spawnActor", { kind } as never).catch(() => {});
+  }, []);
 
   const mapKeyFn = (e: React.KeyboardEvent): string | null => {
     const k = e.key.toLowerCase();
@@ -402,6 +492,14 @@ export function Viewport() {
             <ViewCube />
           </div>
         </>
+      )}
+      {contextMenu && (
+        <ContextMenu
+          x={contextMenu.x}
+          y={contextMenu.y}
+          items={contextMenu.items}
+          onClose={() => setContextMenu(null)}
+        />
       )}
     </div>
   );

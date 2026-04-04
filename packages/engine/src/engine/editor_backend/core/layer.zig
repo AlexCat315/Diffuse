@@ -172,6 +172,26 @@ pub const EditorLayer = struct {
             try manipulation.handleEditingShortcuts(&self.state, layer_context);
         }
         manipulation.updateActiveTransform(&self.state, layer_context);
+        // In editor-server mode, detect gizmo handle clicks and initiate drag
+        // sessions automatically. In the imgui path this was done by the UI;
+        // here we do it in the update loop using the forwarded mouse events.
+        if (self.state.editor_server_mode and !self.state.manipulation_drag_active) {
+            const input = layer_context.input;
+            if (input.wasMousePressed(.left) and !input.modifiers.alt and self.state.manipulation_mode != .none) {
+                const sv = &layer_context.renderer.scene_viewport;
+                if (sv.width > 0 and sv.height > 0) {
+                    const mx: u32 = @intFromFloat(std.math.clamp(input.mouse_position[0], 0.0, @as(f32, @floatFromInt(sv.width -| 1))));
+                    const my: u32 = @intFromFloat(std.math.clamp(input.mouse_position[1], 0.0, @as(f32, @floatFromInt(sv.height -| 1))));
+                    if (camera.activeCameraRayFromViewportPixel(&self.state, layer_context, .{ mx, my }, .{ sv.width, sv.height })) |ray| {
+                        if (manipulation.pickGizmoHandle(&self.state, layer_context, ray)) |handle| {
+                            manipulation.beginGizmoHandleDrag(&self.state, layer_context, handle, ray) catch |err| {
+                                std.log.err("Failed to begin gizmo drag: {s}", .{@errorName(err)});
+                            };
+                        }
+                    }
+                }
+            }
+        }
         camera.handleCameraControls(&self.state, layer_context);
         try mesh_edit.syncSession(&self.state, layer_context);
         manipulation.refreshGizmoState(&self.state, layer_context);
