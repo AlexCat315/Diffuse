@@ -41,6 +41,7 @@ fn generate() []const u8 {
     for (@typeInfo(schema.types).@"struct".decls) |decl| {
         if (comptime std.mem.eql(u8, decl.name, "JsonValue")) continue;
         // Skip enum types — they are represented as strings in the wire format.
+        if (comptime std.mem.eql(u8, decl.name, "ManipulationMode")) continue;
         if (comptime std.mem.eql(u8, decl.name, "TransformSpace")) continue;
         if (comptime std.mem.eql(u8, decl.name, "ViewportShadingMode")) continue;
         if (comptime std.mem.eql(u8, decl.name, "RenderJobStatus")) continue;

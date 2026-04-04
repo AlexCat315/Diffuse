@@ -234,6 +234,13 @@ pub const PrefabEntityDetail = struct {
 
 // ── Shared enums (canonical definitions) ──────────────────────────
 
+pub const ManipulationMode = enum {
+    none,
+    translate,
+    rotate,
+    scale,
+};
+
 pub const TransformSpace = enum {
     local,
     world,

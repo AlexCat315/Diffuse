@@ -62,12 +62,7 @@ pub const ImageThumbnailEntry = struct {
     texture: engine.rhi.Texture,
 };
 
-pub const ManipulationMode = enum {
-    none,
-    translate,
-    rotate,
-    scale,
-};
+pub const ManipulationMode = @import("guava").editor_rpc.schema.types.ManipulationMode;
 
 pub const PlaybackState = engine.core.PlaybackState;
 
