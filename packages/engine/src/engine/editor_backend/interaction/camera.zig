@@ -14,10 +14,13 @@ pub fn handleCameraControls(state: *EditorState, layer_context: *engine.core.Lay
     const input = layer_context.input;
     // Use wantsTextInput() — wantsCaptureKeyboard() is almost always
     // true when NavEnableKeyboard is enabled, blocking camera controls.
-    const can_capture_viewport = state.viewport_has_image and
-        state.viewport_hovered and
-        state.viewport_focused and
-        !state.viewport_overlay_hovered;
+    const can_capture_viewport = if (state.editor_server_mode)
+        true
+    else
+        state.viewport_has_image and
+            state.viewport_hovered and
+            state.viewport_focused and
+            !state.viewport_overlay_hovered;
 
     // DCC ergonomics:
     // Alt+LMB orbit, MMB pan, Alt+RMB dolly, RMB freelook+WASDQE move.
