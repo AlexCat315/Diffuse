@@ -4,22 +4,26 @@ import { useI18n } from "../i18n";
 import {
   IconSave, IconFolderOpen, IconUndo, IconRedo,
   IconPlay, IconPause, IconStop,
-  IconTranslate, IconRotate, IconScale,
+  IconTranslate, IconRotate, IconScale, IconCursor,
 } from "../components/Icons";
 import { useSceneStore } from "../store";
 
 interface ToolbarProps {
   onResetLayout?: () => void;
   onOpenSettings?: () => void;
+  getMissingPanels?: () => { id: string; name: string }[];
+  onAddPanel?: (componentId: string) => void;
 }
 
-export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
+export function Toolbar({ onResetLayout, onOpenSettings, getMissingPanels, onAddPanel }: ToolbarProps) {
   const gizmoMode = useSceneStore((s) => s.gizmoMode);
   const onGizmoModeChange = useSceneStore((s) => s.changeGizmoMode);
   const onRefreshHierarchy = useSceneStore((s) => s.refreshHierarchy);
   const { t } = useI18n();
   const [sceneMenuOpen, setSceneMenuOpen] = useState(false);
   const [scenes, setScenes] = useState<string[]>([]);
+  const [windowMenuOpen, setWindowMenuOpen] = useState(false);
+  const [missingPanels, setMissingPanels] = useState<{ id: string; name: string }[]>([]);
 
   const handlePlay = () => window.guavaEngine.call("playback.play", {});
   const handlePause = () => window.guavaEngine.call("playback.pause", {});
@@ -56,6 +60,25 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
       }
     },
     [onRefreshHierarchy],
+  );
+
+  const handleToggleWindowMenu = useCallback(() => {
+    if (windowMenuOpen) {
+      setWindowMenuOpen(false);
+      return;
+    }
+    if (getMissingPanels) {
+      setMissingPanels(getMissingPanels());
+    }
+    setWindowMenuOpen(true);
+  }, [windowMenuOpen, getMissingPanels]);
+
+  const handleAddPanel = useCallback(
+    (componentId: string) => {
+      setWindowMenuOpen(false);
+      onAddPanel?.(componentId);
+    },
+    [onAddPanel],
   );
 
   return (
@@ -99,8 +122,14 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
       <div style={styles.divider} />
       <div style={styles.section}>
         <ToolButton
+          icon={<IconCursor size={14} />}
+          tooltip={`${t.toolbar.select} (Q)`}
+          active={gizmoMode === "none"}
+          onClick={() => onGizmoModeChange("none")}
+        />
+        <ToolButton
           icon={<IconTranslate size={14} />}
-          tooltip={t.toolbar.translate}
+          tooltip={`${t.toolbar.translate} (W)`}
           active={gizmoMode === "translate"}
           onClick={() => onGizmoModeChange("translate")}
         />
@@ -119,6 +148,34 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
       </div>
       <div style={{ flex: 1 }} />
       <div style={styles.section}>
+        {getMissingPanels && (
+          <div style={{ position: "relative" }}>
+            <ToolButton
+              icon={<span style={{ fontSize: 12 }}>☰</span>}
+              tooltip="Window"
+              onClick={handleToggleWindowMenu}
+            />
+            {windowMenuOpen && (
+              <div style={{ ...styles.dropdown, right: 0, left: "auto" }}>
+                {missingPanels.length === 0 ? (
+                  <div style={styles.dropdownItem}>All panels visible</div>
+                ) : (
+                  missingPanels.map((p) => (
+                    <div
+                      key={p.id}
+                      style={styles.dropdownItem}
+                      onClick={() => handleAddPanel(p.id)}
+                      onMouseEnter={(e) => (e.currentTarget.style.background = "#45475a")}
+                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+                    >
+                      {p.name}
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
+          </div>
+        )}
         {onResetLayout && (
           <ToolButton
             icon={<span style={{ fontSize: 12 }}>⊞</span>}

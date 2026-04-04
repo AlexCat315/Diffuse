@@ -12,6 +12,7 @@ import stopUrl from "@icons/stop.svg";
 import directionArrowsUrl from "@icons/direction-arrows.svg";
 import arrowPathUrl from "@icons/arrow-path.svg";
 import arrowsPointingOutUrl from "@icons/arrows-pointing-out.svg";
+import cursorArrowRaysUrl from "@icons/cursor-arrow-rays.svg";
 import xMarkUrl from "@icons/x-mark.svg";
 import refreshUrl from "@icons/refresh.svg";
 import chevronUpUrl from "@icons/chevron-up.svg";
@@ -85,6 +86,7 @@ export const IconPause = createIcon(pauseUrl);
 export const IconStop = createIcon(stopUrl);
 
 // ── Gizmo / Transform ──────────────────────────────────────────
+export const IconCursor = createIcon(cursorArrowRaysUrl);
 export const IconTranslate = createIcon(directionArrowsUrl);
 export const IconRotate = createIcon(arrowPathUrl);
 export const IconScale = createIcon(arrowsPointingOutUrl);

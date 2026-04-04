@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef } from "react";
-import { Layout, Model, Actions, type IJsonModel, type TabNode } from "flexlayout-react";
+import { Layout, Model, Actions, DockLocation, type IJsonModel, type TabNode } from "flexlayout-react";
 import "flexlayout-react/style/light.css";
 import "./flexlayout-dark.css";
 
@@ -46,6 +46,35 @@ declare global {
     guavaEngine: GuavaEngineAPI;
   }
 }
+
+// ── All panels available in the editor ──────────────────
+const ALL_PANELS: { id: string; name: string }[] = [
+  { id: "hierarchy", name: "Scene Hierarchy" },
+  { id: "inspector", name: "Inspector" },
+  { id: "viewport", name: "Viewport" },
+  { id: "material", name: "Material" },
+  { id: "rendersettings", name: "Render Settings" },
+  { id: "console", name: "Console" },
+  { id: "assets", name: "Assets" },
+  { id: "timeline", name: "Timeline" },
+  { id: "utilities", name: "AI Utilities" },
+  { id: "camera", name: "Camera" },
+  { id: "rhistats", name: "RHI Stats" },
+  { id: "audio", name: "Audio" },
+  { id: "plugins", name: "Plugins" },
+  { id: "style", name: "Style" },
+  { id: "placeactors", name: "Place Actors" },
+  { id: "renderqueue", name: "Render Queue" },
+  { id: "physicsviz", name: "Physics" },
+  { id: "postprocess", name: "Post-FX" },
+  { id: "sequencer", name: "Sequencer" },
+  { id: "animationeditor", name: "Animation" },
+  { id: "materialgraph", name: "Material Graph" },
+  { id: "scriptviewer", name: "Scripts" },
+  { id: "aichat", name: "AI Chat" },
+  { id: "particleeditor", name: "Particles" },
+  { id: "prefabeditor", name: "Prefabs" },
+];
 
 // ── Layout storage key ──────────────────────────────────
 const LAYOUT_STORAGE_KEY = "guava-editor-layout-v1";
@@ -204,6 +233,7 @@ export function App() {
       }
       const { changeGizmoMode, selectedEntity: sel, refreshHierarchy: refresh } = useSceneStore.getState();
       switch (e.key.toLowerCase()) {
+        case "q": changeGizmoMode("none"); break;
         case "w": changeGizmoMode("translate"); break;
         case "e": changeGizmoMode("rotate"); break;
         case "r": changeGizmoMode("scale"); break;
@@ -231,6 +261,50 @@ export function App() {
     modelRef.current = Model.fromJson(defaultLayout);
     // Force re-render by toggling a trivial store field
     useEditorStore.getState().setSettingsOpen(useEditorStore.getState().settingsOpen);
+  }, []);
+
+  // Get list of panels not currently in the layout
+  const getMissingPanels = useCallback(() => {
+    const present = new Set<string>();
+    modelRef.current.visitNodes((node) => {
+      if (node.getType() === "tab") {
+        const comp = (node as TabNode).getComponent();
+        if (comp) present.add(comp);
+      }
+    });
+    return ALL_PANELS.filter((p) => !present.has(p.id));
+  }, []);
+
+  // Add a panel back to the bottom tabset (or first available tabset)
+  const handleAddPanel = useCallback((componentId: string) => {
+    const panel = ALL_PANELS.find((p) => p.id === componentId);
+    if (!panel) return;
+    // Find a tabset to add to — prefer a non-viewport tabset
+    let targetTabsetId: string | undefined;
+    modelRef.current.visitNodes((node) => {
+      if (node.getType() === "tabset" && node.getId() !== "viewport-tabset" && !targetTabsetId) {
+        targetTabsetId = node.getId();
+      }
+    });
+    if (!targetTabsetId) {
+      // Fallback: use any tabset
+      modelRef.current.visitNodes((node) => {
+        if (node.getType() === "tabset" && !targetTabsetId) {
+          targetTabsetId = node.getId();
+        }
+      });
+    }
+    if (targetTabsetId) {
+      modelRef.current.doAction(
+        Actions.addNode(
+          { type: "tab", name: panel.name, component: panel.id },
+          targetTabsetId,
+          DockLocation.CENTER,
+          -1,
+          true,
+        ),
+      );
+    }
   }, []);
 
   // ── Panel factory: maps component id → React element ──
@@ -294,6 +368,8 @@ export function App() {
       <Toolbar
         onResetLayout={handleResetLayout}
         onOpenSettings={() => setSettingsOpen(true)}
+        getMissingPanels={getMissingPanels}
+        onAddPanel={handleAddPanel}
       />
       <div style={styles.dockArea}>
         <Layout

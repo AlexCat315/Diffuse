@@ -205,16 +205,19 @@ pub const ScriptContext = struct {
     /// 打印日志
     pub fn log(self: *ScriptContext, message: []const u8) void {
         std.log.info("[Script:{d}] {s}", .{ self.entity, message });
+        @import("../editor_rpc/server.zig").consoleLog("info", message, "script");
     }
 
     /// 打印警告
     pub fn warn(self: *ScriptContext, message: []const u8) void {
         std.log.warn("[Script:{d}] {s}", .{ self.entity, message });
+        @import("../editor_rpc/server.zig").consoleLog("warn", message, "script");
     }
 
     /// 打印错误
     pub fn logError(self: *ScriptContext, message: []const u8) void {
         std.log.err("[Script:{d}] {s}", .{ self.entity, message });
+        @import("../editor_rpc/server.zig").consoleLog("error", message, "script");
     }
 
     pub fn selectedEntityCount(self: *const ScriptContext) usize {

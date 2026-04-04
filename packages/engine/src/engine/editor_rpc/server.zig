@@ -15,6 +15,26 @@ const core = @import("../core/layer.zig");
 const log = std.log.scoped(.editor_rpc);
 
 const max_clients = 8;
+const max_console_log_entries = 256;
+
+/// A buffered console log entry for broadcasting to the editor.
+pub const ConsoleLogEntry = struct {
+    level: [8]u8 = undefined,
+    level_len: u8 = 0,
+    source: [64]u8 = undefined,
+    source_len: u8 = 0,
+    message: [512]u8 = undefined,
+    message_len: u16 = 0,
+};
+
+/// Global server pointer for console log API.
+var global_server: ?*Server = null;
+
+/// Push a console log entry to the editor. Thread-safe, can be called from anywhere.
+pub fn consoleLog(level: []const u8, message: []const u8, source: ?[]const u8) void {
+    const srv = global_server orelse return;
+    srv.pushConsoleLog(level, message, source);
+}
 
 /// A connected WebSocket client with its own send queue.
 const Client = struct {
@@ -68,6 +88,12 @@ pub const Server = struct {
 
     // Subscription state tracking
     sub_state: subscriptions.SubscriptionState = .{},
+
+    // Console log ring buffer
+    console_log_mutex: std.Thread.Mutex = .{},
+    console_log_buf: [max_console_log_entries]ConsoleLogEntry = undefined,
+    console_log_head: u32 = 0,
+    console_log_count: u32 = 0,
 
     // Shared editor settings (viewport, physics viz, camera bookmarks, material preview)
     settings: @import("settings.zig").EditorSettings = .{},
@@ -182,6 +208,46 @@ pub const Server = struct {
         self.enqueueOutgoing(0, payload);
     }
 
+    /// Push a console log entry into the ring buffer. Thread-safe.
+    pub fn pushConsoleLog(self: *Server, level: []const u8, message: []const u8, source: ?[]const u8) void {
+        self.console_log_mutex.lock();
+        defer self.console_log_mutex.unlock();
+        const idx = (self.console_log_head + self.console_log_count) % max_console_log_entries;
+        var entry = &self.console_log_buf[idx];
+        const llen: u8 = @intCast(@min(level.len, entry.level.len));
+        @memcpy(entry.level[0..llen], level[0..llen]);
+        entry.level_len = llen;
+        const mlen: u16 = @intCast(@min(message.len, entry.message.len));
+        @memcpy(entry.message[0..mlen], message[0..mlen]);
+        entry.message_len = mlen;
+        if (source) |s| {
+            const slen: u8 = @intCast(@min(s.len, entry.source.len));
+            @memcpy(entry.source[0..slen], s[0..slen]);
+            entry.source_len = slen;
+        } else {
+            entry.source_len = 0;
+        }
+        if (self.console_log_count < max_console_log_entries) {
+            self.console_log_count += 1;
+        } else {
+            // Ring buffer full — drop oldest
+            self.console_log_head = (self.console_log_head + 1) % max_console_log_entries;
+        }
+    }
+
+    /// Drain all pending console log entries. Caller must hold no locks.
+    pub fn drainConsoleLogs(self: *Server, buf: []ConsoleLogEntry) u32 {
+        self.console_log_mutex.lock();
+        defer self.console_log_mutex.unlock();
+        const n = @min(self.console_log_count, @as(u32, @intCast(buf.len)));
+        for (0..n) |i| {
+            buf[i] = self.console_log_buf[(self.console_log_head + @as(u32, @intCast(i))) % max_console_log_entries];
+        }
+        self.console_log_head = (self.console_log_head + n) % max_console_log_entries;
+        self.console_log_count -= n;
+        return n;
+    }
+
     /// Get the Layer interface for integration with Application.
     pub fn asLayer(self: *Server) core.Layer {
         return .{
@@ -199,12 +265,14 @@ pub const Server = struct {
 
     fn onAttach(context: *anyopaque, _: *core.LayerContext) !void {
         const self: *Server = @ptrCast(@alignCast(context));
+        global_server = self;
         try self.start();
         log.info("Editor RPC server listening on port {d}", .{self.port});
     }
 
     fn onDetach(context: *anyopaque) void {
         const self: *Server = @ptrCast(@alignCast(context));
+        global_server = null;
         self.shutdown.store(true, .release);
         log.info("Editor RPC server shutting down", .{});
     }

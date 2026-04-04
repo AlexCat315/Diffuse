@@ -25,6 +25,7 @@ export const en = {
     translate: "Translate (W)",
     rotate: "Rotate (E)",
     scale: "Scale (R)",
+    select: "Select",
     brand: "Guava Editor",
     noScenesFound: "No scenes found",
     resetLayout: "Reset Layout",

@@ -61,22 +61,25 @@ export function ViewCube() {
     sx: 0, sy: 0, dragging: false,
   });
 
-  // Poll camera rotation
+  // Track camera rotation via requestAnimationFrame (one in-flight RPC at a time)
   useEffect(() => {
     if (!connected) return;
     let cancelled = false;
-    const poll = async () => {
-      while (!cancelled) {
-        try {
-          const res = await window.guavaEngine.call("camera.getState", {});
+    let pending = false;
+    const tick = () => {
+      if (cancelled) return;
+      if (!pending) {
+        pending = true;
+        window.guavaEngine.call("camera.getState", {}).then((res) => {
           if (res.rotation) {
             setRot([res.rotation.x, res.rotation.y, res.rotation.z, res.rotation.w]);
           }
-        } catch { /* engine not ready */ }
-        await new Promise((r) => setTimeout(r, 100));
+          pending = false;
+        }).catch(() => { pending = false; });
       }
+      requestAnimationFrame(tick);
     };
-    poll();
+    requestAnimationFrame(tick);
     return () => { cancelled = true; };
   }, [connected]);
 
@@ -114,6 +117,7 @@ export function ViewCube() {
 
   // Drag to orbit
   const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation(); // prevent viewport container from intercepting
     dragRef.current = { sx: e.clientX, sy: e.clientY, dragging: false };
     const onMove = (ev: MouseEvent) => {
       const dx = ev.clientX - dragRef.current.sx;

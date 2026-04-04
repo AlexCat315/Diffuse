@@ -1017,6 +1017,25 @@ pub fn applyQuickScale(state: *EditorState, entity_transform: *engine.scene.Tran
 }
 
 pub fn refreshGizmoState(state: *EditorState, layer_context: *engine.core.LayerContext) void {
+    // Consume pending gizmo mode set by RPC handler (viewport.setGizmoMode)
+    if (layer_context.renderer.pending_gizmo_mode) |pending_mode| {
+        state.manipulation_mode = switch (pending_mode) {
+            .idle => .none,
+            .translate => .translate,
+            .rotate => .rotate,
+            .scale => .scale,
+        };
+        state.manipulation_axis = .free;
+        layer_context.renderer.pending_gizmo_mode = null;
+    }
+    if (layer_context.renderer.pending_gizmo_space) |pending_space| {
+        state.transform_space = switch (pending_space) {
+            .local => .local,
+            .world => .world,
+        };
+        layer_context.renderer.pending_gizmo_space = null;
+    }
+
     refreshTransformToolTarget(state, layer_context) catch |err| {
         std.log.err("failed to refresh transform tool target: {}", .{err});
     };
