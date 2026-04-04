@@ -82,6 +82,52 @@ pub const SharedTypes = struct {
         kind: []const u8,
         target: []const u8,
     };
+
+    pub const AnimGraphState = struct {
+        index: u64,
+        name: []const u8,
+        clipName: ?[]const u8 = null,
+        speed: f64,
+        loop: bool,
+        duration: f64,
+        isDefault: bool,
+        isCurrent: bool,
+        isNext: bool,
+    };
+
+    pub const AnimGraphTransition = struct {
+        index: u64,
+        fromState: u64,
+        toState: u64,
+        fromStateName: []const u8,
+        toStateName: []const u8,
+        duration: f64,
+        conditions: []const AnimTransitionCondition,
+    };
+
+    pub const AnimTransitionCondition = struct {
+        index: u64,
+        conditionType: []const u8,
+        threshold: f64,
+        parameterName: ?[]const u8 = null,
+        comparison: ?[]const u8 = null,
+    };
+
+    pub const AnimGraphParameter = struct {
+        index: u64,
+        name: []const u8,
+        paramType: []const u8,
+        floatValue: ?f64 = null,
+        boolValue: ?bool = null,
+        intValue: ?i64 = null,
+    };
+
+    pub const AnimClipTrack = struct {
+        index: u64,
+        name: []const u8,
+        trackType: []const u8,
+        keyframeCount: u64,
+    };
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -1011,6 +1057,130 @@ pub const Methods = struct {
 
     pub const @"material.setPreviewPrimitive" = struct {
         pub const Params = struct { primitive: []const u8 };
+        pub const Result = struct {};
+    };
+
+    // ── animation ──────────────────────────────────────────────
+
+    pub const @"animation.getState" = struct {
+        pub const Params = struct { entityId: u64 };
+        pub const Result = struct {
+            hasAnimator: bool,
+            hasGraph: bool,
+            graphName: ?[]const u8 = null,
+            currentState: ?u32 = null,
+            nextState: ?u32 = null,
+            blendFactor: ?f64 = null,
+            transitionTime: ?f64 = null,
+            transitionDuration: ?f64 = null,
+            defaultState: ?u32 = null,
+            states: ?[]const AnimGraphState = null,
+            transitions: ?[]const AnimGraphTransition = null,
+            parameters: ?[]const AnimGraphParameter = null,
+            clipTracks: ?[]const AnimClipTrack = null,
+            clipDuration: ?f64 = null,
+            sampleTime: ?f64 = null,
+        };
+    };
+
+    pub const @"animation.addState" = struct {
+        pub const Params = struct { entityId: u64, name: ?[]const u8 = null };
+        pub const Result = struct { index: u64 };
+    };
+
+    pub const @"animation.updateState" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            stateIndex: u64,
+            name: ?[]const u8 = null,
+            clip: ?[]const u8 = null,
+            speed: ?f64 = null,
+            loop: ?bool = null,
+            duration: ?f64 = null,
+        };
+        pub const Result = struct {};
+    };
+
+    pub const @"animation.removeState" = struct {
+        pub const Params = struct { entityId: u64, stateIndex: u64 };
+        pub const Result = struct {};
+    };
+
+    pub const @"animation.setDefaultState" = struct {
+        pub const Params = struct { entityId: u64, stateIndex: u64 };
+        pub const Result = struct {};
+    };
+
+    pub const @"animation.activateState" = struct {
+        pub const Params = struct { entityId: u64, stateIndex: u64 };
+        pub const Result = struct {};
+    };
+
+    pub const @"animation.addTransition" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            fromState: u64,
+            toState: u64,
+            duration: ?f64 = null,
+            triggerTime: ?f64 = null,
+        };
+        pub const Result = struct { index: u64 };
+    };
+
+    pub const @"animation.updateTransition" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            transitionIndex: u64,
+            fromState: ?u64 = null,
+            toState: ?u64 = null,
+            duration: ?f64 = null,
+        };
+        pub const Result = struct {};
+    };
+
+    pub const @"animation.removeTransition" = struct {
+        pub const Params = struct { entityId: u64, transitionIndex: u64 };
+        pub const Result = struct {};
+    };
+
+    pub const @"animation.addCondition" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            transitionIndex: u64,
+            conditionType: []const u8,
+            threshold: ?f64 = null,
+            parameterName: ?[]const u8 = null,
+            comparison: ?[]const u8 = null,
+        };
+        pub const Result = struct { index: u64 };
+    };
+
+    pub const @"animation.updateCondition" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            transitionIndex: u64,
+            conditionIndex: u64,
+            conditionType: ?[]const u8 = null,
+            threshold: ?f64 = null,
+            parameterName: ?[]const u8 = null,
+            comparison: ?[]const u8 = null,
+        };
+        pub const Result = struct {};
+    };
+
+    pub const @"animation.removeCondition" = struct {
+        pub const Params = struct { entityId: u64, transitionIndex: u64, conditionIndex: u64 };
+        pub const Result = struct {};
+    };
+
+    pub const @"animation.setParameter" = struct {
+        pub const Params = struct {
+            entityId: u64,
+            parameterIndex: u64,
+            floatValue: ?f64 = null,
+            boolValue: ?bool = null,
+            intValue: ?i64 = null,
+        };
         pub const Result = struct {};
     };
 

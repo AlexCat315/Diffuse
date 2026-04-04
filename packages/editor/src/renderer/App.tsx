@@ -25,6 +25,7 @@ import { RenderQueue } from "./panels/RenderQueue";
 import { PhysicsVisualization } from "./panels/PhysicsVisualization";
 import { PostProcessEditor } from "./panels/PostProcessEditor";
 import { SequencerPanel } from "./panels/SequencerPanel";
+import { AnimationEditor } from "./panels/AnimationEditor";
 import { SettingsPanel } from "./panels/Settings";
 import { useI18n } from "./i18n";
 import {
@@ -129,6 +130,7 @@ const defaultLayout: IJsonModel = {
               { type: "tab", name: "Physics", component: "physicsviz" },
               { type: "tab", name: "Post-FX", component: "postprocess" },
               { type: "tab", name: "Sequencer", component: "sequencer" },
+              { type: "tab", name: "Animation", component: "animationeditor" },
             ],
           },
         ],
@@ -244,6 +246,7 @@ export function App() {
       case "physicsviz":      return <PhysicsVisualization />;
       case "postprocess":     return <PostProcessEditor />;
       case "sequencer":       return <SequencerPanel />;
+      case "animationeditor": return <AnimationEditor />;
       case "settings":        return <SettingsPanel />;
       default:
         return <div style={{ padding: 12, color: "#6c7086" }}>Unknown panel: {component}</div>;
