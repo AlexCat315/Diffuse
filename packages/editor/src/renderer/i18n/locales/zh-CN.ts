@@ -540,6 +540,8 @@ export const zhCN: TranslationKeys = {
     outputType: "输出类型",
     valueType: "值类型",
     texture: "纹理",
+    duplicate: "复制节点",
+    disconnectAll: "断开所有连接",
     inputParameter: "输入参数",
     constant: "常量",
     textureSample: "纹理采样",
