@@ -18,12 +18,7 @@ pub const IntentSource = enum {
     ai,
 };
 
-pub const ManipulationMode = enum {
-    none,
-    translate,
-    rotate,
-    scale,
-};
+pub const ManipulationMode = @import("../editor_rpc/schema/types.zig").ManipulationMode;
 
 pub const TransformSpace = @import("../editor_rpc/schema/types.zig").TransformSpace;
 
