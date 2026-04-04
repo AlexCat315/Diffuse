@@ -13,11 +13,10 @@ const history = @import("../actions/history.zig");
 const camera = @import("../interaction/camera.zig");
 const mesh_edit = @import("../interaction/mesh_edit.zig");
 const manipulation = @import("../interaction/manipulation.zig");
-const inspector = @import("panels/scene/inspector.zig");
+const material_ops = @import("../actions/material_ops.zig");
 const content_browser = @import("../assets/browser.zig");
 const menu_bar = @import("menu_bar.zig");
 const floating_window_blocker = @import("floating_window_blocker.zig");
-const render_settings = @import("panels/rendering/render_settings.zig");
 const ui_icons = @import("icons.zig");
 const layout = @import("layout.zig");
 const playback_session = @import("../core/playback_session.zig");
@@ -1282,7 +1281,7 @@ pub fn drawViewportWindow(state: *EditorState, layer_context: *engine.core.Layer
     state.viewport_hovered = window_hovered and isPointInViewportRect(mouse_pos, state.viewport_origin, state.viewport_extent);
 
     const drawable_size = if (state.render_output_job_stage == .resize_and_render)
-        render_settings.resolveRenderOutputDimensions(state, layer_context)
+        resolveRenderOutputDimensions(state, layer_context)
     else
         utils.viewportDrawableSize(layer_context.window, state.viewport_extent);
     try layer_context.renderer.setSceneViewportSize(drawable_size[0], drawable_size[1]);
@@ -1874,13 +1873,13 @@ fn applyPendingViewportAssetDrop(state: *EditorState, layer_context: *engine.cor
                     const target_entity = pending.target_entity orelse layer_context.renderer.selectedEntity() orelse return;
                     const entity = layer_context.world.getEntity(target_entity) orelse return;
                     if (entity.material == null) {
-                        try inspector.addMaterialComponent(state, layer_context, entity);
+                        try material_ops.addMaterialComponent(state, layer_context, entity);
                     }
-                    const texture_handle = try inspector.importTextureAsset(state, layer_context, entry.id, entry.path);
-                    if (try inspector.ensureEditableMaterialResource(state, layer_context, entity)) |material_resource| {
+                    const texture_handle = try material_ops.importTextureAsset(state, layer_context, entry.id, entry.path);
+                    if (try material_ops.ensureEditableMaterialResource(state, layer_context, entity)) |material_resource| {
                         material_resource.base_color_texture = texture_handle;
                         if (entity.material) |*material_component| {
-                            material_component.handle = inspector.materialHandleForEntity(state, entity);
+                            material_component.handle = material_ops.materialHandleForEntity(state, entity);
                         }
                         try history.captureSnapshot(state, layer_context);
                     }
@@ -2578,4 +2577,26 @@ fn drawViewportViewCube(state: *EditorState, layer_context: *engine.core.LayerCo
         .bottom => camera.lookAlongWorldAxis(state, layer_context, .{ 0.0, 1.0, 0.0 }),
         .none => {},
     }
+}
+
+fn resolveRenderOutputDimensions(
+    state: *const EditorState,
+    layer_context: *const engine.core.LayerContext,
+) [2]u32 {
+    return switch (state.render_output_resolution_preset) {
+        .viewport => blk: {
+            const renderer_size = layer_context.renderer.sceneViewportSize();
+            if (renderer_size[0] > 0 and renderer_size[1] > 0) {
+                break :blk renderer_size;
+            }
+            break :blk .{ 0, 0 };
+        },
+        .hd_1080 => .{ 1920, 1080 },
+        .dci_2k => .{ 2048, 1080 },
+        .uhd_4k => .{ 3840, 2160 },
+        .custom => .{
+            @max(state.render_output_width, 64),
+            @max(state.render_output_height, 64),
+        },
+    };
 }

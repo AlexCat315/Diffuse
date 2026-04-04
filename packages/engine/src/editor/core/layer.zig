@@ -15,7 +15,7 @@ const asset_preview = @import("../assets/preview.zig");
 const history = @import("../actions/history.zig");
 const vfx_runtime = @import("../runtime/vfx.zig");
 const layout = @import("../ui/layout.zig");
-const render_queue = @import("../ui/panels/rendering/render_queue.zig");
+const render_queue = @import("../rendering/render_queue.zig");
 const preferences = @import("preferences.zig");
 
 fn initEditorStyle() void {
