@@ -156,7 +156,7 @@ function ToolButton({
         ...styles.button,
         ...(active && {
           background: "#45475a",
-          borderColor: "#89b4fa",
+          border: "1px solid #89b4fa",
           color: "#89b4fa",
         }),
       }}

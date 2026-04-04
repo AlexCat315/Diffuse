@@ -261,7 +261,7 @@ export function AnimationEditor() {
                       : selectedStateIdx === s.index
                         ? STATE_COLORS.selected
                         : STATE_COLORS.normal,
-                borderColor: selectedStateIdx === s.index ? "#89b4fa" : "transparent",
+                border: selectedStateIdx === s.index ? "1px solid #89b4fa" : "1px solid transparent",
               }}
             >
               <span style={styles.stateLabel}>{s.name}</span>
@@ -809,7 +809,7 @@ const styles: Record<string, React.CSSProperties> = {
     cursor: "pointer",
   },
   btnDanger: {
-    borderColor: "#f38ba8",
+    border: "1px solid #f38ba8",
     color: "#f38ba8",
   },
   list: {

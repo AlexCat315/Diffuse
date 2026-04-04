@@ -376,7 +376,7 @@ const styles: Record<string, React.CSSProperties> = {
   modeButtonActive: {
     background: "#89b4fa",
     color: "#1e1e2e",
-    borderColor: "#89b4fa",
+    border: "1px solid #89b4fa",
     fontWeight: 600,
   },
   toggleRow: {
