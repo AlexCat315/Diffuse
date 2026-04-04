@@ -161,7 +161,7 @@ export function RenderSettingsPanel() {
       </Section>
 
       {/* Transform Space */}
-      <Section title="Transform Space">
+      <Section title={t.renderSettings.transformSpace}>
         <div style={styles.buttonGroup}>
           {(["local", "world"] as const).map((sp) => (
             <button
@@ -175,16 +175,16 @@ export function RenderSettingsPanel() {
                 rpc("rendersettings.setTransformSpace", { space: sp }).catch(() => {});
               }}
             >
-              {sp.charAt(0).toUpperCase() + sp.slice(1)}
+              {sp === "local" ? t.renderSettings.local : t.renderSettings.world}
             </button>
           ))}
         </div>
       </Section>
 
       {/* Path Tracing */}
-      <Section title="Path Tracing">
+      <Section title={t.renderSettings.pathTracing}>
         <div style={styles.sliderRow}>
-          <span style={styles.sliderLabel}>Samples</span>
+          <span style={styles.sliderLabel}>{t.renderSettings.samples}</span>
           <input type="range" min={1} max={4096} step={1} value={pathTrace.samples}
             onChange={(e) => {
               const v = parseInt(e.target.value);
@@ -194,7 +194,7 @@ export function RenderSettingsPanel() {
           <span style={styles.sliderValue}>{pathTrace.samples}</span>
         </div>
         <div style={styles.sliderRow}>
-          <span style={styles.sliderLabel}>Bounces</span>
+          <span style={styles.sliderLabel}>{t.renderSettings.bounces}</span>
           <input type="range" min={1} max={32} step={1} value={pathTrace.bounces}
             onChange={(e) => {
               const v = parseInt(e.target.value);
@@ -204,7 +204,7 @@ export function RenderSettingsPanel() {
           <span style={styles.sliderValue}>{pathTrace.bounces}</span>
         </div>
         <div style={styles.sliderRow}>
-          <span style={styles.sliderLabel}>Res Scale</span>
+          <span style={styles.sliderLabel}>{t.renderSettings.resolutionScale}</span>
           <input type="range" min={0.25} max={2.0} step={0.25} value={pathTrace.resolutionScale}
             onChange={(e) => {
               const v = parseFloat(e.target.value);
@@ -225,7 +225,7 @@ export function RenderSettingsPanel() {
       </Section>
 
       {/* Render Output */}
-      <Section title="Render Output">
+      <Section title={t.renderSettings.renderOutput}>
         <div style={styles.buttonGroup}>
           {["720p", "1080p", "1440p", "4k"].map((preset) => (
             <button key={preset}
@@ -240,7 +240,7 @@ export function RenderSettingsPanel() {
           ))}
         </div>
         <div style={{ ...styles.sliderRow, marginTop: 6 }}>
-          <span style={styles.sliderLabel}>Format</span>
+          <span style={styles.sliderLabel}>{t.renderSettings.format}</span>
           <select value={renderOutput.format} style={styles.select}
             onChange={(e) => {
               setRenderOutput((o) => ({ ...o, format: e.target.value }));

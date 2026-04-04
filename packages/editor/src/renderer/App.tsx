@@ -290,7 +290,7 @@ export function App() {
         <div style={styles.modalBackdrop} onClick={() => setSettingsOpen(false)}>
           <div style={styles.modalPanel} onClick={(e) => e.stopPropagation()}>
             <div style={styles.modalHeader}>
-              <span style={styles.modalTitle}>Settings</span>
+              <span style={styles.modalTitle}>{t.app.settingsModalTitle}</span>
               <button style={styles.modalClose} onClick={() => setSettingsOpen(false)}>✕</button>
             </div>
             <div style={styles.modalBody}>

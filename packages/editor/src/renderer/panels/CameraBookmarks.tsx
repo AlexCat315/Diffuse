@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
 
 interface Bookmark {
@@ -12,6 +13,7 @@ interface Bookmark {
 
 export function CameraBookmarks() {
   const connected = useConnectionStore((s) => s.connected);
+  const { t } = useI18n();
   const [bookmarks, setBookmarks] = useState<Bookmark[]>([]);
   const [editingIdx, setEditingIdx] = useState<number | null>(null);
   const [editName, setEditName] = useState("");
@@ -31,7 +33,7 @@ export function CameraBookmarks() {
   }, [refresh]);
 
   const handleAdd = async () => {
-    const name = `Bookmark ${bookmarks.length + 1}`;
+    const name = `${t.camera.defaultBookmarkName} ${bookmarks.length + 1}`;
     await window.guavaEngine.call("camera.addBookmark", { name });
     refresh();
   };
@@ -63,16 +65,16 @@ export function CameraBookmarks() {
   return (
     <div style={styles.container}>
       <div style={styles.header}>
-        <span style={styles.title}>Camera Bookmarks</span>
+        <span style={styles.title}>{t.camera.title}</span>
         <span style={styles.count}>{bookmarks.length}</span>
         <div style={{ flex: 1 }} />
         <button style={styles.addBtn} onClick={handleAdd} title="Save current camera position">
-          + Add
+          {t.camera.addButton}
         </button>
       </div>
       <div style={styles.list}>
         {bookmarks.length === 0 ? (
-          <div style={styles.empty}>No bookmarks yet. Click "+ Add" to save the current camera.</div>
+          <div style={styles.empty}>{t.camera.emptyState}</div>
         ) : (
           bookmarks.map((b) => (
             <div key={b.index} style={styles.item}>
@@ -92,15 +94,15 @@ export function CameraBookmarks() {
                   </span>
                 )}
                 <div style={styles.actions}>
-                  <button style={styles.actionBtn} onClick={() => handleApply(b.index)} title="Go to bookmark">
+                  <button style={styles.actionBtn} onClick={() => handleApply(b.index)} title={t.camera.applyTooltip}>
                     ▶
                   </button>
-                  <button style={styles.actionBtn} onClick={() => handleRemove(b.index)} title="Delete">
+                  <button style={styles.actionBtn} onClick={() => handleRemove(b.index)} title={t.camera.deleteTooltip}>
                     ✕
                   </button>
                 </div>
               </div>
-              <div style={styles.meta}>pos: ({fmtPos(b.position)})</div>
+              <div style={styles.meta}>{t.camera.positionPrefix} ({fmtPos(b.position)})</div>
             </div>
           ))
         )}

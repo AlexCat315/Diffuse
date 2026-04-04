@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
 
 interface StyleParamSchema {
@@ -37,6 +38,7 @@ interface StyleListItem {
 
 export function StyleInspector() {
   const connected = useConnectionStore((s) => s.connected);
+  const { t } = useI18n();
   const [active, setActive] = useState<ActiveStyleInfo | null>(null);
   const [styles, setStyles] = useState<StyleListItem[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -109,7 +111,7 @@ export function StyleInspector() {
     <div style={panelStyles.container}>
       {/* Style selector */}
       <div style={panelStyles.section}>
-        <div style={panelStyles.sectionTitle}>Active Style</div>
+        <div style={panelStyles.sectionTitle}>{t.style.activeStyle}</div>
         <select
           style={panelStyles.select}
           value={active.name}
@@ -126,18 +128,18 @@ export function StyleInspector() {
       {/* Style info */}
       <div style={panelStyles.section}>
         <div style={panelStyles.row}>
-          <span style={panelStyles.label}>Mesh Program</span>
+          <span style={panelStyles.label}>{t.style.meshProgram}</span>
           <span style={panelStyles.value}>{active.meshProgram}</span>
         </div>
         <div style={panelStyles.row}>
-          <span style={panelStyles.label}>Shadow Program</span>
+          <span style={panelStyles.label}>{t.style.shadowProgram}</span>
           <span style={panelStyles.value}>
             {active.shadowProgram || "(none)"}
           </span>
         </div>
         {active.path && (
           <div style={panelStyles.row}>
-            <span style={panelStyles.label}>Path</span>
+            <span style={panelStyles.label}>{t.style.path}</span>
             <span style={panelStyles.value}>{active.path}</span>
           </div>
         )}
@@ -146,7 +148,7 @@ export function StyleInspector() {
       {/* Disabled passes */}
       {active.disabledPasses.length > 0 && (
         <div style={panelStyles.section}>
-          <div style={panelStyles.sectionTitle}>Disabled Passes</div>
+          <div style={panelStyles.sectionTitle}>{t.style.disabledPasses}</div>
           {active.disabledPasses.map((pass) => (
             <div key={pass} style={panelStyles.listItem}>
               {pass}
@@ -158,7 +160,7 @@ export function StyleInspector() {
       {/* Parameters */}
       {active.configSchema.length > 0 && (
         <div style={panelStyles.section}>
-          <div style={panelStyles.sectionTitle}>Parameters</div>
+          <div style={panelStyles.sectionTitle}>{t.style.parameters}</div>
           {active.configSchema.map((param) => {
             const val = getParamValue(param.name, param.defaultValue);
             if (param.paramType === "float") {
