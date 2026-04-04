@@ -267,9 +267,10 @@ ipcMain.handle(
     let sabActive = false;
     if (useSAB) {
       try {
-        // Allocate SAB for up to 4K viewport: 3840×2160×4 + 16 byte header
+        // Allocate SAB for up to 4K viewport, double-buffered (ping-pong)
+        // to prevent tearing when the native addon writes while the renderer reads.
         const maxPixelBytes = 3840 * 2160 * 4;
-        const sabSize = 16 + maxPixelBytes;
+        const sabSize = 16 + maxPixelBytes * 2;
         viewportSAB = new SharedArrayBuffer(sabSize);
         // Pass a Uint8Array view — N-API can extract the backing ArrayBuffer from
         // a TypedArray regardless of whether it's a regular or shared buffer.
@@ -287,7 +288,7 @@ ipcMain.handle(
             return;
           }
           ioSurfaceView.refreshShared!();
-        }, 8);
+        }, 16);
         sabActive = true;
       } catch (e) {
         console.warn("[Viewport] SAB path failed, falling back to IPC:", (e as Error).message);

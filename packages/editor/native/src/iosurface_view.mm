@@ -13,8 +13,9 @@
 //   [0]  width
 //   [4]  height
 //   [8]  generation (monotonic counter, use Atomics)
-//   [12] reserved
-//   [16] BGRA pixel data (width * height * 4 bytes)
+//   [12] readIndex  (0 or 1 — which ping-pong buffer to read)
+//   [16] buffer 0: BGRA pixel data  (maxPixelBytes)
+//   [16 + maxPixelBytes] buffer 1: BGRA pixel data  (maxPixelBytes)
 
 #import <IOSurface/IOSurface.h>
 #include <napi.h>
@@ -27,6 +28,8 @@ static IOSurfaceRef g_surface = nullptr;
 static uint8_t* g_sab_data = nullptr;   // pointer into SAB backing store
 static size_t   g_sab_size = 0;         // total SAB size in bytes
 static uint32_t g_sab_generation = 0;   // monotonic frame counter
+static uint32_t g_write_index   = 0;    // ping-pong buffer index (0 or 1)
+static uint32_t g_last_seed     = 0;    // IOSurface change seed
 static constexpr size_t SAB_HEADER_BYTES = 16;
 
 // ── attach(nativeHandle, surfaceId, x, y, w, h) ─────────────────────────
@@ -172,16 +175,32 @@ static Napi::Value SetSharedBuffer(const Napi::CallbackInfo& info) {
     g_sab_data = data;
     g_sab_size = size;
     g_sab_generation = 0;
+    g_write_index = 0;
+    g_last_seed = 0;
     return env.Undefined();
 }
 
 // ── refreshShared() → boolean ────────────────────────────────────────────
 // Reads IOSurface pixels into the pre-registered SharedArrayBuffer.
+// Uses double-buffering (ping-pong) so the renderer process can safely read
+// from one buffer while we write to the other.
+//
+// SAB layout (double-buffered):
+//   [0]  width  (u32)
+//   [4]  height (u32)
+//   [8]  generation (u32, atomic — release)
+//   [12] readIndex  (u32 — which buffer the renderer should read, 0 or 1)
+//   [16]                    buffer 0  (maxPixelBytes)
+//   [16 + maxPixelBytes]    buffer 1  (maxPixelBytes)
+//
 // Returns true if a new frame was written, false otherwise.
-// The renderer process polls the generation counter via Atomics.load().
 static Napi::Value RefreshShared(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (!g_surface || !g_sab_data) return Napi::Boolean::New(env, false);
+
+    // Skip if the IOSurface hasn't been modified since last copy.
+    uint32_t seed = IOSurfaceGetSeed(g_surface);
+    if (seed == g_last_seed) return Napi::Boolean::New(env, false);
 
     size_t width  = IOSurfaceGetWidth(g_surface);
     size_t height = IOSurfaceGetHeight(g_surface);
@@ -191,14 +210,16 @@ static Napi::Value RefreshShared(const Napi::CallbackInfo& info) {
     size_t rowBytes    = width * 4;
     size_t dataSize    = width * height * 4;
 
-    // Ensure SAB is large enough for header + pixels
-    if (SAB_HEADER_BYTES + dataSize > g_sab_size) return Napi::Boolean::New(env, false);
+    // Each half of the pixel region is one ping-pong buffer.
+    size_t maxPixelBytes = (g_sab_size - SAB_HEADER_BYTES) / 2;
+    if (dataSize > maxPixelBytes) return Napi::Boolean::New(env, false);
 
     kern_return_t kr = IOSurfaceLock(g_surface, kIOSurfaceLockReadOnly, nullptr);
     if (kr != kIOReturnSuccess) return Napi::Boolean::New(env, false);
 
     void* base = IOSurfaceGetBaseAddress(g_surface);
-    uint8_t* dst = g_sab_data + SAB_HEADER_BYTES;
+    // Write into the current write-side buffer.
+    uint8_t* dst = g_sab_data + SAB_HEADER_BYTES + g_write_index * maxPixelBytes;
     const uint8_t* src = static_cast<const uint8_t*>(base);
 
     if (bytesPerRow == rowBytes) {
@@ -210,15 +231,18 @@ static Napi::Value RefreshShared(const Napi::CallbackInfo& info) {
     }
 
     IOSurfaceUnlock(g_surface, kIOSurfaceLockReadOnly, nullptr);
+    g_last_seed = seed;
 
-    // Write header: width, height, then generation (with release semantics
-    // so the pixel data is visible before the generation counter update).
+    // Publish: write width, height, readIndex, THEN generation (release).
     auto* header = reinterpret_cast<uint32_t*>(g_sab_data);
     header[0] = static_cast<uint32_t>(width);
     header[1] = static_cast<uint32_t>(height);
-    // Atomic store with release ordering for the generation counter.
+    header[3] = g_write_index;  // tell renderer which buffer to read
     ++g_sab_generation;
     __atomic_store_n(&header[2], g_sab_generation, __ATOMIC_RELEASE);
+
+    // Flip for next frame.
+    g_write_index = 1 - g_write_index;
 
     return Napi::Boolean::New(env, true);
 }
