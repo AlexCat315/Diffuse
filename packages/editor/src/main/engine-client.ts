@@ -31,7 +31,12 @@ export class EngineClient {
 
   constructor(
     private url: string,
-    private options: { timeout?: number; reconnectInterval?: number; onReconnected?: () => void } = {},
+    private options: {
+      timeout?: number;
+      reconnectInterval?: number;
+      onReconnected?: () => void;
+      onDisconnected?: () => void;
+    } = {},
   ) {}
 
   get connected(): boolean {
@@ -56,8 +61,12 @@ export class EngineClient {
       });
 
       this.ws.on("close", () => {
+        const wasConnected = this._connected;
         this._connected = false;
         this.rejectAllPending(new Error("Connection closed"));
+        if (wasConnected) {
+          this.options.onDisconnected?.();
+        }
         this.scheduleReconnect();
       });
 

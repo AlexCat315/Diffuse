@@ -62,9 +62,9 @@ pub fn performHandshake(stream: std.net.Stream) !void {
         "Connection: Upgrade\r\n" ++
         "Sec-WebSocket-Accept: ";
 
-    _ = try streamWrite(stream, response);
-    _ = try streamWrite(stream, &accept_key);
-    _ = try streamWrite(stream, "\r\n\r\n");
+    try streamWriteAll(stream, response);
+    try streamWriteAll(stream, &accept_key);
+    try streamWriteAll(stream, "\r\n\r\n");
 }
 
 /// Read a single WebSocket frame from the stream.
@@ -74,8 +74,13 @@ pub fn readFrame(allocator: std.mem.Allocator, stream: std.net.Stream) !Frame {
     var header: [2]u8 = undefined;
     try readExact(stream, &header);
 
+    // FIN bit must be set — we don't support fragmented frames
+    if ((header[0] & 0x80) == 0) return error.FragmentedFrameUnsupported;
+
     const opcode: Opcode = @enumFromInt(@as(u4, @truncate(header[0] & 0x0F)));
-    const masked = (header[1] & 0x80) != 0;
+
+    // RFC 6455 §5.1: client-to-server frames MUST be masked
+    if ((header[1] & 0x80) == 0) return error.UnmaskedClientFrame;
     var payload_len: u64 = header[1] & 0x7F;
 
     // Extended payload length
@@ -94,11 +99,9 @@ pub fn readFrame(allocator: std.mem.Allocator, stream: std.net.Stream) !Frame {
         return error.FrameTooLarge;
     }
 
-    // Read masking key (if present)
-    var mask_key: [4]u8 = .{ 0, 0, 0, 0 };
-    if (masked) {
-        try readExact(stream, &mask_key);
-    }
+    // Read masking key (always present per RFC 6455 §5.1)
+    var mask_key: [4]u8 = undefined;
+    try readExact(stream, &mask_key);
 
     // Read payload
     const payload = try allocator.alloc(u8, @intCast(payload_len));
@@ -108,10 +111,8 @@ pub fn readFrame(allocator: std.mem.Allocator, stream: std.net.Stream) !Frame {
         try readExact(stream, payload);
 
         // Unmask payload
-        if (masked) {
-            for (payload, 0..) |*byte, i| {
-                byte.* ^= mask_key[i % 4];
-            }
+        for (payload, 0..) |*byte, i| {
+            byte.* ^= mask_key[i % 4];
         }
     }
 
@@ -138,16 +139,16 @@ pub fn writeTextFrame(stream: std.net.Stream, payload: []const u8) !void {
         header_len = 10;
     }
 
-    _ = try streamWrite(stream, header_buf[0..header_len]);
+    try streamWriteAll(stream, header_buf[0..header_len]);
     if (payload.len > 0) {
-        _ = try streamWrite(stream, payload);
+        try streamWriteAll(stream, payload);
     }
 }
 
 /// Write a WebSocket close frame.
 pub fn writeCloseFrame(stream: std.net.Stream) !void {
     const frame = [_]u8{ 0x88, 0x00 }; // FIN + close, zero payload
-    _ = try streamWrite(stream, &frame);
+    try streamWriteAll(stream, &frame);
 }
 
 /// Write a WebSocket pong frame with the given payload.
@@ -156,9 +157,9 @@ pub fn writePongFrame(stream: std.net.Stream, payload: []const u8) !void {
     header_buf[0] = 0x8A; // FIN + pong
     header_buf[1] = @intCast(@min(payload.len, 125));
 
-    _ = try streamWrite(stream, &header_buf);
+    try streamWriteAll(stream, &header_buf);
     if (payload.len > 0 and payload.len <= 125) {
-        _ = try streamWrite(stream, payload[0..@min(payload.len, 125)]);
+        try streamWriteAll(stream, payload[0..@min(payload.len, 125)]);
     }
 }
 
@@ -178,9 +179,13 @@ fn streamRead(stream: std.net.Stream, buf: []u8) posix.ReadError!usize {
     return posix.read(stream.handle, buf);
 }
 
-/// Write to a net.Stream handle.
-fn streamWrite(stream: std.net.Stream, data: []const u8) posix.WriteError!usize {
-    return posix.write(stream.handle, data);
+/// Write all bytes to a net.Stream handle, retrying on partial writes.
+fn streamWriteAll(stream: std.net.Stream, data: []const u8) posix.WriteError!void {
+    var offset: usize = 0;
+    while (offset < data.len) {
+        const n = try posix.write(stream.handle, data[offset..]);
+        offset += n;
+    }
 }
 
 fn extractHeader(request: []const u8, name: []const u8) ?[]const u8 {

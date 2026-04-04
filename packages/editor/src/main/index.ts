@@ -8,6 +8,9 @@ const DEFAULT_PORT = 9100;
 let mainWindow: BrowserWindow | null = null;
 let engineProcess: EngineProcess | null = null;
 let engineClient: EngineClient | null = null;
+let isQuitting = false;
+let restartCount = 0;
+const MAX_RESTARTS = 3;
 
 // ── Native viewport addon (platform-specific) ───────────────────
 
@@ -125,6 +128,63 @@ async function startEngine(): Promise<void> {
 
   // Verify connection
   await engineClient.call("editor.getCapabilities", {});
+}
+
+// ── Engine process crash monitoring & auto-restart ───────────────
+
+function monitorEngineProcess(): void {
+  if (!engineProcess) return;
+
+  engineProcess.on("exit", async (code: number | null) => {
+    if (isQuitting) return;
+
+    const canRestart = restartCount < MAX_RESTARTS;
+    console.error(
+      `[Main] Engine process exited unexpectedly (code: ${code}). ` +
+      (canRestart ? `Restarting (${restartCount + 1}/${MAX_RESTARTS})...` : "Max restarts reached."),
+    );
+
+    // Notify renderer immediately
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("engine:disconnected", { code, restarting: canRestart });
+    }
+
+    if (!canRestart) {
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send(
+          "engine:error",
+          `Engine crashed ${MAX_RESTARTS} times. Please restart the application.`,
+        );
+      }
+      return;
+    }
+
+    restartCount++;
+
+    // Clean up old client (stops reconnect loop)
+    engineClient?.disconnect();
+    engineClient = null;
+
+    // Brief delay before restart
+    await new Promise((r) => setTimeout(r, 1500));
+    if (isQuitting) return;
+
+    try {
+      await startEngine();
+      monitorEngineProcess(); // Re-attach to new process instance
+      setupSubscriptionForwarding();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("engine:connected");
+      }
+      restartCount = 0; // Reset on successful restart
+      console.log("[Main] Engine restarted successfully");
+    } catch (err) {
+      console.error("[Main] Engine restart failed:", err);
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send("engine:error", `Engine restart failed: ${err}`);
+      }
+    }
+  });
 }
 
 // ── IPC Bridge: Renderer ↔ Engine ────────────────────────────────
@@ -374,6 +434,7 @@ app.whenReady().then(async () => {
 
   try {
     await startEngine();
+    monitorEngineProcess();
     setupSubscriptionForwarding();
     mainWindow.webContents.send("engine:connected");
   } catch (err) {
@@ -402,6 +463,7 @@ app.on("window-all-closed", async () => {
 });
 
 app.on("before-quit", async () => {
+  isQuitting = true;
   engineClient?.disconnect();
   await engineProcess?.stop();
 });
