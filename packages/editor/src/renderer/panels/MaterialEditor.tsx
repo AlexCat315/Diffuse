@@ -250,7 +250,7 @@ export function MaterialEditor() {
       <Section title={t.material.colors} collapsed={collapsed.has("colors")} onToggle={() => toggle("colors")}>
         {state.baseColor && (
           <ColorRow
-            label="Base Color"
+            label={t.material.baseColor}
             value={state.baseColor}
             hasAlpha
             onChange={(v) => {
@@ -261,7 +261,7 @@ export function MaterialEditor() {
         )}
         {state.emissive && (
           <ColorRow
-            label="Emissive"
+            label={t.material.emissive}
             value={state.emissive}
             onChange={(v) => {
               setState((s) => s && { ...s, emissive: v });
@@ -273,9 +273,9 @@ export function MaterialEditor() {
 
       {/* ── PBR Parameters ─────────────────────────────────── */}
       {isPBR && (
-        <Section title="PBR" collapsed={collapsed.has("pbr")} onToggle={() => toggle("pbr")}>
+        <Section title={t.material.pbr} collapsed={collapsed.has("pbr")} onToggle={() => toggle("pbr")}>
           <SliderRow
-            label="Metallic"
+            label={t.material.metallic}
             value={state.metallic ?? 0}
             min={0}
             max={1}
@@ -286,7 +286,7 @@ export function MaterialEditor() {
             }}
           />
           <SliderRow
-            label="Roughness"
+            label={t.material.roughness}
             value={state.roughness ?? 0.5}
             min={0}
             max={1}
@@ -297,7 +297,7 @@ export function MaterialEditor() {
             }}
           />
           <SliderRow
-            label="Alpha Cutoff"
+            label={t.material.alphaCutoff}
             value={state.alphaCutoff ?? 0.5}
             min={0}
             max={1}
@@ -311,9 +311,9 @@ export function MaterialEditor() {
       )}
 
       {/* ── Flags ──────────────────────────────────────────── */}
-      <Section title="Flags" collapsed={collapsed.has("flags")} onToggle={() => toggle("flags")}>
+      <Section title={t.material.flags} collapsed={collapsed.has("flags")} onToggle={() => toggle("flags")}>
         <CheckboxRow
-          label="Double-Sided"
+          label={t.material.doubleSided}
           value={state.doubleSided ?? false}
           onChange={(v) => {
             setState((s) => s && { ...s, doubleSided: v });
@@ -321,7 +321,7 @@ export function MaterialEditor() {
           }}
         />
         <CheckboxRow
-          label="Use IBL"
+          label={t.material.useIBL}
           value={state.useIBL ?? false}
           onChange={(v) => {
             setState((s) => s && { ...s, useIBL: v });
@@ -330,7 +330,7 @@ export function MaterialEditor() {
         />
         {state.useIBL && (
           <SliderRow
-            label="IBL Intensity"
+            label={t.material.iblIntensity}
             value={state.iblIntensity ?? 1.0}
             min={0}
             max={5}
@@ -344,13 +344,13 @@ export function MaterialEditor() {
       </Section>
 
       {/* ── Textures ───────────────────────────────────────── */}
-      <Section title="Textures" collapsed={collapsed.has("textures")} onToggle={() => toggle("textures")}>
-        {TEXTURE_SLOTS.map(({ key, label }) => {
+      <Section title={t.material.textures} collapsed={collapsed.has("textures")} onToggle={() => toggle("textures")}>
+        {TEXTURE_SLOTS.map(({ key }) => {
           const handleVal = state[texHandleKey(key)] as number | undefined;
           return (
             <TextureSlotRow
               key={key}
-              label={label}
+              label={textureSlotLabels[key] ?? key}
               currentHandle={handleVal && handleVal > 0 ? handleVal : undefined}
               textures={textures}
               onAssign={(h) => commitTexture(key, h)}
