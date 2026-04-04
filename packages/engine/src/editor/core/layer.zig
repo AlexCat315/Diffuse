@@ -15,22 +15,7 @@ const asset_preview = @import("../assets/preview.zig");
 const history = @import("../actions/history.zig");
 const vfx_runtime = @import("../runtime/vfx.zig");
 const layout = @import("../ui/layout.zig");
-const animation_editor = @import("../ui/panels/tools/animation_editor.zig");
-const sequencer_panel = @import("../ui/panels/tools/sequencer_panel.zig");
-const editor_utilities = @import("../ui/panels/debug/editor_utilities.zig");
-const prefab_browser = @import("../ui/panels/assets/prefab_browser.zig");
-const particle_editor = @import("../ui/panels/tools/particle_editor.zig");
-const script_editor = @import("../ui/panels/tools/script_editor.zig");
-const physics_visualization = @import("../ui/panels/rendering/physics_visualization.zig");
-const post_process_editor = @import("../ui/panels/rendering/post_process_editor.zig");
-const prefab_editor = @import("../ui/panels/assets/prefab_editor.zig");
-const camera_bookmarks = @import("../ui/panels/viewport/camera_bookmarks.zig");
-const rhi_stats = @import("../ui/panels/debug/rhi_stats.zig");
-const plugin_manager = @import("../ui/panels/debug/plugin_manager.zig");
-const script_debugger = @import("../ui/panels/debug/script_debugger.zig");
-const style_inspector = @import("../ui/panels/rendering/style_inspector.zig");
 const render_queue = @import("../ui/panels/rendering/render_queue.zig");
-const audio_mixer = @import("../ui/panels/debug/audio_mixer.zig");
 const preferences = @import("preferences.zig");
 
 fn initEditorStyle() void {
@@ -135,18 +120,8 @@ fn seedPostProcessViewportState(state: *const EditorState, viewport_state: *engi
 
 pub const EditorLayer = struct {
     state: EditorState = .{},
-    animation_editor_state: ?animation_editor.AnimationEditorState = null,
-    sequencer_editor_state: ?sequencer_panel.SequencerEditorState = null,
     render_queue_state: render_queue.RenderQueueState = .{},
-    particle_editor_state: particle_editor.ParticleEditorState = .{},
-    script_editor_state: ?script_editor.ScriptEditorState = null,
-    script_debugger_state: script_debugger.ScriptDebuggerState = .{},
-    post_process_editor_state: ?post_process_editor.PostProcessPipelineEditorState = null,
     post_process_viewport_state: engine.render.EditorViewportState = .{},
-    prefab_editor_state: prefab_editor.PrefabEditorState = .{},
-    physics_viz_settings: physics_visualization.PhysicsVisualizationSettings = .{},
-    physics_debug_draw_mode: physics_visualization.PhysicsDebugDrawMode = .off,
-    camera_bookmark_manager: ?camera_bookmarks.CameraBookmarkManager = null,
 
     pub fn asLayer(self: *EditorLayer) engine.core.Layer {
         return .{
@@ -188,17 +163,7 @@ pub const EditorLayer = struct {
         self.state.scene_camera = layer_context.world.primaryCameraEntity();
         self.state.ai_chat_open = false;
 
-        // Initialize animation editor state
-        self.animation_editor_state = try animation_editor.createAnimationEditorState(layer_context.world.allocator);
-
-        // Initialize sequencer editor state
-        self.sequencer_editor_state = try sequencer_panel.createSequencerEditorState(layer_context.world.allocator);
-
-        // Initialize tool panel states
-        self.script_editor_state = script_editor.ScriptEditorState.init(layer_context.world.allocator);
-        self.post_process_editor_state = post_process_editor.PostProcessPipelineEditorState.init(layer_context.world.allocator);
         seedPostProcessViewportState(&self.state, &self.post_process_viewport_state);
-        self.camera_bookmark_manager = camera_bookmarks.CameraBookmarkManager.init(layer_context.world.allocator);
 
         try camera.createEditorCamera(&self.state, layer_context);
         manipulation.refreshGizmoState(&self.state, layer_context);
@@ -238,36 +203,8 @@ pub const EditorLayer = struct {
             self.state.ai_preview_entities = .empty;
             self.state.ai_preview_selected_entity = null;
 
-            // Cleanup animation editor state
-            if (self.animation_editor_state) |*editor_state| {
-                animation_editor.destroyAnimationEditorState(editor_state, allocator);
-                self.animation_editor_state = null;
-            }
-
-            // Cleanup sequencer editor state
-            if (self.sequencer_editor_state) |*seq_state| {
-                sequencer_panel.destroySequencerEditorState(seq_state, allocator);
-                self.sequencer_editor_state = null;
-            }
-
             // Cleanup render queue state
             self.render_queue_state.deinit(allocator);
-
-            // Cleanup tool panel states
-            if (self.script_editor_state) |*s| {
-                s.deinit();
-                self.script_editor_state = null;
-            }
-            if (self.post_process_editor_state) |*s| {
-                s.deinit();
-                self.post_process_editor_state = null;
-            }
-            if (self.camera_bookmark_manager) |*m| {
-                m.deinit();
-                self.camera_bookmark_manager = null;
-            }
-            self.particle_editor_state.deinit();
-            self.prefab_editor_state.deinit(allocator);
 
             if (self.state.ai_preview_runtime) |*runtime| {
                 runtime.deinit();
@@ -335,98 +272,8 @@ pub const EditorLayer = struct {
             layer_context.renderer.setPreviewGizmoTransform(null);
         };
 
-        // Draw animation editor window if open
-        if (self.state.animation_editor_open) {
-            if (self.animation_editor_state) |*editor_state| {
-                try animation_editor.drawAnimationEditorWindow(&self.state, layer_context, editor_state);
-            }
-        }
-
-        // Draw sequencer window if open
-        if (self.state.sequencer_open) {
-            if (self.sequencer_editor_state) |*seq_state| {
-                try sequencer_panel.drawSequencerWindow(&self.state, layer_context, seq_state);
-            }
-        }
-
-        // Draw render queue window if open + tick the queue
-        if (self.state.render_queue_open) {
-            try render_queue.drawRenderQueueWindow(&self.state, layer_context, &self.render_queue_state);
-        }
+        // Tick render queue (background rendering jobs, runs even when panel is closed)
         try render_queue.tickRenderQueue(&self.state, layer_context, &self.render_queue_state);
-
-        if (self.state.prefab_browser_open) {
-            try prefab_browser.drawPrefabBrowserWindow(&self.state, layer_context);
-        }
-
-        if (layer_context.editor_utility_runtime) |utility_runtime| {
-            if (utility_runtime.takeHostOpenRequest()) {
-                self.state.editor_utilities_open = true;
-            }
-        }
-
-        if (self.state.editor_utilities_open) {
-            try editor_utilities.drawEditorUtilitiesWindow(&self.state, layer_context);
-        }
-
-        // Draw migrated tool panels
-        if (self.state.particle_editor_open) {
-            try particle_editor.drawParticleEditorWindow(&self.state, layer_context, &self.particle_editor_state);
-        }
-        if (self.state.script_editor_open) {
-            if (self.script_editor_state) |*es| {
-                // Handle pending open/create requests from the asset browser
-                if (self.state.pending_new_script_path) |new_path| {
-                    if (self.state.pending_new_script_template) |template| {
-                        // Write template to file, then open
-                        if (std.fs.cwd().createFile(new_path, .{})) |file| {
-                            file.writeAll(template) catch {};
-                            file.close();
-                            es.loadFromFile(new_path) catch {};
-                            content_browser.refreshAssetBrowser(&self.state, layer_context) catch {};
-                        } else |_| {}
-                    }
-                    self.state.pending_new_script_path = null;
-                    self.state.pending_new_script_template = null;
-                }
-                if (self.state.pending_script_open_path) |open_path| {
-                    es.loadFromFile(open_path) catch {};
-                    self.state.pending_script_open_path = null;
-                }
-                try script_editor.drawScriptEditorWindow(&self.state, layer_context, es);
-            }
-        }
-        if (self.state.physics_visualization_open) {
-            try physics_visualization.drawPhysicsVisualizationWindow(&self.state, &self.physics_viz_settings, &self.physics_debug_draw_mode);
-        }
-        if (self.state.post_process_editor_open) {
-            if (self.post_process_editor_state) |*es| {
-                try post_process_editor.drawPostProcessPipelineEditorWindow(&self.state, layer_context, es, &self.post_process_viewport_state);
-            }
-        }
-        if (self.state.prefab_editor_open) {
-            try prefab_editor.drawPrefabEditorWindow(&self.state, layer_context, &self.prefab_editor_state);
-        }
-        if (self.state.camera_bookmarks_open) {
-            if (self.camera_bookmark_manager) |*bm| {
-                try camera_bookmarks.drawCameraBookmarkWindow(&self.state, layer_context, bm);
-            }
-        }
-        if (self.state.rhi_stats_open) {
-            rhi_stats.drawRhiStatsWindow(&self.state, layer_context);
-        }
-        if (self.state.plugin_manager_open) {
-            plugin_manager.drawPluginManagerWindow(&self.state, layer_context);
-        }
-        if (self.state.script_debugger_open) {
-            try script_debugger.drawScriptDebuggerWindow(&self.state, layer_context, &self.script_debugger_state);
-        }
-        if (self.state.style_inspector_open) {
-            style_inspector.drawStyleInspectorWindow(&self.state, layer_context);
-        }
-        if (self.state.audio_mixer_open) {
-            audio_mixer.drawAudioMixerWindow(&self.state, layer_context);
-        }
     }
 
     fn handleFileDrop(state: *EditorState, layer_context: *engine.core.LayerContext, path: [:0]const u8) void {

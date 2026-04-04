@@ -3,9 +3,9 @@ const std = @import("std");
 const ctx_mod = @import("../ctx.zig");
 const Ctx = ctx_mod.Ctx;
 
-const engine = @import("guava");
-const Vfx = engine.scene.Vfx;
-const VfxKind = engine.scene.VfxKind;
+const components = @import("../../scene/components.zig");
+const Vfx = components.Vfx;
+const VfxKind = components.VfxKind;
 
 // ── helpers ─────────────────────────────────────────────────────
 
@@ -26,7 +26,7 @@ fn stringToKind(s: []const u8) ?VfxKind {
 
 /// List all entities that have a Vfx component.
 pub fn listVfxEntities(ctx: *Ctx) !void {
-    const world = &ctx.layer.world;
+    const world = ctx.layer.world;
     const a = ctx.allocator;
 
     var buf = std.ArrayList(u8).empty;
@@ -34,8 +34,7 @@ pub fn listVfxEntities(ctx: *Ctx) !void {
     try buf.appendSlice(a, "{\"entities\":[");
 
     var first = true;
-    var it = world.entityIterator();
-    while (it.next()) |entity| {
+    for (world.entities.items) |entity| {
         if (entity.vfx) |vfx| {
             if (!first) try buf.appendSlice(a, ",");
             first = false;
@@ -96,7 +95,7 @@ pub fn setConfig(ctx: *Ctx) !void {
     if (try ctx.paramOpt(f64, "emissionRate")) |v| vfx.emission_rate = @floatCast(v);
     if (try ctx.paramOpt(f64, "particleLifetime")) |v| vfx.particle_lifetime = @floatCast(v);
     if (try ctx.paramOpt(f64, "speed")) |v| vfx.speed = @floatCast(v);
-    if (try ctx.paramOpt(u32, "maxParticles")) |v| vfx.max_particles = @intCast(std.math.clamp(v, 1, 1000));
+    if (try ctx.paramOpt(u64, "maxParticles")) |v| vfx.max_particles = @intCast(std.math.clamp(v, 1, 1000));
     if (try ctx.paramOpt(f64, "radius")) |v| vfx.radius = @floatCast(v);
     if (try ctx.paramOpt(f64, "spread")) |v| vfx.spread = @floatCast(v);
     if (try ctx.paramOpt(f64, "size")) |v| vfx.size = @floatCast(v);
@@ -115,7 +114,7 @@ pub fn applyPreset(ctx: *Ctx) !void {
     const entity = ctx.layer.world.getEntity(eid) orelse return error.EntityNotFound;
 
     const kind = stringToKind(preset_name) orelse return error.InvalidArguments;
-    entity.vfx = engine.scene.defaultVfx(kind);
+    entity.vfx = components.defaultVfx(kind);
     ctx.layer.world.markSceneChanged();
     try ctx.reply(.{ .success = true });
 }

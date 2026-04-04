@@ -3,8 +3,7 @@ const std = @import("std");
 const ctx_mod = @import("../ctx.zig");
 const Ctx = ctx_mod.Ctx;
 
-const engine = @import("guava");
-const prefab_mod = engine.scene.prefab;
+const prefab_mod = @import("../../scene/prefab.zig");
 const PrefabResource = prefab_mod.PrefabResource;
 const PrefabEntityData = prefab_mod.PrefabEntityData;
 
@@ -132,7 +131,7 @@ pub fn getEntities(ctx: *Ctx) !void {
 /// Get detailed info for a specific entity within a prefab.
 pub fn getEntityDetail(ctx: *Ctx) !void {
     const prefab_id = try ctx.param([]const u8, "prefabId");
-    const entity_id = try ctx.param(u32, "prefabEntityId");
+    const entity_id: u32 = @intCast(try ctx.param(u64, "prefabEntityId"));
     const world = ctx.layer.world;
     const a = ctx.allocator;
 
@@ -233,7 +232,7 @@ pub fn getEntityDetail(ctx: *Ctx) !void {
 /// Update transform fields of a prefab entity.
 pub fn setEntityTransform(ctx: *Ctx) !void {
     const prefab_id = try ctx.param([]const u8, "prefabId");
-    const entity_id = try ctx.param(u32, "prefabEntityId");
+    const entity_id: u32 = @intCast(try ctx.param(u64, "prefabEntityId"));
     const world = ctx.layer.world;
 
     const prefab = world.prefab_library.getPrefab(prefab_id) orelse
@@ -266,7 +265,7 @@ pub fn setEntityTransform(ctx: *Ctx) !void {
 /// Set a simple field on a prefab entity (name, visible, isFolder).
 pub fn setEntityField(ctx: *Ctx) !void {
     const prefab_id = try ctx.param([]const u8, "prefabId");
-    const entity_id = try ctx.param(u32, "prefabEntityId");
+    const entity_id: u32 = @intCast(try ctx.param(u64, "prefabEntityId"));
     const field = try ctx.param([]const u8, "field");
     const value = try ctx.param([]const u8, "value");
     const world = ctx.layer.world;
