@@ -562,4 +562,25 @@ export const zhCN: TranslationKeys = {
     enableEdit: "启用编辑",
     disableEdit: "锁定（只读）",
   },
+
+  // ── AI Chat ──────────────────────────────────────────────────
+  aiChat: {
+    title: "AI 聊天",
+    settings: "设置",
+    clear: "清除历史",
+    send: "发送",
+    stop: "停止",
+    placeholder: "输入消息…（Enter 发送，Shift+Enter 换行）",
+    emptyChat: "开始与 AI 对话。",
+    configureFirst: "请先在设置中配置 AI Provider。",
+    providerSettings: "AI Provider 设置",
+    backToChat: "返回聊天",
+    addProvider: "添加 Provider",
+    name: "名称",
+    endpoint: "端点",
+    model: "模型",
+    testConnection: "测试连接",
+    activate: "激活",
+    noProviders: "尚未配置任何 Provider。添加一个以开始使用。",
+  },
 } as const;
