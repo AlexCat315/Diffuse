@@ -196,8 +196,41 @@ pub fn handleCameraControls(state: *EditorState, layer_context: *engine.core.Lay
             camera_transform_changed = true;
         }
     }
+
+    // ── Consume pending RPC camera operations ──────────────────
+    if (layer_context.renderer.pending_camera_orbit) |orbit_delta| {
+        state.yaw -= orbit_delta[0];
+        state.pitch = utils.clampPitch(state.pitch + orbit_delta[1]);
+        state.viewport_view_preset = .custom;
+        if (camera.camera) |camera_component| {
+            var next_camera = camera_component;
+            next_camera.projection = .{ .perspective = .{} };
+            camera.camera = next_camera;
+        }
+        layer_context.renderer.pending_camera_orbit = null;
+        camera_transform_changed = true;
+    }
+    if (layer_context.renderer.pending_camera_look_axis) |axis| {
+        // Compute target yaw/pitch from the look axis direction
+        const target_yaw = std.math.atan2(axis[0], axis[2]);
+        const target_pitch = std.math.asin(std.math.clamp(-axis[1], -1.0, 1.0));
+        // Start a smooth ViewCube transition
+        state.view_cube_transition_active = true;
+        state.view_cube_transition_elapsed = 0.0;
+        state.view_cube_transition_start_yaw = state.yaw;
+        state.view_cube_transition_start_pitch = state.pitch;
+        state.view_cube_transition_target_yaw = target_yaw;
+        state.view_cube_transition_target_pitch = target_pitch;
+        state.view_cube_transition_target_orthographic = false;
+        state.viewport_view_preset = .custom;
+        layer_context.renderer.pending_camera_look_axis = null;
+        // Don't set camera_transform_changed — the transition system handles it
+    }
+
     camera.local_transform.rotation = quat.fromEuler(.{ state.pitch, state.yaw, 0.0 });
     if (camera_transform_changed) {
+        const forward = vec3.forwardFromAngles(state.yaw, state.pitch);
+        camera.local_transform.translation = vec3.sub(state.focus_pivot, vec3.scale(forward, state.orbit_distance));
         layer_context.world.markDirty(camera_id);
     }
 }

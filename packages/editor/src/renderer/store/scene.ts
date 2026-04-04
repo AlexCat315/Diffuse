@@ -18,7 +18,7 @@ export interface SceneState {
 export const useSceneStore = create<SceneState>((set, get) => ({
   hierarchy: [],
   selectedEntity: null,
-  gizmoMode: "translate",
+  gizmoMode: "none",
 
   setHierarchy: (roots) => set({ hierarchy: roots }),
   setSelectedEntity: (entityId) => set({ selectedEntity: entityId }),

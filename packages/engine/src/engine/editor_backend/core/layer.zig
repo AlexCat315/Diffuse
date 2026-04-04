@@ -192,6 +192,9 @@ pub const EditorLayer = struct {
                 }
             }
         }
+        // Suppress entity picking while a gizmo drag is active so that
+        // selection readbacks don't override gizmo axis interactions.
+        layer_context.renderer.suppress_entity_pick = self.state.manipulation_drag_active;
         camera.handleCameraControls(&self.state, layer_context);
         try mesh_edit.syncSession(&self.state, layer_context);
         manipulation.refreshGizmoState(&self.state, layer_context);
