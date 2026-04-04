@@ -9,6 +9,7 @@ const Ctx = ctx_mod.Ctx;
 const handles = @import("../../assets/handles.zig");
 const material_resource_mod = @import("../../assets/material_resource.zig");
 const material_ast_mod = @import("../../assets/material_ast.zig");
+const material_model = @import("../../assets/material_model.zig");
 const components = @import("../../scene/components.zig");
 
 // ── Preview state (static — no EditorState in RPC ctx) ─────────
@@ -408,6 +409,469 @@ pub fn setPreviewPrimitive(ctx: *Ctx) !void {
     try ctx.reply(.{});
 }
 
+// ═══════════════════════════════════════════════════════════════════
+//  Material graph editing handlers
+// ═══════════════════════════════════════════════════════════════════
+
+/// Node positions keyed by (entityId ^ (nodeId << 32)).
+var node_positions: std.AutoHashMap(u64, [2]f32) = std.AutoHashMap(u64, [2]f32).init(std.heap.page_allocator);
+
+fn posKey(eid: u64, node_id: u32) u64 {
+    return eid ^ (@as(u64, node_id) << 32);
+}
+
+fn getNodePos(eid: u64, node_id: u32) [2]f32 {
+    return node_positions.get(posKey(eid, node_id)) orelse .{ 0, 0 };
+}
+
+fn nodeKindStr(kind: material_model.MaterialGraphNodeKind) []const u8 {
+    return @tagName(kind);
+}
+
+fn socketTypeStr(st: material_model.MaterialGraphSocketType) []const u8 {
+    return @tagName(st);
+}
+
+fn channelStr(ch: ?material_model.MaterialChannel) ?[]const u8 {
+    return if (ch) |c| @tagName(c) else null;
+}
+
+fn valueKindStr(vk: material_model.MaterialGraphValueKind) []const u8 {
+    return @tagName(vk);
+}
+
+fn parseNodeKind(s: []const u8) ?material_model.MaterialGraphNodeKind {
+    inline for (@typeInfo(material_model.MaterialGraphNodeKind).@"enum".fields) |f| {
+        if (strEql(s, f.name)) return @enumFromInt(f.value);
+    }
+    return null;
+}
+
+fn parseSocketType(s: []const u8) ?material_model.MaterialGraphSocketType {
+    inline for (@typeInfo(material_model.MaterialGraphSocketType).@"enum".fields) |f| {
+        if (strEql(s, f.name)) return @enumFromInt(f.value);
+    }
+    return null;
+}
+
+fn parseChannel(s: []const u8) ?material_model.MaterialChannel {
+    inline for (@typeInfo(material_model.MaterialChannel).@"enum".fields) |f| {
+        if (strEql(s, f.name)) return @enumFromInt(f.value);
+    }
+    return null;
+}
+
+fn parseValueKind(s: []const u8) ?material_model.MaterialGraphValueKind {
+    inline for (@typeInfo(material_model.MaterialGraphValueKind).@"enum".fields) |f| {
+        if (strEql(s, f.name)) return @enumFromInt(f.value);
+    }
+    return null;
+}
+
+/// Get the graph from a material resource (or null).
+fn getGraphFromEntity(ctx: *Ctx) !struct { eid: u64, res: *material_resource_mod.MaterialResource, graph: *material_model.MaterialGraph } {
+    const r = try getMaterialEntity(ctx);
+    const res = try ensureEditableResource(ctx, r.entity, r.mat);
+    if (res.graph) |*g| return .{ .eid = r.eid, .res = res, .graph = g };
+    return error.InvalidArguments;
+}
+
+/// material.getGraph(entityId) → full MaterialGraph snapshot
+pub fn getGraph(ctx: *Ctx) !void {
+    const eid = try ctx.param(u64, "entityId");
+    const entity = ctx.layer.world.getEntityConst(eid) orelse return error.EntityNotFound;
+    const mat = entity.material orelse {
+        try ctx.reply(.{ .hasGraph = false });
+        return;
+    };
+
+    const graph_opt: ?material_model.MaterialGraph = blk: {
+        if (mat.handle) |h| {
+            if (ctx.layer.world.assets().material(h)) |res| {
+                break :blk res.graph;
+            }
+        }
+        break :blk null;
+    };
+
+    const graph = graph_opt orelse {
+        try ctx.reply(.{ .hasGraph = false });
+        return;
+    };
+
+    // Build JSON manually for performance
+    var buf = std.ArrayList(u8).empty;
+    defer buf.deinit(ctx.allocator);
+
+    try appendSlice(&buf, ctx.allocator, "{\"hasGraph\":true,\"nodes\":[");
+    for (graph.nodes, 0..) |node, i| {
+        if (i > 0) try appendSlice(&buf, ctx.allocator, ",");
+        try appendSlice(&buf, ctx.allocator, "{\"id\":");
+        try appendNum(&buf, ctx.allocator, @as(i64, node.id));
+        try appendSlice(&buf, ctx.allocator, ",\"kind\":\"");
+        try appendSlice(&buf, ctx.allocator, nodeKindStr(node.kind));
+        try appendSlice(&buf, ctx.allocator, "\",\"outputType\":\"");
+        try appendSlice(&buf, ctx.allocator, socketTypeStr(node.output_type));
+        try appendSlice(&buf, ctx.allocator, "\"");
+        if (channelStr(node.channel)) |ch| {
+            try appendSlice(&buf, ctx.allocator, ",\"channel\":\"");
+            try appendSlice(&buf, ctx.allocator, ch);
+            try appendSlice(&buf, ctx.allocator, "\"");
+        }
+        try appendSlice(&buf, ctx.allocator, ",\"valueKind\":\"");
+        try appendSlice(&buf, ctx.allocator, valueKindStr(node.value.kind));
+        try appendSlice(&buf, ctx.allocator, "\",\"scalar\":");
+        try appendFloat(&buf, ctx.allocator, node.value.scalar);
+        try appendSlice(&buf, ctx.allocator, ",\"vec2\":[");
+        try appendFloat(&buf, ctx.allocator, node.value.vec2[0]);
+        try appendSlice(&buf, ctx.allocator, ",");
+        try appendFloat(&buf, ctx.allocator, node.value.vec2[1]);
+        try appendSlice(&buf, ctx.allocator, "],\"vec3\":[");
+        try appendFloat(&buf, ctx.allocator, node.value.vec3[0]);
+        try appendSlice(&buf, ctx.allocator, ",");
+        try appendFloat(&buf, ctx.allocator, node.value.vec3[1]);
+        try appendSlice(&buf, ctx.allocator, ",");
+        try appendFloat(&buf, ctx.allocator, node.value.vec3[2]);
+        try appendSlice(&buf, ctx.allocator, "],\"vec4\":[");
+        try appendFloat(&buf, ctx.allocator, node.value.vec4[0]);
+        try appendSlice(&buf, ctx.allocator, ",");
+        try appendFloat(&buf, ctx.allocator, node.value.vec4[1]);
+        try appendSlice(&buf, ctx.allocator, ",");
+        try appendFloat(&buf, ctx.allocator, node.value.vec4[2]);
+        try appendSlice(&buf, ctx.allocator, ",");
+        try appendFloat(&buf, ctx.allocator, node.value.vec4[3]);
+        try appendSlice(&buf, ctx.allocator, "]");
+        if (node.value.texture) |th| {
+            try appendSlice(&buf, ctx.allocator, ",\"textureHandle\":");
+            try appendNum(&buf, ctx.allocator, @as(i64, @intFromEnum(th)));
+        }
+        const pos = getNodePos(eid, node.id);
+        try appendSlice(&buf, ctx.allocator, ",\"posX\":");
+        try appendFloat(&buf, ctx.allocator, pos[0]);
+        try appendSlice(&buf, ctx.allocator, ",\"posY\":");
+        try appendFloat(&buf, ctx.allocator, pos[1]);
+        try appendSlice(&buf, ctx.allocator, "}");
+    }
+
+    try appendSlice(&buf, ctx.allocator, "],\"connections\":[");
+    for (graph.connections, 0..) |conn, i| {
+        if (i > 0) try appendSlice(&buf, ctx.allocator, ",");
+        try appendSlice(&buf, ctx.allocator, "{\"fromNodeId\":");
+        try appendNum(&buf, ctx.allocator, @as(i64, conn.from_node_id));
+        try appendSlice(&buf, ctx.allocator, ",\"fromSlot\":");
+        try appendNum(&buf, ctx.allocator, @as(i64, conn.from_slot));
+        try appendSlice(&buf, ctx.allocator, ",\"toNodeId\":");
+        try appendNum(&buf, ctx.allocator, @as(i64, conn.to_node_id));
+        try appendSlice(&buf, ctx.allocator, ",\"toSlot\":");
+        try appendNum(&buf, ctx.allocator, @as(i64, conn.to_slot));
+        try appendSlice(&buf, ctx.allocator, "}");
+    }
+
+    try appendSlice(&buf, ctx.allocator, "],\"outputs\":[");
+    for (graph.outputs, 0..) |out, i| {
+        if (i > 0) try appendSlice(&buf, ctx.allocator, ",");
+        try appendSlice(&buf, ctx.allocator, "{\"channel\":\"");
+        try appendSlice(&buf, ctx.allocator, @tagName(out.channel));
+        try appendSlice(&buf, ctx.allocator, "\",\"sourceNodeId\":");
+        try appendNum(&buf, ctx.allocator, @as(i64, out.source_node_id));
+        try appendSlice(&buf, ctx.allocator, ",\"sourceSlot\":");
+        try appendNum(&buf, ctx.allocator, @as(i64, out.source_slot));
+        try appendSlice(&buf, ctx.allocator, "}");
+    }
+
+    try appendSlice(&buf, ctx.allocator, "]}");
+    ctx.replyRaw(try buf.toOwnedSlice(ctx.allocator));
+}
+
+/// material.addGraphNode(entityId, kind, posX?, posY?)
+pub fn addGraphNode(ctx: *Ctx) !void {
+    const r = try getMaterialEntity(ctx);
+    const res = try ensureEditableResource(ctx, r.entity, r.mat);
+
+    const kind_str = try ctx.param([]const u8, "kind");
+    const kind = parseNodeKind(kind_str) orelse return error.InvalidArguments;
+    const pos_x: f32 = @floatCast(try ctx.paramOpt(f64, "posX") orelse 0.0);
+    const pos_y: f32 = @floatCast(try ctx.paramOpt(f64, "posY") orelse 0.0);
+
+    // Determine next node ID
+    var max_id: u32 = 0;
+    if (res.graph) |graph| {
+        for (graph.nodes) |n| {
+            if (n.id > max_id) max_id = n.id;
+        }
+    }
+    const new_id = max_id + 1;
+
+    // Default output type based on kind
+    const default_output_type: material_model.MaterialGraphSocketType = switch (kind) {
+        .texture_sample => .vec4,
+        .normal_map => .vec3,
+        .split_channels => .scalar,
+        .output => .surface,
+        else => .scalar,
+    };
+
+    const new_node = material_model.MaterialGraphNode{
+        .id = new_id,
+        .kind = kind,
+        .output_type = default_output_type,
+    };
+
+    // Ensure graph exists
+    if (res.graph == null) {
+        res.graph = .{};
+    }
+
+    // Grow the nodes array
+    var graph = &res.graph.?;
+    const old_nodes = graph.nodes;
+    const new_nodes = try ctx.allocator.alloc(material_model.MaterialGraphNode, old_nodes.len + 1);
+    @memcpy(new_nodes[0..old_nodes.len], old_nodes);
+    new_nodes[old_nodes.len] = new_node;
+    if (old_nodes.len > 0) ctx.allocator.free(old_nodes);
+    graph.nodes = new_nodes;
+
+    // Save position
+    try node_positions.put(posKey(r.eid, new_id), .{ pos_x, pos_y });
+
+    ctx.layer.world.markDirty(r.eid);
+    try ctx.reply(.{ .nodeId = new_id });
+}
+
+/// material.removeGraphNode(entityId, nodeId)
+pub fn removeGraphNode(ctx: *Ctx) !void {
+    const g = try getGraphFromEntity(ctx);
+    const node_id: u32 = @intCast(try ctx.param(u64, "nodeId"));
+
+    // Remove the node
+    var new_nodes = try ctx.allocator.alloc(material_model.MaterialGraphNode, g.graph.nodes.len);
+    var write: usize = 0;
+    for (g.graph.nodes) |n| {
+        if (n.id != node_id) {
+            new_nodes[write] = n;
+            write += 1;
+        }
+    }
+    if (write == g.graph.nodes.len) {
+        ctx.allocator.free(new_nodes);
+        return error.InvalidArguments; // node not found
+    }
+    if (g.graph.nodes.len > 0) ctx.allocator.free(g.graph.nodes);
+    g.graph.nodes = new_nodes[0..write];
+
+    // Remove connections referencing this node
+    var new_conns = try ctx.allocator.alloc(material_model.MaterialGraphConnection, g.graph.connections.len);
+    var cw: usize = 0;
+    for (g.graph.connections) |c| {
+        if (c.from_node_id != node_id and c.to_node_id != node_id) {
+            new_conns[cw] = c;
+            cw += 1;
+        }
+    }
+    if (g.graph.connections.len > 0) ctx.allocator.free(g.graph.connections);
+    g.graph.connections = new_conns[0..cw];
+
+    // Remove outputs referencing this node
+    var new_outs = try ctx.allocator.alloc(material_model.MaterialGraphOutput, g.graph.outputs.len);
+    var ow: usize = 0;
+    for (g.graph.outputs) |o| {
+        if (o.source_node_id != node_id) {
+            new_outs[ow] = o;
+            ow += 1;
+        }
+    }
+    if (g.graph.outputs.len > 0) ctx.allocator.free(g.graph.outputs);
+    g.graph.outputs = new_outs[0..ow];
+
+    // Remove position
+    _ = node_positions.remove(posKey(g.eid, node_id));
+
+    ctx.layer.world.markDirty(g.eid);
+    try ctx.reply(.{});
+}
+
+/// material.updateGraphNode(entityId, nodeId, channel?, outputType?, valueKind?, scalar?, vec2?, vec3?, vec4?, textureHandle?)
+pub fn updateGraphNode(ctx: *Ctx) !void {
+    const g = try getGraphFromEntity(ctx);
+    const node_id: u32 = @intCast(try ctx.param(u64, "nodeId"));
+
+    var found = false;
+    for (g.graph.nodes) |*node| {
+        if (node.id != node_id) continue;
+        found = true;
+
+        if (try ctx.paramOpt([]const u8, "channel")) |ch_str| {
+            node.channel = parseChannel(ch_str);
+        }
+        if (try ctx.paramOpt([]const u8, "outputType")) |ot_str| {
+            if (parseSocketType(ot_str)) |st| node.output_type = st;
+        }
+        if (try ctx.paramOpt([]const u8, "valueKind")) |vk_str| {
+            if (parseValueKind(vk_str)) |vk| node.value.kind = vk;
+        }
+        if (try ctx.paramOpt(f64, "scalar")) |s| {
+            node.value.scalar = @floatCast(s);
+        }
+        if (ctx.paramArray("vec2")) |arr| {
+            if (arr.items.len >= 2) {
+                node.value.vec2 = .{
+                    floatFromJson(arr.items[0]),
+                    floatFromJson(arr.items[1]),
+                };
+            }
+        } else |_| {}
+        if (ctx.paramArray("vec3")) |arr| {
+            if (arr.items.len >= 3) {
+                node.value.vec3 = .{
+                    floatFromJson(arr.items[0]),
+                    floatFromJson(arr.items[1]),
+                    floatFromJson(arr.items[2]),
+                };
+            }
+        } else |_| {}
+        if (ctx.paramArray("vec4")) |arr| {
+            if (arr.items.len >= 4) {
+                node.value.vec4 = .{
+                    floatFromJson(arr.items[0]),
+                    floatFromJson(arr.items[1]),
+                    floatFromJson(arr.items[2]),
+                    floatFromJson(arr.items[3]),
+                };
+            }
+        } else |_| {}
+        if (try ctx.paramOpt(u64, "textureHandle")) |th| {
+            node.value.texture = u32ToHandle(handles.TextureHandle, @intCast(th));
+        }
+        break;
+    }
+
+    if (!found) return error.InvalidArguments;
+    ctx.layer.world.markDirty(g.eid);
+    try ctx.reply(.{});
+}
+
+/// material.addGraphConnection(entityId, fromNodeId, fromSlot, toNodeId, toSlot)
+pub fn addGraphConnection(ctx: *Ctx) !void {
+    const g = try getGraphFromEntity(ctx);
+    const from_id: u32 = @intCast(try ctx.param(u64, "fromNodeId"));
+    const from_slot: u8 = @intCast(try ctx.paramOpt(u64, "fromSlot") orelse 0);
+    const to_id: u32 = @intCast(try ctx.param(u64, "toNodeId"));
+    const to_slot: u8 = @intCast(try ctx.paramOpt(u64, "toSlot") orelse 0);
+
+    // Prevent duplicate
+    for (g.graph.connections) |c| {
+        if (c.from_node_id == from_id and c.from_slot == from_slot and
+            c.to_node_id == to_id and c.to_slot == to_slot)
+        {
+            try ctx.reply(.{});
+            return;
+        }
+    }
+
+    const new_conn = material_model.MaterialGraphConnection{
+        .from_node_id = from_id,
+        .from_slot = from_slot,
+        .to_node_id = to_id,
+        .to_slot = to_slot,
+    };
+
+    const old = g.graph.connections;
+    const new_conns = try ctx.allocator.alloc(material_model.MaterialGraphConnection, old.len + 1);
+    @memcpy(new_conns[0..old.len], old);
+    new_conns[old.len] = new_conn;
+    if (old.len > 0) ctx.allocator.free(old);
+    g.graph.connections = new_conns;
+
+    ctx.layer.world.markDirty(g.eid);
+    try ctx.reply(.{});
+}
+
+/// material.removeGraphConnection(entityId, fromNodeId, fromSlot, toNodeId, toSlot)
+pub fn removeGraphConnection(ctx: *Ctx) !void {
+    const g = try getGraphFromEntity(ctx);
+    const from_id: u32 = @intCast(try ctx.param(u64, "fromNodeId"));
+    const from_slot: u8 = @intCast(try ctx.paramOpt(u64, "fromSlot") orelse 0);
+    const to_id: u32 = @intCast(try ctx.param(u64, "toNodeId"));
+    const to_slot: u8 = @intCast(try ctx.paramOpt(u64, "toSlot") orelse 0);
+
+    var new_conns = try ctx.allocator.alloc(material_model.MaterialGraphConnection, g.graph.connections.len);
+    var w: usize = 0;
+    for (g.graph.connections) |c| {
+        if (c.from_node_id == from_id and c.from_slot == from_slot and
+            c.to_node_id == to_id and c.to_slot == to_slot)
+            continue;
+        new_conns[w] = c;
+        w += 1;
+    }
+    if (g.graph.connections.len > 0) ctx.allocator.free(g.graph.connections);
+    g.graph.connections = new_conns[0..w];
+
+    ctx.layer.world.markDirty(g.eid);
+    try ctx.reply(.{});
+}
+
+/// material.setGraphOutput(entityId, channel, sourceNodeId, sourceSlot)
+pub fn setGraphOutput(ctx: *Ctx) !void {
+    const g = try getGraphFromEntity(ctx);
+    const ch_str = try ctx.param([]const u8, "channel");
+    const channel = parseChannel(ch_str) orelse return error.InvalidArguments;
+    const src_id: u32 = @intCast(try ctx.param(u64, "sourceNodeId"));
+    const src_slot: u8 = @intCast(try ctx.paramOpt(u64, "sourceSlot") orelse 0);
+
+    // Update existing or append
+    for (g.graph.outputs) |*o| {
+        if (o.channel == channel) {
+            o.source_node_id = src_id;
+            o.source_slot = src_slot;
+            ctx.layer.world.markDirty(g.eid);
+            try ctx.reply(.{});
+            return;
+        }
+    }
+
+    // Append new output
+    const old = g.graph.outputs;
+    const new_outs = try ctx.allocator.alloc(material_model.MaterialGraphOutput, old.len + 1);
+    @memcpy(new_outs[0..old.len], old);
+    new_outs[old.len] = .{ .channel = channel, .source_node_id = src_id, .source_slot = src_slot };
+    if (old.len > 0) ctx.allocator.free(old);
+    g.graph.outputs = new_outs;
+
+    ctx.layer.world.markDirty(g.eid);
+    try ctx.reply(.{});
+}
+
+/// material.removeGraphOutput(entityId, channel)
+pub fn removeGraphOutput(ctx: *Ctx) !void {
+    const g = try getGraphFromEntity(ctx);
+    const ch_str = try ctx.param([]const u8, "channel");
+    const channel = parseChannel(ch_str) orelse return error.InvalidArguments;
+
+    var new_outs = try ctx.allocator.alloc(material_model.MaterialGraphOutput, g.graph.outputs.len);
+    var w: usize = 0;
+    for (g.graph.outputs) |o| {
+        if (o.channel != channel) {
+            new_outs[w] = o;
+            w += 1;
+        }
+    }
+    if (g.graph.outputs.len > 0) ctx.allocator.free(g.graph.outputs);
+    g.graph.outputs = new_outs[0..w];
+
+    ctx.layer.world.markDirty(g.eid);
+    try ctx.reply(.{});
+}
+
+/// material.setNodePosition(entityId, nodeId, posX, posY)
+pub fn setNodePosition(ctx: *Ctx) !void {
+    const eid = try ctx.param(u64, "entityId");
+    const node_id: u32 = @intCast(try ctx.param(u64, "nodeId"));
+    const px: f32 = @floatCast(try ctx.param(f64, "posX"));
+    const py: f32 = @floatCast(try ctx.param(f64, "posY"));
+    try node_positions.put(posKey(eid, node_id), .{ px, py });
+    try ctx.reply(.{});
+}
+
 // ── Utility ─────────────────────────────────────────────────────
 
 fn floatFromJson(val: std.json.Value) f32 {
@@ -420,4 +884,16 @@ fn floatFromJson(val: std.json.Value) f32 {
 
 fn appendSlice(buf: *std.ArrayList(u8), allocator: std.mem.Allocator, data: []const u8) !void {
     try buf.appendSlice(allocator, data);
+}
+
+fn appendNum(buf: *std.ArrayList(u8), allocator: std.mem.Allocator, val: i64) !void {
+    var num_buf: [24]u8 = undefined;
+    const num_str = std.fmt.bufPrint(&num_buf, "{d}", .{val}) catch "0";
+    try buf.appendSlice(allocator, num_str);
+}
+
+fn appendFloat(buf: *std.ArrayList(u8), allocator: std.mem.Allocator, val: f32) !void {
+    var num_buf: [32]u8 = undefined;
+    const num_str = std.fmt.bufPrint(&num_buf, "{d}", .{val}) catch "0";
+    try buf.appendSlice(allocator, num_str);
 }

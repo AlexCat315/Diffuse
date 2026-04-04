@@ -119,6 +119,34 @@ export interface AnimClipTrack {
   keyframeCount: number;
 }
 
+export interface MaterialGraphNodeInfo {
+  id: number;
+  kind: string;
+  outputType: string;
+  channel?: string;
+  valueKind: string;
+  scalar: number;
+  vec2: [number, number];
+  vec3: [number, number, number];
+  vec4: [number, number, number, number];
+  textureHandle?: number;
+  posX: number;
+  posY: number;
+}
+
+export interface MaterialGraphConnectionInfo {
+  fromNodeId: number;
+  fromSlot: number;
+  toNodeId: number;
+  toSlot: number;
+}
+
+export interface MaterialGraphOutputInfo {
+  channel: string;
+  sourceNodeId: number;
+  sourceSlot: number;
+}
+
 // ── RPC Method Signatures ──────────────────────────────────
 
 export interface RpcMethods {
@@ -212,6 +240,15 @@ export interface RpcMethods {
   "material.getTextureInfo": { params: { textureHandle: number }; result: { found: boolean; name?: string; width?: number; height?: number; format?: string } };
   "material.listTextures": { params: Record<string, never>; result: { textures: { handle: number; name: string; width: number; height: number }[] } };
   "material.setPreviewPrimitive": { params: { primitive: string }; result: Record<string, never> };
+  "material.getGraph": { params: { entityId: number }; result: { hasGraph: boolean; nodes?: MaterialGraphNodeInfo[]; connections?: MaterialGraphConnectionInfo[]; outputs?: MaterialGraphOutputInfo[] } };
+  "material.addGraphNode": { params: { entityId: number; kind: string; posX?: number; posY?: number }; result: { nodeId: number } };
+  "material.removeGraphNode": { params: { entityId: number; nodeId: number }; result: Record<string, never> };
+  "material.updateGraphNode": { params: { entityId: number; nodeId: number; channel?: string; outputType?: string; valueKind?: string; scalar?: number; vec2?: [number, number]; vec3?: [number, number, number]; vec4?: [number, number, number, number]; textureHandle?: number }; result: Record<string, never> };
+  "material.addGraphConnection": { params: { entityId: number; fromNodeId: number; fromSlot?: number; toNodeId: number; toSlot?: number }; result: Record<string, never> };
+  "material.removeGraphConnection": { params: { entityId: number; fromNodeId: number; fromSlot?: number; toNodeId: number; toSlot?: number }; result: Record<string, never> };
+  "material.setGraphOutput": { params: { entityId: number; channel: string; sourceNodeId: number; sourceSlot?: number }; result: Record<string, never> };
+  "material.removeGraphOutput": { params: { entityId: number; channel: string }; result: Record<string, never> };
+  "material.setNodePosition": { params: { entityId: number; nodeId: number; posX: number; posY: number }; result: Record<string, never> };
   "sequencer.getState": { params: Record<string, never>; result: { loaded: boolean; name?: string; fps?: number; duration?: number; currentTime: number; isPlaying: boolean; speed: number; filePath?: string; tracks?: SequencerTrack[] } };
   "animation.getState": { params: { entityId: number }; result: { hasAnimator: boolean; hasGraph: boolean; graphName?: string; currentState?: number; nextState?: number; blendFactor?: number; transitionTime?: number; transitionDuration?: number; defaultState?: number; states?: AnimGraphState[]; transitions?: AnimGraphTransition[]; parameters?: AnimGraphParameter[]; clipTracks?: AnimClipTrack[]; clipDuration?: number; sampleTime?: number } };
   "animation.addState": { params: { entityId: number; name?: string }; result: { index: number } };
