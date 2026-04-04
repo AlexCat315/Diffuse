@@ -62,6 +62,61 @@ const MATERIAL_CHANNELS = [
   "alpha_cutoff",
 ] as const;
 
+const SOCKET_TYPES = ["scalar", "vec2", "vec3", "vec4", "texture", "surface"] as const;
+
+const VALUE_KINDS = ["none", "scalar", "vec2", "vec3", "vec4", "texture"] as const;
+
+// ── Vector value editor component ───────────────────────────────
+
+function VecEditor({
+  values,
+  count,
+  labels,
+  onCommit,
+}: {
+  values: number[];
+  count: number;
+  labels: string[];
+  onCommit: (vals: number[]) => void;
+}) {
+  const [local, setLocal] = useState<number[]>(values.slice(0, count));
+
+  useEffect(() => {
+    setLocal(values.slice(0, count));
+  }, [values, count]);
+
+  return (
+    <div style={{ display: "flex", gap: 2, marginTop: 2 }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} style={{ flex: 1 }}>
+          <div style={{ fontSize: 8, color: "#585b70", textAlign: "center" }}>{labels[i]}</div>
+          <input
+            type="number"
+            step="0.01"
+            style={{
+              width: "100%",
+              background: "#1e1e2e",
+              color: "#cdd6f4",
+              border: "1px solid #45475a",
+              borderRadius: 3,
+              padding: "2px 3px",
+              fontSize: 9,
+              textAlign: "center",
+            }}
+            value={local[i]?.toFixed(2) ?? "0.00"}
+            onChange={(e) => {
+              const next = [...local];
+              next[i] = parseFloat(e.target.value) || 0;
+              setLocal(next);
+            }}
+            onBlur={() => onCommit(local)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── Custom node component ───────────────────────────────────────
 
 function MaterialNode({ data }: NodeProps) {
@@ -108,9 +163,9 @@ function MaterialNode({ data }: NodeProps) {
         {nodeData.kind === "constant" && (
           <div style={{ fontSize: 10, color: "#80ff80" }}>
             {nodeData.valueKind === "scalar" && `${nodeData.scalar.toFixed(3)}`}
-            {nodeData.valueKind === "vec2" && `[${nodeData.vec2.map((v: number) => v.toFixed(2)).join(", ")}]`}
-            {nodeData.valueKind === "vec3" && `[${nodeData.vec3.map((v: number) => v.toFixed(2)).join(", ")}]`}
-            {nodeData.valueKind === "vec4" && `[${nodeData.vec4.map((v: number) => v.toFixed(2)).join(", ")}]`}
+            {nodeData.valueKind === "vec2" && `[${(nodeData.vec2 as number[]).map((v: number) => v.toFixed(2)).join(", ")}]`}
+            {nodeData.valueKind === "vec3" && `[${(nodeData.vec3 as number[]).map((v: number) => v.toFixed(2)).join(", ")}]`}
+            {nodeData.valueKind === "vec4" && `[${(nodeData.vec4 as number[]).map((v: number) => v.toFixed(2)).join(", ")}]`}
           </div>
         )}
         {nodeData.kind === "texture_sample" && nodeData.textureHandle != null && (
@@ -188,6 +243,7 @@ export function MaterialGraphEditor() {
   const [flowEdges, setFlowEdges] = useState<Edge[]>([]);
   const [selectedNode, setSelectedNode] = useState<MaterialGraphNodeInfo | null>(null);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [textures, setTextures] = useState<{ handle: number; name: string }[]>([]);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
@@ -227,6 +283,15 @@ export function MaterialGraphEditor() {
     return () => clearInterval(pollingRef.current);
   }, [fetchGraph]);
 
+  // ── Fetch texture list (once) ──────────────────────────────
+
+  useEffect(() => {
+    if (!connected) return;
+    rpc("material.listTextures", {} as never)
+      .then((res) => setTextures(res.textures.map((t) => ({ handle: t.handle, name: t.name }))))
+      .catch(() => {});
+  }, [connected]);
+
   // ── React Flow handlers ─────────────────────────────────────
 
   const onNodesChange: OnNodesChange = useCallback(
@@ -262,12 +327,25 @@ export function MaterialGraphEditor() {
       rpc("material.addGraphConnection", {
         entityId: selectedEntity,
         fromNodeId: Number(connection.source),
+        fromSlot: 0,
         toNodeId: Number(connection.target),
+        toSlot: 0,
       })
         .then(() => fetchGraph())
         .catch(() => {});
     },
     [selectedEntity, fetchGraph],
+  );
+
+  const isValidConnection = useCallback(
+    (connection: Edge | Connection) => {
+      if (connection.source === connection.target) return false;
+      // Prevent duplicate connections
+      return !flowEdges.some(
+        (e) => e.source === connection.source && e.target === connection.target,
+      );
+    },
+    [flowEdges],
   );
 
   const onNodeClick = useCallback(
@@ -331,6 +409,7 @@ export function MaterialGraphEditor() {
         entityId: selectedEntity,
         channel,
         sourceNodeId,
+        sourceSlot: 0,
       })
         .then(() => fetchGraph())
         .catch(() => {});
@@ -359,7 +438,30 @@ export function MaterialGraphEditor() {
   }
 
   if (!hasGraph) {
-    return <div style={styles.placeholder}>{t.materialGraph.noGraph}</div>;
+    return (
+      <div style={styles.placeholder}>
+        <div style={{ textAlign: "center" }}>
+          <div>{t.materialGraph.noGraph}</div>
+          <button
+            style={{ ...styles.toolbarBtn, marginTop: 8 }}
+            onClick={() => {
+              if (selectedEntity == null) return;
+              // Bootstrap: add an output node to force graph creation
+              rpc("material.addGraphNode", {
+                entityId: selectedEntity,
+                kind: "output",
+                posX: 400,
+                posY: 200,
+              })
+                .then(() => fetchGraph())
+                .catch(() => {});
+            }}
+          >
+            {t.materialGraph.createGraph}
+          </button>
+        </div>
+      </div>
+    );
   }
 
   // ── Render ────────────────────────────────────────────────
@@ -411,6 +513,7 @@ export function MaterialGraphEditor() {
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
+            isValidConnection={isValidConnection}
             onNodeClick={onNodeClick}
             onNodeDragStop={onNodeDragStop}
             nodeTypes={nodeTypes}
@@ -473,6 +576,20 @@ export function MaterialGraphEditor() {
                 {t.materialGraph.kind}: {selectedNode.kind.replace(/_/g, " ")}
               </label>
 
+              {/* Output type selector */}
+              <label style={styles.fieldLabel}>{t.materialGraph.outputType}</label>
+              <select
+                style={styles.select}
+                value={selectedNode.outputType}
+                onChange={(e) =>
+                  updateNode(selectedNode.id, { outputType: e.target.value })
+                }
+              >
+                {SOCKET_TYPES.map((st) => (
+                  <option key={st} value={st}>{st}</option>
+                ))}
+              </select>
+
               {/* Channel selector */}
               <label style={styles.fieldLabel}>{t.materialGraph.channel}</label>
               <select
@@ -492,7 +609,25 @@ export function MaterialGraphEditor() {
                 ))}
               </select>
 
-              {/* Value editor for scalars */}
+              {/* Value kind selector (for constant/input_parameter) */}
+              {(selectedNode.kind === "constant" || selectedNode.kind === "input_parameter") && (
+                <>
+                  <label style={styles.fieldLabel}>{t.materialGraph.valueType}</label>
+                  <select
+                    style={styles.select}
+                    value={selectedNode.valueKind}
+                    onChange={(e) =>
+                      updateNode(selectedNode.id, { valueKind: e.target.value })
+                    }
+                  >
+                    {VALUE_KINDS.map((vk) => (
+                      <option key={vk} value={vk}>{vk}</option>
+                    ))}
+                  </select>
+                </>
+              )}
+
+              {/* Scalar value editor */}
               {selectedNode.valueKind === "scalar" && (
                 <>
                   <label style={styles.fieldLabel}>{t.materialGraph.value}</label>
@@ -501,6 +636,7 @@ export function MaterialGraphEditor() {
                     step="0.01"
                     style={styles.input}
                     defaultValue={selectedNode.scalar}
+                    key={`s-${selectedNode.id}-${selectedNode.scalar}`}
                     onBlur={(e) =>
                       updateNode(selectedNode.id, {
                         valueKind: "scalar",
@@ -508,6 +644,84 @@ export function MaterialGraphEditor() {
                       })
                     }
                   />
+                </>
+              )}
+
+              {/* Vec2 value editor */}
+              {selectedNode.valueKind === "vec2" && (
+                <>
+                  <label style={styles.fieldLabel}>{t.materialGraph.value} (vec2)</label>
+                  <VecEditor
+                    values={selectedNode.vec2 as unknown as number[]}
+                    count={2}
+                    labels={["X", "Y"]}
+                    onCommit={(vals) =>
+                      updateNode(selectedNode.id, { valueKind: "vec2", vec2: vals as [number, number] })
+                    }
+                  />
+                </>
+              )}
+
+              {/* Vec3 value editor */}
+              {selectedNode.valueKind === "vec3" && (
+                <>
+                  <label style={styles.fieldLabel}>{t.materialGraph.value} (vec3)</label>
+                  <VecEditor
+                    values={selectedNode.vec3 as unknown as number[]}
+                    count={3}
+                    labels={["R", "G", "B"]}
+                    onCommit={(vals) =>
+                      updateNode(selectedNode.id, { valueKind: "vec3", vec3: vals as [number, number, number] })
+                    }
+                  />
+                </>
+              )}
+
+              {/* Vec4 value editor */}
+              {selectedNode.valueKind === "vec4" && (
+                <>
+                  <label style={styles.fieldLabel}>{t.materialGraph.value} (vec4)</label>
+                  <VecEditor
+                    values={selectedNode.vec4 as unknown as number[]}
+                    count={4}
+                    labels={["R", "G", "B", "A"]}
+                    onCommit={(vals) =>
+                      updateNode(selectedNode.id, { valueKind: "vec4", vec4: vals as [number, number, number, number] })
+                    }
+                  />
+                  {/* Color preview swatch */}
+                  <div
+                    style={{
+                      width: "100%",
+                      height: 20,
+                      borderRadius: 3,
+                      marginTop: 4,
+                      border: "1px solid #45475a",
+                      background: `rgba(${Math.round(((selectedNode.vec4 as unknown as number[])[0] ?? 0) * 255)}, ${Math.round(((selectedNode.vec4 as unknown as number[])[1] ?? 0) * 255)}, ${Math.round(((selectedNode.vec4 as unknown as number[])[2] ?? 0) * 255)}, ${(selectedNode.vec4 as unknown as number[])[3] ?? 1})`,
+                    }}
+                  />
+                </>
+              )}
+
+              {/* Texture selector */}
+              {selectedNode.kind === "texture_sample" && (
+                <>
+                  <label style={styles.fieldLabel}>{t.materialGraph.texture}</label>
+                  <select
+                    style={styles.select}
+                    value={selectedNode.textureHandle ?? 0}
+                    onChange={(e) => {
+                      const h = parseInt(e.target.value, 10);
+                      updateNode(selectedNode.id, { textureHandle: h || undefined });
+                    }}
+                  >
+                    <option value={0}>({t.materialGraph.none})</option>
+                    {textures.map((tex) => (
+                      <option key={tex.handle} value={tex.handle}>
+                        {tex.name} (#{tex.handle})
+                      </option>
+                    ))}
+                  </select>
                 </>
               )}
 
