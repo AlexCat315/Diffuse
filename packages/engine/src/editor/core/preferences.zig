@@ -1,6 +1,6 @@
 const std = @import("std");
 const engine = @import("guava");
-const gui = @import("../ui/gui.zig");
+const sdl = engine.platform.sdl;
 
 const state_mod = @import("state.zig");
 
@@ -183,9 +183,10 @@ fn persistedProviderType(provider: PersistedProvider, fallback: AiProviderType) 
 }
 
 fn prefsPathAlloc(allocator: std.mem.Allocator, file_name: []const u8) ![]u8 {
-    const pref_path = try gui.editorPrefPathAlloc(allocator);
-    defer allocator.free(pref_path);
-    return std.fs.path.join(allocator, &.{ pref_path, file_name });
+    const pref_path = sdl.c.SDL_GetPrefPath("Guava", "Editor") orelse return error.PreferencePathUnavailable;
+    defer sdl.c.SDL_free(pref_path);
+    const pref_dir = std.mem.span(pref_path);
+    return std.fs.path.join(allocator, &.{ pref_dir, file_name });
 }
 
 fn writeJsonFileAtomically(allocator: std.mem.Allocator, path: []const u8, payload: anytype) !void {

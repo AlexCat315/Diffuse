@@ -1,6 +1,5 @@
 const std = @import("std");
 const engine = @import("guava");
-const gui = @import("../ui/gui.zig");
 const camera = @import("../interaction/camera.zig");
 const history = @import("../actions/history.zig");
 const state_mod = @import("../core/state.zig");
@@ -238,143 +237,6 @@ pub fn noteManipulationCancel(state: *EditorState, entity_id: ?engine.scene.Enti
     store.recordIntent(.human, "manipulation_cancel", detail) catch |err| {
         std.log.warn("failed to record manipulation cancel: {s}", .{@errorName(err)});
     };
-}
-
-pub fn drawViewportCollaborationOverlay(state: *EditorState, layer_context: *engine.core.LayerContext) !void {
-    const store = state.ai_collaboration orelse return;
-    const snapshot = store.overlaySnapshot();
-    if (!snapshot.active) {
-        return;
-    }
-
-    drawPreviewPins(state, layer_context, snapshot);
-    try drawPreviewCard(state, layer_context, store, snapshot);
-}
-
-fn drawPreviewCard(
-    state: *EditorState,
-    layer_context: *engine.core.LayerContext,
-    store: *collaboration_mod.Store,
-    snapshot: collaboration_mod.OverlaySnapshot,
-) !void {
-    const card_pos = .{ state.viewport_origin[0] + 18.0, state.viewport_origin[1] + 18.0 };
-    gui.setNextWindowPos(card_pos);
-    gui.setNextWindowBgAlpha(0.92);
-    _ = gui.beginWindowFlags(
-        "AI Collaboration Overlay##ai_native_preview",
-        gui.WindowFlags.no_title_bar |
-            gui.WindowFlags.no_saved_settings |
-            gui.WindowFlags.no_move |
-            gui.WindowFlags.always_auto_resize,
-    );
-    defer gui.endWindow();
-
-    if (gui.isWindowHovered()) {
-        state.viewport_overlay_hovered = true;
-    }
-
-    var header_buffer: [160]u8 = undefined;
-    const header = std.fmt.bufPrint(
-        &header_buffer,
-        "Ghost Preview  #{d}  [{s}]",
-        .{ snapshot.transaction_id, @tagName(snapshot.source) },
-    ) catch "Ghost Preview";
-    gui.text(header);
-
-    if (snapshot.label.len > 0) {
-        gui.text(snapshot.label.slice());
-    }
-    if (snapshot.note.len > 0) {
-        gui.textWrapped(snapshot.note.slice());
-    }
-
-    gui.separator();
-
-    var summary_buffer: [192]u8 = undefined;
-    const summary = std.fmt.bufPrint(
-        &summary_buffer,
-        "commands: {d}   preview: {d}   errors: {d}",
-        .{ snapshot.command_count, snapshot.preview_count, snapshot.error_count },
-    ) catch "preview summary";
-    gui.text(summary);
-
-    if (gui.buttonEx("Apply Preview##ai_stage_apply", 136.0, 0.0)) {
-        const result = try store.applyStagedTransaction(layer_context.world, .human);
-        if (result.had_transaction) {
-            var label_buffer: [96]u8 = undefined;
-            const label = std.fmt.bufPrint(&label_buffer, "Apply AI Preview #{d}", .{result.transaction_id orelse 0}) catch "Apply AI Preview";
-            var detail_buffer: [160]u8 = undefined;
-            const detail = std.fmt.bufPrint(
-                &detail_buffer,
-                "commands={d} changed={d} errors={d}",
-                .{ result.command_count, result.changed_count, result.error_count },
-            ) catch "applied staged transaction";
-            try history.appendTimelineEvent(state, .human, label, detail, "applied_transaction");
-            try history.captureSnapshotWithSource(state, layer_context, .human);
-        }
-        clearPreviewSelection(state, layer_context);
-        layer_context.renderer.clearAiFocusEntities();
-        state.viewport_overlay_hovered = true;
-    }
-    gui.sameLine();
-    if (gui.buttonEx("Discard##ai_stage_discard", 112.0, 0.0)) {
-        const result = store.discardStagedTransaction(.human);
-        if (result.had_transaction) {
-            var label_buffer: [96]u8 = undefined;
-            const label = std.fmt.bufPrint(&label_buffer, "Discard AI Preview #{d}", .{result.transaction_id orelse 0}) catch "Discard AI Preview";
-            var detail_buffer: [128]u8 = undefined;
-            const detail = std.fmt.bufPrint(&detail_buffer, "commands={d}", .{result.command_count}) catch "discarded staged transaction";
-            try history.appendTimelineEvent(state, .human, label, detail, "discarded_transaction");
-        }
-        clearPreviewSelection(state, layer_context);
-        layer_context.renderer.clearAiFocusEntities();
-        state.viewport_overlay_hovered = true;
-    }
-
-    if (state.ai_preview_selected_entity) |selected_entity| {
-        if (previewEntityLabel(state, selected_entity)) |label| {
-            gui.separator();
-            var selected_buffer: [160]u8 = undefined;
-            const selected_text = std.fmt.bufPrint(&selected_buffer, "editing ghost: {s}  #{d}", .{ label, selected_entity }) catch "editing ghost";
-            gui.text(selected_text);
-        }
-    }
-}
-
-fn drawPreviewPins(
-    state: *EditorState,
-    layer_context: *engine.core.LayerContext,
-    snapshot: collaboration_mod.OverlaySnapshot,
-) void {
-    const draw_list = gui.getWindowDrawList();
-    const label_limit = @min(snapshot.visible_entry_count, 12);
-
-    for (0..snapshot.visible_entry_count) |index| {
-        const entry = snapshot.entries[index];
-        if (!entry.has_world_position) {
-            continue;
-        }
-        const screen_pos = worldPointToViewportScreen(state, layer_context, entry.world_position) orelse continue;
-        const color = previewColor(entry.action, entry.visible);
-        const is_selected = entry.entity_id != null and state.ai_preview_selected_entity != null and entry.entity_id.? == state.ai_preview_selected_entity.?;
-        if (is_selected) {
-            draw_list.addCircleFilled(screen_pos, 8.5, gui.getColorU32(.{ 0.98, 0.98, 0.98, 0.92 }), 18);
-        }
-        draw_list.addCircleFilled(screen_pos, if (is_selected) 6.0 else 5.5, color, 12);
-
-        if (index >= label_limit) {
-            continue;
-        }
-        const label_pos = .{ screen_pos[0] + 10.0, screen_pos[1] - 10.0 };
-        draw_list.addRectFilled(
-            .{ label_pos[0] - 4.0, label_pos[1] - 2.0 },
-            .{ label_pos[0] + 12.0 + @as(f32, @floatFromInt(entry.name.len)) * 6.0, label_pos[1] + 16.0 },
-            gui.getColorU32(.{ 0.05, 0.08, 0.07, 0.78 }),
-            4.0,
-            0,
-        );
-        draw_list.addText(label_pos, color, entry.name.slice());
-    }
 }
 
 fn noteManipulationEvent(state: *EditorState, action: []const u8) void {
@@ -615,46 +477,6 @@ fn snapshotCameraProjection(camera_component: engine.scene.Camera) collaboration
     };
 }
 
-fn worldPointToViewportScreen(
-    state: *EditorState,
-    layer_context: *engine.core.LayerContext,
-    world_position: [3]f32,
-) ?[2]f32 {
-    const viewport_size = layer_context.renderer.sceneViewportSize();
-    if (viewport_size[0] == 0 or viewport_size[1] == 0 or state.viewport_extent[0] <= 1.0 or state.viewport_extent[1] <= 1.0) {
-        return null;
-    }
-
-    const view = camera.activeCameraViewMatrix(state, layer_context);
-    const aspect = @as(f32, @floatFromInt(viewport_size[0])) / @as(f32, @floatFromInt(viewport_size[1]));
-    const projection = engine.math.mat4.projectionForCamera(camera.activeCameraComponent(state, layer_context), aspect);
-    const view_projection = engine.math.mat4.mul(projection, view);
-    const clip = mulPoint4(view_projection, .{ world_position[0], world_position[1], world_position[2], 1.0 });
-    if (@abs(clip[3]) <= 0.00001 or clip[3] <= 0.0) {
-        return null;
-    }
-
-    const ndc_x = clip[0] / clip[3];
-    const ndc_y = clip[1] / clip[3];
-    if (ndc_x < -1.15 or ndc_x > 1.15 or ndc_y < -1.15 or ndc_y > 1.15) {
-        return null;
-    }
-
-    return .{
-        state.viewport_origin[0] + (ndc_x * 0.5 + 0.5) * state.viewport_extent[0],
-        state.viewport_origin[1] + (1.0 - (ndc_y * 0.5 + 0.5)) * state.viewport_extent[1],
-    };
-}
-
-fn previewColor(action: collaboration_mod.PreviewAction, visible: bool) u32 {
-    const alpha: f32 = if (visible) 0.96 else 0.55;
-    return gui.getColorU32(switch (action) {
-        .created => .{ 0.24, 0.90, 0.56, alpha },
-        .updated => .{ 0.96, 0.78, 0.30, alpha },
-        .deleted => .{ 0.98, 0.42, 0.42, alpha },
-    });
-}
-
 fn assetKindLabel(kind: state_mod.AssetKind) []const u8 {
     return switch (kind) {
         .scene => "scene",
@@ -683,14 +505,5 @@ fn placeActorKindLabel(kind: state_mod.PlaceActorKind) []const u8 {
         .directional_light => "directional_light",
         .vfx_fountain => "vfx_fountain",
         .vfx_orbit => "vfx_orbit",
-    };
-}
-
-fn mulPoint4(matrix_value: engine.math.mat4.Mat4, point: [4]f32) [4]f32 {
-    return .{
-        matrix_value[0] * point[0] + matrix_value[4] * point[1] + matrix_value[8] * point[2] + matrix_value[12] * point[3],
-        matrix_value[1] * point[0] + matrix_value[5] * point[1] + matrix_value[9] * point[2] + matrix_value[13] * point[3],
-        matrix_value[2] * point[0] + matrix_value[6] * point[1] + matrix_value[10] * point[2] + matrix_value[14] * point[3],
-        matrix_value[3] * point[0] + matrix_value[7] * point[1] + matrix_value[11] * point[2] + matrix_value[15] * point[3],
     };
 }

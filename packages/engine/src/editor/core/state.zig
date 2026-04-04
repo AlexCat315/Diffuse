@@ -687,7 +687,6 @@ pub const EditorState = struct {
     console_show_info: bool = true,
     console_show_debug: bool = true,
     console_auto_scroll: bool = true,
-    dock_layout_initialized: bool = false,
     settings_open: bool = false,
     settings_category: SettingsCategory = .general,
     settings_filter_buffer: [settings_filter_buffer_size]u8 = [_]u8{0} ** settings_filter_buffer_size,

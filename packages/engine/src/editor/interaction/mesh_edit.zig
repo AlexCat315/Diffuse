@@ -1,6 +1,5 @@
 const std = @import("std");
 const engine = @import("guava");
-const gui = @import("../ui/gui.zig");
 const state_mod = @import("../core/state.zig");
 const history = @import("../actions/history.zig");
 const camera = @import("camera.zig");
@@ -179,9 +178,6 @@ pub fn syncSession(state: *EditorState, layer_context: *engine.core.LayerContext
 
 pub fn handleEditingShortcuts(state: *EditorState, layer_context: *engine.core.LayerContext) !bool {
     const input = layer_context.input;
-    if (gui.wantsTextInput()) {
-        return false;
-    }
 
     if (input.wasKeyPressed(.tab) and !input.modifiers.shift and !input.modifiers.ctrl and !input.modifiers.alt) {
         if (isEditModeActive(state) or canEnterEditMode(state, layer_context)) {
@@ -2371,65 +2367,6 @@ fn cancelInteractiveOperation(state: *EditorState, layer_context: *engine.core.L
     allocator.free(op.base_vertices);
     allocator.free(op.base_indices);
     interactive_mesh_op = null;
-}
-
-pub fn drawInteractiveOperationHud(state: *EditorState, layer_context: *engine.core.LayerContext) void {
-    const op = interactive_mesh_op orelse return;
-    if (!state.viewport_has_image) {
-        return;
-    }
-
-    const op_label: []const u8 = switch (op.kind) {
-        .extrude => state.text(.mesh_edit_extrude_action),
-        .inset => state.text(.mesh_edit_inset_action),
-        .bevel => state.text(.mesh_edit_bevel_action),
-        .loop_cut => state.text(.mesh_edit_loop_cut_action),
-    };
-
-    var value_buf: [64]u8 = undefined;
-    const value_text = std.fmt.bufPrint(&value_buf, "{s}: {d:.3}", .{ op_label, op.amount }) catch return;
-
-    var step_buf: [64]u8 = undefined;
-    const base_sensitivity = std.math.clamp(state.mesh_modal_drag_sensitivity, 0.0005, 0.05);
-    const fine_scale = std.math.clamp(state.mesh_modal_fine_scale, 0.05, 1.0);
-    const step_text = std.fmt.bufPrint(&step_buf, "Step {d:.4}  Shift x{d:.2}", .{ base_sensitivity, fine_scale }) catch return;
-
-    var mode_buf: [64]u8 = undefined;
-    const fine_mode_text = std.fmt.bufPrint(
-        &mode_buf,
-        "Fine Adjust: {s}",
-        .{if (layer_context.input.modifiers.shift) "ON" else "OFF"},
-    ) catch return;
-
-    const tips_text = "LMB confirm  RMB/Esc cancel";
-
-    const draw_list = gui.getWindowDrawList();
-    const box_min = [2]f32{ state.viewport_origin[0] + 12.0, state.viewport_origin[1] + 12.0 };
-    const line_h: f32 = 18.0;
-    const pad_x: f32 = 10.0;
-    const pad_y: f32 = 8.0;
-    const value_size = gui.calcTextSize(value_text, false, 0.0);
-    const step_size = gui.calcTextSize(step_text, false, 0.0);
-    const mode_size = gui.calcTextSize(fine_mode_text, false, 0.0);
-    const tips_size = gui.calcTextSize(tips_text, false, 0.0);
-    const box_w = @max(@max(@max(value_size[0], step_size[0]), mode_size[0]), tips_size[0]) + pad_x * 2.0;
-    const box_h = pad_y * 2.0 + line_h * 4.0;
-    const box_max = [2]f32{ box_min[0] + box_w, box_min[1] + box_h };
-
-    draw_list.addRectFilled(box_min, box_max, gui.getColorU32(.{ 0.06, 0.07, 0.09, 0.88 }), 8.0, 0);
-    const border_color = gui.getColorU32(.{ 0.26, 0.42, 0.62, 0.92 });
-    draw_list.addLine(.{ box_min[0], box_min[1] }, .{ box_max[0], box_min[1] }, border_color, 1.0);
-    draw_list.addLine(.{ box_max[0], box_min[1] }, .{ box_max[0], box_max[1] }, border_color, 1.0);
-    draw_list.addLine(.{ box_max[0], box_max[1] }, .{ box_min[0], box_max[1] }, border_color, 1.0);
-    draw_list.addLine(.{ box_min[0], box_max[1] }, .{ box_min[0], box_min[1] }, border_color, 1.0);
-    draw_list.addText(.{ box_min[0] + pad_x, box_min[1] + pad_y + 0.0 * line_h }, gui.getColorU32(.{ 0.95, 0.97, 1.0, 1.0 }), value_text);
-    draw_list.addText(.{ box_min[0] + pad_x, box_min[1] + pad_y + 1.0 * line_h }, gui.getColorU32(.{ 0.78, 0.84, 0.92, 1.0 }), step_text);
-    draw_list.addText(
-        .{ box_min[0] + pad_x, box_min[1] + pad_y + 2.0 * line_h },
-        gui.getColorU32(if (layer_context.input.modifiers.shift) .{ 0.64, 0.91, 0.70, 1.0 } else .{ 0.74, 0.78, 0.84, 1.0 }),
-        fine_mode_text,
-    );
-    draw_list.addText(.{ box_min[0] + pad_x, box_min[1] + pad_y + 3.0 * line_h }, gui.getColorU32(.{ 0.72, 0.76, 0.82, 1.0 }), tips_text);
 }
 
 fn recordDirectedEdge(entries: *std.AutoHashMap(u64, EdgeEntry), a: u32, b: u32) !void {
