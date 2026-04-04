@@ -538,6 +538,8 @@ export const en = {
     outputType: "Output Type",
     valueType: "Value Type",
     texture: "Texture",
+    duplicate: "Duplicate Node",
+    disconnectAll: "Disconnect All",
     inputParameter: "Input Parameter",
     constant: "Constant",
     textureSample: "Texture Sample",

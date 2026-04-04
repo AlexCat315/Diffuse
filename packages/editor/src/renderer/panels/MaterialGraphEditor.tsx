@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
 import {
   ReactFlow,
+  ReactFlowProvider,
   Background,
   Controls,
   MiniMap,
@@ -15,6 +16,7 @@ import {
   Handle,
   Position,
   type NodeProps,
+  useReactFlow,
 } from "@xyflow/react";
 import "@xyflow/react/dist/style.css";
 
@@ -65,6 +67,27 @@ const MATERIAL_CHANNELS = [
 const SOCKET_TYPES = ["scalar", "vec2", "vec3", "vec4", "texture", "surface"] as const;
 
 const VALUE_KINDS = ["none", "scalar", "vec2", "vec3", "vec4", "texture"] as const;
+
+// ── Per-node-kind slot definitions ──────────────────────────────
+
+interface SlotDef {
+  label: string;
+}
+interface NodeSlotConfig {
+  inputs: SlotDef[];
+  outputs: SlotDef[];
+}
+
+const NODE_SLOT_CONFIG: Record<string, NodeSlotConfig> = {
+  input_parameter: { inputs: [], outputs: [{ label: "out" }] },
+  constant:        { inputs: [], outputs: [{ label: "out" }] },
+  texture_sample:  { inputs: [{ label: "UV" }], outputs: [{ label: "color" }] },
+  math_add:        { inputs: [{ label: "A" }, { label: "B" }], outputs: [{ label: "out" }] },
+  math_multiply:   { inputs: [{ label: "A" }, { label: "B" }], outputs: [{ label: "out" }] },
+  split_channels:  { inputs: [{ label: "in" }], outputs: [{ label: "R" }, { label: "G" }, { label: "B" }, { label: "A" }] },
+  normal_map:      { inputs: [{ label: "in" }], outputs: [{ label: "out" }] },
+  output:          { inputs: [{ label: "surface" }], outputs: [] },
+};
 
 // ── Vector value editor component ───────────────────────────────
 
@@ -123,6 +146,7 @@ function MaterialNode({ data }: NodeProps) {
   const nodeData = data as unknown as MaterialGraphNodeInfo & { label: string };
   const color = NODE_KIND_COLORS[nodeData.kind] ?? "#555";
   const kindLabel = nodeData.kind.replace(/_/g, " ");
+  const slotConfig = NODE_SLOT_CONFIG[nodeData.kind] ?? { inputs: [{ label: "in" }], outputs: [{ label: "out" }] };
 
   return (
     <div
@@ -173,26 +197,58 @@ function MaterialNode({ data }: NodeProps) {
             tex #{nodeData.textureHandle}
           </div>
         )}
-        <div style={{ fontSize: 9, color: "#585b70", marginTop: 2 }}>
-          out: {nodeData.outputType}
+
+        {/* Slot labels */}
+        <div style={{ display: "flex", justifyContent: "space-between", marginTop: 4 }}>
+          <div>
+            {slotConfig.inputs.map((s, i) => (
+              <div key={i} style={{ fontSize: 9, color: "#a6e3a1", lineHeight: "16px" }}>
+                ● {s.label}
+              </div>
+            ))}
+          </div>
+          <div style={{ textAlign: "right" }}>
+            {slotConfig.outputs.map((s, i) => (
+              <div key={i} style={{ fontSize: 9, color: "#f38ba8", lineHeight: "16px" }}>
+                {s.label} ●
+              </div>
+            ))}
+          </div>
         </div>
       </div>
 
-      {/* Handles */}
-      {nodeData.kind !== "output" && (
+      {/* Input handles */}
+      {slotConfig.inputs.map((_, i) => (
         <Handle
-          type="source"
-          position={Position.Right}
-          style={{ background: "#f38ba8", width: 10, height: 10, borderRadius: "50%" }}
-        />
-      )}
-      {nodeData.kind !== "input_parameter" && (
-        <Handle
+          key={`in-${i}`}
+          id={`in-${i}`}
           type="target"
           position={Position.Left}
-          style={{ background: "#a6e3a1", width: 10, height: 10, borderRadius: "50%" }}
+          style={{
+            background: "#a6e3a1",
+            width: 10,
+            height: 10,
+            borderRadius: "50%",
+            top: `${56 + i * 16}px`,
+          }}
         />
-      )}
+      ))}
+      {/* Output handles */}
+      {slotConfig.outputs.map((_, i) => (
+        <Handle
+          key={`out-${i}`}
+          id={`out-${i}`}
+          type="source"
+          position={Position.Right}
+          style={{
+            background: "#f38ba8",
+            width: 10,
+            height: 10,
+            borderRadius: "50%",
+            top: `${56 + i * 16}px`,
+          }}
+        />
+      ))}
     </div>
   );
 }
@@ -218,24 +274,47 @@ function toFlowNodes(nodes: MaterialGraphNodeInfo[]): Node[] {
   }));
 }
 
-function toFlowEdges(connections: MaterialGraphConnectionInfo[]): Edge[] {
-  return connections.map((c, i) => ({
-    id: `e-${c.fromNodeId}-${c.fromSlot}-${c.toNodeId}-${c.toSlot}`,
-    source: String(c.fromNodeId),
-    target: String(c.toNodeId),
-    sourceHandle: null,
-    targetHandle: null,
-    style: { stroke: "#6c7086", strokeWidth: 2 },
-    animated: true,
-  }));
+const SOCKET_TYPE_COLORS: Record<string, string> = {
+  scalar: "#6c7086",
+  vec2: "#89b4fa",
+  vec3: "#74c7ec",
+  vec4: "#cba6f7",
+  texture: "#f9e2af",
+  surface: "#f38ba8",
+};
+
+function toFlowEdges(connections: MaterialGraphConnectionInfo[], nodes?: MaterialGraphNodeInfo[]): Edge[] {
+  return connections.map((c, i) => {
+    const sourceNode = nodes?.find((n) => n.id === c.fromNodeId);
+    const strokeColor = SOCKET_TYPE_COLORS[sourceNode?.outputType ?? ""] ?? "#6c7086";
+    return {
+      id: `e-${c.fromNodeId}-${c.fromSlot}-${c.toNodeId}-${c.toSlot}`,
+      source: String(c.fromNodeId),
+      target: String(c.toNodeId),
+      sourceHandle: `out-${c.fromSlot}`,
+      targetHandle: `in-${c.toSlot}`,
+      type: "smoothstep",
+      style: { stroke: strokeColor, strokeWidth: 2 },
+      animated: true,
+    };
+  });
 }
 
 // ── Main component ──────────────────────────────────────────────
 
 export function MaterialGraphEditor() {
+  return (
+    <ReactFlowProvider>
+      <MaterialGraphEditorInner />
+    </ReactFlowProvider>
+  );
+}
+
+function MaterialGraphEditorInner() {
   const { t } = useI18n();
   const selectedEntity = useSceneStore((s) => s.selectedEntity);
   const connected = useConnectionStore((s) => s.connected);
+  const reactFlowInstance = useReactFlow();
 
   const [graphState, setGraphState] = useState<GraphState | null>(null);
   const [hasGraph, setHasGraph] = useState(false);
@@ -244,6 +323,7 @@ export function MaterialGraphEditor() {
   const [selectedNode, setSelectedNode] = useState<MaterialGraphNodeInfo | null>(null);
   const [addMenuOpen, setAddMenuOpen] = useState(false);
   const [textures, setTextures] = useState<{ handle: number; name: string }[]>([]);
+  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; nodeId: number } | null>(null);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 
@@ -270,7 +350,7 @@ export function MaterialGraphEditor() {
       };
       setGraphState(gs);
       setFlowNodes(toFlowNodes(gs.nodes));
-      setFlowEdges(toFlowEdges(gs.connections));
+      setFlowEdges(toFlowEdges(gs.connections, gs.nodes));
     } catch {
       setGraphState(null);
       setHasGraph(false);
@@ -297,15 +377,49 @@ export function MaterialGraphEditor() {
   const onNodesChange: OnNodesChange = useCallback(
     (changes) => {
       setFlowNodes((nds) => applyNodeChanges(changes, nds));
+      // Sync node removals to engine
+      if (selectedEntity == null) return;
+      for (const change of changes) {
+        if (change.type === "remove") {
+          rpc("material.removeGraphNode", {
+            entityId: selectedEntity,
+            nodeId: Number(change.id),
+          })
+            .then(() => {
+              setSelectedNode(null);
+              fetchGraph();
+            })
+            .catch(() => {});
+        }
+      }
     },
-    [],
+    [selectedEntity, fetchGraph],
   );
 
   const onEdgesChange: OnEdgesChange = useCallback(
     (changes) => {
       setFlowEdges((eds) => applyEdgeChanges(changes, eds));
+      // Sync edge removals to engine
+      if (selectedEntity == null) return;
+      for (const change of changes) {
+        if (change.type === "remove") {
+          const parts = change.id.split("-");
+          // edge id format: e-{fromNodeId}-{fromSlot}-{toNodeId}-{toSlot}
+          if (parts.length === 5) {
+            rpc("material.removeGraphConnection", {
+              entityId: selectedEntity,
+              fromNodeId: Number(parts[1]),
+              fromSlot: Number(parts[2]),
+              toNodeId: Number(parts[3]),
+              toSlot: Number(parts[4]),
+            })
+              .then(() => fetchGraph())
+              .catch(() => {});
+          }
+        }
+      }
     },
-    [],
+    [selectedEntity, fetchGraph],
   );
 
   const onNodeDragStop = useCallback(
@@ -324,12 +438,14 @@ export function MaterialGraphEditor() {
   const onConnect: OnConnect = useCallback(
     (connection: Connection) => {
       if (selectedEntity == null) return;
+      const fromSlot = parseInt(connection.sourceHandle?.replace("out-", "") ?? "0", 10);
+      const toSlot = parseInt(connection.targetHandle?.replace("in-", "") ?? "0", 10);
       rpc("material.addGraphConnection", {
         entityId: selectedEntity,
         fromNodeId: Number(connection.source),
-        fromSlot: 0,
+        fromSlot,
         toNodeId: Number(connection.target),
-        toSlot: 0,
+        toSlot,
       })
         .then(() => fetchGraph())
         .catch(() => {});
@@ -341,11 +457,39 @@ export function MaterialGraphEditor() {
     (connection: Edge | Connection) => {
       if (connection.source === connection.target) return false;
       // Prevent duplicate connections
-      return !flowEdges.some(
-        (e) => e.source === connection.source && e.target === connection.target,
-      );
+      if (
+        flowEdges.some(
+          (e) => e.source === connection.source && e.target === connection.target &&
+            e.sourceHandle === connection.sourceHandle && e.targetHandle === connection.targetHandle,
+        )
+      )
+        return false;
+
+      // Socket type compatibility check
+      if (graphState) {
+        const sourceNode = graphState.nodes.find((n) => String(n.id) === connection.source);
+        const targetNode = graphState.nodes.find((n) => String(n.id) === connection.target);
+        if (sourceNode && targetNode) {
+          const srcType = sourceNode.outputType;
+          const tgtKind = targetNode.kind;
+          // output node only accepts surface type
+          if (tgtKind === "output" && srcType !== "surface") return false;
+          // texture_sample UV input only accepts vec2
+          if (tgtKind === "texture_sample" && srcType !== "vec2") return false;
+          // normal_map input accepts vec3/vec4
+          if (tgtKind === "normal_map" && srcType !== "vec3" && srcType !== "vec4") return false;
+          // math nodes accept scalar/vec types, not texture/surface
+          if ((tgtKind === "math_add" || tgtKind === "math_multiply") &&
+            (srcType === "texture" || srcType === "surface"))
+            return false;
+          // split_channels accepts vec types
+          if (tgtKind === "split_channels" && srcType !== "vec2" && srcType !== "vec3" && srcType !== "vec4")
+            return false;
+        }
+      }
+      return true;
     },
-    [flowEdges],
+    [flowEdges, graphState],
   );
 
   const onNodeClick = useCallback(
@@ -353,9 +497,26 @@ export function MaterialGraphEditor() {
       if (!graphState) return;
       const info = graphState.nodes.find((n) => n.id === Number(node.id));
       setSelectedNode(info ?? null);
+      setCtxMenu(null);
     },
     [graphState],
   );
+
+  const onNodeContextMenu = useCallback(
+    (event: React.MouseEvent, node: Node) => {
+      event.preventDefault();
+      if (!graphState) return;
+      const info = graphState.nodes.find((n) => n.id === Number(node.id));
+      setSelectedNode(info ?? null);
+      setCtxMenu({ x: event.clientX, y: event.clientY, nodeId: Number(node.id) });
+    },
+    [graphState],
+  );
+
+  const onPaneClick = useCallback(() => {
+    setCtxMenu(null);
+    setAddMenuOpen(false);
+  }, []);
 
   // ── Actions ─────────────────────────────────────────────────
 
@@ -425,6 +586,48 @@ export function MaterialGraphEditor() {
         .catch(() => {});
     },
     [selectedEntity, fetchGraph],
+  );
+
+  const duplicateNode = useCallback(
+    (nodeId: number) => {
+      if (selectedEntity == null || !graphState) return;
+      const node = graphState.nodes.find((n) => n.id === nodeId);
+      if (!node) return;
+      rpc("material.addGraphNode", {
+        entityId: selectedEntity,
+        kind: node.kind,
+        posX: node.posX + 40,
+        posY: node.posY + 40,
+      })
+        .then(() => fetchGraph())
+        .catch(() => {});
+      setCtxMenu(null);
+    },
+    [selectedEntity, graphState, fetchGraph],
+  );
+
+  const disconnectAll = useCallback(
+    (nodeId: number) => {
+      if (selectedEntity == null || !graphState) return;
+      const conns = graphState.connections.filter(
+        (c) => c.fromNodeId === nodeId || c.toNodeId === nodeId,
+      );
+      Promise.all(
+        conns.map((c) =>
+          rpc("material.removeGraphConnection", {
+            entityId: selectedEntity,
+            fromNodeId: c.fromNodeId,
+            fromSlot: c.fromSlot,
+            toNodeId: c.toNodeId,
+            toSlot: c.toSlot,
+          }),
+        ),
+      )
+        .then(() => fetchGraph())
+        .catch(() => {});
+      setCtxMenu(null);
+    },
+    [selectedEntity, graphState, fetchGraph],
   );
 
   // ── Early returns ─────────────────────────────────────────
@@ -515,9 +718,15 @@ export function MaterialGraphEditor() {
             onConnect={onConnect}
             isValidConnection={isValidConnection}
             onNodeClick={onNodeClick}
+            onNodeContextMenu={onNodeContextMenu}
+            onPaneClick={onPaneClick}
             onNodeDragStop={onNodeDragStop}
             nodeTypes={nodeTypes}
             fitView
+            deleteKeyCode="Delete"
+            snapToGrid
+            snapGrid={[24, 24]}
+            defaultEdgeOptions={{ type: "smoothstep", animated: true }}
             colorMode="dark"
             proOptions={{ hideAttribution: true }}
           >
@@ -531,6 +740,46 @@ export function MaterialGraphEditor() {
               style={{ background: "#181825" }}
             />
           </ReactFlow>
+
+          {/* Context menu */}
+          {ctxMenu && (
+            <div
+              style={{
+                position: "fixed",
+                left: ctxMenu.x,
+                top: ctxMenu.y,
+                background: "#1e1e2e",
+                border: "1px solid #45475a",
+                borderRadius: 6,
+                padding: 4,
+                zIndex: 200,
+                minWidth: 150,
+                boxShadow: "0 4px 12px rgba(0,0,0,0.5)",
+              }}
+            >
+              <button
+                style={styles.dropdownItem}
+                onClick={() => duplicateNode(ctxMenu.nodeId)}
+              >
+                {t.materialGraph.duplicate}
+              </button>
+              <button
+                style={styles.dropdownItem}
+                onClick={() => disconnectAll(ctxMenu.nodeId)}
+              >
+                {t.materialGraph.disconnectAll}
+              </button>
+              <button
+                style={{ ...styles.dropdownItem, color: "#f38ba8" }}
+                onClick={() => {
+                  removeNode(ctxMenu.nodeId);
+                  setCtxMenu(null);
+                }}
+              >
+                {t.materialGraph.removeNode}
+              </button>
+            </div>
+          )}
         </div>
 
         {/* Side panel */}
@@ -757,7 +1006,17 @@ export function MaterialGraphEditor() {
                   borderLeft: `3px solid ${NODE_KIND_COLORS[n.kind] ?? "#555"}`,
                   background: selectedNode?.id === n.id ? "#313244" : "transparent",
                 }}
-                onClick={() => setSelectedNode(n)}
+                onClick={() => {
+                  setSelectedNode(n);
+                  const flowNode = flowNodes.find((fn) => fn.id === String(n.id));
+                  if (flowNode) {
+                    reactFlowInstance.setCenter(
+                      flowNode.position.x + 80,
+                      flowNode.position.y + 40,
+                      { zoom: 1.2, duration: 400 },
+                    );
+                  }
+                }}
               >
                 <span>{n.kind.replace(/_/g, " ")}</span>
                 <span style={{ color: "#585b70", fontSize: 10 }}>#{n.id}</span>
