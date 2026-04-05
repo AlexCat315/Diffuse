@@ -11,6 +11,7 @@ import {
   IconShadingRendered,
   IconShadingWireframe,
 } from "../components/Icons";
+import { MeshEditToolbar } from "./MeshEditToolbar";
 
 const SHADING_ICON_COMPONENTS: Record<ShadingMode, React.FC<{ size?: number; color?: string }>> = {
   solid: IconShadingSolid,
@@ -657,6 +658,7 @@ export function Viewport() {
               );
             })}
           </div>
+          <MeshEditToolbar />
           <ViewportMetricsOverlay />
           <div style={styles.viewCubeOverlay}>
             <ViewCube />

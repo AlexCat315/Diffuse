@@ -2,6 +2,7 @@ const std = @import("std");
 const engine = @import("guava");
 const editor_layer_mod = @import("engine/editor_backend/core/layer.zig");
 const editor_console = @import("engine/editor_backend/core/logging.zig");
+const mesh_bridge = @import("mesh_bridge.zig");
 const cli = @import("cli.zig");
 const commands = @import("commands.zig");
 const project_mod = @import("project.zig");
@@ -276,6 +277,8 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
     const editor_rpc = @import("guava").editor_rpc;
     var rpc_server = editor_rpc.server.Server.init(allocator, options.editor_port);
     defer rpc_server.deinit();
+    var mesh_ops_vtable = mesh_bridge.init(&editor_layer.state);
+    rpc_server.mesh_ops = &mesh_ops_vtable;
 
     try app.pushOverlay(rpc_server.asLayer());
     try app.pushOverlay(editor_layer.asLayer());

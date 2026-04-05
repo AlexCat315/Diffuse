@@ -670,6 +670,29 @@ export const en = {
     components: "Components",
     noComponents: "No components",
   },
+
+  // ── Mesh Editing ──────────────────────────────────────
+  meshEdit: {
+    editMode: "Edit Mode",
+    objectMode: "Object Mode",
+    enterEditMode: "Enter Edit Mode",
+    exitEditMode: "Exit",
+    vertex: "Vertex",
+    edge: "Edge",
+    face: "Face",
+    extrude: "Extrude",
+    inset: "Inset",
+    bevel: "Bevel",
+    loopCut: "Loop Cut",
+    merge: "Merge",
+    delete: "Delete",
+    duplicate: "Duplicate",
+    separate: "Separate",
+    recalcNormals: "Recalc Normals",
+    pivotToSelection: "Pivot to Selection",
+    selectionCount: "Selected",
+    tabToToggle: "Tab to toggle edit mode",
+  },
 };
 
 type DeepStringRecord<T> = {

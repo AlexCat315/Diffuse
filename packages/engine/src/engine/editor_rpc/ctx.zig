@@ -7,7 +7,9 @@ const std = @import("std");
 const core = @import("../core/layer.zig");
 const world_mod = @import("../scene/world.zig");
 const settings_mod = @import("settings.zig");
+const mesh_ops_mod = @import("mesh_ops.zig");
 
+pub const MeshOps = mesh_ops_mod.MeshOps;
 pub const World = world_mod.World;
 pub const Entity = world_mod.Entity;
 pub const EntityId = world_mod.EntityId;
@@ -17,6 +19,7 @@ pub const Ctx = struct {
     params: ?std.json.Value,
     layer: *core.LayerContext,
     settings: *settings_mod.EditorSettings,
+    mesh_ops: ?*const MeshOps = null,
     _result: ?[]u8 = null,
 
     // ── Parameter readers ───────────────────────────────────────

@@ -49,6 +49,7 @@ const handler_modules = [_]HandlerModule{
     .{ .prefix = "script", .mod = @import("handlers/script.zig") },
     .{ .prefix = "particle", .mod = @import("handlers/particle.zig") },
     .{ .prefix = "prefab", .mod = @import("handlers/prefab.zig") },
+    .{ .prefix = "mesh", .mod = @import("handlers/mesh.zig") },
 };
 
 // Subscriptions (push events — detection logic in subscriptions.zig)
@@ -57,6 +58,7 @@ const subscriptions = [_][]const u8{
     "on:selection.changed",
     "on:console.log",
     "on:viewport.metrics",
+    "on:mesh.stateChanged",
 };
 
 // ═══════════════════════════════════════════════════════════════════
@@ -114,7 +116,7 @@ fn dispatchToHandler(method_str: []const u8, ctx: *Ctx) !void {
 //  Public API — called from server.zig
 // ═══════════════════════════════════════════════════════════════════
 
-pub fn dispatch(allocator: std.mem.Allocator, payload: []const u8, layer_context: *core.LayerContext, settings: *settings_mod.EditorSettings) !?[]u8 {
+pub fn dispatch(allocator: std.mem.Allocator, payload: []const u8, layer_context: *core.LayerContext, settings: *settings_mod.EditorSettings, mesh_ops: ?*const ctx_mod.MeshOps) !?[]u8 {
     const parsed = std.json.parseFromSlice(std.json.Value, allocator, payload, .{}) catch {
         return try errorResponse(allocator, null, -32700, "Parse error");
     };
@@ -145,6 +147,7 @@ pub fn dispatch(allocator: std.mem.Allocator, payload: []const u8, layer_context
         .params = params,
         .layer = layer_context,
         .settings = settings,
+        .mesh_ops = mesh_ops,
     };
 
     dispatchToHandler(method_str, &ctx) catch |err| {

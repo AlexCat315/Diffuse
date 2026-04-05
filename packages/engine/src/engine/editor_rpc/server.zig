@@ -117,6 +117,9 @@ pub const Server = struct {
     // Shared editor settings (viewport, physics viz, camera bookmarks, material preview)
     settings: @import("settings.zig").EditorSettings = .{},
 
+    // Mesh editing vtable — set from main.zig (root module) to avoid cross-module imports.
+    mesh_ops: ?*const @import("mesh_ops.zig").MeshOps = null,
+
     pub fn init(allocator: std.mem.Allocator, port: u16) Server {
         return .{
             .allocator = allocator,
@@ -191,7 +194,7 @@ pub const Server = struct {
         for (batch[0..count]) |*msg| {
             defer msg.deinit(self.allocator);
 
-            const response_json = methods.dispatch(self.allocator, msg.payload, layer_context, &self.settings) catch |err| {
+            const response_json = methods.dispatch(self.allocator, msg.payload, layer_context, &self.settings, self.mesh_ops) catch |err| {
                 log.warn("RPC dispatch error: {s}", .{@errorName(err)});
                 continue;
             };

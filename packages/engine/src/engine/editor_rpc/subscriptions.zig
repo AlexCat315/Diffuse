@@ -4,6 +4,7 @@
 ///! broadcasts JSON-RPC notifications to connected Electron clients.
 const std = @import("std");
 const core = @import("../core/layer.zig");
+const mesh_ops_mod = @import("mesh_ops.zig");
 
 const log = std.log.scoped(.editor_rpc_sub);
 
@@ -16,6 +17,12 @@ pub const SubscriptionState = struct {
     last_selection_hash: u64 = 0,
     last_entity_count: u32 = 0,
     frames_since_metrics: u32 = 0,
+    // Mesh edit state tracking
+    last_mesh_active: bool = false,
+    last_mesh_selection_mode: mesh_ops_mod.SelectionMode = .face,
+    last_mesh_entity: ?u64 = null,
+    last_mesh_selection_count: u32 = 0,
+    last_can_enter_edit_mode: bool = false,
 };
 
 /// Check for state changes and broadcast notifications.
@@ -71,6 +78,45 @@ pub fn checkAndBroadcast(server: *Server, layer_context: *core.LayerContext) !vo
             .{ .entityIds = ids_buf[0..id_count] },
         );
         server.broadcast(notification);
+    }
+
+    // ── Mesh edit state changes ────────────────────────────────
+    if (server.mesh_ops) |ops| {
+        const snap = ops.getSnapshot(ops.state_ptr, layer_context);
+
+        const changed = (snap.active != state.last_mesh_active) or
+            (snap.selection_mode != state.last_mesh_selection_mode) or
+            (snap.entity_id != state.last_mesh_entity) or
+            (snap.selection_count != state.last_mesh_selection_count) or
+            (snap.can_enter_edit_mode != state.last_can_enter_edit_mode);
+
+        if (changed) {
+            state.last_mesh_active = snap.active;
+            state.last_mesh_selection_mode = snap.selection_mode;
+            state.last_mesh_entity = snap.entity_id;
+            state.last_mesh_selection_count = snap.selection_count;
+            state.last_can_enter_edit_mode = snap.can_enter_edit_mode;
+
+            const mode_str: []const u8 = if (snap.mode_edit) "edit" else "object";
+            const sel_mode_str: []const u8 = switch (snap.selection_mode) {
+                .vertex => "vertex",
+                .edge => "edge",
+                .face => "face",
+            };
+            const notification = try buildNotification(
+                server.allocator,
+                "on:mesh.stateChanged",
+                .{
+                    .active = snap.active,
+                    .mode = mode_str,
+                    .selectionMode = sel_mode_str,
+                    .selectionCount = @as(u64, snap.selection_count),
+                    .canEnterEditMode = snap.can_enter_edit_mode,
+                    .entityId = snap.entity_id,
+                },
+            );
+            server.broadcast(notification);
+        }
     }
 
     // ── Entity count changes ──────────────────────────────────
