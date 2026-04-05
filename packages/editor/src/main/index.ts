@@ -344,12 +344,13 @@ import WebSocket from "ws";
 
 // ── Popout window management ─────────────────────────────────────
 
-async function createPopoutWindow(panels: string[], initialState?: unknown, originInfo?: unknown): Promise<number> {
+async function createPopoutWindow(panels: string[], initialState?: unknown, originInfo?: unknown, bounds?: { width?: number; height?: number; x?: number; y?: number }): Promise<number> {
   const panelQuery = panels.map((p) => encodeURIComponent(p)).join(",");
 
   const win = new BrowserWindow({
-    width: 600,
-    height: 500,
+    width: bounds?.width ?? 600,
+    height: bounds?.height ?? 500,
+    ...(bounds?.x != null && bounds?.y != null ? { x: bounds.x, y: bounds.y } : {}),
     minWidth: 300,
     minHeight: 200,
     backgroundColor: "#1e1e2e",
@@ -389,20 +390,26 @@ async function createPopoutWindow(panels: string[], initialState?: unknown, orig
     }
   });
 
+  // Capture bounds before the window is destroyed
+  let closeBounds: Electron.Rectangle | null = null;
+  win.on("close", () => {
+    closeBounds = win.getBounds();
+  });
+
   win.on("closed", () => {
     const info = popoutWindows.get(winId);
     popoutWindows.delete(winId);
     // Notify main window that the popout was closed so it can re-add the panel
     if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("popout:closed", panels, info?.originInfo);
+      mainWindow.webContents.send("popout:closed", panels, info?.originInfo, closeBounds);
     }
   });
 
   return winId;
 }
 
-ipcMain.handle("window:popout-panel", async (_event, panels: string[], initialState?: unknown, originInfo?: unknown) => {
-  const winId = await createPopoutWindow(panels, initialState, originInfo);
+ipcMain.handle("window:popout-panel", async (_event, panels: string[], initialState?: unknown, originInfo?: unknown, bounds?: { width?: number; height?: number; x?: number; y?: number }) => {
+  const winId = await createPopoutWindow(panels, initialState, originInfo, bounds);
   return winId;
 });
 

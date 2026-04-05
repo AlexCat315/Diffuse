@@ -120,8 +120,8 @@ contextBridge.exposeInMainWorld("guavaEngine", {
   // ── Multi-window popout ─────────────────────────────────────────
 
   /** Pop out one or more panels into a separate window */
-  popoutPanel: (panels: string[], initialState?: unknown, originInfo?: unknown): Promise<number> =>
-    ipcRenderer.invoke("window:popout-panel", panels, initialState, originInfo),
+  popoutPanel: (panels: string[], initialState?: unknown, originInfo?: unknown, bounds?: { width?: number; height?: number; x?: number; y?: number }): Promise<number> =>
+    ipcRenderer.invoke("window:popout-panel", panels, initialState, originInfo, bounds),
 
   /** Close the current popout window (call from popout window only) */
   closePopout: (): Promise<void> =>
@@ -141,9 +141,9 @@ contextBridge.exposeInMainWorld("guavaEngine", {
   },
 
   /** Subscribe to popout window closed notifications (main window only) */
-  onPopoutClosed: (callback: (panels: string[], originInfo?: unknown) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, panels: string[], originInfo?: unknown) =>
-      callback(panels, originInfo);
+  onPopoutClosed: (callback: (panels: string[], originInfo?: unknown, bounds?: { x: number; y: number; width: number; height: number }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, panels: string[], originInfo?: unknown, bounds?: { x: number; y: number; width: number; height: number }) =>
+      callback(panels, originInfo, bounds);
     ipcRenderer.on("popout:closed", handler);
     return () => ipcRenderer.removeListener("popout:closed", handler);
   },
@@ -176,10 +176,10 @@ export interface GuavaEngineAPI {
   onViewportSharedBuffer(callback: (sab: SharedArrayBuffer) => void): () => void;
   testRemoteConnection(url: string): Promise<{ ok: boolean; version?: string; error?: string }>;
   connectToServer(url: string): Promise<{ ok: boolean; error?: string }>;
-  popoutPanel(panels: string[], initialState?: unknown, originInfo?: unknown): Promise<number>;
+  popoutPanel(panels: string[], initialState?: unknown, originInfo?: unknown, bounds?: { width?: number; height?: number; x?: number; y?: number }): Promise<number>;
   closePopout(): Promise<void>;
   isPopoutWindow(): boolean;
   getPopoutPanels(): string[];
-  onPopoutClosed(callback: (panels: string[], originInfo?: unknown) => void): () => void;
+  onPopoutClosed(callback: (panels: string[], originInfo?: unknown, bounds?: { x: number; y: number; width: number; height: number }) => void): () => void;
   onInitState(callback: (state: unknown) => void): () => void;
 }
