@@ -493,6 +493,7 @@ const S: Record<string, React.CSSProperties> = {
     display: "flex",
     flexDirection: "column",
     height: "100%",
+    minHeight: 0,
     color: "#cdd6f4",
     fontSize: 13,
     background: "#1e1e2e",
@@ -555,6 +556,7 @@ const S: Record<string, React.CSSProperties> = {
   body: {
     display: "flex",
     flex: 1,
+    minHeight: 0,
     overflow: "hidden",
   },
   nav: {
