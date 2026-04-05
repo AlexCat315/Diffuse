@@ -4221,9 +4221,9 @@ pub const Renderer = struct {
         }
 
         // Mesh edit overlay — three layers matching the old ImGui visual style:
-        //   wire = muted grey (vertex-mode wireframe background)
-        //   sel  = gold/yellow (selected elements)
-        //   vtx  = teal/cyan (unselected elements)
+        //   wire = muted grey (vertex-mode wireframe background, depth-tested)
+        //   vtx  = teal/cyan (unselected elements, always on top)
+        //   sel  = gold/yellow (selected elements, always on top)
         if (self.mesh_edit_wireframe_lines.items.len >= 2) {
             const wire_stats = try self.gizmo_pass.drawWorldLines(
                 &self.rhi,
@@ -4231,29 +4231,39 @@ pub const Renderer = struct {
                 pass,
                 prepared_scene.view_projection,
                 self.mesh_edit_wireframe_lines.items,
-                .{ 0.54, 0.62, 0.72, 0.34 }, // muted blue-grey wireframe
+                .{ 0.60, 0.68, 0.78, 0.55 }, // muted blue-grey wireframe
             );
             stats.add(wire_stats);
         }
         if (self.mesh_edit_vertex_lines.items.len >= 2) {
-            const vtx_stats = try self.gizmo_pass.drawWorldLines(
+            const vtx_stats = try self.gizmo_pass.drawThickOverlayLines(
                 &self.rhi,
                 frame,
                 pass,
                 prepared_scene.view_projection,
                 self.mesh_edit_vertex_lines.items,
-                .{ 0.42, 0.86, 0.78, 0.92 }, // teal — unselected elements
+                .{ prepared_scene.camera_world_position[0], prepared_scene.camera_world_position[1], prepared_scene.camera_world_position[2] },
+                prepared_scene.projection_matrix[5],
+                @floatFromInt(self.scene_viewport.height),
+                2.5,
+                self.allocator,
+                .{ 0.38, 0.90, 0.82, 0.95 }, // teal — unselected elements (always on top)
             );
             stats.add(vtx_stats);
         }
         if (self.mesh_edit_selected_lines.items.len >= 2) {
-            const sel_stats = try self.gizmo_pass.drawWorldLines(
+            const sel_stats = try self.gizmo_pass.drawThickOverlayLines(
                 &self.rhi,
                 frame,
                 pass,
                 prepared_scene.view_projection,
                 self.mesh_edit_selected_lines.items,
-                .{ 0.98, 0.84, 0.32, 0.96 }, // gold/yellow — selected elements
+                .{ prepared_scene.camera_world_position[0], prepared_scene.camera_world_position[1], prepared_scene.camera_world_position[2] },
+                prepared_scene.projection_matrix[5],
+                @floatFromInt(self.scene_viewport.height),
+                3.5,
+                self.allocator,
+                .{ 1.00, 0.86, 0.20, 1.00 }, // bright gold — selected elements (always on top)
             );
             stats.add(sel_stats);
         }

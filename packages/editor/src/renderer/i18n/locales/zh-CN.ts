@@ -18,20 +18,21 @@ export const zhCN: TranslationKeys = {
   // ── Toolbar ───────────────────────────────────────────
   toolbar: {
     save: "保存场景 (Ctrl+S)",
-    openScene: "打开场景...",
-    undo: "撤销",
-    redo: "重做",
-    play: "播放",
-    pause: "暂停",
-    stop: "停止",
+    openScene: "打开场景",
+    undo: "撤销 (Ctrl+Z)",
+    redo: "重做 (Ctrl+Shift+Z)",
+    play: "播放 (Space)",
+    pause: "暂停 (Ctrl+Space)",
+    stop: "停止 (Shift+Space)",
     translate: "移动 (W)",
     rotate: "旋转 (E)",
     scale: "缩放 (R)",
-    select: "选择",
+    select: "选择 (Q)",
     brand: "Guava 编辑器",
     noScenesFound: "未找到场景",
     resetLayout: "重置布局",
-    settings: "设置",
+    settings: "设置 (Ctrl+,)",
+    keybindings: "快捷键 (Ctrl+K)",
   },
 
   // ── Scene Hierarchy ───────────────────────────────────
@@ -166,6 +167,7 @@ export const zhCN: TranslationKeys = {
     tabUtilities: "AI 工具",
     tabSettings: "设置",
     settingsModalTitle: "设置",
+    keybindingsModalTitle: "快捷键",
   },
 
   // ── Command Timeline ──────────────────────────────────

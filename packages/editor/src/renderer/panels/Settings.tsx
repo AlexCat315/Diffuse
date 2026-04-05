@@ -88,7 +88,6 @@ const SECTIONS: SectionDef[] = [
   { id: "appearance", label: "Appearance",  labelZh: "外观",       icon: "◉",  keywords: ["fps", "display", "vsync", "overlay", "显示", "垂直同步", "帧率"] },
   { id: "console",    label: "Console",     labelZh: "控制台",     icon: "▸",  keywords: ["console", "log", "max", "limit", "控制台", "日志", "上限"] },
   { id: "layout",     label: "Layout",      labelZh: "布局",       icon: "⊞",  keywords: ["layout", "panel", "reset", "布局", "面板", "重置"] },
-  { id: "shortcuts",  label: "Shortcuts",   labelZh: "快捷键",     icon: "⌨",  keywords: ["shortcut", "key", "binding", "mesh", "extrude", "bevel", "快捷键", "网格"] },
   { id: "remote",     label: "Remote",      labelZh: "远程服务器", icon: "☁",  keywords: ["remote", "server", "local", "websocket", "connect", "远程", "服务器", "连接"], advanced: true },
   { id: "about",      label: "About",       labelZh: "关于",       icon: "ⓘ",  keywords: ["version", "engine", "status", "about", "版本", "关于"] },
 ];
@@ -113,8 +112,6 @@ export function SettingsPanel() {
   const isZh = locale === "zh-CN";
 
   const [prefs, setPrefs] = useLocalState<EditorPrefs>(loadPrefs);
-  const [shortcuts, setShortcuts] = useLocalState<Record<string, ShortcutBinding>>(loadShortcuts);
-  const [recording, setRecording] = useLocalState<string | null>(null);
   const [engineVersion, setEngineVersion] = useLocalState<string>("");
   const [search, setSearch] = useLocalState("");
   const [showAdvanced, setShowAdvanced] = useSyncedState("settings", "showAdvanced", false);
@@ -145,45 +142,6 @@ export function SettingsPanel() {
       return next;
     });
   }, []);
-
-  const updateShortcut = useCallback((id: string, binding: ShortcutBinding) => {
-    setShortcuts((prev) => {
-      const next = { ...prev, [id]: binding };
-      saveShortcuts(next);
-      return next;
-    });
-  }, []);
-
-  const resetShortcuts = useCallback(() => {
-    const defaults: Record<string, ShortcutBinding> = {};
-    for (const s of MESH_SHORTCUTS) defaults[s.id] = { ...s.default };
-    setShortcuts(defaults);
-    saveShortcuts(defaults);
-  }, []);
-
-  const handleKeyRecord = useCallback((e: React.KeyboardEvent) => {
-    if (!recording) return;
-    e.preventDefault();
-    e.stopPropagation();
-    const key = e.key.length === 1 ? e.key.toUpperCase() : e.key;
-    if (["Control", "Shift", "Alt", "Meta"].includes(key)) return;
-    updateShortcut(recording, {
-      key,
-      ctrl: e.ctrlKey || e.metaKey,
-      shift: e.shiftKey,
-      alt: e.altKey,
-    });
-    setRecording(null);
-  }, [recording, updateShortcut]);
-
-  const formatBinding = (b: ShortcutBinding): string => {
-    const parts: string[] = [];
-    if (b.ctrl) parts.push("Ctrl");
-    if (b.shift) parts.push("Shift");
-    if (b.alt) parts.push("Alt");
-    parts.push(b.key);
-    return parts.join("+");
-  };
 
   const handleResetLayout = useCallback(() => {
     localStorage.removeItem("guava-editor-layout-v3");
@@ -268,7 +226,7 @@ export function SettingsPanel() {
   }, []);
 
   return (
-    <div style={S.root} onKeyDown={handleKeyRecord} tabIndex={0}>
+    <div style={S.root} tabIndex={0}>
       {/* Search bar */}
       <div style={S.searchBar}>
         <span style={S.searchIcon}>&#x2315;</span>
@@ -376,45 +334,6 @@ export function SettingsPanel() {
               <SettingRow label={isZh ? "面板布局" : "Panel Layout"} desc={isZh ? "恢复默认面板排列方式" : "Restore default panel arrangement"}>
                 <button style={S.actionBtn} onClick={handleResetLayout}>{isZh ? "重置布局" : "Reset Layout"}</button>
               </SettingRow>
-            </div>
-          )}
-
-          {visibleIds.has("shortcuts") && (
-            <div ref={(el) => { sectionRefs.current["shortcuts"] = el; }} style={S.section}>
-              <div style={S.sectionHeader}>{isZh ? "快捷键" : "Shortcuts"}</div>
-              <div style={S.subsectionTitle}>{isZh ? "网格编辑" : "Mesh Editing"}</div>
-              <div style={S.shortcutTable}>
-                <div style={S.shortcutHeaderRow}>
-                  <span style={S.shortcutAction}>{isZh ? "操作" : "Action"}</span>
-                  <span style={S.shortcutKey}>{isZh ? "快捷键" : "Shortcut"}</span>
-                  <span style={S.shortcutRecord} />
-                </div>
-                {MESH_SHORTCUTS.map((def) => {
-                  const binding = shortcuts[def.id] || def.default;
-                  const isRec = recording === def.id;
-                  return (
-                    <div key={def.id} style={{ ...S.shortcutRow, ...(isRec ? S.shortcutRowRecording : {}) }}>
-                      <span style={S.shortcutAction}>{isZh ? def.labelZh : def.label}</span>
-                      <span style={S.shortcutKey}>
-                        {isRec ? (
-                          <span style={S.recordingBadge}>{isZh ? "录制中..." : "Recording..."}</span>
-                        ) : (
-                          <code style={S.keyCode}>{formatBinding(binding)}</code>
-                        )}
-                      </span>
-                      <span style={S.shortcutRecord}>
-                        <button style={S.recordBtn} onClick={() => setRecording(isRec ? null : def.id)}>
-                          {isRec ? "\u2715" : "\u2328"}
-                        </button>
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div style={{ marginTop: 8, display: "flex", gap: 8, alignItems: "center" }}>
-                <button style={S.actionBtn} onClick={resetShortcuts}>{isZh ? "恢复默认" : "Reset to Defaults"}</button>
-                <span style={S.hint}>{isZh ? "快捷键保存在本地" : "Saved locally"}</span>
-              </div>
             </div>
           )}
 
