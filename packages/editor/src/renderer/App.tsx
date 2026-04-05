@@ -284,8 +284,18 @@ export function App() {
 
   // Listen for popout windows being closed → re-add panels to layout
   useEffect(() => {
-    const cleanup = window.guavaEngine.onPopoutClosed((panels: string[], originInfo?: unknown) => {
+    const cleanup = window.guavaEngine.onPopoutClosed((panels: string[], originInfo?: unknown, bounds?: { x: number; y: number; width: number; height: number }) => {
       const origin = originInfo as { tabsetId?: string; tabIndex?: number; tabName?: string } | undefined;
+
+      // Persist window bounds for each panel so next popout opens at the same size/position
+      if (bounds) {
+        for (const panelId of panels) {
+          try {
+            localStorage.setItem(`popout-bounds-${panelId}`, JSON.stringify(bounds));
+          } catch { /* ignore */ }
+        }
+      }
+
       for (const panelId of panels) {
         const panel = ALL_PANELS.find((p) => p.id === panelId);
         if (!panel) continue;
@@ -358,10 +368,17 @@ export function App() {
       gizmoMode: useSceneStore.getState().gizmoMode,
     };
 
+    // Load saved window bounds for this panel (if any)
+    let savedBounds: { width?: number; height?: number; x?: number; y?: number } | undefined;
+    try {
+      const raw = localStorage.getItem(`popout-bounds-${componentId}`);
+      if (raw) savedBounds = JSON.parse(raw);
+    } catch { /* ignore */ }
+
     // Remove the tab from layout
     modelRef.current.doAction(Actions.deleteTab(node.getId()));
-    // Open in new window with state + origin info
-    window.guavaEngine.popoutPanel([componentId], initialState, originInfo);
+    // Open in new window with state + origin info + saved bounds
+    window.guavaEngine.popoutPanel([componentId], initialState, originInfo, savedBounds);
   }, []);
 
   // ── onRenderTab: add popout button to each tab ──
