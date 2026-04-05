@@ -39,6 +39,9 @@ pub const WindowConfig = struct {
     native_titlebar_controls: bool = true,
     high_pixel_density: bool = true,
     hidden: bool = false,
+    /// On macOS, hide the process from the Dock and Cmd-Tab switcher.
+    /// Must be set at creation time (before the window appears).
+    background_app: bool = false,
 };
 
 pub const EventKind = enum {
@@ -109,6 +112,13 @@ pub const Window = struct {
             return error.SdlInitFailed;
         }
         errdefer sdl.SDL_Quit();
+
+        // On macOS, hide from Dock/Cmd-Tab BEFORE the window is created so the
+        // app never flickers into the Dock.  Must happen after SDL_Init (which
+        // creates NSApp) but before SDL_CreateWindow.
+        if (config.background_app) {
+            setBackgroundApp();
+        }
 
         const title_z = try allocator.dupeZ(u8, config.title);
         defer allocator.free(title_z);
