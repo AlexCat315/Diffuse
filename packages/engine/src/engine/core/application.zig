@@ -462,12 +462,24 @@ pub const Application = struct {
             }
             self.renderer.current_frame_delay_ms = self.config.frame_delay_ms;
 
-            // Frame rate limiting: sleep for the remainder of the target frame time.
+            // Frame rate limiting: sleep for bulk of the wait, then spin-wait
+            // for the final ~1.5ms for sub-millisecond timing accuracy.
+            // std.Thread.sleep alone has ±1-2ms jitter on macOS which is
+            // unacceptable at 120fps (8.33ms budget).
             if (self.config.frame_delay_ms > 0) {
                 const frame_ns = self.timer.read();
                 const target_ns: u64 = @as(u64, self.config.frame_delay_ms) * std.time.ns_per_ms;
                 if (frame_ns < target_ns) {
-                    std.Thread.sleep(target_ns - frame_ns);
+                    const remaining = target_ns - frame_ns;
+                    // Sleep for the bulk (minus 1.5ms margin for spin-wait)
+                    const spin_margin: u64 = 1_500_000; // 1.5ms
+                    if (remaining > spin_margin) {
+                        std.Thread.sleep(remaining - spin_margin);
+                    }
+                    // Spin-wait for precise final timing
+                    while (self.timer.read() < target_ns) {
+                        std.atomic.spinLoopHint();
+                    }
                 }
             }
         }
