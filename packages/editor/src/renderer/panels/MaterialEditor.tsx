@@ -511,6 +511,7 @@ function TextureSlotRow({
   onAssign: (h: number) => void;
   onClear: () => void;
 }) {
+  const { t } = useI18n();
   const current = textures.find((t) => t.handle === currentHandle);
   return (
     <div style={{ ...styles.field, flexWrap: "wrap" }}>
@@ -532,7 +533,7 @@ function TextureSlotRow({
         ))}
       </select>
       {current && (
-        <button style={styles.clearBtn} onClick={onClear} title="Clear texture">
+        <button style={styles.clearBtn} onClick={onClear} title={t.material.clearTexture}>
           ×
         </button>
       )}

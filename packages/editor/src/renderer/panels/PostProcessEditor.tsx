@@ -209,7 +209,7 @@ export function PostProcessEditor() {
       </EffectSection>
 
       {/* ── Anti-Aliasing ──────────────────────────────────── */}
-      <Section title="Anti-Aliasing" collapsed={collapsed.has("aa")} onToggle={() => toggle("aa")}>
+      <Section title={t.postProcess.antiAliasing} collapsed={collapsed.has("aa")} onToggle={() => toggle("aa")}>
         <Toggle label={t.postProcess.fxaa} value={state.fxaaEnabled} onChange={(v) => commit({ fxaaEnabled: v })} />
         <Toggle label={t.postProcess.taa} value={state.taaEnabled} onChange={(v) => commit({ taaEnabled: v })} />
         {state.taaEnabled && (

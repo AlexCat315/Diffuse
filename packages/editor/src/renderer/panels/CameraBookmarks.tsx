@@ -69,7 +69,7 @@ export function CameraBookmarks() {
         <span style={styles.title}>{t.camera.title}</span>
         <span style={styles.count}>{bookmarks.length}</span>
         <div style={{ flex: 1 }} />
-        <button style={styles.addBtn} onClick={handleAdd} title="Save current camera position">
+        <button style={styles.addBtn} onClick={handleAdd} title={t.camera.saveTooltip}>
           {t.camera.addButton}
         </button>
       </div>

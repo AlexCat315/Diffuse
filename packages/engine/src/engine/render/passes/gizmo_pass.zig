@@ -79,6 +79,10 @@ pub const GizmoPass = struct {
     /// so mesh edit overlay elements always draw on top of geometry.
     overlay_line_pipeline: ?rhi_mod.GraphicsPipeline = null,
     triangle_pipeline: ?rhi_mod.GraphicsPipeline = null,
+    /// Mesh-edit overlay triangle pipeline — depth_test=false + alpha blending.
+    /// Used for drawThickOverlayLines / drawVertexDots so teal is semi-transparent
+    /// and gold (alpha=1.0) fully replaces teal wherever it overlaps.
+    overlay_triangle_pipeline: ?rhi_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
     pub fn init(device: *rhi_mod.RhiDevice) !GizmoPass {
@@ -111,6 +115,9 @@ pub const GizmoPass = struct {
         if (self.triangle_pipeline) |*pipeline| {
             device.releaseGraphicsPipeline(pipeline);
         }
+        if (self.overlay_triangle_pipeline) |*pipeline| {
+            device.releaseGraphicsPipeline(pipeline);
+        }
         if (self.line_pipeline) |*pipeline| {
             device.releaseGraphicsPipeline(pipeline);
         }
@@ -125,6 +132,7 @@ pub const GizmoPass = struct {
 
     pub fn isReady(self: *const GizmoPass) bool {
         return self.triangle_pipeline != null and
+            self.overlay_triangle_pipeline != null and
             self.line_pipeline != null and
             self.overlay_line_pipeline != null and
             self.line_axis_vertex_buffer != null and
@@ -353,7 +361,7 @@ pub const GizmoPass = struct {
         }
 
         const model = math.identity();
-        device.bindGraphicsPipeline(pass, &self.triangle_pipeline.?);
+        device.bindGraphicsPipeline(pass, &self.overlay_triangle_pipeline.?);
         self.drawShape(device, frame, pass, buffer, 0, out, view_projection, model, color, .triangles, &stats);
         return stats;
     }
@@ -439,7 +447,7 @@ pub const GizmoPass = struct {
         }
 
         const model = math.identity();
-        device.bindGraphicsPipeline(pass, &self.triangle_pipeline.?);
+        device.bindGraphicsPipeline(pass, &self.overlay_triangle_pipeline.?);
         self.drawShape(device, frame, pass, buffer, 0, out, view_projection, model, color, .triangles, &stats);
         return stats;
     }
@@ -538,6 +546,26 @@ pub const GizmoPass = struct {
             .depth_compare = .always,
             .depth_test = false,
             .depth_write = false,
+        });
+
+        // Mesh-edit overlay triangle pipeline: no depth test + alpha blending.
+        // With blend enabled, gold (alpha=1.0) fully overwrites teal, and teal
+        // is composited semi-transparently over the scene.
+        self.overlay_triangle_pipeline = try device.createGraphicsPipeline(.{
+            .vertex_shader = &self.stages.?.vertex,
+            .fragment_shader = &self.stages.?.fragment,
+            .vertex_buffer_layouts = vertex_layouts[0..],
+            .vertex_attributes = vertex_attributes[0..],
+            .color_format = device.runtimeInfo().swapchain_format,
+            .depth_format = .d32_float,
+            .primitive_type = .triangle_list,
+            .fill_mode = .fill,
+            .cull_mode = .none,
+            .front_face = .counter_clockwise,
+            .depth_compare = .always,
+            .depth_test = false,
+            .depth_write = false,
+            .blend_state = .{ .enable_blend = true },
         });
     }
 

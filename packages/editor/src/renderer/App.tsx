@@ -480,7 +480,7 @@ export function App() {
           <button
             key="collapse-btn"
             className="guava-collapse-btn"
-            title={bottomCollapsedRef.current ? "展开底部面板 (⌘J)" : "折叠底部面板 (⌘J)"}
+            title={bottomCollapsedRef.current ? t.app.expandBottomPanel : t.app.collapseBottomPanel}
             onPointerDown={(e) => e.stopPropagation()}
             onClick={(e) => {
               e.stopPropagation();

@@ -414,12 +414,12 @@ export function SequencerPanel() {
           style={{ ...S.input, width: 200 }}
           value={filePathBuf}
           onChange={(e) => setFilePathBuf(e.target.value)}
-          placeholder="File path"
+          placeholder={t.sequencer.filePath}
         />
         <button style={S.btn} onClick={handleLoad}>{t.sequencer.loadSequence}</button>
         <button style={S.btn} onClick={handleSave}>{t.sequencer.saveSequence}</button>
         <span style={S.sep} />
-        <button style={S.btn} onClick={handleStop} title="Stop">⏹</button>
+        <button style={S.btn} onClick={handleStop} title={t.sequencer.stopButton}>⏹</button>
         <button
           style={{ ...S.btn, ...(state.isPlaying ? { background: "#f38ba8", color: "#1e1e2e" } : {}) }}
           onClick={state.isPlaying ? handlePause : handlePlay}
@@ -467,8 +467,8 @@ export function SequencerPanel() {
               <span style={{ ...S.badge, background: TRACK_COLORS[track.kind] + "33", color: TRACK_COLORS[track.kind] }}>
                 {TRACK_BADGES[track.kind] ?? "?"}
               </span>
-              <span style={S.trackName}>{track.target || `Track ${i}`}</span>
-              <button style={S.btnSmall} onClick={(e) => { e.stopPropagation(); handleRemoveTrack(i); }} title="Remove">×</button>
+              <span style={S.trackName}>{track.target || `${t.sequencer.trackLabel} ${i}`}</span>
+              <button style={S.btnSmall} onClick={(e) => { e.stopPropagation(); handleRemoveTrack(i); }} title={t.sequencer.removeTrack}>×</button>
             </div>
           ))}
           {/* Add track */}
@@ -480,7 +480,7 @@ export function SequencerPanel() {
               style={{ ...S.input, width: "100%", marginTop: 2 }}
               value={newTrackTarget}
               onChange={(e) => setNewTrackTarget(e.target.value)}
-              placeholder="Target entity"
+              placeholder={t.sequencer.targetEntityPlaceholder}
               onKeyDown={(e) => e.key === "Enter" && handleAddTrack()}
             />
             <button style={{ ...S.btn, width: "100%", marginTop: 2 }} onClick={handleAddTrack}>+ {t.sequencer.addTrack}</button>
@@ -516,7 +516,7 @@ export function SequencerPanel() {
               )}
               {selTrack.kind === "property" && (
                 <>
-                  <PropLabel>Property</PropLabel>
+                  <PropLabel>{t.sequencer.propProperty}</PropLabel>
                   <span style={S.propValue}>{selTrack.property ?? ""}</span>
                 </>
               )}
@@ -527,7 +527,7 @@ export function SequencerPanel() {
                   <button style={S.btn} onClick={handleAddKeyframe}>+ {t.sequencer.addKeyframe}</button>
                   {selectedKf !== null && (
                     <button style={{ ...S.btn, background: "#f38ba833", color: "#f38ba8" }} onClick={handleRemoveKeyframe}>
-                      − Delete KF
+                      {t.sequencer.deleteKeyframe}
                     </button>
                   )}
                 </div>
@@ -548,7 +548,7 @@ export function SequencerPanel() {
             </div>
           ) : (
             <div style={{ padding: 8, color: "#585b70", fontSize: 12, textAlign: "center" }}>
-              Select a track
+              {t.sequencer.selectTrack}
             </div>
           )}
         </div>
@@ -564,39 +564,40 @@ function PropLabel({ children }: { children: React.ReactNode }) {
 }
 
 function TrackClipProps({ track, onUpdate }: { track: SeqTrack; onUpdate: () => void }) {
+  const { t } = useI18n();
   const update = async (fields: Record<string, unknown>) => {
     await rpc("sequencer.updateTrack", { index: track.index, ...fields });
     onUpdate();
   };
   return (
     <>
-      <PropLabel>Clip Path</PropLabel>
+      <PropLabel>{t.sequencer.propClipPath}</PropLabel>
       <input
         style={{ ...S.input, width: "100%" }}
         defaultValue={track.clipPath ?? ""}
         onBlur={(e) => update({ clipPath: e.target.value })}
       />
-      <PropLabel>Start / End</PropLabel>
+      <PropLabel>{t.sequencer.propStartEnd}</PropLabel>
       <div style={{ display: "flex", gap: 4 }}>
         <NumberInput value={track.startTime ?? 0} onChange={(v) => update({ startTime: v })} />
         <NumberInput value={track.endTime ?? 0} onChange={(v) => update({ endTime: v })} />
       </div>
       {track.kind === "animation" && (
         <>
-          <PropLabel>Blend In / Out</PropLabel>
+          <PropLabel>{t.sequencer.propBlendInOut}</PropLabel>
           <div style={{ display: "flex", gap: 4 }}>
             <NumberInput value={track.blendIn ?? 0} onChange={(v) => update({ blendIn: v })} />
             <NumberInput value={track.blendOut ?? 0} onChange={(v) => update({ blendOut: v })} />
           </div>
-          <PropLabel>Speed</PropLabel>
+          <PropLabel>{t.sequencer.propSpeed}</PropLabel>
           <NumberInput value={track.speed ?? 1} onChange={(v) => update({ speed: v })} />
         </>
       )}
       {track.kind === "audio" && (
         <>
-          <PropLabel>Volume</PropLabel>
+          <PropLabel>{t.sequencer.propVolume}</PropLabel>
           <NumberInput value={track.volume ?? 1} onChange={(v) => update({ volume: v })} />
-          <PropLabel>Fade In / Out</PropLabel>
+          <PropLabel>{t.sequencer.propFadeInOut}</PropLabel>
           <div style={{ display: "flex", gap: 4 }}>
             <NumberInput value={track.fadeIn ?? 0} onChange={(v) => update({ fadeIn: v })} />
             <NumberInput value={track.fadeOut ?? 0} onChange={(v) => update({ fadeOut: v })} />
@@ -608,15 +609,16 @@ function TrackClipProps({ track, onUpdate }: { track: SeqTrack; onUpdate: () => 
 }
 
 function CameraKfEditor({ trackIndex, kf, onUpdate }: { trackIndex: number; kf: CameraKeyframe; onUpdate: () => void }) {
+  const { t } = useI18n();
   const update = async (fields: Record<string, unknown>) => {
     await rpc("sequencer.updateKeyframe", { trackIndex, keyframeIndex: kf.index, ...fields });
     onUpdate();
   };
   return (
     <div style={{ fontSize: 11 }}>
-      <PropLabel>Time</PropLabel>
+      <PropLabel>{t.sequencer.propTime}</PropLabel>
       <NumberInput value={kf.time} onChange={(v) => update({ time: v })} />
-      <PropLabel>Position (x,y,z)</PropLabel>
+      <PropLabel>{t.sequencer.propPosition}</PropLabel>
       <div style={{ display: "flex", gap: 2 }}>
         {kf.position.map((v, i) => (
           <NumberInput
@@ -626,7 +628,7 @@ function CameraKfEditor({ trackIndex, kf, onUpdate }: { trackIndex: number; kf: 
           />
         ))}
       </div>
-      <PropLabel>Rotation (x,y,z,w)</PropLabel>
+      <PropLabel>{t.sequencer.propRotation}</PropLabel>
       <div style={{ display: "flex", gap: 2 }}>
         {kf.rotation.map((v, i) => (
           <NumberInput
@@ -636,9 +638,9 @@ function CameraKfEditor({ trackIndex, kf, onUpdate }: { trackIndex: number; kf: 
           />
         ))}
       </div>
-      <PropLabel>FOV</PropLabel>
+      <PropLabel>{t.sequencer.propFov}</PropLabel>
       <NumberInput value={kf.fov} onChange={(v) => update({ fov: v })} />
-      <PropLabel>Easing</PropLabel>
+      <PropLabel>{t.sequencer.propEasing}</PropLabel>
       <select style={S.select} value={kf.easing} onChange={(e) => update({ easing: e.target.value })}>
         {EASING_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
@@ -647,15 +649,16 @@ function CameraKfEditor({ trackIndex, kf, onUpdate }: { trackIndex: number; kf: 
 }
 
 function EventKfEditor({ trackIndex, entry, onUpdate }: { trackIndex: number; entry: EventEntry; onUpdate: () => void }) {
+  const { t } = useI18n();
   const update = async (fields: Record<string, unknown>) => {
     await rpc("sequencer.updateKeyframe", { trackIndex, keyframeIndex: entry.index, ...fields });
     onUpdate();
   };
   return (
     <div style={{ fontSize: 11 }}>
-      <PropLabel>Time</PropLabel>
+      <PropLabel>{t.sequencer.propTime}</PropLabel>
       <NumberInput value={entry.time} onChange={(v) => update({ time: v })} />
-      <PropLabel>Event Name</PropLabel>
+      <PropLabel>{t.sequencer.propEventName}</PropLabel>
       <input
         style={{ ...S.input, width: "100%" }}
         defaultValue={entry.name}
@@ -666,17 +669,18 @@ function EventKfEditor({ trackIndex, entry, onUpdate }: { trackIndex: number; en
 }
 
 function ScalarKfEditor({ trackIndex, kf, onUpdate }: { trackIndex: number; kf: ScalarKeyframe; onUpdate: () => void }) {
+  const { t } = useI18n();
   const update = async (fields: Record<string, unknown>) => {
     await rpc("sequencer.updateKeyframe", { trackIndex, keyframeIndex: kf.index, ...fields });
     onUpdate();
   };
   return (
     <div style={{ fontSize: 11 }}>
-      <PropLabel>Time</PropLabel>
+      <PropLabel>{t.sequencer.propTime}</PropLabel>
       <NumberInput value={kf.time} onChange={(v) => update({ time: v })} />
-      <PropLabel>Value</PropLabel>
+      <PropLabel>{t.sequencer.propValue}</PropLabel>
       <NumberInput value={kf.value} onChange={(v) => update({ value: v })} />
-      <PropLabel>Easing</PropLabel>
+      <PropLabel>{t.sequencer.propEasing}</PropLabel>
       <select style={S.select} value={kf.easing} onChange={(e) => update({ easing: e.target.value })}>
         {EASING_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
       </select>
