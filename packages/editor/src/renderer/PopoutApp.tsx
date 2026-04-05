@@ -26,6 +26,7 @@ import { AiChat } from "./panels/AiChat";
 import { ParticleEditor } from "./panels/ParticleEditor";
 import { PrefabEditor } from "./panels/PrefabEditor";
 import { SettingsPanel } from "./panels/Settings";
+import { useI18n } from "./i18n";
 import {
   useConnectionStore,
   useConsoleStore,
@@ -102,6 +103,8 @@ function PanelContent({ panelId }: { panelId: string }) {
 }
 
 export function PopoutApp({ panels }: { panels: string[] }) {
+  const { t } = useI18n();
+  const panelLabels = t.panels as Record<string, string>;
   const connected = useConnectionStore((s) => s.connected);
   const error = useConnectionStore((s) => s.error);
   const [activePanel, setActivePanel] = useState(panels[0] ?? "");
@@ -175,18 +178,18 @@ export function PopoutApp({ panels }: { panels: string[] }) {
               style={p === activePanel ? styles.tabActive : styles.tab}
               onClick={() => setActivePanel(p)}
             >
-              {PANEL_LABELS[p] ?? p}
+              {panelLabels[p] ?? p}
             </button>
           ))}
           <div style={{ flex: 1 }} />
-          <button style={styles.closeBtn} onClick={handleClose} title="Close popout">✕</button>
+          <button style={styles.closeBtn} onClick={handleClose} title={t.app.closePopout}>✕</button>
         </div>
       )}
       {/* Single panel: no tabs, just a minimal title bar */}
       {panels.length === 1 && (
         <div style={styles.titleBar}>
-          <span style={styles.titleText}>{PANEL_LABELS[activePanel] ?? activePanel}</span>
-          <button style={styles.closeBtn} onClick={handleClose} title="Close popout">✕</button>
+          <span style={styles.titleText}>{panelLabels[activePanel] ?? activePanel}</span>
+          <button style={styles.closeBtn} onClick={handleClose} title={t.app.closePopout}>✕</button>
         </div>
       )}
       {/* Panel content */}

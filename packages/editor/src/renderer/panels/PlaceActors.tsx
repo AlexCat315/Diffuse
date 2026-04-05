@@ -158,7 +158,7 @@ export function PlaceActors() {
           </button>
         ))}
         {filtered.length === 0 && (
-          <div style={styles.empty}>No matching actors</div>
+          <div style={styles.empty}>{t.placeActors.noMatch}</div>
         )}
       </div>
     </div>
