@@ -13,9 +13,11 @@ interface ToolbarProps {
   onOpenSettings?: () => void;
   getMissingPanels?: () => { id: string; name: string }[];
   onAddPanel?: (componentId: string) => void;
+  onToggleBottomPanel?: () => void;
+  bottomCollapsed?: boolean;
 }
 
-export function Toolbar({ onResetLayout, onOpenSettings, getMissingPanels, onAddPanel }: ToolbarProps) {
+export function Toolbar({ onResetLayout, onOpenSettings, getMissingPanels, onAddPanel, onToggleBottomPanel, bottomCollapsed }: ToolbarProps) {
   const gizmoMode = useSceneStore((s) => s.gizmoMode);
   const onGizmoModeChange = useSceneStore((s) => s.changeGizmoMode);
   const onRefreshHierarchy = useSceneStore((s) => s.refreshHierarchy);
@@ -148,6 +150,20 @@ export function Toolbar({ onResetLayout, onOpenSettings, getMissingPanels, onAdd
       </div>
       <div style={{ flex: 1 }} />
       <div style={styles.section}>
+        {onToggleBottomPanel && (
+          <ToolButton
+            icon={
+              <svg width="14" height="14" viewBox="0 0 14 14">
+                {bottomCollapsed
+                  ? <path d="M3 9L7 5l4 4" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                  : <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                }
+              </svg>
+            }
+            tooltip={bottomCollapsed ? "展开底部面板 (⌘J)" : "折叠底部面板 (⌘J)"}
+            onClick={onToggleBottomPanel}
+          />
+        )}
         {getMissingPanels && (
           <div style={{ position: "relative" }}>
             <ToolButton

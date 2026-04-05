@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef, useState } from "react";
-import { Layout, Model, Actions, DockLocation, type IJsonModel, type TabNode } from "flexlayout-react";
+import { Layout, Model, Actions, DockLocation, type IJsonModel, type TabNode, type TabSetNode, type ITabSetRenderValues } from "flexlayout-react";
 import "flexlayout-react/style/light.css";
 import "./flexlayout-dark.css";
 
@@ -13,6 +13,7 @@ import { RenderSettingsPanel } from "./panels/RenderSettings";
 import { MaterialEditor } from "./panels/MaterialEditor";
 import { AssetBrowser } from "./panels/AssetBrowser";
 import { ViewportStatus } from "./panels/ViewportStatus";
+
 import { CommandTimeline } from "./panels/CommandTimeline";
 import { EditorUtilities } from "./panels/EditorUtilities";
 import { CameraBookmarks } from "./panels/CameraBookmarks";
@@ -77,7 +78,9 @@ const ALL_PANELS: { id: string; name: string }[] = [
 ];
 
 // ── Layout storage key ──────────────────────────────────
-const LAYOUT_STORAGE_KEY = "guava-editor-layout-v1";
+const LAYOUT_STORAGE_KEY = "guava-editor-layout-v3";
+const BOTTOM_TABSET_ID = "bottom-tabset";
+const DEFAULT_MIN_HEIGHT = 100;
 
 // ── Default docking layout ──────────────────────────────
 // Structure:  Toolbar (top bar, outside dock)
@@ -100,6 +103,7 @@ const defaultLayout: IJsonModel = {
     splitterExtra: 4,
     tabSetMinHeight: 100,
     tabSetMinWidth: 100,
+    rootOrientationVertical: true,
   },
   borders: [],
   layout: {
@@ -107,72 +111,67 @@ const defaultLayout: IJsonModel = {
     weight: 100,
     children: [
       {
-        // Vertical split: [top area | bottom panels]
+        // Top area: Hierarchy | Viewport | Inspector (horizontal row)
         type: "row",
-        weight: 100,
+        weight: 70,
         children: [
           {
-            // Top area: [left | center | right]
-            type: "row",
-            weight: 70,
+            // Left: Scene Hierarchy
+            type: "tabset",
+            weight: 15,
             children: [
-              {
-                // Left: Scene Hierarchy
-                type: "tabset",
-                weight: 15,
-                children: [
-                  { type: "tab", name: "Scene Hierarchy", component: "hierarchy", enableClose: false },
-                  { type: "tab", name: "Place Actors", component: "placeactors" },
-                ],
-              },
-              {
-                // Center: Viewport (the main attraction)
-                type: "tabset",
-                weight: 55,
-                id: "viewport-tabset",
-                children: [
-                  { type: "tab", name: "Viewport", component: "viewport", enableClose: false, enableDrag: false },
-                ],
-              },
-              {
-                // Right: Inspector + Material + Render Settings
-                type: "tabset",
-                weight: 20,
-                children: [
-                  { type: "tab", name: "Inspector", component: "inspector", enableClose: false },
-                  { type: "tab", name: "Material", component: "material" },
-                  { type: "tab", name: "Render Settings", component: "rendersettings" },
-                ],
-              },
+              { type: "tab", name: "Scene Hierarchy", component: "hierarchy", enableClose: false },
+              { type: "tab", name: "Place Actors", component: "placeactors" },
             ],
           },
           {
-            // Bottom: Console, Assets, and other tool tabs
+            // Center: Viewport (the main attraction)
             type: "tabset",
-            weight: 30,
-            id: "bottom-tabset",
+            weight: 55,
+            id: "viewport-tabset",
             children: [
-              { type: "tab", name: "Console", component: "console", enableClose: false },
-              { type: "tab", name: "Assets", component: "assets" },
-              { type: "tab", name: "Timeline", component: "timeline" },
-              { type: "tab", name: "AI Utilities", component: "utilities" },
-              { type: "tab", name: "Camera", component: "camera" },
-              { type: "tab", name: "RHI Stats", component: "rhistats" },
-              { type: "tab", name: "Audio", component: "audio" },
-              { type: "tab", name: "Plugins", component: "plugins" },
-              { type: "tab", name: "Style", component: "style" },
-              { type: "tab", name: "Render Queue", component: "renderqueue" },
-              { type: "tab", name: "Physics", component: "physicsviz" },
-              { type: "tab", name: "Post-FX", component: "postprocess" },
-              { type: "tab", name: "Sequencer", component: "sequencer" },
-              { type: "tab", name: "Animation", component: "animationeditor" },
-              { type: "tab", name: "Material Graph", component: "materialgraph" },
-              { type: "tab", name: "Scripts", component: "scriptviewer" },
-              { type: "tab", name: "AI Chat", component: "aichat" },
-              { type: "tab", name: "Particles", component: "particleeditor" },
-              { type: "tab", name: "Prefabs", component: "prefabeditor" },
+              { type: "tab", name: "Viewport", component: "viewport", enableClose: false, enableDrag: false },
             ],
           },
+          {
+            // Right: Inspector + Material + Render Settings
+            type: "tabset",
+            weight: 20,
+            children: [
+              { type: "tab", name: "Inspector", component: "inspector", enableClose: false },
+              { type: "tab", name: "Material", component: "material" },
+              { type: "tab", name: "Render Settings", component: "rendersettings" },
+            ],
+          },
+        ],
+      },
+      {
+        // Bottom: Console, Assets, Timeline, etc.
+        type: "tabset",
+        weight: 30,
+        id: BOTTOM_TABSET_ID,
+        enableMaximize: false,
+        minHeight: DEFAULT_MIN_HEIGHT,
+        children: [
+          { type: "tab", name: "Console", component: "console", enableClose: false },
+          { type: "tab", name: "Assets", component: "assets" },
+          { type: "tab", name: "Timeline", component: "timeline" },
+          { type: "tab", name: "AI Utilities", component: "utilities" },
+          { type: "tab", name: "Camera", component: "camera" },
+          { type: "tab", name: "RHI Stats", component: "rhistats" },
+          { type: "tab", name: "Audio", component: "audio" },
+          { type: "tab", name: "Plugins", component: "plugins" },
+          { type: "tab", name: "Style", component: "style" },
+          { type: "tab", name: "Render Queue", component: "renderqueue" },
+          { type: "tab", name: "Physics", component: "physicsviz" },
+          { type: "tab", name: "Post-FX", component: "postprocess" },
+          { type: "tab", name: "Sequencer", component: "sequencer" },
+          { type: "tab", name: "Animation", component: "animationeditor" },
+          { type: "tab", name: "Material Graph", component: "materialgraph" },
+          { type: "tab", name: "Scripts", component: "scriptviewer" },
+          { type: "tab", name: "AI Chat", component: "aichat" },
+          { type: "tab", name: "Particles", component: "particleeditor" },
+          { type: "tab", name: "Prefabs", component: "prefabeditor" },
         ],
       },
     ],
@@ -198,6 +197,27 @@ export function App() {
   const setSettingsOpen = useEditorStore((s) => s.setSettingsOpen);
 
   const modelRef = useRef<Model>(Model.fromJson(loadSavedLayout()));
+
+  // ── Bottom panel collapse/expand ──
+  const [bottomCollapsed, setBottomCollapsed] = useState(false);
+  const bottomCollapsedRef = useRef(false);
+
+  const toggleBottomPanel = useCallback(() => {
+    const model = modelRef.current;
+    const next = !bottomCollapsedRef.current;
+    bottomCollapsedRef.current = next;
+    setBottomCollapsed(next);
+    if (next) {
+      // Collapse: set content area height to 0; flexlayout adds tab strip height on top
+      model.doAction(Actions.updateNodeAttributes(BOTTOM_TABSET_ID, { maxHeight: 0, minHeight: 0 }));
+    } else {
+      // Expand: restore default constraints
+      model.doAction(Actions.updateNodeAttributes(BOTTOM_TABSET_ID, { maxHeight: 99999, minHeight: DEFAULT_MIN_HEIGHT }));
+    }
+  }, []);
+
+  const toggleBottomPanelRef = useRef(toggleBottomPanel);
+  toggleBottomPanelRef.current = toggleBottomPanel;
 
   // Persist layout on every model change (debounced).
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
@@ -232,6 +252,12 @@ export function App() {
         }
         return;
       }
+      // Cmd/Ctrl+J: toggle bottom panel
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
+        e.preventDefault();
+        toggleBottomPanelRef.current();
+        return;
+      }
       const { changeGizmoMode, selectedEntity: sel, refreshHierarchy: refresh } = useSceneStore.getState();
       switch (e.key.toLowerCase()) {
         case "q": changeGizmoMode("none"); break;
@@ -260,11 +286,13 @@ export function App() {
   const handleResetLayout = useCallback(() => {
     localStorage.removeItem(LAYOUT_STORAGE_KEY);
     modelRef.current = Model.fromJson(defaultLayout);
+    setBottomCollapsed(false);
+    bottomCollapsedRef.current = false;
     // Force re-render by toggling a trivial store field
     useEditorStore.getState().setSettingsOpen(useEditorStore.getState().settingsOpen);
   }, []);
 
-  // Get list of panels not currently in the layout
+  // Get list of panels not currently in the dock layout
   const getMissingPanels = useCallback(() => {
     const present = new Set<string>();
     modelRef.current.visitNodes((node) => {
@@ -276,23 +304,16 @@ export function App() {
     return ALL_PANELS.filter((p) => !present.has(p.id));
   }, []);
 
-  // Add a panel back to the bottom tabset (or first available tabset)
+  // Add a panel back to any available tabset
   const handleAddPanel = useCallback((componentId: string) => {
     const panel = ALL_PANELS.find((p) => p.id === componentId);
     if (!panel) return;
-    // Prefer the bottom tabset
     let targetTabsetId: string | undefined;
-    const bottomNode = modelRef.current.getNodeById("bottom-tabset");
-    if (bottomNode) {
-      targetTabsetId = "bottom-tabset";
-    } else {
-      // Fallback: find any non-viewport tabset
-      modelRef.current.visitNodes((node) => {
-        if (node.getType() === "tabset" && node.getId() !== "viewport-tabset" && !targetTabsetId) {
-          targetTabsetId = node.getId();
-        }
-      });
-    }
+    modelRef.current.visitNodes((node) => {
+      if (node.getType() === "tabset" && node.getId() !== "viewport-tabset" && !targetTabsetId) {
+        targetTabsetId = node.getId();
+      }
+    });
     if (targetTabsetId) {
       modelRef.current.doAction(
         Actions.addNode(
@@ -341,6 +362,49 @@ export function App() {
     }
   }, []);
 
+  // ── onRenderTabSet: add collapse button to bottom tabset ──
+  const handleRenderTabSet = useCallback(
+    (tabSetNode: TabSetNode | any, renderValues: ITabSetRenderValues) => {
+      if (tabSetNode.getId() === BOTTOM_TABSET_ID) {
+        renderValues.buttons.unshift(
+          <button
+            key="collapse-btn"
+            className="guava-collapse-btn"
+            title={bottomCollapsedRef.current ? "展开底部面板 (⌘J)" : "折叠底部面板 (⌘J)"}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              toggleBottomPanelRef.current();
+            }}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12">
+              {bottomCollapsedRef.current
+                ? <path d="M2 8L6 4l4 4" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+                : <path d="M2 4l4 4 4-4" stroke="currentColor" strokeWidth="1.6" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+              }
+            </svg>
+          </button>
+        );
+      }
+    },
+    [],
+  );
+
+  // ── onAction: intercept maximize-toggle on bottom tabset → collapse instead ──
+  const handleAction = useCallback(
+    (action: any) => {
+      if (action.type === Actions.MAXIMIZE_TOGGLE) {
+        const nodeId = action.data?.node;
+        if (nodeId === BOTTOM_TABSET_ID) {
+          toggleBottomPanelRef.current();
+          return undefined; // swallow the maximize action
+        }
+      }
+      return action;
+    },
+    [],
+  );
+
   if (error) {
     return (
       <div style={styles.errorContainer}>
@@ -369,12 +433,16 @@ export function App() {
         onOpenSettings={() => setSettingsOpen(true)}
         getMissingPanels={getMissingPanels}
         onAddPanel={handleAddPanel}
+        onToggleBottomPanel={toggleBottomPanel}
+        bottomCollapsed={bottomCollapsed}
       />
       <div style={styles.dockArea}>
         <Layout
           model={modelRef.current}
           factory={factory}
           onModelChange={handleModelChange}
+          onRenderTabSet={handleRenderTabSet}
+          onAction={handleAction}
           realtimeResize
         />
       </div>

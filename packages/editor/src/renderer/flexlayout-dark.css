@@ -181,6 +181,24 @@
   color: var(--color-text);
 }
 
+/* ── Bottom panel collapse button ────────────────────── */
+.guava-collapse-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--color-overlay0);
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: 3px;
+  line-height: 1;
+}
+.guava-collapse-btn:hover {
+  color: var(--color-text);
+  background: var(--color-surface0);
+}
+
 /* ── Popup menu (tab overflow) ───────────────────────── */
 .flexlayout__popup_menu {
   background: var(--color-base);
