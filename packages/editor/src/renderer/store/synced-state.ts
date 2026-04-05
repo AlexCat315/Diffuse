@@ -1,13 +1,13 @@
 /**
- * Cross-window panel settings store.
+ * Cross-window synced state store.
  *
  * Every value set here is automatically synced to other Electron windows
- * (popouts) via BroadcastChannel.  Use `usePanelSetting()` in panel
- * components as a drop-in replacement for `useState`.
+ * (popouts) via BroadcastChannel.  Use `useSyncedState()` as a drop-in
+ * replacement for `useState` whenever state needs to be shared across windows.
  *
  * Guidelines:
- *   • Config / preference state       → usePanelSetting  (syncs across windows)
- *   • Ephemeral UI state (hover, loading, context menus) → useState  (local only)
+ *   • Config / preference / shared state → useSyncedState  (syncs across windows)
+ *   • Ephemeral UI state (hover, loading) → useLocalState   (local only)
  */
 
 import { useCallback, useRef } from "react";
@@ -15,13 +15,13 @@ import { create } from "zustand";
 
 // ── Store ──────────────────────────────────────────────────────
 
-const CHANNEL_NAME = "guava-panel-settings";
+const CHANNEL_NAME = "guava-synced-state";
 
-interface PanelSettingsState {
-  /** panelId → key → value */
+interface SyncedStateStore {
+  /** namespace → key → value */
   settings: Record<string, Record<string, unknown>>;
-  /** @internal — use usePanelSetting() instead */
-  _set: (panelId: string, key: string, value: unknown) => void;
+  /** @internal — use useSyncedState() instead */
+  _set: (namespace: string, key: string, value: unknown) => void;
 }
 
 let channel: BroadcastChannel | null = null;
@@ -34,7 +34,7 @@ function getChannel(): BroadcastChannel {
   return channel;
 }
 
-export const usePanelSettingsStore = create<PanelSettingsState>((set) => {
+export const useSyncedStateStore = create<SyncedStateStore>((set) => {
   let syncedFromRemote = false;
 
   // Listen for updates from other windows
@@ -44,7 +44,7 @@ export const usePanelSettingsStore = create<PanelSettingsState>((set) => {
 
     // Another window requesting our full state
     if (msg.type === "sync-request") {
-      const current = usePanelSettingsStore.getState().settings;
+      const current = useSyncedStateStore.getState().settings;
       if (Object.keys(current).length > 0) {
         getChannel().postMessage({ type: "sync-response", settings: current });
       }
@@ -69,13 +69,13 @@ export const usePanelSettingsStore = create<PanelSettingsState>((set) => {
     }
 
     // Regular per-key update
-    const { panelId, key, value } = msg;
-    if (typeof panelId !== "string" || typeof key !== "string") return;
+    const { namespace, key, value } = msg;
+    if (typeof namespace !== "string" || typeof key !== "string") return;
     isSyncing = true;
     set((state) => ({
       settings: {
         ...state.settings,
-        [panelId]: { ...state.settings[panelId], [key]: value },
+        [namespace]: { ...state.settings[namespace], [key]: value },
       },
     }));
     isSyncing = false;
@@ -93,15 +93,15 @@ export const usePanelSettingsStore = create<PanelSettingsState>((set) => {
 
   return {
     settings: {},
-    _set: (panelId, key, value) => {
+    _set: (namespace, key, value) => {
       set((state) => ({
         settings: {
           ...state.settings,
-          [panelId]: { ...state.settings[panelId], [key]: value },
+          [namespace]: { ...state.settings[namespace], [key]: value },
         },
       }));
       if (!isSyncing) {
-        getChannel().postMessage({ panelId, key, value });
+        getChannel().postMessage({ namespace, key, value });
       }
     },
   };
@@ -112,16 +112,20 @@ export const usePanelSettingsStore = create<PanelSettingsState>((set) => {
 /**
  * Drop-in replacement for `useState` that syncs across Electron windows.
  *
+ * @param namespace - Logical group for the state (e.g. panel id, feature area)
+ * @param key       - Unique key within the namespace
+ * @param defaultValue - Initial value when no synced value exists
+ *
  * ```ts
  * // Before:
  * const [encodeVideo, setEncodeVideo] = useState(false);
  *
  * // After:
- * const [encodeVideo, setEncodeVideo] = usePanelSetting("render-queue", "encodeVideo", false);
+ * const [encodeVideo, setEncodeVideo] = useSyncedState("render-queue", "encodeVideo", false);
  * ```
  */
-export function usePanelSetting<T>(
-  panelId: string,
+export function useSyncedState<T>(
+  namespace: string,
   key: string,
   defaultValue: T,
 ): [T, (value: T | ((prev: T) => T)) => void] {
@@ -129,24 +133,24 @@ export function usePanelSetting<T>(
   // don't cause the selector to return a new reference every render.
   const defaultRef = useRef(defaultValue);
 
-  const value = usePanelSettingsStore(
-    (state) => (state.settings[panelId]?.[key] as T) ?? defaultRef.current,
+  const value = useSyncedStateStore(
+    (state) => (state.settings[namespace]?.[key] as T) ?? defaultRef.current,
   );
 
-  const storeSet = usePanelSettingsStore((state) => state._set);
+  const storeSet = useSyncedStateStore((state) => state._set);
 
   const setValue = useCallback(
     (newValue: T | ((prev: T) => T)) => {
       if (typeof newValue === "function") {
         const current =
-          (usePanelSettingsStore.getState().settings[panelId]?.[key] as T) ??
+          (useSyncedStateStore.getState().settings[namespace]?.[key] as T) ??
           defaultRef.current;
-        storeSet(panelId, key, (newValue as (prev: T) => T)(current));
+        storeSet(namespace, key, (newValue as (prev: T) => T)(current));
       } else {
-        storeSet(panelId, key, newValue);
+        storeSet(namespace, key, newValue);
       }
     },
-    [panelId, key, storeSet],
+    [namespace, key, storeSet],
   );
 
   return [value, setValue];

@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useCallback, useRef } from "react";
+import { useLocalState } from "../store/local-state";
 import { rpc } from "../rpc";
 import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
 import { useConnectionStore } from "../store";
-import { usePanelSetting } from "../store/panel-settings";
+import { useSyncedState } from "../store/synced-state";
 import { useI18n } from "../i18n";
 
 // ── Types ───────────────────────────────────────────────────────
@@ -88,13 +89,13 @@ function hexToRGB(hex: string): [number, number, number] {
 export function ParticleEditor() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [entities, setEntities] = useState<VfxEntityInfo[]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
-  const [config, setConfig] = useState<VfxConfig | null>(null);
-  const [curves, setCurves] = useState<CurveState>(defaultCurves);
-  const [collapsed, setCollapsed] = usePanelSetting<Set<string>>("particle-editor", "collapsed", new Set(["emission", "gradient", "sizeCurve"]));
-  const [playing, setPlaying] = useState(false);
-  const [simSpeed, setSimSpeed] = usePanelSetting("particle-editor", "simSpeed", 1.0);
+  const [entities, setEntities] = useLocalState<VfxEntityInfo[]>([]);
+  const [selectedId, setSelectedId] = useLocalState<number | null>(null);
+  const [config, setConfig] = useLocalState<VfxConfig | null>(null);
+  const [curves, setCurves] = useLocalState<CurveState>(defaultCurves);
+  const [collapsed, setCollapsed] = useSyncedState<Set<string>>("particle-editor", "collapsed", new Set(["emission", "gradient", "sizeCurve"]));
+  const [playing, setPlaying] = useLocalState(false);
+  const [simSpeed, setSimSpeed] = useSyncedState("particle-editor", "simSpeed", 1.0);
   const commitTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ── Fetch entities ──────────────────────────────────────────

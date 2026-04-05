@@ -1,8 +1,9 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import React, { useEffect, useCallback, useRef, useMemo } from "react";
+import { useLocalState } from "../store/local-state";
 import { rpc } from "../rpc";
 import { useConnectionStore } from "../store";
 import { useI18n } from "../i18n";
-import { usePanelSetting } from "../store/panel-settings";
+import { useSyncedState } from "../store/synced-state";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -88,17 +89,17 @@ const TRACK_HEIGHT = 28;
 export function SequencerPanel() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [state, setState] = useState<SeqState | null>(null);
-  const [selectedTrack, setSelectedTrack] = useState<number | null>(null);
-  const [selectedKf, setSelectedKf] = useState<number | null>(null);
-  const [timelineScale, setTimelineScale] = usePanelSetting("sequencer", "timelineScale", 80); // px per second
-  const [timelineScroll, setTimelineScroll] = useState(0);
-  const [newTrackKind, setNewTrackKind] = usePanelSetting("sequencer", "newTrackKind", "camera_path");
-  const [newTrackTarget, setNewTrackTarget] = useState("");
-  const [nameBuf, setNameBuf] = useState("");
-  const [fpsBuf, setFpsBuf] = useState("");
-  const [durationBuf, setDurationBuf] = useState("");
-  const [filePathBuf, setFilePathBuf] = useState("");
+  const [state, setState] = useLocalState<SeqState | null>(null);
+  const [selectedTrack, setSelectedTrack] = useLocalState<number | null>(null);
+  const [selectedKf, setSelectedKf] = useLocalState<number | null>(null);
+  const [timelineScale, setTimelineScale] = useSyncedState("sequencer", "timelineScale", 80); // px per second
+  const [timelineScroll, setTimelineScroll] = useLocalState(0);
+  const [newTrackKind, setNewTrackKind] = useSyncedState("sequencer", "newTrackKind", "camera_path");
+  const [newTrackTarget, setNewTrackTarget] = useLocalState("");
+  const [nameBuf, setNameBuf] = useLocalState("");
+  const [fpsBuf, setFpsBuf] = useLocalState("");
+  const [durationBuf, setDurationBuf] = useLocalState("");
+  const [filePathBuf, setFilePathBuf] = useLocalState("");
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const timelineContainerRef = useRef<HTMLDivElement>(null);
   const commitTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -684,7 +685,7 @@ function ScalarKfEditor({ trackIndex, kf, onUpdate }: { trackIndex: number; kf: 
 }
 
 function NumberInput({ value, onChange }: { value: number; onChange: (v: number) => void }) {
-  const [buf, setBuf] = useState(String(value));
+  const [buf, setBuf] = useLocalState(String(value));
   useEffect(() => setBuf(String(parseFloat(value.toFixed(4)))), [value]);
   return (
     <input

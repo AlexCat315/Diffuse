@@ -1,11 +1,12 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
+import { useLocalState } from "../store/local-state";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import type * as monaco from "monaco-editor";
 
 import { rpc } from "../rpc";
 import { useConnectionStore } from "../store";
 import { useI18n } from "../i18n";
-import { usePanelSetting } from "../store/panel-settings";
+import { useSyncedState } from "../store/synced-state";
 import type { ScriptFileInfo } from "../../shared/rpc-types";
 
 // ── Zig language definition for Monaco ──────────────────────────
@@ -104,14 +105,14 @@ export function ScriptViewer() {
   const { t } = useI18n();
   const connected = useConnectionStore((s) => s.connected);
 
-  const [scripts, setScripts] = useState<ScriptFileInfo[]>([]);
-  const [selectedPath, setSelectedPath] = useState<string | null>(null);
-  const [content, setContent] = useState<string>("");
-  const [language, setLanguage] = useState<string>("zig");
-  const [readOnly, setReadOnly] = usePanelSetting("script-viewer", "readOnly", false);
-  const [dirty, setDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [searchQuery, setSearchQuery] = useState("");
+  const [scripts, setScripts] = useLocalState<ScriptFileInfo[]>([]);
+  const [selectedPath, setSelectedPath] = useLocalState<string | null>(null);
+  const [content, setContent] = useLocalState<string>("");
+  const [language, setLanguage] = useLocalState<string>("zig");
+  const [readOnly, setReadOnly] = useSyncedState("script-viewer", "readOnly", false);
+  const [dirty, setDirty] = useLocalState(false);
+  const [saving, setSaving] = useLocalState(false);
+  const [searchQuery, setSearchQuery] = useLocalState("");
 
   const editorRef = useRef<monaco.editor.IStandaloneCodeEditor | null>(null);
 

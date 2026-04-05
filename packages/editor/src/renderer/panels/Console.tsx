@@ -2,7 +2,7 @@ import React, { useRef, useEffect } from "react";
 import { useI18n } from "../i18n";
 import { IconClose } from "../components/Icons";
 import { useConsoleStore } from "../store";
-import { usePanelSetting } from "../store/panel-settings";
+import { useSyncedState } from "../store/synced-state";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -20,7 +20,7 @@ export function Console() {
   const clearLogs = useConsoleStore((s) => s.clearLogs);
   const { t } = useI18n();
   const endRef = useRef<HTMLDivElement>(null);
-  const [activeFilters, setActiveFilters] = usePanelSetting<Set<LogLevel>>("console", "activeFilters", new Set(LEVELS));
+  const [activeFilters, setActiveFilters] = useSyncedState<Set<LogLevel>>("console", "activeFilters", new Set(LEVELS));
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });

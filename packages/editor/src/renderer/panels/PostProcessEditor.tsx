@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useLocalState } from "../store/local-state";
+import React, { useEffect, useCallback, useRef } from "react";
 import { rpc } from "../rpc";
 import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
 import { useConnectionStore } from "../store";
 import { useI18n } from "../i18n";
-import { usePanelSetting } from "../store/panel-settings";
+import { useSyncedState } from "../store/synced-state";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -91,8 +92,8 @@ const LUT_PRESETS = ["neutral", "warm", "cool", "filmic"];
 export function PostProcessEditor() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [state, setState] = useState<PPState | null>(null);
-  const [collapsed, setCollapsed] = usePanelSetting<Set<string>>("post-process", "collapsed", new Set());
+  const [state, setState] = useLocalState<PPState | null>(null);
+  const [collapsed, setCollapsed] = useSyncedState<Set<string>>("post-process", "collapsed", new Set());
   const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const fetchState = useCallback(async () => {

@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useLocalState } from "../store/local-state";
+import React, { useEffect, useCallback, useRef } from "react";
 import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
 
@@ -14,7 +15,7 @@ interface PluginInfo {
 export function PluginManager() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [plugins, setPlugins] = useState<PluginInfo[]>([]);
+  const [plugins, setPlugins] = useLocalState<PluginInfo[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {

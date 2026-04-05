@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from "react";
+import { useLocalState } from "../store/local-state";
+import React, { useEffect, useCallback } from "react";
 import { useI18n } from "../i18n";
 import { IconUndo, IconRedo } from "../components/Icons";
 import type { HistoryEntry } from "../../shared/rpc-types";
@@ -8,9 +9,9 @@ import { useConnectionStore } from "../store";
 export function CommandTimeline() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [entries, setEntries] = useState<HistoryEntry[]>([]);
-  const [cursor, setCursor] = useState<number>(0);
-  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+  const [entries, setEntries] = useLocalState<HistoryEntry[]>([]);
+  const [cursor, setCursor] = useLocalState<number>(0);
+  const [hoveredIdx, setHoveredIdx] = useLocalState<number | null>(null);
 
   const fetchHistory = useCallback(async () => {
     if (!connected) return;

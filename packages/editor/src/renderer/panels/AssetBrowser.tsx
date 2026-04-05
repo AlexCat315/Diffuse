@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useCallback } from "react";
+import { useLocalState } from "../store/local-state";
 import type { AssetEntry } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
-import { usePanelSetting } from "../store/panel-settings";
+import { useSyncedState } from "../store/synced-state";
 import {
   IconFolder, IconModel, IconTexture, IconShader, IconScene,
   IconScript, IconAudio, IconMaterial, IconFile, IconArrowUp, IconRefresh,
@@ -24,9 +25,9 @@ const ASSET_ICONS: Record<string, React.ComponentType<{ size?: number; color?: s
 export function AssetBrowser() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [currentPath, setCurrentPath] = usePanelSetting("asset-browser", "currentPath", "assets");
-  const [entries, setEntries] = useState<AssetEntry[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [currentPath, setCurrentPath] = useSyncedState("asset-browser", "currentPath", "assets");
+  const [entries, setEntries] = useLocalState<AssetEntry[]>([]);
+  const [loading, setLoading] = useLocalState(false);
 
   const fetchDir = useCallback(
     async (path: string) => {

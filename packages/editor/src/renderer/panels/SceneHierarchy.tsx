@@ -1,4 +1,5 @@
-import React, { useState, useCallback, useRef, useEffect } from "react";
+import React, { useCallback, useRef, useEffect } from "react";
+import { useLocalState } from "../store/local-state";
 import type { EntityNode } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
 import { IconClose } from "../components/Icons";
@@ -10,9 +11,9 @@ export function SceneHierarchy() {
   const onSelect = useSceneStore((s) => s.selectEntity);
   const onRefresh = useSceneStore((s) => s.refreshHierarchy);
   const { t } = useI18n();
-  const [search, setSearch] = useState("");
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; entityId: number | null } | null>(null);
-  const [renamingId, setRenamingId] = useState<number | null>(null);
+  const [search, setSearch] = useLocalState("");
+  const [contextMenu, setContextMenu] = useLocalState<{ x: number; y: number; entityId: number | null } | null>(null);
+  const [renamingId, setRenamingId] = useLocalState<number | null>(null);
 
   // Close context menu on click elsewhere
   useEffect(() => {
@@ -201,7 +202,7 @@ interface TreeNodeProps {
 function TreeNode({
   node, depth, selectedId, onSelect, onContextMenu, renamingId, onRename, onStartRename,
 }: TreeNodeProps) {
-  const [expanded, setExpanded] = useState(true);
+  const [expanded, setExpanded] = useLocalState(true);
   const isSelected = node.id === selectedId;
   const hasChildren = node.children.length > 0;
   const isRenaming = renamingId === node.id;
@@ -256,7 +257,7 @@ function TreeNode({
 // ── Inline rename input ───────────────────────────────────────────
 
 function InlineRename({ name, onCommit }: { name: string; onCommit: (name: string) => void }) {
-  const [value, setValue] = useState(name);
+  const [value, setValue] = useLocalState(name);
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {

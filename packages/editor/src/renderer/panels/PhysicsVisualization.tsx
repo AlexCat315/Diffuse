@@ -1,4 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
+import { useLocalState } from "../store/local-state";
+import { useEffect, useCallback } from "react";
 import { rpc } from "../rpc";
 import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
@@ -68,7 +69,7 @@ function hexToRgba(hex: string, alpha: number): [number, number, number, number]
 export function PhysicsVisualization() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [settings, setSettings] = useState<PhysicsVizSettings | null>(null);
+  const [settings, setSettings] = useLocalState<PhysicsVizSettings | null>(null);
 
   const refresh = useCallback(async () => {
     try {

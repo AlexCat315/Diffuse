@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback } from "react";
+import React, { useEffect, useCallback } from "react";
+import { useLocalState } from "../store/local-state";
 import { useI18n } from "../i18n";
 import { IconClose, IconRefresh } from "../components/Icons";
 import { rpc } from "../rpc";
@@ -20,9 +21,9 @@ interface EditorUtilitySnapshot {
 export function EditorUtilities() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [utilities, setUtilities] = useState<EditorUtilitySnapshot[]>([]);
-  const [runtimeAvailable, setRuntimeAvailable] = useState(true);
-  const [loading, setLoading] = useState(false);
+  const [utilities, setUtilities] = useLocalState<EditorUtilitySnapshot[]>([]);
+  const [runtimeAvailable, setRuntimeAvailable] = useLocalState(true);
+  const [loading, setLoading] = useLocalState(false);
 
   const fetchUtilities = useCallback(async () => {
     if (!connected) return;

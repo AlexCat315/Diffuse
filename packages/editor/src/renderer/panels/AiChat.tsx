@@ -1,6 +1,7 @@
-import React, { useCallback, useEffect, useRef, useState } from "react";
+import React, { useCallback, useEffect, useRef } from "react";
+import { useLocalState } from "../store/local-state";
 import { useI18n } from "../i18n";
-import { usePanelSetting } from "../store/panel-settings";
+import { useSyncedState } from "../store/synced-state";
 import {
   type ChatMessage,
   type MessageRole,
@@ -36,19 +37,19 @@ const ROLE_BG: Record<MessageRole, string> = {
 export function AiChat() {
   const { t } = useI18n();
 
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
-  const [input, setInput] = useState("");
-  const [busy, setBusy] = useState(false);
-  const [streamContent, setStreamContent] = useState("");
-  const [streamReasoning, setStreamReasoning] = useState("");
-  const [showSettings, setShowSettings] = usePanelSetting("ai-chat", "showSettings", false);
-  const [showReasoning, setShowReasoning] = usePanelSetting("ai-chat", "showReasoning", true);
+  const [messages, setMessages] = useLocalState<ChatMessage[]>([]);
+  const [input, setInput] = useLocalState("");
+  const [busy, setBusy] = useLocalState(false);
+  const [streamContent, setStreamContent] = useLocalState("");
+  const [streamReasoning, setStreamReasoning] = useLocalState("");
+  const [showSettings, setShowSettings] = useSyncedState("ai-chat", "showSettings", false);
+  const [showReasoning, setShowReasoning] = useSyncedState("ai-chat", "showReasoning", true);
 
   // Provider state
-  const [providers, setProviders] = useState<ProviderConfig[]>(() => loadProviders());
-  const [activeIdx, setActiveIdx] = useState(() => loadActiveIndex());
-  const [testResult, setTestResult] = useState<{ ok: boolean; message: string } | null>(null);
-  const [testing, setTesting] = useState(false);
+  const [providers, setProviders] = useLocalState<ProviderConfig[]>(() => loadProviders());
+  const [activeIdx, setActiveIdx] = useLocalState(() => loadActiveIndex());
+  const [testResult, setTestResult] = useLocalState<{ ok: boolean; message: string } | null>(null);
+  const [testing, setTesting] = useLocalState(false);
 
   const abortRef = useRef<AbortController | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);

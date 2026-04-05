@@ -1,4 +1,5 @@
-import React, { useEffect, useState } from "react";
+import { useLocalState } from "../store/local-state";
+import React, { useEffect } from "react";
 import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
 
@@ -14,7 +15,7 @@ interface ViewportMetrics {
 export function ViewportStatus() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [metrics, setMetrics] = useState<ViewportMetrics | null>(null);
+  const [metrics, setMetrics] = useLocalState<ViewportMetrics | null>(null);
 
   useEffect(() => {
     if (!connected) {

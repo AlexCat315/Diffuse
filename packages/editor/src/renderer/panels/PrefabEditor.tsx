@@ -1,9 +1,10 @@
-import React, { useEffect, useState, useCallback, useMemo, useRef } from "react";
+import React, { useEffect, useCallback, useMemo, useRef } from "react";
+import { useLocalState } from "../store/local-state";
 import { rpc } from "../rpc";
 import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
 import { useConnectionStore, useSceneStore } from "../store";
 import { useI18n } from "../i18n";
-import { usePanelSetting } from "../store/panel-settings";
+import { useSyncedState } from "../store/synced-state";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -99,14 +100,14 @@ export function PrefabEditor() {
   const selectedEntityId = useSceneStore((s) => s.selectedEntity);
   const { t } = useI18n();
 
-  const [prefabs, setPrefabs] = useState<PrefabInfo[]>([]);
-  const [search, setSearch] = useState("");
-  const [selectedPrefab, setSelectedPrefab] = useState<string | null>(null);
-  const [entities, setEntities] = useState<PrefabEntityNode[]>([]);
-  const [selectedEntity, setSelectedEntity] = useState<number | null>(null);
-  const [detail, setDetail] = useState<EntityDetail | null>(null);
-  const [collapsed, setCollapsed] = usePanelSetting<Set<number>>("prefab-editor", "collapsed", new Set());
-  const [busy, setBusy] = useState(false);
+  const [prefabs, setPrefabs] = useLocalState<PrefabInfo[]>([]);
+  const [search, setSearch] = useLocalState("");
+  const [selectedPrefab, setSelectedPrefab] = useLocalState<string | null>(null);
+  const [entities, setEntities] = useLocalState<PrefabEntityNode[]>([]);
+  const [selectedEntity, setSelectedEntity] = useLocalState<number | null>(null);
+  const [detail, setDetail] = useLocalState<EntityDetail | null>(null);
+  const [collapsed, setCollapsed] = useSyncedState<Set<number>>("prefab-editor", "collapsed", new Set());
+  const [busy, setBusy] = useLocalState(false);
   const commitTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ── Fetch all prefabs ───────────────────────────────────────
@@ -468,8 +469,8 @@ export function PrefabEditor() {
 // ── Sub-components ──────────────────────────────────────────────
 
 function InlineEdit({ label, value, onCommit }: { label: string; value: string; onCommit: (v: string) => void }) {
-  const [editing, setEditing] = useState(false);
-  const [draft, setDraft] = useState(value);
+  const [editing, setEditing] = useLocalState(false);
+  const [draft, setDraft] = useLocalState(value);
 
   useEffect(() => { setDraft(value); }, [value]);
 

@@ -1,4 +1,5 @@
-import React, { useCallback, useEffect, useRef, useState, useMemo } from "react";
+import React, { useCallback, useEffect, useRef, useMemo } from "react";
+import { useLocalState } from "../store/local-state";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -102,7 +103,7 @@ function VecEditor({
   labels: string[];
   onCommit: (vals: number[]) => void;
 }) {
-  const [local, setLocal] = useState<number[]>(values.slice(0, count));
+  const [local, setLocal] = useLocalState<number[]>(values.slice(0, count));
 
   useEffect(() => {
     setLocal(values.slice(0, count));
@@ -316,14 +317,14 @@ function MaterialGraphEditorInner() {
   const connected = useConnectionStore((s) => s.connected);
   const reactFlowInstance = useReactFlow();
 
-  const [graphState, setGraphState] = useState<GraphState | null>(null);
-  const [hasGraph, setHasGraph] = useState(false);
-  const [flowNodes, setFlowNodes] = useState<Node[]>([]);
-  const [flowEdges, setFlowEdges] = useState<Edge[]>([]);
-  const [selectedNode, setSelectedNode] = useState<MaterialGraphNodeInfo | null>(null);
-  const [addMenuOpen, setAddMenuOpen] = useState(false);
-  const [textures, setTextures] = useState<{ handle: number; name: string }[]>([]);
-  const [ctxMenu, setCtxMenu] = useState<{ x: number; y: number; nodeId: number } | null>(null);
+  const [graphState, setGraphState] = useLocalState<GraphState | null>(null);
+  const [hasGraph, setHasGraph] = useLocalState(false);
+  const [flowNodes, setFlowNodes] = useLocalState<Node[]>([]);
+  const [flowEdges, setFlowEdges] = useLocalState<Edge[]>([]);
+  const [selectedNode, setSelectedNode] = useLocalState<MaterialGraphNodeInfo | null>(null);
+  const [addMenuOpen, setAddMenuOpen] = useLocalState(false);
+  const [textures, setTextures] = useLocalState<{ handle: number; name: string }[]>([]);
+  const [ctxMenu, setCtxMenu] = useLocalState<{ x: number; y: number; nodeId: number } | null>(null);
 
   const pollingRef = useRef<ReturnType<typeof setInterval> | undefined>(undefined);
 

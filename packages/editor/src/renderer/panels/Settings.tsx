@@ -1,7 +1,8 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
+import React, { useEffect, useCallback, useRef, useMemo } from "react";
+import { useLocalState } from "../store/local-state";
 import { useI18n, type Locale } from "../i18n";
 import { useConnectionStore, useViewportSettingsStore } from "../store";
-import { usePanelSetting } from "../store/panel-settings";
+import { useSyncedState } from "../store/synced-state";
 
 // ── Local preferences (stored in localStorage) ───────────────────
 
@@ -110,22 +111,22 @@ export function SettingsPanel() {
   const { locale, setLocale, t } = useI18n();
   const isZh = locale === "zh-CN";
 
-  const [prefs, setPrefs] = useState<EditorPrefs>(loadPrefs);
-  const [shortcuts, setShortcuts] = useState<Record<string, ShortcutBinding>>(loadShortcuts);
-  const [recording, setRecording] = useState<string | null>(null);
-  const [engineVersion, setEngineVersion] = useState<string>("");
-  const [search, setSearch] = useState("");
-  const [showAdvanced, setShowAdvanced] = usePanelSetting("settings", "showAdvanced", false);
-  const [activeSection, setActiveSection] = usePanelSetting("settings", "activeSection", "language");
+  const [prefs, setPrefs] = useLocalState<EditorPrefs>(loadPrefs);
+  const [shortcuts, setShortcuts] = useLocalState<Record<string, ShortcutBinding>>(loadShortcuts);
+  const [recording, setRecording] = useLocalState<string | null>(null);
+  const [engineVersion, setEngineVersion] = useLocalState<string>("");
+  const [search, setSearch] = useLocalState("");
+  const [showAdvanced, setShowAdvanced] = useSyncedState("settings", "showAdvanced", false);
+  const [activeSection, setActiveSection] = useSyncedState("settings", "activeSection", "language");
   const contentRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
-  const [remoteUrl, setRemoteUrl] = useState(() => localStorage.getItem(REMOTE_URL_KEY) || "ws://192.168.1.100:9100");
-  const [connectMode, setConnectMode] = useState<ConnectMode>(() => (localStorage.getItem(CONNECT_MODE_KEY) as ConnectMode) || "local");
-  const [testStatus, setTestStatus] = useState<TestStatus>("idle");
-  const [testResult, setTestResult] = useState("");
-  const [connecting, setConnecting] = useState(false);
-  const [connectError, setConnectError] = useState("");
+  const [remoteUrl, setRemoteUrl] = useLocalState(() => localStorage.getItem(REMOTE_URL_KEY) || "ws://192.168.1.100:9100");
+  const [connectMode, setConnectMode] = useLocalState<ConnectMode>(() => (localStorage.getItem(CONNECT_MODE_KEY) as ConnectMode) || "local");
+  const [testStatus, setTestStatus] = useLocalState<TestStatus>("idle");
+  const [testResult, setTestResult] = useLocalState("");
+  const [connecting, setConnecting] = useLocalState(false);
+  const [connectError, setConnectError] = useLocalState("");
 
   useEffect(() => {
     if (!connected) return;

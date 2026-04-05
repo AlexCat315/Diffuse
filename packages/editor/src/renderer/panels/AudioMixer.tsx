@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useCallback, useRef } from "react";
+import { useLocalState } from "../store/local-state";
 import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
 
@@ -13,9 +14,9 @@ interface BusInfo {
 export function AudioMixer() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [available, setAvailable] = useState(false);
-  const [activeVoices, setActiveVoices] = useState(0);
-  const [buses, setBuses] = useState<BusInfo[]>([]);
+  const [available, setAvailable] = useLocalState(false);
+  const [activeVoices, setActiveVoices] = useLocalState(0);
+  const [buses, setBuses] = useLocalState<BusInfo[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {

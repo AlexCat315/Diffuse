@@ -1,18 +1,19 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useCallback, useRef } from "react";
+import { useLocalState } from "../store/local-state";
 import type { Transform, ComponentInfo, Vec3 } from "../../shared/rpc-types";
 import type { ComponentField } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
 import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
 import { useSceneStore, useEntityCacheStore } from "../store";
-import { usePanelSetting } from "../store/panel-settings";
+import { useSyncedState } from "../store/synced-state";
 
 export function Inspector() {
   const entityId = useSceneStore((s) => s.selectedEntity);
   const { t } = useI18n();
-  const [transform, setTransform] = useState<Transform | null>(null);
-  const [components, setComponents] = useState<ComponentInfo[]>([]);
-  const [entityName, setEntityName] = useState("");
-  const [collapsedSections, setCollapsedSections] = usePanelSetting<Set<string>>("inspector", "collapsedSections", new Set());
+  const [transform, setTransform] = useLocalState<Transform | null>(null);
+  const [components, setComponents] = useLocalState<ComponentInfo[]>([]);
+  const [entityName, setEntityName] = useLocalState("");
+  const [collapsedSections, setCollapsedSections] = useSyncedState<Set<string>>("inspector", "collapsedSections", new Set());
 
   const fetchEntityData = useCallback(async (eid: number) => {
     const data = await useEntityCacheStore.getState().fetchEntity(eid, true);
@@ -191,7 +192,7 @@ function Vec3Input({
   step?: number;
   onChange: (v: Vec3) => void;
 }) {
-  const [local, setLocal] = useState(value);
+  const [local, setLocal] = useLocalState(value);
   const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Sync with external value when entity changes
@@ -298,7 +299,7 @@ function FieldEditor({
 // ── Float field ──────────────────────────────────────────────────
 
 function FloatField({ label, value, onCommit }: { label: string; value: number; onCommit: (v: number) => void }) {
-  const [local, setLocal] = useState(value);
+  const [local, setLocal] = useLocalState(value);
   useEffect(() => setLocal(value), [value]);
 
   return (
