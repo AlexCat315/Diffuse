@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef, useState } from "react";
-import { Layout, Model, Actions, DockLocation, type IJsonModel, type TabNode, type TabSetNode, type ITabSetRenderValues } from "flexlayout-react";
+import { Layout, Model, Actions, DockLocation, type IJsonModel, type TabNode, type TabSetNode, type ITabSetRenderValues, type ITabRenderValues } from "flexlayout-react";
 import "flexlayout-react/style/light.css";
 import "./flexlayout-dark.css";
 
@@ -282,6 +282,50 @@ export function App() {
     };
   }, []);
 
+  // Listen for popout windows being closed → re-add panels to layout
+  useEffect(() => {
+    const cleanup = window.guavaEngine.onPopoutClosed((panels: string[], originInfo?: unknown) => {
+      const origin = originInfo as { tabsetId?: string; tabIndex?: number; tabName?: string } | undefined;
+      for (const panelId of panels) {
+        const panel = ALL_PANELS.find((p) => p.id === panelId);
+        if (!panel) continue;
+        // Check if panel already exists in layout
+        let exists = false;
+        modelRef.current.visitNodes((node) => {
+          if (node.getType() === "tab" && (node as TabNode).getComponent() === panelId) {
+            exists = true;
+          }
+        });
+        if (exists) continue;
+
+        // Determine target tabset: use original position if the tabset still exists
+        let targetTabsetId = BOTTOM_TABSET_ID;
+        const tabIndex = origin?.tabIndex ?? -1;
+        if (origin?.tabsetId) {
+          // Verify the tabset still exists
+          let tabsetExists = false;
+          modelRef.current.visitNodes((node) => {
+            if (node.getId() === origin.tabsetId) tabsetExists = true;
+          });
+          if (tabsetExists) {
+            targetTabsetId = origin.tabsetId;
+          }
+        }
+
+        modelRef.current.doAction(
+          Actions.addNode(
+            { type: "tab", name: origin?.tabName ?? panel.name, component: panel.id },
+            targetTabsetId,
+            DockLocation.CENTER,
+            tabIndex,
+            false,
+          ),
+        );
+      }
+    });
+    return cleanup;
+  }, []);
+
   // Reset layout to default
   const handleResetLayout = useCallback(() => {
     localStorage.removeItem(LAYOUT_STORAGE_KEY);
@@ -326,6 +370,62 @@ export function App() {
       );
     }
   }, []);
+
+  // Pop out a tab into a separate window
+  const handlePopout = useCallback((node: TabNode) => {
+    const componentId = node.getComponent();
+    if (!componentId || componentId === "viewport") return; // viewport stays in main window
+
+    // Record origin: parent tabset ID and tab index within it
+    const parent = node.getParent();
+    const originInfo = {
+      tabsetId: parent?.getId() ?? BOTTOM_TABSET_ID,
+      tabIndex: parent ? Array.from({ length: (parent as TabSetNode).getChildren().length }, (_, i) => i)
+        .find((i) => (parent as TabSetNode).getChildren()[i].getId() === node.getId()) ?? -1 : -1,
+      tabName: node.getName(),
+    };
+
+    // Snapshot store state for the popout window
+    const initialState = {
+      consoleLogs: useConsoleStore.getState().logs,
+      sceneHierarchy: useSceneStore.getState().hierarchy,
+      selectedEntity: useSceneStore.getState().selectedEntity,
+      gizmoMode: useSceneStore.getState().gizmoMode,
+    };
+
+    // Remove the tab from layout
+    modelRef.current.doAction(Actions.deleteTab(node.getId()));
+    // Open in new window with state + origin info
+    window.guavaEngine.popoutPanel([componentId], initialState, originInfo);
+  }, []);
+
+  // ── onRenderTab: add popout button to each tab ──
+  const handleRenderTab = useCallback(
+    (node: TabNode, renderValues: ITabRenderValues) => {
+      const componentId = node.getComponent();
+      // Don't show popout button for viewport (needs native surface)
+      if (componentId === "viewport") return;
+      renderValues.buttons.push(
+        <button
+          key="popout-btn"
+          className="guava-popout-btn"
+          title="在新窗口中打开"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            handlePopout(node);
+          }}
+        >
+          <svg width="10" height="10" viewBox="0 0 10 10">
+            <path d="M1 3.5V8.5H6" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4 1.5H8.5V6" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+            <path d="M4 6L8.5 1.5" stroke="currentColor" strokeWidth="1.2" fill="none" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>,
+      );
+    },
+    [handlePopout],
+  );
 
   // ── Panel factory: maps component id → React element ──
   const factory = useCallback((node: TabNode) => {
@@ -442,6 +542,7 @@ export function App() {
           factory={factory}
           onModelChange={handleModelChange}
           onRenderTabSet={handleRenderTabSet}
+          onRenderTab={handleRenderTab}
           onAction={handleAction}
           realtimeResize
         />
