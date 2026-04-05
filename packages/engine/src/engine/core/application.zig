@@ -41,7 +41,33 @@
 //! ```
 
 const std = @import("std");
+const builtin = @import("builtin");
 const animator_system = @import("../animation/animator_system.zig");
+
+// macOS Mach kernel APIs for high-precision timing and thread priority.
+const mach = if (builtin.os.tag == .macos) struct {
+    const MachTimebaseInfo = extern struct { numer: u32, denom: u32 };
+    extern "c" fn mach_absolute_time() u64;
+    extern "c" fn mach_wait_until(deadline: u64) c_int;
+    extern "c" fn mach_timebase_info(info: *MachTimebaseInfo) c_int;
+    extern "c" fn pthread_set_qos_class_self_np(qos_class: c_uint, relative_priority: c_int) c_int;
+
+    const QOS_CLASS_USER_INTERACTIVE: c_uint = 0x21;
+
+    var timebase: MachTimebaseInfo = .{ .numer = 0, .denom = 0 };
+
+    fn ensureTimebase() void {
+        if (timebase.numer == 0) {
+            _ = mach_timebase_info(&timebase);
+        }
+    }
+
+    /// Convert nanoseconds to Mach absolute time units.
+    fn nsToAbsolute(ns: u64) u64 {
+        ensureTimebase();
+        return ns * timebase.denom / timebase.numer;
+    }
+} else struct {};
 const physics_system = @import("../physics/system.zig");
 const nav_system_mod = @import("../navigation/nav_system.zig");
 const debug_session_mod = @import("../script/debug_session.zig");
@@ -369,6 +395,11 @@ pub const Application = struct {
             try self.attachLayers();
         }
 
+        // Raise thread priority to reduce scheduling preemption during rendering.
+        if (comptime builtin.os.tag == .macos) {
+            _ = mach.pthread_set_qos_class_self_np(mach.QOS_CLASS_USER_INTERACTIVE, 0);
+        }
+
         var frames_rendered: usize = 0;
         var last_frame = renderer_mod.FrameReport{
             .backend = self.renderer.backendApi(),
@@ -462,22 +493,26 @@ pub const Application = struct {
             }
             self.renderer.current_frame_delay_ms = self.config.frame_delay_ms;
 
-            // Frame rate limiting: sleep for bulk of the wait, then spin-wait
-            // for the final ~0.2ms for sub-millisecond timing accuracy.
-            // Larger margins burn too much CPU (1.5ms × 120fps = 18% of a core).
+            // Frame rate limiting.
             if (self.config.frame_delay_ms > 0) {
                 const frame_ns = self.timer.read();
                 const target_ns: u64 = @as(u64, self.config.frame_delay_ms) * std.time.ns_per_ms;
                 if (frame_ns < target_ns) {
                     const remaining = target_ns - frame_ns;
-                    // Sleep for the bulk (minus 0.2ms margin for spin-wait)
-                    const spin_margin: u64 = 200_000; // 0.2ms
-                    if (remaining > spin_margin) {
-                        std.Thread.sleep(remaining - spin_margin);
-                    }
-                    // Spin-wait for precise final timing
-                    while (self.timer.read() < target_ns) {
-                        std.atomic.spinLoopHint();
+                    if (comptime builtin.os.tag == .macos) {
+                        // mach_wait_until: kernel-level precise timer, no busy-wait,
+                        // no timer coalescing.  Sub-microsecond accuracy.
+                        const deadline = mach.mach_absolute_time() + mach.nsToAbsolute(remaining);
+                        _ = mach.mach_wait_until(deadline);
+                    } else {
+                        // Fallback: sleep + spin-wait for the final 0.2ms
+                        const spin_margin: u64 = 200_000;
+                        if (remaining > spin_margin) {
+                            std.Thread.sleep(remaining - spin_margin);
+                        }
+                        while (self.timer.read() < target_ns) {
+                            std.atomic.spinLoopHint();
+                        }
                     }
                 }
             }
