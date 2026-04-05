@@ -11,21 +11,15 @@ import { useSceneStore } from "../store";
 interface ToolbarProps {
   onResetLayout?: () => void;
   onOpenSettings?: () => void;
-  getMissingPanels?: () => { id: string; name: string }[];
-  onAddPanel?: (componentId: string) => void;
-  onToggleBottomPanel?: () => void;
-  bottomCollapsed?: boolean;
 }
 
-export function Toolbar({ onResetLayout, onOpenSettings, getMissingPanels, onAddPanel, onToggleBottomPanel, bottomCollapsed }: ToolbarProps) {
+export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
   const gizmoMode = useSceneStore((s) => s.gizmoMode);
   const onGizmoModeChange = useSceneStore((s) => s.changeGizmoMode);
   const onRefreshHierarchy = useSceneStore((s) => s.refreshHierarchy);
   const { t } = useI18n();
   const [sceneMenuOpen, setSceneMenuOpen] = useState(false);
   const [scenes, setScenes] = useState<string[]>([]);
-  const [windowMenuOpen, setWindowMenuOpen] = useState(false);
-  const [missingPanels, setMissingPanels] = useState<{ id: string; name: string }[]>([]);
 
   const handlePlay = () => window.guavaEngine.call("playback.play", {});
   const handlePause = () => window.guavaEngine.call("playback.pause", {});
@@ -62,25 +56,6 @@ export function Toolbar({ onResetLayout, onOpenSettings, getMissingPanels, onAdd
       }
     },
     [onRefreshHierarchy],
-  );
-
-  const handleToggleWindowMenu = useCallback(() => {
-    if (windowMenuOpen) {
-      setWindowMenuOpen(false);
-      return;
-    }
-    if (getMissingPanels) {
-      setMissingPanels(getMissingPanels());
-    }
-    setWindowMenuOpen(true);
-  }, [windowMenuOpen, getMissingPanels]);
-
-  const handleAddPanel = useCallback(
-    (componentId: string) => {
-      setWindowMenuOpen(false);
-      onAddPanel?.(componentId);
-    },
-    [onAddPanel],
   );
 
   return (
@@ -150,48 +125,6 @@ export function Toolbar({ onResetLayout, onOpenSettings, getMissingPanels, onAdd
       </div>
       <div style={{ flex: 1 }} />
       <div style={styles.section}>
-        {onToggleBottomPanel && (
-          <ToolButton
-            icon={
-              <svg width="14" height="14" viewBox="0 0 14 14">
-                {bottomCollapsed
-                  ? <path d="M3 9L7 5l4 4" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                  : <path d="M3 5l4 4 4-4" stroke="currentColor" strokeWidth="1.8" fill="none" strokeLinecap="round" strokeLinejoin="round" />
-                }
-              </svg>
-            }
-            tooltip={bottomCollapsed ? "展开底部面板 (⌘J)" : "折叠底部面板 (⌘J)"}
-            onClick={onToggleBottomPanel}
-          />
-        )}
-        {getMissingPanels && (
-          <div style={{ position: "relative" }}>
-            <ToolButton
-              icon={<span style={{ fontSize: 12 }}>☰</span>}
-              tooltip="Window"
-              onClick={handleToggleWindowMenu}
-            />
-            {windowMenuOpen && (
-              <div style={{ ...styles.dropdown, right: 0, left: "auto" }}>
-                {missingPanels.length === 0 ? (
-                  <div style={styles.dropdownItem}>All panels visible</div>
-                ) : (
-                  missingPanels.map((p) => (
-                    <div
-                      key={p.id}
-                      style={styles.dropdownItem}
-                      onClick={() => handleAddPanel(p.id)}
-                      onMouseEnter={(e) => (e.currentTarget.style.background = "#45475a")}
-                      onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
-                    >
-                      {p.name}
-                    </div>
-                  ))
-                )}
-              </div>
-            )}
-          </div>
-        )}
         {onResetLayout && (
           <ToolButton
             icon={<span style={{ fontSize: 12 }}>⊞</span>}

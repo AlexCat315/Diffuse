@@ -336,41 +336,6 @@ export function App() {
     useEditorStore.getState().setSettingsOpen(useEditorStore.getState().settingsOpen);
   }, []);
 
-  // Get list of panels not currently in the dock layout
-  const getMissingPanels = useCallback(() => {
-    const present = new Set<string>();
-    modelRef.current.visitNodes((node) => {
-      if (node.getType() === "tab") {
-        const comp = (node as TabNode).getComponent();
-        if (comp) present.add(comp);
-      }
-    });
-    return ALL_PANELS.filter((p) => !present.has(p.id));
-  }, []);
-
-  // Add a panel back to any available tabset
-  const handleAddPanel = useCallback((componentId: string) => {
-    const panel = ALL_PANELS.find((p) => p.id === componentId);
-    if (!panel) return;
-    let targetTabsetId: string | undefined;
-    modelRef.current.visitNodes((node) => {
-      if (node.getType() === "tabset" && node.getId() !== "viewport-tabset" && !targetTabsetId) {
-        targetTabsetId = node.getId();
-      }
-    });
-    if (targetTabsetId) {
-      modelRef.current.doAction(
-        Actions.addNode(
-          { type: "tab", name: panel.name, component: panel.id },
-          targetTabsetId,
-          DockLocation.CENTER,
-          -1,
-          true,
-        ),
-      );
-    }
-  }, []);
-
   // Pop out a tab into a separate window
   const handlePopout = useCallback((node: TabNode) => {
     const componentId = node.getComponent();
@@ -531,10 +496,6 @@ export function App() {
       <Toolbar
         onResetLayout={handleResetLayout}
         onOpenSettings={() => setSettingsOpen(true)}
-        getMissingPanels={getMissingPanels}
-        onAddPanel={handleAddPanel}
-        onToggleBottomPanel={toggleBottomPanel}
-        bottomCollapsed={bottomCollapsed}
       />
       <div style={styles.dockArea}>
         <Layout
