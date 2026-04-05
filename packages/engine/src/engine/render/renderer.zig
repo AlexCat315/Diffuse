@@ -429,6 +429,12 @@ pub const Renderer = struct {
     editor_viewport_state: EditorViewportState = .{},
     /// Sequencer 相机路径预览线段（由编辑器每帧设置）
     camera_path_preview_lines: std.ArrayListUnmanaged(gizmo_pass_mod.WorldLineVertex) = .empty,
+    /// Mesh edit overlay — all edges of the mesh being edited (wireframe)
+    mesh_edit_wireframe_lines: std.ArrayListUnmanaged(gizmo_pass_mod.WorldLineVertex) = .empty,
+    /// Mesh edit overlay — highlighted lines for selected elements
+    mesh_edit_selected_lines: std.ArrayListUnmanaged(gizmo_pass_mod.WorldLineVertex) = .empty,
+    /// Mesh edit overlay — vertex position markers (small crosshairs)
+    mesh_edit_vertex_lines: std.ArrayListUnmanaged(gizmo_pass_mod.WorldLineVertex) = .empty,
     /// 前一帧视图矩阵（TAA 重投影用）
     prev_view_matrix: [16]f32 = mat4_mod.identity(),
     /// 前一帧未抖动的 view-projection（velocity / TAA history reproject）
@@ -743,6 +749,9 @@ pub const Renderer = struct {
         self.prev_mesh_models.deinit();
         self.preview_entity_filter.deinit(self.allocator);
         self.camera_path_preview_lines.deinit(self.allocator);
+        self.mesh_edit_wireframe_lines.deinit(self.allocator);
+        self.mesh_edit_selected_lines.deinit(self.allocator);
+        self.mesh_edit_vertex_lines.deinit(self.allocator);
         self.scene_viewport.deinit(&self.rhi);
         self.releaseMaterialThumbnailRequests();
         self.releaseMaterialThumbnailCache();
@@ -1178,6 +1187,35 @@ pub const Renderer = struct {
         self.camera_path_preview_lines.ensureTotalCapacity(self.allocator, positions.len) catch return;
         for (positions) |pos| {
             self.camera_path_preview_lines.appendAssumeCapacity(.{ .position = pos });
+        }
+    }
+
+    /// Set mesh edit overlay lines.  Called from the editor layer when
+    /// entering/exiting edit mode or when selection changes.
+    /// All slices are pairs of position vertices representing line segments.
+    pub fn setMeshEditOverlay(
+        self: *Renderer,
+        wireframe: []const [3]f32,
+        selected: []const [3]f32,
+        vertices: []const [3]f32,
+    ) void {
+        self.setLineList(&self.mesh_edit_wireframe_lines, wireframe);
+        self.setLineList(&self.mesh_edit_selected_lines, selected);
+        self.setLineList(&self.mesh_edit_vertex_lines, vertices);
+    }
+
+    /// Clear all mesh edit overlay lines.
+    pub fn clearMeshEditOverlay(self: *Renderer) void {
+        self.mesh_edit_wireframe_lines.clearRetainingCapacity();
+        self.mesh_edit_selected_lines.clearRetainingCapacity();
+        self.mesh_edit_vertex_lines.clearRetainingCapacity();
+    }
+
+    fn setLineList(self: *Renderer, list: *std.ArrayListUnmanaged(gizmo_pass_mod.WorldLineVertex), positions: []const [3]f32) void {
+        list.clearRetainingCapacity();
+        list.ensureTotalCapacity(self.allocator, positions.len) catch return;
+        for (positions) |pos| {
+            list.appendAssumeCapacity(.{ .position = pos });
         }
     }
 
@@ -4180,6 +4218,44 @@ pub const Renderer = struct {
                 .{ 1.0, 0.8, 0.2, 1.0 },
             );
             stats.add(path_stats);
+        }
+
+        // Mesh edit overlay — three layers matching the old ImGui visual style:
+        //   wire = muted grey (vertex-mode wireframe background)
+        //   sel  = gold/yellow (selected elements)
+        //   vtx  = teal/cyan (unselected elements)
+        if (self.mesh_edit_wireframe_lines.items.len >= 2) {
+            const wire_stats = try self.gizmo_pass.drawWorldLines(
+                &self.rhi,
+                frame,
+                pass,
+                prepared_scene.view_projection,
+                self.mesh_edit_wireframe_lines.items,
+                .{ 0.54, 0.62, 0.72, 0.34 }, // muted blue-grey wireframe
+            );
+            stats.add(wire_stats);
+        }
+        if (self.mesh_edit_vertex_lines.items.len >= 2) {
+            const vtx_stats = try self.gizmo_pass.drawWorldLines(
+                &self.rhi,
+                frame,
+                pass,
+                prepared_scene.view_projection,
+                self.mesh_edit_vertex_lines.items,
+                .{ 0.42, 0.86, 0.78, 0.92 }, // teal — unselected elements
+            );
+            stats.add(vtx_stats);
+        }
+        if (self.mesh_edit_selected_lines.items.len >= 2) {
+            const sel_stats = try self.gizmo_pass.drawWorldLines(
+                &self.rhi,
+                frame,
+                pass,
+                prepared_scene.view_projection,
+                self.mesh_edit_selected_lines.items,
+                .{ 0.98, 0.84, 0.32, 0.96 }, // gold/yellow — selected elements
+            );
+            stats.add(sel_stats);
         }
 
         return stats;

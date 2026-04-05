@@ -176,6 +176,151 @@ pub fn syncSession(state: *EditorState, layer_context: *engine.core.LayerContext
     try pruneSelectionToCurrentMesh(state, layer_context);
 }
 
+/// Rebuild the mesh edit overlay lines on the renderer.
+/// Called every frame while in edit mode.  Generates:
+///  - wireframe: all unique edges (dark lines)
+///  - selected: highlighted edges/outlines for the current selection
+///  - vertices: small crosshair markers at selected vertex positions
+pub fn refreshOverlay(state: *EditorState, layer_context: *engine.core.LayerContext) void {
+    const renderer = layer_context.renderer;
+
+    if (!isEditModeActive(state)) {
+        renderer.clearMeshEditOverlay();
+        return;
+    }
+
+    const context = activeContext(state, layer_context) orelse {
+        renderer.clearMeshEditOverlay();
+        return;
+    };
+
+    const mesh = context.mesh;
+    const xform = context.world_transform;
+    const allocator = state.allocator orelse layer_context.world.allocator;
+
+    // Three draw buckets (mirrors old ImGui visual style):
+    //   wire = slot 1 (muted/grey)  — vertex-mode wireframe background
+    //   sel  = slot 2 (gold)        — selected elements across all modes
+    //   vtx  = slot 3 (teal/cyan)   — unselected elements across all modes
+    var wire = std.ArrayList([3]f32).empty;
+    defer wire.deinit(allocator);
+    var sel = std.ArrayList([3]f32).empty;
+    defer sel.deinit(allocator);
+    var vtx = std.ArrayList([3]f32).empty;
+    defer vtx.deinit(allocator);
+
+    switch (state.mesh_edit_selection_mode) {
+        // ── Vertex mode ──────────────────────────────────────────
+        // wire: all unique edges as muted wireframe background
+        // vtx:  unselected vertex crosshairs (teal, small)
+        // sel:  selected vertex crosshairs (gold, larger)
+        .vertex => {
+            // Muted wireframe: de-duplicate edges via hash set
+            var edge_set = std.AutoHashMap(u64, void).init(allocator);
+            defer edge_set.deinit();
+            var tri: usize = 0;
+            while (tri + 2 < mesh.indices.len) : (tri += 3) {
+                const idx = [3]u32{ mesh.indices[tri], mesh.indices[tri + 1], mesh.indices[tri + 2] };
+                inline for (.{ .{ 0, 1 }, .{ 1, 2 }, .{ 2, 0 } }) |pair| {
+                    const ai = idx[pair[0]];
+                    const bi = idx[pair[1]];
+                    const key = canonicalEdgeKey(ai, bi);
+                    if (edge_set.get(key) == null) {
+                        edge_set.put(key, {}) catch break;
+                        wire.append(allocator, transformPoint(xform, mesh.vertices[ai].position)) catch break;
+                        wire.append(allocator, transformPoint(xform, mesh.vertices[bi].position)) catch break;
+                    }
+                }
+            }
+            // Vertex markers: selected (gold, big) vs unselected (teal, small)
+            var sel_set = buildSelectionSet(allocator, state) catch null;
+            defer if (sel_set) |*s| s.deinit();
+            for (mesh.vertices, 0..) |vertex, vi| {
+                const wp = transformPoint(xform, vertex.position);
+                const is_sel = if (sel_set) |s| s.contains(@intCast(vi)) else false;
+                if (is_sel) {
+                    appendCrosshair(allocator, &sel, wp, 0.045) catch {};
+                } else {
+                    appendCrosshair(allocator, &vtx, wp, 0.025) catch {};
+                }
+            }
+        },
+        // ── Edge mode ────────────────────────────────────────────
+        // vtx: all unselected edges (teal)
+        // sel: all selected edges (gold)
+        .edge => {
+            const edges = buildEdgeList(allocator, mesh) catch &.{};
+            defer if (edges.len > 0) allocator.free(edges);
+            var sel_set = buildSelectionSet(allocator, state) catch null;
+            defer if (sel_set) |*s| s.deinit();
+            for (edges, 0..) |e, ei| {
+                const pa = transformPoint(xform, mesh.vertices[e.a].position);
+                const pb = transformPoint(xform, mesh.vertices[e.b].position);
+                const is_sel = if (sel_set) |s| s.contains(@intCast(ei)) else false;
+                if (is_sel) {
+                    sel.append(allocator, pa) catch {};
+                    sel.append(allocator, pb) catch {};
+                } else {
+                    vtx.append(allocator, pa) catch {};
+                    vtx.append(allocator, pb) catch {};
+                }
+            }
+        },
+        // ── Face mode ────────────────────────────────────────────
+        // vtx: all unselected face outlines (teal)
+        // sel: all selected face outlines + centroid marker (gold)
+        .face => {
+            var sel_set = buildSelectionSet(allocator, state) catch null;
+            defer if (sel_set) |*s| s.deinit();
+            var face_index: usize = 0;
+            while (face_index * 3 + 2 < mesh.indices.len) : (face_index += 1) {
+                const base = face_index * 3;
+                const p0 = transformPoint(xform, mesh.vertices[mesh.indices[base]].position);
+                const p1 = transformPoint(xform, mesh.vertices[mesh.indices[base + 1]].position);
+                const p2 = transformPoint(xform, mesh.vertices[mesh.indices[base + 2]].position);
+                const is_sel = if (sel_set) |s| s.contains(@intCast(face_index)) else false;
+                if (is_sel) {
+                    sel.appendSlice(allocator, &.{ p0, p1, p1, p2, p2, p0 }) catch {};
+                    // Centroid marker for selected face
+                    const centroid = [3]f32{
+                        (p0[0] + p1[0] + p2[0]) / 3.0,
+                        (p0[1] + p1[1] + p2[1]) / 3.0,
+                        (p0[2] + p1[2] + p2[2]) / 3.0,
+                    };
+                    appendCrosshair(allocator, &sel, centroid, 0.03) catch {};
+                } else {
+                    vtx.appendSlice(allocator, &.{ p0, p1, p1, p2, p2, p0 }) catch {};
+                }
+            }
+        },
+    }
+
+    renderer.setMeshEditOverlay(wire.items, sel.items, vtx.items);
+}
+
+fn canonicalEdgeKey(a: u32, b: u32) u64 {
+    const lo: u64 = @min(a, b);
+    const hi: u64 = @max(a, b);
+    return (hi << 32) | lo;
+}
+
+/// Build a temporary HashSet of the currently selected element indices for O(1) lookup.
+fn buildSelectionSet(allocator: std.mem.Allocator, state: *const EditorState) !std.AutoHashMap(u32, void) {
+    var set = std.AutoHashMap(u32, void).init(allocator);
+    for (selectedElements(state)) |idx| {
+        try set.put(idx, {});
+    }
+    return set;
+}
+
+fn appendCrosshair(allocator: std.mem.Allocator, list: *std.ArrayList([3]f32), center: [3]f32, size: f32) !void {
+    try list.appendSlice(allocator, &.{
+        .{ center[0] - size, center[1], center[2] }, .{ center[0] + size, center[1], center[2] },
+        .{ center[0], center[1] - size, center[2] }, .{ center[0], center[1] + size, center[2] },
+        .{ center[0], center[1], center[2] - size }, .{ center[0], center[1], center[2] + size },
+    });
+}
+
 pub fn handleEditingShortcuts(state: *EditorState, layer_context: *engine.core.LayerContext) !bool {
     const input = layer_context.input;
 
