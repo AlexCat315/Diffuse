@@ -78,14 +78,15 @@ interface SectionDef {
   labelZh: string;
   icon: string;
   keywords: string[];
+  advanced?: boolean;
 }
 
 const SECTIONS: SectionDef[] = [
   { id: "language",   label: "Language",    labelZh: "语言",       icon: "🌐", keywords: ["language", "locale", "english", "中文", "语言"] },
-  { id: "appearance", label: "Appearance",  labelZh: "外观",       icon: "◉",  keywords: ["fps", "display", "vsync", "overlay", "显示", "垂直同步"] },
+  { id: "appearance", label: "Appearance",  labelZh: "外观",       icon: "◉",  keywords: ["fps", "display", "vsync", "overlay", "显示", "垂直同步", "帧率"] },
   { id: "layout",     label: "Layout",      labelZh: "布局",       icon: "⊞",  keywords: ["layout", "panel", "reset", "布局", "面板", "重置"] },
   { id: "shortcuts",  label: "Shortcuts",   labelZh: "快捷键",     icon: "⌨",  keywords: ["shortcut", "key", "binding", "mesh", "extrude", "bevel", "快捷键", "网格"] },
-  { id: "remote",     label: "Remote",      labelZh: "远程服务器", icon: "☁",  keywords: ["remote", "server", "local", "websocket", "connect", "远程", "服务器", "连接"] },
+  { id: "remote",     label: "Remote",      labelZh: "远程服务器", icon: "☁",  keywords: ["remote", "server", "local", "websocket", "connect", "远程", "服务器", "连接"], advanced: true },
   { id: "about",      label: "About",       labelZh: "关于",       icon: "ⓘ",  keywords: ["version", "engine", "status", "about", "版本", "关于"] },
 ];
 
@@ -113,6 +114,7 @@ export function SettingsPanel() {
   const [recording, setRecording] = useState<string | null>(null);
   const [engineVersion, setEngineVersion] = useState<string>("");
   const [search, setSearch] = useState("");
+  const [showAdvanced, setShowAdvanced] = useState(false);
   const [activeSection, setActiveSection] = useState("language");
   const contentRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
@@ -225,13 +227,16 @@ export function SettingsPanel() {
 
   const q = search.toLowerCase().trim();
   const visibleSections = useMemo(() => {
-    if (!q) return SECTIONS;
-    return SECTIONS.filter((s) =>
-      s.label.toLowerCase().includes(q) ||
-      s.labelZh.includes(q) ||
-      s.keywords.some((kw) => kw.includes(q)),
-    );
-  }, [q]);
+    let sections = showAdvanced ? SECTIONS : SECTIONS.filter((s) => !s.advanced);
+    if (q) {
+      sections = sections.filter((s) =>
+        s.label.toLowerCase().includes(q) ||
+        s.labelZh.includes(q) ||
+        s.keywords.some((kw) => kw.includes(q)),
+      );
+    }
+    return sections;
+  }, [q, showAdvanced]);
   const visibleIds = useMemo(() => new Set(visibleSections.map((s) => s.id)), [visibleSections]);
 
   const scrollToSection = useCallback((id: string) => {
@@ -271,6 +276,13 @@ export function SettingsPanel() {
         {search && (
           <button style={S.searchClear} onClick={() => setSearch("")}>&#x2715;</button>
         )}
+        <button
+          style={{ ...S.advancedToggle, ...(showAdvanced ? S.advancedToggleOn : {}) }}
+          onClick={() => setShowAdvanced((v) => !v)}
+          title={isZh ? "显示高级设置" : "Show advanced settings"}
+        >
+          {isZh ? "高级" : "Advanced"}
+        </button>
       </div>
 
       <div style={S.body}>
@@ -522,6 +534,23 @@ const S: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontSize: 11,
     padding: "0 2px",
+  },
+  advancedToggle: {
+    flexShrink: 0,
+    padding: "2px 8px",
+    border: "1px solid #45475a",
+    borderRadius: 4,
+    background: "transparent",
+    color: "#6c7086",
+    cursor: "pointer",
+    fontSize: 10,
+    whiteSpace: "nowrap" as const,
+    transition: "all 0.1s",
+  },
+  advancedToggleOn: {
+    color: "#89b4fa",
+    borderColor: "#89b4fa",
+    background: "rgba(137,180,250,0.1)",
   },
   body: {
     display: "flex",
