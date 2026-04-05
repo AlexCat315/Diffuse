@@ -516,25 +516,84 @@ export const en = {
     availableStyles: "Available Styles",
   },
 
-  // ── Settings ─────────────────────────────────────────
+  // ── Settings panel ────────────────────────────────────
   settings: {
-    title: "Settings",
-    tabGeneral: "General",
-    tabShortcuts: "Shortcuts",
-    tabRemote: "Remote",
-    language: "Language",
-    fpsDisplay: "FPS Display",
-    vsync: "VSync",
-    engineVersion: "Engine Version",
-    unknown: "Unknown",
-    shortcutPress: "Press keys...",
-    shortcutReset: "Reset",
-    remoteServer: "Remote Server",
-    remoteUrl: "URL",
-    testConnection: "Test",
-    connect: "Connect",
-    disconnect: "Disconnect",
-    useLocal: "Use Local Engine",
+    searchPlaceholder: "Search settings...",
+    showAdvanced: "Advanced",
+    showAdvancedTooltip: "Show advanced settings",
+    noMatch: "No matching settings",
+
+    languageHeader: "Language",
+    interfaceLanguage: "Interface Language",
+    interfaceLanguageDesc: "Editor display language",
+
+    appearanceHeader: "Appearance",
+    fpsDisplayLabel: "FPS Display",
+    fpsDisplayDesc: "Show frame rate overlay in viewport",
+    fpsViewport: "Viewport",
+    fpsNone: "None",
+    frameRateLimit: "Frame Rate Limit",
+    frameRateLimitDesc: "Limit engine rendering frame rate",
+    vsyncLabel: "VSync",
+    vsyncDesc: "Enable vertical sync (requires engine support)",
+
+    consoleHeader: "Console",
+    maxLogEntries: "Max Log Entries",
+    maxLogEntriesDesc: "Oldest entries are discarded when the limit is exceeded (50–10,000)",
+
+    layoutHeader: "Layout",
+    panelLayout: "Panel Layout",
+    panelLayoutDesc: "Restore default panel arrangement",
+    resetLayout: "Reset Layout",
+
+    remoteHeader: "Remote Server",
+    connectionMode: "Connection Mode",
+    connectionModeDesc: "Local engine or remote server",
+    localMode: "Local",
+    remoteMode: "Remote",
+    switching: "Switching...",
+    serverUrl: "Server URL",
+    testBtn: "Test",
+    testingBtn: "Test...",
+    remoteInfo1: "Remote mode connects via WebSocket RPC. All panels work normally.",
+    remoteInfo2: "⚠️ Viewport rendering is local-only (IOSurface). Remote streaming is planned.",
+
+    aboutHeader: "About",
+    editorLabel: "Editor",
+    statusLabel: "Status",
+    statusConnected: "Connected",
+    statusDisconnected: "Disconnected",
+    addressLabel: "URL",
+  },
+
+  // ── Keybindings panel ─────────────────────────────────
+  keybindings: {
+    searchPlaceholder: "Search keybindings...",
+    noMatch: "No matching keybindings",
+
+    categoryEditor: "Editor",
+    categoryGizmo: "Gizmo",
+    categoryMesh: "Mesh Edit",
+
+    colAction: "Action",
+    colShortcut: "Shortcut",
+    colStatus: "Status",
+    fixedBadge: "Fixed",
+
+    editorTitle: "Editor Shortcuts",
+    editorDesc: "These are built-in shortcuts and cannot be customized in this version.",
+
+    gizmoTitle: "Gizmo Shortcuts",
+    gizmoDesc: "Switch transform mode in the viewport (active in object mode).",
+
+    meshTitle: "Mesh Edit Shortcuts",
+    meshDesc: "Active in mesh edit mode (double-click a mesh to enter edit mode).",
+
+    pressNewKey: "Press new key...",
+    recordBtn: "Record",
+    resetToDefaults: "Reset to Defaults",
+    savedLocally: "Shortcuts are saved locally and restored on startup",
+    savedLocallyInstant: "Shortcuts take effect immediately, saved locally",
   },
 
   // ── Material Graph Editor ────────────────────────────

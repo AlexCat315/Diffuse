@@ -435,6 +435,10 @@ pub const Renderer = struct {
     mesh_edit_selected_lines: std.ArrayListUnmanaged(gizmo_pass_mod.WorldLineVertex) = .empty,
     /// Mesh edit overlay — vertex position markers (small crosshairs)
     mesh_edit_vertex_lines: std.ArrayListUnmanaged(gizmo_pass_mod.WorldLineVertex) = .empty,
+    /// Mesh edit overlay — billboard dot for each unselected vertex / face centroid
+    mesh_edit_vtx_dot_positions: std.ArrayListUnmanaged(gizmo_pass_mod.WorldLineVertex) = .empty,
+    /// Mesh edit overlay — billboard dot for each selected vertex / face centroid (gold)
+    mesh_edit_sel_dot_positions: std.ArrayListUnmanaged(gizmo_pass_mod.WorldLineVertex) = .empty,
     /// 前一帧视图矩阵（TAA 重投影用）
     prev_view_matrix: [16]f32 = mat4_mod.identity(),
     /// 前一帧未抖动的 view-projection（velocity / TAA history reproject）
@@ -1192,16 +1196,22 @@ pub const Renderer = struct {
 
     /// Set mesh edit overlay lines.  Called from the editor layer when
     /// entering/exiting edit mode or when selection changes.
-    /// All slices are pairs of position vertices representing line segments.
+    /// All slices are pairs of position vertices representing line segments,
+    /// except `vtx_dot_positions` and `sel_dot_positions` which are single
+    /// positions used as billboard dot centers.
     pub fn setMeshEditOverlay(
         self: *Renderer,
         wireframe: []const [3]f32,
         selected: []const [3]f32,
         vertices: []const [3]f32,
+        sel_dot_positions: []const [3]f32,
+        vtx_dot_positions: []const [3]f32,
     ) void {
         self.setLineList(&self.mesh_edit_wireframe_lines, wireframe);
         self.setLineList(&self.mesh_edit_selected_lines, selected);
         self.setLineList(&self.mesh_edit_vertex_lines, vertices);
+        self.setLineList(&self.mesh_edit_sel_dot_positions, sel_dot_positions);
+        self.setLineList(&self.mesh_edit_vtx_dot_positions, vtx_dot_positions);
     }
 
     /// Clear all mesh edit overlay lines.
@@ -1209,6 +1219,8 @@ pub const Renderer = struct {
         self.mesh_edit_wireframe_lines.clearRetainingCapacity();
         self.mesh_edit_selected_lines.clearRetainingCapacity();
         self.mesh_edit_vertex_lines.clearRetainingCapacity();
+        self.mesh_edit_vtx_dot_positions.clearRetainingCapacity();
+        self.mesh_edit_sel_dot_positions.clearRetainingCapacity();
     }
 
     fn setLineList(self: *Renderer, list: *std.ArrayListUnmanaged(gizmo_pass_mod.WorldLineVertex), positions: []const [3]f32) void {
@@ -4247,7 +4259,7 @@ pub const Renderer = struct {
                 @floatFromInt(self.scene_viewport.height),
                 4.0,
                 self.allocator,
-                .{ 0.38, 0.90, 0.82, 0.95 }, // teal — unselected elements (always on top)
+                .{ 0.28, 0.68, 0.62, 0.72 }, // teal — unselected elements (always on top)
             );
             stats.add(vtx_stats);
         }
@@ -4266,6 +4278,40 @@ pub const Renderer = struct {
                 .{ 1.00, 0.86, 0.20, 1.00 }, // bright gold — selected elements (always on top)
             );
             stats.add(sel_stats);
+        }
+        // Unselected vertex / face-centroid dots (teal squares)
+        if (self.mesh_edit_vtx_dot_positions.items.len > 0) {
+            const dot_stats = try self.gizmo_pass.drawVertexDots(
+                &self.rhi,
+                frame,
+                pass,
+                prepared_scene.view_projection,
+                self.mesh_edit_vtx_dot_positions.items,
+                .{ prepared_scene.camera_world_position[0], prepared_scene.camera_world_position[1], prepared_scene.camera_world_position[2] },
+                prepared_scene.projection_matrix[5],
+                @floatFromInt(self.scene_viewport.height),
+                7.0,
+                self.allocator,
+                .{ 0.28, 0.68, 0.62, 0.90 }, // teal dot
+            );
+            stats.add(dot_stats);
+        }
+        // Selected vertex / face-centroid dots (gold squares, drawn after teal)
+        if (self.mesh_edit_sel_dot_positions.items.len > 0) {
+            const dot_stats = try self.gizmo_pass.drawVertexDots(
+                &self.rhi,
+                frame,
+                pass,
+                prepared_scene.view_projection,
+                self.mesh_edit_sel_dot_positions.items,
+                .{ prepared_scene.camera_world_position[0], prepared_scene.camera_world_position[1], prepared_scene.camera_world_position[2] },
+                prepared_scene.projection_matrix[5],
+                @floatFromInt(self.scene_viewport.height),
+                10.0,
+                self.allocator,
+                .{ 1.00, 0.86, 0.20, 1.00 }, // gold dot
+            );
+            stats.add(dot_stats);
         }
 
         return stats;

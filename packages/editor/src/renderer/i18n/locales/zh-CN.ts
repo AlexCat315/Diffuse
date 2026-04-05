@@ -518,25 +518,84 @@ export const zhCN: TranslationKeys = {
     availableStyles: "可用样式",
   },
 
-  // ── Settings ─────────────────────────────────────────
+  // ── Settings panel ────────────────────────────────────
   settings: {
-    title: "设置",
-    tabGeneral: "通用",
-    tabShortcuts: "快捷键",
-    tabRemote: "远程",
-    language: "语言",
-    fpsDisplay: "FPS 显示",
-    vsync: "垂直同步",
-    engineVersion: "引擎版本",
-    unknown: "未知",
-    shortcutPress: "请按下按键...",
-    shortcutReset: "重置",
-    remoteServer: "远程服务器",
-    remoteUrl: "URL",
-    testConnection: "测试",
-    connect: "连接",
-    disconnect: "断开",
-    useLocal: "使用本地引擎",
+    searchPlaceholder: "搜索设置...",
+    showAdvanced: "高级",
+    showAdvancedTooltip: "显示高级设置",
+    noMatch: "没有匹配的设置项",
+
+    languageHeader: "语言",
+    interfaceLanguage: "界面语言",
+    interfaceLanguageDesc: "编辑器显示语言",
+
+    appearanceHeader: "外观",
+    fpsDisplayLabel: "FPS 显示",
+    fpsDisplayDesc: "在视口中显示帧率浮层",
+    fpsViewport: "视口",
+    fpsNone: "不显示",
+    frameRateLimit: "帧率上限",
+    frameRateLimitDesc: "限制引擎渲染帧率",
+    vsyncLabel: "垂直同步",
+    vsyncDesc: "启用垂直同步（需要引擎支持）",
+
+    consoleHeader: "控制台",
+    maxLogEntries: "最大日志条数",
+    maxLogEntriesDesc: "超出限制时自动丢弃最旧的条目（50–10,000）",
+
+    layoutHeader: "布局",
+    panelLayout: "面板布局",
+    panelLayoutDesc: "恢复默认面板排列",
+    resetLayout: "重置布局",
+
+    remoteHeader: "远程服务器",
+    connectionMode: "连接模式",
+    connectionModeDesc: "本地引擎或远程服务器",
+    localMode: "本地",
+    remoteMode: "远程",
+    switching: "切换中...",
+    serverUrl: "服务器地址",
+    testBtn: "测试",
+    testingBtn: "测试中...",
+    remoteInfo1: "远程模式通过 WebSocket RPC 连接，所有面板均可正常使用。",
+    remoteInfo2: "⚠️ 视口渲染仅支持本地（IOSurface），远程流式传输功能开发中。",
+
+    aboutHeader: "关于",
+    editorLabel: "编辑器",
+    statusLabel: "状态",
+    statusConnected: "已连接",
+    statusDisconnected: "未连接",
+    addressLabel: "地址",
+  },
+
+  // ── Keybindings panel ─────────────────────────────────
+  keybindings: {
+    searchPlaceholder: "搜索快捷键...",
+    noMatch: "没有匹配的快捷键",
+
+    categoryEditor: "编辑器",
+    categoryGizmo: "变换手柄",
+    categoryMesh: "网格编辑",
+
+    colAction: "操作",
+    colShortcut: "快捷键",
+    colStatus: "状态",
+    fixedBadge: "固定",
+
+    editorTitle: "编辑器快捷键",
+    editorDesc: "这些是内置快捷键，当前版本不支持自定义。",
+
+    gizmoTitle: "变换手柄快捷键",
+    gizmoDesc: "在视口中切换变换模式（对象模式下有效）。",
+
+    meshTitle: "网格编辑快捷键",
+    meshDesc: "在网格编辑模式下有效（双击网格进入编辑模式）。",
+
+    pressNewKey: "请按新按键...",
+    recordBtn: "录制",
+    resetToDefaults: "恢复默认",
+    savedLocally: "快捷键已保存到本地，下次启动时自动恢复",
+    savedLocallyInstant: "快捷键立即生效，并保存到本地",
   },
 
   // ── 材质图编辑器 ─────────────────────────────────────
