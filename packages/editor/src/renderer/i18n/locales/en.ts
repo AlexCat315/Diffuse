@@ -16,20 +16,21 @@ export const en = {
   // ── Toolbar ───────────────────────────────────────────
   toolbar: {
     save: "Save Scene (Ctrl+S)",
-    openScene: "Open Scene...",
-    undo: "Undo",
-    redo: "Redo",
-    play: "Play",
-    pause: "Pause",
-    stop: "Stop",
+    openScene: "Open Scene",
+    undo: "Undo (Ctrl+Z)",
+    redo: "Redo (Ctrl+Shift+Z)",
+    play: "Play (Space)",
+    pause: "Pause (Ctrl+Space)",
+    stop: "Stop (Shift+Space)",
     translate: "Translate (W)",
     rotate: "Rotate (E)",
     scale: "Scale (R)",
-    select: "Select",
+    select: "Select (Q)",
     brand: "Guava Editor",
     noScenesFound: "No scenes found",
     resetLayout: "Reset Layout",
-    settings: "Settings",
+    settings: "Settings (Ctrl+,)",
+    keybindings: "Keybindings (Ctrl+K)",
   },
 
   // ── Scene Hierarchy ───────────────────────────────────
@@ -164,6 +165,7 @@ export const en = {
     tabUtilities: "AI Utilities",
     tabSettings: "Settings",
     settingsModalTitle: "Settings",
+    keybindingsModalTitle: "Keybindings",
   },
 
   // ── Command Timeline ──────────────────────────────────

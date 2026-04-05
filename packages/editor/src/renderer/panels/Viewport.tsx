@@ -4,6 +4,7 @@ import { useI18n } from "../i18n";
 import { ViewCube } from "./ViewCube";
 import { useConnectionStore, useSceneStore, useViewportSettingsStore, useMeshEditStore } from "../store";
 import { ContextMenu, type MenuItem } from "../components/ContextMenu";
+import { loadGizmoShortcuts } from "../store/shortcut-config";
 
 
 /**
@@ -339,22 +340,21 @@ export function Viewport() {
       const k = e.key.toLowerCase();
       if (!e.ctrlKey && !e.metaKey && !e.altKey) {
         const { changeGizmoMode } = useSceneStore.getState();
-        switch (k) {
-          case "q": changeGizmoMode("none"); return;
-          case "w": changeGizmoMode("translate"); return;
-          case "e": changeGizmoMode("rotate"); return;
-          case "r": changeGizmoMode("scale"); return;
-          case "delete":
-          case "backspace": {
-            e.preventDefault();
-            const { selectedEntity: sel, setSelectedEntity, refreshHierarchy } = useSceneStore.getState();
-            if (sel != null) {
-              window.guavaEngine.call("scene.deleteEntity", { entityId: sel });
-              setSelectedEntity(null);
-              refreshHierarchy();
-            }
-            return;
+        // Load gizmo shortcuts dynamically (allows user customization)
+        const gizmoKeys = loadGizmoShortcuts();
+        if (k === (gizmoKeys.select?.key ?? "q").toLowerCase()) { changeGizmoMode("none"); return; }
+        if (k === (gizmoKeys.translate?.key ?? "w").toLowerCase()) { changeGizmoMode("translate"); return; }
+        if (k === (gizmoKeys.rotate?.key ?? "e").toLowerCase()) { changeGizmoMode("rotate"); return; }
+        if (k === (gizmoKeys.scale?.key ?? "r").toLowerCase()) { changeGizmoMode("scale"); return; }
+        if (k === "delete" || k === "backspace") {
+          e.preventDefault();
+          const { selectedEntity: sel, setSelectedEntity, refreshHierarchy } = useSceneStore.getState();
+          if (sel != null) {
+            window.guavaEngine.call("scene.deleteEntity", { entityId: sel });
+            setSelectedEntity(null);
+            refreshHierarchy();
           }
+          return;
         }
       }
     }

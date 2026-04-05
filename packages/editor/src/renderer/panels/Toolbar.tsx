@@ -12,9 +12,10 @@ import { useSceneStore } from "../store";
 interface ToolbarProps {
   onResetLayout?: () => void;
   onOpenSettings?: () => void;
+  onOpenKeybindings?: () => void;
 }
 
-export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
+export function Toolbar({ onResetLayout, onOpenSettings, onOpenKeybindings }: ToolbarProps) {
   const gizmoMode = useSceneStore((s) => s.gizmoMode);
   const onGizmoModeChange = useSceneStore((s) => s.changeGizmoMode);
   const onRefreshHierarchy = useSceneStore((s) => s.refreshHierarchy);
@@ -99,15 +100,13 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
       </div>
       <div style={styles.divider} />
       <div style={styles.section}>
-        <ToolButton
-          icon={<IconCursor size={14} />}
-          tooltip={`${t.toolbar.select} (Q)`}
+        <ToolButton icon={<IconCursor size={14} />} tooltip={t.toolbar.select}
           active={gizmoMode === "none"}
           onClick={() => onGizmoModeChange("none")}
         />
         <ToolButton
           icon={<IconTranslate size={14} />}
-          tooltip={`${t.toolbar.translate} (W)`}
+          tooltip={t.toolbar.translate}
           active={gizmoMode === "translate"}
           onClick={() => onGizmoModeChange("translate")}
         />
@@ -129,14 +128,21 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
         {onResetLayout && (
           <ToolButton
             icon={<span style={{ fontSize: 12 }}>⊞</span>}
-            tooltip="Reset Layout"
+            tooltip={t.toolbar.resetLayout}
             onClick={onResetLayout}
+          />
+        )}
+        {onOpenKeybindings && (
+          <ToolButton
+            icon={<span style={{ fontSize: 14 }}>⌨</span>}
+            tooltip={t.toolbar.keybindings}
+            onClick={onOpenKeybindings}
           />
         )}
         {onOpenSettings && (
           <ToolButton
             icon={<span style={{ fontSize: 14 }}>⚙</span>}
-            tooltip="Settings"
+            tooltip={t.toolbar.settings}
             onClick={onOpenSettings}
           />
         )}

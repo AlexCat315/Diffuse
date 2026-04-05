@@ -239,9 +239,9 @@ pub fn refreshOverlay(state: *EditorState, layer_context: *engine.core.LayerCont
                 const wp = transformPoint(xform, vertex.position);
                 const is_sel = if (sel_set) |s| s.contains(@intCast(vi)) else false;
                 if (is_sel) {
-                    appendCrosshair(allocator, &sel, wp, 0.045) catch {};
+                    appendCrosshair(allocator, &sel, wp, 0.062) catch {};
                 } else {
-                    appendCrosshair(allocator, &vtx, wp, 0.025) catch {};
+                    appendCrosshair(allocator, &vtx, wp, 0.038) catch {};
                 }
             }
         },
@@ -287,7 +287,7 @@ pub fn refreshOverlay(state: *EditorState, layer_context: *engine.core.LayerCont
                         (p0[1] + p1[1] + p2[1]) / 3.0,
                         (p0[2] + p1[2] + p2[2]) / 3.0,
                     };
-                    appendCrosshair(allocator, &sel, centroid, 0.03) catch {};
+                    appendCrosshair(allocator, &sel, centroid, 0.045) catch {};
                 } else {
                     vtx.appendSlice(allocator, &.{ p0, p1, p1, p2, p2, p0 }) catch {};
                 }

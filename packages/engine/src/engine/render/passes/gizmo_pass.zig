@@ -1,5 +1,6 @@
 const std = @import("std");
 const math = @import("../../math/mat4.zig");
+const vec3 = @import("../../math/vec3.zig");
 const axis_mod = @import("../../math/axis.zig");
 const components = @import("../../scene/components.zig");
 const mesh_pass_mod = @import("mesh_pass.zig");
@@ -74,6 +75,9 @@ pub const GizmoPass = struct {
     temp_world_line_buffers: [8]rhi_mod.Buffer = undefined,
     temp_world_line_count: u32 = 0,
     line_pipeline: ?rhi_mod.GraphicsPipeline = null,
+    /// Overlay line pipeline — same as line_pipeline but depth_test = false
+    /// so mesh edit overlay elements always draw on top of geometry.
+    overlay_line_pipeline: ?rhi_mod.GraphicsPipeline = null,
     triangle_pipeline: ?rhi_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
@@ -110,6 +114,9 @@ pub const GizmoPass = struct {
         if (self.line_pipeline) |*pipeline| {
             device.releaseGraphicsPipeline(pipeline);
         }
+        if (self.overlay_line_pipeline) |*pipeline| {
+            device.releaseGraphicsPipeline(pipeline);
+        }
         if (self.stages) |*stages| {
             stages.deinit(device);
         }
@@ -119,6 +126,7 @@ pub const GizmoPass = struct {
     pub fn isReady(self: *const GizmoPass) bool {
         return self.triangle_pipeline != null and
             self.line_pipeline != null and
+            self.overlay_line_pipeline != null and
             self.line_axis_vertex_buffer != null and
             self.translate_axis_vertex_buffer != null and
             self.scale_axis_vertex_buffer != null and
@@ -215,6 +223,133 @@ pub const GizmoPass = struct {
         return stats;
     }
 
+    /// Draw world-space line pairs that always appear on top of geometry
+    /// (depth test disabled). Intended for mesh-edit overlay highlight lines.
+    pub fn drawOverlayLines(
+        self: *GizmoPass,
+        device: *rhi_mod.RhiDevice,
+        frame: rhi_mod.Frame,
+        pass: rhi_mod.RenderPass,
+        view_projection: [16]f32,
+        vertices: []const WorldLineVertex,
+        color: [4]f32,
+    ) !mesh_pass_mod.DrawStats {
+        var stats = mesh_pass_mod.DrawStats{};
+        if (!self.isReady() or vertices.len == 0) {
+            return stats;
+        }
+
+        const buffer = try createVertexBuffer(device, vertices);
+        if (self.temp_world_line_count < self.temp_world_line_buffers.len) {
+            self.temp_world_line_buffers[self.temp_world_line_count] = buffer;
+            self.temp_world_line_count += 1;
+        } else {
+            device.releaseBuffer(&self.temp_world_line_buffers[0]);
+            var j: usize = 0;
+            while (j < self.temp_world_line_buffers.len - 1) : (j += 1) {
+                self.temp_world_line_buffers[j] = self.temp_world_line_buffers[j + 1];
+            }
+            self.temp_world_line_buffers[self.temp_world_line_buffers.len - 1] = buffer;
+        }
+
+        const model = math.identity();
+        device.bindGraphicsPipeline(pass, &self.overlay_line_pipeline.?);
+        self.drawShape(device, frame, pass, buffer, 0, vertices.len, view_projection, model, color, .lines, &stats);
+        return stats;
+    }
+
+    /// Draw world-space line pairs as camera-facing quads so they appear
+    /// `line_width_px` pixels wide regardless of camera distance.
+    /// Uses the existing `triangle_pipeline` (depth_test=false) so quads
+    /// are always drawn on top of geometry.
+    ///
+    /// `proj_fov_factor` = projection_matrix[5] = 1/tan(fov_y/2).
+    /// `viewport_height` = render-target height in pixels.
+    pub fn drawThickOverlayLines(
+        self: *GizmoPass,
+        device: *rhi_mod.RhiDevice,
+        frame: rhi_mod.Frame,
+        pass: rhi_mod.RenderPass,
+        view_projection: [16]f32,
+        line_vertices: []const WorldLineVertex,
+        camera_pos: [3]f32,
+        proj_fov_factor: f32,
+        viewport_height: f32,
+        line_width_px: f32,
+        allocator: std.mem.Allocator,
+        color: [4]f32,
+    ) !mesh_pass_mod.DrawStats {
+        var stats = mesh_pass_mod.DrawStats{};
+        if (!self.isReady() or line_vertices.len < 2) {
+            return stats;
+        }
+
+        const segment_count = line_vertices.len / 2;
+        const quad_vertex_count = segment_count * 6;
+
+        const quad_vertices = try allocator.alloc(WorldLineVertex, quad_vertex_count);
+        defer allocator.free(quad_vertices);
+
+        const safe_fov = if (proj_fov_factor < 0.001) 1.0 else proj_fov_factor;
+        const safe_height = if (viewport_height < 1.0) 1.0 else viewport_height;
+
+        var out: usize = 0;
+        var seg: usize = 0;
+        while (seg < segment_count) : (seg += 1) {
+            const p0: [3]f32 = line_vertices[seg * 2].position;
+            const p1: [3]f32 = line_vertices[seg * 2 + 1].position;
+
+            const mid = [3]f32{
+                (p0[0] + p1[0]) * 0.5,
+                (p0[1] + p1[1]) * 0.5,
+                (p0[2] + p1[2]) * 0.5,
+            };
+
+            const line_dir = vec3.normalize(vec3.sub(p1, p0));
+            const to_cam = vec3.sub(camera_pos, mid);
+            const dist = vec3.length(to_cam);
+
+            // Camera-facing perpendicular via billboard cross product.
+            const perp = vec3.normalize(vec3.cross(line_dir, to_cam));
+
+            // Perspective-correct world-space half-thickness.
+            // half_thick [world units] = (line_width_px / 2) * (2 * dist) / (proj_fov_factor * viewport_height)
+            const half_thick = line_width_px * dist / (safe_fov * safe_height * 0.5);
+
+            // Quad corners (two triangles, CCW winding).
+            const a = vec3.sub(p0, vec3.scale(perp, half_thick));
+            const b = vec3.add(p0, vec3.scale(perp, half_thick));
+            const c = vec3.add(p1, vec3.scale(perp, half_thick));
+            const d = vec3.sub(p1, vec3.scale(perp, half_thick));
+
+            quad_vertices[out + 0] = .{ .position = a };
+            quad_vertices[out + 1] = .{ .position = b };
+            quad_vertices[out + 2] = .{ .position = c };
+            quad_vertices[out + 3] = .{ .position = a };
+            quad_vertices[out + 4] = .{ .position = c };
+            quad_vertices[out + 5] = .{ .position = d };
+            out += 6;
+        }
+
+        const buffer = try createVertexBuffer(device, quad_vertices[0..out]);
+        if (self.temp_world_line_count < self.temp_world_line_buffers.len) {
+            self.temp_world_line_buffers[self.temp_world_line_count] = buffer;
+            self.temp_world_line_count += 1;
+        } else {
+            device.releaseBuffer(&self.temp_world_line_buffers[0]);
+            var j: usize = 0;
+            while (j < self.temp_world_line_buffers.len - 1) : (j += 1) {
+                self.temp_world_line_buffers[j] = self.temp_world_line_buffers[j + 1];
+            }
+            self.temp_world_line_buffers[self.temp_world_line_buffers.len - 1] = buffer;
+        }
+
+        const model = math.identity();
+        device.bindGraphicsPipeline(pass, &self.triangle_pipeline.?);
+        self.drawShape(device, frame, pass, buffer, 0, out, view_projection, model, color, .triangles, &stats);
+        return stats;
+    }
+
     fn createResources(self: *GizmoPass, device: *rhi_mod.RhiDevice) !void {
         self.line_axis_vertex_buffer = try createVertexBuffer(device, line_axis_vertices[0..]);
         errdefer if (self.line_axis_vertex_buffer) |*buffer| {
@@ -275,6 +410,23 @@ pub const GizmoPass = struct {
             .front_face = .counter_clockwise,
             .depth_compare = .less_or_equal,
             .depth_test = true,
+            .depth_write = false,
+        });
+
+        // Overlay variant: no depth test so overlay lines always appear on top.
+        self.overlay_line_pipeline = try device.createGraphicsPipeline(.{
+            .vertex_shader = &self.stages.?.vertex,
+            .fragment_shader = &self.stages.?.fragment,
+            .vertex_buffer_layouts = vertex_layouts[0..],
+            .vertex_attributes = vertex_attributes[0..],
+            .color_format = device.runtimeInfo().swapchain_format,
+            .depth_format = .d32_float,
+            .primitive_type = .line_list,
+            .fill_mode = .fill,
+            .cull_mode = .none,
+            .front_face = .counter_clockwise,
+            .depth_compare = .always,
+            .depth_test = false,
             .depth_write = false,
         });
 

@@ -33,6 +33,7 @@ import { AiChat } from "./panels/AiChat";
 import { ParticleEditor } from "./panels/ParticleEditor";
 import { PrefabEditor } from "./panels/PrefabEditor";
 import { SettingsPanel } from "./panels/Settings";
+import { KeybindingsPanel } from "./panels/KeybindingsPanel";
 import { ViewportTabControls } from "./panels/ViewportTabControls";
 import { MeshEditToolbar } from "./panels/MeshEditToolbar";
 import { useI18n } from "./i18n";
@@ -196,6 +197,8 @@ export function App() {
   const error = useConnectionStore((s) => s.error);
   const settingsOpen = useEditorStore((s) => s.settingsOpen);
   const setSettingsOpen = useEditorStore((s) => s.setSettingsOpen);
+  const keybindingsOpen = useEditorStore((s) => s.keybindingsOpen);
+  const setKeybindingsOpen = useEditorStore((s) => s.setKeybindingsOpen);
 
   const modelRef = useRef<Model>(Model.fromJson(loadSavedLayout()));
 
@@ -257,6 +260,34 @@ export function App() {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
         e.preventDefault();
         toggleBottomPanelRef.current();
+        return;
+      }
+      // Cmd/Ctrl+,: open settings
+      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
+        e.preventDefault();
+        useEditorStore.getState().setSettingsOpen(true);
+        return;
+      }
+      // Cmd/Ctrl+K: open keybindings
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
+        e.preventDefault();
+        useEditorStore.getState().setKeybindingsOpen(true);
+        return;
+      }
+      // Space: play; Ctrl+Space: pause; Shift+Space: stop
+      if (e.key === " " && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
+        e.preventDefault();
+        window.guavaEngine.call("playback.play", {}).catch(() => {});
+        return;
+      }
+      if (e.key === " " && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+        e.preventDefault();
+        window.guavaEngine.call("playback.pause", {}).catch(() => {});
+        return;
+      }
+      if (e.key === " " && e.shiftKey && !e.ctrlKey && !e.metaKey) {
+        e.preventDefault();
+        window.guavaEngine.call("playback.stop", {}).catch(() => {});
         return;
       }
       // Bare-key shortcuts (q/w/e/r/delete) are handled in Viewport.tsx so
@@ -505,6 +536,7 @@ export function App() {
       <Toolbar
         onResetLayout={handleResetLayout}
         onOpenSettings={() => setSettingsOpen(true)}
+        onOpenKeybindings={() => setKeybindingsOpen(true)}
       />
       <div style={styles.dockArea}>
         <Layout
@@ -520,6 +552,9 @@ export function App() {
       <ViewportStatus />
       {settingsOpen && (
         <DraggableSettingsModal onClose={() => setSettingsOpen(false)} title={t.app.settingsModalTitle} />
+      )}
+      {keybindingsOpen && (
+        <DraggableKeybindingsModal onClose={() => setKeybindingsOpen(false)} title={t.app.keybindingsModalTitle} />
       )}
     </div>
   );
@@ -568,6 +603,55 @@ function DraggableSettingsModal({ onClose, title }: { onClose: () => void; title
         </div>
         <div style={styles.modalBody}>
           <SettingsPanel />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── Draggable Keybindings Modal ──────────────────────────────────
+
+function DraggableKeybindingsModal({ onClose, title }: { onClose: () => void; title: string }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const dragging = useRef(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).tagName === "BUTTON") return;
+    dragging.current = true;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    e.preventDefault();
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current) return;
+      setPos({ x: ev.clientX - dragOffset.current.x, y: ev.clientY - dragOffset.current.y });
+    };
+    const onUp = () => {
+      dragging.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, []);
+
+  const panelStyle: React.CSSProperties = pos
+    ? { ...styles.modalPanel, left: pos.x, top: pos.y }
+    : styles.modalPanel;
+
+  return (
+    <div style={styles.modalBackdrop} onClick={onClose}>
+      <div ref={panelRef} style={panelStyle} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalHeader} onMouseDown={onMouseDown}>
+          <span style={styles.modalTitle}>{title}</span>
+          <button style={styles.modalClose} onClick={onClose}>✕</button>
+        </div>
+        <div style={styles.modalBody}>
+          <KeybindingsPanel />
         </div>
       </div>
     </div>
