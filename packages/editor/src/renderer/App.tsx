@@ -417,7 +417,7 @@ function DraggableSettingsModal({ onClose, title }: { onClose: () => void; title
   }, []);
 
   const panelStyle: React.CSSProperties = pos
-    ? { ...styles.modalPanel, position: "fixed", left: pos.x, top: pos.y, transform: "none" }
+    ? { ...styles.modalPanel, left: pos.x, top: pos.y }
     : styles.modalPanel;
 
   return (
@@ -482,17 +482,22 @@ const styles: Record<string, React.CSSProperties> = {
   },
   modalPanel: {
     position: "absolute" as const,
-    left: "50%",
-    top: "50%",
-    transform: "translate(-50%, -50%)",
+    left: "calc(50% - 280px)",
+    top: "calc(50% - 35vh)",
     background: "#1e1e2e",
     border: "1px solid #45475a",
     borderRadius: 8,
     width: 560,
-    maxHeight: "80vh",
+    height: "70vh",
+    minWidth: 400,
+    minHeight: 300,
+    maxWidth: "95vw",
+    maxHeight: "95vh",
+    resize: "both" as const,
     display: "flex",
     flexDirection: "column" as const,
     boxShadow: "0 8px 32px rgba(0,0,0,0.6)",
+    overflow: "hidden",
   },
   modalHeader: {
     display: "flex",
@@ -521,5 +526,6 @@ const styles: Record<string, React.CSSProperties> = {
   modalBody: {
     flex: 1,
     overflow: "hidden",
+    minHeight: 0,
   },
 };
