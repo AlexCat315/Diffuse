@@ -8,6 +8,7 @@ import {
   IconShadingWireframe,
 } from "../components/Icons";
 import { useI18n } from "../i18n";
+import { Tooltip } from "../components/Tooltip";
 
 const SHADING_ICONS: Record<ShadingMode, React.FC<{ size?: number; color?: string }>> = {
   solid: IconShadingSolid,
@@ -47,14 +48,14 @@ export function ViewportTabControls() {
         const Icon = SHADING_ICONS[mode];
         const active = shadingMode === mode;
         return (
-          <button
-            key={mode}
-            title={labels[mode]}
-            style={{ ...styles.btn, ...(active ? styles.btnActive : {}) }}
-            onClick={() => handleChange(mode)}
-          >
-            <Icon size={13} color={active ? "#89b4fa" : "#a6adc8"} />
-          </button>
+          <Tooltip key={mode} label={labels[mode]}>
+            <button
+              style={{ ...styles.btn, ...(active ? styles.btnActive : {}) }}
+              onClick={() => handleChange(mode)}
+            >
+              <Icon size={13} color={active ? "#89b4fa" : "#a6adc8"} />
+            </button>
+          </Tooltip>
         );
       })}
     </div>
