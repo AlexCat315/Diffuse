@@ -1,16 +1,21 @@
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import { useI18n } from "../i18n";
 import { ViewCube } from "./ViewCube";
-import { useConnectionStore, useSceneStore } from "../store";
+import { useConnectionStore, useSceneStore, useViewportSettingsStore } from "../store";
+import type { ShadingMode } from "../store/viewport-settings";
 import { ContextMenu, type MenuItem } from "../components/ContextMenu";
+import {
+  IconShadingSolid,
+  IconShadingMaterial,
+  IconShadingRendered,
+  IconShadingWireframe,
+} from "../components/Icons";
 
-type ShadingMode = "solid" | "material" | "rendered" | "wireframe";
-
-const SHADING_ICONS: Record<ShadingMode, string> = {
-  solid: "◻",
-  material: "◼",
-  rendered: "◉",
-  wireframe: "▦",
+const SHADING_ICON_COMPONENTS: Record<ShadingMode, React.FC<{ size?: number; color?: string }>> = {
+  solid: IconShadingSolid,
+  material: IconShadingMaterial,
+  rendered: IconShadingRendered,
+  wireframe: IconShadingWireframe,
 };
 
 
@@ -38,7 +43,9 @@ export function Viewport() {
   const surfaceIdRef = useRef(0);
   const shmNameRef = useRef<string | undefined>(undefined);
   const lastSizeRef = useRef({ w: 0, h: 0 });
-  const [shadingMode, setShadingMode] = useState<ShadingMode>("material");
+  const shadingMode = useViewportSettingsStore((s) => s.shadingMode);
+  const setShadingMode = useViewportSettingsStore((s) => s.setShadingMode);
+  const fetchViewportSettings = useViewportSettingsStore((s) => s.fetchFromEngine);
   const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const selectedEntity = useSceneStore((s) => s.selectedEntity);
 
@@ -55,15 +62,12 @@ export function Viewport() {
   // Fetch current shading mode on connect
   useEffect(() => {
     if (!connected) return;
-    window.guavaEngine.call("viewport.getRenderSettings", {})
-      .then((res) => { if (res.shadingMode) setShadingMode(res.shadingMode as ShadingMode); })
-      .catch(() => {});
-  }, [connected]);
+    fetchViewportSettings();
+  }, [connected, fetchViewportSettings]);
 
   const handleShadingChange = useCallback((mode: ShadingMode) => {
     setShadingMode(mode);
-    window.guavaEngine.call("viewport.setRenderSettings", { shadingMode: mode } as never).catch(() => {});
-  }, []);
+  }, [setShadingMode]);
 
   // ── Input forwarding to the engine ─────────────────────────────
   const dpr = window.devicePixelRatio || 1;
@@ -629,19 +633,28 @@ export function Viewport() {
       {connected && (
         <>
           <div style={styles.shadingOverlay}>
-            {(["solid", "material", "rendered", "wireframe"] as ShadingMode[]).map((mode) => (
-              <button
-                key={mode}
-                title={mode.charAt(0).toUpperCase() + mode.slice(1)}
-                style={{
-                  ...styles.shadingButton,
-                  ...(shadingMode === mode ? styles.shadingButtonActive : {}),
-                }}
-                onClick={() => handleShadingChange(mode)}
-              >
-                {SHADING_ICONS[mode]}
-              </button>
-            ))}
+            {(["solid", "material", "rendered", "wireframe"] as ShadingMode[]).map((mode) => {
+              const Icon = SHADING_ICON_COMPONENTS[mode];
+              const labels: Record<ShadingMode, string> = {
+                solid: t.renderSettings.solid,
+                material: t.renderSettings.material,
+                rendered: t.renderSettings.rendered,
+                wireframe: t.renderSettings.wireframe,
+              };
+              return (
+                <button
+                  key={mode}
+                  title={labels[mode]}
+                  style={{
+                    ...styles.shadingButton,
+                    ...(shadingMode === mode ? styles.shadingButtonActive : {}),
+                  }}
+                  onClick={() => handleShadingChange(mode)}
+                >
+                  <Icon size={14} color={shadingMode === mode ? "#89b4fa" : "#cdd6f4"} />
+                </button>
+              );
+            })}
           </div>
           <ViewportMetricsOverlay />
           <div style={styles.viewCubeOverlay}>

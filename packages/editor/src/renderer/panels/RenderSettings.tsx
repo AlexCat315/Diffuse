@@ -2,10 +2,10 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import type { RpcResult } from "../../shared/rpc-types";
 import { rpc } from "../rpc";
 import { useI18n } from "../i18n";
-import { useConnectionStore } from "../store";
+import { useConnectionStore, useViewportSettingsStore } from "../store";
+import type { ShadingMode } from "../store/viewport-settings";
 
 type RenderSettings = RpcResult<"viewport.getRenderSettings">;
-type ShadingMode = "solid" | "material" | "rendered" | "wireframe";
 
 interface PathTraceState {
   samples: number;
@@ -29,7 +29,11 @@ export function RenderSettingsPanel() {
   const [pathTrace, setPathTrace] = useState<PathTraceState>({ samples: 256, bounces: 8, resolutionScale: 1.0 });
   const [renderOutput, setRenderOutput] = useState<RenderOutputState>({ preset: "1080p", width: 1920, height: 1080, format: "png", path: "render_output" });
   const [transformSpace, setTransformSpace] = useState<"local" | "world">("local");
-  const [fpsLimit, setFpsLimit] = useState<number>(120);
+  const shadingMode = useViewportSettingsStore((s) => s.shadingMode);
+  const setShadingMode = useViewportSettingsStore((s) => s.setShadingMode);
+  const fpsLimit = useViewportSettingsStore((s) => s.fpsLimit);
+  const setFpsLimit = useViewportSettingsStore((s) => s.setFpsLimit);
+  const fetchViewportSettings = useViewportSettingsStore((s) => s.fetchFromEngine);
   const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const fetchSettings = useCallback(async () => {
@@ -40,12 +44,8 @@ export function RenderSettingsPanel() {
     } catch {
       // ignore
     }
-    try {
-      const fpsResult = await window.guavaEngine.call("viewport.getFrameRate", {});
-      if (fpsResult.fps != null) setFpsLimit(Number(fpsResult.fps));
-    } catch {
-      // ignore
-    }
+    // Fetch shared viewport settings (shading mode, FPS) into Zustand store
+    await fetchViewportSettings();
     try {
       const ext = await rpc("rendersettings.getSettings", {});
       setPathTrace(ext.pathTrace);
@@ -94,9 +94,12 @@ export function RenderSettingsPanel() {
               key={mode}
               style={{
                 ...styles.modeButton,
-                ...(settings.shadingMode === mode ? styles.modeButtonActive : {}),
+                ...(shadingMode === mode ? styles.modeButtonActive : {}),
               }}
-              onClick={() => commit({ shadingMode: mode })}
+              onClick={() => {
+                setShadingMode(mode);
+                commit({ shadingMode: mode });
+              }}
             >
               {shadingLabels[mode]}
             </button>
@@ -118,10 +121,7 @@ export function RenderSettingsPanel() {
                   ...styles.modeButton,
                   ...(fpsLimit === fps ? styles.modeButtonActive : {}),
                 }}
-                onClick={() => {
-                  setFpsLimit(fps);
-                  window.guavaEngine.call("viewport.setFrameRate", { fps }).catch(() => {});
-                }}
+                onClick={() => setFpsLimit(fps)}
               >
                 {label}
               </button>

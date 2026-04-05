@@ -31,6 +31,8 @@ import clockUrl from "@icons/clock.svg";
 import packageUrl from "@icons/package.svg";
 import triangleRightUrl from "@icons/triangle-right.svg";
 import triangleDownUrl from "@icons/triangle-down.svg";
+import gridPatternUrl from "@icons/grid-pattern.svg";
+import eyeUrl from "@icons/eye.svg";
 
 // ── Shared icon props ───────────────────────────────────────────
 interface IconProps {
@@ -114,3 +116,9 @@ export const IconPrefab = createIcon(packageUrl);
 // ── Arrow indicators ────────────────────────────────────────────
 export const IconTriangleRight = createIcon(triangleRightUrl);
 export const IconTriangleDown = createIcon(triangleDownUrl);
+
+// ── Viewport shading modes ──────────────────────────────────────
+export const IconShadingSolid = createIcon(cubeUrl);
+export const IconShadingMaterial = createIcon(paintBrushUrl);
+export const IconShadingRendered = createIcon(eyeUrl);
+export const IconShadingWireframe = createIcon(gridPatternUrl);
