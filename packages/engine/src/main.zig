@@ -236,7 +236,7 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
         .window_maximized = false,
         .window_native_titlebar_controls = false,
         .window_hidden = true,
-        .frame_delay_ms = 8, // ~120fps target for editor-server mode
+        .frame_delay_ms = 16, // ~60fps default for editor-server mode
         .preferred_backends = options.backends(),
     });
     defer app.deinit();
