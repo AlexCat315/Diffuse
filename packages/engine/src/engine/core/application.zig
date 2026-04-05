@@ -106,6 +106,8 @@ pub const ApplicationConfig = struct {
     window_native_titlebar_controls: bool = false,
     /// 是否隐藏窗口（editor-server 模式下使用）
     window_hidden: bool = false,
+    /// 在 macOS 上隐藏进程的 Dock 图标和 Cmd-Tab 条目（editor-server 模式下使用）
+    window_background_app: bool = false,
     /// 帧延迟（毫秒，用于限制帧率）
     frame_delay_ms: u32 = 16,
     /// 首选的图形后端列表
@@ -244,6 +246,7 @@ pub const Application = struct {
             .maximized = config.window_maximized,
             .native_titlebar_controls = config.window_native_titlebar_controls,
             .hidden = config.window_hidden,
+            .background_app = config.window_background_app,
         });
         errdefer window.deinit();
 
