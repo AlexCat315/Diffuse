@@ -116,6 +116,45 @@ contextBridge.exposeInMainWorld("guavaEngine", {
   /** Connect to a remote engine server (or "local" to switch back) */
   connectToServer: (url: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke("settings:connectToServer", url),
+
+  // ── Multi-window popout ─────────────────────────────────────────
+
+  /** Pop out one or more panels into a separate window */
+  popoutPanel: (panels: string[], initialState?: unknown, originInfo?: unknown): Promise<number> =>
+    ipcRenderer.invoke("window:popout-panel", panels, initialState, originInfo),
+
+  /** Close the current popout window (call from popout window only) */
+  closePopout: (): Promise<void> =>
+    ipcRenderer.invoke("window:close-popout"),
+
+  /** Check if the current window is a popout window */
+  isPopoutWindow: (): boolean => {
+    const params = new URLSearchParams(window.location.search);
+    return params.has("popout");
+  },
+
+  /** Get the panel IDs for the current popout window */
+  getPopoutPanels: (): string[] => {
+    const params = new URLSearchParams(window.location.search);
+    const popout = params.get("popout");
+    return popout ? popout.split(",").map(decodeURIComponent) : [];
+  },
+
+  /** Subscribe to popout window closed notifications (main window only) */
+  onPopoutClosed: (callback: (panels: string[], originInfo?: unknown) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, panels: string[], originInfo?: unknown) =>
+      callback(panels, originInfo);
+    ipcRenderer.on("popout:closed", handler);
+    return () => ipcRenderer.removeListener("popout:closed", handler);
+  },
+
+  /** Subscribe to initial state pushed from main process (popout windows only) */
+  onInitState: (callback: (state: unknown) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, state: unknown) =>
+      callback(state);
+    ipcRenderer.on("popout:init-state", handler);
+    return () => ipcRenderer.removeListener("popout:init-state", handler);
+  },
 });
 
 /** Type declaration for the exposed API (used in renderer) */
@@ -137,4 +176,10 @@ export interface GuavaEngineAPI {
   onViewportSharedBuffer(callback: (sab: SharedArrayBuffer) => void): () => void;
   testRemoteConnection(url: string): Promise<{ ok: boolean; version?: string; error?: string }>;
   connectToServer(url: string): Promise<{ ok: boolean; error?: string }>;
+  popoutPanel(panels: string[], initialState?: unknown, originInfo?: unknown): Promise<number>;
+  closePopout(): Promise<void>;
+  isPopoutWindow(): boolean;
+  getPopoutPanels(): string[];
+  onPopoutClosed(callback: (panels: string[], originInfo?: unknown) => void): () => void;
+  onInitState(callback: (state: unknown) => void): () => void;
 }

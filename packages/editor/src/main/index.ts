@@ -10,6 +10,7 @@ app.commandLine.appendSwitch("enable-features", "SharedArrayBuffer");
 const DEFAULT_PORT = 9100;
 
 let mainWindow: BrowserWindow | null = null;
+const popoutWindows: Map<number, { win: BrowserWindow; panels: string[]; originInfo?: unknown }> = new Map();
 let engineProcess: EngineProcess | null = null;
 let engineClient: EngineClient | null = null;
 let isQuitting = false;
@@ -37,6 +38,18 @@ try {
   ) as ViewportAddon;
 } catch (err) {
   console.warn("[Main] Viewport native addon not available:", err);
+}
+
+/** Send a message to all open renderer windows (main + popouts) */
+function broadcastToRenderers(channel: string, ...args: unknown[]): void {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send(channel, ...args);
+  }
+  for (const [, { win }] of popoutWindows) {
+    if (!win.isDestroyed()) {
+      win.webContents.send(channel, ...args);
+    }
+  }
 }
 
 function getEngineBinaryPath(): string {
@@ -125,10 +138,8 @@ async function startEngine(): Promise<void> {
     timeout: 10000,
     reconnectInterval: 2000,
     onReconnected: () => {
-      // If the engine reconnects (e.g. after a restart), notify the renderer.
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("engine:connected");
-      }
+      // If the engine reconnects (e.g. after a restart), notify all renderer windows.
+      broadcastToRenderers("engine:connected");
     },
   });
   await engineClient.connect();
@@ -155,18 +166,14 @@ function monitorEngineProcess(): void {
       (canRestart ? `Restarting (${restartCount + 1}/${MAX_RESTARTS})...` : "Max restarts reached."),
     );
 
-    // Notify renderer immediately
-    if (mainWindow && !mainWindow.isDestroyed()) {
-      mainWindow.webContents.send("engine:disconnected", { code, restarting: canRestart });
-    }
+    // Notify all renderer windows immediately
+    broadcastToRenderers("engine:disconnected", { code, restarting: canRestart });
 
     if (!canRestart) {
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send(
-          "engine:error",
-          `Engine crashed ${MAX_RESTARTS} times. Please restart the application.`,
-        );
-      }
+      broadcastToRenderers(
+        "engine:error",
+        `Engine crashed ${MAX_RESTARTS} times. Please restart the application.`,
+      );
       return;
     }
 
@@ -183,16 +190,12 @@ function monitorEngineProcess(): void {
     try {
       await startEngine();
       monitorEngineProcess(); // Re-attach to new process instance
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("engine:connected");
-      }
+      broadcastToRenderers("engine:connected");
       restartCount = 0; // Reset on successful restart
       console.log("[Main] Engine restarted successfully");
     } catch (err) {
       console.error("[Main] Engine restart failed:", err);
-      if (mainWindow && !mainWindow.isDestroyed()) {
-        mainWindow.webContents.send("engine:error", `Engine restart failed: ${err}`);
-      }
+      broadcastToRenderers("engine:error", `Engine restart failed: ${err}`);
     }
   });
 }
@@ -220,7 +223,7 @@ ipcMain.handle("engine:status", () => {
 // ── Subscription forwarding: Engine push → Renderer ──────────────
 
 function setupSubscriptionForwarding(): void {
-  if (!engineClient || !mainWindow) return;
+  if (!engineClient) return;
 
   const events = [
     "on:scene.changed",
@@ -235,7 +238,7 @@ function setupSubscriptionForwarding(): void {
 
   for (const event of events) {
     engineClient.on(event, (data) => {
-      mainWindow?.webContents.send("engine:event", event, data);
+      broadcastToRenderers("engine:event", event, data);
     });
   }
 }
@@ -339,6 +342,77 @@ ipcMain.handle("viewport:detach", async () => {
 
 import WebSocket from "ws";
 
+// ── Popout window management ─────────────────────────────────────
+
+async function createPopoutWindow(panels: string[], initialState?: unknown, originInfo?: unknown): Promise<number> {
+  const panelQuery = panels.map((p) => encodeURIComponent(p)).join(",");
+
+  const win = new BrowserWindow({
+    width: 600,
+    height: 500,
+    minWidth: 300,
+    minHeight: 200,
+    backgroundColor: "#1e1e2e",
+    webPreferences: {
+      preload: path.join(__dirname, "../preload/preload.js"),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  });
+
+  const winId = win.id;
+  popoutWindows.set(winId, { win, panels, originInfo });
+
+  if (process.env.VITE_DEV_SERVER_URL) {
+    await win.loadURL(`${process.env.VITE_DEV_SERVER_URL}?popout=${panelQuery}`);
+  } else {
+    await win.loadFile(path.join(__dirname, "../renderer/index.html"), {
+      query: { popout: panelQuery },
+    });
+  }
+
+  // Forward renderer console output for debugging
+  win.webContents.on("console-message", (_event, level, message, line, sourceId) => {
+    const prefix = ["[Popout:V]", "[Popout:I]", "[Popout:W]", "[Popout:E]"][level] ?? "[Popout]";
+    console.log(`${prefix} ${message} (${sourceId}:${line})`);
+  });
+
+  // Send current engine status to new window once loaded
+  win.webContents.on("did-finish-load", () => {
+    if (engineClient?.connected) {
+      win.webContents.send("engine:connected");
+    }
+    // Forward initial store state so popout has context (e.g. console logs)
+    if (initialState) {
+      win.webContents.send("popout:init-state", initialState);
+    }
+  });
+
+  win.on("closed", () => {
+    const info = popoutWindows.get(winId);
+    popoutWindows.delete(winId);
+    // Notify main window that the popout was closed so it can re-add the panel
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("popout:closed", panels, info?.originInfo);
+    }
+  });
+
+  return winId;
+}
+
+ipcMain.handle("window:popout-panel", async (_event, panels: string[], initialState?: unknown, originInfo?: unknown) => {
+  const winId = await createPopoutWindow(panels, initialState, originInfo);
+  return winId;
+});
+
+ipcMain.handle("window:close-popout", async (event) => {
+  const senderWin = BrowserWindow.fromWebContents(event.sender);
+  if (senderWin && popoutWindows.has(senderWin.id)) {
+    senderWin.close();
+  }
+});
+
 /** Test whether a remote engine server is reachable and responds to RPC. */
 ipcMain.handle("settings:testRemoteConnection", async (_event, url: string) => {
   return new Promise<{ ok: boolean; version?: string; error?: string }>((resolve) => {
@@ -413,15 +487,13 @@ ipcMain.handle("settings:connectToServer", async (_event, url: string) => {
         timeout: 10000,
         reconnectInterval: 2000,
         onReconnected: () => {
-          if (mainWindow && !mainWindow.isDestroyed()) {
-            mainWindow.webContents.send("engine:connected");
-          }
+          broadcastToRenderers("engine:connected");
         },
       });
       await engineClient.connect();
       setupSubscriptionForwarding();
       await engineClient.call("editor.getCapabilities", {});
-      mainWindow?.webContents.send("engine:connected");
+      broadcastToRenderers("engine:connected");
       return { ok: true };
     }
 
@@ -430,15 +502,13 @@ ipcMain.handle("settings:connectToServer", async (_event, url: string) => {
       timeout: 10000,
       reconnectInterval: 3000,
       onReconnected: () => {
-        if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send("engine:connected");
-        }
+        broadcastToRenderers("engine:connected");
       },
     });
     await engineClient.connect();
     setupSubscriptionForwarding();
     await engineClient.call("editor.getCapabilities", {});
-    mainWindow?.webContents.send("engine:connected");
+    broadcastToRenderers("engine:connected");
     return { ok: true };
   } catch (err) {
     return { ok: false, error: String(err) };
@@ -496,6 +566,11 @@ app.whenReady().then(async () => {
   }
 
   mainWindow.on("close", () => {
+    // Close all popout windows when main window closes
+    for (const [, { win }] of popoutWindows) {
+      if (!win.isDestroyed()) win.close();
+    }
+    popoutWindows.clear();
     // Stop the IOSurface refresh timer before the window handle becomes invalid
     if (surfaceRefreshTimer) {
       clearInterval(surfaceRefreshTimer);

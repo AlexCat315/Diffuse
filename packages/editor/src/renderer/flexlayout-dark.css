@@ -199,6 +199,31 @@
   background: var(--color-surface0);
 }
 
+/* ── Tab popout button ───────────────────────────────── */
+.guava-popout-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--color-overlay0);
+  cursor: pointer;
+  padding: 2px 3px;
+  border-radius: 3px;
+  line-height: 1;
+  opacity: 0;
+  transition: opacity 0.15s;
+  margin-left: 2px;
+}
+.flexlayout__tab_button:hover .guava-popout-btn {
+  opacity: 1;
+}
+.guava-popout-btn:hover {
+  color: var(--color-text);
+  background: var(--color-surface0);
+  opacity: 1;
+}
+
 /* ── Popup menu (tab overflow) ───────────────────────── */
 .flexlayout__popup_menu {
   background: var(--color-base);
