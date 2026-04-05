@@ -411,6 +411,8 @@ pub const Renderer = struct {
     pending_frame_delay_ms: ?u32 = null,
     /// 当前生效的帧延迟（由 Application 写入，供 RPC 读取）。
     current_frame_delay_ms: u32 = 16,
+    /// Set to true after blitSharedTexture (GPU done); cleared by RPC broadcast.
+    iosurface_frame_ready: bool = false,
     /// 上一帧渲染统计（由 Application 在 drawFrame 后写入，供 RPC metrics 广播读取）。
     last_frame_report: FrameReport = .{
         .backend = .metal,
@@ -2478,6 +2480,7 @@ pub const Renderer = struct {
                 if (self.scene_viewport.color_texture) |tex| {
                     self.rhi.blitSharedTexture(tex);
                 }
+                self.iosurface_frame_ready = true;
             }
 
             // Collect RHI stats
