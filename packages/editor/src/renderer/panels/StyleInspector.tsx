@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useLocalState } from "../store/local-state";
+import React, { useEffect, useCallback, useRef } from "react";
 import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
 
@@ -39,8 +40,8 @@ interface StyleListItem {
 export function StyleInspector() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [active, setActive] = useState<ActiveStyleInfo | null>(null);
-  const [styles, setStyles] = useState<StyleListItem[]>([]);
+  const [active, setActive] = useLocalState<ActiveStyleInfo | null>(null);
+  const [styles, setStyles] = useLocalState<StyleListItem[]>([]);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {

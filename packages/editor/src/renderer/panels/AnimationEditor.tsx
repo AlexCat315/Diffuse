@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import React, { useEffect, useCallback, useRef } from "react";
+import { useLocalState } from "../store/local-state";
 import { rpc } from "../rpc";
 import { useConnectionStore, useSceneStore } from "../store";
 import { useI18n } from "../i18n";
@@ -63,21 +64,21 @@ export function AnimationEditor() {
   const connected = useConnectionStore((s) => s.connected);
   const selectedEntity = useSceneStore((s) => s.selectedEntity);
 
-  const [state, setState] = useState<AnimState>(EMPTY_STATE);
-  const [selectedStateIdx, setSelectedStateIdx] = useState<number | null>(null);
-  const [selectedTransIdx, setSelectedTransIdx] = useState<number | null>(null);
-  const [selectedCondIdx, setSelectedCondIdx] = useState<number | null>(null);
+  const [state, setState] = useLocalState<AnimState>(EMPTY_STATE);
+  const [selectedStateIdx, setSelectedStateIdx] = useLocalState<number | null>(null);
+  const [selectedTransIdx, setSelectedTransIdx] = useLocalState<number | null>(null);
+  const [selectedCondIdx, setSelectedCondIdx] = useLocalState<number | null>(null);
 
   // Editing buffers
-  const [editStateName, setEditStateName] = useState("");
-  const [editSpeed, setEditSpeed] = useState("1.0");
-  const [editLoop, setEditLoop] = useState(true);
-  const [editDuration, setEditDuration] = useState("0.0");
+  const [editStateName, setEditStateName] = useLocalState("");
+  const [editSpeed, setEditSpeed] = useLocalState("1.0");
+  const [editLoop, setEditLoop] = useLocalState(true);
+  const [editDuration, setEditDuration] = useLocalState("0.0");
 
-  const [newTransFrom, setNewTransFrom] = useState(0);
-  const [newTransTo, setNewTransTo] = useState(1);
-  const [newTransDuration, setNewTransDuration] = useState("0.2");
-  const [newTransTrigger, setNewTransTrigger] = useState("0.25");
+  const [newTransFrom, setNewTransFrom] = useLocalState(0);
+  const [newTransTo, setNewTransTo] = useLocalState(1);
+  const [newTransDuration, setNewTransDuration] = useLocalState("0.2");
+  const [newTransTrigger, setNewTransTrigger] = useLocalState("0.25");
 
   const pollRef = useRef<ReturnType<typeof setInterval>>(undefined);
   const ta = t.animationEditor;

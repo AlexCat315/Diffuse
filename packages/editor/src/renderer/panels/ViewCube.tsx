@@ -1,4 +1,5 @@
-import React, { useRef, useEffect, useCallback, useState, useMemo } from "react";
+import { useLocalState } from "../store/local-state";
+import React, { useRef, useEffect, useCallback, useMemo } from "react";
 import { useConnectionStore } from "../store";
 
 
@@ -55,8 +56,8 @@ function applyMat3(m: number[], v: Vec3): Vec3 {
 
 export function ViewCube() {
   const connected = useConnectionStore((s) => s.connected);
-  const [rot, setRot] = useState<Quat>([0, 0, 0, 1]);
-  const [hovered, setHovered] = useState<string | null>(null);
+  const [rot, setRot] = useLocalState<Quat>([0, 0, 0, 1]);
+  const [hovered, setHovered] = useLocalState<string | null>(null);
   const dragRef = useRef<{ sx: number; sy: number; dragging: boolean }>({
     sx: 0, sy: 0, dragging: false,
   });

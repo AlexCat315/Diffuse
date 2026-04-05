@@ -1,4 +1,5 @@
-import React, { useState, useCallback } from "react";
+import React, { useCallback } from "react";
+import { useLocalState } from "../store/local-state";
 import type { GizmoMode } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
 import {
@@ -18,8 +19,8 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
   const onGizmoModeChange = useSceneStore((s) => s.changeGizmoMode);
   const onRefreshHierarchy = useSceneStore((s) => s.refreshHierarchy);
   const { t } = useI18n();
-  const [sceneMenuOpen, setSceneMenuOpen] = useState(false);
-  const [scenes, setScenes] = useState<string[]>([]);
+  const [sceneMenuOpen, setSceneMenuOpen] = useLocalState(false);
+  const [scenes, setScenes] = useLocalState<string[]>([]);
 
   const handlePlay = () => window.guavaEngine.call("playback.play", {});
   const handlePause = () => window.guavaEngine.call("playback.pause", {});

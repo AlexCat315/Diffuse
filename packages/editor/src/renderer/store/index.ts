@@ -16,6 +16,8 @@ export type { EditorState } from "./editor";
 export { useViewportSettingsStore } from "./viewport-settings";
 export type { ViewportSettingsState, ShadingMode, FpsDisplay } from "./viewport-settings";
 
-export { usePanelSetting, usePanelSettingsStore } from "./panel-settings";
+export { useSyncedState, useSyncedStateStore } from "./synced-state";
+
+export { useLocalState } from "./local-state";
 
 export { initRpcBridge } from "./rpc-bridge";

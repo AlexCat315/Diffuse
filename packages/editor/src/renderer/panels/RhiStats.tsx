@@ -1,4 +1,5 @@
-import React, { useEffect, useState, useCallback, useRef } from "react";
+import { useLocalState } from "../store/local-state";
+import React, { useEffect, useCallback, useRef } from "react";
 import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
 
@@ -28,7 +29,7 @@ interface RhiStatsData {
 export function RhiStats() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [data, setData] = useState<RhiStatsData | null>(null);
+  const [data, setData] = useLocalState<RhiStatsData | null>(null);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const refresh = useCallback(async () => {

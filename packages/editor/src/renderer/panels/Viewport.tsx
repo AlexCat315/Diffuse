@@ -1,4 +1,5 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, { useEffect, useRef, useCallback } from "react";
+import { useLocalState } from "../store/local-state";
 import { useI18n } from "../i18n";
 import { ViewCube } from "./ViewCube";
 import { useConnectionStore, useSceneStore, useViewportSettingsStore } from "../store";
@@ -39,18 +40,18 @@ export function Viewport() {
   const { t } = useI18n();
   const ref = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const [attached, setAttached] = useState(false);
+  const [attached, setAttached] = useLocalState(false);
   const surfaceIdRef = useRef(0);
   const shmNameRef = useRef<string | undefined>(undefined);
   const lastSizeRef = useRef({ w: 0, h: 0 });
   const shadingMode = useViewportSettingsStore((s) => s.shadingMode);
   const setShadingMode = useViewportSettingsStore((s) => s.setShadingMode);
   const fetchViewportSettings = useViewportSettingsStore((s) => s.fetchFromEngine);
-  const [contextMenu, setContextMenu] = useState<{ x: number; y: number; items: MenuItem[] } | null>(null);
+  const [contextMenu, setContextMenu] = useLocalState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const selectedEntity = useSceneStore((s) => s.selectedEntity);
 
   // ── Box selection state ──────────────────────────────────────
-  const [boxSelect, setBoxSelect] = useState<{
+  const [boxSelect, setBoxSelect] = useLocalState<{
     startX: number; startY: number;  // viewport-pixel coords at mousedown
     curX: number; curY: number;      // current viewport-pixel coords
     cssStart: { x: number; y: number }; // CSS coords relative to container
@@ -678,7 +679,7 @@ export function Viewport() {
 
 function ViewportMetricsOverlay() {
   const fpsDisplay = useViewportSettingsStore((s) => s.fpsDisplay);
-  const [metrics, setMetrics] = useState<{ fps: number; frameTimeMs: number; drawCalls: number; triangles: number } | null>(null);
+  const [metrics, setMetrics] = useLocalState<{ fps: number; frameTimeMs: number; drawCalls: number; triangles: number } | null>(null);
 
   useEffect(() => {
     const cleanup = window.guavaEngine.onEvent((event, data) => {

@@ -1,7 +1,8 @@
-import React, { useState, useCallback } from "react";
+import React, { useCallback } from "react";
+import { useLocalState } from "../store/local-state";
 import { useConnectionStore } from "../store";
 import { useI18n } from "../i18n";
-import { usePanelSetting } from "../store/panel-settings";
+import { useSyncedState } from "../store/synced-state";
 
 /** Actor categories with static entries — no RPC needed for the catalog. */
 const categories = [
@@ -49,9 +50,9 @@ const categories = [
 export function PlaceActors() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [activeCategory, setActiveCategory] = usePanelSetting("place-actors", "activeCategory", "basics");
-  const [filter, setFilter] = usePanelSetting("place-actors", "filter", "");
-  const [spawning, setSpawning] = useState(false);
+  const [activeCategory, setActiveCategory] = useSyncedState("place-actors", "activeCategory", "basics");
+  const [filter, setFilter] = useSyncedState("place-actors", "filter", "");
+  const [spawning, setSpawning] = useLocalState(false);
 
   const handleSpawn = useCallback(
     async (kind: string) => {

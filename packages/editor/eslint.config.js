@@ -6,7 +6,8 @@ export default [
   ...tseslint.configs.recommended,
   {
     // Warn when useState is used inside panel components.
-    // Panel state should use usePanelSetting() for cross-window sync.
+    // Panel state should use useSyncedState() for cross-window sync,
+    // or useLocalState() for window-local ephemeral state.
     files: ["src/renderer/panels/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-syntax": [
@@ -14,8 +15,8 @@ export default [
         {
           selector: "CallExpression[callee.name='useState']",
           message:
-            "面板组件请使用 usePanelSetting() 代替 useState()，以支持多窗口状态同步。" +
-            "如果此状态确实不需要同步（如 hover、loading），可添加 // eslint-disable-next-line 注释。",
+            "面板组件请使用 useSyncedState() 代替 useState() 以支持多窗口状态同步，" +
+            "或使用 useLocalState() 标记为窗口本地状态。",
         },
       ],
     },
