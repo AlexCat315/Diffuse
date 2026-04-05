@@ -3,6 +3,8 @@
   "private": true,
   "description": "Guava Engine — Zig game engine with Electron editor",
   "scripts": {
+    "codegen": "cd packages/editor && npm run codegen",
+    "compile-commands": "cd packages/engine && zig build compile-commands",
     "editor:dev": "cd packages/editor && npm run dev",
     "editor:build": "cd packages/editor && npm run build",
     "editor:install": "cd packages/editor && npm install",

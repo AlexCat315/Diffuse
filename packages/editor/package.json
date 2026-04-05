@@ -4,8 +4,8 @@
   "description": "Guava Engine Editor — Electron-based editor frontend",
   "main": "dist/main/index.js",
   "scripts": {
-    "dev": "vite",
-    "build": "vite build",
+    "dev": "npm run codegen && vite",
+    "build": "npm run codegen && vite build",
     "start": "electron dist/main/index.js",
     "build:native": "cd native && npx cmake-js compile --runtime=electron --runtime-version=$(node -e \"console.log(require('electron/package.json').version)\")",
     "rebuild": "cd native && npx cmake-js rebuild --runtime=electron --runtime-version=$(node -e \"console.log(require('electron/package.json').version)\")",
