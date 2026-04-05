@@ -213,6 +213,7 @@ pub const EditorLayer = struct {
         layer_context.renderer.suppress_entity_pick = self.state.manipulation_drag_active or mesh_edit.isEditModeActive(&self.state);
         camera.handleCameraControls(&self.state, layer_context);
         try mesh_edit.syncSession(&self.state, layer_context);
+        mesh_edit.refreshOverlay(&self.state, layer_context);
         manipulation.refreshGizmoState(&self.state, layer_context);
         ai_collaboration.syncContext(&self.state, layer_context) catch |err| {
             std.log.warn("failed to sync AI collaboration context: {s}", .{@errorName(err)});
