@@ -3,6 +3,7 @@ import type { RpcResult } from "../../shared/rpc-types";
 import { rpc } from "../rpc";
 import { useI18n } from "../i18n";
 import { useConnectionStore, useViewportSettingsStore } from "../store";
+import { usePanelSetting } from "../store/panel-settings";
 import type { ShadingMode } from "../store/viewport-settings";
 
 type RenderSettings = RpcResult<"viewport.getRenderSettings">;
@@ -26,9 +27,9 @@ export function RenderSettingsPanel() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
   const [settings, setSettings] = useState<RenderSettings | null>(null);
-  const [pathTrace, setPathTrace] = useState<PathTraceState>({ samples: 256, bounces: 8, resolutionScale: 1.0 });
-  const [renderOutput, setRenderOutput] = useState<RenderOutputState>({ preset: "1080p", width: 1920, height: 1080, format: "png", path: "render_output" });
-  const [transformSpace, setTransformSpace] = useState<"local" | "world">("local");
+  const [pathTrace, setPathTrace] = usePanelSetting<PathTraceState>("render-settings", "pathTrace", { samples: 256, bounces: 8, resolutionScale: 1.0 });
+  const [renderOutput, setRenderOutput] = usePanelSetting<RenderOutputState>("render-settings", "renderOutput", { preset: "1080p", width: 1920, height: 1080, format: "png", path: "render_output" });
+  const [transformSpace, setTransformSpace] = usePanelSetting<"local" | "world">("render-settings", "transformSpace", "local");
   const shadingMode = useViewportSettingsStore((s) => s.shadingMode);
   const setShadingMode = useViewportSettingsStore((s) => s.setShadingMode);
   const fetchViewportSettings = useViewportSettingsStore((s) => s.fetchFromEngine);

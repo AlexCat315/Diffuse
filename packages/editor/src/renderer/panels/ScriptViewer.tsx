@@ -5,6 +5,7 @@ import type * as monaco from "monaco-editor";
 import { rpc } from "../rpc";
 import { useConnectionStore } from "../store";
 import { useI18n } from "../i18n";
+import { usePanelSetting } from "../store/panel-settings";
 import type { ScriptFileInfo } from "../../shared/rpc-types";
 
 // ── Zig language definition for Monaco ──────────────────────────
@@ -107,7 +108,7 @@ export function ScriptViewer() {
   const [selectedPath, setSelectedPath] = useState<string | null>(null);
   const [content, setContent] = useState<string>("");
   const [language, setLanguage] = useState<string>("zig");
-  const [readOnly, setReadOnly] = useState(false);
+  const [readOnly, setReadOnly] = usePanelSetting("script-viewer", "readOnly", false);
   const [dirty, setDirty] = useState(false);
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");

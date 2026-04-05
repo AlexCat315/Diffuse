@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { rpc } from "../rpc";
 import { useConnectionStore } from "../store";
 import { useI18n } from "../i18n";
+import { usePanelSetting } from "../store/panel-settings";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -90,9 +91,9 @@ export function SequencerPanel() {
   const [state, setState] = useState<SeqState | null>(null);
   const [selectedTrack, setSelectedTrack] = useState<number | null>(null);
   const [selectedKf, setSelectedKf] = useState<number | null>(null);
-  const [timelineScale, setTimelineScale] = useState(80); // px per second
+  const [timelineScale, setTimelineScale] = usePanelSetting("sequencer", "timelineScale", 80); // px per second
   const [timelineScroll, setTimelineScroll] = useState(0);
-  const [newTrackKind, setNewTrackKind] = useState("camera_path");
+  const [newTrackKind, setNewTrackKind] = usePanelSetting("sequencer", "newTrackKind", "camera_path");
   const [newTrackTarget, setNewTrackTarget] = useState("");
   const [nameBuf, setNameBuf] = useState("");
   const [fpsBuf, setFpsBuf] = useState("");

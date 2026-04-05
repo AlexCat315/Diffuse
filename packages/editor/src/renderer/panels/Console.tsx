@@ -1,8 +1,8 @@
-import React, { useRef, useEffect, useState } from "react";
-import type { LogEntry } from "../../shared/rpc-types";
+import React, { useRef, useEffect } from "react";
 import { useI18n } from "../i18n";
 import { IconClose } from "../components/Icons";
 import { useConsoleStore } from "../store";
+import { usePanelSetting } from "../store/panel-settings";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
 
@@ -20,7 +20,7 @@ export function Console() {
   const clearLogs = useConsoleStore((s) => s.clearLogs);
   const { t } = useI18n();
   const endRef = useRef<HTMLDivElement>(null);
-  const [activeFilters, setActiveFilters] = useState<Set<LogLevel>>(new Set(LEVELS));
+  const [activeFilters, setActiveFilters] = usePanelSetting<Set<LogLevel>>("console", "activeFilters", new Set(LEVELS));
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -29,7 +29,7 @@ export function Console() {
   const toggleFilter = (level: LogLevel) => {
     setActiveFilters((prev) => {
       const next = new Set(prev);
-      next.has(level) ? next.delete(level) : next.add(level);
+      if (next.has(level)) next.delete(level); else next.add(level);
       return next;
     });
   };

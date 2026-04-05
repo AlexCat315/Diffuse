@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import type { AssetEntry } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
+import { usePanelSetting } from "../store/panel-settings";
 import {
   IconFolder, IconModel, IconTexture, IconShader, IconScene,
   IconScript, IconAudio, IconMaterial, IconFile, IconArrowUp, IconRefresh,
@@ -23,7 +24,7 @@ const ASSET_ICONS: Record<string, React.ComponentType<{ size?: number; color?: s
 export function AssetBrowser() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [currentPath, setCurrentPath] = useState("assets");
+  const [currentPath, setCurrentPath] = usePanelSetting("asset-browser", "currentPath", "assets");
   const [entries, setEntries] = useState<AssetEntry[]>([]);
   const [loading, setLoading] = useState(false);
 

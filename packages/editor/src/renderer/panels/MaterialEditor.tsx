@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { rpc } from "../rpc";
 import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
+import { usePanelSetting } from "../store/panel-settings";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -93,7 +94,7 @@ export function MaterialEditor() {
   };
   const [state, setState] = useState<MaterialState | null>(null);
   const [textures, setTextures] = useState<TextureEntry[]>([]);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [collapsed, setCollapsed] = usePanelSetting<Set<string>>("material-editor", "collapsed", new Set());
   const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   const fetchState = useCallback(async (eid: number) => {

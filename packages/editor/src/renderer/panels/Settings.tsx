@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useI18n, type Locale } from "../i18n";
 import { useConnectionStore, useViewportSettingsStore } from "../store";
+import { usePanelSetting } from "../store/panel-settings";
 
 // ── Local preferences (stored in localStorage) ───────────────────
 
@@ -114,8 +115,8 @@ export function SettingsPanel() {
   const [recording, setRecording] = useState<string | null>(null);
   const [engineVersion, setEngineVersion] = useState<string>("");
   const [search, setSearch] = useState("");
-  const [showAdvanced, setShowAdvanced] = useState(false);
-  const [activeSection, setActiveSection] = useState("language");
+  const [showAdvanced, setShowAdvanced] = usePanelSetting("settings", "showAdvanced", false);
+  const [activeSection, setActiveSection] = usePanelSetting("settings", "activeSection", "language");
   const contentRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 

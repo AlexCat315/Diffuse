@@ -3,6 +3,7 @@ import { rpc } from "../rpc";
 import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
 import { useConnectionStore, useSceneStore } from "../store";
 import { useI18n } from "../i18n";
+import { usePanelSetting } from "../store/panel-settings";
 
 // ── Types ───────────────────────────────────────────────────────
 
@@ -104,7 +105,7 @@ export function PrefabEditor() {
   const [entities, setEntities] = useState<PrefabEntityNode[]>([]);
   const [selectedEntity, setSelectedEntity] = useState<number | null>(null);
   const [detail, setDetail] = useState<EntityDetail | null>(null);
-  const [collapsed, setCollapsed] = useState<Set<number>>(new Set());
+  const [collapsed, setCollapsed] = usePanelSetting<Set<number>>("prefab-editor", "collapsed", new Set());
   const [busy, setBusy] = useState(false);
   const commitTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
