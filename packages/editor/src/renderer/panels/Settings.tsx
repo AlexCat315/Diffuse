@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback, useRef, useMemo } from "react";
 import { useLocalState } from "../store/local-state";
 import { useI18n, type Locale } from "../i18n";
-import { useConnectionStore, useViewportSettingsStore } from "../store";
+import { useConnectionStore, useViewportSettingsStore, useConsoleStore } from "../store";
 import { useSyncedState } from "../store/synced-state";
 
 // ── Local preferences (stored in localStorage) ───────────────────
@@ -86,6 +86,7 @@ interface SectionDef {
 const SECTIONS: SectionDef[] = [
   { id: "language",   label: "Language",    labelZh: "语言",       icon: "🌐", keywords: ["language", "locale", "english", "中文", "语言"] },
   { id: "appearance", label: "Appearance",  labelZh: "外观",       icon: "◉",  keywords: ["fps", "display", "vsync", "overlay", "显示", "垂直同步", "帧率"] },
+  { id: "console",    label: "Console",     labelZh: "控制台",     icon: "▸",  keywords: ["console", "log", "max", "limit", "控制台", "日志", "上限"] },
   { id: "layout",     label: "Layout",      labelZh: "布局",       icon: "⊞",  keywords: ["layout", "panel", "reset", "布局", "面板", "重置"] },
   { id: "shortcuts",  label: "Shortcuts",   labelZh: "快捷键",     icon: "⌨",  keywords: ["shortcut", "key", "binding", "mesh", "extrude", "bevel", "快捷键", "网格"] },
   { id: "remote",     label: "Remote",      labelZh: "远程服务器", icon: "☁",  keywords: ["remote", "server", "local", "websocket", "connect", "远程", "服务器", "连接"], advanced: true },
@@ -118,6 +119,8 @@ export function SettingsPanel() {
   const [search, setSearch] = useLocalState("");
   const [showAdvanced, setShowAdvanced] = useSyncedState("settings", "showAdvanced", false);
   const [activeSection, setActiveSection] = useSyncedState("settings", "activeSection", "language");
+  const maxLogs = useConsoleStore((s) => s.maxLogs);
+  const setMaxLogs = useConsoleStore((s) => s.setMaxLogs);
   const contentRef = useRef<HTMLDivElement>(null);
   const sectionRefs = useRef<Record<string, HTMLDivElement | null>>({});
 
@@ -343,6 +346,26 @@ export function SettingsPanel() {
               </SettingRow>
               <SettingRow label="VSync" desc={isZh ? "启用垂直同步（需引擎端支持）" : "Enable vertical sync (requires engine support)"}>
                 <Toggle checked={prefs.vsyncEnabled} onChange={(v) => updatePref("vsyncEnabled", v)} />
+              </SettingRow>
+            </div>
+          )}
+
+          {visibleIds.has("console") && (
+            <div ref={(el) => { sectionRefs.current["console"] = el; }} style={S.section}>
+              <div style={S.sectionHeader}>{isZh ? "控制台" : "Console"}</div>
+              <SettingRow label={isZh ? "最大日志条数" : "Max Log Entries"} desc={isZh ? "超过此数量时，最旧的日志将被丢弃（50–10000）" : "Oldest entries are discarded when the limit is exceeded (50–10,000)"}>
+                <input
+                  type="number"
+                  min={50}
+                  max={10000}
+                  step={50}
+                  value={maxLogs}
+                  onChange={(e) => {
+                    const v = parseInt(e.target.value, 10);
+                    if (Number.isFinite(v)) setMaxLogs(v);
+                  }}
+                  style={S.numberInput}
+                />
               </SettingRow>
             </div>
           )}
@@ -683,6 +706,16 @@ const S: Record<string, React.CSSProperties> = {
     cursor: "pointer",
     fontSize: 11,
     whiteSpace: "nowrap" as const,
+  },
+  numberInput: {
+    width: 72,
+    padding: "3px 6px",
+    border: "1px solid #45475a",
+    borderRadius: 4,
+    background: "#1e1e2e",
+    color: "#cdd6f4",
+    fontSize: 11,
+    textAlign: "right" as const,
   },
   toggle: {
     position: "relative" as const,
