@@ -13,25 +13,32 @@ import {
   type ShortcutBinding,
 } from "../store/shortcut-config";
 
-// ── Category definitions ─────────────────────────────────────────
+// ── Category definitions ───────────────────────────────────────
 
 interface CategoryDef {
   id: string;
-  label: string;
-  labelZh: string;
   icon: string;
 }
 
 const CATEGORIES: CategoryDef[] = [
-  { id: "editor",  label: "Editor",     labelZh: "编辑器",  icon: "⎈" },
-  { id: "gizmo",   label: "Gizmo",      labelZh: "Gizmo",   icon: "↔" },
-  { id: "mesh",    label: "Mesh Edit",  labelZh: "网格编辑", icon: "⬡" },
+  { id: "editor", icon: "⎈" },
+  { id: "gizmo",  icon: "↔" },
+  { id: "mesh",   icon: "⬡" },
 ];
 
 // ── Main component ───────────────────────────────────────────────
 
 export function KeybindingsPanel() {
-  const { locale, t } = useI18n();
+  const { t } = useI18n();
+
+  const categoryLabels: Record<string, string> = {
+    editor: t.keybindings.categoryEditor,
+    gizmo:  t.keybindings.categoryGizmo,
+    mesh:   t.keybindings.categoryMesh,
+  };
+  const gizmoLabels = t.shortcuts.gizmo as Record<string, string>;
+  const meshLabels  = t.shortcuts.mesh  as Record<string, string>;
+  const editorLabels = t.shortcuts.editor as Record<string, string>;
 
   const [activeCategory, setActiveCategory] = useLocalState<string>("editor");
   const [search, setSearch] = useLocalState("");
@@ -98,20 +105,20 @@ export function KeybindingsPanel() {
   const visibleCategories = useMemo(() => {
     if (!q) return CATEGORIES;
     return CATEGORIES.filter((c) => {
-      if (c.label.toLowerCase().includes(q) || c.labelZh.includes(q)) return true;
+      if (categoryLabels[c.id]?.toLowerCase().includes(q)) return true;
       if (c.id === "editor") {
         return EDITOR_FIXED_SHORTCUTS.some(
-          (s) => s.label.toLowerCase().includes(q) || s.labelZh.includes(q) || s.display.toLowerCase().includes(q),
+          (s) => (editorLabels[s.id] ?? s.id).toLowerCase().includes(q) || s.display.toLowerCase().includes(q),
         );
       }
       if (c.id === "gizmo") {
         return GIZMO_SHORTCUT_DEFS.some(
-          (s) => s.label.toLowerCase().includes(q) || s.labelZh.includes(q),
+          (s) => (gizmoLabels[s.id] ?? s.id).toLowerCase().includes(q),
         );
       }
       if (c.id === "mesh") {
         return MESH_SHORTCUT_DEFS.some(
-          (s) => s.label.toLowerCase().includes(q) || s.labelZh.includes(q),
+          (s) => (meshLabels[s.id] ?? s.id).toLowerCase().includes(q),
         );
       }
       return false;
@@ -151,7 +158,7 @@ export function KeybindingsPanel() {
                 onClick={() => setActiveCategory(c.id)}
               >
                 <span style={S.navIcon}>{c.icon}</span>
-                <span style={S.navLabel}>{locale === "zh-CN" ? c.labelZh : c.label}</span>
+                <span style={S.navLabel}>{categoryLabels[c.id] ?? c.id}</span>
               </button>
             );
           })}
@@ -174,10 +181,10 @@ export function KeybindingsPanel() {
                   <span style={S.colFixed}>{t.keybindings.colStatus}</span>
                 </div>
                 {EDITOR_FIXED_SHORTCUTS
-                  .filter((s) => !q || s.label.toLowerCase().includes(q) || s.labelZh.includes(q) || s.display.toLowerCase().includes(q))
+                  .filter((s) => !q || (editorLabels[s.id] ?? s.id).toLowerCase().includes(q) || s.display.toLowerCase().includes(q))
                   .map((s) => (
                     <div key={s.id} style={S.row}>
-                      <span style={S.colAction}>{locale === "zh-CN" ? s.labelZh : s.label}</span>
+                      <span style={S.colAction}>{editorLabels[s.id] ?? s.id}</span>
                       <span style={S.colKey}><code style={S.keyCode}>{s.display}</code></span>
                       <span style={{ ...S.colFixed, ...S.fixedBadge }}>{t.keybindings.fixedBadge}</span>
                     </div>
@@ -200,14 +207,14 @@ export function KeybindingsPanel() {
                   <span style={S.colRecord} />
                 </div>
                 {GIZMO_SHORTCUT_DEFS
-                  .filter((s) => !q || s.label.toLowerCase().includes(q) || s.labelZh.includes(q))
+                  .filter((s) => !q || (gizmoLabels[s.id] ?? s.id).toLowerCase().includes(q))
                   .map((def) => {
                     const binding = gizmoShortcuts[def.id] || def.default;
                     const recId = `gizmo:${def.id}`;
                     const isRec = recording === recId;
                     return (
                       <div key={def.id} style={{ ...S.row, ...(isRec ? S.rowRecording : {}) }}>
-                        <span style={S.colAction}>{locale === "zh-CN" ? def.labelZh : def.label}</span>
+                        <span style={S.colAction}>{gizmoLabels[def.id] ?? def.id}</span>
                         <span style={S.colKey}>
                           {isRec
                             ? <span style={S.recordingBadge}>{t.keybindings.pressNewKey}</span>
@@ -243,14 +250,14 @@ export function KeybindingsPanel() {
                   <span style={S.colRecord} />
                 </div>
                 {MESH_SHORTCUT_DEFS
-                  .filter((s) => !q || s.label.toLowerCase().includes(q) || s.labelZh.includes(q))
+                  .filter((s) => !q || (meshLabels[s.id] ?? s.id).toLowerCase().includes(q))
                   .map((def) => {
                     const binding = meshShortcuts[def.id] || def.default;
                     const recId = `mesh:${def.id}`;
                     const isRec = recording === recId;
                     return (
                       <div key={def.id} style={{ ...S.row, ...(isRec ? S.rowRecording : {}) }}>
-                        <span style={S.colAction}>{locale === "zh-CN" ? def.labelZh : def.label}</span>
+                        <span style={S.colAction}>{meshLabels[def.id] ?? def.id}</span>
                         <span style={S.colKey}>
                           {isRec
                             ? <span style={S.recordingBadge}>{t.keybindings.pressNewKey}</span>

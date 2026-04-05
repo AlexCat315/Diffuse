@@ -28,68 +28,23 @@ function savePrefs(prefs: EditorPrefs) {
   localStorage.setItem(PREFS_KEY, JSON.stringify(prefs));
 }
 
-// ── Mesh edit shortcut definitions ───────────────────────────────
-
-interface ShortcutBinding {
-  key: string;
-  ctrl: boolean;
-  shift: boolean;
-  alt: boolean;
-}
-
-interface ShortcutDef {
-  id: string;
-  label: string;
-  labelZh: string;
-  default: ShortcutBinding;
-}
-
-const MESH_SHORTCUTS: ShortcutDef[] = [
-  { id: "extrude",         label: "Extrude",              labelZh: "挤出",       default: { key: "E", ctrl: false, shift: false, alt: false } },
-  { id: "inset",           label: "Inset",                labelZh: "内嵌",       default: { key: "I", ctrl: false, shift: false, alt: false } },
-  { id: "bevel",           label: "Bevel",                labelZh: "倒角",       default: { key: "B", ctrl: false, shift: false, alt: false } },
-  { id: "loopCut",         label: "Loop Cut",             labelZh: "环切",       default: { key: "R", ctrl: true,  shift: false, alt: false } },
-  { id: "merge",           label: "Merge",                labelZh: "合并",       default: { key: "M", ctrl: false, shift: false, alt: false } },
-  { id: "duplicateFaces",  label: "Duplicate Faces",      labelZh: "复制面",     default: { key: "D", ctrl: false, shift: true,  alt: false } },
-  { id: "separateFaces",   label: "Separate Faces",       labelZh: "分离面",     default: { key: "P", ctrl: false, shift: false, alt: false } },
-  { id: "recalcNormals",   label: "Recalculate Normals",  labelZh: "重算法线",   default: { key: "N", ctrl: false, shift: true,  alt: false } },
-  { id: "pivotToSelection",label: "Pivot To Selection",   labelZh: "轴心到选区", default: { key: ".", ctrl: false, shift: false, alt: false } },
-];
-
-const SHORTCUTS_KEY = "guava-editor-shortcuts";
-
-function loadShortcuts(): Record<string, ShortcutBinding> {
-  try {
-    const raw = localStorage.getItem(SHORTCUTS_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* fallback */ }
-  const defaults: Record<string, ShortcutBinding> = {};
-  for (const s of MESH_SHORTCUTS) defaults[s.id] = { ...s.default };
-  return defaults;
-}
-
-function saveShortcuts(shortcuts: Record<string, ShortcutBinding>) {
-  localStorage.setItem(SHORTCUTS_KEY, JSON.stringify(shortcuts));
-}
-
 // ── Section nav definitions ──────────────────────────────────────
 
 interface SectionDef {
   id: string;
   label: string;
-  labelZh: string;
   icon: string;
   keywords: string[];
   advanced?: boolean;
 }
 
 const SECTIONS: SectionDef[] = [
-  { id: "language",   label: "Language",    labelZh: "语言",       icon: "🌐", keywords: ["language", "locale", "english", "中文", "语言"] },
-  { id: "appearance", label: "Appearance",  labelZh: "外观",       icon: "◉",  keywords: ["fps", "display", "vsync", "overlay", "显示", "垂直同步", "帧率"] },
-  { id: "console",    label: "Console",     labelZh: "控制台",     icon: "▸",  keywords: ["console", "log", "max", "limit", "控制台", "日志", "上限"] },
-  { id: "layout",     label: "Layout",      labelZh: "布局",       icon: "⊞",  keywords: ["layout", "panel", "reset", "布局", "面板", "重置"] },
-  { id: "remote",     label: "Remote",      labelZh: "远程服务器", icon: "☁",  keywords: ["remote", "server", "local", "websocket", "connect", "远程", "服务器", "连接"], advanced: true },
-  { id: "about",      label: "About",       labelZh: "关于",       icon: "ⓘ",  keywords: ["version", "engine", "status", "about", "版本", "关于"] },
+  { id: "language",   label: "Language",   icon: "🌐", keywords: ["language", "locale", "english", "中文", "语言"] },
+  { id: "appearance", label: "Appearance", icon: "◉",  keywords: ["fps", "display", "vsync", "overlay", "显示", "垂直同步", "帧率"] },
+  { id: "console",    label: "Console",    icon: "▸",  keywords: ["console", "log", "max", "limit", "控制台", "日志", "上限"] },
+  { id: "layout",     label: "Layout",     icon: "⊞",  keywords: ["layout", "panel", "reset", "布局", "面板", "重置"] },
+  { id: "remote",     label: "Remote",     icon: "☁",  keywords: ["remote", "server", "local", "websocket", "connect", "远程", "服务器", "连接"], advanced: true },
+  { id: "about",      label: "About",      icon: "ⓘ",  keywords: ["version", "engine", "status", "about", "版本", "关于"] },
 ];
 
 // ── Remote server constants ──────────────────────────────────────
@@ -109,6 +64,15 @@ export function SettingsPanel() {
   const fpsDisplay = useViewportSettingsStore((s) => s.fpsDisplay);
   const setFpsDisplay = useViewportSettingsStore((s) => s.setFpsDisplay);
   const { locale, setLocale, t } = useI18n();
+
+  const navLabels: Record<string, string> = {
+    language: t.settings.navLanguage,
+    appearance: t.settings.navAppearance,
+    console: t.settings.navConsole,
+    layout: t.settings.navLayout,
+    remote: t.settings.navRemote,
+    about: t.settings.navAbout,
+  };
 
   const [prefs, setPrefs] = useLocalState<EditorPrefs>(loadPrefs);
   const [engineVersion, setEngineVersion] = useLocalState<string>("");
@@ -193,7 +157,6 @@ export function SettingsPanel() {
     if (q) {
       sections = sections.filter((s) =>
         s.label.toLowerCase().includes(q) ||
-        s.labelZh.includes(q) ||
         s.keywords.some((kw) => kw.includes(q)),
       );
     }
@@ -264,7 +227,7 @@ export function SettingsPanel() {
                 onClick={() => scrollToSection(s.id)}
               >
                 <span style={S.navIcon}>{s.icon}</span>
-                <span style={S.navLabel}>{locale === "zh-CN" ? s.labelZh : s.label}</span>
+                <span style={S.navLabel}>{navLabels[s.id] ?? s.label}</span>
               </button>
             );
           })}
