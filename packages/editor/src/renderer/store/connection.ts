@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { withBroadcastSync } from "./broadcast-sync";
 
 export interface ConnectionState {
   connected: boolean;
@@ -8,10 +9,15 @@ export interface ConnectionState {
   setError: (error: string | null) => void;
 }
 
-export const useConnectionStore = create<ConnectionState>((set) => ({
-  connected: false,
-  error: null,
+export const useConnectionStore = create<ConnectionState>(
+  withBroadcastSync(
+    { name: "connection", syncKeys: ["connected", "error"] },
+    (set) => ({
+      connected: false,
+      error: null,
 
-  setConnected: (connected) => set({ connected, error: connected ? null : undefined }),
-  setError: (error) => set({ error }),
-}));
+      setConnected: (connected) => set({ connected, error: connected ? null : undefined }),
+      setError: (error) => set({ error }),
+    }),
+  ),
+);

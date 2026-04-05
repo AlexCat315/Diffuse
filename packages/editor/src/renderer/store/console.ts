@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { LogEntry } from "../../shared/rpc-types";
+import { withBroadcastSync } from "./broadcast-sync";
 
 const MAX_LOGS = 500;
 
@@ -26,20 +27,25 @@ export interface ConsoleState {
   clearLogs: () => void;
 }
 
-export const useConsoleStore = create<ConsoleState>((set) => ({
-  logs: [],
+export const useConsoleStore = create<ConsoleState>(
+  withBroadcastSync(
+    { name: "console", syncKeys: ["logs"] },
+    (set) => ({
+      logs: [],
 
-  appendLog: (entry) => {
-    const normalized = normalizeEntry(entry);
-    set((state) => ({
-      logs: state.logs.length >= MAX_LOGS
-        ? [...state.logs.slice(-(MAX_LOGS - 1)), normalized]
-        : [...state.logs, normalized],
-    }));
-  },
+      appendLog: (entry) => {
+        const normalized = normalizeEntry(entry);
+        set((state) => ({
+          logs: state.logs.length >= MAX_LOGS
+            ? [...state.logs.slice(-(MAX_LOGS - 1)), normalized]
+            : [...state.logs, normalized],
+        }));
+      },
 
-  clearLogs: () => {
-    set({ logs: [] });
-    window.guavaEngine.call("console.clear", {}).catch(() => {});
-  },
-}));
+      clearLogs: () => {
+        set({ logs: [] });
+        window.guavaEngine.call("console.clear", {}).catch(() => {});
+      },
+    }),
+  ),
+);
