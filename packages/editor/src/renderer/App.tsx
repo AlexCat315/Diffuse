@@ -1,5 +1,5 @@
 import React, { useEffect, useCallback, useRef, useState } from "react";
-import { Layout, Model, Actions, DockLocation, type IJsonModel, type TabNode, type TabSetNode, type ITabSetRenderValues, type ITabRenderValues } from "flexlayout-react";
+import { Layout, Model, Actions, DockLocation, type Action, type IJsonModel, type TabNode, type TabSetNode, type BorderNode, type ITabSetRenderValues, type ITabRenderValues } from "flexlayout-react";
 import "flexlayout-react/style/light.css";
 import "./flexlayout-dark.css";
 
@@ -192,14 +192,13 @@ export function App() {
   const { t } = useI18n();
   const connected = useConnectionStore((s) => s.connected);
   const error = useConnectionStore((s) => s.error);
-  const selectedEntity = useSceneStore((s) => s.selectedEntity);
   const settingsOpen = useEditorStore((s) => s.settingsOpen);
   const setSettingsOpen = useEditorStore((s) => s.setSettingsOpen);
 
   const modelRef = useRef<Model>(Model.fromJson(loadSavedLayout()));
 
   // ── Bottom panel collapse/expand ──
-  const [bottomCollapsed, setBottomCollapsed] = useState(false);
+  const [, setBottomCollapsed] = useState(false);
   const bottomCollapsedRef = useRef(false);
 
   const toggleBottomPanel = useCallback(() => {
@@ -446,7 +445,7 @@ export function App() {
 
   // ── onRenderTabSet: add collapse button to bottom tabset ──
   const handleRenderTabSet = useCallback(
-    (tabSetNode: TabSetNode | any, renderValues: ITabSetRenderValues) => {
+    (tabSetNode: TabSetNode | BorderNode, renderValues: ITabSetRenderValues) => {
       if (tabSetNode.getId() === BOTTOM_TABSET_ID) {
         renderValues.buttons.unshift(
           <button
@@ -474,7 +473,7 @@ export function App() {
 
   // ── onAction: intercept maximize-toggle on bottom tabset → collapse instead ──
   const handleAction = useCallback(
-    (action: any) => {
+    (action: Action) => {
       if (action.type === Actions.MAXIMIZE_TOGGLE) {
         const nodeId = action.data?.node;
         if (nodeId === BOTTOM_TABSET_ID) {
