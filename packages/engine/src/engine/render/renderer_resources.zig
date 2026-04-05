@@ -23,6 +23,8 @@ pub const SceneViewportState = struct {
 
     /// IOSurface id for cross-process sharing (0 = not using IOSurface).
     iosurface_id: u32 = 0,
+    /// Staging IOSurface id — safe to read at any time (never written by GPU).
+    staging_iosurface_id: u32 = 0,
     /// POSIX shared memory name for cross-process sharing (Linux Vulkan path).
     shm_name: [64]u8 = [_]u8{0} ** 64,
     /// When true, color_texture is backed by a cross-process shared resource.

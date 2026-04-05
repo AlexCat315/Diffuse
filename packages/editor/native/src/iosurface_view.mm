@@ -29,7 +29,6 @@ static uint8_t* g_sab_data = nullptr;   // pointer into SAB backing store
 static size_t   g_sab_size = 0;         // total SAB size in bytes
 static uint32_t g_sab_generation = 0;   // monotonic frame counter
 static uint32_t g_write_index   = 0;    // ping-pong buffer index (0 or 1)
-static uint32_t g_last_seed     = 0;    // IOSurface change seed
 static constexpr size_t SAB_HEADER_BYTES = 16;
 
 // ── attach(nativeHandle, surfaceId, x, y, w, h) ─────────────────────────
@@ -176,7 +175,6 @@ static Napi::Value SetSharedBuffer(const Napi::CallbackInfo& info) {
     g_sab_size = size;
     g_sab_generation = 0;
     g_write_index = 0;
-    g_last_seed = 0;
     return env.Undefined();
 }
 
@@ -197,10 +195,6 @@ static Napi::Value SetSharedBuffer(const Napi::CallbackInfo& info) {
 static Napi::Value RefreshShared(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (!g_surface || !g_sab_data) return Napi::Boolean::New(env, false);
-
-    // Skip if the IOSurface hasn't been modified since last copy.
-    uint32_t seed = IOSurfaceGetSeed(g_surface);
-    if (seed == g_last_seed) return Napi::Boolean::New(env, false);
 
     size_t width  = IOSurfaceGetWidth(g_surface);
     size_t height = IOSurfaceGetHeight(g_surface);
@@ -231,9 +225,6 @@ static Napi::Value RefreshShared(const Napi::CallbackInfo& info) {
     }
 
     IOSurfaceUnlock(g_surface, kIOSurfaceLockReadOnly, nullptr);
-    // Re-read seed AFTER unlock so our own lock/unlock cycle is included.
-    // Next poll will only proceed if the surface was modified externally.
-    g_last_seed = IOSurfaceGetSeed(g_surface);
 
     // Publish: write width, height, readIndex, THEN generation (release).
     auto* header = reinterpret_cast<uint32_t*>(g_sab_data);

@@ -1096,15 +1096,17 @@ pub const RhiDevice = struct {
     }
 
     /// Blit a shared texture's content to the associated shared memory region.
-    /// On macOS Metal, waits for the GPU to finish writing the IOSurface.
+    /// On macOS Metal, waits for the GPU then copies to a staging IOSurface.
     /// On Linux Vulkan, performs a GPU→CPU readback into the POSIX shm segment.
-    pub fn blitSharedTexture(self: *RhiDevice, texture: Texture) void {
+    /// Returns the staging IOSurface ID on Metal (0 if N/A).
+    pub fn blitSharedTexture(self: *RhiDevice, texture: Texture) u32 {
         if (self.owned_vulkan_device) |vk| {
             _ = vk.blitSharedTexture(texture.id);
         }
         if (self.owned_metal_device) |md| {
-            md.waitForGpu();
+            return md.waitForGpuAndCopyToStaging(texture.id);
         }
+        return 0;
     }
 
     pub fn releaseTexture(self: *RhiDevice, texture: *Texture) void {

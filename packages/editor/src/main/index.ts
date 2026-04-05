@@ -280,8 +280,9 @@ ipcMain.handle(
         mainWindow.webContents.postMessage("viewport:shared-buffer", viewportSAB);
 
         // Event-driven refresh: engine sends "on:viewport.frameReady" after
-        // the GPU finishes rendering.  We also keep a slow fallback timer
-        // in case the notification is lost (reconnect, lag, etc.).
+        // the GPU finishes rendering and pixels are copied to a staging surface.
+        // The staging IOSurface is NEVER written by the GPU, so reading it is
+        // always safe regardless of timing.
         const doRefresh = () => {
           if (!ioSurfaceView || !mainWindow) return;
           if (mainWindow.webContents.isDestroyed()) {
@@ -291,12 +292,12 @@ ipcMain.handle(
           }
           ioSurfaceView.refreshShared!();
         };
-        // Subscribe to engine frame-ready signal (low-latency, no tearing)
+        // Subscribe to engine frame-ready signal
         if (engineClient) {
           engineClient.on("on:viewport.frameReady" as never, doRefresh);
         }
-        // Slow fallback timer — catches frames if notification is missed
-        surfaceRefreshTimer = setInterval(doRefresh, 32);
+        // Very slow fallback — only for edge cases (reconnect, etc.)
+        surfaceRefreshTimer = setInterval(doRefresh, 500);
         sabActive = true;
       } catch (e) {
         console.warn("[Viewport] SAB path failed, falling back to IPC:", (e as Error).message);

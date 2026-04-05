@@ -36,6 +36,20 @@ pub fn consoleLog(level: []const u8, message: []const u8, source: ?[]const u8) v
     srv.pushConsoleLog(level, message, source);
 }
 
+/// Notify the editor that a new IOSurface frame is ready for readback.
+/// Called from the renderer right after waitForGpu() completes, while
+/// the IOSurface pixels are stable (before next drawFrame starts).
+/// Broadcasts + flushes immediately so the editor can read within the
+/// safe window (before the next frame's GPU commands touch the surface).
+pub fn notifyFrameReady() void {
+    const srv = global_server orelse return;
+    if (srv.active_client_count.load(.acquire) == 0) return;
+    const msg = "{\"jsonrpc\":\"2.0\",\"method\":\"on:viewport.frameReady\",\"params\":{}}";
+    const owned = srv.allocator.dupe(u8, msg) catch return;
+    srv.broadcast(owned);
+    srv.flushOutgoing();
+}
+
 /// Callback trampoline for the logging system (matches the function pointer signature).
 pub fn consoleLogTrampoline(level: []const u8, message: []const u8, source: []const u8) void {
     consoleLog(level, message, source);
@@ -443,7 +457,7 @@ pub const Server = struct {
         }
     }
 
-    fn flushOutgoing(self: *Server) void {
+    pub fn flushOutgoing(self: *Server) void {
         var batch_buf: [64]OutgoingMessage = undefined;
         var count: usize = 0;
         {
