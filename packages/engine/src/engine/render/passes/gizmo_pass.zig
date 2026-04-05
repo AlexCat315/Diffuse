@@ -276,6 +276,11 @@ pub const GizmoPass = struct {
         proj_fov_factor: f32,
         viewport_height: f32,
         line_width_px: f32,
+        /// When true, extend each segment endpoint outward by half_thick
+        /// to create square caps.  Use for selected (gold) lines only —
+        /// this allows gold to cover the exact endpoint area of teal lines,
+        /// preventing gold+teal blending at shared vertices.
+        extend_caps: bool,
         allocator: std.mem.Allocator,
         color: [4]f32,
     ) !mesh_pass_mod.DrawStats {
@@ -313,14 +318,17 @@ pub const GizmoPass = struct {
             const perp = vec3.normalize(vec3.cross(line_dir, to_cam));
 
             // Perspective-correct world-space half-thickness.
-            // half_thick [world units] = (line_width_px / 2) * (2 * dist) / (proj_fov_factor * viewport_height)
             const half_thick = line_width_px * dist / (safe_fov * safe_height * 0.5);
 
+            // Optionally extend endpoints for square caps (gold lines only).
+            const p0c = if (extend_caps) vec3.sub(p0, vec3.scale(line_dir, half_thick)) else p0;
+            const p1c = if (extend_caps) vec3.add(p1, vec3.scale(line_dir, half_thick)) else p1;
+
             // Quad corners (two triangles, CCW winding).
-            const a = vec3.sub(p0, vec3.scale(perp, half_thick));
-            const b = vec3.add(p0, vec3.scale(perp, half_thick));
-            const c = vec3.add(p1, vec3.scale(perp, half_thick));
-            const d = vec3.sub(p1, vec3.scale(perp, half_thick));
+            const a = vec3.sub(p0c, vec3.scale(perp, half_thick));
+            const b = vec3.add(p0c, vec3.scale(perp, half_thick));
+            const c = vec3.add(p1c, vec3.scale(perp, half_thick));
+            const d = vec3.sub(p1c, vec3.scale(perp, half_thick));
 
             quad_vertices[out + 0] = .{ .position = a };
             quad_vertices[out + 1] = .{ .position = b };

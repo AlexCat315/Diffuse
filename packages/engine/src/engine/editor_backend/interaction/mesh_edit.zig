@@ -274,29 +274,67 @@ pub fn refreshOverlay(state: *EditorState, layer_context: *engine.core.LayerCont
             }
         },
         // ── Face mode ────────────────────────────────────────────
-        // vtx: all unselected face outlines (teal)
-        // sel: all selected face outlines + centroid marker (gold)
+        // Each unique edge is classified once:
+        //   if any adjacent face is selected → gold (sel)
+        //   otherwise → teal (vtx)
+        // This avoids double-drawing shared edges between two selected faces
+        // and prevents gold+teal blending at boundaries.
         .face => {
             var sel_set = buildSelectionSet(allocator, state) catch null;
             defer if (sel_set) |*s| s.deinit();
+
+            // edge_selected: canonical edge key → is any adjacent face selected?
+            var edge_selected = std.AutoHashMap(u64, bool).init(allocator);
+            defer edge_selected.deinit();
+            // edge_endpoints: canonical edge key → world-space endpoint pair
+            var edge_endpoints = std.AutoHashMap(u64, [2][3]f32).init(allocator);
+            defer edge_endpoints.deinit();
+
             var face_index: usize = 0;
             while (face_index * 3 + 2 < mesh.indices.len) : (face_index += 1) {
                 const base = face_index * 3;
-                const p0 = transformPoint(xform, mesh.vertices[mesh.indices[base]].position);
-                const p1 = transformPoint(xform, mesh.vertices[mesh.indices[base + 1]].position);
-                const p2 = transformPoint(xform, mesh.vertices[mesh.indices[base + 2]].position);
+                const vi0 = mesh.indices[base];
+                const vi1 = mesh.indices[base + 1];
+                const vi2 = mesh.indices[base + 2];
+                const p0 = transformPoint(xform, mesh.vertices[vi0].position);
+                const p1 = transformPoint(xform, mesh.vertices[vi1].position);
+                const p2 = transformPoint(xform, mesh.vertices[vi2].position);
                 const is_sel = if (sel_set) |s| s.contains(@intCast(face_index)) else false;
+
+                // Classify all three edges of this triangle.
+                const edge_v_pairs = [3][2]u32{ .{ vi0, vi1 }, .{ vi1, vi2 }, .{ vi2, vi0 } };
+                const edge_p_pairs = [3][2][3]f32{ .{ p0, p1 }, .{ p1, p2 }, .{ p2, p0 } };
+                for (edge_v_pairs, edge_p_pairs) |vp, pp| {
+                    const key = canonicalEdgeKey(vp[0], vp[1]);
+                    const gop = edge_selected.getOrPut(key) catch continue;
+                    if (!gop.found_existing) {
+                        gop.value_ptr.* = is_sel;
+                        edge_endpoints.put(key, pp) catch {};
+                    } else if (is_sel) {
+                        gop.value_ptr.* = true; // any adjacent face selected → gold
+                    }
+                }
+
                 if (is_sel) {
-                    sel.appendSlice(allocator, &.{ p0, p1, p1, p2, p2, p0 }) catch {};
-                    // Centroid dot for selected face
                     const centroid = [3]f32{
                         (p0[0] + p1[0] + p2[0]) / 3.0,
                         (p0[1] + p1[1] + p2[1]) / 3.0,
                         (p0[2] + p1[2] + p2[2]) / 3.0,
                     };
                     sel_dots.append(allocator, centroid) catch {};
+                }
+            }
+
+            // Distribute each unique edge to the correct colour bucket.
+            var it = edge_selected.iterator();
+            while (it.next()) |entry| {
+                const ep = edge_endpoints.get(entry.key_ptr.*) orelse continue;
+                if (entry.value_ptr.*) {
+                    sel.append(allocator, ep[0]) catch {};
+                    sel.append(allocator, ep[1]) catch {};
                 } else {
-                    vtx.appendSlice(allocator, &.{ p0, p1, p1, p2, p2, p0 }) catch {};
+                    vtx.append(allocator, ep[0]) catch {};
+                    vtx.append(allocator, ep[1]) catch {};
                 }
             }
         },

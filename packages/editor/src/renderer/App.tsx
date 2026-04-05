@@ -401,17 +401,21 @@ export function App() {
     window.guavaEngine.popoutPanel([componentId], initialState, originInfo, savedBounds);
   }, []);
 
-  // ── onRenderTab: add popout button to each tab ──
+  // ── onRenderTab: translate tab title + add popout button ──
   const handleRenderTab = useCallback(
     (node: TabNode, renderValues: ITabRenderValues) => {
       const componentId = node.getComponent();
+      // Override displayed tab name with translated label
+      const panelLabels = t.panels as Record<string, string>;
+      const translatedName = componentId ? panelLabels[componentId] : undefined;
+      if (translatedName) renderValues.content = translatedName;
       // Don't show popout button for viewport (needs native surface)
       if (componentId === "viewport") return;
       renderValues.buttons.push(
         <button
           key="popout-btn"
           className="guava-popout-btn"
-          title="在新窗口中打开"
+          title={t.app.popoutPanel}
           onPointerDown={(e) => e.stopPropagation()}
           onClick={(e) => {
             e.stopPropagation();

@@ -19,16 +19,14 @@ export const MESH_SHORTCUTS_STORAGE_KEY = "guava-editor-shortcuts";
 
 export interface GizmoShortcutDef {
   id: string;
-  label: string;
-  labelZh: string;
   default: ShortcutBinding;
 }
 
 export const GIZMO_SHORTCUT_DEFS: GizmoShortcutDef[] = [
-  { id: "select",    label: "Select",    labelZh: "选择",  default: { key: "q", ctrl: false, shift: false, alt: false } },
-  { id: "translate", label: "Translate", labelZh: "移动",  default: { key: "w", ctrl: false, shift: false, alt: false } },
-  { id: "rotate",    label: "Rotate",    labelZh: "旋转",  default: { key: "e", ctrl: false, shift: false, alt: false } },
-  { id: "scale",     label: "Scale",     labelZh: "缩放",  default: { key: "r", ctrl: false, shift: false, alt: false } },
+  { id: "select",    default: { key: "q", ctrl: false, shift: false, alt: false } },
+  { id: "translate", default: { key: "w", ctrl: false, shift: false, alt: false } },
+  { id: "rotate",    default: { key: "e", ctrl: false, shift: false, alt: false } },
+  { id: "scale",     default: { key: "r", ctrl: false, shift: false, alt: false } },
 ];
 
 export function loadGizmoShortcuts(): Record<string, ShortcutBinding> {
@@ -53,27 +51,25 @@ function buildGizmoDefaults(): Record<string, ShortcutBinding> {
 
 export interface MeshShortcutDef {
   id: string;
-  label: string;
-  labelZh: string;
   default: ShortcutBinding;
   /** Canonical key forwarded to engine if remapped */
   engineKey: string;
 }
 
 export const MESH_SHORTCUT_DEFS: MeshShortcutDef[] = [
-  { id: "extrude",          label: "Extrude",             labelZh: "挤出",       default: { key: "e", ctrl: false, shift: false, alt: false }, engineKey: "e" },
-  { id: "inset",            label: "Inset",               labelZh: "内嵌",       default: { key: "i", ctrl: false, shift: false, alt: false }, engineKey: "i" },
-  { id: "bevel",            label: "Bevel",               labelZh: "倒角",       default: { key: "b", ctrl: false, shift: false, alt: false }, engineKey: "b" },
-  { id: "loopCut",          label: "Loop Cut",            labelZh: "环切",       default: { key: "r", ctrl: true,  shift: false, alt: false }, engineKey: "r" },
-  { id: "merge",            label: "Merge",               labelZh: "合并",       default: { key: "m", ctrl: false, shift: false, alt: false }, engineKey: "m" },
-  { id: "duplicateFaces",   label: "Duplicate Faces",     labelZh: "复制面",     default: { key: "d", ctrl: false, shift: true,  alt: false }, engineKey: "d" },
-  { id: "separateFaces",    label: "Separate Faces",      labelZh: "分离面",     default: { key: "p", ctrl: false, shift: false, alt: false }, engineKey: "p" },
-  { id: "recalcNormals",    label: "Recalculate Normals", labelZh: "重算法线",   default: { key: "n", ctrl: false, shift: true,  alt: false }, engineKey: "n" },
-  { id: "pivotToSelection", label: "Pivot To Selection",  labelZh: "轴心到选区", default: { key: ".", ctrl: false, shift: false, alt: false }, engineKey: "." },
-  { id: "subdivide",        label: "Subdivide",           labelZh: "细分",       default: { key: "s", ctrl: false, shift: true,  alt: false }, engineKey: "s" },
-  { id: "dissolveVerts",    label: "Dissolve Vertices",   labelZh: "溶解顶点",   default: { key: "x", ctrl: false, shift: false, alt: false }, engineKey: "x" },
-  { id: "selectAll",        label: "Select All / None",   labelZh: "全选 / 取消", default: { key: "a", ctrl: false, shift: false, alt: false }, engineKey: "a" },
-  { id: "fillFace",         label: "Fill Face",           labelZh: "填充面",     default: { key: "f", ctrl: false, shift: false, alt: false }, engineKey: "f" },
+  { id: "extrude",          default: { key: "e", ctrl: false, shift: false, alt: false }, engineKey: "e" },
+  { id: "inset",            default: { key: "i", ctrl: false, shift: false, alt: false }, engineKey: "i" },
+  { id: "bevel",            default: { key: "b", ctrl: false, shift: false, alt: false }, engineKey: "b" },
+  { id: "loopCut",          default: { key: "r", ctrl: true,  shift: false, alt: false }, engineKey: "r" },
+  { id: "merge",            default: { key: "m", ctrl: false, shift: false, alt: false }, engineKey: "m" },
+  { id: "duplicateFaces",   default: { key: "d", ctrl: false, shift: true,  alt: false }, engineKey: "d" },
+  { id: "separateFaces",    default: { key: "p", ctrl: false, shift: false, alt: false }, engineKey: "p" },
+  { id: "recalcNormals",    default: { key: "n", ctrl: false, shift: true,  alt: false }, engineKey: "n" },
+  { id: "pivotToSelection", default: { key: ".", ctrl: false, shift: false, alt: false }, engineKey: "." },
+  { id: "subdivide",        default: { key: "s", ctrl: false, shift: true,  alt: false }, engineKey: "s" },
+  { id: "dissolveVerts",    default: { key: "x", ctrl: false, shift: false, alt: false }, engineKey: "x" },
+  { id: "selectAll",        default: { key: "a", ctrl: false, shift: false, alt: false }, engineKey: "a" },
+  { id: "fillFace",         default: { key: "f", ctrl: false, shift: false, alt: false }, engineKey: "f" },
 ];
 
 export function loadMeshShortcuts(): Record<string, ShortcutBinding> {
@@ -98,21 +94,19 @@ function buildMeshDefaults(): Record<string, ShortcutBinding> {
 
 export interface EditorFixedShortcut {
   id: string;
-  label: string;
-  labelZh: string;
   display: string; // e.g. "Ctrl+S"
 }
 
 export const EDITOR_FIXED_SHORTCUTS: EditorFixedShortcut[] = [
-  { id: "save",          label: "Save Scene",           labelZh: "保存场景",     display: "Ctrl+S" },
-  { id: "undo",          label: "Undo",                 labelZh: "撤销",         display: "Ctrl+Z" },
-  { id: "redo",          label: "Redo",                 labelZh: "重做",         display: "Ctrl+Shift+Z" },
-  { id: "togglePanel",   label: "Toggle Bottom Panel",  labelZh: "切换底部面板", display: "Ctrl+J" },
-  { id: "play",          label: "Play",                 labelZh: "播放",         display: "Space" },
-  { id: "pause",         label: "Pause",                labelZh: "暂停",         display: "Ctrl+Space" },
-  { id: "stop",          label: "Stop",                 labelZh: "停止",         display: "Shift+Space" },
-  { id: "openSettings",  label: "Open Settings",        labelZh: "打开设置",     display: "Ctrl+," },
-  { id: "openKeybindings", label: "Open Keybindings",  labelZh: "打开快捷键",   display: "Ctrl+K" },
+  { id: "save",            display: "Ctrl+S" },
+  { id: "undo",            display: "Ctrl+Z" },
+  { id: "redo",            display: "Ctrl+Shift+Z" },
+  { id: "togglePanel",     display: "Ctrl+J" },
+  { id: "play",            display: "Space" },
+  { id: "pause",           display: "Ctrl+Space" },
+  { id: "stop",            display: "Shift+Space" },
+  { id: "openSettings",    display: "Ctrl+," },
+  { id: "openKeybindings", display: "Ctrl+K" },
 ];
 
 // ── Helpers ──────────────────────────────────────────────────────

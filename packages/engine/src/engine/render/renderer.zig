@@ -4258,8 +4258,9 @@ pub const Renderer = struct {
                 prepared_scene.projection_matrix[5],
                 @floatFromInt(self.scene_viewport.height),
                 4.0,
+                false, // no cap extension — teal ends exactly at junction so gold caps cover cleanly
                 self.allocator,
-                .{ 0.28, 0.68, 0.62, 0.72 }, // teal — unselected elements (always on top)
+                .{ 0.35, 0.85, 0.78, 0.82 }, // teal — unselected elements (always on top)
             );
             stats.add(vtx_stats);
         }
@@ -4274,6 +4275,7 @@ pub const Renderer = struct {
                 prepared_scene.projection_matrix[5],
                 @floatFromInt(self.scene_viewport.height),
                 5.5,
+                true, // cap extension: gold extends past junction, covering teal endpoint area
                 self.allocator,
                 .{ 1.00, 0.86, 0.20, 1.00 }, // bright gold — selected elements (always on top)
             );
@@ -4292,7 +4294,7 @@ pub const Renderer = struct {
                 @floatFromInt(self.scene_viewport.height),
                 7.0,
                 self.allocator,
-                .{ 0.28, 0.68, 0.62, 0.90 }, // teal dot
+                .{ 0.38, 0.88, 0.80, 0.90 }, // teal dot
             );
             stats.add(dot_stats);
         }
