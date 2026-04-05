@@ -109,7 +109,6 @@ export function SettingsPanel() {
   const fpsDisplay = useViewportSettingsStore((s) => s.fpsDisplay);
   const setFpsDisplay = useViewportSettingsStore((s) => s.setFpsDisplay);
   const { locale, setLocale, t } = useI18n();
-  const isZh = locale === "zh-CN";
 
   const [prefs, setPrefs] = useLocalState<EditorPrefs>(loadPrefs);
   const [engineVersion, setEngineVersion] = useLocalState<string>("");
@@ -232,7 +231,7 @@ export function SettingsPanel() {
         <span style={S.searchIcon}>&#x2315;</span>
         <input
           style={S.searchInput}
-          placeholder={(isZh ? "搜索设置" : "Search settings") + "..."}
+          placeholder={t.settings.searchPlaceholder}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -242,9 +241,9 @@ export function SettingsPanel() {
         <button
           style={{ ...S.advancedToggle, ...(showAdvanced ? S.advancedToggleOn : {}) }}
           onClick={() => setShowAdvanced((v) => !v)}
-          title={isZh ? "显示高级设置" : "Show advanced settings"}
+          title={t.settings.showAdvancedTooltip}
         >
-          {isZh ? "高级" : "Advanced"}
+          {t.settings.showAdvanced}
         </button>
       </div>
 
@@ -265,7 +264,7 @@ export function SettingsPanel() {
                 onClick={() => scrollToSection(s.id)}
               >
                 <span style={S.navIcon}>{s.icon}</span>
-                <span style={S.navLabel}>{isZh ? s.labelZh : s.label}</span>
+                <span style={S.navLabel}>{locale === "zh-CN" ? s.labelZh : s.label}</span>
               </button>
             );
           })}
@@ -276,8 +275,8 @@ export function SettingsPanel() {
 
           {visibleIds.has("language") && (
             <div ref={(el) => { sectionRefs.current["language"] = el; }} style={S.section}>
-              <div style={S.sectionHeader}>{isZh ? "语言" : "Language"}</div>
-              <SettingRow label={isZh ? "界面语言" : "Interface Language"} desc={isZh ? "选择编辑器显示语言" : "Editor display language"}>
+              <div style={S.sectionHeader}>{t.settings.languageHeader}</div>
+              <SettingRow label={t.settings.interfaceLanguage} desc={t.settings.interfaceLanguageDesc}>
                 <div style={S.btnGroup}>
                   <button style={{ ...S.btn, ...(locale === "en" ? S.btnActive : {}) }} onClick={() => setLocale("en")}>English</button>
                   <button style={{ ...S.btn, ...(locale === "zh-CN" ? S.btnActive : {}) }} onClick={() => setLocale("zh-CN")}>中文</button>
@@ -288,21 +287,21 @@ export function SettingsPanel() {
 
           {visibleIds.has("appearance") && (
             <div ref={(el) => { sectionRefs.current["appearance"] = el; }} style={S.section}>
-              <div style={S.sectionHeader}>{isZh ? "外观" : "Appearance"}</div>
-              <SettingRow label={isZh ? "FPS 显示" : "FPS Display"} desc={isZh ? "在视口中显示帧率叠加层" : "Show frame rate overlay in viewport"}>
+              <div style={S.sectionHeader}>{t.settings.appearanceHeader}</div>
+              <SettingRow label={t.settings.fpsDisplayLabel} desc={t.settings.fpsDisplayDesc}>
                 <div style={S.btnGroup}>
-                  <button style={{ ...S.btn, ...(fpsDisplay === "viewport" ? S.btnActive : {}) }} onClick={() => setFpsDisplay("viewport")}>{isZh ? "视口内" : "Viewport"}</button>
-                  <button style={{ ...S.btn, ...(fpsDisplay === "none" ? S.btnActive : {}) }} onClick={() => setFpsDisplay("none")}>{isZh ? "隐藏" : "None"}</button>
+                  <button style={{ ...S.btn, ...(fpsDisplay === "viewport" ? S.btnActive : {}) }} onClick={() => setFpsDisplay("viewport")}>{t.settings.fpsViewport}</button>
+                  <button style={{ ...S.btn, ...(fpsDisplay === "none" ? S.btnActive : {}) }} onClick={() => setFpsDisplay("none")}>{t.settings.fpsNone}</button>
                 </div>
               </SettingRow>
-              <SettingRow label={isZh ? "帧率上限" : "Frame Rate Limit"} desc={isZh ? "限制引擎渲染帧率" : "Limit engine rendering frame rate"}>
+              <SettingRow label={t.settings.frameRateLimit} desc={t.settings.frameRateLimitDesc}>
                 <div style={S.btnGroup}>
                   {[30, 60, 90, 120].map((fps) => (
                     <button key={fps} style={{ ...S.btn, ...(fpsLimit === fps ? S.btnActive : {}) }} onClick={() => setFpsLimit(fps)}>{fps}</button>
                   ))}
                 </div>
               </SettingRow>
-              <SettingRow label="VSync" desc={isZh ? "启用垂直同步（需引擎端支持）" : "Enable vertical sync (requires engine support)"}>
+              <SettingRow label={t.settings.vsyncLabel} desc={t.settings.vsyncDesc}>
                 <Toggle checked={prefs.vsyncEnabled} onChange={(v) => updatePref("vsyncEnabled", v)} />
               </SettingRow>
             </div>
@@ -310,8 +309,8 @@ export function SettingsPanel() {
 
           {visibleIds.has("console") && (
             <div ref={(el) => { sectionRefs.current["console"] = el; }} style={S.section}>
-              <div style={S.sectionHeader}>{isZh ? "控制台" : "Console"}</div>
-              <SettingRow label={isZh ? "最大日志条数" : "Max Log Entries"} desc={isZh ? "超过此数量时，最旧的日志将被丢弃（50–10000）" : "Oldest entries are discarded when the limit is exceeded (50–10,000)"}>
+              <div style={S.sectionHeader}>{t.settings.consoleHeader}</div>
+              <SettingRow label={t.settings.maxLogEntries} desc={t.settings.maxLogEntriesDesc}>
                 <input
                   type="number"
                   min={50}
@@ -330,29 +329,29 @@ export function SettingsPanel() {
 
           {visibleIds.has("layout") && (
             <div ref={(el) => { sectionRefs.current["layout"] = el; }} style={S.section}>
-              <div style={S.sectionHeader}>{isZh ? "布局" : "Layout"}</div>
-              <SettingRow label={isZh ? "面板布局" : "Panel Layout"} desc={isZh ? "恢复默认面板排列方式" : "Restore default panel arrangement"}>
-                <button style={S.actionBtn} onClick={handleResetLayout}>{isZh ? "重置布局" : "Reset Layout"}</button>
+              <div style={S.sectionHeader}>{t.settings.layoutHeader}</div>
+              <SettingRow label={t.settings.panelLayout} desc={t.settings.panelLayoutDesc}>
+                <button style={S.actionBtn} onClick={handleResetLayout}>{t.settings.resetLayout}</button>
               </SettingRow>
             </div>
           )}
 
           {visibleIds.has("remote") && (
             <div ref={(el) => { sectionRefs.current["remote"] = el; }} style={S.section}>
-              <div style={S.sectionHeader}>{isZh ? "远程服务器" : "Remote Server"}</div>
-              <SettingRow label={isZh ? "连接模式" : "Connection Mode"} desc={isZh ? "选择本地引擎或远端服务器" : "Local engine or remote server"}>
+              <div style={S.sectionHeader}>{t.settings.remoteHeader}</div>
+              <SettingRow label={t.settings.connectionMode} desc={t.settings.connectionModeDesc}>
                 <div style={S.btnGroup}>
-                  <button style={{ ...S.btn, ...(connectMode === "local" ? S.btnActive : {}) }} onClick={() => connectMode !== "local" && handleConnect("local")} disabled={connecting}>{isZh ? "本地" : "Local"}</button>
-                  <button style={{ ...S.btn, ...(connectMode === "remote" ? S.btnActive : {}) }} onClick={() => connectMode !== "remote" && handleConnect("remote")} disabled={connecting}>{isZh ? "远程" : "Remote"}</button>
+                  <button style={{ ...S.btn, ...(connectMode === "local" ? S.btnActive : {}) }} onClick={() => connectMode !== "local" && handleConnect("local")} disabled={connecting}>{t.settings.localMode}</button>
+                  <button style={{ ...S.btn, ...(connectMode === "remote" ? S.btnActive : {}) }} onClick={() => connectMode !== "remote" && handleConnect("remote")} disabled={connecting}>{t.settings.remoteMode}</button>
                 </div>
               </SettingRow>
-              {connecting && <div style={{ ...S.hint, color: "#89b4fa" }}>{isZh ? "正在切换连接..." : "Switching..."}</div>}
+              {connecting && <div style={{ ...S.hint, color: "#89b4fa" }}>{t.settings.switching}</div>}
               {connectError && <div style={{ ...S.hint, color: "#f38ba8" }}>{connectError}</div>}
-              <SettingRow label={isZh ? "服务器地址" : "Server URL"}>
+              <SettingRow label={t.settings.serverUrl}>
                 <div style={{ display: "flex", gap: 6 }}>
                   <input type="text" value={remoteUrl} onChange={(e) => setRemoteUrl(e.target.value)} placeholder="ws://192.168.1.100:9100" style={S.textInput} />
                   <button style={S.actionBtn} onClick={handleTest} disabled={testStatus === "testing"}>
-                    {testStatus === "testing" ? (isZh ? "测试..." : "Test...") : (isZh ? "测试" : "Test")}
+                    {testStatus === "testing" ? t.settings.testingBtn : t.settings.testBtn}
                   </button>
                 </div>
               </SettingRow>
@@ -364,10 +363,10 @@ export function SettingsPanel() {
               )}
               <div style={S.infoBox}>
                 <p style={S.infoParagraph}>
-                  {isZh ? "远程模式通过 WebSocket RPC 连接到远端引擎服务器。所有面板均可正常工作。" : "Remote mode connects via WebSocket RPC. All panels work normally."}
+                  {t.settings.remoteInfo1}
                 </p>
                 <p style={S.infoParagraph}>
-                  {isZh ? "⚠️ 视口渲染仅支持本地模式（IOSurface）。远程像素流传输计划于后续版本实现。" : "⚠️ Viewport rendering is local-only (IOSurface). Remote streaming is planned."}
+                  {t.settings.remoteInfo2}
                 </p>
               </div>
             </div>
@@ -375,18 +374,18 @@ export function SettingsPanel() {
 
           {visibleIds.has("about") && (
             <div ref={(el) => { sectionRefs.current["about"] = el; }} style={S.section}>
-              <div style={S.sectionHeader}>{isZh ? "关于" : "About"}</div>
+              <div style={S.sectionHeader}>{t.settings.aboutHeader}</div>
               <div style={S.aboutGrid}>
                 <AboutRow label="Guava Engine" value={engineVersion || "\u2014"} />
-                <AboutRow label={isZh ? "编辑器" : "Editor"} value="Electron" />
-                <AboutRow label={isZh ? "连接状态" : "Status"} value={connected ? (isZh ? "已连接" : "Connected") : (isZh ? "未连接" : "Disconnected")} valueColor={connected ? "#a6e3a1" : "#f38ba8"} />
-                {connectMode === "remote" && <AboutRow label={isZh ? "地址" : "URL"} value={remoteUrl} mono />}
+                <AboutRow label={t.settings.editorLabel} value="Electron" />
+                <AboutRow label={t.settings.statusLabel} value={connected ? t.settings.statusConnected : t.settings.statusDisconnected} valueColor={connected ? "#a6e3a1" : "#f38ba8"} />
+                {connectMode === "remote" && <AboutRow label={t.settings.addressLabel} value={remoteUrl} mono />}
               </div>
             </div>
           )}
 
           {visibleSections.length === 0 && (
-            <div style={S.empty}>{isZh ? "没有匹配的设置" : "No matching settings"}</div>
+            <div style={S.empty}>{t.settings.noMatch}</div>
           )}
         </div>
       </div>

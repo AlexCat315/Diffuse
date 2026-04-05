@@ -31,8 +31,7 @@ const CATEGORIES: CategoryDef[] = [
 // ── Main component ───────────────────────────────────────────────
 
 export function KeybindingsPanel() {
-  const { locale } = useI18n();
-  const isZh = locale === "zh-CN";
+  const { locale, t } = useI18n();
 
   const [activeCategory, setActiveCategory] = useLocalState<string>("editor");
   const [search, setSearch] = useLocalState("");
@@ -126,7 +125,7 @@ export function KeybindingsPanel() {
         <span style={S.searchIcon}>&#x2315;</span>
         <input
           style={S.searchInput}
-          placeholder={isZh ? "搜索快捷键..." : "Search keybindings..."}
+          placeholder={t.keybindings.searchPlaceholder}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
@@ -152,7 +151,7 @@ export function KeybindingsPanel() {
                 onClick={() => setActiveCategory(c.id)}
               >
                 <span style={S.navIcon}>{c.icon}</span>
-                <span style={S.navLabel}>{isZh ? c.labelZh : c.label}</span>
+                <span style={S.navLabel}>{locale === "zh-CN" ? c.labelZh : c.label}</span>
               </button>
             );
           })}
@@ -164,25 +163,23 @@ export function KeybindingsPanel() {
           {/* Editor (fixed) */}
           {activeCategory === "editor" && (
             <div>
-              <div style={S.sectionHeader}>{isZh ? "编辑器快捷键" : "Editor Shortcuts"}</div>
+              <div style={S.sectionHeader}>{t.keybindings.editorTitle}</div>
               <p style={S.sectionDesc}>
-                {isZh
-                  ? "这些是内置快捷键，当前版本不支持自定义。"
-                  : "These are built-in shortcuts and cannot be customized in this version."}
+                {t.keybindings.editorDesc}
               </p>
               <div style={S.table}>
                 <div style={S.headerRow}>
-                  <span style={S.colAction}>{isZh ? "操作" : "Action"}</span>
-                  <span style={S.colKey}>{isZh ? "快捷键" : "Shortcut"}</span>
-                  <span style={S.colFixed}>{isZh ? "状态" : "Status"}</span>
+                  <span style={S.colAction}>{t.keybindings.colAction}</span>
+                  <span style={S.colKey}>{t.keybindings.colShortcut}</span>
+                  <span style={S.colFixed}>{t.keybindings.colStatus}</span>
                 </div>
                 {EDITOR_FIXED_SHORTCUTS
                   .filter((s) => !q || s.label.toLowerCase().includes(q) || s.labelZh.includes(q) || s.display.toLowerCase().includes(q))
                   .map((s) => (
                     <div key={s.id} style={S.row}>
-                      <span style={S.colAction}>{isZh ? s.labelZh : s.label}</span>
+                      <span style={S.colAction}>{locale === "zh-CN" ? s.labelZh : s.label}</span>
                       <span style={S.colKey}><code style={S.keyCode}>{s.display}</code></span>
-                      <span style={{ ...S.colFixed, ...S.fixedBadge }}>{isZh ? "内置" : "Fixed"}</span>
+                      <span style={{ ...S.colFixed, ...S.fixedBadge }}>{t.keybindings.fixedBadge}</span>
                     </div>
                   ))}
               </div>
@@ -192,16 +189,14 @@ export function KeybindingsPanel() {
           {/* Gizmo shortcuts */}
           {activeCategory === "gizmo" && (
             <div>
-              <div style={S.sectionHeader}>{isZh ? "Gizmo 快捷键" : "Gizmo Shortcuts"}</div>
+              <div style={S.sectionHeader}>{t.keybindings.gizmoTitle}</div>
               <p style={S.sectionDesc}>
-                {isZh
-                  ? "在视口中切换变换模式（对象模式下有效）。"
-                  : "Switch transform mode in the viewport (active in object mode)."}
+                {t.keybindings.gizmoDesc}
               </p>
               <div style={S.table}>
                 <div style={S.headerRow}>
-                  <span style={S.colAction}>{isZh ? "操作" : "Action"}</span>
-                  <span style={S.colKey}>{isZh ? "快捷键" : "Shortcut"}</span>
+                  <span style={S.colAction}>{t.keybindings.colAction}</span>
+                  <span style={S.colKey}>{t.keybindings.colShortcut}</span>
                   <span style={S.colRecord} />
                 </div>
                 {GIZMO_SHORTCUT_DEFS
@@ -212,14 +207,14 @@ export function KeybindingsPanel() {
                     const isRec = recording === recId;
                     return (
                       <div key={def.id} style={{ ...S.row, ...(isRec ? S.rowRecording : {}) }}>
-                        <span style={S.colAction}>{isZh ? def.labelZh : def.label}</span>
+                        <span style={S.colAction}>{locale === "zh-CN" ? def.labelZh : def.label}</span>
                         <span style={S.colKey}>
                           {isRec
-                            ? <span style={S.recordingBadge}>{isZh ? "按下新快捷键..." : "Press new key..."}</span>
+                            ? <span style={S.recordingBadge}>{t.keybindings.pressNewKey}</span>
                             : <code style={S.keyCode}>{formatBinding(binding)}</code>}
                         </span>
                         <span style={S.colRecord}>
-                          <button style={S.recordBtn} onClick={() => setRecording(isRec ? null : recId)} title={isZh ? "录制" : "Record"}>
+                          <button style={S.recordBtn} onClick={() => setRecording(isRec ? null : recId)} title={t.keybindings.recordBtn}>
                             {isRec ? "✕" : "⌨"}
                           </button>
                         </span>
@@ -228,8 +223,8 @@ export function KeybindingsPanel() {
                   })}
               </div>
               <div style={S.footer}>
-                <button style={S.resetBtn} onClick={resetGizmo}>{isZh ? "恢复默认" : "Reset to Defaults"}</button>
-                <span style={S.hint}>{isZh ? "快捷键实时生效，保存在本地" : "Shortcuts take effect immediately, saved locally"}</span>
+                <button style={S.resetBtn} onClick={resetGizmo}>{t.keybindings.resetToDefaults}</button>
+                <span style={S.hint}>{t.keybindings.savedLocallyInstant}</span>
               </div>
             </div>
           )}
@@ -237,16 +232,14 @@ export function KeybindingsPanel() {
           {/* Mesh edit shortcuts */}
           {activeCategory === "mesh" && (
             <div>
-              <div style={S.sectionHeader}>{isZh ? "网格编辑快捷键" : "Mesh Edit Shortcuts"}</div>
+              <div style={S.sectionHeader}>{t.keybindings.meshTitle}</div>
               <p style={S.sectionDesc}>
-                {isZh
-                  ? "在网格编辑模式下有效（双击进入编辑模式）。"
-                  : "Active in mesh edit mode (double-click a mesh to enter edit mode)."}
+                {t.keybindings.meshDesc}
               </p>
               <div style={S.table}>
                 <div style={S.headerRow}>
-                  <span style={S.colAction}>{isZh ? "操作" : "Action"}</span>
-                  <span style={S.colKey}>{isZh ? "快捷键" : "Shortcut"}</span>
+                  <span style={S.colAction}>{t.keybindings.colAction}</span>
+                  <span style={S.colKey}>{t.keybindings.colShortcut}</span>
                   <span style={S.colRecord} />
                 </div>
                 {MESH_SHORTCUT_DEFS
@@ -257,14 +250,14 @@ export function KeybindingsPanel() {
                     const isRec = recording === recId;
                     return (
                       <div key={def.id} style={{ ...S.row, ...(isRec ? S.rowRecording : {}) }}>
-                        <span style={S.colAction}>{isZh ? def.labelZh : def.label}</span>
+                        <span style={S.colAction}>{locale === "zh-CN" ? def.labelZh : def.label}</span>
                         <span style={S.colKey}>
                           {isRec
-                            ? <span style={S.recordingBadge}>{isZh ? "按下新快捷键..." : "Press new key..."}</span>
+                            ? <span style={S.recordingBadge}>{t.keybindings.pressNewKey}</span>
                             : <code style={S.keyCode}>{formatBinding(binding)}</code>}
                         </span>
                         <span style={S.colRecord}>
-                          <button style={S.recordBtn} onClick={() => setRecording(isRec ? null : recId)} title={isZh ? "录制" : "Record"}>
+                          <button style={S.recordBtn} onClick={() => setRecording(isRec ? null : recId)} title={t.keybindings.recordBtn}>
                             {isRec ? "✕" : "⌨"}
                           </button>
                         </span>
@@ -273,14 +266,14 @@ export function KeybindingsPanel() {
                   })}
               </div>
               <div style={S.footer}>
-                <button style={S.resetBtn} onClick={resetMesh}>{isZh ? "恢复默认" : "Reset to Defaults"}</button>
-                <span style={S.hint}>{isZh ? "快捷键保存在本地，下次启动自动加载" : "Shortcuts are saved locally and restored on startup"}</span>
+                <button style={S.resetBtn} onClick={resetMesh}>{t.keybindings.resetToDefaults}</button>
+                <span style={S.hint}>{t.keybindings.savedLocally}</span>
               </div>
             </div>
           )}
 
           {visibleCategories.length === 0 && (
-            <div style={S.empty}>{isZh ? "没有匹配的快捷键" : "No matching keybindings"}</div>
+            <div style={S.empty}>{t.keybindings.noMatch}</div>
           )}
         </div>
       </div>

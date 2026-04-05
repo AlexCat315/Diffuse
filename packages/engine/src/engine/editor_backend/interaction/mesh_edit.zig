@@ -202,12 +202,19 @@ pub fn refreshOverlay(state: *EditorState, layer_context: *engine.core.LayerCont
     //   wire = slot 1 (muted/grey)  — vertex-mode wireframe background
     //   sel  = slot 2 (gold)        — selected elements across all modes
     //   vtx  = slot 3 (teal/cyan)   — unselected elements across all modes
+    // Two dot-position buckets (rendered as billboard squares):
+    //   vtx_dots = unselected vertex / face-centroid positions (teal)
+    //   sel_dots = selected vertex / face-centroid positions (gold)
     var wire = std.ArrayList([3]f32).empty;
     defer wire.deinit(allocator);
     var sel = std.ArrayList([3]f32).empty;
     defer sel.deinit(allocator);
     var vtx = std.ArrayList([3]f32).empty;
     defer vtx.deinit(allocator);
+    var vtx_dots = std.ArrayList([3]f32).empty;
+    defer vtx_dots.deinit(allocator);
+    var sel_dots = std.ArrayList([3]f32).empty;
+    defer sel_dots.deinit(allocator);
 
     switch (state.mesh_edit_selection_mode) {
         // ── Vertex mode ──────────────────────────────────────────
@@ -232,16 +239,16 @@ pub fn refreshOverlay(state: *EditorState, layer_context: *engine.core.LayerCont
                     }
                 }
             }
-            // Vertex markers: selected (gold, big) vs unselected (teal, small)
+            // Vertex markers: selected (gold dot) vs unselected (teal dot)
             var sel_set = buildSelectionSet(allocator, state) catch null;
             defer if (sel_set) |*s| s.deinit();
             for (mesh.vertices, 0..) |vertex, vi| {
                 const wp = transformPoint(xform, vertex.position);
                 const is_sel = if (sel_set) |s| s.contains(@intCast(vi)) else false;
                 if (is_sel) {
-                    appendCrosshair(allocator, &sel, wp, 0.062) catch {};
+                    sel_dots.append(allocator, wp) catch {};
                 } else {
-                    appendCrosshair(allocator, &vtx, wp, 0.038) catch {};
+                    vtx_dots.append(allocator, wp) catch {};
                 }
             }
         },
@@ -281,13 +288,13 @@ pub fn refreshOverlay(state: *EditorState, layer_context: *engine.core.LayerCont
                 const is_sel = if (sel_set) |s| s.contains(@intCast(face_index)) else false;
                 if (is_sel) {
                     sel.appendSlice(allocator, &.{ p0, p1, p1, p2, p2, p0 }) catch {};
-                    // Centroid marker for selected face
+                    // Centroid dot for selected face
                     const centroid = [3]f32{
                         (p0[0] + p1[0] + p2[0]) / 3.0,
                         (p0[1] + p1[1] + p2[1]) / 3.0,
                         (p0[2] + p1[2] + p2[2]) / 3.0,
                     };
-                    appendCrosshair(allocator, &sel, centroid, 0.045) catch {};
+                    sel_dots.append(allocator, centroid) catch {};
                 } else {
                     vtx.appendSlice(allocator, &.{ p0, p1, p1, p2, p2, p0 }) catch {};
                 }
@@ -295,7 +302,7 @@ pub fn refreshOverlay(state: *EditorState, layer_context: *engine.core.LayerCont
         },
     }
 
-    renderer.setMeshEditOverlay(wire.items, sel.items, vtx.items);
+    renderer.setMeshEditOverlay(wire.items, sel.items, vtx.items, sel_dots.items, vtx_dots.items);
 }
 
 fn canonicalEdgeKey(a: u32, b: u32) u64 {

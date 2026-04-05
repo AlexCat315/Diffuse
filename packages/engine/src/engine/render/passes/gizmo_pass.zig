@@ -350,6 +350,92 @@ pub const GizmoPass = struct {
         return stats;
     }
 
+    /// Render world-space positions as camera-facing square billboards.
+    /// Each element of `positions` is treated as a single dot center (NOT a
+    /// line pair).  The billboard is `dot_size_px` × `dot_size_px` pixels.
+    pub fn drawVertexDots(
+        self: *GizmoPass,
+        device: *rhi_mod.RhiDevice,
+        frame: rhi_mod.Frame,
+        pass: rhi_mod.RenderPass,
+        view_projection: [16]f32,
+        positions: []const WorldLineVertex,
+        camera_pos: [3]f32,
+        proj_fov_factor: f32,
+        viewport_height: f32,
+        dot_size_px: f32,
+        allocator: std.mem.Allocator,
+        color: [4]f32,
+    ) !mesh_pass_mod.DrawStats {
+        var stats = mesh_pass_mod.DrawStats{};
+        if (!self.isReady() or positions.len == 0) {
+            return stats;
+        }
+
+        const quad_vertices = try allocator.alloc(WorldLineVertex, positions.len * 6);
+        defer allocator.free(quad_vertices);
+
+        const safe_fov = if (proj_fov_factor < 0.001) 1.0 else proj_fov_factor;
+        const safe_height = if (viewport_height < 1.0) 1.0 else viewport_height;
+        const world_up: [3]f32 = .{ 0.0, 1.0, 0.0 };
+        const world_z: [3]f32 = .{ 0.0, 0.0, 1.0 };
+
+        var out: usize = 0;
+        for (positions) |vx| {
+            const p = vx.position;
+            const to_cam = vec3.sub(camera_pos, p);
+            const dist = vec3.length(to_cam);
+            const view_dir = vec3.normalize(to_cam);
+
+            // Perspective-correct half-size: (dot_size_px / 2) world units
+            const half = dot_size_px * dist / (safe_fov * safe_height * 0.5);
+
+            // Camera-facing right/up.  Avoid cross-product degeneracy when
+            // looking almost straight up or down.
+            const right_raw = vec3.cross(view_dir, world_up);
+            const right = if (vec3.length(right_raw) > 0.001)
+                vec3.normalize(right_raw)
+            else
+                vec3.normalize(vec3.cross(view_dir, world_z));
+            const up_local = vec3.normalize(vec3.cross(right, view_dir));
+
+            const r = vec3.scale(right, half);
+            const u = vec3.scale(up_local, half);
+
+            // CCW quad: bl → br → tr, bl → tr → tl
+            const bl = vec3.sub(vec3.sub(p, r), u);
+            const br = vec3.sub(vec3.add(p, r), u);
+            const tr = vec3.add(vec3.add(p, r), u);
+            const tl = vec3.add(vec3.sub(p, r), u);
+
+            quad_vertices[out + 0] = .{ .position = bl };
+            quad_vertices[out + 1] = .{ .position = br };
+            quad_vertices[out + 2] = .{ .position = tr };
+            quad_vertices[out + 3] = .{ .position = bl };
+            quad_vertices[out + 4] = .{ .position = tr };
+            quad_vertices[out + 5] = .{ .position = tl };
+            out += 6;
+        }
+
+        const buffer = try createVertexBuffer(device, quad_vertices[0..out]);
+        if (self.temp_world_line_count < self.temp_world_line_buffers.len) {
+            self.temp_world_line_buffers[self.temp_world_line_count] = buffer;
+            self.temp_world_line_count += 1;
+        } else {
+            device.releaseBuffer(&self.temp_world_line_buffers[0]);
+            var j: usize = 0;
+            while (j < self.temp_world_line_buffers.len - 1) : (j += 1) {
+                self.temp_world_line_buffers[j] = self.temp_world_line_buffers[j + 1];
+            }
+            self.temp_world_line_buffers[self.temp_world_line_buffers.len - 1] = buffer;
+        }
+
+        const model = math.identity();
+        device.bindGraphicsPipeline(pass, &self.triangle_pipeline.?);
+        self.drawShape(device, frame, pass, buffer, 0, out, view_projection, model, color, .triangles, &stats);
+        return stats;
+    }
+
     fn createResources(self: *GizmoPass, device: *rhi_mod.RhiDevice) !void {
         self.line_axis_vertex_buffer = try createVertexBuffer(device, line_axis_vertices[0..]);
         errdefer if (self.line_axis_vertex_buffer) |*buffer| {
