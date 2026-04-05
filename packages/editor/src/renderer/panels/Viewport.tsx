@@ -163,8 +163,11 @@ export function Viewport() {
           const dx = x - mouseDownPos.current.x;
           const dy = y - mouseDownPos.current.y;
           if (dx * dx + dy * dy < 16) {
-            const mode = (e.shiftKey || e.ctrlKey || e.metaKey) ? "toggle" : "replace";
-            window.guavaEngine.call("viewport.pick", { x: Math.round(x), y: Math.round(y), mode } as never).catch(() => {});
+            // In mesh edit mode, element picking is handled engine-side via raycasting
+            if (!useMeshEditStore.getState().active) {
+              const mode = (e.shiftKey || e.ctrlKey || e.metaKey) ? "toggle" : "replace";
+              window.guavaEngine.call("viewport.pick", { x: Math.round(x), y: Math.round(y), mode } as never).catch(() => {});
+            }
           }
         }
       }

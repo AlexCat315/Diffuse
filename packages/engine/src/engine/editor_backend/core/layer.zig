@@ -172,6 +172,22 @@ pub const EditorLayer = struct {
             try manipulation.handleEditingShortcuts(&self.state, layer_context);
         }
         manipulation.updateActiveTransform(&self.state, layer_context);
+        // In editor-server mode, handle mesh element picking (vertex/edge/face)
+        // when in mesh edit mode. Uses raycasting from cursor position.
+        if (self.state.editor_server_mode and mesh_edit.isEditModeActive(&self.state)) {
+            const input = layer_context.input;
+            if (input.wasMousePressed(.left) and !input.modifiers.alt) {
+                const sv = &layer_context.renderer.scene_viewport;
+                if (sv.width > 0 and sv.height > 0) {
+                    const mx: u32 = @intFromFloat(std.math.clamp(input.mouse_position[0], 0.0, @as(f32, @floatFromInt(sv.width -| 1))));
+                    const my: u32 = @intFromFloat(std.math.clamp(input.mouse_position[1], 0.0, @as(f32, @floatFromInt(sv.height -| 1))));
+                    if (camera.activeCameraRayFromViewportPixel(&self.state, layer_context, .{ mx, my }, .{ sv.width, sv.height })) |ray| {
+                        const sel_mode: engine.render.SelectionUpdateMode = if (input.modifiers.shift or input.modifiers.ctrl) .toggle else .replace;
+                        _ = try mesh_edit.handleViewportSelection(&self.state, layer_context, ray, sel_mode);
+                    }
+                }
+            }
+        }
         // In editor-server mode, detect gizmo handle clicks and initiate drag
         // sessions automatically. In the imgui path this was done by the UI;
         // here we do it in the update loop using the forwarded mouse events.
@@ -192,9 +208,9 @@ pub const EditorLayer = struct {
                 }
             }
         }
-        // Suppress entity picking while a gizmo drag is active so that
-        // selection readbacks don't override gizmo axis interactions.
-        layer_context.renderer.suppress_entity_pick = self.state.manipulation_drag_active;
+        // Suppress entity picking while a gizmo drag is active or while
+        // in mesh edit mode (so viewport.pick doesn't change entity selection).
+        layer_context.renderer.suppress_entity_pick = self.state.manipulation_drag_active or mesh_edit.isEditModeActive(&self.state);
         camera.handleCameraControls(&self.state, layer_context);
         try mesh_edit.syncSession(&self.state, layer_context);
         manipulation.refreshGizmoState(&self.state, layer_context);
