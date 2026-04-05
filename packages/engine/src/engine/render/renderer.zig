@@ -98,7 +98,6 @@ const physics_mod = @import("../physics/system.zig");
 const PassDescriptors = @import("render_helpers.zig").PassDescriptors;
 const render_log = std.log.scoped(.viewport_render);
 const rt_backend = @import("../rt/rt_backend.zig");
-const editor_rpc_server = @import("../editor_rpc/server.zig");
 const renderer_environment = @import("renderer_environment.zig");
 const renderer_path_trace = @import("path_trace/renderer_path_trace.zig");
 const renderer_resources = @import("renderer_resources.zig");
@@ -2475,7 +2474,7 @@ pub const Renderer = struct {
 
             // On Vulkan, blit the shared viewport texture to POSIX shm so
             // the Electron editor process can read the pixels.
-            // On Metal, wait for GPU then copy to a staging IOSurface.
+            // On Metal, wait for GPU then GPU-blit to a staging IOSurface.
             if (viewport_active and self.scene_viewport.use_iosurface) {
                 if (self.scene_viewport.color_texture) |tex| {
                     const staging_id = self.rhi.blitSharedTexture(tex);
@@ -2483,9 +2482,9 @@ pub const Renderer = struct {
                         self.scene_viewport.staging_iosurface_id = staging_id;
                     }
                 }
-                // Notify editor immediately while staging pixels are stable
-                // (after copy, before next frame's GPU commands).
-                editor_rpc_server.notifyFrameReady();
+                // No per-frame RPC notification needed.  The staging IOSurface
+                // is safe to read at any time — the GPU never touches it
+                // directly.  The addon polls on its own rAF schedule.
             }
 
             // Collect RHI stats

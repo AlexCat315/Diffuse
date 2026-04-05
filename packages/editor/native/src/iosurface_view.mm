@@ -29,6 +29,7 @@ static uint8_t* g_sab_data = nullptr;   // pointer into SAB backing store
 static size_t   g_sab_size = 0;         // total SAB size in bytes
 static uint32_t g_sab_generation = 0;   // monotonic frame counter
 static uint32_t g_write_index   = 0;    // ping-pong buffer index (0 or 1)
+static uint32_t g_last_seed     = 0;    // IOSurface seed from last successful copy
 static constexpr size_t SAB_HEADER_BYTES = 16;
 
 // ── attach(nativeHandle, surfaceId, x, y, w, h) ─────────────────────────
@@ -196,6 +197,11 @@ static Napi::Value RefreshShared(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (!g_surface || !g_sab_data) return Napi::Boolean::New(env, false);
 
+    // Seed check: skip copy if the staging IOSurface hasn't been updated.
+    // The engine bumps the seed (via write-lock/unlock) after each GPU blit.
+    uint32_t seed = IOSurfaceGetSeed(g_surface);
+    if (seed == g_last_seed) return Napi::Boolean::New(env, false);
+
     size_t width  = IOSurfaceGetWidth(g_surface);
     size_t height = IOSurfaceGetHeight(g_surface);
     if (width == 0 || height == 0) return Napi::Boolean::New(env, false);
@@ -225,6 +231,9 @@ static Napi::Value RefreshShared(const Napi::CallbackInfo& info) {
     }
 
     IOSurfaceUnlock(g_surface, kIOSurfaceLockReadOnly, nullptr);
+
+    // Record seed so next poll skips if no new frame.
+    g_last_seed = seed;
 
     // Publish: write width, height, readIndex, THEN generation (release).
     auto* header = reinterpret_cast<uint32_t*>(g_sab_data);

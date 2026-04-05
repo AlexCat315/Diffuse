@@ -279,10 +279,9 @@ ipcMain.handle(
         // Send SAB to renderer (one-time, zero-copy share)
         mainWindow.webContents.postMessage("viewport:shared-buffer", viewportSAB);
 
-        // Event-driven refresh: engine sends "on:viewport.frameReady" after
-        // the GPU finishes rendering and pixels are copied to a staging surface.
-        // The staging IOSurface is NEVER written by the GPU, so reading it is
-        // always safe regardless of timing.
+        // Poll-based refresh: the staging IOSurface is always safe to read
+        // (GPU never writes to it directly).  The addon's refreshShared() uses
+        // IOSurfaceGetSeed to skip redundant copies, so fast polling is cheap.
         const doRefresh = () => {
           if (!ioSurfaceView || !mainWindow) return;
           if (mainWindow.webContents.isDestroyed()) {
@@ -292,12 +291,8 @@ ipcMain.handle(
           }
           ioSurfaceView.refreshShared!();
         };
-        // Subscribe to engine frame-ready signal
-        if (engineClient) {
-          engineClient.on("on:viewport.frameReady" as never, doRefresh);
-        }
-        // Very slow fallback — only for edge cases (reconnect, etc.)
-        surfaceRefreshTimer = setInterval(doRefresh, 500);
+        // Poll at ~120Hz — seed check makes redundant calls nearly free.
+        surfaceRefreshTimer = setInterval(doRefresh, 8);
         sabActive = true;
       } catch (e) {
         console.warn("[Viewport] SAB path failed, falling back to IPC:", (e as Error).message);
