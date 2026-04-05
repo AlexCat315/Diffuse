@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useI18n } from "../i18n";
+import { usePanelSetting } from "../store/panel-settings";
 import {
   type ChatMessage,
   type MessageRole,
@@ -40,8 +41,8 @@ export function AiChat() {
   const [busy, setBusy] = useState(false);
   const [streamContent, setStreamContent] = useState("");
   const [streamReasoning, setStreamReasoning] = useState("");
-  const [showSettings, setShowSettings] = useState(false);
-  const [showReasoning, setShowReasoning] = useState(true);
+  const [showSettings, setShowSettings] = usePanelSetting("ai-chat", "showSettings", false);
+  const [showReasoning, setShowReasoning] = usePanelSetting("ai-chat", "showReasoning", true);
 
   // Provider state
   const [providers, setProviders] = useState<ProviderConfig[]>(() => loadProviders());

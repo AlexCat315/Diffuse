@@ -1,6 +1,7 @@
 import React, { useState, useCallback } from "react";
 import { useConnectionStore } from "../store";
 import { useI18n } from "../i18n";
+import { usePanelSetting } from "../store/panel-settings";
 
 /** Actor categories with static entries — no RPC needed for the catalog. */
 const categories = [
@@ -48,8 +49,8 @@ const categories = [
 export function PlaceActors() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [activeCategory, setActiveCategory] = useState("basics");
-  const [filter, setFilter] = useState("");
+  const [activeCategory, setActiveCategory] = usePanelSetting("place-actors", "activeCategory", "basics");
+  const [filter, setFilter] = usePanelSetting("place-actors", "filter", "");
   const [spawning, setSpawning] = useState(false);
 
   const handleSpawn = useCallback(

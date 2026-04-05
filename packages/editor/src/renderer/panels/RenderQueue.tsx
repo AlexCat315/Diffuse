@@ -1,5 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef } from "react";
 import { useConnectionStore } from "../store";
+import { usePanelSetting } from "../store/panel-settings";
 import { useI18n } from "../i18n";
 
 interface RenderJobInfo {
@@ -28,17 +29,17 @@ export function RenderQueue() {
   const [isRunning, setIsRunning] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Form state
-  const [seqPath, setSeqPath] = useState("");
-  const [outDir, setOutDir] = useState("render_output");
-  const [width, setWidth] = useState(1920);
-  const [height, setHeight] = useState(1080);
-  const [format, setFormat] = useState("png");
-  const [samples, setSamples] = useState(256);
-  const [bounces, setBounces] = useState(8);
-  const [usePathTrace, setUsePathTrace] = useState(true);
-  const [encodeVideo, setEncodeVideo] = useState(false);
-  const [videoCodec, setVideoCodec] = useState("h264");
+  // Form state (synced across windows via usePanelSetting)
+  const [seqPath, setSeqPath] = usePanelSetting("render-queue", "seqPath", "");
+  const [outDir, setOutDir] = usePanelSetting("render-queue", "outDir", "render_output");
+  const [width, setWidth] = usePanelSetting("render-queue", "width", 1920);
+  const [height, setHeight] = usePanelSetting("render-queue", "height", 1080);
+  const [format, setFormat] = usePanelSetting("render-queue", "format", "png");
+  const [samples, setSamples] = usePanelSetting("render-queue", "samples", 256);
+  const [bounces, setBounces] = usePanelSetting("render-queue", "bounces", 8);
+  const [usePathTrace, setUsePathTrace] = usePanelSetting("render-queue", "usePathTrace", true);
+  const [encodeVideo, setEncodeVideo] = usePanelSetting("render-queue", "encodeVideo", false);
+  const [videoCodec, setVideoCodec] = usePanelSetting("render-queue", "videoCodec", "h264");
 
   const refresh = useCallback(async () => {
     if (!connected) return;

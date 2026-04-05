@@ -4,6 +4,7 @@ import type { ComponentField } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
 import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
 import { useSceneStore, useEntityCacheStore } from "../store";
+import { usePanelSetting } from "../store/panel-settings";
 
 export function Inspector() {
   const entityId = useSceneStore((s) => s.selectedEntity);
@@ -11,7 +12,7 @@ export function Inspector() {
   const [transform, setTransform] = useState<Transform | null>(null);
   const [components, setComponents] = useState<ComponentInfo[]>([]);
   const [entityName, setEntityName] = useState("");
-  const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+  const [collapsedSections, setCollapsedSections] = usePanelSetting<Set<string>>("inspector", "collapsedSections", new Set());
 
   const fetchEntityData = useCallback(async (eid: number) => {
     const data = await useEntityCacheStore.getState().fetchEntity(eid, true);

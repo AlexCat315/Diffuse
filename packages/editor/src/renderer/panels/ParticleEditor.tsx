@@ -2,6 +2,7 @@ import React, { useEffect, useState, useCallback, useRef } from "react";
 import { rpc } from "../rpc";
 import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
 import { useConnectionStore } from "../store";
+import { usePanelSetting } from "../store/panel-settings";
 import { useI18n } from "../i18n";
 
 // ── Types ───────────────────────────────────────────────────────
@@ -91,9 +92,9 @@ export function ParticleEditor() {
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [config, setConfig] = useState<VfxConfig | null>(null);
   const [curves, setCurves] = useState<CurveState>(defaultCurves);
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set(["emission", "gradient", "sizeCurve"]));
+  const [collapsed, setCollapsed] = usePanelSetting<Set<string>>("particle-editor", "collapsed", new Set(["emission", "gradient", "sizeCurve"]));
   const [playing, setPlaying] = useState(false);
-  const [simSpeed, setSimSpeed] = useState(1.0);
+  const [simSpeed, setSimSpeed] = usePanelSetting("particle-editor", "simSpeed", 1.0);
   const commitTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   // ── Fetch entities ──────────────────────────────────────────
