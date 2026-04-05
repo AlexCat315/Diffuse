@@ -222,8 +222,10 @@ pub fn refreshOverlay(state: *EditorState, layer_context: *engine.core.LayerCont
         // vtx:  unselected vertex crosshairs (teal, small)
         // sel:  selected vertex crosshairs (gold, larger)
         .vertex => {
-            // Muted wireframe: de-duplicate edges via hash set
-            var edge_set = std.AutoHashMap(u64, void).init(allocator);
+            // Muted wireframe: de-duplicate edges via world-position hash set.
+            // Per-face-normal meshes have duplicate vertices at shared corners;
+            // canonical keys based on quantized world positions avoid double-drawing.
+            var edge_set = std.AutoHashMap([6]i64, void).init(allocator);
             defer edge_set.deinit();
             var tri: usize = 0;
             while (tri + 2 < mesh.indices.len) : (tri += 3) {
@@ -231,45 +233,88 @@ pub fn refreshOverlay(state: *EditorState, layer_context: *engine.core.LayerCont
                 inline for (.{ .{ 0, 1 }, .{ 1, 2 }, .{ 2, 0 } }) |pair| {
                     const ai = idx[pair[0]];
                     const bi = idx[pair[1]];
-                    const key = canonicalEdgeKey(ai, bi);
+                    const pa = transformPoint(xform, mesh.vertices[ai].position);
+                    const pb = transformPoint(xform, mesh.vertices[bi].position);
+                    const key = canonicalEdgePosKey(pa, pb);
                     if (edge_set.get(key) == null) {
                         edge_set.put(key, {}) catch break;
-                        wire.append(allocator, transformPoint(xform, mesh.vertices[ai].position)) catch break;
-                        wire.append(allocator, transformPoint(xform, mesh.vertices[bi].position)) catch break;
+                        wire.append(allocator, pa) catch break;
+                        wire.append(allocator, pb) catch break;
                     }
                 }
             }
-            // Vertex markers: selected (gold dot) vs unselected (teal dot)
+            // Vertex markers: deduplicate by world position.
+            // Per-face-normal meshes have multiple vertex indices at each corner;
+            // if ANY copy is selected the whole corner shows gold.
             var sel_set = buildSelectionSet(allocator, state) catch null;
             defer if (sel_set) |*s| s.deinit();
+
+            const DotEntry = struct { selected: bool, pos: [3]f32 };
+            var dot_map = std.AutoHashMap([3]i64, DotEntry).init(allocator);
+            defer dot_map.deinit();
+
             for (mesh.vertices, 0..) |vertex, vi| {
                 const wp = transformPoint(xform, vertex.position);
+                const key = quantizePos(wp);
                 const is_sel = if (sel_set) |s| s.contains(@intCast(vi)) else false;
-                if (is_sel) {
-                    sel_dots.append(allocator, wp) catch {};
+                const gop = dot_map.getOrPut(key) catch continue;
+                if (!gop.found_existing) {
+                    gop.value_ptr.* = .{ .selected = is_sel, .pos = wp };
+                } else if (is_sel) {
+                    gop.value_ptr.*.selected = true;
+                }
+            }
+
+            var dot_it = dot_map.valueIterator();
+            while (dot_it.next()) |entry| {
+                if (entry.selected) {
+                    sel_dots.append(allocator, entry.pos) catch {};
                 } else {
-                    vtx_dots.append(allocator, wp) catch {};
+                    vtx_dots.append(allocator, entry.pos) catch {};
                 }
             }
         },
         // ── Edge mode ────────────────────────────────────────────
         // vtx: all unselected edges (teal)
         // sel: all selected edges (gold)
+        // Per-face-normal meshes store duplicate vertices at shared boundaries,
+        // so buildEdgeList may return multiple copies of the same geometric edge
+        // with different vertex indices.  We aggregate by world-position key:
+        // if ANY copy of a geometric edge is selected → show gold.
         .edge => {
             const edges = buildEdgeList(allocator, mesh) catch &.{};
             defer if (edges.len > 0) allocator.free(edges);
             var sel_set = buildSelectionSet(allocator, state) catch null;
             defer if (sel_set) |*s| s.deinit();
+
+            var pos_selected = std.AutoHashMap([6]i64, bool).init(allocator);
+            defer pos_selected.deinit();
+            var pos_endpoints = std.AutoHashMap([6]i64, [2][3]f32).init(allocator);
+            defer pos_endpoints.deinit();
+
             for (edges, 0..) |e, ei| {
                 const pa = transformPoint(xform, mesh.vertices[e.a].position);
                 const pb = transformPoint(xform, mesh.vertices[e.b].position);
+                const key = canonicalEdgePosKey(pa, pb);
                 const is_sel = if (sel_set) |s| s.contains(@intCast(ei)) else false;
-                if (is_sel) {
-                    sel.append(allocator, pa) catch {};
-                    sel.append(allocator, pb) catch {};
+                const gop = pos_selected.getOrPut(key) catch continue;
+                if (!gop.found_existing) {
+                    gop.value_ptr.* = is_sel;
+                    pos_endpoints.put(key, .{ pa, pb }) catch {};
+                } else if (is_sel) {
+                    gop.value_ptr.* = true; // any copy selected → show gold
+                }
+            }
+
+            var it = pos_selected.iterator();
+            while (it.next()) |entry| {
+                const ep = pos_endpoints.get(entry.key_ptr.*) orelse continue;
+                if (entry.value_ptr.*) {
+                    sel.append(allocator, ep[0]) catch {};
+                    sel.append(allocator, ep[1]) catch {};
                 } else {
-                    vtx.append(allocator, pa) catch {};
-                    vtx.append(allocator, pb) catch {};
+                    vtx.append(allocator, ep[0]) catch {};
+                    vtx.append(allocator, ep[1]) catch {};
                 }
             }
         },
@@ -284,10 +329,13 @@ pub fn refreshOverlay(state: *EditorState, layer_context: *engine.core.LayerCont
             defer if (sel_set) |*s| s.deinit();
 
             // edge_selected: canonical edge key → is any adjacent face selected?
-            var edge_selected = std.AutoHashMap(u64, bool).init(allocator);
+            // Keys are based on quantized world positions so geometrically identical
+            // edges are merged even when they have different vertex indices
+            // (common in per-face-normal meshes).
+            var edge_selected = std.AutoHashMap([6]i64, bool).init(allocator);
             defer edge_selected.deinit();
             // edge_endpoints: canonical edge key → world-space endpoint pair
-            var edge_endpoints = std.AutoHashMap(u64, [2][3]f32).init(allocator);
+            var edge_endpoints = std.AutoHashMap([6]i64, [2][3]f32).init(allocator);
             defer edge_endpoints.deinit();
 
             var face_index: usize = 0;
@@ -302,10 +350,9 @@ pub fn refreshOverlay(state: *EditorState, layer_context: *engine.core.LayerCont
                 const is_sel = if (sel_set) |s| s.contains(@intCast(face_index)) else false;
 
                 // Classify all three edges of this triangle.
-                const edge_v_pairs = [3][2]u32{ .{ vi0, vi1 }, .{ vi1, vi2 }, .{ vi2, vi0 } };
                 const edge_p_pairs = [3][2][3]f32{ .{ p0, p1 }, .{ p1, p2 }, .{ p2, p0 } };
-                for (edge_v_pairs, edge_p_pairs) |vp, pp| {
-                    const key = canonicalEdgeKey(vp[0], vp[1]);
+                for (edge_p_pairs) |pp| {
+                    const key = canonicalEdgePosKey(pp[0], pp[1]);
                     const gop = edge_selected.getOrPut(key) catch continue;
                     if (!gop.found_existing) {
                         gop.value_ptr.* = is_sel;
@@ -347,6 +394,33 @@ fn canonicalEdgeKey(a: u32, b: u32) u64 {
     const lo: u64 = @min(a, b);
     const hi: u64 = @max(a, b);
     return (hi << 32) | lo;
+}
+
+/// Quantize a world-space position to integer units at 1/1000 precision.
+/// This lets edges that share the same geometric position (but different
+/// vertex indices, as in per-face-normal meshes) be treated as the same edge.
+fn quantizePos(p: [3]f32) [3]i64 {
+    return .{
+        @intFromFloat(@round(p[0] * 1000.0)),
+        @intFromFloat(@round(p[1] * 1000.0)),
+        @intFromFloat(@round(p[2] * 1000.0)),
+    };
+}
+
+/// Canonical edge key using world-space positions (NOT vertex indices).
+/// Each endpoint is quantized; the pair is stored in lexicographic order
+/// so the same geometric edge is always the same key regardless of winding.
+fn canonicalEdgePosKey(pa: [3]f32, pb: [3]f32) [6]i64 {
+    const qa = quantizePos(pa);
+    const qb = quantizePos(pb);
+    const a_first = qa[0] < qb[0] or
+        (qa[0] == qb[0] and (qa[1] < qb[1] or
+        (qa[1] == qb[1] and qa[2] <= qb[2])));
+    if (a_first) {
+        return .{ qa[0], qa[1], qa[2], qb[0], qb[1], qb[2] };
+    } else {
+        return .{ qb[0], qb[1], qb[2], qa[0], qa[1], qa[2] };
+    }
 }
 
 /// Build a temporary HashSet of the currently selected element indices for O(1) lookup.
