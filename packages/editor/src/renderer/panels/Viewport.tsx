@@ -323,8 +323,9 @@ export function Viewport() {
       useMeshEditStore.getState().exitEditMode();
       return;
     }
-    // 1/2/3 switch selection mode in edit mode (Blender-style)
+
     if (useMeshEditStore.getState().active) {
+      // ── Mesh edit mode: 1/2/3 switch selection mode ────────────────
       const modeMap: Record<string, "vertex" | "edge" | "face"> = { "1": "vertex", "2": "edge", "3": "face" };
       const mode = modeMap[e.key];
       if (mode) {
@@ -332,7 +333,32 @@ export function Viewport() {
         useMeshEditStore.getState().setSelectionMode(mode);
         return;
       }
+      // All other keys forwarded to engine
+    } else {
+      // ── Object mode: viewport-scoped gizmo + entity shortcuts ──────
+      const k = e.key.toLowerCase();
+      if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        const { changeGizmoMode } = useSceneStore.getState();
+        switch (k) {
+          case "q": changeGizmoMode("none"); return;
+          case "w": changeGizmoMode("translate"); return;
+          case "e": changeGizmoMode("rotate"); return;
+          case "r": changeGizmoMode("scale"); return;
+          case "delete":
+          case "backspace": {
+            e.preventDefault();
+            const { selectedEntity: sel, setSelectedEntity, refreshHierarchy } = useSceneStore.getState();
+            if (sel != null) {
+              window.guavaEngine.call("scene.deleteEntity", { entityId: sel });
+              setSelectedEntity(null);
+              refreshHierarchy();
+            }
+            return;
+          }
+        }
+      }
     }
+
     const key = mapKeyFn(e);
     if (!key) return;
     // Prevent default browser/Electron behavior for keys we handle

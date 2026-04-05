@@ -259,21 +259,8 @@ export function App() {
         toggleBottomPanelRef.current();
         return;
       }
-      const { changeGizmoMode, selectedEntity: sel, refreshHierarchy: refresh } = useSceneStore.getState();
-      switch (e.key.toLowerCase()) {
-        case "q": changeGizmoMode("none"); break;
-        case "w": changeGizmoMode("translate"); break;
-        case "e": changeGizmoMode("rotate"); break;
-        case "r": changeGizmoMode("scale"); break;
-        case "delete":
-        case "backspace":
-          if (sel != null) {
-            window.guavaEngine.call("scene.deleteEntity", { entityId: sel });
-            useSceneStore.getState().setSelectedEntity(null);
-            refresh();
-          }
-          break;
-      }
+      // Bare-key shortcuts (q/w/e/r/delete) are handled in Viewport.tsx so
+      // they are automatically scoped to whichever panel has focus.
     };
     window.addEventListener("keydown", handleKeyDown);
 
