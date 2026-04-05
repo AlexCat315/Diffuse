@@ -368,7 +368,7 @@ export interface RpcMethods {
   "sequencer.setSpeed": { params: { speed: number }; result: Record<string, never> };
   "sequencer.recomputeDuration": { params: Record<string, never>; result: { duration: number } };
   "mesh.getState": { params: Record<string, never>; result: { active: boolean; mode: string; selectionMode: string; selectionCount: number; canEnterEditMode: boolean; entityId?: number } };
-  "mesh.enterEditMode": { params: { entityId: number }; result: { success: boolean } };
+  "mesh.enterEditMode": { params: { entityId?: number }; result: { success: boolean } };
   "mesh.exitEditMode": { params: Record<string, never>; result: Record<string, never> };
   "mesh.setSelectionMode": { params: { mode: string }; result: Record<string, never> };
   "mesh.extrude": { params: Record<string, never>; result: { success: boolean } };

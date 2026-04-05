@@ -69,7 +69,13 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
   );
 
   return (
-    <div ref={menuRef} style={{ ...S.menu, left: adjustedPos.x, top: adjustedPos.y }}>
+    <div
+      ref={menuRef}
+      style={{ ...S.menu, left: adjustedPos.x, top: adjustedPos.y }}
+      onMouseDown={(e) => e.stopPropagation()}
+      onPointerDown={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}
+    >
       {items.map((item, i) => {
         if (item.label === "---") {
           return <div key={i} style={S.separator} />;

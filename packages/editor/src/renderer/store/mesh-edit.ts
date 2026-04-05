@@ -72,7 +72,7 @@ export const useMeshEditStore = create<MeshEditState>(
       enterEditMode: async (entityId) => {
         try {
           const eid = entityId ?? get().entityId;
-          const result = await rpc("mesh.enterEditMode", eid != null ? { entityId: eid } : {});
+          const result = await rpc("mesh.enterEditMode", { entityId: eid ?? undefined });
           return result.success;
         } catch (e) {
           console.error("mesh.enterEditMode failed:", e);

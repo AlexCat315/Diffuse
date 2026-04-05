@@ -18,7 +18,7 @@ pub const @"mesh.getState" = struct {
 };
 
 pub const @"mesh.enterEditMode" = struct {
-    pub const Params = struct { entityId: u64 };
+    pub const Params = struct { entityId: ?u64 = null };
     pub const Result = struct { success: bool };
 };
 

@@ -244,6 +244,7 @@ function setupSubscriptionForwarding(): void {
     "on:playback.stateChanged",
     "on:asset.changed",
     "on:editor.historyChanged",
+    "on:mesh.stateChanged",
   ] as const;
 
   for (const event of events) {

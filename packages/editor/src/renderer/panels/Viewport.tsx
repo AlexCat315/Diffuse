@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useCallback } from "react";
 import { useLocalState } from "../store/local-state";
 import { useI18n } from "../i18n";
 import { ViewCube } from "./ViewCube";
-import { useConnectionStore, useSceneStore, useViewportSettingsStore } from "../store";
+import { useConnectionStore, useSceneStore, useViewportSettingsStore, useMeshEditStore } from "../store";
 import type { ShadingMode } from "../store/viewport-settings";
 import { ContextMenu, type MenuItem } from "../components/ContextMenu";
 import {
@@ -68,7 +68,17 @@ export function Viewport() {
   }, [connected, fetchViewportSettings]);
 
   const handleShadingChange = useCallback((mode: ShadingMode) => {
+    const prevMode = useViewportSettingsStore.getState().shadingMode;
     setShadingMode(mode);
+
+    // Wireframe mode = mesh edit mode
+    if (mode === "wireframe" && prevMode !== "wireframe") {
+      const mesh = useMeshEditStore.getState();
+      if (!mesh.active) mesh.enterEditMode();
+    } else if (mode !== "wireframe" && prevMode === "wireframe") {
+      const mesh = useMeshEditStore.getState();
+      if (mesh.active) mesh.exitEditMode();
+    }
   }, [setShadingMode]);
 
   // ── Input forwarding to the engine ─────────────────────────────
@@ -211,7 +221,35 @@ export function Viewport() {
 
   const buildContextMenu = useCallback((screenX: number, screenY: number) => {
     const entityId = useSceneStore.getState().selectedEntity;
+    const meshState = useMeshEditStore.getState();
     const items: MenuItem[] = [];
+
+    // ── Mesh edit operations (when in edit mode) ──
+    if (meshState.active) {
+      items.push(
+        { label: t.meshEdit.extrude, shortcut: "E", onClick: () => meshState.extrude() },
+        { label: t.meshEdit.inset, shortcut: "I", onClick: () => meshState.inset() },
+        { label: t.meshEdit.bevel, shortcut: "B", onClick: () => meshState.bevel() },
+        { label: t.meshEdit.loopCut, shortcut: "Ctrl+R", onClick: () => meshState.loopCut() },
+        { label: "---" },
+        { label: t.meshEdit.merge, shortcut: "M", onClick: () => meshState.merge() },
+        { label: t.meshEdit.delete, shortcut: "X", onClick: () => meshState.deleteMesh() },
+        { label: t.meshEdit.duplicate, shortcut: "Shift+D", onClick: () => meshState.duplicate() },
+        { label: t.meshEdit.separate, onClick: () => meshState.separate() },
+        { label: "---" },
+        { label: t.meshEdit.recalcNormals, onClick: () => meshState.recalcNormals() },
+        { label: t.meshEdit.pivotToSelection, onClick: () => meshState.pivotToSelection() },
+        { label: "---" },
+        { label: t.meshEdit.exitEditMode, shortcut: "Esc", onClick: () => {
+          meshState.exitEditMode();
+          if (useViewportSettingsStore.getState().shadingMode === "wireframe") {
+            setShadingMode("solid");
+          }
+        }},
+      );
+      setContextMenu({ x: screenX, y: screenY, items });
+      return;
+    }
 
     // ── Entity operations (when an entity is selected) ──
     if (entityId != null) {
@@ -239,8 +277,21 @@ export function Viewport() {
             window.guavaEngine.call("scene.deleteEntity", { entityId } as never).catch(() => {});
           },
         },
-        { label: "---" },
       );
+
+      // Enter edit mode option (when a mesh entity is selected)
+      if (meshState.canEnterEditMode) {
+        items.push(
+          { label: "---" },
+          {
+            label: t.meshEdit.enterEditMode,
+            shortcut: "DblClick",
+            onClick: () => meshState.enterEditMode(),
+          },
+        );
+      }
+
+      items.push({ label: "---" });
     }
 
     // ── Add submenu (always available) ──
@@ -291,6 +342,25 @@ export function Viewport() {
   };
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
+    // Escape exits mesh edit mode and switches back from wireframe
+    if (e.key === "Escape" && useMeshEditStore.getState().active) {
+      e.preventDefault();
+      useMeshEditStore.getState().exitEditMode();
+      if (useViewportSettingsStore.getState().shadingMode === "wireframe") {
+        setShadingMode("solid");
+      }
+      return;
+    }
+    // 1/2/3 switch selection mode in edit mode (Blender-style)
+    if (useMeshEditStore.getState().active) {
+      const modeMap: Record<string, "vertex" | "edge" | "face"> = { "1": "vertex", "2": "edge", "3": "face" };
+      const mode = modeMap[e.key];
+      if (mode) {
+        e.preventDefault();
+        useMeshEditStore.getState().setSelectionMode(mode);
+        return;
+      }
+    }
     const key = mapKeyFn(e);
     if (!key) return;
     if (key === "b") bKeyHeld.current = true;
@@ -634,7 +704,11 @@ export function Viewport() {
       {/* Floating overlays on top of the canvas */}
       {connected && (
         <>
-          <div style={styles.shadingOverlay}>
+          <div
+            style={styles.shadingOverlay}
+            onMouseDown={(e) => e.stopPropagation()}
+            onPointerDown={(e) => e.stopPropagation()}
+          >
             {(["solid", "material", "rendered", "wireframe"] as ShadingMode[]).map((mode) => {
               const Icon = SHADING_ICON_COMPONENTS[mode];
               const labels: Record<ShadingMode, string> = {
