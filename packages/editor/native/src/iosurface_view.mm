@@ -231,7 +231,9 @@ static Napi::Value RefreshShared(const Napi::CallbackInfo& info) {
     }
 
     IOSurfaceUnlock(g_surface, kIOSurfaceLockReadOnly, nullptr);
-    g_last_seed = seed;
+    // Re-read seed AFTER unlock so our own lock/unlock cycle is included.
+    // Next poll will only proceed if the surface was modified externally.
+    g_last_seed = IOSurfaceGetSeed(g_surface);
 
     // Publish: write width, height, readIndex, THEN generation (release).
     auto* header = reinterpret_cast<uint32_t*>(g_sab_data);

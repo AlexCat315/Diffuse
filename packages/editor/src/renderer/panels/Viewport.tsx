@@ -511,13 +511,21 @@ export function Viewport() {
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
     // ── Upload helper ────────────────────────────────
+    let texW = 0, texH = 0;  // track current texture dimensions
     const uploadAndDraw = (pixels: Uint8Array, width: number, height: number) => {
       if (canvas.width !== width || canvas.height !== height) {
         canvas.width = width;
         canvas.height = height;
         gl.viewport(0, 0, width, height);
       }
-      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      if (width === texW && height === texH) {
+        // Same size: sub-image update avoids texture reallocation
+        gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      } else {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+        texW = width;
+        texH = height;
+      }
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     };
 

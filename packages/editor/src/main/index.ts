@@ -279,16 +279,24 @@ ipcMain.handle(
         // Send SAB to renderer (one-time, zero-copy share)
         mainWindow.webContents.postMessage("viewport:shared-buffer", viewportSAB);
 
-        // Fast polling: just memcpy into SAB, no IPC per frame
-        surfaceRefreshTimer = setInterval(() => {
+        // Event-driven refresh: engine sends "on:viewport.frameReady" after
+        // the GPU finishes rendering.  We also keep a slow fallback timer
+        // in case the notification is lost (reconnect, lag, etc.).
+        const doRefresh = () => {
           if (!ioSurfaceView || !mainWindow) return;
           if (mainWindow.webContents.isDestroyed()) {
-            clearInterval(surfaceRefreshTimer!);
+            if (surfaceRefreshTimer) clearInterval(surfaceRefreshTimer);
             surfaceRefreshTimer = null;
             return;
           }
           ioSurfaceView.refreshShared!();
-        }, 16);
+        };
+        // Subscribe to engine frame-ready signal (low-latency, no tearing)
+        if (engineClient) {
+          engineClient.on("on:viewport.frameReady" as never, doRefresh);
+        }
+        // Slow fallback timer — catches frames if notification is missed
+        surfaceRefreshTimer = setInterval(doRefresh, 32);
         sabActive = true;
       } catch (e) {
         console.warn("[Viewport] SAB path failed, falling back to IPC:", (e as Error).message);
