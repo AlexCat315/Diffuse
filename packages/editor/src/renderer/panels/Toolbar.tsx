@@ -7,15 +7,15 @@ import {
   IconPlay, IconPause, IconStop,
   IconTranslate, IconRotate, IconScale, IconCursor,
 } from "../components/Icons";
+import { Tooltip } from "../components/Tooltip";
 import { useSceneStore } from "../store";
 
 interface ToolbarProps {
   onResetLayout?: () => void;
   onOpenSettings?: () => void;
-  onOpenKeybindings?: () => void;
 }
 
-export function Toolbar({ onResetLayout, onOpenSettings, onOpenKeybindings }: ToolbarProps) {
+export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
   const gizmoMode = useSceneStore((s) => s.gizmoMode);
   const onGizmoModeChange = useSceneStore((s) => s.changeGizmoMode);
   const onRefreshHierarchy = useSceneStore((s) => s.refreshHierarchy);
@@ -132,13 +132,6 @@ export function Toolbar({ onResetLayout, onOpenSettings, onOpenKeybindings }: To
             onClick={onResetLayout}
           />
         )}
-        {onOpenKeybindings && (
-          <ToolButton
-            icon={<span style={{ fontSize: 14 }}>⌨</span>}
-            tooltip={t.toolbar.keybindings}
-            onClick={onOpenKeybindings}
-          />
-        )}
         {onOpenSettings && (
           <ToolButton
             icon={<span style={{ fontSize: 14 }}>⚙</span>}
@@ -163,21 +156,27 @@ function ToolButton({
   onClick?: () => void;
   active?: boolean;
 }) {
+  // Parse "Label (Shortcut)" → label + shortcut for the styled Tooltip
+  const match = tooltip.match(/^(.+?)\s*\(([^)]+)\)$/);
+  const label = match ? match[1] : tooltip;
+  const shortcut = match ? match[2] : undefined;
+
   return (
-    <button
-      style={{
-        ...styles.button,
-        ...(active && {
-          background: "#45475a",
-          border: "1px solid #89b4fa",
-          color: "#89b4fa",
-        }),
-      }}
-      title={tooltip}
-      onClick={onClick}
-    >
-      {icon}
-    </button>
+    <Tooltip label={label} shortcut={shortcut} placement="bottom">
+      <button
+        style={{
+          ...styles.button,
+          ...(active && {
+            background: "#45475a",
+            border: "1px solid #89b4fa",
+            color: "#89b4fa",
+          }),
+        }}
+        onClick={onClick}
+      >
+        {icon}
+      </button>
+    </Tooltip>
   );
 }
 

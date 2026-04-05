@@ -4245,7 +4245,7 @@ pub const Renderer = struct {
                 .{ prepared_scene.camera_world_position[0], prepared_scene.camera_world_position[1], prepared_scene.camera_world_position[2] },
                 prepared_scene.projection_matrix[5],
                 @floatFromInt(self.scene_viewport.height),
-                2.5,
+                4.0,
                 self.allocator,
                 .{ 0.38, 0.90, 0.82, 0.95 }, // teal — unselected elements (always on top)
             );
@@ -4261,7 +4261,7 @@ pub const Renderer = struct {
                 .{ prepared_scene.camera_world_position[0], prepared_scene.camera_world_position[1], prepared_scene.camera_world_position[2] },
                 prepared_scene.projection_matrix[5],
                 @floatFromInt(self.scene_viewport.height),
-                3.5,
+                5.5,
                 self.allocator,
                 .{ 1.00, 0.86, 0.20, 1.00 }, // bright gold — selected elements (always on top)
             );
