@@ -121,8 +121,13 @@ pub fn detachFromParent(ctx: *Ctx) !void {
 pub fn getSurfaceId(ctx: *Ctx) !void {
     const sv = &ctx.layer.renderer.scene_viewport;
     const shm_slice = std.mem.sliceTo(&sv.shm_name, 0);
+    // Prefer staging surface (never written by GPU, always safe to read).
+    const surface_id = if (sv.staging_iosurface_id != 0)
+        sv.staging_iosurface_id
+    else
+        sv.iosurface_id;
     try ctx.reply(.{
-        .surfaceId = sv.iosurface_id,
+        .surfaceId = surface_id,
         .shmName = if (shm_slice.len > 0) shm_slice else null,
         .width = sv.width,
         .height = sv.height,

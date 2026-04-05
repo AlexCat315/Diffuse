@@ -1396,3 +1396,90 @@ void guava_metal_rhi_wait_for_gpu(void* raw) {
         }
     }
 }
+
+// ---------------------------------------------------------------------------
+// IOSurface staging copy — CPU memcpy from render surface to staging surface
+// ---------------------------------------------------------------------------
+// Lazily creates a staging IOSurface matching the source dimensions.
+// After waitForGpu(), the render IOSurface has stable pixels.  We copy them
+// to a separate staging IOSurface that the editor addon reads from, so the
+// GPU can start the next frame without racing with the addon's readback.
+
+static IOSurfaceRef g_staging_surface = nullptr;
+static uint32_t     g_staging_surface_id = 0;
+static uint32_t     g_staging_width  = 0;
+static uint32_t     g_staging_height = 0;
+
+uint32_t guava_metal_rhi_copy_to_staging(void* raw, uint32_t src_texture_id) {
+    if (!raw) return 0;
+    @autoreleasepool {
+        auto* ctx = static_cast<GuavaMetalRhiContext*>(raw);
+        if (!ctx) return 0;
+
+        // Find the source IOSurface
+        auto it = ctx->iosurfaces.find(src_texture_id);
+        if (it == ctx->iosurfaces.end()) {
+            fprintf(stderr, "[GuavaMetal] copy_to_staging: texture %u not in iosurfaces map\n", src_texture_id);
+            return 0;
+        }
+        IOSurfaceRef src_surface = it->second;
+        if (!src_surface) return 0;
+
+        uint32_t width  = (uint32_t)IOSurfaceGetWidth(src_surface);
+        uint32_t height = (uint32_t)IOSurfaceGetHeight(src_surface);
+        size_t src_bpr  = IOSurfaceGetBytesPerRow(src_surface);
+        if (width == 0 || height == 0) return 0;
+
+        // (Re)create staging surface if dimensions changed
+        if (!g_staging_surface || g_staging_width != width || g_staging_height != height) {
+            if (g_staging_surface) {
+                CFRelease(g_staging_surface);
+                g_staging_surface = nullptr;
+            }
+            uint32_t bpe = 4;
+            uint32_t alignedBpr = ((width * bpe) + 15) & ~15u;
+            NSDictionary* props = @{
+                (id)kIOSurfaceWidth:           @(width),
+                (id)kIOSurfaceHeight:          @(height),
+                (id)kIOSurfaceBytesPerElement:  @(bpe),
+                (id)kIOSurfaceBytesPerRow:      @(alignedBpr),
+                (id)kIOSurfaceAllocSize:        @((uint64_t)alignedBpr * height),
+                (id)kIOSurfacePixelFormat:      @((uint32_t)'BGRA'),
+                (id)kIOSurfaceIsGlobal:         @YES,
+            };
+            g_staging_surface = IOSurfaceCreate((__bridge CFDictionaryRef)props);
+            if (!g_staging_surface) return 0;
+            g_staging_surface_id = IOSurfaceGetID(g_staging_surface);
+            g_staging_width  = width;
+            g_staging_height = height;
+        }
+
+        // CPU copy: lock both surfaces, memcpy, unlock
+        kern_return_t kr1 = IOSurfaceLock(src_surface, kIOSurfaceLockReadOnly, nullptr);
+        if (kr1 != kIOReturnSuccess) return g_staging_surface_id;
+
+        kern_return_t kr2 = IOSurfaceLock(g_staging_surface, 0, nullptr); // exclusive write
+        if (kr2 != kIOReturnSuccess) {
+            IOSurfaceUnlock(src_surface, kIOSurfaceLockReadOnly, nullptr);
+            return g_staging_surface_id;
+        }
+
+        const uint8_t* src = static_cast<const uint8_t*>(IOSurfaceGetBaseAddress(src_surface));
+        uint8_t* dst = static_cast<uint8_t*>(IOSurfaceGetBaseAddress(g_staging_surface));
+        size_t dst_bpr = IOSurfaceGetBytesPerRow(g_staging_surface);
+
+        if (src_bpr == dst_bpr) {
+            std::memcpy(dst, src, src_bpr * height);
+        } else {
+            size_t row = std::min(src_bpr, dst_bpr);
+            for (uint32_t y = 0; y < height; y++) {
+                std::memcpy(dst + y * dst_bpr, src + y * src_bpr, row);
+            }
+        }
+
+        IOSurfaceUnlock(g_staging_surface, 0, nullptr);
+        IOSurfaceUnlock(src_surface, kIOSurfaceLockReadOnly, nullptr);
+
+        return g_staging_surface_id;
+    }
+}

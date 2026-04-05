@@ -48,6 +48,8 @@ pub const MetalDevice = struct {
         extern fn guava_metal_rhi_create_iosurface_texture(ctx: *anyopaque, width: u32, height: u32, format: u32, usage_bits: u32, out_surface_id: *u32, label: ?[*:0]const u8) u32;
         // GPU synchronization
         extern fn guava_metal_rhi_wait_for_gpu(ctx: *anyopaque) void;
+        // IOSurface staging copy (returns staging surface ID)
+        extern fn guava_metal_rhi_copy_to_staging(ctx: *anyopaque, src_texture_id: u32) u32;
         // Debug
         extern fn guava_metal_rhi_get_device_name(ctx: *anyopaque) ?[*:0]const u8;
     };
@@ -179,6 +181,14 @@ pub const MetalDevice = struct {
     /// before the Electron frontend reads them.
     pub fn waitForGpu(self: *MetalDevice) void {
         bridge.guava_metal_rhi_wait_for_gpu(self.bridge_ctx);
+    }
+
+    /// Wait for GPU, then CPU-copy render IOSurface → staging IOSurface.
+    /// Returns the staging IOSurface ID (globally unique, cross-process safe).
+    /// The staging surface is never touched by the GPU, safe to read any time.
+    pub fn waitForGpuAndCopyToStaging(self: *MetalDevice, render_texture_id: u32) u32 {
+        bridge.guava_metal_rhi_wait_for_gpu(self.bridge_ctx);
+        return bridge.guava_metal_rhi_copy_to_staging(self.bridge_ctx, render_texture_id);
     }
 
     pub fn getTextureHandle(self: *const MetalDevice, texture_id: u32) ?*anyopaque {

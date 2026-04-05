@@ -184,6 +184,9 @@ const char* guava_metal_rhi_get_device_name(void* ctx);
 // ── GPU synchronization ───────────────────────────────────────────────────
 void guava_metal_rhi_wait_for_gpu(void* ctx);
 
+// ── IOSurface staging (copy render→staging for flicker-free readback) ─────
+uint32_t guava_metal_rhi_copy_to_staging(void* ctx, uint32_t src_texture_id);
+
 #ifdef __cplusplus
 }
 #endif

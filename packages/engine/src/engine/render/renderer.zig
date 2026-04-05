@@ -98,6 +98,7 @@ const physics_mod = @import("../physics/system.zig");
 const PassDescriptors = @import("render_helpers.zig").PassDescriptors;
 const render_log = std.log.scoped(.viewport_render);
 const rt_backend = @import("../rt/rt_backend.zig");
+const editor_rpc_server = @import("../editor_rpc/server.zig");
 const renderer_environment = @import("renderer_environment.zig");
 const renderer_path_trace = @import("path_trace/renderer_path_trace.zig");
 const renderer_resources = @import("renderer_resources.zig");
@@ -411,8 +412,6 @@ pub const Renderer = struct {
     pending_frame_delay_ms: ?u32 = null,
     /// 当前生效的帧延迟（由 Application 写入，供 RPC 读取）。
     current_frame_delay_ms: u32 = 16,
-    /// Set to true after blitSharedTexture (GPU done); cleared by RPC broadcast.
-    iosurface_frame_ready: bool = false,
     /// 上一帧渲染统计（由 Application 在 drawFrame 后写入，供 RPC metrics 广播读取）。
     last_frame_report: FrameReport = .{
         .backend = .metal,
@@ -2476,11 +2475,17 @@ pub const Renderer = struct {
 
             // On Vulkan, blit the shared viewport texture to POSIX shm so
             // the Electron editor process can read the pixels.
+            // On Metal, wait for GPU then copy to a staging IOSurface.
             if (viewport_active and self.scene_viewport.use_iosurface) {
                 if (self.scene_viewport.color_texture) |tex| {
-                    self.rhi.blitSharedTexture(tex);
+                    const staging_id = self.rhi.blitSharedTexture(tex);
+                    if (staging_id != 0) {
+                        self.scene_viewport.staging_iosurface_id = staging_id;
+                    }
                 }
-                self.iosurface_frame_ready = true;
+                // Notify editor immediately while staging pixels are stable
+                // (after copy, before next frame's GPU commands).
+                editor_rpc_server.notifyFrameReady();
             }
 
             // Collect RHI stats

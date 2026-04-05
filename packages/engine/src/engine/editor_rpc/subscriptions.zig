@@ -27,18 +27,9 @@ pub fn checkAndBroadcast(server: *Server, layer_context: *core.LayerContext) !vo
     // Skip if no clients connected
     if (server.active_client_count.load(.acquire) == 0) return;
 
-    // ── IOSurface frame ready (GPU done — safe to read) ────────
-    // Signal as early as possible so the editor main process reads
-    // the IOSurface BEFORE the next drawFrame submits GPU work.
-    {
-        const renderer = layer_context.renderer;
-        if (renderer.iosurface_frame_ready) {
-            renderer.iosurface_frame_ready = false;
-            const msg = "{\"jsonrpc\":\"2.0\",\"method\":\"on:viewport.frameReady\",\"params\":{}}";
-            const owned = server.allocator.dupe(u8, msg) catch null;
-            if (owned) |m| server.broadcast(m);
-        }
-    }
+    // NOTE: on:viewport.frameReady is broadcast directly from renderer.zig
+    // right after blitSharedTexture/waitForGpu, NOT here. This ensures the
+    // notification reaches the editor during the inter-frame safe window.
 
     // ── Scene changes ──────────────────────────────────────────
     const current_revision = world.sceneRevision();
