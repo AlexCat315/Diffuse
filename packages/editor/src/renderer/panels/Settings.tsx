@@ -181,7 +181,7 @@ export function SettingsPanel() {
   };
 
   const handleResetLayout = useCallback(() => {
-    localStorage.removeItem("guava-editor-layout-v1");
+    localStorage.removeItem("guava-editor-layout-v3");
     window.location.reload();
   }, []);
 
