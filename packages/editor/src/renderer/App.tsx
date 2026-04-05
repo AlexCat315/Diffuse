@@ -268,10 +268,11 @@ export function App() {
         useEditorStore.getState().setSettingsOpen(true);
         return;
       }
-      // Cmd/Ctrl+K: open keybindings
+      // Cmd/Ctrl+K: open keybindings tab in settings modal
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
         e.preventDefault();
         useEditorStore.getState().setKeybindingsOpen(true);
+        useEditorStore.getState().setSettingsOpen(true);
         return;
       }
       // Space: play; Ctrl+Space: pause; Shift+Space: stop
@@ -536,7 +537,6 @@ export function App() {
       <Toolbar
         onResetLayout={handleResetLayout}
         onOpenSettings={() => setSettingsOpen(true)}
-        onOpenKeybindings={() => setKeybindingsOpen(true)}
       />
       <div style={styles.dockArea}>
         <Layout
@@ -551,20 +551,28 @@ export function App() {
       </div>
       <ViewportStatus />
       {settingsOpen && (
-        <DraggableSettingsModal onClose={() => setSettingsOpen(false)} title={t.app.settingsModalTitle} />
-      )}
-      {keybindingsOpen && (
-        <DraggableKeybindingsModal onClose={() => setKeybindingsOpen(false)} title={t.app.keybindingsModalTitle} />
+        <DraggableSettingsModal
+          onClose={() => { setSettingsOpen(false); setKeybindingsOpen(false); }}
+          initialTab={keybindingsOpen ? "keybindings" : "settings"}
+        />
       )}
     </div>
   );
 }
 
-// ── Draggable Settings Modal ─────────────────────────────────────
+// ── Draggable Settings Modal (with Settings / Keybindings tabs) ──
 
-function DraggableSettingsModal({ onClose, title }: { onClose: () => void; title: string }) {
+function DraggableSettingsModal({
+  onClose,
+  initialTab = "settings",
+}: {
+  onClose: () => void;
+  initialTab?: "settings" | "keybindings";
+}) {
+  const { t } = useI18n();
   const panelRef = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const [activeTab, setActiveTab] = useState<"settings" | "keybindings">(initialTab);
   const dragging = useRef(false);
   const dragOffset = useRef({ x: 0, y: 0 });
 
@@ -598,60 +606,25 @@ function DraggableSettingsModal({ onClose, title }: { onClose: () => void; title
     <div style={styles.modalBackdrop} onClick={onClose}>
       <div ref={panelRef} style={panelStyle} onClick={(e) => e.stopPropagation()}>
         <div style={styles.modalHeader} onMouseDown={onMouseDown}>
-          <span style={styles.modalTitle}>{title}</span>
+          {/* Tab buttons */}
+          <div style={styles.modalTabs}>
+            <button
+              style={{ ...styles.modalTab, ...(activeTab === "settings" ? styles.modalTabActive : {}) }}
+              onClick={() => setActiveTab("settings")}
+            >
+              {t.app.settingsModalTitle}
+            </button>
+            <button
+              style={{ ...styles.modalTab, ...(activeTab === "keybindings" ? styles.modalTabActive : {}) }}
+              onClick={() => setActiveTab("keybindings")}
+            >
+              {t.app.keybindingsModalTitle}
+            </button>
+          </div>
           <button style={styles.modalClose} onClick={onClose}>✕</button>
         </div>
         <div style={styles.modalBody}>
-          <SettingsPanel />
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ── Draggable Keybindings Modal ──────────────────────────────────
-
-function DraggableKeybindingsModal({ onClose, title }: { onClose: () => void; title: string }) {
-  const panelRef = useRef<HTMLDivElement>(null);
-  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
-  const dragging = useRef(false);
-  const dragOffset = useRef({ x: 0, y: 0 });
-
-  const onMouseDown = useCallback((e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).tagName === "BUTTON") return;
-    dragging.current = true;
-    const panel = panelRef.current;
-    if (!panel) return;
-    const rect = panel.getBoundingClientRect();
-    dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
-    e.preventDefault();
-
-    const onMove = (ev: MouseEvent) => {
-      if (!dragging.current) return;
-      setPos({ x: ev.clientX - dragOffset.current.x, y: ev.clientY - dragOffset.current.y });
-    };
-    const onUp = () => {
-      dragging.current = false;
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-    };
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
-  }, []);
-
-  const panelStyle: React.CSSProperties = pos
-    ? { ...styles.modalPanel, left: pos.x, top: pos.y }
-    : styles.modalPanel;
-
-  return (
-    <div style={styles.modalBackdrop} onClick={onClose}>
-      <div ref={panelRef} style={panelStyle} onClick={(e) => e.stopPropagation()}>
-        <div style={styles.modalHeader} onMouseDown={onMouseDown}>
-          <span style={styles.modalTitle}>{title}</span>
-          <button style={styles.modalClose} onClick={onClose}>✕</button>
-        </div>
-        <div style={styles.modalBody}>
-          <KeybindingsPanel />
+          {activeTab === "settings" ? <SettingsPanel /> : <KeybindingsPanel />}
         </div>
       </div>
     </div>
@@ -726,15 +699,34 @@ const styles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "center",
     justifyContent: "space-between",
-    padding: "10px 16px",
+    padding: "0 12px 0 0",
     borderBottom: "1px solid #313244",
     cursor: "grab",
     userSelect: "none" as const,
+    minHeight: 42,
   },
-  modalTitle: {
-    fontSize: 14,
-    fontWeight: 600,
+  modalTabs: {
+    display: "flex",
+    alignItems: "stretch",
+    flex: 1,
+    gap: 0,
+  },
+  modalTab: {
+    background: "transparent",
+    border: "none",
+    borderBottom: "2px solid transparent",
+    color: "#6c7086",
+    cursor: "pointer",
+    fontSize: 13,
+    fontWeight: 500,
+    padding: "0 18px",
+    height: "100%",
+    minHeight: 42,
+    transition: "color 0.15s",
+  },
+  modalTabActive: {
     color: "#cdd6f4",
+    borderBottom: "2px solid #89b4fa",
   },
   modalClose: {
     background: "transparent",
