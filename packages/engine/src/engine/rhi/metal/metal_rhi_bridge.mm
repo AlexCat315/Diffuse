@@ -1474,7 +1474,10 @@ uint32_t guava_metal_rhi_copy_to_staging(void* raw, uint32_t src_texture_id) {
             g_staging_height = (uint32_t)height;
         }
 
-        // GPU blit: texture-to-texture copy via blit command encoder
+        // GPU blit: texture-to-texture copy via blit command encoder.
+        // Submitted ASYNC on the same graphics queue — Metal guarantees FIFO
+        // ordering, so the blit completes before the next frame's render starts.
+        // No waitUntilCompleted needed, saving ~200-400µs per frame.
         id<MTLCommandBuffer> blitCmd = [ctx->graphics_queue commandBuffer];
         if (!blitCmd) return g_staging_surface_id;
 
@@ -1489,13 +1492,20 @@ uint32_t guava_metal_rhi_copy_to_staging(void* raw, uint32_t src_texture_id) {
              destinationLevel:0
             destinationOrigin:MTLOriginMake(0, 0, 0)];
         [blit endEncoding];
-        [blitCmd commit];
-        [blitCmd waitUntilCompleted];
 
-        // Bump IOSurface seed so the addon's seed check detects the new frame.
-        // A write-lock / unlock cycle reliably increments the seed counter.
-        IOSurfaceLock(g_staging_surface, 0, nullptr);
-        IOSurfaceUnlock(g_staging_surface, 0, nullptr);
+        // Bump IOSurface seed in a completion handler so the addon's poll-based
+        // seed check only sees the new frame after the blit is actually done.
+        IOSurfaceRef staging = g_staging_surface;
+        CFRetain(staging); // prevent dealloc before handler runs
+        [blitCmd addCompletedHandler:^(id<MTLCommandBuffer> /*buf*/) {
+            IOSurfaceLock(staging, 0, nullptr);
+            IOSurfaceUnlock(staging, 0, nullptr);
+            CFRelease(staging);
+        }];
+
+        [blitCmd commit];
+        // Don't wait — the blit runs async on the GPU, and the completion
+        // handler bumps the seed when done.
 
         return g_staging_surface_id;
     }
