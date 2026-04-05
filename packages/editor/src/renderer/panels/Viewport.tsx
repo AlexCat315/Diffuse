@@ -3,22 +3,7 @@ import { useLocalState } from "../store/local-state";
 import { useI18n } from "../i18n";
 import { ViewCube } from "./ViewCube";
 import { useConnectionStore, useSceneStore, useViewportSettingsStore, useMeshEditStore } from "../store";
-import type { ShadingMode } from "../store/viewport-settings";
 import { ContextMenu, type MenuItem } from "../components/ContextMenu";
-import {
-  IconShadingSolid,
-  IconShadingMaterial,
-  IconShadingRendered,
-  IconShadingWireframe,
-} from "../components/Icons";
-import { MeshEditToolbar } from "./MeshEditToolbar";
-
-const SHADING_ICON_COMPONENTS: Record<ShadingMode, React.FC<{ size?: number; color?: string }>> = {
-  solid: IconShadingSolid,
-  material: IconShadingMaterial,
-  rendered: IconShadingRendered,
-  wireframe: IconShadingWireframe,
-};
 
 
 /**
@@ -45,8 +30,6 @@ export function Viewport() {
   const surfaceIdRef = useRef(0);
   const shmNameRef = useRef<string | undefined>(undefined);
   const lastSizeRef = useRef({ w: 0, h: 0 });
-  const shadingMode = useViewportSettingsStore((s) => s.shadingMode);
-  const setShadingMode = useViewportSettingsStore((s) => s.setShadingMode);
   const fetchViewportSettings = useViewportSettingsStore((s) => s.fetchFromEngine);
   const [contextMenu, setContextMenu] = useLocalState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const selectedEntity = useSceneStore((s) => s.selectedEntity);
@@ -66,20 +49,6 @@ export function Viewport() {
     if (!connected) return;
     fetchViewportSettings();
   }, [connected, fetchViewportSettings]);
-
-  const handleShadingChange = useCallback((mode: ShadingMode) => {
-    const prevMode = useViewportSettingsStore.getState().shadingMode;
-    setShadingMode(mode);
-
-    // Wireframe mode = mesh edit mode
-    if (mode === "wireframe" && prevMode !== "wireframe") {
-      const mesh = useMeshEditStore.getState();
-      if (!mesh.active) mesh.enterEditMode();
-    } else if (mode !== "wireframe" && prevMode === "wireframe") {
-      const mesh = useMeshEditStore.getState();
-      if (mesh.active) mesh.exitEditMode();
-    }
-  }, [setShadingMode]);
 
   // ── Input forwarding to the engine ─────────────────────────────
   const dpr = window.devicePixelRatio || 1;
@@ -163,10 +132,18 @@ export function Viewport() {
           const dx = x - mouseDownPos.current.x;
           const dy = y - mouseDownPos.current.y;
           if (dx * dx + dy * dy < 16) {
-            // In mesh edit mode, element picking is handled engine-side via raycasting
-            if (!useMeshEditStore.getState().active) {
-              const mode = (e.shiftKey || e.ctrlKey || e.metaKey) ? "toggle" : "replace";
-              window.guavaEngine.call("viewport.pick", { x: Math.round(x), y: Math.round(y), mode } as never).catch(() => {});
+            // Double-click on a mesh entity enters edit mode (Blender-style)
+            if (e.detail >= 2) {
+              const meshState = useMeshEditStore.getState();
+              if (!meshState.active && meshState.canEnterEditMode) {
+                meshState.enterEditMode();
+              }
+            } else {
+              // In mesh edit mode, element picking is handled engine-side via raycasting
+              if (!useMeshEditStore.getState().active) {
+                const mode = (e.shiftKey || e.ctrlKey || e.metaKey) ? "toggle" : "replace";
+                window.guavaEngine.call("viewport.pick", { x: Math.round(x), y: Math.round(y), mode } as never).catch(() => {});
+              }
             }
           }
         }
@@ -243,12 +220,7 @@ export function Viewport() {
         { label: t.meshEdit.recalcNormals, onClick: () => meshState.recalcNormals() },
         { label: t.meshEdit.pivotToSelection, onClick: () => meshState.pivotToSelection() },
         { label: "---" },
-        { label: t.meshEdit.exitEditMode, shortcut: "Esc", onClick: () => {
-          meshState.exitEditMode();
-          if (useViewportSettingsStore.getState().shadingMode === "wireframe") {
-            setShadingMode("solid");
-          }
-        }},
+        { label: t.meshEdit.exitEditMode, shortcut: "Esc", onClick: () => meshState.exitEditMode() },
       );
       setContextMenu({ x: screenX, y: screenY, items });
       return;
@@ -345,13 +317,10 @@ export function Viewport() {
   };
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    // Escape exits mesh edit mode and switches back from wireframe
+    // Escape exits mesh edit mode
     if (e.key === "Escape" && useMeshEditStore.getState().active) {
       e.preventDefault();
       useMeshEditStore.getState().exitEditMode();
-      if (useViewportSettingsStore.getState().shadingMode === "wireframe") {
-        setShadingMode("solid");
-      }
       return;
     }
     // 1/2/3 switch selection mode in edit mode (Blender-style)
@@ -366,6 +335,9 @@ export function Viewport() {
     }
     const key = mapKeyFn(e);
     if (!key) return;
+    // Prevent default browser/Electron behavior for keys we handle
+    // Tab: prevents focus traversal; Delete/Backspace: prevents browser navigation
+    if (key === "tab" || key === "delete" || key === "backspace") e.preventDefault();
     if (key === "b") bKeyHeld.current = true;
     sendInput({ type: "keydown", key, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
   }, [sendInput]);
@@ -522,6 +494,26 @@ export function Viewport() {
     return () => {
       window.guavaEngine.viewportDetach().catch(() => {});
     };
+  }, []);
+
+  // Intercept Tab at the document capture phase so Electron focus navigation
+  // never fires. Only when mesh edit is active (Tab = toggle object/edit mode).
+  useEffect(() => {
+    const onTabCapture = (e: KeyboardEvent) => {
+      if (e.key === "Tab") {
+        e.preventDefault();
+        // Route to the engine the same way handleKeyDown does
+        window.guavaEngine.call("viewport.sendInput", {
+          type: "keydown",
+          key: "tab",
+          shift: e.shiftKey,
+          ctrl: e.ctrlKey || e.metaKey,
+          alt: e.altKey,
+        } as never).catch(() => {});
+      }
+    };
+    document.addEventListener("keydown", onTabCapture, true);
+    return () => document.removeEventListener("keydown", onTabCapture, true);
   }, []);
 
   // WebGL pixel rendering: subscribe to viewport:pixels and display via GPU.
@@ -707,35 +699,6 @@ export function Viewport() {
       {/* Floating overlays on top of the canvas */}
       {connected && (
         <>
-          <div
-            style={styles.shadingOverlay}
-            onMouseDown={(e) => e.stopPropagation()}
-            onPointerDown={(e) => e.stopPropagation()}
-          >
-            {(["solid", "material", "rendered", "wireframe"] as ShadingMode[]).map((mode) => {
-              const Icon = SHADING_ICON_COMPONENTS[mode];
-              const labels: Record<ShadingMode, string> = {
-                solid: t.renderSettings.solid,
-                material: t.renderSettings.material,
-                rendered: t.renderSettings.rendered,
-                wireframe: t.renderSettings.wireframe,
-              };
-              return (
-                <button
-                  key={mode}
-                  title={labels[mode]}
-                  style={{
-                    ...styles.shadingButton,
-                    ...(shadingMode === mode ? styles.shadingButtonActive : {}),
-                  }}
-                  onClick={() => handleShadingChange(mode)}
-                >
-                  <Icon size={14} color={shadingMode === mode ? "#89b4fa" : "#cdd6f4"} />
-                </button>
-              );
-            })}
-          </div>
-          <MeshEditToolbar />
           <ViewportMetricsOverlay />
           <div style={styles.viewCubeOverlay}>
             <ViewCube />
@@ -837,44 +800,11 @@ const styles: Record<string, React.CSSProperties> = {
     height: "100%",
     imageRendering: "pixelated",
   },
-  shadingOverlay: {
-    position: "absolute",
-    top: 8,
-    left: 8,
-    zIndex: 10,
-    display: "flex",
-    gap: 2,
-    background: "rgba(24, 24, 37, 0.75)",
-    backdropFilter: "blur(8px)",
-    WebkitBackdropFilter: "blur(8px)",
-    borderRadius: 6,
-    padding: "3px 4px",
-    boxShadow: "0 2px 8px rgba(0,0,0,0.3)",
-    border: "1px solid rgba(69, 71, 90, 0.4)",
-  },
   viewCubeOverlay: {
     position: "absolute",
     top: 4,
     right: 4,
     zIndex: 10,
-  },
-  shadingButton: {
-    background: "transparent",
-    border: "1px solid transparent",
-    borderRadius: 4,
-    color: "#a6adc8",
-    cursor: "pointer",
-    padding: "4px 8px",
-    fontSize: 13,
-    lineHeight: "1",
-    minWidth: 28,
-    textAlign: "center" as const,
-    transition: "all 0.1s",
-  },
-  shadingButtonActive: {
-    background: "rgba(69, 71, 90, 0.8)",
-    border: "1px solid #89b4fa",
-    color: "#89b4fa",
   },
   toolbarSeparator: {
     width: 1,

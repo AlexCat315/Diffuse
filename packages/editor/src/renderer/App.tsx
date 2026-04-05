@@ -33,6 +33,8 @@ import { AiChat } from "./panels/AiChat";
 import { ParticleEditor } from "./panels/ParticleEditor";
 import { PrefabEditor } from "./panels/PrefabEditor";
 import { SettingsPanel } from "./panels/Settings";
+import { ViewportTabControls } from "./panels/ViewportTabControls";
+import { MeshEditToolbar } from "./panels/MeshEditToolbar";
 import { useI18n } from "./i18n";
 import {
   useConnectionStore,
@@ -443,9 +445,13 @@ export function App() {
     }
   }, []);
 
-  // ── onRenderTabSet: add collapse button to bottom tabset ──
+  // ── onRenderTabSet: add collapse button to bottom tabset, shading controls to viewport ──
   const handleRenderTabSet = useCallback(
     (tabSetNode: TabSetNode | BorderNode, renderValues: ITabSetRenderValues) => {
+      if (tabSetNode.getId() === "viewport-tabset") {
+        renderValues.buttons.push(<MeshEditToolbar key="edit-mode" />);
+        renderValues.buttons.push(<ViewportTabControls key="shading-controls" />);
+      }
       if (tabSetNode.getId() === BOTTOM_TABSET_ID) {
         renderValues.buttons.unshift(
           <button

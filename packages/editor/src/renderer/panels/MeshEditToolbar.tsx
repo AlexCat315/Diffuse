@@ -1,14 +1,12 @@
 import React, { useCallback } from "react";
 import { useMeshEditStore } from "../store/mesh-edit";
-import { useViewportSettingsStore } from "../store";
 import type { MeshSelectionMode } from "../store/mesh-edit";
 import { useI18n } from "../i18n";
 
 /**
- * Compact mode indicator overlaid on the Viewport during mesh editing.
- * Shows V/E/F selection mode toggles and selection count.
- * Enter: double-click entity | Exit: Escape or double-click again
- * Mesh operations are in the context menu (right-click).
+ * Viewport mode indicator — mirrors the Blender-style mode selector:
+ *   - Mesh selected, not editing → "Object Mode ▾" entry button
+ *   - Editing → "Object Mode ▸ Edit Mode | 1 2 3 | n | ✕"
  */
 export function MeshEditToolbar() {
   const { t } = useI18n();
@@ -18,22 +16,12 @@ export function MeshEditToolbar() {
   const setSelMode = useMeshEditStore((s) => s.setSelectionMode);
   const exitEditMode = useMeshEditStore((s) => s.exitEditMode);
 
-  const handleSelMode = useCallback(
-    (mode: MeshSelectionMode) => {
-      setSelMode(mode);
-    },
-    [setSelMode],
-  );
+  const stopProp = useCallback((e: React.SyntheticEvent) => e.stopPropagation(), []);
 
-  const handleExit = useCallback(() => {
-    exitEditMode();
-    if (useViewportSettingsStore.getState().shadingMode === "wireframe") {
-      useViewportSettingsStore.getState().setShadingMode("solid");
-    }
-  }, [exitEditMode]);
-
+  // Not editing → show nothing
   if (!active) return null;
 
+  // ── Edit Mode toolbar ─────────────────────────────────────────────
   const selModes: { key: MeshSelectionMode; label: string; shortcut: string }[] = [
     { key: "vertex", label: t.meshEdit.vertex, shortcut: "1" },
     { key: "edge", label: t.meshEdit.edge, shortcut: "2" },
@@ -41,28 +29,15 @@ export function MeshEditToolbar() {
   ];
 
   return (
-    // Stop pointer/mouse events from reaching the viewport canvas
-    <div
-      style={styles.container}
-      onPointerDown={(e) => e.stopPropagation()}
-      onMouseDown={(e) => e.stopPropagation()}
-      onClick={(e) => e.stopPropagation()}
-    >
-      <span style={styles.modeLabel}>{t.meshEdit.editMode}</span>
-
-      <div style={styles.sep} />
-
+    <div style={styles.container} onPointerDown={stopProp} onMouseDown={stopProp} onClick={stopProp}>
       {/* V / E / F mode buttons */}
       <div style={styles.group}>
         {selModes.map(({ key, label, shortcut }) => (
           <button
             key={key}
             title={`${label} (${shortcut})`}
-            style={{
-              ...styles.btn,
-              ...(selectionMode === key ? styles.btnActive : {}),
-            }}
-            onClick={() => handleSelMode(key)}
+            style={{ ...styles.btn, ...(selectionMode === key ? styles.btnActive : {}) }}
+            onClick={() => setSelMode(key)}
           >
             {shortcut}
           </button>
@@ -75,7 +50,7 @@ export function MeshEditToolbar() {
 
       <div style={styles.sep} />
 
-      <button style={styles.exitBtn} onClick={handleExit} title="Escape">
+      <button style={styles.exitBtn} onClick={exitEditMode} title={`${t.meshEdit.exitEditMode} (Esc)`}>
         ✕
       </button>
     </div>
@@ -84,30 +59,11 @@ export function MeshEditToolbar() {
 
 const styles: Record<string, React.CSSProperties> = {
   container: {
-    position: "absolute",
-    top: 6,
-    left: "50%",
-    transform: "translateX(-50%)",
-    zIndex: 15,
-    display: "flex",
+    display: "inline-flex",
     alignItems: "center",
     gap: 3,
-    background: "rgba(24, 24, 37, 0.88)",
-    backdropFilter: "blur(8px)",
-    WebkitBackdropFilter: "blur(8px)",
-    borderRadius: 5,
-    padding: "2px 6px",
-    boxShadow: "0 1px 4px rgba(0,0,0,0.25)",
-    border: "1px solid rgba(137, 180, 250, 0.35)",
+    padding: "0 6px",
     pointerEvents: "auto",
-  },
-  modeLabel: {
-    fontSize: 10,
-    fontWeight: 600,
-    color: "#89b4fa",
-    whiteSpace: "nowrap" as const,
-    padding: "0 2px",
-    letterSpacing: 0.3,
   },
   group: {
     display: "flex",
