@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useCallback, useRef, useMemo } from "react";
 import { useI18n, type Locale } from "../i18n";
-import { useConnectionStore } from "../store";
+import { useConnectionStore, useViewportSettingsStore } from "../store";
 
 type FpsDisplay = "viewport" | "none";
 
@@ -105,6 +105,8 @@ const CONNECT_MODE_KEY = "guava-editor-connect-mode";
 
 export function SettingsPanel() {
   const connected = useConnectionStore((s) => s.connected);
+  const fpsLimit = useViewportSettingsStore((s) => s.fpsLimit);
+  const setFpsLimit = useViewportSettingsStore((s) => s.setFpsLimit);
   const { locale, setLocale, t } = useI18n();
   const isZh = locale === "zh-CN";
 
@@ -318,6 +320,13 @@ export function SettingsPanel() {
                 <div style={S.btnGroup}>
                   <button style={{ ...S.btn, ...(prefs.fpsDisplay === "viewport" ? S.btnActive : {}) }} onClick={() => updatePref("fpsDisplay", "viewport")}>{isZh ? "视口内" : "Viewport"}</button>
                   <button style={{ ...S.btn, ...(prefs.fpsDisplay === "none" ? S.btnActive : {}) }} onClick={() => updatePref("fpsDisplay", "none")}>{isZh ? "隐藏" : "None"}</button>
+                </div>
+              </SettingRow>
+              <SettingRow label={isZh ? "帧率上限" : "Frame Rate Limit"} desc={isZh ? "限制引擎渲染帧率" : "Limit engine rendering frame rate"}>
+                <div style={S.btnGroup}>
+                  {[30, 60, 90, 120].map((fps) => (
+                    <button key={fps} style={{ ...S.btn, ...(fpsLimit === fps ? S.btnActive : {}) }} onClick={() => setFpsLimit(fps)}>{fps}</button>
+                  ))}
                 </div>
               </SettingRow>
               <SettingRow label="VSync" desc={isZh ? "启用垂直同步（需引擎端支持）" : "Enable vertical sync (requires engine support)"}>

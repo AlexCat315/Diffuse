@@ -31,8 +31,6 @@ export function RenderSettingsPanel() {
   const [transformSpace, setTransformSpace] = useState<"local" | "world">("local");
   const shadingMode = useViewportSettingsStore((s) => s.shadingMode);
   const setShadingMode = useViewportSettingsStore((s) => s.setShadingMode);
-  const fpsLimit = useViewportSettingsStore((s) => s.fpsLimit);
-  const setFpsLimit = useViewportSettingsStore((s) => s.setFpsLimit);
   const fetchViewportSettings = useViewportSettingsStore((s) => s.fetchFromEngine);
   const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -107,28 +105,7 @@ export function RenderSettingsPanel() {
         </div>
       </Section>
 
-      {/* Frame Rate Limit */}
-      <Section title={t.renderSettings.frameRate ?? "Frame Rate"}>
-        <div style={styles.buttonGroup}>
-          {([30, 60, 120, 0] as const).map((fps) => {
-            const label = fps === 0 ? "∞" : `${fps}`;
-            const title = fps === 0 ? "Unlimited (VSync)" : `${fps} FPS`;
-            return (
-              <button
-                key={fps}
-                title={title}
-                style={{
-                  ...styles.modeButton,
-                  ...(fpsLimit === fps ? styles.modeButtonActive : {}),
-                }}
-                onClick={() => setFpsLimit(fps)}
-              >
-                {label}
-              </button>
-            );
-          })}
-        </div>
-      </Section>
+
 
       {/* Viewport Overlays */}
       <Section title={t.renderSettings.overlays}>
