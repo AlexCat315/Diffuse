@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef } from "react";
+import React, { useEffect, useCallback, useRef, useState } from "react";
 import { Layout, Model, Actions, DockLocation, type IJsonModel, type TabNode } from "flexlayout-react";
 import "flexlayout-react/style/light.css";
 import "./flexlayout-dark.css";
@@ -380,18 +380,57 @@ export function App() {
       </div>
       <ViewportStatus />
       {settingsOpen && (
-        <div style={styles.modalBackdrop} onClick={() => setSettingsOpen(false)}>
-          <div style={styles.modalPanel} onClick={(e) => e.stopPropagation()}>
-            <div style={styles.modalHeader}>
-              <span style={styles.modalTitle}>{t.app.settingsModalTitle}</span>
-              <button style={styles.modalClose} onClick={() => setSettingsOpen(false)}>✕</button>
-            </div>
-            <div style={styles.modalBody}>
-              <SettingsPanel />
-            </div>
-          </div>
-        </div>
+        <DraggableSettingsModal onClose={() => setSettingsOpen(false)} title={t.app.settingsModalTitle} />
       )}
+    </div>
+  );
+}
+
+// ── Draggable Settings Modal ─────────────────────────────────────
+
+function DraggableSettingsModal({ onClose, title }: { onClose: () => void; title: string }) {
+  const panelRef = useRef<HTMLDivElement>(null);
+  const [pos, setPos] = useState<{ x: number; y: number } | null>(null);
+  const dragging = useRef(false);
+  const dragOffset = useRef({ x: 0, y: 0 });
+
+  const onMouseDown = useCallback((e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).tagName === "BUTTON") return;
+    dragging.current = true;
+    const panel = panelRef.current;
+    if (!panel) return;
+    const rect = panel.getBoundingClientRect();
+    dragOffset.current = { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    e.preventDefault();
+
+    const onMove = (ev: MouseEvent) => {
+      if (!dragging.current) return;
+      setPos({ x: ev.clientX - dragOffset.current.x, y: ev.clientY - dragOffset.current.y });
+    };
+    const onUp = () => {
+      dragging.current = false;
+      window.removeEventListener("mousemove", onMove);
+      window.removeEventListener("mouseup", onUp);
+    };
+    window.addEventListener("mousemove", onMove);
+    window.addEventListener("mouseup", onUp);
+  }, []);
+
+  const panelStyle: React.CSSProperties = pos
+    ? { ...styles.modalPanel, position: "fixed", left: pos.x, top: pos.y, transform: "none" }
+    : styles.modalPanel;
+
+  return (
+    <div style={styles.modalBackdrop} onClick={onClose}>
+      <div ref={panelRef} style={panelStyle} onClick={(e) => e.stopPropagation()}>
+        <div style={styles.modalHeader} onMouseDown={onMouseDown}>
+          <span style={styles.modalTitle}>{title}</span>
+          <button style={styles.modalClose} onClick={onClose}>✕</button>
+        </div>
+        <div style={styles.modalBody}>
+          <SettingsPanel />
+        </div>
+      </div>
     </div>
   );
 }
@@ -438,13 +477,14 @@ const styles: Record<string, React.CSSProperties> = {
   modalBackdrop: {
     position: "fixed" as const,
     inset: 0,
-    background: "rgba(0,0,0,0.5)",
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "center",
+    background: "rgba(0,0,0,0.35)",
     zIndex: 9999,
   },
   modalPanel: {
+    position: "absolute" as const,
+    left: "50%",
+    top: "50%",
+    transform: "translate(-50%, -50%)",
     background: "#1e1e2e",
     border: "1px solid #45475a",
     borderRadius: 8,
@@ -460,6 +500,8 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "space-between",
     padding: "10px 16px",
     borderBottom: "1px solid #313244",
+    cursor: "grab",
+    userSelect: "none" as const,
   },
   modalTitle: {
     fontSize: 14,
@@ -478,6 +520,6 @@ const styles: Record<string, React.CSSProperties> = {
   },
   modalBody: {
     flex: 1,
-    overflow: "auto",
+    overflow: "hidden",
   },
 };
