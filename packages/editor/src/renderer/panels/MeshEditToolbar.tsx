@@ -2,11 +2,18 @@ import React, { useCallback } from "react";
 import { useMeshEditStore } from "../store/mesh-edit";
 import type { MeshSelectionMode } from "../store/mesh-edit";
 import { useI18n } from "../i18n";
+import { IconMeshVertex, IconMeshEdge, IconMeshFace } from "../components/Icons";
+import { Tooltip } from "../components/Tooltip";
+
+const SEL_MODE_ICONS: Record<MeshSelectionMode, React.FC<{ size?: number; color?: string }>> = {
+  vertex: IconMeshVertex,
+  edge: IconMeshEdge,
+  face: IconMeshFace,
+};
 
 /**
- * Viewport mode indicator — mirrors the Blender-style mode selector:
- *   - Mesh selected, not editing → "Object Mode ▾" entry button
- *   - Editing → "Object Mode ▸ Edit Mode | 1 2 3 | n | ✕"
+ * Viewport mesh edit mode indicator — renders in the panel title bar.
+ * Hidden when not in edit mode; shows V/E/F selection mode buttons when active.
  */
 export function MeshEditToolbar() {
   const { t } = useI18n();
@@ -14,7 +21,6 @@ export function MeshEditToolbar() {
   const selectionMode = useMeshEditStore((s) => s.selectionMode);
   const selectionCount = useMeshEditStore((s) => s.selectionCount);
   const setSelMode = useMeshEditStore((s) => s.setSelectionMode);
-  const exitEditMode = useMeshEditStore((s) => s.exitEditMode);
 
   const stopProp = useCallback((e: React.SyntheticEvent) => e.stopPropagation(), []);
 
@@ -24,35 +30,32 @@ export function MeshEditToolbar() {
   // ── Edit Mode toolbar ─────────────────────────────────────────────
   const selModes: { key: MeshSelectionMode; label: string; shortcut: string }[] = [
     { key: "vertex", label: t.meshEdit.vertex, shortcut: "1" },
-    { key: "edge", label: t.meshEdit.edge, shortcut: "2" },
-    { key: "face", label: t.meshEdit.face, shortcut: "3" },
+    { key: "edge",   label: t.meshEdit.edge,   shortcut: "2" },
+    { key: "face",   label: t.meshEdit.face,   shortcut: "3" },
   ];
 
   return (
     <div style={styles.container} onPointerDown={stopProp} onMouseDown={stopProp} onClick={stopProp}>
-      {/* V / E / F mode buttons */}
       <div style={styles.group}>
-        {selModes.map(({ key, label, shortcut }) => (
-          <button
-            key={key}
-            title={`${label} (${shortcut})`}
-            style={{ ...styles.btn, ...(selectionMode === key ? styles.btnActive : {}) }}
-            onClick={() => setSelMode(key)}
-          >
-            {shortcut}
-          </button>
-        ))}
+        {selModes.map(({ key, label, shortcut }) => {
+          const Icon = SEL_MODE_ICONS[key];
+          const active = selectionMode === key;
+          return (
+            <Tooltip key={key} label={label} shortcut={shortcut}>
+              <button
+                style={{ ...styles.btn, ...(active ? styles.btnActive : {}) }}
+                onClick={() => setSelMode(key)}
+              >
+                <Icon size={14} color={active ? "#89b4fa" : "#a6adc8"} />
+              </button>
+            </Tooltip>
+          );
+        })}
       </div>
 
       <div style={styles.sep} />
 
       <span style={styles.info}>{selectionCount}</span>
-
-      <div style={styles.sep} />
-
-      <button style={styles.exitBtn} onClick={exitEditMode} title={`${t.meshEdit.exitEditMode} (Esc)`}>
-        ✕
-      </button>
     </div>
   );
 }
@@ -100,16 +103,5 @@ const styles: Record<string, React.CSSProperties> = {
     fontVariantNumeric: "tabular-nums",
     minWidth: 12,
     textAlign: "center" as const,
-  },
-  exitBtn: {
-    background: "transparent",
-    border: "none",
-    borderRadius: 3,
-    color: "#a6adc8",
-    cursor: "pointer",
-    padding: "2px 4px",
-    fontSize: 10,
-    lineHeight: "1",
-    transition: "color 0.1s",
   },
 };

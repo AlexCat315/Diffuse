@@ -122,3 +122,43 @@ export const IconShadingSolid = createIcon(cubeUrl);
 export const IconShadingMaterial = createIcon(paintBrushUrl);
 export const IconShadingRendered = createIcon(eyeUrl);
 export const IconShadingWireframe = createIcon(gridPatternUrl);
+
+// ── Mesh edit selection modes (inline SVG) ──────────────────────
+interface MeshIconProps { size?: number; color?: string; }
+
+/** Vertex mode — single prominent dot with faint corner dots */
+export function IconMeshVertex({ size = 14, color = "currentColor" }: MeshIconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="3"  cy="3"  r="1.8" fill={color} opacity="0.45" />
+      <circle cx="13" cy="3"  r="1.8" fill={color} opacity="0.45" />
+      <circle cx="3"  cy="13" r="1.8" fill={color} opacity="0.45" />
+      <circle cx="13" cy="13" r="1.8" fill={color} opacity="0.45" />
+      <circle cx="8"  cy="8"  r="3"   fill={color} />
+    </svg>
+  );
+}
+
+/** Edge mode — diagonal line segment with accent dots at each end */
+export function IconMeshEdge({ size = 14, color = "currentColor" }: MeshIconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <line x1="3" y1="13" x2="13" y2="3" stroke={color} strokeWidth="2" strokeLinecap="round" />
+      <circle cx="3"  cy="13" r="2" fill={color} />
+      <circle cx="13" cy="3"  r="2" fill={color} />
+    </svg>
+  );
+}
+
+/** Face mode — filled quad with corner vertex dots */
+export function IconMeshFace({ size = 14, color = "currentColor" }: MeshIconProps) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+      <rect x="3" y="3" width="10" height="10" rx="1" fill={color} fillOpacity="0.22" stroke={color} strokeWidth="1.5" />
+      <circle cx="3"  cy="3"  r="1.8" fill={color} />
+      <circle cx="13" cy="3"  r="1.8" fill={color} />
+      <circle cx="3"  cy="13" r="1.8" fill={color} />
+      <circle cx="13" cy="13" r="1.8" fill={color} />
+    </svg>
+  );
+}
