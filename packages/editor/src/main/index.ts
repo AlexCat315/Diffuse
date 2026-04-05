@@ -3,6 +3,16 @@ import path from "path";
 import { EngineProcess } from "./engine-process";
 import { EngineClient } from "./engine-client";
 
+// Guard against EPIPE on stdout/stderr — happens when the parent process
+// (e.g. Vite dev server terminal) closes its end of the pipe while we're
+// still writing log output.  Without this, Electron shows a crash dialog.
+for (const stream of [process.stdout, process.stderr]) {
+  stream.on("error", (err: NodeJS.ErrnoException) => {
+    if (err.code === "EPIPE") return;
+    throw err;
+  });
+}
+
 // Enable SharedArrayBuffer in the renderer process without COOP/COEP headers.
 // Required for file:// protocol where onHeadersReceived doesn't apply.
 app.commandLine.appendSwitch("enable-features", "SharedArrayBuffer");

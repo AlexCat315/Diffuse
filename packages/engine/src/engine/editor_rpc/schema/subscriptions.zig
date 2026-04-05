@@ -37,3 +37,12 @@ pub const @"on:editor.historyChanged" = struct {
     cursor: u64,
     totalEntries: u64,
 };
+
+pub const @"on:mesh.stateChanged" = struct {
+    active: bool,
+    mode: []const u8, // "object" | "edit"
+    selectionMode: []const u8, // "vertex" | "edge" | "face"
+    selectionCount: u64,
+    canEnterEditMode: bool,
+    entityId: ?u64 = null,
+};

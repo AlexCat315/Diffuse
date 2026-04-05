@@ -367,6 +367,20 @@ export interface RpcMethods {
   "sequencer.seek": { params: { time: number }; result: Record<string, never> };
   "sequencer.setSpeed": { params: { speed: number }; result: Record<string, never> };
   "sequencer.recomputeDuration": { params: Record<string, never>; result: { duration: number } };
+  "mesh.getState": { params: Record<string, never>; result: { active: boolean; mode: string; selectionMode: string; selectionCount: number; canEnterEditMode: boolean; entityId?: number } };
+  "mesh.enterEditMode": { params: { entityId: number }; result: { success: boolean } };
+  "mesh.exitEditMode": { params: Record<string, never>; result: Record<string, never> };
+  "mesh.setSelectionMode": { params: { mode: string }; result: Record<string, never> };
+  "mesh.extrude": { params: Record<string, never>; result: { success: boolean } };
+  "mesh.inset": { params: Record<string, never>; result: { success: boolean } };
+  "mesh.bevel": { params: Record<string, never>; result: { success: boolean } };
+  "mesh.loopCut": { params: Record<string, never>; result: { success: boolean } };
+  "mesh.merge": { params: Record<string, never>; result: { success: boolean } };
+  "mesh.delete": { params: Record<string, never>; result: { success: boolean } };
+  "mesh.duplicate": { params: Record<string, never>; result: { success: boolean } };
+  "mesh.separate": { params: Record<string, never>; result: { success: boolean } };
+  "mesh.recalcNormals": { params: Record<string, never>; result: { success: boolean } };
+  "mesh.pivotToSelection": { params: Record<string, never>; result: { success: boolean } };
 }
 
 // ── Subscription Events ───────────────────────────────────
@@ -380,6 +394,7 @@ export interface SubscriptionEvents {
   "on:playback.stateChanged": { state: string };
   "on:asset.changed": { assetId: string; changeType: string };
   "on:editor.historyChanged": { cursor: number; totalEntries: number };
+  "on:mesh.stateChanged": { active: boolean; mode: string; selectionMode: string; selectionCount: number; canEnterEditMode: boolean; entityId?: number };
 }
 
 // ── Convenience Aliases ───────────────────────────────────

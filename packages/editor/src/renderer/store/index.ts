@@ -20,4 +20,7 @@ export { useSyncedState, useSyncedStateStore } from "./synced-state";
 
 export { useLocalState } from "./local-state";
 
+export { useMeshEditStore } from "./mesh-edit";
+export type { MeshEditState, MeshEditMode, MeshSelectionMode } from "./mesh-edit";
+
 export { initRpcBridge } from "./rpc-bridge";

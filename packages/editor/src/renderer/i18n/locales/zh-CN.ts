@@ -672,4 +672,27 @@ export const zhCN: TranslationKeys = {
     components: "组件",
     noComponents: "无组件",
   },
+
+  // ── Mesh Editing ──────────────────────────────────────
+  meshEdit: {
+    editMode: "编辑模式",
+    objectMode: "物体模式",
+    enterEditMode: "进入编辑模式",
+    exitEditMode: "退出",
+    vertex: "顶点",
+    edge: "边",
+    face: "面",
+    extrude: "挤出",
+    inset: "内插",
+    bevel: "倒角",
+    loopCut: "环切",
+    merge: "合并",
+    delete: "删除",
+    duplicate: "复制",
+    separate: "分离",
+    recalcNormals: "重算法线",
+    pivotToSelection: "轴心到选区",
+    selectionCount: "已选",
+    tabToToggle: "Tab 切换编辑模式",
+  },
 } as const;

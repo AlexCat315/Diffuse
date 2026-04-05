@@ -3,6 +3,8 @@ import { useConnectionStore } from "./connection";
 import { useSceneStore } from "./scene";
 import { useConsoleStore } from "./console";
 import { useEntityCacheStore } from "./entity-cache";
+import { useMeshEditStore } from "./mesh-edit";
+import type { MeshEditMode, MeshSelectionMode } from "./mesh-edit";
 
 /**
  * Initialize the bridge between engine IPC events and Zustand stores.
@@ -12,6 +14,7 @@ export function initRpcBridge(): () => void {
   const cleanupConnected = window.guavaEngine.onConnected(() => {
     useConnectionStore.getState().setConnected(true);
     useSceneStore.getState().refreshHierarchy();
+    useMeshEditStore.getState().refreshState();
   });
 
   const cleanupError = window.guavaEngine.onError((err) => {
@@ -42,6 +45,18 @@ export function initRpcBridge(): () => void {
         }
         break;
       }
+      case "on:mesh.stateChanged": {
+        const d = data as {
+          active: boolean;
+          mode: MeshEditMode;
+          selectionMode: MeshSelectionMode;
+          selectionCount: number;
+          canEnterEditMode: boolean;
+          entityId: number | null;
+        };
+        useMeshEditStore.getState().setMeshState(d);
+        break;
+      }
     }
   });
 
@@ -50,6 +65,7 @@ export function initRpcBridge(): () => void {
     if (status.rpcConnected) {
       useConnectionStore.getState().setConnected(true);
       useSceneStore.getState().refreshHierarchy();
+      useMeshEditStore.getState().refreshState();
     }
   });
 
