@@ -183,6 +183,14 @@ pub const MetalDevice = struct {
         bridge.guava_metal_rhi_wait_for_gpu(self.bridge_ctx);
     }
 
+    /// Async GPU-blit render IOSurface → staging IOSurface (no waitForGpu).
+    /// Returns the staging IOSurface ID. The blit command is submitted on
+    /// the same graphics queue and runs in FIFO order before any later render
+    /// commands, but this call returns immediately without waiting.
+    pub fn copyToStaging(self: *MetalDevice, render_texture_id: u32) u32 {
+        return bridge.guava_metal_rhi_copy_to_staging(self.bridge_ctx, render_texture_id);
+    }
+
     /// Wait for GPU, then CPU-copy render IOSurface → staging IOSurface.
     /// Returns the staging IOSurface ID (globally unique, cross-process safe).
     /// The staging surface is never touched by the GPU, safe to read any time.
