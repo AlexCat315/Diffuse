@@ -1095,16 +1095,35 @@ pub const RhiDevice = struct {
         return error.DeviceCreateFailed;
     }
 
-    /// Blit a shared texture's content to the associated shared memory region.
-    /// On macOS Metal, waits for the GPU then copies to a staging IOSurface.
-    /// On Linux Vulkan, performs a GPU→CPU readback into the POSIX shm segment.
+    /// Wait for the previous frame's GPU command buffer to complete.
+    /// On Metal this calls [MTLCommandBuffer waitUntilCompleted].
+    /// On Vulkan this is a no-op (sync is handled inside blitSharedTexture).
+    ///
+    /// In the double-buffered pipeline, this is called at the TOP of the
+    /// frame, giving the GPU the entire frame delay sleep + CPU prep time
+    /// to finish the previous frame.  By the time this runs, the GPU work
+    /// is typically already done, making the wait nearly instant.
+    pub fn waitForPreviousFrame(self: *RhiDevice) void {
+        if (self.owned_metal_device) |md| {
+            md.waitForGpu();
+        }
+    }
+
+    /// Async-blit a shared texture to the staging IOSurface.
+    /// Does NOT wait for GPU — the blit command buffer is submitted on the
+    /// same graphics queue and runs before any later render commands (FIFO).
+    /// The caller must call waitForPreviousFrame() first to ensure the
+    /// source texture has stable pixels.
+    ///
+    /// On Vulkan, performs a GPU→CPU readback into the POSIX shm segment
+    /// (includes its own synchronization).
     /// Returns the staging IOSurface ID on Metal (0 if N/A).
     pub fn blitSharedTexture(self: *RhiDevice, texture: Texture) u32 {
         if (self.owned_vulkan_device) |vk| {
             _ = vk.blitSharedTexture(texture.id);
         }
         if (self.owned_metal_device) |md| {
-            return md.waitForGpuAndCopyToStaging(texture.id);
+            return md.copyToStaging(texture.id);
         }
         return 0;
     }

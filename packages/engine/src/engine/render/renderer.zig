@@ -1341,6 +1341,28 @@ pub const Renderer = struct {
 
             const viewport_active = self.scene_viewport.active();
             const can_render_scene = viewport_active or has_swapchain;
+
+            // ── Double-buffered pipeline: wait for PREVIOUS frame's GPU work ──
+            // By deferring the wait to the start of the NEXT frame, the GPU
+            // had the entire frame-delay sleep + CPU prep time to finish.
+            // For a typical 120fps scene the GPU is done long before we arrive
+            // here, making waitForPreviousFrame() nearly instant (~0µs).
+            //
+            // After the wait, the previous frame's color_texture has stable
+            // pixels.  We submit an async blit to copy them to the staging
+            // IOSurface so the addon can read them at any time.  The blit
+            // runs on the same GPU queue and completes before THIS frame's
+            // render commands start (Metal FIFO guarantee).
+            if (viewport_active and self.scene_viewport.use_iosurface) {
+                self.rhi.waitForPreviousFrame();
+                if (self.scene_viewport.color_texture) |tex| {
+                    const staging_id = self.rhi.blitSharedTexture(tex);
+                    if (staging_id != 0) {
+                        self.scene_viewport.staging_iosurface_id = staging_id;
+                    }
+                }
+            }
+
             const render_width = if (viewport_active) self.scene_viewport.width else frame.swapchain_image.width;
             const render_height = if (viewport_active) self.scene_viewport.height else frame.swapchain_image.height;
             var draw_stats = mesh_pass_mod.DrawStats{};
@@ -2472,19 +2494,14 @@ pub const Renderer = struct {
             }
             try self.resolveSelectionReadbacks();
 
-            // On Vulkan, blit the shared viewport texture to POSIX shm so
-            // the Electron editor process can read the pixels.
-            // On Metal, wait for GPU then GPU-blit to a staging IOSurface.
-            if (viewport_active and self.scene_viewport.use_iosurface) {
+            // Blit is now done at the TOP of the next frame (double-buffered
+            // pipeline).  See the waitForPreviousFrame + blitSharedTexture
+            // block near the start of drawFrame.
+            // On Vulkan, the blit is still synchronous inside blitSharedTexture.
+            if (viewport_active and self.scene_viewport.use_iosurface and self.rhi.api == .vulkan) {
                 if (self.scene_viewport.color_texture) |tex| {
-                    const staging_id = self.rhi.blitSharedTexture(tex);
-                    if (staging_id != 0) {
-                        self.scene_viewport.staging_iosurface_id = staging_id;
-                    }
+                    _ = self.rhi.blitSharedTexture(tex);
                 }
-                // No per-frame RPC notification needed.  The staging IOSurface
-                // is safe to read at any time — the GPU never touches it
-                // directly.  The addon polls on its own rAF schedule.
             }
 
             // Collect RHI stats
