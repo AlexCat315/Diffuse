@@ -2,19 +2,15 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from "react"
 import { useI18n, type Locale } from "../i18n";
 import { useConnectionStore, useViewportSettingsStore } from "../store";
 
-type FpsDisplay = "viewport" | "none";
-
 // ── Local preferences (stored in localStorage) ───────────────────
 
 const PREFS_KEY = "guava-editor-prefs";
 
 interface EditorPrefs {
-  fpsDisplay: FpsDisplay;
   vsyncEnabled: boolean;
 }
 
 const defaultPrefs: EditorPrefs = {
-  fpsDisplay: "viewport",
   vsyncEnabled: true,
 };
 
@@ -107,6 +103,8 @@ export function SettingsPanel() {
   const connected = useConnectionStore((s) => s.connected);
   const fpsLimit = useViewportSettingsStore((s) => s.fpsLimit);
   const setFpsLimit = useViewportSettingsStore((s) => s.setFpsLimit);
+  const fpsDisplay = useViewportSettingsStore((s) => s.fpsDisplay);
+  const setFpsDisplay = useViewportSettingsStore((s) => s.setFpsDisplay);
   const { locale, setLocale, t } = useI18n();
   const isZh = locale === "zh-CN";
 
@@ -318,8 +316,8 @@ export function SettingsPanel() {
               <div style={S.sectionHeader}>{isZh ? "外观" : "Appearance"}</div>
               <SettingRow label={isZh ? "FPS 显示" : "FPS Display"} desc={isZh ? "在视口中显示帧率叠加层" : "Show frame rate overlay in viewport"}>
                 <div style={S.btnGroup}>
-                  <button style={{ ...S.btn, ...(prefs.fpsDisplay === "viewport" ? S.btnActive : {}) }} onClick={() => updatePref("fpsDisplay", "viewport")}>{isZh ? "视口内" : "Viewport"}</button>
-                  <button style={{ ...S.btn, ...(prefs.fpsDisplay === "none" ? S.btnActive : {}) }} onClick={() => updatePref("fpsDisplay", "none")}>{isZh ? "隐藏" : "None"}</button>
+                  <button style={{ ...S.btn, ...(fpsDisplay === "viewport" ? S.btnActive : {}) }} onClick={() => setFpsDisplay("viewport")}>{isZh ? "视口内" : "Viewport"}</button>
+                  <button style={{ ...S.btn, ...(fpsDisplay === "none" ? S.btnActive : {}) }} onClick={() => setFpsDisplay("none")}>{isZh ? "隐藏" : "None"}</button>
                 </div>
               </SettingRow>
               <SettingRow label={isZh ? "帧率上限" : "Frame Rate Limit"} desc={isZh ? "限制引擎渲染帧率" : "Limit engine rendering frame rate"}>

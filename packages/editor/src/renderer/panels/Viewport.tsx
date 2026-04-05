@@ -677,6 +677,7 @@ export function Viewport() {
 // ── Viewport FPS / Frame Time Overlay ────────────────────────────
 
 function ViewportMetricsOverlay() {
+  const fpsDisplay = useViewportSettingsStore((s) => s.fpsDisplay);
   const [metrics, setMetrics] = useState<{ fps: number; frameTimeMs: number; drawCalls: number; triangles: number } | null>(null);
 
   useEffect(() => {
@@ -688,7 +689,7 @@ function ViewportMetricsOverlay() {
     return cleanup;
   }, []);
 
-  if (!metrics) return null;
+  if (!metrics || fpsDisplay === "none") return null;
 
   const fpsColor = metrics.fps >= 55 ? "#a6e3a1" : metrics.fps >= 30 ? "#f9e2af" : "#f38ba8";
 
