@@ -58,6 +58,16 @@ export function initRpcBridge(): () => void {
         useMeshEditStore.getState().setMeshState(d);
         break;
       }
+      case "on:playback.stateChanged": {
+        const d = data as { state: string };
+        const s = d.state as "stopped" | "playing" | "paused";
+        useSceneStore.getState().setPlaybackState(s);
+        if (s === "stopped") {
+          // Scene hierarchy may have changed after stop rollback
+          useSceneStore.getState().refreshHierarchy();
+        }
+        break;
+      }
     }
   });
 

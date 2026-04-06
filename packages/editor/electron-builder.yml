@@ -12,10 +12,12 @@ asarUnpack:
   # Native .node addons cannot be executed from inside ASAR
   - "**/*.node"
 
-# Files that go into the asar (renderer + main process JS)
+# Files that go into the asar (renderer + main process JS + bytecode)
 files:
   - dist/**
   - package.json
+  # Include bytenode (runtime dep needed by the loader to register .jsc extension)
+  - node_modules/bytenode/**
 
 # Extra binaries/resources copied alongside the asar, not bundled inside it
 # (needed so the OS can execute guava-engine and load the native .node addon)

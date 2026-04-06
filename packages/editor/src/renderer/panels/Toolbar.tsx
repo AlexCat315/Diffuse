@@ -21,19 +21,32 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
   const onRefreshHierarchy = useSceneStore((s) => s.refreshHierarchy);
   const sceneDirty = useSceneStore((s) => s.sceneRevision !== s.savedRevision);
   const markSaved = useSceneStore((s) => s.markSaved);
+  const playbackState = useSceneStore((s) => s.playbackState);
   const { t } = useI18n();
   const [sceneMenuOpen, setSceneMenuOpen] = useLocalState(false);
   const [scenes, setScenes] = useLocalState<string[]>([]);
 
-  const handlePlay = () => window.guavaEngine.call("playback.play", {});
-  const handlePause = () => window.guavaEngine.call("playback.pause", {});
-  const handleStop = () => window.guavaEngine.call("playback.stop", {});
+  const setPlaybackState = useSceneStore((s) => s.setPlaybackState);
+  const handlePlay = () => {
+    setPlaybackState("playing");
+    window.guavaEngine.call("playback.play", {}).catch(() => setPlaybackState("stopped"));
+  };
+  const handlePause = () => {
+    setPlaybackState("paused");
+    window.guavaEngine.call("playback.pause", {}).catch(() => setPlaybackState("stopped"));
+  };
+  const handleStop = () => {
+    setPlaybackState("stopped");
+    window.guavaEngine.call("playback.stop", {})
+      .then(() => onRefreshHierarchy?.())
+      .catch(() => {});
+  };
   const handleUndo = () => window.guavaEngine.call("editor.undo", {});
   const handleRedo = () => window.guavaEngine.call("editor.redo", {});
 
   const handleSave = useCallback(() => {
     window.guavaEngine.call("scene.save", {})
-      .then(() => markSaved())
+      .then((res: { path: string; revision: number }) => markSaved(res.revision))
       .catch((e) => console.error("Save failed:", e));
   }, [markSaved]);
 
@@ -103,9 +116,12 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
       </div>
       <div style={styles.divider} />
       <div style={styles.section}>
-        <ToolButton icon={<IconPlay size={14} />} tooltip={t.toolbar.play} onClick={handlePlay} />
-        <ToolButton icon={<IconPause size={14} />} tooltip={t.toolbar.pause} onClick={handlePause} />
-        <ToolButton icon={<IconStop size={14} />} tooltip={t.toolbar.stop} onClick={handleStop} />
+        <ToolButton icon={<IconPlay size={14} />} tooltip={t.toolbar.play} onClick={handlePlay}
+          active={playbackState === "playing"} />
+        <ToolButton icon={<IconPause size={14} />} tooltip={t.toolbar.pause} onClick={handlePause}
+          active={playbackState === "paused"} />
+        <ToolButton icon={<IconStop size={14} />} tooltip={t.toolbar.stop} onClick={handleStop}
+          active={playbackState === "stopped"} />
       </div>
       <div style={styles.divider} />
       <div style={styles.section}>

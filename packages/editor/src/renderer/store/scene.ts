@@ -2,6 +2,8 @@ import { create } from "zustand";
 import type { EntityNode, GizmoMode } from "../../shared/rpc-types";
 import { withBroadcastSync } from "./broadcast-sync";
 
+export type PlaybackState = "stopped" | "playing" | "paused";
+
 export interface SceneState {
   hierarchy: EntityNode[];
   selectedEntity: number | null;
@@ -10,14 +12,17 @@ export interface SceneState {
   sceneRevision: number;
   /** Scene revision at last successful save */
   savedRevision: number;
+  /** Current playback state */
+  playbackState: PlaybackState;
 
   setHierarchy: (roots: EntityNode[]) => void;
   setSelectedEntity: (entityId: number | null) => void;
   setGizmoMode: (mode: GizmoMode) => void;
   /** Update the current scene revision (called from on:scene.changed) */
   setSceneRevision: (rev: number) => void;
-  /** Mark the current revision as saved */
-  markSaved: () => void;
+  /** Mark a specific revision as saved (or current if omitted) */
+  markSaved: (revision?: number) => void;
+  setPlaybackState: (state: PlaybackState) => void;
 
   refreshHierarchy: () => Promise<void>;
   selectEntity: (entityId: number) => Promise<void>;
@@ -26,19 +31,21 @@ export interface SceneState {
 
 export const useSceneStore = create<SceneState>(
   withBroadcastSync(
-    { name: "scene", syncKeys: ["hierarchy", "selectedEntity", "gizmoMode", "sceneRevision", "savedRevision"] },
+    { name: "scene", syncKeys: ["hierarchy", "selectedEntity", "gizmoMode", "sceneRevision", "savedRevision", "playbackState"] },
     (set, get) => ({
       hierarchy: [],
       selectedEntity: null,
       gizmoMode: "none",
       sceneRevision: 0,
       savedRevision: 0,
+      playbackState: "stopped" as PlaybackState,
 
       setHierarchy: (roots) => set({ hierarchy: roots }),
       setSelectedEntity: (entityId) => set({ selectedEntity: entityId }),
       setGizmoMode: (mode) => set({ gizmoMode: mode }),
       setSceneRevision: (rev) => set({ sceneRevision: rev }),
-      markSaved: () => set({ savedRevision: get().sceneRevision }),
+      markSaved: (revision?: number) => set({ savedRevision: revision ?? get().sceneRevision }),
+      setPlaybackState: (state) => set({ playbackState: state }),
 
       refreshHierarchy: async () => {
         try {

@@ -23,6 +23,8 @@ pub const SubscriptionState = struct {
     last_mesh_entity: ?u64 = null,
     last_mesh_selection_count: u32 = 0,
     last_can_enter_edit_mode: bool = false,
+    // Playback state tracking
+    last_playback_state: core.PlaybackState = .stopped,
 };
 
 /// Check for state changes and broadcast notifications.
@@ -124,6 +126,23 @@ pub fn checkAndBroadcast(server: *Server, layer_context: *core.LayerContext) !vo
     if (entity_count != state.last_entity_count) {
         state.last_entity_count = entity_count;
         // Scene change notification already covers this via revision
+    }
+
+    // ── Playback state changes ────────────────────────────────
+    const current_playback = layer_context.playback_controller.state;
+    if (current_playback != state.last_playback_state) {
+        state.last_playback_state = current_playback;
+        const state_str: []const u8 = switch (current_playback) {
+            .stopped => "stopped",
+            .playing => "playing",
+            .paused => "paused",
+        };
+        const notification = try buildNotification(
+            server.allocator,
+            "on:playback.stateChanged",
+            .{ .state = state_str },
+        );
+        server.broadcast(notification);
     }
 
     // ── Console log entries (batched into one notification) ───
