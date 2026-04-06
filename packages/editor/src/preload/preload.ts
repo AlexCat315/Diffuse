@@ -229,6 +229,13 @@ contextBridge.exposeInMainWorld("guavaEngine", {
   /** Import files/directories from given absolute OS paths (drag-drop) */
   fsImportPaths: (targetRelDir: string, sourcePaths: string[]): Promise<{ ok: boolean; files: string[]; error?: string }> =>
     ipcRenderer.invoke("fs:importPaths", targetRelDir, sourcePaths),
+
+  /** Listen for import progress events */
+  onImportProgress: (callback: (progress: { current: number; total: number; name?: string; done?: boolean }) => void): (() => void) => {
+    const handler = (_event: unknown, progress: { current: number; total: number; name?: string; done?: boolean }) => callback(progress);
+    ipcRenderer.on("fs:importProgress", handler);
+    return () => ipcRenderer.removeListener("fs:importProgress", handler);
+  },
 });
 
 /** Type declaration for the exposed API (used in renderer) */
@@ -276,4 +283,5 @@ export interface GuavaEngineAPI {
   fsCreateFile(relativePath: string, content: string): Promise<{ ok: boolean; error?: string }>;
   fsImportFiles(targetRelDir: string): Promise<{ ok: boolean; files: string[]; canceled?: boolean; error?: string }>;
   fsImportPaths(targetRelDir: string, sourcePaths: string[]): Promise<{ ok: boolean; files: string[]; error?: string }>;
+  onImportProgress(callback: (progress: { current: number; total: number; name?: string; done?: boolean }) => void): () => void;
 }

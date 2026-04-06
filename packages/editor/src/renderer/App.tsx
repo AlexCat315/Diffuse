@@ -282,6 +282,12 @@ export function App() {
   useEffect(() => {
     const cleanupBridge = initRpcBridge();
 
+    // Prevent Electron from navigating when files are dropped outside designated areas.
+    // Component-level handlers call e.preventDefault() to accept drops selectively.
+    const preventDragNav = (e: Event) => e.preventDefault();
+    document.addEventListener("dragover", preventDragNav);
+    document.addEventListener("drop", preventDragNav);
+
     // If arriving from the launcher, the engine may already be connected
     // before initRpcBridge's onConnected listener was set up. Check now.
     window.guavaEngine.getStatus().then((status) => {
@@ -350,6 +356,8 @@ export function App() {
     return () => {
       cleanupBridge();
       window.removeEventListener("keydown", handleKeyDown);
+      document.removeEventListener("dragover", preventDragNav);
+      document.removeEventListener("drop", preventDragNav);
     };
   }, []);
 
