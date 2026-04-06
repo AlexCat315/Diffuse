@@ -26,13 +26,17 @@ contextBridge.exposeInMainWorld("guavaEngine", {
   browseFolder: (): Promise<string | null> =>
     ipcRenderer.invoke("launcher:browseFolder"),
 
+  /** Get available project templates */
+  getTemplates: (): Promise<{ id: string; name: string; description: string; icon: string }[]> =>
+    ipcRenderer.invoke("launcher:getTemplates"),
+
   /** Open a project by path (starts engine + connects) */
   openProject: (projectPath: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke("launcher:openProject", projectPath),
 
   /** Create a new project and open it */
-  createProject: (projectPath: string, projectName: string): Promise<{ ok: boolean; error?: string }> =>
-    ipcRenderer.invoke("launcher:createProject", projectPath, projectName),
+  createProject: (projectPath: string, projectName: string, templateId?: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("launcher:createProject", projectPath, projectName, templateId),
 
   /** Call an engine RPC method */
   call: (method: string, params: unknown): Promise<unknown> =>
@@ -191,8 +195,9 @@ export interface GuavaEngineAPI {
   getRecentProjects(): Promise<{ path: string; name: string; lastOpened: string }[]>;
   removeRecentProject(projectPath: string): Promise<void>;
   browseFolder(): Promise<string | null>;
+  getTemplates(): Promise<{ id: string; name: string; description: string; icon: string }[]>;
   openProject(projectPath: string): Promise<{ ok: boolean; error?: string }>;
-  createProject(projectPath: string, projectName: string): Promise<{ ok: boolean; error?: string }>;
+  createProject(projectPath: string, projectName: string, templateId?: string): Promise<{ ok: boolean; error?: string }>;
   // Engine RPC
   call<M extends import("../shared/rpc-types").RpcMethodName>(
     method: M,

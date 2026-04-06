@@ -864,6 +864,7 @@ export const zhCN: TranslationKeys = {
     noRecentProjects: "没有最近的项目",
     getStarted: "创建新项目或打开现有项目以开始使用。",
     createNewProject: "创建新项目",
+    template: "模板",
     projectName: "项目名称",
     projectNamePlaceholder: "我的游戏",
     projectLocation: "位置",

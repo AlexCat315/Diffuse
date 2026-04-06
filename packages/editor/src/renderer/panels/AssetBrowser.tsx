@@ -25,7 +25,7 @@ const ASSET_ICONS: Record<string, React.ComponentType<{ size?: number; color?: s
 export function AssetBrowser() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [currentPath, setCurrentPath] = useSyncedState("asset-browser", "currentPath", "assets");
+  const [currentPath, setCurrentPath] = useSyncedState("asset-browser", "currentPath", "Content");
   const [entries, setEntries] = useLocalState<AssetEntry[]>([]);
   const [loading, setLoading] = useLocalState(false);
 

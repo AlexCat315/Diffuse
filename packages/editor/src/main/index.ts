@@ -10,6 +10,7 @@ import {
   isGuavaProject,
   createNewProject,
 } from "./recent-projects";
+import { PROJECT_TEMPLATES, applyTemplate } from "./project-templates";
 
 // Guard against EPIPE on stdout/stderr — happens when the parent process
 // (e.g. Vite dev server terminal) closes its end of the pipe while we're
@@ -605,10 +606,15 @@ ipcMain.handle("launcher:openProject", async (_event, projectPath: string) => {
   }
 });
 
-ipcMain.handle("launcher:createProject", async (_event, projectPath: string, projectName: string) => {
+ipcMain.handle("launcher:getTemplates", () => {
+  return PROJECT_TEMPLATES;
+});
+
+ipcMain.handle("launcher:createProject", async (_event, projectPath: string, projectName: string, templateId?: string) => {
   try {
     const normalized = path.resolve(projectPath);
     createNewProject(normalized, projectName);
+    applyTemplate(normalized, templateId ?? "empty");
     addRecentProject(normalized, projectName);
     launcherMode = false;
     currentProjectPath = normalized;
