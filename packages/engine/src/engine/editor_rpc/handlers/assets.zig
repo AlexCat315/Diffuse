@@ -2,6 +2,7 @@
 const std = @import("std");
 const ctx_mod = @import("../ctx.zig");
 const Ctx = ctx_mod.Ctx;
+const components = @import("../../scene/components.zig");
 
 /// List contents of a directory under the project root.
 /// Defaults to the project's "Content" directory, falling back to "assets"
@@ -162,4 +163,43 @@ pub fn listProjectRoot(ctx: *Ctx) !void {
     for (entries.items) |e| {
         ctx.allocator.free(@constCast(e.name));
     }
+}
+
+/// Import a GLTF/GLB model into the scene at the given position.
+/// Params: { path: string, position?: [x,y,z] }
+/// Returns: { rootEntity: ?u64, entityCount: usize }
+pub fn importModel(ctx: *Ctx) !void {
+    const rel_path = try ctx.param([]const u8, "path");
+
+    // Sanitize: reject path traversal
+    if (std.mem.indexOf(u8, rel_path, "..") != null) return error.InvalidArguments;
+
+    // Parse optional position
+    var transform = components.Transform.identity();
+    if (ctx.paramArray("position")) |pos_arr| {
+        if (pos_arr.items.len >= 3) {
+            transform.translation = .{
+                coerceF32(pos_arr.items[0]),
+                coerceF32(pos_arr.items[1]),
+                coerceF32(pos_arr.items[2]),
+            };
+        }
+    } else |_| {}
+
+    const world = ctx.layer.world;
+    const report = try world.importGltfStaticModel(rel_path, transform);
+
+    try ctx.reply(.{
+        .rootEntity = report.root_entity,
+        .entityCount = report.entity_count,
+        .meshCount = report.mesh_count,
+    });
+}
+
+fn coerceF32(val: std.json.Value) f32 {
+    return switch (val) {
+        .float => |f| @floatCast(f),
+        .integer => |i| @floatFromInt(i),
+        else => 0.0,
+    };
 }

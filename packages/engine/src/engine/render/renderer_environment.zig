@@ -159,11 +159,23 @@ pub fn environmentSelectionFingerprint(resources: *const assets_lib.ResourceLibr
 }
 
 pub fn findSceneEnvironmentAssetId(resources: *const assets_lib.ResourceLibrary) ?[]const u8 {
-    const environment_asset_id = resources.sceneEnvironmentAssetId() orelse return null;
-    const record = resources.asset_registry.recordById(environment_asset_id) orelse return null;
+    const environment_asset_id = resources.sceneEnvironmentAssetId() orelse {
+        std.log.debug("findSceneEnv: no scene_environment_asset_id set", .{});
+        return null;
+    };
+    std.log.debug("findSceneEnv: asset_id='{s}'", .{environment_asset_id});
+    const record = resources.asset_registry.recordById(environment_asset_id) orelse {
+        std.log.debug("findSceneEnv: no record found for id '{s}'", .{environment_asset_id});
+        return null;
+    };
+    std.log.debug("findSceneEnv: record type={}, source_path='{s}'", .{ record.type, record.source_path });
     if (record.type != .texture or !std.mem.endsWith(u8, record.source_path, ".hdr")) {
+        std.log.debug("findSceneEnv: rejected — not texture or not .hdr", .{});
         return null;
     }
-    std.fs.cwd().access(record.source_path, .{}) catch return null;
+    std.fs.cwd().access(record.source_path, .{}) catch |err| {
+        std.log.debug("findSceneEnv: access failed for '{s}': {s}", .{ record.source_path, @errorName(err) });
+        return null;
+    };
     return record.id;
 }

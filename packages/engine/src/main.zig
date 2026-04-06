@@ -256,6 +256,18 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
         editor_layer.state.setProjectContext(project.root_path, project.file.name, project.file.content_dir, project.file.start_scene);
         app.project_root = project.root_path;
         std.log.info("opening project '{s}' at {s}", .{ project.file.name, project.root_path });
+
+        // Change CWD to project root so relative asset paths (e.g. "Content/file.hdr")
+        // resolve correctly in the renderer, texture importer, and asset registry.
+        if (std.fs.openDirAbsolute(project.root_path, .{})) |dir| {
+            var d = dir;
+            d.setAsCwd() catch |err| {
+                std.log.warn("failed to chdir to project root: {s}", .{@errorName(err)});
+            };
+            d.close();
+        } else |err| {
+            std.log.warn("failed to open project root dir: {s}", .{@errorName(err)});
+        }
     }
 
     // Start MCP runtime for AI collaboration support (before EditorLayer push
