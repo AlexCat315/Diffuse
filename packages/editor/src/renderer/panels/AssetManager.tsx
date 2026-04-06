@@ -54,6 +54,19 @@ export function AssetManager() {
   const [viewMode, setViewMode] = useSyncedState<ViewMode>("asset-manager", "viewMode", "list");
   const [activeTypeFilters, setActiveTypeFilters] = useSyncedState<string[]>("asset-manager", "typeFilters", []);
   const [sortBy, setSortBy] = useSyncedState<"name" | "type" | "size">("asset-manager", "sortBy", "name");
+  const [importProgress, setImportProgress] = useState<{ current: number; total: number; name?: string } | null>(null);
+
+  // Listen for import progress events
+  useEffect(() => {
+    const cleanup = window.guavaEngine.onImportProgress((progress) => {
+      if (progress.done) {
+        setImportProgress(null);
+      } else {
+        setImportProgress(progress);
+      }
+    });
+    return cleanup;
+  }, []);
 
   // Recursively scan all directories and build flat asset index
   const scanAll = useCallback(async () => {
@@ -268,6 +281,26 @@ export function AssetManager() {
           <option value="size">Size</option>
         </select>
       </div>
+
+      {/* Import progress */}
+      {importProgress && (
+        <div style={{ padding: "4px 12px" }}>
+          <div style={{ fontSize: 11, color: "#a6adc8", marginBottom: 2 }}>
+            Importing {importProgress.current + 1}/{importProgress.total}: {importProgress.name ?? "…"}
+          </div>
+          <div style={{ height: 3, background: "#313244", borderRadius: 2, overflow: "hidden" }}>
+            <div
+              style={{
+                height: "100%",
+                width: `${((importProgress.current + 1) / importProgress.total) * 100}%`,
+                background: "#89b4fa",
+                borderRadius: 2,
+                transition: "width 0.15s ease",
+              }}
+            />
+          </div>
+        </div>
+      )}
 
       {/* Asset list */}
       {loading ? (

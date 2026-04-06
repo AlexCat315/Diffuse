@@ -781,8 +781,11 @@ ipcMain.handle("fs:importFiles", async (_event, targetRelDir: string) => {
   const targetDir = resolveProjectPath(targetRelDir);
   await fs.mkdir(targetDir, { recursive: true });
   const imported: string[] = [];
-  for (const src of result.filePaths) {
+  const total = result.filePaths.length;
+  for (let i = 0; i < total; i++) {
+    const src = result.filePaths[i];
     const dest = path.join(targetDir, path.basename(src));
+    mainWindow.webContents.send("fs:importProgress", { current: i, total, name: path.basename(src) });
     try {
       const stat = await fs.stat(src);
       if (stat.isDirectory()) {
@@ -795,6 +798,7 @@ ipcMain.handle("fs:importFiles", async (_event, targetRelDir: string) => {
       console.error(`Failed to import ${src}:`, err);
     }
   }
+  mainWindow.webContents.send("fs:importProgress", { current: total, total, done: true });
   return { ok: true, files: imported };
 });
 
@@ -806,8 +810,13 @@ ipcMain.handle("fs:importPaths", async (_event, targetRelDir: string, sourcePath
   const targetDir = resolveProjectPath(targetRelDir);
   await fs.mkdir(targetDir, { recursive: true });
   const imported: string[] = [];
-  for (const src of sourcePaths) {
+  const total = sourcePaths.length;
+  for (let i = 0; i < total; i++) {
+    const src = sourcePaths[i];
     const dest = path.join(targetDir, path.basename(src));
+    if (mainWindow) {
+      mainWindow.webContents.send("fs:importProgress", { current: i, total, name: path.basename(src) });
+    }
     try {
       const stat = await fs.stat(src);
       if (stat.isDirectory()) {
@@ -819,6 +828,9 @@ ipcMain.handle("fs:importPaths", async (_event, targetRelDir: string, sourcePath
     } catch (err) {
       console.error(`Failed to import ${src}:`, err);
     }
+  }
+  if (mainWindow) {
+    mainWindow.webContents.send("fs:importProgress", { current: total, total, done: true });
   }
   return { ok: true, files: imported };
 });
