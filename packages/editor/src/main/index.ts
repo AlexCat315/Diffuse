@@ -128,6 +128,19 @@ async function createMainWindow(): Promise<BrowserWindow> {
     win.webContents.openDevTools({ mode: "detach" });
   }
 
+  // Block DevTools keyboard shortcuts in packaged builds
+  if (app.isPackaged) {
+    win.webContents.on("before-input-event", (event, input) => {
+      // F12 or Cmd/Ctrl+Option+I
+      if (
+        input.key === "F12" ||
+        (input.alt && (input.meta || input.control) && input.key.toLowerCase() === "i")
+      ) {
+        event.preventDefault();
+      }
+    });
+  }
+
   // Forward renderer console output to main process stdout for debugging
   win.webContents.on("console-message", (_event, level, message, line, sourceId) => {
     const prefix = ["[Renderer:V]", "[Renderer:I]", "[Renderer:W]", "[Renderer:E]"][level] ?? "[Renderer]";
@@ -394,6 +407,8 @@ async function createPopoutWindow(panels: string[], initialState?: unknown, orig
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      // Disable DevTools in packaged builds to prevent runtime inspection
+      devTools: !app.isPackaged,
     },
   });
 

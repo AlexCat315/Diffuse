@@ -801,6 +801,12 @@ pub fn loadScenePath(state: *EditorState, layer_context: *engine.core.LayerConte
     utils.syncInspectorNameBuffer(state, layer_context);
     try resetSnapshotHistory(state, layer_context);
     try refreshWindowTitle(state, layer_context);
+
+    // world.clear() inside loadWorldWithRuntimeStateFromPath destroys the
+    // ResourceLibrary, wiping script handles registered by the initial
+    // discoverScripts() call.  Re-discover project scripts so that
+    // entity.setAssetField lookups work for script_handle fields.
+    rediscoverProjectScripts(layer_context.world);
 }
 
 fn reparentAllRootEntitiesToSceneRoot(world: *engine.scene.World, scene_root: engine.scene.EntityId) !void {
@@ -1476,4 +1482,71 @@ fn selectionContainsAncestor(
         current = world.parentEntity(current_id);
     }
     return false;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Script re-discovery after scene load
+// ═══════════════════════════════════════════════════════════════════
+
+/// Re-discover script files under assets/scripts/ and register them in the
+/// ResourceLibrary.  This is needed because world.clear() (called during
+/// scene loading) destroys the entire ResourceLibrary, including script
+/// handles that were registered by Application.discoverScripts() at startup.
+fn rediscoverProjectScripts(world: *engine.scene.World) void {
+    const allocator = world.allocator;
+    const scripts_dir = "assets/scripts";
+    var dir = std.fs.cwd().openDir(scripts_dir, .{ .iterate = true }) catch return;
+    defer dir.close();
+
+    var walker = dir.walk(allocator) catch return;
+    defer walker.deinit();
+
+    var count: usize = 0;
+    while (walker.next() catch null) |entry| {
+        if (entry.kind != .file) continue;
+        const is_zig = std.mem.endsWith(u8, entry.path, ".zig");
+        const is_cs = std.mem.endsWith(u8, entry.path, ".cs");
+        if (!is_zig and !is_cs) continue;
+
+        const full_path = std.fs.path.join(allocator, &.{ scripts_dir, entry.path }) catch continue;
+        defer allocator.free(full_path);
+
+        // Skip if already registered (e.g. restored from scene file)
+        if (world.resources.scriptHandleByAssetId(full_path) != null) continue;
+
+        const source = std.fs.cwd().readFileAlloc(allocator, full_path, 1024 * 1024) catch continue;
+        defer allocator.free(source);
+
+        const language: engine.script.ScriptLanguage = if (is_cs) .csharp else .zig;
+        const handle = world.resources.createScript(.{
+            .source = source,
+            .language = language,
+            .entry_fn = "main",
+            .description = full_path,
+            .source_path = full_path,
+            .artifact_path = "",
+        }) catch continue;
+
+        // Bind an AssetRecord so scriptHandleByAssetId(full_path) returns the handle.
+        const record: engine.assets.AssetRecord = .{
+            .id = allocator.dupe(u8, full_path) catch continue,
+            .type = .script,
+            .source_path = allocator.dupe(u8, full_path) catch continue,
+            .source_hash = engine.assets.hashStringAlloc(allocator, full_path) catch continue,
+            .import_settings_hash = engine.assets.defaultImportSettingsHashAlloc(allocator, .script) catch continue,
+            .import_version = @as(engine.assets.AssetType, .script).importVersion(),
+            .dependency_ids = allocator.alloc([]u8, 0) catch continue,
+            .outputs = allocator.alloc(engine.assets.AssetOutput, 0) catch continue,
+            .metadata = .{
+                .display_name = allocator.dupe(u8, std.fs.path.basename(full_path)) catch continue,
+                .importer = allocator.dupe(u8, @as(engine.assets.AssetType, .script).importerName()) catch continue,
+                .source_extension = allocator.dupe(u8, std.fs.path.extension(full_path)) catch continue,
+            },
+        };
+        _ = world.resources.bindScriptAssetRecord(handle, record) catch continue;
+        count += 1;
+    }
+    if (count > 0) {
+        std.log.info("Editor: re-discovered {d} project script(s) after scene load", .{count});
+    }
 }
