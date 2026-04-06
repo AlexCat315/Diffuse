@@ -4,9 +4,17 @@ const ctx_mod = @import("../ctx.zig");
 const Ctx = ctx_mod.Ctx;
 
 /// List contents of a directory under the project root.
-/// Defaults to "assets" if no path is provided.
+/// Defaults to the project's "Content" directory, falling back to "assets"
+/// for backward compatibility with engine development.
 pub fn list(ctx: *Ctx) !void {
-    const rel_path = (try ctx.paramOpt([]const u8, "path")) orelse "assets";
+    const rel_path = (try ctx.paramOpt([]const u8, "path")) orelse blk: {
+        // Prefer project "Content" directory; fall back to "assets"
+        var d = std.fs.cwd().openDir("Content", .{}) catch {
+            break :blk "assets";
+        };
+        d.close();
+        break :blk "Content";
+    };
 
     // Sanitize: reject absolute paths and path traversal
     if (rel_path.len > 0 and rel_path[0] == '/') return error.InvalidArguments;

@@ -7,6 +7,13 @@ interface RecentProject {
   lastOpened: string;
 }
 
+interface ProjectTemplate {
+  id: string;
+  name: string;
+  description: string;
+  icon: string;
+}
+
 interface LauncherProps {
   onProjectOpened: () => void;
 }
@@ -15,16 +22,19 @@ export function Launcher({ onProjectOpened }: LauncherProps) {
   const { t } = useI18n();
   const lt = t.launcher;
   const [recentProjects, setRecentProjects] = useState<RecentProject[]>([]);
+  const [templates, setTemplates] = useState<ProjectTemplate[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [showNewProject, setShowNewProject] = useState(false);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectPath, setNewProjectPath] = useState("");
+  const [selectedTemplate, setSelectedTemplate] = useState("empty");
   const [hovered, setHovered] = useState<string | null>(null);
 
-  // Load recent projects on mount
+  // Load recent projects and templates on mount
   useEffect(() => {
     window.guavaEngine.getRecentProjects().then(setRecentProjects);
+    window.guavaEngine.getTemplates().then(setTemplates);
   }, []);
 
   const handleOpenProject = useCallback(async (projectPath: string) => {
@@ -66,7 +76,7 @@ export function Launcher({ onProjectOpened }: LauncherProps) {
       const fullPath = newProjectPath.endsWith(newProjectName)
         ? newProjectPath
         : `${newProjectPath}/${newProjectName}`;
-      const result = await window.guavaEngine.createProject(fullPath, newProjectName.trim());
+      const result = await window.guavaEngine.createProject(fullPath, newProjectName.trim(), selectedTemplate);
       if (result.ok) {
         onProjectOpened();
       } else {
@@ -77,7 +87,7 @@ export function Launcher({ onProjectOpened }: LauncherProps) {
       setError(String(err));
       setLoading(false);
     }
-  }, [newProjectName, newProjectPath, onProjectOpened, lt]);
+  }, [newProjectName, newProjectPath, selectedTemplate, onProjectOpened, lt]);
 
   const handleRemoveRecent = useCallback(async (e: React.MouseEvent, projectPath: string) => {
     e.stopPropagation();
@@ -155,6 +165,25 @@ export function Launcher({ onProjectOpened }: LauncherProps) {
           {showNewProject ? (
             <div style={styles.newProjectForm}>
               <h2 style={styles.sectionTitle}>{lt.createNewProject}</h2>
+
+              {/* Template selector */}
+              <label style={styles.label}>{lt.template}</label>
+              <div style={styles.templateGrid}>
+                {templates.map((tmpl) => (
+                  <div
+                    key={tmpl.id}
+                    style={{
+                      ...styles.templateCard,
+                      ...(selectedTemplate === tmpl.id ? styles.templateCardSelected : {}),
+                    }}
+                    onClick={() => setSelectedTemplate(tmpl.id)}
+                  >
+                    <span style={styles.templateIcon}>{tmpl.icon}</span>
+                    <span style={styles.templateName}>{tmpl.name}</span>
+                    <span style={styles.templateDesc}>{tmpl.description}</span>
+                  </div>
+                ))}
+              </div>
 
               <label style={styles.label}>{lt.projectName}</label>
               <input
@@ -456,6 +485,43 @@ const styles: Record<string, React.CSSProperties> = {
   },
   newProjectForm: {
     maxWidth: 480,
+  },
+  templateGrid: {
+    display: "grid",
+    gridTemplateColumns: "repeat(auto-fill, minmax(140px, 1fr))",
+    gap: 10,
+    marginBottom: 4,
+  },
+  templateCard: {
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "center",
+    gap: 6,
+    padding: "14px 10px",
+    background: "#181825",
+    border: "2px solid #313244",
+    borderRadius: 8,
+    cursor: "pointer",
+    transition: "border-color 0.15s, background 0.15s",
+  },
+  templateCardSelected: {
+    borderColor: "#89b4fa",
+    background: "rgba(137, 180, 250, 0.08)",
+  },
+  templateIcon: {
+    fontSize: 28,
+  },
+  templateName: {
+    fontSize: 13,
+    fontWeight: 600,
+    color: "#cdd6f4",
+    textAlign: "center" as const,
+  },
+  templateDesc: {
+    fontSize: 11,
+    color: "#6c7086",
+    textAlign: "center" as const,
+    lineHeight: 1.3,
   },
   label: {
     display: "block",

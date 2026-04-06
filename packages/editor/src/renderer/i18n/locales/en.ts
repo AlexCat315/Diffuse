@@ -862,6 +862,7 @@ export const en = {
     noRecentProjects: "No recent projects",
     getStarted: "Create a new project or open an existing one to get started.",
     createNewProject: "Create New Project",
+    template: "Template",
     projectName: "Project Name",
     projectNamePlaceholder: "My Awesome Game",
     projectLocation: "Location",
