@@ -331,6 +331,27 @@ const MeshColliderRecord = struct {
     is_trigger: bool = false,
 };
 
+const CapsuleColliderRecord = struct {
+    radius: f32 = 0.4,
+    half_height: f32 = 0.5,
+    center: [3]f32 = .{ 0.0, 0.0, 0.0 },
+    is_trigger: bool = false,
+    layer_id: u16 = 0,
+    layer_group: u16 = 0xFFFF,
+};
+
+const CharacterControllerRecord = struct {
+    max_slope_angle: f32 = 0.872,
+    max_strength: f32 = 100.0,
+    padding: f32 = 0.02,
+    mass: f32 = 70.0,
+    up_direction: [3]f32 = .{ 0.0, 1.0, 0.0 },
+};
+
+const TagRecord = struct {
+    name: []const u8 = "",
+};
+
 const EntityRecord = struct {
     name: []const u8,
     parent: ?u32 = null,
@@ -347,6 +368,9 @@ const EntityRecord = struct {
     box_collider: ?BoxColliderRecord = null,
     sphere_collider: ?SphereColliderRecord = null,
     mesh_collider: ?MeshColliderRecord = null,
+    capsule_collider: ?CapsuleColliderRecord = null,
+    character_controller: ?CharacterControllerRecord = null,
+    tag: ?TagRecord = null,
     material: ?MaterialComponentRecord = null,
     light: ?components.Light = null,
     vfx: ?components.Vfx = null,
@@ -916,6 +940,25 @@ fn buildSceneFileFiltered(
                 .use_attached_mesh = collider.use_attached_mesh,
                 .is_trigger = collider.is_trigger,
             } else null,
+            .capsule_collider = if (entity.capsule_collider) |collider| .{
+                .radius = collider.radius,
+                .half_height = collider.half_height,
+                .center = collider.center,
+                .is_trigger = collider.is_trigger,
+                .layer_id = collider.layer_id,
+                .layer_group = collider.layer_group,
+            } else null,
+            .character_controller = if (entity.character_controller) |ctrl| .{
+                .max_slope_angle = ctrl.max_slope_angle,
+                .max_strength = ctrl.max_strength,
+                .padding = ctrl.padding,
+                .mass = ctrl.mass,
+                .up_direction = ctrl.up_direction,
+            } else null,
+            .tag = if (entity.tag) |*t| blk: {
+                const s = t.asSlice();
+                break :blk if (s.len > 0) TagRecord{ .name = s } else null;
+            } else null,
             .material = material_component,
             .light = entity.light,
             .vfx = entity.vfx,
@@ -1365,6 +1408,31 @@ fn applySceneFileToWorld(
                     .use_attached_mesh = collider.use_attached_mesh,
                     .is_trigger = collider.is_trigger,
                 }
+            else
+                null,
+            .capsule_collider = if (entity.capsule_collider) |collider|
+                .{
+                    .radius = collider.radius,
+                    .half_height = collider.half_height,
+                    .center = collider.center,
+                    .is_trigger = collider.is_trigger,
+                    .layer_id = collider.layer_id,
+                    .layer_group = collider.layer_group,
+                }
+            else
+                null,
+            .character_controller = if (entity.character_controller) |ctrl|
+                .{
+                    .max_slope_angle = ctrl.max_slope_angle,
+                    .max_strength = ctrl.max_strength,
+                    .padding = ctrl.padding,
+                    .mass = ctrl.mass,
+                    .up_direction = ctrl.up_direction,
+                }
+            else
+                null,
+            .tag = if (entity.tag) |t|
+                (if (t.name.len > 0) components.Tag.fromSlice(t.name) else null)
             else
                 null,
             .material = if (entity.material) |material_component|

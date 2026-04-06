@@ -12,7 +12,10 @@
 #include <Jolt/Physics/Collision/RayCast.h>
 #include <Jolt/Physics/Collision/Shape/BoxShape.h>
 #include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/RotatedTranslatedShape.h>
 #include <Jolt/Physics/Collision/Shape/StaticCompoundShape.h>
+#include <Jolt/Physics/Character/CharacterVirtual.h>
 #include <Jolt/Physics/Constraints/PointConstraint.h>
 #include <Jolt/Physics/Constraints/HingeConstraint.h>
 #include <Jolt/Physics/Constraints/SliderConstraint.h>
@@ -44,6 +47,7 @@ constexpr uint32_t kFlagHasSphere = 1u << 1;
 constexpr uint32_t kFlagHasMeshProxy = 1u << 2;
 constexpr uint32_t kFlagBodyIsSensor = 1u << 3;
 constexpr uint32_t kFlagAllowSleep = 1u << 4;
+constexpr uint32_t kFlagHasCapsule = 1u << 5;
 
 namespace Layers {
 static constexpr JPH::ObjectLayer NON_MOVING = 0;
@@ -297,6 +301,9 @@ struct GuavaJoltBodyDesc {
   float sphere_center[3];
   float mesh_half_extents[3];
   float mesh_center[3];
+  float capsule_radius;
+  float capsule_half_height;
+  float capsule_center[3];
   uint16_t layer_id;
   uint16_t layer_group;
 };
@@ -387,6 +394,29 @@ struct GuavaJoltSweepHit {
   uint8_t reserved0;
   uint16_t reserved1;
 };
+
+struct GuavaJoltCharacterDesc {
+  uint64_t entity_id;
+  float max_slope_angle;
+  float max_strength;
+  float padding;
+  float mass;
+  float capsule_radius;
+  float capsule_half_height;
+  float up_direction[3];
+  float position[3];
+  float rotation[4];
+  float move_velocity[3];
+};
+
+struct GuavaJoltCharacterState {
+  uint64_t entity_id;
+  float position[3];
+  float rotation[4];
+  uint8_t is_grounded;
+  uint8_t reserved0;
+  uint16_t reserved1;
+};
 }
 
 namespace {
@@ -394,6 +424,13 @@ struct BodyRecord {
   GuavaJoltBodyDesc desc{};
   JPH::BodyID body_id{};
   JPH::Body *body_ptr = nullptr;
+};
+
+struct CharacterRecord {
+  GuavaJoltCharacterDesc desc{};
+  JPH::Ref<JPH::CharacterVirtual> character;
+  float capsule_radius = 0.0f;
+  float capsule_half_height = 0.0f;
 };
 
 bool EqualVec3(const float lhs[3], const float rhs[3]) {
@@ -426,6 +463,9 @@ bool EqualShapeAndSettings(const GuavaJoltBodyDesc &lhs,
          EqualVec3(lhs.box_half_extents, rhs.box_half_extents) &&
          EqualVec3(lhs.box_center, rhs.box_center) &&
          EqualVec3(lhs.sphere_center, rhs.sphere_center) &&
+         lhs.capsule_radius == rhs.capsule_radius &&
+         lhs.capsule_half_height == rhs.capsule_half_height &&
+         EqualVec3(lhs.capsule_center, rhs.capsule_center) &&
          EqualVec3(lhs.mesh_half_extents, rhs.mesh_half_extents) &&
          EqualVec3(lhs.mesh_center, rhs.mesh_center);
 }
@@ -456,6 +496,13 @@ bool BuildBodyShape(const GuavaJoltBodyDesc &desc, JPH::ShapeRefC &out_shape) {
     compound_settings.AddShape(ToVec3(desc.sphere_center),
                                JPH::Quat::sIdentity(),
                                new JPH::SphereShape(desc.sphere_radius));
+    ++shape_count;
+  }
+
+  if ((desc.flags & kFlagHasCapsule) != 0 && desc.capsule_radius > 0.0f && desc.capsule_half_height >= 0.0f) {
+    compound_settings.AddShape(ToVec3(desc.capsule_center),
+                               JPH::Quat::sIdentity(),
+                               new JPH::CapsuleShape(desc.capsule_half_height, desc.capsule_radius));
     ++shape_count;
   }
 
@@ -524,6 +571,7 @@ struct GuavaJoltContext {
   ~GuavaJoltContext() { 
     ClearBodies(); 
     ClearConstraints();
+    ClearCharacters();
   }
 
   void ClearBodies() {
@@ -543,6 +591,114 @@ struct GuavaJoltContext {
       delete entry.second;
     }
     constraint_records.clear();
+  }
+
+  void ClearCharacters() {
+    character_records.clear();
+  }
+
+  bool AddOrUpdateCharacter(const GuavaJoltCharacterDesc &desc, float delta_seconds) {
+    (void)delta_seconds;
+    auto existing = character_records.find(desc.entity_id);
+
+    // If shape params changed, recreate
+    if (existing != character_records.end()) {
+      if (existing->second.capsule_radius == desc.capsule_radius &&
+          existing->second.capsule_half_height == desc.capsule_half_height) {
+        // Just update position, velocity, and settings
+        auto &character = existing->second.character;
+        character->SetPosition(ToRVec3(desc.position));
+        character->SetRotation(ToQuat(desc.rotation));
+        character->SetLinearVelocity(ToVec3(desc.move_velocity));
+        character->SetMass(desc.mass);
+        character->SetMaxStrength(desc.max_strength);
+        existing->second.desc = desc;
+        return true;
+      }
+      character_records.erase(existing);
+    }
+
+    if (desc.capsule_radius <= 0.0f) {
+      return false;
+    }
+
+    JPH::CharacterVirtualSettings settings;
+    settings.mShape = new JPH::CapsuleShape(
+        std::max(desc.capsule_half_height, 0.0f), desc.capsule_radius);
+    settings.mUp = ToVec3(desc.up_direction);
+    settings.mMaxSlopeAngle = desc.max_slope_angle;
+    settings.mMass = desc.mass;
+    settings.mMaxStrength = desc.max_strength;
+    settings.mCharacterPadding = desc.padding;
+
+    auto character = new JPH::CharacterVirtual(
+        &settings, ToRVec3(desc.position), ToQuat(desc.rotation),
+        desc.entity_id, &physics_system);
+    character->SetLinearVelocity(ToVec3(desc.move_velocity));
+
+    CharacterRecord record{};
+    record.desc = desc;
+    record.character = character;
+    record.capsule_radius = desc.capsule_radius;
+    record.capsule_half_height = desc.capsule_half_height;
+    character_records.insert_or_assign(desc.entity_id, std::move(record));
+    return true;
+  }
+
+  bool RemoveCharacter(uint64_t entity_id) {
+    character_records.erase(entity_id);
+    return true;
+  }
+
+  // Steps all character controllers and writes new state.
+  // Returns number of characters that produced state.
+  uint32_t StepCharacters(float delta_seconds, const float gravity[3]) {
+    const JPH::Vec3 gravity_vec = ToVec3(gravity);
+    const JPH::BroadPhaseLayerFilter broad_phase_filter{};
+    const JPH::ObjectLayerFilter object_layer_filter{};
+    const JPH::BodyFilter body_filter{};
+    const JPH::ShapeFilter shape_filter{};
+    JPH::TempAllocatorMalloc temp_alloc;
+
+    JPH::CharacterVirtual::ExtendedUpdateSettings ext_settings{};
+
+    for (auto &entry : character_records) {
+      auto &rec = entry.second;
+      // Apply desired velocity from desc
+      rec.character->SetLinearVelocity(ToVec3(rec.desc.move_velocity));
+      rec.character->ExtendedUpdate(
+          delta_seconds, gravity_vec, ext_settings,
+          broad_phase_filter, object_layer_filter,
+          body_filter, shape_filter, temp_alloc);
+    }
+    return static_cast<uint32_t>(character_records.size());
+  }
+
+  // Fills out_states (one per character). Returns count written.
+  uint32_t CollectCharacterStates(GuavaJoltCharacterState *out_states, size_t max_count) const {
+    uint32_t count = 0;
+    for (const auto &entry : character_records) {
+      if (count >= max_count) break;
+      const auto &rec = entry.second;
+      const JPH::RVec3 pos = rec.character->GetPosition();
+      const JPH::Quat rot = rec.character->GetRotation();
+      const bool grounded =
+          rec.character->GetGroundState() == JPH::CharacterBase::EGroundState::OnGround;
+
+      GuavaJoltCharacterState &state = out_states[count++];
+      state.entity_id = rec.desc.entity_id;
+      state.position[0] = static_cast<float>(pos.GetX());
+      state.position[1] = static_cast<float>(pos.GetY());
+      state.position[2] = static_cast<float>(pos.GetZ());
+      state.rotation[0] = rot.GetX();
+      state.rotation[1] = rot.GetY();
+      state.rotation[2] = rot.GetZ();
+      state.rotation[3] = rot.GetW();
+      state.is_grounded = grounded ? 1 : 0;
+      state.reserved0 = 0;
+      state.reserved1 = 0;
+    }
+    return count;
   }
 
   JPH::BodyID GetBodyID(uint64_t entity_id) {
@@ -787,6 +943,7 @@ struct GuavaJoltContext {
   JPH::JobSystemSingleThreaded job_system{};
   std::unordered_map<uint64_t, BodyRecord> body_records{};
   std::unordered_map<uint64_t, JPH::TwoBodyConstraint *> constraint_records{};
+  std::unordered_map<uint64_t, CharacterRecord> character_records{};
 };
 
 class QueryBodyFilter final : public JPH::BodyFilter {
@@ -1215,5 +1372,34 @@ bool guava_jolt_context_step(GuavaJoltContext *context,
   out_stats->state_count = static_cast<uint32_t>(out_index);
   out_stats->success = 1;
   return true;
+}
+
+bool guava_jolt_context_add_or_update_character(GuavaJoltContext *context,
+                                                 const GuavaJoltCharacterDesc *desc,
+                                                 float delta_seconds) {
+  if (context == nullptr || desc == nullptr) {
+    return false;
+  }
+  return context->AddOrUpdateCharacter(*desc, delta_seconds);
+}
+
+bool guava_jolt_context_remove_character(GuavaJoltContext *context,
+                                          uint64_t entity_id) {
+  if (context == nullptr) {
+    return false;
+  }
+  return context->RemoveCharacter(entity_id);
+}
+
+uint32_t guava_jolt_context_step_characters(GuavaJoltContext *context,
+                                             float delta_seconds,
+                                             const float gravity[3],
+                                             GuavaJoltCharacterState *out_states,
+                                             size_t max_states) {
+  if (context == nullptr || out_states == nullptr || max_states == 0) {
+    return 0;
+  }
+  context->StepCharacters(delta_seconds, gravity);
+  return context->CollectCharacterStates(out_states, max_states);
 }
 }

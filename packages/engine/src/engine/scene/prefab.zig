@@ -126,6 +126,9 @@ const PrefabEntityRecord = struct {
     box_collider: ?components.BoxCollider = null,
     sphere_collider: ?components.SphereCollider = null,
     mesh_collider: ?components.MeshCollider = null,
+    capsule_collider: ?components.CapsuleCollider = null,
+    character_controller: ?components.CharacterController = null,
+    tag: ?components.Tag = null,
     material: ?MaterialComponentRecord = null,
     light: ?components.Light = null,
     vfx: ?components.Vfx = null,
@@ -202,6 +205,9 @@ pub const PrefabEntityData = struct {
     box_collider: ?components.BoxCollider = null,
     sphere_collider: ?components.SphereCollider = null,
     mesh_collider: ?components.MeshCollider = null,
+    capsule_collider: ?components.CapsuleCollider = null,
+    character_controller: ?components.CharacterController = null,
+    tag: ?components.Tag = null,
     material: ?components.Material = null,
     light: ?components.Light = null,
     vfx: ?components.Vfx = null,
@@ -440,6 +446,9 @@ pub fn createPrefabFromEntities(
             .box_collider = entity.box_collider,
             .sphere_collider = entity.sphere_collider,
             .mesh_collider = entity.mesh_collider,
+            .capsule_collider = entity.capsule_collider,
+            .character_controller = entity.character_controller,
+            .tag = entity.tag,
             .material = entity.material,
             .light = entity.light,
             .vfx = entity.vfx,
@@ -494,6 +503,9 @@ pub fn instantiatePrefab(
         desc.box_collider = prefab_entity.box_collider;
         desc.sphere_collider = prefab_entity.sphere_collider;
         desc.mesh_collider = prefab_entity.mesh_collider;
+        desc.capsule_collider = prefab_entity.capsule_collider;
+        desc.character_controller = prefab_entity.character_controller;
+        desc.tag = prefab_entity.tag;
         desc.material = prefab_entity.material;
         desc.light = prefab_entity.light;
         desc.vfx = prefab_entity.vfx;
@@ -592,6 +604,9 @@ fn buildPrefabFile(allocator: std.mem.Allocator, prefab: *const PrefabResource) 
             .box_collider = entity.box_collider,
             .sphere_collider = entity.sphere_collider,
             .mesh_collider = entity.mesh_collider,
+            .capsule_collider = entity.capsule_collider,
+            .character_controller = entity.character_controller,
+            .tag = entity.tag,
             .material = if (entity.material) |mat| .{
                 .asset_id = entity.material_asset_id,
                 .shading = mat.shading,
@@ -685,6 +700,9 @@ fn deserializePrefabV1FromSlice(
             .box_collider = record.box_collider,
             .sphere_collider = record.sphere_collider,
             .mesh_collider = record.mesh_collider,
+            .capsule_collider = record.capsule_collider,
+            .character_controller = record.character_controller,
+            .tag = record.tag,
             .material = if (record.material) |mat| .{
                 .handle = null,
                 .shading = mat.shading,
@@ -844,7 +862,9 @@ fn detectEntityDiff(
     }
     if (!equalOrNull(old_entity.box_collider, new_entity.box_collider) or
         !equalOrNull(old_entity.sphere_collider, new_entity.sphere_collider) or
-        !equalOrNull(old_entity.mesh_collider, new_entity.mesh_collider))
+        !equalOrNull(old_entity.mesh_collider, new_entity.mesh_collider) or
+        !equalOrNull(old_entity.capsule_collider, new_entity.capsule_collider) or
+        !equalOrNull(old_entity.character_controller, new_entity.character_controller))
     {
         diff.component_changes.collider_changed = true;
         diff.has_changes = true;
@@ -1276,6 +1296,9 @@ pub fn updatePrefabInstance(
             entity.box_collider = prefab_entity.box_collider;
             entity.sphere_collider = prefab_entity.sphere_collider;
             entity.mesh_collider = prefab_entity.mesh_collider;
+            entity.capsule_collider = prefab_entity.capsule_collider;
+            entity.character_controller = prefab_entity.character_controller;
+            entity.tag = prefab_entity.tag;
         }
         if (entity_diff.component_changes.vfx_changed and !(overrides != null and overrides.?.override_mask.vfx)) {
             entity.vfx = prefab_entity.vfx;
@@ -1315,6 +1338,9 @@ pub fn updatePrefabInstance(
         desc.box_collider = prefab_entity.box_collider;
         desc.sphere_collider = prefab_entity.sphere_collider;
         desc.mesh_collider = prefab_entity.mesh_collider;
+        desc.capsule_collider = prefab_entity.capsule_collider;
+        desc.character_controller = prefab_entity.character_controller;
+        desc.tag = prefab_entity.tag;
         desc.vfx = prefab_entity.vfx;
         desc.script = resolvePrefabScript(world, prefab_entity);
         desc.visible = prefab_entity.visible;

@@ -120,6 +120,9 @@ pub const Server = struct {
     // Mesh editing vtable — set from main.zig (root module) to avoid cross-module imports.
     mesh_ops: ?*const @import("mesh_ops.zig").MeshOps = null,
 
+    // Project root path — set from main.zig when a project is loaded.
+    project_root: ?[]const u8 = null,
+
     pub fn init(allocator: std.mem.Allocator, port: u16) Server {
         return .{
             .allocator = allocator,
@@ -194,7 +197,7 @@ pub const Server = struct {
         for (batch[0..count]) |*msg| {
             defer msg.deinit(self.allocator);
 
-            const response_json = methods.dispatch(self.allocator, msg.payload, layer_context, &self.settings, self.mesh_ops) catch |err| {
+            const response_json = methods.dispatch(self.allocator, msg.payload, layer_context, &self.settings, self.mesh_ops, self.project_root) catch |err| {
                 log.warn("RPC dispatch error: {s}", .{@errorName(err)});
                 continue;
             };

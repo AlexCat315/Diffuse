@@ -397,6 +397,9 @@ pub const PhysicsState = struct {
         applyJoltBodyStates(world, body_states.items[0..@min(body_states.items.len, @as(usize, @intCast(jolt_stats.state_count)))]);
         world.updateHierarchy();
 
+        // Step and apply character controllers
+        syncAndStepCharacters(world, context, delta_seconds, config);
+
         stats.dynamic_bodies = jolt_stats.dynamic_bodies;
         stats.static_bodies = jolt_stats.static_bodies;
         stats.contacts_resolved = jolt_stats.contacts_resolved;
@@ -792,6 +795,7 @@ const jolt_flag_has_sphere: u32 = 1 << 1;
 const jolt_flag_has_mesh_proxy: u32 = 1 << 2;
 const jolt_flag_body_is_sensor: u32 = 1 << 3;
 const jolt_flag_allow_sleep: u32 = 1 << 4;
+const jolt_flag_has_capsule: u32 = 1 << 5;
 
 const StepSnapshot = struct {
     dynamic_bodies: usize,
@@ -823,6 +827,9 @@ const JoltBodyDesc = extern struct {
     sphere_center: [3]f32,
     mesh_half_extents: [3]f32,
     mesh_center: [3]f32,
+    capsule_radius: f32,
+    capsule_half_height: f32,
+    capsule_center: [3]f32,
     layer_id: u16,
     layer_group: u16,
 };
@@ -1002,6 +1009,46 @@ extern fn guava_jolt_context_sweep_aabb(
     filter: *const JoltQueryFilter,
     out_hit: *JoltSweepHit,
 ) callconv(.c) bool;
+
+const JoltCharacterDesc = extern struct {
+    entity_id: u64,
+    max_slope_angle: f32,
+    max_strength: f32,
+    padding: f32,
+    mass: f32,
+    capsule_radius: f32,
+    capsule_half_height: f32,
+    up_direction: [3]f32,
+    position: [3]f32,
+    rotation: [4]f32,
+    move_velocity: [3]f32,
+};
+
+const JoltCharacterState = extern struct {
+    entity_id: u64,
+    position: [3]f32,
+    rotation: [4]f32,
+    is_grounded: u8,
+    reserved0: u8,
+    reserved1: u16,
+};
+
+extern fn guava_jolt_context_add_or_update_character(
+    context: *JoltContext,
+    desc: *const JoltCharacterDesc,
+    delta_seconds: f32,
+) callconv(.c) bool;
+extern fn guava_jolt_context_remove_character(
+    context: *JoltContext,
+    entity_id: u64,
+) callconv(.c) bool;
+extern fn guava_jolt_context_step_characters(
+    context: *JoltContext,
+    delta_seconds: f32,
+    gravity: *const [3]f32,
+    out_states: [*]JoltCharacterState,
+    max_states: usize,
+) callconv(.c) u32;
 
 export fn GuavaJoltEnqueueTriggerEvent(event: *const extern struct {
     entity_a: u64,
@@ -1361,6 +1408,62 @@ fn buildJoltConstraintDesc(world: *const scene_mod.World, entity: *const scene_m
     };
 }
 
+fn syncAndStepCharacters(world: *scene_mod.World, context: *JoltContext, delta_seconds: f32, config: Config) void {
+    // Count character controllers to size output buffer
+    var char_count: usize = 0;
+    for (world.entities.items) |*entity| {
+        if (entity.character_controller != null) char_count += 1;
+    }
+    if (char_count == 0) return;
+
+    const gravity = config.gravity;
+
+    // Sync character descs to Jolt
+    for (world.entities.items) |*entity| {
+        const ctrl = entity.character_controller orelse continue;
+        const capsule = entity.capsule_collider orelse components.CapsuleCollider{};
+        const wt = entity.world_transform_cache;
+        const scale_max = maxComponent(absVec3(wt.scale));
+        const char_desc = JoltCharacterDesc{
+            .entity_id = entity.id,
+            .max_slope_angle = ctrl.max_slope_angle,
+            .max_strength = ctrl.max_strength,
+            .padding = ctrl.padding,
+            .mass = ctrl.mass,
+            .capsule_radius = @max(scale_max * capsule.radius, epsilon),
+            .capsule_half_height = @max(scale_max * capsule.half_height, 0.0),
+            .up_direction = ctrl.up_direction,
+            .position = wt.translation,
+            .rotation = wt.rotation,
+            .move_velocity = ctrl.move_velocity,
+        };
+        _ = guava_jolt_context_add_or_update_character(context, &char_desc, delta_seconds);
+    }
+
+    // Step all characters and collect new state
+    var char_states_buf: [1024]JoltCharacterState = undefined;
+    const written = guava_jolt_context_step_characters(
+        context,
+        delta_seconds,
+        &gravity,
+        &char_states_buf,
+        @min(char_count, char_states_buf.len),
+    );
+
+    // Apply state back to entities
+    for (char_states_buf[0..written]) |state| {
+        if (world.getEntity(state.entity_id)) |entity| {
+            entity.local_transform.translation = state.position;
+            entity.local_transform.rotation = state.rotation;
+            entity.dirty = true;
+            if (entity.character_controller) |*ctrl| {
+                ctrl.is_grounded = state.is_grounded != 0;
+            }
+        }
+    }
+    world.updateHierarchy();
+}
+
 fn buildJoltBodyDesc(world: *const scene_mod.World, entity: *const scene_mod.Entity, config: Config) ?JoltBodyDesc {
     if (!hasAnyCollider(entity)) {
         return null;
@@ -1392,6 +1495,9 @@ fn buildJoltBodyDesc(world: *const scene_mod.World, entity: *const scene_mod.Ent
         .sphere_center = .{ 0.0, 0.0, 0.0 },
         .mesh_half_extents = .{ 0.0, 0.0, 0.0 },
         .mesh_center = .{ 0.0, 0.0, 0.0 },
+        .capsule_radius = 0.0,
+        .capsule_half_height = 0.0,
+        .capsule_center = .{ 0.0, 0.0, 0.0 },
         .layer_id = layer_info.id,
         .layer_group = layer_info.group,
     };
@@ -1427,7 +1533,15 @@ fn buildJoltBodyDesc(world: *const scene_mod.World, entity: *const scene_mod.Ent
         }
     }
 
-    return if ((desc.flags & (jolt_flag_has_box | jolt_flag_has_sphere | jolt_flag_has_mesh_proxy)) != 0) desc else null;
+    if (entity.capsule_collider) |collider| {
+        const scale_max = maxComponent(scale_abs);
+        desc.flags |= jolt_flag_has_capsule;
+        desc.capsule_radius = @max(scale_max * collider.radius, epsilon);
+        desc.capsule_half_height = @max(scale_max * collider.half_height, 0.0);
+        desc.capsule_center = vec3.mul(world_transform.scale, collider.center);
+    }
+
+    return if ((desc.flags & (jolt_flag_has_box | jolt_flag_has_sphere | jolt_flag_has_mesh_proxy | jolt_flag_has_capsule)) != 0) desc else null;
 }
 
 fn extractLayerInfo(entity: *const scene_mod.Entity) struct { id: u16, group: u16 } {
@@ -1435,6 +1549,9 @@ fn extractLayerInfo(entity: *const scene_mod.Entity) struct { id: u16, group: u1
         return .{ .id = collider.layer_id, .group = collider.layer_group };
     }
     if (entity.sphere_collider) |collider| {
+        return .{ .id = collider.layer_id, .group = collider.layer_group };
+    }
+    if (entity.capsule_collider) |collider| {
         return .{ .id = collider.layer_id, .group = collider.layer_group };
     }
     if (entity.mesh_collider) |collider| {
@@ -1632,7 +1749,8 @@ fn resolveAttachedMeshBounds(
 }
 
 fn hasAnyCollider(entity: *const scene_mod.Entity) bool {
-    return entity.box_collider != null or entity.sphere_collider != null or entity.mesh_collider != null;
+    return entity.box_collider != null or entity.sphere_collider != null or
+        entity.mesh_collider != null or entity.capsule_collider != null;
 }
 
 fn isStaticCollisionTarget(entity: *const scene_mod.Entity) bool {
@@ -1664,6 +1782,12 @@ fn isTriggerOnly(entity: *const scene_mod.Entity) bool {
         }
     }
     if (entity.mesh_collider) |collider| {
+        has_collider = true;
+        if (!collider.is_trigger) {
+            has_solid = true;
+        }
+    }
+    if (entity.capsule_collider) |collider| {
         has_collider = true;
         if (!collider.is_trigger) {
             has_solid = true;

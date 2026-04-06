@@ -275,6 +275,9 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
     defer rpc_server.deinit();
     var mesh_ops_vtable = mesh_bridge.init(&editor_layer.state);
     rpc_server.mesh_ops = &mesh_ops_vtable;
+    if (loaded_project) |*project| {
+        rpc_server.project_root = project.root_path;
+    }
 
     try app.pushOverlay(rpc_server.asLayer());
     try app.pushOverlay(editor_layer.asLayer());
