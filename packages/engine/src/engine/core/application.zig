@@ -220,6 +220,8 @@ pub const Application = struct {
     debug_session: debug_session_mod.DebugSession,
     /// 待处理的文件拖放路径（由 OS 文件拖放事件设置，由编辑器层消费）
     pending_file_drop: ?[:0]const u8 = null,
+    /// 项目根目录（编辑器模式下由 main.zig 设置）
+    project_root: ?[]const u8 = null,
 
     /// 初始化应用程序
     ///
@@ -881,10 +883,19 @@ pub const Application = struct {
         self.bindRuntimeContext();
         const language = inferScriptLanguageFromPath(path);
         const is_binary_artifact = script_system.csharp_toolchain_mod.isSharedLibraryPath(path);
-        const source_or_bytecode = if (is_binary_artifact)
-            try std.fs.cwd().readFileAlloc(self.allocator, path, 16 * 1024 * 1024)
+
+        // Read script source relative to project root (or CWD as fallback).
+        var owned_base: ?std.fs.Dir = if (self.project_root) |root|
+            (std.fs.openDirAbsolute(root, .{}) catch null)
         else
-            try std.fs.cwd().readFileAlloc(self.allocator, path, 1024 * 1024);
+            null;
+        defer if (owned_base) |*d| d.close();
+        const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+
+        const source_or_bytecode = if (is_binary_artifact)
+            try base_dir.readFileAlloc(self.allocator, path, 16 * 1024 * 1024)
+        else
+            try base_dir.readFileAlloc(self.allocator, path, 1024 * 1024);
         defer self.allocator.free(source_or_bytecode);
 
         const script_resource = @import("../assets/script_resource.zig");
@@ -938,7 +949,16 @@ pub const Application = struct {
     /// that are not already loaded in the resource library.
     fn discoverScripts(self: *Application) void {
         const scripts_dir = "assets/scripts";
-        var dir = std.fs.cwd().openDir(scripts_dir, .{ .iterate = true }) catch return;
+
+        // Open scripts directory relative to project root (or CWD as fallback).
+        var owned_base: ?std.fs.Dir = if (self.project_root) |root|
+            (std.fs.openDirAbsolute(root, .{}) catch null)
+        else
+            null;
+        defer if (owned_base) |*d| d.close();
+        const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+
+        var dir = base_dir.openDir(scripts_dir, .{ .iterate = true }) catch return;
         defer dir.close();
 
         var walker = dir.walk(self.allocator) catch return;

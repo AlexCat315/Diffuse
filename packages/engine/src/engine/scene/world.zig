@@ -174,6 +174,8 @@ pub const Entity = struct {
     character_controller: ?components.CharacterController = null,
     /// 标签组件
     tag: ?components.Tag = null,
+    /// 天空/环境组件
+    sky: ?components.Sky = null,
     /// 约束组件
     constraint: ?components.Constraint = null,
     /// 材质组件
@@ -316,6 +318,8 @@ pub const EntityDesc = struct {
     character_controller: ?components.CharacterController = null,
     /// 标签组件
     tag: ?components.Tag = null,
+    /// 天空/环境组件
+    sky: ?components.Sky = null,
     /// 约束组件
     constraint: ?components.Constraint = null,
     /// 材质组件
@@ -628,6 +632,7 @@ pub const World = struct {
             .capsule_collider = desc.capsule_collider,
             .character_controller = desc.character_controller,
             .tag = desc.tag,
+            .sky = desc.sky,
             .constraint = desc.constraint,
             .material = desc.material,
             .light = desc.light,

@@ -129,6 +129,7 @@ const PrefabEntityRecord = struct {
     capsule_collider: ?components.CapsuleCollider = null,
     character_controller: ?components.CharacterController = null,
     tag: ?components.Tag = null,
+    sky: ?components.Sky = null,
     material: ?MaterialComponentRecord = null,
     light: ?components.Light = null,
     vfx: ?components.Vfx = null,
@@ -208,6 +209,7 @@ pub const PrefabEntityData = struct {
     capsule_collider: ?components.CapsuleCollider = null,
     character_controller: ?components.CharacterController = null,
     tag: ?components.Tag = null,
+    sky: ?components.Sky = null,
     material: ?components.Material = null,
     light: ?components.Light = null,
     vfx: ?components.Vfx = null,
@@ -449,6 +451,7 @@ pub fn createPrefabFromEntities(
             .capsule_collider = entity.capsule_collider,
             .character_controller = entity.character_controller,
             .tag = entity.tag,
+            .sky = entity.sky,
             .material = entity.material,
             .light = entity.light,
             .vfx = entity.vfx,
@@ -506,6 +509,7 @@ pub fn instantiatePrefab(
         desc.capsule_collider = prefab_entity.capsule_collider;
         desc.character_controller = prefab_entity.character_controller;
         desc.tag = prefab_entity.tag;
+        desc.sky = prefab_entity.sky;
         desc.material = prefab_entity.material;
         desc.light = prefab_entity.light;
         desc.vfx = prefab_entity.vfx;
@@ -607,6 +611,7 @@ fn buildPrefabFile(allocator: std.mem.Allocator, prefab: *const PrefabResource) 
             .capsule_collider = entity.capsule_collider,
             .character_controller = entity.character_controller,
             .tag = entity.tag,
+            .sky = entity.sky,
             .material = if (entity.material) |mat| .{
                 .asset_id = entity.material_asset_id,
                 .shading = mat.shading,
@@ -703,6 +708,7 @@ fn deserializePrefabV1FromSlice(
             .capsule_collider = record.capsule_collider,
             .character_controller = record.character_controller,
             .tag = record.tag,
+            .sky = record.sky,
             .material = if (record.material) |mat| .{
                 .handle = null,
                 .shading = mat.shading,
@@ -1299,6 +1305,7 @@ pub fn updatePrefabInstance(
             entity.capsule_collider = prefab_entity.capsule_collider;
             entity.character_controller = prefab_entity.character_controller;
             entity.tag = prefab_entity.tag;
+            entity.sky = prefab_entity.sky;
         }
         if (entity_diff.component_changes.vfx_changed and !(overrides != null and overrides.?.override_mask.vfx)) {
             entity.vfx = prefab_entity.vfx;
@@ -1341,6 +1348,7 @@ pub fn updatePrefabInstance(
         desc.capsule_collider = prefab_entity.capsule_collider;
         desc.character_controller = prefab_entity.character_controller;
         desc.tag = prefab_entity.tag;
+        desc.sky = prefab_entity.sky;
         desc.vfx = prefab_entity.vfx;
         desc.script = resolvePrefabScript(world, prefab_entity);
         desc.visible = prefab_entity.visible;

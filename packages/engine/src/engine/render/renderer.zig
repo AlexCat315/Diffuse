@@ -1562,6 +1562,7 @@ pub const Renderer = struct {
                 }
 
                 try resolveEnvironmentTextures(self, scene, &prepared_scene);
+                syncSkyComponent(scene, &prepared_scene);
 
                 var prepared_preview_scene: mesh_pass_mod.PreparedScene = undefined;
                 var has_prepared_preview_scene = false;
@@ -1979,9 +1980,9 @@ pub const Renderer = struct {
                     draw_stats.add(opaque_stats);
 
                     if (self.skybox_pass) |*skybox_pass| {
-                        if (active_render_mode != .wireframe and skybox_pass.isReady() and prepared_scene.environment_map != null) {
+                        if (active_render_mode != .wireframe and skybox_pass.isReady() and prepared_scene.environment_map != null and prepared_scene.sky_enabled) {
                             const skybox_start = std.time.nanoTimestamp();
-                            skybox_pass.draw(&self.rhi, frame, scene_pass, &prepared_scene, prepared_scene.environment_map.?, if (viewport_active) .hdr else .ldr);
+                            skybox_pass.draw(&self.rhi, frame, scene_pass, &prepared_scene, prepared_scene.environment_map.?, if (viewport_active) .hdr else .ldr, prepared_scene.sky_intensity);
                             self.graph.recordPassStat(pass_stats, .skybox_pass, durationNs(skybox_start, std.time.nanoTimestamp()), 1, 1);
                             draw_stats.draw_calls += 1;
                             draw_stats.triangles_drawn += 1;
@@ -4527,6 +4528,22 @@ fn resolveEnvironmentTextures(
     prepared_scene: *mesh_pass_mod.PreparedScene,
 ) !void {
     return renderer_environment.resolveEnvironmentTextures(self, scene, prepared_scene);
+}
+
+/// Sync the first Sky component found in the scene world to PreparedScene.
+/// If a Sky entity exists, its asset_id overrides the library's scene_environment_asset_id.
+fn syncSkyComponent(scene: *scene_mod.Scene, prepared_scene: *mesh_pass_mod.PreparedScene) void {
+    for (scene.entities.items) |*entity| {
+        const sky = entity.sky orelse continue;
+        const asset_id = sky.assetIdSlice();
+        if (asset_id.len > 0) {
+            _ = scene.resources.setSceneEnvironmentAssetId(asset_id) catch {};
+        }
+        prepared_scene.sky_intensity = sky.intensity;
+        prepared_scene.sky_enabled = sky.enabled;
+        return;
+    }
+    // No Sky component — keep defaults (sky_intensity=1.0, sky_enabled=true)
 }
 
 fn expectVec3ApproxEqAbs(expected: [3]f32, actual: [3]f32, tolerance: f32) !void {

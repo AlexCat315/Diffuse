@@ -173,6 +173,7 @@ pub const component_fields = [_]ComponentField{
     .{ .name = "capsule_collider", .display_name = "CapsuleCollider" },
     .{ .name = "character_controller", .display_name = "CharacterController" },
     .{ .name = "tag", .display_name = "Tag" },
+    .{ .name = "sky", .display_name = "Sky" },
     .{ .name = "constraint", .display_name = "Constraint" },
     .{ .name = "material", .display_name = "Material" },
     .{ .name = "light", .display_name = "Light" },

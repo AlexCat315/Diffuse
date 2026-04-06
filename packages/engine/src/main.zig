@@ -172,6 +172,7 @@ fn runEngine(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
     var editor_layer = editor_layer_mod.EditorLayer{};
     if (loaded_project) |*project| {
         editor_layer.state.setProjectContext(project.root_path, project.file.name, project.file.content_dir, project.file.start_scene);
+        app.project_root = project.root_path;
         std.log.info("opening project '{s}' at {s}", .{ project.file.name, project.root_path });
     }
 
@@ -253,6 +254,7 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
     editor_layer.state.editor_server_mode = true;
     if (loaded_project) |*project| {
         editor_layer.state.setProjectContext(project.root_path, project.file.name, project.file.content_dir, project.file.start_scene);
+        app.project_root = project.root_path;
         std.log.info("opening project '{s}' at {s}", .{ project.file.name, project.root_path });
     }
 
@@ -319,6 +321,7 @@ fn runMcp(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
     var editor_layer = editor_layer_mod.EditorLayer{};
     if (loaded_project) |*project| {
         editor_layer.state.setProjectContext(project.root_path, project.file.name, project.file.content_dir, project.file.start_scene);
+        app.project_root = project.root_path;
         std.log.info("opening project '{s}' at {s}", .{ project.file.name, project.root_path });
     }
 

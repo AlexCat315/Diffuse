@@ -16,12 +16,21 @@ pub fn listScripts(ctx: *Ctx) !void {
         entries.deinit(ctx.allocator);
     }
 
-    const dir = std.fs.cwd().openDir(scripts_dir, .{ .iterate = true }) catch {
+    // Open scripts directory relative to project root (or CWD as fallback).
+    var owned_base: ?std.fs.Dir = if (ctx.project_root) |root|
+        (std.fs.openDirAbsolute(root, .{}) catch null)
+    else
+        null;
+    defer if (owned_base) |*d| d.close();
+    const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+
+    var dir = base_dir.openDir(scripts_dir, .{ .iterate = true }) catch {
         try ctx.reply(.{
             .scripts = @as([]const ScriptEntry, &.{}),
         });
         return;
     };
+    defer dir.close();
 
     try collectScripts(ctx.allocator, dir, scripts_dir, &entries);
 
@@ -97,7 +106,14 @@ pub fn getContent(ctx: *Ctx) !void {
     if (rel_path.len > 0 and rel_path[0] == '/') return error.InvalidArguments;
     if (std.mem.indexOf(u8, rel_path, "..") != null) return error.InvalidArguments;
 
-    const file = std.fs.cwd().openFile(rel_path, .{}) catch {
+    var owned_base: ?std.fs.Dir = if (ctx.project_root) |root|
+        (std.fs.openDirAbsolute(root, .{}) catch null)
+    else
+        null;
+    defer if (owned_base) |*d| d.close();
+    const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+
+    const file = base_dir.openFile(rel_path, .{}) catch {
         return error.InvalidArguments;
     };
     defer file.close();
@@ -126,7 +142,14 @@ pub fn saveContent(ctx: *Ctx) !void {
     // Only allow writing to assets/scripts/
     if (!std.mem.startsWith(u8, rel_path, "assets/scripts/")) return error.InvalidArguments;
 
-    const file = std.fs.cwd().createFile(rel_path, .{}) catch {
+    var owned_base: ?std.fs.Dir = if (ctx.project_root) |root|
+        (std.fs.openDirAbsolute(root, .{}) catch null)
+    else
+        null;
+    defer if (owned_base) |*d| d.close();
+    const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+
+    const file = base_dir.createFile(rel_path, .{}) catch {
         try ctx.reply(.{ .success = false });
         return;
     };

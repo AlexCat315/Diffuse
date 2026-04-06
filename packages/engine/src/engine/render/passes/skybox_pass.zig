@@ -12,6 +12,10 @@ pub const SkyboxUniforms = extern struct {
     view: [16]f32,
     camera_position: [4]f32,
     inv_vp: [16]f32, // Precomputed inverse of (projection * view_rot_only)
+    sky_intensity: f32,
+    _pad0: f32 = 0,
+    _pad1: f32 = 0,
+    _pad2: f32 = 0,
 };
 
 pub const SkyboxPass = struct {
@@ -54,6 +58,7 @@ pub const SkyboxPass = struct {
         prepared_scene: *const mesh_pass_mod.PreparedScene,
         env_map_texture: *const rhi_mod.Texture,
         target: base_pass_mod.DrawTarget,
+        sky_intensity: f32,
     ) void {
         if (!self.isReady()) {
             return;
@@ -82,6 +87,7 @@ pub const SkyboxPass = struct {
             .view = prepared_scene.view_matrix,
             .camera_position = prepared_scene.camera_world_position,
             .inv_vp = inv_vp,
+            .sky_intensity = sky_intensity,
         };
         device.pushVertexUniformData(frame, 0, std.mem.asBytes(&uniforms));
 

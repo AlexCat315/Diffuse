@@ -182,7 +182,7 @@ pub const EditorLayer = struct {
             };
             manipulation.refreshGizmoState(&self.state, layer_context);
             // world.clear() also destroys the ResourceLibrary — re-discover scripts.
-            history.rediscoverProjectScripts(layer_context.world);
+            history.rediscoverProjectScripts(layer_context.world, &self.state);
         }
 
         // In editor-server mode, sync viewport state from the renderer since
