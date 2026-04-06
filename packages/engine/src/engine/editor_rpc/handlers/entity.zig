@@ -3,6 +3,8 @@ const std = @import("std");
 const ctx_mod = @import("../ctx.zig");
 const Ctx = ctx_mod.Ctx;
 const EntityId = ctx_mod.EntityId;
+const handles = @import("../../assets/handles.zig");
+const library_mod = @import("../../assets/library.zig");
 
 pub fn getTransform(ctx: *Ctx) !void {
     const eid = try ctx.param(u64, "entityId");
@@ -61,7 +63,7 @@ pub fn getComponents(ctx: *Ctx) !void {
             try appendSlice(&buf, ctx.allocator, "{\"type\":\"");
             try appendSlice(&buf, ctx.allocator, cf.display_name);
             try appendSlice(&buf, ctx.allocator, "\",\"fields\":[");
-            try serializeFields(&buf, ctx.allocator, @TypeOf(comp.*), comp);
+            try serializeFields(&buf, ctx.allocator, @TypeOf(comp.*), comp, &ctx.layer.world.resources);
             try appendSlice(&buf, ctx.allocator, "]}");
         }
     }
@@ -133,11 +135,40 @@ pub fn removeComponent(ctx: *Ctx) !void {
     try ctx.reply(.{});
 }
 
+/// Set an asset-reference field on a component by asset path.
+///
+/// Params: entityId, componentType, fieldName, assetPath (string or null)
+///
+/// The engine resolves the asset path to an internal resource handle.
+pub fn setAssetField(ctx: *Ctx) !void {
+    const eid = try ctx.param(u64, "entityId");
+    const comp_type = try ctx.param([]const u8, "componentType");
+    const field_name = try ctx.param([]const u8, "fieldName");
+    const p = ctx.params orelse return error.InvalidArguments;
+    const raw_val = p.object.get("assetPath") orelse return error.InvalidArguments;
+
+    const entity = ctx.layer.world.getEntity(eid) orelse return error.EntityNotFound;
+    const resources = &ctx.layer.world.resources;
+
+    var found = false;
+    inline for (ctx_mod.component_fields) |cf| {
+        if (std.ascii.eqlIgnoreCase(comp_type, cf.display_name)) {
+            if (@field(entity, cf.name)) |*comp| {
+                found = setHandleField(@TypeOf(comp.*), comp, field_name, raw_val, resources) catch false;
+            }
+        }
+    }
+
+    if (!found) return error.InvalidArguments;
+    ctx.layer.world.markSceneChanged();
+    try ctx.reply(.{});
+}
+
 // ═══════════════════════════════════════════════════════════════════
 //  Component field serialization — comptime inspects struct fields
 // ═══════════════════════════════════════════════════════════════════
 
-fn serializeFields(buf: *std.ArrayList(u8), alloc: std.mem.Allocator, comptime T: type, ptr: *const T) !void {
+fn serializeFields(buf: *std.ArrayList(u8), alloc: std.mem.Allocator, comptime T: type, ptr: *const T, resources: *const library_mod.ResourceLibrary) !void {
     const fields = @typeInfo(T).@"struct".fields;
     var first = true;
     inline for (fields) |field| {
@@ -150,12 +181,22 @@ fn serializeFields(buf: *std.ArrayList(u8), alloc: std.mem.Allocator, comptime T
             try appendSlice(buf, alloc, "\",\"fieldType\":\"");
             try appendSlice(buf, alloc, field_type);
             try appendSlice(buf, alloc, "\",\"value\":");
-            try serializeValue(buf, alloc, field.type, @field(ptr, field.name));
+            if (comptime isOptionalHandle(field.type)) {
+                try serializeHandleValue(buf, alloc, field.type, @field(ptr, field.name), resources);
+            } else {
+                try serializeValue(buf, alloc, field.type, @field(ptr, field.name));
+            }
             // For enums, also emit options array
             if (comptime @typeInfo(field.type) == .@"enum") {
                 try appendSlice(buf, alloc, ",\"options\":[");
                 try emitEnumOptions(buf, alloc, field.type);
                 try appendSlice(buf, alloc, "]");
+            }
+            // For asset_ref, emit assetType
+            if (comptime isOptionalHandle(field.type)) {
+                try appendSlice(buf, alloc, ",\"assetType\":\"");
+                try appendSlice(buf, alloc, comptime assetTypeForHandle(field.type));
+                try appendSlice(buf, alloc, "\"");
             }
             try appendSlice(buf, alloc, "}");
         }
@@ -167,10 +208,70 @@ fn classifyField(comptime T: type) ?[]const u8 {
     if (T == bool) return "bool";
     if (T == [3]f32) return "vec3";
     if (T == [4]f32) return "color";
+    if (comptime isOptionalHandle(T)) return "asset_ref";
     return switch (@typeInfo(T)) {
         .@"enum" => "enum",
-        else => null, // Skip handles, unions, slices, optionals, etc.
+        else => null, // Skip unions, slices, non-handle optionals, etc.
     };
+}
+
+/// Check whether T is an optional handle type (e.g. ?MeshHandle).
+fn isOptionalHandle(comptime T: type) bool {
+    const info = @typeInfo(T);
+    if (info != .optional) return false;
+    const child = info.optional.child;
+    return child == handles.MeshHandle or
+        child == handles.MaterialHandle or
+        child == handles.ScriptHandle or
+        child == handles.TextureHandle or
+        child == handles.SkeletonHandle or
+        child == handles.SkinHandle or
+        child == handles.AnimationClipHandle or
+        child == handles.AudioClipHandle;
+}
+
+/// Map an optional handle type to its asset category string.
+fn assetTypeForHandle(comptime T: type) []const u8 {
+    const child = @typeInfo(T).optional.child;
+    if (child == handles.MeshHandle) return "mesh";
+    if (child == handles.MaterialHandle) return "material";
+    if (child == handles.ScriptHandle) return "script";
+    if (child == handles.TextureHandle) return "texture";
+    if (child == handles.SkeletonHandle) return "skeleton";
+    if (child == handles.SkinHandle) return "skin";
+    if (child == handles.AnimationClipHandle) return "animation_clip";
+    if (child == handles.AudioClipHandle) return "audio_clip";
+    unreachable;
+}
+
+/// Serialize an optional handle field as its asset_id string (or null).
+fn serializeHandleValue(buf: *std.ArrayList(u8), alloc: std.mem.Allocator, comptime T: type, value: T, resources: *const library_mod.ResourceLibrary) !void {
+    const child = @typeInfo(T).optional.child;
+    if (value) |h| {
+        const asset_id = resolveAssetId(child, resources, h);
+        if (asset_id) |id| {
+            try appendSlice(buf, alloc, "\"");
+            try appendSlice(buf, alloc, id);
+            try appendSlice(buf, alloc, "\"");
+        } else {
+            try appendSlice(buf, alloc, "null");
+        }
+    } else {
+        try appendSlice(buf, alloc, "null");
+    }
+}
+
+/// Reverse-lookup: handle → asset_id via ResourceLibrary.
+fn resolveAssetId(comptime HandleT: type, resources: *const library_mod.ResourceLibrary, handle: HandleT) ?[]const u8 {
+    if (HandleT == handles.MeshHandle) return resources.meshAssetId(handle);
+    if (HandleT == handles.MaterialHandle) return resources.materialAssetId(handle);
+    if (HandleT == handles.ScriptHandle) return resources.scriptAssetId(handle);
+    if (HandleT == handles.TextureHandle) return resources.textureAssetId(handle);
+    if (HandleT == handles.SkeletonHandle) return resources.skeletonAssetId(handle);
+    if (HandleT == handles.SkinHandle) return resources.skinAssetId(handle);
+    if (HandleT == handles.AnimationClipHandle) return resources.animationClipAssetId(handle);
+    // AudioClipHandle — not yet in library (no reverse map); return null for now
+    return null;
 }
 
 fn serializeValue(buf: *std.ArrayList(u8), alloc: std.mem.Allocator, comptime T: type, value: T) !void {
@@ -266,4 +367,45 @@ fn canDefaultInit(comptime T: type) bool {
         },
         else => false,
     };
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Asset-reference field mutation — resolves path → handle
+// ═══════════════════════════════════════════════════════════════════
+
+fn setHandleField(comptime T: type, ptr: *T, name: []const u8, val: std.json.Value, resources: *const library_mod.ResourceLibrary) !bool {
+    inline for (@typeInfo(T).@"struct".fields) |field| {
+        if (std.mem.eql(u8, name, field.name)) {
+            const FT = field.type;
+            if (comptime isOptionalHandle(FT)) {
+                switch (val) {
+                    .null => {
+                        @field(ptr, field.name) = null;
+                        return true;
+                    },
+                    .string => |s| {
+                        const child = @typeInfo(FT).optional.child;
+                        const h = lookupHandle(child, resources, s) orelse return error.InvalidArguments;
+                        @field(ptr, field.name) = h;
+                        return true;
+                    },
+                    else => return error.InvalidArguments,
+                }
+            }
+        }
+    }
+    return false;
+}
+
+/// Forward-lookup: asset_id → handle via ResourceLibrary.
+fn lookupHandle(comptime HandleT: type, resources: *const library_mod.ResourceLibrary, asset_id: []const u8) ?HandleT {
+    if (HandleT == handles.MeshHandle) return resources.meshHandleByAssetId(asset_id);
+    if (HandleT == handles.MaterialHandle) return resources.materialHandleByAssetId(asset_id);
+    if (HandleT == handles.ScriptHandle) return resources.scriptHandleByAssetId(asset_id);
+    if (HandleT == handles.TextureHandle) return resources.textureHandleByAssetId(asset_id);
+    if (HandleT == handles.SkeletonHandle) return resources.skeletonHandleByAssetId(asset_id);
+    if (HandleT == handles.SkinHandle) return resources.skinHandleByAssetId(asset_id);
+    if (HandleT == handles.AnimationClipHandle) return resources.animationClipHandleByAssetId(asset_id);
+    // AudioClipHandle — no by-asset-id lookup yet
+    return null;
 }

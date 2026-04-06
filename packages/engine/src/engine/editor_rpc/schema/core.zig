@@ -152,6 +152,16 @@ pub const @"entity.removeComponent" = struct {
     pub const Result = struct {};
 };
 
+pub const @"entity.setAssetField" = struct {
+    pub const Params = struct {
+        entityId: u64,
+        componentType: []const u8,
+        fieldName: []const u8,
+        assetPath: ?[]const u8,
+    };
+    pub const Result = struct {};
+};
+
 // ── playback namespace ───────────────────────────────────────────
 
 pub const @"playback.play" = struct {

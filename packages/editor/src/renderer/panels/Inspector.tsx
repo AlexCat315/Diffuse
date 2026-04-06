@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef } from "react";
+import React, { useEffect, useCallback, useRef, useState } from "react";
 import { useLocalState } from "../store/local-state";
 import type { Transform, ComponentInfo, Vec3 } from "../../shared/rpc-types";
 import type { ComponentField } from "../../shared/rpc-types";
@@ -14,6 +14,7 @@ export function Inspector() {
   const [components, setComponents] = useLocalState<ComponentInfo[]>([]);
   const [entityName, setEntityName] = useLocalState("");
   const [collapsedSections, setCollapsedSections] = useSyncedState<Set<string>>("inspector", "collapsedSections", new Set());
+  const [showAddComponent, setShowAddComponent] = useState(false);
 
   const fetchEntityData = useCallback(async (eid: number) => {
     const data = await useEntityCacheStore.getState().fetchEntity(eid, true);
@@ -129,6 +130,10 @@ export function Inspector() {
           title={comp.type}
           collapsed={collapsedSections.has(comp.type)}
           onToggle={() => toggleSection(comp.type)}
+          onRemove={() => {
+            window.guavaEngine.call("entity.removeComponent", { entityId, componentType: comp.type });
+            setTimeout(() => fetchEntityData(entityId), 100);
+          }}
         >
           {comp.fields.length === 0 ? (
             <div style={{ ...styles.empty, padding: 8 }}>{t.inspector.noEditableFields}</div>
@@ -145,6 +150,18 @@ export function Inspector() {
           )}
         </CollapsibleSection>
       ))}
+
+      {/* Add Component */}
+      <AddComponentButton
+        entityId={entityId}
+        existingTypes={components.map((c) => c.type)}
+        show={showAddComponent}
+        onToggle={() => setShowAddComponent((v) => !v)}
+        onAdded={() => {
+          setShowAddComponent(false);
+          fetchEntityData(entityId);
+        }}
+      />
     </div>
   );
 }
@@ -155,18 +172,29 @@ function CollapsibleSection({
   title,
   collapsed,
   onToggle,
+  onRemove,
   children,
 }: {
   title: string;
   collapsed: boolean;
   onToggle: () => void;
+  onRemove?: () => void;
   children: React.ReactNode;
 }) {
   return (
     <div style={styles.section}>
       <div style={styles.sectionHeader} onClick={onToggle}>
         <span style={styles.arrow}>{collapsed ? <IconTriangleRight size={10} /> : <IconTriangleDown size={10} />}</span>
-        <span style={styles.sectionTitle}>{title}</span>
+        <span style={{ ...styles.sectionTitle, flex: 1 }}>{title}</span>
+        {onRemove && (
+          <button
+            style={styles.removeComponentBtn}
+            title="Remove component"
+            onClick={(e) => { e.stopPropagation(); onRemove(); }}
+          >
+            ✕
+          </button>
+        )}
       </div>
       {!collapsed && children}
     </div>
@@ -284,6 +312,15 @@ function FieldEditor({
           value={field.value as string}
           options={field.options ?? []}
           onCommit={commitField}
+        />
+      );
+    case "asset_ref":
+      return (
+        <AssetRefField
+          entityId={entityId}
+          componentType={componentType}
+          field={field}
+          onChanged={onFieldChanged}
         />
       );
     default:
@@ -408,6 +445,145 @@ function EnumField({
   );
 }
 
+// ── Asset reference field ────────────────────────────────────────
+
+function AssetRefField({
+  entityId,
+  componentType,
+  field,
+  onChanged,
+}: {
+  entityId: number;
+  componentType: string;
+  field: ComponentField;
+  onChanged: () => void;
+}) {
+  const [options, setOptions] = useState<string[]>([]);
+  const currentValue = (field.value as string | null) ?? "";
+
+  useEffect(() => {
+    // Fetch available assets by type
+    const assetType = field.assetType ?? "script";
+    if (assetType === "script") {
+      window.guavaEngine
+        .call("script.listScripts", {})
+        .then((res: { scripts?: { path: string }[] }) => {
+          setOptions((res.scripts ?? []).map((s) => s.path));
+        })
+        .catch(() => {});
+    } else {
+      // For mesh/material/texture — browse assets directory
+      window.guavaEngine
+        .call("assets.list", { path: "" })
+        .then((res: { entries?: { name: string; isDirectory: boolean }[] }) => {
+          // Flatten — for now just show top-level files
+          setOptions(
+            (res.entries ?? [])
+              .filter((e) => !e.isDirectory)
+              .map((e) => e.name),
+          );
+        })
+        .catch(() => {});
+    }
+  }, [field.assetType]);
+
+  const commitAsset = (assetPath: string | null) => {
+    window.guavaEngine.call("entity.setAssetField", {
+      entityId,
+      componentType,
+      fieldName: field.name,
+      assetPath: assetPath ?? undefined,
+    });
+    setTimeout(onChanged, 100);
+  };
+
+  return (
+    <div style={styles.field}>
+      <label style={styles.label}>{field.name}</label>
+      <select
+        value={currentValue}
+        onChange={(e) => commitAsset(e.target.value || null)}
+        style={{
+          ...styles.numInput,
+          flex: 1,
+          marginLeft: 8,
+          appearance: "none",
+          padding: "2px 6px",
+        }}
+      >
+        <option value="">— none —</option>
+        {options.map((opt) => (
+          <option key={opt} value={opt}>
+            {opt.split("/").pop() ?? opt}
+          </option>
+        ))}
+      </select>
+    </div>
+  );
+}
+
+// ── Add Component button ─────────────────────────────────────────
+
+const ALL_COMPONENT_TYPES = [
+  "Camera", "Mesh", "SkinnedMesh", "Animator", "Rigidbody",
+  "BoxCollider", "SphereCollider", "MeshCollider", "Constraint",
+  "Material", "Light", "Vfx", "Script", "AudioSource",
+  "AudioListener", "NavAgent",
+];
+
+function AddComponentButton({
+  entityId,
+  existingTypes,
+  show,
+  onToggle,
+  onAdded,
+}: {
+  entityId: number;
+  existingTypes: string[];
+  show: boolean;
+  onToggle: () => void;
+  onAdded: () => void;
+}) {
+  const available = ALL_COMPONENT_TYPES.filter(
+    (t) => !existingTypes.some((e) => e.toLowerCase() === t.toLowerCase()),
+  );
+
+  const handleAdd = (type: string) => {
+    window.guavaEngine.call("entity.addComponent", { entityId, componentType: type });
+    setTimeout(onAdded, 100);
+  };
+
+  return (
+    <div style={{ padding: "8px 12px" }}>
+      <button
+        onClick={onToggle}
+        style={styles.addComponentBtn}
+      >
+        + Add Component
+      </button>
+      {show && (
+        <div style={styles.addComponentDropdown}>
+          {available.length === 0 ? (
+            <div style={{ padding: 8, opacity: 0.5, fontSize: 11 }}>All components added</div>
+          ) : (
+            available.map((type) => (
+              <div
+                key={type}
+                style={styles.addComponentItem}
+                onClick={() => handleAdd(type)}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#45475a")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
+              >
+                {type}
+              </div>
+            ))
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Styles ──────────────────────────────────────────────────────
 
 const styles: Record<string, React.CSSProperties> = {
@@ -495,5 +671,40 @@ const styles: Record<string, React.CSSProperties> = {
     flex: 1,
     marginLeft: 8,
     outline: "none",
+  },
+  removeComponentBtn: {
+    background: "transparent",
+    border: "none",
+    color: "#6c7086",
+    cursor: "pointer",
+    fontSize: 10,
+    padding: "2px 4px",
+    borderRadius: 3,
+    lineHeight: 1,
+  },
+  addComponentBtn: {
+    width: "100%",
+    padding: "6px 0",
+    background: "#313244",
+    border: "1px solid #45475a",
+    borderRadius: 4,
+    color: "#a6adc8",
+    fontSize: 12,
+    cursor: "pointer",
+    textAlign: "center" as const,
+  },
+  addComponentDropdown: {
+    marginTop: 4,
+    background: "#1e1e2e",
+    border: "1px solid #45475a",
+    borderRadius: 4,
+    maxHeight: 200,
+    overflowY: "auto" as const,
+  },
+  addComponentItem: {
+    padding: "6px 10px",
+    fontSize: 12,
+    color: "#cdd6f4",
+    cursor: "pointer",
   },
 };
