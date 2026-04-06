@@ -73,7 +73,17 @@ export function SceneHierarchy() {
   const filteredRoots = search ? filterTree(roots, search.toLowerCase()) : roots;
 
   return (
-    <div style={styles.container} onContextMenu={(e) => handleContextMenu(e, null)}>
+    <div
+      style={styles.container}
+      tabIndex={0}
+      onContextMenu={(e) => handleContextMenu(e, null)}
+      onKeyDown={(e) => {
+        if ((e.key === "Delete" || e.key === "Backspace") && selectedId != null && renamingId == null) {
+          e.preventDefault();
+          deleteEntity(selectedId);
+        }
+      }}
+    >
       <div style={styles.header}>
         <span style={styles.title}>{t.hierarchy.title}</span>
       </div>
@@ -216,7 +226,7 @@ function TreeNode({
           background: isSelected ? "#45475a" : "transparent",
         }}
         onClick={() => onSelect(node.id)}
-        onContextMenu={(e) => onContextMenu(e, node.id)}
+        onContextMenu={(e) => { e.stopPropagation(); onContextMenu(e, node.id); }}
         onDoubleClick={() => onStartRename(node.id)}
       >
         {hasChildren ? (

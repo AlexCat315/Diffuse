@@ -1116,8 +1116,10 @@ fn applySceneFileToWorld(
 
     if (apply_environment_asset) {
         if (scene.environment_asset_id) |environment_asset_id| {
-            if (findAssetRecord(scene.asset_records, environment_asset_id) != null) {
+            if (findAssetRecord(scene.asset_records, environment_asset_id)) |asset_record| {
                 _ = try world.resources.setSceneEnvironmentAssetId(environment_asset_id);
+                // Register the environment asset record so the renderer can look it up
+                _ = try world.resources.asset_registry.upsertOwned(try asset_record.clone(allocator));
             }
         }
     }
@@ -1342,7 +1344,18 @@ fn applySceneFileToWorld(
             .mesh = if (entity.mesh) |mesh_component|
                 .{
                     .handle = if (mesh_component.asset_id) |mesh_asset_id|
-                        findMeshHandle(mesh_bindings.items, mesh_asset_id) orelse return error.MeshAssetNotFound
+                        findMeshHandle(mesh_bindings.items, mesh_asset_id) orelse resolve_mesh: {
+                            // V6/7 scenes may omit inline mesh data; resolve from primitive type
+                            if (mesh_component.primitive != .custom) {
+                                const handle = try world.resources.ensurePrimitiveMesh(mesh_component.primitive);
+                                try mesh_bindings.append(allocator, .{
+                                    .asset_id = mesh_asset_id,
+                                    .handle = handle,
+                                });
+                                break :resolve_mesh handle;
+                            }
+                            return error.MeshAssetNotFound;
+                        }
                     else
                         null,
                     .primitive = mesh_component.primitive,
@@ -1352,7 +1365,17 @@ fn applySceneFileToWorld(
             .skinned_mesh = if (entity.skinned_mesh) |skinned_mesh_component|
                 .{
                     .mesh_handle = if (skinned_mesh_component.mesh_asset_id) |mesh_asset_id|
-                        findMeshHandle(mesh_bindings.items, mesh_asset_id) orelse return error.MeshAssetNotFound
+                        findMeshHandle(mesh_bindings.items, mesh_asset_id) orelse resolve_skinned: {
+                            if (skinned_mesh_component.primitive != .custom) {
+                                const handle = try world.resources.ensurePrimitiveMesh(skinned_mesh_component.primitive);
+                                try mesh_bindings.append(allocator, .{
+                                    .asset_id = mesh_asset_id,
+                                    .handle = handle,
+                                });
+                                break :resolve_skinned handle;
+                            }
+                            return error.MeshAssetNotFound;
+                        }
                     else
                         null,
                     .primitive = skinned_mesh_component.primitive,
@@ -1459,7 +1482,29 @@ fn applySceneFileToWorld(
             .material = if (entity.material) |material_component|
                 .{
                     .handle = if (material_component.asset_id) |material_asset_id|
-                        findMaterialHandle(material_bindings.items, material_asset_id) orelse return error.MaterialAssetNotFound
+                        findMaterialHandle(material_bindings.items, material_asset_id) orelse resolve_mat: {
+                            // V6/7 scenes store material properties inline on entities; create resource on demand
+                            const mat_name = if (findAssetRecord(scene.asset_records, material_asset_id)) |record|
+                                record.metadata.display_name
+                            else
+                                "UnnamedMaterial";
+                            const handle = try world.resources.createMaterial(.{
+                                .name = mat_name,
+                                .shading = material_component.shading,
+                                .base_color_factor = material_component.base_color_factor,
+                                .emissive_factor = material_component.emissive_factor,
+                                .metallic_factor = material_component.metallic_factor,
+                                .roughness_factor = material_component.roughness_factor,
+                                .alpha_cutoff = material_component.alpha_cutoff,
+                                .double_sided = material_component.double_sided,
+                            });
+                            try bindMaterialAssetFromScene(allocator, world, scene, material_asset_id, mat_name, handle);
+                            try material_bindings.append(allocator, .{
+                                .asset_id = material_asset_id,
+                                .handle = handle,
+                            });
+                            break :resolve_mat handle;
+                        }
                     else
                         null,
                     .shading = material_component.shading,

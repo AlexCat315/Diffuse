@@ -1,5 +1,6 @@
 const std = @import("std");
 const assets_lib = @import("../assets/library.zig");
+const handles = @import("../assets/handles.zig");
 const environment_map_import_mod = @import("../assets/environment_map_import.zig");
 const texture_import_mod = @import("../assets/texture_import.zig");
 const mesh_pass_mod = @import("passes/mesh_pass.zig");
@@ -16,10 +17,10 @@ pub const PathTraceEnvironment = path_trace_common.PathTraceEnvironment;
 pub const CachedEnvironmentTextures = struct {
     resolved: bool = false,
     selection_fingerprint: u64 = 0,
-    environment_map: ?*const rhi_mod.Texture = null,
-    irradiance_map: ?*const rhi_mod.Texture = null,
-    prefiltered_env_map: ?*const rhi_mod.Texture = null,
-    brdf_lut: ?*const rhi_mod.Texture = null,
+    environment_map_handle: ?handles.TextureHandle = null,
+    irradiance_map_handle: ?handles.TextureHandle = null,
+    prefiltered_env_map_handle: ?handles.TextureHandle = null,
+    brdf_lut_handle: ?handles.TextureHandle = null,
 };
 
 pub fn resolvePathTraceEnvironment(self: anytype, scene: *scene_mod.Scene) PathTraceEnvironment {
@@ -60,10 +61,27 @@ pub fn resolveEnvironmentTextures(
     const selection_fingerprint = environmentSelectionFingerprint(&scene.resources);
 
     if (self.cached_env_textures.resolved and self.cached_env_textures.selection_fingerprint == selection_fingerprint) {
-        prepared_scene.environment_map = self.cached_env_textures.environment_map orelse &self.scene_cache.fallback_texture.?;
-        prepared_scene.irradiance_map = self.cached_env_textures.irradiance_map orelse &self.scene_cache.fallback_texture.?;
-        prepared_scene.prefiltered_env_map = self.cached_env_textures.prefiltered_env_map orelse &self.scene_cache.fallback_texture.?;
-        prepared_scene.brdf_lut = self.cached_env_textures.brdf_lut orelse if (self.gpu_brdf_lut) |*lut| lut else self.scene_cache.fallbackBrdfLut();
+        // Re-resolve handles to fresh pointers each frame; the GPU texture ArrayList
+        // may have been reallocated since last frame due to other texture uploads.
+        prepared_scene.environment_map = if (self.cached_env_textures.environment_map_handle) |h|
+            self.scene_cache.ensureTextureHandle(&self.rhi, scene, h) catch &self.scene_cache.fallback_texture.?
+        else
+            &self.scene_cache.fallback_texture.?;
+        prepared_scene.irradiance_map = if (self.cached_env_textures.irradiance_map_handle) |h|
+            self.scene_cache.ensureTextureHandle(&self.rhi, scene, h) catch &self.scene_cache.fallback_texture.?
+        else
+            &self.scene_cache.fallback_texture.?;
+        prepared_scene.prefiltered_env_map = if (self.cached_env_textures.prefiltered_env_map_handle) |h|
+            self.scene_cache.ensureTextureHandle(&self.rhi, scene, h) catch &self.scene_cache.fallback_texture.?
+        else
+            &self.scene_cache.fallback_texture.?;
+        prepared_scene.brdf_lut = if (self.cached_env_textures.brdf_lut_handle) |h|
+            self.scene_cache.ensureTextureHandle(&self.rhi, scene, h) catch self.scene_cache.fallbackBrdfLut()
+        else
+            self.scene_cache.fallbackBrdfLut();
+        if (self.gpu_brdf_lut) |*lut| {
+            prepared_scene.brdf_lut = lut;
+        }
         return;
     }
 
@@ -75,10 +93,10 @@ pub fn resolveEnvironmentTextures(
     self.cached_env_textures = .{
         .resolved = true,
         .selection_fingerprint = selection_fingerprint,
-        .environment_map = null,
-        .irradiance_map = null,
-        .prefiltered_env_map = null,
-        .brdf_lut = null,
+        .environment_map_handle = null,
+        .irradiance_map_handle = null,
+        .prefiltered_env_map_handle = null,
+        .brdf_lut_handle = null,
     };
 
     const borrowed_id = findSceneEnvironmentAssetId(&scene.resources) orelse {
@@ -94,7 +112,6 @@ pub fn resolveEnvironmentTextures(
 
     if (!g_logged_environment_status) {
         render_log.info("environment asset selected: {s}", .{environment_asset_id});
-        g_logged_environment_status = true;
     }
     _ = texture_import_mod.loadTextureAsset(
         self.allocator,
@@ -103,9 +120,13 @@ pub fn resolveEnvironmentTextures(
         environment_asset_id,
     ) catch |err| {
         render_log.warn("failed to load environment texture asset '{s}': {s}; using fallback", .{ environment_asset_id, @errorName(err) });
+        g_logged_environment_status = true;
         return;
     };
 
+    if (!g_logged_environment_status) {
+        render_log.info("environment texture loaded OK, loading IBL data...", .{});
+    }
     var environment = environment_map_import_mod.loadIBLData(
         self.allocator,
         &scene.resources,
@@ -113,10 +134,33 @@ pub fn resolveEnvironmentTextures(
         environment_asset_id,
     ) catch |err| {
         render_log.warn("failed to load IBL data for '{s}': {s}; using fallback", .{ environment_asset_id, @errorName(err) });
+        g_logged_environment_status = true;
         return;
     };
     defer environment.deinit(self.allocator);
 
+    if (!g_logged_environment_status) {
+        render_log.info("IBL data loaded OK, uploading to GPU...", .{});
+        g_logged_environment_status = true;
+    }
+
+    // Phase 1: Ensure all IBL textures are cached in the GPU texture array.
+    // This may cause ArrayList reallocations, so we must NOT hold pointers yet.
+    if (environment.environment_map_handle) |handle| {
+        _ = try self.scene_cache.ensureTextureHandle(&self.rhi, scene, handle);
+    }
+    if (environment.irradiance_map_handle) |handle| {
+        _ = try self.scene_cache.ensureTextureHandle(&self.rhi, scene, handle);
+    }
+    if (environment.prefiltered_map_handle) |handle| {
+        _ = try self.scene_cache.ensureTextureHandle(&self.rhi, scene, handle);
+    }
+    if (environment.brdf_lut_handle) |handle| {
+        _ = try self.scene_cache.ensureTextureHandle(&self.rhi, scene, handle);
+    }
+
+    // Phase 2: All textures are now cached — re-fetch stable pointers
+    // (no more ArrayList appends, so these pointers remain valid).
     if (environment.environment_map_handle) |handle| {
         prepared_scene.environment_map = try self.scene_cache.ensureTextureHandle(&self.rhi, scene, handle);
     }
@@ -137,10 +181,10 @@ pub fn resolveEnvironmentTextures(
     self.cached_env_textures = .{
         .resolved = true,
         .selection_fingerprint = selection_fingerprint,
-        .environment_map = prepared_scene.environment_map,
-        .irradiance_map = prepared_scene.irradiance_map,
-        .prefiltered_env_map = prepared_scene.prefiltered_env_map,
-        .brdf_lut = prepared_scene.brdf_lut,
+        .environment_map_handle = environment.environment_map_handle,
+        .irradiance_map_handle = environment.irradiance_map_handle,
+        .prefiltered_env_map_handle = environment.prefiltered_map_handle,
+        .brdf_lut_handle = environment.brdf_lut_handle,
     };
 }
 
@@ -159,23 +203,11 @@ pub fn environmentSelectionFingerprint(resources: *const assets_lib.ResourceLibr
 }
 
 pub fn findSceneEnvironmentAssetId(resources: *const assets_lib.ResourceLibrary) ?[]const u8 {
-    const environment_asset_id = resources.sceneEnvironmentAssetId() orelse {
-        std.log.debug("findSceneEnv: no scene_environment_asset_id set", .{});
-        return null;
-    };
-    std.log.debug("findSceneEnv: asset_id='{s}'", .{environment_asset_id});
-    const record = resources.asset_registry.recordById(environment_asset_id) orelse {
-        std.log.debug("findSceneEnv: no record found for id '{s}'", .{environment_asset_id});
-        return null;
-    };
-    std.log.debug("findSceneEnv: record type={}, source_path='{s}'", .{ record.type, record.source_path });
+    const environment_asset_id = resources.sceneEnvironmentAssetId() orelse return null;
+    const record = resources.asset_registry.recordById(environment_asset_id) orelse return null;
     if (record.type != .texture or !std.mem.endsWith(u8, record.source_path, ".hdr")) {
-        std.log.debug("findSceneEnv: rejected — not texture or not .hdr", .{});
         return null;
     }
-    std.fs.cwd().access(record.source_path, .{}) catch |err| {
-        std.log.debug("findSceneEnv: access failed for '{s}': {s}", .{ record.source_path, @errorName(err) });
-        return null;
-    };
+    std.fs.cwd().access(record.source_path, .{}) catch return null;
     return record.id;
 }

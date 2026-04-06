@@ -192,6 +192,14 @@ pub fn setAssetField(ctx: *Ctx) !void {
             }
         }
         if (found) {
+            // Immediately sync the scene-level environment asset ID so the renderer
+            // picks it up on the next frame without waiting for syncSkyComponent.
+            if (entity.sky) |*sky_ref| {
+                const new_asset_id = sky_ref.assetIdSlice();
+                _ = resources.setSceneEnvironmentAssetId(
+                    if (new_asset_id.len > 0) new_asset_id else null,
+                ) catch {};
+            }
             ctx.layer.world.markSceneChanged();
             try ctx.reply(.{});
             return;
