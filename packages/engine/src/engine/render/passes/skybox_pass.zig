@@ -104,7 +104,12 @@ pub const SkyboxPass = struct {
             .stage = .fragment,
             .texture_sampler_bindings = bindings[0..],
             .slot_offset = 0,
-        }) catch return;
+        }) catch |err| {
+            std.log.err("skybox createBindGroup FAILED: {s} tex_id={d} sampler_id={d}", .{
+                @errorName(err), env_map_texture.id, self.sampler.?.id,
+            });
+            return;
+        };
         defer device.releaseBindGroup(&bind_group);
 
         device.bindGroup(pass, &bind_group);
@@ -143,7 +148,7 @@ pub const SkyboxPass = struct {
             .fill_mode = .fill,
             .cull_mode = .none,
             .front_face = .counter_clockwise,
-            .depth_compare = .less_or_equal, // Skybox is drawn at Z=1.0
+            .depth_compare = .less_or_equal,
             .depth_test = true,
             .depth_write = false,
         });

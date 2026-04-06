@@ -340,6 +340,7 @@ pub const Renderer = struct {
     plugin_hot_reload: plugin_mod.PluginHotReloadManager,
     /// 天空盒通道
     skybox_pass: ?skybox_pass_mod.SkyboxPass = null,
+    skybox_logged: bool = false,
     /// 轮廓通道（选中物体高亮）
     outline_pass: outline_pass_mod.OutlinePass,
     /// Gizmo 通道（编辑器可视化）
@@ -1563,8 +1564,10 @@ pub const Renderer = struct {
                     }
                 }
 
-                try resolveEnvironmentTextures(self, scene, &prepared_scene);
+                // Sync Sky component FIRST so scene_environment_asset_id is up-to-date
+                // before resolveEnvironmentTextures reads it.
                 syncSkyComponent(scene, &prepared_scene);
+                try resolveEnvironmentTextures(self, scene, &prepared_scene);
 
                 var prepared_preview_scene: mesh_pass_mod.PreparedScene = undefined;
                 var has_prepared_preview_scene = false;
@@ -1983,6 +1986,13 @@ pub const Renderer = struct {
 
                     if (self.skybox_pass) |*skybox_pass| {
                         if (active_render_mode != .wireframe and skybox_pass.isReady() and prepared_scene.environment_map != null and prepared_scene.sky_enabled) {
+                            if (!self.skybox_logged) {
+                                const env_tex = prepared_scene.environment_map.?;
+                                render_log.info("skybox active: env_map {d}x{d} intensity={d:.3} gpu_id={d}", .{
+                                    env_tex.desc.width, env_tex.desc.height, prepared_scene.sky_intensity, env_tex.id,
+                                });
+                                self.skybox_logged = true;
+                            }
                             const skybox_start = std.time.nanoTimestamp();
                             skybox_pass.draw(&self.rhi, frame, scene_pass, &prepared_scene, prepared_scene.environment_map.?, if (viewport_active) .hdr else .ldr, prepared_scene.sky_intensity);
                             self.graph.recordPassStat(pass_stats, .skybox_pass, durationNs(skybox_start, std.time.nanoTimestamp()), 1, 1);
