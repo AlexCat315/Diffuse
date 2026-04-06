@@ -495,6 +495,8 @@ pub const Renderer = struct {
     path_trace_state: PathTraceProgressiveState = .{},
     /// 硬件 RT 渲染状态
     hw_rt_state: HwRtState = .{},
+    /// 是否为编辑器模式（player 模式下禁用 debug 覆盖层）
+    is_editor_mode: bool = true,
 
     /// 初始化渲染器
     ///
@@ -4194,6 +4196,8 @@ pub const Renderer = struct {
         if (!self.gizmo_pass.isReady()) {
             return false;
         }
+        // Player mode: skip all editor debug overlays
+        if (!self.is_editor_mode) return false;
         return self.selection_history.primarySelection() != null or
             self.editor_gizmo_transform_override != null or
             self.preview_gizmo_transform != null or

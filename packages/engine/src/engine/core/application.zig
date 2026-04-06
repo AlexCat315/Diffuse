@@ -124,6 +124,8 @@ pub const ApplicationConfig = struct {
     physics: physics_system.Config = .{},
     /// 脚本系统配置
     script: script_system.ScriptSystemConfig = .{},
+    /// 是否为编辑器模式（禁用时不渲染 debug 覆盖层）
+    is_editor_mode: bool = true,
 };
 
 /// 运行报告
@@ -259,12 +261,15 @@ pub const Application = struct {
         errdefer world.deinit();
         try world.bootstrap3D();
 
-        const renderer = try renderer_mod.Renderer.init(allocator, platform, &window, .{
+        var renderer = try renderer_mod.Renderer.init(allocator, platform, &window, .{
             .requested_backends = config.preferred_backends,
             .selection_policy = config.backend_selection_policy,
             .enable_validation = config.enable_validation,
             .frames_in_flight = config.frames_in_flight,
         });
+
+        // Propagate editor mode to renderer (controls debug overlay visibility)
+        renderer.is_editor_mode = config.is_editor_mode;
 
         // 初始化脚本运行时
         var script_runtime = script_system.ScriptRuntime.init(allocator, config.script);

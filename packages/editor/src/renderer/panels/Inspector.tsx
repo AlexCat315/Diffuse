@@ -359,6 +359,18 @@ function FieldEditor({
           onChanged={onFieldChanged}
         />
       );
+    case "string":
+      // Sky environment_asset_id: show HDR file picker
+      if (componentType === "Sky" && field.name === "environment_asset_id") {
+        return (
+          <SkyEnvironmentField
+            entityId={entityId}
+            field={field}
+            onChanged={onFieldChanged}
+          />
+        );
+      }
+      return <StringField label={field.name} value={(field.value as string) ?? ""} onCommit={commitField} />;
     default:
       return (
         <div style={styles.field}>
@@ -588,11 +600,157 @@ function AssetRefField({
   );
 }
 
+// ── String field ─────────────────────────────────────────────────
+
+function StringField({ label, value, onCommit }: { label: string; value: string; onCommit: (v: string) => void }) {
+  const [local, setLocal] = useLocalState(value);
+  useEffect(() => setLocal(value), [value]);
+
+  return (
+    <div style={styles.field}>
+      <label style={styles.label}>{label}</label>
+      <input
+        type="text"
+        value={local}
+        onChange={(e) => setLocal(e.target.value)}
+        onBlur={() => onCommit(local)}
+        onKeyDown={(e) => { if (e.key === "Enter") onCommit(local); }}
+        style={{ ...styles.numInput, flex: 1, marginLeft: 8 }}
+      />
+    </div>
+  );
+}
+
+// ── Sky environment HDR picker ───────────────────────────────────
+
+interface HdrAssetEntry {
+  name: string;
+  path: string;   // e.g. "Content/environments/sky.hdr"
+}
+
+function SkyEnvironmentField({
+  entityId,
+  field,
+  onChanged,
+}: {
+  entityId: number;
+  field: ComponentField;
+  onChanged: () => void;
+}) {
+  const [hdrFiles, setHdrFiles] = useState<HdrAssetEntry[]>([]);
+  const [dragOver, setDragOver] = useState(false);
+  const currentValue = (field.value as string) ?? "";
+  const sourcePath = (field as ComponentField & { sourcePath?: string }).sourcePath ?? "";
+
+  // Recursively find .hdr files in project Content directory
+  useEffect(() => {
+    const found: HdrAssetEntry[] = [];
+    const scanDir = async (dirPath: string) => {
+      try {
+        const res = await window.guavaEngine.call("assets.list", { path: dirPath }) as {
+          entries?: { name: string; path: string; isDirectory: boolean; assetType: string }[];
+        };
+        for (const entry of res.entries ?? []) {
+          if (entry.isDirectory) {
+            await scanDir(entry.path);
+          } else if (entry.name.toLowerCase().endsWith(".hdr")) {
+            found.push({ name: entry.name, path: entry.path });
+          }
+        }
+      } catch { /* ignore */ }
+    };
+    scanDir("Content").then(() => setHdrFiles(found));
+  }, []);
+
+  const commitAsset = (assetPath: string | undefined) => {
+    window.guavaEngine.call("entity.setAssetField", {
+      entityId,
+      componentType: "Sky",
+      fieldName: "environment_asset_id",
+      assetPath: assetPath || null,
+    });
+    setTimeout(onChanged, 150);
+  };
+
+  const handleDragOver = (e: DragEvent) => {
+    if (e.dataTransfer.types.includes("application/x-guava-asset-path")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "link";
+      setDragOver(true);
+    }
+  };
+
+  const handleDragLeave = () => setDragOver(false);
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const assetPath = e.dataTransfer.getData("application/x-guava-asset-path");
+    if (assetPath && assetPath.toLowerCase().endsWith(".hdr")) {
+      commitAsset(assetPath);
+    }
+  };
+
+  // Display: show file name if we have sourcePath, otherwise show truncated asset ID
+  const displayValue = sourcePath
+    ? sourcePath.split("/").pop() ?? sourcePath
+    : currentValue
+      ? currentValue.substring(0, 12) + "…"
+      : "";
+
+  return (
+    <div
+      style={{
+        ...styles.field,
+        flexDirection: "column",
+        alignItems: "stretch",
+        gap: 4,
+        ...(dragOver ? { outline: "1px solid #89b4fa", borderRadius: 3, background: "rgba(137,180,250,0.08)" } : {}),
+      }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
+      <div style={{ display: "flex", alignItems: "center" }}>
+        <label style={styles.label}>HDR 环境</label>
+        <select
+          value={sourcePath || currentValue}
+          onChange={(e) => commitAsset(e.target.value || undefined)}
+          style={{
+            ...styles.numInput,
+            flex: 1,
+            marginLeft: 8,
+            appearance: "none",
+            padding: "2px 6px",
+          }}
+        >
+          <option value="">— none —</option>
+          {hdrFiles.map((f) => (
+            <option key={f.path} value={f.path}>
+              {f.name}
+            </option>
+          ))}
+          {/* Show current value if it's an asset ID not matching any listed file */}
+          {currentValue && !hdrFiles.some((f) => f.path === sourcePath) && sourcePath && (
+            <option value={sourcePath}>{sourcePath.split("/").pop()}</option>
+          )}
+        </select>
+      </div>
+      {displayValue && (
+        <div style={{ fontSize: 10, opacity: 0.5, paddingLeft: 4 }}>
+          {sourcePath || currentValue}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ── Add Component button ─────────────────────────────────────────
 
 const ALL_COMPONENT_TYPES = [
   "Camera", "Mesh", "SkinnedMesh", "Animator", "Rigidbody",
-  "BoxCollider", "SphereCollider", "MeshCollider", "Constraint",
+  "BoxCollider", "SphereCollider", "MeshCollider", "CapsuleCollider",
+  "CharacterController", "Constraint", "Tag", "Sky",
   "Material", "Light", "Vfx", "Script", "AudioSource",
   "AudioListener", "NavAgent",
 ];

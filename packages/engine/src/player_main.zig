@@ -173,6 +173,7 @@ pub fn main() !u8 {
         .window_native_titlebar_controls = true,
         .frame_delay_ms = 16,
         .preferred_backends = options.backends(),
+        .is_editor_mode = false,
     });
     defer app.deinit();
 

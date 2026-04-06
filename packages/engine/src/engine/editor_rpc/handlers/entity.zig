@@ -5,6 +5,7 @@ const Ctx = ctx_mod.Ctx;
 const EntityId = ctx_mod.EntityId;
 const handles = @import("../../assets/handles.zig");
 const library_mod = @import("../../assets/library.zig");
+const components = @import("../../scene/components.zig");
 
 pub fn getTransform(ctx: *Ctx) !void {
     const eid = try ctx.param(u64, "entityId");
@@ -156,6 +157,37 @@ pub fn setAssetField(ctx: *Ctx) !void {
 
     var found = false;
     var comp_type_matched = false;
+
+    // Special case: Sky component's environment_asset_id — resolve path → asset ID
+    if (std.ascii.eqlIgnoreCase(comp_type, "Sky") and std.mem.eql(u8, field_name, "environment_asset_id")) {
+        comp_type_matched = true;
+        if (entity.sky) |*sky| {
+            switch (raw_val) {
+                .string => |asset_path| {
+                    // Resolve source path to asset registry record
+                    if (resources.asset_registry.recordByPath(asset_path)) |record| {
+                        @memset(&sky._asset_id_buf, 0);
+                        const n = @min(record.id.len, components.Sky.max_id_len);
+                        @memcpy(sky._asset_id_buf[0..n], record.id[0..n]);
+                        found = true;
+                    } else {
+                        std.log.warn("setAssetField: Sky environment asset not found for path '{s}'", .{asset_path});
+                    }
+                },
+                .null => {
+                    @memset(&sky._asset_id_buf, 0);
+                    found = true;
+                },
+                else => {},
+            }
+        }
+        if (found) {
+            ctx.layer.world.markSceneChanged();
+            try ctx.reply(.{});
+            return;
+        }
+    }
+
     inline for (ctx_mod.component_fields) |cf| {
         if (std.ascii.eqlIgnoreCase(comp_type, cf.display_name)) {
             comp_type_matched = true;
@@ -187,6 +219,29 @@ pub fn setAssetField(ctx: *Ctx) !void {
 fn serializeFields(buf: *std.ArrayList(u8), alloc: std.mem.Allocator, comptime T: type, ptr: *const T, resources: *const library_mod.ResourceLibrary) !void {
     const fields = @typeInfo(T).@"struct".fields;
     var first = true;
+
+    // Special case: Sky component — expose the environment asset_id as a string field
+    if (T == components.Sky) {
+        if (!first) try appendSlice(buf, alloc, ",");
+        first = false;
+        try appendSlice(buf, alloc, "{\"name\":\"environment_asset_id\",\"fieldType\":\"string\",\"value\":");
+        const asset_id_slice = ptr.assetIdSlice();
+        if (asset_id_slice.len > 0) {
+            try appendSlice(buf, alloc, "\"");
+            try appendSlice(buf, alloc, asset_id_slice);
+            try appendSlice(buf, alloc, "\"");
+            // Also add source_path for display
+            if (resources.asset_registry.recordById(asset_id_slice)) |record| {
+                try appendSlice(buf, alloc, ",\"sourcePath\":\"");
+                try appendSlice(buf, alloc, record.source_path);
+                try appendSlice(buf, alloc, "\"");
+            }
+        } else {
+            try appendSlice(buf, alloc, "\"\"");
+        }
+        try appendSlice(buf, alloc, "}");
+    }
+
     inline for (fields) |field| {
         const ft = classifyField(field.type);
         if (ft) |field_type| {
@@ -333,6 +388,22 @@ fn appendSlice(buf: *std.ArrayList(u8), alloc: std.mem.Allocator, data: []const 
 // ═══════════════════════════════════════════════════════════════════
 
 fn setField(comptime T: type, ptr: *T, name: []const u8, val: std.json.Value) !bool {
+    // Special case: Sky component's environment_asset_id
+    if (T == components.Sky and std.mem.eql(u8, name, "environment_asset_id")) {
+        switch (val) {
+            .string => |s| {
+                // Only update the asset ID buffer, preserve intensity/enabled
+                @memset(&ptr._asset_id_buf, 0);
+                const n = @min(s.len, components.Sky.max_id_len);
+                @memcpy(ptr._asset_id_buf[0..n], s[0..n]);
+            },
+            .null => {
+                @memset(&ptr._asset_id_buf, 0);
+            },
+            else => return error.InvalidArguments,
+        }
+        return true;
+    }
     inline for (@typeInfo(T).@"struct".fields) |field| {
         if (std.mem.eql(u8, name, field.name)) {
             const FT = field.type;

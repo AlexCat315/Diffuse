@@ -48,6 +48,7 @@ function nullEntity(name: string, overrides: Record<string, unknown> = {}): Reco
     audio_source: null,
     audio_listener: null,
     nav_agent: null,
+    sky: null,
     visible: true,
     editor_only: false,
     dont_destroy_on_load: false,

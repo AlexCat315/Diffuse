@@ -79,6 +79,7 @@ export interface ComponentField {
   max?: number;
   step?: number;
   assetType?: string;
+  sourcePath?: string;
 }
 
 export type AssetType =
