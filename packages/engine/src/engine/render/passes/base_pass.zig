@@ -128,6 +128,10 @@ pub const BasePass = struct {
         defer if (rt_shadow_bg) |*bind_group| {
             device.releaseBindGroup(bind_group);
         };
+        var cluster_bg: ?rhi_mod.BindGroup = null;
+        defer if (cluster_bg) |*bind_group| {
+            device.releaseBindGroup(bind_group);
+        };
         if (!use_metal_combined_bindings) {
             if (prepared_scene.shadow_maps[0]) |_| {
                 const shadow_bindings = [_]rhi_mod.TextureSamplerBinding{
@@ -177,6 +181,23 @@ pub const BasePass = struct {
                     });
                     device.bindGroup(pass, &rt_shadow_bg.?);
                 }
+            }
+
+            // Clustered Forward+: bind cluster data textures at bindings 14-15.
+            if (prepared_scene.cluster_count_texture != null and
+                prepared_scene.cluster_indices_texture != null and
+                prepared_scene.cluster_nearest_sampler != null)
+            {
+                const cluster_bindings = [_]rhi_mod.TextureSamplerBinding{
+                    .{ .texture = prepared_scene.cluster_count_texture.?, .sampler = prepared_scene.cluster_nearest_sampler.? },
+                    .{ .texture = prepared_scene.cluster_indices_texture.?, .sampler = prepared_scene.cluster_nearest_sampler.? },
+                };
+                cluster_bg = try device.createBindGroup(.{
+                    .stage = .fragment,
+                    .texture_sampler_bindings = cluster_bindings[0..],
+                    .slot_offset = 14,
+                });
+                device.bindGroup(pass, &cluster_bg.?);
             }
         }
 
@@ -294,6 +315,11 @@ pub const BasePass = struct {
                 const brdf_lut = prepared_scene.brdf_lut orelse return error.TextureNotFound;
                 const environment_map = prepared_scene.environment_map orelse return error.TextureNotFound;
                 const rt_shadow_texture = prepared_scene.rt_shadow_mask orelse brdf_lut;
+                // Fallback for cluster textures: use brdf_lut if not available.
+                // In practice cluster textures are always valid after the cluster pass inits.
+                const cluster_count_tex = prepared_scene.cluster_count_texture orelse brdf_lut;
+                const cluster_indices_tex = prepared_scene.cluster_indices_texture orelse brdf_lut;
+                const cluster_sampler = prepared_scene.cluster_nearest_sampler orelse texture_sampler;
 
                 const combined_bindings = [_]rhi_mod.TextureSamplerBinding{
                     .{ .texture = item.material_textures[0], .sampler = texture_sampler }, // binding 0: u_base_color_map
@@ -310,6 +336,8 @@ pub const BasePass = struct {
                     .{ .texture = brdf_lut, .sampler = texture_sampler }, // binding 11: u_brdf_lut
                     .{ .texture = environment_map, .sampler = texture_sampler }, // binding 12: u_environment_map
                     .{ .texture = rt_shadow_texture, .sampler = texture_sampler }, // binding 13: u_rt_shadow_mask
+                    .{ .texture = cluster_count_tex, .sampler = cluster_sampler }, // binding 14: u_cluster_counts
+                    .{ .texture = cluster_indices_tex, .sampler = cluster_sampler }, // binding 15: u_cluster_light_indices
                 };
                 // Metal 后端：将所有纹理/采样器合并成单个 bind group，便于 shader 的单绑定点访问
                 var combined_bg = try device.createBindGroup(.{
@@ -407,6 +435,7 @@ pub const BasePass = struct {
             .cascade_matrices = prepared_scene.cascade_matrices,
             .cascade_splits = prepared_scene.cascade_splits,
             .view_matrix = prepared_scene.view_matrix,
+            .cluster_params = prepared_scene.cluster_params,
         };
 
         if (settings.render_mode == .unlit) {

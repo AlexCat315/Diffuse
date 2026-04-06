@@ -117,6 +117,9 @@ export const IconPrefab = createIcon(packageUrl);
 export const IconTriangleRight = createIcon(triangleRightUrl);
 export const IconTriangleDown = createIcon(triangleDownUrl);
 
+// ── Build ───────────────────────────────────────────────────────
+export const IconBuild = createIcon(packageUrl);
+
 // ── Viewport shading modes ──────────────────────────────────────
 export const IconShadingSolid = createIcon(cubeUrl);
 export const IconShadingMaterial = createIcon(paintBrushUrl);

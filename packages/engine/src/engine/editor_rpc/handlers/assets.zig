@@ -97,3 +97,39 @@ fn classifyAsset(name: []const u8) []const u8 {
 fn hasExt(name: []const u8, ext: []const u8) bool {
     return std.ascii.endsWithIgnoreCase(name, ext);
 }
+
+/// List the project root directory — shows top-level folders like Content,
+/// assets, Derived, etc.  Used by the Asset Browser to navigate from root.
+pub fn listProjectRoot(ctx: *Ctx) !void {
+    var entries = std.ArrayList(Entry).empty;
+    defer entries.deinit(ctx.allocator);
+
+    var dir = std.fs.cwd().openDir(".", .{ .iterate = true }) catch {
+        try ctx.reply(.{ .path = ".", .entries = @as([]const Entry, &.{}) });
+        return;
+    };
+    var iter = dir.iterate();
+    while (try iter.next()) |entry| {
+        // Skip hidden files, build artifacts, caches
+        if (entry.name.len > 0 and entry.name[0] == '.') continue;
+        if (std.mem.eql(u8, entry.name, "zig-out")) continue;
+        if (std.mem.eql(u8, entry.name, "zig-cache")) continue;
+        if (std.mem.eql(u8, entry.name, "node_modules")) continue;
+
+        const name = try ctx.allocator.dupe(u8, entry.name);
+        const is_dir = entry.kind == .directory;
+        try entries.append(ctx.allocator, .{
+            .name = name,
+            .path = name,
+            .isDirectory = is_dir,
+            .assetType = if (is_dir) "folder" else classifyAsset(entry.name),
+        });
+    }
+    std.mem.sort(Entry, entries.items, {}, entryLessThan);
+
+    try ctx.reply(.{ .path = ".", .entries = entries.items });
+
+    for (entries.items) |e| {
+        ctx.allocator.free(@constCast(e.name));
+    }
+}

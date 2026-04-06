@@ -158,6 +158,7 @@ pub const TextureFormat = enum {
     d24_unorm,
     d24_unorm_s8_uint,
     d32_float,
+    r32_uint, // single-channel 32-bit unsigned integer (used for cluster data textures)
 
     pub fn bytesPerPixel(self: TextureFormat) u32 {
         return switch (self) {
@@ -166,6 +167,7 @@ pub const TextureFormat = enum {
             .d24_unorm_s8_uint => 4,
             .rgba16_float => 8,
             .rgba32_float => 16,
+            .r32_uint => 4,
             .unknown => 4,
         };
     }

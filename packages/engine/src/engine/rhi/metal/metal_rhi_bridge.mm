@@ -63,7 +63,7 @@ static MTLPixelFormat mapPixelFormat(uint32_t fmt) {
     // Must match types.zig TextureFormat enum ordering:
     // unknown=0, r8_unorm=1, rgba8_unorm=2, bgra8_unorm=3,
     // bgra8_unorm_srgb=4, rgba8_unorm_srgb=5, rgba16_float=6,
-    // rgba32_float=7, d24_unorm=8, d24_unorm_s8_uint=9, d32_float=10
+    // rgba32_float=7, d24_unorm=8, d24_unorm_s8_uint=9, d32_float=10, r32_uint=11
     switch (fmt) {
         case 1:  return MTLPixelFormatR8Unorm;
         case 2:  return MTLPixelFormatRGBA8Unorm;
@@ -75,6 +75,7 @@ static MTLPixelFormat mapPixelFormat(uint32_t fmt) {
         case 8:  return MTLPixelFormatDepth24Unorm_Stencil8; // closest on macOS
         case 9:  return MTLPixelFormatDepth24Unorm_Stencil8;
         case 10: return MTLPixelFormatDepth32Float;
+        case 11: return MTLPixelFormatR32Uint; // single-channel unsigned int (cluster data)
         default: return MTLPixelFormatRGBA8Unorm;
     }
 }

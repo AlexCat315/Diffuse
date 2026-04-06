@@ -1,4 +1,4 @@
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
 import { useLocalState } from "../store/local-state";
 import type { GizmoMode } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
@@ -6,9 +6,11 @@ import {
   IconSave, IconFolderOpen, IconUndo, IconRedo,
   IconPlay, IconPause, IconStop,
   IconTranslate, IconRotate, IconScale, IconCursor,
+  IconBuild,
 } from "../components/Icons";
 import { Tooltip } from "../components/Tooltip";
 import { useSceneStore } from "../store";
+import { BuildDialog } from "../components/BuildDialog";
 
 interface ToolbarProps {
   onResetLayout?: () => void;
@@ -25,6 +27,23 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
   const { t } = useI18n();
   const [sceneMenuOpen, setSceneMenuOpen] = useLocalState(false);
   const [scenes, setScenes] = useLocalState<string[]>([]);
+  const [buildOpen, setBuildOpen] = useState(false);
+  const [runningBuild, setRunningBuild] = useState(false);
+
+  const handleQuickRun = useCallback(async () => {
+    if (runningBuild) return;
+    setRunningBuild(true);
+    try {
+      const res = await window.guavaEngine.buildPackage({ optimize: "Debug" }) as { ok: boolean; path?: string; error?: string };
+      if (res.ok && res.path) {
+        await window.guavaEngine.runBuiltGame(res.path);
+      }
+    } catch {
+      // build errors handled silently for quick-run
+    } finally {
+      setRunningBuild(false);
+    }
+  }, [runningBuild]);
 
   const setPlaybackState = useSceneStore((s) => s.setPlaybackState);
   const handlePlay = () => {
@@ -46,7 +65,7 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
 
   const handleSave = useCallback(() => {
     window.guavaEngine.call("scene.save", {})
-      .then((res: { path: string; revision: number }) => markSaved(res.revision))
+      .then((res: { path: string; revision?: number }) => markSaved(res.revision))
       .catch((e) => console.error("Save failed:", e));
   }, [markSaved]);
 
@@ -150,6 +169,17 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
       </div>
       <div style={{ flex: 1 }} />
       <div style={styles.section}>
+        <ToolButton
+          icon={<IconBuild size={14} />}
+          tooltip="Build Standalone Game"
+          onClick={() => setBuildOpen(true)}
+        />
+        <ToolButton
+          icon={<IconPlay size={14} color={runningBuild ? "#6c7086" : "#a6e3a1"} />}
+          tooltip={runningBuild ? "Building..." : "Quick Run (Build & Launch)"}
+          onClick={handleQuickRun}
+        />
+        <div style={styles.divider} />
         {onResetLayout && (
           <ToolButton
             icon={<span style={{ fontSize: 12 }}>⊞</span>}
@@ -166,6 +196,7 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
         )}
         <span style={styles.brand}>{t.toolbar.brand}</span>
       </div>
+      <BuildDialog open={buildOpen} onClose={() => setBuildOpen(false)} />
     </div>
   );
 }
