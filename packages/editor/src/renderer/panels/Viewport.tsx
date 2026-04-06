@@ -685,6 +685,23 @@ export function Viewport() {
       onContextMenu={handleContextMenu}
       onKeyDown={handleKeyDown}
       onKeyUp={handleKeyUp}
+      onDragOver={(e) => {
+        if (e.dataTransfer.types.includes("application/x-guava-asset-path")) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "link";
+        }
+      }}
+      onDrop={async (e) => {
+        const assetPath = e.dataTransfer.getData("application/x-guava-asset-path");
+        const assetType = e.dataTransfer.getData("application/x-guava-asset-type");
+        if (!assetPath || assetType !== "model") return;
+        e.preventDefault();
+        try {
+          await window.guavaEngine.call("assets.importModel", { path: assetPath });
+        } catch (err) {
+          console.error("Failed to import model:", err);
+        }
+      }}
     >
       <canvas ref={canvasRef} style={styles.canvas} />
       {boxSelect?.active && (() => {
