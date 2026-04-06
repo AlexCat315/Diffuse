@@ -4381,7 +4381,10 @@ pub const Renderer = struct {
             try renderer_debug.appendCameraIconLines(self.allocator, scene, &camera_lines);
             if (camera_lines.items.len > 0) {
                 const cam_stats = try self.gizmo_pass.drawOverlayLines(
-                    &self.rhi, frame, pass, prepared_scene.view_projection,
+                    &self.rhi,
+                    frame,
+                    pass,
+                    prepared_scene.view_projection,
                     camera_lines.items,
                     .{ 0.30, 0.70, 1.00, 1.00 },
                 );
@@ -4398,7 +4401,10 @@ pub const Renderer = struct {
             try renderer_debug.appendLightIconLines(self.allocator, scene, &dir_lines, &point_lines, &spot_lines);
             if (dir_lines.items.len > 0) {
                 const dir_stats = try self.gizmo_pass.drawOverlayLines(
-                    &self.rhi, frame, pass, prepared_scene.view_projection,
+                    &self.rhi,
+                    frame,
+                    pass,
+                    prepared_scene.view_projection,
                     dir_lines.items,
                     .{ 1.00, 0.80, 0.30, 1.00 }, // orange — directional
                 );
@@ -4406,7 +4412,10 @@ pub const Renderer = struct {
             }
             if (point_lines.items.len > 0) {
                 const pt_stats = try self.gizmo_pass.drawOverlayLines(
-                    &self.rhi, frame, pass, prepared_scene.view_projection,
+                    &self.rhi,
+                    frame,
+                    pass,
+                    prepared_scene.view_projection,
                     point_lines.items,
                     .{ 1.00, 1.00, 0.50, 1.00 }, // yellow — point
                 );
@@ -4414,7 +4423,10 @@ pub const Renderer = struct {
             }
             if (spot_lines.items.len > 0) {
                 const sp_stats = try self.gizmo_pass.drawOverlayLines(
-                    &self.rhi, frame, pass, prepared_scene.view_projection,
+                    &self.rhi,
+                    frame,
+                    pass,
+                    prepared_scene.view_projection,
                     spot_lines.items,
                     .{ 0.50, 1.00, 0.30, 1.00 }, // green — spot
                 );
