@@ -32,6 +32,7 @@
 //! });
 //! ```
 
+const std = @import("std");
 const handles = @import("../assets/handles.zig");
 const world_mod = @import("../scene/world.zig");
 
@@ -542,4 +543,73 @@ pub const NavAgent = struct {
     _crowd_idx: ?u32 = null,
     /// 是否已注册到 crowd（不序列化）
     _registered: bool = false,
+};
+
+/// 胶囊碰撞器组件
+///
+/// 定义胶囊形碰撞区域（常用于角色）。
+/// 胶囊由圆柱体加两端半球构成，总高度 = 2 * radius + 2 * half_height。
+pub const CapsuleCollider = struct {
+    /// 球体半径
+    radius: f32 = 0.4,
+    /// 圆柱体半高（不含端部球体）
+    half_height: f32 = 0.5,
+    /// 中心偏移（相对于实体原点）
+    center: Vec3 = .{ 0.0, 0.0, 0.0 },
+    /// 是否为触发器
+    is_trigger: bool = false,
+    /// 碰撞层 ID
+    layer_id: u16 = 0,
+    /// 碰撞层组掩码
+    layer_group: u16 = 0xFFFF,
+};
+
+/// 角色控制器组件
+///
+/// 基于 Jolt CharacterVirtual，为角色提供步进式碰撞响应、
+/// 上坡检测和下楼梯支撑。需要配合 CapsuleCollider 使用。
+pub const CharacterController = struct {
+    /// 可攀爬的最大坡度（弧度，默认约 50°）
+    max_slope_angle: f32 = 0.872,
+    /// 最大推力（牛顿）
+    max_strength: f32 = 100.0,
+    /// 与地面的间距（防止 z-fighting）
+    padding: f32 = 0.02,
+    /// 质量（千克）
+    mass: f32 = 70.0,
+    /// 期望速度（每帧由逻辑层设置）
+    move_velocity: Vec3 = .{ 0.0, 0.0, 0.0 },
+    /// 上方向（通常为 Y+）
+    up_direction: Vec3 = .{ 0.0, 1.0, 0.0 },
+    /// 是否站在地面上（只读，由物理系统更新）
+    is_grounded: bool = false,
+};
+
+/// 标签组件
+///
+/// 为实体附加一个字符串标签，用于游戏逻辑中的分类与查询。
+pub const Tag = struct {
+    const max_len = 63;
+    _buf: [max_len + 1]u8 = [_]u8{0} ** (max_len + 1),
+
+    /// 从切片构建 Tag（超出部分截断）
+    pub fn fromSlice(s: []const u8) Tag {
+        var t = Tag{};
+        const n = @min(s.len, max_len);
+        @memcpy(t._buf[0..n], s[0..n]);
+        t._buf[n] = 0;
+        return t;
+    }
+
+    /// 返回标签字符串切片（不含 null 终止符）
+    pub fn asSlice(self: *const Tag) []const u8 {
+        var len: usize = 0;
+        while (len < max_len and self._buf[len] != 0) : (len += 1) {}
+        return self._buf[0..len];
+    }
+
+    /// 与切片比较是否相等
+    pub fn eql(self: *const Tag, other: []const u8) bool {
+        return std.mem.eql(u8, self.asSlice(), other);
+    }
 };

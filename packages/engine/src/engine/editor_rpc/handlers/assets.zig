@@ -9,6 +9,13 @@ const Ctx = ctx_mod.Ctx;
 pub fn list(ctx: *Ctx) !void {
     const rel_path = (try ctx.paramOpt([]const u8, "path")) orelse blk: {
         // Prefer project "Content" directory; fall back to "assets"
+        if (ctx.project_root) |root| {
+            var d = std.fs.openDirAbsolute(root, .{}) catch break :blk "Content";
+            defer d.close();
+            var content = d.openDir("Content", .{}) catch break :blk "assets";
+            content.close();
+            break :blk "Content";
+        }
         var d = std.fs.cwd().openDir("Content", .{}) catch {
             break :blk "assets";
         };
@@ -23,13 +30,24 @@ pub fn list(ctx: *Ctx) !void {
     var entries = std.ArrayList(Entry).empty;
     defer entries.deinit(ctx.allocator);
 
-    const dir = std.fs.cwd().openDir(rel_path, .{ .iterate = true }) catch {
+    // Open the target directory relative to project root (or CWD as fallback).
+    // We need to track whether we opened a base Dir so we can close it.
+    var owned_base: ?std.fs.Dir = if (ctx.project_root) |root|
+        (std.fs.openDirAbsolute(root, .{}) catch null)
+    else
+        null;
+    defer if (owned_base) |*d| d.close();
+
+    const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+
+    var dir = base_dir.openDir(rel_path, .{ .iterate = true }) catch {
         try ctx.reply(.{
             .path = rel_path,
             .entries = @as([]const Entry, &.{}),
         });
         return;
     };
+    defer dir.close();
 
     var iter = dir.iterate();
     while (try iter.next()) |entry| {
@@ -104,17 +122,29 @@ pub fn listProjectRoot(ctx: *Ctx) !void {
     var entries = std.ArrayList(Entry).empty;
     defer entries.deinit(ctx.allocator);
 
-    var dir = std.fs.cwd().openDir(".", .{ .iterate = true }) catch {
-        try ctx.reply(.{ .path = ".", .entries = @as([]const Entry, &.{}) });
-        return;
-    };
-    var iter = dir.iterate();
+    // Use project root if available, otherwise CWD
+    var base_dir = if (ctx.project_root) |root|
+        std.fs.openDirAbsolute(root, .{ .iterate = true }) catch {
+            try ctx.reply(.{ .path = ".", .entries = @as([]const Entry, &.{}) });
+            return;
+        }
+    else
+        std.fs.cwd().openDir(".", .{ .iterate = true }) catch {
+            try ctx.reply(.{ .path = ".", .entries = @as([]const Entry, &.{}) });
+            return;
+        };
+    defer base_dir.close();
+
+    var iter = base_dir.iterate();
     while (try iter.next()) |entry| {
         // Skip hidden files, build artifacts, caches
         if (entry.name.len > 0 and entry.name[0] == '.') continue;
         if (std.mem.eql(u8, entry.name, "zig-out")) continue;
         if (std.mem.eql(u8, entry.name, "zig-cache")) continue;
+        if (std.mem.eql(u8, entry.name, ".zig-cache")) continue;
         if (std.mem.eql(u8, entry.name, "node_modules")) continue;
+        if (std.mem.eql(u8, entry.name, "Build")) continue;
+        if (std.mem.eql(u8, entry.name, "Derived")) continue;
 
         const name = try ctx.allocator.dupe(u8, entry.name);
         const is_dir = entry.kind == .directory;

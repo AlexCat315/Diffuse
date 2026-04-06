@@ -20,6 +20,7 @@ pub const Ctx = struct {
     layer: *core.LayerContext,
     settings: *settings_mod.EditorSettings,
     mesh_ops: ?*const MeshOps = null,
+    project_root: ?[]const u8 = null,
     _result: ?[]u8 = null,
 
     // ── Parameter readers ───────────────────────────────────────
@@ -169,6 +170,9 @@ pub const component_fields = [_]ComponentField{
     .{ .name = "box_collider", .display_name = "BoxCollider" },
     .{ .name = "sphere_collider", .display_name = "SphereCollider" },
     .{ .name = "mesh_collider", .display_name = "MeshCollider" },
+    .{ .name = "capsule_collider", .display_name = "CapsuleCollider" },
+    .{ .name = "character_controller", .display_name = "CharacterController" },
+    .{ .name = "tag", .display_name = "Tag" },
     .{ .name = "constraint", .display_name = "Constraint" },
     .{ .name = "material", .display_name = "Material" },
     .{ .name = "light", .display_name = "Light" },

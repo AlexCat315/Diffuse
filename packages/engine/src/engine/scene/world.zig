@@ -168,6 +168,12 @@ pub const Entity = struct {
     sphere_collider: ?components.SphereCollider = null,
     /// 网格碰撞器组件
     mesh_collider: ?components.MeshCollider = null,
+    /// 胶囊碰撞器组件
+    capsule_collider: ?components.CapsuleCollider = null,
+    /// 角色控制器组件
+    character_controller: ?components.CharacterController = null,
+    /// 标签组件
+    tag: ?components.Tag = null,
     /// 约束组件
     constraint: ?components.Constraint = null,
     /// 材质组件
@@ -304,6 +310,12 @@ pub const EntityDesc = struct {
     sphere_collider: ?components.SphereCollider = null,
     /// 网格碰撞器组件
     mesh_collider: ?components.MeshCollider = null,
+    /// 胶囊碰撞器组件
+    capsule_collider: ?components.CapsuleCollider = null,
+    /// 角色控制器组件
+    character_controller: ?components.CharacterController = null,
+    /// 标签组件
+    tag: ?components.Tag = null,
     /// 约束组件
     constraint: ?components.Constraint = null,
     /// 材质组件
@@ -445,6 +457,8 @@ pub const World = struct {
     box_collider_set: sparse_set_mod.SparseSet(components.BoxCollider),
     /// SphereCollider 组件稀疏集（热路径组件，O(1) 访问）
     sphere_collider_set: sparse_set_mod.SparseSet(components.SphereCollider),
+    /// CapsuleCollider 组件稀疏集（热路径组件，O(1) 访问）
+    capsule_collider_set: sparse_set_mod.SparseSet(components.CapsuleCollider),
 
     /// 初始化世界
     ///
@@ -472,6 +486,7 @@ pub const World = struct {
             .rigidbody_set = sparse_set_mod.SparseSet(components.Rigidbody).initNoFail(allocator, 256),
             .box_collider_set = sparse_set_mod.SparseSet(components.BoxCollider).initNoFail(allocator, 256),
             .sphere_collider_set = sparse_set_mod.SparseSet(components.SphereCollider).initNoFail(allocator, 256),
+            .capsule_collider_set = sparse_set_mod.SparseSet(components.CapsuleCollider).initNoFail(allocator, 256),
         };
     }
 
@@ -521,6 +536,7 @@ pub const World = struct {
         self.rigidbody_set.deinit(self.allocator);
         self.box_collider_set.deinit(self.allocator);
         self.sphere_collider_set.deinit(self.allocator);
+        self.capsule_collider_set.deinit(self.allocator);
         if (reinitialize) {
             self.entities = .empty;
             self.id_to_index = std.AutoHashMap(EntityId, usize).init(self.allocator);
@@ -544,6 +560,7 @@ pub const World = struct {
             self.rigidbody_set = sparse_set_mod.SparseSet(components.Rigidbody).initNoFail(self.allocator, 256);
             self.box_collider_set = sparse_set_mod.SparseSet(components.BoxCollider).initNoFail(self.allocator, 256);
             self.sphere_collider_set = sparse_set_mod.SparseSet(components.SphereCollider).initNoFail(self.allocator, 256);
+            self.capsule_collider_set = sparse_set_mod.SparseSet(components.CapsuleCollider).initNoFail(self.allocator, 256);
         }
     }
 
@@ -608,6 +625,9 @@ pub const World = struct {
             .box_collider = desc.box_collider,
             .sphere_collider = desc.sphere_collider,
             .mesh_collider = desc.mesh_collider,
+            .capsule_collider = desc.capsule_collider,
+            .character_controller = desc.character_controller,
+            .tag = desc.tag,
             .constraint = desc.constraint,
             .material = desc.material,
             .light = desc.light,
@@ -649,6 +669,11 @@ pub const World = struct {
         if (desc.sphere_collider) |sc| {
             self.sphere_collider_set.insert(id, sc) catch |err| {
                 std.log.err("failed to insert sphere collider for entity {d}: {s}", .{ id, @errorName(err) });
+            };
+        }
+        if (desc.capsule_collider) |cc| {
+            self.capsule_collider_set.insert(id, cc) catch |err| {
+                std.log.err("failed to insert capsule collider for entity {d}: {s}", .{ id, @errorName(err) });
             };
         }
 
