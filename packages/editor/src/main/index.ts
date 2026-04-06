@@ -1,5 +1,6 @@
 import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
 import path from "path";
+import fs from "fs/promises";
 import { EngineProcess } from "./engine-process";
 import { EngineClient } from "./engine-client";
 import {
@@ -712,6 +713,84 @@ ipcMain.handle("build:run", async (_event, appPath: string) => {
   } catch (err) {
     return { ok: false, error: String(err) };
   }
+});
+
+// ── File System Operations (scoped to project) ──────────────────
+
+/** Resolve a relative path within the current project directory. Rejects paths that escape the project root. */
+function resolveProjectPath(relativePath: string): string {
+  if (!currentProjectPath) throw new Error("No project open");
+  const resolved = path.resolve(currentProjectPath, relativePath);
+  if (!resolved.startsWith(currentProjectPath + path.sep) && resolved !== currentProjectPath) {
+    throw new Error("Path escapes project directory");
+  }
+  return resolved;
+}
+
+ipcMain.handle("fs:mkdir", async (_event, relativePath: string) => {
+  try {
+    const abs = resolveProjectPath(relativePath);
+    await fs.mkdir(abs, { recursive: true });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
+ipcMain.handle("fs:rename", async (_event, oldRelPath: string, newRelPath: string) => {
+  try {
+    const oldAbs = resolveProjectPath(oldRelPath);
+    const newAbs = resolveProjectPath(newRelPath);
+    await fs.rename(oldAbs, newAbs);
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
+ipcMain.handle("fs:delete", async (_event, relativePath: string) => {
+  try {
+    const abs = resolveProjectPath(relativePath);
+    await fs.rm(abs, { recursive: true });
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
+ipcMain.handle("fs:createFile", async (_event, relativePath: string, content: string) => {
+  try {
+    const abs = resolveProjectPath(relativePath);
+    await fs.mkdir(path.dirname(abs), { recursive: true });
+    await fs.writeFile(abs, content, "utf-8");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
+ipcMain.handle("fs:importFiles", async (_event, targetRelDir: string) => {
+  if (!mainWindow) return { ok: false, error: "No window", files: [] };
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openFile", "multiSelections"],
+    title: "Import Assets",
+  });
+  if (result.canceled || result.filePaths.length === 0) {
+    return { ok: true, files: [], canceled: true };
+  }
+  const targetDir = resolveProjectPath(targetRelDir);
+  await fs.mkdir(targetDir, { recursive: true });
+  const imported: string[] = [];
+  for (const src of result.filePaths) {
+    const dest = path.join(targetDir, path.basename(src));
+    try {
+      await fs.copyFile(src, dest);
+      imported.push(path.join(targetRelDir, path.basename(src)));
+    } catch (err) {
+      console.error(`Failed to import ${src}:`, err);
+    }
+  }
+  return { ok: true, files: imported };
 });
 
 // ── App Lifecycle ────────────────────────────────────────────────

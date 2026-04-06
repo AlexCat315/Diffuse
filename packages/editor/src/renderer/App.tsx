@@ -85,7 +85,7 @@ const ALL_PANELS: { id: string; name: string }[] = [
 ];
 
 // ── Layout storage key ──────────────────────────────────
-const LAYOUT_STORAGE_KEY = "guava-editor-layout-v3";
+const LAYOUT_STORAGE_KEY = "guava-editor-layout";
 const BOTTOM_TABSET_ID = "bottom-tabset";
 const DEFAULT_MIN_HEIGHT = 100;
 
@@ -187,10 +187,46 @@ const defaultLayout: IJsonModel = {
   },
 };
 
+/** Collect all panel component IDs present in a layout JSON tree. */
+function collectComponents(node: unknown): Set<string> {
+  const ids = new Set<string>();
+  const obj = node as Record<string, unknown>;
+  if (typeof obj.component === "string") ids.add(obj.component);
+  if (Array.isArray(obj.children)) {
+    for (const child of obj.children) collectComponents(child).forEach((id) => ids.add(id));
+  }
+  return ids;
+}
+
 function loadSavedLayout(): IJsonModel {
   try {
     const saved = localStorage.getItem(LAYOUT_STORAGE_KEY);
-    if (saved) return JSON.parse(saved);
+    if (saved) {
+      const layout = JSON.parse(saved) as IJsonModel;
+      // Auto-inject panels defined in ALL_PANELS but missing from the saved layout
+      const existing = collectComponents(layout.layout);
+      const missing = ALL_PANELS.filter((p) => !existing.has(p.id));
+      if (missing.length > 0) {
+        // Find the bottom tabset to append to
+        const findTabset = (node: Record<string, unknown>): Record<string, unknown> | null => {
+          if (node.id === BOTTOM_TABSET_ID && node.type === "tabset") return node;
+          if (Array.isArray(node.children)) {
+            for (const child of node.children) {
+              const found = findTabset(child as Record<string, unknown>);
+              if (found) return found;
+            }
+          }
+          return null;
+        };
+        const bottomTabset = findTabset(layout.layout as unknown as Record<string, unknown>);
+        if (bottomTabset && Array.isArray(bottomTabset.children)) {
+          for (const p of missing) {
+            bottomTabset.children.push({ type: "tab", name: p.name, component: p.id });
+          }
+        }
+      }
+      return layout;
+    }
   } catch {
     // Corrupted — fall back to default.
   }
