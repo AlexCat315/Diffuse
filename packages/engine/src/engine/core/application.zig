@@ -898,6 +898,26 @@ pub const Application = struct {
         };
 
         const handle = try self.world.resources.createScript(desc);
+
+        // Bind asset record so the script can be looked up by path in the editor
+        const asset_registry = @import("../assets/registry.zig");
+        const record: asset_registry.AssetRecord = .{
+            .id = try self.allocator.dupe(u8, path),
+            .type = .script,
+            .source_path = try self.allocator.dupe(u8, path),
+            .source_hash = try asset_registry.hashStringAlloc(self.allocator, path),
+            .import_settings_hash = try asset_registry.defaultImportSettingsHashAlloc(self.allocator, .script),
+            .import_version = @as(asset_registry.AssetType, .script).importVersion(),
+            .dependency_ids = try self.allocator.alloc([]u8, 0),
+            .outputs = try self.allocator.alloc(asset_registry.AssetOutput, 0),
+            .metadata = .{
+                .display_name = try self.allocator.dupe(u8, std.fs.path.basename(path)),
+                .importer = try self.allocator.dupe(u8, @as(asset_registry.AssetType, .script).importerName()),
+                .source_extension = try self.allocator.dupe(u8, std.fs.path.extension(path)),
+            },
+        };
+        _ = try self.world.resources.bindScriptAssetRecord(handle, record);
+
         if (self.script_runtime.hot_reload) |*hr| {
             try hr.registerScript(path, handle);
         }

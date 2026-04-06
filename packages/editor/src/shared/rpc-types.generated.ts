@@ -241,6 +241,7 @@ export interface RpcMethods {
   "entity.setComponentField": { params: { entityId: number; componentType: string; fieldName: string; value: unknown }; result: Record<string, never> };
   "entity.addComponent": { params: { entityId: number; componentType: string }; result: Record<string, never> };
   "entity.removeComponent": { params: { entityId: number; componentType: string }; result: Record<string, never> };
+  "entity.setAssetField": { params: { entityId: number; componentType: string; fieldName: string; assetPath?: string }; result: Record<string, never> };
   "playback.play": { params: Record<string, never>; result: Record<string, never> };
   "playback.pause": { params: Record<string, never>; result: Record<string, never> };
   "playback.stop": { params: Record<string, never>; result: Record<string, never> };
