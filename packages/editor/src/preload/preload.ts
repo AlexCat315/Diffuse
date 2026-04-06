@@ -8,6 +8,32 @@ contextBridge.exposeInMainWorld("guavaEngine", {
   /** The OS platform (e.g. "darwin", "win32", "linux") */
   platform: process.platform,
 
+  // ── Launcher ────────────────────────────────────────────────────
+
+  /** Get the current app mode (launcher or editor) */
+  getAppMode: (): Promise<"launcher" | "editor"> =>
+    ipcRenderer.invoke("launcher:getAppMode"),
+
+  /** Get list of recently opened projects */
+  getRecentProjects: (): Promise<{ path: string; name: string; lastOpened: string }[]> =>
+    ipcRenderer.invoke("launcher:getRecentProjects"),
+
+  /** Remove a project from the recent list */
+  removeRecentProject: (projectPath: string): Promise<void> =>
+    ipcRenderer.invoke("launcher:removeRecentProject", projectPath),
+
+  /** Open a native folder selection dialog */
+  browseFolder: (): Promise<string | null> =>
+    ipcRenderer.invoke("launcher:browseFolder"),
+
+  /** Open a project by path (starts engine + connects) */
+  openProject: (projectPath: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("launcher:openProject", projectPath),
+
+  /** Create a new project and open it */
+  createProject: (projectPath: string, projectName: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("launcher:createProject", projectPath, projectName),
+
   /** Call an engine RPC method */
   call: (method: string, params: unknown): Promise<unknown> =>
     ipcRenderer.invoke("engine:call", method, params),
@@ -160,6 +186,14 @@ contextBridge.exposeInMainWorld("guavaEngine", {
 /** Type declaration for the exposed API (used in renderer) */
 export interface GuavaEngineAPI {
   platform: string;
+  // Launcher
+  getAppMode(): Promise<"launcher" | "editor">;
+  getRecentProjects(): Promise<{ path: string; name: string; lastOpened: string }[]>;
+  removeRecentProject(projectPath: string): Promise<void>;
+  browseFolder(): Promise<string | null>;
+  openProject(projectPath: string): Promise<{ ok: boolean; error?: string }>;
+  createProject(projectPath: string, projectName: string): Promise<{ ok: boolean; error?: string }>;
+  // Engine RPC
   call<M extends import("../shared/rpc-types").RpcMethodName>(
     method: M,
     params: import("../shared/rpc-types").RpcParams<M>,

@@ -240,6 +240,15 @@ export function App() {
   useEffect(() => {
     const cleanupBridge = initRpcBridge();
 
+    // If arriving from the launcher, the engine may already be connected
+    // before initRpcBridge's onConnected listener was set up. Check now.
+    window.guavaEngine.getStatus().then((status) => {
+      if (status.rpcConnected) {
+        useConnectionStore.getState().setConnected(true);
+        useSceneStore.getState().refreshHierarchy();
+      }
+    });
+
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
