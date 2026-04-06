@@ -203,6 +203,28 @@ contextBridge.exposeInMainWorld("guavaEngine", {
     ipcRenderer.on("build:progress", handler);
     return () => ipcRenderer.removeListener("build:progress", handler);
   },
+
+  // ── File System (project-scoped) ────────────────────────────────
+
+  /** Create a directory (relative to project root) */
+  fsMkdir: (relativePath: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("fs:mkdir", relativePath),
+
+  /** Rename/move a file or directory (relative to project root) */
+  fsRename: (oldPath: string, newPath: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("fs:rename", oldPath, newPath),
+
+  /** Delete a file or directory (relative to project root) */
+  fsDelete: (relativePath: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("fs:delete", relativePath),
+
+  /** Create a file with content (relative to project root) */
+  fsCreateFile: (relativePath: string, content: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("fs:createFile", relativePath, content),
+
+  /** Open native file dialog and copy selected files into target directory */
+  fsImportFiles: (targetRelDir: string): Promise<{ ok: boolean; files: string[]; canceled?: boolean; error?: string }> =>
+    ipcRenderer.invoke("fs:importFiles", targetRelDir),
 });
 
 /** Type declaration for the exposed API (used in renderer) */
@@ -243,4 +265,10 @@ export interface GuavaEngineAPI {
   buildPackage(opts?: { outputDir?: string; optimize?: string; choosePath?: boolean }): Promise<{ ok: boolean; path?: string; error?: string }>;
   runBuiltGame(appPath: string): Promise<{ ok: boolean; error?: string }>;
   onBuildProgress(callback: (progress: { stage: string; percent: number; detail?: string }) => void): () => void;
+  // File system
+  fsMkdir(relativePath: string): Promise<{ ok: boolean; error?: string }>;
+  fsRename(oldPath: string, newPath: string): Promise<{ ok: boolean; error?: string }>;
+  fsDelete(relativePath: string): Promise<{ ok: boolean; error?: string }>;
+  fsCreateFile(relativePath: string, content: string): Promise<{ ok: boolean; error?: string }>;
+  fsImportFiles(targetRelDir: string): Promise<{ ok: boolean; files: string[]; canceled?: boolean; error?: string }>;
 }

@@ -169,6 +169,18 @@ export function AssetManager() {
         <span style={styles.assetCount}>
           {filteredAssets.length}{allAssets.length !== filteredAssets.length && ` / ${allAssets.length}`}
         </span>
+        <button
+          style={styles.iconBtn}
+          onClick={async () => {
+            const res = await window.guavaEngine.fsImportFiles("Content");
+            if (res.ok && (res.files?.length ?? 0) > 0) {
+              scanAll();
+            }
+          }}
+          title="Import files"
+        >
+          +
+        </button>
         <button style={styles.iconBtn} onClick={scanAll} title="Refresh">
           <IconRefresh size={14} />
         </button>
