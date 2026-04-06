@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useMemo } from "react";
+import React, { useEffect, useCallback, useMemo, useState } from "react";
 import { useLocalState } from "../store/local-state";
 import { useSyncedState } from "../store/synced-state";
 import {
@@ -162,7 +162,32 @@ export function AssetManager() {
   }
 
   return (
-    <div style={styles.container}>
+    <div
+      style={styles.container}
+      onDragOver={(e) => {
+        // Accept OS file drops
+        if (e.dataTransfer.types.includes("Files")) {
+          e.preventDefault();
+          e.dataTransfer.dropEffect = "copy";
+        }
+      }}
+      onDrop={async (e) => {
+        if (!e.dataTransfer.types.includes("Files")) return;
+        e.preventDefault();
+        const paths: string[] = [];
+        for (const f of Array.from(e.dataTransfer.files)) {
+          if ((f as unknown as { path?: string }).path) {
+            paths.push((f as unknown as { path: string }).path);
+          }
+        }
+        if (paths.length > 0) {
+          const res = await window.guavaEngine.fsImportPaths("Content", paths);
+          if (res.ok && (res.files?.length ?? 0) > 0) {
+            scanAll();
+          }
+        }
+      }}
+    >
       {/* Header */}
       <div style={styles.headerBar}>
         <span style={styles.title}>Asset Manager</span>

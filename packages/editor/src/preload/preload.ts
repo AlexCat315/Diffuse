@@ -225,6 +225,10 @@ contextBridge.exposeInMainWorld("guavaEngine", {
   /** Open native file dialog and copy selected files into target directory */
   fsImportFiles: (targetRelDir: string): Promise<{ ok: boolean; files: string[]; canceled?: boolean; error?: string }> =>
     ipcRenderer.invoke("fs:importFiles", targetRelDir),
+
+  /** Import files/directories from given absolute OS paths (drag-drop) */
+  fsImportPaths: (targetRelDir: string, sourcePaths: string[]): Promise<{ ok: boolean; files: string[]; error?: string }> =>
+    ipcRenderer.invoke("fs:importPaths", targetRelDir, sourcePaths),
 });
 
 /** Type declaration for the exposed API (used in renderer) */
@@ -271,4 +275,5 @@ export interface GuavaEngineAPI {
   fsDelete(relativePath: string): Promise<{ ok: boolean; error?: string }>;
   fsCreateFile(relativePath: string, content: string): Promise<{ ok: boolean; error?: string }>;
   fsImportFiles(targetRelDir: string): Promise<{ ok: boolean; files: string[]; canceled?: boolean; error?: string }>;
+  fsImportPaths(targetRelDir: string, sourcePaths: string[]): Promise<{ ok: boolean; files: string[]; error?: string }>;
 }

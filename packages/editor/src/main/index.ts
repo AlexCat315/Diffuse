@@ -772,7 +772,7 @@ ipcMain.handle("fs:createFile", async (_event, relativePath: string, content: st
 ipcMain.handle("fs:importFiles", async (_event, targetRelDir: string) => {
   if (!mainWindow) return { ok: false, error: "No window", files: [] };
   const result = await dialog.showOpenDialog(mainWindow, {
-    properties: ["openFile", "multiSelections"],
+    properties: ["openFile", "openDirectory", "multiSelections"],
     title: "Import Assets",
   });
   if (result.canceled || result.filePaths.length === 0) {
@@ -784,7 +784,37 @@ ipcMain.handle("fs:importFiles", async (_event, targetRelDir: string) => {
   for (const src of result.filePaths) {
     const dest = path.join(targetDir, path.basename(src));
     try {
-      await fs.copyFile(src, dest);
+      const stat = await fs.stat(src);
+      if (stat.isDirectory()) {
+        await fs.cp(src, dest, { recursive: true });
+      } else {
+        await fs.copyFile(src, dest);
+      }
+      imported.push(path.join(targetRelDir, path.basename(src)));
+    } catch (err) {
+      console.error(`Failed to import ${src}:`, err);
+    }
+  }
+  return { ok: true, files: imported };
+});
+
+// Import files given their absolute OS paths (for drag-drop from Finder/Explorer)
+ipcMain.handle("fs:importPaths", async (_event, targetRelDir: string, sourcePaths: string[]) => {
+  if (!Array.isArray(sourcePaths) || sourcePaths.length === 0) {
+    return { ok: true, files: [] };
+  }
+  const targetDir = resolveProjectPath(targetRelDir);
+  await fs.mkdir(targetDir, { recursive: true });
+  const imported: string[] = [];
+  for (const src of sourcePaths) {
+    const dest = path.join(targetDir, path.basename(src));
+    try {
+      const stat = await fs.stat(src);
+      if (stat.isDirectory()) {
+        await fs.cp(src, dest, { recursive: true });
+      } else {
+        await fs.copyFile(src, dest);
+      }
       imported.push(path.join(targetRelDir, path.basename(src)));
     } catch (err) {
       console.error(`Failed to import ${src}:`, err);
