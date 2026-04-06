@@ -146,13 +146,19 @@ export function SkyPanel() {
   const commitAsset = useCallback(
     (assetPath: string | undefined) => {
       if (!sky) return;
-      window.guavaEngine.call("entity.setAssetField", {
-        entityId: sky.entityId,
-        componentType: "Sky",
-        fieldName: "environment_asset_id",
-        assetPath: assetPath || undefined,
-      });
-      setTimeout(refreshSky, 200);
+      window.guavaEngine
+        .call("entity.setAssetField", {
+          entityId: sky.entityId,
+          componentType: "Sky",
+          fieldName: "environment_asset_id",
+          assetPath: assetPath || undefined,
+        })
+        .then(() => setTimeout(refreshSky, 200))
+        .catch((err: unknown) => {
+          console.error("setAssetField failed:", err);
+          // Still refresh to show current state
+          setTimeout(refreshSky, 200);
+        });
     },
     [sky, refreshSky],
   );
