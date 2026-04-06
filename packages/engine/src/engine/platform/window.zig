@@ -199,7 +199,10 @@ pub const Window = struct {
             _ = sdl.SDL_MaximizeWindow(window.handle);
             try window.refreshSizes();
         }
-        if (builtin.os.tag == .macos) {
+        // Bring window to front — skipped in background-app mode because
+        // calling [NSApp activate] on an NSApplicationActivationPolicyAccessory
+        // app can cause macOS to briefly flash a Dock icon.
+        if (builtin.os.tag == .macos and !config.background_app) {
             guava_window_activate_macos_app();
         }
 

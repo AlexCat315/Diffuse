@@ -167,6 +167,24 @@ pub const EditorLayer = struct {
     fn onUpdate(context: *anyopaque, layer_context: *engine.core.LayerContext) !void {
         const self: *EditorLayer = @ptrCast(@alignCast(context));
 
+        // Recover editor infrastructure after world.clear() (e.g. playback
+        // stop, scene reload).  The snapshot/deserialize path wipes
+        // editor-only entities (camera, gizmo) because they are excluded
+        // from serialization.
+        if (self.state.editor_camera) |ec_id| {
+            if (layer_context.world.getEntityConst(ec_id) == null) {
+                self.state.editor_camera = null;
+            }
+        }
+        if (self.state.editor_camera == null) {
+            camera.createEditorCamera(&self.state, layer_context) catch |err| {
+                std.log.err("Editor: failed to recover editor camera: {s}", .{@errorName(err)});
+            };
+            manipulation.refreshGizmoState(&self.state, layer_context);
+            // world.clear() also destroys the ResourceLibrary — re-discover scripts.
+            history.rediscoverProjectScripts(layer_context.world);
+        }
+
         // In editor-server mode, sync viewport state from the renderer since
         // there is no imgui viewport panel to set these fields.
         if (self.state.editor_server_mode) {

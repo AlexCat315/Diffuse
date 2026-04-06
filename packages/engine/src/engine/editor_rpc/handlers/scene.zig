@@ -59,11 +59,14 @@ pub fn save(ctx: *Ctx) !void {
     const explicit = try ctx.paramOpt([]const u8, "path");
     const path = explicit orelse
         if (ctx.layer.scene_manager) |sm| sm.current_scene_path orelse fallback_scene_path else fallback_scene_path;
+    // Capture revision *before* saving so the frontend knows exactly which
+    // version was persisted (avoids race if scene changes during I/O).
+    const saved_revision = ctx.layer.world.sceneRevision();
     scene_io.saveWorldToPath(ctx.allocator, ctx.layer.world, path) catch |e| {
         std.log.err("scene.save failed: {}", .{e});
         return error.InternalError;
     };
-    try ctx.reply(.{ .path = path });
+    try ctx.reply(.{ .path = path, .revision = saved_revision });
 }
 
 pub fn load(ctx: *Ctx) !void {

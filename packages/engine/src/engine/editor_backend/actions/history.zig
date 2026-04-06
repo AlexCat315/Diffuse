@@ -1492,7 +1492,7 @@ fn selectionContainsAncestor(
 /// ResourceLibrary.  This is needed because world.clear() (called during
 /// scene loading) destroys the entire ResourceLibrary, including script
 /// handles that were registered by Application.discoverScripts() at startup.
-fn rediscoverProjectScripts(world: *engine.scene.World) void {
+pub fn rediscoverProjectScripts(world: *engine.scene.World) void {
     const allocator = world.allocator;
     const scripts_dir = "assets/scripts";
     var dir = std.fs.cwd().openDir(scripts_dir, .{ .iterate = true }) catch return;
