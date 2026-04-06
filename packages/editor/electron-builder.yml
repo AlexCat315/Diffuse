@@ -5,6 +5,13 @@ copyright: Copyright © 2024 Guava Engine
 directories:
   output: dist-package
 
+# ASAR packaging with integrity verification (Electron 30+)
+# Prevents casual extraction with `asar extract` and detects tampering
+asar: true
+asarUnpack:
+  # Native .node addons cannot be executed from inside ASAR
+  - "**/*.node"
+
 # Files that go into the asar (renderer + main process JS)
 files:
   - dist/**

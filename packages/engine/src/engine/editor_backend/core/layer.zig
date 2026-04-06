@@ -100,19 +100,21 @@ pub const EditorLayer = struct {
             // transform tools & VFX state in loadScenePath for no reason).
             if (std.fs.cwd().access(start_scene, .{})) |_| {
                 std.log.info("Editor: auto-loading start scene: {s}", .{start_scene});
-                history.loadScenePath(&self.state, layer_context, start_scene) catch |err| {
-                    std.log.warn("Editor: failed to auto-load start scene '{s}': {s}", .{ start_scene, @errorName(err) });
-                    // loadScenePath may have called world.clear() before the error
-                    // occurred (e.g. MeshAssetNotFound during deserialization).
-                    // Re-bootstrap so the editor doesn't start with an empty world.
+                const entity_count_before = layer_context.world.entities.items.len;
+                history.loadScenePath(&self.state, layer_context, start_scene) catch {};
+                // loadScenePath swallows deserialization errors with a bare
+                // return (not error return).  If the world was cleared but
+                // deserialization failed, the entity list will be empty.
+                if (layer_context.world.entities.items.len == 0 and entity_count_before > 0) {
+                    std.log.warn("Editor: scene load left world empty — restoring default scene", .{});
                     layer_context.world.bootstrap3D() catch |boot_err| {
-                        std.log.err("Editor: failed to re-bootstrap after scene load failure: {s}", .{@errorName(boot_err)});
+                        std.log.err("Editor: failed to re-bootstrap: {s}", .{@errorName(boot_err)});
                     };
                     try camera.createEditorCamera(&self.state, layer_context);
                     manipulation.refreshGizmoState(&self.state, layer_context);
                     utils.syncInspectorNameBuffer(&self.state, layer_context);
                     try history.resetSnapshotHistory(&self.state, layer_context);
-                };
+                }
             } else |_| {
                 std.log.info("Editor: start scene not found, skipping auto-load: {s}", .{start_scene});
             }

@@ -387,6 +387,10 @@ pub const assets = struct {
     pub const AssetMetadata = @import("engine/assets/registry.zig").AssetMetadata;
     /// 创建派生资源 ID
     pub const makeDerivedAssetIdAlloc = @import("engine/assets/registry.zig").makeDerivedAssetIdAlloc;
+    /// 计算字符串 SHA256 哈希
+    pub const hashStringAlloc = @import("engine/assets/registry.zig").hashStringAlloc;
+    /// 获取默认导入设置哈希
+    pub const defaultImportSettingsHashAlloc = @import("engine/assets/registry.zig").defaultImportSettingsHashAlloc;
     /// 资源库，运行时资源管理
     pub const ResourceLibrary = @import("engine/assets/library.zig").ResourceLibrary;
     /// 资源验证问题

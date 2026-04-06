@@ -148,19 +148,34 @@ pub fn setAssetField(ctx: *Ctx) !void {
     // assetPath may be a string, null, or absent (all treated as "clear the field")
     const raw_val = p.object.get("assetPath") orelse std.json.Value.null;
 
-    const entity = ctx.layer.world.getEntity(eid) orelse return error.EntityNotFound;
+    const entity = ctx.layer.world.getEntity(eid) orelse {
+        std.log.warn("setAssetField: entity {d} not found", .{eid});
+        return error.EntityNotFound;
+    };
     const resources = &ctx.layer.world.resources;
 
     var found = false;
+    var comp_type_matched = false;
     inline for (ctx_mod.component_fields) |cf| {
         if (std.ascii.eqlIgnoreCase(comp_type, cf.display_name)) {
+            comp_type_matched = true;
             if (@field(entity, cf.name)) |*comp| {
-                found = setHandleField(@TypeOf(comp.*), comp, field_name, raw_val, resources) catch false;
+                found = setHandleField(@TypeOf(comp.*), comp, field_name, raw_val, resources) catch |e| blk: {
+                    std.log.warn("setAssetField: setHandleField error for '{s}'.'{s}' on entity {d}: {s}", .{ cf.display_name, field_name, eid, @errorName(e) });
+                    break :blk false;
+                };
+            } else {
+                std.log.warn("setAssetField: entity {d} matched component type '{s}' but field '{s}' is null (component not present)", .{ eid, cf.display_name, cf.name });
             }
         }
     }
 
-    if (!found) return error.InvalidArguments;
+    if (!found) {
+        if (!comp_type_matched) {
+            std.log.warn("setAssetField: unknown component type '{s}' on entity {d}", .{ comp_type, eid });
+        }
+        return error.InvalidArguments;
+    }
     ctx.layer.world.markSceneChanged();
     try ctx.reply(.{});
 }
@@ -386,11 +401,17 @@ fn setHandleField(comptime T: type, ptr: *T, name: []const u8, val: std.json.Val
                     },
                     .string => |s| {
                         const child = @typeInfo(FT).optional.child;
-                        const h = lookupHandle(child, resources, s) orelse return error.InvalidArguments;
+                        const h = lookupHandle(child, resources, s) orelse {
+                            std.log.warn("setHandleField: lookupHandle failed for field '{s}' with value '{s}' (len={d})", .{ field.name, s, s.len });
+                            return error.InvalidArguments;
+                        };
                         @field(ptr, field.name) = h;
                         return true;
                     },
-                    else => return error.InvalidArguments,
+                    else => {
+                        std.log.warn("setHandleField: unexpected json type for field '{s}': {s}", .{ field.name, @tagName(val) });
+                        return error.InvalidArguments;
+                    },
                 }
             }
         }
