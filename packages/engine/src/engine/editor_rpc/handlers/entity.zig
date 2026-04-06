@@ -64,7 +64,7 @@ pub fn getComponents(ctx: *Ctx) !void {
             try appendSlice(&buf, ctx.allocator, "{\"type\":\"");
             try appendSlice(&buf, ctx.allocator, cf.display_name);
             try appendSlice(&buf, ctx.allocator, "\",\"fields\":[");
-            try serializeFields(&buf, ctx.allocator, @TypeOf(comp.*), comp, &ctx.layer.world.resources);
+            try serializeFields(&buf, ctx.allocator, @TypeOf(comp.*), comp, &ctx.layer.world.resources, ctx.project_root);
             try appendSlice(&buf, ctx.allocator, "]}");
         }
     }
@@ -164,14 +164,24 @@ pub fn setAssetField(ctx: *Ctx) !void {
         if (entity.sky) |*sky| {
             switch (raw_val) {
                 .string => |asset_path| {
-                    // Resolve source path to asset registry record
-                    if (resources.asset_registry.recordByPath(asset_path)) |record| {
+                    // Build absolute path from project root so ensureProjectAsset
+                    // can find the file regardless of the engine's CWD.
+                    const abs_path = if (ctx.project_root) |root|
+                        std.fmt.allocPrint(ctx.allocator, "{s}/{s}", .{ root, asset_path }) catch null
+                    else
+                        null;
+                    defer if (abs_path) |ap| ctx.allocator.free(ap);
+                    const resolve_path = abs_path orelse asset_path;
+
+                    // Use ensureProjectAsset which creates/loads the .meta file
+                    // and registers the asset, returning the record with its ID.
+                    if (resources.asset_registry.ensureProjectAsset(resolve_path)) |record| {
                         @memset(&sky._asset_id_buf, 0);
                         const n = @min(record.id.len, components.Sky.max_id_len);
                         @memcpy(sky._asset_id_buf[0..n], record.id[0..n]);
                         found = true;
-                    } else {
-                        std.log.warn("setAssetField: Sky environment asset not found for path '{s}'", .{asset_path});
+                    } else |err| {
+                        std.log.warn("setAssetField: Sky environment asset not found for path '{s}': {s}", .{ resolve_path, @errorName(err) });
                     }
                 },
                 .null => {
@@ -216,7 +226,7 @@ pub fn setAssetField(ctx: *Ctx) !void {
 //  Component field serialization — comptime inspects struct fields
 // ═══════════════════════════════════════════════════════════════════
 
-fn serializeFields(buf: *std.ArrayList(u8), alloc: std.mem.Allocator, comptime T: type, ptr: *const T, resources: *const library_mod.ResourceLibrary) !void {
+fn serializeFields(buf: *std.ArrayList(u8), alloc: std.mem.Allocator, comptime T: type, ptr: *const T, resources: *const library_mod.ResourceLibrary, project_root: ?[]const u8) !void {
     const fields = @typeInfo(T).@"struct".fields;
     var first = true;
 
@@ -230,10 +240,20 @@ fn serializeFields(buf: *std.ArrayList(u8), alloc: std.mem.Allocator, comptime T
             try appendSlice(buf, alloc, "\"");
             try appendSlice(buf, alloc, asset_id_slice);
             try appendSlice(buf, alloc, "\"");
-            // Also add source_path for display
+            // Also add source_path for display — strip project_root prefix
+            // so the path matches the relative format from assets.list
             if (resources.asset_registry.recordById(asset_id_slice)) |record| {
+                var display_path = record.source_path;
+                if (project_root) |root| {
+                    if (std.mem.startsWith(u8, display_path, root)) {
+                        display_path = display_path[root.len..];
+                        if (display_path.len > 0 and display_path[0] == '/') {
+                            display_path = display_path[1..];
+                        }
+                    }
+                }
                 try appendSlice(buf, alloc, ",\"sourcePath\":\"");
-                try appendSlice(buf, alloc, record.source_path);
+                try appendSlice(buf, alloc, display_path);
                 try appendSlice(buf, alloc, "\"");
             }
         } else {

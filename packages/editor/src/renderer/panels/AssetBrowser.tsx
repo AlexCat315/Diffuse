@@ -247,6 +247,31 @@ export function AssetBrowser() {
             node: { name: "Project", path: ".", isDirectory: true, loaded: true },
           });
         }}
+        onDragOver={(e) => {
+          if (e.dataTransfer.types.includes("Files")) {
+            e.preventDefault();
+            e.dataTransfer.dropEffect = "copy";
+          }
+        }}
+        onDrop={async (e) => {
+          if (!e.dataTransfer.types.includes("Files")) return;
+          e.preventDefault();
+          const paths: string[] = [];
+          for (const f of Array.from(e.dataTransfer.files)) {
+            if ((f as unknown as { path?: string }).path) {
+              paths.push((f as unknown as { path: string }).path);
+            }
+          }
+          if (paths.length > 0) {
+            const targetDir = selected
+              ? (roots.some((r) => r.path === selected && r.isDirectory) ? selected : "Content")
+              : "Content";
+            const res = await window.guavaEngine.fsImportPaths(targetDir, paths);
+            if (res.ok && (res.files?.length ?? 0) > 0) {
+              await refreshDir(targetDir);
+            }
+          }
+        }}
       >
         {roots.length === 0 ? (
           <div style={styles.empty}>{connected ? t.assets.emptyDirectory : "Not connected"}</div>
