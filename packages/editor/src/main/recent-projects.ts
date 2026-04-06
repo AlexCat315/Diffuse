@@ -73,6 +73,7 @@ export function removeRecentProject(projectPath: string): void {
 }
 
 /**
+/**
  * Read the .guava marker file to get the project name.
  * Returns the folder name as fallback.
  */
@@ -88,6 +89,24 @@ export function readProjectName(projectPath: string): string {
     // No .guava file or invalid — use folder name
   }
   return path.basename(projectPath) || "Unnamed Project";
+}
+
+/**
+ * Read the start_scene path from the .guava marker file.
+ * Returns undefined if not found.
+ */
+export function readStartScene(projectPath: string): string | undefined {
+  try {
+    const markerPath = path.join(projectPath, ".guava");
+    const raw = fs.readFileSync(markerPath, "utf-8");
+    const data = JSON.parse(raw);
+    if (typeof data.start_scene === "string" && data.start_scene.trim().length > 0) {
+      return data.start_scene;
+    }
+  } catch {
+    // ignore
+  }
+  return undefined;
 }
 
 /**

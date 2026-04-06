@@ -92,6 +92,35 @@ pub const EditorLayer = struct {
         if (persisted_style.len > 0) {
             _ = layer_context.renderer.styleRegistry().setActiveStyle(persisted_style);
         }
+
+        // Auto-load the project's start scene so the editor doesn't start empty.
+        const start_scene = self.state.projectStartScene();
+        if (start_scene.len > 0) {
+            // Only attempt load if the file actually exists (avoids clearing
+            // transform tools & VFX state in loadScenePath for no reason).
+            if (std.fs.cwd().access(start_scene, .{})) |_| {
+                std.log.info("Editor: auto-loading start scene: {s}", .{start_scene});
+                history.loadScenePath(&self.state, layer_context, start_scene) catch |err| {
+                    std.log.warn("Editor: failed to auto-load start scene '{s}': {s}", .{ start_scene, @errorName(err) });
+                    // loadScenePath may have called world.clear() before the error
+                    // occurred (e.g. MeshAssetNotFound during deserialization).
+                    // Re-bootstrap so the editor doesn't start with an empty world.
+                    layer_context.world.bootstrap3D() catch |boot_err| {
+                        std.log.err("Editor: failed to re-bootstrap after scene load failure: {s}", .{@errorName(boot_err)});
+                    };
+                    try camera.createEditorCamera(&self.state, layer_context);
+                    manipulation.refreshGizmoState(&self.state, layer_context);
+                    utils.syncInspectorNameBuffer(&self.state, layer_context);
+                    try history.resetSnapshotHistory(&self.state, layer_context);
+                };
+            } else |_| {
+                std.log.info("Editor: start scene not found, skipping auto-load: {s}", .{start_scene});
+            }
+            // Track the configured path so scene.save writes to the correct file.
+            if (layer_context.scene_manager) |sm| {
+                sm.setCurrentScenePath(start_scene) catch {};
+            }
+        }
     }
 
     fn onDetach(context: *anyopaque) void {

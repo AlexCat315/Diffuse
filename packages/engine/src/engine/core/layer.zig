@@ -37,11 +37,35 @@ pub const PlaybackController = struct {
     state: PlaybackState = .stopped,
     pending_steps: usize = 0,
     fixed_delta_seconds: ?f32 = null,
+    /// Scene snapshot taken when entering play mode, used to rollback on stop.
+    snapshot: ?[]u8 = null,
+    snapshot_allocator: ?std.mem.Allocator = null,
 
     pub fn setState(self: *PlaybackController, next: PlaybackState) void {
         self.state = next;
         self.pending_steps = 0;
         self.fixed_delta_seconds = null;
+    }
+
+    pub fn storeSnapshot(self: *PlaybackController, allocator: std.mem.Allocator, data: []u8) void {
+        self.clearSnapshot();
+        self.snapshot = data;
+        self.snapshot_allocator = allocator;
+    }
+
+    pub fn takeSnapshot(self: *PlaybackController) ?[]u8 {
+        const data = self.snapshot;
+        self.snapshot = null;
+        self.snapshot_allocator = null;
+        return data;
+    }
+
+    pub fn clearSnapshot(self: *PlaybackController) void {
+        if (self.snapshot) |s| {
+            if (self.snapshot_allocator) |a| a.free(s);
+        }
+        self.snapshot = null;
+        self.snapshot_allocator = null;
     }
 
     pub fn requestStep(self: *PlaybackController) void {

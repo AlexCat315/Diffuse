@@ -7,6 +7,7 @@ import {
   addRecentProject,
   removeRecentProject,
   readProjectName,
+  readStartScene,
   isGuavaProject,
   createNewProject,
 } from "./recent-projects";
