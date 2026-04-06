@@ -619,7 +619,7 @@ pub const Tag = struct {
 /// 为场景指定 HDR 环境贴图，控制天空盒渲染和 IBL 光照。
 /// 场景中最多一个有效 Sky 实体（取第一个）。
 pub const Sky = struct {
-    const max_id_len = 255;
+    pub const max_id_len = 255;
     _asset_id_buf: [max_id_len + 1]u8 = [_]u8{0} ** (max_id_len + 1),
 
     /// 环境光强度倍率（影响天空盒亮度和 IBL 强度）

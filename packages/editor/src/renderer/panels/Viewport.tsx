@@ -133,18 +133,10 @@ export function Viewport() {
           const dx = x - mouseDownPos.current.x;
           const dy = y - mouseDownPos.current.y;
           if (dx * dx + dy * dy < 16) {
-            // Double-click on a mesh entity enters edit mode (Blender-style)
-            if (e.detail >= 2) {
-              const meshState = useMeshEditStore.getState();
-              if (!meshState.active && meshState.canEnterEditMode) {
-                meshState.enterEditMode();
-              }
-            } else {
-              // In mesh edit mode, element picking is handled engine-side via raycasting
-              if (!useMeshEditStore.getState().active) {
-                const mode = (e.shiftKey || e.ctrlKey || e.metaKey) ? "toggle" : "replace";
-                window.guavaEngine.call("viewport.pick", { x: Math.round(x), y: Math.round(y), mode } as never).catch(() => {});
-              }
+            // In mesh edit mode, element picking is handled engine-side via raycasting
+            if (!useMeshEditStore.getState().active) {
+              const mode = (e.shiftKey || e.ctrlKey || e.metaKey) ? "toggle" : "replace";
+              window.guavaEngine.call("viewport.pick", { x: Math.round(x), y: Math.round(y), mode } as never).catch(() => {});
             }
           }
         }
@@ -255,18 +247,6 @@ export function Viewport() {
         },
       );
 
-      // Enter edit mode option (when a mesh entity is selected)
-      if (meshState.canEnterEditMode) {
-        items.push(
-          { label: "---" },
-          {
-            label: t.meshEdit.enterEditMode,
-            shortcut: "DblClick",
-            onClick: () => meshState.enterEditMode(),
-          },
-        );
-      }
-
       items.push({ label: "---" });
     }
 
@@ -317,6 +297,9 @@ export function Viewport() {
     return null;
   };
 
+  // Track which keys were consumed by gizmo shortcuts (prevent forwarding keyup to engine)
+  const consumedGizmoKeys = useRef(new Set<string>());
+
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
     // Escape exits mesh edit mode
     if (e.key === "Escape" && useMeshEditStore.getState().active) {
@@ -342,10 +325,10 @@ export function Viewport() {
         const { changeGizmoMode } = useSceneStore.getState();
         // Load gizmo shortcuts dynamically (allows user customization)
         const gizmoKeys = loadGizmoShortcuts();
-        if (k === (gizmoKeys.select?.key ?? "q").toLowerCase()) { changeGizmoMode("none"); return; }
-        if (k === (gizmoKeys.translate?.key ?? "w").toLowerCase()) { changeGizmoMode("translate"); return; }
-        if (k === (gizmoKeys.rotate?.key ?? "e").toLowerCase()) { changeGizmoMode("rotate"); return; }
-        if (k === (gizmoKeys.scale?.key ?? "r").toLowerCase()) { changeGizmoMode("scale"); return; }
+        if (k === (gizmoKeys.select?.key ?? "q").toLowerCase()) { e.preventDefault(); consumedGizmoKeys.current.add(k); changeGizmoMode("none"); return; }
+        if (k === (gizmoKeys.translate?.key ?? "w").toLowerCase()) { e.preventDefault(); consumedGizmoKeys.current.add(k); changeGizmoMode("translate"); return; }
+        if (k === (gizmoKeys.rotate?.key ?? "e").toLowerCase()) { e.preventDefault(); consumedGizmoKeys.current.add(k); changeGizmoMode("rotate"); return; }
+        if (k === (gizmoKeys.scale?.key ?? "r").toLowerCase()) { e.preventDefault(); consumedGizmoKeys.current.add(k); changeGizmoMode("scale"); return; }
         if (k === "delete" || k === "backspace") {
           e.preventDefault();
           const { selectedEntity: sel, setSelectedEntity, refreshHierarchy } = useSceneStore.getState();
@@ -371,6 +354,12 @@ export function Viewport() {
   const handleKeyUp = useCallback((e: React.KeyboardEvent) => {
     const key = mapKeyFn(e);
     if (!key) return;
+    // Don't forward keyup to engine for keys consumed by gizmo shortcuts
+    const k = e.key.toLowerCase();
+    if (consumedGizmoKeys.current.has(k)) {
+      consumedGizmoKeys.current.delete(k);
+      return;
+    }
     if (key === "b") {
       bKeyHeld.current = false;
       // Cancel pending box select if B released before mouseup
