@@ -1,7 +1,15 @@
-import { app, BrowserWindow, ipcMain, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
 import path from "path";
 import { EngineProcess } from "./engine-process";
 import { EngineClient } from "./engine-client";
+import {
+  loadRecentProjects,
+  addRecentProject,
+  removeRecentProject,
+  readProjectName,
+  isGuavaProject,
+  createNewProject,
+} from "./recent-projects";
 
 // Guard against EPIPE on stdout/stderr — happens when the parent process
 // (e.g. Vite dev server terminal) closes its end of the pipe while we're
@@ -26,6 +34,7 @@ let engineClient: EngineClient | null = null;
 let isQuitting = false;
 let restartCount = 0;
 const MAX_RESTARTS = 3;
+let launcherMode = false;
 
 // ── Native viewport addon (platform-specific) ───────────────────
 
@@ -83,11 +92,12 @@ function getProjectPath(): string | undefined {
 }
 
 async function createMainWindow(): Promise<BrowserWindow> {
+  const isLauncher = launcherMode;
   const win = new BrowserWindow({
-    width: 1600,
-    height: 1000,
-    minWidth: 800,
-    minHeight: 600,
+    width: isLauncher ? 900 : 1200,
+    height: isLauncher ? 560 : 800,
+    minWidth: isLauncher ? 640 : 800,
+    minHeight: isLauncher ? 400 : 600,
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 12, y: 12 },
     backgroundColor: "#1e1e2e",
@@ -98,6 +108,11 @@ async function createMainWindow(): Promise<BrowserWindow> {
       sandbox: false,
     },
   });
+
+  // In editor mode, maximize the window by default
+  if (!isLauncher) {
+    win.maximize();
+  }
 
   // In development, load from Vite dev server; in production, load built files
   if (process.env.VITE_DEV_SERVER_URL) {
@@ -120,8 +135,11 @@ async function createMainWindow(): Promise<BrowserWindow> {
   return win;
 }
 
+/** Currently active project path (set by CLI arg or launcher selection). */
+let currentProjectPath: string | undefined;
+
 async function startEngine(): Promise<void> {
-  const projectPath = getProjectPath();
+  const projectPath = currentProjectPath ?? getProjectPath();
 
   engineProcess = new EngineProcess({
     engineBinary: getEngineBinaryPath(),
@@ -537,6 +555,79 @@ ipcMain.handle("settings:connectToServer", async (_event, url: string) => {
   }
 });
 
+// ── Launcher IPC ─────────────────────────────────────────────────
+
+ipcMain.handle("launcher:getAppMode", () => {
+  return launcherMode ? "launcher" : "editor";
+});
+
+ipcMain.handle("launcher:getRecentProjects", () => {
+  return loadRecentProjects();
+});
+
+ipcMain.handle("launcher:removeRecentProject", (_event, projectPath: string) => {
+  removeRecentProject(projectPath);
+});
+
+ipcMain.handle("launcher:browseFolder", async () => {
+  if (!mainWindow) return null;
+  const result = await dialog.showOpenDialog(mainWindow, {
+    properties: ["openDirectory", "createDirectory"],
+  });
+  if (result.canceled || result.filePaths.length === 0) return null;
+  return result.filePaths[0];
+});
+
+ipcMain.handle("launcher:openProject", async (_event, projectPath: string) => {
+  try {
+    const normalized = path.resolve(projectPath);
+    if (!isGuavaProject(normalized)) {
+      return { ok: false, error: `Not a Guava project: no .guava file found in ${normalized}` };
+    }
+
+    const projectName = readProjectName(normalized);
+    addRecentProject(normalized, projectName);
+    launcherMode = false;
+    currentProjectPath = normalized;
+
+    // Transition from launcher to editor: maximize the window
+    if (mainWindow) {
+      mainWindow.setMinimumSize(800, 600);
+      mainWindow.maximize();
+    }
+
+    await startEngine();
+    monitorEngineProcess();
+    broadcastToRenderers("engine:connected");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
+ipcMain.handle("launcher:createProject", async (_event, projectPath: string, projectName: string) => {
+  try {
+    const normalized = path.resolve(projectPath);
+    createNewProject(normalized, projectName);
+    addRecentProject(normalized, projectName);
+    launcherMode = false;
+    currentProjectPath = normalized;
+
+    // Transition from launcher to editor: maximize the window
+    if (mainWindow) {
+      mainWindow.setMinimumSize(800, 600);
+      mainWindow.maximize();
+    }
+
+    await startEngine();
+    monitorEngineProcess();
+    broadcastToRenderers("engine:connected");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
 // ── App Lifecycle ────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
@@ -560,6 +651,18 @@ app.whenReady().then(async () => {
     });
   });
 
+  // Determine whether to show the launcher or go straight to the editor.
+  const cliProjectPath = getProjectPath();
+  if (cliProjectPath) {
+    currentProjectPath = cliProjectPath;
+    launcherMode = false;
+    // Also record in recent projects
+    const name = readProjectName(cliProjectPath);
+    addRecentProject(cliProjectPath, name);
+  } else {
+    launcherMode = true;
+  }
+
   mainWindow = await createMainWindow();
 
   // When the renderer reloads (Vite HMR full-reload or manual refresh),
@@ -578,14 +681,19 @@ app.whenReady().then(async () => {
     }
   });
 
-  try {
-    await startEngine();
-    monitorEngineProcess();
-    mainWindow.webContents.send("engine:connected");
-  } catch (err) {
-    console.error("[Main] Failed to start engine:", err);
-    mainWindow.webContents.send("engine:error", String(err));
+  if (!launcherMode) {
+    // Direct-to-editor: start engine immediately (existing flow)
+    try {
+      await startEngine();
+      monitorEngineProcess();
+      mainWindow.webContents.send("engine:connected");
+    } catch (err) {
+      console.error("[Main] Failed to start engine:", err);
+      mainWindow.webContents.send("engine:error", String(err));
+    }
   }
+  // In launcher mode, the renderer will show the Launcher UI.
+  // Engine will be started when the user picks a project via launcher:openProject.
 
   mainWindow.on("close", () => {
     // Close all popout windows when main window closes

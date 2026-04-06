@@ -852,6 +852,31 @@ export const en = {
     selectionCount: "Selected",
     tabToToggle: "Tab to toggle edit mode",
   },
+
+  // ── Launcher ─────────────────────────────────────────
+  launcher: {
+    subtitle: "Create, open and manage your projects",
+    newProject: "New Project",
+    openProject: "Open Project",
+    recentProjects: "Recent Projects",
+    noRecentProjects: "No recent projects",
+    getStarted: "Create a new project or open an existing one to get started.",
+    createNewProject: "Create New Project",
+    projectName: "Project Name",
+    projectNamePlaceholder: "My Awesome Game",
+    projectLocation: "Location",
+    locationPlaceholder: "Select a folder...",
+    browse: "Browse",
+    willCreateAt: "Project will be created at",
+    create: "Create",
+    openFailed: "Failed to open project",
+    createFailed: "Failed to create project",
+    openingProject: "Opening project...",
+    removeFromRecent: "Remove from recent",
+    today: "Today",
+    yesterday: "Yesterday",
+    daysAgo: "{n} days ago",
+  },
 };
 
 type DeepStringRecord<T> = {
