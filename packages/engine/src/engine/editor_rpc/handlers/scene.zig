@@ -53,54 +53,94 @@ pub fn duplicateEntity(ctx: *Ctx) !void {
     try ctx.reply(.{ .entityId = new_id });
 }
 
-const fallback_scene_path = "assets/scenes/editor_autosave.guava_scene";
+const fallback_scene_rel = "assets/scenes/editor_autosave.guava_scene";
 
 pub fn save(ctx: *Ctx) !void {
     const explicit = try ctx.paramOpt([]const u8, "path");
     const path = explicit orelse
-        if (ctx.layer.scene_manager) |sm| sm.current_scene_path orelse fallback_scene_path else fallback_scene_path;
+        if (ctx.layer.scene_manager) |sm| sm.current_scene_path orelse null else null;
+
+    // If we have a path (either explicit or from scene_manager), use it directly.
+    // Otherwise, build fallback as absolute path under project root (or CWD).
+    var fallback_buf: [512]u8 = undefined;
+    const final_path = path orelse blk: {
+        if (ctx.project_root) |root| {
+            break :blk std.fmt.bufPrint(&fallback_buf, "{s}/{s}", .{ root, fallback_scene_rel }) catch fallback_scene_rel;
+        }
+        break :blk fallback_scene_rel;
+    };
+
     // Capture revision *before* saving so the frontend knows exactly which
     // version was persisted (avoids race if scene changes during I/O).
     const saved_revision = ctx.layer.world.sceneRevision();
-    scene_io.saveWorldToPath(ctx.allocator, ctx.layer.world, path) catch |e| {
+    scene_io.saveWorldToPath(ctx.allocator, ctx.layer.world, final_path) catch |e| {
         std.log.err("scene.save failed: {}", .{e});
         return error.InternalError;
     };
-    try ctx.reply(.{ .path = path, .revision = saved_revision });
+    try ctx.reply(.{ .path = final_path, .revision = saved_revision });
 }
 
 pub fn load(ctx: *Ctx) !void {
     const path = try ctx.param([]const u8, "path");
-    scene_io.loadWorldFromPath(ctx.allocator, ctx.layer.world, path) catch |e| {
+
+    // If path is relative and we have a project root, resolve to absolute.
+    var abs_buf: [512]u8 = undefined;
+    const resolved_path = if (!std.fs.path.isAbsolute(path)) blk: {
+        if (ctx.project_root) |root| {
+            break :blk std.fmt.bufPrint(&abs_buf, "{s}/{s}", .{ root, path }) catch path;
+        }
+        break :blk path;
+    } else path;
+
+    scene_io.loadWorldFromPath(ctx.allocator, ctx.layer.world, resolved_path) catch |e| {
         std.log.err("scene.load failed: {}", .{e});
         return error.InternalError;
     };
     // Track the loaded path so scene.save can write back to the same file.
     if (ctx.layer.scene_manager) |sm| {
-        sm.setCurrentScenePath(path) catch {};
+        sm.setCurrentScenePath(resolved_path) catch {};
     }
     ctx.layer.world.markSceneChanged();
-    try ctx.reply(.{ .path = path });
+    try ctx.reply(.{ .path = resolved_path });
 }
 
 pub fn listScenes(ctx: *Ctx) !void {
     var names = std.ArrayList([]const u8).empty;
     defer names.deinit(ctx.allocator);
 
-    const scenes_dir = std.fs.cwd().openDir("assets/scenes", .{ .iterate = true }) catch {
+    // Try project-relative scenes directories, then fall back to CWD.
+    const scene_dirs = [_][]const u8{ "Content/Scenes", "assets/scenes" };
+
+    var owned_base: ?std.fs.Dir = if (ctx.project_root) |root|
+        (std.fs.openDirAbsolute(root, .{}) catch null)
+    else
+        null;
+    defer if (owned_base) |*d| d.close();
+    const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+
+    var found = false;
+    for (scene_dirs) |scene_rel| {
+        var dir = base_dir.openDir(scene_rel, .{ .iterate = true }) catch continue;
+        defer dir.close();
+        found = true;
+
+        var iter = dir.iterate();
+        while (try iter.next()) |entry| {
+            if (entry.kind != .file) continue;
+            if (std.mem.endsWith(u8, entry.name, ".guava_scene") or
+                std.mem.endsWith(u8, entry.name, ".json"))
+            {
+                // Return full relative path so scene.load can resolve it.
+                const full_path = try std.fmt.allocPrint(ctx.allocator, "{s}/{s}", .{ scene_rel, entry.name });
+                try names.append(ctx.allocator, full_path);
+            }
+        }
+        break; // Use the first directory that exists.
+    }
+
+    if (!found) {
         try ctx.reply(.{ .scenes = @as([]const []const u8, &.{}) });
         return;
-    };
-
-    var iter = scenes_dir.iterate();
-    while (try iter.next()) |entry| {
-        if (entry.kind != .file) continue;
-        if (std.mem.endsWith(u8, entry.name, ".guava_scene") or
-            std.mem.endsWith(u8, entry.name, ".json"))
-        {
-            const owned = try ctx.allocator.dupe(u8, entry.name);
-            try names.append(ctx.allocator, owned);
-        }
     }
 
     try ctx.reply(.{ .scenes = names.items });

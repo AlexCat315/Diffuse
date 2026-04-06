@@ -352,6 +352,12 @@ const TagRecord = struct {
     name: []const u8 = "",
 };
 
+const SkyRecord = struct {
+    environment_asset_id: []const u8 = "",
+    intensity: f32 = 1.0,
+    enabled: bool = true,
+};
+
 const EntityRecord = struct {
     name: []const u8,
     parent: ?u32 = null,
@@ -371,6 +377,7 @@ const EntityRecord = struct {
     capsule_collider: ?CapsuleColliderRecord = null,
     character_controller: ?CharacterControllerRecord = null,
     tag: ?TagRecord = null,
+    sky: ?SkyRecord = null,
     material: ?MaterialComponentRecord = null,
     light: ?components.Light = null,
     vfx: ?components.Vfx = null,
@@ -959,6 +966,14 @@ fn buildSceneFileFiltered(
                 const s = t.asSlice();
                 break :blk if (s.len > 0) TagRecord{ .name = s } else null;
             } else null,
+            .sky = if (entity.sky) |*s| blk: {
+                const asset_id = s.assetIdSlice();
+                break :blk SkyRecord{
+                    .environment_asset_id = asset_id,
+                    .intensity = s.intensity,
+                    .enabled = s.enabled,
+                };
+            } else null,
             .material = material_component,
             .light = entity.light,
             .vfx = entity.vfx,
@@ -1435,6 +1450,12 @@ fn applySceneFileToWorld(
                 (if (t.name.len > 0) components.Tag.fromSlice(t.name) else null)
             else
                 null,
+            .sky = if (entity.sky) |s| blk: {
+                var sky = components.Sky.fromAssetId(s.environment_asset_id);
+                sky.intensity = s.intensity;
+                sky.enabled = s.enabled;
+                break :blk sky;
+            } else null,
             .material = if (entity.material) |material_component|
                 .{
                     .handle = if (material_component.asset_id) |material_asset_id|

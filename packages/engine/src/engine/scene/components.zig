@@ -613,3 +613,34 @@ pub const Tag = struct {
         return std.mem.eql(u8, self.asSlice(), other);
     }
 };
+
+/// 天空/环境组件
+///
+/// 为场景指定 HDR 环境贴图，控制天空盒渲染和 IBL 光照。
+/// 场景中最多一个有效 Sky 实体（取第一个）。
+pub const Sky = struct {
+    const max_id_len = 255;
+    _asset_id_buf: [max_id_len + 1]u8 = [_]u8{0} ** (max_id_len + 1),
+
+    /// 环境光强度倍率（影响天空盒亮度和 IBL 强度）
+    intensity: f32 = 1.0,
+
+    /// 是否启用天空盒渲染
+    enabled: bool = true,
+
+    /// 从 asset ID 切片构建（超出部分截断）
+    pub fn fromAssetId(s: []const u8) Sky {
+        var sky = Sky{};
+        const n = @min(s.len, max_id_len);
+        @memcpy(sky._asset_id_buf[0..n], s[0..n]);
+        sky._asset_id_buf[n] = 0;
+        return sky;
+    }
+
+    /// 返回 asset ID 切片（不含 null 终止符）
+    pub fn assetIdSlice(self: *const Sky) []const u8 {
+        var len: usize = 0;
+        while (len < max_id_len and self._asset_id_buf[len] != 0) : (len += 1) {}
+        return self._asset_id_buf[0..len];
+    }
+};

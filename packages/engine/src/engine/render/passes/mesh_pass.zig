@@ -211,6 +211,8 @@ pub const PreparedScene = struct {
     irradiance_map: ?*const rhi_mod.Texture = null,
     prefiltered_env_map: ?*const rhi_mod.Texture = null,
     brdf_lut: ?*const rhi_mod.Texture = null,
+    sky_intensity: f32 = 1.0,
+    sky_enabled: bool = true,
     ambient_color: [4]f32,
     // Clustered Forward+ — written by cluster_lights_pass, read by the base pass.
     cluster_count_texture: ?*const rhi_mod.Texture = null,

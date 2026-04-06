@@ -806,7 +806,7 @@ pub fn loadScenePath(state: *EditorState, layer_context: *engine.core.LayerConte
     // ResourceLibrary, wiping script handles registered by the initial
     // discoverScripts() call.  Re-discover project scripts so that
     // entity.setAssetField lookups work for script_handle fields.
-    rediscoverProjectScripts(layer_context.world);
+    rediscoverProjectScripts(layer_context.world, state);
 }
 
 fn reparentAllRootEntitiesToSceneRoot(world: *engine.scene.World, scene_root: engine.scene.EntityId) !void {
@@ -1492,10 +1492,20 @@ fn selectionContainsAncestor(
 /// ResourceLibrary.  This is needed because world.clear() (called during
 /// scene loading) destroys the entire ResourceLibrary, including script
 /// handles that were registered by Application.discoverScripts() at startup.
-pub fn rediscoverProjectScripts(world: *engine.scene.World) void {
+pub fn rediscoverProjectScripts(world: *engine.scene.World, state: *const EditorState) void {
     const allocator = world.allocator;
     const scripts_dir = "assets/scripts";
-    var dir = std.fs.cwd().openDir(scripts_dir, .{ .iterate = true }) catch return;
+
+    // Open scripts directory relative to project root (or CWD as fallback).
+    const project_path = state.projectPath();
+    var owned_base: ?std.fs.Dir = if (project_path.len > 0)
+        (std.fs.openDirAbsolute(project_path, .{}) catch null)
+    else
+        null;
+    defer if (owned_base) |*d| d.close();
+    const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+
+    var dir = base_dir.openDir(scripts_dir, .{ .iterate = true }) catch return;
     defer dir.close();
 
     var walker = dir.walk(allocator) catch return;
@@ -1514,7 +1524,7 @@ pub fn rediscoverProjectScripts(world: *engine.scene.World) void {
         // Skip if already registered (e.g. restored from scene file)
         if (world.resources.scriptHandleByAssetId(full_path) != null) continue;
 
-        const source = std.fs.cwd().readFileAlloc(allocator, full_path, 1024 * 1024) catch continue;
+        const source = base_dir.readFileAlloc(allocator, full_path, 1024 * 1024) catch continue;
         defer allocator.free(source);
 
         const language: engine.script.ScriptLanguage = if (is_cs) .csharp else .zig;
