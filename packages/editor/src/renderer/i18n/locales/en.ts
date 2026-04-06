@@ -66,7 +66,7 @@ export const en = {
 
   // ── Asset Browser ─────────────────────────────────────
   assets: {
-    title: "Assets",
+    title: "Content Browser",
     refreshTooltip: "Refresh",
     emptyDirectory: "Empty directory",
     parentDirectory: "..",
@@ -607,7 +607,7 @@ export const en = {
     material:        "Material",
     rendersettings:  "Render Settings",
     console:         "Console",
-    assets:          "Assets",
+    assets:          "Content Browser",
     timeline:        "Timeline",
     utilities:       "AI Utilities",
     camera:          "Camera",
@@ -627,6 +627,7 @@ export const en = {
     particleeditor:  "Particles",
     prefabeditor:    "Prefabs",
     sky:             "Sky",
+    assetmanager:    "Asset Manager",
   },
 
   // ── Shortcut action names ─────────────────────────────
