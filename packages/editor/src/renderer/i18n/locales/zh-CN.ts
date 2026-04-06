@@ -628,6 +628,7 @@ export const zhCN: TranslationKeys = {
     aichat:          "AI 聊天",
     particleeditor:  "粒子编辑器",
     prefabeditor:    "预制体",
+    sky:             "天空环境",
   },
 
   // ── Shortcut action names ─────────────────────────────

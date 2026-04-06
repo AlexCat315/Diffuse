@@ -626,6 +626,7 @@ export const en = {
     aichat:          "AI Chat",
     particleeditor:  "Particles",
     prefabeditor:    "Prefabs",
+    sky:             "Sky",
   },
 
   // ── Shortcut action names ─────────────────────────────
