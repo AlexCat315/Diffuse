@@ -24,6 +24,15 @@ layout(set = 2, binding = 11) uniform sampler2D u_brdf_lut;
 layout(set = 2, binding = 12) uniform sampler2D u_environment_map; // Fallback for debugging
 layout(set = 2, binding = 13) uniform sampler2D u_rt_shadow_mask;
 
+// Clustered Forward+ — per-cluster light data (written by cluster_lights compute pass)
+layout(set = 2, binding = 14) uniform usampler2D u_cluster_counts;        // R32UI, width=3456, height=1
+layout(set = 2, binding = 15) uniform usampler2D u_cluster_light_indices;  // R32UI, width=64, height=3456
+
+#define CLUSTER_X 16
+#define CLUSTER_Y  9
+#define CLUSTER_Z 24
+#define MAX_LIGHTS_PER_CLUSTER 64
+
 layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     vec4 u_base_color_factor;
     vec4 u_emissive_factor;
@@ -33,8 +42,8 @@ layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     vec4 u_dir_light_directions[4]; // xyz = direction
     vec4 u_dir_light_colors[4]; // rgb = color, w = intensity
     mat4 u_light_space_matrix;
-    vec4 u_point_light_positions[16]; // xyz = position, w = range
-    vec4 u_point_light_colors[16]; // rgb = color, w = intensity
+    vec4 u_point_light_positions[256]; // xyz = position, w = range  (Clustered F+: up to 256)
+    vec4 u_point_light_colors[256]; // rgb = color, w = intensity
     vec4 u_spot_light_positions[16]; // xyz = position, w = range
     vec4 u_spot_light_directions[16]; // xyz = direction, w = inner cone cos
     vec4 u_spot_light_colors[16]; // rgb = color, w = intensity
@@ -47,6 +56,8 @@ layout(set = 3, binding = 0, std140) uniform MaterialUniforms {
     mat4 u_cascade_matrices[4];
     vec4 u_cascade_splits; // view-space far distance per cascade
     mat4 u_view_matrix;
+    // Cluster params (required for cluster index reconstruction in fragment stage)
+    vec4 u_cluster_params; // x=near, y=far, z=viewport_w, w=viewport_h
 } material_uniforms;
 
 const float PI = 3.14159265359;
@@ -288,35 +299,58 @@ void main() {
         Lo += (kD * albedo / PI + specular) * radiance * NdotL * light_shadow;
     }
 
-    // Point Lights (up to 16)
-    int point_count = int(material_uniforms.u_light_counts.y);
-    for (int i = 0; i < point_count; ++i) {
-        vec3 L_vec = material_uniforms.u_point_light_positions[i].xyz - v_world_position;
-        float distance = length(L_vec);
-        if (distance <= 0.0001) {
-            continue;
+    // Point Lights — Clustered Forward+
+    // Reconstruct which cluster this fragment falls into, then sample only
+    // the lights assigned to that cluster by the cluster_lights compute pass.
+    {
+        vec4 view_pos_frag = material_uniforms.u_view_matrix * vec4(v_world_position, 1.0);
+        float abs_view_z = max(-view_pos_frag.z, material_uniforms.u_cluster_params.x);
+        float cluster_near = material_uniforms.u_cluster_params.x;
+        float cluster_far  = material_uniforms.u_cluster_params.y;
+        float viewport_w   = material_uniforms.u_cluster_params.z;
+        float viewport_h   = material_uniforms.u_cluster_params.w;
+
+        uint x_tile  = clamp(uint(gl_FragCoord.x / (viewport_w / float(CLUSTER_X))), 0u, uint(CLUSTER_X - 1));
+        uint y_tile  = clamp(uint(gl_FragCoord.y / (viewport_h / float(CLUSTER_Y))), 0u, uint(CLUSTER_Y - 1));
+        uint z_slice = clamp(uint(log(abs_view_z / cluster_near) /
+                                  log(cluster_far  / cluster_near) * float(CLUSTER_Z)),
+                             0u, uint(CLUSTER_Z - 1));
+
+        int cluster_id = int(x_tile + y_tile * uint(CLUSTER_X) +
+                             z_slice * uint(CLUSTER_X * CLUSTER_Y));
+
+        uint light_count = texelFetch(u_cluster_counts, ivec2(cluster_id, 0), 0).r;
+        light_count = min(light_count, uint(MAX_LIGHTS_PER_CLUSTER));
+
+        for (uint ci = 0u; ci < light_count; ++ci) {
+            int i = int(texelFetch(u_cluster_light_indices, ivec2(int(ci), cluster_id), 0).r);
+            vec3 L_vec = material_uniforms.u_point_light_positions[i].xyz - v_world_position;
+            float distance = length(L_vec);
+            if (distance <= 0.0001) continue;
+            vec3 L = normalize(L_vec);
+            vec3 H = normalize(V + L);
+
+            float attenuation = clamp(
+                1.0 - distance / max(material_uniforms.u_point_light_positions[i].w, 0.001),
+                0.0, 1.0);
+            attenuation *= attenuation;
+            vec3 radiance = material_uniforms.u_point_light_colors[i].rgb *
+                            material_uniforms.u_point_light_colors[i].w * attenuation;
+
+            float NDF = DistributionGGX(N, H, roughness);
+            float G   = GeometrySmith(N, V, L, roughness);
+            vec3  F   = fresnelSchlick(max(dot(H, V), 0.0), F0);
+
+            vec3 kS = F;
+            vec3 kD = (vec3(1.0) - kS) * (1.0 - metallic);
+
+            vec3 numerator   = NDF * G * F;
+            float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
+            vec3 specular = numerator / denominator;
+
+            float NdotL = max(dot(N, L), 0.0);
+            Lo += (kD * albedo / PI + specular) * radiance * NdotL;
         }
-        vec3 L = normalize(L_vec);
-        vec3 H = normalize(V + L);
-
-        float attenuation = clamp(1.0 - distance / max(material_uniforms.u_point_light_positions[i].w, 0.001), 0.0, 1.0);
-        attenuation *= attenuation;
-        vec3 radiance = material_uniforms.u_point_light_colors[i].rgb * material_uniforms.u_point_light_colors[i].w * attenuation;
-
-        float NDF = DistributionGGX(N, H, roughness);
-        float G = GeometrySmith(N, V, L, roughness);
-        vec3 F = fresnelSchlick(max(dot(H, V), 0.0), F0);
-
-        vec3 kS = F;
-        vec3 kD = vec3(1.0) - kS;
-        kD *= 1.0 - metallic;
-
-        vec3 numerator = NDF * G * F;
-        float denominator = 4.0 * max(dot(N, V), 0.0) * max(dot(N, L), 0.0) + 0.0001;
-        vec3 specular = numerator / denominator;
-
-        float NdotL = max(dot(N, L), 0.0);
-        Lo += (kD * albedo / PI + specular) * radiance * NdotL;
     }
 
     int spot_count = int(material_uniforms.u_light_counts.z);

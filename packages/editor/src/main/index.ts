@@ -12,6 +12,7 @@ import {
   createNewProject,
 } from "./recent-projects";
 import { PROJECT_TEMPLATES, applyTemplate } from "./project-templates";
+import { buildProject, type BuildProgress } from "./build-project";
 
 // Guard against EPIPE on stdout/stderr — happens when the parent process
 // (e.g. Vite dev server terminal) closes its end of the pipe while we're
@@ -644,6 +645,69 @@ ipcMain.handle("launcher:createProject", async (_event, projectPath: string, pro
     await startEngine();
     monitorEngineProcess();
     broadcastToRenderers("engine:connected");
+    return { ok: true };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
+// ── Build / Package ──────────────────────────────────────────────
+
+ipcMain.handle("build:package", async (_event, opts?: { outputDir?: string; optimize?: string; choosePath?: boolean }) => {
+  if (!currentProjectPath) return { ok: false, error: "No project open" };
+
+  const projectName = await readProjectName(currentProjectPath) ?? path.basename(currentProjectPath);
+
+  // Default output directory: {project}/Build/
+  let outputDir = opts?.outputDir ?? path.join(currentProjectPath, "Build");
+
+  // Only show dialog if user explicitly requests it
+  if (opts?.choosePath && mainWindow) {
+    const result = await dialog.showOpenDialog(mainWindow, {
+      title: "Choose build output folder",
+      defaultPath: outputDir,
+      buttonLabel: "Build Here",
+      properties: ["openDirectory", "createDirectory"],
+    });
+    if (result.canceled || result.filePaths.length === 0) {
+      return { ok: false, error: "Cancelled" };
+    }
+    outputDir = result.filePaths[0];
+  }
+  if (!outputDir) return { ok: false, error: "No output directory" };
+
+  try {
+    broadcastToRenderers("build:progress", { stage: "compile", percent: 0, detail: "Starting build..." });
+
+    const outPath = await buildProject(
+      {
+        projectPath: currentProjectPath,
+        outputDir,
+        gameName: projectName,
+        optimize: (opts?.optimize as "Debug" | "ReleaseSafe" | "ReleaseFast") ?? "ReleaseSafe",
+      },
+      (p: BuildProgress) => {
+        broadcastToRenderers("build:progress", p);
+      },
+    );
+
+    return { ok: true, path: outPath };
+  } catch (err) {
+    return { ok: false, error: String(err) };
+  }
+});
+
+ipcMain.handle("build:run", async (_event, appPath: string) => {
+  try {
+    const { spawn: spawnProc } = await import("child_process");
+    if (process.platform === "darwin" && appPath.endsWith(".app")) {
+      spawnProc("open", [appPath], { detached: true, stdio: "ignore" });
+    } else {
+      const exe = process.platform === "win32"
+        ? path.join(appPath, "guava-player.exe")
+        : path.join(appPath, "bin", "guava-player");
+      spawnProc(exe, [], { cwd: appPath, detached: true, stdio: "ignore" });
+    }
     return { ok: true };
   } catch (err) {
     return { ok: false, error: String(err) };

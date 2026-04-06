@@ -97,7 +97,7 @@ pub const VertexUniforms = extern struct {
 
 pub const csm_cascade_count = 4;
 pub const max_directional_lights = 4;
-pub const max_point_lights = 16;
+pub const max_point_lights = 256; // Clustered Forward+
 pub const max_spot_lights = 16;
 
 pub const BasePassUniforms = extern struct {
@@ -123,6 +123,8 @@ pub const BasePassUniforms = extern struct {
     cascade_matrices: [csm_cascade_count][16]f32,
     cascade_splits: [4]f32, // view-space far distance per cascade
     view_matrix: [16]f32,
+    // Clustered Forward+: x=near, y=far, z=viewport_w, w=viewport_h
+    cluster_params: [4]f32,
 };
 
 pub const DrawItem = struct {
@@ -210,6 +212,12 @@ pub const PreparedScene = struct {
     prefiltered_env_map: ?*const rhi_mod.Texture = null,
     brdf_lut: ?*const rhi_mod.Texture = null,
     ambient_color: [4]f32,
+    // Clustered Forward+ — written by cluster_lights_pass, read by the base pass.
+    cluster_count_texture: ?*const rhi_mod.Texture = null,
+    cluster_indices_texture: ?*const rhi_mod.Texture = null,
+    cluster_nearest_sampler: ?*const rhi_mod.Sampler = null,
+    /// Cluster params for the fragment UBO: x=near, y=far, z=viewport_w, w=viewport_h
+    cluster_params: [4]f32 = .{ 0.0, 0.0, 0.0, 0.0 },
     opaque_meshes: []DrawItem,
     transparent_meshes: []DrawItem,
     debug: DebugBlock,

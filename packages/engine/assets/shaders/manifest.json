@@ -147,6 +147,13 @@
       "threadcount_x": 8,
       "threadcount_y": 8,
       "threadcount_z": 1
+    },
+    {
+      "name": "cluster_lights",
+      "compute": "assets/shaders/cluster_lights.comp.glsl",
+      "threadcount_x": 64,
+      "threadcount_y": 1,
+      "threadcount_z": 1
     }
   ]
 }

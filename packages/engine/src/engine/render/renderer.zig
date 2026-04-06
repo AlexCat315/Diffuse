@@ -62,6 +62,7 @@ const ssgi_compute_pass_mod = @import("passes/ssgi_compute_pass.zig");
 const ssgi_composite_pass_mod = @import("passes/ssgi_composite_pass.zig");
 const ibl_compute_pass_mod = @import("passes/ibl_compute_pass.zig");
 const contact_shadow_pass_mod = @import("passes/contact_shadow_pass.zig");
+const cluster_lights_pass_mod = @import("passes/cluster_lights_pass.zig");
 const taa_pass_mod = @import("passes/taa_pass.zig");
 const rt_shadow_composite_pass_mod = @import("passes/rt_shadow_composite_pass.zig");
 const rt_shadow_denoise_pass_mod = @import("passes/rt_shadow_denoise_pass.zig");
@@ -345,6 +346,8 @@ pub const Renderer = struct {
     gizmo_pass: gizmo_pass_mod.GizmoPass,
     /// SSAO Compute 通道（GPU Compute 加速）
     ssao_compute_pass: ?ssao_compute_pass_mod.SSAOComputePass = null,
+    /// Clustered Forward+ 光源裁剪 Compute 通道
+    cluster_lights_pass: ?cluster_lights_pass_mod.ClusterLightsPass = null,
     /// Contact Shadows 屏幕空间接触阴影通道
     contact_shadow_pass: contact_shadow_pass_mod.ContactShadowPass,
     ssgi_compute_pass: ?ssgi_compute_pass_mod.SSGIComputePass = null,
@@ -637,6 +640,11 @@ pub const Renderer = struct {
             break :blk null;
         };
 
+        renderer.cluster_lights_pass = cluster_lights_pass_mod.ClusterLightsPass.init(&renderer.rhi) catch |err| blk: {
+            std.log.warn("Cluster lights pass init failed (clustered Forward+ disabled): {}", .{err});
+            break :blk null;
+        };
+
         renderer.contact_shadow_pass = try contact_shadow_pass_mod.ContactShadowPass.init(&renderer.rhi);
         errdefer renderer.contact_shadow_pass.deinit(&renderer.rhi);
 
@@ -770,6 +778,7 @@ pub const Renderer = struct {
             pass.deinit(&self.rhi);
         }
         if (self.ssao_compute_pass) |*p| p.deinit(&self.rhi);
+        if (self.cluster_lights_pass) |*p| p.deinit(&self.rhi);
         self.contact_shadow_pass.deinit(&self.rhi);
         if (self.gpu_brdf_lut) |*t| self.rhi.releaseTexture(t);
         if (self.ibl_compute_pass) |*p| p.deinit(&self.rhi);
@@ -1908,6 +1917,54 @@ pub const Renderer = struct {
                             });
                         } else {
                             scene_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.colorWithDepth(base_pass_target, scene_clear_color, scene_depth_target));
+                        }
+                    }
+
+                    // ── Clustered Forward+: light culling compute pass ──────────
+                    // Dispatch before base pass so cluster textures are ready for
+                    // the fragment shader. Also sets prepared_scene.cluster_* refs.
+                    if (self.cluster_lights_pass) |*cluster_pass| {
+                        if (cluster_pass.isReady()) {
+                            const mat4_cluster = @import("../math/mat4.zig");
+                            const inv_proj = mat4_cluster.inverse(prepared_scene.projection_matrix) orelse mat4_cluster.identity();
+
+                            const camera_near = switch (prepared_scene.camera.camera.projection) {
+                                .perspective => |p| p.near_clip,
+                                .orthographic => |o| o.near_clip,
+                            };
+                            const camera_far = switch (prepared_scene.camera.camera.projection) {
+                                .perspective => |p| p.far_clip,
+                                .orthographic => |o| o.far_clip,
+                            };
+                            const vp_w: f32 = @floatFromInt(self.scene_viewport.width);
+                            const vp_h: f32 = @floatFromInt(self.scene_viewport.height);
+
+                            // Build the per-frame UBO for the cluster compute shader.
+                            var cluster_uniforms = cluster_lights_pass_mod.ClusterLightsUniforms{
+                                .inv_projection = inv_proj,
+                                .view = prepared_scene.view_matrix,
+                                .near = camera_near,
+                                .far = camera_far,
+                                .viewport_w = vp_w,
+                                .viewport_h = vp_h,
+                                .point_count = @intCast(@min(prepared_scene.lights.point_lights.len, cluster_lights_pass_mod.max_point_lights)),
+                            };
+                            const pt_count = cluster_uniforms.point_count;
+                            for (0..pt_count) |i| {
+                                const pl = prepared_scene.lights.point_lights[i];
+                                cluster_uniforms.lights[i] = .{
+                                    .position_range = .{ pl.position[0], pl.position[1], pl.position[2], pl.range },
+                                    .color_intensity = .{ pl.color[0], pl.color[1], pl.color[2], pl.intensity },
+                                };
+                            }
+
+                            cluster_pass.dispatch(&self.rhi, frame, cluster_uniforms);
+
+                            // Pass cluster texture refs to prepared_scene for base_pass binding.
+                            prepared_scene.cluster_count_texture = if (cluster_pass.cluster_count_texture) |*t| t else null;
+                            prepared_scene.cluster_indices_texture = if (cluster_pass.cluster_indices_texture) |*t| t else null;
+                            prepared_scene.cluster_nearest_sampler = if (cluster_pass.nearest_sampler) |*s| s else null;
+                            prepared_scene.cluster_params = .{ camera_near, camera_far, vp_w, vp_h };
                         }
                     }
 
@@ -4314,6 +4371,55 @@ pub const Renderer = struct {
                 .{ 1.00, 0.86, 0.20, 1.00 }, // gold dot
             );
             stats.add(dot_stats);
+        }
+
+        // ── Entity icons (camera + lights) ───────────────────────────
+        {
+            // Camera icons (blue)
+            var camera_lines = std.ArrayList(gizmo_pass_mod.WorldLineVertex).empty;
+            defer camera_lines.deinit(self.allocator);
+            try renderer_debug.appendCameraIconLines(self.allocator, scene, &camera_lines);
+            if (camera_lines.items.len > 0) {
+                const cam_stats = try self.gizmo_pass.drawOverlayLines(
+                    &self.rhi, frame, pass, prepared_scene.view_projection,
+                    camera_lines.items,
+                    .{ 0.30, 0.70, 1.00, 1.00 },
+                );
+                stats.add(cam_stats);
+            }
+
+            // Light icons (per type with different colors)
+            var dir_lines = std.ArrayList(gizmo_pass_mod.WorldLineVertex).empty;
+            defer dir_lines.deinit(self.allocator);
+            var point_lines = std.ArrayList(gizmo_pass_mod.WorldLineVertex).empty;
+            defer point_lines.deinit(self.allocator);
+            var spot_lines = std.ArrayList(gizmo_pass_mod.WorldLineVertex).empty;
+            defer spot_lines.deinit(self.allocator);
+            try renderer_debug.appendLightIconLines(self.allocator, scene, &dir_lines, &point_lines, &spot_lines);
+            if (dir_lines.items.len > 0) {
+                const dir_stats = try self.gizmo_pass.drawOverlayLines(
+                    &self.rhi, frame, pass, prepared_scene.view_projection,
+                    dir_lines.items,
+                    .{ 1.00, 0.80, 0.30, 1.00 }, // orange — directional
+                );
+                stats.add(dir_stats);
+            }
+            if (point_lines.items.len > 0) {
+                const pt_stats = try self.gizmo_pass.drawOverlayLines(
+                    &self.rhi, frame, pass, prepared_scene.view_projection,
+                    point_lines.items,
+                    .{ 1.00, 1.00, 0.50, 1.00 }, // yellow — point
+                );
+                stats.add(pt_stats);
+            }
+            if (spot_lines.items.len > 0) {
+                const sp_stats = try self.gizmo_pass.drawOverlayLines(
+                    &self.rhi, frame, pass, prepared_scene.view_projection,
+                    spot_lines.items,
+                    .{ 0.50, 1.00, 0.30, 1.00 }, // green — spot
+                );
+                stats.add(sp_stats);
+            }
         }
 
         return stats;

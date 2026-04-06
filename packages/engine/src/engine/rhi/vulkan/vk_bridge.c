@@ -356,6 +356,7 @@ static VkFormat map_texture_format(uint32_t fmt) {
         case 8:  return VK_FORMAT_D24_UNORM_S8_UINT;
         case 9:  return VK_FORMAT_D24_UNORM_S8_UINT;
         case 10: return VK_FORMAT_D32_SFLOAT;
+        case 11: return VK_FORMAT_R32_UINT; /* single-channel unsigned int (cluster data) */
         default: return VK_FORMAT_R8G8B8A8_UNORM;
     }
 }

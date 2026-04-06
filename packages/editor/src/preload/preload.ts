@@ -185,6 +185,24 @@ contextBridge.exposeInMainWorld("guavaEngine", {
     ipcRenderer.on("popout:init-state", handler);
     return () => ipcRenderer.removeListener("popout:init-state", handler);
   },
+
+  // ── Build / Package ─────────────────────────────────────────────
+
+  /** Build a standalone game package */
+  buildPackage: (opts?: { outputDir?: string; optimize?: string; choosePath?: boolean }): Promise<{ ok: boolean; path?: string; error?: string }> =>
+    ipcRenderer.invoke("build:package", opts),
+
+  /** Run a previously built game package */
+  runBuiltGame: (appPath: string): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("build:run", appPath),
+
+  /** Subscribe to build progress updates */
+  onBuildProgress: (callback: (progress: { stage: string; percent: number; detail?: string }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: { stage: string; percent: number; detail?: string }) =>
+      callback(progress);
+    ipcRenderer.on("build:progress", handler);
+    return () => ipcRenderer.removeListener("build:progress", handler);
+  },
 });
 
 /** Type declaration for the exposed API (used in renderer) */
@@ -221,4 +239,8 @@ export interface GuavaEngineAPI {
   getPopoutPanels(): string[];
   onPopoutClosed(callback: (panels: string[], originInfo?: unknown, bounds?: { x: number; y: number; width: number; height: number }) => void): () => void;
   onInitState(callback: (state: unknown) => void): () => void;
+  // Build
+  buildPackage(opts?: { outputDir?: string; optimize?: string; choosePath?: boolean }): Promise<{ ok: boolean; path?: string; error?: string }>;
+  runBuiltGame(appPath: string): Promise<{ ok: boolean; error?: string }>;
+  onBuildProgress(callback: (progress: { stage: string; percent: number; detail?: string }) => void): () => void;
 }

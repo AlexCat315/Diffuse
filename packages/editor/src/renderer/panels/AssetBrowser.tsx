@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback } from "react";
+import React, { useEffect, useCallback, useMemo } from "react";
 import { useLocalState } from "../store/local-state";
 import type { AssetEntry } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
@@ -25,16 +25,18 @@ const ASSET_ICONS: Record<string, React.ComponentType<{ size?: number; color?: s
 export function AssetBrowser() {
   const connected = useConnectionStore((s) => s.connected);
   const { t } = useI18n();
-  const [currentPath, setCurrentPath] = useSyncedState("asset-browser", "currentPath", "Content");
+  const [currentPath, setCurrentPath] = useSyncedState("asset-browser", "currentPath", ".");
   const [entries, setEntries] = useLocalState<AssetEntry[]>([]);
   const [loading, setLoading] = useLocalState(false);
+  const [searchQuery, setSearchQuery] = useLocalState("");
 
   const fetchDir = useCallback(
     async (path: string) => {
       if (!connected) return;
       setLoading(true);
       try {
-        const result = await window.guavaEngine.call("assets.list", { path });
+        const rpcMethod = path === "." ? "assets.listProjectRoot" : "assets.list";
+        const result = await window.guavaEngine.call(rpcMethod as "assets.list", { path });
         setEntries(result.entries);
         setCurrentPath(result.path);
       } catch {
@@ -60,15 +62,20 @@ export function AssetBrowser() {
   );
 
   const handleNavigateUp = useCallback(() => {
+    if (currentPath === ".") return;
     const parent = currentPath.includes("/")
       ? currentPath.substring(0, currentPath.lastIndexOf("/"))
-      : currentPath;
-    if (parent !== currentPath && parent.length > 0) {
-      fetchDir(parent);
-    }
+      : ".";
+    fetchDir(parent);
   }, [currentPath, fetchDir]);
 
-  const pathParts = currentPath.split("/");
+  const filteredEntries = useMemo(() => {
+    if (!searchQuery) return entries;
+    const q = searchQuery.toLowerCase();
+    return entries.filter((e) => e.name.toLowerCase().includes(q));
+  }, [entries, searchQuery]);
+
+  const pathParts = currentPath === "." ? ["Project"] : ["Project", ...currentPath.split("/")];
 
   return (
     <div style={styles.container}>
@@ -82,7 +89,7 @@ export function AssetBrowser() {
       {/* Breadcrumbs */}
       <div style={styles.breadcrumbs}>
         {pathParts.map((part, i) => {
-          const path = pathParts.slice(0, i + 1).join("/");
+          const path = i === 0 ? "." : pathParts.slice(1, i + 1).join("/");
           return (
             <React.Fragment key={path}>
               {i > 0 && <span style={styles.breadcrumbSep}>/</span>}
@@ -100,9 +107,19 @@ export function AssetBrowser() {
         })}
       </div>
 
+      {/* Search */}
+      <div style={styles.searchBox}>
+        <input
+          style={styles.searchInput}
+          placeholder="Search..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+        />
+      </div>
+
       {/* File list */}
       <div style={styles.list}>
-        {currentPath !== "assets" && (
+        {currentPath !== "." && (
           <div style={styles.entry} onClick={handleNavigateUp}>
             <span style={styles.icon}><IconArrowUp size={14} /></span>
             <span style={styles.entryName}>{t.assets.parentDirectory}</span>
@@ -110,14 +127,21 @@ export function AssetBrowser() {
         )}
         {loading ? (
           <div style={styles.empty}>{t.common.loading}</div>
-        ) : entries.length === 0 ? (
-          <div style={styles.empty}>{t.assets.emptyDirectory}</div>
+        ) : filteredEntries.length === 0 ? (
+          <div style={styles.empty}>{searchQuery ? "No results" : t.assets.emptyDirectory}</div>
         ) : (
-          entries.map((entry) => (
+          filteredEntries.map((entry) => (
             <div
               key={entry.name}
               style={styles.entry}
               onClick={() => handleClick(entry)}
+              draggable={!entry.isDirectory}
+              onDragStart={(e) => {
+                if (entry.isDirectory) return;
+                e.dataTransfer.setData("application/x-guava-asset-path", entry.path);
+                e.dataTransfer.setData("application/x-guava-asset-type", entry.assetType ?? "unknown");
+                e.dataTransfer.effectAllowed = "link";
+              }}
               onMouseEnter={(e) => (e.currentTarget.style.background = "#313244")}
               onMouseLeave={(e) => (e.currentTarget.style.background = "transparent")}
             >
@@ -184,6 +208,20 @@ const styles: Record<string, React.CSSProperties> = {
   breadcrumbSep: {
     color: "#45475a",
     margin: "0 1px",
+  },
+  searchBox: {
+    padding: "0 12px 6px",
+  },
+  searchInput: {
+    width: "100%",
+    background: "#313244",
+    border: "1px solid #45475a",
+    borderRadius: 4,
+    color: "#cdd6f4",
+    padding: "4px 8px",
+    fontSize: 12,
+    outline: "none",
+    boxSizing: "border-box" as const,
   },
   list: {
     flex: 1,

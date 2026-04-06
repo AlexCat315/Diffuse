@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useRef, useState } from "react";
+import React, { useEffect, useCallback, useRef, useState, type DragEvent } from "react";
 import { useLocalState } from "../store/local-state";
 import type { Transform, ComponentInfo, Vec3 } from "../../shared/rpc-types";
 import type { ComponentField } from "../../shared/rpc-types";
@@ -56,6 +56,42 @@ export function Inspector() {
     });
   };
 
+  const handleInspectorDrop = useCallback(
+    async (e: React.DragEvent) => {
+      const assetPath = e.dataTransfer.getData("application/x-guava-asset-path");
+      const assetType = e.dataTransfer.getData("application/x-guava-asset-type");
+      if (!assetPath || entityId == null) return;
+
+      // Only auto-add Script component when dropping a script file
+      if (assetType !== "script") return;
+      e.preventDefault();
+
+      const hasScript = components.some((c) => c.type.toLowerCase() === "script");
+      if (!hasScript) {
+        await window.guavaEngine.call("entity.addComponent", { entityId, componentType: "Script" });
+      }
+      // Assign the dropped script
+      await window.guavaEngine.call("entity.setAssetField", {
+        entityId,
+        componentType: "Script",
+        fieldName: "script",
+        assetPath,
+      });
+      setTimeout(() => fetchEntityData(entityId), 150);
+    },
+    [entityId, components, fetchEntityData],
+  );
+
+  const handleInspectorDragOver = useCallback(
+    (e: React.DragEvent) => {
+      if (e.dataTransfer.types.includes("application/x-guava-asset-path")) {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = "link";
+      }
+    },
+    [],
+  );
+
   if (entityId == null) {
     return (
       <div style={styles.container}>
@@ -66,7 +102,7 @@ export function Inspector() {
   }
 
   return (
-    <div style={styles.container}>
+    <div style={styles.container} onDragOver={handleInspectorDragOver} onDrop={handleInspectorDrop}>
       <div style={styles.header}>{t.inspector.title}</div>
 
       {/* Entity identity */}
@@ -459,6 +495,7 @@ function AssetRefField({
   onChanged: () => void;
 }) {
   const [options, setOptions] = useState<string[]>([]);
+  const [dragOver, setDragOver] = useState(false);
   const currentValue = (field.value as string | null) ?? "";
 
   useEffect(() => {
@@ -487,7 +524,7 @@ function AssetRefField({
     }
   }, [field.assetType]);
 
-  const commitAsset = (assetPath: string | null) => {
+  const commitAsset = (assetPath: string | undefined) => {
     window.guavaEngine.call("entity.setAssetField", {
       entityId,
       componentType,
@@ -497,12 +534,41 @@ function AssetRefField({
     setTimeout(onChanged, 100);
   };
 
+  const handleDragOver = (e: DragEvent) => {
+    if (e.dataTransfer.types.includes("application/x-guava-asset-path")) {
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "link";
+      setDragOver(true);
+    }
+  };
+
+  const handleDragLeave = () => {
+    setDragOver(false);
+  };
+
+  const handleDrop = (e: DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    const assetPath = e.dataTransfer.getData("application/x-guava-asset-path");
+    if (assetPath) {
+      commitAsset(assetPath);
+    }
+  };
+
   return (
-    <div style={styles.field}>
+    <div
+      style={{
+        ...styles.field,
+        ...(dragOver ? { outline: "1px solid #89b4fa", borderRadius: 3, background: "rgba(137,180,250,0.08)" } : {}),
+      }}
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       <label style={styles.label}>{field.name}</label>
       <select
         value={currentValue}
-        onChange={(e) => commitAsset(e.target.value || null)}
+        onChange={(e) => commitAsset(e.target.value || undefined)}
         style={{
           ...styles.numInput,
           flex: 1,
