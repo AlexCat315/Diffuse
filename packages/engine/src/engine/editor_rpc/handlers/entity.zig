@@ -182,28 +182,31 @@ pub fn setAssetField(ctx: *Ctx) !void {
                         found = true;
                     } else |err| {
                         std.log.warn("setAssetField: Sky environment asset not found for path '{s}': {s}", .{ resolve_path, @errorName(err) });
+                        return error.InvalidArguments;
                     }
                 },
                 .null => {
                     @memset(&sky._asset_id_buf, 0);
                     found = true;
                 },
-                else => {},
+                else => {
+                    return error.InvalidArguments;
+                },
             }
+        } else {
+            std.log.warn("setAssetField: entity {d} has no Sky component", .{eid});
+            return error.InvalidArguments;
         }
-        if (found) {
-            // Immediately sync the scene-level environment asset ID so the renderer
-            // picks it up on the next frame without waiting for syncSkyComponent.
-            if (entity.sky) |*sky_ref| {
-                const new_asset_id = sky_ref.assetIdSlice();
-                _ = resources.setSceneEnvironmentAssetId(
-                    if (new_asset_id.len > 0) new_asset_id else null,
-                ) catch {};
-            }
-            ctx.layer.world.markSceneChanged();
-            try ctx.reply(.{});
-            return;
+        // Sky environment_asset_id handled — sync and reply
+        if (entity.sky) |*sky_ref| {
+            const new_asset_id = sky_ref.assetIdSlice();
+            _ = resources.setSceneEnvironmentAssetId(
+                if (new_asset_id.len > 0) new_asset_id else null,
+            ) catch {};
         }
+        ctx.layer.world.markSceneChanged();
+        try ctx.reply(.{});
+        return;
     }
 
     inline for (ctx_mod.component_fields) |cf| {
