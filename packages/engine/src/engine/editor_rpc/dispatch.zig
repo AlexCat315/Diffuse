@@ -151,6 +151,9 @@ pub fn dispatch(allocator: std.mem.Allocator, payload: []const u8, layer_context
     };
 
     dispatchToHandler(method_str, &ctx) catch |err| {
+        if (err != error.MethodNotFound) {
+            log.warn("RPC handler '{s}' failed: {s}", .{ method_str, @errorName(err) });
+        }
         return try errorResponse(allocator, id_val, if (err == error.MethodNotFound) @as(i64, -32601) else -32603, @errorName(err));
     };
 

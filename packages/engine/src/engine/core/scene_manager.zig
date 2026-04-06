@@ -518,7 +518,7 @@ pub const SceneManager = struct {
         }
     }
 
-    fn setCurrentScenePath(self: *SceneManager, path: []const u8) !void {
+    pub fn setCurrentScenePath(self: *SceneManager, path: []const u8) !void {
         self.clearCurrentScenePath();
         self.current_scene_path = try self.allocator.dupe(u8, path);
     }

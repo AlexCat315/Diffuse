@@ -492,7 +492,7 @@ function AssetRefField({
       entityId,
       componentType,
       fieldName: field.name,
-      assetPath: assetPath ?? undefined,
+      assetPath,
     });
     setTimeout(onChanged, 100);
   };

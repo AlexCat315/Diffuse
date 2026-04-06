@@ -25,6 +25,7 @@ export function initRpcBridge(): () => void {
     switch (event) {
       case "on:scene.changed": {
         const d = data as { revision: number; entityIds: number[] };
+        useSceneStore.getState().setSceneRevision(d.revision);
         useSceneStore.getState().refreshHierarchy();
         useEntityCacheStore.getState().invalidate(d.entityIds);
         break;

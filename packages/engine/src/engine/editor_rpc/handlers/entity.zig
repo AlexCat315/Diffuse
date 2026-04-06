@@ -145,7 +145,8 @@ pub fn setAssetField(ctx: *Ctx) !void {
     const comp_type = try ctx.param([]const u8, "componentType");
     const field_name = try ctx.param([]const u8, "fieldName");
     const p = ctx.params orelse return error.InvalidArguments;
-    const raw_val = p.object.get("assetPath") orelse return error.InvalidArguments;
+    // assetPath may be a string, null, or absent (all treated as "clear the field")
+    const raw_val = p.object.get("assetPath") orelse std.json.Value.null;
 
     const entity = ctx.layer.world.getEntity(eid) orelse return error.EntityNotFound;
     const resources = &ctx.layer.world.resources;

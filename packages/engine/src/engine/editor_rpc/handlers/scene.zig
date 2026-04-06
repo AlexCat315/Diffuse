@@ -53,10 +53,12 @@ pub fn duplicateEntity(ctx: *Ctx) !void {
     try ctx.reply(.{ .entityId = new_id });
 }
 
-const default_scene_path = "assets/scenes/editor_autosave.guava_scene";
+const fallback_scene_path = "assets/scenes/editor_autosave.guava_scene";
 
 pub fn save(ctx: *Ctx) !void {
-    const path = (try ctx.paramOpt([]const u8, "path")) orelse default_scene_path;
+    const explicit = try ctx.paramOpt([]const u8, "path");
+    const path = explicit orelse
+        if (ctx.layer.scene_manager) |sm| sm.current_scene_path orelse fallback_scene_path else fallback_scene_path;
     scene_io.saveWorldToPath(ctx.allocator, ctx.layer.world, path) catch |e| {
         std.log.err("scene.save failed: {}", .{e});
         return error.InternalError;
@@ -70,6 +72,10 @@ pub fn load(ctx: *Ctx) !void {
         std.log.err("scene.load failed: {}", .{e});
         return error.InternalError;
     };
+    // Track the loaded path so scene.save can write back to the same file.
+    if (ctx.layer.scene_manager) |sm| {
+        sm.setCurrentScenePath(path) catch {};
+    }
     ctx.layer.world.markSceneChanged();
     try ctx.reply(.{ .path = path });
 }

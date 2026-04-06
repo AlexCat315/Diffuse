@@ -19,6 +19,8 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
   const gizmoMode = useSceneStore((s) => s.gizmoMode);
   const onGizmoModeChange = useSceneStore((s) => s.changeGizmoMode);
   const onRefreshHierarchy = useSceneStore((s) => s.refreshHierarchy);
+  const sceneDirty = useSceneStore((s) => s.sceneRevision !== s.savedRevision);
+  const markSaved = useSceneStore((s) => s.markSaved);
   const { t } = useI18n();
   const [sceneMenuOpen, setSceneMenuOpen] = useLocalState(false);
   const [scenes, setScenes] = useLocalState<string[]>([]);
@@ -30,8 +32,10 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
   const handleRedo = () => window.guavaEngine.call("editor.redo", {});
 
   const handleSave = useCallback(() => {
-    window.guavaEngine.call("scene.save", {}).catch((e) => console.error("Save failed:", e));
-  }, []);
+    window.guavaEngine.call("scene.save", {})
+      .then(() => markSaved())
+      .catch((e) => console.error("Save failed:", e));
+  }, [markSaved]);
 
   const handleOpenSceneMenu = useCallback(async () => {
     if (sceneMenuOpen) {
@@ -63,7 +67,12 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
   return (
     <div style={styles.toolbar}>
       <div style={styles.section}>
-        <ToolButton icon={<IconSave size={14} />} tooltip={t.toolbar.save} onClick={handleSave} />
+        <ToolButton
+          icon={<IconSave size={14} />}
+          tooltip={t.toolbar.save}
+          onClick={handleSave}
+          highlight={sceneDirty}
+        />
         <div style={{ position: "relative" }}>
           <ToolButton icon={<IconFolderOpen size={14} />} tooltip={t.toolbar.openScene} onClick={handleOpenSceneMenu} />
           {sceneMenuOpen && (
@@ -150,11 +159,13 @@ function ToolButton({
   tooltip,
   onClick,
   active,
+  highlight,
 }: {
   icon: React.ReactNode;
   tooltip: string;
   onClick?: () => void;
   active?: boolean;
+  highlight?: boolean;
 }) {
   // Parse "Label (Shortcut)" → label + shortcut for the styled Tooltip
   const match = tooltip.match(/^(.+?)\s*\(([^)]+)\)$/);
@@ -170,6 +181,9 @@ function ToolButton({
             background: "#45475a",
             border: "1px solid #89b4fa",
             color: "#89b4fa",
+          }),
+          ...(highlight && {
+            color: "#f9e2af",
           }),
         }}
         onClick={onClick}

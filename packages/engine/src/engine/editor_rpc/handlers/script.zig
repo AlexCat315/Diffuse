@@ -8,7 +8,13 @@ pub fn listScripts(ctx: *Ctx) !void {
     const scripts_dir = "assets/scripts";
 
     var entries = std.ArrayList(ScriptEntry).empty;
-    defer entries.deinit(ctx.allocator);
+    defer {
+        for (entries.items) |e| {
+            ctx.allocator.free(e.path);
+            ctx.allocator.free(e.name);
+        }
+        entries.deinit(ctx.allocator);
+    }
 
     const dir = std.fs.cwd().openDir(scripts_dir, .{ .iterate = true }) catch {
         try ctx.reply(.{
@@ -36,17 +42,28 @@ fn collectScripts(
         if (entry.name.len > 0 and entry.name[0] == '_') continue;
 
         const full_path = try std.fmt.allocPrint(allocator, "{s}/{s}", .{ prefix, entry.name });
+        errdefer allocator.free(full_path);
 
         if (entry.kind == .directory) {
-            const sub_dir = dir.openDir(entry.name, .{ .iterate = true }) catch continue;
+            const sub_dir = dir.openDir(entry.name, .{ .iterate = true }) catch {
+                allocator.free(full_path);
+                continue;
+            };
             try collectScripts(allocator, sub_dir, full_path, out);
+            // full_path ownership transferred to recursive entries; free here
+            // since prefix is only used as a format arg (already copied into child paths).
+            allocator.free(full_path);
             continue;
         }
 
-        const lang = classifyLanguage(entry.name) orelse continue;
+        const lang = classifyLanguage(entry.name) orelse {
+            allocator.free(full_path);
+            continue;
+        };
 
-        const stat = dir.statFile(entry.name) catch |err| switch (err) {
-            else => continue,
+        const stat = dir.statFile(entry.name) catch {
+            allocator.free(full_path);
+            continue;
         };
 
         try out.append(allocator, .{
