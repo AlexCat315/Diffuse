@@ -32,6 +32,7 @@ import { ScriptViewer } from "./panels/ScriptViewer";
 import { AiChat } from "./panels/AiChat";
 import { ParticleEditor } from "./panels/ParticleEditor";
 import { PrefabEditor } from "./panels/PrefabEditor";
+import { SkyPanel } from "./panels/SkyPanel";
 import { SettingsPanel } from "./panels/Settings";
 import { KeybindingsPanel } from "./panels/KeybindingsPanel";
 import { ViewportTabControls } from "./panels/ViewportTabControls";
@@ -78,6 +79,7 @@ const ALL_PANELS: { id: string; name: string }[] = [
   { id: "aichat", name: "AI Chat" },
   { id: "particleeditor", name: "Particles" },
   { id: "prefabeditor", name: "Prefabs" },
+  { id: "sky", name: "Sky" },
 ];
 
 // ── Layout storage key ──────────────────────────────────
@@ -175,6 +177,7 @@ const defaultLayout: IJsonModel = {
           { type: "tab", name: "AI Chat", component: "aichat" },
           { type: "tab", name: "Particles", component: "particleeditor" },
           { type: "tab", name: "Prefabs", component: "prefabeditor" },
+          { type: "tab", name: "Sky", component: "sky" },
         ],
       },
     ],
@@ -471,6 +474,7 @@ export function App() {
       case "aichat":          return <AiChat />;
       case "particleeditor":  return <ParticleEditor />;
       case "prefabeditor":    return <PrefabEditor />;
+      case "sky":             return <SkyPanel />;
       case "settings":        return <SettingsPanel />;
       default:
         return <div style={{ padding: 12, color: "#6c7086" }}>Unknown panel: {component}</div>;
