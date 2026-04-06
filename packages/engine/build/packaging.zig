@@ -25,6 +25,19 @@ pub fn addPackageSteps(
     cook_cmd.addArg("validate");
     cook_step.dependOn(&cook_cmd.step);
 
+    // Editor package step — builds guava-engine then runs electron-builder
+    // Usage: zig build editor-package -Doptimize=ReleaseFast
+    const editor_package_cmd = b.addSystemCommand(&.{ "npm", "run", "package" });
+    editor_package_cmd.setCwd(b.path("../editor"));
+    // Ensure guava-engine binary is built and installed before electron-builder runs
+    editor_package_cmd.step.dependOn(b.getInstallStep());
+
+    const editor_package_step = b.step(
+        "editor-package",
+        "Build guava-engine then package the Electron editor into a distributable app",
+    );
+    editor_package_step.dependOn(&editor_package_cmd.step);
+
     // Scripts compilation step
     addScriptsStep(b, target);
 }

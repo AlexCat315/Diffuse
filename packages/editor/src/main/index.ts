@@ -43,9 +43,10 @@ let viewportSAB: SharedArrayBuffer | null = null;
 const isMac = process.platform === "darwin";
 try {
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  ioSurfaceView = require(
-    path.join(__dirname, "../../native/build/Release/iosurface_view.node"),
-  ) as ViewportAddon;
+  const addonPath = app.isPackaged
+    ? path.join(process.resourcesPath, "iosurface_view.node")
+    : path.join(__dirname, "../../native/build/Release/iosurface_view.node");
+  ioSurfaceView = require(addonPath) as ViewportAddon;
 } catch (err) {
   console.warn("[Main] Viewport native addon not available:", err);
 }
@@ -63,9 +64,12 @@ function broadcastToRenderers(channel: string, ...args: unknown[]): void {
 }
 
 function getEngineBinaryPath(): string {
+  if (app.isPackaged) {
+    // In packaged app, guava-engine is placed next to the asar in Resources/
+    return path.join(process.resourcesPath, "guava-engine");
+  }
   // In development, use the sibling engine package's build output
-  const devPath = path.resolve(__dirname, "../../..", "engine/zig-out/bin/guava-engine");
-  return devPath;
+  return path.resolve(__dirname, "../../..", "engine/zig-out/bin/guava-engine");
 }
 
 function getProjectPath(): string | undefined {
@@ -602,14 +606,20 @@ app.whenReady().then(async () => {
   });
 });
 
-app.on("window-all-closed", async () => {
-  engineClient?.disconnect();
-  await engineProcess?.stop();
+app.on("window-all-closed", () => {
+  // Let before-quit handle engine cleanup; just trigger the quit.
   app.quit();
 });
 
-app.on("before-quit", async () => {
+app.on("before-quit", (event) => {
+  if (isQuitting) return; // Second call from our own app.quit() below — let it through
   isQuitting = true;
+  // Pause quit until the engine subprocess is fully stopped.
+  event.preventDefault();
   engineClient?.disconnect();
-  await engineProcess?.stop();
+  engineProcess
+    ?.stop()
+    .finally(() => {
+      app.quit(); // Resume quit now that engine is gone
+    });
 });

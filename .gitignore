@@ -83,3 +83,4 @@ examples/csharp/**/obj/
 # Electron native addon build artifacts
 packages/editor/native/build/
 packages/editor/native/bin/
+packages/editor/dist-package
