@@ -68,7 +68,7 @@ export const zhCN: TranslationKeys = {
 
   // ── Asset Browser ─────────────────────────────────────
   assets: {
-    title: "资产",
+    title: "内容浏览器",
     refreshTooltip: "刷新",
     emptyDirectory: "空目录",
     parentDirectory: "..",
@@ -609,7 +609,7 @@ export const zhCN: TranslationKeys = {
     material:        "材质",
     rendersettings:  "渲染设置",
     console:         "控制台",
-    assets:          "资产",
+    assets:          "内容浏览器",
     timeline:        "时间轴",
     utilities:       "AI 工具",
     camera:          "相机",
@@ -629,6 +629,7 @@ export const zhCN: TranslationKeys = {
     particleeditor:  "粒子编辑器",
     prefabeditor:    "预制体",
     sky:             "天空环境",
+    assetmanager:    "资产管理器",
   },
 
   // ── Shortcut action names ─────────────────────────────

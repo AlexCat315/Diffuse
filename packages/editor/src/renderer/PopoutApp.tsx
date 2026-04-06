@@ -26,6 +26,7 @@ import { AiChat } from "./panels/AiChat";
 import { ParticleEditor } from "./panels/ParticleEditor";
 import { PrefabEditor } from "./panels/PrefabEditor";
 import { SkyPanel } from "./panels/SkyPanel";
+import { AssetManager } from "./panels/AssetManager";
 import { SettingsPanel } from "./panels/Settings";
 import { useI18n } from "./i18n";
 import {
@@ -48,7 +49,7 @@ const PANEL_LABELS: Record<string, string> = {
   material: "Material",
   rendersettings: "Render Settings",
   console: "Console",
-  assets: "Assets",
+  assets: "Content Browser",
   timeline: "Timeline",
   utilities: "AI Utilities",
   camera: "Camera",
@@ -68,6 +69,7 @@ const PANEL_LABELS: Record<string, string> = {
   particleeditor: "Particles",
   prefabeditor: "Prefabs",
   sky: "Sky",
+  assetmanager: "Asset Manager",
   settings: "Settings",
 };
 
@@ -99,6 +101,7 @@ function PanelContent({ panelId }: { panelId: string }) {
     case "particleeditor":  return <ParticleEditor />;
     case "prefabeditor":    return <PrefabEditor />;
     case "sky":             return <SkyPanel />;
+    case "assetmanager":    return <AssetManager />;
     case "settings":        return <SettingsPanel />;
     default:
       return <div style={{ padding: 12, color: "#6c7086" }}>Unknown panel: {panelId}</div>;

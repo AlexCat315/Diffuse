@@ -33,6 +33,7 @@ import { AiChat } from "./panels/AiChat";
 import { ParticleEditor } from "./panels/ParticleEditor";
 import { PrefabEditor } from "./panels/PrefabEditor";
 import { SkyPanel } from "./panels/SkyPanel";
+import { AssetManager } from "./panels/AssetManager";
 import { SettingsPanel } from "./panels/Settings";
 import { KeybindingsPanel } from "./panels/KeybindingsPanel";
 import { ViewportTabControls } from "./panels/ViewportTabControls";
@@ -60,7 +61,7 @@ const ALL_PANELS: { id: string; name: string }[] = [
   { id: "material", name: "Material" },
   { id: "rendersettings", name: "Render Settings" },
   { id: "console", name: "Console" },
-  { id: "assets", name: "Assets" },
+  { id: "assets", name: "Content Browser" },
   { id: "timeline", name: "Timeline" },
   { id: "utilities", name: "AI Utilities" },
   { id: "camera", name: "Camera" },
@@ -80,6 +81,7 @@ const ALL_PANELS: { id: string; name: string }[] = [
   { id: "particleeditor", name: "Particles" },
   { id: "prefabeditor", name: "Prefabs" },
   { id: "sky", name: "Sky" },
+  { id: "assetmanager", name: "Asset Manager" },
 ];
 
 // ── Layout storage key ──────────────────────────────────
@@ -159,7 +161,7 @@ const defaultLayout: IJsonModel = {
         minHeight: DEFAULT_MIN_HEIGHT,
         children: [
           { type: "tab", name: "Console", component: "console", enableClose: false },
-          { type: "tab", name: "Assets", component: "assets" },
+          { type: "tab", name: "Content Browser", component: "assets" },
           { type: "tab", name: "Timeline", component: "timeline" },
           { type: "tab", name: "AI Utilities", component: "utilities" },
           { type: "tab", name: "Camera", component: "camera" },
@@ -178,6 +180,7 @@ const defaultLayout: IJsonModel = {
           { type: "tab", name: "Particles", component: "particleeditor" },
           { type: "tab", name: "Prefabs", component: "prefabeditor" },
           { type: "tab", name: "Sky", component: "sky" },
+          { type: "tab", name: "Asset Manager", component: "assetmanager" },
         ],
       },
     ],
@@ -475,6 +478,7 @@ export function App() {
       case "particleeditor":  return <ParticleEditor />;
       case "prefabeditor":    return <PrefabEditor />;
       case "sky":             return <SkyPanel />;
+      case "assetmanager":    return <AssetManager />;
       case "settings":        return <SettingsPanel />;
       default:
         return <div style={{ padding: 12, color: "#6c7086" }}>Unknown panel: {component}</div>;
