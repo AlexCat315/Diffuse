@@ -9,6 +9,7 @@
     "editor:build": "cd packages/editor && npm run build",
     "editor:install": "cd packages/editor && npm install",
     "engine:build": "cd packages/engine && zig build install",
-    "engine:run-editor": "cd packages/engine && zig build run-editor"
+    "engine:run-editor": "cd packages/engine && zig build run-editor",
+    "engine:run-editor-fast": "cd packages/engine && zig build run-editor -Doptimize=ReleaseFast"
   }
 }

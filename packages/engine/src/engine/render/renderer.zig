@@ -1606,6 +1606,8 @@ pub const Renderer = struct {
 
                 const path_trace_viewport = viewport_active and self.editor_viewport_state.pipeline_mode == .path_trace;
 
+                const do_path_trace = path_trace_viewport;
+
                 // scene_color_target 在所有模式下都需要（用于 overlay passes: gizmo, outline, debug）
                 const scene_color_target: rhi_mod.ColorTarget = if (viewport_active)
                     .{ .texture = self.scene_viewport.color().? }
@@ -1641,7 +1643,7 @@ pub const Renderer = struct {
                 var current_unjittered_view_projection = prepared_scene.view_projection;
                 var current_taa_jitter_uv = [2]f32{ 0.0, 0.0 };
 
-                if (path_trace_viewport) {
+                if (do_path_trace) {
                     const path_trace_start = std.time.nanoTimestamp();
                     try self.renderPathTraceViewport(&prepared_scene, scene);
                     const path_trace_end = std.time.nanoTimestamp();
@@ -3450,11 +3452,16 @@ pub const Renderer = struct {
             g_hwrt_diag_frame_count += 1;
         }
 
-        // 相机/参数变化：仅重置累积（保留场景数据和加速结构）
-        // 记录本帧是否因 vp 变化需要走快速路径（跳过累积）
+        // 相机/场景/参数变化检测
         const is_interactive_frame = vp_changed;
+
+        // 相机/参数变化：重置累积计数（交互帧跳过昂贵的 memset）
         if (vp_changed or params_changed) {
-            mrt.resetAccumulation();
+            mrt.accum_frame_count = 0;
+            if (!is_interactive_frame) {
+                if (mrt.accum_pixels) |accum| @memset(accum, 0.0);
+            }
+            mrt.needs_retrace = true;
         }
         // 场景变化：完全重建
         if (scene_changed) {
@@ -3836,81 +3843,53 @@ pub const Renderer = struct {
             params.spot_light_outer_angle_cos[index] = light.outer_angle_cos;
         }
 
-        if (!self.rhi.rtTraceRays(&params, mrt.trace_pixels.?)) {
+        const display_pixels = mrt.display_pixels.?;
+        const trace_timer = std.time.nanoTimestamp();
+
+        // GPU trace
+        const trace_pixels = mrt.trace_pixels.?;
+        if (!self.rhi.rtTraceRays(&params, trace_pixels)) {
             render_log.err("{s} trace failed", .{self.rhi.rtBackendName()});
             return false;
         }
 
-        const trace_pixels = mrt.trace_pixels.?;
-        const display_pixels = mrt.display_pixels.?;
-
         if (is_interactive_frame) {
-            // ── 快速路径：相机移动中，跳过 f32 累积，直接 f16→f16 上采样 ──
-            // 使用 Bresenham 步进 + u64 word copy 避免 Debug 模式下逐像素整数除法瓶颈
-            const src_words: [*]const u64 = @ptrCast(@alignCast(trace_pixels.ptr));
-            const dst_words: [*]u64 = @ptrCast(@alignCast(display_pixels.ptr));
-            const tw: usize = @as(usize, trace_width);
-            const th: usize = @as(usize, trace_height);
-            const dw: usize = @as(usize, width);
-            const dh: usize = @as(usize, height);
-            const row_bytes: usize = dw * 8;
-
-            var y_accum: usize = 0;
-            var src_y: usize = 0;
-            var prev_src_y: usize = std.math.maxInt(usize);
-            var out_y: usize = 0;
-            while (out_y < dh) : (out_y += 1) {
-                const dst_row = out_y * dw;
-                if (src_y == prev_src_y and out_y > 0) {
-                    // 重复源行 → 整行复制上一输出行
-                    const prev_off = (out_y - 1) * row_bytes;
-                    const cur_off = out_y * row_bytes;
-                    const dst_bytes: [*]u8 = @ptrCast(dst_words);
-                    @memcpy(dst_bytes[cur_off..][0..row_bytes], dst_bytes[prev_off..][0..row_bytes]);
-                } else if (tw == dw) {
-                    // 同宽 → 整行复制源行
-                    const src_row_off = src_y * tw;
-                    for (0..dw) |x| {
-                        dst_words[dst_row + x] = src_words[src_row_off + x];
-                    }
-                } else {
-                    // Bresenham x 步进：无除法最近邻采样
-                    const src_row_off = src_y * tw;
-                    var x_accum: usize = 0;
-                    var src_x: usize = 0;
-                    var out_x: usize = 0;
-                    while (out_x < dw) : (out_x += 1) {
-                        dst_words[dst_row + out_x] = src_words[src_row_off + src_x];
-                        x_accum += tw;
-                        while (x_accum >= dw) {
-                            x_accum -= dw;
-                            src_x += 1;
-                        }
-                    }
-                }
-                prev_src_y = src_y;
-                y_accum += th;
-                while (y_accum >= dh) {
-                    y_accum -= dh;
-                    src_y += 1;
+            // 交互帧：跳过 f32 累积，直接最近邻上采样到显示缓冲区
+            const trace_half: [*]const f16 = @ptrCast(@alignCast(trace_pixels.ptr));
+            const display_half: [*]f16 = @ptrCast(@alignCast(display_pixels.ptr));
+            var out_y: u32 = 0;
+            while (out_y < height) : (out_y += 1) {
+                const src_y: u32 = @min(trace_height - 1, @as(u32, @intCast((@as(u64, out_y) * @as(u64, trace_height)) / @as(u64, height))));
+                var out_x: u32 = 0;
+                while (out_x < width) : (out_x += 1) {
+                    const src_x: u32 = @min(trace_width - 1, @as(u32, @intCast((@as(u64, out_x) * @as(u64, trace_width)) / @as(u64, width))));
+                    const src_base: usize = (@as(usize, src_y) * @as(usize, trace_width) + @as(usize, src_x)) * 4;
+                    const dst_base: usize = (@as(usize, out_y) * @as(usize, width) + @as(usize, out_x)) * 4;
+                    display_half[dst_base + 0] = trace_half[src_base + 0];
+                    display_half[dst_base + 1] = trace_half[src_base + 1];
+                    display_half[dst_base + 2] = trace_half[src_base + 2];
+                    display_half[dst_base + 3] = @as(f16, 1.0);
                 }
             }
-            // 不递增 accum_frame_count，相机停止后从 0 开始正式累积
+            mrt.accum_frame_count = 0;
         } else {
-            // ── 累积路径：相机静止，渐进式 f32 累积 ──
+            // 静态帧：渐进式 f32 累积
             const accum = mrt.accum_pixels.?;
             const pixel_count = @as(usize, trace_width) * @as(usize, trace_height);
+            // 首帧需要清零累积缓冲区
+            if (mrt.accum_frame_count == 0) {
+                @memset(accum, 0.0);
+            }
             const trace_half: [*]const f16 = @ptrCast(@alignCast(trace_pixels.ptr));
             for (0..pixel_count) |i| {
-                const src_base = i * 4; // half4: R, G, B, A
-                const dst_base = i * 3; // float3: R, G, B
+                const src_base = i * 4;
+                const dst_base = i * 3;
                 accum[dst_base + 0] += @floatCast(trace_half[src_base + 0]);
                 accum[dst_base + 1] += @floatCast(trace_half[src_base + 1]);
                 accum[dst_base + 2] += @floatCast(trace_half[src_base + 2]);
             }
             mrt.accum_frame_count += 1;
 
-            // 从累积缓冲区生成 display 像素（平均后转 half16）
             const inv_count: f32 = 1.0 / @as(f32, @floatFromInt(mrt.accum_frame_count));
             const display_half: [*]f16 = @ptrCast(@alignCast(display_pixels.ptr));
             var out_y: u32 = 0;
@@ -3929,7 +3908,23 @@ pub const Renderer = struct {
             }
         }
 
+        const after_trace_timer = std.time.nanoTimestamp();
         self.rhi.uploadTextureData(target, display_pixels, width, height) catch return false;
+        const upload_timer = std.time.nanoTimestamp();
+
+        if (g_hwrt_diag_frame_count <= 200) {
+            const trace_ms = @as(f64, @floatFromInt(after_trace_timer - trace_timer)) / 1_000_000.0;
+            const upload_ms = @as(f64, @floatFromInt(upload_timer - after_trace_timer)) / 1_000_000.0;
+            render_log.warn("[HWRT detail] trace={d:.1}ms upload={d:.1}ms accum={d}/{d} res={d}x{d}", .{
+                trace_ms,
+                upload_ms,
+                mrt.accum_frame_count,
+                samples,
+                trace_width,
+                trace_height,
+            });
+        }
+
         return true;
     }
 
