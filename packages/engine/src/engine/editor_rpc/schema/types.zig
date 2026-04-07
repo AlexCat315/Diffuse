@@ -36,6 +36,7 @@ pub const EntityNode = struct {
     id: u64,
     name: []const u8,
     visible: bool,
+    selectable: bool,
     children: []const EntityNode,
 };
 

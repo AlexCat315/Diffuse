@@ -1076,9 +1076,10 @@ pub const MeshSceneCache = struct {
             const material_state = try self.resolveMaterial(device, world, render_mesh.material);
             const skinning_state = buildSkinningState(world, render_mesh.entity_id, render_mesh.transform);
 
+            const entity = world.getEntityConst(render_mesh.entity_id);
             const draw_item = DrawItem{
                 .entity_id = render_mesh.entity_id,
-                .pickable = pickable,
+                .pickable = pickable and (if (entity) |e| e.selectable else true),
                 .mesh_handle = mesh_handle,
                 .vertex_buffer = gpu_mesh.vertex_buffer,
                 .index_buffer = gpu_mesh.index_buffer,

@@ -319,24 +319,18 @@ export function Viewport() {
       }
       // All other keys forwarded to engine
     } else {
-      // ── Object mode: viewport-scoped gizmo + entity shortcuts ──────
+      // ── Object mode: gizmo + entity shortcuts handled globally ──────
+      // W/E/R/Q and Delete/Backspace are handled by the document-level
+      // capture-phase listener (works regardless of DOM focus).
       const k = e.key.toLowerCase();
       if (!e.ctrlKey && !e.metaKey && !e.altKey) {
-        const { changeGizmoMode } = useSceneStore.getState();
-        // Load gizmo shortcuts dynamically (allows user customization)
         const gizmoKeys = loadGizmoShortcuts();
-        if (k === (gizmoKeys.select?.key ?? "q").toLowerCase()) { e.preventDefault(); consumedGizmoKeys.current.add(k); changeGizmoMode("none"); return; }
-        if (k === (gizmoKeys.translate?.key ?? "w").toLowerCase()) { e.preventDefault(); consumedGizmoKeys.current.add(k); changeGizmoMode("translate"); return; }
-        if (k === (gizmoKeys.rotate?.key ?? "e").toLowerCase()) { e.preventDefault(); consumedGizmoKeys.current.add(k); changeGizmoMode("rotate"); return; }
-        if (k === (gizmoKeys.scale?.key ?? "r").toLowerCase()) { e.preventDefault(); consumedGizmoKeys.current.add(k); changeGizmoMode("scale"); return; }
-        if (k === "delete" || k === "backspace") {
-          e.preventDefault();
-          const { selectedEntity: sel, setSelectedEntity, refreshHierarchy } = useSceneStore.getState();
-          if (sel != null) {
-            window.guavaEngine.call("scene.deleteEntity", { entityId: sel });
-            setSelectedEntity(null);
-            refreshHierarchy();
-          }
+        if (k === (gizmoKeys.select?.key ?? "q").toLowerCase() ||
+            k === (gizmoKeys.translate?.key ?? "w").toLowerCase() ||
+            k === (gizmoKeys.rotate?.key ?? "e").toLowerCase() ||
+            k === (gizmoKeys.scale?.key ?? "r").toLowerCase() ||
+            k === "delete" || k === "backspace") {
+          // Already handled by capture-phase listener; don't double-process
           return;
         }
       }
@@ -368,16 +362,16 @@ export function Viewport() {
     sendInput({ type: "keyup", key, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
   }, [sendInput]);
 
-  // Compute element size (width, height) in CSS points.
+  // Compute element size in **physical pixels** (matching DPR-scaled pick coords).
   const getSize = useCallback(() => {
     const el = ref.current;
     if (!el) return null;
     const rect = el.getBoundingClientRect();
-    const w = Math.round(rect.width);
-    const h = Math.round(rect.height);
+    const w = Math.round(rect.width * dpr);
+    const h = Math.round(rect.height * dpr);
     if (w <= 0 || h <= 0) return null;
     return { w, h };
-  }, []);
+  }, [dpr]);
 
   // Initialisation: tell the engine our viewport size and start pixel streaming.
   useEffect(() => {
@@ -511,13 +505,16 @@ export function Viewport() {
     };
   }, []);
 
-  // Intercept Tab at the document capture phase so Electron focus navigation
-  // never fires. Only when mesh edit is active (Tab = toggle object/edit mode).
+  // Intercept Tab, gizmo shortcuts (W/E/R/Q), and Delete/Backspace at the
+  // document capture phase so they work regardless of which panel has DOM focus.
   useEffect(() => {
-    const onTabCapture = (e: KeyboardEvent) => {
+    const onGlobalKeyCapture = (e: KeyboardEvent) => {
+      // Skip when text-editing elements have focus
+      const tag = (e.target as HTMLElement)?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+
       if (e.key === "Tab") {
         e.preventDefault();
-        // Route to the engine the same way handleKeyDown does
         window.guavaEngine.call("viewport.sendInput", {
           type: "keydown",
           key: "tab",
@@ -525,10 +522,34 @@ export function Viewport() {
           ctrl: e.ctrlKey || e.metaKey,
           alt: e.altKey,
         } as never).catch(() => {});
+        return;
+      }
+
+      // Gizmo tool shortcuts (only when no modifier)
+      if (!e.ctrlKey && !e.metaKey && !e.altKey && !useMeshEditStore.getState().active) {
+        const k = e.key.toLowerCase();
+        const gizmoKeys = loadGizmoShortcuts();
+        const { changeGizmoMode } = useSceneStore.getState();
+
+        if (k === (gizmoKeys.select?.key ?? "q").toLowerCase()) { e.preventDefault(); changeGizmoMode("none"); return; }
+        if (k === (gizmoKeys.translate?.key ?? "w").toLowerCase()) { e.preventDefault(); changeGizmoMode("translate"); return; }
+        if (k === (gizmoKeys.rotate?.key ?? "e").toLowerCase()) { e.preventDefault(); changeGizmoMode("rotate"); return; }
+        if (k === (gizmoKeys.scale?.key ?? "r").toLowerCase()) { e.preventDefault(); changeGizmoMode("scale"); return; }
+
+        if (k === "delete" || k === "backspace") {
+          e.preventDefault();
+          const { selectedEntity: sel, setSelectedEntity, refreshHierarchy } = useSceneStore.getState();
+          if (sel != null) {
+            window.guavaEngine.call("scene.deleteEntity", { entityId: sel });
+            setSelectedEntity(null);
+            refreshHierarchy();
+          }
+          return;
+        }
       }
     };
-    document.addEventListener("keydown", onTabCapture, true);
-    return () => document.removeEventListener("keydown", onTabCapture, true);
+    document.addEventListener("keydown", onGlobalKeyCapture, true);
+    return () => document.removeEventListener("keydown", onGlobalKeyCapture, true);
   }, []);
 
   // WebGL pixel rendering: subscribe to viewport:pixels and display via GPU.

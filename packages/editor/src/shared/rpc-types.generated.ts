@@ -37,6 +37,7 @@ export interface EntityNode {
   id: number;
   name: string;
   visible: boolean;
+  selectable: boolean;
   children: EntityNode[];
 }
 
@@ -241,6 +242,8 @@ export interface RpcMethods {
   "entity.setComponentField": { params: { entityId: number; componentType: string; fieldName: string; value: unknown }; result: Record<string, never> };
   "entity.addComponent": { params: { entityId: number; componentType: string }; result: Record<string, never> };
   "entity.removeComponent": { params: { entityId: number; componentType: string }; result: Record<string, never> };
+  "entity.setVisible": { params: { entityId: number; visible: boolean }; result: Record<string, never> };
+  "entity.setSelectable": { params: { entityId: number; selectable: boolean }; result: Record<string, never> };
   "entity.setAssetField": { params: { entityId: number; componentType: string; fieldName: string; assetPath?: string }; result: Record<string, never> };
   "playback.play": { params: Record<string, never>; result: Record<string, never> };
   "playback.pause": { params: Record<string, never>; result: Record<string, never> };

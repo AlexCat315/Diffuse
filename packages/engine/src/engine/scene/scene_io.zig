@@ -387,6 +387,7 @@ const EntityRecord = struct {
     nav_agent: ?NavAgentComponentRecord = null,
     visible: bool = true,
     editor_only: bool = false,
+    selectable: bool = true,
     dont_destroy_on_load: bool = false,
     is_folder: bool = false,
 };
@@ -442,6 +443,7 @@ const LegacyEntityRecord = struct {
     light: ?components.Light = null,
     visible: bool = true,
     editor_only: bool = false,
+    selectable: bool = true,
 };
 
 const TextureBinding = struct {
@@ -1001,6 +1003,7 @@ fn buildSceneFileFiltered(
             } else null,
             .visible = entity.visible,
             .editor_only = entity.editor_only,
+            .selectable = entity.selectable,
             .dont_destroy_on_load = entity.dont_destroy_on_load,
             .is_folder = entity.is_folder,
         });
@@ -1565,6 +1568,7 @@ fn applySceneFileToWorld(
                 null,
             .visible = entity.visible,
             .editor_only = entity.editor_only,
+            .selectable = entity.selectable,
             .dont_destroy_on_load = entity.dont_destroy_on_load,
             .is_folder = entity.is_folder,
         });
@@ -1686,6 +1690,7 @@ fn deserializeLegacyWorldFromSlice(allocator: std.mem.Allocator, world: *world_m
             .light = entity.light,
             .visible = entity.visible,
             .editor_only = entity.editor_only,
+            .selectable = entity.selectable,
         });
     }
 
