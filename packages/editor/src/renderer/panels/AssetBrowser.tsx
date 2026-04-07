@@ -169,9 +169,9 @@ export function AssetBrowser() {
   const handleNewScript = useCallback(
     async (parentPath: string) => {
       setContextMenu(null);
-      const name = "new_script.lua";
+      const name = "new_script.zig";
       const newPath = parentPath === "." ? name : `${parentPath}/${name}`;
-      const res = await window.guavaEngine.fsCreateFile(newPath, "-- New script\n");
+      const res = await window.guavaEngine.fsCreateFile(newPath, "const guava = @import(\"guava\");\n\nexport fn guava_on_init() void {}\n\nexport fn guava_on_update(_dt: f32) void {}\n");
       if (res.ok) {
         await refreshDir(parentPath);
         setExpanded((prev) => new Set(prev).add(parentPath));
