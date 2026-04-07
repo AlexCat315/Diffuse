@@ -1646,7 +1646,7 @@ pub const Renderer = struct {
                     try self.renderPathTraceViewport(&prepared_scene, scene);
                     const path_trace_end = std.time.nanoTimestamp();
                     const pt_full_ms = @as(f64, @floatFromInt(path_trace_end - path_trace_start)) / 1_000_000.0;
-                    if (g_hwrt_diag_frame_count <= 25) {
+                    if (g_hwrt_diag_frame_count <= 200) {
                         render_log.warn("[Frame PT total] renderPathTraceViewport={d:.1}ms", .{pt_full_ms});
                     }
                     self.graph.recordPassStat(pass_stats, .base_pass, durationNs(path_trace_start, path_trace_end), 0, 0);
@@ -3070,7 +3070,7 @@ pub const Renderer = struct {
         if (!self.editor_viewport_state.path_trace_force_cpu) {
             if (self.tryRenderHwRtPath(prepared_scene, scene, target, width, height, trace_width, trace_height, samples, bounces, resolution_scale)) {
                 const hwrt_timer_end = std.time.nanoTimestamp();
-                if (g_hwrt_diag_frame_count <= 20) {
+                if (g_hwrt_diag_frame_count <= 200) {
                     const sig_ms = @as(f64, @floatFromInt(sig_timer_end - pt_timer_start)) / 1_000_000.0;
                     const hwrt_ms = @as(f64, @floatFromInt(hwrt_timer_end - sig_timer_end)) / 1_000_000.0;
                     const total_ms = @as(f64, @floatFromInt(hwrt_timer_end - pt_timer_start)) / 1_000_000.0;
@@ -3451,6 +3451,8 @@ pub const Renderer = struct {
         }
 
         // 相机/参数变化：仅重置累积（保留场景数据和加速结构）
+        // 记录本帧是否因 vp 变化需要走快速路径（跳过累积）
+        const is_interactive_frame = vp_changed;
         if (vp_changed or params_changed) {
             mrt.resetAccumulation();
         }
@@ -3839,36 +3841,91 @@ pub const Renderer = struct {
             return false;
         }
 
-        // --- 渐进式累积：将本帧 1-spp 结果累加到 float32 缓冲区 ---
         const trace_pixels = mrt.trace_pixels.?;
-        const accum = mrt.accum_pixels.?;
-        const pixel_count = @as(usize, trace_width) * @as(usize, trace_height);
-        const trace_half: [*]const f16 = @ptrCast(@alignCast(trace_pixels.ptr));
-        for (0..pixel_count) |i| {
-            const src_base = i * 4; // half4: R, G, B, A
-            const dst_base = i * 3; // float3: R, G, B
-            accum[dst_base + 0] += @floatCast(trace_half[src_base + 0]);
-            accum[dst_base + 1] += @floatCast(trace_half[src_base + 1]);
-            accum[dst_base + 2] += @floatCast(trace_half[src_base + 2]);
-        }
-        mrt.accum_frame_count += 1;
-
-        // --- 从累积缓冲区生成 display 像素（平均后转 half16） ---
-        const inv_count: f32 = 1.0 / @as(f32, @floatFromInt(mrt.accum_frame_count));
         const display_pixels = mrt.display_pixels.?;
-        const display_half: [*]f16 = @ptrCast(@alignCast(display_pixels.ptr));
-        var out_y: u32 = 0;
-        while (out_y < height) : (out_y += 1) {
-            const src_y: u32 = @min(trace_height - 1, @as(u32, @intCast((@as(u64, out_y) * @as(u64, trace_height)) / @as(u64, height))));
-            var out_x: u32 = 0;
-            while (out_x < width) : (out_x += 1) {
-                const src_x: u32 = @min(trace_width - 1, @as(u32, @intCast((@as(u64, out_x) * @as(u64, trace_width)) / @as(u64, width))));
-                const src_base: usize = (@as(usize, src_y) * @as(usize, trace_width) + @as(usize, src_x)) * 3;
-                const dst_base: usize = (@as(usize, out_y) * @as(usize, width) + @as(usize, out_x)) * 4;
-                display_half[dst_base + 0] = @floatCast(accum[src_base + 0] * inv_count);
-                display_half[dst_base + 1] = @floatCast(accum[src_base + 1] * inv_count);
-                display_half[dst_base + 2] = @floatCast(accum[src_base + 2] * inv_count);
-                display_half[dst_base + 3] = @as(f16, 1.0);
+
+        if (is_interactive_frame) {
+            // ── 快速路径：相机移动中，跳过 f32 累积，直接 f16→f16 上采样 ──
+            // 使用 Bresenham 步进 + u64 word copy 避免 Debug 模式下逐像素整数除法瓶颈
+            const src_words: [*]const u64 = @ptrCast(@alignCast(trace_pixels.ptr));
+            const dst_words: [*]u64 = @ptrCast(@alignCast(display_pixels.ptr));
+            const tw: usize = @as(usize, trace_width);
+            const th: usize = @as(usize, trace_height);
+            const dw: usize = @as(usize, width);
+            const dh: usize = @as(usize, height);
+            const row_bytes: usize = dw * 8;
+
+            var y_accum: usize = 0;
+            var src_y: usize = 0;
+            var prev_src_y: usize = std.math.maxInt(usize);
+            var out_y: usize = 0;
+            while (out_y < dh) : (out_y += 1) {
+                const dst_row = out_y * dw;
+                if (src_y == prev_src_y and out_y > 0) {
+                    // 重复源行 → 整行复制上一输出行
+                    const prev_off = (out_y - 1) * row_bytes;
+                    const cur_off = out_y * row_bytes;
+                    const dst_bytes: [*]u8 = @ptrCast(dst_words);
+                    @memcpy(dst_bytes[cur_off..][0..row_bytes], dst_bytes[prev_off..][0..row_bytes]);
+                } else if (tw == dw) {
+                    // 同宽 → 整行复制源行
+                    const src_row_off = src_y * tw;
+                    for (0..dw) |x| {
+                        dst_words[dst_row + x] = src_words[src_row_off + x];
+                    }
+                } else {
+                    // Bresenham x 步进：无除法最近邻采样
+                    const src_row_off = src_y * tw;
+                    var x_accum: usize = 0;
+                    var src_x: usize = 0;
+                    var out_x: usize = 0;
+                    while (out_x < dw) : (out_x += 1) {
+                        dst_words[dst_row + out_x] = src_words[src_row_off + src_x];
+                        x_accum += tw;
+                        while (x_accum >= dw) {
+                            x_accum -= dw;
+                            src_x += 1;
+                        }
+                    }
+                }
+                prev_src_y = src_y;
+                y_accum += th;
+                while (y_accum >= dh) {
+                    y_accum -= dh;
+                    src_y += 1;
+                }
+            }
+            // 不递增 accum_frame_count，相机停止后从 0 开始正式累积
+        } else {
+            // ── 累积路径：相机静止，渐进式 f32 累积 ──
+            const accum = mrt.accum_pixels.?;
+            const pixel_count = @as(usize, trace_width) * @as(usize, trace_height);
+            const trace_half: [*]const f16 = @ptrCast(@alignCast(trace_pixels.ptr));
+            for (0..pixel_count) |i| {
+                const src_base = i * 4; // half4: R, G, B, A
+                const dst_base = i * 3; // float3: R, G, B
+                accum[dst_base + 0] += @floatCast(trace_half[src_base + 0]);
+                accum[dst_base + 1] += @floatCast(trace_half[src_base + 1]);
+                accum[dst_base + 2] += @floatCast(trace_half[src_base + 2]);
+            }
+            mrt.accum_frame_count += 1;
+
+            // 从累积缓冲区生成 display 像素（平均后转 half16）
+            const inv_count: f32 = 1.0 / @as(f32, @floatFromInt(mrt.accum_frame_count));
+            const display_half: [*]f16 = @ptrCast(@alignCast(display_pixels.ptr));
+            var out_y: u32 = 0;
+            while (out_y < height) : (out_y += 1) {
+                const src_y: u32 = @min(trace_height - 1, @as(u32, @intCast((@as(u64, out_y) * @as(u64, trace_height)) / @as(u64, height))));
+                var out_x: u32 = 0;
+                while (out_x < width) : (out_x += 1) {
+                    const src_x: u32 = @min(trace_width - 1, @as(u32, @intCast((@as(u64, out_x) * @as(u64, trace_width)) / @as(u64, width))));
+                    const src_base: usize = (@as(usize, src_y) * @as(usize, trace_width) + @as(usize, src_x)) * 3;
+                    const dst_base_px: usize = (@as(usize, out_y) * @as(usize, width) + @as(usize, out_x)) * 4;
+                    display_half[dst_base_px + 0] = @floatCast(accum[src_base + 0] * inv_count);
+                    display_half[dst_base_px + 1] = @floatCast(accum[src_base + 1] * inv_count);
+                    display_half[dst_base_px + 2] = @floatCast(accum[src_base + 2] * inv_count);
+                    display_half[dst_base_px + 3] = @as(f16, 1.0);
+                }
             }
         }
 
