@@ -13,7 +13,6 @@ export type {
   Transform,
   TransformPartial,
   EntityNode,
-  ComponentInfo,
   ComponentField as ComponentFieldBase,
   LogEntry,
   AssetEntry,
@@ -31,17 +30,56 @@ export type {
   PrefabInfo,
   PrefabEntityNode,
   PrefabEntityDetail,
-  RpcMethods,
   SubscriptionEvents,
-  RpcMethodName,
   SubscriptionName,
-  RpcParams,
-  RpcResult,
   JsonRpcRequest,
   JsonRpcResponse,
 } from "./rpc-types.generated";
 
-import type { RpcResult } from "./rpc-types.generated";
+import type {
+  ComponentInfo as GeneratedComponentInfo,
+  RpcMethods as GeneratedRpcMethods,
+  RpcResult as GeneratedRpcResult,
+} from "./rpc-types.generated";
+
+// ── Extended types (fields the engine supports but the schema hasn't caught up) ──
+
+export interface ComponentInfo extends GeneratedComponentInfo {
+  scriptIndex?: number;
+}
+
+export interface RpcMethods extends GeneratedRpcMethods {
+  "entity.getComponents": {
+    params: { entityId: number };
+    result: { components: ComponentInfo[] };
+  };
+  "entity.setAssetField": {
+    params: {
+      entityId: number;
+      componentType: string;
+      fieldName: string;
+      assetPath?: string;
+      scriptIndex?: number;
+    };
+    result: Record<string, never>;
+  };
+  "script.getEntityParameters": {
+    params: { entityId: number; scriptIndex: number };
+    result: { parameters?: string | null };
+  };
+  "script.setEntityParameters": {
+    params: { entityId: number; scriptIndex: number; parameters: string };
+    result: Record<string, never>;
+  };
+  "assets.importModel": {
+    params: { sourcePath: string; targetDir?: string };
+    result: { success: boolean; assetPath?: string };
+  };
+}
+
+export type RpcMethodName = keyof RpcMethods;
+export type RpcParams<M extends RpcMethodName> = RpcMethods[M]["params"];
+export type RpcResult<M extends RpcMethodName> = RpcMethods[M]["result"];
 
 /** History entry — extracted from the getHistory result shape. */
 export type HistoryEntry = RpcResult<"editor.getHistory">["entries"][number];

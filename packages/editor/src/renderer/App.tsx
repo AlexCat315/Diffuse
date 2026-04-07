@@ -1,5 +1,6 @@
 import React, { useEffect, useCallback, useRef, useState } from "react";
 import { IconClose } from "./components/Icons";
+import { keybindingService, type KeyBinding } from "./keybinding-service";
 import { Layout, Model, Actions, DockLocation, type Action, type IJsonModel, type TabNode, type TabSetNode, type BorderNode, type ITabSetRenderValues, type ITabRenderValues } from "flexlayout-react";
 import "flexlayout-react/style/light.css";
 import "./flexlayout-dark.css";
@@ -296,65 +297,49 @@ export function App() {
       }
     });
 
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "s") {
-        e.preventDefault();
-        window.guavaEngine.call("scene.save", {}).catch(() => {});
-        return;
-      }
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "z") {
-        e.preventDefault();
-        if (e.shiftKey) {
-          window.guavaEngine.call("editor.redo", {}).catch(() => {});
-        } else {
-          window.guavaEngine.call("editor.undo", {}).catch(() => {});
-        }
-        return;
-      }
-      // Cmd/Ctrl+J: toggle bottom panel
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "j") {
-        e.preventDefault();
-        toggleBottomPanelRef.current();
-        return;
-      }
-      // Cmd/Ctrl+,: open settings
-      if ((e.metaKey || e.ctrlKey) && e.key === ",") {
-        e.preventDefault();
-        useEditorStore.getState().setSettingsOpen(true);
-        return;
-      }
-      // Cmd/Ctrl+K: open keybindings tab in settings modal
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === "k") {
-        e.preventDefault();
+    // ── Global keybinding context (lowest priority) ──────────────
+    const globalBindings: KeyBinding[] = [
+      { id: "save", combo: { key: "s", ctrl: true }, handler: () => {
+        window.guavaEngine.call("scene.save", {}).catch(() => {}); return true;
+      }},
+      { id: "undo", combo: { key: "z", ctrl: true }, handler: () => {
+        window.guavaEngine.call("editor.undo", {}).catch(() => {}); return true;
+      }},
+      { id: "redo", combo: { key: "z", ctrl: true, shift: true }, handler: () => {
+        window.guavaEngine.call("editor.redo", {}).catch(() => {}); return true;
+      }},
+      { id: "togglePanel", combo: { key: "j", ctrl: true }, handler: () => {
+        toggleBottomPanelRef.current(); return true;
+      }},
+      { id: "openSettings", combo: { key: ",", ctrl: true }, handler: () => {
+        useEditorStore.getState().setSettingsOpen(true); return true;
+      }},
+      { id: "openKeybindings", combo: { key: "k", ctrl: true }, handler: () => {
         useEditorStore.getState().setKeybindingsOpen(true);
-        useEditorStore.getState().setSettingsOpen(true);
-        return;
-      }
-      // Space: play; Ctrl+Space: pause; Shift+Space: stop
-      if (e.key === " " && !e.ctrlKey && !e.metaKey && !e.shiftKey && !e.altKey) {
-        e.preventDefault();
-        window.guavaEngine.call("playback.play", {}).catch(() => {});
-        return;
-      }
-      if (e.key === " " && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
-        e.preventDefault();
-        window.guavaEngine.call("playback.pause", {}).catch(() => {});
-        return;
-      }
-      if (e.key === " " && e.shiftKey && !e.ctrlKey && !e.metaKey) {
-        e.preventDefault();
-        window.guavaEngine.call("playback.stop", {}).catch(() => {});
-        return;
-      }
-      // Bare-key shortcuts (q/w/e/r/delete) are handled in Viewport.tsx so
-      // they are automatically scoped to whichever panel has focus.
-    };
-    window.addEventListener("keydown", handleKeyDown);
+        useEditorStore.getState().setSettingsOpen(true); return true;
+      }},
+      { id: "play", combo: { key: " " }, handler: () => {
+        window.guavaEngine.call("playback.play", {}).catch(() => {}); return true;
+      }},
+      { id: "pause", combo: { key: " ", ctrl: true }, handler: () => {
+        window.guavaEngine.call("playback.pause", {}).catch(() => {}); return true;
+      }},
+      { id: "stop", combo: { key: " ", shift: true }, handler: () => {
+        window.guavaEngine.call("playback.stop", {}).catch(() => {}); return true;
+      }},
+    ];
+
+    const unregGlobal = keybindingService.register({
+      id: "global",
+      bindings: globalBindings,
+    });
+
+    keybindingService.install();
 
     return () => {
       cleanupBridge();
-      window.removeEventListener("keydown", handleKeyDown);
+      unregGlobal();
+      keybindingService.uninstall();
       document.removeEventListener("dragover", preventDragNav);
       document.removeEventListener("drop", preventDragNav);
     };
