@@ -1484,7 +1484,7 @@ pub const Renderer = struct {
                 defer prepared_scene.deinit();
 
                 // 确保选择系统有一个初始选中项（用于编辑器交互）
-                if (!self.selection_seeded) {
+                if (self.is_editor_mode and !self.selection_seeded) {
                     _ = try self.selection_history.applyPick(
                         self.scene_cache.defaultSelectionEntity(scene),
                         .replace,
