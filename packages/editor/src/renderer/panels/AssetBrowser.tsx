@@ -152,26 +152,30 @@ export function AssetBrowser() {
   const handleNewFolder = useCallback(
     async (parentPath: string) => {
       setContextMenu(null);
-      const name = "New Folder";
+      const parent = parentPath === "." ? undefined : findNode(roots, parentPath);
+      const siblings = parentPath === "." ? roots : parent?.children ?? [];
+      const name = uniqueName(siblings, "New Folder", "");
       const newPath = parentPath === "." ? name : `${parentPath}/${name}`;
       const res = await window.guavaEngine.fsMkdir(newPath);
       if (res.ok) {
         await refreshDir(parentPath);
-        // Auto-expand parent
         setExpanded((prev) => new Set(prev).add(parentPath));
         setRenaming(newPath);
         setRenameValue(name);
       }
     },
-    [refreshDir],
+    [refreshDir, roots],
   );
 
   const handleNewScript = useCallback(
     async (parentPath: string) => {
       setContextMenu(null);
-      const name = "new_script.zig";
+      const parent = parentPath === "." ? undefined : findNode(roots, parentPath);
+      const siblings = parentPath === "." ? roots : parent?.children ?? [];
+      const name = uniqueName(siblings, "new_script", ".zig");
       const newPath = parentPath === "." ? name : `${parentPath}/${name}`;
-      const res = await window.guavaEngine.fsCreateFile(newPath, "const guava = @import(\"guava\");\n\nexport fn guava_on_init() void {}\n\nexport fn guava_on_update(_dt: f32) void {}\n");
+      const template = "const guava = @import(\"guava\");\n\nexport fn guava_on_init() void {}\n\nexport fn guava_on_update(_dt: f32) void {}\n";
+      const res = await window.guavaEngine.fsCreateFile(newPath, template);
       if (res.ok) {
         await refreshDir(parentPath);
         setExpanded((prev) => new Set(prev).add(parentPath));
@@ -179,7 +183,7 @@ export function AssetBrowser() {
         setRenameValue(name);
       }
     },
-    [refreshDir],
+    [refreshDir, roots],
   );
 
   const handleDelete = useCallback(
@@ -497,6 +501,30 @@ function mergeChildren(
     }
     return newNode;
   });
+}
+
+/** Find a node by path in the tree. */
+function findNode(nodes: TreeNode[], path: string): TreeNode | undefined {
+  for (const n of nodes) {
+    if (n.path === path) return n;
+    if (n.children) {
+      const found = findNode(n.children, path);
+      if (found) return found;
+    }
+  }
+  return undefined;
+}
+
+/** Generate a unique name among siblings, appending _2, _3, … on collision. */
+function uniqueName(siblings: TreeNode[], baseName: string, ext: string): string {
+  const existingNames = new Set(siblings.map((s) => s.name));
+  let candidate = `${baseName}${ext}`;
+  let i = 2;
+  while (existingNames.has(candidate)) {
+    candidate = `${baseName}_${i}${ext}`;
+    i++;
+  }
+  return candidate;
 }
 
 // ── Styles ───────────────────────────────────────────────────────

@@ -925,7 +925,7 @@ function ScriptParametersEditor({ entityId, scriptIndex }: { entityId: number; s
     window.guavaEngine
       .call("script.getEntityParameters", {
         entityId,
-        ...(scriptIndex != null ? { scriptIndex } : {}),
+        scriptIndex: scriptIndex ?? 0,
       })
       .then((res: { parameters?: string | null }) => {
         const p = res.parameters ?? "";
@@ -950,7 +950,7 @@ function ScriptParametersEditor({ entityId, scriptIndex }: { entityId: number; s
         window.guavaEngine.call("script.setEntityParameters", {
           entityId,
           parameters: value.trim() || "{}",
-          ...(scriptIndex != null ? { scriptIndex } : {}),
+          scriptIndex: scriptIndex ?? 0,
         });
         setParams(value);
         setEditing(false);
