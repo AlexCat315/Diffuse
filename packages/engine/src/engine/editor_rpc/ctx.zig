@@ -21,6 +21,7 @@ pub const Ctx = struct {
     settings: *settings_mod.EditorSettings,
     mesh_ops: ?*const MeshOps = null,
     project_root: ?[]const u8 = null,
+    scripts_dir: []const u8 = "Content/Scripts",
     _result: ?[]u8 = null,
 
     // ── Parameter readers ───────────────────────────────────────

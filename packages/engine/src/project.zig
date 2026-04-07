@@ -4,12 +4,14 @@ pub const marker_file_name = ".guava";
 pub const current_project_version: u32 = 1;
 pub const default_content_dir = "Content";
 pub const default_start_scene = "Content/Scenes/Main.guava_scene";
+pub const default_scripts_dir = "Content/Scripts";
 
 const PersistedProjectFile = struct {
     version: u32 = current_project_version,
     name: []const u8,
     content_dir: []const u8 = default_content_dir,
     start_scene: ?[]const u8 = default_start_scene,
+    scripts_dir: []const u8 = default_scripts_dir,
 };
 
 pub const ProjectFile = struct {
@@ -17,10 +19,12 @@ pub const ProjectFile = struct {
     name: []u8,
     content_dir: []u8,
     start_scene: ?[]u8 = null,
+    scripts_dir: []u8,
 
     pub fn deinit(self: *ProjectFile, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
         allocator.free(self.content_dir);
+        allocator.free(self.scripts_dir);
         if (self.start_scene) |value| {
             allocator.free(value);
         }
@@ -71,6 +75,7 @@ pub fn loadAlloc(allocator: std.mem.Allocator, project_root: []const u8) !Projec
         .name = try allocator.dupe(u8, doc.name),
         .content_dir = try allocator.dupe(u8, doc.content_dir),
         .start_scene = if (doc.start_scene) |value| try allocator.dupe(u8, value) else null,
+        .scripts_dir = try allocator.dupe(u8, doc.scripts_dir),
     };
 }
 
@@ -100,6 +105,10 @@ pub fn initializeAlloc(allocator: std.mem.Allocator, project_root: []const u8, p
     defer allocator.free(derived_path);
     try std.fs.cwd().makePath(derived_path);
 
+    const scripts_path = try std.fs.path.join(allocator, &.{ project_root, default_scripts_dir });
+    defer allocator.free(scripts_path);
+    try std.fs.cwd().makePath(scripts_path);
+
     const marker_path = try markerPathAlloc(allocator, project_root);
     defer allocator.free(marker_path);
 
@@ -107,6 +116,7 @@ pub fn initializeAlloc(allocator: std.mem.Allocator, project_root: []const u8, p
         .name = project_name,
         .content_dir = default_content_dir,
         .start_scene = default_start_scene,
+        .scripts_dir = default_scripts_dir,
     });
     defer allocator.free(payload);
 

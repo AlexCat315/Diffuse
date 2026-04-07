@@ -226,6 +226,8 @@ pub const Application = struct {
     pending_file_drop: ?[:0]const u8 = null,
     /// 项目根目录（编辑器模式下由 main.zig 设置）
     project_root: ?[]const u8 = null,
+    /// 脚本目录（相对于项目根目录，由 .guava 配置文件指定）
+    scripts_dir: []const u8 = "Content/Scripts",
 
     /// 初始化应用程序
     ///
@@ -968,10 +970,10 @@ pub const Application = struct {
         return .zig;
     }
 
-    /// Scan assets/scripts/ directory and auto-register any .zig/.cs scripts
+    /// Scan the configured scripts directory and auto-register any .zig/.cs scripts
     /// that are not already loaded in the resource library.
     fn discoverScripts(self: *Application) void {
-        const scripts_dir = "assets/scripts";
+        const scripts_dir = self.scripts_dir;
 
         // Open scripts directory relative to project root (or CWD as fallback).
         var owned_base: ?std.fs.Dir = if (self.project_root) |root|

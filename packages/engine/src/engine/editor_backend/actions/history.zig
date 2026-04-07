@@ -1488,13 +1488,13 @@ fn selectionContainsAncestor(
 //  Script re-discovery after scene load
 // ═══════════════════════════════════════════════════════════════════
 
-/// Re-discover script files under assets/scripts/ and register them in the
+/// Re-discover script files under the configured scripts directory and register them in the
 /// ResourceLibrary.  This is needed because world.clear() (called during
 /// scene loading) destroys the entire ResourceLibrary, including script
 /// handles that were registered by Application.discoverScripts() at startup.
 pub fn rediscoverProjectScripts(world: *engine.scene.World, state: *const EditorState) void {
     const allocator = world.allocator;
-    const scripts_dir = "assets/scripts";
+    const scripts_dir = state.scriptsDir();
 
     // Open scripts directory relative to project root (or CWD as fallback).
     const project_path = state.projectPath();

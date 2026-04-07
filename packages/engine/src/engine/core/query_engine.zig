@@ -311,7 +311,7 @@ fn entityHasComponent(entity: *const world_mod.Entity, component_name: []const u
         .material => entity.material != null,
         .light => entity.light != null,
         .vfx => entity.vfx != null,
-        .script => entity.script != null,
+        .script => entity.script != null or entity.scripts.len > 0,
     };
 }
 

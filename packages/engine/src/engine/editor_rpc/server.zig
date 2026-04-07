@@ -122,6 +122,7 @@ pub const Server = struct {
 
     // Project root path — set from main.zig when a project is loaded.
     project_root: ?[]const u8 = null,
+    scripts_dir: []const u8 = "Content/Scripts",
 
     pub fn init(allocator: std.mem.Allocator, port: u16) Server {
         return .{
@@ -197,7 +198,7 @@ pub const Server = struct {
         for (batch[0..count]) |*msg| {
             defer msg.deinit(self.allocator);
 
-            const response_json = methods.dispatch(self.allocator, msg.payload, layer_context, &self.settings, self.mesh_ops, self.project_root) catch |err| {
+            const response_json = methods.dispatch(self.allocator, msg.payload, layer_context, &self.settings, self.mesh_ops, self.project_root, self.scripts_dir) catch |err| {
                 log.warn("RPC dispatch error: {s}", .{@errorName(err)});
                 continue;
             };

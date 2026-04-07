@@ -3,9 +3,9 @@ const std = @import("std");
 const ctx_mod = @import("../ctx.zig");
 const Ctx = ctx_mod.Ctx;
 
-/// List all script files under the assets/scripts directory.
+/// List all script files under the configured scripts directory.
 pub fn listScripts(ctx: *Ctx) !void {
-    const scripts_dir = "assets/scripts";
+    const scripts_dir = ctx.scripts_dir;
 
     var entries = std.ArrayList(ScriptEntry).empty;
     defer {
@@ -139,8 +139,8 @@ pub fn saveContent(ctx: *Ctx) !void {
     // Sanitize
     if (rel_path.len > 0 and rel_path[0] == '/') return error.InvalidArguments;
     if (std.mem.indexOf(u8, rel_path, "..") != null) return error.InvalidArguments;
-    // Only allow writing to assets/scripts/
-    if (!std.mem.startsWith(u8, rel_path, "assets/scripts/")) return error.InvalidArguments;
+    // Only allow writing to the configured scripts directory
+    if (!std.mem.startsWith(u8, rel_path, ctx.scripts_dir)) return error.InvalidArguments;
 
     var owned_base: ?std.fs.Dir = if (ctx.project_root) |root|
         (std.fs.openDirAbsolute(root, .{}) catch null)
@@ -161,4 +161,49 @@ pub fn saveContent(ctx: *Ctx) !void {
     };
 
     try ctx.reply(.{ .success = true });
+}
+
+/// Get the current parameter values of an entity's script component.
+/// script.getEntityParameters(entityId)
+pub fn getEntityParameters(ctx: *Ctx) !void {
+    const eid: u64 = @intCast(try ctx.param(i64, "entityId"));
+    const entity = ctx.layer.world.getEntityConst(eid) orelse {
+        try ctx.reply(.{ .parameters = @as(?[]const u8, null) });
+        return;
+    };
+    // Return parameters from legacy script field
+    if (entity.script) |script| {
+        if (script.parameters.len > 0) {
+            try ctx.reply(.{ .parameters = script.parameters });
+            return;
+        }
+    }
+    try ctx.reply(.{ .parameters = @as(?[]const u8, null) });
+}
+
+/// Set parameter values on an entity's script component.
+/// script.setEntityParameters(entityId, parameters)
+/// `parameters` is a JSON string like '{"speed": 5.0, "jump_height": 2.0}'
+pub fn setEntityParameters(ctx: *Ctx) !void {
+    const eid: u64 = @intCast(try ctx.param(i64, "entityId"));
+    const parameters = try ctx.param([]const u8, "parameters");
+    const entity = ctx.layer.world.getEntity(eid) orelse {
+        try ctx.reply(.{ .success = false });
+        return;
+    };
+
+    if (entity.script) |*script| {
+        // Store new parameters (duped into world allocator).
+        // The old slice is NOT freed here because its origin allocator is
+        // unknown (might be arena, static, or world allocator).
+        script.parameters = ctx.layer.world.allocator.dupe(u8, parameters) catch {
+            try ctx.reply(.{ .success = false });
+            return;
+        };
+        ctx.layer.world.markDirty(eid);
+        try ctx.reply(.{ .success = true });
+        return;
+    }
+
+    try ctx.reply(.{ .success = false });
 }

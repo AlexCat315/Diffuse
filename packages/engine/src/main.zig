@@ -171,8 +171,9 @@ fn runEngine(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
 
     var editor_layer = editor_layer_mod.EditorLayer{};
     if (loaded_project) |*project| {
-        editor_layer.state.setProjectContext(project.root_path, project.file.name, project.file.content_dir, project.file.start_scene);
+        editor_layer.state.setProjectContext(project.root_path, project.file.name, project.file.content_dir, project.file.scripts_dir, project.file.start_scene);
         app.project_root = project.root_path;
+        app.scripts_dir = project.file.scripts_dir;
         std.log.info("opening project '{s}' at {s}", .{ project.file.name, project.root_path });
     }
 
@@ -249,8 +250,9 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
     var editor_layer = editor_layer_mod.EditorLayer{};
     editor_layer.state.editor_server_mode = true;
     if (loaded_project) |*project| {
-        editor_layer.state.setProjectContext(project.root_path, project.file.name, project.file.content_dir, project.file.start_scene);
+        editor_layer.state.setProjectContext(project.root_path, project.file.name, project.file.content_dir, project.file.scripts_dir, project.file.start_scene);
         app.project_root = project.root_path;
+        app.scripts_dir = project.file.scripts_dir;
         std.log.info("opening project '{s}' at {s}", .{ project.file.name, project.root_path });
 
         // Change CWD to project root so relative asset paths (e.g. "Content/file.hdr")
@@ -287,6 +289,7 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
     rpc_server.mesh_ops = &mesh_ops_vtable;
     if (loaded_project) |*project| {
         rpc_server.project_root = project.root_path;
+        rpc_server.scripts_dir = project.file.scripts_dir;
     }
 
     try app.pushOverlay(rpc_server.asLayer());
@@ -331,8 +334,9 @@ fn runMcp(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
 
     var editor_layer = editor_layer_mod.EditorLayer{};
     if (loaded_project) |*project| {
-        editor_layer.state.setProjectContext(project.root_path, project.file.name, project.file.content_dir, project.file.start_scene);
+        editor_layer.state.setProjectContext(project.root_path, project.file.name, project.file.content_dir, project.file.scripts_dir, project.file.start_scene);
         app.project_root = project.root_path;
+        app.scripts_dir = project.file.scripts_dir;
         std.log.info("opening project '{s}' at {s}", .{ project.file.name, project.root_path });
     }
 
