@@ -54,6 +54,7 @@ export const en = {
     rotation: "Rotation",
     scale: "Scale",
     noEditableFields: "No editable fields",
+    selectEntityHint: "Select an entity from the Scene Hierarchy.",
   },
 
   // ── Console ───────────────────────────────────────────
@@ -736,6 +737,8 @@ export const en = {
     search: "Search scripts…",
     noScripts: "No script files found.",
     selectFile: "Select a script file to view.",
+    openFromSidebar: "Open a file from the sidebar to start editing.",
+    refreshScripts: "Refresh",
     save: "Save",
     enableEdit: "Enable editing",
     disableEdit: "Lock (read-only)",

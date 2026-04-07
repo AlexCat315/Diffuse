@@ -135,7 +135,13 @@ export function Inspector() {
     return (
       <div style={styles.container}>
         <div style={styles.header}>{t.inspector.title}</div>
-        <div style={styles.empty}>{t.common.noEntitySelected}</div>
+        <div style={styles.emptyState}>
+          <div style={{ width: 48, height: 48, borderRadius: 12, background: "#1e1e2e", display: "flex", alignItems: "center", justifyContent: "center", marginBottom: 12 }}>
+            <IconScript size={24} color="#313244" />
+          </div>
+          <span style={{ fontSize: 13, color: "#585b70" }}>{t.common.noEntitySelected}</span>
+          <span style={{ fontSize: 11, color: "#45475a", marginTop: 4 }}>{t.inspector.selectEntityHint ?? "Select an entity from the Scene Hierarchy."}</span>
+        </div>
       </div>
     );
   }
@@ -158,19 +164,21 @@ export function Inspector() {
       <div style={styles.header}>{t.inspector.title}</div>
 
       {/* Entity identity */}
-      <div style={styles.section}>
-        <div style={styles.sectionTitle}>{t.inspector.entityLabel} #{entityId}</div>
-        <div style={styles.field}>
-          <label style={styles.label}>{t.common.name}</label>
-          <input
-            type="text"
-            value={entityName}
-            onChange={(e) => setEntityName(e.target.value)}
-            onBlur={commitName}
-            onKeyDown={(e) => e.key === "Enter" && commitName()}
-            style={styles.input}
-            placeholder={t.inspector.entityNamePlaceholder}
-          />
+      <div style={styles.sectionCard}>
+        <div style={{ padding: "8px 10px" }}>
+          <div style={{ ...styles.sectionTitle, marginBottom: 6, fontSize: 11, color: "#6c7086" }}>{t.inspector.entityLabel} #{entityId}</div>
+          <div style={styles.field}>
+            <label style={styles.label}>{t.common.name}</label>
+            <input
+              type="text"
+              value={entityName}
+              onChange={(e) => setEntityName(e.target.value)}
+              onBlur={commitName}
+              onKeyDown={(e) => e.key === "Enter" && commitName()}
+              style={styles.input}
+              placeholder={t.inspector.entityNamePlaceholder}
+            />
+          </div>
         </div>
       </div>
 
@@ -295,22 +303,32 @@ function CollapsibleSection({
   onRemove?: () => void;
   children: React.ReactNode;
 }) {
+  const [hover, setHover] = useState(false);
   return (
-    <div style={styles.section}>
-      <div style={styles.sectionHeader} onClick={onToggle}>
+    <div style={styles.sectionCard}>
+      <div
+        style={styles.sectionHeader}
+        onClick={onToggle}
+        onMouseEnter={() => setHover(true)}
+        onMouseLeave={() => setHover(false)}
+      >
         <span style={styles.arrow}>{collapsed ? <IconTriangleRight size={10} /> : <IconTriangleDown size={10} />}</span>
         <span style={{ ...styles.sectionTitle, flex: 1 }}>{title}</span>
         {onRemove && (
           <button
-            style={styles.removeComponentBtn}
+            style={{
+              ...styles.removeComponentBtn,
+              opacity: hover ? 1 : 0,
+              transition: "opacity 0.15s",
+            }}
             title="Remove component"
             onClick={(e) => { e.stopPropagation(); onRemove(); }}
           >
-            <IconClose size={10} />
+            <IconClose size={10} color="#f38ba8" />
           </button>
         )}
       </div>
-      {!collapsed && children}
+      {!collapsed && <div style={styles.sectionBody}>{children}</div>}
     </div>
   );
 }
@@ -1045,7 +1063,7 @@ function ScriptParametersEditor({ entityId, scriptIndex }: { entityId: number; s
 // ── Styles ──────────────────────────────────────────────────────
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { display: "flex", flexDirection: "column" },
+  container: { display: "flex", flexDirection: "column", height: "100%", overflowY: "auto" },
   header: {
     padding: "8px 12px",
     borderBottom: "1px solid #313244",
@@ -1056,9 +1074,25 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#a6adc8",
   },
   empty: { padding: 24, textAlign: "center", opacity: 0.4, fontSize: 13 },
+  emptyState: {
+    display: "flex",
+    flexDirection: "column",
+    alignItems: "center",
+    justifyContent: "center",
+    flex: 1,
+    padding: 32,
+    gap: 0,
+  },
   section: {
     borderBottom: "1px solid #313244",
     padding: "6px 12px",
+  },
+  sectionCard: {
+    margin: "4px 8px",
+    borderRadius: 6,
+    background: "rgba(49,50,68,0.3)",
+    border: "1px solid #313244",
+    overflow: "hidden",
   },
   sectionHeader: {
     display: "flex",
@@ -1066,7 +1100,11 @@ const styles: Record<string, React.CSSProperties> = {
     gap: 4,
     cursor: "pointer",
     userSelect: "none",
-    marginBottom: 4,
+    padding: "6px 10px",
+    background: "rgba(49,50,68,0.4)",
+  },
+  sectionBody: {
+    padding: "4px 10px 8px",
   },
   sectionTitle: {
     fontSize: 12,
@@ -1142,11 +1180,11 @@ const styles: Record<string, React.CSSProperties> = {
   },
   addComponentBtn: {
     width: "100%",
-    padding: "6px 0",
-    background: "#313244",
-    border: "1px solid #45475a",
-    borderRadius: 4,
-    color: "#a6adc8",
+    padding: "7px 0",
+    background: "transparent",
+    border: "1px dashed #45475a",
+    borderRadius: 6,
+    color: "#6c7086",
     fontSize: 12,
     cursor: "pointer",
     textAlign: "center" as const,

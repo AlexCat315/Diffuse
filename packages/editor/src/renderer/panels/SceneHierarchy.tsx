@@ -250,7 +250,8 @@ function TreeNode({
         style={{
           ...styles.node,
           paddingLeft: 8 + depth * 16,
-          background: isSelected ? "#45475a" : "transparent",
+          background: isSelected ? "rgba(137,180,250,0.15)" : "transparent",
+          borderLeft: isSelected ? "2px solid #89b4fa" : "2px solid transparent",
         }}
         onClick={() => onSelect(node.id)}
         onContextMenu={(e) => { e.stopPropagation(); onContextMenu(e, node.id); }}
@@ -360,17 +361,17 @@ const styles: Record<string, React.CSSProperties> = {
   searchBar: {
     display: "flex",
     alignItems: "center",
-    padding: "4px 8px",
+    padding: "6px 8px",
     borderBottom: "1px solid #313244",
   },
   searchInput: {
     flex: 1,
-    background: "#313244",
-    border: "1px solid #45475a",
-    borderRadius: 3,
+    background: "#1e1e2e",
+    border: "1px solid #313244",
+    borderRadius: 4,
     color: "#cdd6f4",
-    padding: "4px 8px",
-    fontSize: 12,
+    padding: "5px 8px",
+    fontSize: 11,
     outline: "none",
   },
   clearSearch: {
@@ -381,16 +382,18 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "2px 4px",
   },
   tree: { flex: 1, overflow: "auto", padding: "4px 0" },
-  empty: { padding: 16, textAlign: "center", opacity: 0.4, fontSize: 13 },
+  empty: { padding: 24, textAlign: "center", color: "#585b70", fontSize: 12 },
   node: {
     display: "flex",
     alignItems: "center",
     gap: 4,
-    padding: "3px 8px",
+    padding: "5px 8px",
     cursor: "pointer",
-    fontSize: 13,
-    borderRadius: 3,
+    fontSize: 12,
+    borderRadius: 0,
     userSelect: "none",
+    transition: "background 0.1s",
+    color: "#cdd6f4",
   },
   arrow: {
     width: 14,

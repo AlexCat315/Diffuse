@@ -56,6 +56,7 @@ export const zhCN: TranslationKeys = {
     rotation: "旋转",
     scale: "缩放",
     noEditableFields: "无可编辑字段",
+    selectEntityHint: "从场景层级中选择一个实体。",
   },
 
   // ── Console ───────────────────────────────────────────
@@ -738,6 +739,8 @@ export const zhCN: TranslationKeys = {
     search: "搜索脚本…",
     noScripts: "未找到脚本文件。",
     selectFile: "选择一个脚本文件查看。",
+    openFromSidebar: "从左侧列表选择文件开始编辑。",
+    refreshScripts: "刷新",
     save: "保存",
     enableEdit: "启用编辑",
     disableEdit: "锁定（只读）",
