@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useCallback } from "react";
 import { useLocalState } from "../store/local-state";
 import { useI18n } from "../i18n";
+import { keybindingService } from "../keybinding-service";
 import { ViewCube } from "./ViewCube";
 import { useConnectionStore, useSceneStore, useViewportSettingsStore, useMeshEditStore } from "../store";
 import { ContextMenu, type MenuItem } from "../components/ContextMenu";
@@ -325,20 +326,19 @@ export function Viewport() {
       }
       // All other keys forwarded to engine
     } else {
-      // ── Object mode: gizmo + entity shortcuts handled globally ──────
-      // W/E/R/Q and Delete/Backspace are handled by the document-level
-      // capture-phase listener (works regardless of DOM focus).
+      // ── Object mode: gizmo + entity shortcuts handled by keybinding service.
+      // Skip forwarding these to engine to avoid double-processing.
       const k = e.key.toLowerCase();
       if (!e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (k === "delete" || k === "backspace" || k === "tab") return;
         const gizmoKeys = loadGizmoShortcuts();
-        if (k === (gizmoKeys.select?.key ?? "q").toLowerCase() ||
-            k === (gizmoKeys.translate?.key ?? "w").toLowerCase() ||
-            k === (gizmoKeys.rotate?.key ?? "e").toLowerCase() ||
-            k === (gizmoKeys.scale?.key ?? "r").toLowerCase() ||
-            k === "delete" || k === "backspace") {
-          // Already handled by capture-phase listener; don't double-process
-          return;
-        }
+        const gizmoKeySet = new Set([
+          (gizmoKeys.select?.key ?? "q").toLowerCase(),
+          (gizmoKeys.translate?.key ?? "w").toLowerCase(),
+          (gizmoKeys.rotate?.key ?? "e").toLowerCase(),
+          (gizmoKeys.scale?.key ?? "r").toLowerCase(),
+        ]);
+        if (gizmoKeySet.has(k)) return;
       }
     }
 
@@ -511,51 +511,42 @@ export function Viewport() {
     };
   }, []);
 
-  // Intercept Tab, gizmo shortcuts (W/E/R/Q), and Delete/Backspace at the
-  // document capture phase so they work regardless of which panel has DOM focus.
+  // Register viewport keybinding contexts with the central keybinding service.
+  // Gizmo shortcuts (Q/W/E/R) are global-scope but suppressed in mesh edit mode.
+  // Entity management (Delete/Backspace) and Tab forwarding are also registered.
   useEffect(() => {
-    const onGlobalKeyCapture = (e: KeyboardEvent) => {
-      // Skip when text-editing elements have focus
-      const tag = (e.target as HTMLElement)?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || (e.target as HTMLElement)?.isContentEditable) return;
+    const gizmoKeys = loadGizmoShortcuts();
+    const { changeGizmoMode } = useSceneStore.getState();
 
-      if (e.key === "Tab") {
-        e.preventDefault();
-        window.guavaEngine.call("viewport.sendInput", {
-          type: "keydown",
-          key: "tab",
-          shift: e.shiftKey,
-          ctrl: e.ctrlKey || e.metaKey,
-          alt: e.altKey,
-        } as never).catch(() => {});
-        return;
-      }
-
-      // Gizmo tool shortcuts (only when no modifier)
-      if (!e.ctrlKey && !e.metaKey && !e.altKey && !useMeshEditStore.getState().active) {
-        const k = e.key.toLowerCase();
-        const gizmoKeys = loadGizmoShortcuts();
-        const { changeGizmoMode } = useSceneStore.getState();
-
-        if (k === (gizmoKeys.select?.key ?? "q").toLowerCase()) { e.preventDefault(); changeGizmoMode("none"); return; }
-        if (k === (gizmoKeys.translate?.key ?? "w").toLowerCase()) { e.preventDefault(); changeGizmoMode("translate"); return; }
-        if (k === (gizmoKeys.rotate?.key ?? "e").toLowerCase()) { e.preventDefault(); changeGizmoMode("rotate"); return; }
-        if (k === (gizmoKeys.scale?.key ?? "r").toLowerCase()) { e.preventDefault(); changeGizmoMode("scale"); return; }
-
-        if (k === "delete" || k === "backspace") {
-          e.preventDefault();
+    // Gizmo context — active when NOT in mesh edit mode
+    const unregGizmo = keybindingService.registerAt(0, {
+      id: "viewport.gizmo",
+      when: () => !useMeshEditStore.getState().active,
+      bindings: [
+        { id: "gizmo.select", combo: { key: gizmoKeys.select?.key ?? "q" }, handler: () => { changeGizmoMode("none"); return true; } },
+        { id: "gizmo.translate", combo: { key: gizmoKeys.translate?.key ?? "w" }, handler: () => { changeGizmoMode("translate"); return true; } },
+        { id: "gizmo.rotate", combo: { key: gizmoKeys.rotate?.key ?? "e" }, handler: () => { changeGizmoMode("rotate"); return true; } },
+        { id: "gizmo.scale", combo: { key: gizmoKeys.scale?.key ?? "r" }, handler: () => { changeGizmoMode("scale"); return true; } },
+        { id: "entity.delete", combo: { key: "delete" }, handler: () => {
           const { selectedEntity: sel, setSelectedEntity, refreshHierarchy } = useSceneStore.getState();
-          if (sel != null) {
-            window.guavaEngine.call("scene.deleteEntity", { entityId: sel });
-            setSelectedEntity(null);
-            refreshHierarchy();
-          }
-          return;
-        }
-      }
-    };
-    document.addEventListener("keydown", onGlobalKeyCapture, true);
-    return () => document.removeEventListener("keydown", onGlobalKeyCapture, true);
+          if (sel != null) { window.guavaEngine.call("scene.deleteEntity", { entityId: sel }); setSelectedEntity(null); refreshHierarchy(); }
+          return true;
+        }},
+        { id: "entity.backspace", combo: { key: "backspace" }, handler: () => {
+          const { selectedEntity: sel, setSelectedEntity, refreshHierarchy } = useSceneStore.getState();
+          if (sel != null) { window.guavaEngine.call("scene.deleteEntity", { entityId: sel }); setSelectedEntity(null); refreshHierarchy(); }
+          return true;
+        }},
+        { id: "viewport.tab", combo: { key: "tab" }, handler: (e) => {
+          window.guavaEngine.call("viewport.sendInput", {
+            type: "keydown", key: "tab", shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey,
+          } as never).catch(() => {});
+          return true;
+        }},
+      ],
+    });
+
+    return () => { unregGizmo(); };
   }, []);
 
   // WebGL pixel rendering: subscribe to viewport:pixels and display via GPU.
