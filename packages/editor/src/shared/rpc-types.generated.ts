@@ -44,7 +44,6 @@ export interface EntityNode {
 export interface ComponentInfo {
   type: string;
   fields: ComponentField[];
-  scriptIndex?: number;
 }
 
 export interface ComponentField {
@@ -245,7 +244,7 @@ export interface RpcMethods {
   "entity.removeComponent": { params: { entityId: number; componentType: string }; result: Record<string, never> };
   "entity.setVisible": { params: { entityId: number; visible: boolean }; result: Record<string, never> };
   "entity.setSelectable": { params: { entityId: number; selectable: boolean }; result: Record<string, never> };
-  "entity.setAssetField": { params: { entityId: number; componentType: string; fieldName: string; assetPath?: string; scriptIndex?: number }; result: Record<string, never> };
+  "entity.setAssetField": { params: { entityId: number; componentType: string; fieldName: string; assetPath?: string }; result: Record<string, never> };
   "playback.play": { params: Record<string, never>; result: Record<string, never> };
   "playback.pause": { params: Record<string, never>; result: Record<string, never> };
   "playback.stop": { params: Record<string, never>; result: Record<string, never> };
@@ -279,12 +278,9 @@ export interface RpcMethods {
   "camera.lookAlongAxis": { params: { axisX: number; axisY: number; axisZ: number; distance?: number; targetX?: number; targetY?: number; targetZ?: number }; result: Record<string, never> };
   "camera.orbit": { params: { deltaYaw: number; deltaPitch: number }; result: Record<string, never> };
   "assets.list": { params: { path?: string }; result: { path: string; entries: AssetEntry[] } };
-  "assets.importModel": { params: { sourcePath: string; targetDir?: string }; result: { success: boolean; assetPath?: string } };
   "script.listScripts": { params: Record<string, never>; result: { scripts: ScriptFileInfo[] } };
   "script.getContent": { params: { path: string }; result: { content: string; language: string; readOnly: boolean } };
   "script.saveContent": { params: { path: string; content: string }; result: { success: boolean } };
-  "script.getEntityParameters": { params: { entityId: number; scriptIndex: number }; result: { parameters?: string | null } };
-  "script.setEntityParameters": { params: { entityId: number; scriptIndex: number; parameters: string }; result: Record<string, never> };
   "utilities.list": { params: Record<string, never>; result: { utilities: { handle: number; name: string; description: string; sourcePath: string; status: string; open: boolean; lastError: string }[] } };
   "utilities.setOpen": { params: { handle: number; open: boolean }; result: Record<string, never> };
   "utilities.remove": { params: { handle: number }; result: Record<string, never> };
