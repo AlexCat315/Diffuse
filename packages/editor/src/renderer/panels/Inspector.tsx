@@ -66,20 +66,27 @@ export function Inspector() {
       if (assetType !== "script") return;
       e.preventDefault();
 
-      const hasScript = components.some((c) => c.type.toLowerCase() === "script");
-      if (!hasScript) {
-        await window.guavaEngine.call("entity.addComponent", { entityId, componentType: "Script" });
-      }
-      // Assign the dropped script
+      // Always append a new Script to the scripts array
+      await window.guavaEngine.call("entity.addComponent", { entityId, componentType: "Script" });
+      // Refresh components to get the new scriptIndex
+      const data = await window.guavaEngine.call("entity.getComponents", { entityId });
+      const scriptComps = (data.components ?? []).filter(
+        (c: { type: string }) => c.type === "Script",
+      );
+      // The newly added script is the last one in the array
+      const lastScript = scriptComps[scriptComps.length - 1];
+      const newIndex = lastScript?.scriptIndex ?? 0;
+      // Assign the dropped script to the newly created slot
       await window.guavaEngine.call("entity.setAssetField", {
         entityId,
         componentType: "Script",
-        fieldName: "script",
+        fieldName: "script_handle",
         assetPath,
+        scriptIndex: newIndex,
       });
       setTimeout(() => fetchEntityData(entityId), 150);
     },
-    [entityId, components, fetchEntityData],
+    [entityId, fetchEntityData],
   );
 
   const handleInspectorDragOver = useCallback(
@@ -160,36 +167,50 @@ export function Inspector() {
       )}
 
       {/* Components */}
-      {components.map((comp) => (
-        <CollapsibleSection
-          key={comp.type}
-          title={comp.type}
-          collapsed={collapsedSections.has(comp.type)}
-          onToggle={() => toggleSection(comp.type)}
-          onRemove={() => {
-            window.guavaEngine.call("entity.removeComponent", { entityId, componentType: comp.type });
-            setTimeout(() => fetchEntityData(entityId), 100);
-          }}
-        >
-          {comp.fields.length === 0 ? (
-            <div style={{ ...styles.empty, padding: 8 }}>{t.inspector.noEditableFields}</div>
-          ) : (
-            comp.fields.map((field) => (
-              <FieldEditor
-                key={field.name}
-                entityId={entityId}
-                componentType={comp.type}
-                field={field as ComponentField}
-                onFieldChanged={() => fetchEntityData(entityId)}
-              />
-            ))
-          )}
-          {/* Script parameters editor */}
-          {comp.type === "Script" && (
-            <ScriptParametersEditor entityId={entityId} />
-          )}
-        </CollapsibleSection>
-      ))}
+      {components.map((comp, compIdx) => {
+        const isScript = comp.type === "Script";
+        const scriptIdx = isScript ? (comp as ComponentInfo & { scriptIndex?: number }).scriptIndex : undefined;
+        const sectionKey = isScript ? `Script#${scriptIdx ?? compIdx}` : comp.type;
+        const sectionTitle = isScript && components.filter((c) => c.type === "Script").length > 1
+          ? `Script #${(scriptIdx ?? 0) + 1}`
+          : comp.type;
+
+        return (
+          <CollapsibleSection
+            key={sectionKey}
+            title={sectionTitle}
+            collapsed={collapsedSections.has(sectionKey)}
+            onToggle={() => toggleSection(sectionKey)}
+            onRemove={() => {
+              window.guavaEngine.call("entity.removeComponent", {
+                entityId,
+                componentType: comp.type,
+                ...(scriptIdx != null ? { scriptIndex: scriptIdx } : {}),
+              });
+              setTimeout(() => fetchEntityData(entityId), 100);
+            }}
+          >
+            {comp.fields.length === 0 ? (
+              <div style={{ ...styles.empty, padding: 8 }}>{t.inspector.noEditableFields}</div>
+            ) : (
+              comp.fields.map((field) => (
+                <FieldEditor
+                  key={field.name}
+                  entityId={entityId}
+                  componentType={comp.type}
+                  field={field as ComponentField}
+                  onFieldChanged={() => fetchEntityData(entityId)}
+                  scriptIndex={scriptIdx}
+                />
+              ))
+            )}
+            {/* Script parameters editor */}
+            {isScript && (
+              <ScriptParametersEditor entityId={entityId} scriptIndex={scriptIdx} />
+            )}
+          </CollapsibleSection>
+        );
+      })}
 
       {/* Add Component */}
       <AddComponentButton
@@ -306,11 +327,13 @@ function FieldEditor({
   componentType,
   field,
   onFieldChanged,
+  scriptIndex,
 }: {
   entityId: number;
   componentType: string;
   field: ComponentField;
   onFieldChanged: () => void;
+  scriptIndex?: number;
 }) {
   const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
@@ -323,10 +346,11 @@ function FieldEditor({
           componentType,
           fieldName: field.name,
           value,
+          ...(scriptIndex != null ? { scriptIndex } : {}),
         });
       }, 150);
     },
-    [entityId, componentType, field.name],
+    [entityId, componentType, field.name, scriptIndex],
   );
 
   switch (field.fieldType) {
@@ -361,6 +385,7 @@ function FieldEditor({
           componentType={componentType}
           field={field}
           onChanged={onFieldChanged}
+          scriptIndex={scriptIndex}
         />
       );
     case "string":
@@ -504,11 +529,13 @@ function AssetRefField({
   componentType,
   field,
   onChanged,
+  scriptIndex,
 }: {
   entityId: number;
   componentType: string;
   field: ComponentField;
   onChanged: () => void;
+  scriptIndex?: number;
 }) {
   const [options, setOptions] = useState<string[]>([]);
   const [dragOver, setDragOver] = useState(false);
@@ -546,6 +573,7 @@ function AssetRefField({
       componentType,
       fieldName: field.name,
       assetPath,
+      ...(scriptIndex != null ? { scriptIndex } : {}),
     });
     setTimeout(onChanged, 100);
   };
@@ -773,7 +801,9 @@ function AddComponentButton({
   onAdded: () => void;
 }) {
   const available = ALL_COMPONENT_TYPES.filter(
-    (t) => !existingTypes.some((e) => e.toLowerCase() === t.toLowerCase()),
+    (t) =>
+      // Script can be added multiple times; other components are unique
+      t === "Script" || !existingTypes.some((e) => e.toLowerCase() === t.toLowerCase()),
   );
 
   const handleAdd = (type: string) => {
@@ -814,7 +844,7 @@ function AddComponentButton({
 
 // ── Script parameters editor ────────────────────────────────────
 
-function ScriptParametersEditor({ entityId }: { entityId: number }) {
+function ScriptParametersEditor({ entityId, scriptIndex }: { entityId: number; scriptIndex?: number }) {
   const [params, setParams] = useState("");
   const [editing, setEditing] = useState(false);
   const [draft, setDraft] = useState("");
@@ -822,14 +852,17 @@ function ScriptParametersEditor({ entityId }: { entityId: number }) {
 
   useEffect(() => {
     window.guavaEngine
-      .call("script.getEntityParameters", { entityId })
+      .call("script.getEntityParameters", {
+        entityId,
+        ...(scriptIndex != null ? { scriptIndex } : {}),
+      })
       .then((res: { parameters?: string | null }) => {
         const p = res.parameters ?? "";
         setParams(p);
         setDraft(p);
       })
       .catch(() => {});
-  }, [entityId]);
+  }, [entityId, scriptIndex]);
 
   const saveParams = useCallback(
     (value: string) => {
@@ -846,12 +879,13 @@ function ScriptParametersEditor({ entityId }: { entityId: number }) {
         window.guavaEngine.call("script.setEntityParameters", {
           entityId,
           parameters: value.trim() || "{}",
+          ...(scriptIndex != null ? { scriptIndex } : {}),
         });
         setParams(value);
         setEditing(false);
       }, 300);
     },
-    [entityId],
+    [entityId, scriptIndex],
   );
 
   return (

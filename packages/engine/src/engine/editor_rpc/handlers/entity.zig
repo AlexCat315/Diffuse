@@ -7,6 +7,11 @@ const handles = @import("../../assets/handles.zig");
 const library_mod = @import("../../assets/library.zig");
 const components = @import("../../scene/components.zig");
 
+/// Free script parameter memory if non-empty.
+fn freeScriptParams(alloc: std.mem.Allocator, parameters: []const u8) void {
+    if (parameters.len != 0) alloc.free(parameters);
+}
+
 pub fn getTransform(ctx: *Ctx) !void {
     const eid = try ctx.param(u64, "entityId");
     const entity = ctx.layer.world.getEntityConst(eid) orelse return error.EntityNotFound;
@@ -74,6 +79,9 @@ pub fn getComponents(ctx: *Ctx) !void {
     var first_comp = true;
 
     inline for (ctx_mod.component_fields) |cf| {
+        // Skip legacy single `script` field — we use `scripts` array below
+        if (comptime std.mem.eql(u8, cf.name, "script")) continue;
+
         if (@field(entity, cf.name)) |*comp| {
             if (!first_comp) try appendSlice(&buf, ctx.allocator, ",");
             first_comp = false;
@@ -83,6 +91,30 @@ pub fn getComponents(ctx: *Ctx) !void {
             try serializeFields(&buf, ctx.allocator, @TypeOf(comp.*), comp, &ctx.layer.world.resources, ctx.project_root);
             try appendSlice(&buf, ctx.allocator, "]}");
         }
+    }
+
+    // Emit each script from the `scripts` array with a scriptIndex
+    for (entity.scripts, 0..) |*script, idx| {
+        if (!first_comp) try appendSlice(&buf, ctx.allocator, ",");
+        first_comp = false;
+        try appendSlice(&buf, ctx.allocator, "{\"type\":\"Script\",\"scriptIndex\":");
+        // Format the index as a number
+        var idx_buf: [20]u8 = undefined;
+        const idx_str = std.fmt.bufPrint(&idx_buf, "{d}", .{idx}) catch "0";
+        try appendSlice(&buf, ctx.allocator, idx_str);
+        try appendSlice(&buf, ctx.allocator, ",\"fields\":[");
+        try serializeFields(&buf, ctx.allocator, components.Script, script, &ctx.layer.world.resources, ctx.project_root);
+        try appendSlice(&buf, ctx.allocator, "]}");
+    }
+
+    // Also emit the legacy single script as scriptIndex -1 if present
+    // (for backward compatibility during migration)
+    if (entity.script) |*legacy_script| {
+        if (!first_comp) try appendSlice(&buf, ctx.allocator, ",");
+        first_comp = false;
+        try appendSlice(&buf, ctx.allocator, "{\"type\":\"Script\",\"scriptIndex\":-1,\"fields\":[");
+        try serializeFields(&buf, ctx.allocator, components.Script, legacy_script, &ctx.layer.world.resources, ctx.project_root);
+        try appendSlice(&buf, ctx.allocator, "]}");
     }
 
     try appendSlice(&buf, ctx.allocator, "]}");
@@ -99,8 +131,40 @@ pub fn setComponentField(ctx: *Ctx) !void {
 
     const entity = ctx.layer.world.getEntity(eid) orelse return error.EntityNotFound;
 
+    // Special handling for Script — use scriptIndex to address the right entry
+    if (std.ascii.eqlIgnoreCase(comp_type, "Script")) {
+        const script_index = try ctx.paramOpt(i64, "scriptIndex");
+        var found = false;
+        if (script_index) |raw_idx| {
+            if (raw_idx == -1) {
+                // Legacy single script
+                if (entity.script) |*comp| {
+                    found = setField(components.Script, comp, field_name, raw_val) catch false;
+                }
+            } else {
+                const idx: usize = @intCast(raw_idx);
+                if (idx < entity.scripts.len) {
+                    found = setField(components.Script, &entity.scripts[idx], field_name, raw_val) catch false;
+                }
+            }
+        } else {
+            // Fallback: try scripts[0], then legacy
+            if (entity.scripts.len > 0) {
+                found = setField(components.Script, &entity.scripts[0], field_name, raw_val) catch false;
+            } else if (entity.script) |*comp| {
+                found = setField(components.Script, comp, field_name, raw_val) catch false;
+            }
+        }
+        if (!found) return error.InvalidArguments;
+        ctx.layer.world.markSceneChanged();
+        try ctx.reply(.{});
+        return;
+    }
+
     var found = false;
     inline for (ctx_mod.component_fields) |cf| {
+        // Skip legacy script — handled above
+        if (comptime std.mem.eql(u8, cf.name, "script")) continue;
         if (std.ascii.eqlIgnoreCase(comp_type, cf.display_name)) {
             if (@field(entity, cf.name)) |*comp| {
                 found = setField(@TypeOf(comp.*), comp, field_name, raw_val) catch false;
@@ -117,6 +181,20 @@ pub fn addComponent(ctx: *Ctx) !void {
     const eid = try ctx.param(u64, "entityId");
     const comp_type = try ctx.param([]const u8, "componentType");
     const entity = ctx.layer.world.getEntity(eid) orelse return error.EntityNotFound;
+
+    // Special handling for Script — append to `scripts` array
+    if (std.ascii.eqlIgnoreCase(comp_type, "Script")) {
+        const alloc = ctx.layer.world.allocator;
+        const old = entity.scripts;
+        const new_scripts = try alloc.alloc(components.Script, old.len + 1);
+        @memcpy(new_scripts[0..old.len], old);
+        new_scripts[old.len] = .{};
+        if (old.len > 0) alloc.free(old);
+        entity.scripts = new_scripts;
+        ctx.layer.world.markSceneChanged();
+        try ctx.reply(.{});
+        return;
+    }
 
     var found = false;
     inline for (ctx_mod.component_fields) |cf| {
@@ -139,6 +217,56 @@ pub fn removeComponent(ctx: *Ctx) !void {
     const eid = try ctx.param(u64, "entityId");
     const comp_type = try ctx.param([]const u8, "componentType");
     const entity = ctx.layer.world.getEntity(eid) orelse return error.EntityNotFound;
+
+    // Special handling for Script — remove by scriptIndex from `scripts` array
+    if (std.ascii.eqlIgnoreCase(comp_type, "Script")) {
+        const alloc = ctx.layer.world.allocator;
+        const script_index = try ctx.paramOpt(i64, "scriptIndex");
+
+        if (script_index) |raw_idx| {
+            if (raw_idx == -1) {
+                // Remove legacy single script
+                if (entity.script) |script| {
+                    freeScriptParams(alloc, script.parameters);
+                    entity.script = null;
+                }
+            } else {
+                const idx: usize = @intCast(raw_idx);
+                const old = entity.scripts;
+                if (idx >= old.len) return error.InvalidArguments;
+                // Free parameters of the removed script
+                freeScriptParams(alloc, old[idx].parameters);
+                if (old.len == 1) {
+                    alloc.free(old);
+                    entity.scripts = &.{};
+                } else {
+                    const new_scripts = try alloc.alloc(components.Script, old.len - 1);
+                    @memcpy(new_scripts[0..idx], old[0..idx]);
+                    if (idx < old.len - 1) {
+                        @memcpy(new_scripts[idx..], old[idx + 1 ..]);
+                    }
+                    alloc.free(old);
+                    entity.scripts = new_scripts;
+                }
+            }
+        } else {
+            // No index — remove all scripts (both legacy and array)
+            if (entity.script) |script| {
+                freeScriptParams(alloc, script.parameters);
+                entity.script = null;
+            }
+            for (entity.scripts) |script| {
+                freeScriptParams(alloc, script.parameters);
+            }
+            if (entity.scripts.len > 0) {
+                alloc.free(entity.scripts);
+                entity.scripts = &.{};
+            }
+        }
+        ctx.layer.world.markSceneChanged();
+        try ctx.reply(.{});
+        return;
+    }
 
     var found = false;
     inline for (ctx_mod.component_fields) |cf| {
@@ -231,7 +359,38 @@ pub fn setAssetField(ctx: *Ctx) !void {
         return;
     }
 
+    // Special case: Script component — use scriptIndex to address the right entry
+    if (std.ascii.eqlIgnoreCase(comp_type, "Script")) {
+        comp_type_matched = true;
+        const script_index = try ctx.paramOpt(i64, "scriptIndex");
+        if (script_index) |raw_idx| {
+            if (raw_idx == -1) {
+                if (entity.script) |*comp| {
+                    found = setHandleField(components.Script, comp, field_name, raw_val, resources) catch false;
+                }
+            } else {
+                const idx: usize = @intCast(raw_idx);
+                if (idx < entity.scripts.len) {
+                    found = setHandleField(components.Script, &entity.scripts[idx], field_name, raw_val, resources) catch false;
+                }
+            }
+        } else {
+            // Fallback: try scripts[0], then legacy
+            if (entity.scripts.len > 0) {
+                found = setHandleField(components.Script, &entity.scripts[0], field_name, raw_val, resources) catch false;
+            } else if (entity.script) |*comp| {
+                found = setHandleField(components.Script, comp, field_name, raw_val, resources) catch false;
+            }
+        }
+        if (!found) return error.InvalidArguments;
+        ctx.layer.world.markSceneChanged();
+        try ctx.reply(.{});
+        return;
+    }
+
     inline for (ctx_mod.component_fields) |cf| {
+        // Skip legacy script — handled above
+        if (comptime std.mem.eql(u8, cf.name, "script")) continue;
         if (std.ascii.eqlIgnoreCase(comp_type, cf.display_name)) {
             comp_type_matched = true;
             if (@field(entity, cf.name)) |*comp| {
