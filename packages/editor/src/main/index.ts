@@ -654,6 +654,8 @@ ipcMain.handle("launcher:createProject", async (_event, projectPath: string, pro
 
 // ── Build / Package ──────────────────────────────────────────────
 
+let activeBuildAbort: AbortController | null = null;
+
 ipcMain.handle("build:package", async (_event, opts?: { outputDir?: string; optimize?: string; choosePath?: boolean }) => {
   if (!currentProjectPath) return { ok: false, error: "No project open" };
 
@@ -677,6 +679,9 @@ ipcMain.handle("build:package", async (_event, opts?: { outputDir?: string; opti
   }
   if (!outputDir) return { ok: false, error: "No output directory" };
 
+  const abort = new AbortController();
+  activeBuildAbort = abort;
+
   try {
     broadcastToRenderers("build:progress", { stage: "compile", percent: 0, detail: "Starting build..." });
 
@@ -690,12 +695,23 @@ ipcMain.handle("build:package", async (_event, opts?: { outputDir?: string; opti
       (p: BuildProgress) => {
         broadcastToRenderers("build:progress", p);
       },
+      abort.signal,
     );
 
     return { ok: true, path: outPath };
   } catch (err) {
     return { ok: false, error: String(err) };
+  } finally {
+    activeBuildAbort = null;
   }
+});
+
+ipcMain.handle("build:cancel", async () => {
+  if (activeBuildAbort) {
+    activeBuildAbort.abort();
+    return { ok: true };
+  }
+  return { ok: false, error: "No active build" };
 });
 
 ipcMain.handle("build:run", async (_event, appPath: string) => {

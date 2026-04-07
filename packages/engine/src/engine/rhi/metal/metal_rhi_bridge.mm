@@ -1245,7 +1245,6 @@ bool guava_metal_rhi_acquire_swapchain(void* raw,
         auto* ctx = static_cast<GuavaMetalRhiContext*>(raw);
 
         if (!ctx->metal_layer) {
-            fprintf(stderr, "[GuavaMetal] acquire_swapchain: no CAMetalLayer configured\n");
             return false;
         }
 

@@ -229,16 +229,12 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
     defer allocator.free(app_name);
 
     // In editor-server mode, the window is managed by Electron.
-    // The engine creates a regular window that Electron can embed as a child.
+    // Run headless — no SDL window is created; rendering goes to IOSurface.
     var app = try engine.core.Application.init(allocator, .{
         .name = app_name,
         .window_width = 1280,
         .window_height = 720,
-        .window_borderless = false,
-        .window_maximized = false,
-        .window_native_titlebar_controls = false,
-        .window_hidden = true,
-        .window_background_app = true,
+        .is_headless = true,
         .frame_delay_ms = 16, // ~60fps default for editor-server mode
         .preferred_backends = options.backends(),
     });

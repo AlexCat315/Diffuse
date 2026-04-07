@@ -369,8 +369,10 @@ pub const RhiDevice = struct {
             errdefer vk_ptr.deinit();
 
             // Create the Vulkan surface through the platform window bridge.
-            _ = vk_ptr.createSurface(@ptrCast(window.handle));
-            _ = vk_ptr.createSwapchain(window.drawable_width, window.drawable_height, config.vsync_enabled);
+            if (window.handle) |wh| {
+                _ = vk_ptr.createSurface(@ptrCast(wh));
+                _ = vk_ptr.createSwapchain(window.drawable_width, window.drawable_height, config.vsync_enabled);
+            }
 
             const dev_ptr = allocator.create(rhi.Device) catch return error.OutOfMemory;
             errdefer allocator.destroy(dev_ptr);
@@ -681,7 +683,10 @@ pub const RhiDevice = struct {
     }
 
     pub fn beginFrame(self: *RhiDevice) Error!Frame {
-        const swapchain_image = try self.device.acquireSwapchainImage();
+        const swapchain_image = self.device.acquireSwapchainImage() catch |err| switch (err) {
+            error.SwapchainAcquireFailed => rhi.SwapchainImage{ .id = 0, .width = self.runtime_info.drawable_width, .height = self.runtime_info.drawable_height },
+            else => return err,
+        };
         const cmd = try self.device.createCommandBuffer(self.allocator);
         try self.resize(swapchain_image.width, swapchain_image.height);
         const frame: Frame = .{
@@ -704,7 +709,9 @@ pub const RhiDevice = struct {
         const active = self.current_frame orelse frame;
         try self.device.submitCommandBuffer(.graphics, &active.command_buffer, .{});
         const swapchain_image = active.swapchain_image;
-        try self.device.present(swapchain_image);
+        if (swapchain_image.id != 0) {
+            try self.device.present(swapchain_image);
+        }
         var cmd_mut = active.command_buffer;
         cmd_mut.deinit();
         self.flushPendingPostSubmitWork();
@@ -717,7 +724,9 @@ pub const RhiDevice = struct {
         const active = self.current_frame orelse frame;
         try self.device.submitCommandBuffer(.graphics, &active.command_buffer, .{});
         const swapchain_image = active.swapchain_image;
-        try self.device.present(swapchain_image);
+        if (swapchain_image.id != 0) {
+            try self.device.present(swapchain_image);
+        }
         var cmd_mut = active.command_buffer;
         cmd_mut.deinit();
         self.flushPendingPostSubmitWork();

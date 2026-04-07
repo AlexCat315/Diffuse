@@ -126,6 +126,8 @@ pub const ApplicationConfig = struct {
     script: script_system.ScriptSystemConfig = .{},
     /// 是否为编辑器模式（禁用时不渲染 debug 覆盖层）
     is_editor_mode: bool = true,
+    /// 无头模式：不创建 SDL 窗口，适用于 editor-server 等场景
+    is_headless: bool = false,
 };
 
 /// 运行报告
@@ -251,6 +253,7 @@ pub const Application = struct {
             .native_titlebar_controls = config.window_native_titlebar_controls,
             .hidden = config.window_hidden,
             .background_app = config.window_background_app,
+            .headless = config.is_headless,
         });
         errdefer window.deinit();
 

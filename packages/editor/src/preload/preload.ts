@@ -192,13 +192,17 @@ contextBridge.exposeInMainWorld("guavaEngine", {
   buildPackage: (opts?: { outputDir?: string; optimize?: string; choosePath?: boolean }): Promise<{ ok: boolean; path?: string; error?: string }> =>
     ipcRenderer.invoke("build:package", opts),
 
+  /** Cancel an in-progress build */
+  cancelBuild: (): Promise<{ ok: boolean; error?: string }> =>
+    ipcRenderer.invoke("build:cancel"),
+
   /** Run a previously built game package */
   runBuiltGame: (appPath: string): Promise<{ ok: boolean; error?: string }> =>
     ipcRenderer.invoke("build:run", appPath),
 
   /** Subscribe to build progress updates */
-  onBuildProgress: (callback: (progress: { stage: string; percent: number; detail?: string }) => void): (() => void) => {
-    const handler = (_event: Electron.IpcRendererEvent, progress: { stage: string; percent: number; detail?: string }) =>
+  onBuildProgress: (callback: (progress: { stage: string; percent: number; detail?: string; log?: string }) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, progress: { stage: string; percent: number; detail?: string; log?: string }) =>
       callback(progress);
     ipcRenderer.on("build:progress", handler);
     return () => ipcRenderer.removeListener("build:progress", handler);
@@ -274,8 +278,9 @@ export interface GuavaEngineAPI {
   onInitState(callback: (state: unknown) => void): () => void;
   // Build
   buildPackage(opts?: { outputDir?: string; optimize?: string; choosePath?: boolean }): Promise<{ ok: boolean; path?: string; error?: string }>;
+  cancelBuild(): Promise<{ ok: boolean; error?: string }>;
   runBuiltGame(appPath: string): Promise<{ ok: boolean; error?: string }>;
-  onBuildProgress(callback: (progress: { stage: string; percent: number; detail?: string }) => void): () => void;
+  onBuildProgress(callback: (progress: { stage: string; percent: number; detail?: string; log?: string }) => void): () => void;
   // File system
   fsMkdir(relativePath: string): Promise<{ ok: boolean; error?: string }>;
   fsRename(oldPath: string, newPath: string): Promise<{ ok: boolean; error?: string }>;

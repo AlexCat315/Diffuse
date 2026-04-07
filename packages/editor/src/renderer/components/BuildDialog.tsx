@@ -1,9 +1,10 @@
-import React, { useState, useEffect, useCallback } from "react";
+import React, { useState, useEffect, useCallback, useRef } from "react";
 
 interface BuildProgress {
   stage: string;
   percent: number;
   detail?: string;
+  log?: string;
 }
 
 interface BuildDialogProps {
@@ -16,20 +17,35 @@ export function BuildDialog({ open, onClose }: BuildDialogProps) {
   const [progress, setProgress] = useState<BuildProgress | null>(null);
   const [result, setResult] = useState<{ ok: boolean; path?: string; error?: string } | null>(null);
   const [optimize, setOptimize] = useState<"Debug" | "ReleaseSafe" | "ReleaseFast">("ReleaseSafe");
+  const [logs, setLogs] = useState<string[]>([]);
+  const logEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!open) return;
-    const unsub = window.guavaEngine.onBuildProgress((p) => setProgress(p));
+    const unsub = window.guavaEngine.onBuildProgress((p) => {
+      setProgress(p);
+      if (p.log) {
+        setLogs((prev) => {
+          const next = [...prev, p.log!];
+          return next.length > 500 ? next.slice(-500) : next;
+        });
+      }
+    });
     return unsub;
   }, [open]);
+
+  useEffect(() => {
+    logEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [logs]);
 
   const handleBuild = useCallback(async (choosePath = false, runAfter = false) => {
     setBuilding(true);
     setResult(null);
+    setLogs([]);
     setProgress({ stage: "init", percent: 0, detail: "Starting..." });
     try {
       const res = await window.guavaEngine.buildPackage({ optimize, choosePath }) as { ok: boolean; path?: string; error?: string };
-      if (res.error === "Cancelled") {
+      if (res.error === "Cancelled" || res.error === "Error: Build cancelled") {
         setBuilding(false);
         setProgress(null);
         return;
@@ -44,6 +60,10 @@ export function BuildDialog({ open, onClose }: BuildDialogProps) {
       setBuilding(false);
     }
   }, [optimize]);
+
+  const handleCancel = useCallback(async () => {
+    await window.guavaEngine.cancelBuild();
+  }, []);
 
   const handleRunGame = useCallback(async () => {
     if (!result?.path) return;
@@ -94,7 +114,18 @@ export function BuildDialog({ open, onClose }: BuildDialogProps) {
             <div style={styles.progressBar}>
               <div style={{ ...styles.progressFill, width: `${progress.percent}%` }} />
             </div>
-            <div style={styles.progressPercent}>{Math.round(progress.percent)}%</div>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+              <div style={styles.progressPercent}>{Math.round(progress.percent)}%</div>
+              <button style={styles.cancelBtn} onClick={handleCancel}>Cancel</button>
+            </div>
+            {logs.length > 0 && (
+              <div style={styles.logContainer}>
+                {logs.map((line, i) => (
+                  <div key={i} style={styles.logLine}>{line}</div>
+                ))}
+                <div ref={logEndRef} />
+              </div>
+            )}
           </div>
         )}
 
@@ -267,5 +298,21 @@ const styles = {
     whiteSpace: "pre-wrap" as const,
     maxHeight: 200,
     overflow: "auto",
+  },
+  logContainer: {
+    background: "#11111b",
+    border: "1px solid #313244",
+    borderRadius: 4,
+    padding: 8,
+    maxHeight: 200,
+    overflow: "auto",
+    fontFamily: "monospace",
+    fontSize: 11,
+  },
+  logLine: {
+    color: "#a6adc8",
+    lineHeight: "1.4",
+    whiteSpace: "pre-wrap" as const,
+    wordBreak: "break-all" as const,
   },
 };
