@@ -10,6 +10,7 @@ import { Tooltip } from "../components/Tooltip";
 
 import { rpc } from "../rpc";
 import { useConnectionStore } from "../store";
+import { useEditorStore } from "../store/editor";
 import { useI18n } from "../i18n";
 import type { ScriptFileInfo } from "../../shared/rpc-types";
 
@@ -175,6 +176,19 @@ export function ScriptViewer() {
       // ignore
     }
   }, [tabs, scripts]);
+
+  // ── React to external "open script" requests ───────────────
+
+  useEffect(() => {
+    let prevPath: string | null = null;
+    return useEditorStore.subscribe((state) => {
+      if (state.pendingScriptPath && state.pendingScriptPath !== prevPath) {
+        prevPath = state.pendingScriptPath;
+        openScript(state.pendingScriptPath);
+        useEditorStore.getState().clearPendingScript();
+      }
+    });
+  }, [openScript]);
 
   // ── Close tab ──────────────────────────────────────────────
 
