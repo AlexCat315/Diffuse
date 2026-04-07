@@ -29,7 +29,7 @@ import { PostProcessEditor } from "./panels/PostProcessEditor";
 import { SequencerPanel } from "./panels/SequencerPanel";
 import { AnimationEditor } from "./panels/AnimationEditor";
 import { MaterialGraphEditor } from "./panels/MaterialGraphEditor";
-import { ScriptViewer } from "./panels/ScriptViewer";
+import { ScriptEditor } from "./panels/ScriptEditor";
 import { AiChat } from "./panels/AiChat";
 import { ParticleEditor } from "./panels/ParticleEditor";
 import { PrefabEditor } from "./panels/PrefabEditor";
@@ -77,7 +77,6 @@ const ALL_PANELS: { id: string; name: string }[] = [
   { id: "sequencer", name: "Sequencer" },
   { id: "animationeditor", name: "Animation" },
   { id: "materialgraph", name: "Material Graph" },
-  { id: "scriptviewer", name: "Scripts" },
   { id: "aichat", name: "AI Chat" },
   { id: "particleeditor", name: "Particles" },
   { id: "prefabeditor", name: "Prefabs" },
@@ -176,7 +175,6 @@ const defaultLayout: IJsonModel = {
           { type: "tab", name: "Sequencer", component: "sequencer" },
           { type: "tab", name: "Animation", component: "animationeditor" },
           { type: "tab", name: "Material Graph", component: "materialgraph" },
-          { type: "tab", name: "Scripts", component: "scriptviewer" },
           { type: "tab", name: "AI Chat", component: "aichat" },
           { type: "tab", name: "Particles", component: "particleeditor" },
           { type: "tab", name: "Prefabs", component: "prefabeditor" },
@@ -363,20 +361,43 @@ export function App() {
   }, []);
 
   // Listen for "openScript" actions from other panels (e.g., AssetBrowser double-click)
-  // → activate the ScriptViewer tab in FlexLayout
+  // → open a script editor tab in the viewport tabset
   useEffect(() => {
     let prevPath: string | null = null;
     return useEditorStore.subscribe((state) => {
       if (state.pendingScriptPath && state.pendingScriptPath !== prevPath) {
         prevPath = state.pendingScriptPath;
-        // Find and select the scriptviewer tab
+        const scriptPath = state.pendingScriptPath;
+        const componentId = `script:${scriptPath}`;
         const model = modelRef.current;
+
+        // Check if a tab for this script already exists
+        let existingTabId: string | null = null;
         model.visitNodes((node) => {
-          if ("getComponent" in node && (node as TabNode).getComponent?.() === "scriptviewer") {
-            model.doAction(Actions.selectTab(node.getId()));
+          if ("getComponent" in node && (node as TabNode).getComponent?.() === componentId) {
+            existingTabId = node.getId();
           }
         });
-        // pendingScriptPath will be consumed by ScriptViewer itself
+
+        if (existingTabId) {
+          // Just activate the existing tab
+          model.doAction(Actions.selectTab(existingTabId));
+        } else {
+          // Create a new tab in the viewport tabset
+          const name = scriptPath.split("/").pop() ?? scriptPath;
+          model.doAction(Actions.addNode(
+            { type: "tab", name, component: componentId, enableFloat: true },
+            "viewport-tabset",
+            DockLocation.CENTER,
+            -1,
+            true,
+          ));
+        }
+
+        useEditorStore.getState().clearPendingScript();
+      } else if (!state.pendingScriptPath) {
+        // Reset prevPath when cleared so the same script can be re-opened
+        prevPath = null;
       }
     });
   }, []);
@@ -537,7 +558,6 @@ export function App() {
       case "sequencer":       return <SequencerPanel />;
       case "animationeditor": return <AnimationEditor />;
       case "materialgraph":   return <MaterialGraphEditor />;
-      case "scriptviewer":    return <ScriptViewer />;
       case "aichat":          return <AiChat />;
       case "particleeditor":  return <ParticleEditor />;
       case "prefabeditor":    return <PrefabEditor />;
@@ -545,6 +565,10 @@ export function App() {
       case "assetmanager":    return <AssetManager />;
       case "settings":        return <SettingsPanel />;
       default:
+        if (component?.startsWith("script:")) {
+          const scriptPath = component.slice("script:".length);
+          return <ScriptEditor path={scriptPath} />;
+        }
         return <div style={{ padding: 12, color: "#6c7086" }}>Unknown panel: {component}</div>;
     }
   }, []);

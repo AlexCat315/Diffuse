@@ -22,7 +22,7 @@ import { PostProcessEditor } from "./panels/PostProcessEditor";
 import { SequencerPanel } from "./panels/SequencerPanel";
 import { AnimationEditor } from "./panels/AnimationEditor";
 import { MaterialGraphEditor } from "./panels/MaterialGraphEditor";
-import { ScriptViewer } from "./panels/ScriptViewer";
+import { ScriptEditor } from "./panels/ScriptEditor";
 import { AiChat } from "./panels/AiChat";
 import { ParticleEditor } from "./panels/ParticleEditor";
 import { PrefabEditor } from "./panels/PrefabEditor";
@@ -65,7 +65,6 @@ const PANEL_LABELS: Record<string, string> = {
   sequencer: "Sequencer",
   animationeditor: "Animation",
   materialgraph: "Material Graph",
-  scriptviewer: "Scripts",
   aichat: "AI Chat",
   particleeditor: "Particles",
   prefabeditor: "Prefabs",
@@ -97,7 +96,6 @@ function PanelContent({ panelId }: { panelId: string }) {
     case "sequencer":       return <SequencerPanel />;
     case "animationeditor": return <AnimationEditor />;
     case "materialgraph":   return <MaterialGraphEditor />;
-    case "scriptviewer":    return <ScriptViewer />;
     case "aichat":          return <AiChat />;
     case "particleeditor":  return <ParticleEditor />;
     case "prefabeditor":    return <PrefabEditor />;
@@ -105,6 +103,10 @@ function PanelContent({ panelId }: { panelId: string }) {
     case "assetmanager":    return <AssetManager />;
     case "settings":        return <SettingsPanel />;
     default:
+      if (panelId.startsWith("script:")) {
+        const scriptPath = panelId.slice("script:".length);
+        return <ScriptEditor path={scriptPath} />;
+      }
       return <div style={{ padding: 12, color: "#6c7086" }}>Unknown panel: {panelId}</div>;
   }
 }
@@ -149,7 +151,10 @@ export function PopoutApp({ panels }: { panels: string[] }) {
 
   // Set window title
   useEffect(() => {
-    const label = panels.map((p) => PANEL_LABELS[p] ?? p).join(" / ");
+    const label = panels.map((p) => {
+      if (p.startsWith("script:")) return p.slice("script:".length).split("/").pop() ?? p;
+      return PANEL_LABELS[p] ?? p;
+    }).join(" / ");
     document.title = `${label} — Guava Editor`;
   }, [panels]);
 
