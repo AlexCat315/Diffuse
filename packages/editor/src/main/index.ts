@@ -718,7 +718,14 @@ ipcMain.handle("build:run", async (_event, appPath: string) => {
   try {
     const { spawn: spawnProc } = await import("child_process");
     if (process.platform === "darwin" && appPath.endsWith(".app")) {
-      spawnProc("open", [appPath], { detached: true, stdio: "ignore" });
+      // Launch the player binary directly so we can pass --project-path
+      const exe = path.join(appPath, "Contents", "MacOS", "guava-player");
+      const resourcesDir = path.join(appPath, "Contents", "Resources");
+      spawnProc(exe, ["run", "--project-path", resourcesDir], {
+        cwd: resourcesDir,
+        detached: true,
+        stdio: "ignore",
+      });
     } else {
       const exe = process.platform === "win32"
         ? path.join(appPath, "guava-player.exe")
