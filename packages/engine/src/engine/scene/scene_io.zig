@@ -382,6 +382,7 @@ const EntityRecord = struct {
     light: ?components.Light = null,
     vfx: ?components.Vfx = null,
     script: ?ScriptComponentRecord = null,
+    scripts: []const ScriptComponentRecord = &.{},
     audio_source: ?AudioSourceComponentRecord = null,
     audio_listener: ?AudioListenerComponentRecord = null,
     nav_agent: ?NavAgentComponentRecord = null,
@@ -916,6 +917,28 @@ fn buildSceneFileFiltered(
         else
             null;
 
+        // Build multi-script array records
+        var scripts_records_list = std.ArrayList(ScriptComponentRecord).empty;
+        defer scripts_records_list.deinit(allocator);
+        for (entity.scripts) |script| {
+            try scripts_records_list.append(allocator, .{
+                .asset_id = if (script.script_handle) |script_handle|
+                    try ensureScriptRecord(
+                        allocator,
+                        world,
+                        script_handle,
+                        &script_asset_ids,
+                        &script_records,
+                        &asset_records,
+                    )
+                else
+                    null,
+                .language = script.language,
+                .enabled = script.enabled,
+                .parameters = script.parameters,
+            });
+        }
+
         try entity_records.append(allocator, .{
             .name = entity.name,
             .parent = if (entity.parent) |parent_id| entity_indices.get(parent_id) else null,
@@ -980,6 +1003,7 @@ fn buildSceneFileFiltered(
             .light = entity.light,
             .vfx = entity.vfx,
             .script = script_component,
+            .scripts = scripts_records_list.items,
             .audio_source = if (entity.audio_source) |as| AudioSourceComponentRecord{
                 .clip_asset_path = as.clip_asset_path,
                 .bus = as.bus,
@@ -1534,6 +1558,22 @@ fn applySceneFileToWorld(
                 }
             else
                 null,
+            .scripts = blk: {
+                if (entity.scripts.len == 0) break :blk &.{};
+                const scripts_arr = try allocator.alloc(components.Script, entity.scripts.len);
+                for (entity.scripts, 0..) |sc, si| {
+                    scripts_arr[si] = .{
+                        .script_handle = if (sc.asset_id) |said|
+                            findScriptHandle(script_bindings.items, said) orelse return error.ScriptAssetNotFound
+                        else
+                            null,
+                        .language = sc.language,
+                        .enabled = sc.enabled,
+                        .parameters = sc.parameters,
+                    };
+                }
+                break :blk scripts_arr;
+            },
             .audio_source = if (entity.audio_source) |as_rec|
                 .{
                     .clip_asset_path = as_rec.clip_asset_path,

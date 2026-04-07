@@ -184,8 +184,10 @@ pub const Entity = struct {
     light: ?components.Light = null,
     /// 特效组件
     vfx: ?components.Vfx = null,
-    /// 脚本组件
+    /// 脚本组件（已弃用，兼容旧场景）
     script: ?components.Script = null,
+    /// 脚本组件列表（多脚本支持）
+    scripts: []components.Script = &.{},
     /// 音频源组件
     audio_source: ?components.AudioSource = null,
     /// 音频监听器组件
@@ -218,6 +220,10 @@ pub const Entity = struct {
         if (self.script) |script| {
             freeScriptParameters(allocator, script.parameters);
         }
+        for (self.scripts) |script| {
+            freeScriptParameters(allocator, script.parameters);
+        }
+        if (self.scripts.len > 0) allocator.free(self.scripts);
         if (self.audio_source) |audio_source| {
             if (audio_source.clip_asset_path) |path| {
                 if (path.len != 0) {
@@ -235,6 +241,17 @@ fn cloneScriptComponent(allocator: std.mem.Allocator, script: ?components.Script
     const value = script orelse return null;
     var cloned = value;
     cloned.parameters = if (value.parameters.len != 0) try allocator.dupe(u8, value.parameters) else &.{};
+    return cloned;
+}
+
+fn cloneScriptComponents(allocator: std.mem.Allocator, scripts: []const components.Script) ![]components.Script {
+    if (scripts.len == 0) return &.{};
+    const cloned = try allocator.alloc(components.Script, scripts.len);
+    errdefer allocator.free(cloned);
+    for (scripts, 0..) |script, i| {
+        cloned[i] = script;
+        cloned[i].parameters = if (script.parameters.len != 0) try allocator.dupe(u8, script.parameters) else &.{};
+    }
     return cloned;
 }
 
@@ -330,8 +347,10 @@ pub const EntityDesc = struct {
     light: ?components.Light = null,
     /// 特效组件
     vfx: ?components.Vfx = null,
-    /// 脚本组件
+    /// 脚本组件（已弃用，使用 scripts）
     script: ?components.Script = null,
+    /// 脚本组件列表（多脚本支持）
+    scripts: []const components.Script = &.{},
     /// 音频源组件
     audio_source: ?components.AudioSource = null,
     /// 音频监听器组件
@@ -642,6 +661,7 @@ pub const World = struct {
             .light = desc.light,
             .vfx = desc.vfx,
             .script = try cloneScriptComponent(self.allocator, desc.script),
+            .scripts = try cloneScriptComponents(self.allocator, desc.scripts),
             .audio_source = try cloneAudioSourceComponent(self.allocator, desc.audio_source),
             .audio_listener = desc.audio_listener,
             .nav_agent = desc.nav_agent,
@@ -1860,6 +1880,7 @@ pub const World = struct {
             .light = source.light,
             .vfx = source.vfx,
             .script = try cloneScriptComponent(self.allocator, source.script),
+            .scripts = try cloneScriptComponents(self.allocator, source.scripts),
             .audio_source = try cloneAudioSourceComponent(self.allocator, source.audio_source),
             .audio_listener = source.audio_listener,
             .nav_agent = source.nav_agent,

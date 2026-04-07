@@ -11,7 +11,19 @@
 import { spawn } from "child_process";
 import path from "path";
 import fs from "fs/promises";
-import { existsSync } from "fs";
+import { existsSync, readFileSync } from "fs";
+
+/** Read the scripts_dir setting from .guava project file, defaulting to "Content/Scripts". */
+function readScriptsDir(projectPath: string): string {
+  try {
+    const raw = readFileSync(path.join(projectPath, ".guava"), "utf-8");
+    const config = JSON.parse(raw);
+    if (typeof config.scripts_dir === "string" && config.scripts_dir.length > 0) {
+      return config.scripts_dir;
+    }
+  } catch { /* ignore */ }
+  return "Content/Scripts";
+}
 
 export type BuildPlatform = "macos" | "windows" | "linux";
 
@@ -217,12 +229,14 @@ async function assemblePackage(
     await relativizeSceneAssetPaths(path.join(assetsDir, "Content"), projectPath);
   }
 
-  // Copy project scripts from engine runtime location
-  const projectScriptsDir = path.join(engineRoot, "assets", "scripts");
+  // Copy project scripts from the configured scripts directory
+  const scriptsDir = readScriptsDir(projectPath);
+  const projectScriptsDir = path.join(projectPath, scriptsDir);
   if (existsSync(projectScriptsDir)) {
+    onLog?.(`Copy ${scriptsDir}/`);
     await copyDirRecursive(
       projectScriptsDir,
-      path.join(assetsDir, "assets", "scripts"),
+      path.join(assetsDir, scriptsDir),
       [".meta", ".DS_Store"],
     );
   }

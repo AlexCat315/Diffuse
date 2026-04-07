@@ -131,6 +131,7 @@ export function createNewProject(projectPath: string, projectName: string): void
   // Create directory structure
   fs.mkdirSync(normalized, { recursive: true });
   fs.mkdirSync(path.join(normalized, "Content", "Scenes"), { recursive: true });
+  fs.mkdirSync(path.join(normalized, "Content", "Scripts"), { recursive: true });
   fs.mkdirSync(path.join(normalized, "Derived"), { recursive: true });
 
   // Write .guava marker file
@@ -139,6 +140,7 @@ export function createNewProject(projectPath: string, projectName: string): void
     name: projectName,
     content_dir: "Content",
     start_scene: "Content/Scenes/Main.guava_scene",
+    scripts_dir: "Content/Scripts",
   };
   fs.writeFileSync(
     path.join(normalized, ".guava"),

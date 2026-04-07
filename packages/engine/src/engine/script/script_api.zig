@@ -80,6 +80,10 @@ pub const HostApi = extern struct {
     canvas_set_visible: *const fn (?*anyopaque, u32, u32) callconv(.c) void,
     canvas_remove_widget: *const fn (?*anyopaque, u32) callconv(.c) void,
     canvas_was_button_clicked: *const fn (?*anyopaque, u32) callconv(.c) u32,
+    // Script Parameters
+    get_parameter_float: *const fn (?*anyopaque, [*]const u8, usize, f32) callconv(.c) f32,
+    get_parameter_int: *const fn (?*anyopaque, [*]const u8, usize, i32) callconv(.c) i32,
+    get_parameter_bool: *const fn (?*anyopaque, [*]const u8, usize, u32) callconv(.c) u32,
 };
 
 // ---------------------------------------------------------------------------
@@ -504,4 +508,23 @@ pub fn canvasRemoveWidget(id: WidgetId) void {
 /// 查询按钮本帧是否被点击
 pub fn canvasWasButtonClicked(id: WidgetId) bool {
     return api.canvas_was_button_clicked(ctx, id) != 0;
+}
+
+// ---------------------------------------------------------------------------
+// Script Parameters API
+// ---------------------------------------------------------------------------
+
+/// 获取 float 类型参数值，参数由编辑器 Inspector 设置
+pub fn getParameterFloat(name: []const u8, default: f32) f32 {
+    return api.get_parameter_float(ctx, name.ptr, name.len, default);
+}
+
+/// 获取 int 类型参数值
+pub fn getParameterInt(name: []const u8, default: i32) i32 {
+    return api.get_parameter_int(ctx, name.ptr, name.len, default);
+}
+
+/// 获取 bool 类型参数值
+pub fn getParameterBool(name: []const u8, default: bool) bool {
+    return api.get_parameter_bool(ctx, name.ptr, name.len, if (default) @as(u32, 1) else @as(u32, 0)) != 0;
 }

@@ -241,6 +241,32 @@ function generateEmptyScene(): string {
   return JSON.stringify(scene, null, 2);
 }
 
+const STARTER_SCRIPT = `//! Guava Engine Starter Script
+//!
+//! Attach this script to an entity via the Inspector panel.
+//! The entity will rotate continuously as a demo.
+
+const guava = @import("guava");
+const std = @import("std");
+
+var angle: f32 = 0.0;
+
+export fn guava_on_init() callconv(.c) void {
+    guava.log("Script initialized!");
+}
+
+export fn guava_on_update(dt: f32) callconv(.c) void {
+    // Rotate the entity around the Y axis
+    angle += dt * 1.0;
+    const half = angle * 0.5;
+    guava.setRotation(.{ 0.0, @sin(half), 0.0, @cos(half) });
+}
+
+export fn guava_on_destroy() callconv(.c) void {
+    guava.log("Script destroyed");
+}
+`;
+
 /**
  * Apply a template to a project directory.
  * Assumes the directory structure (.guava, Content/Scenes, Derived) already exists.
@@ -253,9 +279,14 @@ export function applyTemplate(projectPath: string, templateId: string): void {
   fs.mkdirSync(scenesDir, { recursive: true });
 
   switch (templateId) {
-    case "3d-basic":
+    case "3d-basic": {
       fs.writeFileSync(scenePath, generateBasic3DScene(), "utf-8");
+      // Write a starter script so the user has a working example
+      const scriptsDir = path.join(projectPath, "Content", "Scripts");
+      fs.mkdirSync(scriptsDir, { recursive: true });
+      fs.writeFileSync(path.join(scriptsDir, "rotate.zig"), STARTER_SCRIPT, "utf-8");
       break;
+    }
     case "empty":
     default:
       fs.writeFileSync(scenePath, generateEmptyScene(), "utf-8");

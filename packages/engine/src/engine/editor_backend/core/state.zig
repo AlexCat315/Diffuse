@@ -602,6 +602,7 @@ pub const EditorState = struct {
     history_snapshot_needs_refresh: bool = false,
     project_root_buffer: [project_root_buffer_size]u8 = [_]u8{0} ** project_root_buffer_size,
     project_content_root_buffer: [project_root_buffer_size]u8 = [_]u8{0} ** project_root_buffer_size,
+    project_scripts_dir_buffer: [project_root_buffer_size]u8 = [_]u8{0} ** project_root_buffer_size,
     project_name_buffer: [project_name_buffer_size]u8 = [_]u8{0} ** project_name_buffer_size,
     project_start_scene_buffer: [project_root_buffer_size]u8 = [_]u8{0} ** project_root_buffer_size,
     asset_registry: ?engine.assets.AssetRegistry = null,
@@ -878,6 +879,11 @@ pub const EditorState = struct {
         return fixedBufferSlice(self.project_content_root_buffer[0..]);
     }
 
+    pub fn scriptsDir(self: *const EditorState) []const u8 {
+        const dir = fixedBufferSlice(self.project_scripts_dir_buffer[0..]);
+        return if (dir.len > 0) dir else "Content/Scripts";
+    }
+
     pub fn projectName(self: *const EditorState) []const u8 {
         return fixedBufferSlice(self.project_name_buffer[0..]);
     }
@@ -890,13 +896,15 @@ pub const EditorState = struct {
         return self.projectPath().len > 0;
     }
 
-    pub fn setProjectContext(self: *EditorState, project_root: []const u8, project_name: []const u8, content_dir: []const u8, start_scene: ?[]const u8) void {
+    pub fn setProjectContext(self: *EditorState, project_root: []const u8, project_name: []const u8, content_dir: []const u8, scripts_dir: []const u8, start_scene: ?[]const u8) void {
         writeFixedBuffer(self.project_root_buffer[0..], project_root);
         writeFixedBuffer(self.project_name_buffer[0..], project_name);
 
         var content_path_buffer: [project_root_buffer_size]u8 = undefined;
         const content_path = std.fmt.bufPrint(&content_path_buffer, "{s}/{s}", .{ project_root, content_dir }) catch project_root;
         writeFixedBuffer(self.project_content_root_buffer[0..], content_path);
+
+        writeFixedBuffer(self.project_scripts_dir_buffer[0..], scripts_dir);
 
         if (start_scene) |scene_path| {
             if (std.fs.path.isAbsolute(scene_path)) {

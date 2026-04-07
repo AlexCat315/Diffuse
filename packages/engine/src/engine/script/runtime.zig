@@ -272,10 +272,18 @@ pub const ScriptRuntime = struct {
     }
 
     pub fn applyEntityScriptParameters(self: *ScriptRuntime, world: *world_mod.World, entity_id: types.EntityId) !bool {
+        // With the pull-based parameter model, scripts read parameters on
+        // demand via guava.getParameterFloat/Int/Bool.  This function serves
+        // as a validation hook: it confirms the entity has a script with
+        // non-empty parameters and that a running instance exists.
         _ = self;
-        _ = world;
-        _ = entity_id;
-        // Parameter payload application removed; no-op for builtin VMs.
+        const entity = world.getEntity(entity_id) orelse return false;
+        if (entity.script) |script| {
+            if (script.parameters.len > 0 and script.instance_id != null) return true;
+        }
+        for (entity.scripts) |script| {
+            if (script.parameters.len > 0 and script.instance_id != null) return true;
+        }
         return false;
     }
 
@@ -368,8 +376,13 @@ pub const ScriptRuntime = struct {
         }
 
         for (world_ptr.entities.items) |*entity| {
+            // Support legacy single-script field
             if (entity.script) |*script| {
                 self.ensureEntityScriptInstance(world_ptr, entity, script);
+            }
+            // Support multi-script array
+            for (entity.scripts) |*script| {
+                self.ensureEntityScriptInstance(world_ptr, entity, @constCast(script));
             }
         }
     }
@@ -426,15 +439,24 @@ pub const ScriptRuntime = struct {
     fn instanceMatchesWorld(self: *ScriptRuntime, world: *world_mod.World, instance: *const types.ScriptInstance) bool {
         _ = self;
         const entity = world.getEntityConst(instance.entity_id) orelse return false;
-        const script = entity.script orelse return false;
-        if (!script.enabled or script.script_handle == null) {
-            return false;
+        // Check legacy single-script field
+        if (entity.script) |script| {
+            if (script.enabled and script.script_handle != null) {
+                const script_language: types.ScriptLanguage = @enumFromInt(@intFromEnum(script.language));
+                if (script.instance_id == instance.id and
+                    script.script_handle.? == instance.script_handle and
+                    script_language == instance.language) return true;
+            }
         }
-
-        const script_language: types.ScriptLanguage = @enumFromInt(@intFromEnum(script.language));
-        return script.instance_id == instance.id and
-            script.script_handle.? == instance.script_handle and
-            script_language == instance.language;
+        // Check multi-script array
+        for (entity.scripts) |script| {
+            if (!script.enabled or script.script_handle == null) continue;
+            const script_language: types.ScriptLanguage = @enumFromInt(@intFromEnum(script.language));
+            if (script.instance_id == instance.id and
+                script.script_handle.? == instance.script_handle and
+                script_language == instance.language) return true;
+        }
+        return false;
     }
 
     fn destroyTrackedInstance(
@@ -445,6 +467,11 @@ pub const ScriptRuntime = struct {
     ) void {
         if (world.getEntity(instance.entity_id)) |entity| {
             if (entity.script) |*script| {
+                if (script.instance_id == instance.id) {
+                    script.instance_id = null;
+                }
+            }
+            for (entity.scripts) |*script| {
                 if (script.instance_id == instance.id) {
                     script.instance_id = null;
                 }

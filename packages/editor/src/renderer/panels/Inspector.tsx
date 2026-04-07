@@ -184,6 +184,10 @@ export function Inspector() {
               />
             ))
           )}
+          {/* Script parameters editor */}
+          {comp.type === "Script" && (
+            <ScriptParametersEditor entityId={entityId} />
+          )}
         </CollapsibleSection>
       ))}
 
@@ -667,7 +671,7 @@ function SkyEnvironmentField({
       entityId,
       componentType: "Sky",
       fieldName: "environment_asset_id",
-      assetPath: assetPath || null,
+      assetPath: assetPath ?? undefined,
     });
     setTimeout(onChanged, 150);
   };
@@ -803,6 +807,149 @@ function AddComponentButton({
             ))
           )}
         </div>
+      )}
+    </div>
+  );
+}
+
+// ── Script parameters editor ────────────────────────────────────
+
+function ScriptParametersEditor({ entityId }: { entityId: number }) {
+  const [params, setParams] = useState("");
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState("");
+  const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+
+  useEffect(() => {
+    window.guavaEngine
+      .call("script.getEntityParameters", { entityId })
+      .then((res: { parameters?: string | null }) => {
+        const p = res.parameters ?? "";
+        setParams(p);
+        setDraft(p);
+      })
+      .catch(() => {});
+  }, [entityId]);
+
+  const saveParams = useCallback(
+    (value: string) => {
+      // Validate JSON before sending
+      if (value.trim() && value.trim() !== "") {
+        try {
+          JSON.parse(value);
+        } catch {
+          return; // Invalid JSON — don't save
+        }
+      }
+      clearTimeout(commitTimer.current);
+      commitTimer.current = setTimeout(() => {
+        window.guavaEngine.call("script.setEntityParameters", {
+          entityId,
+          parameters: value.trim() || "{}",
+        });
+        setParams(value);
+        setEditing(false);
+      }, 300);
+    },
+    [entityId],
+  );
+
+  return (
+    <div style={{ padding: "4px 8px" }}>
+      <div style={{ display: "flex", alignItems: "center", marginBottom: 4 }}>
+        <span style={{ fontSize: 11, color: "#a6adc8", flex: 1 }}>Parameters</span>
+        {!editing && (
+          <button
+            onClick={() => {
+              setDraft(params || "{}");
+              setEditing(true);
+            }}
+            style={{
+              background: "none",
+              border: "1px solid #45475a",
+              borderRadius: 3,
+              color: "#cdd6f4",
+              fontSize: 10,
+              padding: "1px 6px",
+              cursor: "pointer",
+            }}
+          >
+            Edit
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <div>
+          <textarea
+            value={draft}
+            onChange={(e) => setDraft(e.target.value)}
+            rows={4}
+            style={{
+              width: "100%",
+              background: "#1e1e2e",
+              color: "#cdd6f4",
+              border: "1px solid #45475a",
+              borderRadius: 3,
+              fontFamily: "monospace",
+              fontSize: 11,
+              padding: 4,
+              resize: "vertical",
+              boxSizing: "border-box",
+            }}
+          />
+          <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+            <button
+              onClick={() => saveParams(draft)}
+              style={{
+                background: "#89b4fa",
+                border: "none",
+                borderRadius: 3,
+                color: "#1e1e2e",
+                fontSize: 10,
+                padding: "2px 8px",
+                cursor: "pointer",
+              }}
+            >
+              Save
+            </button>
+            <button
+              onClick={() => {
+                setDraft(params);
+                setEditing(false);
+              }}
+              style={{
+                background: "none",
+                border: "1px solid #45475a",
+                borderRadius: 3,
+                color: "#cdd6f4",
+                fontSize: 10,
+                padding: "2px 8px",
+                cursor: "pointer",
+              }}
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : params ? (
+        <pre
+          style={{
+            background: "#1e1e2e",
+            borderRadius: 3,
+            padding: 4,
+            margin: 0,
+            fontSize: 10,
+            color: "#a6adc8",
+            whiteSpace: "pre-wrap",
+            wordBreak: "break-all",
+            maxHeight: 100,
+            overflow: "auto",
+          }}
+        >
+          {params}
+        </pre>
+      ) : (
+        <span style={{ fontSize: 10, color: "#585b70", fontStyle: "italic" }}>No parameters set</span>
       )}
     </div>
   );

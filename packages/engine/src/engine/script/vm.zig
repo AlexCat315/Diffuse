@@ -399,6 +399,10 @@ const ZigDylibHostApi = extern struct {
     canvas_set_visible: *const fn (?*anyopaque, u32, u32) callconv(.c) void,
     canvas_remove_widget: *const fn (?*anyopaque, u32) callconv(.c) void,
     canvas_was_button_clicked: *const fn (?*anyopaque, u32) callconv(.c) u32,
+    // Script Parameters
+    get_parameter_float: *const fn (?*anyopaque, [*]const u8, usize, f32) callconv(.c) f32,
+    get_parameter_int: *const fn (?*anyopaque, [*]const u8, usize, i32) callconv(.c) i32,
+    get_parameter_bool: *const fn (?*anyopaque, [*]const u8, usize, u32) callconv(.c) u32,
 };
 
 const zig_dylib_host_api: ZigDylibHostApi = .{
@@ -455,6 +459,10 @@ const zig_dylib_host_api: ZigDylibHostApi = .{
     .canvas_set_visible = zigDylibHostCanvasSetVisible,
     .canvas_remove_widget = zigDylibHostCanvasRemoveWidget,
     .canvas_was_button_clicked = zigDylibHostCanvasWasButtonClicked,
+    // Script Parameters
+    .get_parameter_float = zigDylibHostGetParameterFloat,
+    .get_parameter_int = zigDylibHostGetParameterInt,
+    .get_parameter_bool = zigDylibHostGetParameterBool,
 };
 
 const ZigDylibLibrary = struct {
@@ -468,11 +476,15 @@ const ZigDylibLibrary = struct {
     on_collision_exit: ?*const fn (u64) callconv(.c) void,
     on_trigger_enter: ?*const fn (u64) callconv(.c) void,
     on_trigger_exit: ?*const fn (u64) callconv(.c) void,
+    get_parameter_metadata: ?*const fn () callconv(.c) [*:0]const u8,
 };
 
 const ZigDylibInstanceState = struct {
     library: *ZigDylibLibrary,
     host_context: ZigDylibHostContext = .{},
+    /// When true, this instance owns a private dylib copy for state isolation.
+    /// The dylib file will be closed and deleted when the instance is destroyed.
+    owns_library: bool = false,
 };
 
 // ---------------------------------------------------------------------------
@@ -486,6 +498,8 @@ pub const ZigVM = struct {
     current_dylib: ?*ZigDylibLibrary = null,
     error_msg: []u8 = &.{},
     mode: enum { none, builtin, dylib } = .none,
+    /// Counter for generating unique instance dylib paths.
+    instance_counter: u64 = 0,
 
     const Self = @This();
 
@@ -553,13 +567,20 @@ pub const ZigVM = struct {
 
     pub fn createInstance(vm: *Self, ctx: *context.ScriptContext) types.ScriptError!*types.ScriptInstance {
         if (vm.mode == .dylib) {
-            if (vm.current_dylib) |library| {
+            if (vm.current_dylib) |template_library| {
+                // Create a per-instance copy of the dylib so each instance
+                // gets its own data segment (isolated module-level state).
+                const instance_library = vm.copyDylibForInstance(template_library) catch {
+                    setOwnedMessage(vm.allocator, &vm.error_msg, "failed to copy dylib for instance isolation");
+                    return types.ScriptError.LoadError;
+                };
+
                 const instance = vm.allocator.create(types.ScriptInstance) catch return types.ScriptError.LoadError;
                 errdefer vm.allocator.destroy(instance);
 
                 const state = vm.allocator.create(ZigDylibInstanceState) catch return types.ScriptError.LoadError;
                 errdefer vm.allocator.destroy(state);
-                state.* = .{ .library = library };
+                state.* = .{ .library = instance_library, .owns_library = true };
 
                 instance.* = .{
                     .id = 0,
@@ -583,7 +604,17 @@ pub const ZigVM = struct {
     pub fn destroyInstance(vm: *Self, instance: *types.ScriptInstance) void {
         if (instance.user_data_tag == zig_dylib_user_data_tag) {
             if (instance.user_data) |data| {
-                vm.allocator.destroy(castUserData(ZigDylibInstanceState, data));
+                const state = castUserData(ZigDylibInstanceState, data);
+                if (state.owns_library) {
+                    // Close and delete the per-instance dylib copy
+                    const lib_path = state.library.path;
+                    state.library.lib.close();
+                    // Delete the copy file (best-effort)
+                    std.fs.cwd().deleteFile(lib_path) catch {};
+                    vm.allocator.free(lib_path);
+                    vm.allocator.destroy(state.library);
+                }
+                vm.allocator.destroy(state);
             }
             vm.allocator.destroy(instance);
             return;
@@ -668,6 +699,75 @@ pub const ZigVM = struct {
         defer state.host_context.active_context = null;
         state.library.bind(&zig_dylib_host_api, &state.host_context, ctx.entity);
         if (state.library.on_trigger_exit) |cb| cb(other);
+    }
+
+    /// Copy a template dylib to a unique per-instance path and load it.
+    /// This ensures each script instance gets its own data segment, isolating
+    /// module-level state variables across entities sharing the same script.
+    fn copyDylibForInstance(vm: *Self, template: *ZigDylibLibrary) !*ZigDylibLibrary {
+        vm.instance_counter += 1;
+
+        const stem = std.fs.path.stem(template.path);
+        const ext = std.fs.path.extension(template.path);
+        const dir = std.fs.path.dirname(template.path) orelse ".";
+
+        const copy_path = std.fmt.allocPrint(vm.allocator, "{s}/{s}_inst_{d}{s}", .{ dir, stem, vm.instance_counter, ext }) catch return error.CompileError;
+        errdefer vm.allocator.free(copy_path);
+
+        // Copy the template dylib file
+        const src_path_z = vm.allocator.dupeZ(u8, template.path) catch return error.CompileError;
+        defer vm.allocator.free(src_path_z);
+        const dst_path_z = vm.allocator.dupeZ(u8, copy_path) catch return error.CompileError;
+        defer vm.allocator.free(dst_path_z);
+
+        const src_file = std.fs.cwd().openFile(src_path_z, .{}) catch {
+            setOwnedMessage(vm.allocator, &vm.error_msg, "failed to open template dylib for copy");
+            return error.CompileError;
+        };
+        defer src_file.close();
+
+        const dst_file = std.fs.cwd().createFile(dst_path_z, .{}) catch {
+            setOwnedMessage(vm.allocator, &vm.error_msg, "failed to create instance dylib copy");
+            return error.CompileError;
+        };
+        defer dst_file.close();
+
+        // Stream copy
+        var buf: [8192]u8 = undefined;
+        while (true) {
+            const n = src_file.read(&buf) catch return error.CompileError;
+            if (n == 0) break;
+            dst_file.writeAll(buf[0..n]) catch return error.CompileError;
+        }
+
+        // Load the copy as a new dylib (bypass cache — this is a unique path)
+        var lib = std.DynLib.open(dst_path_z) catch {
+            setOwnedMessage(vm.allocator, &vm.error_msg, "failed to open instance dylib copy");
+            return error.CompileError;
+        };
+
+        const bind_fn = lib.lookup(*const fn (*const ZigDylibHostApi, ?*anyopaque, u64) callconv(.c) void, "guava_bind") orelse {
+            setOwnedMessage(vm.allocator, &vm.error_msg, "missing guava_bind in instance dylib copy");
+            lib.close();
+            return error.CompileError;
+        };
+
+        const library = vm.allocator.create(ZigDylibLibrary) catch return error.CompileError;
+        library.* = .{
+            .path = copy_path,
+            .lib = lib,
+            .bind = bind_fn,
+            .on_init = lib.lookup(*const fn () callconv(.c) void, "guava_on_init"),
+            .on_update = lib.lookup(*const fn (f32) callconv(.c) void, "guava_on_update"),
+            .on_destroy = lib.lookup(*const fn () callconv(.c) void, "guava_on_destroy"),
+            .on_collision_enter = lib.lookup(*const fn (u64) callconv(.c) void, "guava_on_collision_enter"),
+            .on_collision_exit = lib.lookup(*const fn (u64) callconv(.c) void, "guava_on_collision_exit"),
+            .on_trigger_enter = lib.lookup(*const fn (u64) callconv(.c) void, "guava_on_trigger_enter"),
+            .on_trigger_exit = lib.lookup(*const fn (u64) callconv(.c) void, "guava_on_trigger_exit"),
+            .get_parameter_metadata = lib.lookup(*const fn () callconv(.c) [*:0]const u8, "guava_get_parameter_metadata"),
+        };
+
+        return library;
     }
 
     fn compileToDylib(vm: *Self, resource: *const script_resource_mod.ScriptResource) !*ZigDylibLibrary {
@@ -778,6 +878,7 @@ pub const ZigVM = struct {
             .on_collision_exit = lib.lookup(*const fn (u64) callconv(.c) void, "guava_on_collision_exit"),
             .on_trigger_enter = lib.lookup(*const fn (u64) callconv(.c) void, "guava_on_trigger_enter"),
             .on_trigger_exit = lib.lookup(*const fn (u64) callconv(.c) void, "guava_on_trigger_exit"),
+            .get_parameter_metadata = lib.lookup(*const fn () callconv(.c) [*:0]const u8, "guava_get_parameter_metadata"),
         };
 
         vm.loaded_dylibs.append(vm.allocator, library) catch return error.CompileError;
@@ -1201,6 +1302,73 @@ fn zigDylibHostCanvasSetVisible(_: ?*anyopaque, _: u32, _: u32) callconv(.c) voi
 fn zigDylibHostCanvasRemoveWidget(_: ?*anyopaque, _: u32) callconv(.c) void {}
 fn zigDylibHostCanvasWasButtonClicked(_: ?*anyopaque, _: u32) callconv(.c) u32 {
     return 0;
+}
+
+// ---------------------------------------------------------------------------
+// Script Parameter host functions
+// ---------------------------------------------------------------------------
+
+/// Resolve the parameters JSON for the currently executing script on the active entity.
+fn resolveActiveScriptParameters(ctx_ptr: *context.ScriptContext) ?[]const u8 {
+    const entity = ctx_ptr.world.getEntity(ctx_ptr.entity) orelse return null;
+    // Match by instance_id to find the correct script component
+    if (entity.script) |script| {
+        if (script.instance_id) |iid| {
+            if (iid == ctx_ptr.instance.id and script.parameters.len > 0) return script.parameters;
+        }
+    }
+    for (entity.scripts) |script| {
+        if (script.instance_id) |iid| {
+            if (iid == ctx_ptr.instance.id and script.parameters.len > 0) return script.parameters;
+        }
+    }
+    // Fallback: use legacy script if only one exists
+    if (entity.script) |script| {
+        if (script.parameters.len > 0) return script.parameters;
+    }
+    return null;
+}
+
+fn zigDylibHostGetParameterFloat(userdata: ?*anyopaque, name_ptr: [*]const u8, name_len: usize, default_val: f32) callconv(.c) f32 {
+    const ctx_ptr = zigDylibActiveContext(userdata) orelse return default_val;
+    const params_json = resolveActiveScriptParameters(ctx_ptr) orelse return default_val;
+    var parsed = std.json.parseFromSlice(std.json.Value, ctx_ptr.allocator, params_json, .{}) catch return default_val;
+    defer parsed.deinit();
+    if (parsed.value != .object) return default_val;
+    const val = parsed.value.object.get(name_ptr[0..name_len]) orelse return default_val;
+    return switch (val) {
+        .float => |f| @floatCast(f),
+        .integer => |i| @floatFromInt(i),
+        else => default_val,
+    };
+}
+
+fn zigDylibHostGetParameterInt(userdata: ?*anyopaque, name_ptr: [*]const u8, name_len: usize, default_val: i32) callconv(.c) i32 {
+    const ctx_ptr = zigDylibActiveContext(userdata) orelse return default_val;
+    const params_json = resolveActiveScriptParameters(ctx_ptr) orelse return default_val;
+    var parsed = std.json.parseFromSlice(std.json.Value, ctx_ptr.allocator, params_json, .{}) catch return default_val;
+    defer parsed.deinit();
+    if (parsed.value != .object) return default_val;
+    const val = parsed.value.object.get(name_ptr[0..name_len]) orelse return default_val;
+    return switch (val) {
+        .integer => |i| @intCast(i),
+        .float => |f| @intFromFloat(f),
+        else => default_val,
+    };
+}
+
+fn zigDylibHostGetParameterBool(userdata: ?*anyopaque, name_ptr: [*]const u8, name_len: usize, default_val: u32) callconv(.c) u32 {
+    const ctx_ptr = zigDylibActiveContext(userdata) orelse return default_val;
+    const params_json = resolveActiveScriptParameters(ctx_ptr) orelse return default_val;
+    var parsed = std.json.parseFromSlice(std.json.Value, ctx_ptr.allocator, params_json, .{}) catch return default_val;
+    defer parsed.deinit();
+    if (parsed.value != .object) return default_val;
+    const val = parsed.value.object.get(name_ptr[0..name_len]) orelse return default_val;
+    return switch (val) {
+        .bool => |b| if (b) @as(u32, 1) else @as(u32, 0),
+        .integer => |i| if (i != 0) @as(u32, 1) else @as(u32, 0),
+        else => default_val,
+    };
 }
 
 const csharp_native_aot_api_version: u32 = 1;
