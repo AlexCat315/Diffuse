@@ -291,11 +291,12 @@ export function AssetManager() {
 
       {/* Import progress */}
       {importProgress && (
-        <div style={{ padding: "4px 12px" }}>
-          <div style={{ fontSize: 11, color: "#a6adc8", marginBottom: 2 }}>
-            Importing {importProgress.current + 1}/{importProgress.total}: {importProgress.name ?? "…"}
+        <div style={{ padding: "6px 12px" }}>
+          <div style={{ fontSize: 11, color: "#a6adc8", marginBottom: 3, display: "flex", justifyContent: "space-between" }}>
+            <span>Importing: {importProgress.name ?? "…"}</span>
+            <span style={{ color: "#585b70" }}>{importProgress.current + 1}/{importProgress.total}</span>
           </div>
-          <div style={{ height: 3, background: "#313244", borderRadius: 2, overflow: "hidden" }}>
+          <div style={{ height: 4, background: "#313244", borderRadius: 3, overflow: "hidden" }}>
             <div
               style={{
                 height: "100%",
@@ -425,12 +426,12 @@ const styles: Record<string, React.CSSProperties> = {
   },
   searchInput: {
     flex: 1,
-    background: "#313244",
-    border: "1px solid #45475a",
+    background: "#1e1e2e",
+    border: "1px solid #313244",
     borderRadius: 4,
     color: "#cdd6f4",
-    padding: "4px 8px",
-    fontSize: 12,
+    padding: "5px 8px",
+    fontSize: 11,
     outline: "none",
     boxSizing: "border-box" as const,
   },
@@ -524,22 +525,24 @@ const styles: Record<string, React.CSSProperties> = {
     alignContent: "flex-start",
   },
   gridItem: {
-    width: 80,
-    padding: "8px 4px 4px",
-    borderRadius: 4,
+    width: 84,
+    padding: "8px 4px 6px",
+    borderRadius: 6,
     cursor: "grab",
     display: "flex",
     flexDirection: "column" as const,
     alignItems: "center",
-    gap: 2,
+    gap: 3,
     transition: "background 0.1s",
   },
   gridIcon: {
-    width: 40,
-    height: 40,
+    width: 44,
+    height: 44,
     display: "flex",
     alignItems: "center",
     justifyContent: "center",
+    borderRadius: 8,
+    background: "rgba(49,50,68,0.4)",
   },
   gridName: {
     fontSize: 10,

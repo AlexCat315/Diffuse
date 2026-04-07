@@ -4,6 +4,19 @@ import { I18nProvider } from "./i18n";
 import { App } from "./App";
 import { PopoutApp } from "./PopoutApp";
 import { Launcher } from "./Launcher";
+import { loader } from "@monaco-editor/react";
+import * as monaco from "monaco-editor";
+import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+
+// Configure Monaco workers for Vite (must be before loader.config)
+self.MonacoEnvironment = {
+  getWorker() {
+    return new editorWorker();
+  },
+};
+
+// Configure Monaco to use local bundle instead of CDN (blocked by CSP)
+loader.config({ monaco });
 
 const params = new URLSearchParams(window.location.search);
 const popoutParam = params.get("popout");
