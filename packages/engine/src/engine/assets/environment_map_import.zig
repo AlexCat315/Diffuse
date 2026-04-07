@@ -7,7 +7,7 @@ const environment_map_resource = @import("environment_map_resource.zig");
 const handles = @import("handles.zig");
 const rhi_types = @import("../rhi/types.zig");
 
-pub const current_environment_map_cache_version: u32 = registry_mod.AssetType.texture.importVersion() + 2;
+pub const current_environment_map_cache_version: u32 = registry_mod.AssetType.texture.importVersion() + 3;
 
 const CookedIBLData = struct {
     version: u32 = current_environment_map_cache_version,
@@ -53,11 +53,19 @@ pub fn generateIBLDataForHDR(
     );
     defer allocator.free(irradiance_pixels);
 
+    // Cap prefiltered map resolution to avoid extreme memory usage.
+    // Standard IBL practice: 256x256 base with mip chain.
+    const prefiltered_max: u32 = 256;
+    const pref_w = @min(width, prefiltered_max);
+    const pref_h = @min(height, prefiltered_max);
+
     const prefiltered_pixels = try ibl_precompute.generatePrefilteredMap(
         allocator,
         width,
         height,
         hdr_pixels,
+        pref_w,
+        pref_h,
         5,
     );
     defer allocator.free(prefiltered_pixels);
@@ -76,8 +84,8 @@ pub fn generateIBLDataForHDR(
         .import_version = import_version,
         .irradiance_width = 64,
         .irradiance_height = 64,
-        .prefiltered_width = width,
-        .prefiltered_height = height,
+        .prefiltered_width = pref_w,
+        .prefiltered_height = pref_h,
         .prefiltered_mip_levels = 5,
         .brdf_lut_size = 256,
         .irradiance_pixels_hex = irradiance_pixels_hex,
@@ -125,6 +133,18 @@ pub fn loadIBLData(
         return error.AssetTypeMismatch;
     }
 
+    // Copy record fields we need BEFORE any ensureDerivedTexture calls,
+    // because those calls may append to the registry's records ArrayList,
+    // causing a reallocation that invalidates the `record` pointer.
+    const owned_id = try allocator.dupe(u8, record.id);
+    defer allocator.free(owned_id);
+    const owned_source_path = try allocator.dupe(u8, record.source_path);
+    defer allocator.free(owned_source_path);
+    const owned_source_hash = try allocator.dupe(u8, record.source_hash);
+    defer allocator.free(owned_source_hash);
+    const owned_import_settings_hash = try allocator.dupe(u8, record.import_settings_hash);
+    defer allocator.free(owned_import_settings_hash);
+
     const environment_map_handle = library.textureHandleByAssetId(asset_id) orelse return error.EnvironmentMapTextureNotLoaded;
     const cooked_ibl_path = try ensureCookedIBLData(allocator, registry, asset_id);
     defer allocator.free(cooked_ibl_path);
@@ -145,17 +165,17 @@ pub fn loadIBLData(
     const prefiltered_bytes = try decodeRgb32fHexToRgbaBytes(allocator, cooked.prefiltered_pixels_hex);
     defer allocator.free(prefiltered_bytes);
 
-    const derived_dependencies = [_][]const u8{record.id};
+    const derived_dependencies = [_][]const u8{owned_id};
 
     const irradiance_handle = try environment_map_resource.ensureDerivedTexture(
         allocator,
         library,
         asset_id,
-        record.source_path,
+        owned_source_path,
         "ibl/irradiance",
         "IBL Irradiance",
-        record.source_hash,
-        record.import_settings_hash,
+        owned_source_hash,
+        owned_import_settings_hash,
         derived_dependencies[0..],
         cooked.irradiance_width,
         cooked.irradiance_height,
@@ -166,11 +186,11 @@ pub fn loadIBLData(
         allocator,
         library,
         asset_id,
-        record.source_path,
+        owned_source_path,
         "ibl/prefiltered",
         "IBL Prefiltered",
-        record.source_hash,
-        record.import_settings_hash,
+        owned_source_hash,
+        owned_import_settings_hash,
         derived_dependencies[0..],
         cooked.prefiltered_width,
         cooked.prefiltered_height,
@@ -180,7 +200,7 @@ pub fn loadIBLData(
     const brdf_lut_handle = try environment_map_resource.ensureBRDFLUTTexture(allocator, library, cooked.brdf_lut_size);
 
     return .{
-        .name = try allocator.dupe(u8, record.id),
+        .name = try allocator.dupe(u8, owned_id),
         .source_width = 0,
         .source_height = 0,
         .source_pixels = try allocator.alloc(f32, 0),

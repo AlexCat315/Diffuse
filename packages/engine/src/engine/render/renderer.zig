@@ -341,6 +341,7 @@ pub const Renderer = struct {
     /// 天空盒通道
     skybox_pass: ?skybox_pass_mod.SkyboxPass = null,
     skybox_logged: bool = false,
+    skybox_log_count: u32 = 0,
     /// 轮廓通道（选中物体高亮）
     outline_pass: outline_pass_mod.OutlinePass,
     /// Gizmo 通道（编辑器可视化）
@@ -1567,7 +1568,9 @@ pub const Renderer = struct {
                 // Sync Sky component FIRST so scene_environment_asset_id is up-to-date
                 // before resolveEnvironmentTextures reads it.
                 syncSkyComponent(scene, &prepared_scene);
-                try resolveEnvironmentTextures(self, scene, &prepared_scene);
+                resolveEnvironmentTextures(self, scene, &prepared_scene) catch |err| {
+                    render_log.warn("resolveEnvironmentTextures failed: {s}; using fallback", .{@errorName(err)});
+                };
 
                 var prepared_preview_scene: mesh_pass_mod.PreparedScene = undefined;
                 var has_prepared_preview_scene = false;
@@ -1784,6 +1787,55 @@ pub const Renderer = struct {
                         self.scene_viewport.velocity() != null and
                         active_render_mode != .wireframe and
                         self.velocity_pass.isReady();
+                    // ── Clustered Forward+: light culling compute pass ──────────
+                    // MUST run BEFORE the scene render pass begins because
+                    // Metal compute dispatch ends the current render encoder.
+                    // Placing it between beginRenderPass and draw commands
+                    // silently kills renderEnc → all subsequent draws are
+                    // dropped on Metal.
+                    if (self.cluster_lights_pass) |*cluster_pass| {
+                        if (cluster_pass.isReady()) {
+                            const mat4_cluster = @import("../math/mat4.zig");
+                            const inv_proj = mat4_cluster.inverse(prepared_scene.projection_matrix) orelse mat4_cluster.identity();
+
+                            const camera_near = switch (prepared_scene.camera.camera.projection) {
+                                .perspective => |p| p.near_clip,
+                                .orthographic => |o| o.near_clip,
+                            };
+                            const camera_far = switch (prepared_scene.camera.camera.projection) {
+                                .perspective => |p| p.far_clip,
+                                .orthographic => |o| o.far_clip,
+                            };
+                            const vp_w: f32 = @floatFromInt(self.scene_viewport.width);
+                            const vp_h: f32 = @floatFromInt(self.scene_viewport.height);
+
+                            var cluster_uniforms = cluster_lights_pass_mod.ClusterLightsUniforms{
+                                .inv_projection = inv_proj,
+                                .view = prepared_scene.view_matrix,
+                                .near = camera_near,
+                                .far = camera_far,
+                                .viewport_w = vp_w,
+                                .viewport_h = vp_h,
+                                .point_count = @intCast(@min(prepared_scene.lights.point_lights.len, cluster_lights_pass_mod.max_point_lights)),
+                            };
+                            const pt_count = cluster_uniforms.point_count;
+                            for (0..pt_count) |i| {
+                                const pl = prepared_scene.lights.point_lights[i];
+                                cluster_uniforms.lights[i] = .{
+                                    .position_range = .{ pl.position[0], pl.position[1], pl.position[2], pl.range },
+                                    .color_intensity = .{ pl.color[0], pl.color[1], pl.color[2], pl.intensity },
+                                };
+                            }
+
+                            cluster_pass.dispatch(&self.rhi, frame, cluster_uniforms);
+
+                            prepared_scene.cluster_count_texture = if (cluster_pass.cluster_count_texture) |*t| t else null;
+                            prepared_scene.cluster_indices_texture = if (cluster_pass.cluster_indices_texture) |*t| t else null;
+                            prepared_scene.cluster_nearest_sampler = if (cluster_pass.nearest_sampler) |*s| s else null;
+                            prepared_scene.cluster_params = .{ camera_near, camera_far, vp_w, vp_h };
+                        }
+                    }
+
                     var scene_pass: rhi_mod.RenderPass = undefined;
                     if (run_rt_shadow_denoise) {
                         const depth_prepass_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.depthOnly(scene_depth_target.?));
@@ -1926,54 +1978,6 @@ pub const Renderer = struct {
                         }
                     }
 
-                    // ── Clustered Forward+: light culling compute pass ──────────
-                    // Dispatch before base pass so cluster textures are ready for
-                    // the fragment shader. Also sets prepared_scene.cluster_* refs.
-                    if (self.cluster_lights_pass) |*cluster_pass| {
-                        if (cluster_pass.isReady()) {
-                            const mat4_cluster = @import("../math/mat4.zig");
-                            const inv_proj = mat4_cluster.inverse(prepared_scene.projection_matrix) orelse mat4_cluster.identity();
-
-                            const camera_near = switch (prepared_scene.camera.camera.projection) {
-                                .perspective => |p| p.near_clip,
-                                .orthographic => |o| o.near_clip,
-                            };
-                            const camera_far = switch (prepared_scene.camera.camera.projection) {
-                                .perspective => |p| p.far_clip,
-                                .orthographic => |o| o.far_clip,
-                            };
-                            const vp_w: f32 = @floatFromInt(self.scene_viewport.width);
-                            const vp_h: f32 = @floatFromInt(self.scene_viewport.height);
-
-                            // Build the per-frame UBO for the cluster compute shader.
-                            var cluster_uniforms = cluster_lights_pass_mod.ClusterLightsUniforms{
-                                .inv_projection = inv_proj,
-                                .view = prepared_scene.view_matrix,
-                                .near = camera_near,
-                                .far = camera_far,
-                                .viewport_w = vp_w,
-                                .viewport_h = vp_h,
-                                .point_count = @intCast(@min(prepared_scene.lights.point_lights.len, cluster_lights_pass_mod.max_point_lights)),
-                            };
-                            const pt_count = cluster_uniforms.point_count;
-                            for (0..pt_count) |i| {
-                                const pl = prepared_scene.lights.point_lights[i];
-                                cluster_uniforms.lights[i] = .{
-                                    .position_range = .{ pl.position[0], pl.position[1], pl.position[2], pl.range },
-                                    .color_intensity = .{ pl.color[0], pl.color[1], pl.color[2], pl.intensity },
-                                };
-                            }
-
-                            cluster_pass.dispatch(&self.rhi, frame, cluster_uniforms);
-
-                            // Pass cluster texture refs to prepared_scene for base_pass binding.
-                            prepared_scene.cluster_count_texture = if (cluster_pass.cluster_count_texture) |*t| t else null;
-                            prepared_scene.cluster_indices_texture = if (cluster_pass.cluster_indices_texture) |*t| t else null;
-                            prepared_scene.cluster_nearest_sampler = if (cluster_pass.nearest_sampler) |*s| s else null;
-                            prepared_scene.cluster_params = .{ camera_near, camera_far, vp_w, vp_h };
-                        }
-                    }
-
                     // 渲染主几何（Opaque）：调用 BasePass.draw 来绘制不透明物体（会遍历 DrawItem 列表并发出 draw 调用）
                     const opaque_start = std.time.nanoTimestamp();
                     const opaque_stats = try self.base_pass.draw(&self.rhi, frame, scene_pass, &prepared_scene, .{
@@ -1986,12 +1990,13 @@ pub const Renderer = struct {
 
                     if (self.skybox_pass) |*skybox_pass| {
                         if (active_render_mode != .wireframe and skybox_pass.isReady() and prepared_scene.environment_map != null and prepared_scene.sky_enabled) {
-                            if (!self.skybox_logged) {
+                            if (self.skybox_log_count < 5) {
+                                self.skybox_log_count += 1;
                                 const env_tex = prepared_scene.environment_map.?;
-                                render_log.info("skybox active: env_map {d}x{d} intensity={d:.3} gpu_id={d}", .{
-                                    env_tex.desc.width, env_tex.desc.height, prepared_scene.sky_intensity, env_tex.id,
+                                render_log.info("skybox draw #{d}: env_map {d}x{d} intensity={d:.3} gpu_id={d} viewport_active={} target={s}", .{
+                                    self.skybox_log_count,                 env_tex.desc.width, env_tex.desc.height, prepared_scene.sky_intensity, env_tex.id, viewport_active,
+                                    if (viewport_active) "hdr" else "ldr",
                                 });
-                                self.skybox_logged = true;
                             }
                             const skybox_start = std.time.nanoTimestamp();
                             skybox_pass.draw(&self.rhi, frame, scene_pass, &prepared_scene, prepared_scene.environment_map.?, if (viewport_active) .hdr else .ldr, prepared_scene.sky_intensity);

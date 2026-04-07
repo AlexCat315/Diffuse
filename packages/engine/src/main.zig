@@ -305,7 +305,10 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
 
     std.log.info("Editor server mode: RPC on port {d}", .{options.editor_port});
 
-    _ = try app.run(options.frame_count);
+    _ = app.run(options.frame_count) catch |err| {
+        std.log.err("app.run() returned error: {s}", .{@errorName(err)});
+        return err;
+    };
 }
 
 fn runMcp(allocator: std.mem.Allocator, options: cli.CliOptions) !void {

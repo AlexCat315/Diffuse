@@ -148,15 +148,17 @@ pub fn generateIrradianceMap(
 // Generate prefiltered environment map for different roughness levels
 pub fn generatePrefilteredMap(
     allocator: std.mem.Allocator,
-    width: u32,
-    height: u32,
+    src_width: u32,
+    src_height: u32,
     hdr_pixels: []const f32,
+    out_width: u32,
+    out_height: u32,
     max_mip_level: u32,
 ) ![]f32 {
     // For simplicity, we use a box filter approximation
     // Real implementation should use importance sampling with GGX distribution
 
-    var result = try allocator.alloc(f32, width * height * 3);
+    var result = try allocator.alloc(f32, out_width * out_height * 3);
     errdefer allocator.free(result);
 
     // For each roughness level (approximated with a simple blur)
@@ -166,10 +168,18 @@ pub fn generatePrefilteredMap(
         0.5;
     const filter_size = @max(1, @as(u32, @intFromFloat(roughness * 10.0)));
 
+    // Scale factor from output to source coordinates
+    const scale_x = @as(f32, @floatFromInt(src_width)) / @as(f32, @floatFromInt(out_width));
+    const scale_y = @as(f32, @floatFromInt(src_height)) / @as(f32, @floatFromInt(out_height));
+
     var i: u32 = 0;
-    while (i < width * height) : (i += 1) {
-        const x = i % width;
-        const y = i / width;
+    while (i < out_width * out_height) : (i += 1) {
+        const ox = i % out_width;
+        const oy = i / out_width;
+
+        // Map output pixel to source coordinates
+        const src_x = @as(u32, @intFromFloat(@as(f32, @floatFromInt(ox)) * scale_x));
+        const src_y = @as(u32, @intFromFloat(@as(f32, @floatFromInt(oy)) * scale_y));
 
         // Simple box filter
         var color = [3]f32{ 0.0, 0.0, 0.0 };
@@ -180,9 +190,9 @@ pub fn generatePrefilteredMap(
         while (ky < kernel_size) : (ky += 1) {
             var kx: u32 = 0;
             while (kx < kernel_size) : (kx += 1) {
-                const sx = @min(x + kx, width - 1);
-                const sy = @min(y + ky, height - 1);
-                const sample_idx = (sy * width + sx) * 4;
+                const sx = @min(src_x + kx, src_width - 1);
+                const sy = @min(src_y + ky, src_height - 1);
+                const sample_idx = (sy * src_width + sx) * 4;
 
                 if (sample_idx + 2 < hdr_pixels.len) {
                     color[0] += hdr_pixels[sample_idx];
