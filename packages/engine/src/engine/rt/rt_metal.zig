@@ -19,6 +19,9 @@ const MetalRtImpl = struct {
     extern fn guava_metal_rt_is_supported(ctx: *anyopaque) bool;
     extern fn guava_metal_rt_build_accel(ctx: *anyopaque, triangles: [*]const rt.RtTriangle, count: u32) bool;
     extern fn guava_metal_rt_trace(ctx: *anyopaque, params: *const rt.RtParams, output: [*]u8, size: u32) bool;
+    extern fn guava_metal_rt_trace_async(ctx: *anyopaque, params: *const rt.RtParams) bool;
+    extern fn guava_metal_rt_is_trace_complete(ctx: *anyopaque) bool;
+    extern fn guava_metal_rt_get_trace_result(ctx: *anyopaque, output: [*]u8, size: u32) bool;
     extern fn guava_metal_rt_upload_textures(ctx: *anyopaque, pixel_data: [*]const u8, pixel_data_size: u32, meta: [*]const rt.RtTextureMeta, texture_count: u32) bool;
     extern fn guava_metal_rt_upload_sampling_tables(ctx: *anyopaque, table_data: [*]const u8, table_data_size: u32, meta: [*]const rt.RtSamplingTableMeta, table_count: u32) bool;
     extern fn guava_metal_rt_destroy(ctx: *anyopaque) void;
@@ -40,6 +43,19 @@ const MetalRtImpl = struct {
     pub fn traceRays(self: *MetalRtImpl, params: *const rt.RtParams, output: []u8) bool {
         if (output.len == 0) return false;
         return guava_metal_rt_trace(self.ctx, params, output.ptr, @intCast(output.len));
+    }
+
+    pub fn traceRaysAsync(self: *MetalRtImpl, params: *const rt.RtParams) bool {
+        return guava_metal_rt_trace_async(self.ctx, params);
+    }
+
+    pub fn isTraceComplete(self: *MetalRtImpl) bool {
+        return guava_metal_rt_is_trace_complete(self.ctx);
+    }
+
+    pub fn getTraceResult(self: *MetalRtImpl, output: []u8) bool {
+        if (output.len == 0) return false;
+        return guava_metal_rt_get_trace_result(self.ctx, output.ptr, @intCast(output.len));
     }
 
     pub fn uploadTextures(self: *MetalRtImpl, pixel_data: []const u8, meta: []const rt.RtTextureMeta) bool {
@@ -76,6 +92,15 @@ const MetalRtStub = struct {
         return false;
     }
     pub fn traceRays(_: *MetalRtStub, _: *const rt.RtParams, _: []u8) bool {
+        return false;
+    }
+    pub fn traceRaysAsync(_: *MetalRtStub, _: *const rt.RtParams) bool {
+        return false;
+    }
+    pub fn isTraceComplete(_: *MetalRtStub) bool {
+        return true;
+    }
+    pub fn getTraceResult(_: *MetalRtStub, _: []u8) bool {
         return false;
     }
     pub fn uploadTextures(_: *MetalRtStub, _: []const u8, _: []const rt.RtTextureMeta) bool {

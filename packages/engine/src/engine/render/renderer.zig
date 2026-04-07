@@ -119,8 +119,6 @@ var g_logged_scene_extraction_culling: bool = false;
 var g_logged_collision_overlay_boxes: ?usize = null;
 /// 是否已记录 CPU PathTrace 激活日志
 var g_logged_path_trace_active: bool = false;
-/// 帧级 diag 计数器（限制 HW RT 日志输出）
-var g_hwrt_diag_frame_count: u32 = 0;
 
 const CachedEnvironmentTextures = renderer_environment.CachedEnvironmentTextures;
 
@@ -1647,10 +1645,6 @@ pub const Renderer = struct {
                     const path_trace_start = std.time.nanoTimestamp();
                     try self.renderPathTraceViewport(&prepared_scene, scene);
                     const path_trace_end = std.time.nanoTimestamp();
-                    const pt_full_ms = @as(f64, @floatFromInt(path_trace_end - path_trace_start)) / 1_000_000.0;
-                    if (g_hwrt_diag_frame_count <= 200) {
-                        render_log.warn("[Frame PT total] renderPathTraceViewport={d:.1}ms", .{pt_full_ms});
-                    }
                     self.graph.recordPassStat(pass_stats, .base_pass, durationNs(path_trace_start, path_trace_end), 0, 0);
 
                     const bloom_enabled = self.editor_viewport_state.bloom_enabled and self.scene_viewport.bloom() != null;
@@ -3055,12 +3049,8 @@ pub const Renderer = struct {
         const height = target.desc.height;
         if (width == 0 or height == 0) return;
 
-        const pt_timer_start = std.time.nanoTimestamp();
-
         const path_trace_environment = resolvePathTraceEnvironment(self, scene);
         const scene_signature = computePathTraceSceneSignature(prepared_scene, scene, path_trace_environment);
-
-        const sig_timer_end = std.time.nanoTimestamp();
 
         const samples = std.math.clamp(self.editor_viewport_state.path_trace_samples, 1, 2048);
         const bounces = std.math.clamp(self.editor_viewport_state.path_trace_bounces, 1, 12);
@@ -3071,15 +3061,6 @@ pub const Renderer = struct {
         // 默认优先尝试与 CPU Phase 5 积分器对齐后的 Metal RT 路径。
         if (!self.editor_viewport_state.path_trace_force_cpu) {
             if (self.tryRenderHwRtPath(prepared_scene, scene, target, width, height, trace_width, trace_height, samples, bounces, resolution_scale)) {
-                const hwrt_timer_end = std.time.nanoTimestamp();
-                if (g_hwrt_diag_frame_count <= 200) {
-                    const sig_ms = @as(f64, @floatFromInt(sig_timer_end - pt_timer_start)) / 1_000_000.0;
-                    const hwrt_ms = @as(f64, @floatFromInt(hwrt_timer_end - sig_timer_end)) / 1_000_000.0;
-                    const total_ms = @as(f64, @floatFromInt(hwrt_timer_end - pt_timer_start)) / 1_000_000.0;
-                    render_log.warn("[PT timing] signature={d:.1}ms hwrt={d:.1}ms total={d:.1}ms trace={d}x{d}", .{
-                        sig_ms, hwrt_ms, total_ms, trace_width, trace_height,
-                    });
-                }
                 return;
             }
         }
@@ -3435,22 +3416,6 @@ pub const Renderer = struct {
         const size_changed = trace_width != mrt.trace_width or trace_height != mrt.trace_height or width != mrt.target_width or height != mrt.target_height;
         const params_changed = samples != mrt.last_samples or bounces != mrt.last_bounces or resolution_scale != mrt.last_resolution_scale;
         const scene_changed = scene_signature != mrt.last_scene_signature;
-
-        // 诊断日志（前20帧）
-        if (g_hwrt_diag_frame_count < 20) {
-            render_log.warn("[HWRT diag #{d}] vp={} scene={} params={} size={} accum={d}/{d} accel={} sig=0x{x}", .{
-                g_hwrt_diag_frame_count,
-                vp_changed,
-                scene_changed,
-                params_changed,
-                size_changed,
-                mrt.accum_frame_count,
-                samples,
-                mrt.accel_built,
-                scene_signature,
-            });
-            g_hwrt_diag_frame_count += 1;
-        }
 
         // 相机/场景/参数变化检测
         const is_interactive_frame = vp_changed;
@@ -3844,39 +3809,46 @@ pub const Renderer = struct {
         }
 
         const display_pixels = mrt.display_pixels.?;
-        const trace_timer = std.time.nanoTimestamp();
 
-        // GPU trace
         const trace_pixels = mrt.trace_pixels.?;
-        if (!self.rhi.rtTraceRays(&params, trace_pixels)) {
-            render_log.err("{s} trace failed", .{self.rhi.rtBackendName()});
-            return false;
-        }
 
         if (is_interactive_frame) {
-            // 交互帧：跳过 f32 累积，直接最近邻上采样到显示缓冲区
-            const trace_half: [*]const f16 = @ptrCast(@alignCast(trace_pixels.ptr));
-            const display_half: [*]f16 = @ptrCast(@alignCast(display_pixels.ptr));
-            var out_y: u32 = 0;
-            while (out_y < height) : (out_y += 1) {
-                const src_y: u32 = @min(trace_height - 1, @as(u32, @intCast((@as(u64, out_y) * @as(u64, trace_height)) / @as(u64, height))));
-                var out_x: u32 = 0;
-                while (out_x < width) : (out_x += 1) {
-                    const src_x: u32 = @min(trace_width - 1, @as(u32, @intCast((@as(u64, out_x) * @as(u64, trace_width)) / @as(u64, width))));
-                    const src_base: usize = (@as(usize, src_y) * @as(usize, trace_width) + @as(usize, src_x)) * 4;
-                    const dst_base: usize = (@as(usize, out_y) * @as(usize, width) + @as(usize, out_x)) * 4;
-                    display_half[dst_base + 0] = trace_half[src_base + 0];
-                    display_half[dst_base + 1] = trace_half[src_base + 1];
-                    display_half[dst_base + 2] = trace_half[src_base + 2];
-                    display_half[dst_base + 3] = @as(f16, 1.0);
+            // 交互帧：异步 GPU 调度，显示上一帧结果，不阻塞 CPU
+            // 1. 检查上一次异步 trace 是否完成 → 取回结果并上采样
+            if (self.rhi.rtIsTraceComplete()) {
+                if (self.rhi.rtGetTraceResult(trace_pixels)) {
+                    const trace_half: [*]const f16 = @ptrCast(@alignCast(trace_pixels.ptr));
+                    const display_half: [*]f16 = @ptrCast(@alignCast(display_pixels.ptr));
+                    var out_y: u32 = 0;
+                    while (out_y < height) : (out_y += 1) {
+                        const src_y: u32 = @min(trace_height - 1, @as(u32, @intCast((@as(u64, out_y) * @as(u64, trace_height)) / @as(u64, height))));
+                        var out_x: u32 = 0;
+                        while (out_x < width) : (out_x += 1) {
+                            const src_x: u32 = @min(trace_width - 1, @as(u32, @intCast((@as(u64, out_x) * @as(u64, trace_width)) / @as(u64, width))));
+                            const src_base: usize = (@as(usize, src_y) * @as(usize, trace_width) + @as(usize, src_x)) * 4;
+                            const dst_base: usize = (@as(usize, out_y) * @as(usize, width) + @as(usize, out_x)) * 4;
+                            display_half[dst_base + 0] = trace_half[src_base + 0];
+                            display_half[dst_base + 1] = trace_half[src_base + 1];
+                            display_half[dst_base + 2] = trace_half[src_base + 2];
+                            display_half[dst_base + 3] = @as(f16, 1.0);
+                        }
+                    }
                 }
             }
+            // else: display_pixels 保留上一帧的有效画面（收敛帧或上一次 async 结果）
+
+            // 2. 发射新的异步 trace（不等待 GPU）
+            _ = self.rhi.rtTraceRaysAsync(&params);
             mrt.accum_frame_count = 0;
         } else {
-            // 静态帧：渐进式 f32 累积
+            // 静态帧：同步 trace + 渐进式 f32 累积
+            if (!self.rhi.rtTraceRays(&params, trace_pixels)) {
+                render_log.err("{s} trace failed", .{self.rhi.rtBackendName()});
+                return false;
+            }
+
             const accum = mrt.accum_pixels.?;
             const pixel_count = @as(usize, trace_width) * @as(usize, trace_height);
-            // 首帧需要清零累积缓冲区
             if (mrt.accum_frame_count == 0) {
                 @memset(accum, 0.0);
             }
@@ -3908,22 +3880,7 @@ pub const Renderer = struct {
             }
         }
 
-        const after_trace_timer = std.time.nanoTimestamp();
         self.rhi.uploadTextureData(target, display_pixels, width, height) catch return false;
-        const upload_timer = std.time.nanoTimestamp();
-
-        if (g_hwrt_diag_frame_count <= 200) {
-            const trace_ms = @as(f64, @floatFromInt(after_trace_timer - trace_timer)) / 1_000_000.0;
-            const upload_ms = @as(f64, @floatFromInt(upload_timer - after_trace_timer)) / 1_000_000.0;
-            render_log.warn("[HWRT detail] trace={d:.1}ms upload={d:.1}ms accum={d}/{d} res={d}x{d}", .{
-                trace_ms,
-                upload_ms,
-                mrt.accum_frame_count,
-                samples,
-                trace_width,
-                trace_height,
-            });
-        }
 
         return true;
     }

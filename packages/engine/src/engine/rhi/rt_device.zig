@@ -80,4 +80,22 @@ pub const RtDevice = struct {
         var b = self.backend orelse return false;
         return b.traceRays(params, output);
     }
+
+    /// Dispatch async trace (returns immediately, GPU works in background).
+    pub fn traceRaysAsync(self: *RtDevice, params: *const rt_backend.RtParams) bool {
+        var b = self.backend orelse return false;
+        return b.traceRaysAsync(params);
+    }
+
+    /// Non-blocking poll: is the previous async trace complete?
+    pub fn isTraceComplete(self: *RtDevice) bool {
+        var b = self.backend orelse return true;
+        return b.isTraceComplete();
+    }
+
+    /// Read the async trace result into output. Call only after isTraceComplete() == true.
+    pub fn getTraceResult(self: *RtDevice, output: []u8) bool {
+        var b = self.backend orelse return false;
+        return b.getTraceResult(output);
+    }
 };
