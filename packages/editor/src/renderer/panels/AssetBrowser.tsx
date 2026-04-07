@@ -8,6 +8,7 @@ import {
   IconScript, IconAudio, IconMaterial, IconFile, IconRefresh,
 } from "../components/Icons";
 import { useConnectionStore } from "../store";
+import { useEditorStore } from "../store/editor";
 import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
 
 // ── Types ────────────────────────────────────────────────────────
@@ -122,6 +123,13 @@ export function AssetBrowser() {
   // Select a node
   const handleSelect = useCallback((node: TreeNode) => {
     setSelected(node.path);
+  }, []);
+
+  // Double-click: open script files in ScriptViewer
+  const handleDoubleClick = useCallback((node: TreeNode) => {
+    if (!node.isDirectory && node.assetType === "script") {
+      useEditorStore.getState().openScript(node.path);
+    }
   }, []);
 
   // Right-click context menu
@@ -294,6 +302,7 @@ export function AssetBrowser() {
               renameValue={renameValue}
               onToggle={toggleExpand}
               onSelect={handleSelect}
+              onDoubleClick={handleDoubleClick}
               onContextMenu={handleContextMenu}
               onRenameChange={setRenameValue}
               onRenameCommit={commitRename}
@@ -356,6 +365,7 @@ function TreeItem({
   renameValue,
   onToggle,
   onSelect,
+  onDoubleClick,
   onContextMenu,
   onRenameChange,
   onRenameCommit,
@@ -368,6 +378,7 @@ function TreeItem({
   renameValue: string;
   onToggle: (node: TreeNode) => void;
   onSelect: (node: TreeNode) => void;
+  onDoubleClick: (node: TreeNode) => void;
   onContextMenu: (e: React.MouseEvent, node: TreeNode) => void;
   onRenameChange: (v: string) => void;
   onRenameCommit: (oldPath: string) => void;
@@ -391,6 +402,7 @@ function TreeItem({
           onSelect(node);
           if (node.isDirectory) onToggle(node);
         }}
+        onDoubleClick={() => onDoubleClick(node)}
         onContextMenu={(e) => onContextMenu(e, node)}
         draggable={!node.isDirectory}
         onDragStart={(e) => {
@@ -446,6 +458,7 @@ function TreeItem({
           renameValue={renameValue}
           onToggle={onToggle}
           onSelect={onSelect}
+          onDoubleClick={onDoubleClick}
           onContextMenu={onContextMenu}
           onRenameChange={onRenameChange}
           onRenameCommit={onRenameCommit}

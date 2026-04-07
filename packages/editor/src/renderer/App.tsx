@@ -362,6 +362,25 @@ export function App() {
     };
   }, []);
 
+  // Listen for "openScript" actions from other panels (e.g., AssetBrowser double-click)
+  // → activate the ScriptViewer tab in FlexLayout
+  useEffect(() => {
+    let prevPath: string | null = null;
+    return useEditorStore.subscribe((state) => {
+      if (state.pendingScriptPath && state.pendingScriptPath !== prevPath) {
+        prevPath = state.pendingScriptPath;
+        // Find and select the scriptviewer tab
+        const model = modelRef.current;
+        model.visitNodes((node) => {
+          if ("getComponent" in node && (node as TabNode).getComponent?.() === "scriptviewer") {
+            model.doAction(Actions.selectTab(node.getId()));
+          }
+        });
+        // pendingScriptPath will be consumed by ScriptViewer itself
+      }
+    });
+  }, []);
+
   // Listen for popout windows being closed → re-add panels to layout
   useEffect(() => {
     const cleanup = window.guavaEngine.onPopoutClosed((panels: string[], originInfo?: unknown, bounds?: { x: number; y: number; width: number; height: number }) => {
