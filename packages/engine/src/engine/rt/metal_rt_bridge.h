@@ -83,7 +83,7 @@ typedef struct {
     uint32_t environment_importance_width;
     uint32_t environment_importance_height;
     float emissive_total_area;
-    uint32_t _tail_pad;
+    uint32_t frame_index;  // 渐进式路径追踪帧索引
 } GuavaRTParams;
 
 #ifdef __cplusplus

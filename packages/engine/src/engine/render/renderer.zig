@@ -119,6 +119,8 @@ var g_logged_scene_extraction_culling: bool = false;
 var g_logged_collision_overlay_boxes: ?usize = null;
 /// 是否已记录 CPU PathTrace 激活日志
 var g_logged_path_trace_active: bool = false;
+/// 帧级 diag 计数器（限制 HW RT 日志输出）
+var g_hwrt_diag_frame_count: u32 = 0;
 
 const CachedEnvironmentTextures = renderer_environment.CachedEnvironmentTextures;
 
@@ -1052,11 +1054,16 @@ pub const Renderer = struct {
 
         const mrt = &self.hw_rt_state;
         if (mrt.trace_pixels != null or mrt.display_pixels != null) {
+            const target_samples = std.math.clamp(self.editor_viewport_state.path_trace_samples, 1, 2048);
+            const progress = if (target_samples > 0)
+                @as(f32, @floatFromInt(@min(mrt.accum_frame_count, target_samples))) / @as(f32, @floatFromInt(target_samples))
+            else
+                1.0;
             return .{
                 .active = true,
-                .complete = !mrt.needs_retrace,
+                .complete = mrt.accum_frame_count >= target_samples,
                 .uses_hw_rt = true,
-                .fraction = if (mrt.needs_retrace) 0.0 else 1.0,
+                .fraction = progress,
                 .trace_width = mrt.trace_width,
                 .trace_height = mrt.trace_height,
             };
@@ -1637,7 +1644,12 @@ pub const Renderer = struct {
                 if (path_trace_viewport) {
                     const path_trace_start = std.time.nanoTimestamp();
                     try self.renderPathTraceViewport(&prepared_scene, scene);
-                    self.graph.recordPassStat(pass_stats, .base_pass, durationNs(path_trace_start, std.time.nanoTimestamp()), 0, 0);
+                    const path_trace_end = std.time.nanoTimestamp();
+                    const pt_full_ms = @as(f64, @floatFromInt(path_trace_end - path_trace_start)) / 1_000_000.0;
+                    if (g_hwrt_diag_frame_count <= 25) {
+                        render_log.warn("[Frame PT total] renderPathTraceViewport={d:.1}ms", .{pt_full_ms});
+                    }
+                    self.graph.recordPassStat(pass_stats, .base_pass, durationNs(path_trace_start, path_trace_end), 0, 0);
 
                     const bloom_enabled = self.editor_viewport_state.bloom_enabled and self.scene_viewport.bloom() != null;
                     const fxaa_enabled = self.editor_viewport_state.fxaa_enabled and self.scene_viewport.fxaa() != null;
@@ -3041,8 +3053,12 @@ pub const Renderer = struct {
         const height = target.desc.height;
         if (width == 0 or height == 0) return;
 
+        const pt_timer_start = std.time.nanoTimestamp();
+
         const path_trace_environment = resolvePathTraceEnvironment(self, scene);
         const scene_signature = computePathTraceSceneSignature(prepared_scene, scene, path_trace_environment);
+
+        const sig_timer_end = std.time.nanoTimestamp();
 
         const samples = std.math.clamp(self.editor_viewport_state.path_trace_samples, 1, 2048);
         const bounces = std.math.clamp(self.editor_viewport_state.path_trace_bounces, 1, 12);
@@ -3053,6 +3069,15 @@ pub const Renderer = struct {
         // 默认优先尝试与 CPU Phase 5 积分器对齐后的 Metal RT 路径。
         if (!self.editor_viewport_state.path_trace_force_cpu) {
             if (self.tryRenderHwRtPath(prepared_scene, scene, target, width, height, trace_width, trace_height, samples, bounces, resolution_scale)) {
+                const hwrt_timer_end = std.time.nanoTimestamp();
+                if (g_hwrt_diag_frame_count <= 20) {
+                    const sig_ms = @as(f64, @floatFromInt(sig_timer_end - pt_timer_start)) / 1_000_000.0;
+                    const hwrt_ms = @as(f64, @floatFromInt(hwrt_timer_end - sig_timer_end)) / 1_000_000.0;
+                    const total_ms = @as(f64, @floatFromInt(hwrt_timer_end - pt_timer_start)) / 1_000_000.0;
+                    render_log.warn("[PT timing] signature={d:.1}ms hwrt={d:.1}ms total={d:.1}ms trace={d}x{d}", .{
+                        sig_ms, hwrt_ms, total_ms, trace_width, trace_height,
+                    });
+                }
                 return;
             }
         }
@@ -3409,9 +3434,27 @@ pub const Renderer = struct {
         const params_changed = samples != mrt.last_samples or bounces != mrt.last_bounces or resolution_scale != mrt.last_resolution_scale;
         const scene_changed = scene_signature != mrt.last_scene_signature;
 
-        if (vp_changed or params_changed) {
-            mrt.needs_retrace = true;
+        // 诊断日志（前20帧）
+        if (g_hwrt_diag_frame_count < 20) {
+            render_log.warn("[HWRT diag #{d}] vp={} scene={} params={} size={} accum={d}/{d} accel={} sig=0x{x}", .{
+                g_hwrt_diag_frame_count,
+                vp_changed,
+                scene_changed,
+                params_changed,
+                size_changed,
+                mrt.accum_frame_count,
+                samples,
+                mrt.accel_built,
+                scene_signature,
+            });
+            g_hwrt_diag_frame_count += 1;
         }
+
+        // 相机/参数变化：仅重置累积（保留场景数据和加速结构）
+        if (vp_changed or params_changed) {
+            mrt.resetAccumulation();
+        }
+        // 场景变化：完全重建
         if (scene_changed) {
             mrt.reset(self.allocator);
         }
@@ -3419,8 +3462,10 @@ pub const Renderer = struct {
             mrt.reset(self.allocator);
             if (mrt.trace_pixels) |p| self.allocator.free(p);
             if (mrt.display_pixels) |p| self.allocator.free(p);
+            if (mrt.accum_pixels) |p| self.allocator.free(p);
             mrt.trace_pixels = null;
             mrt.display_pixels = null;
+            mrt.accum_pixels = null;
         }
 
         mrt.last_view_projection = prepared_scene.view_projection;
@@ -3442,9 +3487,15 @@ pub const Renderer = struct {
             mrt.target_width = width;
             mrt.target_height = height;
         }
+        // 累积缓冲区（float32 RGB，trace 分辨率）
+        if (mrt.accum_pixels == null) {
+            mrt.accum_pixels = self.allocator.alloc(f32, @as(usize, trace_width) * trace_height * 3) catch return false;
+            @memset(mrt.accum_pixels.?, 0.0);
+            mrt.accum_frame_count = 0;
+        }
 
-        // 若无变化且已追踪完成，直接上传缓存
-        if (!mrt.needs_retrace and mrt.accel_built) {
+        // 渐进式累积完成 → 直接上传缓存
+        if (mrt.accum_frame_count >= samples and mrt.accel_built) {
             self.rhi.uploadTextureData(target, mrt.display_pixels.?, width, height) catch return false;
             return true;
         }
@@ -3730,7 +3781,7 @@ pub const Renderer = struct {
             mrt.sampling_tables_uploaded = true;
         }
 
-        // --- 光线追踪 ---
+        // --- 光线追踪（渐进式：每帧 1 spp） ---
         const light_dir: [3]f32 = if (prepared_scene.lights.directional_lights.len > 0)
             vec3.normalize(vec3.scale(prepared_scene.lights.directional_lights[0].direction, -1.0))
         else
@@ -3746,7 +3797,7 @@ pub const Renderer = struct {
             .light_direction = light_dir,
             .width = trace_width,
             .height = trace_height,
-            .samples = samples,
+            .samples = 1, // 渐进式：每帧 GPU 只追踪 1 个采样
             .bounces = bounces,
             .output_is_half = 1,
             .environment_texture_index = mrt.environment_texture_index,
@@ -3754,6 +3805,7 @@ pub const Renderer = struct {
             .environment_importance_width = mrt.environment_importance_width,
             .environment_importance_height = mrt.environment_importance_height,
             .emissive_total_area = mrt.emissive_total_area,
+            .frame_index = mrt.accum_frame_count, // 渐进式：当前累积帧号作为随机种子
         };
 
         const directional_count = @min(prepared_scene.lights.directional_lights.len, rt_backend.max_directional_lights);
@@ -3786,20 +3838,37 @@ pub const Renderer = struct {
             render_log.err("{s} trace failed", .{self.rhi.rtBackendName()});
             return false;
         }
-        mrt.needs_retrace = false;
 
-        // --- 上采样 trace → display ---
+        // --- 渐进式累积：将本帧 1-spp 结果累加到 float32 缓冲区 ---
         const trace_pixels = mrt.trace_pixels.?;
+        const accum = mrt.accum_pixels.?;
+        const pixel_count = @as(usize, trace_width) * @as(usize, trace_height);
+        const trace_half: [*]const f16 = @ptrCast(@alignCast(trace_pixels.ptr));
+        for (0..pixel_count) |i| {
+            const src_base = i * 4; // half4: R, G, B, A
+            const dst_base = i * 3; // float3: R, G, B
+            accum[dst_base + 0] += @floatCast(trace_half[src_base + 0]);
+            accum[dst_base + 1] += @floatCast(trace_half[src_base + 1]);
+            accum[dst_base + 2] += @floatCast(trace_half[src_base + 2]);
+        }
+        mrt.accum_frame_count += 1;
+
+        // --- 从累积缓冲区生成 display 像素（平均后转 half16） ---
+        const inv_count: f32 = 1.0 / @as(f32, @floatFromInt(mrt.accum_frame_count));
         const display_pixels = mrt.display_pixels.?;
+        const display_half: [*]f16 = @ptrCast(@alignCast(display_pixels.ptr));
         var out_y: u32 = 0;
         while (out_y < height) : (out_y += 1) {
             const src_y: u32 = @min(trace_height - 1, @as(u32, @intCast((@as(u64, out_y) * @as(u64, trace_height)) / @as(u64, height))));
             var out_x: u32 = 0;
             while (out_x < width) : (out_x += 1) {
                 const src_x: u32 = @min(trace_width - 1, @as(u32, @intCast((@as(u64, out_x) * @as(u64, trace_width)) / @as(u64, width))));
-                const src_idx: usize = (@as(usize, src_y) * @as(usize, trace_width) + @as(usize, src_x)) * 8;
-                const dst_idx: usize = (@as(usize, out_y) * @as(usize, width) + @as(usize, out_x)) * 8;
-                @memcpy(display_pixels[dst_idx .. dst_idx + 8], trace_pixels[src_idx .. src_idx + 8]);
+                const src_base: usize = (@as(usize, src_y) * @as(usize, trace_width) + @as(usize, src_x)) * 3;
+                const dst_base: usize = (@as(usize, out_y) * @as(usize, width) + @as(usize, out_x)) * 4;
+                display_half[dst_base + 0] = @floatCast(accum[src_base + 0] * inv_count);
+                display_half[dst_base + 1] = @floatCast(accum[src_base + 1] * inv_count);
+                display_half[dst_base + 2] = @floatCast(accum[src_base + 2] * inv_count);
+                display_half[dst_base + 3] = @as(f16, 1.0);
             }
         }
 
@@ -3871,7 +3940,8 @@ pub const Renderer = struct {
         height: u32,
     } {
         const mrt = &self.hw_rt_state;
-        if (mrt.needs_retrace or mrt.trace_pixels == null) return null;
+        // 渐进式：至少有 1 帧累积才可导出
+        if (mrt.accum_frame_count == 0 or mrt.trace_pixels == null) return null;
         if (mrt.trace_width != viewport_size[0] or mrt.trace_height != viewport_size[1]) return null;
         return .{
             .pixels = mrt.trace_pixels.?,

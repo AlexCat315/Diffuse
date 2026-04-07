@@ -34,6 +34,20 @@ function getChannel(): BroadcastChannel {
   return channel;
 }
 
+function safeSend(data: unknown): void {
+  try {
+    getChannel().postMessage(data);
+  } catch {
+    // Channel was closed (e.g. window unload race) — recreate and retry once
+    channel = null;
+    try {
+      getChannel().postMessage(data);
+    } catch {
+      // Still failing — give up silently
+    }
+  }
+}
+
 export const useSyncedStateStore = create<SyncedStateStore>((set) => {
   let syncedFromRemote = false;
 
@@ -46,7 +60,7 @@ export const useSyncedStateStore = create<SyncedStateStore>((set) => {
     if (msg.type === "sync-request") {
       const current = useSyncedStateStore.getState().settings;
       if (Object.keys(current).length > 0) {
-        getChannel().postMessage({ type: "sync-response", settings: current });
+        safeSend({ type: "sync-response", settings: current });
       }
       return;
     }
@@ -89,7 +103,7 @@ export const useSyncedStateStore = create<SyncedStateStore>((set) => {
   }
 
   // Request existing state from other windows on init
-  setTimeout(() => getChannel().postMessage({ type: "sync-request" }), 0);
+  setTimeout(() => safeSend({ type: "sync-request" }), 0);
 
   return {
     settings: {},
@@ -101,7 +115,7 @@ export const useSyncedStateStore = create<SyncedStateStore>((set) => {
         },
       }));
       if (!isSyncing) {
-        getChannel().postMessage({ namespace, key, value });
+        safeSend({ namespace, key, value });
       }
     },
   };

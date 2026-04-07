@@ -78,7 +78,7 @@ struct RTParams {
     uint environment_importance_width;
     uint environment_importance_height;
     float emissive_total_area;
-    uint _tail_pad;
+    uint frame_index;  // 渐进式路径追踪帧索引，用于随机种子变化
 };
 
 // ---- deterministic hash RNG (与 CPU 路径追踪保持一致) ----
@@ -1227,7 +1227,8 @@ kernel void raytrace_kernel(
     threadgroup uint tile_target_samples;
 
     float3 accumulated = float3(0.0f);
-    uint pixel_seed = hash_u32(tid.x ^ (tid.y << 16) ^ 0x7f4a7c15u);
+    // 渐进式：frame_index 参与种子，每帧产生不同随机光线
+    uint pixel_seed = hash_u32(tid.x ^ (tid.y << 16) ^ 0x7f4a7c15u ^ (params.frame_index * 0x9e3779b9u));
     const int env_table_index = find_sampling_table(sample_meta, params.sampling_table_count, RT_SAMPLING_TABLE_ENVIRONMENT_IMPORTANCE);
     const int emissive_table_index = find_sampling_table(sample_meta, params.sampling_table_count, RT_SAMPLING_TABLE_EMISSIVE_LIGHT);
     const bool has_environment_sampling =

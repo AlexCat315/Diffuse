@@ -50,6 +50,10 @@ pub const HwRtState = struct {
     light_radiance: [3]f32 = .{ 0, 0, 0 },
     trace_pixels: ?[]u8 = null,
     display_pixels: ?[]u8 = null,
+    /// 累积辐射度缓冲区（float32 RGB，用于渐进式路径追踪多帧累积）
+    accum_pixels: ?[]f32 = null,
+    /// 已累积的帧数（每帧 1 spp，累积到 target_samples 后停止）
+    accum_frame_count: u32 = 0,
     trace_width: u32 = 0,
     trace_height: u32 = 0,
     target_width: u32 = 0,
@@ -63,6 +67,7 @@ pub const HwRtState = struct {
     last_scene_signature: u64 = 0,
     environment_texture_index: i32 = -1,
 
+    /// 完全重置（场景变化时：重建三角形、加速结构、纹理等）
     pub fn reset(self: *HwRtState, allocator: std.mem.Allocator) void {
         if (self.triangles) |t| allocator.free(t);
         if (self.texture_atlas) |a| allocator.free(a);
@@ -85,7 +90,16 @@ pub const HwRtState = struct {
         self.sampling_tables_uploaded = false;
         self.accel_built = false;
         self.needs_retrace = true;
+        self.accum_frame_count = 0;
+        if (self.accum_pixels) |accum| @memset(accum, 0.0);
         self.environment_texture_index = -1;
+    }
+
+    /// 仅重置累积状态（相机/参数变化时：保留场景数据，重新开始累积）
+    pub fn resetAccumulation(self: *HwRtState) void {
+        self.accum_frame_count = 0;
+        if (self.accum_pixels) |accum| @memset(accum, 0.0);
+        self.needs_retrace = true;
     }
 
     pub fn deinit(self: *HwRtState, allocator: std.mem.Allocator) void {
@@ -98,6 +112,7 @@ pub const HwRtState = struct {
         if (self.emissive_lights) |items| allocator.free(items);
         if (self.trace_pixels) |p| allocator.free(p);
         if (self.display_pixels) |p| allocator.free(p);
+        if (self.accum_pixels) |p| allocator.free(p);
         self.* = .{};
     }
 };
@@ -214,7 +229,8 @@ pub fn wyhashUpdateTextureResource(
     if (resources.texture(resolved_handle)) |texture| {
         wyhashUpdateValue(hasher, texture.width);
         wyhashUpdateValue(hasher, texture.height);
-        hasher.update(texture.pixels);
+        // 用像素长度代替全量 hash，句柄 + 尺寸 + 长度 已唯一标识纹理内容
+        wyhashUpdateValue(hasher, texture.pixels.len);
     }
 }
 
@@ -256,7 +272,8 @@ pub fn computePathTraceSceneSignature(
     if (environment.texture) |env_texture| {
         wyhashUpdateValue(&hasher, env_texture.width);
         wyhashUpdateValue(&hasher, env_texture.height);
-        hasher.update(env_texture.pixels);
+        // 用像素长度代替全量 hash，handle + 尺寸 + 长度已唯一标识纹理
+        wyhashUpdateValue(&hasher, env_texture.pixels.len);
     }
 
     for (prepared_scene.opaque_meshes) |item| {
@@ -271,8 +288,9 @@ pub fn computePathTraceSceneSignature(
 
         if (handles.isValid(item.mesh_handle)) {
             if (scene.resources.mesh(item.mesh_handle)) |mesh| {
-                hasher.update(std.mem.sliceAsBytes(mesh.vertices));
-                hasher.update(std.mem.sliceAsBytes(mesh.indices));
+                // 用顶点/索引数量代替全量 hash，mesh_handle 已唯一标识几何体
+                wyhashUpdateValue(&hasher, mesh.vertices.len);
+                wyhashUpdateValue(&hasher, mesh.indices.len);
             }
         }
 
@@ -312,8 +330,9 @@ pub fn computePathTraceSceneSignature(
 
         if (handles.isValid(item.mesh_handle)) {
             if (scene.resources.mesh(item.mesh_handle)) |mesh| {
-                hasher.update(std.mem.sliceAsBytes(mesh.vertices));
-                hasher.update(std.mem.sliceAsBytes(mesh.indices));
+                // 用顶点/索引数量代替全量 hash
+                wyhashUpdateValue(&hasher, mesh.vertices.len);
+                wyhashUpdateValue(&hasher, mesh.indices.len);
             }
         }
 
