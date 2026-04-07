@@ -70,7 +70,8 @@ pub fn getComponents(ctx: *Ctx) !void {
     }
 
     try appendSlice(&buf, ctx.allocator, "]}");
-    ctx.replyRaw(try buf.toOwnedSlice(ctx.allocator));
+    const json_payload = try buf.toOwnedSlice(ctx.allocator);
+    ctx.replyRaw(json_payload);
 }
 
 pub fn setComponentField(ctx: *Ctx) !void {
@@ -175,11 +176,13 @@ pub fn setAssetField(ctx: *Ctx) !void {
 
                     // Use ensureProjectAsset which creates/loads the .meta file
                     // and registers the asset, returning the record with its ID.
+                    std.log.info("setAssetField: Sky resolving path '{s}'", .{resolve_path});
                     if (resources.asset_registry.ensureProjectAsset(resolve_path)) |record| {
                         @memset(&sky._asset_id_buf, 0);
                         const n = @min(record.id.len, components.Sky.max_id_len);
                         @memcpy(sky._asset_id_buf[0..n], record.id[0..n]);
                         found = true;
+                        std.log.info("setAssetField: Sky asset resolved OK, id='{s}' (len={d})", .{ record.id, record.id.len });
                     } else |err| {
                         std.log.warn("setAssetField: Sky environment asset not found for path '{s}': {s}", .{ resolve_path, @errorName(err) });
                         return error.InvalidArguments;
@@ -200,12 +203,15 @@ pub fn setAssetField(ctx: *Ctx) !void {
         // Sky environment_asset_id handled — sync and reply
         if (entity.sky) |*sky_ref| {
             const new_asset_id = sky_ref.assetIdSlice();
+            std.log.info("setAssetField: Sky syncing environment, asset_id='{s}' (len={d})", .{ new_asset_id, new_asset_id.len });
             _ = resources.setSceneEnvironmentAssetId(
                 if (new_asset_id.len > 0) new_asset_id else null,
             ) catch {};
         }
         ctx.layer.world.markSceneChanged();
+        std.log.info("setAssetField: Sky markSceneChanged done, calling reply...", .{});
         try ctx.reply(.{});
+        std.log.info("setAssetField: Sky reply sent, returning from handler", .{});
         return;
     }
 

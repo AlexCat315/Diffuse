@@ -73,6 +73,7 @@ export function SkyPanel() {
 
     // First: try to find an entity with Sky component from cache
     let skyEntityId = findSkyEntity();
+    console.log('[SkyPanel] refreshSky: findSkyEntity from cache =', skyEntityId, 'hierarchy nodes =', hierarchy.length);
 
     // If not in cache, scan all entities (depth-first) by fetching their components
     if (skyEntityId == null) {
@@ -86,21 +87,26 @@ export function SkyPanel() {
         return null;
       };
       skyEntityId = await scanAll(hierarchy);
+      console.log('[SkyPanel] refreshSky: scanAll result =', skyEntityId);
     }
 
     if (skyEntityId == null) {
+      console.warn('[SkyPanel] refreshSky: no Sky entity found anywhere, setting sky=null');
       setSky(null);
       return;
     }
 
     // Fetch latest component data
     const data = await useEntityCacheStore.getState().fetchEntity(skyEntityId, true);
+    console.log('[SkyPanel] refreshSky: fetchEntity(', skyEntityId, ') =', data ? `${data.components.length} components: [${data.components.map(c => c.type).join(', ')}]` : 'null');
     if (!data) {
+      console.warn('[SkyPanel] refreshSky: fetchEntity returned null for entity', skyEntityId);
       setSky(null);
       return;
     }
     const skyComp = data.components.find((c) => c.type === "Sky");
     if (!skyComp) {
+      console.warn('[SkyPanel] refreshSky: entity', skyEntityId, 'has no Sky component in data');
       setSky(null);
       return;
     }
@@ -146,6 +152,7 @@ export function SkyPanel() {
   const commitAsset = useCallback(
     (assetPath: string | undefined) => {
       if (!sky) return;
+      console.log('[SkyPanel] commitAsset: calling setAssetField with path =', assetPath, 'entityId =', sky.entityId);
       window.guavaEngine
         .call("entity.setAssetField", {
           entityId: sky.entityId,
@@ -153,9 +160,12 @@ export function SkyPanel() {
           fieldName: "environment_asset_id",
           assetPath: assetPath || undefined,
         })
-        .then(() => setTimeout(refreshSky, 200))
+        .then((result: unknown) => {
+          console.log('[SkyPanel] commitAsset: setAssetField succeeded, result =', result);
+          setTimeout(refreshSky, 200);
+        })
         .catch((err: unknown) => {
-          console.error("setAssetField failed:", err);
+          console.error('[SkyPanel] commitAsset: setAssetField FAILED:', err);
           // Still refresh to show current state
           setTimeout(refreshSky, 200);
         });

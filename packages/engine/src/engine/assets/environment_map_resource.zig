@@ -44,8 +44,9 @@ pub const EnvironmentMapResource = struct {
         const base_asset_id = try runtimeAssetIdAlloc(allocator, self.name);
         defer allocator.free(base_asset_id);
 
-        const source_path = try std.fmt.allocPrint(allocator, "memory://{s}", .{base_asset_id});
-        defer allocator.free(source_path);
+        var sp_buf: [512]u8 = undefined;
+        const source_path = std.fmt.bufPrint(&sp_buf, "memory://{s}", .{base_asset_id}) catch
+            return error.Overflow;
 
         self.environment_map_handle = try ensureSyntheticTexture(
             allocator,
@@ -97,6 +98,8 @@ pub const EnvironmentMapResource = struct {
             self.source_width,
             self.source_height,
             self.source_pixels,
+            self.prefiltered_size,
+            self.prefiltered_size,
             self.prefiltered_mip_levels,
         );
         defer allocator.free(prefiltered_pixels);
@@ -196,8 +199,9 @@ pub fn ensureBRDFLUTTexture(
     library: *library_mod.ResourceLibrary,
     size: u32,
 ) !handles.TextureHandle {
-    const asset_id = try std.fmt.allocPrint(allocator, "builtin://ibl/brdf_lut/{d}", .{size});
-    defer allocator.free(asset_id);
+    var id_buf: [128]u8 = undefined;
+    const asset_id = std.fmt.bufPrint(&id_buf, "builtin://ibl/brdf_lut/{d}", .{size}) catch
+        return error.Overflow;
 
     if (library.textureHandleByAssetId(asset_id)) |handle| {
         return handle;
@@ -240,11 +244,15 @@ pub fn ensureDerivedTexture(
     format: rhi_types.TextureFormat,
     pixels: []const u8,
 ) !handles.TextureHandle {
-    const derived_asset_id = try std.fmt.allocPrint(allocator, "{s}#{s}", .{ base_asset_id, suffix });
-    defer allocator.free(derived_asset_id);
+    // Use stack buffers instead of allocPrint to avoid Zig 0.15 Writer.Allocating.drain
+    // integer overflow that can occur with certain allocator states.
+    var id_buf: [512]u8 = undefined;
+    const derived_asset_id = std.fmt.bufPrint(&id_buf, "{s}#{s}", .{ base_asset_id, suffix }) catch
+        return error.Overflow;
 
-    const source_path = try std.fmt.allocPrint(allocator, "{s}#{s}", .{ base_source_path, suffix });
-    defer allocator.free(source_path);
+    var path_buf: [1024]u8 = undefined;
+    const source_path = std.fmt.bufPrint(&path_buf, "{s}#{s}", .{ base_source_path, suffix }) catch
+        return error.Overflow;
 
     return ensureSyntheticTexture(
         allocator,
@@ -416,7 +424,10 @@ fn runtimeAssetIdAlloc(allocator: std.mem.Allocator, name: []const u8) ![]u8 {
         try sanitized.appendSlice(allocator, "environment");
     }
 
-    return std.fmt.allocPrint(allocator, "runtime://environment/{s}", .{sanitized.items});
+    var buf: [512]u8 = undefined;
+    const result = std.fmt.bufPrint(&buf, "runtime://environment/{s}", .{sanitized.items}) catch
+        return error.Overflow;
+    return try allocator.dupe(u8, result);
 }
 
 test "ensureBRDFLUTTexture reuses a stable asset handle" {

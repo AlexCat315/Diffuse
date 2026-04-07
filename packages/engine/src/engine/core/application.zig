@@ -421,7 +421,10 @@ pub const Application = struct {
 
         while ((frame_count == 0 or frames_rendered < frame_count) and !self.window.should_close) : (frames_rendered += 1) {
             self.input.beginFrame();
-            try self.pumpEvents();
+            self.pumpEvents() catch |err| {
+                std.log.err("[run-loop] pumpEvents failed at frame {d}: {s}", .{ frames_rendered, @errorName(err) });
+                return err;
+            };
 
             // 每帧刷新输入动作映射状态（GR-6）
             self.action_map.update(&self.input);
@@ -431,15 +434,21 @@ pub const Application = struct {
             delta_seconds = @min(delta_seconds, 0.1); // 最大帧间隔锁定为 0.1 秒
             self.renderer.device().recordFrame(@min(elapsed_ns, 100 * std.time.ns_per_ms));
 
-            try self.scene_manager.pump(
+            self.scene_manager.pump(
                 &self.world,
                 &self.physics_state,
                 &self.script_runtime,
                 &self.command_queue,
                 &self.renderer,
-            );
+            ) catch |err| {
+                std.log.err("[run-loop] scene_manager.pump failed at frame {d}: {s}", .{ frames_rendered, @errorName(err) });
+                return err;
+            };
 
-            try self.applyPendingCommands();
+            self.applyPendingCommands() catch |err| {
+                std.log.err("[run-loop] applyPendingCommands failed at frame {d}: {s}", .{ frames_rendered, @errorName(err) });
+                return err;
+            };
 
             const should_advance_simulation = self.playback_controller.shouldAdvance();
             if (should_advance_simulation) {
@@ -468,7 +477,10 @@ pub const Application = struct {
                 self.nav_system.update(&self.world, delta_seconds);
                 // 更新脚本系统（传递时间和输入）
                 self.updateScripts(delta_seconds);
-                try self.applyPendingCommands();
+                self.applyPendingCommands() catch |err| {
+                    std.log.err("[run-loop] applyPendingCommands(sim) failed at frame {d}: {s}", .{ frames_rendered, @errorName(err) });
+                    return err;
+                };
             }
 
             // P1: Update hierarchy transforms and bounds once per frame
@@ -493,7 +505,10 @@ pub const Application = struct {
                 self.playback_controller.consumeAdvance();
             }
 
-            last_frame = try self.renderer.drawFrame(&self.world, &self.physics_state);
+            last_frame = self.renderer.drawFrame(&self.world, &self.physics_state) catch |err| {
+                std.log.err("[run-loop] drawFrame failed at frame {d}: {s}", .{ frames_rendered, @errorName(err) });
+                return err;
+            };
             self.renderer.last_frame_report = last_frame;
 
             // Consume pending frame delay change from RPC.
