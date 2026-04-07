@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useMemo } from "react";
 import { useLocalState } from "../store/local-state";
+import { IconFilledCircle, IconDelete, IconClose } from "../components/Icons";
 import {
   ReactFlow,
   ReactFlowProvider,
@@ -204,14 +205,14 @@ function MaterialNode({ data }: NodeProps) {
           <div>
             {slotConfig.inputs.map((s, i) => (
               <div key={i} style={{ fontSize: 9, color: "#a6e3a1", lineHeight: "16px" }}>
-                ● {s.label}
+                <IconFilledCircle size={8} color="#a6e3a1" /> {s.label}
               </div>
             ))}
           </div>
           <div style={{ textAlign: "right" }}>
             {slotConfig.outputs.map((s, i) => (
               <div key={i} style={{ fontSize: 9, color: "#f38ba8", lineHeight: "16px" }}>
-                {s.label} ●
+                {s.label} <IconFilledCircle size={8} color="#f38ba8" />
               </div>
             ))}
           </div>
@@ -798,7 +799,7 @@ function MaterialGraphEditorInner() {
                   onClick={() => removeOutput(o.channel)}
                   title={t.materialGraph.removeOutput}
                 >
-                  ✕
+                  <IconClose size={10} />
                 </button>
               </div>
             ))}
@@ -817,7 +818,7 @@ function MaterialGraphEditorInner() {
                   onClick={() => removeNode(selectedNode.id)}
                   title={t.materialGraph.removeNode}
                 >
-                  🗑
+                  <IconDelete size={14} />
                 </button>
               </div>
 

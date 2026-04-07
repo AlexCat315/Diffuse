@@ -1,7 +1,7 @@
 import React, { useEffect, useCallback, useMemo, useRef } from "react";
 import { useLocalState } from "../store/local-state";
 import { rpc } from "../rpc";
-import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
+import { IconTriangleRight, IconTriangleDown, IconCamera, IconModel, IconMaterial, IconLightBulb, IconSettings, IconBox, IconShader, IconScript, IconAnimation, IconSphereCollider, IconMeshCollider, IconBoxCollider } from "../components/Icons";
 import { useConnectionStore, useSceneStore } from "../store";
 import { useI18n } from "../i18n";
 import { useSyncedState } from "../store/synced-state";
@@ -87,10 +87,10 @@ function flattenTree(nodes: TreeNode[]): TreeNode[] {
   return result;
 }
 
-const COMPONENT_ICONS: Record<string, string> = {
-  Camera: "📷", Mesh: "🔷", Material: "🎨", Light: "💡",
-  Rigidbody: "⚙️", BoxCollider: "📦", SphereCollider: "⚽",
-  MeshCollider: "🔶", Vfx: "✨", Script: "📜", Animator: "🏃",
+const COMPONENT_ICONS: Record<string, React.ReactNode> = {
+  Camera: <IconCamera size={12} />, Mesh: <IconModel size={12} />, Material: <IconMaterial size={12} />, Light: <IconLightBulb size={12} />,
+  Rigidbody: <IconSettings size={12} />, BoxCollider: <IconBoxCollider size={12} />, SphereCollider: <IconSphereCollider size={12} />,
+  MeshCollider: <IconMeshCollider size={12} />, Vfx: <IconShader size={12} />, Script: <IconScript size={12} />, Animator: <IconAnimation size={12} />,
 };
 
 // ── Main Component ──────────────────────────────────────────────
@@ -449,7 +449,7 @@ export function PrefabEditor() {
                   <div style={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
                     {detail.components.map((c) => (
                       <span key={c} style={styles.componentBadge}>
-                        {COMPONENT_ICONS[c] ?? "🔧"} {c}
+                        {COMPONENT_ICONS[c] ?? <IconSettings size={12} />} {c}
                       </span>
                     ))}
                     {detail.components.length === 0 && (

@@ -2,6 +2,7 @@ import React, { useEffect, useCallback } from "react";
 import { useLocalState } from "../store/local-state";
 import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
+import { IconPlay, IconClose } from "../components/Icons";
 
 interface Bookmark {
   index: number;
@@ -96,10 +97,10 @@ export function CameraBookmarks() {
                 )}
                 <div style={styles.actions}>
                   <button style={styles.actionBtn} onClick={() => handleApply(b.index)} title={t.camera.applyTooltip}>
-                    ▶
+                    <IconPlay size={10} />
                   </button>
                   <button style={styles.actionBtn} onClick={() => handleRemove(b.index)} title={t.camera.deleteTooltip}>
-                    ✕
+                    <IconClose size={10} />
                   </button>
                 </div>
               </div>

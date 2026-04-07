@@ -5,6 +5,10 @@ import { ViewCube } from "./ViewCube";
 import { useConnectionStore, useSceneStore, useViewportSettingsStore, useMeshEditStore } from "../store";
 import { ContextMenu, type MenuItem } from "../components/ContextMenu";
 import { loadGizmoShortcuts } from "../store/shortcut-config";
+import {
+  IconCrosshair, IconClose, IconPlus, IconBox, IconCamera,
+  IconLightPoint, IconLightSpot, IconLightSun, IconModel, IconFilledCircle, IconGrid,
+} from "../components/Icons";
 
 
 /**
@@ -34,6 +38,8 @@ export function Viewport() {
   const fetchViewportSettings = useViewportSettingsStore((s) => s.fetchFromEngine);
   const [contextMenu, setContextMenu] = useLocalState<{ x: number; y: number; items: MenuItem[] } | null>(null);
   const selectedEntity = useSceneStore((s) => s.selectedEntity);
+  const [modelDragOver, setModelDragOver] = useLocalState(false);
+  const dropCountRef = useRef(0);
 
   // ── Box selection state ──────────────────────────────────────
   const [boxSelect, setBoxSelect] = useLocalState<{
@@ -225,14 +231,14 @@ export function Viewport() {
         {
           label: t.contextMenu.focusSelection,
           shortcut: "F",
-          icon: "⊕",
+          icon: <IconCrosshair size={12} />,
           onClick: () => sendInput({ type: "keydown", key: "f", shift: false, ctrl: false, alt: false }),
         },
         { label: "---" },
         {
           label: t.contextMenu.duplicate,
           shortcut: "Ctrl+D",
-          icon: "❏",
+          icon: <IconModel size={12} />,
           onClick: () => {
             window.guavaEngine.call("scene.duplicateEntity", { entityId } as never).catch(() => {});
           },
@@ -240,7 +246,7 @@ export function Viewport() {
         {
           label: t.contextMenu.delete,
           shortcut: "Del",
-          icon: "✕",
+          icon: <IconClose size={12} />,
           onClick: () => {
             window.guavaEngine.call("scene.deleteEntity", { entityId } as never).catch(() => {});
           },
@@ -253,19 +259,19 @@ export function Viewport() {
     // ── Add submenu (always available) ──
     items.push({
       label: t.contextMenu.add,
-      icon: "+",
+      icon: <IconPlus size={12} />,
       children: [
-        { label: t.contextMenu.addEmpty, icon: "○", onClick: () => spawnActor("empty") },
+        { label: t.contextMenu.addEmpty, icon: <IconCrosshair size={12} />, onClick: () => spawnActor("empty") },
         { label: "---" },
-        { label: t.contextMenu.addCube, icon: "□", onClick: () => spawnActor("cube") },
-        { label: t.contextMenu.addSphere, icon: "◎", onClick: () => spawnActor("sphere") },
-        { label: t.contextMenu.addPlane, icon: "▬", onClick: () => spawnActor("plane") },
+        { label: t.contextMenu.addCube, icon: <IconBox size={12} />, onClick: () => spawnActor("cube") },
+        { label: t.contextMenu.addSphere, icon: <IconFilledCircle size={12} />, onClick: () => spawnActor("sphere") },
+        { label: t.contextMenu.addPlane, icon: <IconGrid size={12} />, onClick: () => spawnActor("plane") },
         { label: "---" },
-        { label: t.contextMenu.addPointLight, icon: "💡", onClick: () => spawnActor("point_light") },
-        { label: t.contextMenu.addSpotLight, icon: "🔦", onClick: () => spawnActor("spot_light") },
-        { label: t.contextMenu.addDirLight, icon: "☀", onClick: () => spawnActor("directional_light") },
+        { label: t.contextMenu.addPointLight, icon: <IconLightPoint size={12} />, onClick: () => spawnActor("point_light") },
+        { label: t.contextMenu.addSpotLight, icon: <IconLightSpot size={12} />, onClick: () => spawnActor("spot_light") },
+        { label: t.contextMenu.addDirLight, icon: <IconLightSun size={12} />, onClick: () => spawnActor("directional_light") },
         { label: "---" },
-        { label: t.contextMenu.addCamera, icon: "📷", onClick: () => spawnActor("camera") },
+        { label: t.contextMenu.addCamera, icon: <IconCamera size={12} />, onClick: () => spawnActor("camera") },
       ],
     });
 
@@ -697,7 +703,10 @@ export function Viewport() {
   return (
     <div
       ref={ref}
-      style={styles.container}
+      style={{
+        ...styles.container,
+        ...(modelDragOver ? { outline: "2px dashed #89b4fa", outlineOffset: -2, background: "rgba(137,180,250,0.04)" } : {}),
+      }}
       tabIndex={0}
       onMouseDown={handleMouseDown}
       onMouseUp={handleMouseUp}
@@ -712,7 +721,22 @@ export function Viewport() {
           e.dataTransfer.dropEffect = "link";
         }
       }}
+      onDragEnter={(e) => {
+        if (e.dataTransfer.types.includes("application/x-guava-asset-path")) {
+          dropCountRef.current++;
+          setModelDragOver(true);
+        }
+      }}
+      onDragLeave={() => {
+        dropCountRef.current--;
+        if (dropCountRef.current <= 0) {
+          dropCountRef.current = 0;
+          setModelDragOver(false);
+        }
+      }}
       onDrop={async (e) => {
+        dropCountRef.current = 0;
+        setModelDragOver(false);
         const assetPath = e.dataTransfer.getData("application/x-guava-asset-path");
         const assetType = e.dataTransfer.getData("application/x-guava-asset-type");
         if (!assetPath || assetType !== "model") return;
@@ -725,6 +749,19 @@ export function Viewport() {
       }}
     >
       <canvas ref={canvasRef} style={styles.canvas} />
+      {modelDragOver && (
+        <div style={{
+          position: "absolute", inset: 0,
+          display: "flex", alignItems: "center", justifyContent: "center",
+          background: "rgba(137,180,250,0.08)",
+          pointerEvents: "none",
+          zIndex: 10,
+        }}>
+          <span style={{ color: "#89b4fa", fontSize: 13, fontWeight: 500, letterSpacing: 0.3 }}>
+            <IconModel size={18} color="#89b4fa" style={{ marginRight: 6 }} /> Drop model here
+          </span>
+        </div>
+      )}
       {boxSelect?.active && (() => {
         const left = Math.min(boxSelect.cssStart.x, boxSelect.cssCur.x);
         const top = Math.min(boxSelect.cssStart.y, boxSelect.cssCur.y);

@@ -1,4 +1,5 @@
 import React, { useEffect, useCallback, useRef, useState } from "react";
+import { IconClose } from "./components/Icons";
 import { Layout, Model, Actions, DockLocation, type Action, type IJsonModel, type TabNode, type TabSetNode, type BorderNode, type ITabSetRenderValues, type ITabRenderValues } from "flexlayout-react";
 import "flexlayout-react/style/light.css";
 import "./flexlayout-dark.css";
@@ -686,7 +687,7 @@ function DraggableSettingsModal({
               {t.app.keybindingsModalTitle}
             </button>
           </div>
-          <button style={styles.modalClose} onClick={onClose}>✕</button>
+          <button style={styles.modalClose} onClick={onClose}><IconClose size={12} /></button>
         </div>
         <div style={styles.modalBody}>
           {activeTab === "settings" ? <SettingsPanel /> : <KeybindingsPanel />}

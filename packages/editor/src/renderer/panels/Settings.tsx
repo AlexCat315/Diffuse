@@ -3,6 +3,7 @@ import { useLocalState } from "../store/local-state";
 import { useI18n, type Locale } from "../i18n";
 import { useConnectionStore, useViewportSettingsStore, useConsoleStore } from "../store";
 import { useSyncedState } from "../store/synced-state";
+import { IconGlobe, IconGrid, IconChevronRight, IconSettings, IconRemote, IconAbout } from "../components/Icons";
 
 // ── Local preferences (stored in localStorage) ───────────────────
 
@@ -33,18 +34,18 @@ function savePrefs(prefs: EditorPrefs) {
 interface SectionDef {
   id: string;
   label: string;
-  icon: string;
+  icon: React.ReactNode;
   keywords: string[];
   advanced?: boolean;
 }
 
 const SECTIONS: SectionDef[] = [
-  { id: "language",   label: "Language",   icon: "🌐", keywords: ["language", "locale", "english", "中文", "语言"] },
-  { id: "appearance", label: "Appearance", icon: "◉",  keywords: ["fps", "display", "vsync", "overlay", "显示", "垂直同步", "帧率"] },
-  { id: "console",    label: "Console",    icon: "▸",  keywords: ["console", "log", "max", "limit", "控制台", "日志", "上限"] },
-  { id: "layout",     label: "Layout",     icon: "⊞",  keywords: ["layout", "panel", "reset", "布局", "面板", "重置"] },
-  { id: "remote",     label: "Remote",     icon: "☁",  keywords: ["remote", "server", "local", "websocket", "connect", "远程", "服务器", "连接"], advanced: true },
-  { id: "about",      label: "About",      icon: "ⓘ",  keywords: ["version", "engine", "status", "about", "版本", "关于"] },
+  { id: "language",   label: "Language",   icon: <IconGlobe size={14} />, keywords: ["language", "locale", "english", "中文", "语言"] },
+  { id: "appearance", label: "Appearance", icon: <IconSettings size={14} />,  keywords: ["fps", "display", "vsync", "overlay", "显示", "垂直同步", "帧率"] },
+  { id: "console",    label: "Console",    icon: <IconChevronRight size={14} />,  keywords: ["console", "log", "max", "limit", "控制台", "日志", "上限"] },
+  { id: "layout",     label: "Layout",     icon: <IconGrid size={14} />,  keywords: ["layout", "panel", "reset", "布局", "面板", "重置"] },
+  { id: "remote",     label: "Remote",     icon: <IconRemote size={14} />,  keywords: ["remote", "server", "local", "websocket", "connect", "远程", "服务器", "连接"], advanced: true },
+  { id: "about",      label: "About",      icon: <IconAbout size={14} />,  keywords: ["version", "engine", "status", "about", "版本", "关于"] },
 ];
 
 // ── Remote server constants ──────────────────────────────────────

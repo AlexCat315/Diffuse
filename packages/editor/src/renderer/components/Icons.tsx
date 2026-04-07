@@ -33,6 +33,33 @@ import triangleRightUrl from "@icons/triangle-right.svg";
 import triangleDownUrl from "@icons/triangle-down.svg";
 import gridPatternUrl from "@icons/grid-pattern.svg";
 import eyeUrl from "@icons/eye.svg";
+import eyeSlashUrl from "@icons/eye-slash.svg";
+import cog6ToothUrl from "@icons/cog-6-tooth.svg";
+import checkUrl from "@icons/check.svg";
+import deleteUrl from "@icons/delete.svg";
+import plusUrl from "@icons/plus.svg";
+import cameraUrl from "@icons/camera.svg";
+import lightBulbUrl from "@icons/light-bulb.svg";
+import lightSpotUrl from "@icons/light_spot.svg";
+import lightSunUrl from "@icons/light_sun.svg";
+import lightPointUrl from "@icons/light_point.svg";
+import globeUrl from "@icons/globe.svg";
+import squares2x2Url from "@icons/squares-2x2.svg";
+import forwardUrl from "@icons/forward.svg";
+import crosshairUrl from "@icons/crosshair.svg";
+import boxUrl from "@icons/box.svg";
+import dataUrl from "@icons/data.svg";
+import lockClosedUrl from "@icons/lock-closed.svg";
+import lockOpenUrl from "@icons/lock-open.svg";
+import aboutUrl from "@icons/about.svg";
+import keyboardUrl from "@icons/keyboard.svg";
+import remoteUrl from "@icons/remote.svg";
+import filledCircleUrl from "@icons/icon-filled-circle.svg";
+import boxColliderUrl from "@icons/icon-box collider.svg";
+import sphereColliderUrl from "@icons/icon-sphere Collider.svg";
+import meshColliderUrl from "@icons/Mesh Collider.svg";
+import capsuleUrl from "@icons/capsule-fill.svg";
+import listUrl from "@icons/list.svg";
 
 // ── Shared icon props ───────────────────────────────────────────
 interface IconProps {
@@ -124,7 +151,38 @@ export const IconBuild = createIcon(packageUrl);
 export const IconShadingSolid = createIcon(cubeUrl);
 export const IconShadingMaterial = createIcon(paintBrushUrl);
 export const IconShadingRendered = createIcon(eyeUrl);
+export const IconEyeSlash = createIcon(eyeSlashUrl);
 export const IconShadingWireframe = createIcon(gridPatternUrl);
+
+// ── Common actions ──────────────────────────────────────────────
+export const IconSettings = createIcon(cog6ToothUrl);
+export const IconCheck = createIcon(checkUrl);
+export const IconDelete = createIcon(deleteUrl);
+export const IconPlus = createIcon(plusUrl);
+export const IconForward = createIcon(forwardUrl);
+export const IconGrid = createIcon(squares2x2Url);
+export const IconCrosshair = createIcon(crosshairUrl);
+export const IconGlobe = createIcon(globeUrl);
+
+// ── Scene object types ──────────────────────────────────────────
+export const IconCamera = createIcon(cameraUrl);
+export const IconLightBulb = createIcon(lightBulbUrl);
+export const IconLightSpot = createIcon(lightSpotUrl);
+export const IconLightSun = createIcon(lightSunUrl);
+export const IconLightPoint = createIcon(lightPointUrl);
+export const IconBox = createIcon(boxUrl);
+export const IconData = createIcon(dataUrl);
+export const IconLockClosed = createIcon(lockClosedUrl);
+export const IconLockOpen = createIcon(lockOpenUrl);
+export const IconAbout = createIcon(aboutUrl);
+export const IconKeyboard = createIcon(keyboardUrl);
+export const IconRemote = createIcon(remoteUrl);
+export const IconFilledCircle = createIcon(filledCircleUrl);
+export const IconBoxCollider = createIcon(boxColliderUrl);
+export const IconSphereCollider = createIcon(sphereColliderUrl);
+export const IconMeshCollider = createIcon(meshColliderUrl);
+export const IconCapsule = createIcon(capsuleUrl);
+export const IconList = createIcon(listUrl);
 
 // ── Mesh edit selection modes (inline SVG) ──────────────────────
 interface MeshIconProps { size?: number; color?: string; }

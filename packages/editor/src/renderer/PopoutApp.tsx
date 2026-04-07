@@ -1,4 +1,5 @@
 import React, { useEffect, useCallback, useState } from "react";
+import { IconClose } from "./components/Icons";
 import type { GuavaEngineAPI } from "../preload/preload";
 import { SceneHierarchy } from "./panels/SceneHierarchy";
 import { Inspector } from "./panels/Inspector";
@@ -188,14 +189,14 @@ export function PopoutApp({ panels }: { panels: string[] }) {
             </button>
           ))}
           <div style={{ flex: 1 }} />
-          <button style={styles.closeBtn} onClick={handleClose} title={t.app.closePopout}>✕</button>
+          <button style={styles.closeBtn} onClick={handleClose} title={t.app.closePopout}><IconClose size={10} /></button>
         </div>
       )}
       {/* Single panel: no tabs, just a minimal title bar */}
       {panels.length === 1 && (
         <div style={styles.titleBar}>
           <span style={styles.titleText}>{panelLabels[activePanel] ?? activePanel}</span>
-          <button style={styles.closeBtn} onClick={handleClose} title={t.app.closePopout}>✕</button>
+          <button style={styles.closeBtn} onClick={handleClose} title={t.app.closePopout}><IconClose size={10} /></button>
         </div>
       )}
       {/* Panel content */}

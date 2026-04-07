@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
+import { IconClose } from "./Icons";
 
 interface BuildProgress {
   stage: string;
@@ -78,7 +79,7 @@ export function BuildDialog({ open, onClose }: BuildDialogProps) {
         <div style={styles.header}>
           <span style={styles.title}>Build Standalone Game</span>
           {!building && (
-            <button style={styles.closeBtn} onClick={onClose}>✕</button>
+            <button style={styles.closeBtn} onClick={onClose}><IconClose size={10} /></button>
           )}
         </div>
 

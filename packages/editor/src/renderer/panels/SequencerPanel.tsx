@@ -3,6 +3,7 @@ import { useLocalState } from "../store/local-state";
 import { rpc } from "../rpc";
 import { useConnectionStore } from "../store";
 import { useI18n } from "../i18n";
+import { IconPlay, IconPause, IconStop } from "../components/Icons";
 import { useSyncedState } from "../store/synced-state";
 
 // ── Types ───────────────────────────────────────────────────────
@@ -419,12 +420,12 @@ export function SequencerPanel() {
         <button style={S.btn} onClick={handleLoad}>{t.sequencer.loadSequence}</button>
         <button style={S.btn} onClick={handleSave}>{t.sequencer.saveSequence}</button>
         <span style={S.sep} />
-        <button style={S.btn} onClick={handleStop} title={t.sequencer.stopButton}>⏹</button>
+        <button style={S.btn} onClick={handleStop} title={t.sequencer.stopButton}><IconStop size={12} /></button>
         <button
           style={{ ...S.btn, ...(state.isPlaying ? { background: "#f38ba8", color: "#1e1e2e" } : {}) }}
           onClick={state.isPlaying ? handlePause : handlePlay}
         >
-          {state.isPlaying ? "⏸" : "▶"}
+          {state.isPlaying ? <IconPause size={12} /> : <IconPlay size={12} />}
         </button>
         <span style={{ color: "#cdd6f4", fontFamily: "monospace", fontSize: 12, marginLeft: 4 }}>
           {formatTime(state.currentTime)} / {formatTime(state.duration ?? 0)}
