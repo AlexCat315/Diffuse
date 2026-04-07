@@ -212,6 +212,9 @@ async function assemblePackage(
       path.join(assetsDir, "Content"),
       [".meta", ".DS_Store"],
     );
+    // Post-process scene files: convert absolute source_paths to relative
+    onLog?.("Relativize scene asset paths");
+    await relativizeSceneAssetPaths(path.join(assetsDir, "Content"), projectPath);
   }
 
   // Copy project scripts from engine runtime location
@@ -319,6 +322,53 @@ async function fixMacOSDylibs(appPath: string): Promise<void> {
 }
 
 // ─── Utilities ────────────────────────────────────────────────────
+
+/**
+ * Walk a directory tree and rewrite absolute `source_path` values in
+ * .guava_scene files so they become relative to `projectRoot`.
+ *
+ * This is necessary because the editor stores absolute paths in asset
+ * records, but the packaged game resolves assets relative to its own
+ * Resources directory layout.
+ */
+async function relativizeSceneAssetPaths(
+  contentDir: string,
+  projectRoot: string,
+): Promise<void> {
+  const normalizedRoot = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
+  await walkAndFixScenes(contentDir, normalizedRoot);
+}
+
+async function walkAndFixScenes(dir: string, normalizedRoot: string): Promise<void> {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const fullPath = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      await walkAndFixScenes(fullPath, normalizedRoot);
+    } else if (entry.name.endsWith(".guava_scene")) {
+      const raw = await fs.readFile(fullPath, "utf-8");
+      let scene: Record<string, unknown>;
+      try {
+        scene = JSON.parse(raw);
+      } catch {
+        continue;
+      }
+      let changed = false;
+      const records = (scene as any).asset_records ?? (scene as any).scene?.asset_records;
+      if (Array.isArray(records)) {
+        for (const rec of records) {
+          if (typeof rec.source_path === "string" && rec.source_path.startsWith(normalizedRoot)) {
+            rec.source_path = rec.source_path.slice(normalizedRoot.length);
+            changed = true;
+          }
+        }
+      }
+      if (changed) {
+        await fs.writeFile(fullPath, JSON.stringify(scene, null, 2), "utf-8");
+      }
+    }
+  }
+}
 
 async function copyDirRecursive(
   src: string,

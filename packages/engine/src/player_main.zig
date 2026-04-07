@@ -57,6 +57,19 @@ fn resolveProjectRootAlloc(allocator: std.mem.Allocator) !?[]u8 {
 
     const exe_dir = try std.fs.selfExeDirPathAlloc(allocator);
     defer allocator.free(exe_dir);
+
+    // macOS .app bundle: exe is at Contents/MacOS/, resources at Contents/Resources/
+    if (std.mem.endsWith(u8, exe_dir, "/Contents/MacOS") or std.mem.endsWith(u8, exe_dir, "/Contents/MacOS/")) {
+        const contents_dir = std.fs.path.dirname(exe_dir) orelse exe_dir;
+        const resources_path = try std.fs.path.join(allocator, &.{ contents_dir, "Resources" });
+        defer allocator.free(resources_path);
+        const resources_assets = try std.fs.path.join(allocator, &.{ resources_path, "assets" });
+        defer allocator.free(resources_assets);
+        if (std.fs.accessAbsolute(resources_assets, .{})) |_| {
+            return try std.fs.cwd().realpathAlloc(allocator, resources_path);
+        } else |_| {}
+    }
+
     return try findProjectRootFromAbsoluteAlloc(allocator, exe_dir);
 }
 
@@ -101,7 +114,11 @@ const LoadedProject = struct {
 };
 
 fn loadConfiguredProjectAlloc(allocator: std.mem.Allocator, options: cli.CliOptions) !?LoadedProject {
-    const raw_project_path = options.project_path orelse return null;
+    const raw_project_path = options.project_path orelse blk: {
+        // Auto-discover project from .guava marker in CWD
+        std.fs.cwd().access(project_mod.marker_file_name, .{}) catch return null;
+        break :blk ".";
+    };
     const resolved_root = try std.fs.cwd().realpathAlloc(allocator, raw_project_path);
     errdefer allocator.free(resolved_root);
 
