@@ -508,6 +508,21 @@ pub const RhiDevice = struct {
         return false;
     }
 
+    pub fn rtTraceRaysAsync(self: *RhiDevice, params: *const rt_backend.RtParams) bool {
+        if (self.rt_device) |*dev| return dev.traceRaysAsync(params);
+        return false;
+    }
+
+    pub fn rtIsTraceComplete(self: *RhiDevice) bool {
+        if (self.rt_device) |*dev| return dev.isTraceComplete();
+        return true;
+    }
+
+    pub fn rtGetTraceResult(self: *RhiDevice, output: []u8) bool {
+        if (self.rt_device) |*dev| return dev.getTraceResult(output);
+        return false;
+    }
+
     // ────────────────────────────────────────────────────────────────────
     // Performance statistics (stub - kept for compatibility)
     // ────────────────────────────────────────────────────────────────────

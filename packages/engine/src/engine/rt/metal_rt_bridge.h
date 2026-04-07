@@ -109,6 +109,20 @@ bool guava_metal_rt_trace(GuavaMetalRTContext* ctx,
                           uint8_t* output_pixels,
                           uint32_t output_size);
 
+/// 异步分发光线追踪 (不等待 GPU 完成，立即返回)。
+/// 使用 guava_metal_rt_is_trace_complete 轮询完成状态，
+/// 使用 guava_metal_rt_get_trace_result 读取结果。
+bool guava_metal_rt_trace_async(GuavaMetalRTContext* ctx,
+                                const GuavaRTParams* params);
+
+/// 非阻塞轮询：上一次 trace_async 是否已完成。
+bool guava_metal_rt_is_trace_complete(GuavaMetalRTContext* ctx);
+
+/// 读取异步 trace 结果到 output_pixels。调用前需确认 is_trace_complete 为 true。
+bool guava_metal_rt_get_trace_result(GuavaMetalRTContext* ctx,
+                                     uint8_t* output_pixels,
+                                     uint32_t output_size);
+
 /// 上传纹理图集数据到 GPU。pixel_data 为所有纹理像素 (BGRA8) 紧密排列，
 /// meta 为每张纹理的偏移/尺寸元数据。
 bool guava_metal_rt_upload_textures(GuavaMetalRTContext* ctx,

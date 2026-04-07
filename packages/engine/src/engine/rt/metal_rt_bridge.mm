@@ -1375,6 +1375,9 @@ struct GuavaMetalRTContext {
     uint32_t                        samplingTableCount;
     bool                            supported;
     bool                            accelBuilt;
+    // --- async trace state ---
+    id<MTLCommandBuffer>            pendingCmdBuf;
+    bool                            asyncInFlight;
 };
 
 // ---------------------------------------------------------------------------
@@ -1622,6 +1625,13 @@ extern "C" bool guava_metal_rt_trace(GuavaMetalRTContext* ctx,
     if (!ctx || !ctx->accelBuilt || !params || !output_pixels) return false;
 
     @autoreleasepool {
+        // 确保上一次异步 trace 已完成，避免共享 outputBuffer 竞争
+        if (ctx->asyncInFlight && ctx->pendingCmdBuf) {
+            [ctx->pendingCmdBuf waitUntilCompleted];
+            ctx->pendingCmdBuf = nil;
+            ctx->asyncInFlight = false;
+        }
+
         const uint32_t w = params->width;
         const uint32_t h = params->height;
         const uint32_t bytes_per_pixel = (params->mode == 1) ? 4 : ((params->output_is_half != 0) ? 8 : 4);
@@ -1709,11 +1719,141 @@ extern "C" bool guava_metal_rt_trace(GuavaMetalRTContext* ctx,
 }
 
 // ---------------------------------------------------------------------------
+// guava_metal_rt_trace_async — 异步分发光追 (不等待 GPU 完成)
+// ---------------------------------------------------------------------------
+extern "C" bool guava_metal_rt_trace_async(GuavaMetalRTContext* ctx,
+                                           const GuavaRTParams* params) {
+    if (!ctx || !ctx->accelBuilt || !params) return false;
+
+    @autoreleasepool {
+        // 如果上一次异步 trace 仍在运行，必须等待其完成才能安全复用 outputBuffer
+        if (ctx->asyncInFlight && ctx->pendingCmdBuf) {
+            [ctx->pendingCmdBuf waitUntilCompleted];
+            ctx->pendingCmdBuf = nil;
+            ctx->asyncInFlight = false;
+        }
+
+        const uint32_t w = params->width;
+        const uint32_t h = params->height;
+        const uint32_t bytes_per_pixel = (params->mode == 1) ? 4 : ((params->output_is_half != 0) ? 8 : 4);
+        const uint32_t needed = w * h * bytes_per_pixel;
+
+        id<MTLDevice> dev = ctx->device;
+
+        // ---- output buffer ----
+        if (!ctx->outputBuffer || ctx->outputWidth != w || ctx->outputHeight != h || ctx->outputBytesPerPixel != bytes_per_pixel) {
+            ctx->outputBuffer = [dev newBufferWithLength:needed
+                                                 options:MTLResourceStorageModeShared];
+            if (!ctx->outputBuffer) return false;
+            ctx->outputWidth  = w;
+            ctx->outputHeight = h;
+            ctx->outputBytesPerPixel = bytes_per_pixel;
+        }
+
+        // ---- params buffer ----
+        if (!ctx->paramsBuffer || [ctx->paramsBuffer length] != sizeof(GuavaRTParams)) {
+            ctx->paramsBuffer = [dev newBufferWithLength:sizeof(GuavaRTParams)
+                                                 options:MTLResourceStorageModeShared];
+            if (!ctx->paramsBuffer) return false;
+        }
+        memcpy([ctx->paramsBuffer contents], params, sizeof(GuavaRTParams));
+
+        // ---- dispatch ----
+        id<MTLCommandBuffer> cmdBuf = [ctx->commandQueue commandBuffer];
+        id<MTLComputeCommandEncoder> enc = [cmdBuf computeCommandEncoder];
+
+        [enc setComputePipelineState:ctx->pipeline];
+        [enc setBuffer:ctx->paramsBuffer       offset:0 atIndex:0];
+        [enc setBuffer:ctx->outputBuffer       offset:0 atIndex:1];
+        [enc setBuffer:ctx->triangleDataBuffer offset:0 atIndex:2];
+        [enc setAccelerationStructure:ctx->accel atBufferIndex:3];
+
+        if (ctx->textureAtlasBuffer && ctx->textureMetaBuffer && ctx->textureCount > 0) {
+            [enc setBuffer:ctx->textureAtlasBuffer offset:0 atIndex:4];
+            [enc setBuffer:ctx->textureMetaBuffer  offset:0 atIndex:5];
+        } else {
+            static id<MTLBuffer> emptyBuf = nil;
+            if (!emptyBuf) {
+                emptyBuf = [ctx->device newBufferWithLength:16
+                                                    options:MTLResourceStorageModeShared];
+            }
+            [enc setBuffer:emptyBuf offset:0 atIndex:4];
+            [enc setBuffer:emptyBuf offset:0 atIndex:5];
+        }
+
+        if (ctx->samplingTableBuffer && ctx->samplingTableMetaBuffer && ctx->samplingTableCount > 0) {
+            [enc setBuffer:ctx->samplingTableBuffer offset:0 atIndex:6];
+            [enc setBuffer:ctx->samplingTableMetaBuffer offset:0 atIndex:7];
+        } else {
+            static id<MTLBuffer> emptyBuf = nil;
+            if (!emptyBuf) {
+                emptyBuf = [ctx->device newBufferWithLength:16
+                                                    options:MTLResourceStorageModeShared];
+            }
+            [enc setBuffer:emptyBuf offset:0 atIndex:6];
+            [enc setBuffer:emptyBuf offset:0 atIndex:7];
+        }
+
+        [enc useResource:ctx->vertexPositionBuffer usage:MTLResourceUsageRead];
+
+        MTLSize gridSize  = MTLSizeMake(w, h, 1);
+        MTLSize groupSize = MTLSizeMake(8, 8, 1);
+        [enc dispatchThreads:gridSize threadsPerThreadgroup:groupSize];
+        [enc endEncoding];
+        [cmdBuf commit];
+
+        // 不等待 — 保留 command buffer 引用以便后续轮询
+        ctx->pendingCmdBuf = cmdBuf;
+        ctx->asyncInFlight = true;
+        return true;
+    }
+}
+
+// ---------------------------------------------------------------------------
+// guava_metal_rt_is_trace_complete — 非阻塞轮询异步 trace 是否完成
+// ---------------------------------------------------------------------------
+extern "C" bool guava_metal_rt_is_trace_complete(GuavaMetalRTContext* ctx) {
+    if (!ctx || !ctx->asyncInFlight || !ctx->pendingCmdBuf) return true;
+    MTLCommandBufferStatus status = ctx->pendingCmdBuf.status;
+    return status == MTLCommandBufferStatusCompleted || status == MTLCommandBufferStatusError;
+}
+
+// ---------------------------------------------------------------------------
+// guava_metal_rt_get_trace_result — 读取异步 trace 结果 (调用前需确认 complete)
+// ---------------------------------------------------------------------------
+extern "C" bool guava_metal_rt_get_trace_result(GuavaMetalRTContext* ctx,
+                                                uint8_t* output_pixels,
+                                                uint32_t output_size) {
+    if (!ctx || !ctx->asyncInFlight || !ctx->pendingCmdBuf) return false;
+
+    if (ctx->pendingCmdBuf.status == MTLCommandBufferStatusError) {
+        fprintf(stderr, "[Metal RT] Async trace failed: %s\n",
+                [[ctx->pendingCmdBuf.error localizedDescription] UTF8String]);
+        ctx->pendingCmdBuf = nil;
+        ctx->asyncInFlight = false;
+        return false;
+    }
+
+    const uint32_t needed = ctx->outputWidth * ctx->outputHeight * ctx->outputBytesPerPixel;
+    if (output_size < needed) return false;
+
+    memcpy(output_pixels, [ctx->outputBuffer contents], needed);
+    ctx->pendingCmdBuf = nil;
+    ctx->asyncInFlight = false;
+    return true;
+}
+
+// ---------------------------------------------------------------------------
 // guava_metal_rt_destroy
 // ---------------------------------------------------------------------------
 extern "C" void guava_metal_rt_destroy(GuavaMetalRTContext* ctx) {
     if (!ctx) return;
     @autoreleasepool {
+        // 等待任何飞行中的异步 trace
+        if (ctx->asyncInFlight && ctx->pendingCmdBuf) {
+            [ctx->pendingCmdBuf waitUntilCompleted];
+        }
+        ctx->pendingCmdBuf        = nil;
         ctx->accel                = nil;
         ctx->vertexPositionBuffer = nil;
         ctx->triangleDataBuffer   = nil;
