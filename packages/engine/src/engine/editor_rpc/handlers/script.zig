@@ -164,25 +164,54 @@ pub fn saveContent(ctx: *Ctx) !void {
 }
 
 /// Get the current parameter values of an entity's script component.
-/// script.getEntityParameters(entityId)
+/// script.getEntityParameters(entityId, scriptIndex?)
 pub fn getEntityParameters(ctx: *Ctx) !void {
     const eid: u64 = @intCast(try ctx.param(i64, "entityId"));
     const entity = ctx.layer.world.getEntityConst(eid) orelse {
         try ctx.reply(.{ .parameters = @as(?[]const u8, null) });
         return;
     };
-    // Return parameters from legacy script field
-    if (entity.script) |script| {
-        if (script.parameters.len > 0) {
-            try ctx.reply(.{ .parameters = script.parameters });
-            return;
+
+    const script_index = try ctx.paramOpt(i64, "scriptIndex");
+    if (script_index) |raw_idx| {
+        if (raw_idx == -1) {
+            // Legacy single script
+            if (entity.script) |script| {
+                if (script.parameters.len > 0) {
+                    try ctx.reply(.{ .parameters = script.parameters });
+                    return;
+                }
+            }
+        } else {
+            const idx: usize = @intCast(raw_idx);
+            if (idx < entity.scripts.len) {
+                const script = entity.scripts[idx];
+                if (script.parameters.len > 0) {
+                    try ctx.reply(.{ .parameters = script.parameters });
+                    return;
+                }
+            }
+        }
+    } else {
+        // Fallback: try scripts[0], then legacy
+        if (entity.scripts.len > 0) {
+            const script = entity.scripts[0];
+            if (script.parameters.len > 0) {
+                try ctx.reply(.{ .parameters = script.parameters });
+                return;
+            }
+        } else if (entity.script) |script| {
+            if (script.parameters.len > 0) {
+                try ctx.reply(.{ .parameters = script.parameters });
+                return;
+            }
         }
     }
     try ctx.reply(.{ .parameters = @as(?[]const u8, null) });
 }
 
 /// Set parameter values on an entity's script component.
-/// script.setEntityParameters(entityId, parameters)
+/// script.setEntityParameters(entityId, parameters, scriptIndex?)
 /// `parameters` is a JSON string like '{"speed": 5.0, "jump_height": 2.0}'
 pub fn setEntityParameters(ctx: *Ctx) !void {
     const eid: u64 = @intCast(try ctx.param(i64, "entityId"));
@@ -192,17 +221,52 @@ pub fn setEntityParameters(ctx: *Ctx) !void {
         return;
     };
 
-    if (entity.script) |*script| {
-        // Store new parameters (duped into world allocator).
-        // The old slice is NOT freed here because its origin allocator is
-        // unknown (might be arena, static, or world allocator).
-        script.parameters = ctx.layer.world.allocator.dupe(u8, parameters) catch {
-            try ctx.reply(.{ .success = false });
+    const alloc = ctx.layer.world.allocator;
+    const script_index = try ctx.paramOpt(i64, "scriptIndex");
+
+    if (script_index) |raw_idx| {
+        if (raw_idx == -1) {
+            // Legacy single script
+            if (entity.script) |*script| {
+                script.parameters = alloc.dupe(u8, parameters) catch {
+                    try ctx.reply(.{ .success = false });
+                    return;
+                };
+                ctx.layer.world.markDirty(eid);
+                try ctx.reply(.{ .success = true });
+                return;
+            }
+        } else {
+            const idx: usize = @intCast(raw_idx);
+            if (idx < entity.scripts.len) {
+                entity.scripts[idx].parameters = alloc.dupe(u8, parameters) catch {
+                    try ctx.reply(.{ .success = false });
+                    return;
+                };
+                ctx.layer.world.markDirty(eid);
+                try ctx.reply(.{ .success = true });
+                return;
+            }
+        }
+    } else {
+        // Fallback: try scripts[0], then legacy
+        if (entity.scripts.len > 0) {
+            entity.scripts[0].parameters = alloc.dupe(u8, parameters) catch {
+                try ctx.reply(.{ .success = false });
+                return;
+            };
+            ctx.layer.world.markDirty(eid);
+            try ctx.reply(.{ .success = true });
             return;
-        };
-        ctx.layer.world.markDirty(eid);
-        try ctx.reply(.{ .success = true });
-        return;
+        } else if (entity.script) |*script| {
+            script.parameters = alloc.dupe(u8, parameters) catch {
+                try ctx.reply(.{ .success = false });
+                return;
+            };
+            ctx.layer.world.markDirty(eid);
+            try ctx.reply(.{ .success = true });
+            return;
+        }
     }
 
     try ctx.reply(.{ .success = false });
