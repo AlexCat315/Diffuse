@@ -3,7 +3,7 @@ import { useLocalState } from "../store/local-state";
 import type { Transform, ComponentInfo, Vec3 } from "../../shared/rpc-types";
 import type { ComponentField } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
-import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
+import { IconTriangleRight, IconTriangleDown, IconScript, IconClose } from "../components/Icons";
 import { useSceneStore, useEntityCacheStore } from "../store";
 import { useSyncedState } from "../store/synced-state";
 
@@ -15,6 +15,8 @@ export function Inspector() {
   const [entityName, setEntityName] = useLocalState("");
   const [collapsedSections, setCollapsedSections] = useSyncedState<Set<string>>("inspector", "collapsedSections", new Set());
   const [showAddComponent, setShowAddComponent] = useState(false);
+  const [scriptDropOver, setScriptDropOver] = useState(false);
+  const dropCountRef = useRef(0);
 
   const fetchEntityData = useCallback(async (eid: number) => {
     const data = await useEntityCacheStore.getState().fetchEntity(eid, true);
@@ -99,6 +101,36 @@ export function Inspector() {
     [],
   );
 
+  const handleInspectorDragEnter = useCallback(
+    (e: React.DragEvent) => {
+      if (e.dataTransfer.types.includes("application/x-guava-asset-path")) {
+        dropCountRef.current++;
+        setScriptDropOver(true);
+      }
+    },
+    [],
+  );
+
+  const handleInspectorDragLeave = useCallback(
+    (e: React.DragEvent) => {
+      dropCountRef.current--;
+      if (dropCountRef.current <= 0) {
+        dropCountRef.current = 0;
+        setScriptDropOver(false);
+      }
+    },
+    [],
+  );
+
+  const handleInspectorDropWrapped = useCallback(
+    async (e: React.DragEvent) => {
+      dropCountRef.current = 0;
+      setScriptDropOver(false);
+      await handleInspectorDrop(e);
+    },
+    [handleInspectorDrop],
+  );
+
   if (entityId == null) {
     return (
       <div style={styles.container}>
@@ -109,7 +141,20 @@ export function Inspector() {
   }
 
   return (
-    <div style={styles.container} onDragOver={handleInspectorDragOver} onDrop={handleInspectorDrop}>
+    <div
+      style={{
+        ...styles.container,
+        ...(scriptDropOver ? {
+          outline: "2px dashed #89b4fa",
+          outlineOffset: -2,
+          background: "rgba(137,180,250,0.04)",
+        } : {}),
+      }}
+      onDragOver={handleInspectorDragOver}
+      onDragEnter={handleInspectorDragEnter}
+      onDragLeave={handleInspectorDragLeave}
+      onDrop={handleInspectorDropWrapped}
+    >
       <div style={styles.header}>{t.inspector.title}</div>
 
       {/* Entity identity */}
@@ -212,6 +257,14 @@ export function Inspector() {
         );
       })}
 
+      {/* Script drop hint */}
+      {scriptDropOver && (
+        <div style={styles.scriptDropHint}>
+          <span style={{ fontSize: 16, marginBottom: 4 }}><IconScript size={18} color="#89b4fa" /></span>
+          Drop to add script
+        </div>
+      )}
+
       {/* Add Component */}
       <AddComponentButton
         entityId={entityId}
@@ -253,7 +306,7 @@ function CollapsibleSection({
             title="Remove component"
             onClick={(e) => { e.stopPropagation(); onRemove(); }}
           >
-            ✕
+            <IconClose size={10} />
           </button>
         )}
       </div>
@@ -1111,5 +1164,20 @@ const styles: Record<string, React.CSSProperties> = {
     fontSize: 12,
     color: "#cdd6f4",
     cursor: "pointer",
+  },
+  scriptDropHint: {
+    display: "flex",
+    flexDirection: "column" as const,
+    alignItems: "center",
+    padding: "12px 8px",
+    margin: "4px 12px",
+    border: "2px dashed #89b4fa",
+    borderRadius: 6,
+    background: "rgba(137,180,250,0.06)",
+    color: "#89b4fa",
+    fontSize: 11,
+    fontWeight: 500,
+    letterSpacing: 0.3,
+    pointerEvents: "none" as const,
   },
 };

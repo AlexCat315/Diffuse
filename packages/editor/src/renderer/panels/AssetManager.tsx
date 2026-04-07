@@ -3,7 +3,7 @@ import { useLocalState } from "../store/local-state";
 import { useSyncedState } from "../store/synced-state";
 import {
   IconModel, IconTexture, IconShader, IconScene,
-  IconScript, IconAudio, IconMaterial, IconFile, IconRefresh,
+  IconScript, IconAudio, IconMaterial, IconFile, IconRefresh, IconGrid, IconList,
 } from "../components/Icons";
 import { useConnectionStore } from "../store";
 
@@ -55,6 +55,7 @@ export function AssetManager() {
   const [activeTypeFilters, setActiveTypeFilters] = useSyncedState<string[]>("asset-manager", "typeFilters", []);
   const [sortBy, setSortBy] = useSyncedState<"name" | "type" | "size">("asset-manager", "sortBy", "name");
   const [importProgress, setImportProgress] = useState<{ current: number; total: number; name?: string } | null>(null);
+  const [fileDragOver, setFileDragOver] = useLocalState(false);
 
   // Listen for import progress events
   useEffect(() => {
@@ -176,17 +177,23 @@ export function AssetManager() {
 
   return (
     <div
-      style={styles.container}
+      style={{
+        ...styles.container,
+        ...(fileDragOver ? { outline: "2px dashed #89b4fa", outlineOffset: -2, background: "rgba(137,180,250,0.04)" } : {}),
+      }}
       onDragOver={(e) => {
         // Accept OS file drops
         if (e.dataTransfer.types.includes("Files")) {
           e.preventDefault();
           e.dataTransfer.dropEffect = "copy";
+          setFileDragOver(true);
         }
       }}
+      onDragLeave={() => setFileDragOver(false)}
       onDrop={async (e) => {
         if (!e.dataTransfer.types.includes("Files")) return;
         e.preventDefault();
+        setFileDragOver(false);
         const paths: string[] = [];
         for (const f of Array.from(e.dataTransfer.files)) {
           if ((f as unknown as { path?: string }).path) {
@@ -237,14 +244,14 @@ export function AssetManager() {
           onClick={() => setViewMode("list")}
           title="List view"
         >
-          ☰
+          <IconList size={12} />
         </button>
         <button
           style={{ ...styles.viewBtn, ...(viewMode === "grid" ? styles.viewBtnActive : {}) }}
           onClick={() => setViewMode("grid")}
           title="Grid view"
         >
-          ⊞
+          <IconGrid size={12} />
         </button>
       </div>
 

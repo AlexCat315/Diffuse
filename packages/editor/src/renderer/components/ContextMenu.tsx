@@ -1,9 +1,10 @@
 import React, { useEffect, useRef, useCallback } from "react";
+import { IconChevronRight } from "./Icons";
 
 export interface MenuItem {
   label: string;
   shortcut?: string;
-  icon?: string;
+  icon?: React.ReactNode;
   disabled?: boolean;
   children?: MenuItem[];
   onClick?: () => void;
@@ -96,7 +97,7 @@ export function ContextMenu({ x, y, items, onClose }: ContextMenuProps) {
             <span style={S.itemIcon}>{item.icon ?? ""}</span>
             <span style={S.itemLabel}>{item.label}</span>
             {item.shortcut && <span style={S.itemShortcut}>{item.shortcut}</span>}
-            {hasChildren && <span style={S.itemArrow}>▸</span>}
+            {hasChildren && <span style={S.itemArrow}><IconChevronRight size={10} /></span>}
             {hasChildren && isOpen && (
               <Submenu items={item.children!} onClose={onClose} parentRef={menuRef} />
             )}

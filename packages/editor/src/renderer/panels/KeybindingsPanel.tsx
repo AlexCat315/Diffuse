@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo } from "react";
 import { useLocalState } from "../store/local-state";
 import { useI18n } from "../i18n";
+import { IconSettings, IconTranslate, IconModel, IconClose, IconKeyboard } from "../components/Icons";
 import {
   GIZMO_SHORTCUT_DEFS,
   MESH_SHORTCUT_DEFS,
@@ -17,13 +18,13 @@ import {
 
 interface CategoryDef {
   id: string;
-  icon: string;
+  icon: React.ReactNode;
 }
 
 const CATEGORIES: CategoryDef[] = [
-  { id: "editor", icon: "⎈" },
-  { id: "gizmo",  icon: "↔" },
-  { id: "mesh",   icon: "⬡" },
+  { id: "editor", icon: <IconSettings size={12} /> },
+  { id: "gizmo",  icon: <IconTranslate size={12} /> },
+  { id: "mesh",   icon: <IconModel size={12} /> },
 ];
 
 // ── Main component ───────────────────────────────────────────────
@@ -222,7 +223,7 @@ export function KeybindingsPanel() {
                         </span>
                         <span style={S.colRecord}>
                           <button style={S.recordBtn} onClick={() => setRecording(isRec ? null : recId)} title={t.keybindings.recordBtn}>
-                            {isRec ? "✕" : "⌨"}
+                            {isRec ? <IconClose size={10} /> : <IconKeyboard size={12} />}
                           </button>
                         </span>
                       </div>
@@ -265,7 +266,7 @@ export function KeybindingsPanel() {
                         </span>
                         <span style={S.colRecord}>
                           <button style={S.recordBtn} onClick={() => setRecording(isRec ? null : recId)} title={t.keybindings.recordBtn}>
-                            {isRec ? "✕" : "⌨"}
+                            {isRec ? <IconClose size={10} /> : <IconKeyboard size={12} />}
                           </button>
                         </span>
                       </div>

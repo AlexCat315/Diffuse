@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef } from "react";
 import { useLocalState } from "../store/local-state";
 import Editor, { type OnMount } from "@monaco-editor/react";
 import type * as monaco from "monaco-editor";
+import { IconLockClosed, IconLockOpen, IconFilledCircle } from "../components/Icons";
 
 import { rpc } from "../rpc";
 import { useConnectionStore } from "../store";
@@ -204,14 +205,14 @@ export function ScriptViewer() {
           <>
             <span style={{ fontSize: 11, color: "#a6adc8", flex: 1 }}>
               {selectedPath}
-              {dirty && <span style={{ color: "#f9e2af" }}> ●</span>}
+              {dirty && <span style={{ color: "#f9e2af" }}> <IconFilledCircle size={8} color="#f9e2af" /></span>}
             </span>
             <button
               style={styles.toolbarBtn}
               onClick={() => setReadOnly(!readOnly)}
               title={readOnly ? t.scriptViewer.enableEdit : t.scriptViewer.disableEdit}
             >
-              {readOnly ? "🔒" : "✏️"}
+              {readOnly ? <IconLockClosed size={14} /> : <IconLockOpen size={14} />}
             </button>
             {!readOnly && (
               <button

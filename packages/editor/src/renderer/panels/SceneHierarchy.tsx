@@ -2,7 +2,7 @@ import React, { useCallback, useRef, useEffect } from "react";
 import { useLocalState } from "../store/local-state";
 import type { EntityNode } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
-import { IconClose } from "../components/Icons";
+import { IconClose, IconTriangleRight, IconTriangleDown, IconLockClosed, IconLockOpen, IconShadingRendered, IconEyeSlash } from "../components/Icons";
 import { useSceneStore } from "../store";
 
 export function SceneHierarchy() {
@@ -263,7 +263,7 @@ function TreeNode({
             style={styles.arrow}
             onClick={(e) => { e.stopPropagation(); setExpanded(!expanded); }}
           >
-            {expanded ? "▾" : "▸"}
+            {expanded ? <IconTriangleDown size={10} /> : <IconTriangleRight size={10} />}
           </span>
         ) : (
           <span style={styles.arrowPlaceholder} />
@@ -280,7 +280,7 @@ function TreeNode({
               title={node.visible ? "Hide" : "Show"}
               onClick={(e) => { e.stopPropagation(); onToggleVisible(node.id, !node.visible); }}
             >
-              {node.visible ? "👁" : "👁‍🗨"}
+              {node.visible ? <IconShadingRendered size={12} /> : <IconEyeSlash size={12} />}
             </span>
           )}
           {showLockIcon && (
@@ -289,7 +289,7 @@ function TreeNode({
               title={node.selectable ? "Lock" : "Unlock"}
               onClick={(e) => { e.stopPropagation(); onToggleSelectable(node.id, !node.selectable); }}
             >
-              {node.selectable ? "🔓" : "🔒"}
+              {node.selectable ? <IconLockOpen size={12} /> : <IconLockClosed size={12} />}
             </span>
           )}
         </span>

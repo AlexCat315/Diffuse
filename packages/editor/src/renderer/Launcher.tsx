@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from "react";
+import { IconClose } from "./components/Icons";
 import { useI18n } from "./i18n";
 
 interface RecentProject {
@@ -279,7 +280,7 @@ export function Launcher({ onProjectOpened }: LauncherProps) {
                           onClick={(e) => handleRemoveRecent(e, project.path)}
                           title={lt.removeFromRecent}
                         >
-                          ✕
+                          <IconClose size={10} />
                         </button>
                       </div>
                     </div>

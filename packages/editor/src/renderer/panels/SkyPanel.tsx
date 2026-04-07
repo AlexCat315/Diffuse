@@ -2,6 +2,7 @@ import React, { useEffect, useCallback } from "react";
 import { useLocalState } from "../store/local-state";
 import type { EntityNode, ComponentField } from "../../shared/rpc-types";
 import { useConnectionStore, useSceneStore, useEntityCacheStore } from "../store";
+import { IconLightSun, IconCheck } from "../components/Icons";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -236,7 +237,7 @@ export function SkyPanel() {
       <div style={styles.container}>
         <div style={styles.header}>Sky Environment</div>
         <div style={styles.emptyState}>
-          <div style={styles.emptyIcon}>☀️</div>
+          <div style={styles.emptyIcon}><IconLightSun size={28} color="#f9e2af" /></div>
           <div style={styles.emptyText}>No sky environment configured</div>
           <button style={styles.createButton} onClick={handleCreate} disabled={loading}>
             {loading ? "Creating…" : "Add Sky Environment"}
@@ -256,7 +257,7 @@ export function SkyPanel() {
     <div
       style={{
         ...styles.container,
-        ...(dragOver ? { outline: "1px solid #89b4fa", outlineOffset: -1 } : {}),
+        ...(dragOver ? { outline: "2px dashed #89b4fa", outlineOffset: -2, background: "rgba(137,180,250,0.04)" } : {}),
       }}
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
@@ -272,7 +273,7 @@ export function SkyPanel() {
             ...(sky.enabled ? styles.checkboxActive : {}),
           }}
         >
-          {sky.enabled && "✓"}
+          {sky.enabled && <IconCheck size={10} />}
         </div>
         <span>Enabled</span>
       </div>

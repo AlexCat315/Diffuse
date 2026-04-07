@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useRef } from "react";
 import { useLocalState } from "../store/local-state";
 import { useI18n } from "../i18n";
 import { useSyncedState } from "../store/synced-state";
+import { IconCheck, IconClose, IconDelete, IconSettings, IconChevronDown, IconChevronRight } from "../components/Icons";
 import {
   type ChatMessage,
   type MessageRole,
@@ -213,7 +214,7 @@ export function AiChat() {
             >
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
                 <span style={{ fontWeight: 600, fontSize: 12, color: "#cdd6f4" }}>
-                  {p.type.toUpperCase()}{i === activeIdx ? " ✓" : ""}
+                  {p.type.toUpperCase()}{i === activeIdx ? <> <IconCheck size={10} /></> : ""}
                 </span>
                 <div style={{ display: "flex", gap: 4 }}>
                   {i !== activeIdx && (
@@ -222,7 +223,7 @@ export function AiChat() {
                     </button>
                   )}
                   <button style={{ ...styles.smallBtn, color: "#f38ba8" }} onClick={() => removeProvider(i)}>
-                    ✕
+                    <IconClose size={10} />
                   </button>
                 </div>
               </div>
@@ -303,10 +304,10 @@ export function AiChat() {
         )}
         <div style={{ flex: 1 }} />
         <button style={styles.toolbarBtn} onClick={clearHistory} title={t.aiChat.clear}>
-          🗑
+          <IconDelete size={14} />
         </button>
         <button style={styles.toolbarBtn} onClick={() => setShowSettings(true)}>
-          ⚙ {t.aiChat.settings}
+          <IconSettings size={14} /> {t.aiChat.settings}
         </button>
       </div>
 
@@ -331,7 +332,7 @@ export function AiChat() {
                     style={styles.smallBtn}
                     onClick={() => setShowReasoning(!showReasoning)}
                   >
-                    {showReasoning ? "▼" : "▶"}
+                    {showReasoning ? <IconChevronDown size={10} /> : <IconChevronRight size={10} />}
                   </button>
                 )}
                 <span style={{ fontSize: 9, color: "#585b70", marginLeft: "auto" }}>

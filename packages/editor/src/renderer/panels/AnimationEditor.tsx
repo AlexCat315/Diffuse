@@ -3,6 +3,7 @@ import { useLocalState } from "../store/local-state";
 import { rpc } from "../rpc";
 import { useConnectionStore, useSceneStore } from "../store";
 import { useI18n } from "../i18n";
+import { IconClose, IconPlay, IconForward } from "../components/Icons";
 import type {
   AnimGraphState,
   AnimGraphTransition,
@@ -267,9 +268,9 @@ export function AnimationEditor() {
             >
               <span style={styles.stateLabel}>{s.name}</span>
               <span style={styles.stateBadge}>
-                {s.isDefault && "⬡ "}
-                {s.isCurrent && "▶ "}
-                {s.isNext && "⏭ "}
+                {s.isDefault && <><IconPlay size={8} /> </>}
+                {s.isCurrent && <><IconPlay size={8} color="#a6e3a1" /> </>}
+                {s.isNext && <><IconForward size={8} /> </>}
               </span>
             </button>
           ))}
@@ -619,7 +620,7 @@ function ConditionRow({ condition: c, selected, onClick, onUpdate, onRemove, ta,
           onBlur={(e) => onUpdate({ threshold: parseFloat(e.target.value) || 0 })}
         />
 
-        <button style={styles.removeBtn} onClick={(e) => { e.stopPropagation(); onRemove(); }}>✕</button>
+        <button style={styles.removeBtn} onClick={(e) => { e.stopPropagation(); onRemove(); }}><IconClose size={10} /></button>
       </div>
     </div>
   );

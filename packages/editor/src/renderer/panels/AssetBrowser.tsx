@@ -43,6 +43,7 @@ export function AssetBrowser() {
   const [contextMenu, setContextMenu] = useLocalState<{ x: number; y: number; node: TreeNode } | null>(null);
   const [renaming, setRenaming] = useLocalState<string | null>(null);
   const [renameValue, setRenameValue] = useLocalState("");
+  const [fileDragOver, setFileDragOver] = useLocalState(false);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Fetch directory contents
@@ -238,7 +239,10 @@ export function AssetBrowser() {
 
       {/* Tree */}
       <div
-        style={styles.tree}
+        style={{
+          ...styles.tree,
+          ...(fileDragOver ? { outline: "2px dashed #89b4fa", outlineOffset: -2, background: "rgba(137,180,250,0.04)" } : {}),
+        }}
         onContextMenu={(e) => {
           e.preventDefault();
           setContextMenu({
@@ -251,11 +255,14 @@ export function AssetBrowser() {
           if (e.dataTransfer.types.includes("Files")) {
             e.preventDefault();
             e.dataTransfer.dropEffect = "copy";
+            setFileDragOver(true);
           }
         }}
+        onDragLeave={() => setFileDragOver(false)}
         onDrop={async (e) => {
           if (!e.dataTransfer.types.includes("Files")) return;
           e.preventDefault();
+          setFileDragOver(false);
           const paths: string[] = [];
           for (const f of Array.from(e.dataTransfer.files)) {
             if ((f as unknown as { path?: string }).path) {

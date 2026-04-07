@@ -6,7 +6,7 @@ import {
   IconSave, IconFolderOpen, IconUndo, IconRedo,
   IconPlay, IconPause, IconStop,
   IconTranslate, IconRotate, IconScale, IconCursor,
-  IconBuild,
+  IconBuild, IconGrid, IconSettings,
 } from "../components/Icons";
 import { Tooltip } from "../components/Tooltip";
 import { useSceneStore } from "../store";
@@ -182,14 +182,14 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
         <div style={styles.divider} />
         {onResetLayout && (
           <ToolButton
-            icon={<span style={{ fontSize: 12 }}>⊞</span>}
+            icon={<IconGrid size={12} />}
             tooltip={t.toolbar.resetLayout}
             onClick={onResetLayout}
           />
         )}
         {onOpenSettings && (
           <ToolButton
-            icon={<span style={{ fontSize: 14 }}>⚙</span>}
+            icon={<IconSettings size={14} />}
             tooltip={t.toolbar.settings}
             onClick={onOpenSettings}
           />
