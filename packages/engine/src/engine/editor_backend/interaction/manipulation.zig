@@ -1847,8 +1847,8 @@ fn pickMoveOrScaleHandleOnScreen(
     const mouse = effectiveCursorPos(layer_context);
     const origin_screen = projectWorldPointToViewport(state, layer_context, origin) orelse return null;
 
-    const axis_pick_radius_px: f32 = 12.0;
-    const center_pick_radius_px: f32 = if (mode == .translate) 14.0 else 16.0;
+    const axis_pick_radius_px: f32 = 18.0;
+    const center_pick_radius_px: f32 = if (mode == .translate) 20.0 else 22.0;
     const min_axis_projected_len_px: f32 = 16.0;
     var best: ?PickedGizmoHandle = null;
 
@@ -1881,7 +1881,7 @@ fn pickRotateHandleOnScreen(
 ) ?PickedGizmoHandle {
     const mouse = effectiveCursorPos(layer_context);
     const ring_radius = 0.9 * scale;
-    const ring_pick_radius_px: f32 = 12.0;
+    const ring_pick_radius_px: f32 = 18.0;
     const samples: usize = 40;
     var best: ?PickedGizmoHandle = null;
 

@@ -225,6 +225,7 @@ pub fn bootstrap3D(self: anytype) !void {
 
     _ = try self.createEntity(.{
         .name = "Ground",
+        .selectable = false,
         .mesh = .{
             .handle = plane_mesh,
             .primitive = .plane,

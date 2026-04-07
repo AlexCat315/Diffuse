@@ -196,6 +196,8 @@ pub const Entity = struct {
     visible: bool = true,
     /// 是否仅在编辑器中显示
     editor_only: bool = false,
+    /// 是否可被鼠标拾取选择
+    selectable: bool = true,
     /// 场景切换时是否保留
     dont_destroy_on_load: bool = false,
     /// 是否为文件夹（用于层级面板组织）
@@ -340,6 +342,8 @@ pub const EntityDesc = struct {
     visible: bool = true,
     /// 是否仅在编辑器中显示
     editor_only: bool = false,
+    /// 是否可被鼠标拾取选择
+    selectable: bool = true,
     /// 场景切换时是否保留
     dont_destroy_on_load: bool = false,
     /// 是否为文件夹
@@ -643,6 +647,7 @@ pub const World = struct {
             .nav_agent = desc.nav_agent,
             .visible = desc.visible,
             .editor_only = desc.editor_only,
+            .selectable = desc.selectable,
             .dont_destroy_on_load = desc.dont_destroy_on_load,
             .is_folder = desc.is_folder,
             .world_transform_cache = .{},
@@ -1860,6 +1865,7 @@ pub const World = struct {
             .nav_agent = source.nav_agent,
             .visible = source.visible,
             .editor_only = source.editor_only,
+            .selectable = source.selectable,
             .dont_destroy_on_load = source.dont_destroy_on_load,
             .is_folder = source.is_folder,
         });

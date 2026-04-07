@@ -70,6 +70,24 @@ export function SceneHierarchy() {
     }
   }, [onRefresh]);
 
+  const toggleVisible = useCallback(async (entityId: number, visible: boolean) => {
+    try {
+      await window.guavaEngine.call("entity.setVisible", { entityId, visible });
+      onRefresh();
+    } catch (e) {
+      console.error("Failed to toggle visibility:", e);
+    }
+  }, [onRefresh]);
+
+  const toggleSelectable = useCallback(async (entityId: number, selectable: boolean) => {
+    try {
+      await window.guavaEngine.call("entity.setSelectable", { entityId, selectable });
+      onRefresh();
+    } catch (e) {
+      console.error("Failed to toggle selectable:", e);
+    }
+  }, [onRefresh]);
+
   const filteredRoots = search ? filterTree(roots, search.toLowerCase()) : roots;
 
   return (
@@ -117,6 +135,8 @@ export function SceneHierarchy() {
               renamingId={renamingId}
               onRename={handleRename}
               onStartRename={setRenamingId}
+              onToggleVisible={toggleVisible}
+              onToggleSelectable={toggleSelectable}
             />
           ))
         )}
@@ -207,15 +227,22 @@ interface TreeNodeProps {
   renamingId: number | null;
   onRename: (entityId: number, name: string) => void;
   onStartRename: (entityId: number) => void;
+  onToggleVisible: (entityId: number, visible: boolean) => void;
+  onToggleSelectable: (entityId: number, selectable: boolean) => void;
 }
 
 function TreeNode({
   node, depth, selectedId, onSelect, onContextMenu, renamingId, onRename, onStartRename,
+  onToggleVisible, onToggleSelectable,
 }: TreeNodeProps) {
   const [expanded, setExpanded] = useLocalState(true);
+  const [hovered, setHovered] = useLocalState(false);
   const isSelected = node.id === selectedId;
   const hasChildren = node.children.length > 0;
   const isRenaming = renamingId === node.id;
+
+  const showVisIcon = hovered || !node.visible;
+  const showLockIcon = hovered || !node.selectable;
 
   return (
     <div>
@@ -228,6 +255,8 @@ function TreeNode({
         onClick={() => onSelect(node.id)}
         onContextMenu={(e) => { e.stopPropagation(); onContextMenu(e, node.id); }}
         onDoubleClick={() => onStartRename(node.id)}
+        onMouseEnter={() => setHovered(true)}
+        onMouseLeave={() => setHovered(false)}
       >
         {hasChildren ? (
           <span
@@ -242,8 +271,28 @@ function TreeNode({
         {isRenaming ? (
           <InlineRename name={node.name} onCommit={(name) => onRename(node.id, name)} />
         ) : (
-          <span style={{ opacity: node.visible ? 1 : 0.4 }}>{node.name}</span>
+          <span style={{ flex: 1, opacity: node.visible ? 1 : 0.4 }}>{node.name}</span>
         )}
+        <span style={styles.iconGroup}>
+          {showVisIcon && (
+            <span
+              style={{ ...styles.toggleIcon, opacity: node.visible ? 0.4 : 0.8 }}
+              title={node.visible ? "Hide" : "Show"}
+              onClick={(e) => { e.stopPropagation(); onToggleVisible(node.id, !node.visible); }}
+            >
+              {node.visible ? "👁" : "👁‍🗨"}
+            </span>
+          )}
+          {showLockIcon && (
+            <span
+              style={{ ...styles.toggleIcon, opacity: node.selectable ? 0.4 : 0.8 }}
+              title={node.selectable ? "Lock" : "Unlock"}
+              onClick={(e) => { e.stopPropagation(); onToggleSelectable(node.id, !node.selectable); }}
+            >
+              {node.selectable ? "🔓" : "🔒"}
+            </span>
+          )}
+        </span>
       </div>
       {expanded &&
         hasChildren &&
@@ -258,6 +307,8 @@ function TreeNode({
             renamingId={renamingId}
             onRename={onRename}
             onStartRename={onStartRename}
+            onToggleVisible={onToggleVisible}
+            onToggleSelectable={onToggleSelectable}
           />
         ))}
     </div>
@@ -295,7 +346,7 @@ function InlineRename({ name, onCommit }: { name: string; onCommit: (name: strin
 // ── Styles ────────────────────────────────────────────────────────
 
 const styles: Record<string, React.CSSProperties> = {
-  container: { display: "flex", flexDirection: "column", height: "100%" },
+  container: { display: "flex", flexDirection: "column", height: "100%", outline: "none" },
   header: {
     padding: "8px 12px",
     borderBottom: "1px solid #313244",
@@ -349,6 +400,20 @@ const styles: Record<string, React.CSSProperties> = {
     color: "#6c7086",
   },
   arrowPlaceholder: { width: 14 },
+  iconGroup: {
+    display: "flex",
+    alignItems: "center",
+    gap: 2,
+    marginLeft: "auto",
+    flexShrink: 0,
+  },
+  toggleIcon: {
+    cursor: "pointer",
+    fontSize: 12,
+    padding: "0 2px",
+    lineHeight: 1,
+    userSelect: "none" as const,
+  },
   renameInput: {
     background: "#313244",
     border: "1px solid #89b4fa",

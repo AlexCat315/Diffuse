@@ -184,6 +184,7 @@ const EntityNodeJson = struct {
     id: u64,
     name: []const u8,
     visible: bool,
+    selectable: bool,
     children: []EntityNodeJson,
 };
 
@@ -206,6 +207,7 @@ fn buildEntityNode(allocator: std.mem.Allocator, world: *World, entity_id: Entit
         .id = entity_id,
         .name = entity.name,
         .visible = entity.visible,
+        .selectable = entity.selectable,
         .children = try children_list.toOwnedSlice(allocator),
     };
 }

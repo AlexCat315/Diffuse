@@ -4600,6 +4600,20 @@ pub const Renderer = struct {
                 var pixel: [4]u8 = undefined;
                 try self.rhi.readTransferBufferBytesAt(&batch.transfer_buffer, readback.offset, pixel[0..]);
                 const entity = id_pass_mod.decodeEntityIdBgra(pixel);
+                const id_tex = self.id_pass.texture();
+                const tw: u32 = if (id_tex) |t| t.desc.width else 0;
+                const th: u32 = if (id_tex) |t| t.desc.height else 0;
+                std.log.info("[PICK] pixel=({d},{d}) id_texture={d}x{d} rgba=[{d},{d},{d},{d}] entity={?d}", .{
+                    readback.request.pixel_x,
+                    readback.request.pixel_y,
+                    tw,
+                    th,
+                    pixel[0],
+                    pixel[1],
+                    pixel[2],
+                    pixel[3],
+                    entity,
+                });
                 _ = try self.selection_history.applyPick(entity, readback.request.mode);
             }
         }

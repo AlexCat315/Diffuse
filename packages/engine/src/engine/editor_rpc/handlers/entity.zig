@@ -47,6 +47,22 @@ pub fn setName(ctx: *Ctx) !void {
     try ctx.reply(.{});
 }
 
+pub fn setVisible(ctx: *Ctx) !void {
+    const eid = try ctx.param(u64, "entityId");
+    const visible = try ctx.param(bool, "visible");
+    _ = ctx.layer.world.setEntityVisible(eid, visible);
+    try ctx.reply(.{});
+}
+
+pub fn setSelectable(ctx: *Ctx) !void {
+    const eid = try ctx.param(u64, "entityId");
+    const selectable = try ctx.param(bool, "selectable");
+    const entity = ctx.layer.world.getEntity(eid) orelse return error.EntityNotFound;
+    entity.selectable = selectable;
+    ctx.layer.world.markSceneChanged();
+    try ctx.reply(.{});
+}
+
 pub fn getComponents(ctx: *Ctx) !void {
     const eid = try ctx.param(u64, "entityId");
     const entity = ctx.layer.world.getEntityConst(eid) orelse return error.EntityNotFound;

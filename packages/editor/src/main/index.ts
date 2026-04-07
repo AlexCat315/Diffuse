@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, session } from "electron";
 import path from "path";
 import fs from "fs/promises";
 import { EngineProcess } from "./engine-process";
@@ -861,9 +861,60 @@ ipcMain.handle("fs:importPaths", async (_event, targetRelDir: string, sourcePath
 // ── App Lifecycle ────────────────────────────────────────────────
 
 app.whenReady().then(async () => {
+  // ── Custom application menu ─────────────────────────────────────
+  // Override the default Electron menu to suppress problematic shortcuts
+  // (Cmd+R reload, Cmd+W close) that conflict with editor interaction.
+  const isDev = !!(process.env.VITE_DEV_SERVER_URL);
+  const template: Electron.MenuItemConstructorOptions[] = [
+    {
+      label: app.name,
+      submenu: [
+        { role: "about" },
+        { type: "separator" },
+        { role: "hide" },
+        { role: "hideOthers" },
+        { role: "unhide" },
+        { type: "separator" },
+        { role: "quit" },
+      ],
+    },
+    {
+      label: "Edit",
+      submenu: [
+        { role: "undo" },
+        { role: "redo" },
+        { type: "separator" },
+        { role: "cut" },
+        { role: "copy" },
+        { role: "paste" },
+        { role: "selectAll" },
+      ],
+    },
+    {
+      label: "Window",
+      submenu: [
+        { role: "minimize" },
+        { role: "zoom" },
+        { type: "separator" },
+        { role: "front" },
+      ],
+    },
+  ];
+  // Allow reload in dev mode only
+  if (isDev) {
+    template.push({
+      label: "Developer",
+      submenu: [
+        { role: "reload" },
+        { role: "forceReload" },
+        { role: "toggleDevTools" },
+      ],
+    });
+  }
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+
   // Set Content-Security-Policy to suppress Electron security warning.
   // In dev mode Vite injects inline scripts for HMR, so we must allow 'unsafe-inline'.
-  const isDev = !!(process.env.VITE_DEV_SERVER_URL);
   const scriptSrc = isDev
     ? "script-src 'self' 'unsafe-inline' http://localhost:*"
     : "script-src 'self'";

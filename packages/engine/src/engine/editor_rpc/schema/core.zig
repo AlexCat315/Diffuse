@@ -152,6 +152,22 @@ pub const @"entity.removeComponent" = struct {
     pub const Result = struct {};
 };
 
+pub const @"entity.setVisible" = struct {
+    pub const Params = struct {
+        entityId: u64,
+        visible: bool,
+    };
+    pub const Result = struct {};
+};
+
+pub const @"entity.setSelectable" = struct {
+    pub const Params = struct {
+        entityId: u64,
+        selectable: bool,
+    };
+    pub const Result = struct {};
+};
+
 pub const @"entity.setAssetField" = struct {
     pub const Params = struct {
         entityId: u64,
