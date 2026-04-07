@@ -116,22 +116,22 @@ pub const RtParams = extern struct {
     point_light_count: u32 = 0,
     spot_light_count: u32 = 0,
     sampling_table_count: u32 = 0,
-    directional_light_directions: [max_directional_lights][3]f32 = .{ .{ 0.0, 0.0, 0.0 } } ** max_directional_lights,
-    directional_light_radiance: [max_directional_lights][3]f32 = .{ .{ 0.0, 0.0, 0.0 } } ** max_directional_lights,
-    point_light_positions: [max_point_lights][3]f32 = .{ .{ 0.0, 0.0, 0.0 } } ** max_point_lights,
-    point_light_radiance: [max_point_lights][3]f32 = .{ .{ 0.0, 0.0, 0.0 } } ** max_point_lights,
+    directional_light_directions: [max_directional_lights][3]f32 = .{.{ 0.0, 0.0, 0.0 }} ** max_directional_lights,
+    directional_light_radiance: [max_directional_lights][3]f32 = .{.{ 0.0, 0.0, 0.0 }} ** max_directional_lights,
+    point_light_positions: [max_point_lights][3]f32 = .{.{ 0.0, 0.0, 0.0 }} ** max_point_lights,
+    point_light_radiance: [max_point_lights][3]f32 = .{.{ 0.0, 0.0, 0.0 }} ** max_point_lights,
     point_light_ranges: [max_point_lights]f32 = .{0.0} ** max_point_lights,
-    spot_light_positions: [max_spot_lights][3]f32 = .{ .{ 0.0, 0.0, 0.0 } } ** max_spot_lights,
-    spot_light_directions: [max_spot_lights][3]f32 = .{ .{ 0.0, 0.0, -1.0 } } ** max_spot_lights,
-    spot_light_radiance: [max_spot_lights][3]f32 = .{ .{ 0.0, 0.0, 0.0 } } ** max_spot_lights,
+    spot_light_positions: [max_spot_lights][3]f32 = .{.{ 0.0, 0.0, 0.0 }} ** max_spot_lights,
+    spot_light_directions: [max_spot_lights][3]f32 = .{.{ 0.0, 0.0, -1.0 }} ** max_spot_lights,
+    spot_light_radiance: [max_spot_lights][3]f32 = .{.{ 0.0, 0.0, 0.0 }} ** max_spot_lights,
     spot_light_ranges: [max_spot_lights]f32 = .{0.0} ** max_spot_lights,
     spot_light_inner_angle_cos: [max_spot_lights]f32 = .{1.0} ** max_spot_lights,
     spot_light_outer_angle_cos: [max_spot_lights]f32 = .{1.0} ** max_spot_lights,
     environment_importance_width: u32 = 0,
     environment_importance_height: u32 = 0,
     emissive_total_area: f32 = 0.0,
-    // Keep the params buffer 16-byte aligned for the Metal argument ABI.
-    _tail_pad: u32 = 0,
+    /// 渐进式路径追踪帧索引（每帧递增，用于随机种子变化）
+    frame_index: u32 = 0,
 };
 
 comptime {

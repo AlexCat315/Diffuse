@@ -1,7 +1,8 @@
-import React, { useRef, useEffect } from "react";
+import React, { useRef, useEffect, useLayoutEffect, useState, useCallback, useMemo } from "react";
 import { useI18n } from "../i18n";
 import { IconClose } from "../components/Icons";
 import { useConsoleStore } from "../store";
+import { setConsoleTrimPaused } from "../store/console";
 import { useSyncedState } from "../store/synced-state";
 
 type LogLevel = "debug" | "info" | "warn" | "error";
@@ -15,16 +16,54 @@ const levelColors: Record<string, string> = {
   error: "#f38ba8",
 };
 
+const sourceColors: Record<string, string> = {
+  renderer: "#89b4fa",
+  asset: "#a6e3a1",
+  script: "#cba6f7",
+  scene: "#fab387",
+  editor: "#74c7ec",
+  rhi: "#94e2d5",
+};
+
+/** Threshold (px) to consider the list "at the bottom". */
+const SCROLL_THRESHOLD = 40;
+
 export function Console() {
   const logs = useConsoleStore((s) => s.logs);
   const clearLogs = useConsoleStore((s) => s.clearLogs);
   const { t } = useI18n();
+
+  const listRef = useRef<HTMLDivElement>(null);
   const endRef = useRef<HTMLDivElement>(null);
+  // Use a ref for the most up-to-date stick state (avoids race with React batching)
+  const stickRef = useRef(true);
+  const [stickToBottom, setStickToBottom] = useState(true);
+  const [searchText, setSearchText] = useState("");
   const [activeFilters, setActiveFilters] = useSyncedState<Set<LogLevel>>("console", "activeFilters", new Set(LEVELS));
 
-  useEffect(() => {
-    endRef.current?.scrollIntoView({ behavior: "smooth" });
+  // Detect if user has scrolled away from bottom
+  const handleScroll = useCallback(() => {
+    const el = listRef.current;
+    if (!el) return;
+    const atBottom = el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_THRESHOLD;
+    stickRef.current = atBottom;
+    setStickToBottom(atBottom);
+    setConsoleTrimPaused(!atBottom);
+  }, []);
+
+  // Auto-scroll only when sticking to bottom — uses ref to avoid stale-state race
+  useLayoutEffect(() => {
+    if (stickRef.current) {
+      endRef.current?.scrollIntoView({ behavior: "auto" });
+    }
   }, [logs.length]);
+
+  const jumpToBottom = useCallback(() => {
+    stickRef.current = true;
+    setStickToBottom(true);
+    setConsoleTrimPaused(false);
+    endRef.current?.scrollIntoView({ behavior: "auto" });
+  }, []);
 
   const toggleFilter = (level: LogLevel) => {
     setActiveFilters((prev) => {
@@ -34,7 +73,18 @@ export function Console() {
     });
   };
 
-  const filtered = logs.filter((log) => activeFilters.has(log.level as LogLevel));
+  const searchLower = searchText.toLowerCase();
+  const filtered = useMemo(
+    () =>
+      logs.filter(
+        (log) =>
+          activeFilters.has(log.level as LogLevel) &&
+          (!searchLower ||
+            log.message.toLowerCase().includes(searchLower) ||
+            (log.source && log.source.toLowerCase().includes(searchLower))),
+      ),
+    [logs, activeFilters, searchLower],
+  );
 
   return (
     <div style={styles.container}>
@@ -58,25 +108,44 @@ export function Console() {
             </button>
           ))}
         </div>
+        <input
+          type="text"
+          value={searchText}
+          onChange={(e) => setSearchText(e.target.value)}
+          placeholder="Filter..."
+          style={styles.searchInput}
+        />
         <div style={{ flex: 1 }} />
         <button style={styles.clearBtn} onClick={clearLogs} title={t.console.clearTooltip}>
           <IconClose size={12} />
         </button>
       </div>
-      <div style={styles.logList}>
-        {filtered.length === 0 ? (
-          <div style={styles.empty}>{t.console.noLogs}</div>
-        ) : (
-          filtered.map((log, i) => (
-            <div key={i} style={styles.logEntry}>
-              <span style={{ ...styles.level, color: levelColors[log.level] ?? "#cdd6f4" }}>
-                [{log.level.toUpperCase()}]
-              </span>
-              <span style={styles.message}>{log.message}</span>
-            </div>
-          ))
+      <div style={{ position: "relative", flex: 1, minHeight: 0 }}>
+        <div ref={listRef} onScroll={handleScroll} style={styles.logList}>
+          {filtered.length === 0 ? (
+            <div style={styles.empty}>{t.console.noLogs}</div>
+          ) : (
+            filtered.map((log) => (
+              <div key={log._id} style={styles.logEntry}>
+                <span style={{ ...styles.level, color: levelColors[log.level] ?? "#cdd6f4" }}>
+                  [{log.level.toUpperCase()}]
+                </span>
+                {log.source && (
+                  <span style={{ ...styles.source, color: sourceColors[log.source] ?? "#585b70" }}>
+                    {log.source}
+                  </span>
+                )}
+                <span style={styles.message}>{log.message}</span>
+              </div>
+            ))
+          )}
+          <div ref={endRef} />
+        </div>
+        {!stickToBottom && (
+          <button style={styles.jumpBtn} onClick={jumpToBottom}>
+            ↓ New logs
+          </button>
         )}
-        <div ref={endRef} />
       </div>
     </div>
   );
@@ -129,7 +198,7 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "1px 5px",
     fontSize: 12,
   },
-  logList: { flex: 1, overflow: "auto", padding: 4, fontFamily: "monospace", fontSize: 12 },
+  logList: { position: "absolute", inset: 0, overflow: "auto", padding: 4, fontFamily: "monospace", fontSize: 12 },
   empty: { padding: 16, textAlign: "center", opacity: 0.4 },
   logEntry: {
     display: "flex",
@@ -137,6 +206,35 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "1px 8px",
     borderBottom: "1px solid #181825",
   },
-  level: { minWidth: 55, fontWeight: 600, fontSize: 11 },
+  level: { minWidth: 55, fontWeight: 600, fontSize: 11, flexShrink: 0 },
+  source: { minWidth: 60, fontSize: 10, opacity: 0.7, flexShrink: 0 },
   message: { color: "#cdd6f4", wordBreak: "break-all" },
+  searchInput: {
+    background: "#1e1e2e",
+    border: "1px solid #45475a",
+    borderRadius: 3,
+    color: "#cdd6f4",
+    padding: "2px 6px",
+    fontSize: 11,
+    fontFamily: "monospace",
+    width: 140,
+    outline: "none",
+    marginLeft: 8,
+  },
+  jumpBtn: {
+    position: "absolute" as const,
+    bottom: 12,
+    left: "50%",
+    transform: "translateX(-50%)",
+    background: "#45475a",
+    color: "#cdd6f4",
+    border: "none",
+    borderRadius: 12,
+    padding: "4px 14px",
+    fontSize: 11,
+    fontFamily: "monospace",
+    cursor: "pointer",
+    boxShadow: "0 2px 8px rgba(0,0,0,0.4)",
+    zIndex: 10,
+  },
 };

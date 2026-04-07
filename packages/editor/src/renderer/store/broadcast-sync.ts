@@ -25,12 +25,33 @@ export function withBroadcastSync<T extends object>(
   creator: StateCreator<T>,
 ): StateCreator<T> {
   return (set, get, api) => {
-    const channel = new BroadcastChannel(CHANNEL_PREFIX + options.name);
+    let channel: BroadcastChannel | null = null;
     let isSyncing = false; // prevent echo loops
     let syncedFromRemote = false;
 
-    // Listen for updates from other windows
-    channel.onmessage = (event: MessageEvent) => {
+    function getChannel(): BroadcastChannel {
+      if (!channel) {
+        channel = new BroadcastChannel(CHANNEL_PREFIX + options.name);
+        channel.onmessage = handleMessage;
+      }
+      return channel;
+    }
+
+    function safeSend(data: unknown): void {
+      try {
+        getChannel().postMessage(data);
+      } catch {
+        // Channel was closed (e.g. window unload race) — recreate and retry once
+        channel = null;
+        try {
+          getChannel().postMessage(data);
+        } catch {
+          // Still failing — give up silently
+        }
+      }
+    }
+
+    function handleMessage(event: MessageEvent): void {
       const msg = event.data;
       if (!msg || typeof msg !== "object") return;
 
@@ -41,7 +62,7 @@ export function withBroadcastSync<T extends object>(
         for (const key of options.syncKeys) {
           snapshot[key] = (state as Record<string, unknown>)[key];
         }
-        channel.postMessage({ type: "sync-response", data: snapshot });
+        safeSend({ type: "sync-response", data: snapshot });
         return;
       }
 
@@ -63,7 +84,10 @@ export function withBroadcastSync<T extends object>(
         set(patch);
         isSyncing = false;
       }
-    };
+    }
+
+    // Initialize channel and attach listener
+    getChannel();
 
     // Wrap set to broadcast changes
     const syncSet: typeof set = (partial, replace?) => {
@@ -88,17 +112,20 @@ export function withBroadcastSync<T extends object>(
       }
 
       if (hasPatch) {
-        channel.postMessage(patch);
+        safeSend(patch);
       }
     };
 
     // Clean up channel when the window unloads
     if (typeof window !== "undefined") {
-      window.addEventListener("beforeunload", () => channel.close());
+      window.addEventListener("beforeunload", () => {
+        channel?.close();
+        channel = null;
+      });
     }
 
     // Request existing state from other windows on init
-    setTimeout(() => channel.postMessage({ type: "sync-request" }), 0);
+    setTimeout(() => safeSend({ type: "sync-request" }), 0);
 
     return creator(syncSet, get, api);
   };
