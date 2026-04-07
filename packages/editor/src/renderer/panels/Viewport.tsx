@@ -742,7 +742,7 @@ export function Viewport() {
         if (!assetPath || assetType !== "model") return;
         e.preventDefault();
         try {
-          await window.guavaEngine.call("assets.importModel", { path: assetPath });
+          await window.guavaEngine.call("assets.importModel", { sourcePath: assetPath });
         } catch (err) {
           console.error("Failed to import model:", err);
         }

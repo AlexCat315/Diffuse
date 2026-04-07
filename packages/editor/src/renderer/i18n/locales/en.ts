@@ -737,7 +737,7 @@ export const en = {
     search: "Search scripts…",
     noScripts: "No script files found.",
     selectFile: "Select a script file to view.",
-    openFromSidebar: "Open a file from the sidebar to start editing.",
+    openFromBrowser: "Double-click a script in the Content Browser to open it here.",
     refreshScripts: "Refresh",
     save: "Save",
     enableEdit: "Enable editing",
