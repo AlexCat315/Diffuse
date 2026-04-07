@@ -42,6 +42,9 @@ pub const WindowConfig = struct {
     /// On macOS, hide the process from the Dock and Cmd-Tab switcher.
     /// Must be set at creation time (before the window appears).
     background_app: bool = false,
+    /// Headless mode: skip SDL initialization and window creation entirely.
+    /// Used by editor-server mode for true frontend/backend separation.
+    headless: bool = false,
 };
 
 pub const EventKind = enum {
@@ -87,7 +90,7 @@ pub const Event = struct {
 };
 
 pub const Window = struct {
-    handle: *sdl.SDL_Window,
+    handle: ?*sdl.SDL_Window = null,
     logical_width: u32 = 0,
     logical_height: u32 = 0,
     drawable_width: u32 = 0,
@@ -97,6 +100,7 @@ pub const Window = struct {
     native_titlebar_leading_inset: f32 = 0.0,
     native_titlebar_trailing_inset: f32 = 0.0,
     should_close: bool = false,
+    headless: bool = false,
 
     // Saved bounds for maximizeFull / restore pair. When the user triggers the
     // explicit fullscreen/usable-area maximize (maximizeFull), we save the
@@ -107,6 +111,21 @@ pub const Window = struct {
     prev_bounds_size: [2]i32 = .{ 0, 0 },
 
     pub fn init(allocator: std.mem.Allocator, config: WindowConfig) !Window {
+        // Headless mode: skip all SDL/window initialization
+        if (config.headless) {
+            const w = if (config.width > 0) config.width else 1280;
+            const h = if (config.height > 0) config.height else 720;
+            return .{
+                .handle = null,
+                .headless = true,
+                .logical_width = w,
+                .logical_height = h,
+                .drawable_width = w,
+                .drawable_height = h,
+                .content_scale = 1.0,
+            };
+        }
+
         if (!sdl.SDL_Init(sdl.SDL_INIT_VIDEO | sdl.SDL_INIT_GAMEPAD)) {
             std.log.err("SDL_Init failed: {s}", .{lastError()});
             return error.SdlInitFailed;
@@ -169,15 +188,16 @@ pub const Window = struct {
             .handle = handle.?,
             .native_titlebar_controls = use_native_titlebar_controls,
         };
+        const sdl_handle = window.handle.?;
         if (use_native_titlebar_controls) {
             switch (builtin.os.tag) {
                 .macos => {
-                    if (!guava_window_apply_macos_native_titlebar_style(window.handle)) {
+                    if (!guava_window_apply_macos_native_titlebar_style(sdl_handle)) {
                         return error.SdlWindowOperationFailed;
                     }
                 },
                 .windows => {
-                    if (!guava_window_apply_windows_native_titlebar_style(window.handle)) {
+                    if (!guava_window_apply_windows_native_titlebar_style(sdl_handle)) {
                         return error.SdlWindowOperationFailed;
                     }
                 },
@@ -191,12 +211,12 @@ pub const Window = struct {
         try window.refreshSizes();
 
         // Bring window to front
-        _ = sdl.SDL_RaiseWindow(window.handle);
+        _ = sdl.SDL_RaiseWindow(sdl_handle);
         if (config.maximized) {
             // On macOS, SDL_WINDOW_MAXIMIZED may not fully fill the usable area.
             // Explicitly maximize after creation to ensure it covers the full screen
             // below the menu bar and above the dock.
-            _ = sdl.SDL_MaximizeWindow(window.handle);
+            _ = sdl.SDL_MaximizeWindow(sdl_handle);
             try window.refreshSizes();
         }
         // Bring window to front — skipped in background-app mode because
@@ -210,8 +230,10 @@ pub const Window = struct {
     }
 
     pub fn deinit(self: *Window) void {
-        sdl.SDL_DestroyWindow(self.handle);
-        sdl.SDL_Quit();
+        if (self.handle) |h| {
+            sdl.SDL_DestroyWindow(h);
+            sdl.SDL_Quit();
+        }
     }
 
     /// On macOS, hide the app from the Dock and Cmd-Tab switcher.
@@ -223,16 +245,17 @@ pub const Window = struct {
     }
 
     pub fn refreshSizes(self: *Window) !void {
+        const h = self.handle orelse return;
         var logical_w: c_int = 0;
         var logical_h: c_int = 0;
-        if (!sdl.SDL_GetWindowSize(self.handle, &logical_w, &logical_h)) {
+        if (!sdl.SDL_GetWindowSize(h, &logical_w, &logical_h)) {
             std.log.err("SDL_GetWindowSize failed: {s}", .{lastError()});
             return error.SdlQueryFailed;
         }
 
         var drawable_w: c_int = 0;
         var drawable_h: c_int = 0;
-        if (!sdl.SDL_GetWindowSizeInPixels(self.handle, &drawable_w, &drawable_h)) {
+        if (!sdl.SDL_GetWindowSizeInPixels(h, &drawable_w, &drawable_h)) {
             std.log.err("SDL_GetWindowSizeInPixels failed: {s}", .{lastError()});
             return error.SdlQueryFailed;
         }
@@ -251,6 +274,7 @@ pub const Window = struct {
     }
 
     pub fn pollEvent(self: *Window) !?Event {
+        if (self.headless) return null;
         var raw_event: sdl.SDL_Event = undefined;
         while (sdl.SDL_PollEvent(&raw_event)) {
             switch (raw_event.type) {
@@ -434,7 +458,8 @@ pub const Window = struct {
     }
 
     pub fn displayRefreshRate(self: *const Window) ?f32 {
-        const display_id = sdl.SDL_GetDisplayForWindow(self.handle);
+        const h = self.handle orelse return null;
+        const display_id = sdl.SDL_GetDisplayForWindow(h);
         if (display_id == 0) {
             return null;
         }
@@ -453,15 +478,17 @@ pub const Window = struct {
     }
 
     pub fn setTitle(self: *Window, allocator: std.mem.Allocator, title: []const u8) !void {
+        const h = self.handle orelse return;
         const title_z = try allocator.dupeZ(u8, title);
         defer allocator.free(title_z);
-        _ = sdl.SDL_SetWindowTitle(self.handle, title_z.ptr);
+        _ = sdl.SDL_SetWindowTitle(h, title_z.ptr);
     }
 
     pub fn position(self: *const Window) ![2]i32 {
+        const h = self.handle orelse return .{ 0, 0 };
         var x: c_int = 0;
         var y: c_int = 0;
-        if (!sdl.SDL_GetWindowPosition(self.handle, &x, &y)) {
+        if (!sdl.SDL_GetWindowPosition(h, &x, &y)) {
             std.log.err("SDL_GetWindowPosition failed: {s}", .{lastError()});
             return error.SdlQueryFailed;
         }
@@ -469,13 +496,15 @@ pub const Window = struct {
     }
 
     pub fn setPosition(self: *Window, x: i32, y: i32) !void {
-        if (!sdl.SDL_SetWindowPosition(self.handle, x, y)) {
+        const h = self.handle orelse return;
+        if (!sdl.SDL_SetWindowPosition(h, x, y)) {
             std.log.err("SDL_SetWindowPosition failed: {s}", .{lastError()});
             return error.SdlWindowOperationFailed;
         }
     }
 
-    pub fn globalMousePosition(_: *const Window) [2]f32 {
+    pub fn globalMousePosition(self: *const Window) [2]f32 {
+        if (self.headless) return .{ 0.0, 0.0 };
         var x: f32 = 0.0;
         var y: f32 = 0.0;
         _ = sdl.SDL_GetGlobalMouseState(&x, &y);
@@ -483,8 +512,9 @@ pub const Window = struct {
     }
 
     pub fn beginNativeDrag(self: *Window) bool {
+        const h = self.handle orelse return false;
         return switch (builtin.os.tag) {
-            .macos => guava_window_begin_macos_native_drag(self.handle),
+            .macos => guava_window_begin_macos_native_drag(h),
             else => false,
         };
     }
@@ -493,24 +523,28 @@ pub const Window = struct {
     /// 相对模式下光标隐藏并锁定，鼠标增量不受屏幕边缘限制。
     /// 用于摄像机拖拽（轨道/自由视角），防止移动到屏幕边缘后卡住。
     pub fn setRelativeMouseMode(self: *Window, enabled: bool) void {
-        _ = sdl.SDL_SetWindowRelativeMouseMode(self.handle, enabled);
+        const h = self.handle orelse return;
+        _ = sdl.SDL_SetWindowRelativeMouseMode(h, enabled);
     }
 
     pub fn minimize(self: *Window) !void {
-        if (!sdl.SDL_MinimizeWindow(self.handle)) {
+        const h = self.handle orelse return;
+        if (!sdl.SDL_MinimizeWindow(h)) {
             std.log.err("SDL_MinimizeWindow failed: {s}", .{lastError()});
             return error.SdlWindowOperationFailed;
         }
     }
 
     pub fn maximize(self: *Window) !void {
-        if (!sdl.SDL_MaximizeWindow(self.handle)) {
+        const h = self.handle orelse return;
+        if (!sdl.SDL_MaximizeWindow(h)) {
             std.log.err("SDL_MaximizeWindow failed: {s}", .{lastError()});
             return error.SdlWindowOperationFailed;
         }
     }
 
     pub fn maximizeFull(self: *Window) !void {
+        if (self.headless) return;
         // Save previous bounds so restore() can return to them.
         // Only overwrite saved bounds if we don't already have a saved state;
         // this prevents clobbering the original bounds if maximizeFull is called
@@ -528,12 +562,13 @@ pub const Window = struct {
 
         // Ensure the window fills the entire usable display area (work area).
         const usable = try primaryDisplayUsableBounds();
+        const h = self.handle.?;
         // Set position and size explicitly to usable bounds.
-        if (!sdl.SDL_SetWindowPosition(self.handle, usable.x, usable.y)) {
+        if (!sdl.SDL_SetWindowPosition(h, usable.x, usable.y)) {
             std.log.err("SDL_SetWindowPosition failed: {s}", .{lastError()});
             return error.SdlWindowOperationFailed;
         }
-        if (!sdl.SDL_SetWindowSize(self.handle, usable.w, usable.h)) {
+        if (!sdl.SDL_SetWindowSize(h, usable.w, usable.h)) {
             std.log.err("SDL_SetWindowSize failed: {s}", .{lastError()});
             return error.SdlWindowOperationFailed;
         }
@@ -541,6 +576,7 @@ pub const Window = struct {
     }
 
     pub fn restore(self: *Window) !void {
+        if (self.headless) return;
         // If we previously maximized via maximizeFull and saved bounds, restore
         // to those exact bounds instead of relying on SDL_RestoreWindow, which
         // may not map to the saved bounds we expect.
@@ -550,11 +586,11 @@ pub const Window = struct {
             const pw = self.prev_bounds_size[0];
             const ph = self.prev_bounds_size[1];
 
-            if (!sdl.SDL_SetWindowPosition(self.handle, px, py)) {
+            if (!sdl.SDL_SetWindowPosition(self.handle.?, px, py)) {
                 std.log.err("SDL_SetWindowPosition (restore) failed: {s}", .{lastError()});
                 return error.SdlWindowOperationFailed;
             }
-            if (!sdl.SDL_SetWindowSize(self.handle, pw, ph)) {
+            if (!sdl.SDL_SetWindowSize(self.handle.?, pw, ph)) {
                 std.log.err("SDL_SetWindowSize (restore) failed: {s}", .{lastError()});
                 return error.SdlWindowOperationFailed;
             }
@@ -566,27 +602,29 @@ pub const Window = struct {
         }
 
         // Fallback to SDL's restore if we don't have saved bounds.
-        if (!sdl.SDL_RestoreWindow(self.handle)) {
+        if (!sdl.SDL_RestoreWindow(self.handle.?)) {
             std.log.err("SDL_RestoreWindow failed: {s}", .{lastError()});
             return error.SdlWindowOperationFailed;
         }
     }
 
     pub fn sync(self: *Window) !void {
-        if (!sdl.SDL_SyncWindow(self.handle)) {
+        const h = self.handle orelse return;
+        if (!sdl.SDL_SyncWindow(h)) {
             std.log.err("SDL_SyncWindow failed: {s}", .{lastError()});
             return error.SdlWindowOperationFailed;
         }
     }
 
     pub fn createMetalLayerBinding(self: *Window) ?MetalLayerBinding {
+        const h = self.handle orelse return null;
         return switch (builtin.os.tag) {
             .macos => blk: {
                 var binding = MetalLayerBinding{
                     .metal_view = null,
                     .layer = null,
                 };
-                if (!guava_window_create_metal_layer_binding(@ptrCast(self.handle), &binding)) {
+                if (!guava_window_create_metal_layer_binding(@ptrCast(h), &binding)) {
                     break :blk null;
                 }
                 break :blk binding;
@@ -596,15 +634,17 @@ pub const Window = struct {
     }
 
     pub fn nativeWin32Hwnd(self: *Window) ?*anyopaque {
+        const h = self.handle orelse return null;
         return switch (builtin.os.tag) {
-            .windows => guava_window_get_native_win32_hwnd(@ptrCast(self.handle)),
+            .windows => guava_window_get_native_win32_hwnd(@ptrCast(h)),
             else => null,
         };
     }
 
     pub fn nativeCocoaWindow(self: *Window) ?*anyopaque {
+        const h = self.handle orelse return null;
         return switch (builtin.os.tag) {
-            .macos => guava_window_get_native_cocoa_window(@ptrCast(self.handle)),
+            .macos => guava_window_get_native_cocoa_window(@ptrCast(h)),
             else => null,
         };
     }
@@ -613,22 +653,25 @@ pub const Window = struct {
     /// On macOS, parent_handle should be an NSView*. The child moves with the parent
     /// and stays above it in z-order.
     pub fn attachToParent(self: *Window, parent_handle: *anyopaque) bool {
+        const h = self.handle orelse return false;
         return switch (builtin.os.tag) {
-            .macos => guava_window_attach_to_parent_nsview(@ptrCast(self.handle), parent_handle),
+            .macos => guava_window_attach_to_parent_nsview(@ptrCast(h), parent_handle),
             else => false,
         };
     }
 
     /// Detach this window from its parent, making it an independent top-level window again.
     pub fn detachFromParent(self: *Window) bool {
+        const h = self.handle orelse return false;
         return switch (builtin.os.tag) {
-            .macos => guava_window_detach_from_parent(@ptrCast(self.handle)),
+            .macos => guava_window_detach_from_parent(@ptrCast(h)),
             else => false,
         };
     }
 
     pub fn isMaximized(self: *const Window) bool {
-        return (sdl.SDL_GetWindowFlags(self.handle) & sdl.SDL_WINDOW_MAXIMIZED) != 0;
+        const h = self.handle orelse return false;
+        return (sdl.SDL_GetWindowFlags(h) & sdl.SDL_WINDOW_MAXIMIZED) != 0;
     }
 
     pub fn isMaximizedFull(self: *const Window) bool {
@@ -672,6 +715,11 @@ pub const Window = struct {
     }
 
     fn refreshNativeTitlebarInsets(self: *Window) void {
+        const h = self.handle orelse {
+            self.native_titlebar_leading_inset = 0.0;
+            self.native_titlebar_trailing_inset = 0.0;
+            return;
+        };
         if (!self.native_titlebar_controls) {
             self.native_titlebar_leading_inset = 0.0;
             self.native_titlebar_trailing_inset = 0.0;
@@ -680,12 +728,12 @@ pub const Window = struct {
 
         switch (builtin.os.tag) {
             .macos => {
-                self.native_titlebar_leading_inset = guava_window_macos_titlebar_leading_inset(self.handle);
+                self.native_titlebar_leading_inset = guava_window_macos_titlebar_leading_inset(h);
                 self.native_titlebar_trailing_inset = 0.0;
             },
             .windows => {
                 self.native_titlebar_leading_inset = 0.0;
-                self.native_titlebar_trailing_inset = guava_window_windows_titlebar_trailing_inset(self.handle);
+                self.native_titlebar_trailing_inset = guava_window_windows_titlebar_trailing_inset(h);
             },
             else => {
                 self.native_titlebar_leading_inset = 0.0;

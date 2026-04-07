@@ -38,18 +38,26 @@ pub fn setRect(ctx: *Ctx) !void {
 
     const win = ctx.layer.window;
 
-    // Make window borderless for clean embedding (idempotent)
-    _ = sdl.SDL_SetWindowBordered(win.handle, false);
+    if (win.handle) |h| {
+        // Make window borderless for clean embedding (idempotent)
+        _ = sdl.SDL_SetWindowBordered(h, false);
 
-    // Reposition
-    try win.setPosition(@intCast(x), @intCast(y));
+        // Reposition
+        try win.setPosition(@intCast(x), @intCast(y));
 
-    // Resize
-    if (!sdl.SDL_SetWindowSize(win.handle, @intCast(width), @intCast(height))) {
-        std.log.err("viewport.setRect: SDL_SetWindowSize failed", .{});
-        return error.SdlWindowOperationFailed;
+        // Resize
+        if (!sdl.SDL_SetWindowSize(h, @intCast(width), @intCast(height))) {
+            std.log.err("viewport.setRect: SDL_SetWindowSize failed", .{});
+            return error.SdlWindowOperationFailed;
+        }
+        try win.refreshSizes();
+    } else {
+        // Headless: no SDL window, update dimensions directly from RPC params
+        win.logical_width = @intCast(width);
+        win.logical_height = @intCast(height);
+        win.drawable_width = @intCast(width);
+        win.drawable_height = @intCast(height);
     }
-    try win.refreshSizes();
 
     // Use the physical (drawable) pixel size for the render target, not the
     // logical (CSS) size, so Retina/HiDPI displays get full-resolution

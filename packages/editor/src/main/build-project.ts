@@ -32,6 +32,7 @@ export interface BuildProgress {
   stage: string;
   percent: number;
   detail?: string;
+  log?: string;
 }
 
 function currentPlatform(): BuildPlatform {
@@ -56,6 +57,7 @@ function engineRootDir(): string {
 export async function buildProject(
   opts: BuildOptions,
   onProgress?: (p: BuildProgress) => void,
+  signal?: AbortSignal,
 ): Promise<string> {
   const platform = opts.platform ?? currentPlatform();
   const optimize = opts.optimize ?? "ReleaseSafe";
@@ -66,12 +68,16 @@ export async function buildProject(
 
   // ── Stage 1: Compile guava-player ────────────────────────────────
   report("compile", 0, "Compiling guava-player...");
-  await zigBuildPlayer(engineRoot, optimize);
+  await zigBuildPlayer(engineRoot, optimize, (line) => {
+    onProgress?.({ stage: "compile", percent: 15, log: line });
+  }, signal);
   report("compile", 30, "Compilation complete");
 
   // ── Stage 2: Assemble output directory ───────────────────────────
   report("package", 35, "Assembling package...");
-  const outPath = await assemblePackage(engineRoot, opts, platform);
+  const outPath = await assemblePackage(engineRoot, opts, platform, (line) => {
+    onProgress?.({ stage: "package", percent: 60, log: line });
+  });
   report("package", 90, "Package assembled");
 
   // ── Stage 3: Platform post-processing ────────────────────────────
@@ -86,7 +92,12 @@ export async function buildProject(
 
 // ─── Zig compilation ──────────────────────────────────────────────
 
-function zigBuildPlayer(engineRoot: string, optimize: string): Promise<void> {
+function zigBuildPlayer(
+  engineRoot: string,
+  optimize: string,
+  onLog?: (line: string) => void,
+  signal?: AbortSignal,
+): Promise<void> {
   return new Promise((resolve, reject) => {
     const args = ["build", "player", `-Doptimize=${optimize}`];
     const proc = spawn("zig", args, {
@@ -94,8 +105,26 @@ function zigBuildPlayer(engineRoot: string, optimize: string): Promise<void> {
       stdio: ["ignore", "pipe", "pipe"],
     });
 
+    if (signal) {
+      const onAbort = () => {
+        proc.kill("SIGTERM");
+        reject(new Error("Build cancelled"));
+      };
+      if (signal.aborted) { proc.kill("SIGTERM"); reject(new Error("Build cancelled")); return; }
+      signal.addEventListener("abort", onAbort, { once: true });
+      proc.on("exit", () => signal.removeEventListener("abort", onAbort));
+    }
+
     let stderr = "";
-    proc.stderr?.on("data", (d: Buffer) => { stderr += d.toString(); });
+    proc.stdout?.on("data", (d: Buffer) => {
+      const lines = d.toString().split("\n").filter(Boolean);
+      for (const line of lines) onLog?.(line);
+    });
+    proc.stderr?.on("data", (d: Buffer) => {
+      stderr += d.toString();
+      const lines = d.toString().split("\n").filter(Boolean);
+      for (const line of lines) onLog?.(line);
+    });
     proc.on("exit", (code) => {
       if (code === 0) resolve();
       else reject(new Error(`zig build player failed (code ${code}):\n${stderr}`));
@@ -110,6 +139,7 @@ async function assemblePackage(
   engineRoot: string,
   opts: BuildOptions,
   platform: BuildPlatform,
+  onLog?: (line: string) => void,
 ): Promise<string> {
   const { outputDir, projectPath, gameName } = opts;
 
@@ -148,6 +178,7 @@ async function assemblePackage(
   const playerBinName = platform === "windows" ? "guava-player.exe" : "guava-player";
   const playerSrc = path.join(engineRoot, "zig-out", "bin", playerBinName);
   const playerDst = path.join(binDir, playerBinName);
+  onLog?.(`Copy ${playerBinName}`);
   await fs.copyFile(playerSrc, playerDst);
   if (platform !== "windows") {
     await fs.chmod(playerDst, 0o755);
@@ -159,6 +190,7 @@ async function assemblePackage(
     const src = path.join(engineAssetsDir, subdir);
     const dst = path.join(assetsDir, "assets", subdir);
     if (existsSync(src)) {
+      onLog?.(`Copy engine ${subdir}`);
       await copyDirRecursive(src, dst, [".meta", ".DS_Store"]);
     }
   }
@@ -174,6 +206,7 @@ async function assemblePackage(
   // 3. Copy project assets (scenes, scripts, models, materials, etc.)
   const projectContentDir = path.join(projectPath, "Content");
   if (existsSync(projectContentDir)) {
+    onLog?.("Copy project Content/");
     await copyDirRecursive(
       projectContentDir,
       path.join(assetsDir, "Content"),
@@ -194,6 +227,7 @@ async function assemblePackage(
   // 4. Copy derived assets (pre-processed models, textures)
   const derivedDir = path.join(projectPath, "Derived");
   if (existsSync(derivedDir)) {
+    onLog?.("Copy Derived/");
     await copyDirRecursive(
       derivedDir,
       path.join(assetsDir, "Derived"),
@@ -206,6 +240,7 @@ async function assemblePackage(
     const src = path.join(engineAssetsDir, "derived", subdir);
     const dst = path.join(assetsDir, "assets", "derived", subdir);
     if (existsSync(src)) {
+      onLog?.(`Copy engine derived/${subdir}`);
       await copyDirRecursive(src, dst, [".meta", ".DS_Store"]);
     }
   }
@@ -225,7 +260,11 @@ async function assemblePackage(
     if (existsSync(sdlSrc)) {
       const fwDir = path.join(bundleRoot, "Frameworks");
       await fs.mkdir(fwDir, { recursive: true });
-      await fs.copyFile(sdlSrc, path.join(fwDir, "libSDL3.0.dylib"));
+      onLog?.("Copy SDL3 framework");
+      const sdlDst = path.join(fwDir, "libSDL3.0.dylib");
+      await fs.rm(sdlDst, { force: true });
+      await fs.copyFile(sdlSrc, sdlDst);
+      await fs.chmod(sdlDst, 0o644);
     }
   }
 
