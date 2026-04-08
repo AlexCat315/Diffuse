@@ -265,7 +265,7 @@ export function AiChat() {
     // If we hit MAX_TOOL_ROUNDS, notify
     setMessages((prev) => [
       ...prev,
-      { role: "system", content: "Tool call limit reached. Please try a simpler request.", timestamp: Date.now() },
+      { role: "system", content: t.aiChat.toolLimitReached, timestamp: Date.now() },
     ]);
     setBusy(false);
   }, [input, busy, activeProvider, messages, toolsEnabled]);
@@ -463,7 +463,7 @@ export function AiChat() {
             color: toolsEnabled ? "#89b4fa" : "#6c7086",
           }}
           onClick={() => setToolsEnabled(!toolsEnabled)}
-          title={toolsEnabled ? "Tools enabled — AI can control the engine" : "Tools disabled — chat only"}
+          title={toolsEnabled ? t.aiChat.toolsOn : t.aiChat.toolsOff}
         >
           🔧 {toolsEnabled ? "ON" : "OFF"}
         </button>
@@ -479,20 +479,20 @@ export function AiChat() {
       {pendingConfirm && (
         <div style={styles.confirmBar}>
           <span style={{ fontSize: 11, color: "#f9e2af" }}>
-            ⚠️ AI wants to execute destructive action(s): {pendingConfirm.calls.map((c) => c.name).join(", ")}
+            ⚠️ {t.aiChat.confirmDestructive} {pendingConfirm.calls.map((c) => c.name).join(", ")}
           </span>
           <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
             <button
               style={{ ...styles.toolbarBtn, background: "#a6e3a1", color: "#1e1e2e" }}
               onClick={() => pendingConfirm.resolve(true)}
             >
-              Approve
+              {t.aiChat.approve}
             </button>
             <button
               style={{ ...styles.toolbarBtn, background: "#f38ba8", color: "#1e1e2e" }}
               onClick={() => pendingConfirm.resolve(false)}
             >
-              Reject
+              {t.aiChat.reject}
             </button>
           </div>
         </div>

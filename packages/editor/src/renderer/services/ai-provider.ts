@@ -208,6 +208,7 @@ async function streamOpenAI(
   // Accumulate tool calls by index
   const toolCallAccum: Map<number, { id: string; name: string; args: string }> = new Map();
   let hasToolCalls = false;
+  let toolCallsEmitted = false;
 
   await readSSE(res, (data) => {
     if (data === "[DONE]") return;
@@ -240,8 +241,9 @@ async function streamOpenAI(
         }
       }
 
-      // When finish_reason is "tool_calls", emit them
-      if (finishReason === "tool_calls" && hasToolCalls) {
+      // When finish_reason is "tool_calls", emit them (exactly once)
+      if (finishReason === "tool_calls" && hasToolCalls && !toolCallsEmitted) {
+        toolCallsEmitted = true;
         const calls: ToolCallInfo[] = [];
         for (const [, entry] of [...toolCallAccum.entries()].sort((a, b) => a[0] - b[0])) {
           try {
@@ -255,12 +257,17 @@ async function streamOpenAI(
     } catch { /* skip malformed */ }
   });
 
-  // If the stream ended without explicit finish_reason but we accumulated tool calls, emit them
-  if (hasToolCalls && toolCallAccum.size > 0) {
-    const alreadyEmitted = fullContent === "" && fullReasoning === ""; // check if onToolCalls was likely already called
-    if (!alreadyEmitted) {
-      // Double-emit is harmless; the consumer deduplicates via the done callback
+  // Fallback: if we accumulated tool calls but never saw finish_reason=tool_calls, emit them once
+  if (hasToolCalls && toolCallAccum.size > 0 && !toolCallsEmitted) {
+    const calls: ToolCallInfo[] = [];
+    for (const [, entry] of [...toolCallAccum.entries()].sort((a, b) => a[0] - b[0])) {
+      try {
+        calls.push({ id: entry.id, name: entry.name, arguments: JSON.parse(entry.args || "{}") });
+      } catch {
+        calls.push({ id: entry.id, name: entry.name, arguments: {} });
+      }
     }
+    cb.onToolCalls?.(calls);
   }
 
   cb.onDone(fullContent, fullReasoning || undefined);
@@ -347,6 +354,7 @@ async function streamAnthropic(
   let currentToolName = "";
   let currentToolInput = "";
   const toolCalls: ToolCallInfo[] = [];
+  let toolCallsEmitted = false;
 
   await readSSE(res, (data) => {
     try {
@@ -381,15 +389,16 @@ async function streamAnthropic(
         }
         currentBlockType = "";
       } else if (json.type === "message_delta") {
-        if (json.delta?.stop_reason === "tool_use" && toolCalls.length > 0) {
+        if (json.delta?.stop_reason === "tool_use" && toolCalls.length > 0 && !toolCallsEmitted) {
+          toolCallsEmitted = true;
           cb.onToolCalls?.(toolCalls);
         }
       }
     } catch { /* skip */ }
   });
 
-  // If we got tool calls but no explicit stop_reason event, still emit
-  if (toolCalls.length > 0) {
+  // Fallback: if we accumulated tool calls but never got stop_reason event, emit once
+  if (toolCalls.length > 0 && !toolCallsEmitted) {
     cb.onToolCalls?.(toolCalls);
   }
 
