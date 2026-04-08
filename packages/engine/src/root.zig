@@ -143,6 +143,14 @@ pub const behavior = @import("engine/behavior/bt_system.zig");
 pub const terrain = @import("engine/terrain/terrain.zig");
 pub const terrain_renderer = @import("engine/terrain/terrain_renderer.zig");
 
+/// 网络/多人系统
+///
+/// 纯 Zig 实现的 UDP 网络协议栈，包含可靠传输、会话管理与实体同步。
+pub const network_protocol = @import("engine/network/protocol.zig");
+pub const network_transport = @import("engine/network/transport.zig");
+pub const network_session = @import("engine/network/session.zig");
+pub const network = @import("engine/network/net_system.zig");
+
 /// 运行时 UI 模块
 ///
 /// 提供保留模式（retained-mode）的游戏 UI 系统。
