@@ -85,6 +85,7 @@ const renderer_mod = @import("../render/renderer.zig");
 const render_types = @import("../render/types.zig");
 const window_mod = @import("../platform/window.zig");
 const scene_mod = @import("../scene/scene.zig");
+const scene_components = @import("../scene/components.zig");
 const job_system_mod = @import("job_system.zig");
 const audio_mod = @import("../audio/mod.zig");
 
@@ -820,7 +821,24 @@ pub const Application = struct {
         kind: physics_system.TriggerEventKind,
     ) void {
         const entity = self.world.getEntityConst(self_id) orelse return;
-        const script = entity.script orelse return;
+
+        // Dispatch to legacy single script
+        if (entity.script) |script| {
+            self.dispatchTriggerToScript(self_id, other_id, kind, script);
+        }
+        // Dispatch to multi-script array
+        for (entity.scripts) |script| {
+            self.dispatchTriggerToScript(self_id, other_id, kind, script);
+        }
+    }
+
+    fn dispatchTriggerToScript(
+        self: *Application,
+        self_id: scene_mod.EntityId,
+        other_id: scene_mod.EntityId,
+        kind: physics_system.TriggerEventKind,
+        script: scene_components.Script,
+    ) void {
         const instance_id = script.instance_id orelse return;
         const instance = self.script_runtime.instances.get(instance_id) orelse return;
         if (!script.enabled or instance.state != .running) return;
@@ -853,7 +871,7 @@ pub const Application = struct {
         switch (kind) {
             .enter => vm.callTriggerEnter(instance, &ctx, other_id),
             .exit => vm.callTriggerExit(instance, &ctx, other_id),
-            .stay => {}, // stay 事件不转发（可按需添加）
+            .stay => {},
         }
     }
 
@@ -864,7 +882,24 @@ pub const Application = struct {
         kind: physics_system.CollisionEventKind,
     ) void {
         const entity = self.world.getEntityConst(self_id) orelse return;
-        const script = entity.script orelse return;
+
+        // Dispatch to legacy single script
+        if (entity.script) |script| {
+            self.dispatchCollisionToScript(self_id, other_id, kind, script);
+        }
+        // Dispatch to multi-script array
+        for (entity.scripts) |script| {
+            self.dispatchCollisionToScript(self_id, other_id, kind, script);
+        }
+    }
+
+    fn dispatchCollisionToScript(
+        self: *Application,
+        self_id: scene_mod.EntityId,
+        other_id: scene_mod.EntityId,
+        kind: physics_system.CollisionEventKind,
+        script: scene_components.Script,
+    ) void {
         const instance_id = script.instance_id orelse return;
         const instance = self.script_runtime.instances.get(instance_id) orelse return;
         if (!script.enabled or instance.state != .running) return;

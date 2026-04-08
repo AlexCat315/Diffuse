@@ -15,6 +15,8 @@ pub const Wav = c.Wav;
 pub const Bus = c.Bus;
 
 /// SoLoud 后端选项
+const builtin = @import("builtin");
+
 pub const Backend = enum(c_uint) {
     auto = c.SOLOUD_AUTO,
     sdl2 = c.SOLOUD_SDL2,
@@ -23,6 +25,8 @@ pub const Backend = enum(c_uint) {
     coreaudio = c.SOLOUD_COREAUDIO,
     nosound = c.SOLOUD_NOSOUND,
 };
+
+const default_backend: Backend = if (builtin.os.tag == .macos) .coreaudio else .miniaudio;
 
 /// SoLoud 初始化标记
 pub const InitFlags = struct {
@@ -55,7 +59,7 @@ pub fn init(soloud: *Soloud) !void {
     const result = c.Soloud_initEx(
         soloud,
         InitFlags.clip_roundoff,
-        @intFromEnum(Backend.miniaudio),
+        @intFromEnum(default_backend),
         0, // AUTO samplerate
         0, // AUTO buffer size
         2, // 2 channels (stereo)
