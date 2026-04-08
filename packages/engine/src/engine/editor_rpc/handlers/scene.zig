@@ -203,8 +203,8 @@ pub fn queryEntities(ctx: *Ctx) !void {
     };
 
     var result = try query_engine.queryAlloc(ctx.allocator, world, filter, .{
-        .static_bvh = if (world.renderable_spatial_index) |*idx| idx else null,
-        .dynamic_bvh = if (world.dynamic_renderable_spatial_index) |*idx| idx else null,
+        .static_bvh = &world.renderable_spatial_index,
+        .dynamic_bvh = &world.dynamic_renderable_spatial_index,
     });
     defer result.deinit(ctx.allocator);
 

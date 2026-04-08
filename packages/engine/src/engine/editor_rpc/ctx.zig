@@ -79,6 +79,11 @@ pub const Ctx = struct {
 
     fn coerce(comptime T: type, val: std.json.Value) !T {
         return switch (T) {
+            u32 => switch (val) {
+                .integer => |i| @intCast(i),
+                .float => |f| @intFromFloat(f),
+                else => error.InvalidArguments,
+            },
             u64 => switch (val) {
                 .integer => |i| @intCast(i),
                 .float => |f| @intFromFloat(f),

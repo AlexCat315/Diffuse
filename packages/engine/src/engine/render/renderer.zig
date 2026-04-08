@@ -55,6 +55,7 @@ const depth_prepass_mod = @import("passes/depth_prepass.zig");
 const velocity_pass_mod = @import("passes/velocity_pass.zig");
 const id_pass_mod = @import("passes/id_pass.zig");
 const gizmo_pass_mod = @import("passes/gizmo_pass.zig");
+const ui_canvas_mod = @import("../ui/canvas.zig");
 const outline_pass_mod = @import("passes/outline_pass.zig");
 const volumetric_fog_pass_mod = @import("passes/volumetric_fog_pass.zig");
 const ssao_compute_pass_mod = @import("passes/ssao_compute_pass_runtime.zig");
@@ -346,6 +347,8 @@ pub const Renderer = struct {
     outline_pass: outline_pass_mod.OutlinePass,
     /// Gizmo 通道（编辑器可视化）
     gizmo_pass: gizmo_pass_mod.GizmoPass,
+    /// Runtime UI canvas（游戏 HUD / 运行时 UI）
+    ui_canvas: ?ui_canvas_mod.Canvas = null,
     /// SSAO Compute 通道（GPU Compute 加速）
     ssao_compute_pass: ?ssao_compute_pass_mod.SSAOComputePass = null,
     /// Clustered Forward+ 光源裁剪 Compute 通道
@@ -750,6 +753,11 @@ pub const Renderer = struct {
         errdefer renderer.outline_pass.deinit(&renderer.rhi);
 
         renderer.gizmo_pass = try gizmo_pass_mod.GizmoPass.init(&renderer.rhi);
+
+        // Runtime UI canvas
+        renderer.ui_canvas = try ui_canvas_mod.Canvas.init(allocator);
+        try renderer.ui_canvas.?.createGpuResources(&renderer.rhi);
+
         renderer.graph.writeExports("dist/reports/render_graph.dot", "dist/reports/render_graph.json") catch |err| {
             std.log.warn("failed to write render graph exports: {}", .{err});
         };
@@ -816,6 +824,7 @@ pub const Renderer = struct {
             bp.deinit();
             self.allocator.destroy(bp);
         }
+        if (self.ui_canvas) |*uc| uc.deinit(&self.rhi);
         self.gizmo_pass.deinit(&self.rhi);
         self.outline_pass.deinit(&self.rhi);
         self.base_pass.deinit(&self.rhi);
@@ -2609,6 +2618,15 @@ pub const Renderer = struct {
                 });
                 const ui_start = std.time.nanoTimestamp();
                 _ = ui_cmd;
+
+                // Draw runtime UI
+                if (self.ui_canvas) |*uc| {
+                    const sw: f32 = @floatFromInt(frame.swapchain_image.width);
+                    const sh: f32 = @floatFromInt(frame.swapchain_image.height);
+                    uc.update(sw, sh);
+                    uc.draw(&self.rhi, frame, ui_pass, sw, sh);
+                }
+
                 self.graph.recordPassStat(pass_stats, .ui_overlay, durationNs(ui_start, std.time.nanoTimestamp()), 0, 0);
                 self.rhi.endRenderPass(ui_pass);
             }
