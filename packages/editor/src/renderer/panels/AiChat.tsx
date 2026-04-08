@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useRef } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useLocalState } from "../store/local-state";
 import { useI18n } from "../i18n";
 import { useSyncedState } from "../store/synced-state";
@@ -8,6 +8,7 @@ import {
   type MessageRole,
   type ProviderConfig,
   type ProviderType,
+  type ToolCallInfo,
   defaultConfig,
   loadProviders,
   saveProviders,
@@ -16,6 +17,8 @@ import {
   streamChat,
   testConnection,
 } from "../services/ai-provider";
+import { AI_TOOLS, findTool } from "../services/ai-tools";
+import type { RpcMethodName } from "../../shared/rpc-types";
 
 // ── Role colors ─────────────────────────────────────────────────
 
@@ -24,6 +27,7 @@ const ROLE_COLORS: Record<MessageRole, string> = {
   assistant: "#cdd6f4",
   reasoning: "#cba6f7",
   system: "#a6adc8",
+  tool: "#a6e3a1",
 };
 
 const ROLE_BG: Record<MessageRole, string> = {
@@ -31,7 +35,52 @@ const ROLE_BG: Record<MessageRole, string> = {
   assistant: "#1e1e2e",
   reasoning: "#2a1f3d",
   system: "#1e1e2e",
+  tool: "#1a2e1a",
 };
+
+// ── Tool execution ──────────────────────────────────────────────
+
+const MAX_TOOL_ROUNDS = 15;
+
+async function executeToolCall(call: ToolCallInfo): Promise<string> {
+  const def = findTool(call.name);
+  if (!def) return JSON.stringify({ error: `Unknown tool: ${call.name}` });
+
+  try {
+    const result = await window.guavaEngine.call(
+      def.rpcMethod as RpcMethodName,
+      call.arguments as never,
+    );
+    return JSON.stringify(result ?? { ok: true });
+  } catch (err: unknown) {
+    return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
+  }
+}
+
+/** Build a system prompt that gives the AI context about available tools and scene state. */
+function buildSystemPrompt(): string {
+  const categories = new Map<string, string[]>();
+  for (const tool of AI_TOOLS) {
+    const list = categories.get(tool.category) ?? [];
+    list.push(`  - ${tool.name}: ${tool.description}`);
+    categories.set(tool.category, list);
+  }
+
+  let toolList = "";
+  for (const [cat, items] of categories) {
+    toolList += `\n[${cat}]\n${items.join("\n")}`;
+  }
+
+  return [
+    "You are Guava AI — the intelligent assistant embedded in the Guava game engine editor.",
+    "You can manipulate the scene, entities, components, scripts, materials, animations, cameras, and playback by calling tools.",
+    "When the user asks you to do something to the scene, call the appropriate tool(s). You may call multiple tools in sequence.",
+    "Always prefer tool calls over giving instructions — take action directly.",
+    "If a tool call fails, report the error to the user and suggest alternatives.",
+    "",
+    "Available tools:" + toolList,
+  ].join("\n");
+}
 
 // ── Main component ──────────────────────────────────────────────
 
@@ -45,6 +94,13 @@ export function AiChat() {
   const [streamReasoning, setStreamReasoning] = useLocalState("");
   const [showSettings, setShowSettings] = useSyncedState("ai-chat", "showSettings", false);
   const [showReasoning, setShowReasoning] = useSyncedState("ai-chat", "showReasoning", true);
+  const [toolsEnabled, setToolsEnabled] = useSyncedState("ai-chat", "toolsEnabled", true);
+
+  // Tool confirmation state
+  const [pendingConfirm, setPendingConfirm] = useState<{
+    calls: ToolCallInfo[];
+    resolve: (approved: boolean) => void;
+  } | null>(null);
 
   // Provider state
   const [providers, setProviders] = useLocalState<ProviderConfig[]>(() => loadProviders());
@@ -75,8 +131,8 @@ export function AiChat() {
     if (!text || busy || !activeProvider) return;
 
     const userMsg: ChatMessage = { role: "user", content: text, timestamp: Date.now() };
-    const newMessages = [...messages, userMsg];
-    setMessages(newMessages);
+    let conversationMessages = [...messages, userMsg];
+    setMessages(conversationMessages);
     setInput("");
     setBusy(true);
     setStreamContent("");
@@ -85,37 +141,134 @@ export function AiChat() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    await streamChat(
-      activeProvider,
-      newMessages,
-      undefined,
-      {
-        onContent: (chunk) => setStreamContent((prev) => prev + chunk),
-        onReasoning: (chunk) => setStreamReasoning((prev) => prev + chunk),
-        onDone: (content, reasoning) => {
-          const newMsgs: ChatMessage[] = [];
-          if (reasoning) {
-            newMsgs.push({ role: "reasoning", content: reasoning, timestamp: Date.now() });
+    const systemPrompt = toolsEnabled ? buildSystemPrompt() : undefined;
+    const tools = toolsEnabled ? AI_TOOLS : undefined;
+
+    // Tool-call loop: repeat until the LLM responds with text (no tool calls)
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      if (controller.signal.aborted) break;
+
+      let resolvedContent = "";
+      let resolvedReasoning = "";
+      // Use a mutable container so TypeScript doesn't narrow to `never` across the closure boundary
+      const toolCallBox: { value: ToolCallInfo[] | null } = { value: null };
+
+      // Stream one LLM turn
+      await new Promise<void>((resolve) => {
+        streamChat(
+          activeProvider,
+          conversationMessages,
+          systemPrompt,
+          {
+            onContent: (chunk) => {
+              resolvedContent += chunk;
+              setStreamContent((prev) => prev + chunk);
+            },
+            onReasoning: (chunk) => {
+              resolvedReasoning += chunk;
+              setStreamReasoning((prev) => prev + chunk);
+            },
+            onToolCalls: (calls) => {
+              toolCallBox.value = calls;
+            },
+            onDone: () => resolve(),
+            onError: (error) => {
+              setMessages((prev) => [
+                ...prev,
+                { role: "system", content: `Error: ${error}`, timestamp: Date.now() },
+              ]);
+              setStreamContent("");
+              setStreamReasoning("");
+              setBusy(false);
+              resolve();
+            },
+          },
+          { tools, signal: controller.signal },
+        );
+      });
+
+      if (controller.signal.aborted) break;
+
+      // Append reasoning if any
+      if (resolvedReasoning) {
+        const reasoningMsg: ChatMessage = { role: "reasoning", content: resolvedReasoning, timestamp: Date.now() };
+        conversationMessages = [...conversationMessages, reasoningMsg];
+        setMessages([...conversationMessages]);
+      }
+      setStreamReasoning("");
+
+      const toolCalls = toolCallBox.value;
+
+      // No tool calls — final text response
+      if (!toolCalls || toolCalls.length === 0) {
+        const assistantMsg: ChatMessage = { role: "assistant", content: resolvedContent, timestamp: Date.now() };
+        conversationMessages = [...conversationMessages, assistantMsg];
+        setMessages([...conversationMessages]);
+        setStreamContent("");
+        setBusy(false);
+        return;
+      }
+
+      // Got tool calls — add assistant message with toolCalls attached
+      const assistantMsg: ChatMessage = {
+        role: "assistant",
+        content: resolvedContent,
+        timestamp: Date.now(),
+        toolCalls,
+      };
+      conversationMessages = [...conversationMessages, assistantMsg];
+      setMessages([...conversationMessages]);
+      setStreamContent("");
+
+      // Check if any tool requires confirmation
+      const needsConfirm = toolCalls.some((tc) => findTool(tc.name)?.requiresConfirmation);
+      if (needsConfirm) {
+        const approved = await new Promise<boolean>((resolve) => {
+          setPendingConfirm({ calls: toolCalls, resolve });
+        });
+        setPendingConfirm(null);
+        if (!approved) {
+          // User rejected — add a tool result saying "cancelled by user"
+          for (const tc of toolCalls) {
+            const cancelMsg: ChatMessage = {
+              role: "tool",
+              content: JSON.stringify({ error: "Cancelled by user" }),
+              timestamp: Date.now(),
+              toolCallId: tc.id,
+              toolName: tc.name,
+            };
+            conversationMessages = [...conversationMessages, cancelMsg];
           }
-          newMsgs.push({ role: "assistant", content, timestamp: Date.now() });
-          setMessages((prev) => [...prev, ...newMsgs]);
-          setStreamContent("");
-          setStreamReasoning("");
+          setMessages([...conversationMessages]);
           setBusy(false);
-        },
-        onError: (error) => {
-          setMessages((prev) => [
-            ...prev,
-            { role: "system", content: `Error: ${error}`, timestamp: Date.now() },
-          ]);
-          setStreamContent("");
-          setStreamReasoning("");
-          setBusy(false);
-        },
-      },
-      controller.signal,
-    );
-  }, [input, busy, activeProvider, messages]);
+          return;
+        }
+      }
+
+      // Execute tool calls
+      for (const tc of toolCalls) {
+        const result = await executeToolCall(tc);
+        const toolMsg: ChatMessage = {
+          role: "tool",
+          content: result,
+          timestamp: Date.now(),
+          toolCallId: tc.id,
+          toolName: tc.name,
+        };
+        conversationMessages = [...conversationMessages, toolMsg];
+        setMessages([...conversationMessages]);
+      }
+
+      // Loop back — send tool results to LLM for next turn
+    }
+
+    // If we hit MAX_TOOL_ROUNDS, notify
+    setMessages((prev) => [
+      ...prev,
+      { role: "system", content: "Tool call limit reached. Please try a simpler request.", timestamp: Date.now() },
+    ]);
+    setBusy(false);
+  }, [input, busy, activeProvider, messages, toolsEnabled]);
 
   // ── Stop generation ────────────────────────────────────────
 
@@ -303,6 +456,17 @@ export function AiChat() {
           </span>
         )}
         <div style={{ flex: 1 }} />
+        <button
+          style={{
+            ...styles.toolbarBtn,
+            background: toolsEnabled ? "#1e3a5f" : "#313244",
+            color: toolsEnabled ? "#89b4fa" : "#6c7086",
+          }}
+          onClick={() => setToolsEnabled(!toolsEnabled)}
+          title={toolsEnabled ? "Tools enabled — AI can control the engine" : "Tools disabled — chat only"}
+        >
+          🔧 {toolsEnabled ? "ON" : "OFF"}
+        </button>
         <button style={styles.toolbarBtn} onClick={clearHistory} title={t.aiChat.clear}>
           <IconDelete size={14} />
         </button>
@@ -310,6 +474,29 @@ export function AiChat() {
           <IconSettings size={14} /> {t.aiChat.settings}
         </button>
       </div>
+
+      {/* Confirmation dialog */}
+      {pendingConfirm && (
+        <div style={styles.confirmBar}>
+          <span style={{ fontSize: 11, color: "#f9e2af" }}>
+            ⚠️ AI wants to execute destructive action(s): {pendingConfirm.calls.map((c) => c.name).join(", ")}
+          </span>
+          <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+            <button
+              style={{ ...styles.toolbarBtn, background: "#a6e3a1", color: "#1e1e2e" }}
+              onClick={() => pendingConfirm.resolve(true)}
+            >
+              Approve
+            </button>
+            <button
+              style={{ ...styles.toolbarBtn, background: "#f38ba8", color: "#1e1e2e" }}
+              onClick={() => pendingConfirm.resolve(false)}
+            >
+              Reject
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Messages */}
       <div ref={scrollRef} style={styles.messageArea}>
@@ -321,6 +508,54 @@ export function AiChat() {
 
         {messages.map((msg, i) => {
           if (msg.role === "reasoning" && !showReasoning) return null;
+
+          // Tool call message — assistant with toolCalls
+          if (msg.role === "assistant" && msg.toolCalls?.length) {
+            return (
+              <div key={i} style={{ ...styles.msgCard, background: "#1a2636" }}>
+                <div style={styles.msgHeader}>
+                  <span style={{ color: "#89b4fa", fontWeight: 600, fontSize: 10 }}>TOOL CALLS</span>
+                  <span style={{ fontSize: 9, color: "#585b70", marginLeft: "auto" }}>
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+                {msg.content && <div style={styles.msgBody}>{msg.content}</div>}
+                <div style={{ marginTop: 4 }}>
+                  {msg.toolCalls.map((tc, j) => (
+                    <div key={j} style={styles.toolCallChip}>
+                      <span style={{ color: "#89b4fa", fontWeight: 600 }}>⚡ {tc.name}</span>
+                      <span style={{ color: "#a6adc8", fontSize: 10, marginLeft: 6 }}>
+                        {JSON.stringify(tc.arguments)}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            );
+          }
+
+          // Tool result message
+          if (msg.role === "tool") {
+            let parsed: unknown;
+            try { parsed = JSON.parse(msg.content); } catch { parsed = msg.content; }
+            const isError = typeof parsed === "object" && parsed !== null && "error" in parsed;
+            return (
+              <div key={i} style={{ ...styles.msgCard, background: isError ? "#2a1a1a" : "#1a2e1a" }}>
+                <div style={styles.msgHeader}>
+                  <span style={{ color: isError ? "#f38ba8" : "#a6e3a1", fontWeight: 600, fontSize: 10 }}>
+                    {isError ? "✗" : "✓"} {msg.toolName ?? "TOOL RESULT"}
+                  </span>
+                  <span style={{ fontSize: 9, color: "#585b70", marginLeft: "auto" }}>
+                    {new Date(msg.timestamp).toLocaleTimeString()}
+                  </span>
+                </div>
+                <div style={{ ...styles.msgBody, fontSize: 10, maxHeight: 120, overflow: "auto" }}>
+                  {typeof parsed === "string" ? parsed : JSON.stringify(parsed, null, 2)}
+                </div>
+              </div>
+            );
+          }
+
           return (
             <div key={i} style={{ ...styles.msgCard, background: ROLE_BG[msg.role] }}>
               <div style={styles.msgHeader}>
@@ -489,5 +724,20 @@ const styles: Record<string, React.CSSProperties> = {
     textAlign: "center",
     padding: 24,
     fontStyle: "italic",
+  },
+  confirmBar: {
+    padding: "8px 12px",
+    background: "#2a2000",
+    borderBottom: "1px solid #f9e2af44",
+  },
+  toolCallChip: {
+    display: "flex",
+    alignItems: "center",
+    background: "#181825",
+    borderRadius: 4,
+    padding: "3px 8px",
+    marginTop: 3,
+    fontSize: 11,
+    border: "1px solid #313244",
   },
 };
