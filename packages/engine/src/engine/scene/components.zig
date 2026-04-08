@@ -670,3 +670,8 @@ pub const NetworkTransform = @import("../network/net_system.zig").NetworkTransfo
 pub const RtsCamera = @import("../camera/rts_camera.zig").RtsCamera;
 /// RTS 相机配置。
 pub const RtsCameraConfig = @import("../camera/rts_camera.zig").Config;
+
+/// 战争迷雾视野组件 — 挂载在提供视野的实体上。
+pub const FogVision = @import("../fog/fog_system.zig").FogVision;
+/// 战争迷雾全局配置组件 — 挂载在管理实体上。
+pub const FogOfWarConfig = @import("../fog/fog_system.zig").FogOfWarConfig;

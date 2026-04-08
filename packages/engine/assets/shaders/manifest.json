@@ -127,6 +127,11 @@
       "name": "ui",
       "vertex": "assets/shaders/ui.vert.glsl",
       "fragment": "assets/shaders/ui.frag.glsl"
+    },
+    {
+      "name": "fog_of_war",
+      "vertex": "assets/shaders/tonemap.vert.glsl",
+      "fragment": "assets/shaders/fog_of_war.frag.glsl"
     }
   ],
   "compute_programs": [

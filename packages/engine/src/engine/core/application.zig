@@ -47,6 +47,7 @@ const bt_system = @import("../behavior/bt_system.zig");
 const net_system_mod = @import("../network/net_system.zig");
 const net_session_mod = @import("../network/session.zig");
 const rts_camera_mod = @import("../camera/rts_camera.zig");
+const fog_system_mod = @import("../fog/fog_system.zig");
 
 // macOS Mach kernel APIs for high-precision timing and thread priority.
 const mach = if (builtin.os.tag == .macos) struct {
@@ -227,6 +228,8 @@ pub const Application = struct {
     nav_system: nav_system_mod.NavSystem,
     /// 网络/多人系统
     net_system: net_system_mod.NetworkSystem,
+    /// 战争迷雾系统
+    fog_system: fog_system_mod.FogOfWarSystem,
     /// 脚本调试会话
     debug_session: debug_session_mod.DebugSession,
     /// 待处理的文件拖放路径（由 OS 文件拖放事件设置，由编辑器层消费）
@@ -313,6 +316,7 @@ pub const Application = struct {
             .physics_state = physics_system.PhysicsState.init(allocator),
             .nav_system = nav_system_mod.NavSystem.init(allocator),
             .net_system = net_system_mod.NetworkSystem.init(allocator, net_session_mod.SessionConfig{}),
+            .fog_system = fog_system_mod.FogOfWarSystem.init(allocator),
             .debug_session = debug_session_mod.DebugSession.init(allocator),
             .action_map = input_action_mod.ActionMap.init(allocator),
         };
@@ -360,6 +364,7 @@ pub const Application = struct {
         self.physics_state.deinit();
         self.nav_system.deinit();
         self.net_system.deinit();
+        self.fog_system.deinit();
         self.debug_session.deinit();
         self.world.deinit();
         self.command_queue.deinit();
@@ -514,6 +519,19 @@ pub const Application = struct {
                     @floatFromInt(self.window.drawable_width),
                     @floatFromInt(self.window.drawable_height),
                 );
+                // 更新战争迷雾系统（CPU 端可见性计算）
+                if (self.fog_system.update(&self.world)) |fog_data| {
+                    if (self.fog_system.gridSize()) |size| {
+                        self.renderer.fog_of_war_pass.uploadVisibility(
+                            &self.renderer.rhi,
+                            fog_data,
+                            size.width,
+                            size.height,
+                        ) catch |err| {
+                            std.log.err("[run-loop] fog uploadVisibility failed: {s}", .{@errorName(err)});
+                        };
+                    }
+                }
                 // 更新脚本系统（传递时间和输入）
                 self.updateScripts(delta_seconds);
                 self.applyPendingCommands() catch |err| {
