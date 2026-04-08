@@ -261,6 +261,18 @@ pub const RenderJobStatus = enum {
     failed,
 };
 
+// ── Query ─────────────────────────────────────────────────────────
+
+pub const QueryResultItem = struct {
+    id: u64,
+    name: []const u8,
+    parentId: ?u64 = null,
+    visible: bool,
+    worldX: f32,
+    worldY: f32,
+    worldZ: f32,
+};
+
 // ── AI Tool metadata ──────────────────────────────────────────────
 
 /// Category for AI tool grouping in the system prompt.
@@ -277,6 +289,7 @@ pub const ToolCategory = enum {
     prefab,
     audio,
     query,
+    collaboration,
 };
 
 /// Inline metadata for exposing an RPC method as an AI tool.

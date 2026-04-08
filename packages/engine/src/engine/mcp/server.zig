@@ -5,6 +5,7 @@ const protocol = @import("protocol.zig");
 const resources_mod = @import("resources/mod.zig");
 const scene_mod = @import("../scene/scene.zig");
 const tools_mod = @import("tools.zig");
+const schema = @import("../editor_rpc/schema/mod.zig");
 
 const EmptyObject = struct {};
 
@@ -298,7 +299,7 @@ const Server = struct {
                     .title = "Guava Engine MCP",
                     .version = "0.1.0",
                 },
-                .instructions = "Guava Engine MCP bridge with scene snapshots, component schema contracts, editor context injection, staged ghost-preview transactions, paged entity queries, script pipelines for both scene scripts and editor utilities, and viewport screenshot capture. Resources: scene://hierarchy, selection://current, entity://{id}, schema://components, editor://context, editor://intent-log, preview://staged, script://runtime-status, editor://utilities. Tools: create_entity, delete_entity, rename_entity, set_parent, set_local_transform, set_world_transform, set_visible, query_entities, compile_script, compile_editor_utility, screenshot_png, stage_transaction, apply_staged_transaction, discard_staged_transaction.",
+                .instructions = "Guava Engine MCP bridge — unified with the RPC handler system. All scene manipulation, entity management, material editing, animation, playback, viewport control, and collaboration tools are auto-generated from the RPC schema. Use tools/list to discover available tools. Resources: scene://hierarchy, selection://current, entity://{id}, schema://components, editor://context, editor://intent-log, preview://staged, script://runtime-status, editor://utilities.",
             });
             return false;
         }
@@ -337,124 +338,33 @@ const Server = struct {
                 null;
             const arguments_value = if (arguments) |value| std.json.Value{ .object = value } else null;
 
-            if (collaboration_mod.isToolName(tool_name.?)) {
-                var response = self.collaboration_bridge.submitJson(tool_name.?, arguments_value) catch |err| switch (err) {
-                    error.ToolNotFound => {
-                        try writeErrorResponse(stdout_file, id, protocol.ErrorCode.invalid_params, "Unknown tool.", .{
-                            .name = tool_name.?,
-                        });
-                        return false;
-                    },
-                    error.InvalidArguments => {
-                        try writeErrorResponse(stdout_file, id, protocol.ErrorCode.invalid_params, "Invalid collaboration tool arguments.", .{
-                            .name = tool_name.?,
-                        });
-                        return false;
-                    },
-                    error.ShuttingDown => {
-                        try writeErrorResponse(stdout_file, id, protocol.ErrorCode.internal_error, "Collaboration bridge is shutting down.", null);
-                        return false;
-                    },
-                    else => return err,
-                };
-                defer response.deinit(self.collaboration_bridge.allocator);
+            // Convert MCP tool name (underscores) to RPC method name (dots).
+            // e.g. "entity_setTransform" → "entity.setTransform"
+            var rpc_method_buf: [256]u8 = undefined;
+            const rpc_method = mcpNameToRpcMethod(tool_name.?, &rpc_method_buf);
 
-                const summary = try collaboration_mod.buildSummaryAlloc(std.heap.page_allocator, response);
-                defer std.heap.page_allocator.free(summary);
-
-                try writeCollaborationToolResult(stdout_file, id, response, summary);
-                return false;
-            }
-
-            var response = self.tool_bridge.submitJson(tool_name.?, arguments_value) catch |err| switch (err) {
-                error.ToolNotFound => {
-                    try writeErrorResponse(stdout_file, id, protocol.ErrorCode.invalid_params, "Unknown tool.", .{
-                        .name = tool_name.?,
-                    });
-                    return false;
-                },
-                error.InvalidArguments => {
-                    try writeErrorResponse(stdout_file, id, protocol.ErrorCode.invalid_params, "Invalid tool arguments.", .{
-                        .name = tool_name.?,
-                    });
-                    return false;
-                },
+            // Forward all tools through the RPC dispatch system via the tool bridge.
+            var response = self.tool_bridge.submitRpcDispatch(tool_name.?, rpc_method, arguments_value) catch |err| switch (err) {
                 error.ShuttingDown => {
                     try writeErrorResponse(stdout_file, id, protocol.ErrorCode.internal_error, "Tool bridge is shutting down.", null);
                     return false;
                 },
-                else => return err,
+                else => {
+                    try writeErrorResponse(stdout_file, id, protocol.ErrorCode.internal_error, "Tool bridge error.", null);
+                    return false;
+                },
             };
             defer response.deinit(self.tool_bridge.allocator);
 
-            const summary = try tools_mod.buildSummaryAlloc(std.heap.page_allocator, response);
-            defer std.heap.page_allocator.free(summary);
-
-            if (response.result.kind == .query) {
-                const query = response.result.query_result.?;
-                try writeResult(stdout_file, id, .{
-                    .content = &.{
-                        .{
-                            .type = "text",
-                            .text = summary,
-                        },
-                    },
-                    .structuredContent = .{
-                        .tool = response.tool_name,
-                        .total = query.total,
-                        .offset = query.offset,
-                        .limit = query.limit,
-                        .returned = query.items.len,
-                        .count_only = query.count_only,
-                        .truncated = query.truncated,
-                        .items = query.items,
-                    },
-                    .isError = false,
-                });
-                return false;
-            }
-
-            if (response.result.kind == .screenshot) {
-                const data_uri = response.result.screenshot_data_uri orelse "";
-                const content_text = if (data_uri.len != 0) data_uri else summary;
-                try writeResult(stdout_file, id, .{
-                    .content = &.{
-                        .{
-                            .type = "text",
-                            .text = content_text,
-                        },
-                    },
-                    .structuredContent = .{
-                        .tool = response.tool_name,
-                        .mime_type = "image/png",
-                        .width = response.result.screenshot_width,
-                        .height = response.result.screenshot_height,
-                        .data_uri = data_uri,
-                        .@"error" = response.result.script_error,
-                    },
-                    .isError = response.result.script_error != null,
-                });
-                return false;
-            }
-
+            const result_json = response.result.result_json orelse "{}";
             try writeResult(stdout_file, id, .{
                 .content = &.{
                     .{
                         .type = "text",
-                        .text = summary,
+                        .text = result_json,
                     },
                 },
-                .structuredContent = .{
-                    .tool = response.tool_name,
-                    .changed = response.result.changed,
-                    .entity_id = response.result.entity_id,
-                    .script_handle = response.result.script_handle,
-                    .compiled = response.result.compiled,
-                    .attached = response.result.attached,
-                    .command_error = if (response.result.command_error) |err| @tagName(err) else null,
-                    .script_error = response.result.script_error,
-                },
-                .isError = response.result.command_error != null or response.result.script_error != null,
+                .isError = response.result.error_message != null,
             });
             return false;
         }
@@ -610,224 +520,32 @@ fn freeResourceDescriptorOwned(allocator: std.mem.Allocator, descriptor: protoco
 }
 
 fn writeToolList(stdout_file: *std.fs.File, id: std.json.Value) !void {
-    try writeResult(stdout_file, id, .{
-        .tools = &.{
-            .{
-                .name = "create_entity",
-                .description = "Create an entity with optional parent, transform, visibility, and common scene components.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{
-                        .name = .{ .type = "string" },
-                        .parent = .{ .type = "integer" },
-                        .local_transform = .{ .type = "object" },
-                        .camera = .{ .type = "object" },
-                        .mesh = .{ .type = "object" },
-                        .material = .{ .type = "object" },
-                        .light = .{ .type = "object" },
-                        .vfx = .{ .type = "object" },
-                        .visible = .{ .type = "boolean" },
-                        .editor_only = .{ .type = "boolean" },
-                        .is_folder = .{ .type = "boolean" },
-                    },
-                    .required = &.{"name"},
-                },
-            },
-            .{
-                .name = "delete_entity",
-                .description = "Delete an entity by id.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{
-                        .entity_id = .{ .type = "integer" },
-                    },
-                    .required = &.{"entity_id"},
-                },
-            },
-            .{
-                .name = "rename_entity",
-                .description = "Rename an entity by id.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{
-                        .entity_id = .{ .type = "integer" },
-                        .name = .{ .type = "string" },
-                    },
-                    .required = &.{ "entity_id", "name" },
-                },
-            },
-            .{
-                .name = "set_parent",
-                .description = "Set or clear an entity parent.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{
-                        .entity_id = .{ .type = "integer" },
-                        .parent_id = .{ .type = "integer" },
-                    },
-                    .required = &.{"entity_id"},
-                },
-            },
-            .{
-                .name = "set_local_transform",
-                .description = "Set the local transform of an entity.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{
-                        .entity_id = .{ .type = "integer" },
-                        .transform = .{ .type = "object" },
-                    },
-                    .required = &.{ "entity_id", "transform" },
-                },
-            },
-            .{
-                .name = "set_world_transform",
-                .description = "Set the world transform of an entity.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{
-                        .entity_id = .{ .type = "integer" },
-                        .transform = .{ .type = "object" },
-                    },
-                    .required = &.{ "entity_id", "transform" },
-                },
-            },
-            .{
-                .name = "set_visible",
-                .description = "Set entity visibility.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{
-                        .entity_id = .{ .type = "integer" },
-                        .visible = .{ .type = "boolean" },
-                    },
-                    .required = &.{ "entity_id", "visible" },
-                },
-            },
-            .{
-                .name = "query_entities",
-                .description = "Query entities with pagination, optional component filters, optional radius filtering, and optional AABB filtering. Use count_only before requesting large result sets.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{
-                        .id = .{ .type = "integer" },
-                        .name_contains = .{ .type = "string" },
-                        .has_component = .{ .type = "string" },
-                        .parent_id = .{ .type = "integer" },
-                        .visible = .{ .type = "boolean" },
-                        .origin = .{ .type = "array" },
-                        .radius = .{ .type = "number" },
-                        .aabb_min = .{ .type = "array" },
-                        .aabb_max = .{ .type = "array" },
-                        .limit = .{ .type = "integer" },
-                        .offset = .{ .type = "integer" },
-                        .count_only = .{ .type = "boolean" },
-                    },
-                    .required = &.{},
-                },
-            },
-            .{
-                .name = "compile_script",
-                .description = "Register Zig source as a script, optionally update an existing script resource, and optionally attach it to an entity.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{
-                        .script_handle = .{ .type = "integer" },
-                        .entity_id = .{ .type = "integer" },
-                        .source = .{ .type = "string" },
-                        .source_path = .{ .type = "string" },
-                        .description = .{ .type = "string" },
-                        .enabled = .{ .type = "boolean" },
-                    },
-                    .required = &.{},
-                },
-            },
-            .{
-                .name = "compile_editor_utility",
-                .description = "Register Zig source as an editor utility panel and add it to the editor UI.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{
-                        .script_handle = .{ .type = "integer" },
-                        .source = .{ .type = "string" },
-                        .source_path = .{ .type = "string" },
-                        .description = .{ .type = "string" },
-                        .utility_name = .{ .type = "string" },
-                        .open = .{ .type = "boolean" },
-                    },
-                    .required = &.{},
-                },
-            },
-            .{
-                .name = "stage_transaction",
-                .description = "Stage a batch of entity tools into an isolated preview world and publish a ghost preview.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{
-                        .label = .{ .type = "string" },
-                        .note = .{ .type = "string" },
-                        .source = .{ .type = "string" },
-                        .meta = .{ .type = "object" },
-                        .actor = .{ .type = "string" },
-                        .client = .{ .type = "string" },
-                        .session = .{ .type = "string" },
-                        .request = .{ .type = "string" },
-                        .trace = .{ .type = "string" },
-                        .approval = .{ .type = "string" },
-                        .base_revision = .{ .type = "integer" },
-                        .commands = .{ .type = "array" },
-                        .operations = .{ .type = "array" },
-                    },
-                    .required = &.{"commands"},
-                },
-            },
-            .{
-                .name = "apply_staged_transaction",
-                .description = "Commit the active staged transaction into the main world.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{
-                        .meta = .{ .type = "object" },
-                        .actor = .{ .type = "string" },
-                        .client = .{ .type = "string" },
-                        .session = .{ .type = "string" },
-                        .request = .{ .type = "string" },
-                        .trace = .{ .type = "string" },
-                        .approval = .{ .type = "string" },
-                        .base_revision = .{ .type = "integer" },
-                    },
-                    .required = &.{},
-                },
-            },
-            .{
-                .name = "discard_staged_transaction",
-                .description = "Discard the active staged transaction and clear the ghost preview.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{
-                        .meta = .{ .type = "object" },
-                        .actor = .{ .type = "string" },
-                        .client = .{ .type = "string" },
-                        .session = .{ .type = "string" },
-                        .request = .{ .type = "string" },
-                        .trace = .{ .type = "string" },
-                        .approval = .{ .type = "string" },
-                        .base_revision = .{ .type = "integer" },
-                    },
-                    .required = &.{},
-                },
-            },
-            .{
-                .name = "screenshot_png",
-                .description = "Capture current viewport rendering as PNG and return base64-encoded data URI.",
-                .inputSchema = .{
-                    .type = "object",
-                    .properties = .{},
-                    .required = &.{},
-                },
-            },
-        },
+    // Pre-rendered JSON for the tools array (generated at comptime from the RPC schema)
+    const tools_json = comptime generateMcpToolsJson();
+    const allocator = std.heap.page_allocator;
+
+    // Serialize the "id" field
+    var id_buf = std.ArrayList(u8).empty;
+    defer id_buf.deinit(allocator);
+    var id_writer = id_buf.writer(allocator);
+    var id_adapter_buf: [256]u8 = undefined;
+    var id_adapter = id_writer.adaptToNewApi(&id_adapter_buf);
+    try std.json.Stringify.value(id, .{}, &id_adapter.new_interface);
+    try id_adapter.new_interface.flush();
+
+    // Compose the full JSON-RPC response body
+    const body = try std.fmt.allocPrint(allocator, "{{\"jsonrpc\":\"{s}\",\"id\":{s},\"result\":{{\"tools\":{s}}}}}", .{
+        protocol.jsonrpc_version,
+        id_buf.items,
+        tools_json,
     });
+    defer allocator.free(body);
+
+    // Frame with Content-Length header
+    const header = try std.fmt.allocPrint(allocator, "Content-Length: {d}\r\n\r\n", .{body.len});
+    defer allocator.free(header);
+    try stdout_file.writeAll(header);
+    try stdout_file.writeAll(body);
 }
 
 fn writeCollaborationToolResult(
@@ -925,6 +643,158 @@ fn writeErrorResponse(
     });
     defer std.heap.page_allocator.free(framed);
     try stdout_file.writeAll(framed);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Comptime MCP Tool List Generation from RPC Schema
+// ═══════════════════════════════════════════════════════════════════
+
+/// Convert an MCP tool name (underscores) back to an RPC method name (dots).
+/// Uses the first underscore as the namespace separator.
+/// e.g. "entity_setTransform" → "entity.setTransform"
+fn mcpNameToRpcMethod(tool_name: []const u8, buf: *[256]u8) []const u8 {
+    if (tool_name.len > 255) return tool_name;
+    var found_sep = false;
+    for (tool_name, 0..) |c, i| {
+        if (!found_sep and c == '_') {
+            buf[i] = '.';
+            found_sep = true;
+        } else {
+            buf[i] = c;
+        }
+    }
+    return buf[0..tool_name.len];
+}
+
+fn isOptional(comptime T: type) bool {
+    return @typeInfo(T) == .optional;
+}
+
+fn unwrap(comptime T: type) type {
+    return @typeInfo(T).optional.child;
+}
+
+/// Convert a Zig field type to a JSON Schema snippet string (valid JSON).
+fn mcpFieldSchema(comptime T: type) []const u8 {
+    const U = if (isOptional(T)) unwrap(T) else T;
+    if (U == schema.types.JsonValue) return "{\"type\":\"string\"}";
+    return switch (@typeInfo(U)) {
+        .bool => "{\"type\":\"boolean\"}",
+        .int => "{\"type\":\"integer\"}",
+        .float => "{\"type\":\"number\"}",
+        .pointer => |p| if (p.child == u8)
+            "{\"type\":\"string\"}"
+        else
+            "{\"type\":\"array\",\"items\":" ++ mcpFieldSchema(p.child) ++ "}",
+        .array => |a| "{\"type\":\"array\",\"items\":" ++ mcpFieldSchema(a.child) ++ "}",
+        .@"struct" => |s| blk: {
+            if (s.fields.len == 0) break :blk "{\"type\":\"object\"}";
+            var r: []const u8 = "{\"type\":\"object\",\"properties\":{";
+            for (s.fields, 0..) |field, i| {
+                if (i > 0) r = r ++ ",";
+                r = r ++ "\"" ++ field.name ++ "\":" ++ mcpFieldSchema(field.type);
+            }
+            break :blk r ++ "}}";
+        },
+        else => "{\"type\":\"string\"}",
+    };
+}
+
+/// Convert a Zig struct Params type to a JSON Schema object snippet (valid JSON).
+fn mcpParamsSchema(comptime T: type) []const u8 {
+    const fields = @typeInfo(T).@"struct".fields;
+    if (fields.len == 0) return "{\"type\":\"object\",\"properties\":{}}";
+
+    var props: []const u8 = "";
+    var req: []const u8 = "";
+    var req_count: usize = 0;
+
+    for (fields, 0..) |field, i| {
+        if (i > 0) props = props ++ ",";
+        props = props ++ "\"" ++ field.name ++ "\":" ++ mcpFieldSchema(field.type);
+        if (!isOptional(field.type) and field.default_value_ptr == null) {
+            if (req_count > 0) req = req ++ ",";
+            req = req ++ "\"" ++ field.name ++ "\"";
+            req_count += 1;
+        }
+    }
+
+    var r: []const u8 = "{\"type\":\"object\",\"properties\":{" ++ props ++ "}";
+    if (req_count > 0) {
+        r = r ++ ",\"required\":[" ++ req ++ "]";
+    }
+    return r ++ "}";
+}
+
+/// Escape a comptime string for embedding in JSON (escape " and \ characters).
+fn escapeJson(comptime s: []const u8) []const u8 {
+    comptime {
+        var out: []const u8 = "";
+        for (s) |c| {
+            if (c == '"') {
+                out = out ++ "\\\"";
+            } else if (c == '\\') {
+                out = out ++ "\\\\";
+            } else if (c == '\n') {
+                out = out ++ "\\n";
+            } else {
+                out = out ++ &[1]u8{c};
+            }
+        }
+        return out;
+    }
+}
+
+/// Convert RPC method name dots to underscores for MCP compatibility.
+fn mcpToolName(comptime method_name: []const u8) []const u8 {
+    comptime {
+        var out: [method_name.len]u8 = undefined;
+        for (method_name, 0..) |c, i| {
+            out[i] = if (c == '.') '_' else c;
+        }
+        return &out;
+    }
+}
+
+/// Look up the Params type for a given RPC method name across all schema modules.
+fn findSchemaParamsType(comptime method_name: []const u8) ?type {
+    inline for (schema.method_modules) |mod| {
+        for (@typeInfo(mod).@"struct".decls) |decl| {
+            if (comptime std.mem.eql(u8, decl.name, method_name)) {
+                return @field(mod, decl.name).Params;
+            }
+        }
+    }
+    return null;
+}
+
+/// Generate the complete JSON array of MCP tools from the RPC schema at comptime.
+fn generateMcpToolsJson() []const u8 {
+    @setEvalBranchQuota(200_000);
+    comptime {
+        var r: []const u8 = "[";
+        var count: usize = 0;
+
+        for (schema.method_modules) |mod| {
+            for (@typeInfo(mod).@"struct".decls) |decl| {
+                const M = @field(mod, decl.name);
+                if (@hasDecl(M, "ai_tool")) {
+                    const tool_meta: schema.types.AiTool = M.ai_tool;
+                    const Params = findSchemaParamsType(decl.name) orelse
+                        @compileError("ai_tool on method with no Params type: " ++ decl.name);
+
+                    if (count > 0) r = r ++ ",";
+                    r = r ++ "{\"name\":\"" ++ mcpToolName(decl.name) ++ "\"";
+                    r = r ++ ",\"description\":\"" ++ escapeJson(tool_meta.description) ++ "\"";
+                    r = r ++ ",\"inputSchema\":" ++ mcpParamsSchema(Params);
+                    r = r ++ "}";
+                    count += 1;
+                }
+            }
+        }
+
+        return r ++ "]";
+    }
 }
 
 test "stringField reads string params from JSON objects" {

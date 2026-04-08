@@ -2126,25 +2126,19 @@ fn parsePendingRequestAlloc(
             };
             const command_name = optionalStringField(command_object, "name") orelse return error.InvalidArguments;
             const command_arguments = if (command_object.get("arguments")) |value| value else null;
-            const parsed = try tools_mod.parseToolCallAlloc(allocator, command_name, command_arguments);
+            var parsed = try tools_mod.parseCommandAlloc(allocator, command_name, command_arguments);
             var command_meta = try stage_request.meta.cloneAlloc(allocator);
             errdefer command_meta.deinit(allocator);
             command_meta.base_revision = null;
             try applyCommandMetaFieldsAlloc(allocator, command_object, &command_meta);
-            switch (parsed) {
-                .command => |command_request| {
-                    try stage_request.commands.append(allocator, .{
-                        .tool_name = command_request.tool_name,
-                        .command = command_request.command,
-                        .meta = command_meta,
-                    });
-                },
-                else => {
-                    var owned = parsed;
-                    owned.deinit(allocator);
-                    return error.InvalidArguments;
-                },
-            }
+            // parseCommandAlloc already handled meta internally; override with our meta.
+            parsed.meta.deinit(allocator);
+            parsed.meta = command_meta;
+            try stage_request.commands.append(allocator, .{
+                .tool_name = parsed.tool_name,
+                .command = parsed.command,
+                .meta = parsed.meta,
+            });
         }
 
         return .{

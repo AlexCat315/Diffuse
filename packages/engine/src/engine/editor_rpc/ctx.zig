@@ -8,11 +8,13 @@ const core = @import("../core/layer.zig");
 const world_mod = @import("../scene/world.zig");
 const settings_mod = @import("settings.zig");
 const mesh_ops_mod = @import("mesh_ops.zig");
+const collaboration_mod = @import("../mcp/collaboration.zig");
 
 pub const MeshOps = mesh_ops_mod.MeshOps;
 pub const World = world_mod.World;
 pub const Entity = world_mod.Entity;
 pub const EntityId = world_mod.EntityId;
+pub const CollaborationStore = collaboration_mod.Store;
 
 pub const Ctx = struct {
     allocator: std.mem.Allocator,
@@ -20,6 +22,7 @@ pub const Ctx = struct {
     layer: *core.LayerContext,
     settings: *settings_mod.EditorSettings,
     mesh_ops: ?*const MeshOps = null,
+    collaboration_store: ?*CollaborationStore = null,
     project_root: ?[]const u8 = null,
     scripts_dir: []const u8 = "Content/Scripts",
     _result: ?[]u8 = null,

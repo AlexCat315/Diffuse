@@ -284,6 +284,7 @@ fn categoryToStr(comptime cat: schema.types.ToolCategory) []const u8 {
         .prefab => "prefab",
         .audio => "audio",
         .query => "query",
+        .collaboration => "collaboration",
     };
 }
 
@@ -373,7 +374,8 @@ fn emitAiTools() []const u8 {
         \\  | "render"
         \\  | "prefab"
         \\  | "audio"
-        \\  | "query";
+        \\  | "query"
+        \\  | "collaboration";
         \\
         \\export interface AiToolDef {
         \\  name: string;
@@ -472,6 +474,7 @@ fn generateManifestMd() []const u8 {
         .{ .cat = .prefab, .label = "Prefab" },
         .{ .cat = .audio, .label = "Audio" },
         .{ .cat = .query, .label = "Query" },
+        .{ .cat = .collaboration, .label = "Collaboration" },
     };
 
     for (categories) |group| {

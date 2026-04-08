@@ -3,6 +3,7 @@ const std = @import("std");
 const ctx_mod = @import("../ctx.zig");
 const scene_io = @import("../../scene/scene_io.zig");
 const components = @import("../../scene/components.zig");
+const query_engine = @import("../../core/query_engine.zig");
 const Ctx = ctx_mod.Ctx;
 const World = ctx_mod.World;
 const EntityId = ctx_mod.EntityId;
@@ -176,6 +177,62 @@ pub fn spawnActor(ctx: *Ctx) !void {
         return error.InvalidArguments;
 
     try ctx.reply(.{ .entityId = entity_id });
+}
+
+pub fn queryEntities(ctx: *Ctx) !void {
+    const world = ctx.layer.world;
+
+    var origin: ?components.Vec3 = null;
+    if (try ctx.paramOpt(f32, "originX")) |ox| {
+        const oy = (try ctx.paramOpt(f32, "originY")) orelse 0;
+        const oz = (try ctx.paramOpt(f32, "originZ")) orelse 0;
+        origin = .{ ox, oy, oz };
+    }
+
+    const filter = query_engine.Filter{
+        .name_contains = try ctx.paramOpt([]const u8, "nameContains"),
+        .has_component = try ctx.paramOpt([]const u8, "hasComponent"),
+        .parent_id = try ctx.paramOpt(u64, "parentId"),
+        .visible = try ctx.paramOpt(bool, "visible"),
+        .is_root = try ctx.paramOpt(bool, "isRoot"),
+        .origin = origin,
+        .radius = try ctx.paramOpt(f32, "radius"),
+        .limit = if (try ctx.paramOpt(u32, "limit")) |l| @intCast(l) else 50,
+        .offset = if (try ctx.paramOpt(u32, "offset")) |o| @intCast(o) else 0,
+        .count_only = (try ctx.paramOpt(bool, "countOnly")) orelse false,
+    };
+
+    var result = try query_engine.queryAlloc(ctx.allocator, world, filter, .{
+        .static_bvh = if (world.renderable_spatial_index) |*idx| idx else null,
+        .dynamic_bvh = if (world.dynamic_renderable_spatial_index) |*idx| idx else null,
+    });
+    defer result.deinit(ctx.allocator);
+
+    const Item = struct {
+        id: u64,
+        name: []const u8,
+        parentId: ?u64 = null,
+        visible: bool,
+        worldX: f32,
+        worldY: f32,
+        worldZ: f32,
+    };
+    var items = try ctx.allocator.alloc(Item, result.items.len);
+    defer ctx.allocator.free(items);
+
+    for (result.items, 0..) |item, i| {
+        items[i] = .{
+            .id = item.id,
+            .name = item.name,
+            .parentId = item.parent_id,
+            .visible = item.visible,
+            .worldX = item.world_translation[0],
+            .worldY = item.world_translation[1],
+            .worldZ = item.world_translation[2],
+        };
+    }
+
+    try ctx.reply(.{ .total = result.total, .items = items });
 }
 
 // ── Helpers (scene-domain only) ─────────────────────────────────

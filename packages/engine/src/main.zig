@@ -287,10 +287,21 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
     defer rpc_server.deinit();
     var mesh_ops_vtable = mesh_bridge.init(&editor_layer.state);
     rpc_server.mesh_ops = &mesh_ops_vtable;
+    rpc_server.collaboration_store = mcp_runtime.collaborationStore();
     if (loaded_project) |*project| {
         rpc_server.project_root = project.root_path;
         rpc_server.scripts_dir = project.file.scripts_dir;
     }
+
+    // Wire RPC dispatch context into tool bridge for MCP→RPC forwarding
+    const tool_bridge = mcp_runtime.toolBridge();
+    tool_bridge.rpc_ctx = .{
+        .settings = &rpc_server.settings,
+        .mesh_ops = rpc_server.mesh_ops,
+        .collaboration_store = mcp_runtime.collaborationStore(),
+        .project_root = rpc_server.project_root,
+        .scripts_dir = rpc_server.scripts_dir,
+    };
 
     try app.pushOverlay(rpc_server.asLayer());
     try app.pushOverlay(editor_layer.asLayer());

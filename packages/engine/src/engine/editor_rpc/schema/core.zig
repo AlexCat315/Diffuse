@@ -197,6 +197,54 @@ pub const @"entity.setAssetField" = struct {
     pub const Result = struct {};
 };
 
+pub const @"entity.setParent" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Set or clear an entity's parent. Provide parentId to reparent, omit or pass null to make root-level.", .category = .entity };
+    pub const Params = struct {
+        entityId: u64,
+        parentId: ?u64 = null,
+    };
+    pub const Result = struct {};
+};
+
+pub const @"entity.setWorldTransform" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Set an entity's world-space transform. Automatically computes the local transform relative to parent. Only specified fields (position, rotation, scale) are changed.", .category = .entity };
+    pub const Params = struct {
+        entityId: u64,
+        transform: types.TransformPartial,
+    };
+    pub const Result = struct {};
+};
+
+pub const @"scene.queryEntities" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Query entities with filters, spatial search, and pagination. Filters: nameContains, hasComponent, parentId, visible, isRoot, hasMesh, hasRigidbody. Spatial: originX/Y/Z + radius. Pagination: limit (max 200, default 50), offset. Set countOnly=true to just count.", .category = .query };
+    pub const Params = struct {
+        nameContains: ?[]const u8 = null,
+        hasComponent: ?[]const u8 = null,
+        parentId: ?u64 = null,
+        visible: ?bool = null,
+        isRoot: ?bool = null,
+        originX: ?f32 = null,
+        originY: ?f32 = null,
+        originZ: ?f32 = null,
+        radius: ?f32 = null,
+        limit: ?u32 = null,
+        offset: ?u32 = null,
+        countOnly: ?bool = null,
+    };
+    pub const Result = struct {
+        total: u32,
+        items: []const types.QueryResultItem,
+    };
+};
+
+pub const @"viewport.screenshot" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Capture the current viewport as a PNG screenshot. Returns a base64-encoded data URI.", .category = .render };
+    pub const Params = struct {};
+    pub const Result = struct {
+        dataUri: []const u8,
+    };
+};
+
 // ── playback namespace ───────────────────────────────────────────
 
 pub const @"playback.play" = struct {
