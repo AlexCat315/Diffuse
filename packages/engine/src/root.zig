@@ -173,6 +173,17 @@ pub const economy = @import("engine/economy/economy_system.zig");
 /// 提供 RTS 风格的单位选择：点击、框选、双击选同类型、编组（Ctrl+1-3）、右键指令。
 pub const selection = @import("engine/selection/selection_system.zig");
 
+/// FPS 相机控制器
+///
+/// 提供第一人称射击游戏的相机控制：鼠标视角、WASD 移动、冲刺、蹲下、头部摆动、ADS FOV 过渡。
+pub const fps_camera = @import("engine/camera/fps_camera.zig");
+
+/// 回合制框架
+///
+/// 提供 4X/文明/棋类游戏的回合管理：回合/阶段状态机、玩家轮次调度、AI 回合、
+/// 动作队列/动画等待、行动点系统。
+pub const turn_based = @import("engine/turnbased/turn_system.zig");
+
 /// 运行时 UI 模块
 ///
 /// 提供保留模式（retained-mode）的游戏 UI 系统。
