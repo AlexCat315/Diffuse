@@ -112,6 +112,10 @@ pub const soloud_backend_cpp_sources = [_][]const u8{
     "third_party/soloud/src/backend/miniaudio/soloud_miniaudio.cpp",
 };
 
+pub const soloud_coreaudio_cpp_sources = [_][]const u8{
+    "third_party/soloud/src/backend/coreaudio/soloud_coreaudio.cpp",
+};
+
 pub const soloud_c_api_cpp_sources = [_][]const u8{
     "third_party/soloud/src/c_api/soloud_c.cpp",
 };
@@ -173,6 +177,12 @@ pub const engine_cpp_flags = [_][]const u8{
 pub const soloud_cpp_flags = [_][]const u8{
     "-std=c++17",
     "-DWITH_MINIAUDIO=1",
+    "-DWITH_COREAUDIO=1",
+};
+
+pub const soloud_coreaudio_cpp_flags = [_][]const u8{
+    "-std=c++17",
+    "-DWITH_COREAUDIO=1",
 };
 
 pub const soloud_c_flags = [_][]const u8{
@@ -240,10 +250,15 @@ pub fn configureEngineModule(
 
     if (os_tag == .macos) {
         module.addCSourceFiles(.{ .files = &macos_objcpp_sources, .flags = &macos_objcpp_flags });
+        module.addCSourceFiles(.{ .files = &soloud_coreaudio_cpp_sources, .flags = &soloud_coreaudio_cpp_flags });
         module.linkFramework("AppKit", .{});
         module.linkFramework("Metal", .{});
         module.linkFramework("MetalPerformanceShaders", .{});
         module.linkFramework("QuartzCore", .{});
+        module.linkFramework("CoreFoundation", .{});
+        module.linkFramework("CoreAudio", .{});
+        module.linkFramework("AudioUnit", .{});
+        module.linkFramework("AudioToolbox", .{});
     }
     if (os_tag == .windows) {
         module.addCSourceFiles(.{ .files = &windows_cpp_sources, .flags = &windows_platform_cpp_flags });

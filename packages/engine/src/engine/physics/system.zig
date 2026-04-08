@@ -309,11 +309,11 @@ pub const PhysicsState = struct {
     // ── Body manipulation API (used by script runtime) ──
 
     pub fn setBodyLinearVelocity(self: *PhysicsState, world: *scene_mod.World, entity_id: u64, velocity: components.Vec3) void {
-        _ = self;
         if (world.id_to_index.get(entity_id)) |idx| {
             var entity = &world.entities.items[idx];
             if (entity.rigidbody) |*rb| {
                 rb.linear_velocity = velocity;
+                self.enqueuePhysicsEvent(.{ .transform_changed = entity_id });
             }
         }
     }
@@ -330,13 +330,13 @@ pub const PhysicsState = struct {
     }
 
     pub fn addBodyImpulse(self: *PhysicsState, world: *scene_mod.World, entity_id: u64, impulse: components.Vec3) void {
-        _ = self;
         if (world.id_to_index.get(entity_id)) |idx| {
             var entity = &world.entities.items[idx];
             if (entity.rigidbody) |*rb| {
                 if (rb.mass > 0.0) {
                     const inv_mass = 1.0 / rb.mass;
                     rb.linear_velocity = vec3.add(rb.linear_velocity, vec3.scale(impulse, inv_mass));
+                    self.enqueuePhysicsEvent(.{ .transform_changed = entity_id });
                 }
             }
         }
