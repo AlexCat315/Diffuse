@@ -18,6 +18,7 @@ pub const method_modules = .{
     @import("rendering.zig"),
     @import("animation.zig"),
     @import("mesh.zig"),
+    @import("collaboration.zig"),
 };
 
 test {
@@ -29,5 +30,6 @@ test {
     _ = @import("rendering.zig");
     _ = @import("animation.zig");
     _ = @import("mesh.zig");
+    _ = @import("collaboration.zig");
     _ = @import("subscriptions.zig");
 }

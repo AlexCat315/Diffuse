@@ -4,7 +4,7 @@
 > To expose a new tool, add `pub const ai_tool: types.AiTool = .{ ... };` inside the RPC method struct.
 > Regenerate: `cd packages/engine && zig run src/engine/editor_rpc/gen_types.zig > ../../docs/api/ai-tools.md 2> ../editor/src/shared/rpc-types.generated.ts`
 
-Total: **37** tools
+Total: **44** tools
 
 ## Scene
 
@@ -34,6 +34,8 @@ Total: **37** tools
 | `entity.removeComponent` | Remove a component from an entity. | No |
 | `entity.setVisible` | Show or hide an entity. | No |
 | `entity.setAssetField` | Assign an asset to a component field. Params: entityId, componentType, fieldName, assetPath (string\|null to clear). For Sky.environment_asset_id pass the asset path. For Script, use optional scriptIndex. | No |
+| `entity.setParent` | Set or clear an entity's parent. Provide parentId to reparent, omit or pass null to make root-level. | No |
+| `entity.setWorldTransform` | Set an entity's world-space transform. Automatically computes the local transform relative to parent. Only specified fields (position, rotation, scale) are changed. | No |
 
 ## Playback
 
@@ -80,6 +82,12 @@ Total: **37** tools
 | `camera.getState` | Get the current editor camera position and rotation. | No |
 | `camera.lookAlongAxis` | Point the editor camera along a direction. Params: axisX, axisY, axisZ (floats). Common: top-down (0,-1,0), front (0,0,-1), right (1,0,0). | No |
 
+## Render
+
+| Method | Description | Confirm? |
+|--------|-------------|----------|
+| `viewport.screenshot` | Capture the current viewport as a PNG screenshot. Returns a base64-encoded data URI. | No |
+
 ## Prefab
 
 | Method | Description | Confirm? |
@@ -92,4 +100,18 @@ Total: **37** tools
 | Method | Description | Confirm? |
 |--------|-------------|----------|
 | `audio.getMixerStatus` | Get the audio mixer status (buses, volumes, active voices). | No |
+
+## Query
+
+| Method | Description | Confirm? |
+|--------|-------------|----------|
+| `scene.queryEntities` | Query entities with filters, spatial search, and pagination. Filters: nameContains, hasComponent, parentId, visible, isRoot, hasMesh, hasRigidbody. Spatial: originX/Y/Z + radius. Pagination: limit (max 200, default 50), offset. Set countOnly=true to just count. | No |
+
+## Collaboration
+
+| Method | Description | Confirm? |
+|--------|-------------|----------|
+| `collaboration.stageTransaction` | Stage a batch of RPC tool calls for preview before committing. Executes all commands in an isolated ghost world. Returns a transactionId for apply/discard. commands is an array of {name, arguments} objects. | ⚠️ Yes |
+| `collaboration.applyStagedTransaction` | Commit the currently staged transaction into the real world. Fails if no transaction is staged. | ⚠️ Yes |
+| `collaboration.discardStagedTransaction` | Discard the currently staged transaction and clear the ghost preview. | No |
 

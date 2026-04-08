@@ -564,3 +564,13 @@ pub fn boxSelect(ctx: *Ctx) !void {
 
     try ctx.reply(.{ .selectedIds = hits.items });
 }
+
+pub fn screenshot(ctx: *Ctx) !void {
+    const screenshot_tool = @import("../../mcp/screenshot_tool.zig");
+    const data_uri = try screenshot_tool.screenshotAsDataUriAlloc(ctx.allocator, ctx.layer);
+    defer ctx.allocator.free(data_uri);
+    // Transfer ownership to ctx result
+    const owned = try ctx.allocator.dupe(u8, data_uri);
+    _ = owned;
+    try ctx.reply(.{ .dataUri = data_uri });
+}

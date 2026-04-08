@@ -68,6 +68,35 @@ pub fn setSelectable(ctx: *Ctx) !void {
     try ctx.reply(.{});
 }
 
+pub fn setParent(ctx: *Ctx) !void {
+    const eid = try ctx.param(u64, "entityId");
+    const parent_id = try ctx.paramOpt(u64, "parentId");
+    _ = try ctx.layer.world.setParent(eid, parent_id);
+    try ctx.reply(.{});
+}
+
+pub fn setWorldTransform(ctx: *Ctx) !void {
+    const eid = try ctx.param(u64, "entityId");
+    const t_obj = try ctx.paramObj("transform");
+
+    // Build full world transform from partial input
+    const current_world = ctx.layer.world.worldTransform(eid) orelse return error.EntityNotFound;
+    var target = current_world;
+
+    if (t_obj.get("position")) |pos| {
+        if (ctx_mod.readVec3(pos)) |v| target.translation = v;
+    }
+    if (t_obj.get("rotation")) |rot| {
+        if (ctx_mod.readQuat(rot)) |q| target.rotation = q;
+    }
+    if (t_obj.get("scale")) |scale| {
+        if (ctx_mod.readVec3(scale)) |v| target.scale = v;
+    }
+
+    _ = ctx.layer.world.setEntityWorldTransform(eid, target);
+    try ctx.reply(.{});
+}
+
 pub fn getComponents(ctx: *Ctx) !void {
     const eid = try ctx.param(u64, "entityId");
     const entity = ctx.layer.world.getEntityConst(eid) orelse return error.EntityNotFound;

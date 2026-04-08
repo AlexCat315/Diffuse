@@ -217,6 +217,16 @@ export interface PrefabEntityDetail {
   components: string[];
 }
 
+export interface QueryResultItem {
+  id: number;
+  name: string;
+  parentId?: number;
+  visible: boolean;
+  worldX: number;
+  worldY: number;
+  worldZ: number;
+}
+
 // ── RPC Method Signatures ──────────────────────────────────
 
 export interface RpcMethods {
@@ -245,6 +255,10 @@ export interface RpcMethods {
   "entity.setVisible": { params: { entityId: number; visible: boolean }; result: Record<string, never> };
   "entity.setSelectable": { params: { entityId: number; selectable: boolean }; result: Record<string, never> };
   "entity.setAssetField": { params: { entityId: number; componentType: string; fieldName: string; assetPath?: string }; result: Record<string, never> };
+  "entity.setParent": { params: { entityId: number; parentId?: number }; result: Record<string, never> };
+  "entity.setWorldTransform": { params: { entityId: number; transform: TransformPartial }; result: Record<string, never> };
+  "scene.queryEntities": { params: { nameContains?: string; hasComponent?: string; parentId?: number; visible?: boolean; isRoot?: boolean; originX?: number; originY?: number; originZ?: number; radius?: number; limit?: number; offset?: number; countOnly?: boolean }; result: { total: number; items: QueryResultItem[] } };
+  "viewport.screenshot": { params: Record<string, never>; result: { dataUri: string } };
   "playback.play": { params: Record<string, never>; result: Record<string, never> };
   "playback.pause": { params: Record<string, never>; result: Record<string, never> };
   "playback.stop": { params: Record<string, never>; result: Record<string, never> };
@@ -385,6 +399,9 @@ export interface RpcMethods {
   "mesh.separate": { params: Record<string, never>; result: { success: boolean } };
   "mesh.recalcNormals": { params: Record<string, never>; result: { success: boolean } };
   "mesh.pivotToSelection": { params: Record<string, never>; result: { success: boolean } };
+  "collaboration.stageTransaction": { params: { commands: unknown; label?: string; note?: string }; result: { transactionId: number; commandCount: number; errorCount: number } };
+  "collaboration.applyStagedTransaction": { params: Record<string, never>; result: { applied: boolean; commandCount: number; changedCount: number; errorCount: number } };
+  "collaboration.discardStagedTransaction": { params: Record<string, never>; result: { hadTransaction: boolean } };
 }
 
 // ── Subscription Events ───────────────────────────────────
@@ -432,7 +449,7 @@ export interface JsonRpcResponse {
 // │  Add `pub const ai_tool: types.AiTool = .{ ... };`      │
 // │  inside any RPC method struct to expose it to the AI.    │
 // └──────────────────────────────────────────────────────────┘
-//  Total: 37 tools
+//  Total: 44 tools
 //
 //  Method                         Category     Confirm?
 //  ─────────────────────────────── ──────────── ────────
@@ -455,6 +472,10 @@ export interface JsonRpcResponse {
 //  entity.removeComponent           entity       no
 //  entity.setVisible                entity       no
 //  entity.setAssetField             entity       no
+//  entity.setParent                 entity       no
+//  entity.setWorldTransform         entity       no
+//  scene.queryEntities              query        no
+//  viewport.screenshot              render       no
 //  playback.play                    playback     no
 //  playback.pause                   playback     no
 //  playback.stop                    playback     no
@@ -473,6 +494,9 @@ export interface JsonRpcResponse {
 //  animation.getState               animation    no
 //  animation.addState               animation    no
 //  animation.addTransition          animation    no
+//  collaboration.stageTransaction   collaborationyes
+//  collaboration.applyStagedTransactioncollaborationyes
+//  collaboration.discardStagedTransactioncollaborationno
 //
 
 export type ToolCategory =
@@ -487,7 +511,8 @@ export type ToolCategory =
   | "render"
   | "prefab"
   | "audio"
-  | "query";
+  | "query"
+  | "collaboration";
 
 export interface AiToolDef {
   name: string;
@@ -635,6 +660,34 @@ export const AI_TOOLS: AiToolDef[] = [
     category: "entity",
   },
   {
+    name: "entity.setParent",
+    description: "Set or clear an entity's parent. Provide parentId to reparent, omit or pass null to make root-level.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, parentId: { type: "integer" as const } }, required: ["entityId"] },
+    rpcMethod: "entity.setParent",
+    category: "entity",
+  },
+  {
+    name: "entity.setWorldTransform",
+    description: "Set an entity's world-space transform. Automatically computes the local transform relative to parent. Only specified fields (position, rotation, scale) are changed.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, transform: { type: "object" as const, properties: { position: { type: "object" as const, properties: { x: { type: "number" as const }, y: { type: "number" as const }, z: { type: "number" as const } } }, rotation: { type: "object" as const, properties: { x: { type: "number" as const }, y: { type: "number" as const }, z: { type: "number" as const }, w: { type: "number" as const } } }, scale: { type: "object" as const, properties: { x: { type: "number" as const }, y: { type: "number" as const }, z: { type: "number" as const } } } } } }, required: ["entityId", "transform"] },
+    rpcMethod: "entity.setWorldTransform",
+    category: "entity",
+  },
+  {
+    name: "scene.queryEntities",
+    description: "Query entities with filters, spatial search, and pagination. Filters: nameContains, hasComponent, parentId, visible, isRoot, hasMesh, hasRigidbody. Spatial: originX/Y/Z + radius. Pagination: limit (max 200, default 50), offset. Set countOnly=true to just count.",
+    parameters: { type: "object" as const, properties: { nameContains: { type: "string" as const }, hasComponent: { type: "string" as const }, parentId: { type: "integer" as const }, visible: { type: "boolean" as const }, isRoot: { type: "boolean" as const }, originX: { type: "number" as const }, originY: { type: "number" as const }, originZ: { type: "number" as const }, radius: { type: "number" as const }, limit: { type: "integer" as const }, offset: { type: "integer" as const }, countOnly: { type: "boolean" as const } } },
+    rpcMethod: "scene.queryEntities",
+    category: "query",
+  },
+  {
+    name: "viewport.screenshot",
+    description: "Capture the current viewport as a PNG screenshot. Returns a base64-encoded data URI.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "viewport.screenshot",
+    category: "render",
+  },
+  {
     name: "playback.play",
     description: "Start playing the scene (enter Play mode).",
     parameters: { type: "object" as const, properties: {} },
@@ -759,6 +812,29 @@ export const AI_TOOLS: AiToolDef[] = [
     parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, fromState: { type: "integer" as const }, toState: { type: "integer" as const }, duration: { type: "number" as const }, triggerTime: { type: "number" as const } }, required: ["entityId", "fromState", "toState"] },
     rpcMethod: "animation.addTransition",
     category: "animation",
+  },
+  {
+    name: "collaboration.stageTransaction",
+    description: "Stage a batch of RPC tool calls for preview before committing. Executes all commands in an isolated ghost world. Returns a transactionId for apply/discard. commands is an array of {name, arguments} objects.",
+    parameters: { type: "object" as const, properties: { commands: { type: "string" as const }, label: { type: "string" as const }, note: { type: "string" as const } }, required: ["commands"] },
+    rpcMethod: "collaboration.stageTransaction",
+    requiresConfirmation: true,
+    category: "collaboration",
+  },
+  {
+    name: "collaboration.applyStagedTransaction",
+    description: "Commit the currently staged transaction into the real world. Fails if no transaction is staged.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "collaboration.applyStagedTransaction",
+    requiresConfirmation: true,
+    category: "collaboration",
+  },
+  {
+    name: "collaboration.discardStagedTransaction",
+    description: "Discard the currently staged transaction and clear the ghost preview.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "collaboration.discardStagedTransaction",
+    category: "collaboration",
   },
 ];
 

@@ -11,6 +11,7 @@ const ws = @import("websocket.zig");
 const methods = @import("dispatch.zig");
 const subscriptions = @import("subscriptions.zig");
 const core = @import("../core/layer.zig");
+const ctx_mod = @import("ctx.zig");
 
 const log = std.log.scoped(.editor_rpc);
 
@@ -120,6 +121,9 @@ pub const Server = struct {
     // Mesh editing vtable — set from main.zig (root module) to avoid cross-module imports.
     mesh_ops: ?*const @import("mesh_ops.zig").MeshOps = null,
 
+    // Collaboration store — set from main.zig for AI staged-transaction support.
+    collaboration_store: ?*ctx_mod.CollaborationStore = null,
+
     // Project root path — set from main.zig when a project is loaded.
     project_root: ?[]const u8 = null,
     scripts_dir: []const u8 = "Content/Scripts",
@@ -198,7 +202,7 @@ pub const Server = struct {
         for (batch[0..count]) |*msg| {
             defer msg.deinit(self.allocator);
 
-            const response_json = methods.dispatch(self.allocator, msg.payload, layer_context, &self.settings, self.mesh_ops, self.project_root, self.scripts_dir) catch |err| {
+            const response_json = methods.dispatch(self.allocator, msg.payload, layer_context, &self.settings, self.mesh_ops, self.collaboration_store, self.project_root, self.scripts_dir) catch |err| {
                 log.warn("RPC dispatch error: {s}", .{@errorName(err)});
                 continue;
             };

@@ -50,6 +50,7 @@ const handler_modules = [_]HandlerModule{
     .{ .prefix = "particle", .mod = @import("handlers/particle.zig") },
     .{ .prefix = "prefab", .mod = @import("handlers/prefab.zig") },
     .{ .prefix = "mesh", .mod = @import("handlers/mesh.zig") },
+    .{ .prefix = "collaboration", .mod = @import("handlers/collaboration.zig") },
 };
 
 // Subscriptions (push events — detection logic in subscriptions.zig)
@@ -116,7 +117,7 @@ fn dispatchToHandler(method_str: []const u8, ctx: *Ctx) !void {
 //  Public API — called from server.zig
 // ═══════════════════════════════════════════════════════════════════
 
-pub fn dispatch(allocator: std.mem.Allocator, payload: []const u8, layer_context: *core.LayerContext, settings: *settings_mod.EditorSettings, mesh_ops: ?*const ctx_mod.MeshOps, project_root: ?[]const u8, scripts_dir: []const u8) !?[]u8 {
+pub fn dispatch(allocator: std.mem.Allocator, payload: []const u8, layer_context: *core.LayerContext, settings: *settings_mod.EditorSettings, mesh_ops: ?*const ctx_mod.MeshOps, collaboration_store: ?*ctx_mod.CollaborationStore, project_root: ?[]const u8, scripts_dir: []const u8) !?[]u8 {
     const parsed = std.json.parseFromSlice(std.json.Value, allocator, payload, .{}) catch {
         return try errorResponse(allocator, null, -32700, "Parse error");
     };
@@ -148,6 +149,7 @@ pub fn dispatch(allocator: std.mem.Allocator, payload: []const u8, layer_context
         .layer = layer_context,
         .settings = settings,
         .mesh_ops = mesh_ops,
+        .collaboration_store = collaboration_store,
         .project_root = project_root,
         .scripts_dir = scripts_dir,
     };
