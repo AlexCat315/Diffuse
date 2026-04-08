@@ -1,4 +1,4 @@
-const vm = @import("engine/script/vm.zig");
+const vm = @import("engine/script/zig_backend.zig");
 const runtime = @import("engine/script/runtime.zig");
 
 test {

@@ -5,7 +5,7 @@ const command_queue_mod = @import("../core/command_queue.zig");
 const world_mod = @import("../scene/world.zig");
 const context_mod = @import("./context.zig");
 const types = @import("./types.zig");
-const vm_mod = @import("./vm.zig");
+const vm_mod = @import("./zig_backend.zig");
 
 /// 编辑器工具的运行状态
 ///

@@ -13,78 +13,14 @@
 //!   }
 
 const std = @import("std");
+const host_api = @import("host_api.zig");
 
 // ---------------------------------------------------------------------------
-// Host API 函数表（C ABI，与引擎侧定义完全一致）
+// Host API 函数表（C ABI，由 host_api.zig 统一定义）
 // ---------------------------------------------------------------------------
 
-pub const HostApi = extern struct {
-    // Logging
-    log_fn: *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) void,
-    // Entity
-    get_entity_id: *const fn (?*anyopaque) callconv(.c) u64,
-    find_entity_by_name: *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) u64,
-    spawn_entity: *const fn (?*anyopaque) callconv(.c) u64,
-    destroy_entity: *const fn (?*anyopaque, u64) callconv(.c) void,
-    // Transform
-    get_position: *const fn (?*anyopaque, *f32, *f32, *f32) callconv(.c) void,
-    set_position: *const fn (?*anyopaque, f32, f32, f32) callconv(.c) void,
-    get_rotation: *const fn (?*anyopaque, *f32, *f32, *f32, *f32) callconv(.c) void,
-    set_rotation: *const fn (?*anyopaque, f32, f32, f32, f32) callconv(.c) void,
-    get_scale: *const fn (?*anyopaque, *f32, *f32, *f32) callconv(.c) void,
-    set_scale: *const fn (?*anyopaque, f32, f32, f32) callconv(.c) void,
-    // Input
-    is_key_down: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    was_key_pressed: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    was_key_released: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    is_mouse_button_down: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    get_mouse_position: *const fn (?*anyopaque, *f32, *f32) callconv(.c) void,
-    get_mouse_delta: *const fn (?*anyopaque, *f32, *f32) callconv(.c) void,
-    get_mouse_wheel: *const fn (?*anyopaque, *f32, *f32) callconv(.c) void,
-    // Time
-    get_delta_time: *const fn (?*anyopaque) callconv(.c) f32,
-    get_time: *const fn (?*anyopaque) callconv(.c) f32,
-    // Physics
-    raycast: *const fn (?*anyopaque, f32, f32, f32, f32, f32, f32, f32, *f32, *f32, *f32, *f32, *u64) callconv(.c) u32,
-    set_linear_velocity: *const fn (?*anyopaque, u64, f32, f32, f32) callconv(.c) void,
-    get_linear_velocity: *const fn (?*anyopaque, u64, *f32, *f32, *f32) callconv(.c) void,
-    add_impulse: *const fn (?*anyopaque, u64, f32, f32, f32) callconv(.c) void,
-    // Scene
-    load_scene: *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) void,
-    // Gamepad
-    is_gamepad_connected: *const fn (?*anyopaque) callconv(.c) u32,
-    is_gamepad_button_down: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    was_gamepad_button_pressed: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    get_gamepad_axis: *const fn (?*anyopaque, u32) callconv(.c) f32,
-    // Audio
-    audio_load_clip: *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) u32,
-    audio_play_2d: *const fn (?*anyopaque, u32, f32, u32) callconv(.c) u32,
-    audio_play_3d: *const fn (?*anyopaque, u32, f32, f32, f32, f32, u32) callconv(.c) u32,
-    audio_stop: *const fn (?*anyopaque, u32) callconv(.c) void,
-    audio_set_volume: *const fn (?*anyopaque, u32, f32) callconv(.c) void,
-    audio_pause: *const fn (?*anyopaque, u32, u32) callconv(.c) void,
-    audio_is_playing: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    // Animation
-    anim_play: *const fn (?*anyopaque, u64, [*]const u8, usize, f32) callconv(.c) void,
-    anim_stop: *const fn (?*anyopaque, u64) callconv(.c) void,
-    anim_set_speed: *const fn (?*anyopaque, u64, f32) callconv(.c) void,
-    anim_is_playing: *const fn (?*anyopaque, u64) callconv(.c) u32,
-    // Canvas / UI
-    canvas_clear: *const fn (?*anyopaque) callconv(.c) void,
-    canvas_add_text: *const fn (?*anyopaque, f32, f32, f32, f32, [*]const u8, usize, u8, u8, u8, u8) callconv(.c) u32,
-    canvas_add_panel: *const fn (?*anyopaque, f32, f32, f32, f32, u8, u8, u8, u8) callconv(.c) u32,
-    canvas_add_button: *const fn (?*anyopaque, f32, f32, f32, f32, [*]const u8, usize) callconv(.c) u32,
-    canvas_add_progress_bar: *const fn (?*anyopaque, f32, f32, f32, f32, f32) callconv(.c) u32,
-    canvas_set_text: *const fn (?*anyopaque, u32, [*]const u8, usize) callconv(.c) void,
-    canvas_set_progress: *const fn (?*anyopaque, u32, f32) callconv(.c) void,
-    canvas_set_visible: *const fn (?*anyopaque, u32, u32) callconv(.c) void,
-    canvas_remove_widget: *const fn (?*anyopaque, u32) callconv(.c) void,
-    canvas_was_button_clicked: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    // Script Parameters
-    get_parameter_float: *const fn (?*anyopaque, [*]const u8, usize, f32) callconv(.c) f32,
-    get_parameter_int: *const fn (?*anyopaque, [*]const u8, usize, i32) callconv(.c) i32,
-    get_parameter_bool: *const fn (?*anyopaque, [*]const u8, usize, u32) callconv(.c) u32,
-};
+pub const HostApi = host_api.GuavaHostApi;
+pub const API_VERSION = host_api.API_VERSION;
 
 // ---------------------------------------------------------------------------
 // 模块级别状态（每次回调前由引擎通过 guava_bind 设置）
@@ -95,8 +31,8 @@ var ctx: ?*anyopaque = null;
 var bound_entity: u64 = 0;
 
 /// 引擎在每次回调前调用此函数注入 API 与上下文
-export fn guava_bind(host_api: *const HostApi, host_ctx: ?*anyopaque, entity_id: u64) callconv(.c) void {
-    api = host_api;
+export fn guava_bind(host: *const HostApi, host_ctx: ?*anyopaque, entity_id: u64) callconv(.c) void {
+    api = host;
     ctx = host_ctx;
     bound_entity = entity_id;
 }
