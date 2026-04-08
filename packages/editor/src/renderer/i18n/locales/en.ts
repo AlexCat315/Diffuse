@@ -763,6 +763,12 @@ export const en = {
     testConnection: "Test Connection",
     activate: "Activate",
     noProviders: "No providers configured. Add one to get started.",
+    toolsOn: "Tools enabled — AI can control the engine",
+    toolsOff: "Tools disabled — chat only",
+    approve: "Approve",
+    reject: "Reject",
+    confirmDestructive: "AI wants to execute destructive action(s):",
+    toolLimitReached: "Tool call limit reached. Please try a simpler request.",
   },
 
   // ── Particle Editor ──────────────────────────────────────────

@@ -765,6 +765,12 @@ export const zhCN: TranslationKeys = {
     testConnection: "测试连接",
     activate: "激活",
     noProviders: "尚未配置任何 Provider。添加一个以开始使用。",
+    toolsOn: "工具已启用 — AI 可控制引擎",
+    toolsOff: "工具已禁用 — 仅聊天",
+    approve: "批准",
+    reject: "拒绝",
+    confirmDestructive: "AI 要执行破坏性操作：",
+    toolLimitReached: "工具调用次数已达上限，请尝试简化请求。",
   },
 
   // ── 粒子编辑器 ──────────────────────────────────────────────
