@@ -216,6 +216,9 @@ pub const Entity = struct {
     supply_consumer: ?components.SupplyConsumer = null,
     production_queue: ?components.ProductionQueue = null,
     trade_offer: ?components.TradeOffer = null,
+    // ─── 单位选择组件 ───
+    unit_selectable: ?components.UnitSelectable = null,
+    command_receiver: ?components.CommandReceiver = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示
@@ -404,6 +407,9 @@ pub const EntityDesc = struct {
     supply_consumer: ?components.SupplyConsumer = null,
     production_queue: ?components.ProductionQueue = null,
     trade_offer: ?components.TradeOffer = null,
+    // ─── 单位选择组件 ───
+    unit_selectable: ?components.UnitSelectable = null,
+    command_receiver: ?components.CommandReceiver = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示
