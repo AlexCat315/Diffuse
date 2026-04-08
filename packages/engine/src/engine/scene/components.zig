@@ -675,3 +675,20 @@ pub const RtsCameraConfig = @import("../camera/rts_camera.zig").Config;
 pub const FogVision = @import("../fog/fog_system.zig").FogVision;
 /// 战争迷雾全局配置组件 — 挂载在管理实体上。
 pub const FogOfWarConfig = @import("../fog/fog_system.zig").FogOfWarConfig;
+
+// ─────── 经济系统组件 ───────
+const economy_mod = @import("../economy/economy_system.zig");
+/// 资源储备组件 — 挂载在玩家/基地实体上。
+pub const ResourceStorage = economy_mod.ResourceStorage;
+/// 资源采集者组件 — 挂载在采集单位上。
+pub const ResourceHarvester = economy_mod.ResourceHarvester;
+/// 资源节点组件 — 挂载在矿山/树木等可采集物上。
+pub const ResourceNode = economy_mod.ResourceNode;
+/// 供给提供者组件 — 挂载在房屋/基地等建筑上。
+pub const SupplyProvider = economy_mod.SupplyProvider;
+/// 供给消费者组件 — 挂载在需要人口的单位上。
+pub const SupplyConsumer = economy_mod.SupplyConsumer;
+/// 生产队列组件 — 挂载在生产建筑上。
+pub const ProductionQueue = economy_mod.ProductionQueue;
+/// 交易报价组件 — 挂载在市场建筑上。
+pub const TradeOffer = economy_mod.TradeOffer;
