@@ -18,6 +18,104 @@ export interface ProviderConfig {
   apiKey: string;
 }
 
+// ── Provider Presets ─────────────────────────────────────────────
+
+/** Known AI service preset. Add new entries here to support more providers. */
+export interface ProviderPreset {
+  /** Display label in the Add Provider UI. */
+  label: string;
+  type: ProviderType;
+  /** Default endpoint with full path (must end with the API route). */
+  endpoint: string;
+  /** Default model. */
+  model: string;
+  /** Suggested models the user can pick from. */
+  models: string[];
+  /** Whether an API key is required. */
+  requiresKey: boolean;
+  /** Flavor used for request formatting (openai-compatible, anthropic, ollama). */
+  flavor: "openai" | "anthropic" | "ollama";
+}
+
+/**
+ * Registry of known AI service presets.
+ * To add a new service: append an entry here. Everything else is derived from it.
+ */
+export const PROVIDER_PRESETS: ProviderPreset[] = [
+  {
+    label: "OpenAI",
+    type: "openai",
+    endpoint: "https://api.openai.com/v1/chat/completions",
+    model: "gpt-4o",
+    models: ["gpt-4o", "gpt-4o-mini", "gpt-4.1", "gpt-4.1-mini", "o3-mini"],
+    requiresKey: true,
+    flavor: "openai",
+  },
+  {
+    label: "Anthropic",
+    type: "anthropic",
+    endpoint: "https://api.anthropic.com/v1/messages",
+    model: "claude-sonnet-4-20250514",
+    models: ["claude-sonnet-4-20250514", "claude-opus-4-20250514", "claude-3-5-haiku-20241022"],
+    requiresKey: true,
+    flavor: "anthropic",
+  },
+  {
+    label: "DeepSeek",
+    type: "openai",
+    endpoint: "https://api.deepseek.com/chat/completions",
+    model: "deepseek-chat",
+    models: ["deepseek-chat", "deepseek-reasoner"],
+    requiresKey: true,
+    flavor: "openai",
+  },
+  {
+    label: "Google Gemini",
+    type: "openai",
+    endpoint: "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions",
+    model: "gemini-2.5-flash",
+    models: ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.0-flash"],
+    requiresKey: true,
+    flavor: "openai",
+  },
+  {
+    label: "Groq",
+    type: "openai",
+    endpoint: "https://api.groq.com/openai/v1/chat/completions",
+    model: "llama-3.3-70b-versatile",
+    models: ["llama-3.3-70b-versatile", "llama-3.1-8b-instant", "mixtral-8x7b-32768"],
+    requiresKey: true,
+    flavor: "openai",
+  },
+  {
+    label: "Together AI",
+    type: "openai",
+    endpoint: "https://api.together.xyz/v1/chat/completions",
+    model: "meta-llama/Llama-3.3-70B-Instruct-Turbo",
+    models: ["meta-llama/Llama-3.3-70B-Instruct-Turbo", "mistralai/Mixtral-8x22B-Instruct-v0.1"],
+    requiresKey: true,
+    flavor: "openai",
+  },
+  {
+    label: "OpenRouter",
+    type: "openai",
+    endpoint: "https://openrouter.ai/api/v1/chat/completions",
+    model: "openai/gpt-4o",
+    models: ["openai/gpt-4o", "anthropic/claude-sonnet-4-20250514", "google/gemini-2.5-flash"],
+    requiresKey: true,
+    flavor: "openai",
+  },
+  {
+    label: "Ollama",
+    type: "ollama",
+    endpoint: "http://localhost:11434/api/chat",
+    model: "llama3.2",
+    models: ["llama3.2", "llama3.1", "mistral", "codellama", "qwen2.5-coder"],
+    requiresKey: false,
+    flavor: "ollama",
+  },
+];
+
 export type MessageRole = "user" | "assistant" | "reasoning" | "system" | "tool";
 
 export interface ChatMessage {
@@ -81,16 +179,25 @@ export function saveActiveIndex(index: number): void {
 
 // ── Default configs per provider ─────────────────────────────────
 
-export function defaultConfig(type: ProviderType): ProviderConfig {
-  switch (type) {
+export function defaultConfig(typeOrPreset: ProviderType | string): ProviderConfig {
+  // Try matching a preset label first
+  const preset = PROVIDER_PRESETS.find(
+    (p) => p.label === typeOrPreset || p.label.toLowerCase() === typeOrPreset,
+  );
+  if (preset) {
+    return { type: preset.type, name: preset.label, endpoint: preset.endpoint, model: preset.model, apiKey: "" };
+  }
+  // Fall back for raw ProviderType values
+  switch (typeOrPreset as ProviderType) {
     case "openai":
-      return { type, name: "OpenAI", endpoint: "https://api.openai.com/v1/chat/completions", model: "gpt-4o", apiKey: "" };
+      return { type: "openai", name: "OpenAI", endpoint: "https://api.openai.com/v1/chat/completions", model: "gpt-4o", apiKey: "" };
     case "anthropic":
-      return { type, name: "Anthropic", endpoint: "https://api.anthropic.com/v1/messages", model: "claude-sonnet-4-20250514", apiKey: "" };
+      return { type: "anthropic", name: "Anthropic", endpoint: "https://api.anthropic.com/v1/messages", model: "claude-sonnet-4-20250514", apiKey: "" };
     case "ollama":
-      return { type, name: "Ollama", endpoint: "http://localhost:11434/api/chat", model: "llama3.2", apiKey: "" };
+      return { type: "ollama", name: "Ollama", endpoint: "http://localhost:11434/api/chat", model: "llama3.2", apiKey: "" };
     case "custom":
-      return { type, name: "Custom", endpoint: "", model: "", apiKey: "" };
+    default:
+      return { type: "custom", name: "Custom", endpoint: "", model: "", apiKey: "" };
   }
 }
 
@@ -103,6 +210,37 @@ function detectFlavor(config: ProviderConfig): Flavor {
   if (ep.includes("anthropic") || ep.includes("/v1/messages")) return "anthropic";
   if (ep.includes("ollama") || ep.includes("/api/chat") || ep.includes("11434")) return "ollama";
   return "openai";
+}
+
+/**
+ * Resolve the actual API endpoint from user-configured endpoint.
+ * Uses preset registry to normalize bare domains to correct API paths.
+ */
+function resolveEndpoint(config: ProviderConfig): string {
+  const ep = config.endpoint.replace(/\/+$/, ""); // strip trailing slashes
+  const flavor = detectFlavor(config);
+
+  // Check if endpoint matches a known preset's base domain → use preset's full path
+  for (const preset of PROVIDER_PRESETS) {
+    try {
+      const presetUrl = new URL(preset.endpoint);
+      const userUrl = new URL(ep);
+      if (userUrl.hostname === presetUrl.hostname && (userUrl.pathname === "/" || userUrl.pathname === "")) {
+        return preset.endpoint;
+      }
+    } catch { /* skip invalid URLs */ }
+  }
+
+  // If endpoint already contains a reasonable path, use it as-is
+  try {
+    const url = new URL(ep);
+    if (url.pathname !== "/" && url.pathname !== "") return ep;
+  } catch { return ep; }
+
+  // Bare domain fallback based on flavor
+  if (flavor === "anthropic") return ep + "/v1/messages";
+  if (flavor === "ollama") return ep + "/api/chat";
+  return ep + "/v1/chat/completions";
 }
 
 // ── Streaming request ────────────────────────────────────────────
@@ -188,7 +326,8 @@ async function streamOpenAI(
     body.tools = toOpenAiTools(opts.tools);
   }
 
-  const res = await fetch(config.endpoint, {
+  const endpoint = resolveEndpoint(config);
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -331,7 +470,8 @@ async function streamAnthropic(
     // or using a specific combination. For simplicity, keep thinking if supported.
   }
 
-  const res = await fetch(config.endpoint, {
+  const endpoint = resolveEndpoint(config);
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
@@ -421,7 +561,8 @@ async function streamOllama(
     apiMessages.push({ role: m.role === "assistant" ? "assistant" : "user", content: m.content });
   }
 
-  const res = await fetch(config.endpoint, {
+  const endpoint = resolveEndpoint(config);
+  const res = await fetch(endpoint, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ model: config.model, messages: apiMessages, stream: true }),
@@ -485,11 +626,11 @@ async function readSSE(res: Response, onData: (data: string) => void) {
 export async function testConnection(config: ProviderConfig): Promise<{ ok: boolean; message: string }> {
   try {
     const flavor = detectFlavor(config);
-    let testUrl = config.endpoint;
+    const endpoint = resolveEndpoint(config);
 
     if (flavor === "ollama") {
       // Ollama: just GET the base URL /api/tags
-      testUrl = config.endpoint.replace(/\/api\/chat\/?$/, "/api/tags");
+      const testUrl = endpoint.replace(/\/api\/chat\/?$/, "/api/tags");
       const res = await fetch(testUrl, { method: "GET" });
       if (res.ok) return { ok: true, message: "Connected to Ollama" };
       return { ok: false, message: `Ollama ${res.status}` };
@@ -507,8 +648,8 @@ export async function testConnection(config: ProviderConfig): Promise<{ ok: bool
       ? JSON.stringify({ model: config.model, max_tokens: 1, messages: [{ role: "user", content: "hi" }] })
       : JSON.stringify({ model: config.model, messages: [{ role: "user", content: "hi" }], max_tokens: 1 });
 
-    const res = await fetch(config.endpoint, { method: "POST", headers, body });
-    if (res.ok || res.status === 200) return { ok: true, message: `Connected (${config.type})` };
+    const res = await fetch(endpoint, { method: "POST", headers, body });
+    if (res.ok || res.status === 200) return { ok: true, message: `Connected → ${endpoint}` };
     const text = await res.text();
     return { ok: false, message: `${res.status}: ${text.slice(0, 100)}` };
   } catch (err: unknown) {

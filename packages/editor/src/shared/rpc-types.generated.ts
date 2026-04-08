@@ -713,21 +713,28 @@ export const AI_TOOLS: AiToolDef[] = [
   },
 ];
 
+/** Sanitize tool name for OpenAI/Anthropic (only [a-zA-Z0-9_-] allowed). */
+function sanitizeName(name: string): string {
+  return name.replace(/\./g, "_");
+}
+
 export function toOpenAiTools(tools: AiToolDef[]) {
   return tools.map((t) => ({
     type: "function" as const,
-    function: { name: t.name, description: t.description, parameters: t.parameters },
+    function: { name: sanitizeName(t.name), description: t.description, parameters: t.parameters },
   }));
 }
 
 export function toAnthropicTools(tools: AiToolDef[]) {
   return tools.map((t) => ({
-    name: t.name,
+    name: sanitizeName(t.name),
     description: t.description,
     input_schema: t.parameters,
   }));
 }
 
+/** Find a tool by name (accepts both dotted and underscored forms). */
 export function findTool(name: string): AiToolDef | undefined {
-  return AI_TOOLS.find((t) => t.name === name);
+  const normalized = name.replace(/_/g, ".");
+  return AI_TOOLS.find((t) => t.name === name || t.name === normalized);
 }

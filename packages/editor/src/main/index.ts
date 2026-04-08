@@ -923,7 +923,7 @@ app.whenReady().then(async () => {
       responseHeaders: {
         ...details.responseHeaders,
         "Content-Security-Policy": [
-          `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* http://localhost:*; img-src 'self' data:`,
+          `default-src 'self'; ${scriptSrc}; style-src 'self' 'unsafe-inline'; connect-src 'self' ws://127.0.0.1:* http://localhost:* https:; img-src 'self' data:`,
         ],
         // Required for SharedArrayBuffer to be transferable via postMessage.
         "Cross-Origin-Opener-Policy": ["same-origin"],
