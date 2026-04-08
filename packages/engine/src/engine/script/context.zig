@@ -95,6 +95,7 @@ pub const ScriptContext = struct {
         if (self.world.id_to_index.get(self.entity)) |idx| {
             self.world.entities.items[idx].local_transform.translation = pos;
             self.world.markDirty(self.entity);
+            self.notifyPhysicsTransformChanged();
         }
     }
 
@@ -103,6 +104,7 @@ pub const ScriptContext = struct {
         if (self.world.id_to_index.get(self.entity)) |idx| {
             self.world.entities.items[idx].local_transform.rotation = rot;
             self.world.markDirty(self.entity);
+            self.notifyPhysicsTransformChanged();
         }
     }
 
@@ -111,6 +113,15 @@ pub const ScriptContext = struct {
         if (self.world.id_to_index.get(self.entity)) |idx| {
             self.world.entities.items[idx].local_transform.scale = scale;
             self.world.markDirty(self.entity);
+            self.notifyPhysicsTransformChanged();
+        }
+    }
+
+    /// 通知物理系统当前实体的 Transform 已被脚本修改，
+    /// 使 Jolt 同步新位置/旋转/缩放（而非下一帧覆盖回旧值）。
+    fn notifyPhysicsTransformChanged(self: *ScriptContext) void {
+        if (self.physics_state) |ps| {
+            ps.enqueuePhysicsEvent(.{ .transform_changed = self.entity });
         }
     }
 
