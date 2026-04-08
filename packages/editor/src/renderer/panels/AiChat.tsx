@@ -41,7 +41,7 @@ const ROLE_BG: Record<MessageRole, string> = {
 
 // ── Tool execution ──────────────────────────────────────────────
 
-const MAX_TOOL_ROUNDS = 15;
+const DEFAULT_MAX_TOOL_ROUNDS = 25;
 
 async function executeToolCall(call: ToolCallInfo): Promise<string> {
   const def = findTool(call.name);
@@ -59,7 +59,7 @@ async function executeToolCall(call: ToolCallInfo): Promise<string> {
 }
 
 /** Build a system prompt that gives the AI context about available tools and scene state. */
-function buildSystemPrompt(): string {
+function buildSystemPrompt(maxRounds: number = DEFAULT_MAX_TOOL_ROUNDS): string {
   const categories = new Map<string, string[]>();
   for (const tool of AI_TOOLS) {
     const list = categories.get(tool.category) ?? [];
@@ -75,9 +75,10 @@ function buildSystemPrompt(): string {
   return [
     "You are Guava AI — the intelligent assistant embedded in the Guava game engine editor.",
     "You can manipulate the scene, entities, components, scripts, materials, animations, cameras, and playback by calling tools.",
-    "When the user asks you to do something to the scene, call the appropriate tool(s). You may call multiple tools in sequence.",
+    "When the user asks you to do something to the scene, call the appropriate tool(s). You may call multiple tools in a single response to be efficient.",
     "Always prefer tool calls over giving instructions — take action directly.",
     "If a tool call fails, report the error to the user and suggest alternatives.",
+    "IMPORTANT: You have a maximum of " + maxRounds + " tool-call rounds per message. Use tools efficiently — batch related operations in a single round when possible.",
     "",
     "Available tools:" + toolList,
   ].join("\n");
@@ -96,11 +97,17 @@ export function AiChat() {
   const [showSettings, setShowSettings] = useSyncedState("ai-chat", "showSettings", false);
   const [showReasoning, setShowReasoning] = useSyncedState("ai-chat", "showReasoning", true);
   const [toolsEnabled, setToolsEnabled] = useSyncedState("ai-chat", "toolsEnabled", true);
+  const [maxToolRounds, setMaxToolRounds] = useSyncedState("ai-chat", "maxToolRounds", DEFAULT_MAX_TOOL_ROUNDS);
 
   // Tool confirmation state
   const [pendingConfirm, setPendingConfirm] = useState<{
     calls: ToolCallInfo[];
     resolve: (approved: boolean) => void;
+  } | null>(null);
+
+  // Continue after tool limit state
+  const [pendingContinue, setPendingContinue] = useState<{
+    resolve: (shouldContinue: boolean) => void;
   } | null>(null);
 
   // Provider state
@@ -142,11 +149,14 @@ export function AiChat() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const systemPrompt = toolsEnabled ? buildSystemPrompt() : undefined;
+    const systemPrompt = toolsEnabled ? buildSystemPrompt(maxToolRounds) : undefined;
     const tools = toolsEnabled ? AI_TOOLS : undefined;
 
     // Tool-call loop: repeat until the LLM responds with text (no tool calls)
-    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    let totalRounds = 0;
+    let continueLoop = true;
+    while (continueLoop) {
+    for (let round = 0; round < maxToolRounds; round++) {
       if (controller.signal.aborted) break;
 
       let resolvedContent = "";
@@ -190,7 +200,10 @@ export function AiChat() {
         );
       });
 
-      if (hadError || controller.signal.aborted) break;
+      if (hadError || controller.signal.aborted) {
+        continueLoop = false;
+        break;
+      }
 
       // Append reasoning if any
       if (resolvedReasoning) {
@@ -263,22 +276,32 @@ export function AiChat() {
       }
 
       // Loop back — send tool results to LLM for next turn
+      totalRounds++;
     }
 
-    // If we hit MAX_TOOL_ROUNDS (not due to error/abort), notify
+    // Reached max rounds — ask user if they want to continue
     if (!controller.signal.aborted) {
-      // Check if we ended because of an error (hadError will have set busy=false already)
-      // Only show limit message if we genuinely ran out of rounds
       const lastMsg = conversationMessages[conversationMessages.length - 1];
       if (lastMsg?.role === "tool") {
-        setMessages((prev) => [
-          ...prev,
-          { role: "system", content: t.aiChat.toolLimitReached, timestamp: Date.now() },
-        ]);
-        setBusy(false);
+        // Show continue prompt
+        const shouldContinue = await new Promise<boolean>((resolve) => {
+          setPendingContinue({ resolve });
+        });
+        setPendingContinue(null);
+        if (!shouldContinue) {
+          continueLoop = false;
+        }
+        // else: loop continues with a fresh set of maxToolRounds
+      } else {
+        continueLoop = false;
       }
+    } else {
+      continueLoop = false;
     }
-  }, [input, busy, activeProvider, messages, toolsEnabled]);
+    } // end while(continueLoop)
+
+    setBusy(false);
+  }, [input, busy, activeProvider, messages, toolsEnabled, maxToolRounds]);
 
   // ── Stop generation ────────────────────────────────────────
 
@@ -470,6 +493,22 @@ export function AiChat() {
             </div>
           )}
 
+          {/* Max tool rounds setting */}
+          <div style={{ marginTop: 12, display: "flex", alignItems: "center", gap: 8 }}>
+            <label style={styles.fieldLabel}>{t.aiChat.maxToolRounds}</label>
+            <input
+              type="number"
+              min={1}
+              max={200}
+              style={{ ...styles.input, width: 70 }}
+              value={maxToolRounds}
+              onChange={(e) => {
+                const v = parseInt(e.target.value, 10);
+                if (v > 0) setMaxToolRounds(v);
+              }}
+            />
+          </div>
+
           {providers.length === 0 && (
             <div style={styles.emptyHint}>{t.aiChat.noProviders}</div>
           )}
@@ -528,6 +567,29 @@ export function AiChat() {
               onClick={() => pendingConfirm.resolve(false)}
             >
               {t.aiChat.reject}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Continue after tool limit */}
+      {pendingContinue && (
+        <div style={styles.confirmBar}>
+          <span style={{ fontSize: 11, color: "#f9e2af" }}>
+            ⚙️ {t.aiChat.toolLimitReached}
+          </span>
+          <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
+            <button
+              style={{ ...styles.toolbarBtn, background: "#89b4fa", color: "#1e1e2e" }}
+              onClick={() => pendingContinue.resolve(true)}
+            >
+              {t.aiChat.continueBtn}
+            </button>
+            <button
+              style={{ ...styles.toolbarBtn, background: "#6c7086", color: "#cdd6f4" }}
+              onClick={() => pendingContinue.resolve(false)}
+            >
+              {t.aiChat.stopBtn}
             </button>
           </div>
         </div>

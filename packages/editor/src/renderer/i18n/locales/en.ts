@@ -768,7 +768,10 @@ export const en = {
     approve: "Approve",
     reject: "Reject",
     confirmDestructive: "AI wants to execute destructive action(s):",
-    toolLimitReached: "Tool call limit reached. Please try a simpler request.",
+    toolLimitReached: "Tool call round limit reached.",
+    continueBtn: "Continue",
+    stopBtn: "Stop",
+    maxToolRounds: "Max Tool Rounds",
   },
 
   // ── Particle Editor ──────────────────────────────────────────
