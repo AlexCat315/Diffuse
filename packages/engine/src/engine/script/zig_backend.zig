@@ -9,8 +9,8 @@ const quat = @import("../math/quat.zig");
 const vec3 = @import("../math/vec3.zig");
 const world_mod = @import("../scene/world.zig");
 const input_mod = @import("../core/input.zig");
-const audio_mod = @import("../audio/mod.zig");
-const animator_system = @import("../animation/animator_system.zig");
+const host_mod = @import("./host/mod.zig");
+const host_api_mod = @import("./host_api.zig");
 
 const log = std.log.scoped(.vm);
 
@@ -327,148 +327,19 @@ const ZigBuiltinVM = GameplayBuiltinVM(.zig, "ZigVM");
 const CSharpBuiltinVM = GameplayBuiltinVM(.csharp, "CSharpVM");
 
 // ---------------------------------------------------------------------------
-// Zig Dylib Host API — 布局必须与 src/engine/script/script_api.zig HostApi 完全一致
+// Guava Host API（统一契约，所有语言运行时共享）
 // ---------------------------------------------------------------------------
 
-const zig_dylib_api_version: u32 = 1;
+const GuavaHostApi = host_api_mod.GuavaHostApi;
+const GuavaHostContext = host_mod.GuavaHostContext;
+const guava_host_api = host_mod.guava_host_api;
+
 const zig_dylib_user_data_tag: u32 = 0x5A444C42; // "ZDLB"
-
-const ZigDylibHostContext = struct {
-    active_context: ?*context.ScriptContext = null,
-};
-
-const ZigDylibHostApi = extern struct {
-    // Logging
-    log_fn: *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) void,
-    // Entity
-    get_entity_id: *const fn (?*anyopaque) callconv(.c) u64,
-    find_entity_by_name: *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) u64,
-    spawn_entity: *const fn (?*anyopaque) callconv(.c) u64,
-    destroy_entity: *const fn (?*anyopaque, u64) callconv(.c) void,
-    // Transform
-    get_position: *const fn (?*anyopaque, *f32, *f32, *f32) callconv(.c) void,
-    set_position: *const fn (?*anyopaque, f32, f32, f32) callconv(.c) void,
-    get_rotation: *const fn (?*anyopaque, *f32, *f32, *f32, *f32) callconv(.c) void,
-    set_rotation: *const fn (?*anyopaque, f32, f32, f32, f32) callconv(.c) void,
-    get_scale: *const fn (?*anyopaque, *f32, *f32, *f32) callconv(.c) void,
-    set_scale: *const fn (?*anyopaque, f32, f32, f32) callconv(.c) void,
-    // Input
-    is_key_down: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    was_key_pressed: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    was_key_released: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    is_mouse_button_down: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    get_mouse_position: *const fn (?*anyopaque, *f32, *f32) callconv(.c) void,
-    get_mouse_delta: *const fn (?*anyopaque, *f32, *f32) callconv(.c) void,
-    get_mouse_wheel: *const fn (?*anyopaque, *f32, *f32) callconv(.c) void,
-    // Time
-    get_delta_time: *const fn (?*anyopaque) callconv(.c) f32,
-    get_time: *const fn (?*anyopaque) callconv(.c) f32,
-    // Physics
-    raycast: *const fn (?*anyopaque, f32, f32, f32, f32, f32, f32, f32, *f32, *f32, *f32, *f32, *u64) callconv(.c) u32,
-    set_linear_velocity: *const fn (?*anyopaque, u64, f32, f32, f32) callconv(.c) void,
-    get_linear_velocity: *const fn (?*anyopaque, u64, *f32, *f32, *f32) callconv(.c) void,
-    add_impulse: *const fn (?*anyopaque, u64, f32, f32, f32) callconv(.c) void,
-    // Scene
-    load_scene: *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) void,
-    // Gamepad
-    is_gamepad_connected: *const fn (?*anyopaque) callconv(.c) u32,
-    is_gamepad_button_down: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    was_gamepad_button_pressed: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    get_gamepad_axis: *const fn (?*anyopaque, u32) callconv(.c) f32,
-    // Audio
-    audio_load_clip: *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) u32,
-    audio_play_2d: *const fn (?*anyopaque, u32, f32, u32) callconv(.c) u32,
-    audio_play_3d: *const fn (?*anyopaque, u32, f32, f32, f32, f32, u32) callconv(.c) u32,
-    audio_stop: *const fn (?*anyopaque, u32) callconv(.c) void,
-    audio_set_volume: *const fn (?*anyopaque, u32, f32) callconv(.c) void,
-    audio_pause: *const fn (?*anyopaque, u32, u32) callconv(.c) void,
-    audio_is_playing: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    // Animation
-    anim_play: *const fn (?*anyopaque, u64, [*]const u8, usize, f32) callconv(.c) void,
-    anim_stop: *const fn (?*anyopaque, u64) callconv(.c) void,
-    anim_set_speed: *const fn (?*anyopaque, u64, f32) callconv(.c) void,
-    anim_is_playing: *const fn (?*anyopaque, u64) callconv(.c) u32,
-    // Canvas / UI
-    canvas_clear: *const fn (?*anyopaque) callconv(.c) void,
-    canvas_add_text: *const fn (?*anyopaque, f32, f32, f32, f32, [*]const u8, usize, u8, u8, u8, u8) callconv(.c) u32,
-    canvas_add_panel: *const fn (?*anyopaque, f32, f32, f32, f32, u8, u8, u8, u8) callconv(.c) u32,
-    canvas_add_button: *const fn (?*anyopaque, f32, f32, f32, f32, [*]const u8, usize) callconv(.c) u32,
-    canvas_add_progress_bar: *const fn (?*anyopaque, f32, f32, f32, f32, f32) callconv(.c) u32,
-    canvas_set_text: *const fn (?*anyopaque, u32, [*]const u8, usize) callconv(.c) void,
-    canvas_set_progress: *const fn (?*anyopaque, u32, f32) callconv(.c) void,
-    canvas_set_visible: *const fn (?*anyopaque, u32, u32) callconv(.c) void,
-    canvas_remove_widget: *const fn (?*anyopaque, u32) callconv(.c) void,
-    canvas_was_button_clicked: *const fn (?*anyopaque, u32) callconv(.c) u32,
-    // Script Parameters
-    get_parameter_float: *const fn (?*anyopaque, [*]const u8, usize, f32) callconv(.c) f32,
-    get_parameter_int: *const fn (?*anyopaque, [*]const u8, usize, i32) callconv(.c) i32,
-    get_parameter_bool: *const fn (?*anyopaque, [*]const u8, usize, u32) callconv(.c) u32,
-};
-
-const zig_dylib_host_api: ZigDylibHostApi = .{
-    .log_fn = zigDylibHostLog,
-    .get_entity_id = zigDylibHostGetEntityId,
-    .find_entity_by_name = zigDylibHostFindEntityByName,
-    .spawn_entity = zigDylibHostSpawnEntity,
-    .destroy_entity = zigDylibHostDestroyEntity,
-    .get_position = zigDylibHostGetPosition,
-    .set_position = zigDylibHostSetPosition,
-    .get_rotation = zigDylibHostGetRotation,
-    .set_rotation = zigDylibHostSetRotation,
-    .get_scale = zigDylibHostGetScale,
-    .set_scale = zigDylibHostSetScale,
-    .is_key_down = zigDylibHostIsKeyDown,
-    .was_key_pressed = zigDylibHostWasKeyPressed,
-    .was_key_released = zigDylibHostWasKeyReleased,
-    .is_mouse_button_down = zigDylibHostIsMouseButtonDown,
-    .get_mouse_position = zigDylibHostGetMousePosition,
-    .get_mouse_delta = zigDylibHostGetMouseDelta,
-    .get_mouse_wheel = zigDylibHostGetMouseWheel,
-    .get_delta_time = zigDylibHostGetDeltaTime,
-    .get_time = zigDylibHostGetTime,
-    .raycast = zigDylibHostRaycast,
-    .set_linear_velocity = zigDylibHostSetLinearVelocity,
-    .get_linear_velocity = zigDylibHostGetLinearVelocity,
-    .add_impulse = zigDylibHostAddImpulse,
-    .load_scene = zigDylibHostLoadScene,
-    .is_gamepad_connected = zigDylibHostIsGamepadConnected,
-    .is_gamepad_button_down = zigDylibHostIsGamepadButtonDown,
-    .was_gamepad_button_pressed = zigDylibHostWasGamepadButtonPressed,
-    .get_gamepad_axis = zigDylibHostGetGamepadAxis,
-    // Audio
-    .audio_load_clip = zigDylibHostAudioLoadClip,
-    .audio_play_2d = zigDylibHostAudioPlay2d,
-    .audio_play_3d = zigDylibHostAudioPlay3d,
-    .audio_stop = zigDylibHostAudioStop,
-    .audio_set_volume = zigDylibHostAudioSetVolume,
-    .audio_pause = zigDylibHostAudioPause,
-    .audio_is_playing = zigDylibHostAudioIsPlaying,
-    // Animation
-    .anim_play = zigDylibHostAnimPlay,
-    .anim_stop = zigDylibHostAnimStop,
-    .anim_set_speed = zigDylibHostAnimSetSpeed,
-    .anim_is_playing = zigDylibHostAnimIsPlaying,
-    // Canvas / UI
-    .canvas_clear = zigDylibHostCanvasClear,
-    .canvas_add_text = zigDylibHostCanvasAddText,
-    .canvas_add_panel = zigDylibHostCanvasAddPanel,
-    .canvas_add_button = zigDylibHostCanvasAddButton,
-    .canvas_add_progress_bar = zigDylibHostCanvasAddProgressBar,
-    .canvas_set_text = zigDylibHostCanvasSetText,
-    .canvas_set_progress = zigDylibHostCanvasSetProgress,
-    .canvas_set_visible = zigDylibHostCanvasSetVisible,
-    .canvas_remove_widget = zigDylibHostCanvasRemoveWidget,
-    .canvas_was_button_clicked = zigDylibHostCanvasWasButtonClicked,
-    // Script Parameters
-    .get_parameter_float = zigDylibHostGetParameterFloat,
-    .get_parameter_int = zigDylibHostGetParameterInt,
-    .get_parameter_bool = zigDylibHostGetParameterBool,
-};
 
 const ZigDylibLibrary = struct {
     path: []u8,
     lib: std.DynLib,
-    bind: *const fn (*const ZigDylibHostApi, ?*anyopaque, u64) callconv(.c) void,
+    bind: *const fn (*const GuavaHostApi, ?*anyopaque, u64) callconv(.c) void,
     on_init: ?*const fn () callconv(.c) void,
     on_update: ?*const fn (f32) callconv(.c) void,
     on_destroy: ?*const fn () callconv(.c) void,
@@ -481,7 +352,7 @@ const ZigDylibLibrary = struct {
 
 const ZigDylibInstanceState = struct {
     library: *ZigDylibLibrary,
-    host_context: ZigDylibHostContext = .{},
+    host_context: GuavaHostContext = .{},
     /// When true, this instance owns a private dylib copy for state isolation.
     /// The dylib file will be closed and deleted when the instance is destroyed.
     owns_library: bool = false,
@@ -660,7 +531,7 @@ pub const ZigVM = struct {
         defer state.host_context.active_context = null;
 
         // bind API + context into dylib
-        state.library.bind(&zig_dylib_host_api, &state.host_context, ctx.entity);
+        state.library.bind(&guava_host_api, &state.host_context, ctx.entity);
 
         switch (phase) {
             .init => if (state.library.on_init) |cb| cb(),
@@ -673,7 +544,7 @@ pub const ZigVM = struct {
         const state = castUserData(ZigDylibInstanceState, instance.user_data orelse return);
         state.host_context.active_context = ctx;
         defer state.host_context.active_context = null;
-        state.library.bind(&zig_dylib_host_api, &state.host_context, ctx.entity);
+        state.library.bind(&guava_host_api, &state.host_context, ctx.entity);
         if (state.library.on_collision_enter) |cb| cb(other);
     }
 
@@ -681,7 +552,7 @@ pub const ZigVM = struct {
         const state = castUserData(ZigDylibInstanceState, instance.user_data orelse return);
         state.host_context.active_context = ctx;
         defer state.host_context.active_context = null;
-        state.library.bind(&zig_dylib_host_api, &state.host_context, ctx.entity);
+        state.library.bind(&guava_host_api, &state.host_context, ctx.entity);
         if (state.library.on_collision_exit) |cb| cb(other);
     }
 
@@ -689,7 +560,7 @@ pub const ZigVM = struct {
         const state = castUserData(ZigDylibInstanceState, instance.user_data orelse return);
         state.host_context.active_context = ctx;
         defer state.host_context.active_context = null;
-        state.library.bind(&zig_dylib_host_api, &state.host_context, ctx.entity);
+        state.library.bind(&guava_host_api, &state.host_context, ctx.entity);
         if (state.library.on_trigger_enter) |cb| cb(other);
     }
 
@@ -697,7 +568,7 @@ pub const ZigVM = struct {
         const state = castUserData(ZigDylibInstanceState, instance.user_data orelse return);
         state.host_context.active_context = ctx;
         defer state.host_context.active_context = null;
-        state.library.bind(&zig_dylib_host_api, &state.host_context, ctx.entity);
+        state.library.bind(&guava_host_api, &state.host_context, ctx.entity);
         if (state.library.on_trigger_exit) |cb| cb(other);
     }
 
@@ -746,7 +617,7 @@ pub const ZigVM = struct {
             return error.CompileError;
         };
 
-        const bind_fn = lib.lookup(*const fn (*const ZigDylibHostApi, ?*anyopaque, u64) callconv(.c) void, "guava_bind") orelse {
+        const bind_fn = lib.lookup(*const fn (*const GuavaHostApi, ?*anyopaque, u64) callconv(.c) void, "guava_bind") orelse {
             setOwnedMessage(vm.allocator, &vm.error_msg, "missing guava_bind in instance dylib copy");
             lib.close();
             return error.CompileError;
@@ -855,7 +726,7 @@ pub const ZigVM = struct {
             return error.CompileError;
         };
 
-        const bind_fn = lib.lookup(*const fn (*const ZigDylibHostApi, ?*anyopaque, u64) callconv(.c) void, "guava_bind") orelse {
+        const bind_fn = lib.lookup(*const fn (*const GuavaHostApi, ?*anyopaque, u64) callconv(.c) void, "guava_bind") orelse {
             setOwnedMessage(vm.allocator, &vm.error_msg, "missing guava_bind export in dylib");
             lib.close();
             return error.CompileError;
@@ -988,395 +859,8 @@ fn resolveZigDylibPath(resource: *const script_resource_mod.ScriptResource) ?[]c
 // Zig Dylib Host API 实现
 // ---------------------------------------------------------------------------
 
-fn zigDylibActiveContext(userdata: ?*anyopaque) ?*context.ScriptContext {
-    const host_context: *ZigDylibHostContext = @ptrCast(@alignCast(userdata orelse return null));
-    return host_context.active_context;
-}
-
-fn zigDylibHostLog(userdata: ?*anyopaque, ptr: [*]const u8, len: usize) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    std.log.info("[ZigScript:{d}] {s}", .{ ctx_ptr.entity, ptr[0..len] });
-}
-
-fn zigDylibHostGetEntityId(userdata: ?*anyopaque) callconv(.c) u64 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    return ctx_ptr.entity;
-}
-
-fn zigDylibHostFindEntityByName(userdata: ?*anyopaque, ptr: [*]const u8, len: usize) callconv(.c) u64 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    return ctx_ptr.findEntityByName(ptr[0..len]) orelse 0;
-}
-
-fn zigDylibHostSpawnEntity(userdata: ?*anyopaque) callconv(.c) u64 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const child_id = ctx_ptr.createChild("spawned") catch return 0;
-    return child_id;
-}
-
-fn zigDylibHostDestroyEntity(userdata: ?*anyopaque, target: u64) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    ctx_ptr.destroyEntity(target);
-}
-
-fn zigDylibHostGetPosition(userdata: ?*anyopaque, x: *f32, y: *f32, z: *f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const pos = ctx_ptr.getPosition() orelse return;
-    x.* = pos[0];
-    y.* = pos[1];
-    z.* = pos[2];
-}
-
-fn zigDylibHostSetPosition(userdata: ?*anyopaque, x: f32, y: f32, z: f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    ctx_ptr.setPosition(.{ x, y, z });
-}
-
-fn zigDylibHostGetRotation(userdata: ?*anyopaque, x: *f32, y: *f32, z: *f32, w: *f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const rot = ctx_ptr.getRotation() orelse return;
-    x.* = rot[0];
-    y.* = rot[1];
-    z.* = rot[2];
-    w.* = rot[3];
-}
-
-fn zigDylibHostSetRotation(userdata: ?*anyopaque, x: f32, y: f32, z: f32, w: f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    ctx_ptr.setRotation(.{ x, y, z, w });
-}
-
-fn zigDylibHostGetScale(userdata: ?*anyopaque, x: *f32, y: *f32, z: *f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const s = ctx_ptr.getScale() orelse return;
-    x.* = s[0];
-    y.* = s[1];
-    z.* = s[2];
-}
-
-fn zigDylibHostSetScale(userdata: ?*anyopaque, x: f32, y: f32, z: f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    ctx_ptr.setScale(.{ x, y, z });
-}
-
-fn zigDylibHostIsKeyDown(userdata: ?*anyopaque, key_raw: u32) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const key = std.meta.intToEnum(input_mod.Key, @as(u8, @intCast(key_raw))) catch return 0;
-    return if (ctx_ptr.isKeyDown(key)) 1 else 0;
-}
-
-fn zigDylibHostWasKeyPressed(userdata: ?*anyopaque, key_raw: u32) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const key = std.meta.intToEnum(input_mod.Key, @as(u8, @intCast(key_raw))) catch return 0;
-    return if (ctx_ptr.wasKeyPressed(key)) 1 else 0;
-}
-
-fn zigDylibHostWasKeyReleased(userdata: ?*anyopaque, key_raw: u32) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const key = std.meta.intToEnum(input_mod.Key, @as(u8, @intCast(key_raw))) catch return 0;
-    return if (ctx_ptr.wasKeyReleased(key)) 1 else 0;
-}
-
-fn zigDylibHostIsMouseButtonDown(userdata: ?*anyopaque, btn_raw: u32) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const input_state = ctx_ptr.input orelse return 0;
-    const btn = std.meta.intToEnum(input_mod.MouseButton, @as(u8, @intCast(btn_raw))) catch return 0;
-    return if (input_state.isMouseDown(btn)) 1 else 0;
-}
-
-fn zigDylibHostGetMousePosition(userdata: ?*anyopaque, x: *f32, y: *f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const mouse = ctx_ptr.getMousePosition() orelse return;
-    x.* = mouse[0];
-    y.* = mouse[1];
-}
-
-fn zigDylibHostGetMouseDelta(userdata: ?*anyopaque, x: *f32, y: *f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const delta = ctx_ptr.getMouseDelta() orelse return;
-    x.* = delta[0];
-    y.* = delta[1];
-}
-
-fn zigDylibHostGetMouseWheel(userdata: ?*anyopaque, x: *f32, y: *f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const wheel = ctx_ptr.getMouseWheel() orelse return;
-    x.* = wheel[0];
-    y.* = wheel[1];
-}
-
-fn zigDylibHostGetDeltaTime(userdata: ?*anyopaque) callconv(.c) f32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0.0;
-    return ctx_ptr.delta_time;
-}
-
-fn zigDylibHostGetTime(userdata: ?*anyopaque) callconv(.c) f32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0.0;
-    return ctx_ptr.time;
-}
-
-fn zigDylibHostRaycast(
-    userdata: ?*anyopaque,
-    ox: f32,
-    oy: f32,
-    oz: f32,
-    dx: f32,
-    dy: f32,
-    dz: f32,
-    max_dist: f32,
-    hit_x: *f32,
-    hit_y: *f32,
-    hit_z: *f32,
-    hit_dist: *f32,
-    hit_entity: *u64,
-) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const hit = ctx_ptr.physicsRaycast(.{ ox, oy, oz }, .{ dx, dy, dz }, max_dist) orelse return 0;
-    hit_x.* = hit.position[0];
-    hit_y.* = hit.position[1];
-    hit_z.* = hit.position[2];
-    hit_dist.* = hit.distance;
-    hit_entity.* = hit.entity_id;
-    return 1;
-}
-
-fn zigDylibHostSetLinearVelocity(userdata: ?*anyopaque, target: u64, vx: f32, vy: f32, vz: f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const ps = ctx_ptr.physics_state orelse return;
-    ps.setBodyLinearVelocity(ctx_ptr.world, target, .{ vx, vy, vz });
-}
-
-fn zigDylibHostGetLinearVelocity(userdata: ?*anyopaque, target: u64, vx: *f32, vy: *f32, vz: *f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const ps = ctx_ptr.physics_state orelse return;
-    const vel = ps.getBodyLinearVelocity(ctx_ptr.world, target) orelse return;
-    vx.* = vel[0];
-    vy.* = vel[1];
-    vz.* = vel[2];
-}
-
-fn zigDylibHostAddImpulse(userdata: ?*anyopaque, target: u64, ix: f32, iy: f32, iz: f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const ps = ctx_ptr.physics_state orelse return;
-    ps.addBodyImpulse(ctx_ptr.world, target, .{ ix, iy, iz });
-}
-
-fn zigDylibHostLoadScene(userdata: ?*anyopaque, ptr: [*]const u8, len: usize) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    if (ctx_ptr.scene_manager_api) |scene_api| {
-        scene_api.load_scene(scene_api.context, ptr[0..len]);
-    }
-}
-
-fn zigDylibHostIsGamepadConnected(userdata: ?*anyopaque) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const input_state = ctx_ptr.input orelse return 0;
-    return if (input_state.gamepad_connected) @as(u32, 1) else @as(u32, 0);
-}
-
-fn zigDylibHostIsGamepadButtonDown(userdata: ?*anyopaque, button: u32) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const input_state = ctx_ptr.input orelse return 0;
-    const btn = std.meta.intToEnum(input_mod.GamepadButton, @as(u8, @intCast(button))) catch return 0;
-    return if (input_state.isGamepadButtonDown(btn)) @as(u32, 1) else @as(u32, 0);
-}
-
-fn zigDylibHostWasGamepadButtonPressed(userdata: ?*anyopaque, button: u32) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    const input_state = ctx_ptr.input orelse return 0;
-    const btn = std.meta.intToEnum(input_mod.GamepadButton, @as(u8, @intCast(button))) catch return 0;
-    return if (input_state.wasGamepadButtonPressed(btn)) @as(u32, 1) else @as(u32, 0);
-}
-
-fn zigDylibHostGetGamepadAxis(userdata: ?*anyopaque, axis: u32) callconv(.c) f32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0.0;
-    const input_state = ctx_ptr.input orelse return 0.0;
-    const ax = std.meta.intToEnum(input_mod.GamepadAxis, @as(u8, @intCast(axis))) catch return 0.0;
-    return input_state.getGamepadAxis(ax);
-}
-
-// ---------------------------------------------------------------------------
-// Audio host functions
-// ---------------------------------------------------------------------------
-
-fn zigDylibHostAudioLoadClip(_: ?*anyopaque, path_ptr: [*]const u8, path_len: usize) callconv(.c) u32 {
-    const runtime = audio_mod.get() catch return 0;
-    const path = path_ptr[0..path_len];
-    const handle = runtime.loadClipBySlice(path) catch return 0;
-    return handle;
-}
-
-fn zigDylibHostAudioPlay2d(_: ?*anyopaque, clip_id: u32, volume: f32, loop_flag: u32) callconv(.c) u32 {
-    const runtime = audio_mod.get() catch return 0;
-    return runtime.playClip2d(clip_id, volume, loop_flag != 0) catch return 0;
-}
-
-fn zigDylibHostAudioPlay3d(_: ?*anyopaque, clip_id: u32, x: f32, y: f32, z: f32, volume: f32, loop_flag: u32) callconv(.c) u32 {
-    const runtime = audio_mod.get() catch return 0;
-    return runtime.playClip3d(clip_id, .{ x, y, z }, volume, loop_flag != 0) catch return 0;
-}
-
-fn zigDylibHostAudioStop(_: ?*anyopaque, voice_handle: u32) callconv(.c) void {
-    const runtime = audio_mod.get() catch return;
-    runtime.stopVoice(voice_handle);
-}
-
-fn zigDylibHostAudioSetVolume(_: ?*anyopaque, voice_handle: u32, volume: f32) callconv(.c) void {
-    const runtime = audio_mod.get() catch return;
-    runtime.setVoiceVolume(voice_handle, volume);
-}
-
-fn zigDylibHostAudioPause(_: ?*anyopaque, voice_handle: u32, paused: u32) callconv(.c) void {
-    const runtime = audio_mod.get() catch return;
-    runtime.pauseVoice(voice_handle, paused != 0);
-}
-
-fn zigDylibHostAudioIsPlaying(_: ?*anyopaque, voice_handle: u32) callconv(.c) u32 {
-    const runtime = audio_mod.get() catch return 0;
-    return if (runtime.isVoiceHandleActive(voice_handle)) @as(u32, 1) else @as(u32, 0);
-}
-
-// ---------------------------------------------------------------------------
-// Animation host functions
-// ---------------------------------------------------------------------------
-
-fn zigDylibHostAnimPlay(userdata: ?*anyopaque, entity_id: u64, clip_ptr: [*]const u8, clip_len: usize, blend_duration: f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    const clip_asset_id = clip_ptr[0..clip_len];
-    const clip_handle = ctx_ptr.world.resources.animationClipHandleByAssetId(clip_asset_id) orelse return;
-    animator_system.playClip(ctx_ptr.world, entity_id, clip_handle, .{ .blend_duration_seconds = blend_duration }) catch return;
-}
-
-fn zigDylibHostAnimStop(userdata: ?*anyopaque, entity_id: u64) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    if (ctx_ptr.world.id_to_index.get(entity_id)) |idx| {
-        var entity = &ctx_ptr.world.entities.items[idx];
-        if (entity.animator) |*anim| {
-            anim.playing = false;
-        }
-    }
-}
-
-fn zigDylibHostAnimSetSpeed(userdata: ?*anyopaque, entity_id: u64, speed: f32) callconv(.c) void {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return;
-    if (ctx_ptr.world.id_to_index.get(entity_id)) |idx| {
-        var entity = &ctx_ptr.world.entities.items[idx];
-        if (entity.animator) |*anim| {
-            anim.speed = speed;
-        }
-    }
-}
-
-fn zigDylibHostAnimIsPlaying(userdata: ?*anyopaque, entity_id: u64) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return 0;
-    if (ctx_ptr.world.id_to_index.get(entity_id)) |idx| {
-        const entity = ctx_ptr.world.entities.items[idx];
-        if (entity.animator) |anim| {
-            return if (anim.playing) @as(u32, 1) else @as(u32, 0);
-        }
-    }
-    return 0;
-}
-
-// ---------------------------------------------------------------------------
-// Canvas / UI host functions (no-op stubs — runtime_ui removed)
-// Kept for ZigDylibHostApi ABI compatibility with pre-compiled plugins.
-// ---------------------------------------------------------------------------
-
-fn zigDylibHostCanvasClear(_: ?*anyopaque) callconv(.c) void {}
-fn zigDylibHostCanvasAddText(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: [*]const u8, _: usize, _: u8, _: u8, _: u8, _: u8) callconv(.c) u32 {
-    return 0;
-}
-fn zigDylibHostCanvasAddPanel(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: u8, _: u8, _: u8, _: u8) callconv(.c) u32 {
-    return 0;
-}
-fn zigDylibHostCanvasAddButton(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: [*]const u8, _: usize) callconv(.c) u32 {
-    return 0;
-}
-fn zigDylibHostCanvasAddProgressBar(_: ?*anyopaque, _: f32, _: f32, _: f32, _: f32, _: f32) callconv(.c) u32 {
-    return 0;
-}
-fn zigDylibHostCanvasSetText(_: ?*anyopaque, _: u32, _: [*]const u8, _: usize) callconv(.c) void {}
-fn zigDylibHostCanvasSetProgress(_: ?*anyopaque, _: u32, _: f32) callconv(.c) void {}
-fn zigDylibHostCanvasSetVisible(_: ?*anyopaque, _: u32, _: u32) callconv(.c) void {}
-fn zigDylibHostCanvasRemoveWidget(_: ?*anyopaque, _: u32) callconv(.c) void {}
-fn zigDylibHostCanvasWasButtonClicked(_: ?*anyopaque, _: u32) callconv(.c) u32 {
-    return 0;
-}
-
-// ---------------------------------------------------------------------------
-// Script Parameter host functions
-// ---------------------------------------------------------------------------
-
-/// Resolve the parameters JSON for the currently executing script on the active entity.
-fn resolveActiveScriptParameters(ctx_ptr: *context.ScriptContext) ?[]const u8 {
-    const entity = ctx_ptr.world.getEntity(ctx_ptr.entity) orelse return null;
-    // Match by instance_id to find the correct script component
-    if (entity.script) |script| {
-        if (script.instance_id) |iid| {
-            if (iid == ctx_ptr.instance.id and script.parameters.len > 0) return script.parameters;
-        }
-    }
-    for (entity.scripts) |script| {
-        if (script.instance_id) |iid| {
-            if (iid == ctx_ptr.instance.id and script.parameters.len > 0) return script.parameters;
-        }
-    }
-    // Fallback: use legacy script if only one exists
-    if (entity.script) |script| {
-        if (script.parameters.len > 0) return script.parameters;
-    }
-    return null;
-}
-
-fn zigDylibHostGetParameterFloat(userdata: ?*anyopaque, name_ptr: [*]const u8, name_len: usize, default_val: f32) callconv(.c) f32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return default_val;
-    const params_json = resolveActiveScriptParameters(ctx_ptr) orelse return default_val;
-    var parsed = std.json.parseFromSlice(std.json.Value, ctx_ptr.allocator, params_json, .{}) catch return default_val;
-    defer parsed.deinit();
-    if (parsed.value != .object) return default_val;
-    const val = parsed.value.object.get(name_ptr[0..name_len]) orelse return default_val;
-    return switch (val) {
-        .float => |f| @floatCast(f),
-        .integer => |i| @floatFromInt(i),
-        else => default_val,
-    };
-}
-
-fn zigDylibHostGetParameterInt(userdata: ?*anyopaque, name_ptr: [*]const u8, name_len: usize, default_val: i32) callconv(.c) i32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return default_val;
-    const params_json = resolveActiveScriptParameters(ctx_ptr) orelse return default_val;
-    var parsed = std.json.parseFromSlice(std.json.Value, ctx_ptr.allocator, params_json, .{}) catch return default_val;
-    defer parsed.deinit();
-    if (parsed.value != .object) return default_val;
-    const val = parsed.value.object.get(name_ptr[0..name_len]) orelse return default_val;
-    return switch (val) {
-        .integer => |i| @intCast(i),
-        .float => |f| @intFromFloat(f),
-        else => default_val,
-    };
-}
-
-fn zigDylibHostGetParameterBool(userdata: ?*anyopaque, name_ptr: [*]const u8, name_len: usize, default_val: u32) callconv(.c) u32 {
-    const ctx_ptr = zigDylibActiveContext(userdata) orelse return default_val;
-    const params_json = resolveActiveScriptParameters(ctx_ptr) orelse return default_val;
-    var parsed = std.json.parseFromSlice(std.json.Value, ctx_ptr.allocator, params_json, .{}) catch return default_val;
-    defer parsed.deinit();
-    if (parsed.value != .object) return default_val;
-    const val = parsed.value.object.get(name_ptr[0..name_len]) orelse return default_val;
-    return switch (val) {
-        .bool => |b| if (b) @as(u32, 1) else @as(u32, 0),
-        .integer => |i| if (i != 0) @as(u32, 1) else @as(u32, 0),
-        else => default_val,
-    };
-}
-
 const csharp_native_aot_api_version: u32 = 1;
 const csharp_native_aot_user_data_tag: u32 = 0x43534E41;
-
-const CSharpNativeAotHostContext = struct {
-    active_context: ?*context.ScriptContext = null,
-};
 
 const CSharpNativeAotHostApi = extern struct {
     log: *const fn (?*anyopaque, [*]const u8, usize) callconv(.c) void,
@@ -1396,20 +880,81 @@ const CSharpNativeAotHostApi = extern struct {
 };
 
 const csharp_native_aot_host_api: CSharpNativeAotHostApi = .{
-    .log = csharpNativeAotHostLog,
-    .find_entity_by_name = csharpNativeAotHostFindEntityByName,
-    .get_position = csharpNativeAotHostGetPosition,
-    .set_position = csharpNativeAotHostSetPosition,
-    .get_rotation = csharpNativeAotHostGetRotation,
-    .set_rotation = csharpNativeAotHostSetRotation,
-    .get_scale = csharpNativeAotHostGetScale,
-    .set_scale = csharpNativeAotHostSetScale,
-    .is_key_down = csharpNativeAotHostIsKeyDown,
-    .was_key_pressed = csharpNativeAotHostWasKeyPressed,
-    .get_mouse_position = csharpNativeAotHostGetMousePosition,
-    .get_delta_time = csharpNativeAotHostGetDeltaTime,
-    .get_time_scale = csharpNativeAotHostGetTimeScale,
-    .get_game_state = csharpNativeAotHostGetGameState,
+    .log = host_mod.log_host.guavaHostLog,
+    .find_entity_by_name = host_mod.entity.guavaHostFindEntityByName,
+    .get_position = CSharpCompat.getPosition,
+    .set_position = CSharpCompat.setPosition,
+    .get_rotation = CSharpCompat.getRotation,
+    .set_rotation = CSharpCompat.setRotation,
+    .get_scale = CSharpCompat.getScale,
+    .set_scale = CSharpCompat.setScale,
+    .is_key_down = host_mod.input.guavaHostIsKeyDown,
+    .was_key_pressed = host_mod.input.guavaHostWasKeyPressed,
+    .get_mouse_position = CSharpCompat.getMousePosition,
+    .get_delta_time = host_mod.time.guavaHostGetDeltaTime,
+    .get_time_scale = CSharpCompat.getTimeScale,
+    .get_game_state = CSharpCompat.getGameState,
+};
+
+/// C# NativeAOT 兼容适配器 — C# 侧某些函数返回 u32 状态码（而非 void）。
+/// 此适配器将统一的 GuavaHostContext 桥接到 C# 专有签名。
+/// 当 C# SDK 迁移到 GuavaHostApi 后可删除此块。
+const CSharpCompat = struct {
+    fn getPosition(userdata: ?*anyopaque, x: *f32, y: *f32, z: *f32) callconv(.c) u32 {
+        const ctx = host_mod.activeContext(userdata) orelse return 0;
+        const pos = ctx.getPosition() orelse return 0;
+        x.* = pos[0];
+        y.* = pos[1];
+        z.* = pos[2];
+        return 1;
+    }
+    fn setPosition(userdata: ?*anyopaque, x: f32, y: f32, z: f32) callconv(.c) u32 {
+        const ctx = host_mod.activeContext(userdata) orelse return 0;
+        ctx.setPosition(.{ x, y, z });
+        return 1;
+    }
+    fn getRotation(userdata: ?*anyopaque, x: *f32, y: *f32, z: *f32, w: *f32) callconv(.c) u32 {
+        const ctx = host_mod.activeContext(userdata) orelse return 0;
+        const rot = ctx.getRotation() orelse return 0;
+        x.* = rot[0];
+        y.* = rot[1];
+        z.* = rot[2];
+        w.* = rot[3];
+        return 1;
+    }
+    fn setRotation(userdata: ?*anyopaque, x: f32, y: f32, z: f32, w: f32) callconv(.c) u32 {
+        const ctx = host_mod.activeContext(userdata) orelse return 0;
+        ctx.setRotation(.{ x, y, z, w });
+        return 1;
+    }
+    fn getScale(userdata: ?*anyopaque, x: *f32, y: *f32, z: *f32) callconv(.c) u32 {
+        const ctx = host_mod.activeContext(userdata) orelse return 0;
+        const scale = ctx.getScale() orelse return 0;
+        x.* = scale[0];
+        y.* = scale[1];
+        z.* = scale[2];
+        return 1;
+    }
+    fn setScale(userdata: ?*anyopaque, x: f32, y: f32, z: f32) callconv(.c) u32 {
+        const ctx = host_mod.activeContext(userdata) orelse return 0;
+        ctx.setScale(.{ x, y, z });
+        return 1;
+    }
+    fn getMousePosition(userdata: ?*anyopaque, x: *f32, y: *f32) callconv(.c) u32 {
+        const ctx = host_mod.activeContext(userdata) orelse return 0;
+        const mouse = ctx.getMousePosition() orelse return 0;
+        x.* = mouse[0];
+        y.* = mouse[1];
+        return 1;
+    }
+    fn getTimeScale(userdata: ?*anyopaque) callconv(.c) f32 {
+        const ctx = host_mod.activeContext(userdata) orelse return 1.0;
+        return ctx.time_scale;
+    }
+    fn getGameState(userdata: ?*anyopaque) callconv(.c) u32 {
+        const ctx = host_mod.activeContext(userdata) orelse return 0;
+        return ctx.game_state;
+    }
 };
 
 const CSharpNativeAotLibrary = struct {
@@ -1425,7 +970,7 @@ const CSharpNativeAotLibrary = struct {
 
 const CSharpNativeAotInstanceState = struct {
     library: *const CSharpNativeAotLibrary,
-    host_context: CSharpNativeAotHostContext = .{},
+    host_context: GuavaHostContext = .{},
     guest_instance: ?*anyopaque = null,
 };
 
@@ -1728,102 +1273,6 @@ fn isSharedLibraryPath(path: []const u8) bool {
 
 fn lookupRequired(lib: *std.DynLib, comptime T: type, name: [:0]const u8) ?T {
     return lib.lookup(T, name);
-}
-
-fn csharpNativeAotActiveContext(userdata: ?*anyopaque) ?*context.ScriptContext {
-    const host_context: *CSharpNativeAotHostContext = @ptrCast(@alignCast(userdata orelse return null));
-    return host_context.active_context;
-}
-
-fn csharpNativeAotHostLog(userdata: ?*anyopaque, ptr: [*]const u8, len: usize) callconv(.c) void {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return;
-    std.log.info("[CSharpScript:{d}] {s}", .{ ctx.entity, ptr[0..len] });
-}
-
-fn csharpNativeAotHostFindEntityByName(userdata: ?*anyopaque, ptr: [*]const u8, len: usize) callconv(.c) u64 {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return 0;
-    return ctx.findEntityByName(ptr[0..len]) orelse 0;
-}
-
-fn csharpNativeAotHostGetPosition(userdata: ?*anyopaque, x: *f32, y: *f32, z: *f32) callconv(.c) u32 {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return 0;
-    const position = ctx.getPosition() orelse return 0;
-    x.* = position[0];
-    y.* = position[1];
-    z.* = position[2];
-    return 1;
-}
-
-fn csharpNativeAotHostSetPosition(userdata: ?*anyopaque, x: f32, y: f32, z: f32) callconv(.c) u32 {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return 0;
-    ctx.setPosition(.{ x, y, z });
-    return 1;
-}
-
-fn csharpNativeAotHostGetRotation(userdata: ?*anyopaque, x: *f32, y: *f32, z: *f32, w: *f32) callconv(.c) u32 {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return 0;
-    const rotation = ctx.getRotation() orelse return 0;
-    x.* = rotation[0];
-    y.* = rotation[1];
-    z.* = rotation[2];
-    w.* = rotation[3];
-    return 1;
-}
-
-fn csharpNativeAotHostSetRotation(userdata: ?*anyopaque, x: f32, y: f32, z: f32, w: f32) callconv(.c) u32 {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return 0;
-    ctx.setRotation(.{ x, y, z, w });
-    return 1;
-}
-
-fn csharpNativeAotHostGetScale(userdata: ?*anyopaque, x: *f32, y: *f32, z: *f32) callconv(.c) u32 {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return 0;
-    const scale = ctx.getScale() orelse return 0;
-    x.* = scale[0];
-    y.* = scale[1];
-    z.* = scale[2];
-    return 1;
-}
-
-fn csharpNativeAotHostSetScale(userdata: ?*anyopaque, x: f32, y: f32, z: f32) callconv(.c) u32 {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return 0;
-    ctx.setScale(.{ x, y, z });
-    return 1;
-}
-
-fn csharpNativeAotHostIsKeyDown(userdata: ?*anyopaque, key_raw: u32) callconv(.c) u32 {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return 0;
-    const key = std.meta.intToEnum(input_mod.Key, @as(u8, @intCast(key_raw))) catch return 0;
-    return if (ctx.isKeyDown(key)) 1 else 0;
-}
-
-fn csharpNativeAotHostWasKeyPressed(userdata: ?*anyopaque, key_raw: u32) callconv(.c) u32 {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return 0;
-    const key = std.meta.intToEnum(input_mod.Key, @as(u8, @intCast(key_raw))) catch return 0;
-    return if (ctx.wasKeyPressed(key)) 1 else 0;
-}
-
-fn csharpNativeAotHostGetMousePosition(userdata: ?*anyopaque, x: *f32, y: *f32) callconv(.c) u32 {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return 0;
-    const mouse = ctx.getMousePosition() orelse return 0;
-    x.* = mouse[0];
-    y.* = mouse[1];
-    return 1;
-}
-
-fn csharpNativeAotHostGetDeltaTime(userdata: ?*anyopaque) callconv(.c) f32 {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return 0.0;
-    return ctx.delta_time;
-}
-
-fn csharpNativeAotHostGetTimeScale(userdata: ?*anyopaque) callconv(.c) f32 {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return 1.0;
-    return ctx.time_scale;
-}
-
-fn csharpNativeAotHostGetGameState(userdata: ?*anyopaque) callconv(.c) u32 {
-    const ctx = csharpNativeAotActiveContext(userdata) orelse return 0;
-    return ctx.game_state;
 }
 
 fn clearOwnedMessage(allocator: std.mem.Allocator, slot: *[]u8) void {
