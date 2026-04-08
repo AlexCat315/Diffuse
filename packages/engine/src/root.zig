@@ -168,6 +168,11 @@ pub const fog_of_war = @import("engine/fog/fog_system.zig");
 /// 提供 RTS/4X 风格的经济框架：资源存储、采集、生产队列、供给/人口管理、交易。
 pub const economy = @import("engine/economy/economy_system.zig");
 
+/// 单位选择系统
+///
+/// 提供 RTS 风格的单位选择：点击、框选、双击选同类型、编组（Ctrl+1-3）、右键指令。
+pub const selection = @import("engine/selection/selection_system.zig");
+
 /// 运行时 UI 模块
 ///
 /// 提供保留模式（retained-mode）的游戏 UI 系统。

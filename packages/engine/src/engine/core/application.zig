@@ -49,6 +49,7 @@ const net_session_mod = @import("../network/session.zig");
 const rts_camera_mod = @import("../camera/rts_camera.zig");
 const fog_system_mod = @import("../fog/fog_system.zig");
 const economy_mod = @import("../economy/economy_system.zig");
+const selection_mod = @import("../selection/selection_system.zig");
 
 // macOS Mach kernel APIs for high-precision timing and thread priority.
 const mach = if (builtin.os.tag == .macos) struct {
@@ -233,6 +234,8 @@ pub const Application = struct {
     fog_system: fog_system_mod.FogOfWarSystem,
     /// 经济系统
     economy_system: economy_mod.EconomySystem,
+    /// 单位选择系统
+    selection_system: selection_mod.SelectionSystem,
     /// 脚本调试会话
     debug_session: debug_session_mod.DebugSession,
     /// 待处理的文件拖放路径（由 OS 文件拖放事件设置，由编辑器层消费）
@@ -321,6 +324,7 @@ pub const Application = struct {
             .net_system = net_system_mod.NetworkSystem.init(allocator, net_session_mod.SessionConfig{}),
             .fog_system = fog_system_mod.FogOfWarSystem.init(allocator),
             .economy_system = economy_mod.EconomySystem.init(allocator),
+            .selection_system = selection_mod.SelectionSystem.init(allocator),
             .debug_session = debug_session_mod.DebugSession.init(allocator),
             .action_map = input_action_mod.ActionMap.init(allocator),
         };
@@ -370,6 +374,7 @@ pub const Application = struct {
         self.net_system.deinit();
         self.fog_system.deinit();
         self.economy_system.deinit();
+        self.selection_system.deinit();
         self.debug_session.deinit();
         self.world.deinit();
         self.command_queue.deinit();
@@ -539,6 +544,13 @@ pub const Application = struct {
                 }
                 // 更新经济系统
                 self.economy_system.update(&self.world, delta_seconds);
+                // 更新单位选择系统
+                self.selection_system.setViewport(
+                    self.renderer.prev_view_projection,
+                    @floatFromInt(self.window.drawable_width),
+                    @floatFromInt(self.window.drawable_height),
+                );
+                self.selection_system.update(&self.world, &self.input);
                 // 更新脚本系统（传递时间和输入）
                 self.updateScripts(delta_seconds);
                 self.applyPendingCommands() catch |err| {

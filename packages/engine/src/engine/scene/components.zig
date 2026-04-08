@@ -692,3 +692,10 @@ pub const SupplyConsumer = economy_mod.SupplyConsumer;
 pub const ProductionQueue = economy_mod.ProductionQueue;
 /// 交易报价组件 — 挂载在市场建筑上。
 pub const TradeOffer = economy_mod.TradeOffer;
+
+// ─────── 单位选择系统组件 ───────
+const selection_mod = @import("../selection/selection_system.zig");
+/// 可选中单位组件 — 挂载在可被框选/点选的游戏单位上。
+pub const UnitSelectable = selection_mod.Selectable;
+/// 选择命令接收器 — 挂载在可接收右键指令的单位上。
+pub const CommandReceiver = selection_mod.CommandReceiver;
