@@ -3,6 +3,7 @@
 const std = @import("std");
 const node_mod = @import("node.zig");
 const style_mod = @import("style.zig");
+const font_mod = @import("font.zig");
 const rhi_mod = @import("../rhi/device.zig");
 const rhi_types = @import("../rhi/types.zig");
 const shader_support = @import("../render/shader_support.zig");
@@ -44,6 +45,7 @@ pub const UIRenderer = struct {
     white_texture: ?rhi_mod.Texture = null,
     sampler: ?rhi_mod.Sampler = null,
     bind_group: ?rhi_mod.BindGroup = null,
+    font: ?*font_mod.Font = null,
 
     pub fn init(allocator: std.mem.Allocator) UIRenderer {
         return .{ .allocator = allocator };
@@ -270,8 +272,14 @@ pub const UIRenderer = struct {
             const fu = FragmentUniforms{ .mode = batch.mode };
             device.pushFragmentUniformData(frame, 0, std.mem.asBytes(&fu));
 
-            // TODO: bind texture per batch when texture support is added
-            if (self.bind_group) |*bg| {
+            // Bind the appropriate texture: font atlas for SDF text, white 1x1 for solid
+            if (batch.mode == 2) {
+                if (self.font) |f| {
+                    if (f.atlas_bind_group) |*bg| {
+                        device.bindGroup(pass, bg);
+                    }
+                }
+            } else if (self.bind_group) |*bg| {
                 device.bindGroup(pass, bg);
             }
 
@@ -314,14 +322,52 @@ pub const UIRenderer = struct {
             self.pushRect(r.x + r.width - bw, r.y + bw, bw, r.height - 2 * bw, bc);
         }
 
-        // TODO: draw text (requires font atlas)
-        // TODO: draw image (requires texture binding)
+        // Draw text (SDF glyphs)
+        if (node.tag == .text) {
+            if (node.text) |txt| {
+                if (txt.len > 0) self.renderText(node, r, txt);
+            }
+        }
 
         // Recurse children
         var child_opt = node.first_child;
         while (child_opt) |cid| {
             self.visitNode(pool, cid);
-            child_opt = if (pool.get(cid)) |c| c.next_sibling else null;
+            child_opt = if (pool.get(cid)) |c_node| c_node.next_sibling else null;
+        }
+    }
+
+    fn renderText(self: *UIRenderer, node: *const node_mod.Node, r: node_mod.ComputedRect, text: []const u8) void {
+        const f = self.font orelse return;
+        const size = node.style.font_size;
+        const color = node.style.text_color;
+        const scale_factor = size / f.font_size;
+        const baseline_y = r.y + f.scaledAscent(size);
+
+        var pen_x = r.x;
+
+        for (text) |byte| {
+            const g = f.getGlyph(byte) orelse continue;
+
+            const gx = pen_x + g.bearing_x * scale_factor;
+            const gy = baseline_y + g.bearing_y * scale_factor;
+            const gw = g.width * scale_factor;
+            const gh = g.height * scale_factor;
+
+            if (gw > 0 and gh > 0) {
+                self.pushGlyph(
+                    gx,
+                    gy,
+                    gw,
+                    gh,
+                    .{ g.uv_x0, g.uv_y0 },
+                    .{ g.uv_x1, g.uv_y1 },
+                    color,
+                    0, // font_tex_id — single font for now
+                );
+            }
+
+            pen_x += g.advance * scale_factor;
         }
     }
 };

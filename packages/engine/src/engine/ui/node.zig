@@ -74,13 +74,16 @@ pub const NodePool = struct {
     }
 
     pub fn alloc(self: *NodePool, allocator: std.mem.Allocator) !*Node {
-        const id: u32 = if (self.free_list.items.len > 0)
-            self.free_list.pop().?
-        else blk: {
-            const id = self.next_id;
+        const id: u32 = blk: {
+            if (self.free_list.items.len > 0) {
+                const recycled = self.free_list.items[self.free_list.items.len - 1];
+                self.free_list.items.len -= 1;
+                break :blk recycled;
+            }
+            const fresh = self.next_id;
             self.next_id += 1;
-            try self.nodes.append(allocator, undefined_node(id));
-            break :blk id;
+            try self.nodes.append(allocator, undefined_node(fresh));
+            break :blk fresh;
         };
         const node = &self.nodes.items[@intCast(id)];
         node.* = .{ .id = id };

@@ -34,6 +34,7 @@ pub const plutovg_c_sources = [_][]const u8{
     "third_party/lunasvg/plutovg/source/plutovg-surface.c",
     "src/engine/assets/stb_image_impl.c",
     "src/engine/assets/stb_image_write_impl.c",
+    "src/engine/assets/stb_truetype_impl.c",
 };
 
 // ─── SoLoud audio engine ────────────────────────────────────────────────────

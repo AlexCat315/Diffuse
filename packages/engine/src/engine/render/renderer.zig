@@ -758,6 +758,11 @@ pub const Renderer = struct {
         renderer.ui_canvas = try ui_canvas_mod.Canvas.init(allocator);
         try renderer.ui_canvas.?.createGpuResources(&renderer.rhi);
 
+        // Load default UI font
+        renderer.ui_canvas.?.loadFont(&renderer.rhi, "assets/fonts/Roboto-Regular.ttf", 32) catch |err| {
+            std.log.warn("failed to load UI font: {}", .{err});
+        };
+
         renderer.graph.writeExports("dist/reports/render_graph.dot", "dist/reports/render_graph.json") catch |err| {
             std.log.warn("failed to write render graph exports: {}", .{err});
         };

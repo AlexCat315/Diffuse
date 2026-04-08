@@ -20,6 +20,7 @@ const std = @import("std");
 const node_mod = @import("node.zig");
 const layout_mod = @import("layout.zig");
 const renderer_mod = @import("renderer.zig");
+const font_mod = @import("font.zig");
 const rhi_mod = @import("../rhi/device.zig");
 
 pub const Node = node_mod.Node;
@@ -33,6 +34,7 @@ pub const ComputedRect = node_mod.ComputedRect;
 pub const EventKind = node_mod.EventKind;
 pub const UIRenderer = renderer_mod.UIRenderer;
 pub const UIVertex = renderer_mod.UIVertex;
+pub const Font = font_mod.Font;
 
 pub const Canvas = struct {
     allocator: std.mem.Allocator,
@@ -40,6 +42,8 @@ pub const Canvas = struct {
     tree: node_mod.Tree = undefined,
     root_id: u32 = 0,
     renderer: UIRenderer,
+    font: ?font_mod.Font = null,
+    font_data: ?[]u8 = null, // owned TTF bytes
     dirty: bool = true,
 
     pub fn init(allocator: std.mem.Allocator) !Canvas {
@@ -59,12 +63,38 @@ pub const Canvas = struct {
     }
 
     pub fn deinit(self: *Canvas, device: *rhi_mod.RhiDevice) void {
+        if (self.font) |*f| f.deinit(device);
+        if (self.font_data) |d| self.allocator.free(d);
         self.renderer.deinit(device);
         self.pool.deinit(self.allocator);
     }
 
     pub fn createGpuResources(self: *Canvas, device: *rhi_mod.RhiDevice) !void {
         try self.renderer.createGpuResources(device);
+    }
+
+    /// Load a TTF font from a file path and create the SDF atlas on the GPU.
+    pub fn loadFont(self: *Canvas, device: *rhi_mod.RhiDevice, path: []const u8, font_size_px: f32) !void {
+        // Read font file
+        const file = try std.fs.cwd().openFile(path, .{});
+        defer file.close();
+        const stat = try file.stat();
+        const data = try self.allocator.alloc(u8, stat.size);
+        const bytes_read = try file.readAll(data);
+        if (bytes_read != stat.size) {
+            self.allocator.free(data);
+            return error.IncompleteRead;
+        }
+        self.font_data = data;
+
+        // Initialize font and generate atlas
+        self.font = font_mod.Font.init(self.allocator);
+        const ascii_range = [_][2]u32{.{ 32, 126 }}; // printable ASCII
+        try self.font.?.load(data, font_size_px, &ascii_range);
+        try self.font.?.createGpuResources(device);
+
+        // Wire font into renderer
+        self.renderer.font = &self.font.?;
     }
 
     // ── Node CRUD ───────────────────────────────────────────────
