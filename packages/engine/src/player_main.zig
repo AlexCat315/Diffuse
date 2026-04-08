@@ -206,6 +206,8 @@ pub fn main() !u8 {
     }
 
     try app.pushLayer(bootstrap.asLayer());
+    // 独立播放器自动进入 playing 状态（编辑器模式由 UI 控制）
+    app.playback_controller.setState(.playing);
     _ = try app.run(options.frame_count);
     return 0;
 }

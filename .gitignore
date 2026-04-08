@@ -84,3 +84,4 @@ examples/csharp/**/obj/
 packages/editor/native/build/
 packages/editor/native/bin/
 packages/editor/dist-package
+.gauva_scene

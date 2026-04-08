@@ -2,8 +2,8 @@
 //! 挂载到一个空实体（GameManager）上
 const guava = @import("guava");
 
-var text_id: u64 = 0;
-var win_id: u64 = 0;
+var text_id: u32 = 0;
+var win_id: u32 = 0;
 var won: bool = false;
 
 export fn guava_on_init() callconv(.c) void {

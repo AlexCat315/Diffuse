@@ -9,6 +9,14 @@ pub fn guavaHostGetPosition(userdata: ?*anyopaque, x: *f32, y: *f32, z: *f32) ca
     z.* = pos[2];
 }
 
+pub fn guavaHostGetPositionOfEntity(userdata: ?*anyopaque, entity_id: u64, x: *f32, y: *f32, z: *f32) callconv(.c) void {
+    const ctx = mod.activeContext(userdata) orelse return;
+    const pos = ctx.getPositionOfEntity(entity_id) orelse return;
+    x.* = pos[0];
+    y.* = pos[1];
+    z.* = pos[2];
+}
+
 pub fn guavaHostSetPosition(userdata: ?*anyopaque, x: f32, y: f32, z: f32) callconv(.c) void {
     const ctx = mod.activeContext(userdata) orelse return;
     ctx.setPosition(.{ x, y, z });
