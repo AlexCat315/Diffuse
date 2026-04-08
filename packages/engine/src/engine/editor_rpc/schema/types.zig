@@ -260,3 +260,33 @@ pub const RenderJobStatus = enum {
     complete,
     failed,
 };
+
+// ── AI Tool metadata ──────────────────────────────────────────────
+
+/// Category for AI tool grouping in the system prompt.
+pub const ToolCategory = enum {
+    scene,
+    entity,
+    playback,
+    script,
+    asset,
+    animation,
+    material,
+    camera,
+    render,
+    prefab,
+    audio,
+    query,
+};
+
+/// Inline metadata for exposing an RPC method as an AI tool.
+/// Add `pub const ai_tool: AiTool = .{ ... };` inside any RPC method struct
+/// to expose it. Methods without `ai_tool` are not visible to the AI.
+pub const AiTool = struct {
+    /// Human-readable description shown to the LLM.
+    description: []const u8,
+    /// UI category for grouping.
+    category: ToolCategory,
+    /// If true, the editor asks for user confirmation before executing.
+    requires_confirmation: bool = false,
+};

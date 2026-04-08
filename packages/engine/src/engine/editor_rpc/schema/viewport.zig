@@ -347,6 +347,7 @@ pub const @"camera.renameBookmark" = struct {
 };
 
 pub const @"camera.getState" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Get the current editor camera position and rotation.", .category = .camera };
     pub const Params = struct {};
     pub const Result = struct {
         position: types.Vec3,
@@ -355,6 +356,7 @@ pub const @"camera.getState" = struct {
 };
 
 pub const @"camera.lookAlongAxis" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Point the editor camera along a direction. Params: axisX, axisY, axisZ (floats). Common: top-down (0,-1,0), front (0,0,-1), right (1,0,0).", .category = .camera };
     pub const Params = struct {
         axisX: f64,
         axisY: f64,

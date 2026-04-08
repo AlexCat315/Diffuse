@@ -1,4 +1,5 @@
 ///! Rendering infrastructure RPC methods: renderqueue, debug, audio, physicsviz.
+const types = @import("types.zig");
 
 // ── renderqueue namespace ────────────────────────────────────────
 
@@ -99,6 +100,7 @@ pub const @"debug.resetRhiStats" = struct {
 // ── audio namespace ──────────────────────────────────────────────
 
 pub const @"audio.getMixerStatus" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Get the audio mixer status (buses, volumes, active voices).", .category = .audio };
     pub const Params = struct {};
     pub const Result = struct {
         available: bool,

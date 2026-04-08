@@ -4,6 +4,7 @@ const types = @import("types.zig");
 // ── material namespace ───────────────────────────────────────────
 
 pub const @"material.getState" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Get material properties: baseColor [4]f32, emissive [3]f32, metallic, roughness, alphaCutoff, doubleSided, texture handles, etc. Note: property names in getState use camelCase but setColor/setScalar use snake_case.", .category = .material };
     pub const Params = struct { entityId: u64 };
     pub const Result = struct {
         hasMaterial: bool,
@@ -36,11 +37,13 @@ pub const @"material.setShading" = struct {
 };
 
 pub const @"material.setColor" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Set a color property on an entity's material. property must be \"base_color\" or \"emissive\". value is [r,g,b,a] with floats 0-1.", .category = .material };
     pub const Params = struct { entityId: u64, property: []const u8, value: [4]f32 };
     pub const Result = struct {};
 };
 
 pub const @"material.setScalar" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Set a scalar material property. property must be \"metallic\", \"roughness\", \"alpha_cutoff\", or \"ibl_intensity\". value is a float.", .category = .material };
     pub const Params = struct { entityId: u64, property: []const u8, value: f32 };
     pub const Result = struct {};
 };
