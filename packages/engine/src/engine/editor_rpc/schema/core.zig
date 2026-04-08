@@ -141,7 +141,7 @@ pub const @"entity.getComponents" = struct {
 };
 
 pub const @"entity.setComponentField" = struct {
-    pub const ai_tool: types.AiTool = .{ .description = "Set a field value on a component. Use exact field names from entity.getComponents. Works for scalars and arrays. For material colors prefer material.setColor.", .category = .entity };
+    pub const ai_tool: types.AiTool = .{ .description = "Set a field value on a component. Use exact field names from entity.getComponents. Works for scalars, arrays, and enums. For Mesh.primitive valid values: \"cube\", \"sphere\", \"plane\". For material colors prefer material.setColor.", .category = .entity };
     pub const Params = struct {
         entityId: u64,
         componentType: []const u8,
@@ -152,7 +152,7 @@ pub const @"entity.setComponentField" = struct {
 };
 
 pub const @"entity.addComponent" = struct {
-    pub const ai_tool: types.AiTool = .{ .description = "Add a component to an entity. Valid types: Camera, Mesh, SkinnedMesh, Animator, Rigidbody, BoxCollider, SphereCollider, MeshCollider, CapsuleCollider, CharacterController, Tag, Sky, Constraint, Material, Light, Vfx, Script, AudioSource, AudioListener, NavAgent.", .category = .entity };
+    pub const ai_tool: types.AiTool = .{ .description = "Add a component to an entity. Valid types: Camera, Mesh, SkinnedMesh, Animator, Rigidbody, BoxCollider, SphereCollider, MeshCollider, CapsuleCollider, CharacterController, Tag, Sky, Constraint, Material, Light, Vfx, Script, AudioSource, AudioListener, NavAgent. Components are added with default values. After adding Mesh, you MUST call entity.setComponentField to set primitive to \"cube\", \"sphere\", or \"plane\" — otherwise it defaults to \"custom\" (no geometry).", .category = .entity };
     pub const Params = struct {
         entityId: u64,
         componentType: []const u8,

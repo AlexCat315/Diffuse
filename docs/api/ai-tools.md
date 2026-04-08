@@ -29,8 +29,8 @@ Total: **37** tools
 | `entity.setTransform` | Set an entity's position, rotation and/or scale. Only specified fields are changed. | No |
 | `entity.setName` | Rename an entity. | No |
 | `entity.getComponents` | Get all components attached to an entity, with their field names and values. Use field names from the result when calling entity.setComponentField. | No |
-| `entity.setComponentField` | Set a field value on a component. Use exact field names from entity.getComponents. Works for scalars and arrays. For material colors prefer material.setColor. | No |
-| `entity.addComponent` | Add a component to an entity. Valid types: Camera, Mesh, SkinnedMesh, Animator, Rigidbody, BoxCollider, SphereCollider, MeshCollider, CapsuleCollider, CharacterController, Tag, Sky, Constraint, Material, Light, Vfx, Script, AudioSource, AudioListener, NavAgent. | No |
+| `entity.setComponentField` | Set a field value on a component. Use exact field names from entity.getComponents. Works for scalars, arrays, and enums. For Mesh.primitive valid values: `cube`, `sphere`, `plane`. For material colors prefer material.setColor. | No |
+| `entity.addComponent` | Add a component to an entity. Valid types: Camera, Mesh, SkinnedMesh, Animator, Rigidbody, BoxCollider, SphereCollider, MeshCollider, CapsuleCollider, CharacterController, Tag, Sky, Constraint, Material, Light, Vfx, Script, AudioSource, AudioListener, NavAgent. Components are added with default values. After adding Mesh, you MUST call entity.setComponentField to set primitive to `cube`, `sphere`, or `plane` — otherwise it defaults to `custom` (no geometry). | No |
 | `entity.removeComponent` | Remove a component from an entity. | No |
 | `entity.setVisible` | Show or hide an entity. | No |
 | `entity.setAssetField` | Assign an asset to a component field. Params: entityId, componentType, fieldName, assetPath (string\|null to clear). For Sky.environment_asset_id pass the asset path. For Script, use optional scriptIndex. | No |

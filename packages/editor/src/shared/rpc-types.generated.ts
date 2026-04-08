@@ -601,14 +601,14 @@ export const AI_TOOLS: AiToolDef[] = [
   },
   {
     name: "entity.setComponentField",
-    description: "Set a field value on a component. Use exact field names from entity.getComponents. Works for scalars and arrays. For material colors prefer material.setColor.",
+    description: "Set a field value on a component. Use exact field names from entity.getComponents. Works for scalars, arrays, and enums. For Mesh.primitive valid values: \"cube\", \"sphere\", \"plane\". For material colors prefer material.setColor.",
     parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, componentType: { type: "string" as const }, fieldName: { type: "string" as const }, value: { type: "string" as const } }, required: ["entityId", "componentType", "fieldName", "value"] },
     rpcMethod: "entity.setComponentField",
     category: "entity",
   },
   {
     name: "entity.addComponent",
-    description: "Add a component to an entity. Valid types: Camera, Mesh, SkinnedMesh, Animator, Rigidbody, BoxCollider, SphereCollider, MeshCollider, CapsuleCollider, CharacterController, Tag, Sky, Constraint, Material, Light, Vfx, Script, AudioSource, AudioListener, NavAgent.",
+    description: "Add a component to an entity. Valid types: Camera, Mesh, SkinnedMesh, Animator, Rigidbody, BoxCollider, SphereCollider, MeshCollider, CapsuleCollider, CharacterController, Tag, Sky, Constraint, Material, Light, Vfx, Script, AudioSource, AudioListener, NavAgent. Components are added with default values. After adding Mesh, you MUST call entity.setComponentField to set primitive to \"cube\", \"sphere\", or \"plane\" — otherwise it defaults to \"custom\" (no geometry).",
     parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, componentType: { type: "string" as const } }, required: ["entityId", "componentType"] },
     rpcMethod: "entity.addComponent",
     category: "entity",

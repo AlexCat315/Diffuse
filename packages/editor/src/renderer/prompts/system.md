@@ -21,7 +21,7 @@ Entities are identified by `entityId` (u64). Components are attached to entities
 | Component | Description |
 |-----------|-------------|
 | Camera | Camera (perspective/orthographic) |
-| Mesh | 3D mesh renderer (references a mesh asset) |
+| Mesh | 3D mesh renderer (references a mesh asset or built-in primitive) |
 | SkinnedMesh | Animated mesh with skeleton |
 | Animator | Animation state machine |
 | Rigidbody | Physics rigid body |
@@ -73,6 +73,20 @@ Entities are identified by `entityId` (u64). Components are attached to entities
 
 Every entity has a transform: `position [x,y,z]`, `rotation [x,y,z]` (Euler degrees), `scale [x,y,z]`.
 Use `entity.setTransform` — only specified fields are changed (partial update).
+
+### Mesh & Primitives
+
+The Mesh component can reference an external mesh asset OR use a built-in primitive.
+**When adding a Mesh component, it defaults to `primitive: "custom"` (no geometry — invisible!).**
+
+Built-in primitives: `"cube"`, `"sphere"`, `"plane"`
+
+**To create a visible object (e.g. a red cube):**
+1. `scene.createEntity` → get entityId
+2. `entity.addComponent(entityId, "Mesh")` — Mesh added with `primitive: "custom"`
+3. `entity.setComponentField(entityId, "Mesh", "primitive", "cube")` — **critical step!**
+4. `entity.addComponent(entityId, "Material")` — Material added with default white
+5. `material.setColor(entityId, "base_color", [1,0,0,1])` — set to red
 
 ### Scripts
 
