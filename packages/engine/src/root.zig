@@ -157,6 +157,12 @@ pub const network = @import("engine/network/net_system.zig");
 /// 中键拖拽、可选旋转、地图边界约束。
 pub const rts_camera = @import("engine/camera/rts_camera.zig");
 
+/// 战争迷雾系统
+///
+/// 提供 RTS/4X 风格的战争迷雾：CPU 端可见性网格 + GPU 渲染叠加。
+/// 支持未探索/已探索/可见三态、多队伍视野、地图边界、可配置网格分辨率。
+pub const fog_of_war = @import("engine/fog/fog_system.zig");
+
 /// 运行时 UI 模块
 ///
 /// 提供保留模式（retained-mode）的游戏 UI 系统。

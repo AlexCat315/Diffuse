@@ -79,6 +79,7 @@ const plugin_mod = @import("../plugin/plugin.zig");
 const loader_mod = @import("../plugin/loader.zig");
 const fullscreen_post_mod = @import("passes/fullscreen_post_pass.zig");
 const fxaa_pass_mod = @import("passes/fxaa_pass.zig");
+const fog_of_war_pass_mod = @import("passes/fog_of_war_pass.zig");
 const platform_mod = @import("../core/platform.zig");
 const selection_history_mod = @import("selection_history.zig");
 const window_mod = @import("../platform/window.zig");
@@ -388,6 +389,8 @@ pub const Renderer = struct {
     dof_runtime_pass: dof_runtime_pass_mod.DofRuntimePass,
     /// FXAA 抗锯齿通道
     fxaa_pass: fxaa_pass_mod.FxaaPass,
+    /// 战争迷雾叠加通道
+    fog_of_war_pass: fog_of_war_pass_mod.FogOfWarPass,
     /// RT 阴影合成通道
     rt_shadow_composite_pass: rt_shadow_composite_pass_mod.RtShadowCompositePass,
     /// RT 阴影双边去噪通道
@@ -572,6 +575,7 @@ pub const Renderer = struct {
             .tonemap_pass = undefined,
             .dof_runtime_pass = undefined,
             .fxaa_pass = undefined,
+            .fog_of_war_pass = undefined,
             .rt_shadow_composite_pass = undefined,
             .rt_shadow_denoise_pass = undefined,
             .ssao_composite_pass = undefined,
@@ -688,6 +692,9 @@ pub const Renderer = struct {
 
         renderer.fxaa_pass = try fxaa_pass_mod.FxaaPass.init(&renderer.rhi);
         errdefer renderer.fxaa_pass.deinit(&renderer.rhi);
+
+        renderer.fog_of_war_pass = try fog_of_war_pass_mod.FogOfWarPass.init(&renderer.rhi);
+        errdefer renderer.fog_of_war_pass.deinit(&renderer.rhi);
 
         renderer.rt_shadow_composite_pass = try rt_shadow_composite_pass_mod.RtShadowCompositePass.init(&renderer.rhi);
         errdefer renderer.rt_shadow_composite_pass.deinit(&renderer.rhi);
@@ -813,6 +820,7 @@ pub const Renderer = struct {
         self.tonemap_pass.deinit(&self.rhi);
         self.dof_runtime_pass.deinit(&self.rhi);
         self.fxaa_pass.deinit(&self.rhi);
+        self.fog_of_war_pass.deinit(&self.rhi);
         self.rt_shadow_composite_pass.deinit(&self.rhi);
         self.rt_shadow_denoise_pass.deinit(&self.rhi);
         self.ssao_composite_pass.deinit(&self.rhi);
@@ -2536,6 +2544,35 @@ pub const Renderer = struct {
                             self.rhi.endRenderPass(fxaa_render_pass);
                         }
                     }
+                }
+
+                // --- 战争迷雾叠加 ---
+                if (self.fog_of_war_pass.isReady() and self.fog_of_war_pass.fog_texture != null) {
+                    const inv_vp_fog = mat4_mod.inverse(prepared_scene.view_projection) orelse mat4_mod.identity();
+                    // 从场景中获取 FogOfWarConfig（遍历实体查找）
+                    var fog_cfg: fog_of_war_pass_mod.FogUniforms = .{};
+                    for (scene.entities.items) |*ent| {
+                        if (ent.fog_of_war_config) |cfg| {
+                            fog_cfg.unexplored_color = cfg.unexplored_color;
+                            fog_cfg.explored_color = cfg.explored_color;
+                            const total_w = @as(f32, @floatFromInt(cfg.grid_width)) * cfg.cell_size;
+                            const total_h = @as(f32, @floatFromInt(cfg.grid_height)) * cfg.cell_size;
+                            fog_cfg.grid_world_params = .{
+                                cfg.origin_x,
+                                cfg.origin_z,
+                                if (total_w > 0) 1.0 / total_w else 1.0,
+                                if (total_h > 0) 1.0 / total_h else 1.0,
+                            };
+                            break;
+                        }
+                    }
+                    fog_cfg.inv_view_projection = inv_vp_fog;
+                    const fog_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.overlay(scene_color_target));
+                    const fog_start = std.time.nanoTimestamp();
+                    const fog_stats = self.fog_of_war_pass.draw(&self.rhi, frame, fog_render_pass, fog_cfg);
+                    draw_stats.add(fog_stats);
+                    self.graph.recordPassStat(pass_stats, .post_process, durationNs(fog_start, std.time.nanoTimestamp()), fog_stats.draw_calls, fog_stats.triangles_drawn);
+                    self.rhi.endRenderPass(fog_render_pass);
                 }
 
                 // --- 公共 overlay passes：所有模式（Raster/PathTrace/HW RT）都运行 ---

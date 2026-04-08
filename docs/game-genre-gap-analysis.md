@@ -133,19 +133,22 @@
 
 ---
 
-### 5. 战争迷雾（Fog of War）🟡 中优先级（RTS/4X）
+### 5. 战争迷雾（Fog of War）✅ 已完成
 
-**当前状态**: 零。
-
-**需要实现**:
-- [ ] 可见性数据结构（per-tile 或 per-pixel）
-- [ ] 视野计算（圆形/扇形/射线遮挡）
-- [ ] GPU compute pass 渲染（explored / visible / hidden）
-- [ ] 与 minimap 联动
-- [ ] 动态更新（单位移动时实时刷新）
+**实现状态**:
+- [x] 可见性数据结构（per-tile VisibilityGrid，unexplored/explored/visible 三态）
+- [x] 视野计算（圆形区域，按实体 FogVision.sight_range 揭露）
+- [x] GPU fullscreen overlay 渲染（CPU 计算 → R8 纹理上传 → fragment shader 混合）
+- [x] 动态更新（每帧清除当前可见，重新计算，与 explored 合成）
+- [x] 团队支持（team_id 过滤，仅渲染本地队伍视野）
+- [x] ECS 集成（FogVision / FogOfWarConfig 组件，FogOfWarSystem）
+- [ ] 与 minimap 联动（待 minimap 系统实现后集成）
 - [ ] 脚本 API（查询某坐标是否可见）
 
-**预估工作量**: 中（1-2 周基础实现）
+**关键文件**:
+- `src/engine/fog/fog_system.zig` — CPU 可见性网格 + ECS 系统
+- `src/engine/render/passes/fog_of_war_pass.zig` — GPU fullscreen overlay pass
+- `assets/shaders/fog_of_war.frag.glsl` — 迷雾 fragment shader
 
 ---
 
@@ -259,7 +262,7 @@ Phase 4 — 4X 基础
 | ~~AI 行为系统~~  | ~~★★★~~ | ~~★★★★★~~ | ~~★★★★★~~ | **✅ 已完成** |
 | ~~地形系统~~     | ~~★★★★~~ | ~~★★★★~~ | ~~★★★★★~~ | **✅ 基础完成** |
 | ~~网络/多人~~    | ~~★★★★★~~ | ~~★★★★~~ | ~~★★★~~ | **✅ 基础完成** |
-| 战争迷雾         | ✗ | ★★★★★ | ★★★★ | **9** |
+| 战争迷雾         | ~~✗~~ | ~~★★★★★~~ | ~~★★★★~~ | **✅ 已完成** |
 | 资源/经济系统    | ✗ | ★★★★ | ★★★★★ | **9** |
 | FPS 相机控制器   | ★★★★★ | ✗ | ✗ | **5** |
 | RTS 相机控制器   | ~~✗~~ | ~~★★★★★~~ | ~~★★★★★~~ | **✅ 已完成** |
