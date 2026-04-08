@@ -22,3 +22,39 @@ pub fn guavaHostDestroyEntity(userdata: ?*anyopaque, target: u64) callconv(.c) v
     const ctx = mod.activeContext(userdata) orelse return;
     ctx.destroyEntity(target);
 }
+
+// ─── Entity Hierarchy ─────────────────────────────────────────────────────
+
+pub fn guavaHostGetChildCount(userdata: ?*anyopaque) callconv(.c) u32 {
+    const ctx = mod.activeContext(userdata) orelse return 0;
+    return @intCast(ctx.getChildCount());
+}
+
+pub fn guavaHostGetChildEntity(userdata: ?*anyopaque, index: u32) callconv(.c) u64 {
+    const ctx = mod.activeContext(userdata) orelse return 0;
+    return ctx.getChild(@intCast(index)) orelse 0;
+}
+
+pub fn guavaHostGetParentEntity(userdata: ?*anyopaque) callconv(.c) u64 {
+    const ctx = mod.activeContext(userdata) orelse return 0;
+    return ctx.getParent() orelse 0;
+}
+
+// ─── Tag Query ────────────────────────────────────────────────────────────
+
+pub fn guavaHostFindEntitiesByTag(userdata: ?*anyopaque, ptr: [*]const u8, len: usize, out: [*]u64, max: u32) callconv(.c) u32 {
+    const ctx = mod.activeContext(userdata) orelse return 0;
+    return @intCast(ctx.findEntitiesByTag(ptr[0..len], out[0..max]));
+}
+
+pub fn guavaHostGetTag(userdata: ?*anyopaque, out_ptr: *[*]const u8, out_len: *usize) callconv(.c) void {
+    const ctx = mod.activeContext(userdata) orelse return;
+    const tag = ctx.getTag();
+    out_ptr.* = tag.ptr;
+    out_len.* = tag.len;
+}
+
+pub fn guavaHostSetTag(userdata: ?*anyopaque, ptr: [*]const u8, len: usize) callconv(.c) void {
+    const ctx = mod.activeContext(userdata) orelse return;
+    ctx.setTag(ptr[0..len]);
+}

@@ -39,6 +39,8 @@ pub const audio = @import("./audio.zig");
 pub const animation = @import("./animation.zig");
 pub const canvas = @import("./canvas.zig");
 pub const parameters = @import("./parameters.zig");
+pub const persistence = @import("./persistence.zig");
+pub const blackboard = @import("./blackboard.zig");
 
 // ═══════════════════════════════════════════════════════════════════════════
 // GuavaHostApi 实例构造
@@ -113,4 +115,44 @@ pub const guava_host_api: GuavaHostApi = .{
     .get_parameter_float = parameters.guavaHostGetParameterFloat,
     .get_parameter_int = parameters.guavaHostGetParameterInt,
     .get_parameter_bool = parameters.guavaHostGetParameterBool,
+    // Entity Hierarchy
+    .get_child_count = entity.guavaHostGetChildCount,
+    .get_child_entity = entity.guavaHostGetChildEntity,
+    .get_parent_entity = entity.guavaHostGetParentEntity,
+    // Scene Management (extended)
+    .unload_scene = scene.guavaHostUnloadScene,
+    .is_scene_loading = scene.guavaHostIsSceneLoading,
+    .set_dont_destroy_on_load = scene.guavaHostSetDontDestroyOnLoad,
+    .set_entity_dont_destroy_on_load = scene.guavaHostSetEntityDontDestroyOnLoad,
+    // Time (extended)
+    .get_time_scale = time.guavaHostGetTimeScale,
+    .set_time_scale = time.guavaHostSetTimeScale,
+    .get_scaled_delta_time = time.guavaHostGetScaledDeltaTime,
+    .get_scaled_time = time.guavaHostGetScaledTime,
+    .get_fps = time.guavaHostGetFps,
+    // Input: Mouse (extended)
+    .was_mouse_button_pressed = input.guavaHostWasMouseButtonPressed,
+    .was_mouse_button_released = input.guavaHostWasMouseButtonReleased,
+    .was_mouse_double_clicked = input.guavaHostWasMouseDoubleClicked,
+    // Input: Action Map
+    .is_action_pressed = input.guavaHostIsActionPressed,
+    .was_action_just_pressed = input.guavaHostWasActionJustPressed,
+    .was_action_just_released = input.guavaHostWasActionJustReleased,
+    .get_action_axis = input.guavaHostGetActionAxis,
+    // Physics (extended)
+    .overlap_box = physics.guavaHostOverlapBox,
+    .sweep_box = physics.guavaHostSweepBox,
+    // Entity Tag Query
+    .find_entities_by_tag = entity.guavaHostFindEntitiesByTag,
+    .get_tag = entity.guavaHostGetTag,
+    .set_tag = entity.guavaHostSetTag,
+    // Prefab
+    .instantiate_prefab = scene.guavaHostInstantiatePrefab,
+    // Persistence
+    .save_data = persistence.guavaHostSaveData,
+    .load_data = persistence.guavaHostLoadData,
+    // Blackboard
+    .blackboard_set = blackboard.guavaHostBlackboardSet,
+    .blackboard_get = blackboard.guavaHostBlackboardGet,
+    .blackboard_remove = blackboard.guavaHostBlackboardRemove,
 };
