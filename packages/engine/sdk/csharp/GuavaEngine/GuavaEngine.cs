@@ -64,7 +64,7 @@ namespace Guava
         internal static nint Context;
         internal static ulong EntityId;
 
-        internal static void Bind(HostApi* api, nint context, ulong entityId)
+        public static void Bind(HostApi* api, nint context, ulong entityId)
         {
             Api = api;
             Context = context;

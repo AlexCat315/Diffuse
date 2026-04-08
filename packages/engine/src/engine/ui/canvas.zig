@@ -45,6 +45,10 @@ pub const Canvas = struct {
     font: ?font_mod.Font = null,
     font_data: ?[]u8 = null, // owned TTF bytes
     dirty: bool = true,
+    debug_hud_id: ?u32 = null,
+    debug_fps_id: ?u32 = null,
+    debug_draw_id: ?u32 = null,
+    debug_entity_id: ?u32 = null,
 
     pub fn init(allocator: std.mem.Allocator) !Canvas {
         var canvas = Canvas{
@@ -191,6 +195,39 @@ pub const Canvas = struct {
 
     // ── Convenience builders ────────────────────────────────────
 
+    /// Process mouse input for hover and click detection.
+    /// Call once per frame, after input polling and before script updates.
+    pub fn processInput(self: *Canvas, mouse_x: f32, mouse_y: f32, left_pressed: bool, left_released: bool) void {
+        // Clear per-frame state on all interactive nodes.
+        for (self.pool.nodes.items) |*n| {
+            if (n.hovered or n.clicked_this_frame) {
+                if (n.hovered) {
+                    if (n.on_event) |handler| handler(n, .hover_exit);
+                }
+                n.hovered = false;
+                n.clicked_this_frame = false;
+            }
+        }
+
+        // Hit-test under cursor → mark hovered chain.
+        if (self.hitTest(mouse_x, mouse_y)) |hit| {
+            var cur: ?*Node = hit;
+            while (cur) |n| {
+                n.hovered = true;
+                if (n.on_event) |handler| handler(n, .hover_enter);
+                cur = if (n.parent) |pid| self.pool.get(pid) else null;
+            }
+
+            // Left button press fires click on the deepest interactive node.
+            if (left_pressed and hit.interactive) {
+                hit.clicked_this_frame = true;
+                if (hit.on_event) |handler| handler(hit, .click);
+            }
+        }
+
+        _ = left_released; // reserved for future pointer_up events
+    }
+
     pub fn addPanel(self: *Canvas, opts: struct {
         parent: ?u32 = null,
         x: ?f32 = null,
@@ -238,4 +275,81 @@ pub const Canvas = struct {
         }
         return n;
     }
+
+    // ── Debug HUD ───────────────────────────────────────────────
+
+    /// 格式化整数到固定缓冲区（避免分配）
+    fn fmtInt(buf: []u8, prefix: []const u8, value: usize) []const u8 {
+        var pos: usize = 0;
+        for (prefix) |c| {
+            if (pos >= buf.len) break;
+            buf[pos] = c;
+            pos += 1;
+        }
+        // 简化整数格式化
+        if (value == 0) {
+            if (pos < buf.len) {
+                buf[pos] = '0';
+                pos += 1;
+            }
+        } else {
+            var tmp: [20]u8 = undefined;
+            var ti: usize = 0;
+            var v = value;
+            while (v > 0) : (ti += 1) {
+                tmp[ti] = @intCast('0' + (v % 10));
+                v /= 10;
+            }
+            var i: usize = 0;
+            while (i < ti and pos < buf.len) : (i += 1) {
+                buf[pos] = tmp[ti - 1 - i];
+                pos += 1;
+            }
+        }
+        return buf[0..pos];
+    }
+
+    /// 每帧更新 debug HUD 文本。由 Renderer 在 update() 之前调用。
+    pub fn updateDebugHud(self: *Canvas, fps: usize, draw_calls: usize, entity_count: usize) void {
+        // 延迟创建 HUD 节点（首次调用时）
+        if (self.debug_hud_id == null) {
+            const panel = self.addPanel(.{
+                .x = 8,
+                .y = 8,
+                .width = .{ .px = 180 },
+                .height = .{ .px = 64 },
+                .background = Color{ .r = 0.05, .g = 0.05, .b = 0.1, .a = 0.75 },
+                .border_radius = 4,
+                .padding = 6,
+            }) catch return;
+            self.debug_hud_id = panel.id;
+
+            const fps_lbl = self.addLabel(.{ .parent = panel.id, .text = "FPS: --", .color = Color.green, .font_size = 14 }) catch return;
+            self.debug_fps_id = fps_lbl.id;
+
+            const draw_lbl = self.addLabel(.{ .parent = panel.id, .text = "Draw: --", .color = Color.white, .font_size = 14 }) catch return;
+            self.debug_draw_id = draw_lbl.id;
+
+            const ent_lbl = self.addLabel(.{ .parent = panel.id, .text = "Ent: --", .color = Color.white, .font_size = 14 }) catch return;
+            self.debug_entity_id = ent_lbl.id;
+        }
+
+        // 更新文字
+        var fps_buf: [32]u8 = undefined;
+        var draw_buf: [32]u8 = undefined;
+        var ent_buf: [32]u8 = undefined;
+
+        if (self.pool.get(self.debug_fps_id.?)) |n| {
+            n.text = fmtInt(&fps_buf, "FPS: ", fps);
+            n.style.text_color = if (fps >= 55) Color.green else if (fps >= 30) Color.yellow else Color.red;
+        }
+        if (self.pool.get(self.debug_draw_id.?)) |n| {
+            n.text = fmtInt(&draw_buf, "Draw: ", draw_calls);
+        }
+        if (self.pool.get(self.debug_entity_id.?)) |n| {
+            n.text = fmtInt(&ent_buf, "Entities: ", entity_count);
+        }
+        self.dirty = true;
+    }
 };
+

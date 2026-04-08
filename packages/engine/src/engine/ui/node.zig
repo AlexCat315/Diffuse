@@ -54,6 +54,7 @@ pub const Node = struct {
     visible: bool = true,
     interactive: bool = false,
     hovered: bool = false,
+    clicked_this_frame: bool = false,
 
     // ── Events ──────────────────────────────────────────────────
     on_event: ?EventHandler = null,

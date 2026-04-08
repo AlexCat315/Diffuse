@@ -18,34 +18,39 @@
 | 场景 | `src/engine/scene/` | 存档系统（多槽位），场景加载/切换，全局时间缩放 |
 | ECS | `src/engine/scene/world.zig` | 21 种组件类型，Transform 层级，空间查询（BVH） |
 | 过场 | `src/engine/cinematic/` | 相机路径、关键帧动画、FFMPEG 导出 |
+| 运行时 UI | `src/engine/ui/` | 保留模式 Canvas，SDF 字体，Flexbox 布局，点击/悬停交互，Debug HUD |
+| C# 脚本 SDK | `sdk/csharp/GuavaEngine/` | NativeAOT .dylib，Canvas/Transform/Input/Time API，完整导出 |
 | 插件 | `src/engine/plugin/` | 热加载插件框架（render_style, audio_effect, physics_ext, terrain_gen, ai_behavior, ui_extension, script_vm） |
 
 ## 缺失系统清单
 
-### 1. 运行时 UI 系统 🔴 高优先级
+### 1. 运行时 UI 系统 ✅ 已完成
 
-**当前状态**: 零。在游戏运行时没有任何渲染 UI 的能力（编辑器 UI 由 Electron 提供，和游戏运行时无关）。
+**当前状态**: 已实现。保留模式 UI 系统，含 SDF 字体渲染、Flexbox 布局、点击/悬停交互、C# 脚本 API。
 
-**所有类型都需要**: FPS（准星/弹药/血量）、RTS（建筑菜单/资源/小地图/单位信息）、4X（科技树/外交/城市面板）。
+**实现文件**:
+- `src/engine/ui/style.zig` — 颜色、文本对齐、视觉样式属性
+- `src/engine/ui/layout.zig` — Flexbox-lite 布局引擎
+- `src/engine/ui/node.zig` — 保留模式节点树（NodePool + Tree）
+- `src/engine/ui/renderer.zig` — 批量 UI 四边形渲染（SDF text + filled rect）
+- `src/engine/ui/font.zig` — stb_truetype SDF atlas 生成
+- `src/engine/ui/canvas.zig` — Canvas 公共 API（createNode/hitTest/processInput/addPanel/addLabel）
+- `src/engine/script/host/canvas.zig` — 10 个 host 函数（C# 桥接）
+- `sdk/csharp/GuavaEngine/GuavaCanvas.cs` — C# Canvas SDK
 
-**需要实现**:
-- [ ] Font 渲染（SDF 或 bitmap atlas）
-- [ ] 矩形/圆形/线条基本图元绘制
-- [ ] 文本布局（左/中/右对齐）
-- [ ] 交互系统（点击/悬停/拖拽命中测试）
-- [ ] 布局系统（水平/垂直/网格）
-- [ ] 常用控件（Button, Label, Slider, ProgressBar, Panel, ScrollView）
-- [ ] 9-patch/sprite 图片渲染
-- [ ] render pass 集成（在 tonemap 后 compositing）
-- [ ] 脚本 API 暴露
-
-**可选方案**:
-- A) `imgui` 风格即时模式（简单，适合调试/原型）
-- B) 保留模式组件系统（复杂，适合正式 UI）
-- C) 嵌入 Web 引擎如 Ultralight/WebView（最快但笨重）
-- D) 基于 NanoVG/PlutoVG（已集成的 SVG 引擎）
-
-**预估工作量**: 大（2-4 周核心功能）
+**已完成项**:
+- [x] Font 渲染（SDF atlas，stb_truetype）
+- [x] 矩形图元绘制（filled rect with border_radius）
+- [x] 文本布局（左/中/右对齐）
+- [x] 交互系统（点击/悬停命中测试，processInput 每帧更新）
+- [x] 布局系统（Flexbox: row/column/wrap, justify/align, padding/margin）
+- [x] 常用控件（Panel, Label, Button, ProgressBar 通过 Canvas 便捷 API）
+- [x] render pass 集成（ui_overlay pass，tonemap 后合成）
+- [x] 脚本 API 暴露（Zig host functions + C# SDK）
+- [x] Debug HUD（FPS/DrawCalls/Entities 叠加层）
+- [ ] 9-patch/sprite 图片渲染（待实现）
+- [ ] ScrollView 控件（待实现）
+- [ ] 拖拽交互（待实现）
 
 ---
 
@@ -234,7 +239,7 @@ Phase 4 — 4X 基础
 
 | 缺失系统          | FPS | RTS | 4X/文明 | 总优先分 |
 |-------------------|-----|-----|---------|----------|
-| 运行时 UI        | ★★★★ | ★★★★★ | ★★★★★ | **14** |
+| ~~运行时 UI~~    | ~~★★★★~~ | ~~★★★★★~~ | ~~★★★★★~~ | **✅ 已完成** |
 | AI 行为系统      | ★★★ | ★★★★★ | ★★★★★ | **13** |
 | 地形系统         | ★★★★ | ★★★★ | ★★★★★ | **13** |
 | 网络/多人        | ★★★★★ | ★★★★ | ★★★ | **12** |

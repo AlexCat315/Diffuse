@@ -205,5 +205,5 @@ pub fn guavaHostCanvasRemoveWidget(userdata: ?*anyopaque, node_id: u32) callconv
 pub fn guavaHostCanvasWasButtonClicked(userdata: ?*anyopaque, node_id: u32) callconv(.c) u32 {
     const canvas = getCanvas(userdata) orelse return 0;
     const node = canvas.getNode(node_id) orelse return 0;
-    return if (node.hovered and node.interactive) @as(u32, 1) else @as(u32, 0);
+    return if (node.clicked_this_frame) @as(u32, 1) else @as(u32, 0);
 }

@@ -435,6 +435,17 @@ pub const Application = struct {
             // 每帧刷新输入动作映射状态（GR-6）
             self.action_map.update(&self.input);
 
+            // 更新 UI Canvas 的鼠标交互（hover + click），脚本可在 updateScripts 中查询
+            if (self.renderer.ui_canvas) |*uc| {
+                const mp = self.input.mouse_position;
+                uc.processInput(
+                    mp[0],
+                    mp[1],
+                    self.input.wasMousePressed(.left),
+                    self.input.wasMouseReleased(.left),
+                );
+            }
+
             const elapsed_ns = self.timer.lap();
             var delta_seconds = @as(f32, @floatFromInt(elapsed_ns)) / @as(f32, @floatFromInt(std.time.ns_per_s));
             delta_seconds = @min(delta_seconds, 0.1); // 最大帧间隔锁定为 0.1 秒
