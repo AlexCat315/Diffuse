@@ -12,11 +12,11 @@ export interface ConnectionState {
 export const useConnectionStore = create<ConnectionState>(
   withBroadcastSync(
     { name: "connection", syncKeys: ["connected", "error"] },
-    (set) => ({
+    (set, get) => ({
       connected: false,
       error: null,
 
-      setConnected: (connected) => set({ connected, error: connected ? null : undefined }),
+      setConnected: (connected) => set({ connected, error: connected ? null : get().error }),
       setError: (error) => set({ error }),
     }),
   ),
