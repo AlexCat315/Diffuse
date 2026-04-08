@@ -219,6 +219,12 @@ pub const Entity = struct {
     // ─── 单位选择组件 ───
     unit_selectable: ?components.UnitSelectable = null,
     command_receiver: ?components.CommandReceiver = null,
+    // ─── FPS 相机组件 ───
+    fps_camera: ?components.FpsCamera = null,
+    // ─── 回合制组件 ───
+    turn_config: ?components.TurnConfig = null,
+    turn_player: ?components.TurnPlayer = null,
+    turn_actor: ?components.TurnActor = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示
@@ -410,6 +416,12 @@ pub const EntityDesc = struct {
     // ─── 单位选择组件 ───
     unit_selectable: ?components.UnitSelectable = null,
     command_receiver: ?components.CommandReceiver = null,
+    // ─── FPS 相机组件 ───
+    fps_camera: ?components.FpsCamera = null,
+    // ─── 回合制组件 ───
+    turn_config: ?components.TurnConfig = null,
+    turn_player: ?components.TurnPlayer = null,
+    turn_actor: ?components.TurnActor = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示

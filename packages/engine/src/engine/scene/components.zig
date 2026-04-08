@@ -699,3 +699,19 @@ const selection_mod = @import("../selection/selection_system.zig");
 pub const UnitSelectable = selection_mod.Selectable;
 /// 选择命令接收器 — 挂载在可接收右键指令的单位上。
 pub const CommandReceiver = selection_mod.CommandReceiver;
+
+// ─────── FPS 相机组件 ───────
+const fps_camera_mod = @import("../camera/fps_camera.zig");
+/// FPS 相机运行时状态。
+pub const FpsCamera = fps_camera_mod.FpsCamera;
+/// FPS 相机配置。
+pub const FpsCameraConfig = fps_camera_mod.Config;
+
+// ─────── 回合制组件 ───────
+const turn_mod = @import("../turnbased/turn_system.zig");
+/// 回合制全局配置组件。
+pub const TurnConfig = turn_mod.TurnConfig;
+/// 回合制玩家组件。
+pub const TurnPlayer = turn_mod.TurnPlayer;
+/// 回合制动作者组件。
+pub const TurnActor = turn_mod.TurnActor;
