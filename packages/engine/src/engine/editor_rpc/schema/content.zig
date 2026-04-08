@@ -4,6 +4,7 @@ const types = @import("types.zig");
 // ── assets namespace ─────────────────────────────────────────────
 
 pub const @"assets.list" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "List files and folders in a project directory.", .category = .asset };
     pub const Params = struct { path: ?[]const u8 = null };
     pub const Result = struct {
         path: []const u8,
@@ -14,6 +15,7 @@ pub const @"assets.list" = struct {
 // ── script namespace ─────────────────────────────────────────────
 
 pub const @"script.listScripts" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "List all script files in the project.", .category = .script };
     pub const Params = struct {};
     pub const Result = struct {
         scripts: []const types.ScriptFileInfo,
@@ -21,6 +23,7 @@ pub const @"script.listScripts" = struct {
 };
 
 pub const @"script.getContent" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Read the source code of a script file.", .category = .script };
     pub const Params = struct {
         path: []const u8,
     };
@@ -32,6 +35,7 @@ pub const @"script.getContent" = struct {
 };
 
 pub const @"script.saveContent" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Write source code to a script file. Creates the file if it doesn't exist.", .category = .script };
     pub const Params = struct {
         path: []const u8,
         content: []const u8,
@@ -110,6 +114,7 @@ pub const @"plugin.rescan" = struct {
 // ── prefab namespace ─────────────────────────────────────────────
 
 pub const @"prefab.list" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "List all prefabs in the project.", .category = .prefab };
     pub const Params = struct {};
     pub const Result = struct {
         prefabs: []const types.PrefabInfo,
@@ -175,6 +180,7 @@ pub const @"prefab.create" = struct {
 };
 
 pub const @"prefab.instantiate" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Instantiate a prefab at a position in the scene.", .category = .prefab };
     pub const Params = struct {
         prefabId: []const u8,
         posX: ?f64 = null,

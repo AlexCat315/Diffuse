@@ -10,11 +10,16 @@
 const std = @import("std");
 const schema = @import("schema/mod.zig");
 
-// Generate the entire file at comptime — O(1) runtime work.
-const output = generate();
+// Generate everything at comptime — O(1) runtime work.
+const ts_output = generate();
+const md_output = generateManifestMd();
 
 pub fn main() void {
-    std.debug.print("{s}", .{output});
+    // TypeScript → stderr (redirect with 2>)
+    std.debug.print("{s}", .{ts_output});
+    // Markdown manifest → stdout (redirect with >)
+    const stdout = std.fs.File.stdout();
+    stdout.writeAll(md_output) catch {};
 }
 
 // ═══════════════════════════════════════════════════════════════════
@@ -45,6 +50,9 @@ fn generate() []const u8 {
         if (comptime std.mem.eql(u8, decl.name, "TransformSpace")) continue;
         if (comptime std.mem.eql(u8, decl.name, "ViewportShadingMode")) continue;
         if (comptime std.mem.eql(u8, decl.name, "RenderJobStatus")) continue;
+        // Skip AI tool metadata types — they are not wire types.
+        if (comptime std.mem.eql(u8, decl.name, "ToolCategory")) continue;
+        if (comptime std.mem.eql(u8, decl.name, "AiTool")) continue;
         r = r ++ emitInterface(decl.name, @field(schema.types, decl.name));
     }
 
@@ -170,8 +178,6 @@ fn emitInterface(comptime name: []const u8, comptime T: type) []const u8 {
 //  AI Tool code generator
 // ═══════════════════════════════════════════════════════════════════
 
-const ai_tools = schema.ai_tools;
-
 /// Look up the Params type for a given RPC method name across all schema modules.
 fn findParamsType(comptime method_name: []const u8) ?type {
     inline for (schema.method_modules) |mod| {
@@ -264,7 +270,7 @@ fn fieldToJsonSchema(comptime T: type) []const u8 {
     };
 }
 
-fn categoryToStr(comptime cat: ai_tools.Category) []const u8 {
+fn categoryToStr(comptime cat: schema.types.ToolCategory) []const u8 {
     return switch (cat) {
         .scene => "scene",
         .entity => "entity",
@@ -298,17 +304,63 @@ fn escapeForJs(comptime s: []const u8) []const u8 {
     }
 }
 
+/// Comptime record for a discovered AI tool (from inline `pub const ai_tool` decls).
+const ToolEntry = struct {
+    method_name: []const u8,
+    meta: schema.types.AiTool,
+};
+
+/// Scan all method_modules at comptime and collect every method that has `pub const ai_tool`.
+fn collectAiTools() []const ToolEntry {
+    comptime {
+        var entries: []const ToolEntry = &.{};
+        for (schema.method_modules) |mod| {
+            for (@typeInfo(mod).@"struct".decls) |decl| {
+                const M = @field(mod, decl.name);
+                if (@hasDecl(M, "ai_tool")) {
+                    entries = entries ++ &[1]ToolEntry{.{
+                        .method_name = decl.name,
+                        .meta = M.ai_tool,
+                    }};
+                }
+            }
+        }
+        return entries;
+    }
+}
+
 fn emitAiTools() []const u8 {
     @setEvalBranchQuota(200_000);
 
-    // First, validate that all referenced RPC methods exist.
-    for (ai_tools.tools) |tool| {
-        if (findParamsType(tool.rpc_method) == null) {
-            @compileError("ai_tools references unknown RPC method: " ++ tool.rpc_method);
-        }
-    }
+    const tools = collectAiTools();
 
+    // ── Human-readable manifest comment ──────────────────────────
     var r: []const u8 =
+        \\//
+        \\// ┌──────────────────────────────────────────────────────────┐
+        \\// │  AI Tools Manifest — auto-collected from schema modules  │
+        \\// │  Add `pub const ai_tool: types.AiTool = .{ ... };`      │
+        \\// │  inside any RPC method struct to expose it to the AI.    │
+        \\// └──────────────────────────────────────────────────────────┘
+        \\
+    ;
+    r = r ++ "//  Total: " ++ std.fmt.comptimePrint("{d}", .{tools.len}) ++ " tools\n";
+    r = r ++ "//\n";
+    r = r ++ "//  Method                         Category     Confirm?\n";
+    r = r ++ "//  ─────────────────────────────── ──────────── ────────\n";
+    for (tools) |tool| {
+        // Pad method name to 33 chars
+        var name_padded: []const u8 = tool.method_name;
+        while (name_padded.len < 33) name_padded = name_padded ++ " ";
+        // Pad category to 13 chars
+        var cat_padded: []const u8 = categoryToStr(tool.meta.category);
+        while (cat_padded.len < 13) cat_padded = cat_padded ++ " ";
+        r = r ++ "//  " ++ name_padded ++ cat_padded ++ (if (tool.meta.requires_confirmation) "yes" else "no") ++ "\n";
+    }
+    r = r ++ "//\n\n";
+
+    // ── TypeScript types ─────────────────────────────────────────
+    r = r ++
         \\export type ToolCategory =
         \\  | "scene"
         \\  | "entity"
@@ -336,17 +388,18 @@ fn emitAiTools() []const u8 {
         \\
     ;
 
-    for (ai_tools.tools) |tool| {
-        const Params = findParamsType(tool.rpc_method).?;
+    for (tools) |tool| {
+        const Params = findParamsType(tool.method_name) orelse
+            @compileError("ai_tool on method with no Params type: " ++ tool.method_name);
         r = r ++ "  {\n";
-        r = r ++ "    name: \"" ++ tool.rpc_method ++ "\",\n";
-        r = r ++ "    description: \"" ++ escapeForJs(tool.description) ++ "\",\n";
+        r = r ++ "    name: \"" ++ tool.method_name ++ "\",\n";
+        r = r ++ "    description: \"" ++ escapeForJs(tool.meta.description) ++ "\",\n";
         r = r ++ "    parameters: " ++ paramsToJsonSchema(Params) ++ ",\n";
-        r = r ++ "    rpcMethod: \"" ++ tool.rpc_method ++ "\",\n";
-        if (tool.requires_confirmation) {
+        r = r ++ "    rpcMethod: \"" ++ tool.method_name ++ "\",\n";
+        if (tool.meta.requires_confirmation) {
             r = r ++ "    requiresConfirmation: true,\n";
         }
-        r = r ++ "    category: \"" ++ categoryToStr(tool.category) ++ "\",\n";
+        r = r ++ "    category: \"" ++ categoryToStr(tool.meta.category) ++ "\",\n";
         r = r ++ "  },\n";
     }
 
@@ -383,4 +436,79 @@ fn emitAiTools() []const u8 {
     ;
 
     return r;
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Markdown manifest generator
+// ═══════════════════════════════════════════════════════════════════
+
+fn generateManifestMd() []const u8 {
+    @setEvalBranchQuota(200_000);
+    const tools = collectAiTools();
+
+    var r: []const u8 =
+        \\# AI Tools Reference
+        \\
+        \\> **Auto-generated** — do not edit manually.
+        \\> To expose a new tool, add `pub const ai_tool: types.AiTool = .{ ... };` inside the RPC method struct.
+        \\> Regenerate: `cd packages/engine && zig run src/engine/editor_rpc/gen_types.zig > ../../docs/api/ai-tools.md 2> ../editor/src/shared/rpc-types.generated.ts`
+        \\
+        \\
+    ;
+
+    r = r ++ "Total: **" ++ std.fmt.comptimePrint("{d}", .{tools.len}) ++ "** tools\n\n";
+
+    // Group tools by category
+    const categories = [_]struct { cat: schema.types.ToolCategory, label: []const u8 }{
+        .{ .cat = .scene, .label = "Scene" },
+        .{ .cat = .entity, .label = "Entity" },
+        .{ .cat = .playback, .label = "Playback" },
+        .{ .cat = .script, .label = "Script" },
+        .{ .cat = .asset, .label = "Asset" },
+        .{ .cat = .animation, .label = "Animation" },
+        .{ .cat = .material, .label = "Material" },
+        .{ .cat = .camera, .label = "Camera" },
+        .{ .cat = .render, .label = "Render" },
+        .{ .cat = .prefab, .label = "Prefab" },
+        .{ .cat = .audio, .label = "Audio" },
+        .{ .cat = .query, .label = "Query" },
+    };
+
+    for (categories) |group| {
+        // Count tools in this category
+        var count: usize = 0;
+        for (tools) |tool| {
+            if (tool.meta.category == group.cat) count += 1;
+        }
+        if (count == 0) continue;
+
+        r = r ++ "## " ++ group.label ++ "\n\n";
+        r = r ++ "| Method | Description | Confirm? |\n";
+        r = r ++ "|--------|-------------|----------|\n";
+
+        for (tools) |tool| {
+            if (tool.meta.category != group.cat) continue;
+            r = r ++ "| `" ++ tool.method_name ++ "` | " ++ escapeForMd(tool.meta.description) ++ " | " ++ (if (tool.meta.requires_confirmation) "⚠️ Yes" else "No") ++ " |\n";
+        }
+        r = r ++ "\n";
+    }
+
+    return r;
+}
+
+/// Escape pipe characters for Markdown table cells.
+fn escapeForMd(comptime s: []const u8) []const u8 {
+    comptime {
+        var out: []const u8 = "";
+        for (s) |c| {
+            if (c == '|') {
+                out = out ++ "\\|";
+            } else if (c == '"') {
+                out = out ++ "`";
+            } else {
+                out = out ++ &[1]u8{c};
+            }
+        }
+        return out;
+    }
 }

@@ -2,9 +2,11 @@
 ///!
 ///! Re-exports all schema sub-modules so that gen_types.zig and other
 ///! consumers have a single import point.
+///!
+///! AI tool exposure: add `pub const ai_tool: types.AiTool = .{ ... };`
+///! inside any method struct to expose it. gen_types.zig will auto-collect.
 pub const types = @import("types.zig");
 pub const subscriptions = @import("subscriptions.zig");
-pub const ai_tools = @import("ai_tools.zig");
 
 /// Comptime tuple of all method modules.  gen_types.zig iterates this
 /// with `inline for` to emit every RPC method signature.
@@ -28,5 +30,4 @@ test {
     _ = @import("animation.zig");
     _ = @import("mesh.zig");
     _ = @import("subscriptions.zig");
-    _ = @import("ai_tools.zig");
 }

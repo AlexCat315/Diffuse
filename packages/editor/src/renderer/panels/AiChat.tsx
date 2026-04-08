@@ -19,6 +19,7 @@ import {
   testConnection,
 } from "../services/ai-provider";
 import { AI_TOOLS, findTool } from "../services/ai-tools";
+import { buildSystemPrompt, gatherSceneContext } from "../services/ai-prompts";
 import type { RpcMethodName } from "../../shared/rpc-types";
 
 // ── Role colors ─────────────────────────────────────────────────
@@ -56,42 +57,6 @@ async function executeToolCall(call: ToolCallInfo): Promise<string> {
   } catch (err: unknown) {
     return JSON.stringify({ error: err instanceof Error ? err.message : String(err) });
   }
-}
-
-/** Build a system prompt that gives the AI context about available tools and scene state. */
-function buildSystemPrompt(maxRounds: number = DEFAULT_MAX_TOOL_ROUNDS): string {
-  const categories = new Map<string, string[]>();
-  for (const tool of AI_TOOLS) {
-    const list = categories.get(tool.category) ?? [];
-    list.push(`  - ${tool.name}: ${tool.description}`);
-    categories.set(tool.category, list);
-  }
-
-  let toolList = "";
-  for (const [cat, items] of categories) {
-    toolList += `\n[${cat}]\n${items.join("\n")}`;
-  }
-
-  return [
-    "You are Guava AI — the intelligent assistant embedded in the Guava game engine editor.",
-    "You can manipulate the scene, entities, components, scripts, materials, animations, cameras, and playback by calling tools.",
-    "When the user asks you to do something to the scene, call the appropriate tool(s). You may call multiple tools in a single response to be efficient.",
-    "Always prefer tool calls over giving instructions — take action directly.",
-    "If a tool call fails, report the error to the user and suggest alternatives.",
-    "IMPORTANT: You have a maximum of " + maxRounds + " tool-call rounds per message. Use tools efficiently — batch related operations in a single round when possible.",
-    "",
-    "── Engine Reference ──",
-    "Component types: Camera, Mesh, SkinnedMesh, Animator, Rigidbody, BoxCollider, SphereCollider, MeshCollider, CapsuleCollider, CharacterController, Tag, Sky, Constraint, Material, Light, Vfx, Script, AudioSource, AudioListener, NavAgent.",
-    "Material color properties: use material.setColor with property=\"base_color\" or \"emissive\", value=[r,g,b,a] (floats 0-1).",
-    "Material scalar properties: use material.setScalar with property=\"metallic\", \"roughness\", \"alpha_cutoff\", or \"ibl_intensity\".",
-    "Material texture slots: base_color, metallic_roughness, normal, occlusion, emissive.",
-    "Material shading modes: unlit, lambert, pbr_metallic_roughness.",
-    "NAMING CONVENTION: getState returns camelCase (baseColor, alphaCutoff) but setColor/setScalar expect snake_case (base_color, alpha_cutoff).",
-    "entity.setComponentField uses exact field names from entity.getComponents (snake_case like base_color_factor, metallic_factor).",
-    "For colors, prefer material.setColor over setComponentField — it handles resource dedup and dirty marking correctly.",
-    "",
-    "Available tools:" + toolList,
-  ].join("\n");
 }
 
 // ── Main component ──────────────────────────────────────────────
@@ -159,8 +124,12 @@ export function AiChat() {
     const controller = new AbortController();
     abortRef.current = controller;
 
-    const systemPrompt = toolsEnabled ? buildSystemPrompt(maxToolRounds) : undefined;
+    let systemPrompt: string | undefined;
     const tools = toolsEnabled ? AI_TOOLS : undefined;
+    if (toolsEnabled) {
+      const sceneContext = await gatherSceneContext();
+      systemPrompt = buildSystemPrompt({ maxToolRounds, sceneContext });
+    }
 
     // Tool-call loop: repeat until the LLM responds with text (no tool calls)
     let totalRounds = 0;

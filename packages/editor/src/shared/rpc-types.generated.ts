@@ -426,6 +426,55 @@ export interface JsonRpcResponse {
 }
 // ── AI Tool Definitions ────────────────────────────────────
 
+//
+// ┌──────────────────────────────────────────────────────────┐
+// │  AI Tools Manifest — auto-collected from schema modules  │
+// │  Add `pub const ai_tool: types.AiTool = .{ ... };`      │
+// │  inside any RPC method struct to expose it to the AI.    │
+// └──────────────────────────────────────────────────────────┘
+//  Total: 37 tools
+//
+//  Method                         Category     Confirm?
+//  ─────────────────────────────── ──────────── ────────
+//  editor.undo                      scene        no
+//  editor.redo                      scene        no
+//  editor.getHistory                scene        no
+//  scene.getHierarchy               scene        no
+//  scene.createEntity               scene        no
+//  scene.deleteEntity               scene        yes
+//  scene.duplicateEntity            scene        no
+//  scene.save                       scene        no
+//  scene.load                       scene        yes
+//  scene.listScenes                 scene        no
+//  entity.getTransform              entity       no
+//  entity.setTransform              entity       no
+//  entity.setName                   entity       no
+//  entity.getComponents             entity       no
+//  entity.setComponentField         entity       no
+//  entity.addComponent              entity       no
+//  entity.removeComponent           entity       no
+//  entity.setVisible                entity       no
+//  entity.setAssetField             entity       no
+//  playback.play                    playback     no
+//  playback.pause                   playback     no
+//  playback.stop                    playback     no
+//  camera.getState                  camera       no
+//  camera.lookAlongAxis             camera       no
+//  assets.list                      asset        no
+//  script.listScripts               script       no
+//  script.getContent                script       no
+//  script.saveContent               script       no
+//  prefab.list                      prefab       no
+//  prefab.instantiate               prefab       no
+//  material.getState                material     no
+//  material.setColor                material     no
+//  material.setScalar               material     no
+//  audio.getMixerStatus             audio        no
+//  animation.getState               animation    no
+//  animation.addState               animation    no
+//  animation.addTransition          animation    no
+//
+
 export type ToolCategory =
   | "scene"
   | "entity"
@@ -450,6 +499,27 @@ export interface AiToolDef {
 }
 
 export const AI_TOOLS: AiToolDef[] = [
+  {
+    name: "editor.undo",
+    description: "Undo the last action.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "editor.undo",
+    category: "scene",
+  },
+  {
+    name: "editor.redo",
+    description: "Redo the last undone action.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "editor.redo",
+    category: "scene",
+  },
+  {
+    name: "editor.getHistory",
+    description: "Get the undo/redo history list.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "editor.getHistory",
+    category: "scene",
+  },
   {
     name: "scene.getHierarchy",
     description: "Get the full entity hierarchy of the current scene as a tree.",
@@ -586,6 +656,27 @@ export const AI_TOOLS: AiToolDef[] = [
     category: "playback",
   },
   {
+    name: "camera.getState",
+    description: "Get the current editor camera position and rotation.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "camera.getState",
+    category: "camera",
+  },
+  {
+    name: "camera.lookAlongAxis",
+    description: "Point the editor camera along a direction. Params: axisX, axisY, axisZ (floats). Common: top-down (0,-1,0), front (0,0,-1), right (1,0,0).",
+    parameters: { type: "object" as const, properties: { axisX: { type: "number" as const }, axisY: { type: "number" as const }, axisZ: { type: "number" as const }, distance: { type: "number" as const }, targetX: { type: "number" as const }, targetY: { type: "number" as const }, targetZ: { type: "number" as const } }, required: ["axisX", "axisY", "axisZ"] },
+    rpcMethod: "camera.lookAlongAxis",
+    category: "camera",
+  },
+  {
+    name: "assets.list",
+    description: "List files and folders in a project directory.",
+    parameters: { type: "object" as const, properties: { path: { type: "string" as const } } },
+    rpcMethod: "assets.list",
+    category: "asset",
+  },
+  {
     name: "script.listScripts",
     description: "List all script files in the project.",
     parameters: { type: "object" as const, properties: {} },
@@ -607,32 +698,18 @@ export const AI_TOOLS: AiToolDef[] = [
     category: "script",
   },
   {
-    name: "assets.list",
-    description: "List files and folders in a project directory.",
-    parameters: { type: "object" as const, properties: { path: { type: "string" as const } } },
-    rpcMethod: "assets.list",
-    category: "asset",
+    name: "prefab.list",
+    description: "List all prefabs in the project.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "prefab.list",
+    category: "prefab",
   },
   {
-    name: "animation.getState",
-    description: "Get the animation graph state of an entity.",
-    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const } }, required: ["entityId"] },
-    rpcMethod: "animation.getState",
-    category: "animation",
-  },
-  {
-    name: "animation.addState",
-    description: "Add a new animation state to an entity's animation graph. Optional name param, defaults to 'State N'. Returns the new state index.",
-    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, name: { type: "string" as const } }, required: ["entityId"] },
-    rpcMethod: "animation.addState",
-    category: "animation",
-  },
-  {
-    name: "animation.addTransition",
-    description: "Add a transition between animation states. Params: entityId, fromState (index), toState (index), optional duration (default 0.2), optional triggerTime (default 0.25). Returns transition index.",
-    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, fromState: { type: "integer" as const }, toState: { type: "integer" as const }, duration: { type: "number" as const }, triggerTime: { type: "number" as const } }, required: ["entityId", "fromState", "toState"] },
-    rpcMethod: "animation.addTransition",
-    category: "animation",
+    name: "prefab.instantiate",
+    description: "Instantiate a prefab at a position in the scene.",
+    parameters: { type: "object" as const, properties: { prefabId: { type: "string" as const }, posX: { type: "number" as const }, posY: { type: "number" as const }, posZ: { type: "number" as const } }, required: ["prefabId"] },
+    rpcMethod: "prefab.instantiate",
+    category: "prefab",
   },
   {
     name: "material.getState",
@@ -656,34 +733,6 @@ export const AI_TOOLS: AiToolDef[] = [
     category: "material",
   },
   {
-    name: "camera.getState",
-    description: "Get the current editor camera position and rotation.",
-    parameters: { type: "object" as const, properties: {} },
-    rpcMethod: "camera.getState",
-    category: "camera",
-  },
-  {
-    name: "camera.lookAlongAxis",
-    description: "Point the editor camera along a direction. Params: axisX, axisY, axisZ (floats). Common: top-down (0,1,0), front (0,0,1), right (1,0,0).",
-    parameters: { type: "object" as const, properties: { axisX: { type: "number" as const }, axisY: { type: "number" as const }, axisZ: { type: "number" as const }, distance: { type: "number" as const }, targetX: { type: "number" as const }, targetY: { type: "number" as const }, targetZ: { type: "number" as const } }, required: ["axisX", "axisY", "axisZ"] },
-    rpcMethod: "camera.lookAlongAxis",
-    category: "camera",
-  },
-  {
-    name: "prefab.list",
-    description: "List all prefabs in the project.",
-    parameters: { type: "object" as const, properties: {} },
-    rpcMethod: "prefab.list",
-    category: "prefab",
-  },
-  {
-    name: "prefab.instantiate",
-    description: "Instantiate a prefab at a position in the scene.",
-    parameters: { type: "object" as const, properties: { prefabId: { type: "string" as const }, posX: { type: "number" as const }, posY: { type: "number" as const }, posZ: { type: "number" as const } }, required: ["prefabId"] },
-    rpcMethod: "prefab.instantiate",
-    category: "prefab",
-  },
-  {
     name: "audio.getMixerStatus",
     description: "Get the audio mixer status (buses, volumes, active voices).",
     parameters: { type: "object" as const, properties: {} },
@@ -691,25 +740,25 @@ export const AI_TOOLS: AiToolDef[] = [
     category: "audio",
   },
   {
-    name: "editor.undo",
-    description: "Undo the last action.",
-    parameters: { type: "object" as const, properties: {} },
-    rpcMethod: "editor.undo",
-    category: "scene",
+    name: "animation.getState",
+    description: "Get the animation graph state of an entity.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const } }, required: ["entityId"] },
+    rpcMethod: "animation.getState",
+    category: "animation",
   },
   {
-    name: "editor.redo",
-    description: "Redo the last undone action.",
-    parameters: { type: "object" as const, properties: {} },
-    rpcMethod: "editor.redo",
-    category: "scene",
+    name: "animation.addState",
+    description: "Add a new animation state to an entity's animation graph. Optional name param, defaults to 'State N'. Returns the new state index.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, name: { type: "string" as const } }, required: ["entityId"] },
+    rpcMethod: "animation.addState",
+    category: "animation",
   },
   {
-    name: "editor.getHistory",
-    description: "Get the undo/redo history list.",
-    parameters: { type: "object" as const, properties: {} },
-    rpcMethod: "editor.getHistory",
-    category: "scene",
+    name: "animation.addTransition",
+    description: "Add a transition between animation states. Params: entityId, fromState (index), toState (index), optional duration (default 0.2), optional triggerTime (default 0.25). Returns transition index.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, fromState: { type: "integer" as const }, toState: { type: "integer" as const }, duration: { type: "number" as const }, triggerTime: { type: "number" as const } }, required: ["entityId", "fromState", "toState"] },
+    rpcMethod: "animation.addTransition",
+    category: "animation",
   },
 ];
 

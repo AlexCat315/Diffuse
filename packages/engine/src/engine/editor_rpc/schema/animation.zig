@@ -4,6 +4,7 @@ const types = @import("types.zig");
 // ── animation namespace ──────────────────────────────────────────
 
 pub const @"animation.getState" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Get the animation graph state of an entity.", .category = .animation };
     pub const Params = struct { entityId: u64 };
     pub const Result = struct {
         hasAnimator: bool,
@@ -25,6 +26,7 @@ pub const @"animation.getState" = struct {
 };
 
 pub const @"animation.addState" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Add a new animation state to an entity's animation graph. Optional name param, defaults to 'State N'. Returns the new state index.", .category = .animation };
     pub const Params = struct { entityId: u64, name: ?[]const u8 = null };
     pub const Result = struct { index: u64 };
 };
@@ -58,6 +60,7 @@ pub const @"animation.activateState" = struct {
 };
 
 pub const @"animation.addTransition" = struct {
+    pub const ai_tool: types.AiTool = .{ .description = "Add a transition between animation states. Params: entityId, fromState (index), toState (index), optional duration (default 0.2), optional triggerTime (default 0.25). Returns transition index.", .category = .animation };
     pub const Params = struct {
         entityId: u64,
         fromState: u64,
