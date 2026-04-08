@@ -859,7 +859,7 @@ fn resolveZigDylibPath(resource: *const script_resource_mod.ScriptResource) ?[]c
 // Zig Dylib Host API 实现
 // ---------------------------------------------------------------------------
 
-const csharp_native_aot_api_version: u32 = 1;
+const csharp_native_aot_api_version: u32 = 2;
 const csharp_native_aot_user_data_tag: u32 = 0x43534E41;
 
 const CSharpNativeAotHostApi = extern struct {
@@ -877,6 +877,17 @@ const CSharpNativeAotHostApi = extern struct {
     get_delta_time: *const fn (?*anyopaque) callconv(.c) f32,
     get_time_scale: *const fn (?*anyopaque) callconv(.c) f32,
     get_game_state: *const fn (?*anyopaque) callconv(.c) u32,
+    // Canvas / UI (v2)
+    canvas_clear: *const fn (?*anyopaque) callconv(.c) void,
+    canvas_add_text: *const fn (?*anyopaque, f32, f32, f32, f32, [*]const u8, usize, u8, u8, u8, u8) callconv(.c) u32,
+    canvas_add_panel: *const fn (?*anyopaque, f32, f32, f32, f32, u8, u8, u8, u8) callconv(.c) u32,
+    canvas_add_button: *const fn (?*anyopaque, f32, f32, f32, f32, [*]const u8, usize) callconv(.c) u32,
+    canvas_add_progress_bar: *const fn (?*anyopaque, f32, f32, f32, f32, f32) callconv(.c) u32,
+    canvas_set_text: *const fn (?*anyopaque, u32, [*]const u8, usize) callconv(.c) void,
+    canvas_set_progress: *const fn (?*anyopaque, u32, f32) callconv(.c) void,
+    canvas_set_visible: *const fn (?*anyopaque, u32, u32) callconv(.c) void,
+    canvas_remove_widget: *const fn (?*anyopaque, u32) callconv(.c) void,
+    canvas_was_button_clicked: *const fn (?*anyopaque, u32) callconv(.c) u32,
 };
 
 const csharp_native_aot_host_api: CSharpNativeAotHostApi = .{
@@ -894,6 +905,17 @@ const csharp_native_aot_host_api: CSharpNativeAotHostApi = .{
     .get_delta_time = host_mod.time.guavaHostGetDeltaTime,
     .get_time_scale = CSharpCompat.getTimeScale,
     .get_game_state = CSharpCompat.getGameState,
+    // Canvas / UI
+    .canvas_clear = host_mod.canvas.guavaHostCanvasClear,
+    .canvas_add_text = host_mod.canvas.guavaHostCanvasAddText,
+    .canvas_add_panel = host_mod.canvas.guavaHostCanvasAddPanel,
+    .canvas_add_button = host_mod.canvas.guavaHostCanvasAddButton,
+    .canvas_add_progress_bar = host_mod.canvas.guavaHostCanvasAddProgressBar,
+    .canvas_set_text = host_mod.canvas.guavaHostCanvasSetText,
+    .canvas_set_progress = host_mod.canvas.guavaHostCanvasSetProgress,
+    .canvas_set_visible = host_mod.canvas.guavaHostCanvasSetVisible,
+    .canvas_remove_widget = host_mod.canvas.guavaHostCanvasRemoveWidget,
+    .canvas_was_button_clicked = host_mod.canvas.guavaHostCanvasWasButtonClicked,
 };
 
 /// C# NativeAOT 兼容适配器 — C# 侧某些函数返回 u32 状态码（而非 void）。
@@ -1761,27 +1783,27 @@ fn csharpLoadBridge(context_ptr: *anyopaque, resource: *const script_resource_mo
 }
 
 fn csharpUnloadBridge(context_ptr: *anyopaque) void {
-    CSharpVM.unloadStub(castContext(CSharpVM, context_ptr));
+    CSharpVM.unload(castContext(CSharpVM, context_ptr));
 }
 
 fn csharpCreateInstanceBridge(context_ptr: *anyopaque, ctx: *context.ScriptContext) types.ScriptError!*types.ScriptInstance {
-    return CSharpVM.createInstanceStub(castContext(CSharpVM, context_ptr), ctx);
+    return CSharpVM.createInstance(castContext(CSharpVM, context_ptr), ctx);
 }
 
 fn csharpDestroyInstanceBridge(context_ptr: *anyopaque, instance: *types.ScriptInstance) void {
-    CSharpVM.destroyInstanceStub(castContext(CSharpVM, context_ptr), instance);
+    CSharpVM.destroyInstance(castContext(CSharpVM, context_ptr), instance);
 }
 
 fn csharpCallInitBridge(context_ptr: *anyopaque, instance: *types.ScriptInstance, ctx: *context.ScriptContext) types.ScriptError!void {
-    return CSharpVM.callInitStub(castContext(CSharpVM, context_ptr), instance, ctx);
+    return CSharpVM.callInit(castContext(CSharpVM, context_ptr), instance, ctx);
 }
 
 fn csharpCallUpdateBridge(context_ptr: *anyopaque, instance: *types.ScriptInstance, ctx: *context.ScriptContext, dt: f32) types.ScriptError!void {
-    return CSharpVM.callUpdateStub(castContext(CSharpVM, context_ptr), instance, ctx, dt);
+    return CSharpVM.callUpdate(castContext(CSharpVM, context_ptr), instance, ctx, dt);
 }
 
 fn csharpCallDestroyBridge(context_ptr: *anyopaque, instance: *types.ScriptInstance, ctx: *context.ScriptContext) types.ScriptError!void {
-    return CSharpVM.callDestroyStub(castContext(CSharpVM, context_ptr), instance, ctx);
+    return CSharpVM.callDestroy(castContext(CSharpVM, context_ptr), instance, ctx);
 }
 
 fn csharpGetErrorBridge(context_ptr: *anyopaque) []const u8 {

@@ -65,6 +65,8 @@ pub const ScriptContext = struct {
     blackboard: ?*Blackboard = null,
     /// 持久化存储根路径（项目目录下 saves/ 子目录）
     save_root_path: ?[]const u8 = null,
+    /// 运行时 UI Canvas（?*ui.Canvas 以 anyopaque 传递避免循环依赖）
+    ui_canvas: ?*anyopaque = null,
 
     /// 获取实体的名称
     pub fn getName(self: *ScriptContext) []const u8 {

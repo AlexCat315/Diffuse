@@ -769,6 +769,7 @@ pub const Application = struct {
                     .action_map = &self.action_map,
                     .blackboard = &self.script_runtime.blackboard,
                     .save_root_path = self.script_runtime.save_root_path,
+                    .ui_canvas = if (self.renderer.ui_canvas != null) @ptrCast(&self.renderer.ui_canvas.?) else null,
                     .scene_manager_api = .{
                         .context = self,
                         .load_scene = scriptLoadScene,
@@ -859,6 +860,7 @@ pub const Application = struct {
             .action_map = &self.action_map,
             .blackboard = &self.script_runtime.blackboard,
             .save_root_path = self.script_runtime.save_root_path,
+            .ui_canvas = if (self.renderer.ui_canvas != null) @ptrCast(&self.renderer.ui_canvas.?) else null,
             .scene_manager_api = .{
                 .context = self,
                 .load_scene = scriptLoadScene,
@@ -920,6 +922,7 @@ pub const Application = struct {
             .action_map = &self.action_map,
             .blackboard = &self.script_runtime.blackboard,
             .save_root_path = self.script_runtime.save_root_path,
+            .ui_canvas = if (self.renderer.ui_canvas != null) @ptrCast(&self.renderer.ui_canvas.?) else null,
             .scene_manager_api = .{
                 .context = self,
                 .load_scene = scriptLoadScene,
