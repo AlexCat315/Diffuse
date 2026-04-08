@@ -10,6 +10,7 @@ import {
   type ProviderType,
   type ToolCallInfo,
   defaultConfig,
+  PROVIDER_PRESETS,
   loadProviders,
   saveProviders,
   loadActiveIndex,
@@ -152,6 +153,7 @@ export function AiChat() {
       let resolvedReasoning = "";
       // Use a mutable container so TypeScript doesn't narrow to `never` across the closure boundary
       const toolCallBox: { value: ToolCallInfo[] | null } = { value: null };
+      let hadError = false;
 
       // Stream one LLM turn
       await new Promise<void>((resolve) => {
@@ -173,6 +175,7 @@ export function AiChat() {
             },
             onDone: () => resolve(),
             onError: (error) => {
+              hadError = true;
               setMessages((prev) => [
                 ...prev,
                 { role: "system", content: `Error: ${error}`, timestamp: Date.now() },
@@ -187,7 +190,7 @@ export function AiChat() {
         );
       });
 
-      if (controller.signal.aborted) break;
+      if (hadError || controller.signal.aborted) break;
 
       // Append reasoning if any
       if (resolvedReasoning) {
@@ -262,12 +265,19 @@ export function AiChat() {
       // Loop back — send tool results to LLM for next turn
     }
 
-    // If we hit MAX_TOOL_ROUNDS, notify
-    setMessages((prev) => [
-      ...prev,
-      { role: "system", content: t.aiChat.toolLimitReached, timestamp: Date.now() },
-    ]);
-    setBusy(false);
+    // If we hit MAX_TOOL_ROUNDS (not due to error/abort), notify
+    if (!controller.signal.aborted) {
+      // Check if we ended because of an error (hadError will have set busy=false already)
+      // Only show limit message if we genuinely ran out of rounds
+      const lastMsg = conversationMessages[conversationMessages.length - 1];
+      if (lastMsg?.role === "tool") {
+        setMessages((prev) => [
+          ...prev,
+          { role: "system", content: t.aiChat.toolLimitReached, timestamp: Date.now() },
+        ]);
+        setBusy(false);
+      }
+    }
   }, [input, busy, activeProvider, messages, toolsEnabled]);
 
   // ── Stop generation ────────────────────────────────────────
@@ -295,8 +305,8 @@ export function AiChat() {
 
   // ── Provider management ────────────────────────────────────
 
-  const addProvider = useCallback((type: ProviderType) => {
-    setProviders((prev) => [...prev, defaultConfig(type)]);
+  const addProvider = useCallback((typeOrPreset: ProviderType | string) => {
+    setProviders((prev) => [...prev, defaultConfig(typeOrPreset)]);
     setActiveIdx(providers.length);
     setTestResult(null);
   }, [providers.length]);
@@ -344,12 +354,15 @@ export function AiChat() {
           {/* Add provider */}
           <div style={{ marginBottom: 12 }}>
             <label style={styles.fieldLabel}>{t.aiChat.addProvider}</label>
-            <div style={{ display: "flex", gap: 4, marginTop: 4 }}>
-              {(["openai", "anthropic", "ollama", "custom"] as ProviderType[]).map((type) => (
-                <button key={type} style={styles.toolbarBtn} onClick={() => addProvider(type)}>
-                  + {type}
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 4, marginTop: 4 }}>
+              {PROVIDER_PRESETS.map((preset) => (
+                <button key={preset.label} style={styles.toolbarBtn} onClick={() => addProvider(preset.label)}>
+                  + {preset.label}
                 </button>
               ))}
+              <button style={styles.toolbarBtn} onClick={() => addProvider("custom")}>
+                + Custom
+              </button>
             </div>
           </div>
 
@@ -400,23 +413,45 @@ export function AiChat() {
                 </div>
                 <div>
                   <label style={styles.fieldLabel}>{t.aiChat.model}</label>
-                  <input
-                    style={styles.input}
-                    value={p.model}
-                    onChange={(e) => updateProvider(i, { model: e.target.value })}
-                  />
+                  {(() => {
+                    const preset = PROVIDER_PRESETS.find((pr) => pr.label === p.name);
+                    if (preset && preset.models.length > 0) {
+                      return (
+                        <select
+                          style={styles.input}
+                          value={p.model}
+                          onChange={(e) => updateProvider(i, { model: e.target.value })}
+                        >
+                          {preset.models.map((m) => <option key={m} value={m}>{m}</option>)}
+                          {!preset.models.includes(p.model) && <option value={p.model}>{p.model}</option>}
+                        </select>
+                      );
+                    }
+                    return (
+                      <input
+                        style={styles.input}
+                        value={p.model}
+                        onChange={(e) => updateProvider(i, { model: e.target.value })}
+                      />
+                    );
+                  })()}
                 </div>
-                {p.type !== "ollama" && (
-                  <div>
-                    <label style={styles.fieldLabel}>API Key</label>
-                    <input
-                      style={styles.input}
-                      type="password"
-                      value={p.apiKey}
-                      onChange={(e) => updateProvider(i, { apiKey: e.target.value })}
-                    />
-                  </div>
-                )}
+                {(() => {
+                  const preset = PROVIDER_PRESETS.find((pr) => pr.label === p.name);
+                  const needsKey = preset ? preset.requiresKey : p.type !== "ollama";
+                  if (!needsKey) return null;
+                  return (
+                    <div>
+                      <label style={styles.fieldLabel}>API Key</label>
+                      <input
+                        style={styles.input}
+                        type="password"
+                        value={p.apiKey}
+                        onChange={(e) => updateProvider(i, { apiKey: e.target.value })}
+                      />
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           ))}
