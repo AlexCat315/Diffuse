@@ -424,3 +424,310 @@ export interface JsonRpcResponse {
   result?: unknown;
   error?: { code: number; message: string; data?: unknown };
 }
+// ── AI Tool Definitions ────────────────────────────────────
+
+export type ToolCategory =
+  | "scene"
+  | "entity"
+  | "playback"
+  | "script"
+  | "asset"
+  | "animation"
+  | "material"
+  | "camera"
+  | "render"
+  | "prefab"
+  | "audio"
+  | "query";
+
+export interface AiToolDef {
+  name: string;
+  description: string;
+  parameters: { type: "object"; properties: Record<string, unknown>; required?: string[] };
+  rpcMethod: RpcMethodName;
+  requiresConfirmation?: boolean;
+  category: ToolCategory;
+}
+
+export const AI_TOOLS: AiToolDef[] = [
+  {
+    name: "scene.getHierarchy",
+    description: "Get the full entity hierarchy of the current scene as a tree.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "scene.getHierarchy",
+    category: "scene",
+  },
+  {
+    name: "scene.createEntity",
+    description: "Create a new entity in the scene. Optionally specify a name and parent.",
+    parameters: { type: "object" as const, properties: { name: { type: "string" as const }, parentId: { type: "integer" as const } } },
+    rpcMethod: "scene.createEntity",
+    category: "scene",
+  },
+  {
+    name: "scene.deleteEntity",
+    description: "Delete an entity from the scene.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const } }, required: ["entityId"] },
+    rpcMethod: "scene.deleteEntity",
+    requiresConfirmation: true,
+    category: "scene",
+  },
+  {
+    name: "scene.duplicateEntity",
+    description: "Duplicate an entity (with all components and children).",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const } }, required: ["entityId"] },
+    rpcMethod: "scene.duplicateEntity",
+    category: "scene",
+  },
+  {
+    name: "scene.save",
+    description: "Save the current scene to disk.",
+    parameters: { type: "object" as const, properties: { path: { type: "string" as const } } },
+    rpcMethod: "scene.save",
+    category: "scene",
+  },
+  {
+    name: "scene.load",
+    description: "Load a scene file.",
+    parameters: { type: "object" as const, properties: { path: { type: "string" as const } }, required: ["path"] },
+    rpcMethod: "scene.load",
+    requiresConfirmation: true,
+    category: "scene",
+  },
+  {
+    name: "scene.listScenes",
+    description: "List all available scene files in the project.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "scene.listScenes",
+    category: "scene",
+  },
+  {
+    name: "entity.getTransform",
+    description: "Get an entity's position, rotation and scale.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const } }, required: ["entityId"] },
+    rpcMethod: "entity.getTransform",
+    category: "entity",
+  },
+  {
+    name: "entity.setTransform",
+    description: "Set an entity's position, rotation and/or scale. Only specified fields are changed.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, transform: { type: "object" as const, properties: { position: { type: "object" as const, properties: { x: { type: "number" as const }, y: { type: "number" as const }, z: { type: "number" as const } } }, rotation: { type: "object" as const, properties: { x: { type: "number" as const }, y: { type: "number" as const }, z: { type: "number" as const }, w: { type: "number" as const } } }, scale: { type: "object" as const, properties: { x: { type: "number" as const }, y: { type: "number" as const }, z: { type: "number" as const } } } } } }, required: ["entityId", "transform"] },
+    rpcMethod: "entity.setTransform",
+    category: "entity",
+  },
+  {
+    name: "entity.setName",
+    description: "Rename an entity.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, name: { type: "string" as const } }, required: ["entityId", "name"] },
+    rpcMethod: "entity.setName",
+    category: "entity",
+  },
+  {
+    name: "entity.getComponents",
+    description: "Get all components attached to an entity, with their field values.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const } }, required: ["entityId"] },
+    rpcMethod: "entity.getComponents",
+    category: "entity",
+  },
+  {
+    name: "entity.setComponentField",
+    description: "Set a field value on a component of an entity.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, componentType: { type: "string" as const }, fieldName: { type: "string" as const }, value: { type: "string" as const } }, required: ["entityId", "componentType", "fieldName", "value"] },
+    rpcMethod: "entity.setComponentField",
+    category: "entity",
+  },
+  {
+    name: "entity.addComponent",
+    description: "Add a component to an entity (e.g. Rigidbody, Light, Script, BoxCollider).",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, componentType: { type: "string" as const } }, required: ["entityId", "componentType"] },
+    rpcMethod: "entity.addComponent",
+    category: "entity",
+  },
+  {
+    name: "entity.removeComponent",
+    description: "Remove a component from an entity.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, componentType: { type: "string" as const } }, required: ["entityId", "componentType"] },
+    rpcMethod: "entity.removeComponent",
+    category: "entity",
+  },
+  {
+    name: "entity.setVisible",
+    description: "Show or hide an entity.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, visible: { type: "boolean" as const } }, required: ["entityId", "visible"] },
+    rpcMethod: "entity.setVisible",
+    category: "entity",
+  },
+  {
+    name: "entity.setAssetField",
+    description: "Assign an asset (model, texture, script) to a component field on an entity.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, componentType: { type: "string" as const }, fieldName: { type: "string" as const }, assetPath: { type: "string" as const } }, required: ["entityId", "componentType", "fieldName"] },
+    rpcMethod: "entity.setAssetField",
+    category: "entity",
+  },
+  {
+    name: "playback.play",
+    description: "Start playing the scene (enter Play mode).",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "playback.play",
+    category: "playback",
+  },
+  {
+    name: "playback.pause",
+    description: "Pause playback.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "playback.pause",
+    category: "playback",
+  },
+  {
+    name: "playback.stop",
+    description: "Stop playback and return to edit mode.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "playback.stop",
+    category: "playback",
+  },
+  {
+    name: "script.listScripts",
+    description: "List all script files in the project.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "script.listScripts",
+    category: "script",
+  },
+  {
+    name: "script.getContent",
+    description: "Read the source code of a script file.",
+    parameters: { type: "object" as const, properties: { path: { type: "string" as const } }, required: ["path"] },
+    rpcMethod: "script.getContent",
+    category: "script",
+  },
+  {
+    name: "script.saveContent",
+    description: "Write source code to a script file. Creates the file if it doesn't exist.",
+    parameters: { type: "object" as const, properties: { path: { type: "string" as const }, content: { type: "string" as const } }, required: ["path", "content"] },
+    rpcMethod: "script.saveContent",
+    category: "script",
+  },
+  {
+    name: "assets.list",
+    description: "List files and folders in a project directory.",
+    parameters: { type: "object" as const, properties: { path: { type: "string" as const } } },
+    rpcMethod: "assets.list",
+    category: "asset",
+  },
+  {
+    name: "animation.getState",
+    description: "Get the animation graph state of an entity.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const } }, required: ["entityId"] },
+    rpcMethod: "animation.getState",
+    category: "animation",
+  },
+  {
+    name: "animation.addState",
+    description: "Add a new animation state to an entity's animation graph.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, name: { type: "string" as const } }, required: ["entityId"] },
+    rpcMethod: "animation.addState",
+    category: "animation",
+  },
+  {
+    name: "animation.addTransition",
+    description: "Add a transition between two animation states.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, fromState: { type: "integer" as const }, toState: { type: "integer" as const }, duration: { type: "number" as const }, triggerTime: { type: "number" as const } }, required: ["entityId", "fromState", "toState"] },
+    rpcMethod: "animation.addTransition",
+    category: "animation",
+  },
+  {
+    name: "material.getState",
+    description: "Get the material properties of an entity.",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const } }, required: ["entityId"] },
+    rpcMethod: "material.getState",
+    category: "material",
+  },
+  {
+    name: "material.setColor",
+    description: "Set a color property on an entity's material (e.g. baseColor, emissive).",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, property: { type: "string" as const }, value: { type: "array" as const, items: { type: "number" as const } } }, required: ["entityId", "property", "value"] },
+    rpcMethod: "material.setColor",
+    category: "material",
+  },
+  {
+    name: "material.setScalar",
+    description: "Set a scalar material property (metallic, roughness, etc.).",
+    parameters: { type: "object" as const, properties: { entityId: { type: "integer" as const }, property: { type: "string" as const }, value: { type: "number" as const } }, required: ["entityId", "property", "value"] },
+    rpcMethod: "material.setScalar",
+    category: "material",
+  },
+  {
+    name: "camera.getState",
+    description: "Get the current editor camera position and rotation.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "camera.getState",
+    category: "camera",
+  },
+  {
+    name: "camera.lookAlongAxis",
+    description: "Point the editor camera along an axis (top-down, front, side view).",
+    parameters: { type: "object" as const, properties: { axisX: { type: "number" as const }, axisY: { type: "number" as const }, axisZ: { type: "number" as const }, distance: { type: "number" as const }, targetX: { type: "number" as const }, targetY: { type: "number" as const }, targetZ: { type: "number" as const } }, required: ["axisX", "axisY", "axisZ"] },
+    rpcMethod: "camera.lookAlongAxis",
+    category: "camera",
+  },
+  {
+    name: "prefab.list",
+    description: "List all prefabs in the project.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "prefab.list",
+    category: "prefab",
+  },
+  {
+    name: "prefab.instantiate",
+    description: "Instantiate a prefab at a position in the scene.",
+    parameters: { type: "object" as const, properties: { prefabId: { type: "string" as const }, posX: { type: "number" as const }, posY: { type: "number" as const }, posZ: { type: "number" as const } }, required: ["prefabId"] },
+    rpcMethod: "prefab.instantiate",
+    category: "prefab",
+  },
+  {
+    name: "audio.getMixerStatus",
+    description: "Get the audio mixer status (buses, volumes, active voices).",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "audio.getMixerStatus",
+    category: "audio",
+  },
+  {
+    name: "editor.undo",
+    description: "Undo the last action.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "editor.undo",
+    category: "scene",
+  },
+  {
+    name: "editor.redo",
+    description: "Redo the last undone action.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "editor.redo",
+    category: "scene",
+  },
+  {
+    name: "editor.getHistory",
+    description: "Get the undo/redo history list.",
+    parameters: { type: "object" as const, properties: {} },
+    rpcMethod: "editor.getHistory",
+    category: "scene",
+  },
+];
+
+export function toOpenAiTools(tools: AiToolDef[]) {
+  return tools.map((t) => ({
+    type: "function" as const,
+    function: { name: t.name, description: t.description, parameters: t.parameters },
+  }));
+}
+
+export function toAnthropicTools(tools: AiToolDef[]) {
+  return tools.map((t) => ({
+    name: t.name,
+    description: t.description,
+    input_schema: t.parameters,
+  }));
+}
+
+export function findTool(name: string): AiToolDef | undefined {
+  return AI_TOOLS.find((t) => t.name === name);
+}
