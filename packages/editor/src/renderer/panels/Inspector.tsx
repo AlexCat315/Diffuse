@@ -851,11 +851,29 @@ function SkyEnvironmentField({
 // ── Add Component button ─────────────────────────────────────────
 
 const ALL_COMPONENT_TYPES = [
+  // Core
   "Camera", "Mesh", "SkinnedMesh", "Animator", "Rigidbody",
   "BoxCollider", "SphereCollider", "MeshCollider", "CapsuleCollider",
   "CharacterController", "Constraint", "Tag", "Sky",
   "Material", "Light", "Vfx", "Script", "AudioSource",
   "AudioListener", "NavAgent",
+  // AI / Behavior
+  "BehaviorTree",
+  // Terrain
+  "Terrain",
+  // Networking
+  "NetworkIdentity", "NetworkTransform",
+  // Camera controllers
+  "RtsCamera", "FpsCamera",
+  // Fog of War
+  "FogVision", "FogOfWarConfig",
+  // Economy / Resources
+  "ResourceStorage", "ResourceHarvester", "ResourceNode",
+  "SupplyProvider", "SupplyConsumer", "ProductionQueue", "TradeOffer",
+  // Unit Selection
+  "UnitSelectable", "CommandReceiver",
+  // Turn-Based
+  "TurnConfig", "TurnPlayer", "TurnActor",
 ];
 
 function AddComponentButton({

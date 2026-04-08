@@ -191,4 +191,32 @@ pub const component_fields = [_]ComponentField{
     .{ .name = "audio_source", .display_name = "AudioSource" },
     .{ .name = "audio_listener", .display_name = "AudioListener" },
     .{ .name = "nav_agent", .display_name = "NavAgent" },
+    // AI / Behavior
+    .{ .name = "behavior_tree", .display_name = "BehaviorTree" },
+    // Terrain
+    .{ .name = "terrain", .display_name = "Terrain" },
+    // Networking
+    .{ .name = "network_identity", .display_name = "NetworkIdentity" },
+    .{ .name = "network_transform", .display_name = "NetworkTransform" },
+    // Camera controllers
+    .{ .name = "rts_camera", .display_name = "RtsCamera" },
+    .{ .name = "fps_camera", .display_name = "FpsCamera" },
+    // Fog of War
+    .{ .name = "fog_vision", .display_name = "FogVision" },
+    .{ .name = "fog_of_war_config", .display_name = "FogOfWarConfig" },
+    // Economy / Resources
+    .{ .name = "resource_storage", .display_name = "ResourceStorage" },
+    .{ .name = "resource_harvester", .display_name = "ResourceHarvester" },
+    .{ .name = "resource_node", .display_name = "ResourceNode" },
+    .{ .name = "supply_provider", .display_name = "SupplyProvider" },
+    .{ .name = "supply_consumer", .display_name = "SupplyConsumer" },
+    .{ .name = "production_queue", .display_name = "ProductionQueue" },
+    .{ .name = "trade_offer", .display_name = "TradeOffer" },
+    // Unit Selection
+    .{ .name = "unit_selectable", .display_name = "UnitSelectable" },
+    .{ .name = "command_receiver", .display_name = "CommandReceiver" },
+    // Turn-Based
+    .{ .name = "turn_config", .display_name = "TurnConfig" },
+    .{ .name = "turn_player", .display_name = "TurnPlayer" },
+    .{ .name = "turn_actor", .display_name = "TurnActor" },
 };
