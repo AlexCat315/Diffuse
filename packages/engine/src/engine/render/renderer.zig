@@ -2628,6 +2628,13 @@ pub const Renderer = struct {
                 if (self.ui_canvas) |*uc| {
                     const sw: f32 = @floatFromInt(frame.swapchain_image.width);
                     const sh: f32 = @floatFromInt(frame.swapchain_image.height);
+
+                    // Update debug HUD overlay
+                    const stats = self.rhi.performanceStats();
+                    const fps_val: usize = @intFromFloat(@min(stats.fps(), 9999.0));
+                    const entity_count = scene.entities.items.len;
+                    uc.updateDebugHud(fps_val, stats.draw_calls, entity_count);
+
                     uc.update(sw, sh);
                     uc.draw(&self.rhi, frame, ui_pass, sw, sh);
                 }

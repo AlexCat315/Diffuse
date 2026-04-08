@@ -85,3 +85,5 @@ packages/editor/native/build/
 packages/editor/native/bin/
 packages/editor/dist-package
 .guava_scene
+packages/engine/sdk/csharp/**/**/bin/**
+packages/engine/sdk/csharp/**/**/obj/**
