@@ -34,6 +34,7 @@ pub const GuavaHostApi = extern struct {
 
     // ─── Transform ────────────────────────────────────────────────
     get_position: *const fn (?*anyopaque, *f32, *f32, *f32) callconv(.c) void,
+    get_position_of_entity: *const fn (?*anyopaque, u64, *f32, *f32, *f32) callconv(.c) void,
     set_position: *const fn (?*anyopaque, f32, f32, f32) callconv(.c) void,
     get_rotation: *const fn (?*anyopaque, *f32, *f32, *f32, *f32) callconv(.c) void,
     set_rotation: *const fn (?*anyopaque, f32, f32, f32, f32) callconv(.c) void,

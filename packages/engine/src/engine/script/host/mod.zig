@@ -59,6 +59,7 @@ pub const guava_host_api: GuavaHostApi = .{
     .destroy_entity = entity.guavaHostDestroyEntity,
     // Transform
     .get_position = transform.guavaHostGetPosition,
+    .get_position_of_entity = transform.guavaHostGetPositionOfEntity,
     .set_position = transform.guavaHostSetPosition,
     .get_rotation = transform.guavaHostGetRotation,
     .set_rotation = transform.guavaHostSetRotation,

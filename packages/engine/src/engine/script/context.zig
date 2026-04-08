@@ -122,6 +122,14 @@ pub const ScriptContext = struct {
         return null;
     }
 
+    /// 获取任意实体的位置
+    pub fn getPositionOfEntity(self: *ScriptContext, entity_id: u64) ?components.Vec3 {
+        if (self.world.id_to_index.get(entity_id)) |idx| {
+            return self.world.entities.items[idx].local_transform.translation;
+        }
+        return null;
+    }
+
     /// 获取实体的旋转
     pub fn getRotation(self: *ScriptContext) ?components.Quat {
         if (self.world.id_to_index.get(self.entity)) |idx| {

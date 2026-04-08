@@ -139,6 +139,15 @@ pub fn getPosition() Vec3 {
     return .{ x, y, z };
 }
 
+/// 获取任意实体的本地位置
+pub fn getPositionOf(entity_id: u64) Vec3 {
+    var x: f32 = 0;
+    var y: f32 = 0;
+    var z: f32 = 0;
+    api.get_position_of_entity(ctx, entity_id, &x, &y, &z);
+    return .{ x, y, z };
+}
+
 /// 设置当前实体的本地位置
 pub fn setPosition(pos: Vec3) void {
     api.set_position(ctx, pos[0], pos[1], pos[2]);
