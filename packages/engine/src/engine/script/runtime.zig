@@ -65,6 +65,10 @@ pub const ScriptRuntime = struct {
     allocator: std.mem.Allocator,
     /// 临时上下文（每帧复用）
     temp_context: ?*context.ScriptContext = null,
+    /// 全局黑板（跨脚本共享键值存储）
+    blackboard: context.Blackboard,
+    /// 持久化存储根路径（saves/）
+    save_root_path: []const u8 = "saves",
     /// 可读脚本状态日志
     status_events: std.ArrayList(StatusEvent),
     status_mutex: std.Thread.Mutex = .{},
@@ -81,6 +85,7 @@ pub const ScriptRuntime = struct {
                 hot_reload_mod.HotReloadManager.init(allocator, undefined)
             else
                 null,
+            .blackboard = context.Blackboard.init(allocator),
             .status_events = .empty,
         };
     }
@@ -126,6 +131,9 @@ pub const ScriptRuntime = struct {
             self.allocator.destroy(script_vm);
         }
         self.vms.deinit();
+
+        // 销毁全局黑板
+        self.blackboard.deinit();
 
         // 销毁热重载管理器
         if (self.hot_reload) |*hr| {
@@ -486,6 +494,8 @@ pub const ScriptRuntime = struct {
                     .instance = instance,
                     .allocator = self.allocator,
                     .command_queue = self.command_queue,
+                    .blackboard = &self.blackboard,
+                    .save_root_path = self.save_root_path,
                 };
                 vm.callDestroy(instance, &ctx) catch |err| {
                     log.err("Script destroy error for entity {}: {}", .{ instance.entity_id, err });
@@ -564,6 +574,8 @@ pub const ScriptRuntime = struct {
             .instance = undefined,
             .allocator = self.allocator,
             .command_queue = self.command_queue,
+            .blackboard = &self.blackboard,
+            .save_root_path = self.save_root_path,
         };
 
         const instance = vm.createInstance(&ctx) catch |err| {

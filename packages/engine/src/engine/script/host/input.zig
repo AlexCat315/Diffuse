@@ -80,3 +80,45 @@ pub fn guavaHostGetGamepadAxis(userdata: ?*anyopaque, axis: u32) callconv(.c) f3
     const ax = std.meta.intToEnum(input_mod.GamepadAxis, @as(u8, @intCast(axis))) catch return 0.0;
     return input_state.getGamepadAxis(ax);
 }
+
+// ─── Mouse (extended) ─────────────────────────────────────────────────────
+
+pub fn guavaHostWasMouseButtonPressed(userdata: ?*anyopaque, btn_raw: u32) callconv(.c) u32 {
+    const ctx = mod.activeContext(userdata) orelse return 0;
+    const button = std.meta.intToEnum(input_mod.MouseButton, @as(u2, @intCast(btn_raw))) catch return 0;
+    return if (ctx.wasMouseButtonPressed(button)) @as(u32, 1) else @as(u32, 0);
+}
+
+pub fn guavaHostWasMouseButtonReleased(userdata: ?*anyopaque, btn_raw: u32) callconv(.c) u32 {
+    const ctx = mod.activeContext(userdata) orelse return 0;
+    const button = std.meta.intToEnum(input_mod.MouseButton, @as(u2, @intCast(btn_raw))) catch return 0;
+    return if (ctx.wasMouseButtonReleased(button)) @as(u32, 1) else @as(u32, 0);
+}
+
+pub fn guavaHostWasMouseDoubleClicked(userdata: ?*anyopaque, btn_raw: u32) callconv(.c) u32 {
+    const ctx = mod.activeContext(userdata) orelse return 0;
+    const button = std.meta.intToEnum(input_mod.MouseButton, @as(u2, @intCast(btn_raw))) catch return 0;
+    return if (ctx.wasMouseDoubleClicked(button)) @as(u32, 1) else @as(u32, 0);
+}
+
+// ─── Action Map ───────────────────────────────────────────────────────────
+
+pub fn guavaHostIsActionPressed(userdata: ?*anyopaque, ptr: [*]const u8, len: usize) callconv(.c) u32 {
+    const ctx = mod.activeContext(userdata) orelse return 0;
+    return if (ctx.isActionPressed(ptr[0..len])) @as(u32, 1) else @as(u32, 0);
+}
+
+pub fn guavaHostWasActionJustPressed(userdata: ?*anyopaque, ptr: [*]const u8, len: usize) callconv(.c) u32 {
+    const ctx = mod.activeContext(userdata) orelse return 0;
+    return if (ctx.wasActionJustPressed(ptr[0..len])) @as(u32, 1) else @as(u32, 0);
+}
+
+pub fn guavaHostWasActionJustReleased(userdata: ?*anyopaque, ptr: [*]const u8, len: usize) callconv(.c) u32 {
+    const ctx = mod.activeContext(userdata) orelse return 0;
+    return if (ctx.wasActionJustReleased(ptr[0..len])) @as(u32, 1) else @as(u32, 0);
+}
+
+pub fn guavaHostGetActionAxis(userdata: ?*anyopaque, ptr: [*]const u8, len: usize) callconv(.c) f32 {
+    const ctx = mod.activeContext(userdata) orelse return 0.0;
+    return ctx.getActionAxis(ptr[0..len]);
+}

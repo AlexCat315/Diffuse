@@ -61,6 +61,10 @@ pub const ScriptContext = struct {
     editor_selection_api: ?EditorSelectionApi = null,
     /// 输入动作映射（GR-6；可选）
     action_map: ?*const action_map_mod.ActionMap = null,
+    /// 全局黑板（所有脚本实例共享；由运行时持有）
+    blackboard: ?*Blackboard = null,
+    /// 持久化存储根路径（项目目录下 saves/ 子目录）
+    save_root_path: ?[]const u8 = null,
 
     /// 获取实体的名称
     pub fn getName(self: *ScriptContext) []const u8 {
@@ -451,7 +455,8 @@ pub const ScriptContext = struct {
         translation: components.Vec3,
         filter: physics_mod.QueryFilter,
     ) ?physics_mod.SweepHit {
-        return physics_mod.sweepAabb(self.world, query_bounds, translation, filter);
+        const ps = self.physics_state orelse return null;
+        return ps.sweepAabb(self.world, query_bounds, translation, filter);
     }
 
     pub fn physicsSweepBox(
@@ -494,6 +499,164 @@ pub const ScriptContext = struct {
     pub fn getActionAxis(self: *ScriptContext, action: []const u8) f32 {
         const am = self.action_map orelse return 0.0;
         return am.getAxis(action);
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 2a: 实体标签查询
+    // -----------------------------------------------------------------------
+
+    /// 按标签查找实体，将结果写入 out_buf，返回命中数量
+    pub fn findEntitiesByTag(self: *ScriptContext, tag: []const u8, out_buf: []EntityId) usize {
+        var count: usize = 0;
+        for (self.world.entities.items) |*entity| {
+            if (entity.tag) |*t| {
+                if (t.eql(tag)) {
+                    if (count >= out_buf.len) break;
+                    out_buf[count] = entity.id;
+                    count += 1;
+                }
+            }
+        }
+        return count;
+    }
+
+    /// 获取当前实体的标签（无标签返回空切片）
+    pub fn getTag(self: *ScriptContext) []const u8 {
+        if (self.world.id_to_index.get(self.entity)) |idx| {
+            const entity = &self.world.entities.items[idx];
+            if (entity.tag) |*t| return t.asSlice();
+        }
+        return "";
+    }
+
+    /// 设置当前实体的标签
+    pub fn setTag(self: *ScriptContext, tag: []const u8) void {
+        if (self.world.id_to_index.get(self.entity)) |idx| {
+            self.world.entities.items[idx].tag = components.Tag.fromSlice(tag);
+        }
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 2b: Prefab 实例化
+    // -----------------------------------------------------------------------
+
+    /// 实例化预制体，返回根实体 ID
+    pub fn instantiatePrefab(self: *ScriptContext, prefab_id: []const u8, px: f32, py: f32, pz: f32) ?EntityId {
+        return self.world.instantiatePrefab(prefab_id, .{
+            .transform = .{
+                .translation = .{ px, py, pz },
+            },
+            .load_resources = true,
+        }) catch |err| {
+            std.log.err("[Script:{d}] instantiatePrefab failed: {}", .{ self.entity, err });
+            return null;
+        };
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 2c: 持久化存储（脚本可读写的 key-value 文件）
+    // -----------------------------------------------------------------------
+
+    /// 将字符串值保存到持久化文件（saves/{key}.dat）
+    pub fn saveData(self: *ScriptContext, key: []const u8, value: []const u8) bool {
+        const root = self.save_root_path orelse return false;
+        // 确保目录存在
+        std.fs.cwd().makePath(root) catch return false;
+
+        var path_buf: [512]u8 = undefined;
+        const path = std.fmt.bufPrint(&path_buf, "{s}/{s}.dat", .{ root, key }) catch return false;
+        const file = std.fs.cwd().createFile(path, .{}) catch return false;
+        defer file.close();
+        file.writeAll(value) catch return false;
+        return true;
+    }
+
+    /// 从持久化文件读取字符串值，失败返回空切片
+    /// 注意：返回值使用 ScriptContext.allocator 分配，调用者需要自行管理
+    pub fn loadData(self: *ScriptContext, key: []const u8) ?[]const u8 {
+        const root = self.save_root_path orelse return null;
+        var path_buf: [512]u8 = undefined;
+        const path = std.fmt.bufPrint(&path_buf, "{s}/{s}.dat", .{ root, key }) catch return null;
+        const file = std.fs.cwd().openFile(path, .{}) catch return null;
+        defer file.close();
+        return file.readToEndAlloc(self.allocator, 1024 * 1024) catch null;
+    }
+
+    // -----------------------------------------------------------------------
+    // Phase 2d: 全局黑板
+    // -----------------------------------------------------------------------
+
+    /// 设置黑板键值对（值被复制到黑板分配器中）
+    pub fn setBlackboard(self: *ScriptContext, key: []const u8, value: []const u8) void {
+        const bb = self.blackboard orelse return;
+        bb.set(key, value);
+    }
+
+    /// 获取黑板键值对
+    pub fn getBlackboard(self: *ScriptContext, key: []const u8) ?[]const u8 {
+        const bb = self.blackboard orelse return null;
+        return bb.get(key);
+    }
+
+    /// 删除黑板键
+    pub fn removeBlackboard(self: *ScriptContext, key: []const u8) void {
+        const bb = self.blackboard orelse return;
+        bb.remove(key);
+    }
+};
+
+// ═══════════════════════════════════════════════════════════════════════════
+// 全局黑板 — 脚本间共享的键值存储
+// ═══════════════════════════════════════════════════════════════════════════
+
+pub const Blackboard = struct {
+    allocator: std.mem.Allocator,
+    map: std.StringHashMap([]const u8),
+
+    pub fn init(allocator: std.mem.Allocator) Blackboard {
+        return .{
+            .allocator = allocator,
+            .map = std.StringHashMap([]const u8).init(allocator),
+        };
+    }
+
+    pub fn deinit(self: *Blackboard) void {
+        var it = self.map.iterator();
+        while (it.next()) |entry| {
+            self.allocator.free(entry.key_ptr.*);
+            self.allocator.free(entry.value_ptr.*);
+        }
+        self.map.deinit();
+    }
+
+    pub fn set(self: *Blackboard, key: []const u8, value: []const u8) void {
+        // 如果已存在，释放旧值
+        if (self.map.getEntry(key)) |existing| {
+            self.allocator.free(existing.value_ptr.*);
+            existing.value_ptr.* = self.allocator.dupe(u8, value) catch return;
+            return;
+        }
+        // 新增键值对
+        const owned_key = self.allocator.dupe(u8, key) catch return;
+        const owned_value = self.allocator.dupe(u8, value) catch {
+            self.allocator.free(owned_key);
+            return;
+        };
+        self.map.put(owned_key, owned_value) catch {
+            self.allocator.free(owned_key);
+            self.allocator.free(owned_value);
+        };
+    }
+
+    pub fn get(self: *Blackboard, key: []const u8) ?[]const u8 {
+        return self.map.get(key);
+    }
+
+    pub fn remove(self: *Blackboard, key: []const u8) void {
+        if (self.map.fetchRemove(key)) |removed| {
+            self.allocator.free(removed.key);
+            self.allocator.free(removed.value);
+        }
     }
 };
 

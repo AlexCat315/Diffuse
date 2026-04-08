@@ -464,3 +464,251 @@ pub fn getParameterInt(name: []const u8, default: i32) i32 {
 pub fn getParameterBool(name: []const u8, default: bool) bool {
     return api.get_parameter_bool(ctx, name.ptr, name.len, if (default) @as(u32, 1) else @as(u32, 0)) != 0;
 }
+
+// ---------------------------------------------------------------------------
+// Entity Hierarchy API
+// ---------------------------------------------------------------------------
+
+/// 获取当前实体的直接子实体数量
+pub fn getChildCount() u32 {
+    return api.get_child_count(ctx);
+}
+
+/// 按索引获取子实体 ID（0 = 无效/越界）
+pub fn getChildEntity(index: u32) u64 {
+    return api.get_child_entity(ctx, index);
+}
+
+/// 获取当前实体的父实体 ID（0 = 根实体/无父）
+pub fn getParentEntity() u64 {
+    return api.get_parent_entity(ctx);
+}
+
+// ---------------------------------------------------------------------------
+// Scene Management (extended)
+// ---------------------------------------------------------------------------
+
+/// 卸载当前场景
+pub fn unloadScene() void {
+    api.unload_scene(ctx);
+}
+
+/// 查询场景是否正在加载中
+pub fn isSceneLoading() bool {
+    return api.is_scene_loading(ctx) != 0;
+}
+
+/// 标记当前实体为"跨场景不销毁"
+pub fn setDontDestroyOnLoad(enabled: bool) void {
+    api.set_dont_destroy_on_load(ctx, if (enabled) 1 else 0);
+}
+
+/// 标记指定实体为"跨场景不销毁"
+pub fn setEntityDontDestroyOnLoad(entity_id: u64, enabled: bool) void {
+    api.set_entity_dont_destroy_on_load(ctx, entity_id, if (enabled) 1 else 0);
+}
+
+// ---------------------------------------------------------------------------
+// Time (extended)
+// ---------------------------------------------------------------------------
+
+/// 获取时间缩放系数
+pub fn getTimeScale() f32 {
+    return api.get_time_scale(ctx);
+}
+
+/// 设置时间缩放系数
+pub fn setTimeScale(scale: f32) void {
+    api.set_time_scale(ctx, scale);
+}
+
+/// 获取缩放后的帧间隔（deltaTime * timeScale）
+pub fn scaledDeltaTime() f32 {
+    return api.get_scaled_delta_time(ctx);
+}
+
+/// 获取缩放后的总时间
+pub fn scaledTime() f32 {
+    return api.get_scaled_time(ctx);
+}
+
+/// 获取当前帧率（FPS）
+pub fn fps() f32 {
+    return api.get_fps(ctx);
+}
+
+// ---------------------------------------------------------------------------
+// Mouse Input (extended)
+// ---------------------------------------------------------------------------
+
+/// 查询鼠标按钮是否在本帧刚按下
+pub fn wasMouseButtonPressed(button: MouseButton) bool {
+    return api.was_mouse_button_pressed(ctx, @intFromEnum(button)) != 0;
+}
+
+/// 查询鼠标按钮是否在本帧刚释放
+pub fn wasMouseButtonReleased(button: MouseButton) bool {
+    return api.was_mouse_button_released(ctx, @intFromEnum(button)) != 0;
+}
+
+/// 查询鼠标是否双击
+pub fn wasMouseDoubleClicked(button: MouseButton) bool {
+    return api.was_mouse_double_clicked(ctx, @intFromEnum(button)) != 0;
+}
+
+// ---------------------------------------------------------------------------
+// Action Map API
+// ---------------------------------------------------------------------------
+
+/// 查询动作是否当前按住（持续状态）
+pub fn isActionPressed(action: []const u8) bool {
+    return api.is_action_pressed(ctx, action.ptr, action.len) != 0;
+}
+
+/// 查询动作是否刚按下（本帧上升沿）
+pub fn wasActionJustPressed(action: []const u8) bool {
+    return api.was_action_just_pressed(ctx, action.ptr, action.len) != 0;
+}
+
+/// 查询动作是否刚释放（本帧下降沿）
+pub fn wasActionJustReleased(action: []const u8) bool {
+    return api.was_action_just_released(ctx, action.ptr, action.len) != 0;
+}
+
+/// 获取合成轴值（-1.0 ~ 1.0）
+pub fn getActionAxis(action: []const u8) f32 {
+    return api.get_action_axis(ctx, action.ptr, action.len);
+}
+
+// ---------------------------------------------------------------------------
+// Physics (extended)
+// ---------------------------------------------------------------------------
+
+pub const OverlapResult = struct {
+    count: u32,
+    entities: []const u64,
+};
+
+/// 盒体重叠检测，返回命中实体数量。entity_buf 需由调用者分配。
+pub fn overlapBox(center: Vec3, half_extents: Vec3, exclude_entity: u64, include_triggers: bool, entity_buf: []u64) u32 {
+    return api.overlap_box(
+        ctx,
+        center[0],
+        center[1],
+        center[2],
+        half_extents[0],
+        half_extents[1],
+        half_extents[2],
+        exclude_entity,
+        if (include_triggers) 1 else 0,
+        entity_buf.ptr,
+        @intCast(entity_buf.len),
+    );
+}
+
+pub const SweepHit = struct {
+    entity_id: u64,
+    fraction: f32,
+    normal: Vec3,
+};
+
+/// 盒体扫掠检测（shape cast），返回最近命中
+pub fn sweepBox(center: Vec3, half_extents: Vec3, direction: Vec3, exclude_entity: u64, include_triggers: bool) ?SweepHit {
+    var eid: u64 = 0;
+    var frac: f32 = 0;
+    var nx: f32 = 0;
+    var ny: f32 = 0;
+    var nz: f32 = 0;
+    const hit = api.sweep_box(
+        ctx,
+        center[0],
+        center[1],
+        center[2],
+        half_extents[0],
+        half_extents[1],
+        half_extents[2],
+        direction[0],
+        direction[1],
+        direction[2],
+        exclude_entity,
+        if (include_triggers) 1 else 0,
+        &eid,
+        &frac,
+        &nx,
+        &ny,
+        &nz,
+    );
+    if (hit == 0) return null;
+    return .{ .entity_id = eid, .fraction = frac, .normal = .{ nx, ny, nz } };
+}
+
+// ---------------------------------------------------------------------------
+// Entity Tag API (Phase 2a)
+// ---------------------------------------------------------------------------
+
+/// 按标签查找实体，返回命中数量。entity_buf 需由调用者分配。
+pub fn findEntitiesByTag(tag: []const u8, entity_buf: []u64) u32 {
+    return api.find_entities_by_tag(ctx, tag.ptr, tag.len, entity_buf.ptr, @intCast(entity_buf.len));
+}
+
+/// 获取当前实体的标签
+pub fn getTag() []const u8 {
+    var ptr: [*]const u8 = undefined;
+    var len: usize = 0;
+    api.get_tag(ctx, &ptr, &len);
+    if (len == 0) return "";
+    return ptr[0..len];
+}
+
+/// 设置当前实体的标签
+pub fn setTag(tag: []const u8) void {
+    api.set_tag(ctx, tag.ptr, tag.len);
+}
+
+// ---------------------------------------------------------------------------
+// Prefab API (Phase 2b)
+// ---------------------------------------------------------------------------
+
+/// 实例化预制体，返回根实体 ID（0 = 失败）
+pub fn instantiatePrefab(prefab_id: []const u8, position: Vec3) u64 {
+    return api.instantiate_prefab(ctx, prefab_id.ptr, prefab_id.len, position[0], position[1], position[2]);
+}
+
+// ---------------------------------------------------------------------------
+// Persistence API (Phase 2c)
+// ---------------------------------------------------------------------------
+
+/// 将字符串值保存到持久化文件
+pub fn saveData(key: []const u8, value: []const u8) bool {
+    return api.save_data(ctx, key.ptr, key.len, value.ptr, value.len) != 0;
+}
+
+/// 从持久化文件读取字符串值
+pub fn loadData(key: []const u8) ?[]const u8 {
+    var ptr: [*]const u8 = undefined;
+    var len: usize = 0;
+    if (api.load_data(ctx, key.ptr, key.len, &ptr, &len) == 0) return null;
+    return ptr[0..len];
+}
+
+// ---------------------------------------------------------------------------
+// Blackboard API (Phase 2d)
+// ---------------------------------------------------------------------------
+
+/// 设置全局黑板键值对（对所有脚本实例可见）
+pub fn blackboardSet(key: []const u8, value: []const u8) void {
+    api.blackboard_set(ctx, key.ptr, key.len, value.ptr, value.len);
+}
+
+/// 获取全局黑板键值对
+pub fn blackboardGet(key: []const u8) ?[]const u8 {
+    var ptr: [*]const u8 = undefined;
+    var len: usize = 0;
+    if (api.blackboard_get(ctx, key.ptr, key.len, &ptr, &len) == 0) return null;
+    return ptr[0..len];
+}
+
+/// 删除全局黑板键
+pub fn blackboardRemove(key: []const u8) void {
+    api.blackboard_remove(ctx, key.ptr, key.len);
+}
