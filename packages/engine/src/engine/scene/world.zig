@@ -198,6 +198,10 @@ pub const Entity = struct {
     behavior_tree: ?components.BehaviorTreeComponent = null,
     /// 地形组件
     terrain: ?components.TerrainComponent = null,
+    /// 网络身份组件
+    network_identity: ?components.NetworkIdentity = null,
+    /// 网络变换同步组件
+    network_transform: ?components.NetworkTransform = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示
@@ -368,6 +372,10 @@ pub const EntityDesc = struct {
     behavior_tree: ?components.BehaviorTreeComponent = null,
     /// 地形组件
     terrain: ?components.TerrainComponent = null,
+    /// 网络身份组件
+    network_identity: ?components.NetworkIdentity = null,
+    /// 网络变换同步组件
+    network_transform: ?components.NetworkTransform = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示

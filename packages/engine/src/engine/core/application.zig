@@ -44,6 +44,8 @@ const std = @import("std");
 const builtin = @import("builtin");
 const animator_system = @import("../animation/animator_system.zig");
 const bt_system = @import("../behavior/bt_system.zig");
+const net_system_mod = @import("../network/net_system.zig");
+const net_session_mod = @import("../network/session.zig");
 
 // macOS Mach kernel APIs for high-precision timing and thread priority.
 const mach = if (builtin.os.tag == .macos) struct {
@@ -222,6 +224,8 @@ pub const Application = struct {
     physics_state: physics_system.PhysicsState,
     /// 导航系统状态
     nav_system: nav_system_mod.NavSystem,
+    /// 网络/多人系统
+    net_system: net_system_mod.NetworkSystem,
     /// 脚本调试会话
     debug_session: debug_session_mod.DebugSession,
     /// 待处理的文件拖放路径（由 OS 文件拖放事件设置，由编辑器层消费）
@@ -307,6 +311,7 @@ pub const Application = struct {
             .timer = timer,
             .physics_state = physics_system.PhysicsState.init(allocator),
             .nav_system = nav_system_mod.NavSystem.init(allocator),
+            .net_system = net_system_mod.NetworkSystem.init(allocator, net_session_mod.SessionConfig{}),
             .debug_session = debug_session_mod.DebugSession.init(allocator),
             .action_map = input_action_mod.ActionMap.init(allocator),
         };
@@ -353,6 +358,7 @@ pub const Application = struct {
         self.physics_state.deinitWorld(&self.world);
         self.physics_state.deinit();
         self.nav_system.deinit();
+        self.net_system.deinit();
         self.debug_session.deinit();
         self.world.deinit();
         self.command_queue.deinit();
@@ -495,6 +501,10 @@ pub const Application = struct {
                 self.nav_system.update(&self.world, delta_seconds);
                 // 更新行为树（AI 决策）
                 bt_system.update(&self.world, delta_seconds);
+                // 更新网络系统（收发数据包、同步实体状态）
+                self.net_system.update(&self.world, delta_seconds) catch |err| {
+                    std.log.err("[run-loop] net_system.update failed: {s}", .{@errorName(err)});
+                };
                 // 更新脚本系统（传递时间和输入）
                 self.updateScripts(delta_seconds);
                 self.applyPendingCommands() catch |err| {

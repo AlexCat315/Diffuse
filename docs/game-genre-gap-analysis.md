@@ -79,27 +79,29 @@
 
 ---
 
-### 3. 网络/多人系统 🔴 高难度
+### 3. 网络/多人系统 ✅ 基础实现完成
 
-**当前状态**: 零。WebSocket RPC 仅用于编辑器通信，无游戏级网络。
+**当前状态**: 纯 Zig 实现的 UDP 网络协议栈，无 C 依赖。
 
-**FPS/RTS 需要**: 实时同步。4X 可用 turn-based 降低需求。
+**已实现**:
+- [x] 传输层 — 非阻塞 UDP 套接字 (`network/transport.zig`)
+- [x] 可靠传输 — 序列号 + ACK 位域 + 200ms 重传
+- [x] 包协议 — 13 字节头 + 手动序列化/反序列化 (`network/protocol.zig`)
+- [x] 多通道 — reliable / unreliable / unreliable_sequenced / control
+- [x] 会话管理 — Host/Client 模式、4 步握手、心跳、超时检测 (`network/session.zig`)
+- [x] 实体同步 — NetworkIdentity + NetworkTransform ECS 组件 (`network/net_system.zig`)
+- [x] 状态复制 — Host 广播 TransformSnapshot，Client 插值
+- [x] 已集成主循环 — `application.zig` 每帧调用 `net_system.update()`
+- [x] 最多 16 玩家、RTT 估算
+- [x] C# SDK API (`GuavaNetwork.cs` — NetworkManager + RPC 编解码)
 
-**需要实现**:
-- [ ] 传输层（UDP/WebSocket/QUIC）
-- [ ] 序列化协议（帧数据/状态快照）
+**待完善**:
 - [ ] 客户端预测 + 服务端权威
-- [ ] 延迟补偿 / 插值
-- [ ] 大厅/房间系统
+- [ ] 大厅/房间/匹配系统
 - [ ] 断线重连
-- [ ] 可选 dedicated server 模式
-
-**可选方案**:
-- A) Lockstep（RTS 经典，确定性物理）
-- B) 快照插值（FPS 经典，Valve-style）
-- C) ECS 状态同步（通用）
-
-**预估工作量**: 极大（4-8 周核心功能，不含反作弊/匹配）
+- [ ] 帧同步 (Lockstep) 模式
+- [ ] 反作弊
+- [ ] HostApi 扩展（C# 脚本直接调用原生网络 API）
 
 ---
 
@@ -253,7 +255,7 @@ Phase 4 — 4X 基础
 | ~~运行时 UI~~    | ~~★★★★~~ | ~~★★★★★~~ | ~~★★★★★~~ | **✅ 已完成** |
 | ~~AI 行为系统~~  | ~~★★★~~ | ~~★★★★★~~ | ~~★★★★★~~ | **✅ 已完成** |
 | ~~地形系统~~     | ~~★★★★~~ | ~~★★★★~~ | ~~★★★★★~~ | **✅ 基础完成** |
-| 网络/多人        | ★★★★★ | ★★★★ | ★★★ | **12** |
+| ~~网络/多人~~    | ~~★★★★★~~ | ~~★★★★~~ | ~~★★★~~ | **✅ 基础完成** |
 | 战争迷雾         | ✗ | ★★★★★ | ★★★★ | **9** |
 | 资源/经济系统    | ✗ | ★★★★ | ★★★★★ | **9** |
 | FPS 相机控制器   | ★★★★★ | ✗ | ✗ | **5** |

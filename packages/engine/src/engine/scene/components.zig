@@ -659,3 +659,9 @@ pub const TerrainComponent = struct {
     /// 是否启用.
     enabled: bool = true,
 };
+
+/// 网络身份组件 — 标记实体参与网络同步。
+pub const NetworkIdentity = @import("../network/net_system.zig").NetworkIdentity;
+
+/// 网络变换组件 — 通过网络同步实体变换，包含插值。
+pub const NetworkTransform = @import("../network/net_system.zig").NetworkTransform;
