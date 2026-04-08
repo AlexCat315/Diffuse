@@ -151,6 +151,12 @@ pub const network_transport = @import("engine/network/transport.zig");
 pub const network_session = @import("engine/network/session.zig");
 pub const network = @import("engine/network/net_system.zig");
 
+/// RTS 相机控制器
+///
+/// 提供俯瞰/斜视角 RTS 风格相机：WASD 平移、边缘滚动、滚轮缩放、
+/// 中键拖拽、可选旋转、地图边界约束。
+pub const rts_camera = @import("engine/camera/rts_camera.zig");
+
 /// 运行时 UI 模块
 ///
 /// 提供保留模式（retained-mode）的游戏 UI 系统。

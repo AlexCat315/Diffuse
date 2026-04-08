@@ -46,6 +46,7 @@ const animator_system = @import("../animation/animator_system.zig");
 const bt_system = @import("../behavior/bt_system.zig");
 const net_system_mod = @import("../network/net_system.zig");
 const net_session_mod = @import("../network/session.zig");
+const rts_camera_mod = @import("../camera/rts_camera.zig");
 
 // macOS Mach kernel APIs for high-precision timing and thread priority.
 const mach = if (builtin.os.tag == .macos) struct {
@@ -505,6 +506,14 @@ pub const Application = struct {
                 self.net_system.update(&self.world, delta_seconds) catch |err| {
                     std.log.err("[run-loop] net_system.update failed: {s}", .{@errorName(err)});
                 };
+                // 更新 RTS 相机控制器
+                rts_camera_mod.RtsCameraSystem.update(
+                    &self.world,
+                    &self.input,
+                    delta_seconds,
+                    @floatFromInt(self.window.drawable_width),
+                    @floatFromInt(self.window.drawable_height),
+                );
                 // 更新脚本系统（传递时间和输入）
                 self.updateScripts(delta_seconds);
                 self.applyPendingCommands() catch |err| {
