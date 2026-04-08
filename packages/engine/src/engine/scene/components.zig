@@ -647,3 +647,15 @@ pub const Sky = struct {
 
 /// 行为树组件 — 将行为树挂载到实体上，由 bt_system 每帧驱动。
 pub const BehaviorTreeComponent = @import("../behavior/bt_system.zig").BehaviorTreeComponent;
+
+/// 地形组件 — 引用一个 Terrain 实例（由 Renderer 持有）。
+pub const TerrainComponent = struct {
+    /// 地形世界大小 (X, Z).
+    world_size: [2]f32 = .{ 256, 256 },
+    /// 高度图分辨率 (width = height).
+    resolution: u32 = 128,
+    /// 最大高度.
+    max_height: f32 = 50,
+    /// 是否启用.
+    enabled: bool = true,
+};

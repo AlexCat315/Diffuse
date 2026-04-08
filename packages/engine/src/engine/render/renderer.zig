@@ -56,6 +56,7 @@ const velocity_pass_mod = @import("passes/velocity_pass.zig");
 const id_pass_mod = @import("passes/id_pass.zig");
 const gizmo_pass_mod = @import("passes/gizmo_pass.zig");
 const ui_canvas_mod = @import("../ui/canvas.zig");
+const terrain_renderer_mod = @import("../terrain/terrain_renderer.zig");
 const outline_pass_mod = @import("passes/outline_pass.zig");
 const volumetric_fog_pass_mod = @import("passes/volumetric_fog_pass.zig");
 const ssao_compute_pass_mod = @import("passes/ssao_compute_pass_runtime.zig");
@@ -349,6 +350,8 @@ pub const Renderer = struct {
     gizmo_pass: gizmo_pass_mod.GizmoPass,
     /// Runtime UI canvas（游戏 HUD / 运行时 UI）
     ui_canvas: ?ui_canvas_mod.Canvas = null,
+    /// 地形渲染器
+    terrain_renderer: terrain_renderer_mod.TerrainRenderer,
     /// SSAO Compute 通道（GPU Compute 加速）
     ssao_compute_pass: ?ssao_compute_pass_mod.SSAOComputePass = null,
     /// Clustered Forward+ 光源裁剪 Compute 通道
@@ -556,6 +559,7 @@ pub const Renderer = struct {
             .skybox_pass = undefined,
             .outline_pass = undefined,
             .gizmo_pass = undefined,
+            .terrain_renderer = undefined,
             .ssao_compute_pass = null,
             .contact_shadow_pass = undefined,
             .ssgi_compute_pass = null,
@@ -754,6 +758,9 @@ pub const Renderer = struct {
 
         renderer.gizmo_pass = try gizmo_pass_mod.GizmoPass.init(&renderer.rhi);
 
+        // Terrain renderer
+        renderer.terrain_renderer = terrain_renderer_mod.TerrainRenderer.init(allocator);
+
         // Runtime UI canvas
         renderer.ui_canvas = try ui_canvas_mod.Canvas.init(allocator);
         try renderer.ui_canvas.?.createGpuResources(&renderer.rhi);
@@ -830,6 +837,7 @@ pub const Renderer = struct {
             self.allocator.destroy(bp);
         }
         if (self.ui_canvas) |*uc| uc.deinit(&self.rhi);
+        self.terrain_renderer.deinit(&self.rhi);
         self.gizmo_pass.deinit(&self.rhi);
         self.outline_pass.deinit(&self.rhi);
         self.base_pass.deinit(&self.rhi);
@@ -2009,6 +2017,12 @@ pub const Renderer = struct {
                     });
                     self.graph.recordPassStat(pass_stats, .base_pass, durationNs(opaque_start, std.time.nanoTimestamp()), opaque_stats.draw_calls, opaque_stats.triangles_drawn);
                     draw_stats.add(opaque_stats);
+
+                    // 渲染地形
+                    {
+                        const terrain_stats = self.terrain_renderer.syncAndDraw(&self.rhi, frame, scene_pass, scene, prepared_scene.view_projection);
+                        draw_stats.add(terrain_stats);
+                    }
 
                     if (self.skybox_pass) |*skybox_pass| {
                         if (active_render_mode != .wireframe and skybox_pass.isReady() and prepared_scene.environment_map != null and prepared_scene.sky_enabled) {

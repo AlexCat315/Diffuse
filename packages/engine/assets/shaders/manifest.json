@@ -1,6 +1,11 @@
 {
   "programs": [
     {
+      "name": "terrain",
+      "vertex": "assets/shaders/terrain.vert.glsl",
+      "fragment": "assets/shaders/terrain.frag.glsl"
+    },
+    {
       "name": "depth_prepass",
       "vertex": "assets/shaders/mesh.vert.glsl"
     },

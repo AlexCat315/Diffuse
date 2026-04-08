@@ -140,6 +140,8 @@ pub const cinematic = @import("engine/cinematic/mod.zig");
 /// Inverter/Repeater/Cooldown 装饰器、Action/Condition/Wait 叶节点、
 /// 以及 per-entity Blackboard 和 Builder API。
 pub const behavior = @import("engine/behavior/bt_system.zig");
+pub const terrain = @import("engine/terrain/terrain.zig");
+pub const terrain_renderer = @import("engine/terrain/terrain_renderer.zig");
 
 /// 运行时 UI 模块
 ///

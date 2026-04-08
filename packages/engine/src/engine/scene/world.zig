@@ -196,6 +196,8 @@ pub const Entity = struct {
     nav_agent: ?components.NavAgent = null,
     /// 行为树组件
     behavior_tree: ?components.BehaviorTreeComponent = null,
+    /// 地形组件
+    terrain: ?components.TerrainComponent = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示
@@ -364,6 +366,8 @@ pub const EntityDesc = struct {
     nav_agent: ?components.NavAgent = null,
     /// 行为树组件
     behavior_tree: ?components.BehaviorTreeComponent = null,
+    /// 地形组件
+    terrain: ?components.TerrainComponent = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示
