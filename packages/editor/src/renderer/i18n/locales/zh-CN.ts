@@ -770,7 +770,10 @@ export const zhCN: TranslationKeys = {
     approve: "批准",
     reject: "拒绝",
     confirmDestructive: "AI 要执行破坏性操作：",
-    toolLimitReached: "工具调用次数已达上限，请尝试简化请求。",
+    toolLimitReached: "工具调用轮次已达上限。",
+    continueBtn: "继续",
+    stopBtn: "停止",
+    maxToolRounds: "最大工具轮次",
   },
 
   // ── 粒子编辑器 ──────────────────────────────────────────────
