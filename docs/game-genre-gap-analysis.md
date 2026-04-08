@@ -103,20 +103,31 @@
 
 ---
 
-### 4. 地形系统 🔴 高优先级（RTS/4X）
+### 4. 地形系统 ✅ 基础实现完成
 
-**当前状态**: 零。插件类型定义了 `terrain_gen` 但无实现。
+**当前状态**: 基础地形系统已实现。
 
-**需要实现**:
-- [ ] Heightmap 地形网格生成
-- [ ] LOD（Clipmap 或 CDLOD）
+**已实现**:
+- [x] Heightmap 地形网格生成 (`src/engine/terrain/terrain.zig`)
+- [x] TerrainComponent ECS 组件 + Entity/EntityDesc 字段
+- [x] GPU 渲染管线 (terrain.vert/frag GLSL → TerrainRenderer)
+- [x] 集成到 Renderer.drawFrame() base_pass 阶段
+- [x] 高度查询 (bilinear interpolation)
+- [x] 程序化地形生成 (multi-octave sin/cos hills)
+- [x] LOD 数据结构 (TerrainChunk with 4 LOD levels)
+
+**待完善**:
+- [ ] LOD 实际切换（Clipmap 或 CDLOD）
 - [ ] 多层纹理混合（Splatmap）
 - [ ] Sculpt/Paint 编辑工具（编辑器）
 - [ ] 与 NavMesh 集成
 - [ ] 与物理碰撞集成（heightfield collider）
-- [ ] 可选：程序化地形生成（噪声 + 侵蚀）
 
-**预估工作量**: 大（2-4 周渲染+碰撞，编辑器另算）
+**实现文件**:
+- `src/engine/terrain/terrain.zig` — Heightmap, TerrainMesh, generateMesh, Terrain
+- `src/engine/terrain/terrain_renderer.zig` — TerrainRenderer (pipeline, buffers, draw, syncAndDraw)
+- `assets/shaders/terrain.vert.glsl` / `terrain.frag.glsl` — 地形着色器
+- `src/engine/scene/components.zig` — TerrainComponent
 
 ---
 
@@ -229,7 +240,7 @@ Phase 3 — RTS 原型
 └── 验证: 小规模 RTS 对战
 
 Phase 4 — 4X 基础
-├── 地形系统          [引擎] 2-4周
+├── 地形系统          [引擎] ✅ 基础完成
 ├── 回合制框架        [脚本+引擎] 1-2周
 ├── 地图生成          [引擎] 2-3周
 └── 验证: 文明 MVP
@@ -241,7 +252,7 @@ Phase 4 — 4X 基础
 |-------------------|-----|-----|---------|----------|
 | ~~运行时 UI~~    | ~~★★★★~~ | ~~★★★★★~~ | ~~★★★★★~~ | **✅ 已完成** |
 | ~~AI 行为系统~~  | ~~★★★~~ | ~~★★★★★~~ | ~~★★★★★~~ | **✅ 已完成** |
-| 地形系统         | ★★★★ | ★★★★ | ★★★★★ | **13** |
+| ~~地形系统~~     | ~~★★★★~~ | ~~★★★★~~ | ~~★★★★★~~ | **✅ 基础完成** |
 | 网络/多人        | ★★★★★ | ★★★★ | ★★★ | **12** |
 | 战争迷雾         | ✗ | ★★★★★ | ★★★★ | **9** |
 | 资源/经济系统    | ✗ | ★★★★ | ★★★★★ | **9** |
