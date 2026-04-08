@@ -95,6 +95,10 @@ fn generate() []const u8 {
         \\
     ;
 
+    // ── AI Tool Definitions ──────────────────────────────────────
+    r = r ++ "// ── AI Tool Definitions ────────────────────────────────────\n\n";
+    r = r ++ emitAiTools();
+
     return r;
 }
 
@@ -160,4 +164,199 @@ fn emitInterface(comptime name: []const u8, comptime T: type) []const u8 {
         r = r ++ ": " ++ typeToTs(if (is_opt) unwrap(field.type) else field.type) ++ ";\n";
     }
     return r ++ "}\n\n";
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  AI Tool code generator
+// ═══════════════════════════════════════════════════════════════════
+
+const ai_tools = schema.ai_tools;
+
+/// Look up the Params type for a given RPC method name across all schema modules.
+fn findParamsType(comptime method_name: []const u8) ?type {
+    inline for (schema.method_modules) |mod| {
+        for (@typeInfo(mod).@"struct".decls) |decl| {
+            if (comptime std.mem.eql(u8, decl.name, method_name)) {
+                return @field(mod, decl.name).Params;
+            }
+        }
+    }
+    return null;
+}
+
+/// Convert a Zig type to a JSON Schema type string.
+fn jsonSchemaType(comptime T: type) []const u8 {
+    // Unwrap optionals first
+    const U = if (isOptional(T)) unwrap(T) else T;
+    return switch (@typeInfo(U)) {
+        .bool => "boolean",
+        .int => "integer",
+        .float => "number",
+        .pointer => |p| if (p.child == u8) "string" else "array",
+        .@"struct" => "object",
+        .array => "array",
+        else => "string",
+    };
+}
+
+/// Convert a Zig struct Params type to a JSON Schema object literal string.
+/// Example output: { type: "object", properties: { entityId: { type: "integer" } }, required: ["entityId"] }
+fn paramsToJsonSchema(comptime T: type) []const u8 {
+    const fields = @typeInfo(T).@"struct".fields;
+    if (fields.len == 0) return "{ type: \"object\" as const, properties: {} }";
+
+    var r: []const u8 = "{ type: \"object\" as const, properties: { ";
+    var req: []const u8 = "";
+    var req_count: usize = 0;
+
+    for (fields, 0..) |field, i| {
+        if (i > 0) r = r ++ ", ";
+        r = r ++ field.name ++ ": " ++ fieldToJsonSchema(field.type);
+
+        // Non-optional fields without defaults are required
+        if (!isOptional(field.type) and field.default_value_ptr == null) {
+            if (req_count > 0) req = req ++ ", ";
+            req = req ++ "\"" ++ field.name ++ "\"";
+            req_count += 1;
+        }
+    }
+
+    r = r ++ " }";
+    if (req_count > 0) {
+        r = r ++ ", required: [" ++ req ++ "]";
+    }
+    return r ++ " }";
+}
+
+/// Convert a single field type to its JSON Schema representation.
+fn fieldToJsonSchema(comptime T: type) []const u8 {
+    const U = if (isOptional(T)) unwrap(T) else T;
+
+    // Opaque sentinel → any value (string is the best LLM hint for JSON-encoded values)
+    if (U == schema.types.JsonValue) return "{ type: \"string\" as const }";
+
+    return switch (@typeInfo(U)) {
+        .bool => "{ type: \"boolean\" as const }",
+        .int => "{ type: \"integer\" as const }",
+        .float => "{ type: \"number\" as const }",
+        .pointer => |p| {
+            if (p.child == u8) {
+                return "{ type: \"string\" as const }";
+            }
+            // Array of T → { type: "array", items: ... }
+            return "{ type: \"array\" as const, items: " ++ fieldToJsonSchema(p.child) ++ " }";
+        },
+        .array => |a| {
+            // Fixed-size array (e.g. [3]f64) → { type: "array", items: ... }
+            return "{ type: \"array\" as const, items: " ++ fieldToJsonSchema(a.child) ++ " }";
+        },
+        .@"struct" => |s| {
+            // Nested struct → { type: "object", properties: ... }
+            if (s.fields.len == 0) return "{ type: \"object\" as const }";
+            var r: []const u8 = "{ type: \"object\" as const, properties: { ";
+            for (s.fields, 0..) |field, i| {
+                if (i > 0) r = r ++ ", ";
+                r = r ++ field.name ++ ": " ++ fieldToJsonSchema(field.type);
+            }
+            return r ++ " } }";
+        },
+        else => "{ type: \"string\" as const }",
+    };
+}
+
+fn categoryToStr(comptime cat: ai_tools.Category) []const u8 {
+    return switch (cat) {
+        .scene => "scene",
+        .entity => "entity",
+        .playback => "playback",
+        .script => "script",
+        .asset => "asset",
+        .animation => "animation",
+        .material => "material",
+        .camera => "camera",
+        .render => "render",
+        .prefab => "prefab",
+        .audio => "audio",
+        .query => "query",
+    };
+}
+
+fn emitAiTools() []const u8 {
+    @setEvalBranchQuota(200_000);
+
+    // First, validate that all referenced RPC methods exist.
+    for (ai_tools.tools) |tool| {
+        if (findParamsType(tool.rpc_method) == null) {
+            @compileError("ai_tools references unknown RPC method: " ++ tool.rpc_method);
+        }
+    }
+
+    var r: []const u8 =
+        \\export type ToolCategory =
+        \\  | "scene"
+        \\  | "entity"
+        \\  | "playback"
+        \\  | "script"
+        \\  | "asset"
+        \\  | "animation"
+        \\  | "material"
+        \\  | "camera"
+        \\  | "render"
+        \\  | "prefab"
+        \\  | "audio"
+        \\  | "query";
+        \\
+        \\export interface AiToolDef {
+        \\  name: string;
+        \\  description: string;
+        \\  parameters: { type: "object"; properties: Record<string, unknown>; required?: string[] };
+        \\  rpcMethod: RpcMethodName;
+        \\  requiresConfirmation?: boolean;
+        \\  category: ToolCategory;
+        \\}
+        \\
+        \\export const AI_TOOLS: AiToolDef[] = [
+        \\
+    ;
+
+    for (ai_tools.tools) |tool| {
+        const Params = findParamsType(tool.rpc_method).?;
+        r = r ++ "  {\n";
+        r = r ++ "    name: \"" ++ tool.rpc_method ++ "\",\n";
+        r = r ++ "    description: \"" ++ tool.description ++ "\",\n";
+        r = r ++ "    parameters: " ++ paramsToJsonSchema(Params) ++ ",\n";
+        r = r ++ "    rpcMethod: \"" ++ tool.rpc_method ++ "\",\n";
+        if (tool.requires_confirmation) {
+            r = r ++ "    requiresConfirmation: true,\n";
+        }
+        r = r ++ "    category: \"" ++ categoryToStr(tool.category) ++ "\",\n";
+        r = r ++ "  },\n";
+    }
+
+    r = r ++ "];\n\n";
+
+    // ── Helper functions ─────────────────────────────────────────
+    r = r ++
+        \\export function toOpenAiTools(tools: AiToolDef[]) {
+        \\  return tools.map((t) => ({
+        \\    type: "function" as const,
+        \\    function: { name: t.name, description: t.description, parameters: t.parameters },
+        \\  }));
+        \\}
+        \\
+        \\export function toAnthropicTools(tools: AiToolDef[]) {
+        \\  return tools.map((t) => ({
+        \\    name: t.name,
+        \\    description: t.description,
+        \\    input_schema: t.parameters,
+        \\  }));
+        \\}
+        \\
+        \\export function findTool(name: string): AiToolDef | undefined {
+        \\  return AI_TOOLS.find((t) => t.name === name);
+        \\}
+        \\
+    ;
+
+    return r;
 }
