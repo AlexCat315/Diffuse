@@ -202,6 +202,8 @@ pub const Entity = struct {
     network_identity: ?components.NetworkIdentity = null,
     /// 网络变换同步组件
     network_transform: ?components.NetworkTransform = null,
+    /// RTS 相机控制器组件
+    rts_camera: ?components.RtsCamera = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示
@@ -376,6 +378,8 @@ pub const EntityDesc = struct {
     network_identity: ?components.NetworkIdentity = null,
     /// 网络变换同步组件
     network_transform: ?components.NetworkTransform = null,
+    /// RTS 相机控制器组件
+    rts_camera: ?components.RtsCamera = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示

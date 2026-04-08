@@ -665,3 +665,8 @@ pub const NetworkIdentity = @import("../network/net_system.zig").NetworkIdentity
 
 /// 网络变换组件 — 通过网络同步实体变换，包含插值。
 pub const NetworkTransform = @import("../network/net_system.zig").NetworkTransform;
+
+/// RTS 相机组件 — 俯瞰/斜视角相机控制器。
+pub const RtsCamera = @import("../camera/rts_camera.zig").RtsCamera;
+/// RTS 相机配置。
+pub const RtsCameraConfig = @import("../camera/rts_camera.zig").Config;
