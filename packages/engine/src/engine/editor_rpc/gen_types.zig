@@ -281,6 +281,23 @@ fn categoryToStr(comptime cat: ai_tools.Category) []const u8 {
     };
 }
 
+/// Escape double-quotes for embedding inside a JS string literal.
+fn escapeForJs(comptime s: []const u8) []const u8 {
+    comptime {
+        var out: []const u8 = "";
+        for (s) |c| {
+            if (c == '"') {
+                out = out ++ "\\\"";
+            } else if (c == '\\') {
+                out = out ++ "\\\\";
+            } else {
+                out = out ++ &[1]u8{c};
+            }
+        }
+        return out;
+    }
+}
+
 fn emitAiTools() []const u8 {
     @setEvalBranchQuota(200_000);
 
@@ -323,7 +340,7 @@ fn emitAiTools() []const u8 {
         const Params = findParamsType(tool.rpc_method).?;
         r = r ++ "  {\n";
         r = r ++ "    name: \"" ++ tool.rpc_method ++ "\",\n";
-        r = r ++ "    description: \"" ++ tool.description ++ "\",\n";
+        r = r ++ "    description: \"" ++ escapeForJs(tool.description) ++ "\",\n";
         r = r ++ "    parameters: " ++ paramsToJsonSchema(Params) ++ ",\n";
         r = r ++ "    rpcMethod: \"" ++ tool.rpc_method ++ "\",\n";
         if (tool.requires_confirmation) {

@@ -93,17 +93,17 @@ pub const tools: []const ToolMeta = &.{
     },
     .{
         .rpc_method = "entity.getComponents",
-        .description = "Get all components attached to an entity, with their field values.",
+        .description = "Get all components attached to an entity, with their field names and values. Use field names from the result when calling entity.setComponentField.",
         .category = .entity,
     },
     .{
         .rpc_method = "entity.setComponentField",
-        .description = "Set a field value on a component of an entity.",
+        .description = "Set a field value on a component. Use exact field names from entity.getComponents. Works for scalars and arrays. For material colors prefer material.setColor.",
         .category = .entity,
     },
     .{
         .rpc_method = "entity.addComponent",
-        .description = "Add a component to an entity (e.g. Rigidbody, Light, Script, BoxCollider).",
+        .description = "Add a component to an entity. Valid types: Camera, Mesh, SkinnedMesh, Animator, Rigidbody, BoxCollider, SphereCollider, MeshCollider, CapsuleCollider, CharacterController, Tag, Sky, Constraint, Material, Light, Vfx, Script, AudioSource, AudioListener, NavAgent.",
         .category = .entity,
     },
     .{
@@ -118,7 +118,7 @@ pub const tools: []const ToolMeta = &.{
     },
     .{
         .rpc_method = "entity.setAssetField",
-        .description = "Assign an asset (model, texture, script) to a component field on an entity.",
+        .description = "Assign an asset to a component field. Params: entityId, componentType, fieldName, assetPath (string|null to clear). For Sky.environment_asset_id pass the asset path. For Script, use optional scriptIndex.",
         .category = .entity,
     },
 
@@ -171,29 +171,29 @@ pub const tools: []const ToolMeta = &.{
     },
     .{
         .rpc_method = "animation.addState",
-        .description = "Add a new animation state to an entity's animation graph.",
+        .description = "Add a new animation state to an entity's animation graph. Optional name param, defaults to 'State N'. Returns the new state index.",
         .category = .animation,
     },
     .{
         .rpc_method = "animation.addTransition",
-        .description = "Add a transition between two animation states.",
+        .description = "Add a transition between animation states. Params: entityId, fromState (index), toState (index), optional duration (default 0.2), optional triggerTime (default 0.25). Returns transition index.",
         .category = .animation,
     },
 
     // ───── Material ───────────────────────
     .{
         .rpc_method = "material.getState",
-        .description = "Get the material properties of an entity.",
+        .description = "Get material properties: baseColor [4]f32, emissive [3]f32, metallic, roughness, alphaCutoff, doubleSided, texture handles, etc. Note: property names in getState use camelCase but setColor/setScalar use snake_case.",
         .category = .material,
     },
     .{
         .rpc_method = "material.setColor",
-        .description = "Set a color property on an entity's material (e.g. baseColor, emissive).",
+        .description = "Set a color property on an entity's material. property must be \"base_color\" or \"emissive\". value is [r,g,b,a] with floats 0-1.",
         .category = .material,
     },
     .{
         .rpc_method = "material.setScalar",
-        .description = "Set a scalar material property (metallic, roughness, etc.).",
+        .description = "Set a scalar material property. property must be \"metallic\", \"roughness\", \"alpha_cutoff\", or \"ibl_intensity\". value is a float.",
         .category = .material,
     },
 
@@ -205,7 +205,7 @@ pub const tools: []const ToolMeta = &.{
     },
     .{
         .rpc_method = "camera.lookAlongAxis",
-        .description = "Point the editor camera along an axis (top-down, front, side view).",
+        .description = "Point the editor camera along a direction. Params: axisX, axisY, axisZ (floats). Common: top-down (0,1,0), front (0,0,1), right (1,0,0).",
         .category = .camera,
     },
 
