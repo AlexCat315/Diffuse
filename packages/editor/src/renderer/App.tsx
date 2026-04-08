@@ -41,12 +41,14 @@ import { KeybindingsPanel } from "./panels/KeybindingsPanel";
 import { ViewportTabControls } from "./panels/ViewportTabControls";
 import { MeshEditToolbar } from "./panels/MeshEditToolbar";
 import { useI18n } from "./i18n";
+import { ToastContainer } from "./components/ToastContainer";
 import {
   useConnectionStore,
   useSceneStore,
   useConsoleStore,
   useEditorStore,
   initRpcBridge,
+  toast,
 } from "./store";
 
 declare global {
@@ -300,13 +302,23 @@ export function App() {
     // ── Global keybinding context (lowest priority) ──────────────
     const globalBindings: KeyBinding[] = [
       { id: "save", combo: { key: "s", ctrl: true }, handler: () => {
-        window.guavaEngine.call("scene.save", {}).catch(() => {}); return true;
+        window.guavaEngine.call("scene.save", {})
+          .then((res: { path: string; revision?: number }) => {
+            useSceneStore.getState().markSaved(res.revision);
+            toast.success("Scene saved");
+          })
+          .catch((e) => toast.error(`Save failed: ${e instanceof Error ? e.message : String(e)}`));
+        return true;
       }},
       { id: "undo", combo: { key: "z", ctrl: true }, handler: () => {
-        window.guavaEngine.call("editor.undo", {}).catch(() => {}); return true;
+        window.guavaEngine.call("editor.undo", {})
+          .catch((e) => toast.warn(`Undo failed: ${e instanceof Error ? e.message : String(e)}`));
+        return true;
       }},
       { id: "redo", combo: { key: "z", ctrl: true, shift: true }, handler: () => {
-        window.guavaEngine.call("editor.redo", {}).catch(() => {}); return true;
+        window.guavaEngine.call("editor.redo", {})
+          .catch((e) => toast.warn(`Redo failed: ${e instanceof Error ? e.message : String(e)}`));
+        return true;
       }},
       { id: "togglePanel", combo: { key: "j", ctrl: true }, handler: () => {
         toggleBottomPanelRef.current(); return true;
@@ -650,6 +662,7 @@ export function App() {
           initialTab={keybindingsOpen ? "keybindings" : "settings"}
         />
       )}
+      <ToastContainer />
     </div>
   );
 }
