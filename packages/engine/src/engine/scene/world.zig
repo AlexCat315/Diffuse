@@ -208,6 +208,14 @@ pub const Entity = struct {
     fog_vision: ?components.FogVision = null,
     /// 战争迷雾全局配置组件
     fog_of_war_config: ?components.FogOfWarConfig = null,
+    // ─── 经济系统组件 ───
+    resource_storage: ?components.ResourceStorage = null,
+    resource_harvester: ?components.ResourceHarvester = null,
+    resource_node: ?components.ResourceNode = null,
+    supply_provider: ?components.SupplyProvider = null,
+    supply_consumer: ?components.SupplyConsumer = null,
+    production_queue: ?components.ProductionQueue = null,
+    trade_offer: ?components.TradeOffer = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示
@@ -388,6 +396,14 @@ pub const EntityDesc = struct {
     fog_vision: ?components.FogVision = null,
     /// 战争迷雾全局配置组件
     fog_of_war_config: ?components.FogOfWarConfig = null,
+    // ─── 经济系统组件 ───
+    resource_storage: ?components.ResourceStorage = null,
+    resource_harvester: ?components.ResourceHarvester = null,
+    resource_node: ?components.ResourceNode = null,
+    supply_provider: ?components.SupplyProvider = null,
+    supply_consumer: ?components.SupplyConsumer = null,
+    production_queue: ?components.ProductionQueue = null,
+    trade_offer: ?components.TradeOffer = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示
