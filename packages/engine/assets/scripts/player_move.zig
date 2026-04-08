@@ -10,7 +10,6 @@ var coin_ids: [5]u64 = .{ 0, 0, 0, 0, 0 };
 var score: u32 = 0;
 var total: u32 = 5;
 var initialized: bool = false;
-var diag_frame: u32 = 0;
 
 export fn guava_on_init() callconv(.c) void {
     guava.log("Player ready — WASD to move, collect all coins!");
@@ -43,16 +42,6 @@ export fn guava_on_update(dt: f32) callconv(.c) void {
     if (s) dz += 1;
     if (a) dx -= 1;
     if (d) dx += 1;
-
-    // 诊断：每 120 帧输出一次
-    diag_frame += 1;
-    if (diag_frame % 120 == 1) {
-        if (w or s or a or d) {
-            guava.log("DIAG: key pressed, moving");
-        } else {
-            guava.log("DIAG: no keys");
-        }
-    }
 
     const len = @sqrt(dx * dx + dz * dz);
     if (len > 0.001) {
