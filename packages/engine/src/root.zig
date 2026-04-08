@@ -134,6 +134,12 @@ pub const platform = struct {
 /// `.guava_sequence` 同时服务于游戏过场与离线影视渲染。
 pub const cinematic = @import("engine/cinematic/mod.zig");
 
+/// 运行时 UI 模块
+///
+/// 提供保留模式（retained-mode）的游戏 UI 系统。
+/// 包含节点树、Flexbox 布局引擎、批量渲染器与 Canvas 公共 API。
+pub const ui = @import("engine/ui/canvas.zig");
+
 /// MCP 模块
 ///
 /// 提供面向 AI 客户端的协议层、资源快照与服务端实现。
