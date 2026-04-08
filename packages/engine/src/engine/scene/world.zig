@@ -194,6 +194,8 @@ pub const Entity = struct {
     audio_listener: ?components.AudioListener = null,
     /// 导航代理组件
     nav_agent: ?components.NavAgent = null,
+    /// 行为树组件
+    behavior_tree: ?components.BehaviorTreeComponent = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示
@@ -233,6 +235,9 @@ pub const Entity = struct {
         }
         if (self.prefab_instance_override) |*override| {
             override.deinit(allocator);
+        }
+        if (self.behavior_tree) |*bt| {
+            bt.deinit(allocator);
         }
     }
 };
@@ -357,6 +362,8 @@ pub const EntityDesc = struct {
     audio_listener: ?components.AudioListener = null,
     /// 导航代理组件
     nav_agent: ?components.NavAgent = null,
+    /// 行为树组件
+    behavior_tree: ?components.BehaviorTreeComponent = null,
     /// 是否可见
     visible: bool = true,
     /// 是否仅在编辑器中显示

@@ -20,6 +20,7 @@
 | 过场 | `src/engine/cinematic/` | 相机路径、关键帧动画、FFMPEG 导出 |
 | 运行时 UI | `src/engine/ui/` | 保留模式 Canvas，SDF 字体，Flexbox 布局，点击/悬停交互，Debug HUD |
 | C# 脚本 SDK | `sdk/csharp/GuavaEngine/` | NativeAOT .dylib，Canvas/Transform/Input/Time API，完整导出 |
+| AI 行为树 | `src/engine/behavior/` | Sequence/Selector/Parallel，Decorator 装饰器，Action/Condition/Wait 叶节点，per-entity Blackboard，Builder API |
 | 插件 | `src/engine/plugin/` | 热加载插件框架（render_style, audio_effect, physics_ext, terrain_gen, ai_behavior, ui_extension, script_vm） |
 
 ## 缺失系统清单
@@ -54,28 +55,27 @@
 
 ---
 
-### 2. AI 行为系统 🟡 中优先级
+### 2. AI 行为系统 ✅ 已完成
 
-**当前状态**: 零（仅有 NavAgent 寻路）。插件类型定义了 `ai_behavior` 但无实现。
+**当前状态**: 已实现。ECS-native 行为树运行时 + per-entity Blackboard + C# SDK。
 
-**RTS/4X 关键需求**: 敌军 AI 决策、单位自动行为、城市 AI。
+**实现文件**:
+- `src/engine/behavior/behavior_tree.zig` — 核心 BT：Status/NodeKind/BtNode/BehaviorTree/Builder/Blackboard
+- `src/engine/behavior/bt_system.zig` — ECS 系统：BehaviorTreeComponent + update() 迭代器
+- `sdk/csharp/GuavaEngine/GuavaBehaviorTree.cs` — C# 行为树 SDK（纯 C# 实现）
 
-**需要实现**:
-- [ ] 行为树（Behavior Tree）运行时
-  - Sequence, Selector, Parallel 节点
-  - Decorator（条件/重复/反转）
-  - Action/Condition 叶节点
-- [ ] 黑板（Blackboard）数据共享
-- [ ] 有限状态机（FSM）组件
-- [ ] 脚本 API（Zig/C# 自定义节点）
-- [ ] 可选：效用 AI（Utility AI）评分系统
-
-**可选方案**:
-- A) 纯脚本层实现（最快原型）
-- B) ECS-native 行为树组件（性能好，可序列化）
-- C) 可视化编辑器集成（长期）
-
-**预估工作量**: 中（1-2 周核心运行时，不含编辑器）
+**已完成项**:
+- [x] 行为树运行时（Sequence/Selector/Parallel 组合节点）
+- [x] Decorator（Inverter/Repeater/Succeeder/RepeatUntilFail/Cooldown）
+- [x] Action/Condition/Wait 叶节点（用户回调）
+- [x] per-entity Blackboard（typed key-value: int/float/bool/string）
+- [x] Builder API（链式构建）
+- [x] ECS 组件集成（BehaviorTreeComponent 自动每帧 tick）
+- [x] 主循环集成（nav_system → bt_system → scripts 顺序）
+- [x] C# SDK（Sequence/Selector/Parallel/Inverter/Succeeder/Cooldown/Action/Condition/Wait）
+- [ ] 有限状态机（FSM）组件（待实现）
+- [ ] 效用 AI（Utility AI）评分系统（待实现）
+- [ ] 可视化编辑器集成（待实现）
 
 ---
 
@@ -240,7 +240,7 @@ Phase 4 — 4X 基础
 | 缺失系统          | FPS | RTS | 4X/文明 | 总优先分 |
 |-------------------|-----|-----|---------|----------|
 | ~~运行时 UI~~    | ~~★★★★~~ | ~~★★★★★~~ | ~~★★★★★~~ | **✅ 已完成** |
-| AI 行为系统      | ★★★ | ★★★★★ | ★★★★★ | **13** |
+| ~~AI 行为系统~~  | ~~★★★~~ | ~~★★★★★~~ | ~~★★★★★~~ | **✅ 已完成** |
 | 地形系统         | ★★★★ | ★★★★ | ★★★★★ | **13** |
 | 网络/多人        | ★★★★★ | ★★★★ | ★★★ | **12** |
 | 战争迷雾         | ✗ | ★★★★★ | ★★★★ | **9** |

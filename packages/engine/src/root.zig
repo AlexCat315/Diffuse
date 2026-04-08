@@ -134,6 +134,13 @@ pub const platform = struct {
 /// `.guava_sequence` 同时服务于游戏过场与离线影视渲染。
 pub const cinematic = @import("engine/cinematic/mod.zig");
 
+/// AI 行为树模块
+///
+/// 提供数据驱动的行为树运行时：Sequence/Selector/Parallel 组合节点、
+/// Inverter/Repeater/Cooldown 装饰器、Action/Condition/Wait 叶节点、
+/// 以及 per-entity Blackboard 和 Builder API。
+pub const behavior = @import("engine/behavior/bt_system.zig");
+
 /// 运行时 UI 模块
 ///
 /// 提供保留模式（retained-mode）的游戏 UI 系统。
