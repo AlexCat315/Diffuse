@@ -644,3 +644,6 @@ pub const Sky = struct {
         return self._asset_id_buf[0..len];
     }
 };
+
+/// 行为树组件 — 将行为树挂载到实体上，由 bt_system 每帧驱动。
+pub const BehaviorTreeComponent = @import("../behavior/bt_system.zig").BehaviorTreeComponent;

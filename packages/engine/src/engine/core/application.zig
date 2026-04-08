@@ -43,6 +43,7 @@
 const std = @import("std");
 const builtin = @import("builtin");
 const animator_system = @import("../animation/animator_system.zig");
+const bt_system = @import("../behavior/bt_system.zig");
 
 // macOS Mach kernel APIs for high-precision timing and thread priority.
 const mach = if (builtin.os.tag == .macos) struct {
@@ -492,6 +493,8 @@ pub const Application = struct {
                 self.advancePhysics(delta_seconds);
                 // 更新导航系统（crowd agent 避障和位置同步）
                 self.nav_system.update(&self.world, delta_seconds);
+                // 更新行为树（AI 决策）
+                bt_system.update(&self.world, delta_seconds);
                 // 更新脚本系统（传递时间和输入）
                 self.updateScripts(delta_seconds);
                 self.applyPendingCommands() catch |err| {
