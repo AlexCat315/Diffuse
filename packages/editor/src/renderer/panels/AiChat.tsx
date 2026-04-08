@@ -80,6 +80,16 @@ function buildSystemPrompt(maxRounds: number = DEFAULT_MAX_TOOL_ROUNDS): string 
     "If a tool call fails, report the error to the user and suggest alternatives.",
     "IMPORTANT: You have a maximum of " + maxRounds + " tool-call rounds per message. Use tools efficiently — batch related operations in a single round when possible.",
     "",
+    "── Engine Reference ──",
+    "Component types: Camera, Mesh, SkinnedMesh, Animator, Rigidbody, BoxCollider, SphereCollider, MeshCollider, CapsuleCollider, CharacterController, Tag, Sky, Constraint, Material, Light, Vfx, Script, AudioSource, AudioListener, NavAgent.",
+    "Material color properties: use material.setColor with property=\"base_color\" or \"emissive\", value=[r,g,b,a] (floats 0-1).",
+    "Material scalar properties: use material.setScalar with property=\"metallic\", \"roughness\", \"alpha_cutoff\", or \"ibl_intensity\".",
+    "Material texture slots: base_color, metallic_roughness, normal, occlusion, emissive.",
+    "Material shading modes: unlit, lambert, pbr_metallic_roughness.",
+    "NAMING CONVENTION: getState returns camelCase (baseColor, alphaCutoff) but setColor/setScalar expect snake_case (base_color, alpha_cutoff).",
+    "entity.setComponentField uses exact field names from entity.getComponents (snake_case like base_color_factor, metallic_factor).",
+    "For colors, prefer material.setColor over setComponentField — it handles resource dedup and dirty marking correctly.",
+    "",
     "Available tools:" + toolList,
   ].join("\n");
 }
