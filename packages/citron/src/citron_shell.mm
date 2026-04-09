@@ -80,7 +80,8 @@ fragment float4 composition_fragment(
     float2 vp_min = viewport_rect.xy;
     float2 vp_max = viewport_rect.xy + viewport_rect.zw;
 
-    if (uv.x >= vp_min.x && uv.x <= vp_max.x &&
+    if (viewport_rect.z > 0.0 && viewport_rect.w > 0.0 &&
+        uv.x >= vp_min.x && uv.x <= vp_max.x &&
         uv.y >= vp_min.y && uv.y <= vp_max.y) {
         // Map to scene texture UV.
         float2 scene_uv = (uv - vp_min) / viewport_rect.zw;
@@ -91,7 +92,8 @@ fragment float4 composition_fragment(
     float4 ui_color = ui_tex.sample(s, uv);
 
     // Alpha-blend: UI over scene.
-    // Pre-multiplied alpha: result = ui + scene * (1 - ui.a)
+    // The viewport area in the UI MUST have alpha=0 (transparent CSS background)
+    // so the 3D scene shows through.  Outside the viewport, UI alpha is 1.
     float4 result;
     result.rgb = ui_color.rgb + scene_color.rgb * (1.0 - ui_color.a);
     result.a = 1.0;
@@ -163,9 +165,8 @@ class ShellRenderHandler : public CefRenderHandler {
 public:
     void GetViewRect(CefRefPtr<CefBrowser> browser, CefRect& rect) override {
         if (!g_shell) { rect.Set(0, 0, 1, 1); return; }
-        rect.Set(0, 0,
-                 (int)(g_shell->windowWidth * g_shell->scaleFactor),
-                 (int)(g_shell->windowHeight * g_shell->scaleFactor));
+        // Return DIP (logical/CSS points) — CEF multiplies by device_scale_factor.
+        rect.Set(0, 0, g_shell->windowWidth, g_shell->windowHeight);
     }
 
     bool GetScreenInfo(CefRefPtr<CefBrowser> browser, CefScreenInfo& screen_info) override {
@@ -180,6 +181,18 @@ public:
                  const void* buffer,
                  int width, int height) override {
         if (!g_shell || type != PET_VIEW) return;
+
+        static int paintCount = 0;
+        ++paintCount;
+        if (paintCount <= 15 || paintCount % 60 == 0) {
+            // Sample center pixel alpha for diagnostics
+            int cx = width / 2, cy = height / 2;
+            const uint8_t* px = (const uint8_t*)buffer + ((size_t)cy * width + cx) * 4;
+            NSLog(@"[Citron] OnPaint #%d: %dx%d — center BGRA=(%d,%d,%d,%d) alpha=%s",
+                  paintCount, width, height,
+                  px[0], px[1], px[2], px[3],
+                  px[3] == 0 ? "TRANSPARENT" : "OPAQUE");
+        }
 
         size_t dataSize = (size_t)width * height * 4;
 
@@ -218,14 +231,68 @@ public:
 
 // ── CefClient: routes handler requests ───────────────────────────────────
 
+class ShellDisplayHandler : public CefDisplayHandler {
+public:
+    bool OnConsoleMessage(CefRefPtr<CefBrowser> browser,
+                          cef_log_severity_t level,
+                          const CefString& message,
+                          const CefString& source,
+                          int line) override {
+        const char* levelStr = "I";
+        if (level == LOGSEVERITY_WARNING) levelStr = "W";
+        else if (level >= LOGSEVERITY_ERROR) levelStr = "E";
+        NSLog(@"[CEF/%s] %s (%s:%d)", levelStr,
+              message.ToString().c_str(),
+              source.ToString().c_str(), line);
+        return false;  // Let CEF also log it
+    }
+    IMPLEMENT_REFCOUNTING(ShellDisplayHandler);
+};
+
+class ShellLoadHandler : public CefLoadHandler {
+public:
+    void OnLoadStart(CefRefPtr<CefBrowser> browser,
+                     CefRefPtr<CefFrame> frame,
+                     TransitionType transition_type) override {
+        if (frame->IsMain()) {
+            NSLog(@"[Citron] OnLoadStart: %s", frame->GetURL().ToString().c_str());
+        }
+    }
+
+    void OnLoadEnd(CefRefPtr<CefBrowser> browser,
+                   CefRefPtr<CefFrame> frame,
+                   int httpStatusCode) override {
+        if (frame->IsMain()) {
+            NSLog(@"[Citron] OnLoadEnd: status=%d url=%s", httpStatusCode,
+                  frame->GetURL().ToString().c_str());
+        }
+    }
+
+    void OnLoadError(CefRefPtr<CefBrowser> browser,
+                     CefRefPtr<CefFrame> frame,
+                     ErrorCode errorCode,
+                     const CefString& errorText,
+                     const CefString& failedUrl) override {
+        NSLog(@"[Citron] OnLoadError: code=%d text=%s url=%s",
+              errorCode, errorText.ToString().c_str(),
+              failedUrl.ToString().c_str());
+    }
+
+    IMPLEMENT_REFCOUNTING(ShellLoadHandler);
+};
+
 class ShellClient : public CefClient {
 public:
     ShellClient()
         : renderHandler_(new ShellRenderHandler())
-        , lifeSpanHandler_(new ShellLifeSpanHandler()) {}
+        , lifeSpanHandler_(new ShellLifeSpanHandler())
+        , displayHandler_(new ShellDisplayHandler())
+        , loadHandler_(new ShellLoadHandler()) {}
 
     CefRefPtr<CefRenderHandler> GetRenderHandler() override { return renderHandler_; }
     CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { return lifeSpanHandler_; }
+    CefRefPtr<CefDisplayHandler> GetDisplayHandler() override { return displayHandler_; }
+    CefRefPtr<CefLoadHandler> GetLoadHandler() override { return loadHandler_; }
 
     // Handle messages from JS → Native (via CefProcessMessage).
     bool OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
@@ -250,6 +317,8 @@ public:
 private:
     CefRefPtr<ShellRenderHandler>  renderHandler_;
     CefRefPtr<ShellLifeSpanHandler> lifeSpanHandler_;
+    CefRefPtr<ShellDisplayHandler>  displayHandler_;
+    CefRefPtr<ShellLoadHandler>     loadHandler_;
 };
 
 // ── CefV8Handler: handles window.citron.invoke() / postMessage() calls ───
@@ -323,6 +392,9 @@ public:
     void OnContextCreated(CefRefPtr<CefBrowser> browser,
                           CefRefPtr<CefFrame> frame,
                           CefRefPtr<CefV8Context> context) override {
+        NSLog(@"[Citron] OnContextCreated called for frame=%s url=%s",
+              frame->GetIdentifier().ToString().c_str(),
+              frame->GetURL().ToString().c_str());
         // Create window.citron object.
         auto global = context->GetGlobal();
         auto citronObj = CefV8Value::CreateObject(nullptr, nullptr);
@@ -387,8 +459,7 @@ public:
 // ── CefApp: process-level setup ──────────────────────────────────────────
 
 class ShellApp : public CefApp,
-                 public CefBrowserProcessHandler,
-                 public CefRenderProcessHandler {
+                 public CefBrowserProcessHandler {
 public:
     CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() override { return this; }
     CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler() override { return renderProcessHandler_; }
@@ -677,6 +748,11 @@ CitronShell* citron_create(const CitronConfig* config) {
     settings.log_severity = LOGSEVERITY_WARNING;
     settings.command_line_args_disabled = false;
 
+    // Set a separate cache path to avoid conflicts with Electron's Chromium instance.
+    NSString* cacheDir = [NSString stringWithFormat:@"%@/Library/Caches/Citron",
+                          NSHomeDirectory()];
+    CefString(&settings.root_cache_path) = [cacheDir UTF8String];
+
     if (!CefInitialize(mainArgs, settings, app, nullptr)) {
         NSLog(@"[Citron] CEF initialization failed");
         delete shell;
@@ -735,6 +811,7 @@ CitronShell* citron_create(const CitronConfig* config) {
 
     CefBrowserSettings browserSettings;
     browserSettings.windowless_frame_rate = 60;
+    browserSettings.background_color = CefColorSetARGB(0, 0, 0, 0);  // Transparent for composition
     CefString(&browserSettings.default_encoding) = "UTF-8";
 
     CefRefPtr<ShellClient> client(new ShellClient());
@@ -835,7 +912,6 @@ void citron_set_scene_surface(CitronShell* shell, uint32_t iosurface_id) {
     shell->sceneSurface = surface;
     shell->sceneIOSurfaceId = iosurface_id;
 
-    // Create Metal texture from IOSurface.
     size_t sw = IOSurfaceGetWidth(surface);
     size_t sh = IOSurfaceGetHeight(surface);
 

@@ -27,6 +27,39 @@
     return;
   }
 
+  // ── Make page background transparent for Metal composition ───────────
+  // In Citron, the Metal shader alpha-blends CEF output over the 3D scene.
+  // Wherever the CEF pixel has alpha=0 the scene shows through.
+  //
+  // Strategy:
+  //  1. html/body/#root → transparent (CEF background_color is already 0)
+  //  2. All FlexLayout structural containers in the ancestor chain of the
+  //     viewport → transparent (layout, tabset-selected, tab)
+  //  3. Every panel root (.flexlayout__tab >) gets an explicit #1e1e2e
+  //     background so non-viewport panels remain opaque.
+  //  4. The Viewport component sets inline background:transparent when
+  //     native overlay is active, which overrides rule 3 (inline > CSS).
+  const injectTransparentCSS = () => {
+    const style = document.createElement("style");
+    style.textContent = [
+      "html, body, #root { background: transparent !important; }",
+      ".flexlayout__layout,",
+      ".flexlayout__tabset-selected,",
+      ".flexlayout__tab {",
+      "  background: transparent !important;",
+      "}",
+      "/* Give every panel content root an opaque background. */",
+      "/* Viewport overrides this via inline style when nativeOverlay is active. */",
+      ".flexlayout__tab > * { background-color: #1e1e2e; }",
+    ].join("\n");
+    document.head.appendChild(style);
+  };
+  if (document.head) {
+    injectTransparentCSS();
+  } else {
+    document.addEventListener("DOMContentLoaded", injectTransparentCSS, { once: true });
+  }
+
   // ── Pending RPC calls ────────────────────────────────────────────────
   let nextId = 1;
   const pending = new Map(); // id → { resolve, reject, timer }

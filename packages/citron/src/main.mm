@@ -23,6 +23,7 @@ static NSString* const kEngineURL = @"ws://127.0.0.1:9100";
     NSURLSessionWebSocketTask* _wsTask;
     NSURLSession* _session;
     BOOL _shouldReconnect;
+    int _reconnectAttempts;
 }
 
 - (instancetype)initWithShell:(CitronShell*)shell {
@@ -48,7 +49,9 @@ static NSString* const kEngineURL = @"ws://127.0.0.1:9100";
     _wsTask = [_session webSocketTaskWithURL:url];
     [_wsTask resume];
     [self listenForMessages];
-    NSLog(@"[Guava/Engine] Connecting to %@...", kEngineURL);
+    if (_reconnectAttempts == 0) {
+        NSLog(@"[Guava/Engine] Connecting to %@...", kEngineURL);
+    }
 }
 
 - (void)disconnect {
@@ -61,7 +64,13 @@ static NSString* const kEngineURL = @"ws://127.0.0.1:9100";
 - (void)scheduleReconnect {
     if (!_shouldReconnect) return;
     _wsTask = nil;
-    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, 2 * NSEC_PER_SEC),
+    _reconnectAttempts++;
+    // Exponential backoff: 2s, 4s, 8s, ... capped at 30s.
+    int delay = MIN(2 * (1 << MIN(_reconnectAttempts - 1, 4)), 30);
+    if (_reconnectAttempts <= 3 || (_reconnectAttempts % 10) == 0) {
+        NSLog(@"[Guava/Engine] Reconnecting in %ds (attempt %d)...", delay, _reconnectAttempts);
+    }
+    dispatch_after(dispatch_time(DISPATCH_TIME_NOW, delay * NSEC_PER_SEC),
                    dispatch_get_main_queue(), ^{
         if (self->_shouldReconnect && !self->_wsTask) {
             [self doConnect];
@@ -75,7 +84,9 @@ static NSString* const kEngineURL = @"ws://127.0.0.1:9100";
         EngineRPC* self = weakSelf;
         if (!self) return;
         if (error) {
-            NSLog(@"[Guava/Engine] WS error: %@", error.localizedDescription);
+            if (self->_reconnectAttempts == 0) {
+                NSLog(@"[Guava/Engine] WS error: %@", error.localizedDescription);
+            }
             self->_connected = NO;
             [self scheduleReconnect];
             return;
@@ -143,6 +154,7 @@ static NSString* const kEngineURL = @"ws://127.0.0.1:9100";
     didOpenWithProtocol:(NSString*)protocol {
     NSLog(@"[Guava/Engine] Connected to %@", kEngineURL);
     _connected = YES;
+    _reconnectAttempts = 0;
     // Notify JS that engine is connected.
     const char* msg = "{\"type\":\"engine.connected\"}";
     citron_send_to_js(_shell, msg, (uint32_t)strlen(msg));
@@ -185,32 +197,25 @@ static void onJSMessage(const char* json, uint32_t len, void* /*userdata*/) {
     // ── Local handling for viewport commands that affect Citron natively ──
 
     if ([method isEqualToString:@"viewport.attachSurface"]) {
-        // Citron handles IOSurface natively — update viewport rect.
+        // Citron handles IOSurface natively — bind the surface.
         NSNumber* surfaceId = params[@"surfaceId"];
         if (surfaceId) {
             citron_set_scene_surface(g_shell, [surfaceId unsignedIntValue]);
         }
-        int32_t x = [params[@"x"] intValue];
-        int32_t y = [params[@"y"] intValue];
-        int32_t w = [params[@"w"] intValue];
-        int32_t h = [params[@"h"] intValue];
-        if (w > 0 && h > 0) {
-            citron_set_viewport_rect(g_shell, x, y, w, h);
-        }
+        // Note: Do NOT call citron_set_viewport_rect here.
+        // The x,y,w,h from attachSurface are in pixel coordinates (engine-local),
+        // not window-relative CSS points. viewport.updateBounds handles positioning.
         return;
     }
 
     if ([method isEqualToString:@"viewport.updateBounds"]) {
-        // Update Citron shell viewport rect for Metal composition.
+        // This is THE source of truth for Metal composition viewport rect.
+        // Values are CSS points from getBoundingClientRect(), window-relative.
         int32_t x = [params[@"x"] intValue];
         int32_t y = [params[@"y"] intValue];
         int32_t w = [params[@"w"] intValue];
         int32_t h = [params[@"h"] intValue];
         citron_set_viewport_rect(g_shell, x, y, w, h);
-        // Also forward to engine so it knows the viewport bounds.
-        if (g_engine.connected && msgId) {
-            [g_engine sendRaw:[[NSString alloc] initWithBytes:json length:len encoding:NSUTF8StringEncoding]];
-        }
         return;
     }
 
@@ -228,15 +233,12 @@ static void onJSMessage(const char* json, uint32_t len, void* /*userdata*/) {
         return;
     }
 
-    // ── viewport.setRect: update Citron + forward to engine ──
+    // ── viewport.setRect: forward to engine only (engine rendering resolution) ──
 
     if ([method isEqualToString:@"viewport.setRect"]) {
-        int32_t x = [params[@"x"] intValue];
-        int32_t y = [params[@"y"] intValue];
-        int32_t w = [params[@"w"] intValue] ?: [params[@"width"] intValue];
-        int32_t h = [params[@"h"] intValue] ?: [params[@"height"] intValue];
-        citron_set_viewport_rect(g_shell, x, y, w, h);
-        // Forward to engine.
+        // viewport.setRect sends pixel dimensions (CSS * DPR) for the engine's
+        // render target size. Do NOT use for Metal composition positioning —
+        // that's handled by viewport.updateBounds.
         [g_engine sendRaw:[[NSString alloc] initWithBytes:json length:len encoding:NSUTF8StringEncoding]];
         return;
     }
