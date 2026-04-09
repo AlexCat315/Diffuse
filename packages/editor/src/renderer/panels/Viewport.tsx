@@ -86,6 +86,9 @@ export function Viewport() {
   const lastMousePos = useRef<{ x: number; y: number } | null>(null);
   const dragging = useRef(false);
 
+  // Throttle mousemove RPC to avoid flooding the engine (~60 fps cap)
+  const lastMoveTime = useRef(0);
+
   // Track mousedown position for click-to-pick detection
   const mouseDownPos = useRef<{ x: number; y: number } | null>(null);
 
@@ -164,7 +167,12 @@ export function Viewport() {
     }
     lastMousePos.current = { x, y };
 
-    sendInput({ type: "mousemove", x, y, deltaX, deltaY, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
+    // Throttle RPC to ~60 fps (16ms) to avoid flooding the engine
+    const now = performance.now();
+    if (now - lastMoveTime.current >= 16) {
+      lastMoveTime.current = now;
+      sendInput({ type: "mousemove", x, y, deltaX, deltaY, shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey });
+    }
 
     // Update box selection
     setBoxSelect((prev) => {
@@ -639,6 +647,8 @@ export function Viewport() {
     let sabPixels: Uint8Array | null = null;
     let lastGeneration = 0;
     let raf = 0;
+    let lastUploadTime = 0;
+    const MIN_UPLOAD_INTERVAL = 16; // Cap texture uploads to ~60 fps
 
     const unsubSAB = window.guavaEngine.onViewportSharedBuffer((sab) => {
       sabRef = sab;
@@ -650,16 +660,20 @@ export function Viewport() {
       if (sabHeader && sabPixels) {
         const gen = Atomics.load(sabHeader, 2);
         if (gen !== lastGeneration) {
-          lastGeneration = gen;
-          const width = sabHeader[0];
-          const height = sabHeader[1];
-          const bufIdx = sabHeader[3]; // ping-pong: which buffer to read (0 or 1)
-          if (width > 0 && height > 0) {
-            // Double-buffered: each buffer is half of the pixel region.
-            const maxPixelBytes = (sabRef!.byteLength - 16) / 2;
-            const offset = 16 + bufIdx * maxPixelBytes;
-            const src = new Uint8Array(sabRef!, offset, width * height * 4);
-            uploadAndDraw(src, width, height);
+          const now = performance.now();
+          if (now - lastUploadTime >= MIN_UPLOAD_INTERVAL) {
+            lastUploadTime = now;
+            lastGeneration = gen;
+            const width = sabHeader[0];
+            const height = sabHeader[1];
+            const bufIdx = sabHeader[3]; // ping-pong: which buffer to read (0 or 1)
+            if (width > 0 && height > 0) {
+              // Double-buffered: each buffer is half of the pixel region.
+              const maxPixelBytes = (sabRef!.byteLength - 16) / 2;
+              const offset = 16 + bufIdx * maxPixelBytes;
+              const src = new Uint8Array(sabRef!, offset, width * height * 4);
+              uploadAndDraw(src, width, height);
+            }
           }
         }
       }

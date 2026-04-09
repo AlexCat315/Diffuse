@@ -77,6 +77,12 @@ const mach = if (builtin.os.tag == .macos) struct {
         return ns * timebase.denom / timebase.numer;
     }
 } else struct {};
+
+/// Absolute Mach-time deadline for the fixed-timestep frame limiter.
+/// Advances by exactly `frame_delay_ms` each frame.  Initialised to 0;
+/// the first frame sets it to `mach_absolute_time() + target`.
+var g_frame_deadline_abs: u64 = 0;
+
 const physics_system = @import("../physics/system.zig");
 const nav_system_mod = @import("../navigation/nav_system.zig");
 const debug_session_mod = @import("../script/debug_session.zig");
@@ -455,6 +461,17 @@ pub const Application = struct {
         };
 
         while ((frame_count == 0 or frames_rendered < frame_count) and !self.window.should_close) : (frames_rendered += 1) {
+            // Measure frame interval FIRST.  By placing lap() before
+            // pumpEvents / input processing, timer.read() in the frame
+            // limiter accounts for their variable cost (1-5ms when the
+            // editor sends rapid RPC messages).  Previously they ran
+            // *before* lap(), so the frame limiter under-estimated the
+            // total frame budget → ~51 FPS instead of 60.
+            const elapsed_ns = self.timer.lap();
+            var delta_seconds = @as(f32, @floatFromInt(elapsed_ns)) / @as(f32, @floatFromInt(std.time.ns_per_s));
+            delta_seconds = @min(delta_seconds, 0.1); // 最大帧间隔锁定为 0.1 秒
+            self.renderer.device().recordFrame(@min(elapsed_ns, 100 * std.time.ns_per_ms));
+
             self.input.beginFrame();
             self.pumpEvents() catch |err| {
                 std.log.err("[run-loop] pumpEvents failed at frame {d}: {s}", .{ frames_rendered, @errorName(err) });
@@ -474,11 +491,6 @@ pub const Application = struct {
                     self.input.wasMouseReleased(.left),
                 );
             }
-
-            const elapsed_ns = self.timer.lap();
-            var delta_seconds = @as(f32, @floatFromInt(elapsed_ns)) / @as(f32, @floatFromInt(std.time.ns_per_s));
-            delta_seconds = @min(delta_seconds, 0.1); // 最大帧间隔锁定为 0.1 秒
-            self.renderer.device().recordFrame(@min(elapsed_ns, 100 * std.time.ns_per_ms));
 
             self.scene_manager.pump(
                 &self.world,
@@ -591,11 +603,24 @@ pub const Application = struct {
                 self.playback_controller.consumeAdvance();
             }
 
+            const draw_start_ns = std.time.nanoTimestamp();
             last_frame = self.renderer.drawFrame(&self.world, &self.physics_state) catch |err| {
                 std.log.err("[run-loop] drawFrame failed at frame {d}: {s}", .{ frames_rendered, @errorName(err) });
                 return err;
             };
+            const draw_end_ns = std.time.nanoTimestamp();
             self.renderer.last_frame_report = last_frame;
+
+            // Frame-budget profiling: log timing every 300 frames (~5s @ 60fps)
+            if (frames_rendered > 0 and frames_rendered % 300 == 0) {
+                const draw_us: u64 = @intCast(@divTrunc(draw_end_ns - draw_start_ns, 1000));
+                std.log.info("[frame-budget] frame={d} draw={d}us elapsed_prev={d}us delay={d}ms", .{
+                    frames_rendered,
+                    draw_us,
+                    elapsed_ns / 1000,
+                    self.config.frame_delay_ms,
+                });
+            }
 
             // Consume pending frame delay change from RPC.
             if (self.renderer.pending_frame_delay_ms) |new_delay| {
@@ -604,19 +629,45 @@ pub const Application = struct {
             }
             self.renderer.current_frame_delay_ms = self.config.frame_delay_ms;
 
-            // Frame rate limiting.
+            // Frame rate limiting — fixed-timestep absolute-deadline approach.
+            //
+            // Instead of sleeping a relative amount each frame (which accumulates
+            // scheduler jitter: if mach_wait_until overshoots by 3ms, that time
+            // is lost), we maintain an absolute deadline that advances by exactly
+            // target_ns each iteration.  If one frame's sleep overshoots, the
+            // next deadline is still only target_ns later, so the sleep is
+            // automatically shortened to compensate.
+            //
+            // This keeps the AVERAGE frame interval at target_ns even when
+            // individual frames have ±3-5ms of scheduler jitter.
             if (self.config.frame_delay_ms > 0) {
-                const frame_ns = self.timer.read();
                 const target_ns: u64 = @as(u64, self.config.frame_delay_ms) * std.time.ns_per_ms;
-                if (frame_ns < target_ns) {
-                    const remaining = target_ns - frame_ns;
-                    if (comptime builtin.os.tag == .macos) {
-                        // mach_wait_until: kernel-level precise timer, no busy-wait,
-                        // no timer coalescing.  Sub-microsecond accuracy.
-                        const deadline = mach.mach_absolute_time() + mach.nsToAbsolute(remaining);
-                        _ = mach.mach_wait_until(deadline);
+                if (comptime builtin.os.tag == .macos) {
+                    const target_abs = mach.nsToAbsolute(target_ns);
+                    const now = mach.mach_absolute_time();
+
+                    if (g_frame_deadline_abs == 0) {
+                        // First frame — initialise deadline to now + target.
+                        g_frame_deadline_abs = now + target_abs;
                     } else {
-                        // Fallback: sleep + spin-wait for the final 0.2ms
+                        // Advance deadline by exactly one frame interval.
+                        g_frame_deadline_abs += target_abs;
+
+                        // If we fell behind by more than one frame, snap forward
+                        // to avoid a catch-up burst.
+                        if (g_frame_deadline_abs + target_abs < now) {
+                            g_frame_deadline_abs = now + target_abs;
+                        }
+                    }
+
+                    if (g_frame_deadline_abs > now) {
+                        _ = mach.mach_wait_until(g_frame_deadline_abs);
+                    }
+                } else {
+                    // Fallback: relative sleep + spin-wait (unchanged)
+                    const frame_ns = self.timer.read();
+                    if (frame_ns < target_ns) {
+                        const remaining = target_ns - frame_ns;
                         const spin_margin: u64 = 200_000;
                         if (remaining > spin_margin) {
                             std.Thread.sleep(remaining - spin_margin);
