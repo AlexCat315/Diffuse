@@ -4,6 +4,8 @@
 #include "panels/ViewportWidget.h"
 #include "panels/SceneTreeWidget.h"
 #include "panels/InspectorWidget.h"
+#include "util/IconProvider.h"
+#include "util/Translator.h"
 
 #include <QAction>
 #include <QActionGroup>
@@ -43,32 +45,43 @@ MainWindow::~MainWindow() = default;
 
 void MainWindow::setupMenuBar()
 {
-    auto* fileMenu = menuBar()->addMenu(tr("&File"));
-    fileMenu->addAction(tr("New Scene"), QKeySequence::New, [this]() {
+    const auto& menus = Translator::menus();
+    
+    auto* fileMenu = menuBar()->addMenu("&File");
+    auto* newSceneAct = fileMenu->addAction(menus.newScene(), QKeySequence::New, [this]() {
         engineClient_->call("scene.createEntity", {{"name", "New Entity"}});
     });
-    fileMenu->addAction(tr("Open Scene..."), QKeySequence::Open, [this]() {
+    newSceneAct->setIcon(IconProvider::document());
+    
+    auto* openAct = fileMenu->addAction(menus.openScene(), QKeySequence::Open, [this]() {
         // TODO: file dialog → scene.load
     });
-    fileMenu->addAction(tr("Save Scene"), QKeySequence::Save, [this]() {
+    openAct->setIcon(IconProvider::openFolder());
+    
+    auto* saveAct = fileMenu->addAction(menus.saveScene(), QKeySequence::Save, [this]() {
         engineClient_->call("scene.save", {});
     });
+    saveAct->setIcon(IconProvider::save());
+    
     fileMenu->addSeparator();
-    fileMenu->addAction(tr("Quit"), QKeySequence::Quit, qApp, &QApplication::quit);
+    fileMenu->addAction(menus.quit(), QKeySequence::Quit, qApp, &QApplication::quit);
 
-    auto* editMenu = menuBar()->addMenu(tr("&Edit"));
-    editMenu->addAction(tr("Undo"), QKeySequence::Undo, [this]() {
+    auto* editMenu = menuBar()->addMenu("&Edit");
+    auto* undoAct = editMenu->addAction(menus.undo(), QKeySequence::Undo, [this]() {
         engineClient_->call("editor.undo", {});
     });
-    editMenu->addAction(tr("Redo"), QKeySequence::Redo, [this]() {
+    undoAct->setIcon(IconProvider::undo());
+    
+    auto* redoAct = editMenu->addAction(menus.redo(), QKeySequence::Redo, [this]() {
         engineClient_->call("editor.redo", {});
     });
+    redoAct->setIcon(IconProvider::redo());
 
-    auto* viewMenu = menuBar()->addMenu(tr("&View"));
+    auto* viewMenu = menuBar()->addMenu("&View");
     // Dock toggles will be added after dock creation
 
-    auto* helpMenu = menuBar()->addMenu(tr("&Help"));
-    helpMenu->addAction(tr("About"), [this]() {
+    auto* helpMenu = menuBar()->addMenu("&Help");
+    helpMenu->addAction(menus.about(), [this]() {
         QMessageBox::about(this, "Guava Editor",
             "Guava Editor v0.1.0\nNative Qt Edition");
     });
@@ -87,23 +100,29 @@ void MainWindow::setupMenuBar()
 
 void MainWindow::setupToolBar()
 {
-    mainToolBar_ = addToolBar(tr("Main"));
+    const auto& toolbar = Translator::toolbar();
+    const auto& tooltips = Translator::tooltips();
+    
+    mainToolBar_ = addToolBar("Main");
     mainToolBar_->setMovable(false);
     mainToolBar_->setIconSize(QSize(20, 20));
 
     // Gizmo mode group
-    auto* translateAct = mainToolBar_->addAction(tr("Translate (W)"));
+    auto* translateAct = mainToolBar_->addAction(IconProvider::translate(), toolbar.translate());
     translateAct->setCheckable(true);
     translateAct->setChecked(true);
     translateAct->setShortcut(Qt::Key_W);
+    translateAct->setToolTip(tooltips.gizmo().translate());
 
-    auto* rotateAct = mainToolBar_->addAction(tr("Rotate (E)"));
+    auto* rotateAct = mainToolBar_->addAction(IconProvider::rotate(), toolbar.rotate());
     rotateAct->setCheckable(true);
     rotateAct->setShortcut(Qt::Key_E);
+    rotateAct->setToolTip(tooltips.gizmo().rotate());
 
-    auto* scaleAct = mainToolBar_->addAction(tr("Scale (R)"));
+    auto* scaleAct = mainToolBar_->addAction(IconProvider::scale(), toolbar.scale());
     scaleAct->setCheckable(true);
     scaleAct->setShortcut(Qt::Key_R);
+    scaleAct->setToolTip(tooltips.gizmo().scale());
 
     auto* gizmoGroup = new QActionGroup(this);
     gizmoGroup->addAction(translateAct);
@@ -111,29 +130,30 @@ void MainWindow::setupToolBar()
     gizmoGroup->addAction(scaleAct);
     gizmoGroup->setExclusive(true);
 
-    connect(gizmoGroup, &QActionGroup::triggered, this, [this](QAction* action) {
+    connect(gizmoGroup, &QActionGroup::triggered, this, [this, translateAct, rotateAct, scaleAct](QAction* action) {
         QString mode = "translate";
-        if (action->text().startsWith("Rotate")) mode = "rotate";
-        else if (action->text().startsWith("Scale")) mode = "scale";
+        if (action == rotateAct) mode = "rotate";
+        else if (action == scaleAct) mode = "scale";
         engineClient_->call("viewport.setGizmoMode", {{"mode", mode}});
     });
 
     mainToolBar_->addSeparator();
 
     // Playback controls
-    auto* playAct = mainToolBar_->addAction(tr("Play"));
+    auto* playAct = mainToolBar_->addAction(IconProvider::play(), toolbar.play());
     playAct->setShortcut(Qt::Key_F5);
+    playAct->setToolTip({});
     connect(playAct, &QAction::triggered, this, [this]() {
         engineClient_->call("playback.play", {});
     });
 
-    auto* pauseAct = mainToolBar_->addAction(tr("Pause"));
+    auto* pauseAct = mainToolBar_->addAction(IconProvider::pause(), toolbar.pause());
     pauseAct->setShortcut(Qt::Key_F6);
     connect(pauseAct, &QAction::triggered, this, [this]() {
         engineClient_->call("playback.pause", {});
     });
 
-    auto* stopAct = mainToolBar_->addAction(tr("Stop"));
+    auto* stopAct = mainToolBar_->addAction(IconProvider::stop(), toolbar.stop());
     stopAct->setShortcut(Qt::Key_F7);
     connect(stopAct, &QAction::triggered, this, [this]() {
         engineClient_->call("playback.stop", {});
@@ -157,19 +177,21 @@ static QDockWidget* createDock(const QString& title, QWidget* parent, QWidget* c
 
 void MainWindow::setupDockWidgets()
 {
+    const auto& docks = Translator::docks();
+    
     // ── Viewport (center) ──
     viewportWidget_ = new ViewportWidget(engineClient_);
-    viewportDock_ = createDock(tr("Viewport"), this, viewportWidget_);
+    viewportDock_ = createDock(docks.viewport(), this, viewportWidget_);
     setCentralWidget(viewportWidget_);
 
     // ── Scene Hierarchy (left) ──
     sceneTree_ = new SceneTreeWidget(engineClient_);
-    sceneDock_ = createDock(tr("Scene Hierarchy"), this, sceneTree_);
+    sceneDock_ = createDock(docks.sceneHierarchy(), this, sceneTree_);
     addDockWidget(Qt::LeftDockWidgetArea, sceneDock_);
 
     // ── Inspector (right) ──
     inspector_ = new InspectorWidget(engineClient_);
-    inspectorDock_ = createDock(tr("Inspector"), this, inspector_);
+    inspectorDock_ = createDock(docks.inspector(), this, inspector_);
     addDockWidget(Qt::RightDockWidgetArea, inspectorDock_);
 
     // ── Selection sync: scene tree → inspector ──
@@ -180,11 +202,11 @@ void MainWindow::setupDockWidgets()
     auto* consoleText = new QTextEdit;
     consoleText->setReadOnly(true);
     consoleText->setPlaceholderText("Console output...");
-    consoleDock_ = createDock(tr("Console"), this, consoleText);
+    consoleDock_ = createDock(docks.console(), this, consoleText);
     addDockWidget(Qt::BottomDockWidgetArea, consoleDock_);
 
     // ── Asset Browser (bottom, tabbed with Console) ──
-    assetDock_ = createDock(tr("Asset Browser"), this);
+    assetDock_ = createDock(docks.assetBrowser(), this);
     tabifyDockWidget(consoleDock_, assetDock_);
     consoleDock_->raise();  // Console visible by default
 

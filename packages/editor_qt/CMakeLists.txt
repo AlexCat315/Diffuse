@@ -17,6 +17,7 @@ find_package(Qt6 REQUIRED COMPONENTS
     Widgets
     WebSockets
     Network
+    Svg
 )
 
 # ── Sources ───────────────────────────────────────────────────────────────
@@ -38,6 +39,10 @@ set(SOURCES
     src/util/Theme.cpp
     src/util/MacOS.h
     src/util/MacOS.mm
+    src/util/IconProvider.h
+    src/util/IconProvider.cpp
+    src/util/Translator.h
+    src/util/Translator.cpp
 )
 
 # ── Resources ─────────────────────────────────────────────────────────────
@@ -66,6 +71,7 @@ target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Widgets
     Qt6::WebSockets
     Qt6::Network
+    Qt6::Svg
 )
 
 # ── macOS frameworks ──────────────────────────────────────────────────────
