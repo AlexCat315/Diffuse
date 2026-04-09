@@ -234,12 +234,12 @@ private:
 
 ### Phase 0: 项目脚手架 (1 周)
 
-- [ ] 创建 `packages/editor_qt/` 目录
-- [ ] CMakeLists.txt 配置 Qt6 + 必要模块
-- [ ] 安装 Qt 6.8 (`brew install qt@6`)
-- [ ] 基本 QMainWindow 空壳，能编译 & 运行
-- [ ] EngineClient WebSocket 连接，验证 `editor.ping` 成功
-- [ ] 引擎子进程管理 (QProcess)
+- [x] 创建 `packages/editor_qt/` 目录
+- [x] CMakeLists.txt 配置 Qt6 + 必要模块
+- [x] 安装 Qt 6.8 (`brew install qt@6`)
+- [x] 基本 QMainWindow 空壳，能编译 & 运行
+- [x] EngineClient WebSocket 连接，验证 `editor.ping` 成功
+- [x] 引擎子进程管理 (QProcess)
 
 **交付物：** 空窗口可连接引擎
 
