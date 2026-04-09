@@ -62,3 +62,13 @@ add_custom_command(TARGET Citron POST_BUILD
         "$<TARGET_BUNDLE_DIR:Citron>/Contents/Frameworks/Chromium Embedded Framework.framework"
     COMMENT "Copying CEF framework into app bundle..."
 )
+
+# ── Copy preload script into app bundle Resources ────────────────────────
+add_custom_command(TARGET Citron POST_BUILD
+    COMMAND ${CMAKE_COMMAND} -E make_directory
+        "$<TARGET_BUNDLE_DIR:Citron>/Contents/Resources"
+    COMMAND ${CMAKE_COMMAND} -E copy
+        "${CMAKE_CURRENT_SOURCE_DIR}/src/citron-preload.js"
+        "$<TARGET_BUNDLE_DIR:Citron>/Contents/Resources/citron-preload.js"
+    COMMENT "Copying citron-preload.js into app bundle..."
+)

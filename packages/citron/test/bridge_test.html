@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Citron JS Bridge Test</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, sans-serif;
+            margin: 40px;
+            background: #1e1e2e;
+            color: #cdd6f4;
+        }
+        h1 { color: #89b4fa; }
+        .result { 
+            background: #313244; 
+            padding: 12px; 
+            border-radius: 8px;
+            margin: 8px 0;
+            font-family: monospace;
+        }
+        .pass { border-left: 4px solid #a6e3a1; }
+        .fail { border-left: 4px solid #f38ba8; }
+        button {
+            background: #89b4fa;
+            color: #1e1e2e;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            margin: 4px;
+        }
+        button:hover { background: #74c7ec; }
+        #log {
+            background: #181825;
+            padding: 12px;
+            border-radius: 8px;
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 13px;
+            white-space: pre-wrap;
+        }
+    </style>
+</head>
+<body>
+    <h1>🍋 Citron JS Bridge Test</h1>
+    
+    <h2>Bridge Detection</h2>
+    <div id="detection"></div>
+    
+    <h2>Actions</h2>
+    <button onclick="testPostMessage()">Test postMessage()</button>
+    <button onclick="testInvoke()">Test invoke()</button>
+    <button onclick="testNativeMessage()">Register _handleNative</button>
+    
+    <h2>Log</h2>
+    <div id="log"></div>
+
+    <script>
+        const logEl = document.getElementById('log');
+        function log(msg) {
+            const line = document.createElement('div');
+            line.textContent = `[${new Date().toISOString().substr(11, 12)}] ${msg}`;
+            logEl.appendChild(line);
+            logEl.scrollTop = logEl.scrollHeight;
+        }
+
+        // Detection
+        const det = document.getElementById('detection');
+        function addResult(label, value, pass) {
+            const div = document.createElement('div');
+            div.className = `result ${pass ? 'pass' : 'fail'}`;
+            div.textContent = `${label}: ${JSON.stringify(value)}`;
+            det.appendChild(div);
+        }
+
+        if (typeof citron !== 'undefined') {
+            addResult('window.citron exists', true, true);
+            addResult('citron.isNative', citron.isNative, citron.isNative === true);
+            addResult('citron.platform', citron.platform, citron.platform === 'macos');
+            addResult('citron.postMessage', typeof citron.postMessage, typeof citron.postMessage === 'function');
+            addResult('citron.invoke', typeof citron.invoke, typeof citron.invoke === 'function');
+            log('JS bridge detected successfully!');
+        } else {
+            addResult('window.citron exists', false, false);
+            log('ERROR: window.citron not found — JS bridge not injected');
+        }
+
+        // Tests
+        function testPostMessage() {
+            if (typeof citron === 'undefined') {
+                log('ERROR: citron not available');
+                return;
+            }
+            const msg = JSON.stringify({ type: 'test', payload: 'Hello from JS!' });
+            citron.postMessage(msg);
+            log(`postMessage sent: ${msg}`);
+        }
+
+        function testInvoke() {
+            if (typeof citron === 'undefined') {
+                log('ERROR: citron not available');
+                return;
+            }
+            citron.invoke('viewport.setRect', JSON.stringify({x: 0, y: 0, w: 800, h: 600}));
+            log('invoke("viewport.setRect", ...) called');
+        }
+
+        function testNativeMessage() {
+            if (typeof citron === 'undefined') {
+                log('ERROR: citron not available');
+                return;
+            }
+            citron._handleNative = function(msg) {
+                log(`Received from native: ${JSON.stringify(msg)}`);
+            };
+            log('_handleNative handler registered — send a message from native to test');
+        }
+    </script>
+</body>
+</html>

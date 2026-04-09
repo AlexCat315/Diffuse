@@ -27,7 +27,9 @@
 #include "include/cef_render_handler.h"
 #include "include/cef_life_span_handler.h"
 #include "include/cef_browser_process_handler.h"
+#include "include/cef_render_process_handler.h"
 #include "include/cef_display_handler.h"
+#include "include/cef_v8.h"
 #include "include/wrapper/cef_helpers.h"
 #include "include/wrapper/cef_library_loader.h"
 
@@ -36,6 +38,8 @@
 #include <mutex>
 #include <atomic>
 #include <cstring>
+#include <fstream>
+#include <sstream>
 
 // ══════════════════════════════════════════════════════════════════════════
 // ── Metal Composition Shader ─────────────────────────────────────────────
@@ -146,6 +150,9 @@ struct CitronShell {
 // Global shell pointer (for CEF callbacks which can't take user data).
 static CitronShell* g_shell = nullptr;
 
+// Preload script content (loaded once, injected into every page context).
+static std::string g_preloadScript;
+
 // ══════════════════════════════════════════════════════════════════════════
 // ── CEF Handler Classes ──────────────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════
@@ -245,11 +252,146 @@ private:
     CefRefPtr<ShellLifeSpanHandler> lifeSpanHandler_;
 };
 
+// ── CefV8Handler: handles window.citron.invoke() / postMessage() calls ───
+
+class CitronV8Handler : public CefV8Handler {
+public:
+    bool Execute(const CefString& name,
+                 CefRefPtr<CefV8Value> object,
+                 const CefV8ValueList& arguments,
+                 CefRefPtr<CefV8Value>& retval,
+                 CefString& exception) override {
+
+        if (name == "postMessage" && arguments.size() >= 1) {
+            // window.citron.postMessage(jsonString)
+            // Send JSON string to browser process via CefProcessMessage.
+            CefString json = arguments[0]->IsString()
+                ? arguments[0]->GetStringValue()
+                : CefString("{}");
+
+            auto context = CefV8Context::GetCurrentContext();
+            auto browser = context->GetBrowser();
+            auto frame = context->GetFrame();
+
+            auto msg = CefProcessMessage::Create("citron_message");
+            msg->GetArgumentList()->SetString(0, json);
+            frame->SendProcessMessage(PID_BROWSER, msg);
+
+            retval = CefV8Value::CreateBool(true);
+            return true;
+        }
+
+        if (name == "invoke" && arguments.size() >= 1) {
+            // window.citron.invoke(method, params) → Promise
+            // Serialize as JSON: {"method": ..., "params": ...}
+            // For now, wrap in a simple JSON envelope and send via postMessage path.
+            CefString method = arguments[0]->GetStringValue();
+
+            // Build JSON manually (avoid needing a JSON library).
+            std::string json = "{\"method\":\"";
+            json += method.ToString();
+            json += "\"";
+            if (arguments.size() >= 2 && arguments[1]->IsString()) {
+                json += ",\"params\":";
+                json += arguments[1]->GetStringValue().ToString();
+            }
+            json += "}";
+
+            auto context = CefV8Context::GetCurrentContext();
+            auto browser = context->GetBrowser();
+            auto frame = context->GetFrame();
+
+            auto msg = CefProcessMessage::Create("citron_message");
+            msg->GetArgumentList()->SetString(0, json);
+            frame->SendProcessMessage(PID_BROWSER, msg);
+
+            // Return undefined (not a real Promise yet — TODO: implement request/response).
+            retval = CefV8Value::CreateUndefined();
+            return true;
+        }
+
+        return false;
+    }
+
+    IMPLEMENT_REFCOUNTING(CitronV8Handler);
+};
+
+// ── CefRenderProcessHandler: injects window.citron into every page ───────
+
+class ShellRenderProcessHandler : public CefRenderProcessHandler {
+public:
+    void OnContextCreated(CefRefPtr<CefBrowser> browser,
+                          CefRefPtr<CefFrame> frame,
+                          CefRefPtr<CefV8Context> context) override {
+        // Create window.citron object.
+        auto global = context->GetGlobal();
+        auto citronObj = CefV8Value::CreateObject(nullptr, nullptr);
+
+        CefRefPtr<CitronV8Handler> handler(new CitronV8Handler());
+
+        // window.citron.postMessage(json)
+        citronObj->SetValue("postMessage",
+            CefV8Value::CreateFunction("postMessage", handler),
+            V8_PROPERTY_ATTRIBUTE_READONLY);
+
+        // window.citron.invoke(method, paramsJson)
+        citronObj->SetValue("invoke",
+            CefV8Value::CreateFunction("invoke", handler),
+            V8_PROPERTY_ATTRIBUTE_READONLY);
+
+        // window.citron.isNative = true
+        citronObj->SetValue("isNative",
+            CefV8Value::CreateBool(true),
+            V8_PROPERTY_ATTRIBUTE_READONLY);
+
+        // window.citron.platform = "macos"
+        citronObj->SetValue("platform",
+            CefV8Value::CreateString("macos"),
+            V8_PROPERTY_ATTRIBUTE_READONLY);
+
+        // window.citron._handleNative = function(msg) {} — placeholder, overwritten by JS
+        citronObj->SetValue("_handleNative",
+            CefV8Value::CreateFunction("_handleNative", handler),
+            V8_PROPERTY_ATTRIBUTE_NONE);
+
+        global->SetValue("citron", citronObj, V8_PROPERTY_ATTRIBUTE_READONLY);
+
+        // Inject the preload script that creates window.guavaEngine bridge.
+        if (!g_preloadScript.empty()) {
+            frame->ExecuteJavaScript(g_preloadScript, "citron-preload.js", 0);
+        }
+
+        NSLog(@"[Citron] JS bridge injected (frame=%s)", frame->GetIdentifier().ToString().c_str());
+    }
+
+    bool OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
+                                  CefRefPtr<CefFrame> frame,
+                                  CefProcessId source_process,
+                                  CefRefPtr<CefProcessMessage> message) override {
+        // Handle messages from browser process → renderer (for citron_send_to_js).
+        if (message->GetName() == "citron_to_js") {
+            auto args = message->GetArgumentList();
+            if (args->GetSize() >= 1) {
+                CefString js = "window.citron && window.citron._handleNative && window.citron._handleNative(";
+                std::string code = js.ToString() + args->GetString(0).ToString() + ")";
+                frame->ExecuteJavaScript(code, frame->GetURL(), 0);
+            }
+            return true;
+        }
+        return false;
+    }
+
+    IMPLEMENT_REFCOUNTING(ShellRenderProcessHandler);
+};
+
 // ── CefApp: process-level setup ──────────────────────────────────────────
 
-class ShellApp : public CefApp, public CefBrowserProcessHandler {
+class ShellApp : public CefApp,
+                 public CefBrowserProcessHandler,
+                 public CefRenderProcessHandler {
 public:
     CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() override { return this; }
+    CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler() override { return renderProcessHandler_; }
 
     void OnBeforeCommandLineProcessing(
         const CefString& process_type,
@@ -264,6 +406,9 @@ public:
     }
 
     IMPLEMENT_REFCOUNTING(ShellApp);
+
+private:
+    CefRefPtr<ShellRenderProcessHandler> renderProcessHandler_{new ShellRenderProcessHandler()};
 };
 
 // ══════════════════════════════════════════════════════════════════════════
@@ -488,6 +633,30 @@ CitronShell* citron_create(const CitronConfig* config) {
     shell->vpW = config->viewport_w;
     shell->vpH = config->viewport_h;
     shell->devToolsEnabled = config->dev_tools;
+
+    // ── Load preload script (citron-preload.js) ─────────────────────────
+    {
+        // Try: 1) Bundle resource, 2) executable-relative, 3) source tree
+        NSString* preloadPath = [[NSBundle mainBundle] pathForResource:@"citron-preload" ofType:@"js"];
+        if (!preloadPath) {
+            // Fallback: next to the executable (for development builds)
+            NSString* exeDir = [[[NSBundle mainBundle] executablePath] stringByDeletingLastPathComponent];
+            preloadPath = [exeDir stringByAppendingPathComponent:@"citron-preload.js"];
+            if (![[NSFileManager defaultManager] fileExistsAtPath:preloadPath]) {
+                // Fallback: source tree (development)
+                preloadPath = [exeDir stringByAppendingPathComponent:@"../../../src/citron-preload.js"];
+            }
+        }
+        if (preloadPath && [[NSFileManager defaultManager] fileExistsAtPath:preloadPath]) {
+            std::ifstream f([preloadPath UTF8String]);
+            std::ostringstream ss;
+            ss << f.rdbuf();
+            g_preloadScript = ss.str();
+            NSLog(@"[Citron] Preload script loaded (%zu bytes) from %@", g_preloadScript.size(), preloadPath);
+        } else {
+            NSLog(@"[Citron] WARNING: citron-preload.js not found");
+        }
+    }
 
     // ── Load CEF framework library (required on macOS before any CEF API call) ──
     static CefScopedLibraryLoader cefLibraryLoader;

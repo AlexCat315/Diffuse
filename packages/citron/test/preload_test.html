@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Citron Preload Bridge Test</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: -apple-system, system-ui, sans-serif; background: #1e1e2e; color: #cdd6f4; padding: 24px; }
+  h1 { font-size: 18px; margin-bottom: 16px; color: #89b4fa; }
+  .test { padding: 8px 12px; margin: 4px 0; border-radius: 6px; display: flex; align-items: center; gap: 8px; font-size: 14px; }
+  .test .indicator { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+  .pass { background: rgba(166, 227, 161, 0.1); }
+  .pass .indicator { background: #a6e3a1; }
+  .fail { background: rgba(243, 139, 168, 0.1); }
+  .fail .indicator { background: #f38ba8; }
+  .section { margin-top: 16px; margin-bottom: 8px; font-size: 14px; color: #94e2d5; font-weight: 600; }
+  #log { margin-top: 20px; background: #11111b; border-radius: 8px; padding: 12px; font-family: monospace; font-size: 12px; max-height: 300px; overflow-y: auto; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Citron Preload Bridge Test</h1>
+<div id="results"></div>
+<div id="log"></div>
+
+<script>
+  const results = document.getElementById("results");
+  const logEl = document.getElementById("log");
+
+  function log(msg) {
+    logEl.textContent += msg + "\n";
+    console.log(msg);
+  }
+
+  function test(name, passed, detail) {
+    const div = document.createElement("div");
+    div.className = `test ${passed ? "pass" : "fail"}`;
+    div.innerHTML = `<span class="indicator"></span><span>${name}${detail ? ": " + detail : ""}</span>`;
+    results.appendChild(div);
+  }
+
+  function section(name) {
+    const div = document.createElement("div");
+    div.className = "section";
+    div.textContent = name;
+    results.appendChild(div);
+  }
+
+  // ── Low-level bridge (window.citron) ────────────────────────────────
+  section("Low-level bridge (window.citron)");
+  test("window.citron exists", !!window.citron);
+  test("citron.isNative", window.citron && window.citron.isNative === true, String(window.citron?.isNative));
+  test("citron.platform", window.citron && typeof window.citron.platform === "string", window.citron?.platform);
+  test("citron.postMessage", window.citron && typeof window.citron.postMessage === "function");
+  test("citron._handleNative", window.citron && typeof window.citron._handleNative === "function");
+
+  // ── High-level bridge (window.guavaEngine) ──────────────────────────
+  section("High-level bridge (window.guavaEngine)");
+  const ge = window.guavaEngine;
+  test("window.guavaEngine exists", !!ge);
+  test("guavaEngine.platform", ge && typeof ge.platform === "string", ge?.platform);
+
+  // Launcher APIs
+  section("Launcher APIs (should resolve immediately)");
+  if (ge) {
+    ge.getAppMode().then(mode => {
+      test("getAppMode()", mode === "editor", mode);
+    });
+    ge.getRecentProjects().then(projects => {
+      test("getRecentProjects()", Array.isArray(projects), `${projects.length} items`);
+    });
+  }
+
+  // Engine RPC
+  section("Engine RPC");
+  test("call() exists", ge && typeof ge.call === "function");
+  test("getStatus() exists", ge && typeof ge.getStatus === "function");
+  test("onEvent() exists", ge && typeof ge.onEvent === "function");
+  test("onConnected() exists", ge && typeof ge.onConnected === "function");
+  test("onError() exists", ge && typeof ge.onError === "function");
+  test("onDisconnected() exists", ge && typeof ge.onDisconnected === "function");
+
+  if (ge) {
+    ge.getStatus().then(status => {
+      test("getStatus() resolves", true, JSON.stringify(status));
+    });
+
+    // Test event subscription returns cleanup function
+    const cleanup = ge.onEvent(() => {});
+    test("onEvent() returns cleanup fn", typeof cleanup === "function");
+    cleanup();
+  }
+
+  // Viewport APIs
+  section("Viewport APIs");
+  test("viewportAttachSurface", ge && typeof ge.viewportAttachSurface === "function");
+  test("viewportUpdateSurface", ge && typeof ge.viewportUpdateSurface === "function");
+  test("viewportDetach", ge && typeof ge.viewportDetach === "function");
+  test("viewportUpdateBounds", ge && typeof ge.viewportUpdateBounds === "function");
+  test("viewportUpdateExclusions", ge && typeof ge.viewportUpdateExclusions === "function");
+  test("onViewportOverlayActive", ge && typeof ge.onViewportOverlayActive === "function");
+  test("onViewportPixels", ge && typeof ge.onViewportPixels === "function");
+  test("onViewportSharedBuffer", ge && typeof ge.onViewportSharedBuffer === "function");
+
+  if (ge) {
+    // Test that overlay is always active in Citron
+    const overlayCleanup = ge.onViewportOverlayActive(active => {
+      test("onViewportOverlayActive fires", active === true, String(active));
+    });
+  }
+
+  // Multi-window stubs
+  section("Multi-window (stubs)");
+  test("isPopoutWindow", ge && ge.isPopoutWindow() === false, String(ge?.isPopoutWindow()));
+  test("getPopoutPanels", ge && Array.isArray(ge.getPopoutPanels()), JSON.stringify(ge?.getPopoutPanels()));
+
+  // FS stubs
+  section("File System APIs");
+  test("fsMkdir", ge && typeof ge.fsMkdir === "function");
+  test("fsRename", ge && typeof ge.fsRename === "function");
+  test("fsDelete", ge && typeof ge.fsDelete === "function");
+  test("fsCreateFile", ge && typeof ge.fsCreateFile === "function");
+  test("fsImportFiles", ge && typeof ge.fsImportFiles === "function");
+
+  // Build stubs
+  section("Build APIs");
+  test("buildPackage", ge && typeof ge.buildPackage === "function");
+  test("cancelBuild", ge && typeof ge.cancelBuild === "function");
+  test("runBuiltGame", ge && typeof ge.runBuiltGame === "function");
+  test("onBuildProgress", ge && typeof ge.onBuildProgress === "function");
+
+  log("All tests executed.");
+
+  // ── Test engine.connected event ────────────────────────────────────
+  if (ge) {
+    ge.onConnected(() => {
+      log("✅ engine.connected event received!");
+      test("engine.connected event", true);
+    });
+    ge.onDisconnected(info => {
+      log("⚠️ engine.disconnected: " + JSON.stringify(info));
+    });
+    ge.onError(err => {
+      log("❌ engine.error: " + err);
+    });
+  }
+</script>
+</body>
+</html>
