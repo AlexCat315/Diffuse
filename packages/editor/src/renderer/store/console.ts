@@ -63,7 +63,7 @@ export interface ConsoleState {
 
 export const useConsoleStore = create<ConsoleState>(
   withBroadcastSync(
-    { name: "console", syncKeys: ["logs", "maxLogs"] },
+    { name: "console", syncKeys: ["maxLogs"] },
     (set) => ({
       logs: [],
       maxLogs: loadMaxLogs(),

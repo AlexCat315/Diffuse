@@ -345,6 +345,8 @@ pub const Renderer = struct {
     skybox_pass: ?skybox_pass_mod.SkyboxPass = null,
     skybox_logged: bool = false,
     skybox_log_count: u32 = 0,
+    /// IOSurface 性能日志计数
+    iosurface_perf_log_count: u32 = 0,
     /// 轮廓通道（选中物体高亮）
     outline_pass: outline_pass_mod.OutlinePass,
     /// Gizmo 通道（编辑器可视化）
@@ -1451,15 +1453,14 @@ pub const Renderer = struct {
             // IOSurface so the addon can read them at any time.  The blit
             // runs on the same GPU queue and completes before THIS frame's
             // render commands start (Metal FIFO guarantee).
-            if (viewport_active and self.scene_viewport.use_iosurface) {
-                self.rhi.waitForPreviousFrame();
-                if (self.scene_viewport.color_texture) |tex| {
-                    const staging_id = self.rhi.blitSharedTexture(tex);
-                    if (staging_id != 0) {
-                        self.scene_viewport.staging_iosurface_id = staging_id;
-                    }
-                }
-            }
+            // ── IOSurface staging blit (deferred to AFTER submitFrame) ──
+            // We no longer call waitForPreviousFrame() here.  Instead, the blit
+            // is submitted after submitFrame below.  Metal FIFO ordering
+            // guarantees that the blit reads stable pixels from the just-completed
+            // render pass.  This eliminates the CPU stall that was the #1 cause
+            // of sub-60 FPS in editor-server mode.
+            //
+            // See the blit block after submitFrame near the end of drawFrame.
 
             const render_width = if (viewport_active) self.scene_viewport.width else frame.swapchain_image.width;
             const render_height = if (viewport_active) self.scene_viewport.height else frame.swapchain_image.height;
@@ -2708,13 +2709,18 @@ pub const Renderer = struct {
             }
             try self.resolveSelectionReadbacks();
 
-            // Blit is now done at the TOP of the next frame (double-buffered
-            // pipeline).  See the waitForPreviousFrame + blitSharedTexture
-            // block near the start of drawFrame.
-            // On Vulkan, the blit is still synchronous inside blitSharedTexture.
-            if (viewport_active and self.scene_viewport.use_iosurface and self.rhi.api == .vulkan) {
+            // ── Async IOSurface blit (after submitFrame) ──
+            // The blit is submitted on the same GPU queue AFTER all render
+            // commands.  Metal FIFO ordering guarantees stable source pixels.
+            // On Vulkan, blitSharedTexture includes its own synchronization.
+            // This approach eliminates the CPU stall from waitForPreviousFrame
+            // that was previously done at the top of drawFrame.
+            if (viewport_active and self.scene_viewport.use_iosurface) {
                 if (self.scene_viewport.color_texture) |tex| {
-                    _ = self.rhi.blitSharedTexture(tex);
+                    const staging_id = self.rhi.blitSharedTexture(tex);
+                    if (staging_id != 0) {
+                        self.scene_viewport.staging_iosurface_id = staging_id;
+                    }
                 }
             }
 
