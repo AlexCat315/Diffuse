@@ -9,6 +9,9 @@
 
 class EngineClient;
 class EngineProcess;
+class ViewportWidget;
+class SceneTreeWidget;
+class InspectorWidget;
 
 class MainWindow : public QMainWindow
 {
@@ -42,8 +45,11 @@ private:
 
     // Dock widgets (Phase 0: placeholders)
     QDockWidget* viewportDock_ = nullptr;
+    ViewportWidget* viewportWidget_ = nullptr;
     QDockWidget* sceneDock_ = nullptr;
+    SceneTreeWidget* sceneTree_ = nullptr;
     QDockWidget* inspectorDock_ = nullptr;
+    InspectorWidget* inspector_ = nullptr;
     QDockWidget* consoleDock_ = nullptr;
     QDockWidget* assetDock_ = nullptr;
 };

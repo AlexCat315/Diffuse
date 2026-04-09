@@ -48,6 +48,20 @@ app.*.map.json
 dist/
 .zig-cache/
 zig-out/
+
+# CMake build directories
+**/build/
+**/cmake-build-*/
+**/CMakeUserPresets.json
+
+# Qt/compiled artifacts
+**/moc_*.cpp
+**/ui_*.h
+**/qrc_*.cpp
+**/*.o
+**/*.a
+**/*.so
+**/*.dylib
 compile_commands.json
 packages/engine/assets/derived/
 packages/engine/assets/scenes/editor_autosave.guava_scene
@@ -87,3 +101,8 @@ packages/editor/dist-package
 .guava_scene
 packages/engine/sdk/csharp/**/**/bin/**
 packages/engine/sdk/csharp/**/**/obj/**
+
+*.o
+/build/
+/packages/*/build/
+/CMakeFiles/

@@ -1,6 +1,9 @@
 #include "MainWindow.h"
 #include "EngineProcess.h"
 #include "engine/EngineClient.h"
+#include "panels/ViewportWidget.h"
+#include "panels/SceneTreeWidget.h"
+#include "panels/InspectorWidget.h"
 
 #include <QAction>
 #include <QActionGroup>
@@ -155,19 +158,23 @@ static QDockWidget* createDock(const QString& title, QWidget* parent, QWidget* c
 void MainWindow::setupDockWidgets()
 {
     // ── Viewport (center) ──
-    auto* viewportPlaceholder = new QWidget;
-    viewportPlaceholder->setMinimumSize(400, 300);
-    viewportPlaceholder->setStyleSheet("background-color: #11111b;");
-    viewportDock_ = createDock(tr("Viewport"), this, viewportPlaceholder);
-    setCentralWidget(viewportPlaceholder);
+    viewportWidget_ = new ViewportWidget(engineClient_);
+    viewportDock_ = createDock(tr("Viewport"), this, viewportWidget_);
+    setCentralWidget(viewportWidget_);
 
     // ── Scene Hierarchy (left) ──
-    sceneDock_ = createDock(tr("Scene Hierarchy"), this);
+    sceneTree_ = new SceneTreeWidget(engineClient_);
+    sceneDock_ = createDock(tr("Scene Hierarchy"), this, sceneTree_);
     addDockWidget(Qt::LeftDockWidgetArea, sceneDock_);
 
     // ── Inspector (right) ──
-    inspectorDock_ = createDock(tr("Inspector"), this);
+    inspector_ = new InspectorWidget(engineClient_);
+    inspectorDock_ = createDock(tr("Inspector"), this, inspector_);
     addDockWidget(Qt::RightDockWidgetArea, inspectorDock_);
+
+    // ── Selection sync: scene tree → inspector ──
+    connect(sceneTree_, &SceneTreeWidget::selectionSynced,
+            inspector_, &InspectorWidget::inspect);
 
     // ── Console (bottom) ──
     auto* consoleText = new QTextEdit;
@@ -229,7 +236,12 @@ void MainWindow::connectEngine()
 {
     // Start engine process
     connect(engineProcess_, &EngineProcess::started, this, [this]() {
-        statusLabel_->setText(tr("Engine started, connecting..."));
+        statusLabel_->setText(tr("Engine started, waiting for initialization..."));
+        // Give engine 2 seconds to fully initialize before attempting WebSocket connection
+        QTimer::singleShot(2000, this, [this]() {
+            qDebug() << "[MainWindow] Engine initialized delay complete, connecting client...";
+            engineClient_->connectToEngine();
+        });
     });
 
     connect(engineProcess_, &EngineProcess::stopped, this, [this](int exitCode) {
@@ -245,9 +257,7 @@ void MainWindow::connectEngine()
 
     // Start engine (searches for guava-engine binary)
     engineProcess_->start();
-
-    // Connect WebSocket (with retry)
-    engineClient_->connectToEngine();
+    // WebSocket connection happens after engine initialization (in engineProcess_ started signal)
 }
 
 // ── Close Event ──────────────────────────────────────────────────────────

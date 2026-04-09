@@ -25,8 +25,16 @@ set(SOURCES
     src/app/EngineProcess.cpp
     src/engine/EngineClient.h
     src/engine/EngineClient.cpp
+    src/panels/ViewportWidget.h
+    src/panels/ViewportWidget.mm
+    src/panels/SceneTreeWidget.h
+    src/panels/SceneTreeWidget.cpp
+    src/panels/InspectorWidget.h
+    src/panels/InspectorWidget.cpp
     src/util/Theme.h
     src/util/Theme.cpp
+    src/util/MacOS.h
+    src/util/MacOS.mm
 )
 
 # ── Resources ─────────────────────────────────────────────────────────────
@@ -62,8 +70,10 @@ if(APPLE)
     target_link_libraries(${PROJECT_NAME} PRIVATE
         "-framework AppKit"
         "-framework Metal"
+        "-framework MetalKit"
         "-framework QuartzCore"
         "-framework IOSurface"
+        "-framework CoreVideo"
     )
 endif()
 

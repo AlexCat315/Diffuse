@@ -54,7 +54,19 @@ void EngineProcess::start()
         return;
     }
 
-    qDebug() << "[EngineProcess] Starting:" << binary;
+    // Engine needs to run from project root to find assets/
+    QDir projectRoot = QDir(QCoreApplication::applicationDirPath());
+    // Navigate from: /path/to/build/GuavaEditor.app/Contents/MacOS
+    // to: /path/to/workspace (project root)
+    for (int i = 0; i < 6; ++i) {
+        projectRoot.cdUp();
+    }
+
+    qDebug() << "[EngineProcess] Setting working directory to:" << projectRoot.absolutePath();
+    process_->setWorkingDirectory(projectRoot.absolutePath());
+
+    qDebug() << "[EngineProcess] Starting:" << binary << "with --editor-server";
+    // Start in headless editor-server mode (WebSocket RPC on port 9100, no SDL window)
     process_->start(binary, {"--editor-server"});
 }
 
@@ -90,15 +102,21 @@ QString EngineProcess::findEngineBinary() const
     candidates << appDir + "/guava-engine";
 
     // Engine build output (from workspace root)
+    // Check if we're in the editor_qt build directory
     // packages/editor_qt/build/GuavaEditor.app/Contents/MacOS/GuavaEditor
-    // → packages/engine/zig-out/bin/guava-engine
+    // → ../../../../packages/engine/zig-out/bin/guava-engine
     QDir dir(appDir);
-    // Navigate up from build dir to workspace root
+    // Navigate up from Contents/MacOS to workspace root:
+    // Contents/MacOS (0) -> GuavaEditor.app (1) -> build (2) -> packages (3) -> editor_qt (4) -> packages (5) -> workspace root (6)
     for (int i = 0; i < 6; ++i) {
-        QString candidate = dir.absoluteFilePath("packages/engine/zig-out/bin/guava-engine");
-        if (QFileInfo::exists(candidate)) return candidate;
         dir.cdUp();
     }
+    QString candidate = dir.absoluteFilePath("packages/engine/zig-out/bin/guava-engine");
+    if (QFileInfo::exists(candidate)) return candidate;
+
+    // Also check the build directory we just found (where we built the engine)
+    candidate = dir.absoluteFilePath("packages/engine/build/zig-out/bin/guava-engine");
+    if (QFileInfo::exists(candidate)) return candidate;
 
     for (const auto& path : candidates) {
         if (QFileInfo::exists(path)) return path;

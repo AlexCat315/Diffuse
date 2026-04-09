@@ -1,6 +1,9 @@
 # Build output
 build/
-
+*.o
+/build/
+/packages/*/build/
+/CMakeFiles/
 
 # OS
 .DS_Store
