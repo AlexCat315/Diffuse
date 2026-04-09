@@ -1,4 +1,6 @@
 #include "Translator.h"
+#include "TranslationsEnglish.h"
+#include "TranslationsChinese.h"
 
 // ─────────────────────────────────────────────────────────────────────────
 // Static Storage & Initialization
@@ -7,161 +9,37 @@
 // Note: currentLanguage_ is defined as inline static in Translator.h (C++17+)
 // No redefinition needed here
 
-// Inline translations map (can be extended to load from .json files)
-static const QMap<QString, QMap<QString, QString>> TRANSLATIONS = {
-    // English translations
-    {"en_US", {
-        // Menu - File
-        {"menu.file.newScene", "New Scene"},
-        {"menu.file.openScene", "Open Scene..."},
-        {"menu.file.saveScene", "Save Scene"},
-        {"menu.file.quit", "Quit"},
-        
-        // Menu - Edit
-        {"menu.edit.undo", "Undo"},
-        {"menu.edit.redo", "Redo"},
-        
-        // Menu - View
-        {"menu.view.toggleViewport", "Viewport"},
-        {"menu.view.toggleHierarchy", "Scene Hierarchy"},
-        {"menu.view.toggleInspector", "Inspector"},
-        
-        // Menu - Help
-        {"menu.help.about", "About"},
-        
-        // Toolbar
-        {"toolbar.translate", "Translate (W)"},
-        {"toolbar.rotate", "Rotate (E)"},
-        {"toolbar.scale", "Scale (R)"},
-        {"toolbar.play", "Play"},
-        {"toolbar.pause", "Pause"},
-        {"toolbar.stop", "Stop"},
-        
-        // Dock titles
-        {"dock.viewport", "Viewport"},
-        {"dock.sceneHierarchy", "Scene Hierarchy"},
-        {"dock.inspector", "Inspector"},
-        {"dock.console", "Console"},
-        {"dock.assetBrowser", "Asset Browser"},
-        
-        // Tooltips - Gizmo
-        {"tooltip.gizmo.translate", "Translate (W)"},
-        {"tooltip.gizmo.rotate", "Rotate (E)"},
-        {"tooltip.gizmo.scale", "Scale (R)"},
-        
-        // Tooltips - Actions
-        {"tooltip.action.save", "Save Scene (Ctrl+S)"},
-        {"tooltip.action.undo", "Undo (Ctrl+Z)"},
-        {"tooltip.action.redo", "Redo (Ctrl+Y)"},
-        {"tooltip.action.refresh", "Refresh Scene"},
-        {"tooltip.action.delete", "Delete Entity (Del)"},
-        
-        // Errors
-        {"error.failedToConnect", "Failed to connect to Guava Engine"},
-        {"error.engineCrashed", "Guava Engine process crashed"},
-        {"error.failedToSave", "Failed to save scene"},
-        {"error.failedToLoad", "Failed to load scene"},
-        
-        // Status bar
-        {"status.connected", "Engine connected"},
-        {"status.disconnected", "Engine disconnected"},
-        {"status.fps", "FPS: %1"},
-        
-        // Context menu
-        {"context.createEntity", "Create Entity"},
-        {"context.deleteEntity", "Delete Entity"},
-        {"context.duplicateEntity", "Duplicate"},
-        {"context.renameEntity", "Rename"},
-        {"context.addComponent", "Add Component"},
-        {"context.removeComponent", "Remove Component"},
-    }},
-    
-    // Chinese (Simplified) translations
-    {"zh_CN", {
-        // Menu - File
-        {"menu.file.newScene", "新建场景"},
-        {"menu.file.openScene", "打开场景..."},
-        {"menu.file.saveScene", "保存场景"},
-        {"menu.file.quit", "退出"},
-        
-        // Menu - Edit
-        {"menu.edit.undo", "撤销"},
-        {"menu.edit.redo", "重做"},
-        
-        // Menu - View
-        {"menu.view.toggleViewport", "视口"},
-        {"menu.view.toggleHierarchy", "场景层级"},
-        {"menu.view.toggleInspector", "检视器"},
-        
-        // Menu - Help
-        {"menu.help.about", "关于"},
-        
-        // Toolbar
-        {"toolbar.translate", "移动 (W)"},
-        {"toolbar.rotate", "旋转 (E)"},
-        {"toolbar.scale", "缩放 (R)"},
-        {"toolbar.play", "播放"},
-        {"toolbar.pause", "暂停"},
-        {"toolbar.stop", "停止"},
-        
-        // Dock titles
-        {"dock.viewport", "视口"},
-        {"dock.sceneHierarchy", "场景层级"},
-        {"dock.inspector", "检视器"},
-        {"dock.console", "控制台"},
-        {"dock.assetBrowser", "资源浏览器"},
-        
-        // Tooltips - Gizmo
-        {"tooltip.gizmo.translate", "移动 (W)"},
-        {"tooltip.gizmo.rotate", "旋转 (E)"},
-        {"tooltip.gizmo.scale", "缩放 (R)"},
-        
-        // Tooltips - Actions
-        {"tooltip.action.save", "保存场景 (Ctrl+S)"},
-        {"tooltip.action.undo", "撤销 (Ctrl+Z)"},
-        {"tooltip.action.redo", "重做 (Ctrl+Y)"},
-        {"tooltip.action.refresh", "刷新场景"},
-        {"tooltip.action.delete", "删除实体 (Del)"},
-        
-        // Errors
-        {"error.failedToConnect", "无法连接到 Guava 引擎"},
-        {"error.engineCrashed", "Guava 引擎进程崩溃"},
-        {"error.failedToSave", "保存场景失败"},
-        {"error.failedToLoad", "加载场景失败"},
-        
-        // Status bar
-        {"status.connected", "引擎已连接"},
-        {"status.disconnected", "引擎未连接"},
-        {"status.fps", "帧率: %1"},
-        
-        // Context menu
-        {"context.createEntity", "创建实体"},
-        {"context.deleteEntity", "删除实体"},
-        {"context.duplicateEntity", "复制"},
-        {"context.renameEntity", "重命名"},
-        {"context.addComponent", "添加组件"},
-        {"context.removeComponent", "移除组件"},
-    }},
-};
-
 // ─────────────────────────────────────────────────────────────────────────
 // Helper
 // ─────────────────────────────────────────────────────────────────────────
 
 QString Translator::translate(const QString& context, const QString& key)
 {
-    auto langIt = TRANSLATIONS.find(currentLanguage_);
-    if (langIt == TRANSLATIONS.end()) {
-        // Fallback to English if language not found
-        langIt = TRANSLATIONS.find("en_US");
+    const QMap<QString, QString>* translations = nullptr;
+    
+    // Select translation map based on current language
+    if (currentLanguage_ == "zh_CN") {
+        translations = &TRANSLATIONS_ZH_CN;
+    } else {
+        // Default to English for unknown languages
+        translations = &TRANSLATIONS_EN_US;
     }
     
-    auto textIt = langIt->find(key);
-    if (textIt != langIt->end()) {
+    // Look up translation
+    auto textIt = translations->find(key);
+    if (textIt != translations->end()) {
         return *textIt;
     }
     
-    // Return key as fallback if translation missing
+    // Fallback to English if translation not found
+    if (currentLanguage_ != "en_US") {
+        auto enIt = TRANSLATIONS_EN_US.find(key);
+        if (enIt != TRANSLATIONS_EN_US.end()) {
+            return *enIt;
+        }
+    }
+    
+    // Return key as last resort fallback
     return key;
 }
 
