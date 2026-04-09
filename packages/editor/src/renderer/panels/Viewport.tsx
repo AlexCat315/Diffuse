@@ -120,6 +120,30 @@ export function Viewport() {
   useEffect(() => {
     if (!nativeOverlay || !ref.current) return;
     const el = ref.current;
+
+    // Walk up the ENTIRE ancestor chain and clear any opaque backgrounds.
+    const modified: { el: HTMLElement; saved: string }[] = [];
+    let node: HTMLElement | null = el.parentElement;
+    let depth = 0;
+    while (node) {
+      const bg = getComputedStyle(node).backgroundColor;
+      const tag = node.tagName.toLowerCase();
+      const cls = typeof node.className === "string" ? node.className : "";
+      if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") {
+        console.log("[VP-walk] SET TRANSPARENT: " + tag + " cls=" + cls + " was=" + bg);
+        modified.push({ el: node, saved: node.style.background });
+        node.style.setProperty("background", "transparent", "important");
+      } else {
+        console.log("[VP-walk] OK (already transparent): " + tag + " cls=" + cls);
+      }
+      node = node.parentElement;
+      depth++;
+    }
+    console.log("[VP-walk] done, modified " + modified.length + " elements across " + depth + " ancestors");
+
+    // FlexLayout structural containers are made transparent by the Citron
+    // preload CSS.  We only need to report bounds here so the Metal
+    // composition layer positions the 3D scene correctly.
     const report = () => {
       const rect = el.getBoundingClientRect();
       window.guavaEngine.viewportUpdateBounds(rect.x, rect.y, rect.width, rect.height);
@@ -132,6 +156,10 @@ export function Viewport() {
     return () => {
       ro.disconnect();
       window.removeEventListener("resize", report);
+      // Restore original backgrounds when overlay deactivates.
+      for (const { el: n, saved } of modified) {
+        n.style.background = saved;
+      }
     };
   }, [nativeOverlay]);
 
