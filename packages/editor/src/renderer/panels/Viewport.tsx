@@ -42,6 +42,12 @@ export function Viewport() {
   const [modelDragOver, setModelDragOver] = useLocalState(false);
   const dropCountRef = useRef(0);
 
+  // ── Native overlay state (macOS zero-copy) ──────────────────
+  // When active, the CALayer in the native addon displays the IOSurface
+  // directly — no WebGL canvas needed.  HTML overlays (ViewCube, metrics)
+  // still render on top via Chromium.
+  const [nativeOverlay, setNativeOverlay] = useLocalState(false);
+
   // ── Box selection state ──────────────────────────────────────
   const [boxSelect, setBoxSelect] = useLocalState<{
     startX: number; startY: number;  // viewport-pixel coords at mousedown
@@ -57,6 +63,77 @@ export function Viewport() {
     if (!connected) return;
     fetchViewportSettings();
   }, [connected, fetchViewportSettings]);
+
+  // Listen for native overlay activation from main process.
+  useEffect(() => {
+    const unsub = window.guavaEngine.onViewportOverlayActive((active) => {
+      setNativeOverlay(active);
+    });
+    return unsub;
+  }, []);
+
+  // When native overlay is active, the child NSWindow sits ABOVE the Electron
+  // window displaying the 3D scene.  A CAShapeLayer mask on the overlay punches
+  // transparent holes where HTML overlay elements (ViewCube, metrics) live.
+  // We collect bounding rects of those elements and send them to the native
+  // addon so the mask can be updated.
+  const viewCubeRef = useRef<HTMLDivElement>(null);
+  const metricsRef  = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!nativeOverlay || !ref.current) return;
+    const container = ref.current;
+
+    const reportExclusions = () => {
+      const containerRect = container.getBoundingClientRect();
+      const rects: number[][] = [];
+      for (const child of [viewCubeRef.current, metricsRef.current]) {
+        if (!child) continue;
+        const r = child.getBoundingClientRect();
+        if (r.width === 0 || r.height === 0) continue;
+        rects.push([
+          r.x - containerRect.x,
+          r.y - containerRect.y,
+          r.width,
+          r.height,
+        ]);
+      }
+      window.guavaEngine.viewportUpdateExclusions(rects);
+    };
+
+    const ro = new ResizeObserver(reportExclusions);
+    ro.observe(container);
+    if (viewCubeRef.current) ro.observe(viewCubeRef.current);
+    if (metricsRef.current) ro.observe(metricsRef.current);
+    window.addEventListener("resize", reportExclusions);
+    // Delay initial report slightly so overlay window has been positioned.
+    const timer = setTimeout(reportExclusions, 100);
+    return () => {
+      clearTimeout(timer);
+      ro.disconnect();
+      window.removeEventListener("resize", reportExclusions);
+    };
+  }, [nativeOverlay]);
+
+  // Report viewport bounds to main process so the native overlay CALayer
+  // can be positioned to match the div.  Uses ResizeObserver + scroll/move.
+  useEffect(() => {
+    if (!nativeOverlay || !ref.current) return;
+    const el = ref.current;
+    const report = () => {
+      const rect = el.getBoundingClientRect();
+      window.guavaEngine.viewportUpdateBounds(rect.x, rect.y, rect.width, rect.height);
+    };
+    report(); // initial
+    const ro = new ResizeObserver(report);
+    ro.observe(el);
+    // Also re-report when the window moves/resizes (panel layout changes).
+    window.addEventListener("resize", report);
+    return () => {
+      ro.disconnect();
+      window.removeEventListener("resize", report);
+    };
+  }, [nativeOverlay]);
 
   // ── Input forwarding to the engine ─────────────────────────────
   const dpr = window.devicePixelRatio || 1;
@@ -556,15 +633,18 @@ export function Viewport() {
     return () => { unregGizmo(); };
   }, []);
 
-  // WebGL pixel rendering: subscribe to viewport:pixels and display via GPU.
+  // WebGL pixel rendering — ONLY used when native overlay is not active.
+  // When nativeOverlay is true, the CALayer displays the IOSurface directly
+  // and no WebGL canvas / SAB polling is needed.
+  //
   // Pixels arrive as BGRA from Vulkan/Metal readback; a fragment shader swaps
   // R↔B on the GPU, avoiding the slow per-pixel JS conversion.
   //
   // Two paths:
-  //   A) SharedArrayBuffer (macOS): renderer polls SAB via rAF + Atomics
+  //   A) SharedArrayBuffer (macOS fallback): renderer polls SAB via rAF + Atomics
   //   B) IPC fallback (Linux): renderer receives pixels via IPC callback
   useEffect(() => {
-    if (!attached) return;
+    if (!attached || nativeOverlay) return;
     const canvas = canvasRef.current;
     if (!canvas) return;
 
@@ -702,13 +782,17 @@ export function Viewport() {
       gl.deleteShader(vs);
       gl.deleteShader(fs);
     };
-  }, [attached]);
+  }, [attached, nativeOverlay]);
 
   return (
     <div
       ref={ref}
       style={{
         ...styles.container,
+        // When the native overlay is active, the viewport background must be
+        // transparent so the CALayer (inserted below Chromium's compositor
+        // layer) shows through.  HTML overlays render on top normally.
+        ...(nativeOverlay ? { background: "transparent" } : {}),
         ...(modelDragOver ? { outline: "2px dashed #89b4fa", outlineOffset: -2, background: "rgba(137,180,250,0.04)" } : {}),
       }}
       tabIndex={0}
@@ -752,7 +836,7 @@ export function Viewport() {
         }
       }}
     >
-      <canvas ref={canvasRef} style={styles.canvas} />
+      <canvas ref={canvasRef} style={{ ...styles.canvas, ...(nativeOverlay ? { display: "none" } : {}) }} />
       {modelDragOver && (
         <div style={{
           position: "absolute", inset: 0,
@@ -793,8 +877,10 @@ export function Viewport() {
       {/* Floating overlays on top of the canvas */}
       {connected && (
         <>
-          <ViewportMetricsOverlay />
-          <div style={styles.viewCubeOverlay}>
+          <div ref={metricsRef}>
+            <ViewportMetricsOverlay />
+          </div>
+          <div ref={viewCubeRef} style={styles.viewCubeOverlay}>
             <ViewCube />
           </div>
         </>

@@ -29,6 +29,9 @@ if(APPLE)
   )
   target_link_libraries(${PROJECT_NAME} PRIVATE
     "-framework IOSurface"
+    "-framework AppKit"
+    "-framework QuartzCore"
+    "-framework CoreVideo"
     ${CMAKE_JS_LIB}
   )
   set(CMAKE_OSX_DEPLOYMENT_TARGET "13.0")
