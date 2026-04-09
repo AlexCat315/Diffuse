@@ -427,6 +427,17 @@ pub const Renderer = struct {
     pending_frame_delay_ms: ?u32 = null,
     /// 当前生效的帧延迟（由 Application 写入，供 RPC 读取）。
     current_frame_delay_ms: u32 = 16,
+    /// Dirty flag: set to true when the viewport needs a new frame.
+    /// When false AND the scene revision hasn't changed AND simulation is paused,
+    /// drawFrame can be skipped to save CPU/GPU.  Automatically cleared after
+    /// each drawFrame and set by any RPC/interaction that changes visual state.
+    needs_redraw: bool = true,
+    /// Scene revision at the time of the last drawFrame — used to detect
+    /// scene content changes without explicit needs_redraw signals.
+    last_drawn_scene_revision: u64 = 0,
+    /// Cooldown: after the last redraw trigger, render N extra frames to allow
+    /// GPU pipeline drain and IOSurface blit to complete.
+    redraw_cooldown: u8 = 0,
     /// 上一帧渲染统计（由 Application 在 drawFrame 后写入，供 RPC metrics 广播读取）。
     last_frame_report: FrameReport = .{
         .backend = .metal,
@@ -1127,20 +1138,24 @@ pub const Renderer = struct {
     pub fn replaceSelection(self: *Renderer, entity: ?scene_mod.EntityId) !void {
         _ = try self.selection_history.applyPick(entity, .replace);
         self.selection_seeded = true;
+        self.needs_redraw = true;
     }
 
     pub fn replaceSelectionMany(self: *Renderer, entities: []const scene_mod.EntityId) !void {
         _ = try self.selection_history.replaceSelection(entities);
         self.selection_seeded = true;
+        self.needs_redraw = true;
     }
 
     pub fn toggleSelection(self: *Renderer, entity: ?scene_mod.EntityId) !void {
         _ = try self.selection_history.applyPick(entity, .toggle);
         self.selection_seeded = true;
+        self.needs_redraw = true;
     }
 
     pub fn setEditorGizmoState(self: *Renderer, state: EditorGizmoState) void {
         self.editor_gizmo_state = state;
+        self.needs_redraw = true;
     }
 
     pub fn setEditorGizmoTransformOverride(self: *Renderer, transform: ?components.Transform) void {
@@ -1189,6 +1204,7 @@ pub const Renderer = struct {
     pub fn invalidateEnvironmentState(self: *Renderer) void {
         self.cached_env_textures = .{};
         self.resetPathTraceState();
+        self.needs_redraw = true;
     }
 
     pub fn setEditorViewportState(self: *Renderer, state: EditorViewportState) void {
@@ -1228,6 +1244,7 @@ pub const Renderer = struct {
             g_logged_postfx_state = state;
         }
         self.editor_viewport_state = state;
+        self.needs_redraw = true;
     }
 
     pub fn setPreviewScene(self: *Renderer, scene: ?*const scene_mod.Scene) void {
@@ -1283,6 +1300,14 @@ pub const Renderer = struct {
 
     pub fn setSceneViewportSize(self: *Renderer, width: u32, height: u32) !void {
         try self.scene_viewport.ensure(&self.rhi, width, height);
+        self.needs_redraw = true;
+    }
+
+    /// Signal that the viewport needs to re-render.  Call this from any RPC
+    /// handler or interaction that changes visual state (camera, selection,
+    /// gizmo, viewport settings, etc.).
+    pub fn requestRedraw(self: *Renderer) void {
+        self.needs_redraw = true;
     }
 
     pub fn sceneViewportTexture(self: *Renderer) ?*const rhi_mod.Texture {

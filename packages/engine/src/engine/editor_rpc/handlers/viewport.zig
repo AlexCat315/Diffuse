@@ -16,6 +16,7 @@ pub fn setGizmoMode(ctx: *Ctx) !void {
     else
         .idle;
     ctx.layer.renderer.pending_gizmo_mode = mode;
+    ctx.layer.renderer.needs_redraw = true;
     // Also update space if provided
     if (try ctx.paramOpt([]const u8, "space")) |space_str| {
         ctx.layer.renderer.pending_gizmo_space = if (std.mem.eql(u8, space_str, "world"))
@@ -457,6 +458,10 @@ pub fn sendInput(ctx: *Ctx) !void {
             }
         }
     }
+
+    // Any user input may cause visual changes (camera orbit, gizmo hover,
+    // keyboard shortcuts, etc.) — mark the renderer for redraw.
+    ctx.layer.renderer.needs_redraw = true;
 
     try ctx.reply(.{});
 }

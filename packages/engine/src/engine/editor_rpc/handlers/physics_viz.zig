@@ -35,6 +35,7 @@ pub fn setDrawMode(ctx: *Ctx) !void {
     } else if (strEql(mode_str, "all")) {
         pv.draw_mode = .all;
     } else return error.InvalidArguments;
+    ctx.layer.renderer.needs_redraw = true;
     try ctx.reply(.{});
 }
 
@@ -59,6 +60,7 @@ pub fn setToggle(ctx: *Ctx) !void {
     } else if (strEql(key, "showAabbs")) {
         pv.show_aabbs = val;
     } else return error.InvalidArguments;
+    ctx.layer.renderer.needs_redraw = true;
     try ctx.reply(.{});
 }
 
@@ -71,6 +73,7 @@ pub fn setFloat(ctx: *Ctx) !void {
     } else if (strEql(key, "velocityScale")) {
         pv.velocity_scale = @max(0.1, @min(10.0, val));
     } else return error.InvalidArguments;
+    ctx.layer.renderer.needs_redraw = true;
     try ctx.reply(.{});
 }
 
@@ -95,6 +98,7 @@ pub fn setColor(ctx: *Ctx) !void {
     } else if (strEql(key, "constraint")) {
         pv.color_constraint = c;
     } else return error.InvalidArguments;
+    ctx.layer.renderer.needs_redraw = true;
     try ctx.reply(.{});
 }
 

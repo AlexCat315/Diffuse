@@ -54,6 +54,7 @@ pub fn setShadingMode(ctx: *Ctx) !void {
     } else if (strEql(mode_str, "wireframe")) {
         vp.shading_mode = .wireframe;
     } else return error.InvalidArguments;
+    ctx.layer.renderer.needs_redraw = true;
     try ctx.reply(.{});
 }
 
@@ -65,6 +66,7 @@ pub fn setTransformSpace(ctx: *Ctx) !void {
     } else if (strEql(space_str, "world")) {
         vp.transform_space = .world;
     } else return error.InvalidArguments;
+    ctx.layer.renderer.needs_redraw = true;
     try ctx.reply(.{});
 }
 
@@ -79,6 +81,7 @@ pub fn setOverlay(ctx: *Ctx) !void {
     } else if (strEql(key, "showCollision")) {
         vp.show_collision = val;
     } else return error.InvalidArguments;
+    ctx.layer.renderer.needs_redraw = true;
     try ctx.reply(.{});
 }
 
@@ -122,6 +125,7 @@ pub fn applyPtPreset(ctx: *Ctx) !void {
         vp.pt_resolution_scale = 1.0;
     } else return error.InvalidArguments;
     ctx.layer.renderer.resetPathTraceState();
+    ctx.layer.renderer.needs_redraw = true;
     try ctx.reply(.{});
 }
 

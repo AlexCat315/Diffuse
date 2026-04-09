@@ -62,26 +62,43 @@ export function ViewCube() {
     sx: 0, sy: 0, dragging: false,
   });
 
-  // Track camera rotation via requestAnimationFrame (one in-flight RPC at a time)
+  // Track camera rotation — fast when moving, slow when idle
   useEffect(() => {
     if (!connected) return;
     let cancelled = false;
     let pending = false;
-    const tick = () => {
-      if (cancelled) return;
-      if (!pending) {
-        pending = true;
-        window.guavaEngine.call("camera.getState", {}).then((res) => {
-          if (res.rotation) {
-            setRot([res.rotation.x, res.rotation.y, res.rotation.z, res.rotation.w]);
-          }
-          pending = false;
-        }).catch(() => { pending = false; });
-      }
-      requestAnimationFrame(tick);
+    let lastRot: Quat = [0, 0, 0, 1];
+    let idleCount = 0;
+    let timerId: ReturnType<typeof setTimeout> | null = null;
+
+    const FAST_MS = 16;   // ~60fps when camera is moving
+    const SLOW_MS = 200;  // ~5fps when idle
+
+    const quatDiff = (a: Quat, b: Quat) =>
+      Math.abs(a[0] - b[0]) + Math.abs(a[1] - b[1]) + Math.abs(a[2] - b[2]) + Math.abs(a[3] - b[3]);
+
+    const poll = () => {
+      if (cancelled || pending) return;
+      pending = true;
+      window.guavaEngine.call("camera.getState", {}).then((res) => {
+        pending = false;
+        if (cancelled) return;
+        if (res.rotation) {
+          const q: Quat = [res.rotation.x, res.rotation.y, res.rotation.z, res.rotation.w];
+          const moved = quatDiff(q, lastRot) > 0.0001;
+          lastRot = q;
+          setRot(q);
+          idleCount = moved ? 0 : idleCount + 1;
+        }
+        const delay = idleCount < 5 ? FAST_MS : SLOW_MS;
+        timerId = setTimeout(poll, delay);
+      }).catch(() => {
+        pending = false;
+        if (!cancelled) timerId = setTimeout(poll, SLOW_MS);
+      });
     };
-    requestAnimationFrame(tick);
-    return () => { cancelled = true; };
+    poll();
+    return () => { cancelled = true; if (timerId) clearTimeout(timerId); };
   }, [connected]);
 
   // Project axes to 2D using camera rotation

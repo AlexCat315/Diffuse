@@ -100,6 +100,7 @@ pub fn setActiveStyle(ctx: *Ctx) !void {
     if (!style_reg.setActiveStyle(name)) {
         return error.InvalidArguments;
     }
+    ctx.layer.renderer.needs_redraw = true;
     try ctx.reply(.{});
 }
 
@@ -111,5 +112,6 @@ pub fn setParam(ctx: *Ctx) !void {
     var style_reg = ctx.layer.renderer.styleRegistry();
     const pv = try style_reg.getParamValues(style_name);
     try pv.set(param_name, value);
+    ctx.layer.renderer.needs_redraw = true;
     try ctx.reply(.{});
 }

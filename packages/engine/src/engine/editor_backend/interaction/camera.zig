@@ -232,6 +232,7 @@ pub fn handleCameraControls(state: *EditorState, layer_context: *engine.core.Lay
         const forward = vec3.forwardFromAngles(state.yaw, state.pitch);
         camera.local_transform.translation = vec3.sub(state.focus_pivot, vec3.scale(forward, state.orbit_distance));
         layer_context.world.markDirty(camera_id);
+        layer_context.renderer.needs_redraw = true;
     }
 }
 
@@ -624,6 +625,7 @@ fn updateViewCubeTransition(state: *EditorState, layer_context: *engine.core.Lay
 
     camera_entity.local_transform = editorCameraTransform(state);
     layer_context.world.markDirty(camera_id);
+    layer_context.renderer.needs_redraw = true;
     if (camera_entity.camera) |camera_component| {
         var next_camera = camera_component;
         next_camera.projection = if (state.view_cube_transition_target_orthographic)
