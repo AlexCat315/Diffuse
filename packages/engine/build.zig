@@ -207,11 +207,43 @@ pub fn build(b: *std.Build) void {
     packaging.addPackageSteps(b, target, exe, player, sdl_prefix);
 
     // ── compile-commands (clangd) ───────────────────────────────────────────
-    const compile_commands_step = b.step("compile-commands", "Generate compile_commands.json for clangd");
+    const compile_commands_step = b.step("compile-commands", "Generate compile_commands.json for clangd (engine + Qt)");
+    
+    // Build Qt editor to generate its compile_commands.json
+    const cmake_configure = b.addSystemCommand(&.{
+        "cmake",
+        "-B",
+        "packages/editor_qt/build",
+        "-S",
+        "packages/editor_qt",
+        "-G",
+        "Ninja",
+        "-DCMAKE_BUILD_TYPE=Release",
+    });
+    
+    const build_qt_cmd = b.addSystemCommand(&.{
+        "cmake",
+        "--build",
+        "packages/editor_qt/build",
+        "--config",
+        "Release",
+    });
+    build_qt_cmd.step.dependOn(&cmake_configure.step);
+    
+    // Generate engine compile_commands.json
     const update_compile_commands = b.addUpdateSourceFiles();
     update_compile_commands.addBytesToSource(
         compile_commands.generateCompileCommandsJson(b, target.result.os.tag, sdl_prefix),
         "compile_commands.json",
     );
-    compile_commands_step.dependOn(&update_compile_commands.step);
+    
+    // Merge Qt compile_commands.json if it exists
+    const merge_compile_commands = b.addSystemCommand(&.{
+        "python3",
+        "packages/engine/build/merge_compile_commands.py",
+    });
+    merge_compile_commands.step.dependOn(&build_qt_cmd.step);
+    merge_compile_commands.step.dependOn(&update_compile_commands.step);
+    
+    compile_commands_step.dependOn(&merge_compile_commands.step);
 }
