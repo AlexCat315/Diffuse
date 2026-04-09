@@ -1,0 +1,9 @@
+# Build output
+build/
+
+# CEF binary distribution (~470MB total, should be downloaded by build script)
+third_party/cef/
+third_party/cef_minimal.tar.bz2
+
+# OS
+.DS_Store

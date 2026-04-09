@@ -49,6 +49,12 @@ interface ViewportAddon {
   refresh(): { pixels: Buffer; width: number; height: number } | void;
   setSharedBuffer?(sab: ArrayBufferLike | Uint8Array): void;
   refreshShared?(): boolean;
+  // Native overlay (macOS zero-copy path)
+  createOverlay?(nativeHandle: Buffer): boolean;
+  updateOverlayBounds?(x: number, y: number, w: number, h: number): void;
+  updateOverlayExclusions?(rects: number[][]): void;
+  destroyOverlay?(): void;
+  isOverlayActive?(): boolean;
 }
 
 let ioSurfaceView: ViewportAddon | null = null;
@@ -105,6 +111,7 @@ async function createMainWindow(): Promise<BrowserWindow> {
     titleBarStyle: "hiddenInset",
     trafficLightPosition: { x: 12, y: 12 },
     backgroundColor: "#1e1e2e",
+    hasShadow: true,
     webPreferences: {
       preload: path.join(__dirname, "../preload/preload.js"),
       contextIsolation: true,
@@ -313,59 +320,72 @@ ipcMain.handle(
 
     if (surfaceRefreshTimer) clearInterval(surfaceRefreshTimer);
 
-    // Prefer SharedArrayBuffer path: zero-IPC pixel delivery.
-    // The renderer polls the SAB directly via Atomics; we only need to
-    // memcpy IOSurface → SAB on each tick here in the main process.
-    const useSAB = isMac && typeof ioSurfaceView.setSharedBuffer === "function";
-    let sabActive = false;
-    if (useSAB) {
+    // ── Path 1: Native overlay (macOS, zero-copy) ──────────────────
+    // Insert a CALayer backed by the IOSurface into the Electron window's
+    // layer hierarchy.  A CVDisplayLink refreshes it at VSync — no memcpy,
+    // no SAB, no texSubImage2D.
+    const useOverlay = isMac && typeof ioSurfaceView.createOverlay === "function";
+    let overlayActive = false;
+    if (useOverlay) {
       try {
-        // Allocate SAB for up to 4K viewport, double-buffered (ping-pong)
-        // to prevent tearing when the native addon writes while the renderer reads.
-        const maxPixelBytes = 3840 * 2160 * 4;
-        const sabSize = 16 + maxPixelBytes * 2;
-        viewportSAB = new SharedArrayBuffer(sabSize);
-        // Pass a Uint8Array view — N-API can extract the backing ArrayBuffer from
-        // a TypedArray regardless of whether it's a regular or shared buffer.
-        ioSurfaceView.setSharedBuffer!(new Uint8Array(viewportSAB) as never);
+        const handle = mainWindow.getNativeWindowHandle();
+        console.log("[Viewport] Creating native overlay, handle length:", handle.length, "bytes");
+        overlayActive = ioSurfaceView.createOverlay!(handle);
+        console.log("[Viewport] createOverlay returned:", overlayActive);
+        if (overlayActive) {
+          // Notify renderer that native overlay is active — it should skip
+          // WebGL canvas setup and make the viewport div transparent.
+          mainWindow.webContents.send("viewport:overlay-active", true);
+          console.log("[Viewport] Overlay active — sent viewport:overlay-active to renderer");
+        }
+      } catch (e) {
+        console.warn("[Viewport] Native overlay failed, falling back to SAB:", (e as Error).message);
+      }
+    }
 
-        // Send SAB to renderer (one-time, zero-copy share)
-        mainWindow.webContents.postMessage("viewport:shared-buffer", viewportSAB);
+    // ── Path 2: SharedArrayBuffer fallback ─────────────────────────
+    if (!overlayActive) {
+      const useSAB = isMac && typeof ioSurfaceView.setSharedBuffer === "function";
+      let sabActive = false;
+      if (useSAB) {
+        try {
+          const maxPixelBytes = 3840 * 2160 * 4;
+          const sabSize = 16 + maxPixelBytes * 2;
+          viewportSAB = new SharedArrayBuffer(sabSize);
+          ioSurfaceView.setSharedBuffer!(new Uint8Array(viewportSAB) as never);
+          mainWindow.webContents.postMessage("viewport:shared-buffer", viewportSAB);
+          const doRefresh = () => {
+            if (!ioSurfaceView || !mainWindow) return;
+            if (mainWindow.webContents.isDestroyed()) {
+              if (surfaceRefreshTimer) clearInterval(surfaceRefreshTimer);
+              surfaceRefreshTimer = null;
+              return;
+            }
+            ioSurfaceView.refreshShared!();
+          };
+          surfaceRefreshTimer = setInterval(doRefresh, 8);
+          sabActive = true;
+        } catch (e) {
+          console.warn("[Viewport] SAB path failed, falling back to IPC:", (e as Error).message);
+          viewportSAB = null;
+        }
+      }
 
-        // Poll-based refresh: the staging IOSurface is always safe to read
-        // (GPU never writes to it directly).  The addon's refreshShared() uses
-        // IOSurfaceGetSeed to skip redundant copies, so fast polling is cheap.
-        const doRefresh = () => {
+      // ── Path 3: IPC fallback (Linux / no SAB support) ─────────────
+      if (!sabActive) {
+        surfaceRefreshTimer = setInterval(() => {
           if (!ioSurfaceView || !mainWindow) return;
           if (mainWindow.webContents.isDestroyed()) {
-            if (surfaceRefreshTimer) clearInterval(surfaceRefreshTimer);
+            clearInterval(surfaceRefreshTimer!);
             surfaceRefreshTimer = null;
             return;
           }
-          ioSurfaceView.refreshShared!();
-        };
-        // Poll at ~120Hz — seed check makes redundant calls nearly free.
-        surfaceRefreshTimer = setInterval(doRefresh, 8);
-        sabActive = true;
-      } catch (e) {
-        console.warn("[Viewport] SAB path failed, falling back to IPC:", (e as Error).message);
-        viewportSAB = null;
+          const result = ioSurfaceView.refresh();
+          if (result && result.pixels) {
+            mainWindow.webContents.send("viewport:pixels", result.pixels, result.width, result.height);
+          }
+        }, 16);
       }
-    }
-    if (!sabActive) {
-      // Fallback: IPC-based pixel delivery (Linux / no SAB support)
-      surfaceRefreshTimer = setInterval(() => {
-        if (!ioSurfaceView || !mainWindow) return;
-        if (mainWindow.webContents.isDestroyed()) {
-          clearInterval(surfaceRefreshTimer!);
-          surfaceRefreshTimer = null;
-          return;
-        }
-        const result = ioSurfaceView.refresh();
-        if (result && result.pixels) {
-          mainWindow.webContents.send("viewport:pixels", result.pixels, result.width, result.height);
-        }
-      }, 16);
     }
 
     return true;
@@ -380,11 +400,25 @@ ipcMain.handle("viewport:updateSurface", async (_event, surfaceId: number, shmNa
   }
 });
 
+// Renderer reports the viewport div's bounds so the native overlay can be
+// positioned to match.  Coordinates are CSS pixels, top-left origin.
+ipcMain.on("viewport:updateBounds", (_event, x: number, y: number, w: number, h: number) => {
+  console.log(`[Viewport] updateBounds: x=${x} y=${y} w=${w} h=${h}`);
+  ioSurfaceView?.updateOverlayBounds?.(x, y, w, h);
+});
+
+// Renderer reports overlay-relative rects where HTML elements need to show
+// through the native overlay (ViewCube, metrics, buttons, etc.).
+ipcMain.on("viewport:updateExclusions", (_event, rects: number[][]) => {
+  ioSurfaceView?.updateOverlayExclusions?.(rects);
+});
+
 ipcMain.handle("viewport:detach", async () => {
   if (surfaceRefreshTimer) {
     clearInterval(surfaceRefreshTimer);
     surfaceRefreshTimer = null;
   }
+  ioSurfaceView?.destroyOverlay?.();
   ioSurfaceView?.detach();
 });
 

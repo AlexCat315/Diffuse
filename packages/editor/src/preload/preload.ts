@@ -108,7 +108,25 @@ contextBridge.exposeInMainWorld("guavaEngine", {
   /** Remove the viewport surface */
   viewportDetach: (): Promise<void> => ipcRenderer.invoke("viewport:detach"),
 
-  /** Subscribe to pixel data pushed from main process (Linux shm path) */
+  /** Report viewport div bounds to main process for native overlay positioning */
+  viewportUpdateBounds: (x: number, y: number, w: number, h: number): void => {
+    ipcRenderer.send("viewport:updateBounds", x, y, w, h);
+  },
+
+  /** Report exclusion rects (overlay-relative CSS points) to punch holes in the native overlay */
+  viewportUpdateExclusions: (rects: number[][]): void => {
+    ipcRenderer.send("viewport:updateExclusions", rects);
+  },
+
+  /** Subscribe to native overlay activation (macOS zero-copy path) */
+  onViewportOverlayActive: (
+    callback: (active: boolean) => void,
+  ): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, active: boolean) => callback(active);
+    ipcRenderer.on("viewport:overlay-active", handler);
+    return () => ipcRenderer.removeListener("viewport:overlay-active", handler);
+  },
+
   /** Subscribe to pixel data pushed from main process (Linux shm path) */
   onViewportPixels: (
     callback: (pixels: Buffer, width: number, height: number) => void,
@@ -266,6 +284,9 @@ export interface GuavaEngineAPI {
   viewportAttachSurface(surfaceId: number, x: number, y: number, w: number, h: number, shmName?: string): Promise<boolean>;
   viewportUpdateSurface(surfaceId: number, shmName?: string, width?: number, height?: number): Promise<void>;
   viewportDetach(): Promise<void>;
+  viewportUpdateBounds(x: number, y: number, w: number, h: number): void;
+  viewportUpdateExclusions(rects: number[][]): void;
+  onViewportOverlayActive(callback: (active: boolean) => void): () => void;
   onViewportPixels(callback: (pixels: Buffer, width: number, height: number) => void): () => void;
   onViewportSharedBuffer(callback: (sab: SharedArrayBuffer) => void): () => void;
   testRemoteConnection(url: string): Promise<{ ok: boolean; version?: string; error?: string }>;
