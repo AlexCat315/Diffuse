@@ -466,50 +466,49 @@ export function Viewport() {
   // Track size changes and notify the engine to resize + recreate surface.
   useEffect(() => {
     if (!attached) return;
+    const el = ref.current;
+    if (!el) return;
 
-    let raf: number;
-
-    const tick = () => {
+    const handleResize = () => {
       const size = getSize();
-      if (size) {
-        const last = lastSizeRef.current;
-        if (size.w !== last.w || size.h !== last.h) {
-          lastSizeRef.current = size;
-          window.guavaEngine
-            .call("viewport.setRect", {
-              x: 0,
-              y: 0,
-              width: size.w,
-              height: size.h,
-            })
-            .then(async () => {
-              // Give the engine a moment to recreate the surface, then
-              // poll for the new surface id.
-              await new Promise((r) => setTimeout(r, 100));
-              try {
-                const res = await window.guavaEngine.call("viewport.getSurfaceId", {});
-                if (res.surfaceId && res.surfaceId !== surfaceIdRef.current) {
-                  surfaceIdRef.current = res.surfaceId;
-                  shmNameRef.current = res.shmName ?? undefined;
-                  window.guavaEngine.viewportUpdateSurface(
-                    res.surfaceId,
-                    res.shmName ?? undefined,
-                    res.width,
-                    res.height,
-                  );
-                }
-              } catch {
-                // Best-effort.
+      if (!size) return;
+      const last = lastSizeRef.current;
+      if (size.w !== last.w || size.h !== last.h) {
+        lastSizeRef.current = size;
+        window.guavaEngine
+          .call("viewport.setRect", {
+            x: 0,
+            y: 0,
+            width: size.w,
+            height: size.h,
+          })
+          .then(async () => {
+            // Give the engine a moment to recreate the surface, then
+            // poll for the new surface id.
+            await new Promise((r) => setTimeout(r, 100));
+            try {
+              const res = await window.guavaEngine.call("viewport.getSurfaceId", {});
+              if (res.surfaceId && res.surfaceId !== surfaceIdRef.current) {
+                surfaceIdRef.current = res.surfaceId;
+                shmNameRef.current = res.shmName ?? undefined;
+                window.guavaEngine.viewportUpdateSurface(
+                  res.surfaceId,
+                  res.shmName ?? undefined,
+                  res.width,
+                  res.height,
+                );
               }
-            })
-            .catch(() => {});
-        }
+            } catch {
+              // Best-effort.
+            }
+          })
+          .catch(() => {});
       }
-      raf = requestAnimationFrame(tick);
     };
 
-    raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    const ro = new ResizeObserver(handleResize);
+    ro.observe(el);
+    return () => ro.disconnect();
   }, [attached, getSize]);
 
   // Cleanup on unmount.
@@ -569,7 +568,7 @@ export function Viewport() {
     const canvas = canvasRef.current;
     if (!canvas) return;
 
-    const gl = canvas.getContext("webgl", { alpha: false, antialias: false, preserveDrawingBuffer: true });
+    const gl = canvas.getContext("webgl", { alpha: false, antialias: false, desynchronized: true, preserveDrawingBuffer: false });
     if (!gl) {
       console.error("[Viewport] WebGL unavailable — pixel display disabled");
       return;
@@ -863,9 +862,7 @@ const metricsStyles: Record<string, React.CSSProperties> = {
     display: "flex",
     alignItems: "baseline",
     gap: 3,
-    background: "rgba(24, 24, 37, 0.75)",
-    backdropFilter: "blur(8px)",
-    WebkitBackdropFilter: "blur(8px)",
+    background: "rgba(24, 24, 37, 0.92)",
     borderRadius: 6,
     padding: "3px 8px",
     boxShadow: "0 2px 8px rgba(0,0,0,0.3)",

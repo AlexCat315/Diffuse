@@ -604,10 +604,39 @@ pub const Application = struct {
             }
 
             const draw_start_ns = std.time.nanoTimestamp();
-            last_frame = self.renderer.drawFrame(&self.world, &self.physics_state) catch |err| {
-                std.log.err("[run-loop] drawFrame failed at frame {d}: {s}", .{ frames_rendered, @errorName(err) });
-                return err;
-            };
+
+            // ── Skip-frame optimisation ──────────────────────────────────────
+            // If nothing visual has changed, skip the expensive drawFrame call.
+            // This saves CPU (command buffer encoding) and GPU (render passes)
+            // when the editor viewport is idle (no camera motion, no edits).
+            const scene_rev = self.world.sceneRevision();
+            const scene_changed = scene_rev != self.renderer.last_drawn_scene_revision;
+            const has_pending_picks = self.renderer.pending_selection_readbacks.items.len > 0;
+            const needs_draw = scene_changed or
+                self.renderer.needs_redraw or
+                self.renderer.redraw_cooldown > 0 or
+                should_advance_simulation or
+                has_pending_picks;
+
+            if (needs_draw) {
+                last_frame = self.renderer.drawFrame(&self.world, &self.physics_state) catch |err| {
+                    std.log.err("[run-loop] drawFrame failed at frame {d}: {s}", .{ frames_rendered, @errorName(err) });
+                    return err;
+                };
+                self.renderer.last_drawn_scene_revision = scene_rev;
+                self.renderer.needs_redraw = false;
+                // After a redraw trigger, render a few extra frames to
+                // allow the GPU pipeline to drain and the IOSurface blit
+                // to propagate the latest pixels to the editor.
+                self.renderer.redraw_cooldown = 3;
+            } else {
+                // Nothing changed — reuse last frame report, skip GPU work.
+                // The cooldown ensures we don't skip the very first idle
+                // frame (which would leave the IOSurface with stale pixels).
+            }
+            if (self.renderer.redraw_cooldown > 0) {
+                self.renderer.redraw_cooldown -= 1;
+            }
             const draw_end_ns = std.time.nanoTimestamp();
             self.renderer.last_frame_report = last_frame;
 
