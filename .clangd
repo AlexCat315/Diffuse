@@ -1,0 +1,33 @@
+---
+# Clangd configuration for Guava Editor project
+# Provides full Qt + Engine compilation database support
+
+CompileFlags:
+  # Use the merged compile_commands.json (engine + Qt)
+  CompilationDatabase: .
+  
+# Include paths can be configured here if needed
+# This is mainly handled through compile_commands.json
+
+# Diagnostics settings
+Diagnostics:
+  # Show clang warnings
+  ClangTidy:
+    Checks: '-*'  # Disable clang-tidy checks
+    CheckOptions: {}
+  
+  # Suppress warnings from Qt generated files
+  Suppress:
+    - 'readability-named-parameter'
+    - 'misc-non-private-member-variables-in-classes'
+
+# Inlay hints for better code understanding
+InlayHints:
+  Enabled: true
+  ParameterNames: true
+  DeducedTypes: true
+
+# Code completion
+Completion:
+  AllScopes: true
+  BundleOverloads: true

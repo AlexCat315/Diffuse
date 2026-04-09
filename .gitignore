@@ -106,3 +106,6 @@ packages/engine/sdk/csharp/**/**/obj/**
 /build/
 /packages/*/build/
 /CMakeFiles/
+
+# Allow build/development scripts in engine package
+!packages/engine/build/merge_compile_commands.py
