@@ -35,8 +35,8 @@ set(SOURCES
     src/panels/SceneTreeWidget.cpp
     src/panels/InspectorWidget.h
     src/panels/InspectorWidget.cpp
-    src/util/Theme.h
-    src/util/Theme.cpp
+    src/theme/Theme.h
+    src/theme/Theme.cpp
     src/util/MacOS.h
     src/util/MacOS.mm
     src/util/IconProvider.h

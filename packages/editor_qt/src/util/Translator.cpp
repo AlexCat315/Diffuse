@@ -1,6 +1,5 @@
 #include "Translator.h"
-#include "TranslationsEnglish.h"
-#include "TranslationsChinese.h"
+#include "../i18n/i18n.h"
 
 // ─────────────────────────────────────────────────────────────────────────
 // Static Storage & Initialization

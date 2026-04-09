@@ -1,5 +1,5 @@
 #include "app/MainWindow.h"
-#include "util/Theme.h"
+#include "theme/Theme.h"
 #include "util/Translator.h"
 #include <QApplication>
 #include <QLocale>
