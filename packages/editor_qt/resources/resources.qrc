@@ -1,0 +1,5 @@
+<RCC>
+    <qresource prefix="/">
+        <file>themes/catppuccin-mocha.qss</file>
+    </qresource>
+</RCC>
