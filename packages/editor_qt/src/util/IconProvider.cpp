@@ -1,6 +1,6 @@
 #include "IconProvider.h"
 
-#include <QSvgRenderer>
+#include <QtSvg/QSvgRenderer>
 #include <QPainter>
 #include <QDebug>
 
