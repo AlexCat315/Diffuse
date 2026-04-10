@@ -14,6 +14,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 find_package(Qt6 REQUIRED COMPONENTS
     Core
     Gui
+    Quick
+    Qml
+    QuickControls2
     Widgets
     WebSockets
     Network
@@ -22,7 +25,7 @@ find_package(Qt6 REQUIRED COMPONENTS
 
 # ── Sources ───────────────────────────────────────────────────────────────
 set(SOURCES
-    src/main.cpp
+    src/main_qml.cpp
     src/app/MainWindow.h
     src/app/MainWindow.cpp
     src/app/EngineProcess.h
@@ -31,6 +34,8 @@ set(SOURCES
     src/engine/EngineClient.cpp
     src/panels/ViewportWidget.h
     src/panels/ViewportWidget.mm
+    src/panels/MetalViewportItem.h
+    src/panels/MetalViewportItem.cpp
     src/panels/SceneTreeWidget.h
     src/panels/SceneTreeWidget.cpp
     src/panels/InspectorWidget.h
@@ -43,6 +48,12 @@ set(SOURCES
     src/util/IconProvider.cpp
     src/util/Translator.h
     src/util/Translator.cpp
+    src/util/TranslatorQML.h
+    src/util/TranslatorQML.cpp
+    src/util/SceneNode.h
+    src/util/SceneNode.cpp
+    src/util/SceneModel.h
+    src/util/SceneModel.cpp
 )
 
 # ── Resources ─────────────────────────────────────────────────────────────
@@ -68,6 +79,9 @@ target_include_directories(${PROJECT_NAME} PRIVATE src)
 target_link_libraries(${PROJECT_NAME} PRIVATE
     Qt6::Core
     Qt6::Gui
+    Qt6::Quick
+    Qt6::Qml
+    Qt6::QuickControls2
     Qt6::Widgets
     Qt6::WebSockets
     Qt6::Network

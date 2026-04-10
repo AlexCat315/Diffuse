@@ -2,6 +2,14 @@
     <qresource prefix="/">
         <file>themes/catppuccin-mocha.qss</file>
     </qresource>
+    <qresource prefix="/qml">
+        <file>qml/main.qml</file>
+        <file>qml/Viewport.qml</file>
+        <file>qml/SceneTree.qml</file>
+        <file>qml/Inspector.qml</file>
+        <file>qml/Console.qml</file>
+        <file>qml/Assets.qml</file>
+    </qresource>
     <qresource prefix="/icons">
         <!-- File & Scene Management -->
         <file>icons/svg/save.svg</file>
