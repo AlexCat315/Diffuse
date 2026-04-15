@@ -1,12 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cDefine("STBI_NO_STDIO", "1");
-    @cDefine("STBI_ONLY_PNG", "1");
-    @cDefine("STBI_ONLY_JPEG", "1");
-    @cDefine("STBI_ONLY_HDR", "1");
-    @cInclude("stb_image.h");
-});
+const c = @import("c_stb_image");
 
 pub const DecodedImage = struct {
     allocator: std.mem.Allocator,

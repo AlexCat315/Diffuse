@@ -183,6 +183,6 @@ pub fn writeMessage(buf: []u8, kind: MessageKind, payload: []const u8) error{Buf
 /// Read a message tag + payload slice from raw data.
 pub fn readMessage(data: []const u8) error{InvalidPacket}!struct { kind: MessageKind, payload: []const u8 } {
     if (data.len < 1) return error.InvalidPacket;
-    const kind = std.meta.intToEnum(MessageKind, data[0]) catch return error.InvalidPacket;
+    const kind = std.enums.fromInt(MessageKind, data[0]) orelse return error.InvalidPacket;
     return .{ .kind = kind, .payload = data[1..] };
 }

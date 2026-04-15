@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const engine = @import("guava");
 const quat = engine.math.quat;
 const vec3 = engine.math.vec3;
@@ -136,7 +137,7 @@ pub fn appendTimelineEvent(
     const allocator = state.allocator orelse return;
     try state.timeline_entries.append(allocator, .{
         .sequence = state.next_timeline_sequence,
-        .timestamp_ms = std.time.milliTimestamp(),
+        .timestamp_ms = std.Io.Timestamp.now(io_globals.global_io, .real).toMilliseconds(),
         .source = source,
         .label = try allocator.dupe(u8, label),
         .detail = try allocator.dupe(u8, detail),
@@ -1498,21 +1499,21 @@ pub fn rediscoverProjectScripts(world: *engine.scene.World, state: *const Editor
 
     // Open scripts directory relative to project root (or CWD as fallback).
     const project_path = state.projectPath();
-    var owned_base: ?std.fs.Dir = if (project_path.len > 0)
-        (std.fs.openDirAbsolute(project_path, .{}) catch null)
+    var owned_base: ?std.Io.Dir = if (project_path.len > 0)
+        (std.Io.Dir.openDirAbsolute(io_globals.global_io, project_path, .{}) catch null)
     else
         null;
-    defer if (owned_base) |*d| d.close();
-    const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+    defer if (owned_base) |*d| d.close(io_globals.global_io);
+    const base_dir: std.Io.Dir = owned_base orelse std.Io.Dir.cwd();
 
-    var dir = base_dir.openDir(scripts_dir, .{ .iterate = true }) catch return;
-    defer dir.close();
+    var dir = base_dir.openDir(io_globals.global_io, scripts_dir, .{ .iterate = true }) catch return;
+    defer dir.close(io_globals.global_io);
 
     var walker = dir.walk(allocator) catch return;
     defer walker.deinit();
 
     var count: usize = 0;
-    while (walker.next() catch null) |entry| {
+    while (walker.next(io_globals.global_io) catch null) |entry| {
         if (entry.kind != .file) continue;
         const is_zig = std.mem.endsWith(u8, entry.path, ".zig");
         const is_cs = std.mem.endsWith(u8, entry.path, ".cs");
@@ -1524,7 +1525,7 @@ pub fn rediscoverProjectScripts(world: *engine.scene.World, state: *const Editor
         // Skip if already registered (e.g. restored from scene file)
         if (world.resources.scriptHandleByAssetId(full_path) != null) continue;
 
-        const source = base_dir.readFileAlloc(allocator, full_path, 1024 * 1024) catch continue;
+        const source = base_dir.readFileAlloc(io_globals.global_io, full_path, allocator, .limited(1024 * 1024)) catch continue;
         defer allocator.free(source);
 
         const language: engine.script.ScriptLanguage = if (is_cs) .csharp else .zig;

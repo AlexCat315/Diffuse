@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const plugin_types = @import("../plugin/types.zig");
 const loader_mod = @import("../plugin/loader.zig");
 
@@ -261,7 +262,7 @@ pub const StyleRegistry = struct {
         const manifest_path = try std.fs.path.join(self.allocator, &.{ dir_path, "manifest.json" });
         defer self.allocator.free(manifest_path);
 
-        const content = try std.fs.cwd().readFileAlloc(self.allocator, manifest_path, 64 * 1024);
+        const content = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, manifest_path, self.allocator, .limited(64 * 1024));
         errdefer self.allocator.free(content);
 
         const RenderStyleJson = struct {

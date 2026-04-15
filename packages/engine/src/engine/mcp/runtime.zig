@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const application_mod = @import("../core/application.zig");
 const collaboration_mod = @import("collaboration.zig");
 const resources_mod = @import("resources/mod.zig");
@@ -83,7 +84,7 @@ pub const Runtime = struct {
             self.tool_bridge.shutdown();
             self.exit_requested.store(true, .release);
             if (self.config.close_stdin_on_shutdown) {
-                std.posix.close(std.posix.STDIN_FILENO);
+                std.Io.File.stdin().close(io_globals.global_io);
             }
             thread.join();
             self.server_thread = null;

@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const types = @import("types.zig");
 const manifest_mod = @import("manifest.zig");
 
@@ -8,15 +9,15 @@ pub const Plugin = types.PluginRecord;
 pub const PluginRegistry = struct {
     allocator: std.mem.Allocator,
     plugins: std.StringHashMap(*types.PluginRecord),
-    by_type: std.AutoArrayHashMap(types.PluginType, std.ArrayList(*types.PluginRecord)),
-    capabilities: std.AutoArrayHashMap(types.PluginCapability, std.ArrayList(*types.PluginRecord)),
+    by_type: std.AutoArrayHashMapUnmanaged(types.PluginType, std.ArrayList(*types.PluginRecord)),
+    capabilities: std.AutoArrayHashMapUnmanaged(types.PluginCapability, std.ArrayList(*types.PluginRecord)),
 
     pub fn init(allocator: std.mem.Allocator) !PluginRegistry {
         return .{
             .allocator = allocator,
             .plugins = std.StringHashMap(*types.PluginRecord).init(allocator),
-            .by_type = std.AutoArrayHashMap(types.PluginType, std.ArrayList(*types.PluginRecord)).init(allocator),
-            .capabilities = std.AutoArrayHashMap(types.PluginCapability, std.ArrayList(*types.PluginRecord)).init(allocator),
+            .by_type = .empty,
+            .capabilities = .empty,
         };
     }
 
@@ -32,13 +33,13 @@ pub const PluginRegistry = struct {
         while (type_it.next()) |entry| {
             entry.value_ptr.deinit(self.allocator);
         }
-        self.by_type.deinit();
+        self.by_type.deinit(self.allocator);
 
         var cap_it = self.capabilities.iterator();
         while (cap_it.next()) |entry| {
             entry.value_ptr.deinit(self.allocator);
         }
-        self.capabilities.deinit();
+        self.capabilities.deinit(self.allocator);
     }
 
     pub fn register(self: *PluginRegistry, record: *types.PluginRecord) !void {
@@ -50,14 +51,14 @@ pub const PluginRegistry = struct {
 
         try self.plugins.put(name, record);
 
-        const plugin_type_list = self.by_type.getOrPut(record.manifest.plugin_type) catch return error.OutOfMemory;
+        const plugin_type_list = self.by_type.getOrPut(self.allocator, record.manifest.plugin_type) catch return error.OutOfMemory;
         if (!plugin_type_list.found_existing) {
             plugin_type_list.value_ptr.* = .empty;
         }
         try plugin_type_list.value_ptr.append(self.allocator, record);
 
         for (record.manifest.capabilities) |cap| {
-            const cap_list = self.capabilities.getOrPut(cap) catch return error.OutOfMemory;
+            const cap_list = self.capabilities.getOrPut(self.allocator, cap) catch return error.OutOfMemory;
             if (!cap_list.found_existing) {
                 cap_list.value_ptr.* = .empty;
             }
@@ -87,20 +88,20 @@ pub const PluginRegistry = struct {
     /// Iterates subdirectories of `root_path`, reads `manifest.json` from
     /// each, and registers a `PluginRecord` for every valid manifest.
     pub fn discover(self: *PluginRegistry, root_path: []const u8) !void {
-        var dir = std.fs.cwd().openDir(root_path, .{ .iterate = true }) catch |err| {
+        var dir = std.Io.Dir.cwd().openDir(io_globals.global_io, root_path, .{ .iterate = true }) catch |err| {
             std.log.warn("PluginRegistry: cannot open directory '{s}': {s}", .{ root_path, @errorName(err) });
             return;
         };
-        defer dir.close();
+        defer dir.close(io_globals.global_io);
 
         var it = dir.iterate();
-        while (try it.next()) |entry| {
+        while (try it.next(io_globals.global_io)) |entry| {
             if (entry.kind != .directory) continue;
 
             const manifest_path = std.fs.path.join(self.allocator, &.{ root_path, entry.name, "manifest.json" }) catch continue;
             defer self.allocator.free(manifest_path);
 
-            const content = std.fs.cwd().readFileAlloc(self.allocator, manifest_path, 64 * 1024) catch continue;
+            const content = std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, manifest_path, self.allocator, .limited(64 * 1024)) catch continue;
             defer self.allocator.free(content);
 
             var plugin_manifest = manifest_mod.parseManifest(self.allocator, content) catch continue;

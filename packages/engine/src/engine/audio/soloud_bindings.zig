@@ -4,10 +4,7 @@
 //! SoLoud 提供完整的 3D 空间音效、混音器和多种音频格式支持。
 
 const std = @import("std");
-const c = @cImport({
-    @cDefine("SOLOUD_NO_EXCEPTIONS", "1");
-    @cInclude("soloud_c.h");
-});
+const c = @import("c_soloud");
 
 pub const Soloud = c.Soloud;
 pub const AudioSource = c.AudioSource;

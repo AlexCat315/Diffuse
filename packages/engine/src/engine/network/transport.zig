@@ -11,8 +11,9 @@
 ///!   - The sender keeps a ring buffer of unacked outgoing packets and
 ///!     retransmits after a timeout if no ack has been received.
 const std = @import("std");
-const posix = std.posix;
+const net = std.Io.net;
 const protocol = @import("protocol.zig");
+const io_globals = @import("io_globals");
 
 const log = std.log.scoped(.net_transport);
 
@@ -20,7 +21,7 @@ const log = std.log.scoped(.net_transport);
 // Address helper
 // ═══════════════════════════════════════════════════════════════════════════
 
-pub const Address = std.net.Address;
+pub const Address = net.IpAddress;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Sent packet record (for reliable retransmission)
@@ -28,7 +29,7 @@ pub const Address = std.net.Address;
 
 const SentPacket = struct {
     sequence: u16,
-    send_time: i128, // nanosecond timestamp
+    send_time: i96 = 0, // nanosecond timestamp
     acked: bool = false,
     data: [protocol.MAX_PACKET]u8 = undefined,
     data_len: usize = 0,
@@ -43,7 +44,7 @@ const SEND_BUFFER_SIZE: usize = 256;
 const SEND_BUFFER_MASK: usize = SEND_BUFFER_SIZE - 1;
 
 /// Reliable retransmission timeout (nanoseconds): 200ms default.
-const RETRANSMIT_NS: i128 = 200_000_000;
+const RETRANSMIT_NS: i96 = 200_000_000;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // Per-peer connection state
@@ -58,15 +59,15 @@ pub const PeerState = struct {
     /// Bitfield: bit N = received (remote_sequence - 1 - N).
     remote_ack_bits: u32 = 0,
     /// Ring buffer of sent reliable packets awaiting ack.
-    sent_packets: [SEND_BUFFER_SIZE]SentPacket = [_]SentPacket{SentPacket{ .sequence = 0, .send_time = 0 }} ** SEND_BUFFER_SIZE,
+    sent_packets: [SEND_BUFFER_SIZE]SentPacket = [_]SentPacket{.{ .sequence = 0 }} ** SEND_BUFFER_SIZE,
     /// Round-trip time estimate (nanoseconds).
-    rtt_ns: i128 = 100_000_000, // 100ms initial estimate
+    rtt_ns: i96 = 100_000_000, // 100ms initial estimate
     /// Smoothed RTT (exponential moving average).
-    smoothed_rtt_ns: i128 = 100_000_000,
+    smoothed_rtt_ns: i96 = 100_000_000,
     /// Last time we received any packet from this peer.
-    last_recv_time: i128 = 0,
+    last_recv_time: i96 = 0,
     /// Last time we sent any packet to this peer.
-    last_send_time: i128 = 0,
+    last_send_time: i96 = 0,
     /// Connection alive.
     connected: bool = true,
 
@@ -104,7 +105,7 @@ pub const PeerState = struct {
     }
 
     /// Process ack/ack_bits from an incoming packet header. Marks sent packets as acked.
-    fn processAcks(self: *PeerState, ack: u16, ack_bits: u32, now: i128) void {
+    fn processAcks(self: *PeerState, ack: u16, ack_bits: u32, now: i96) void {
         // The remote side is telling us it received `ack` and the 32 before it.
         self.markAcked(ack, now);
         for (0..32) |i| {
@@ -114,7 +115,7 @@ pub const PeerState = struct {
         }
     }
 
-    fn markAcked(self: *PeerState, sequence: u16, now: i128) void {
+    fn markAcked(self: *PeerState, sequence: u16, now: i96) void {
         const idx = @as(usize, sequence) & SEND_BUFFER_MASK;
         var sent = &self.sent_packets[idx];
         if (sent.sequence == sequence and !sent.acked and sent.data_len > 0) {
@@ -145,7 +146,7 @@ pub const ReceivedPacket = struct {
 
 pub const UdpTransport = struct {
     allocator: std.mem.Allocator,
-    socket: posix.socket_t,
+    socket: net.Socket,
     /// Peer table keyed by address hash.
     peers: std.AutoHashMap(u64, PeerState),
     /// Reusable receive buffer.
@@ -156,16 +157,10 @@ pub const UdpTransport = struct {
     recv_payloads: std.ArrayList([]u8),
 
     pub fn init(allocator: std.mem.Allocator, bind_port: u16) !UdpTransport {
-        const addr = std.net.Address.initIp4(.{ 0, 0, 0, 0 }, bind_port);
+        const io = io_globals.global_io;
+        var addr = Address{ .ip4 = net.Ip4Address.unspecified(bind_port) };
 
-        const sock = try posix.socket(
-            posix.AF.INET,
-            posix.SOCK.DGRAM | posix.SOCK.NONBLOCK,
-            0,
-        );
-        errdefer posix.close(sock);
-
-        try posix.bind(sock, &addr.any, addr.getOsSockLen());
+        const sock = try addr.bind(io, .{ .mode = .dgram });
 
         return .{
             .allocator = allocator,
@@ -177,7 +172,8 @@ pub const UdpTransport = struct {
     }
 
     pub fn deinit(self: *UdpTransport) void {
-        posix.close(self.socket);
+        const io = io_globals.global_io;
+        self.socket.close(io);
         for (self.recv_payloads.items) |p| self.allocator.free(p);
         self.recv_payloads.deinit(self.allocator);
         self.recv_queue.deinit(self.allocator);
@@ -191,7 +187,7 @@ pub const UdpTransport = struct {
         if (!result.found_existing) {
             result.value_ptr.* = PeerState{
                 .address = addr,
-                .last_recv_time = std.time.nanoTimestamp(),
+                .last_recv_time = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds,
             };
         }
         return result.value_ptr;
@@ -203,8 +199,9 @@ pub const UdpTransport = struct {
 
     /// Send a packet to a peer on a given channel.
     pub fn send(self: *UdpTransport, addr: Address, channel: protocol.Channel, payload: []const u8) !void {
+        const io = io_globals.global_io;
         const peer = try self.getOrCreatePeer(addr);
-        const now = std.time.nanoTimestamp();
+        const now = std.Io.Timestamp.now(io, .boot).nanoseconds;
         const seq = peer.nextSequence();
 
         const header = protocol.PacketHeader{
@@ -231,8 +228,8 @@ pub const UdpTransport = struct {
             peer.sent_packets[idx].data_len = total;
         }
 
-        _ = posix.sendto(self.socket, buf[0..total], 0, &addr.any, addr.getOsSockLen()) catch |err| {
-            log.warn("sendto failed: {}", .{err});
+        self.socket.send(io, &addr, buf[0..total]) catch |err| {
+            log.warn("send failed: {}", .{err});
             return;
         };
         peer.last_send_time = now;
@@ -246,23 +243,21 @@ pub const UdpTransport = struct {
         self.recv_payloads.clearRetainingCapacity();
         self.recv_queue.clearRetainingCapacity();
 
-        const now = std.time.nanoTimestamp();
+        const io = io_globals.global_io;
+        const now = std.Io.Timestamp.now(io, .boot).nanoseconds;
 
-        // Drain the socket.
+        // Drain the socket using zero-timeout receives.
         while (true) {
-            var src_addr: posix.sockaddr = undefined;
-            var addr_len: posix.socklen_t = @sizeOf(posix.sockaddr);
-
-            const n = posix.recvfrom(self.socket, &self.recv_buf, 0, &src_addr, &addr_len) catch |err| {
-                if (err == error.WouldBlock) break;
-                log.warn("recvfrom error: {}", .{err});
+            const msg = self.socket.receiveTimeout(io, &self.recv_buf, .{ .duration = .{ .raw = .{ .nanoseconds = 0 }, .clock = .boot } }) catch |err| {
+                if (err == error.Timeout) break;
+                log.warn("receive error: {}", .{err});
                 break;
             };
 
-            if (n == 0) break;
+            if (msg.data.len == 0) break;
 
-            const decoded = protocol.decodePacket(self.recv_buf[0..n]) catch continue;
-            const addr = Address{ .any = src_addr };
+            const decoded = protocol.decodePacket(msg.data) catch continue;
+            const addr = msg.from;
 
             // Update peer state.
             const peer = self.getOrCreatePeer(addr) catch continue;
@@ -278,7 +273,7 @@ pub const UdpTransport = struct {
                 continue;
             };
 
-            const channel = std.meta.intToEnum(protocol.Channel, decoded.header.channel) catch .unreliable;
+            const channel = std.enums.fromInt(protocol.Channel, decoded.header.channel) orelse .unreliable;
 
             // For unreliable_sequenced, drop if older than last received.
             if (channel == .unreliable_sequenced) {
@@ -304,13 +299,7 @@ pub const UdpTransport = struct {
                 if (sent.data_len > 0 and !sent.acked) {
                     if (now - sent.send_time > RETRANSMIT_NS) {
                         // Resend.
-                        _ = posix.sendto(
-                            self.socket,
-                            sent.data[0..sent.data_len],
-                            0,
-                            &peer.address.any,
-                            peer.address.getOsSockLen(),
-                        ) catch {};
+                        self.socket.send(io, &peer.address, sent.data[0..sent.data_len]) catch {};
                         sent.send_time = now; // Reset timer.
                     }
                 }
@@ -333,20 +322,17 @@ pub const UdpTransport = struct {
 
 /// Hash an address to a u64 key for the peer table.
 fn addressKey(addr: Address) u64 {
-    switch (addr.any.family) {
-        posix.AF.INET => {
-            const in4: *const posix.sockaddr.in = @ptrCast(@alignCast(&addr.any));
-            return @as(u64, in4.addr) | (@as(u64, in4.port) << 32);
+    switch (addr) {
+        .ip4 => |ip4| {
+            const addr_int: u32 = @bitCast(ip4.bytes);
+            return @as(u64, addr_int) | (@as(u64, ip4.port) << 32);
         },
-        posix.AF.INET6 => {
-            const in6: *const posix.sockaddr.in6 = @ptrCast(@alignCast(&addr.any));
-            var hash: u64 = in6.port;
-            const addr_bytes = std.mem.asBytes(&in6.addr);
-            for (addr_bytes) |b| {
+        .ip6 => |ip6| {
+            var hash: u64 = ip6.port;
+            for (ip6.bytes) |b| {
                 hash = hash *% 31 +% b;
             }
             return hash;
         },
-        else => return 0,
     }
 }

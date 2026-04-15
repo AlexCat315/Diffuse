@@ -172,49 +172,37 @@ fn successResponse(allocator: std.mem.Allocator, id: ?std.json.Value, result_jso
     defer allocator.free(result_json);
     var buf = std.ArrayList(u8).empty;
     defer buf.deinit(allocator);
-    var writer = buf.writer(allocator);
-    var tmp: [256]u8 = undefined;
-    var adapter = writer.adaptToNewApi(&tmp);
-    const w = &adapter.new_interface;
 
-    try w.writeAll("{\"jsonrpc\":\"2.0\",\"id\":");
-    try writeJsonId(w, id);
-    try w.writeAll(",\"result\":");
-    try w.writeAll(result_json);
-    try w.writeAll("}");
-    try w.flush();
-    if (adapter.err) |err| return err;
+    try buf.appendSlice(allocator, "{\"jsonrpc\":\"2.0\",\"id\":");
+    try appendJsonId(&buf, allocator, id);
+    try buf.appendSlice(allocator, ",\"result\":");
+    try buf.appendSlice(allocator, result_json);
+    try buf.appendSlice(allocator, "}");
     return try buf.toOwnedSlice(allocator);
 }
 
 fn errorResponse(allocator: std.mem.Allocator, id: ?std.json.Value, code: i64, message: []const u8) ![]u8 {
     var buf = std.ArrayList(u8).empty;
     defer buf.deinit(allocator);
-    var writer = buf.writer(allocator);
-    var tmp: [256]u8 = undefined;
-    var adapter = writer.adaptToNewApi(&tmp);
-    const w = &adapter.new_interface;
 
-    try w.writeAll("{\"jsonrpc\":\"2.0\",\"id\":");
-    try writeJsonId(w, id);
-    try w.print(",\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}", .{ code, message });
-    try w.flush();
-    if (adapter.err) |err| return err;
+    try buf.appendSlice(allocator, "{\"jsonrpc\":\"2.0\",\"id\":");
+    try appendJsonId(&buf, allocator, id);
+    try buf.print(allocator, ",\"error\":{{\"code\":{d},\"message\":\"{s}\"}}}}", .{ code, message });
     return try buf.toOwnedSlice(allocator);
 }
 
-fn writeJsonId(w: anytype, id: ?std.json.Value) !void {
+fn appendJsonId(buf: *std.ArrayList(u8), allocator: std.mem.Allocator, id: ?std.json.Value) !void {
     if (id) |id_val| {
         switch (id_val) {
-            .integer => |i| try w.print("{d}", .{i}),
+            .integer => |i| try buf.print(allocator, "{d}", .{i}),
             .string => |s| {
-                try w.writeAll("\"");
-                try w.writeAll(s);
-                try w.writeAll("\"");
+                try buf.appendSlice(allocator, "\"");
+                try buf.appendSlice(allocator, s);
+                try buf.appendSlice(allocator, "\"");
             },
-            else => try w.writeAll("null"),
+            else => try buf.appendSlice(allocator, "null"),
         }
     } else {
-        try w.writeAll("null");
+        try buf.appendSlice(allocator, "null");
     }
 }

@@ -1,5 +1,6 @@
 const builtin = @import("builtin");
 const std = @import("std");
+const io_globals = @import("io_globals");
 
 pub const PublishError = error{
     DotnetNotFound,
@@ -40,7 +41,7 @@ pub fn findDotnetBinary(allocator: std.mem.Allocator) !?[]u8 {
     }
 
     const executable_name = if (builtin.os.tag == .windows) "dotnet.exe" else "dotnet";
-    const dotnet_root_vars = [_][]const u8{
+    const dotnet_root_vars = [_][*:0]const u8{
         "DOTNET_ROOT",
         "DOTNET_ROOT_X64",
         "DOTNET_ROOT_X86",
@@ -112,7 +113,7 @@ pub fn publishNativeAotLibraryAlloc(allocator: std.mem.Allocator, options: Publi
         try defaultPublishOutputDirAlloc(allocator, options.project_path);
     defer allocator.free(output_dir);
 
-    try std.fs.cwd().makePath(output_dir);
+    try std.Io.Dir.cwd().createDirPath(io_globals.global_io, output_dir);
 
     const publish_aot = if (options.publish_aot) "true" else "false";
     const self_contained = if (options.self_contained) "true" else "false";
@@ -138,16 +139,16 @@ pub fn publishNativeAotLibraryAlloc(allocator: std.mem.Allocator, options: Publi
         self_contained_arg,
     };
 
-    const result = try std.process.Child.run(.{
-        .allocator = allocator,
+    const result = try std.process.run(allocator, io_globals.global_io, .{
         .argv = &argv,
-        .max_output_bytes = 8 * 1024 * 1024,
+        .stdout_limit = .limited(8 * 1024 * 1024),
+        .stderr_limit = .limited(8 * 1024 * 1024),
     });
     defer allocator.free(result.stdout);
     defer allocator.free(result.stderr);
 
     switch (result.term) {
-        .Exited => |code| {
+        .exited => |code| {
             if (code != 0) {
                 std.debug.print("dotnet publish failed for {s}:\n{s}\n{s}\n", .{
                     options.project_path,
@@ -208,13 +209,13 @@ pub fn collectProjectWatchPathsAlloc(allocator: std.mem.Allocator, project_path:
     try appendUniquePath(allocator, &paths, project_path);
 
     const project_dir_path = std.fs.path.dirname(project_path) orelse ".";
-    var project_dir = try std.fs.cwd().openDir(project_dir_path, .{ .iterate = true });
-    defer project_dir.close();
+    var project_dir = try std.Io.Dir.cwd().openDir(io_globals.global_io, project_dir_path, .{ .iterate = true });
+    defer project_dir.close(io_globals.global_io);
 
     var walker = try project_dir.walk(allocator);
     defer walker.deinit();
 
-    while (try walker.next()) |entry| {
+    while (try walker.next(io_globals.global_io)) |entry| {
         if (shouldSkipProjectEntry(entry.path)) {
             continue;
         }
@@ -269,11 +270,10 @@ fn publishOutputDirForArtifactAlloc(allocator: std.mem.Allocator, artifact_path:
     return try allocator.dupe(u8, dir);
 }
 
-fn getOwnedEnvVarOrNull(allocator: std.mem.Allocator, name: []const u8) !?[]u8 {
-    return std.process.getEnvVarOwned(allocator, name) catch |err| switch (err) {
-        error.EnvironmentVariableNotFound => null,
-        else => return err,
-    };
+fn getOwnedEnvVarOrNull(allocator: std.mem.Allocator, name: [*:0]const u8) !?[]u8 {
+    const val_ptr = std.c.getenv(name) orelse return null;
+    const val = std.mem.span(val_ptr);
+    return try allocator.dupe(u8, val);
 }
 
 fn findExecutableInPath(allocator: std.mem.Allocator, executable_name: []const u8) !?[]u8 {
@@ -297,7 +297,7 @@ fn findExecutableInPathString(allocator: std.mem.Allocator, path_env: []const u8
 }
 
 fn pathExists(path: []const u8) bool {
-    std.fs.cwd().access(path, .{}) catch return false;
+    std.Io.Dir.cwd().access(io_globals.global_io, path, .{}) catch return false;
     return true;
 }
 
@@ -323,20 +323,20 @@ fn fallbackDotnetPaths() []const []const u8 {
     };
 }
 
-fn getFileMtime(path: []const u8) !i128 {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
+fn getFileMtime(path: []const u8) !i96 {
+    const file = try std.Io.Dir.cwd().openFile(io_globals.global_io, path, .{});
+    defer file.close(io_globals.global_io);
 
-    const stat = try file.stat();
-    return stat.mtime;
+    const stat = try file.stat(io_globals.global_io);
+    return stat.mtime.nanoseconds;
 }
 
 fn findPublishedNativeAotLibrary(allocator: std.mem.Allocator, output_dir: []const u8) ![]u8 {
-    var dir = try std.fs.cwd().openDir(output_dir, .{ .iterate = true });
-    defer dir.close();
+    var dir = try std.Io.Dir.cwd().openDir(io_globals.global_io, output_dir, .{ .iterate = true });
+    defer dir.close(io_globals.global_io);
 
     var iter = dir.iterate();
-    while (try iter.next()) |entry| {
+    while (try iter.next(io_globals.global_io)) |entry| {
         if (entry.kind != .file) continue;
         if (!isSharedLibraryPath(entry.name)) continue;
         return try std.fmt.allocPrint(allocator, "{s}/{s}", .{ output_dir, entry.name });
@@ -345,24 +345,25 @@ fn findPublishedNativeAotLibrary(allocator: std.mem.Allocator, output_dir: []con
 }
 
 test "dotnet lookup finds executable in PATH entries" {
+    const io = io_globals.global_io;
     var temp_dir = std.testing.tmpDir(.{});
     defer temp_dir.cleanup();
 
-    try temp_dir.dir.makePath("sdk");
+    try temp_dir.dir.createDirPath(io, "sdk");
 
     const executable_name = if (builtin.os.tag == .windows) "dotnet.exe" else "dotnet";
 
     var relative_path_buf: [64]u8 = undefined;
     const relative_path = try std.fmt.bufPrint(&relative_path_buf, "sdk/{s}", .{executable_name});
-    try temp_dir.dir.writeFile(.{
+    try temp_dir.dir.writeFile(io, .{
         .sub_path = relative_path,
         .data = "",
     });
 
-    var original = try std.fs.cwd().openDir(".", .{});
-    defer original.close();
-    try temp_dir.dir.setAsCwd();
-    defer original.setAsCwd() catch {};
+    var original = try std.Io.Dir.cwd().openDir(io, ".", .{});
+    defer original.close(io);
+    try std.process.setCurrentDir(io, temp_dir.dir);
+    defer std.process.setCurrentDir(io, original) catch {};
 
     const found = try findExecutableInPathString(std.testing.allocator, "sdk", executable_name);
     defer if (found) |path| std.testing.allocator.free(path);
@@ -375,37 +376,38 @@ test "dotnet lookup finds executable in PATH entries" {
 }
 
 test "collect project watch paths includes cs and csproj but skips bin obj" {
+    const io = io_globals.global_io;
     var temp_dir = std.testing.tmpDir(.{});
     defer temp_dir.cleanup();
 
-    try temp_dir.dir.makePath("game/bin");
-    try temp_dir.dir.makePath("game/obj");
-    try temp_dir.dir.makePath("game/Sub");
-    try temp_dir.dir.writeFile(.{
+    try temp_dir.dir.createDirPath(io, "game/bin");
+    try temp_dir.dir.createDirPath(io, "game/obj");
+    try temp_dir.dir.createDirPath(io, "game/Sub");
+    try temp_dir.dir.writeFile(io, .{
         .sub_path = "game/Game.csproj",
         .data = "<Project />",
     });
-    try temp_dir.dir.writeFile(.{
+    try temp_dir.dir.writeFile(io, .{
         .sub_path = "game/Player.cs",
         .data = "class Player {}",
     });
-    try temp_dir.dir.writeFile(.{
+    try temp_dir.dir.writeFile(io, .{
         .sub_path = "game/Sub/Enemy.cs",
         .data = "class Enemy {}",
     });
-    try temp_dir.dir.writeFile(.{
+    try temp_dir.dir.writeFile(io, .{
         .sub_path = "game/bin/Ignore.cs",
         .data = "class Ignore {}",
     });
-    try temp_dir.dir.writeFile(.{
+    try temp_dir.dir.writeFile(io, .{
         .sub_path = "game/obj/IgnoreToo.cs",
         .data = "class IgnoreToo {}",
     });
 
-    var original = try std.fs.cwd().openDir(".", .{});
-    defer original.close();
-    try temp_dir.dir.setAsCwd();
-    defer original.setAsCwd() catch {};
+    var original = try std.Io.Dir.cwd().openDir(io, ".", .{});
+    defer original.close(io);
+    try std.process.setCurrentDir(io, temp_dir.dir);
+    defer std.process.setCurrentDir(io, original) catch {};
 
     const watched = try collectProjectWatchPathsAlloc(std.testing.allocator, "game/Game.csproj");
     defer {

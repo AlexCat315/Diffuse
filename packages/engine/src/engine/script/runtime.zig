@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const command_queue_mod = @import("../core/command_queue.zig");
 const types = @import("./types.zig");
 const context = @import("./context.zig");
@@ -71,7 +72,7 @@ pub const ScriptRuntime = struct {
     save_root_path: []const u8 = "saves",
     /// 可读脚本状态日志
     status_events: std.ArrayList(StatusEvent),
-    status_mutex: std.Thread.Mutex = .{},
+    status_mutex: std.Io.Mutex = std.Io.Mutex.init,
     next_status_sequence: u64 = 1,
 
     pub fn init(allocator: std.mem.Allocator, config: types.ScriptSystemConfig) ScriptRuntime {
@@ -109,8 +110,8 @@ pub const ScriptRuntime = struct {
         }
         self.instances.deinit();
 
-        self.status_mutex.lock();
-        defer self.status_mutex.unlock();
+        self.status_mutex.lockUncancelable(io_globals.global_io);
+        defer self.status_mutex.unlock(io_globals.global_io);
         for (self.status_events.items) |event| {
             self.allocator.free(event.message);
         }
@@ -153,8 +154,8 @@ pub const ScriptRuntime = struct {
         const owned_message = self.allocator.dupe(u8, desc.message) catch return;
         errdefer self.allocator.free(owned_message);
 
-        self.status_mutex.lock();
-        defer self.status_mutex.unlock();
+        self.status_mutex.lockUncancelable(io_globals.global_io);
+        defer self.status_mutex.unlock(io_globals.global_io);
 
         if (self.status_events.items.len >= 64) {
             const dropped = self.status_events.orderedRemove(0);
@@ -177,10 +178,10 @@ pub const ScriptRuntime = struct {
 
     pub fn buildStatusJsonAlloc(self: *const ScriptRuntime, allocator: std.mem.Allocator) ![]u8 {
         const mutable: *ScriptRuntime = @constCast(self);
-        mutable.status_mutex.lock();
-        defer mutable.status_mutex.unlock();
+        mutable.status_mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.status_mutex.unlock(io_globals.global_io);
 
-        var out: std.io.Writer.Allocating = .init(allocator);
+        var out: std.Io.Writer.Allocating = .init(allocator);
         defer out.deinit();
 
         try std.json.Stringify.value(.{
@@ -188,7 +189,7 @@ pub const ScriptRuntime = struct {
             .events = mutable.status_events.items,
         }, .{ .whitespace = .indent_2 }, &out.writer);
         try out.writer.writeByte('\n');
-        return try allocator.dupe(u8, out.written());
+        return out.toOwnedSlice();
     }
 
     /// 初始化 VM
@@ -309,7 +310,7 @@ pub const ScriptRuntime = struct {
         var refreshed_source: ?[]u8 = null;
         var refreshed_mtime = resource.last_modified;
         if (!reloads_from_artifact and resource.source_path.len != 0) {
-            refreshed_source = try std.fs.cwd().readFileAlloc(self.allocator, resource.source_path, 8 * 1024 * 1024);
+            refreshed_source = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, resource.source_path, self.allocator, .limited(8 * 1024 * 1024));
             errdefer if (refreshed_source) |bytes| self.allocator.free(bytes);
             refreshed_mtime = readFileMtime(resource.source_path) catch resource.last_modified;
         } else if (csharp_artifact_path) |artifact_path| {
@@ -757,12 +758,12 @@ fn csharpArtifactPath(resource: *const script_resource_mod.ScriptResource) ?[]co
     return null;
 }
 
-fn readFileMtime(path: []const u8) !i128 {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
+fn readFileMtime(path: []const u8) !i96 {
+    const file = try std.Io.Dir.cwd().openFile(io_globals.global_io, path, .{});
+    defer file.close(io_globals.global_io);
 
-    const stat = try file.stat();
-    return stat.mtime;
+    const stat = try file.stat(io_globals.global_io);
+    return stat.mtime.nanoseconds;
 }
 
 fn replaceOwnedSlice(allocator: std.mem.Allocator, target: *[]const u8, next: []const u8) !void {

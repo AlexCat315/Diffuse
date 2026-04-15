@@ -18,6 +18,7 @@
 //! Thread-safety: Not thread-safe. Compile must complete before rendering begins.
 
 const std = @import("std");
+const io_globals = @import("io_globals");
 const rhi = @import("../rhi/rhi.zig");
 
 /// GPU queue type for pass execution.
@@ -721,26 +722,28 @@ pub const RenderGraph = struct {
         var output = std.ArrayList(u8).empty;
         defer output.deinit(allocator);
 
-        try output.writer(allocator).print("digraph RenderGraph {{\n  rankdir=LR;\n", .{});
+        try output.print(allocator, "digraph RenderGraph {{\n  rankdir=LR;\n", .{});
         for (self.resources.items, 0..) |resource, index| {
-            try output.writer(allocator).print(
+            try output.print(
+                allocator,
                 "  resource_{d} [shape=ellipse,label=\"{s}\"];\n",
                 .{ index, resource.name },
             );
         }
         for (compiled.execution, 0..) |pass, index| {
-            try output.writer(allocator).print(
+            try output.print(
+                allocator,
                 "  pass_{d} [shape=box,label=\"{s}\"];\n",
                 .{ index, pass.name },
             );
             for (pass.inputs) |input| {
-                try output.writer(allocator).print("  resource_{d} -> pass_{d};\n", .{ input.resource, index });
+                try output.print(allocator, "  resource_{d} -> pass_{d};\n", .{ input.resource, index });
             }
             for (pass.outputs) |resource_use| {
-                try output.writer(allocator).print("  pass_{d} -> resource_{d};\n", .{ index, resource_use.resource });
+                try output.print(allocator, "  pass_{d} -> resource_{d};\n", .{ index, resource_use.resource });
             }
         }
-        try output.writer(allocator).print("}}\n", .{});
+        try output.print(allocator, "}}\n", .{});
         return output.toOwnedSlice(allocator);
     }
 
@@ -941,26 +944,16 @@ fn barrierStateToBits(state: BarrierState) u32 {
     };
 }
 
-fn stringifyAlloc(allocator: std.mem.Allocator, value: anytype) ![]u8 {
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
-
-    var writer = output.writer(allocator);
-    var adapter_buffer: [4096]u8 = undefined;
-    var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
-    try std.json.Stringify.value(value, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
-    try writer_adapter.new_interface.flush();
-    if (writer_adapter.err) |err| {
-        return err;
-    }
-    return output.toOwnedSlice(allocator);
+fn stringifyAlloc(allocator: std.mem.Allocator, val: anytype) ![]u8 {
+    return std.json.Stringify.valueAlloc(allocator, val, .{ .whitespace = .indent_2 });
 }
 
 fn writeTextFile(path: []const u8, contents: []const u8) !void {
+    const io = io_globals.global_io;
     if (std.fs.path.dirname(path)) |directory| {
-        try std.fs.cwd().makePath(directory);
+        try std.Io.Dir.cwd().createDirPath(io, directory);
     }
-    try std.fs.cwd().writeFile(.{
+    try std.Io.Dir.cwd().writeFile(io, .{
         .sub_path = path,
         .data = contents,
     });

@@ -13,6 +13,9 @@ pub fn build(b: *std.Build) void {
     };
     const sdl_prefix = b.option([]const u8, "sdl-prefix", "Prefix path for an SDL3 installation") orelse default_sdl_prefix;
 
+    // ── C Translations (replacing @cImport) ─────────────────────────────────
+    const c_translations = sources.createCTranslations(b, target, optimize, sdl_prefix);
+
     // ── Shader codegen ──────────────────────────────────────────────────────
     const shader_codegen = b.addExecutable(.{
         .name = "shader-codegen",
@@ -30,11 +33,20 @@ pub fn build(b: *std.Build) void {
     shaders_step.dependOn(&run_shader_codegen.step);
 
     // ── Engine module ───────────────────────────────────────────────────────
+    // ── Shared io_globals module ──────────────────────────────────────────
+    const io_globals_mod = b.addModule("io_globals", .{
+        .root_source_file = b.path("src/io_globals.zig"),
+        .target = target,
+    });
+
     const engine_mod = b.addModule("guava", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
+        .imports = &.{
+            .{ .name = "io_globals", .module = io_globals_mod },
+        },
     });
-    sources.configureEngineModule(b, engine_mod, target.result.os.tag, sdl_prefix);
+    sources.configureEngineModule(b, engine_mod, target.result.os.tag, sdl_prefix, c_translations);
 
     // ── Executables ─────────────────────────────────────────────────────────
     const exe = b.addExecutable(.{
@@ -45,11 +57,12 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "guava", .module = engine_mod },
+                .{ .name = "io_globals", .module = io_globals_mod },
             },
         }),
     });
-    exe.linkLibC();
-    exe.linkLibCpp();
+    exe.root_module.link_libc = true;
+    exe.root_module.link_libcpp = true;
     exe.linker_allow_shlib_undefined = true;
     exe.step.dependOn(&run_shader_codegen.step);
     b.installArtifact(exe);
@@ -62,11 +75,12 @@ pub fn build(b: *std.Build) void {
             .optimize = optimize,
             .imports = &.{
                 .{ .name = "guava", .module = engine_mod },
+                .{ .name = "io_globals", .module = io_globals_mod },
             },
         }),
     });
-    player.linkLibC();
-    player.linkLibCpp();
+    player.root_module.link_libc = true;
+    player.root_module.link_libcpp = true;
     player.linker_allow_shlib_undefined = true;
     player.step.dependOn(&run_shader_codegen.step);
     b.installArtifact(player);
@@ -136,16 +150,16 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/test_main.zig"),
         .target = target,
     });
-    sources.configureEngineModule(b, test_mod, target.result.os.tag, sdl_prefix);
+    sources.configureEngineModule(b, test_mod, target.result.os.tag, sdl_prefix, c_translations);
 
     const mod_tests = b.addTest(.{ .root_module = test_mod });
-    mod_tests.linkLibC();
-    mod_tests.linkLibCpp();
+    mod_tests.root_module.link_libc = true;
+    mod_tests.root_module.link_libcpp = true;
     mod_tests.step.dependOn(&run_shader_codegen.step);
 
     const exe_tests = b.addTest(.{ .root_module = exe.root_module });
-    exe_tests.linkLibC();
-    exe_tests.linkLibCpp();
+    exe_tests.root_module.link_libc = true;
+    exe_tests.root_module.link_libcpp = true;
     exe_tests.step.dependOn(&run_shader_codegen.step);
 
     const run_mod_tests = b.addRunArtifact(mod_tests);
@@ -156,8 +170,8 @@ pub fn build(b: *std.Build) void {
     test_step.dependOn(&run_exe_tests.step);
 
     const player_tests = b.addTest(.{ .root_module = player.root_module });
-    player_tests.linkLibC();
-    player_tests.linkLibCpp();
+    player_tests.root_module.link_libc = true;
+    player_tests.root_module.link_libcpp = true;
     player_tests.step.dependOn(&run_shader_codegen.step);
 
     const run_player_tests = b.addRunArtifact(player_tests);
@@ -169,11 +183,11 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/script_vm_test_main.zig"),
         .target = target,
     });
-    sources.configureEngineModule(b, script_vm_test_mod, target.result.os.tag, sdl_prefix);
+    sources.configureEngineModule(b, script_vm_test_mod, target.result.os.tag, sdl_prefix, c_translations);
 
     const script_vm_tests = b.addTest(.{ .root_module = script_vm_test_mod });
-    script_vm_tests.linkLibC();
-    script_vm_tests.linkLibCpp();
+    script_vm_tests.root_module.link_libc = true;
+    script_vm_tests.root_module.link_libcpp = true;
     script_vm_tests.step.dependOn(&run_shader_codegen.step);
 
     const run_script_vm_tests = b.addRunArtifact(script_vm_tests);
@@ -189,14 +203,14 @@ pub fn build(b: *std.Build) void {
         .root_source_file = b.path("src/test_console.zig"),
         .target = target,
     });
-    sources.configureEngineModule(b, console_test_mod, target.result.os.tag, sdl_prefix);
+    sources.configureEngineModule(b, console_test_mod, target.result.os.tag, sdl_prefix, c_translations);
 
     const console_test_exe = b.addExecutable(.{
         .name = "test-console",
         .root_module = console_test_mod,
     });
-    console_test_exe.linkLibC();
-    console_test_exe.linkLibCpp();
+    console_test_exe.root_module.link_libc = true;
+    console_test_exe.root_module.link_libcpp = true;
     console_test_exe.step.dependOn(&run_shader_codegen.step);
 
     const console_test_cmd = b.addRunArtifact(console_test_exe);

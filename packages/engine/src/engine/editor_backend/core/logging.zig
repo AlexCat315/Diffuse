@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 
 const max_entries = 256;
 const max_scope_len = 48;
@@ -24,47 +25,51 @@ pub const Entry = struct {
     }
 };
 
-var g_mutex: std.Thread.Mutex = .{};
+var g_mutex: std.Io.Mutex = std.Io.Mutex.init;
 var g_entries: [max_entries]Entry = undefined;
 var g_entry_count: usize = 0;
 var g_entry_write: usize = 0; // Write head for ring buffer
 var g_entry_read: usize = 0; // Read head for ring buffer
 
-var g_log_file: ?std.fs.File = null;
-var g_log_file_mutex: std.Thread.Mutex = .{};
+var g_log_file: ?std.Io.File = null;
+var g_log_file_mutex: std.Io.Mutex = std.Io.Mutex.init;
 
 pub fn initLogFile() !void {
-    var log_dir = try std.fs.cwd().makeOpenPath("logs", .{});
-    defer log_dir.close();
+    const io = io_globals.global_io;
+    var log_dir = try std.Io.Dir.cwd().createDirPathOpen(io, "logs", .{});
+    defer log_dir.close(io);
 
-    const timestamp = std.time.timestamp();
+    const timestamp = std.Io.Timestamp.now(io, .real);
+    const ts_secs = timestamp.toSeconds();
     var time_buffer: [64]u8 = undefined;
-    const time_str = std.fmt.bufPrint(&time_buffer, "{d}", .{timestamp}) catch "unknown";
+    const time_str = std.fmt.bufPrint(&time_buffer, "{d}", .{ts_secs}) catch "unknown";
 
     var filename_buffer: [128]u8 = undefined;
     const filename = std.fmt.bufPrint(&filename_buffer, "guava_{s}.log", .{time_str}) catch "guava.log";
 
-    g_log_file = try log_dir.createFile(filename, .{});
+    g_log_file = try log_dir.createFile(io, filename, .{});
 
     const header = "=== Guava Engine Log Started ===\n";
-    try g_log_file.?.writeAll(header);
+    try g_log_file.?.writeStreamingAll(io, header);
 }
 
 pub fn deinitLogFile() void {
-    g_log_file_mutex.lock();
-    defer g_log_file_mutex.unlock();
+    const io = io_globals.global_io;
+    g_log_file_mutex.lockUncancelable(io);
+    defer g_log_file_mutex.unlock(io);
 
     if (g_log_file) |*file| {
-        file.writeAll("=== Guava Engine Log Ended ===\n") catch {};
-        file.sync() catch {};
-        file.close();
+        file.writeStreamingAll(io, "=== Guava Engine Log Ended ===\n") catch {};
+        file.sync(io) catch {};
+        file.close(io);
         g_log_file = null;
     }
 }
 
 fn writeToLogFile(level: std.log.Level, scope: []const u8, message: []const u8) void {
-    g_log_file_mutex.lock();
-    defer g_log_file_mutex.unlock();
+    const io = io_globals.global_io;
+    g_log_file_mutex.lockUncancelable(io);
+    defer g_log_file_mutex.unlock(io);
 
     if (g_log_file) |file| {
         const level_str = levelLabel(level);
@@ -72,28 +77,29 @@ fn writeToLogFile(level: std.log.Level, scope: []const u8, message: []const u8) 
         // Format into a stack buffer to issue a single write() syscall
         // instead of 7 separate writeAll() calls.
         var buf: [max_scope_len + max_message_len + 16]u8 = undefined;
-        var fbs = std.io.fixedBufferStream(&buf);
-        const w = fbs.writer();
+        var w = std.Io.Writer.fixed(&buf);
         w.print("[{s}] {s}: {s}\n", .{ level_str, scope, message }) catch {
             // Fallback: single unformatted write
-            file.writeAll(message) catch {};
-            file.writeAll("\n") catch {};
+            file.writeStreamingAll(io, message) catch {};
+            file.writeStreamingAll(io, "\n") catch {};
             return;
         };
-        file.writeAll(fbs.getWritten()) catch {};
+        file.writeStreamingAll(io, w.buffered()) catch {};
     }
 }
 
 pub fn logFn(
     comptime message_level: std.log.Level,
-    comptime scope: @Type(.enum_literal),
+    comptime scope: @EnumLiteral(),
     comptime format: []const u8,
     args: anytype,
 ) void {
+    const io = io_globals.global_io;
+
     // 对于 GPA 的错误,直接输出到 stderr 以避免格式化问题
     if (comptime std.mem.eql(u8, @tagName(scope), "gpa")) {
         var stderr_buffer: [2048]u8 = undefined;
-        var stderr_writer = std.fs.File.stderr().writer(&stderr_buffer);
+        var stderr_writer = std.Io.File.stderr().writer(io, &stderr_buffer);
         const stderr = &stderr_writer.interface;
         stderr.print("[{s}] {s}: ", .{ levelLabel(message_level), @tagName(scope) }) catch {};
         stderr.print(format, args) catch |err| {
@@ -130,24 +136,25 @@ pub fn logFn(
     // syscall overhead per log call, which is critical for frame budget.
     {
         var line_buf: [max_scope_len + max_message_len + 16]u8 = undefined;
-        var fbs = std.io.fixedBufferStream(&line_buf);
-        const w = fbs.writer();
+        var w = std.Io.Writer.fixed(&line_buf);
         w.print("[{s}] {s}: {s}\n", .{ levelLabel(message_level), scope_text, message_text }) catch return;
-        _ = std.posix.write(std.posix.STDERR_FILENO, fbs.getWritten()) catch return;
+        std.Io.File.stderr().writeStreamingAll(io, w.buffered()) catch return;
     }
 }
 
 pub fn clear() void {
-    g_mutex.lock();
-    defer g_mutex.unlock();
+    const io = io_globals.global_io;
+    g_mutex.lockUncancelable(io);
+    defer g_mutex.unlock(io);
     g_entry_count = 0;
     g_entry_write = 0;
     g_entry_read = 0;
 }
 
 pub fn snapshot(buffer: []Entry) usize {
-    g_mutex.lock();
-    defer g_mutex.unlock();
+    const io = io_globals.global_io;
+    g_mutex.lockUncancelable(io);
+    defer g_mutex.unlock(io);
 
     if (g_entry_count == 0) {
         return 0;
@@ -175,8 +182,9 @@ pub fn levelLabel(level: std.log.Level) []const u8 {
 }
 
 fn appendEntry(level: std.log.Level, scope: []const u8, message: []const u8) void {
-    g_mutex.lock();
-    defer g_mutex.unlock();
+    const io = io_globals.global_io;
+    g_mutex.lockUncancelable(io);
+    defer g_mutex.unlock(io);
 
     const slot = if (g_entry_count < max_entries) blk: {
         const value = g_entry_count;

@@ -53,20 +53,22 @@ pub const PluginLoader = struct {
 /// Registry mapping PluginType → PluginLoader.
 /// Renderer populates this at init time, then uses it for all lifecycle dispatch.
 pub const TypedLoaderRegistry = struct {
-    loaders: std.AutoArrayHashMap(types.PluginType, PluginLoader),
+    loaders: std.AutoArrayHashMapUnmanaged(types.PluginType, PluginLoader),
+    allocator: std.mem.Allocator,
 
     pub fn init(allocator: std.mem.Allocator) TypedLoaderRegistry {
         return .{
-            .loaders = std.AutoArrayHashMap(types.PluginType, PluginLoader).init(allocator),
+            .loaders = .empty,
+            .allocator = allocator,
         };
     }
 
     pub fn deinit(self: *TypedLoaderRegistry) void {
-        self.loaders.deinit();
+        self.loaders.deinit(self.allocator);
     }
 
     pub fn register(self: *TypedLoaderRegistry, plugin_type: types.PluginType, loader: PluginLoader) !void {
-        try self.loaders.put(plugin_type, loader);
+        try self.loaders.put(self.allocator, plugin_type, loader);
     }
 
     pub fn get(self: *const TypedLoaderRegistry, plugin_type: types.PluginType) ?PluginLoader {

@@ -4,7 +4,7 @@
 ///! Only supports text frames (opcode 0x1) and close frames (opcode 0x8).
 ///! Designed for trusted localhost connections from the Electron editor.
 const std = @import("std");
-const posix = std.posix;
+const io_globals = @import("io_globals");
 
 const log = std.log.scoped(.websocket);
 
@@ -25,7 +25,7 @@ pub const Frame = struct {
 
 /// Perform the WebSocket upgrade handshake on an accepted TCP connection.
 /// Returns true if the handshake succeeded, false otherwise.
-pub fn performHandshake(stream: std.net.Stream) !void {
+pub fn performHandshake(stream: std.Io.net.Stream) !void {
     // Read the HTTP request (up to 4KB should be enough for the upgrade request)
     var buf: [4096]u8 = undefined;
     var total_read: usize = 0;
@@ -69,7 +69,7 @@ pub fn performHandshake(stream: std.net.Stream) !void {
 
 /// Read a single WebSocket frame from the stream.
 /// Caller owns the returned payload memory.
-pub fn readFrame(allocator: std.mem.Allocator, stream: std.net.Stream) !Frame {
+pub fn readFrame(allocator: std.mem.Allocator, stream: std.Io.net.Stream) !Frame {
     // Read first 2 bytes: FIN/opcode + mask/payload_len
     var header: [2]u8 = undefined;
     try readExact(stream, &header);
@@ -121,7 +121,7 @@ pub fn readFrame(allocator: std.mem.Allocator, stream: std.net.Stream) !Frame {
 
 /// Write a WebSocket text frame to the stream.
 /// Server frames are never masked per RFC 6455.
-pub fn writeTextFrame(stream: std.net.Stream, payload: []const u8) !void {
+pub fn writeTextFrame(stream: std.Io.net.Stream, payload: []const u8) !void {
     // FIN=1, opcode=text
     var header_buf: [10]u8 = undefined;
     var header_len: usize = 2;
@@ -146,13 +146,13 @@ pub fn writeTextFrame(stream: std.net.Stream, payload: []const u8) !void {
 }
 
 /// Write a WebSocket close frame.
-pub fn writeCloseFrame(stream: std.net.Stream) !void {
+pub fn writeCloseFrame(stream: std.Io.net.Stream) !void {
     const frame = [_]u8{ 0x88, 0x00 }; // FIN + close, zero payload
     try streamWriteAll(stream, &frame);
 }
 
 /// Write a WebSocket pong frame with the given payload.
-pub fn writePongFrame(stream: std.net.Stream, payload: []const u8) !void {
+pub fn writePongFrame(stream: std.Io.net.Stream, payload: []const u8) !void {
     var header_buf: [2]u8 = undefined;
     header_buf[0] = 0x8A; // FIN + pong
     header_buf[1] = @intCast(@min(payload.len, 125));
@@ -165,7 +165,7 @@ pub fn writePongFrame(stream: std.net.Stream, payload: []const u8) !void {
 
 // ── Helpers ──────────────────────────────────────────────────────
 
-fn readExact(stream: std.net.Stream, buf: []u8) !void {
+fn readExact(stream: std.Io.net.Stream, buf: []u8) !void {
     var total: usize = 0;
     while (total < buf.len) {
         const n = streamRead(stream, buf[total..]) catch return error.ConnectionClosed;
@@ -175,17 +175,18 @@ fn readExact(stream: std.net.Stream, buf: []u8) !void {
 }
 
 /// Read from a net.Stream handle.
-fn streamRead(stream: std.net.Stream, buf: []u8) posix.ReadError!usize {
-    return posix.read(stream.handle, buf);
+fn streamRead(stream: std.Io.net.Stream, buf: []u8) !usize {
+    var reader_buffer: [0]u8 = undefined;
+    var reader = stream.reader(io_globals.global_io, &reader_buffer);
+    return reader.interface.readSliceShort(buf);
 }
 
 /// Write all bytes to a net.Stream handle, retrying on partial writes.
-fn streamWriteAll(stream: std.net.Stream, data: []const u8) posix.WriteError!void {
-    var offset: usize = 0;
-    while (offset < data.len) {
-        const n = try posix.write(stream.handle, data[offset..]);
-        offset += n;
-    }
+fn streamWriteAll(stream: std.Io.net.Stream, data: []const u8) !void {
+    var writer_buffer: [0]u8 = undefined;
+    var writer = stream.writer(io_globals.global_io, &writer_buffer);
+    try writer.interface.writeAll(data);
+    try writer.interface.flush();
 }
 
 fn extractHeader(request: []const u8, name: []const u8) ?[]const u8 {
@@ -193,8 +194,8 @@ fn extractHeader(request: []const u8, name: []const u8) ?[]const u8 {
     while (lines.next()) |line| {
         if (line.len > name.len + 2 and std.ascii.eqlIgnoreCase(line[0..name.len], name)) {
             if (line[name.len] == ':') {
-                const value = std.mem.trimLeft(u8, line[name.len + 1 ..], " ");
-                return std.mem.trimRight(u8, value, " \r\n");
+                const value = std.mem.trimStart(u8, line[name.len + 1 ..], " ");
+                return std.mem.trimEnd(u8, value, " \r\n");
             }
         }
     }

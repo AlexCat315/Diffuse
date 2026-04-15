@@ -1,5 +1,6 @@
 ///! handlers/scene.zig — scene hierarchy & entity lifecycle.
 const std = @import("std");
+const io_globals = @import("io_globals");
 const ctx_mod = @import("../ctx.zig");
 const scene_io = @import("../../scene/scene_io.zig");
 const components = @import("../../scene/components.zig");
@@ -112,21 +113,21 @@ pub fn listScenes(ctx: *Ctx) !void {
     // Try project-relative scenes directories, then fall back to CWD.
     const scene_dirs = [_][]const u8{ "Content/Scenes", "assets/scenes" };
 
-    var owned_base: ?std.fs.Dir = if (ctx.project_root) |root|
-        (std.fs.openDirAbsolute(root, .{}) catch null)
+    var owned_base: ?std.Io.Dir = if (ctx.project_root) |root|
+        (std.Io.Dir.openDirAbsolute(io_globals.global_io, root, .{}) catch null)
     else
         null;
-    defer if (owned_base) |*d| d.close();
-    const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+    defer if (owned_base) |*d| d.close(io_globals.global_io);
+    const base_dir: std.Io.Dir = owned_base orelse std.Io.Dir.cwd();
 
     var found = false;
     for (scene_dirs) |scene_rel| {
-        var dir = base_dir.openDir(scene_rel, .{ .iterate = true }) catch continue;
-        defer dir.close();
+        var dir = base_dir.openDir(io_globals.global_io, scene_rel, .{ .iterate = true }) catch continue;
+        defer dir.close(io_globals.global_io);
         found = true;
 
         var iter = dir.iterate();
-        while (try iter.next()) |entry| {
+        while (try iter.next(io_globals.global_io)) |entry| {
             if (entry.kind != .file) continue;
             if (std.mem.endsWith(u8, entry.name, ".guava_scene") or
                 std.mem.endsWith(u8, entry.name, ".json"))

@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const assets_lib = @import("../assets/library.zig");
 const handles = @import("../assets/handles.zig");
 const environment_map_import_mod = @import("../assets/environment_map_import.zig");
@@ -263,7 +264,7 @@ pub fn findSceneEnvironmentAssetId(resources: *const assets_lib.ResourceLibrary)
         render_log.warn("findSceneEnvAssetId: record type={} source_path='{s}' — not .texture or not .hdr", .{ @intFromEnum(record.type), record.source_path });
         return null;
     }
-    std.fs.cwd().access(record.source_path, .{}) catch |err| {
+    std.Io.Dir.cwd().access(io_globals.global_io, record.source_path, .{}) catch |err| {
         render_log.warn("findSceneEnvAssetId: access('{s}') failed: {s}", .{ record.source_path, @errorName(err) });
         return null;
     };

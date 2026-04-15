@@ -7,6 +7,7 @@
 ///! Designed to integrate as a Layer in the Application layer stack,
 ///! processing pending requests each frame on the main thread.
 const std = @import("std");
+const io_globals = @import("io_globals");
 const ws = @import("websocket.zig");
 const methods = @import("dispatch.zig");
 const subscriptions = @import("subscriptions.zig");
@@ -58,7 +59,7 @@ pub fn consoleLogTrampoline(level: []const u8, message: []const u8, source: []co
 
 /// A connected WebSocket client with its own send queue.
 const Client = struct {
-    stream: std.net.Stream,
+    stream: std.Io.net.Stream,
     alive: bool = true,
     id: u32 = 0,
 };
@@ -92,13 +93,13 @@ pub const Server = struct {
     client_threads: [max_clients]?std.Thread = .{null} ** max_clients,
 
     // Thread-safe queues
-    incoming_mutex: std.Thread.Mutex = .{},
+    incoming_mutex: std.Io.Mutex = std.Io.Mutex.init,
     incoming: std.ArrayList(IncomingMessage) = .empty,
-    outgoing_mutex: std.Thread.Mutex = .{},
+    outgoing_mutex: std.Io.Mutex = std.Io.Mutex.init,
     outgoing: std.ArrayList(OutgoingMessage) = .empty,
 
     // Connected clients (accessed from listener + client threads)
-    clients_mutex: std.Thread.Mutex = .{},
+    clients_mutex: std.Io.Mutex = std.Io.Mutex.init,
     clients: [max_clients]?Client = .{null} ** max_clients,
     next_client_id: u32 = 1,
 
@@ -110,7 +111,7 @@ pub const Server = struct {
     sub_state: subscriptions.SubscriptionState = .{},
 
     // Console log ring buffer
-    console_log_mutex: std.Thread.Mutex = .{},
+    console_log_mutex: std.Io.Mutex = std.Io.Mutex.init,
     console_log_buf: [max_console_log_entries]ConsoleLogEntry = undefined,
     console_log_head: u32 = 0,
     console_log_count: u32 = 0,
@@ -154,14 +155,14 @@ pub const Server = struct {
 
         // Drain queues
         {
-            self.incoming_mutex.lock();
-            defer self.incoming_mutex.unlock();
+            self.incoming_mutex.lockUncancelable(io_globals.global_io);
+            defer self.incoming_mutex.unlock(io_globals.global_io);
             for (self.incoming.items) |*msg| msg.deinit(self.allocator);
             self.incoming.deinit(self.allocator);
         }
         {
-            self.outgoing_mutex.lock();
-            defer self.outgoing_mutex.unlock();
+            self.outgoing_mutex.lockUncancelable(io_globals.global_io);
+            defer self.outgoing_mutex.unlock(io_globals.global_io);
             for (self.outgoing.items) |*msg| msg.deinit(self.allocator);
             self.outgoing.deinit(self.allocator);
         }
@@ -179,8 +180,8 @@ pub const Server = struct {
         var batch: [64]IncomingMessage = undefined;
         var count: u32 = 0;
         {
-            self.incoming_mutex.lock();
-            defer self.incoming_mutex.unlock();
+            self.incoming_mutex.lockUncancelable(io_globals.global_io);
+            defer self.incoming_mutex.unlock(io_globals.global_io);
             const n = @min(self.incoming.items.len, batch.len);
             if (n > 0) {
                 @memcpy(batch[0..n], self.incoming.items[0..n]);
@@ -223,8 +224,8 @@ pub const Server = struct {
 
     /// Enqueue a response or notification for a specific client (or broadcast if client_id=0).
     pub fn enqueueOutgoing(self: *Server, client_id: u32, payload: []u8) void {
-        self.outgoing_mutex.lock();
-        defer self.outgoing_mutex.unlock();
+        self.outgoing_mutex.lockUncancelable(io_globals.global_io);
+        defer self.outgoing_mutex.unlock(io_globals.global_io);
         self.outgoing.append(self.allocator, .{
             .client_id = client_id,
             .payload = payload,
@@ -240,8 +241,8 @@ pub const Server = struct {
 
     /// Push a console log entry into the ring buffer. Thread-safe.
     pub fn pushConsoleLog(self: *Server, level: []const u8, message: []const u8, source: ?[]const u8) void {
-        self.console_log_mutex.lock();
-        defer self.console_log_mutex.unlock();
+        self.console_log_mutex.lockUncancelable(io_globals.global_io);
+        defer self.console_log_mutex.unlock(io_globals.global_io);
         const idx = (self.console_log_head + self.console_log_count) % max_console_log_entries;
         var entry = &self.console_log_buf[idx];
         const llen: u8 = @intCast(@min(level.len, entry.level.len));
@@ -267,8 +268,8 @@ pub const Server = struct {
 
     /// Drain all pending console log entries. Caller must hold no locks.
     pub fn drainConsoleLogs(self: *Server, buf: []ConsoleLogEntry) u32 {
-        self.console_log_mutex.lock();
-        defer self.console_log_mutex.unlock();
+        self.console_log_mutex.lockUncancelable(io_globals.global_io);
+        defer self.console_log_mutex.unlock(io_globals.global_io);
         const n = @min(self.console_log_count, @as(u32, @intCast(buf.len)));
         for (0..n) |i| {
             buf[i] = self.console_log_buf[(self.console_log_head + @as(u32, @intCast(i))) % max_console_log_entries];
@@ -323,36 +324,37 @@ pub const Server = struct {
     }
 
     fn acceptLoop(self: *Server) !void {
-        const address = std.net.Address.initIp4(.{ 127, 0, 0, 1 }, self.port);
-        var listener = try address.listen(.{
+        const io = io_globals.global_io;
+        var address = std.Io.net.IpAddress{ .ip4 = std.Io.net.Ip4Address.loopback(self.port) };
+        var listener = try address.listen(io, .{
             .reuse_address = true,
         });
-        defer listener.deinit();
+        defer listener.deinit(io);
 
         // Print ready message for Electron process to detect
         var stdout_buf: [128]u8 = undefined;
         const msg = std.fmt.bufPrint(&stdout_buf, "Editor RPC server listening on port {d}\n", .{self.port}) catch unreachable;
-        _ = std.posix.write(std.posix.STDOUT_FILENO, msg) catch {};
+        _ = std.Io.File.stdout().writeStreamingAll(io, msg) catch {};
 
         while (!self.shutdown.load(.acquire)) {
             // Non-blocking accept with timeout
-            const conn = listener.accept() catch |err| {
+            const conn = listener.accept(io) catch |err| {
                 if (self.shutdown.load(.acquire)) return;
                 log.warn("Accept error: {s}", .{@errorName(err)});
                 continue;
             };
 
-            self.spawnClientHandler(conn.stream) catch |err| {
+            self.spawnClientHandler(conn) catch |err| {
                 log.warn("Failed to spawn client handler: {s}", .{@errorName(err)});
-                conn.stream.close();
+                conn.close(io);
             };
         }
     }
 
-    fn spawnClientHandler(self: *Server, stream: std.net.Stream) !void {
+    fn spawnClientHandler(self: *Server, stream: std.Io.net.Stream) !void {
         // Find a free client slot
-        self.clients_mutex.lock();
-        defer self.clients_mutex.unlock();
+        self.clients_mutex.lockUncancelable(io_globals.global_io);
+        defer self.clients_mutex.unlock(io_globals.global_io);
 
         for (&self.clients, &self.client_threads) |*client_slot, *thread_slot| {
             if (client_slot.* == null) {
@@ -379,7 +381,7 @@ pub const Server = struct {
         }
 
         log.warn("Max clients reached, rejecting connection", .{});
-        stream.close();
+        stream.close(io_globals.global_io);
     }
 
     fn clientMain(self: *Server, client_id: u32) void {
@@ -413,8 +415,8 @@ pub const Server = struct {
             switch (frame.opcode) {
                 .text => {
                     // Enqueue for main-thread processing
-                    self.incoming_mutex.lock();
-                    defer self.incoming_mutex.unlock();
+                    self.incoming_mutex.lockUncancelable(io_globals.global_io);
+                    defer self.incoming_mutex.unlock(io_globals.global_io);
                     self.incoming.append(self.allocator, .{
                         .client_id = client_id,
                         .payload = @constCast(frame.payload),
@@ -440,9 +442,9 @@ pub const Server = struct {
 
     // ── Client Management ────────────────────────────────────────────
 
-    fn getClientStream(self: *Server, client_id: u32) ?std.net.Stream {
-        self.clients_mutex.lock();
-        defer self.clients_mutex.unlock();
+    fn getClientStream(self: *Server, client_id: u32) ?std.Io.net.Stream {
+        self.clients_mutex.lockUncancelable(io_globals.global_io);
+        defer self.clients_mutex.unlock(io_globals.global_io);
         for (&self.clients) |*slot| {
             if (slot.*) |client| {
                 if (client.id == client_id and client.alive) {
@@ -454,13 +456,13 @@ pub const Server = struct {
     }
 
     fn removeClient(self: *Server, client_id: u32) void {
-        self.clients_mutex.lock();
-        defer self.clients_mutex.unlock();
+        self.clients_mutex.lockUncancelable(io_globals.global_io);
+        defer self.clients_mutex.unlock(io_globals.global_io);
         for (&self.clients) |*slot| {
             if (slot.*) |*client| {
                 if (client.id == client_id) {
                     client.alive = false;
-                    client.stream.close();
+                    client.stream.close(io_globals.global_io);
                     slot.* = null;
                     return;
                 }
@@ -472,8 +474,8 @@ pub const Server = struct {
         var batch_buf: [64]OutgoingMessage = undefined;
         var count: usize = 0;
         {
-            self.outgoing_mutex.lock();
-            defer self.outgoing_mutex.unlock();
+            self.outgoing_mutex.lockUncancelable(io_globals.global_io);
+            defer self.outgoing_mutex.unlock(io_globals.global_io);
             count = @min(self.outgoing.items.len, batch_buf.len);
             if (count > 0) {
                 @memcpy(batch_buf[0..count], self.outgoing.items[0..count]);
@@ -492,11 +494,11 @@ pub const Server = struct {
         if (count == 0) return;
 
         // Snapshot live client handles so we can write outside the mutex.
-        const ClientSnapshot = struct { stream: std.net.Stream, alive: bool, id: u32 };
+        const ClientSnapshot = struct { stream: std.Io.net.Stream, alive: bool, id: u32 };
         var snap_buf: [max_clients]?ClientSnapshot = undefined;
         {
-            self.clients_mutex.lock();
-            defer self.clients_mutex.unlock();
+            self.clients_mutex.lockUncancelable(io_globals.global_io);
+            defer self.clients_mutex.unlock(io_globals.global_io);
             for (&self.clients, 0..) |*slot, i| {
                 if (slot.*) |c| {
                     snap_buf[i] = .{ .stream = c.stream, .alive = c.alive, .id = c.id };

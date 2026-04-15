@@ -3,6 +3,7 @@
 //! 处理命令行参数解析，定义所有可用命令和选项类型。
 
 const std = @import("std");
+const io_globals = @import("io_globals");
 const engine = @import("guava");
 
 pub const McpTransport = enum {
@@ -119,7 +120,7 @@ pub const Command = union(enum) {
 };
 
 pub fn parseCommandAlloc(allocator: std.mem.Allocator) !Command {
-    var args = try std.process.argsWithAllocator(allocator);
+    var args = io_globals.global_args.iterate();
     defer args.deinit();
 
     _ = args.next(); // skip program name

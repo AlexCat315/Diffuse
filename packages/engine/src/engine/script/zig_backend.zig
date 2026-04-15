@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const script_resource_mod = @import("../assets/script_resource.zig");
 const types = @import("./types.zig");
 const context = @import("./context.zig");
@@ -481,7 +482,7 @@ pub const ZigVM = struct {
                     const lib_path = state.library.path;
                     state.library.lib.close();
                     // Delete the copy file (best-effort)
-                    std.fs.cwd().deleteFile(lib_path) catch {};
+                    std.Io.Dir.cwd().deleteFile(io_globals.global_io, lib_path) catch {};
                     vm.allocator.free(lib_path);
                     vm.allocator.destroy(state.library);
                 }
@@ -591,25 +592,12 @@ pub const ZigVM = struct {
         const dst_path_z = vm.allocator.dupeZ(u8, copy_path) catch return error.CompileError;
         defer vm.allocator.free(dst_path_z);
 
-        const src_file = std.fs.cwd().openFile(src_path_z, .{}) catch {
-            setOwnedMessage(vm.allocator, &vm.error_msg, "failed to open template dylib for copy");
+        const io = io_globals.global_io;
+        const cwd = std.Io.Dir.cwd();
+        cwd.copyFile(src_path_z, cwd, dst_path_z, io, .{}) catch {
+            setOwnedMessage(vm.allocator, &vm.error_msg, "failed to copy template dylib");
             return error.CompileError;
         };
-        defer src_file.close();
-
-        const dst_file = std.fs.cwd().createFile(dst_path_z, .{}) catch {
-            setOwnedMessage(vm.allocator, &vm.error_msg, "failed to create instance dylib copy");
-            return error.CompileError;
-        };
-        defer dst_file.close();
-
-        // Stream copy
-        var buf: [8192]u8 = undefined;
-        while (true) {
-            const n = src_file.read(&buf) catch return error.CompileError;
-            if (n == 0) break;
-            dst_file.writeAll(buf[0..n]) catch return error.CompileError;
-        }
 
         // Load the copy as a new dylib (bypass cache — this is a unique path)
         var lib = std.DynLib.open(dst_path_z) catch {
@@ -652,7 +640,7 @@ pub const ZigVM = struct {
         const cache_dir = "zig-cache/guava/scripts";
 
         // 创建缓存目录
-        std.fs.cwd().makePath(cache_dir) catch |err| {
+        std.Io.Dir.cwd().createDirPath(io_globals.global_io, cache_dir) catch |err| {
             log.err("failed to create script cache directory: {s}", .{@errorName(err)});
         };
 
@@ -674,8 +662,7 @@ pub const ZigVM = struct {
 
         log.info("compiling zig dylib: {s} -> {s}", .{ source_path, output_path });
 
-        const result = std.process.Child.run(.{
-            .allocator = std.heap.page_allocator,
+        const result = std.process.run(std.heap.page_allocator, io_globals.global_io, .{
             .argv = &.{
                 "zig",
                 "build-lib",
@@ -687,7 +674,8 @@ pub const ZigVM = struct {
                 "-Mguava=src/engine/script/script_api.zig",
                 emit_arg,
             },
-            .max_output_bytes = 1024 * 1024,
+            .stdout_limit = .limited(1024 * 1024),
+            .stderr_limit = .limited(1024 * 1024),
         }) catch {
             setOwnedMessage(vm.allocator, &vm.error_msg, "failed to execute zig build-lib");
             return error.CompileError;
@@ -696,7 +684,7 @@ pub const ZigVM = struct {
         defer std.heap.page_allocator.free(result.stderr);
 
         const exit_code = switch (result.term) {
-            .Exited => |code| code,
+            .exited => |code| code,
             else => 1,
         };
         if (exit_code != 0) {
@@ -1340,10 +1328,10 @@ fn parseScriptDefinition(source: []const u8) !ScriptDefinition {
 
 fn directivePayload(line: []const u8) ?[]const u8 {
     if (std.mem.startsWith(u8, line, "//!guava")) {
-        return std.mem.trimLeft(u8, line["//!guava".len..], " \t");
+        return std.mem.trimStart(u8, line["//!guava".len..], " \t");
     }
     if (std.mem.startsWith(u8, line, "// guava:")) {
-        return std.mem.trimLeft(u8, line["// guava:".len..], " \t");
+        return std.mem.trimStart(u8, line["// guava:".len..], " \t");
     }
     return null;
 }
@@ -1729,7 +1717,7 @@ fn castInstanceState(comptime T: type, instance: *types.ScriptInstance) ?*T {
 }
 
 fn builtinKindFromTag(tag: u32) BuiltinKind {
-    return std.meta.intToEnum(BuiltinKind, tag) catch .none;
+    return std.enums.fromInt(BuiltinKind, tag) orelse .none;
 }
 
 fn builtinKindForState(comptime T: type) BuiltinKind {

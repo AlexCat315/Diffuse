@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const animation_clip_mod = @import("animation_clip_resource.zig");
 const handles = @import("handles.zig");
 const image_decoder = @import("image_decoder.zig");
@@ -363,7 +364,7 @@ fn importStaticModelAssetInternal(
     }
 
     const cooked_path = try ensureCookedModel(world.allocator, registry, record);
-    const encoded = try std.fs.cwd().readFileAlloc(world.allocator, cooked_path, 128 * 1024 * 1024);
+    const encoded = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, cooked_path, world.allocator, .limited(128 * 1024 * 1024));
     defer world.allocator.free(encoded);
 
     var parsed = try std.json.parseFromSlice(CookedModelFile, world.allocator, encoded, .{
@@ -408,7 +409,7 @@ pub fn validateCookedModelAsset(
     }
 
     const cooked_path = try ensureCookedModel(allocator, registry, record);
-    const encoded = try std.fs.cwd().readFileAlloc(allocator, cooked_path, 128 * 1024 * 1024);
+    const encoded = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, cooked_path, allocator, .limited(128 * 1024 * 1024));
     defer allocator.free(encoded);
 
     var parsed = try std.json.parseFromSlice(CookedModelFile, allocator, encoded, .{
@@ -479,7 +480,7 @@ fn ensureCookedModel(
 ) ![]u8 {
     const cooked_path = record.outputs[0].path;
     const should_recook = recook: {
-        std.fs.cwd().access(cooked_path, .{}) catch |err| switch (err) {
+        std.Io.Dir.cwd().access(io_globals.global_io, cooked_path, .{}) catch |err| switch (err) {
             error.FileNotFound => break :recook true,
             else => return err,
         };
@@ -497,7 +498,7 @@ fn cookModelRecord(
     record: *const registry_mod.AssetRecord,
     cooked_path: []const u8,
 ) !void {
-    const source = try std.fs.cwd().readFileAlloc(allocator, record.source_path, 32 * 1024 * 1024);
+    const source = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, record.source_path, allocator, .limited(32 * 1024 * 1024));
     defer allocator.free(source);
 
     var document_parse = try std.json.parseFromSlice(GltfDocument, allocator, source, .{
@@ -637,7 +638,7 @@ fn cookModelRecord(
     defer freeCookedModelOwned(allocator, &cooked);
 
     if (std.fs.path.dirname(cooked_path)) |directory| {
-        try std.fs.cwd().makePath(directory);
+        try std.Io.Dir.cwd().createDirPath(io_globals.global_io, directory);
     }
 
     // Write mesh binary sidecar: all vertices then all indices packed sequentially
@@ -666,7 +667,7 @@ fn cookModelRecord(
             mesh.indices = &.{};
         }
 
-        try std.fs.cwd().writeFile(.{
+        try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{
             .sub_path = bin_path,
             .data = bin_data.items,
         });
@@ -677,7 +678,7 @@ fn cookModelRecord(
     const encoded = try stringifyAlloc(allocator, cooked);
     defer allocator.free(encoded);
 
-    try std.fs.cwd().writeFile(.{
+    try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{
         .sub_path = cooked_path,
         .data = encoded,
     });
@@ -996,7 +997,7 @@ fn instantiateCookedModel(
 
     // Load mesh binary sidecar if available
     const mesh_bin_data: ?[]const u8 = if (cooked.mesh_bin_path.len > 0)
-        std.fs.cwd().readFileAlloc(world.allocator, cooked.mesh_bin_path, 512 * 1024 * 1024) catch null
+        std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, cooked.mesh_bin_path, world.allocator, .limited(512 * 1024 * 1024)) catch null
     else
         null;
     defer if (mesh_bin_data) |d| world.allocator.free(d);
@@ -1833,7 +1834,7 @@ fn cookedModelIsCurrent(
     record: *const registry_mod.AssetRecord,
     cooked_path: []const u8,
 ) !bool {
-    const encoded = try std.fs.cwd().readFileAlloc(allocator, cooked_path, 128 * 1024 * 1024);
+    const encoded = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, cooked_path, allocator, .limited(128 * 1024 * 1024));
     defer allocator.free(encoded);
 
     var parsed = std.json.parseFromSlice(CookedModelFile, allocator, encoded, .{
@@ -2011,18 +2012,7 @@ fn builtinAssetIdAlloc(allocator: std.mem.Allocator, source_path: []const u8) ![
 }
 
 fn stringifyAlloc(allocator: std.mem.Allocator, value: anytype) ![]u8 {
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
-
-    var writer = output.writer(allocator);
-    var adapter_buffer: [2048]u8 = undefined;
-    var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
-    try std.json.Stringify.value(value, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
-    try writer_adapter.new_interface.flush();
-    if (writer_adapter.err) |err| {
-        return err;
-    }
-    return output.toOwnedSlice(allocator);
+    return try std.json.Stringify.valueAlloc(allocator, value, .{ .whitespace = .indent_2 });
 }
 
 fn cloneStringList(allocator: std.mem.Allocator, values: []const []const u8) ![][]u8 {
@@ -2159,12 +2149,12 @@ test "gltf cooked output is deterministic for identical source graph" {
 
     try temp_dir.dir.makePath("assets/models/guava_showcase");
 
-    const cwd = std.fs.cwd();
-    const gltf_bytes = try cwd.readFileAlloc(std.testing.allocator, "assets/models/guava_showcase/guava_showcase.gltf", 512 * 1024);
+    const cwd = std.Io.Dir.cwd();
+    const gltf_bytes = try cwd.readFileAlloc(io_globals.global_io, "assets/models/guava_showcase/guava_showcase.gltf", std.testing.allocator, .limited(512 * 1024));
     defer std.testing.allocator.free(gltf_bytes);
-    const bin_bytes = try cwd.readFileAlloc(std.testing.allocator, "assets/models/guava_showcase/guava_showcase.bin", 4 * 1024 * 1024);
+    const bin_bytes = try cwd.readFileAlloc(io_globals.global_io, "assets/models/guava_showcase/guava_showcase.bin", std.testing.allocator, .limited(4 * 1024 * 1024));
     defer std.testing.allocator.free(bin_bytes);
-    const png_bytes = try cwd.readFileAlloc(std.testing.allocator, "assets/models/guava_showcase/checker.png", 512 * 1024);
+    const png_bytes = try cwd.readFileAlloc(io_globals.global_io, "assets/models/guava_showcase/checker.png", std.testing.allocator, .limited(512 * 1024));
     defer std.testing.allocator.free(png_bytes);
 
     try temp_dir.dir.writeFile(.{
@@ -2191,12 +2181,12 @@ test "gltf cooked output is deterministic for identical source graph" {
 
     const record = registry.recordByPath("assets/models/guava_showcase/guava_showcase.gltf") orelse return error.AssetNotFound;
     const first_path = try ensureCookedModelAsset(std.testing.allocator, &registry, record.id);
-    const first_bytes = try std.fs.cwd().readFileAlloc(std.testing.allocator, first_path, 8 * 1024 * 1024);
+    const first_bytes = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, first_path, std.testing.allocator, .limited(8 * 1024 * 1024));
     defer std.testing.allocator.free(first_bytes);
 
-    try std.fs.cwd().deleteFile(first_path);
+    try std.Io.Dir.cwd().deleteFile(io_globals.global_io, first_path);
     const second_path = try ensureCookedModelAsset(std.testing.allocator, &registry, record.id);
-    const second_bytes = try std.fs.cwd().readFileAlloc(std.testing.allocator, second_path, 8 * 1024 * 1024);
+    const second_bytes = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, second_path, std.testing.allocator, .limited(8 * 1024 * 1024));
     defer std.testing.allocator.free(second_bytes);
 
     try std.testing.expectEqualStrings(first_path, second_path);
@@ -2240,7 +2230,7 @@ fn importStaticModelInternal(
     create_root_instance: bool,
 ) !ImportReport {
     const allocator = world.allocator;
-    const source = try std.fs.cwd().readFileAlloc(allocator, path, 32 * 1024 * 1024);
+    const source = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, path, allocator, .limited(32 * 1024 * 1024));
     defer allocator.free(source);
 
     var document_parse = try std.json.parseFromSlice(GltfDocument, allocator, source, .{
@@ -2790,7 +2780,7 @@ fn loadBinaryUri(
 
     const resolved_path = try std.fs.path.join(allocator, &.{ base_dir, uri });
     defer allocator.free(resolved_path);
-    return std.fs.cwd().readFileAlloc(allocator, resolved_path, 128 * 1024 * 1024);
+    return std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, resolved_path, allocator, .limited(128 * 1024 * 1024));
 }
 
 fn bufferViewBytes(

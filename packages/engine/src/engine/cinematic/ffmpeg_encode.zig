@@ -2,6 +2,7 @@
 //! a rendered image sequence into a video file (H.264, H.265, or ProRes).
 
 const std = @import("std");
+const io_globals = @import("io_globals");
 
 pub const VideoCodec = enum {
     h264,
@@ -131,37 +132,22 @@ pub fn encode(allocator: std.mem.Allocator, options: EncodeOptions) !EncodeResul
     const argv = try buildFfmpegArgs(allocator, options);
     defer freeFfmpegArgs(allocator, argv);
 
-    var child = std.process.Child.init(argv, allocator);
-    child.stderr_behavior = .Pipe;
-    child.stdout_behavior = .Pipe;
+    const result = try std.process.run(allocator, io_globals.global_io, .{
+        .argv = argv,
+        .stdout_limit = .limited(0),
+        .stderr_limit = .limited(1024 * 1024),
+    });
+    defer allocator.free(result.stdout);
 
-    try child.spawn();
-
-    // Read stderr for diagnostics
-    var stderr_buf = std.ArrayList(u8).empty;
-    defer stderr_buf.deinit(allocator);
-
-    if (child.stderr) |stderr_pipe| {
-        var buf: [4096]u8 = undefined;
-        while (true) {
-            const n = stderr_pipe.read(&buf) catch break;
-            if (n == 0) break;
-            try stderr_buf.appendSlice(allocator, buf[0..n]);
-            // Cap at 64KB to avoid unbounded memory
-            if (stderr_buf.items.len > 64 * 1024) break;
-        }
-    }
-
-    const term = try child.wait();
-    const exit_code: u32 = switch (term) {
-        .Exited => |code| code,
+    const exit_code: u32 = switch (result.term) {
+        .exited => |code| code,
         else => 1,
     };
 
     return .{
         .success = exit_code == 0,
         .exit_code = exit_code,
-        .stderr_output = try stderr_buf.toOwnedSlice(allocator),
+        .stderr_output = result.stderr,
         .allocator = allocator,
     };
 }

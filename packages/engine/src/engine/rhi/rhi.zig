@@ -897,7 +897,7 @@ pub const Device = struct {
     }
 
     fn applyExplicitBarrier(self: *const Device, barrier: command_buffer.PipelineBarrierCmd) Error!void {
-        const resource_kind = std.meta.intToEnum(ResourceKind, barrier.resource_kind) catch return error.SubmitFailed;
+        const resource_kind = std.enums.fromInt(ResourceKind, barrier.resource_kind) orelse return error.SubmitFailed;
         const resource = ResourceRef{
             .kind = resource_kind,
             .id = barrier.resource_id,
@@ -906,7 +906,7 @@ pub const Device = struct {
         };
         const src_queue: QueueClass = @enumFromInt(@as(u8, barrier.src_queue));
         const dst_queue: QueueClass = @enumFromInt(@as(u8, barrier.dst_queue));
-        const sync_action = std.meta.intToEnum(BarrierSyncAction, barrier.sync_action) catch return error.SubmitFailed;
+        const sync_action = std.enums.fromInt(BarrierSyncAction, barrier.sync_action) orelse return error.SubmitFailed;
         switch (sync_action) {
             .full => {
                 try self.submission_tracking.state_tracker.setCurrentState(resource, ResourceStates.fromBits(barrier.dst_state_bits));
@@ -959,7 +959,7 @@ pub const Device = struct {
         const sync_action = try decodeBarrierSyncAction(barrier.sync_action);
         const src_queue: QueueClass = @enumFromInt(@as(u8, barrier.src_queue));
         const dst_queue: QueueClass = @enumFromInt(@as(u8, barrier.dst_queue));
-        const resource_kind = std.meta.intToEnum(ResourceKind, barrier.resource_kind) catch return error.SubmitFailed;
+        const resource_kind = std.enums.fromInt(ResourceKind, barrier.resource_kind) orelse return error.SubmitFailed;
         const resource = ResourceRef{
             .kind = resource_kind,
             .id = barrier.resource_id,
@@ -1237,7 +1237,7 @@ fn passBlockEndOpcode(pass_kind: PassBlockKind) command_buffer.OpCode {
 }
 
 fn decodeBarrierPassScope(raw_scope: u8) Error!BarrierPassScope {
-    return std.meta.intToEnum(BarrierPassScope, raw_scope) catch error.SubmitFailed;
+    return std.enums.fromInt(BarrierPassScope, raw_scope) orelse return error.SubmitFailed;
 }
 
 fn deriveBarrierSyncAction(src_queue: QueueClass, dst_queue: QueueClass) BarrierSyncAction {
@@ -1248,7 +1248,7 @@ fn deriveBarrierSyncAction(src_queue: QueueClass, dst_queue: QueueClass) Barrier
 }
 
 fn decodeBarrierSyncAction(raw_action: u8) Error!BarrierSyncAction {
-    return std.meta.intToEnum(BarrierSyncAction, raw_action) catch error.SubmitFailed;
+    return std.enums.fromInt(BarrierSyncAction, raw_action) orelse return error.SubmitFailed;
 }
 
 fn queueClassIndex(queue_class: QueueClass) usize {

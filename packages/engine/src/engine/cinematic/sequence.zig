@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const track_mod = @import("track.zig");
 
 pub const Track = track_mod.Track;
@@ -135,7 +136,7 @@ pub fn loadFromJson(allocator: std.mem.Allocator, source: []const u8) !Sequence 
 }
 
 pub fn loadFromPath(allocator: std.mem.Allocator, path: []const u8) !Sequence {
-    const source = try std.fs.cwd().readFileAlloc(allocator, path, 64 * 1024 * 1024);
+    const source = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, path, allocator, .limited(64 * 1024 * 1024));
     defer allocator.free(source);
     return loadFromJson(allocator, source);
 }
@@ -259,10 +260,10 @@ fn easingName(e: EasingMode) []const u8 {
 
 /// Serialize the sequence to JSON-format bytes (caller owns the returned slice).
 pub fn saveToJsonAlloc(seq: *const Sequence, allocator: std.mem.Allocator) ![]u8 {
-    var buf = std.ArrayListUnmanaged(u8).empty;
-    errdefer buf.deinit(allocator);
+    var writer: std.Io.Writer.Allocating = .init(allocator);
+    errdefer writer.deinit();
 
-    var w = buf.writer(allocator);
+    const w = &writer.writer;
 
     try w.writeAll("{\n");
     try w.print("  \"version\": {d},\n", .{current_sequence_version});
@@ -272,13 +273,13 @@ pub fn saveToJsonAlloc(seq: *const Sequence, allocator: std.mem.Allocator) ![]u8
     try w.writeAll("  \"tracks\": [\n");
 
     for (seq.tracks.items, 0..) |t, ti| {
-        try writeTrackJson(&w, allocator, t);
+        try writeTrackJson(w, allocator, t);
         if (ti + 1 < seq.tracks.items.len) try w.writeAll(",");
         try w.writeAll("\n");
     }
 
     try w.writeAll("  ]\n}\n");
-    return buf.toOwnedSlice(allocator);
+    return writer.toOwnedSlice();
 }
 
 fn writeTrackJson(w: anytype, _: std.mem.Allocator, t: Track) !void {
@@ -344,7 +345,7 @@ fn writeTrackJson(w: anytype, _: std.mem.Allocator, t: Track) !void {
 pub fn saveToPath(seq: *const Sequence, allocator: std.mem.Allocator, path: []const u8) !void {
     const data = try saveToJsonAlloc(seq, allocator);
     defer allocator.free(data);
-    try std.fs.cwd().writeFile(.{ .sub_path = path, .data = data });
+    try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{ .sub_path = path, .data = data });
 }
 
 // ---------------------------------------------------------------------------

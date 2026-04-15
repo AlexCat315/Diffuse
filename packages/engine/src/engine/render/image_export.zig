@@ -1,6 +1,8 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const vec3 = @import("../math/vec3.zig");
 const render_types = @import("types.zig");
+const c_stb_write = @import("c_stb_image_write");
 
 pub fn sanitizeHdrValue(value: f32) f32 {
     if (!std.math.isFinite(value)) return 0.0;
@@ -346,14 +348,8 @@ pub fn encodePngAlloc(
 ) ![]u8 {
     if (rgba.len < @as(usize, width) * @as(usize, height) * 4) return error.InvalidPngData;
 
-    const c = @cImport({
-        @cDefine("STBI_WRITE_NO_STDIO", "1");
-        @cDefine("STB_IMAGE_WRITE_IMPLEMENTATION", "1");
-        @cInclude("stb_image_write.h");
-    });
-
     var out_len: c_int = 0;
-    const png_data = c.stbi_write_png_to_mem(
+    const png_data = c_stb_write.stbi_write_png_to_mem(
         @constCast(rgba.ptr),
         @intCast(width * 4),
         @intCast(width),
@@ -361,7 +357,7 @@ pub fn encodePngAlloc(
         4,
         &out_len,
     ) orelse return error.PngEncodingFailed;
-    defer c.free(png_data);
+    defer c_stb_write.free(png_data);
 
     const png_slice: []const u8 = @ptrCast(png_data[0..@intCast(out_len)]);
     return allocator.dupe(u8, png_slice);
@@ -369,11 +365,11 @@ pub fn encodePngAlloc(
 
 pub fn writeFileEnsuringParent(out_path: []const u8, bytes: []const u8) !void {
     if (std.fs.path.dirname(out_path)) |directory| {
-        try std.fs.cwd().makePath(directory);
+        try std.Io.Dir.cwd().createDirPath(io_globals.global_io, directory);
     }
-    const file = try std.fs.cwd().createFile(out_path, .{});
-    defer file.close();
-    try file.writeAll(bytes);
+    const file = try std.Io.Dir.cwd().createFile(io_globals.global_io, out_path, .{});
+    defer file.close(io_globals.global_io);
+    try file.writeStreamingAll(io_globals.global_io, bytes);
 }
 
 pub fn allocSidecarPath(allocator: std.mem.Allocator, out_path: []const u8, suffix: []const u8) ![]u8 {

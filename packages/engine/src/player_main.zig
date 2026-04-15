@@ -2,6 +2,7 @@ const std = @import("std");
 const engine = @import("guava");
 const cli = @import("cli.zig");
 const project_mod = @import("project.zig");
+const io_globals = @import("io_globals");
 
 const PlayerBootstrapLayer = struct {
     allocator: std.mem.Allocator,
@@ -27,7 +28,7 @@ const PlayerBootstrapLayer = struct {
     fn onAttach(context: *anyopaque, layer_context: *engine.core.LayerContext) anyerror!void {
         const self: *PlayerBootstrapLayer = @ptrCast(@alignCast(context));
         if (self.start_scene_path) |scene_path| {
-            const source = try std.fs.cwd().readFileAlloc(self.allocator, scene_path, 128 * 1024 * 1024);
+            const source = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, scene_path, self.allocator, .unlimited);
             defer self.allocator.free(source);
             try engine.scene.deserializeWorldFromSlice(self.allocator, layer_context.world, source);
         }
@@ -35,13 +36,13 @@ const PlayerBootstrapLayer = struct {
 };
 
 fn ensureProjectRootAsCwd(allocator: std.mem.Allocator) !void {
-    std.fs.cwd().access("assets", .{}) catch |err| switch (err) {
+    std.Io.Dir.cwd().access(io_globals.global_io, "assets", .{}) catch |err| switch (err) {
         error.FileNotFound => {
             const resolved_root = try resolveProjectRootAlloc(allocator);
             defer if (resolved_root) |root| allocator.free(root);
 
             if (resolved_root) |root| {
-                try std.process.changeCurDir(root);
+                try std.process.setCurrentPath(io_globals.global_io, root);
             }
         },
         else => return err,
@@ -49,13 +50,13 @@ fn ensureProjectRootAsCwd(allocator: std.mem.Allocator) !void {
 }
 
 fn resolveProjectRootAlloc(allocator: std.mem.Allocator) !?[]u8 {
-    const cwd_path = try std.fs.cwd().realpathAlloc(allocator, ".");
+    const cwd_path = try std.Io.Dir.cwd().realPathFileAlloc(io_globals.global_io, ".", allocator);
     defer allocator.free(cwd_path);
     if (try findProjectRootFromAbsoluteAlloc(allocator, cwd_path)) |root| {
         return root;
     }
 
-    const exe_dir = try std.fs.selfExeDirPathAlloc(allocator);
+    const exe_dir = try std.process.executableDirPathAlloc(io_globals.global_io, allocator);
     defer allocator.free(exe_dir);
 
     // macOS .app bundle: exe is at Contents/MacOS/, resources at Contents/Resources/
@@ -65,8 +66,8 @@ fn resolveProjectRootAlloc(allocator: std.mem.Allocator) !?[]u8 {
         defer allocator.free(resources_path);
         const resources_assets = try std.fs.path.join(allocator, &.{ resources_path, "assets" });
         defer allocator.free(resources_assets);
-        if (std.fs.accessAbsolute(resources_assets, .{})) |_| {
-            return try std.fs.cwd().realpathAlloc(allocator, resources_path);
+        if (std.Io.Dir.cwd().access(io_globals.global_io, resources_assets, .{})) |_| {
+            return try std.Io.Dir.cwd().realPathFileAlloc(io_globals.global_io, resources_path, allocator);
         } else |_| {}
     }
 
@@ -81,7 +82,7 @@ fn findProjectRootFromAbsoluteAlloc(allocator: std.mem.Allocator, start_path: []
         const assets_path = try std.fs.path.join(allocator, &.{ current, "assets" });
         defer allocator.free(assets_path);
 
-        if (std.fs.accessAbsolute(assets_path, .{})) |_| {
+        if (std.Io.Dir.cwd().access(io_globals.global_io, assets_path, .{})) |_| {
             return current;
         } else |err| switch (err) {
             error.FileNotFound => {},
@@ -115,11 +116,10 @@ const LoadedProject = struct {
 
 fn loadConfiguredProjectAlloc(allocator: std.mem.Allocator, options: cli.CliOptions) !?LoadedProject {
     const raw_project_path = options.project_path orelse blk: {
-        // Auto-discover project from .guava marker in CWD
-        std.fs.cwd().access(project_mod.marker_file_name, .{}) catch return null;
+        std.Io.Dir.cwd().access(io_globals.global_io, project_mod.marker_file_name, .{}) catch return null;
         break :blk ".";
     };
-    const resolved_root = try std.fs.cwd().realpathAlloc(allocator, raw_project_path);
+    const resolved_root = try std.Io.Dir.cwd().realPathFileAlloc(io_globals.global_io, raw_project_path, allocator);
     errdefer allocator.free(resolved_root);
 
     var project_file = try project_mod.loadAlloc(allocator, resolved_root);
@@ -153,17 +153,9 @@ fn resolveStartScenePathAlloc(
     return try std.fmt.allocPrint(allocator, "{s}/{s}", .{ project_root, scene_path });
 }
 
-pub fn main() !u8 {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-
-    defer {
-        const leaked = gpa.deinit();
-        if (leaked == .leak) {
-            std.debug.print("程序将以错误码 1 退出。\n", .{});
-            std.process.exit(1);
-        }
-    }
+pub fn main(init: std.process.Init) !u8 {
+    io_globals.init(init.io, init.minimal.args);
+    const allocator = init.gpa;
 
     try ensureProjectRootAsCwd(allocator);
 

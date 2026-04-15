@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const rhi_mod = @import("../rhi/device.zig");
 const mesh_pass_mod = @import("passes/mesh_pass.zig");
 const graph_mod = @import("render_graph.zig");
@@ -17,14 +18,14 @@ pub fn executePass(
     drawFn: *const fn (*rhi_mod.RhiDevice, rhi_mod.Frame, rhi_mod.RenderPass) mesh_pass_mod.DrawStats,
 ) !void {
     const render_pass = try rhi.beginRenderPassWithDesc(frame, desc);
-    const start = std.time.nanoTimestamp();
+    const start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
     const stats = drawFn(rhi, frame, render_pass);
-    graph.recordPassStat(pass_stats, pass_id, durationNs(start, std.time.nanoTimestamp()), stats.draw_calls, stats.triangles_drawn);
+    graph.recordPassStat(pass_stats, pass_id, durationNs(start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), stats.draw_calls, stats.triangles_drawn);
     draw_stats.add(stats);
     rhi.endRenderPass(render_pass);
 }
 
-fn durationNs(start: i128, end: i128) u64 {
+fn durationNs(start: i96, end: i96) u64 {
     return @intCast(@max(0, end - start));
 }
 

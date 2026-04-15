@@ -261,11 +261,11 @@ fn rasterizeTriangle(
 fn writePpmAlloc(allocator: std.mem.Allocator, pixels: []const [3]u8, width: usize, height: usize) ![]u8 {
     var output = std.ArrayList(u8).empty;
     defer output.deinit(allocator);
-    try output.writer(allocator).print("P3\n{d} {d}\n255\n", .{ width, height });
+    try output.print(allocator, "P3\n{d} {d}\n255\n", .{ width, height });
     for (pixels, 0..) |pixel, index| {
-        try output.writer(allocator).print("{d} {d} {d}", .{ pixel[0], pixel[1], pixel[2] });
+        try output.print(allocator, "{d} {d} {d}", .{ pixel[0], pixel[1], pixel[2] });
         if (index + 1 < pixels.len) {
-            try output.writer(allocator).writeByte('\n');
+            try output.append(allocator, '\n');
         }
     }
     return output.toOwnedSlice(allocator);

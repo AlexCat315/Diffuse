@@ -7,19 +7,19 @@ const input_mod = @import("../../core/input.zig");
 
 pub fn guavaHostIsKeyDown(userdata: ?*anyopaque, key_raw: u32) callconv(.c) u32 {
     const ctx = mod.activeContext(userdata) orelse return 0;
-    const key = std.meta.intToEnum(input_mod.Key, @as(u8, @intCast(key_raw))) catch return 0;
+    const key = std.enums.fromInt(input_mod.Key, @as(u8, @intCast(key_raw))) orelse return 0;
     return if (ctx.isKeyDown(key)) 1 else 0;
 }
 
 pub fn guavaHostWasKeyPressed(userdata: ?*anyopaque, key_raw: u32) callconv(.c) u32 {
     const ctx = mod.activeContext(userdata) orelse return 0;
-    const key = std.meta.intToEnum(input_mod.Key, @as(u8, @intCast(key_raw))) catch return 0;
+    const key = std.enums.fromInt(input_mod.Key, @as(u8, @intCast(key_raw))) orelse return 0;
     return if (ctx.wasKeyPressed(key)) 1 else 0;
 }
 
 pub fn guavaHostWasKeyReleased(userdata: ?*anyopaque, key_raw: u32) callconv(.c) u32 {
     const ctx = mod.activeContext(userdata) orelse return 0;
-    const key = std.meta.intToEnum(input_mod.Key, @as(u8, @intCast(key_raw))) catch return 0;
+    const key = std.enums.fromInt(input_mod.Key, @as(u8, @intCast(key_raw))) orelse return 0;
     return if (ctx.wasKeyReleased(key)) 1 else 0;
 }
 
@@ -27,7 +27,7 @@ pub fn guavaHostWasKeyReleased(userdata: ?*anyopaque, key_raw: u32) callconv(.c)
 
 pub fn guavaHostIsMouseButtonDown(userdata: ?*anyopaque, btn_raw: u32) callconv(.c) u32 {
     const ctx = mod.activeContext(userdata) orelse return 0;
-    const button = std.meta.intToEnum(input_mod.MouseButton, @as(u2, @intCast(btn_raw))) catch return 0;
+    const button = std.enums.fromInt(input_mod.MouseButton, @as(u2, @intCast(btn_raw))) orelse return 0;
     return if (ctx.isMouseButtonDown(button)) 1 else 0;
 }
 
@@ -63,21 +63,21 @@ pub fn guavaHostIsGamepadConnected(userdata: ?*anyopaque) callconv(.c) u32 {
 pub fn guavaHostIsGamepadButtonDown(userdata: ?*anyopaque, button: u32) callconv(.c) u32 {
     const ctx = mod.activeContext(userdata) orelse return 0;
     const input_state = ctx.input orelse return 0;
-    const btn = std.meta.intToEnum(input_mod.GamepadButton, @as(u8, @intCast(button))) catch return 0;
+    const btn = std.enums.fromInt(input_mod.GamepadButton, @as(u8, @intCast(button))) orelse return 0;
     return if (input_state.isGamepadButtonDown(btn)) @as(u32, 1) else @as(u32, 0);
 }
 
 pub fn guavaHostWasGamepadButtonPressed(userdata: ?*anyopaque, button: u32) callconv(.c) u32 {
     const ctx = mod.activeContext(userdata) orelse return 0;
     const input_state = ctx.input orelse return 0;
-    const btn = std.meta.intToEnum(input_mod.GamepadButton, @as(u8, @intCast(button))) catch return 0;
+    const btn = std.enums.fromInt(input_mod.GamepadButton, @as(u8, @intCast(button))) orelse return 0;
     return if (input_state.wasGamepadButtonPressed(btn)) @as(u32, 1) else @as(u32, 0);
 }
 
 pub fn guavaHostGetGamepadAxis(userdata: ?*anyopaque, axis: u32) callconv(.c) f32 {
     const ctx = mod.activeContext(userdata) orelse return 0.0;
     const input_state = ctx.input orelse return 0.0;
-    const ax = std.meta.intToEnum(input_mod.GamepadAxis, @as(u8, @intCast(axis))) catch return 0.0;
+    const ax = std.enums.fromInt(input_mod.GamepadAxis, @as(u8, @intCast(axis))) orelse return 0.0;
     return input_state.getGamepadAxis(ax);
 }
 
@@ -85,19 +85,19 @@ pub fn guavaHostGetGamepadAxis(userdata: ?*anyopaque, axis: u32) callconv(.c) f3
 
 pub fn guavaHostWasMouseButtonPressed(userdata: ?*anyopaque, btn_raw: u32) callconv(.c) u32 {
     const ctx = mod.activeContext(userdata) orelse return 0;
-    const button = std.meta.intToEnum(input_mod.MouseButton, @as(u2, @intCast(btn_raw))) catch return 0;
+    const button = std.enums.fromInt(input_mod.MouseButton, @as(u2, @intCast(btn_raw))) orelse return 0;
     return if (ctx.wasMouseButtonPressed(button)) @as(u32, 1) else @as(u32, 0);
 }
 
 pub fn guavaHostWasMouseButtonReleased(userdata: ?*anyopaque, btn_raw: u32) callconv(.c) u32 {
     const ctx = mod.activeContext(userdata) orelse return 0;
-    const button = std.meta.intToEnum(input_mod.MouseButton, @as(u2, @intCast(btn_raw))) catch return 0;
+    const button = std.enums.fromInt(input_mod.MouseButton, @as(u2, @intCast(btn_raw))) orelse return 0;
     return if (ctx.wasMouseButtonReleased(button)) @as(u32, 1) else @as(u32, 0);
 }
 
 pub fn guavaHostWasMouseDoubleClicked(userdata: ?*anyopaque, btn_raw: u32) callconv(.c) u32 {
     const ctx = mod.activeContext(userdata) orelse return 0;
-    const button = std.meta.intToEnum(input_mod.MouseButton, @as(u2, @intCast(btn_raw))) catch return 0;
+    const button = std.enums.fromInt(input_mod.MouseButton, @as(u2, @intCast(btn_raw))) orelse return 0;
     return if (ctx.wasMouseDoubleClicked(button)) @as(u32, 1) else @as(u32, 0);
 }
 

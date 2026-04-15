@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const collaboration_mod = @import("../collaboration.zig");
 const protocol = @import("../protocol.zig");
 const editor_utility_runtime_mod = @import("../../script/editor_utility_runtime.zig");
@@ -67,7 +68,7 @@ pub const SnapshotStore = struct {
     collaboration: ?*const collaboration_mod.Store = null,
     script_runtime: ?*const script_runtime_mod.ScriptRuntime = null,
     editor_utility_runtime: ?*const editor_utility_runtime_mod.EditorUtilityRuntime = null,
-    mutex: std.Thread.Mutex = .{},
+    mutex: std.Io.Mutex = std.Io.Mutex.init,
     ready: bool = false,
     entries: std.ArrayList(ResourceEntry) = .empty,
 
@@ -87,16 +88,16 @@ pub const SnapshotStore = struct {
     }
 
     pub fn deinit(self: *SnapshotStore) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         freeEntriesOwned(self.allocator, self.entries.items);
         self.entries.deinit(self.allocator);
     }
 
     pub fn isReady(self: *const SnapshotStore) bool {
         const mutable: *SnapshotStore = @constCast(self);
-        mutable.mutex.lock();
-        defer mutable.mutex.unlock();
+        mutable.mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.mutex.unlock(io_globals.global_io);
         return mutable.ready;
     }
 
@@ -116,8 +117,8 @@ pub const SnapshotStore = struct {
             self.allocator.free(next_entries);
         }
 
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
 
         freeEntriesOwned(self.allocator, self.entries.items);
         self.entries.deinit(self.allocator);
@@ -130,8 +131,8 @@ pub const SnapshotStore = struct {
 
     pub fn listAlloc(self: *const SnapshotStore, allocator: std.mem.Allocator) ![]protocol.ResourceDescriptor {
         const mutable: *SnapshotStore = @constCast(self);
-        mutable.mutex.lock();
-        defer mutable.mutex.unlock();
+        mutable.mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.mutex.unlock(io_globals.global_io);
 
         var resources = std.ArrayList(protocol.ResourceDescriptor).empty;
         errdefer {
@@ -215,8 +216,8 @@ pub const SnapshotStore = struct {
 
     pub fn readAlloc(self: *const SnapshotStore, allocator: std.mem.Allocator, uri: []const u8) !?protocol.TextResourceContents {
         const mutable: *SnapshotStore = @constCast(self);
-        mutable.mutex.lock();
-        defer mutable.mutex.unlock();
+        mutable.mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.mutex.unlock(io_globals.global_io);
 
         for (mutable.entries.items) |entry| {
             if (!std.mem.eql(u8, entry.uri, uri)) {
@@ -294,13 +295,13 @@ pub const SnapshotStore = struct {
                 .music_playing = 0,
                 .sfx_playing = 0,
             };
-            var out: std.io.Writer.Allocating = .init(allocator);
+            var out: std.Io.Writer.Allocating = .init(allocator);
             defer out.deinit();
             try std.json.Stringify.value(status, .{}, &out.writer);
             return .{
                 .uri = try allocator.dupe(u8, "audio://mixer-status"),
                 .mimeType = try allocator.dupe(u8, "application/json"),
-                .text = try allocator.dupe(u8, out.written()),
+                .text = try out.toOwnedSlice(),
             };
         }
 
@@ -1254,15 +1255,7 @@ fn optionalHandleValue(handle: anytype) ?u32 {
 }
 
 fn stringifyAlloc(allocator: std.mem.Allocator, value: anytype) ![]u8 {
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
-
-    var writer = output.writer(allocator);
-    var adapter_buffer: [4096]u8 = undefined;
-    var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
-    try std.json.Stringify.value(value, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
-    try writer_adapter.new_interface.flush();
-    return try output.toOwnedSlice(allocator);
+    return try std.json.Stringify.valueAlloc(allocator, value, .{ .whitespace = .indent_2 });
 }
 
 test "SnapshotStore publishes read-only hierarchy, selection, and entity snapshots" {
