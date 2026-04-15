@@ -150,45 +150,41 @@ pub fn checkAndBroadcast(server: *Server, layer_context: *core.LayerContext) !vo
     const log_count = server.drainConsoleLogs(&log_buf);
     if (log_count > 0) {
         // Build batched notification: {"jsonrpc":"2.0","method":"on:console.logs","params":{"entries":[...]}}
-        var batch_buf_arr = std.ArrayList(u8).empty;
-        defer batch_buf_arr.deinit(server.allocator);
+        var batch_writer: std.Io.Writer.Allocating = .init(server.allocator);
+        errdefer batch_writer.deinit();
         {
-            var w = batch_buf_arr.writer(server.allocator);
-            var tmp: [4096]u8 = undefined;
-            var adapter = w.adaptToNewApi(&tmp);
-            try adapter.new_interface.writeAll("{\"jsonrpc\":\"2.0\",\"method\":\"on:console.logs\",\"params\":{\"entries\":[");
+            const w = &batch_writer.writer;
+            try w.writeAll("{\"jsonrpc\":\"2.0\",\"method\":\"on:console.logs\",\"params\":{\"entries\":[");
             for (log_buf[0..log_count], 0..) |entry, i| {
-                if (i > 0) try adapter.new_interface.writeAll(",");
-                try adapter.new_interface.writeAll("{\"level\":\"");
-                try adapter.new_interface.writeAll(entry.level[0..entry.level_len]);
-                try adapter.new_interface.writeAll("\",\"message\":\"");
+                if (i > 0) try w.writeAll(",");
+                try w.writeAll("{\"level\":\"");
+                try w.writeAll(entry.level[0..entry.level_len]);
+                try w.writeAll("\",\"message\":\"");
                 // Escape JSON special chars in message
                 for (entry.message[0..entry.message_len]) |ch| {
                     switch (ch) {
-                        '"' => try adapter.new_interface.writeAll("\\\""),
-                        '\\' => try adapter.new_interface.writeAll("\\\\"),
-                        '\n' => try adapter.new_interface.writeAll("\\n"),
-                        '\r' => try adapter.new_interface.writeAll("\\r"),
-                        '\t' => try adapter.new_interface.writeAll("\\t"),
+                        '"' => try w.writeAll("\\\""),
+                        '\\' => try w.writeAll("\\\\"),
+                        '\n' => try w.writeAll("\\n"),
+                        '\r' => try w.writeAll("\\r"),
+                        '\t' => try w.writeAll("\\t"),
                         else => {
                             const byte: [1]u8 = .{ch};
-                            try adapter.new_interface.writeAll(&byte);
+                            try w.writeAll(&byte);
                         },
                     }
                 }
-                try adapter.new_interface.writeAll("\"");
+                try w.writeAll("\"");
                 if (entry.source_len > 0) {
-                    try adapter.new_interface.writeAll(",\"source\":\"");
-                    try adapter.new_interface.writeAll(entry.source[0..entry.source_len]);
-                    try adapter.new_interface.writeAll("\"");
+                    try w.writeAll(",\"source\":\"");
+                    try w.writeAll(entry.source[0..entry.source_len]);
+                    try w.writeAll("\"");
                 }
-                try adapter.new_interface.writeAll("}");
+                try w.writeAll("}");
             }
-            try adapter.new_interface.writeAll("]}}");
-            try adapter.new_interface.flush();
-            if (adapter.err) |err| return err;
+            try w.writeAll("]}}");
         }
-        const owned = try batch_buf_arr.toOwnedSlice(server.allocator);
+        const owned = try batch_writer.toOwnedSlice();
         server.broadcast(owned);
     }
 
@@ -239,33 +235,11 @@ fn computeSelectionHash(primary: ?u64, multi: []const u64) u64 {
 }
 
 fn buildNotification(allocator: std.mem.Allocator, method: []const u8, params: anytype) ![]u8 {
-    // First serialize params
-    var params_buf = std.ArrayList(u8).empty;
-    defer params_buf.deinit(allocator);
-    {
-        var pw = params_buf.writer(allocator);
-        var ptmp: [4096]u8 = undefined;
-        var padapter = pw.adaptToNewApi(&ptmp);
-        try std.json.Stringify.value(params, .{}, &padapter.new_interface);
-        try padapter.new_interface.flush();
-        if (padapter.err) |err| return err;
-    }
+    const params_json = try std.json.Stringify.valueAlloc(allocator, params, .{});
+    defer allocator.free(params_json);
 
-    // Build the full notification JSON
-    var buf = std.ArrayList(u8).empty;
-    defer buf.deinit(allocator);
-    {
-        var w = buf.writer(allocator);
-        var tmp: [256]u8 = undefined;
-        var adapter = w.adaptToNewApi(&tmp);
-        try adapter.new_interface.writeAll("{\"jsonrpc\":\"2.0\",\"method\":\"");
-        try adapter.new_interface.writeAll(method);
-        try adapter.new_interface.writeAll("\",\"params\":");
-        try adapter.new_interface.writeAll(params_buf.items);
-        try adapter.new_interface.writeAll("}");
-        try adapter.new_interface.flush();
-        if (adapter.err) |err| return err;
-    }
-
-    return try buf.toOwnedSlice(allocator);
+    return try std.fmt.allocPrint(allocator, "{{\"jsonrpc\":\"2.0\",\"method\":\"{s}\",\"params\":{s}}}", .{
+        method,
+        params_json,
+    });
 }

@@ -5,6 +5,7 @@
 const std = @import("std");
 const engine = @import("guava");
 const cli = @import("cli.zig");
+const io_globals = @import("io_globals");
 
 fn buildRenderTestExportSuffix(allocator: std.mem.Allocator, options: cli.RenderTestOptions) ![]u8 {
     const base_suffix = try options.goldenSuffix(allocator);
@@ -14,7 +15,7 @@ fn buildRenderTestExportSuffix(allocator: std.mem.Allocator, options: cli.Render
     defer suffix.deinit(allocator);
     try suffix.appendSlice(allocator, base_suffix);
     if (options.path_trace and options.path_trace_samples != 4) {
-        try std.fmt.format(suffix.writer(allocator), "_pts{d}", .{options.path_trace_samples});
+        try suffix.print(allocator, "_pts{d}", .{options.path_trace_samples});
     }
     return suffix.toOwnedSlice(allocator);
 }
@@ -52,15 +53,15 @@ pub fn runBenchmark(allocator: std.mem.Allocator, scene_path: []const u8, update
     const scene_basename = std.fs.path.basename(scene_path);
     const scene_name = if (std.mem.lastIndexOfScalar(u8, scene_basename, '.')) |idx| scene_basename[0..idx] else scene_basename;
 
-    try std.fs.cwd().makePath("assets/benchmarks/golden");
+    try std.Io.Dir.cwd().createDirPath(io_globals.global_io, "assets/benchmarks/golden");
     const golden_path = try std.fmt.allocPrint(allocator, "assets/benchmarks/golden/{s}.ppm", .{scene_name});
     defer allocator.free(golden_path);
 
     if (update_golden) {
-        try std.fs.cwd().writeFile(.{ .sub_path = golden_path, .data = frame_ppm });
+        try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{ .sub_path = golden_path, .data = frame_ppm });
         std.log.info("Golden image updated: {s}", .{golden_path});
     } else {
-        const file_stat = std.fs.cwd().statFile(golden_path) catch |err| {
+        const file_stat = std.Io.Dir.cwd().statFile(io_globals.global_io, golden_path, .{}) catch |err| {
             if (err == error.FileNotFound) {
                 std.log.err("Golden image not found: {s}. Run with --update-golden to create it.", .{golden_path});
                 return err;
@@ -69,7 +70,7 @@ pub fn runBenchmark(allocator: std.mem.Allocator, scene_path: []const u8, update
             return err;
         };
 
-        const golden_ppm = std.fs.cwd().readFileAlloc(allocator, golden_path, file_stat.size) catch |err| {
+        const golden_ppm = std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, golden_path, allocator, .limited(file_stat.size)) catch |err| {
             std.log.err("读取基准文件失败: {s}", .{@errorName(err)});
             return err;
         };
@@ -80,10 +81,10 @@ pub fn runBenchmark(allocator: std.mem.Allocator, scene_path: []const u8, update
         } else {
             std.log.err("Benchmark FAILED: Render output differs from golden image.", .{});
 
-            try std.fs.cwd().makePath("dist/reports/benchmark_diff");
+            try std.Io.Dir.cwd().createDirPath(io_globals.global_io, "dist/reports/benchmark_diff");
             const diff_path = try std.fmt.allocPrint(allocator, "dist/reports/benchmark_diff/{s}_failed.ppm", .{scene_name});
             defer allocator.free(diff_path);
-            try std.fs.cwd().writeFile(.{ .sub_path = diff_path, .data = frame_ppm });
+            try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{ .sub_path = diff_path, .data = frame_ppm });
             std.log.info("Failed frame saved to: {s}", .{diff_path});
 
             return error.BenchmarkValidationFailed;
@@ -119,14 +120,14 @@ pub fn runCompareRender(allocator: std.mem.Allocator, scene_path: []const u8, ou
     const software_ppm = try engine.render.BasePassGolden.renderScenePpmAlloc(allocator, &app.world, width, height);
     defer allocator.free(software_ppm);
 
-    try std.fs.cwd().makePath(output_dir);
+    try std.Io.Dir.cwd().createDirPath(io_globals.global_io, output_dir);
     const gpu_path = try std.fmt.allocPrint(allocator, "{s}/gpu.ppm", .{output_dir});
     defer allocator.free(gpu_path);
     const software_path = try std.fmt.allocPrint(allocator, "{s}/software.ppm", .{output_dir});
     defer allocator.free(software_path);
 
-    try std.fs.cwd().writeFile(.{ .sub_path = gpu_path, .data = gpu_ppm });
-    try std.fs.cwd().writeFile(.{ .sub_path = software_path, .data = software_ppm });
+    try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{ .sub_path = gpu_path, .data = gpu_ppm });
+    try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{ .sub_path = software_path, .data = software_ppm });
 
     std.log.info("Comparison completed. GPU and Software images saved to {s}", .{output_dir});
 }
@@ -170,7 +171,7 @@ pub fn runGenerateBenchmark(allocator: std.mem.Allocator, output_path: []const u
 
 pub fn runValidate(allocator: std.mem.Allocator, options: cli.ValidateOptions) !void {
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writer(io_globals.global_io, &stdout_buffer);
     const stdout = &stdout_writer.interface;
 
     var registry = engine.assets.AssetRegistry.init(allocator);
@@ -200,19 +201,14 @@ pub fn runValidate(allocator: std.mem.Allocator, options: cli.ValidateOptions) !
     }
     try stdout.flush();
 
-    try std.fs.cwd().makePath("dist/reports");
-    const file = try std.fs.cwd().createFile("dist/reports/asset_validation_report.json", .{});
-    defer file.close();
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
+    try std.Io.Dir.cwd().createDirPath(io_globals.global_io, "dist/reports");
+    const file = try std.Io.Dir.cwd().createFile(io_globals.global_io, "dist/reports/asset_validation_report.json", .{});
+    defer file.close(io_globals.global_io);
 
-    var writer = output.writer(allocator);
-    var adapter_buffer: [8192]u8 = undefined;
-    var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
-    try std.json.Stringify.value(report, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
-    try writer_adapter.new_interface.flush();
+    const output = try std.json.Stringify.valueAlloc(allocator, report, .{ .whitespace = .indent_2 });
+    defer allocator.free(output);
 
-    try file.writeAll(output.items);
+    try file.writeStreamingAll(io_globals.global_io, output);
     std.debug.print("✅ 资产验证报告已成功生成: dist/reports/asset_validation_report.json\n", .{});
 
     if (!report.ok()) {
@@ -255,8 +251,7 @@ pub fn runRenderTest(allocator: std.mem.Allocator, options: cli.RenderTestOption
 
     // Build feature label for output
     var feature_buf: [256]u8 = undefined;
-    var feature_fbs = std.io.fixedBufferStream(&feature_buf);
-    const fw = feature_fbs.writer();
+    var fw = std.Io.Writer.fixed(&feature_buf);
     var feature_count: usize = 0;
     if (options.rt_shadows) {
         if (feature_count > 0) fw.writeAll(", ") catch {};
@@ -284,7 +279,7 @@ pub fn runRenderTest(allocator: std.mem.Allocator, options: cli.RenderTestOption
         feature_count += 1;
     }
     if (feature_count == 0) fw.writeAll("baseline") catch {};
-    const feature_label = feature_fbs.getWritten();
+    const feature_label = fw.buffered();
 
     std.debug.print("\n=== Render Test ===\n", .{});
     std.debug.print("Scene: {s}\n", .{options.scene_path});
@@ -369,7 +364,7 @@ pub fn runRenderTest(allocator: std.mem.Allocator, options: cli.RenderTestOption
         const baseline_path = try std.fmt.allocPrint(allocator, "dist/reports/render_test/{s}_baseline.ppm", .{sn});
         defer allocator.free(baseline_path);
 
-        const baseline_ppm = std.fs.cwd().readFileAlloc(allocator, baseline_path, 32 * 1024 * 1024) catch {
+        const baseline_ppm = std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, baseline_path, allocator, .limited(32 * 1024 * 1024)) catch {
             std.debug.print("DELTA [SKIP]: No baseline golden for comparison ({s})\n", .{baseline_path});
             break :delta;
         };
@@ -414,14 +409,14 @@ pub fn runRenderTest(allocator: std.mem.Allocator, options: cli.RenderTestOption
 
     // Export frame image if requested
     if (options.export_png or options.export_exr) {
-        try std.fs.cwd().makePath("dist/reports/render_test");
+        try std.Io.Dir.cwd().createDirPath(io_globals.global_io, "dist/reports/render_test");
         const export_suffix = try buildRenderTestExportSuffix(allocator, options);
         defer allocator.free(export_suffix);
 
         if (options.export_png) {
             const ppm_path = try std.fmt.allocPrint(allocator, "dist/reports/render_test/frame{s}.ppm", .{export_suffix});
             defer allocator.free(ppm_path);
-            try std.fs.cwd().writeFile(.{ .sub_path = ppm_path, .data = frame_ppm });
+            try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{ .sub_path = ppm_path, .data = frame_ppm });
             std.debug.print("Exported frame: {s}\n", .{ppm_path});
         }
 
@@ -439,15 +434,15 @@ pub fn runRenderTest(allocator: std.mem.Allocator, options: cli.RenderTestOption
     const suffix = try options.goldenSuffix(allocator);
     defer allocator.free(suffix);
 
-    try std.fs.cwd().makePath("dist/reports/render_test");
+    try std.Io.Dir.cwd().createDirPath(io_globals.global_io, "dist/reports/render_test");
     const golden_path = try std.fmt.allocPrint(allocator, "dist/reports/render_test/{s}{s}.ppm", .{ scene_name, suffix });
     defer allocator.free(golden_path);
 
     if (options.update_golden) {
-        try std.fs.cwd().writeFile(.{ .sub_path = golden_path, .data = frame_ppm });
+        try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{ .sub_path = golden_path, .data = frame_ppm });
         std.debug.print("\nGolden image saved: {s}\n", .{golden_path});
     } else golden: {
-        const golden_ppm = std.fs.cwd().readFileAlloc(allocator, golden_path, 32 * 1024 * 1024) catch |err| {
+        const golden_ppm = std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, golden_path, allocator, .limited(32 * 1024 * 1024)) catch |err| {
             if (err == error.FileNotFound) {
                 std.debug.print("\nNo golden image found: {s}\n", .{golden_path});
                 std.debug.print("Run with --update-golden to create it.\n", .{});

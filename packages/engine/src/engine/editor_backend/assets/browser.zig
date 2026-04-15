@@ -6,6 +6,7 @@ const state_mod = @import("../core/state.zig");
 const utils = @import("../common/utils.zig");
 const history = @import("../actions/history.zig");
 const asset_preview = @import("preview.zig");
+const io_globals = @import("io_globals");
 
 const AssetKind = state_mod.AssetKind;
 const AssetEntry = state_mod.AssetEntry;
@@ -353,15 +354,15 @@ pub fn refreshAssetBrowser(state: *EditorState, _: *engine.core.LayerContext) !v
 
 /// Scan the actual file system and populate asset_entries with ALL files and directories.
 fn scanFileSystemEntries(state: *EditorState, allocator: std.mem.Allocator, root_path: []const u8) !void {
-    var root_dir = std.fs.cwd().openDir(root_path, .{ .iterate = true }) catch |err| {
+    var root_dir = std.Io.Dir.cwd().openDir(io_globals.global_io, root_path, .{ .iterate = true }) catch |err| {
         if (err == error.FileNotFound) return;
         return err;
     };
-    defer root_dir.close();
+    defer root_dir.close(io_globals.global_io);
 
     var walker = try root_dir.walk(allocator);
     defer walker.deinit();
-    while (try walker.next()) |entry| {
+    while (try walker.next(io_globals.global_io)) |entry| {
         // Skip hidden files, .meta files, and derived/ directory.
         if (std.mem.startsWith(u8, entry.path, ".")) continue;
         if (entry.basename.len > 0 and entry.basename[0] == '.') continue;

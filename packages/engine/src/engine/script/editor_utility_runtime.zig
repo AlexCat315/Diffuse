@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const handles = @import("../assets/handles.zig");
 const script_resource_mod = @import("../assets/script_resource.zig");
 const command_queue_mod = @import("../core/command_queue.zig");
@@ -121,7 +122,7 @@ pub const EditorUtilityRuntime = struct {
     /// 内存分配器，用于所有内部分配
     allocator: std.mem.Allocator,
     /// 线程安全保护锁，保护 utilities 列表的并发访问
-    mutex: std.Thread.Mutex = .{},
+    mutex: std.Io.Mutex = std.Io.Mutex.init,
     /// 已注册的工具条目列表
     utilities: std.ArrayList(UtilityEntry) = .empty,
     /// 请求宿主打开工具窗口的标志（一次性触发器）
@@ -167,7 +168,7 @@ pub const EditorUtilityRuntime = struct {
             // 多线程环境，正常获取锁
             // 使用 tryLock 来避免可能的死锁情况
             if (self.mutex.tryLock()) {
-                defer self.mutex.unlock();
+                defer self.mutex.unlock(io_globals.global_io);
                 for (self.utilities.items) |*entry| {
                     entry.deinit(self.allocator);
                 }
@@ -211,8 +212,8 @@ pub const EditorUtilityRuntime = struct {
         utility_name: []const u8,
         open: bool,
     ) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
 
         // 获取脚本资源，如果不存在则返回错误
         const resource = world.resources.script(handle) orelse return error.ScriptNotFound;
@@ -264,8 +265,8 @@ pub const EditorUtilityRuntime = struct {
     /// 返回:
     ///   如果自上次调用以来有打开请求则返回 true，否则返回 false
     pub fn takeHostOpenRequest(self: *EditorUtilityRuntime) bool {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
 
         const requested = self.request_host_open;
         self.request_host_open = false;
@@ -287,8 +288,8 @@ pub const EditorUtilityRuntime = struct {
         self: *EditorUtilityRuntime,
         handle: handles.ScriptHandle,
     ) bool {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
 
         const index = findIndexByHandle(self.utilities.items, handle) orelse return false;
         var removed = self.utilities.swapRemove(index);
@@ -306,8 +307,8 @@ pub const EditorUtilityRuntime = struct {
     ///   handle: 目标工具的句柄
     ///   open: true 表示打开窗口，false 表示关闭窗口
     pub fn setOpen(self: *EditorUtilityRuntime, handle: handles.ScriptHandle, open: bool) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
 
         const index = findIndexByHandle(self.utilities.items, handle) orelse return;
         self.utilities.items[index].open = open;
@@ -330,8 +331,8 @@ pub const EditorUtilityRuntime = struct {
     pub fn listAlloc(self: *const EditorUtilityRuntime, allocator: std.mem.Allocator) ![]Snapshot {
         // 需要移除 const 以获取锁，但不修改数据
         const mutable: *EditorUtilityRuntime = @constCast(self);
-        mutable.mutex.lock();
-        defer mutable.mutex.unlock();
+        mutable.mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.mutex.unlock(io_globals.global_io);
 
         var snapshots = try allocator.alloc(Snapshot, mutable.utilities.items.len);
         errdefer freeSnapshots(allocator, snapshots);
@@ -373,8 +374,8 @@ pub const EditorUtilityRuntime = struct {
         handle: handles.ScriptHandle,
     ) !?[]u8 {
         const mutable: *EditorUtilityRuntime = @constCast(self);
-        mutable.mutex.lock();
-        defer mutable.mutex.unlock();
+        mutable.mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.mutex.unlock(io_globals.global_io);
 
         const index = findIndexByHandle(mutable.utilities.items, handle) orelse return null;
         return try allocator.dupe(u8, mutable.utilities.items[index].last_error);
@@ -398,7 +399,7 @@ pub const EditorUtilityRuntime = struct {
         const snapshots = try self.listAlloc(allocator);
         defer freeSnapshots(allocator, snapshots);
 
-        var out: std.io.Writer.Allocating = .init(allocator);
+        var out: std.Io.Writer.Allocating = .init(allocator);
         defer out.deinit();
 
         // 使用缩进格式化 JSON，便于阅读
@@ -407,7 +408,7 @@ pub const EditorUtilityRuntime = struct {
             .utilities = snapshots,
         }, .{ .whitespace = .indent_2 }, &out.writer);
         try out.writer.writeByte('\n');
-        return try allocator.dupe(u8, out.written());
+        return out.toOwnedSlice();
     }
 };
 

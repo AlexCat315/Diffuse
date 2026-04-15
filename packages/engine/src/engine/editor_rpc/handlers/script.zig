@@ -1,5 +1,6 @@
 ///! handlers/script.zig — script file browsing and editing.
 const std = @import("std");
+const io_globals = @import("io_globals");
 const ctx_mod = @import("../ctx.zig");
 const Ctx = ctx_mod.Ctx;
 
@@ -17,20 +18,20 @@ pub fn listScripts(ctx: *Ctx) !void {
     }
 
     // Open scripts directory relative to project root (or CWD as fallback).
-    var owned_base: ?std.fs.Dir = if (ctx.project_root) |root|
-        (std.fs.openDirAbsolute(root, .{}) catch null)
+    var owned_base: ?std.Io.Dir = if (ctx.project_root) |root|
+        (std.Io.Dir.openDirAbsolute(io_globals.global_io, root, .{}) catch null)
     else
         null;
-    defer if (owned_base) |*d| d.close();
-    const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+    defer if (owned_base) |*d| d.close(io_globals.global_io);
+    const base_dir: std.Io.Dir = owned_base orelse std.Io.Dir.cwd();
 
-    var dir = base_dir.openDir(scripts_dir, .{ .iterate = true }) catch {
+    var dir = base_dir.openDir(io_globals.global_io, scripts_dir, .{ .iterate = true }) catch {
         try ctx.reply(.{
             .scripts = @as([]const ScriptEntry, &.{}),
         });
         return;
     };
-    defer dir.close();
+    defer dir.close(io_globals.global_io);
 
     try collectScripts(ctx.allocator, dir, scripts_dir, &entries);
 
@@ -41,12 +42,12 @@ pub fn listScripts(ctx: *Ctx) !void {
 
 fn collectScripts(
     allocator: std.mem.Allocator,
-    dir: std.fs.Dir,
+    dir: std.Io.Dir,
     prefix: []const u8,
     out: *std.ArrayList(ScriptEntry),
 ) !void {
     var iter = dir.iterate();
-    while (try iter.next()) |entry| {
+    while (try iter.next(io_globals.global_io)) |entry| {
         if (entry.name.len > 0 and entry.name[0] == '.') continue;
         if (entry.name.len > 0 and entry.name[0] == '_') continue;
 
@@ -54,7 +55,7 @@ fn collectScripts(
         errdefer allocator.free(full_path);
 
         if (entry.kind == .directory) {
-            const sub_dir = dir.openDir(entry.name, .{ .iterate = true }) catch {
+            const sub_dir = dir.openDir(io_globals.global_io, entry.name, .{ .iterate = true }) catch {
                 allocator.free(full_path);
                 continue;
             };
@@ -70,7 +71,7 @@ fn collectScripts(
             continue;
         };
 
-        const stat = dir.statFile(entry.name) catch {
+        const stat = dir.statFile(io_globals.global_io, entry.name, .{}) catch {
             allocator.free(full_path);
             continue;
         };
@@ -106,19 +107,14 @@ pub fn getContent(ctx: *Ctx) !void {
     if (rel_path.len > 0 and rel_path[0] == '/') return error.InvalidArguments;
     if (std.mem.indexOf(u8, rel_path, "..") != null) return error.InvalidArguments;
 
-    var owned_base: ?std.fs.Dir = if (ctx.project_root) |root|
-        (std.fs.openDirAbsolute(root, .{}) catch null)
+    var owned_base: ?std.Io.Dir = if (ctx.project_root) |root|
+        (std.Io.Dir.openDirAbsolute(io_globals.global_io, root, .{}) catch null)
     else
         null;
-    defer if (owned_base) |*d| d.close();
-    const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+    defer if (owned_base) |*d| d.close(io_globals.global_io);
+    const base_dir: std.Io.Dir = owned_base orelse std.Io.Dir.cwd();
 
-    const file = base_dir.openFile(rel_path, .{}) catch {
-        return error.InvalidArguments;
-    };
-    defer file.close();
-
-    const content = file.readToEndAlloc(ctx.allocator, 10 * 1024 * 1024) catch {
+    const content = base_dir.readFileAlloc(io_globals.global_io, rel_path, ctx.allocator, .limited(10 * 1024 * 1024)) catch {
         return error.InvalidArguments;
     };
 
@@ -142,20 +138,20 @@ pub fn saveContent(ctx: *Ctx) !void {
     // Only allow writing to the configured scripts directory
     if (!std.mem.startsWith(u8, rel_path, ctx.scripts_dir)) return error.InvalidArguments;
 
-    var owned_base: ?std.fs.Dir = if (ctx.project_root) |root|
-        (std.fs.openDirAbsolute(root, .{}) catch null)
+    var owned_base: ?std.Io.Dir = if (ctx.project_root) |root|
+        (std.Io.Dir.openDirAbsolute(io_globals.global_io, root, .{}) catch null)
     else
         null;
-    defer if (owned_base) |*d| d.close();
-    const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+    defer if (owned_base) |*d| d.close(io_globals.global_io);
+    const base_dir: std.Io.Dir = owned_base orelse std.Io.Dir.cwd();
 
-    const file = base_dir.createFile(rel_path, .{}) catch {
+    const file = base_dir.createFile(io_globals.global_io, rel_path, .{}) catch {
         try ctx.reply(.{ .success = false });
         return;
     };
-    defer file.close();
+    defer file.close(io_globals.global_io);
 
-    file.writeAll(content) catch {
+    file.writeStreamingAll(io_globals.global_io, content) catch {
         try ctx.reply(.{ .success = false });
         return;
     };

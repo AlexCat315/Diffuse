@@ -24,9 +24,7 @@
 //! ```
 
 const std = @import("std");
-const c = @cImport({
-    @cInclude("recast_bridge.h");
-});
+const c = @import("c_recast");
 
 // ---------------------------------------------------------------------------
 // NavMesh build parameters

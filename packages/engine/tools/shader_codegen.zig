@@ -38,20 +38,22 @@ const Stage = enum {
     compute,
 };
 
-pub fn main() !void {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    defer _ = gpa.deinit();
-    const allocator = gpa.allocator();
+pub fn main(init: std.process.Init) !void {
+    const allocator = init.gpa;
+    const io = init.io;
 
-    const args = try std.process.argsAlloc(allocator);
-    defer std.process.argsFree(allocator, args);
-
-    if (args.len != 3) {
+    var args_iter = init.minimal.args.iterate();
+    _ = args_iter.next(); // skip program name
+    const manifest_path = args_iter.next() orelse {
         std.log.err("usage: shader_codegen <manifest.json> <output.zig>", .{});
         return error.InvalidArguments;
-    }
+    };
+    const output_arg = args_iter.next() orelse {
+        std.log.err("usage: shader_codegen <manifest.json> <output.zig>", .{});
+        return error.InvalidArguments;
+    };
 
-    const manifest_source = try std.fs.cwd().readFileAlloc(allocator, args[1], 1024 * 1024);
+    const manifest_source = try std.Io.Dir.cwd().readFileAlloc(io, manifest_path, allocator, .unlimited);
     defer allocator.free(manifest_source);
 
     var manifest_parse = try std.json.parseFromSlice(Manifest, allocator, manifest_source, .{
@@ -59,17 +61,18 @@ pub fn main() !void {
     });
     defer manifest_parse.deinit();
 
-    try generateShaderModule(allocator, manifest_parse.value, args[2]);
+    try generateShaderModule(allocator, io, manifest_parse.value, output_arg);
 }
 
 fn generateShaderModule(
     allocator: std.mem.Allocator,
+    io: std.Io,
     manifest: Manifest,
     output_path: []const u8,
 ) !void {
-    var out = std.ArrayList(u8).empty;
-    defer out.deinit(allocator);
-    var writer = out.writer(allocator);
+    var aw: std.Io.Writer.Allocating = .init(allocator);
+    defer aw.deinit();
+    const writer = &aw.writer;
 
     try writer.writeAll(
         \\const std = @import("std");
@@ -140,7 +143,7 @@ fn generateShaderModule(
         const identifier = try sanitizeIdentifier(allocator, program.name);
         defer allocator.free(identifier);
 
-        const vertex_stage = try compileStage(allocator, identifier, program, .vertex);
+        const vertex_stage = try compileStage(allocator, io, identifier, program, .vertex);
         defer {
             allocator.free(vertex_stage.spirv_bytes);
             allocator.free(vertex_stage.msl_bytes);
@@ -153,14 +156,14 @@ fn generateShaderModule(
         };
 
         if (program.fragment) |_| {
-            fragment_stage = try compileStage(allocator, identifier, program, .fragment);
+            fragment_stage = try compileStage(allocator, io, identifier, program, .fragment);
         }
 
-        try emitByteArray(&writer, identifier, "vertex_spirv", vertex_stage.spirv_bytes);
-        try emitByteArray(&writer, identifier, "vertex_msl", vertex_stage.msl_bytes);
+        try emitByteArray(writer, identifier, "vertex_spirv", vertex_stage.spirv_bytes);
+        try emitByteArray(writer, identifier, "vertex_msl", vertex_stage.msl_bytes);
         if (fragment_stage) |compiled_stage| {
-            try emitByteArray(&writer, identifier, "fragment_spirv", compiled_stage.spirv_bytes);
-            try emitByteArray(&writer, identifier, "fragment_msl", compiled_stage.msl_bytes);
+            try emitByteArray(writer, identifier, "fragment_spirv", compiled_stage.spirv_bytes);
+            try emitByteArray(writer, identifier, "fragment_msl", compiled_stage.msl_bytes);
         }
 
         const vertex_msl_entry = try std.fmt.allocPrint(allocator, "guava_{s}_vertex_main", .{identifier});
@@ -284,14 +287,14 @@ fn generateShaderModule(
         const identifier = try sanitizeIdentifier(allocator, program.name);
         defer allocator.free(identifier);
 
-        const compute_stage = try compileComputeStage(allocator, identifier, program.compute);
+        const compute_stage = try compileComputeStage(allocator, io, identifier, program.compute);
         defer {
             allocator.free(compute_stage.spirv_bytes);
             allocator.free(compute_stage.msl_bytes);
         }
 
-        try emitByteArray(&writer, identifier, "compute_spirv", compute_stage.spirv_bytes);
-        try emitByteArray(&writer, identifier, "compute_msl", compute_stage.msl_bytes);
+        try emitByteArray(writer, identifier, "compute_spirv", compute_stage.spirv_bytes);
+        try emitByteArray(writer, identifier, "compute_msl", compute_stage.msl_bytes);
 
         const compute_msl_entry = try std.fmt.allocPrint(allocator, "guava_{s}_compute_main", .{identifier});
         defer allocator.free(compute_msl_entry);
@@ -359,17 +362,18 @@ fn generateShaderModule(
     );
 
     if (std.fs.path.dirname(output_path)) |directory| {
-        try std.fs.cwd().makePath(directory);
+        try std.Io.Dir.cwd().createDirPath(io, directory);
     }
 
-    try std.fs.cwd().writeFile(.{
+    try std.Io.Dir.cwd().writeFile(io, .{
         .sub_path = output_path,
-        .data = out.items,
+        .data = aw.written(),
     });
 }
 
 fn compileStage(
     allocator: std.mem.Allocator,
+    io: std.Io,
     identifier: []const u8,
     program: Program,
     stage: Stage,
@@ -393,14 +397,14 @@ fn compileStage(
     const output_basename = try std.fmt.allocPrint(allocator, "{s}.{s}.spv", .{ identifier, stage_name });
     defer allocator.free(output_basename);
 
-    const source_absolute = try std.fs.cwd().realpathAlloc(allocator, source_path);
+    const source_absolute = try std.Io.Dir.cwd().realPathFileAlloc(io, source_path, allocator);
     defer allocator.free(source_absolute);
 
-    try std.fs.cwd().makePath(".zig-cache/shader-gen");
+    try std.Io.Dir.cwd().createDirPath(io, ".zig-cache/shader-gen");
     const spirv_path = try std.fs.path.join(allocator, &.{ ".zig-cache", "shader-gen", output_basename });
     defer allocator.free(spirv_path);
 
-    try runCommand(allocator, &.{
+    try runCommand(allocator, io, &.{
         "glslangValidator",
         "-V",
         source_absolute,
@@ -410,9 +414,9 @@ fn compileStage(
         spirv_path,
     });
 
-    const spirv_bytes = try std.fs.cwd().readFileAlloc(allocator, spirv_path, 4 * 1024 * 1024);
+    const spirv_bytes = try std.Io.Dir.cwd().readFileAlloc(io, spirv_path, allocator, .unlimited);
 
-    const reflection_json = try runCommandCapture(allocator, &.{
+    const reflection_json = try runCommandCapture(allocator, io, &.{
         "spirv-cross",
         spirv_path,
         "--reflect",
@@ -423,7 +427,7 @@ fn compileStage(
     const msl_entry = try std.fmt.allocPrint(allocator, "guava_{s}_{s}_main", .{ identifier, stage_label });
     defer allocator.free(msl_entry);
 
-    const msl_source = try runCommandCapture(allocator, &.{
+    const msl_source = try runCommandCapture(allocator, io, &.{
         "spirv-cross",
         spirv_path,
         "--msl",
@@ -443,20 +447,21 @@ fn compileStage(
 
 fn compileComputeStage(
     allocator: std.mem.Allocator,
+    io: std.Io,
     identifier: []const u8,
     source_path: []const u8,
 ) !CompiledStage {
     const output_basename = try std.fmt.allocPrint(allocator, "{s}.comp.spv", .{identifier});
     defer allocator.free(output_basename);
 
-    const source_absolute = try std.fs.cwd().realpathAlloc(allocator, source_path);
+    const source_absolute = try std.Io.Dir.cwd().realPathFileAlloc(io, source_path, allocator);
     defer allocator.free(source_absolute);
 
-    try std.fs.cwd().makePath(".zig-cache/shader-gen");
+    try std.Io.Dir.cwd().createDirPath(io, ".zig-cache/shader-gen");
     const spirv_path = try std.fs.path.join(allocator, &.{ ".zig-cache", "shader-gen", output_basename });
     defer allocator.free(spirv_path);
 
-    try runCommand(allocator, &.{
+    try runCommand(allocator, io, &.{
         "glslangValidator",
         "-V",
         source_absolute,
@@ -466,9 +471,9 @@ fn compileComputeStage(
         spirv_path,
     });
 
-    const spirv_bytes = try std.fs.cwd().readFileAlloc(allocator, spirv_path, 4 * 1024 * 1024);
+    const spirv_bytes = try std.Io.Dir.cwd().readFileAlloc(io, spirv_path, allocator, .unlimited);
 
-    const reflection_json = try runCommandCapture(allocator, &.{
+    const reflection_json = try runCommandCapture(allocator, io, &.{
         "spirv-cross",
         spirv_path,
         "--reflect",
@@ -479,7 +484,7 @@ fn compileComputeStage(
     const msl_entry = try std.fmt.allocPrint(allocator, "guava_{s}_compute_main", .{identifier});
     defer allocator.free(msl_entry);
 
-    const msl_source = try runCommandCapture(allocator, &.{
+    const msl_source = try runCommandCapture(allocator, io, &.{
         "spirv-cross",
         spirv_path,
         "--msl",
@@ -518,16 +523,15 @@ fn countArrayField(object: std.json.ObjectMap, field_name: []const u8) u32 {
     };
 }
 
-fn runCommand(allocator: std.mem.Allocator, argv: []const []const u8) !void {
-    const result = try std.process.Child.run(.{
-        .allocator = allocator,
+fn runCommand(allocator: std.mem.Allocator, io: std.Io, argv: []const []const u8) !void {
+    const result = try std.process.run(allocator, io, .{
         .argv = argv,
     });
     defer allocator.free(result.stdout);
     defer allocator.free(result.stderr);
 
     switch (result.term) {
-        .Exited => |code| {
+        .exited => |code| {
             if (code == 0) {
                 return;
             }
@@ -539,15 +543,14 @@ fn runCommand(allocator: std.mem.Allocator, argv: []const []const u8) !void {
     return error.CommandFailed;
 }
 
-fn runCommandCapture(allocator: std.mem.Allocator, argv: []const []const u8) ![]u8 {
-    const result = try std.process.Child.run(.{
-        .allocator = allocator,
+fn runCommandCapture(allocator: std.mem.Allocator, io: std.Io, argv: []const []const u8) ![]u8 {
+    const result = try std.process.run(allocator, io, .{
         .argv = argv,
     });
     defer allocator.free(result.stderr);
 
     switch (result.term) {
-        .Exited => |code| {
+        .exited => |code| {
             if (code == 0) {
                 return result.stdout;
             }

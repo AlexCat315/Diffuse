@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 
 pub const current_asset_version: u32 = 2;
 pub const current_meta_version: u32 = 1;
@@ -307,13 +308,13 @@ pub const AssetRegistry = struct {
     pub fn refreshProject(self: *AssetRegistry, root_path: []const u8) anyerror!void {
         self.clear();
 
-        var root_dir = std.fs.cwd().openDir(root_path, .{ .iterate = true }) catch |err| {
+        var root_dir = std.Io.Dir.cwd().openDir(io_globals.global_io, root_path, .{ .iterate = true }) catch |err| {
             if (err == error.FileNotFound) {
                 return;
             }
             return err;
         };
-        defer root_dir.close();
+        defer root_dir.close(io_globals.global_io);
 
         var source_paths = std.ArrayList([]u8).empty;
         defer {
@@ -325,7 +326,7 @@ pub const AssetRegistry = struct {
 
         var walker = try root_dir.walk(self.allocator);
         defer walker.deinit();
-        while (try walker.next()) |entry| {
+        while (try walker.next(io_globals.global_io)) |entry| {
             if (entry.kind != .file) {
                 continue;
             }
@@ -356,29 +357,18 @@ pub const AssetRegistry = struct {
         defer self.allocator.free(encoded);
 
         if (std.fs.path.dirname(path)) |directory| {
-            try std.fs.cwd().makePath(directory);
+            try std.Io.Dir.cwd().createDirPath(io_globals.global_io, directory);
         }
-        try std.fs.cwd().writeFile(.{
+        try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{
             .sub_path = path,
             .data = encoded,
         });
     }
 
     pub fn snapshotJsonAlloc(self: *const AssetRegistry, allocator: std.mem.Allocator) ![]u8 {
-        var output = std.ArrayList(u8).empty;
-        defer output.deinit(allocator);
-
-        var writer = output.writer(allocator);
-        var adapter_buffer: [4096]u8 = undefined;
-        var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
-        try std.json.Stringify.value(RegistrySnapshot{
+        return try std.json.Stringify.valueAlloc(allocator, RegistrySnapshot{
             .records = self.records.items,
-        }, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
-        try writer_adapter.new_interface.flush();
-        if (writer_adapter.err) |err| {
-            return err;
-        }
-        return output.toOwnedSlice(allocator);
+        }, .{ .whitespace = .indent_2 });
     }
 
     pub fn directDependentsAlloc(self: *const AssetRegistry, allocator: std.mem.Allocator, asset_id: []const u8) ![][]u8 {
@@ -500,7 +490,7 @@ fn discoverSourceHashAndDependencies(
     source_path: []const u8,
     asset_type: AssetType,
 ) anyerror!SourceDiscovery {
-    const bytes = try std.fs.cwd().readFileAlloc(registry.allocator, source_path, 128 * 1024 * 1024);
+    const bytes = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, source_path, registry.allocator, .limited(128 * 1024 * 1024));
     defer registry.allocator.free(bytes);
 
     switch (asset_type) {
@@ -580,7 +570,7 @@ fn discoverGltfDependencies(
             };
             try dependency_ids.append(registry.allocator, try registry.allocator.dupe(u8, dependency_record.id));
 
-            const image_bytes = std.fs.cwd().readFileAlloc(registry.allocator, dependency_path, 128 * 1024 * 1024) catch |err| {
+            const image_bytes = std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, dependency_path, registry.allocator, .limited(128 * 1024 * 1024)) catch |err| {
                 if (err == error.FileNotFound) {
                     std.log.warn("glTF image not found: {s} (referenced from {s})", .{ uri, source_path });
                     continue;
@@ -611,7 +601,7 @@ fn loadOrCreateMetaFile(
     const meta_path = try std.fmt.allocPrint(allocator, "{s}.meta", .{source_path});
     defer allocator.free(meta_path);
 
-    const encoded = std.fs.cwd().readFileAlloc(allocator, meta_path, 1024 * 1024) catch |err| switch (err) {
+    const encoded = std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, meta_path, allocator, .limited(1024 * 1024)) catch |err| switch (err) {
         error.FileNotFound => return createMetaFile(allocator, source_path, asset_type, import_settings_hash, import_version, meta_path),
         else => return err,
     };
@@ -660,9 +650,9 @@ fn createMetaFile(
     defer allocator.free(encoded);
 
     if (std.fs.path.dirname(meta_path)) |directory| {
-        try std.fs.cwd().makePath(directory);
+        try std.Io.Dir.cwd().createDirPath(io_globals.global_io, directory);
     }
-    try std.fs.cwd().writeFile(.{
+    try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{
         .sub_path = meta_path,
         .data = encoded,
     });
@@ -725,18 +715,7 @@ fn normalizeProjectPath(allocator: std.mem.Allocator, path: []const u8) ![]u8 {
 }
 
 fn stringifyAlloc(allocator: std.mem.Allocator, value: anytype) ![]u8 {
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
-
-    var writer = output.writer(allocator);
-    var adapter_buffer: [2048]u8 = undefined;
-    var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
-    try std.json.Stringify.value(value, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
-    try writer_adapter.new_interface.flush();
-    if (writer_adapter.err) |err| {
-        return err;
-    }
-    return output.toOwnedSlice(allocator);
+    return try std.json.Stringify.valueAlloc(allocator, value, .{ .whitespace = .indent_2 });
 }
 
 fn loadUriBytesAlloc(allocator: std.mem.Allocator, base_dir: []const u8, uri: []const u8) ![]u8 {
@@ -756,7 +735,7 @@ fn loadUriBytesAlloc(allocator: std.mem.Allocator, base_dir: []const u8, uri: []
 
     const resolved = try std.fs.path.join(allocator, &.{ base_dir, uri });
     defer allocator.free(resolved);
-    return std.fs.cwd().readFileAlloc(allocator, resolved, 128 * 1024 * 1024);
+    return std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, resolved, allocator, .limited(128 * 1024 * 1024));
 }
 
 fn collectTransitiveDependents(
@@ -835,9 +814,9 @@ test "project asset registry produces deterministic ids and hashes" {
         .data = "png",
     });
 
-    const cwd = std.fs.cwd();
-    var original = try cwd.openDir(".", .{});
-    defer original.close();
+    const cwd = std.Io.Dir.cwd();
+    var original = try cwd.openDir(io_globals.global_io, ".", .{});
+    defer original.close(io_globals.global_io);
     try temp_dir.dir.setAsCwd();
     defer original.setAsCwd() catch {};
 
@@ -873,9 +852,9 @@ test "registry tracks dependency graph and invalidates dependent outputs" {
         ,
     });
 
-    const cwd = std.fs.cwd();
-    var original = try cwd.openDir(".", .{});
-    defer original.close();
+    const cwd = std.Io.Dir.cwd();
+    var original = try cwd.openDir(io_globals.global_io, ".", .{});
+    defer original.close(io_globals.global_io);
     try temp_dir.dir.setAsCwd();
     defer original.setAsCwd() catch {};
 

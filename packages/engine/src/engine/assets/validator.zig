@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const gltf_import = @import("gltf_import.zig");
 const registry_mod = @import("registry.zig");
 const texture_import = @import("texture_import.zig");
@@ -122,7 +123,7 @@ fn validateRecord(
         try appendIssue(allocator, issues, record.id, record.source_path, "import_settings_hash 为空");
     }
 
-    std.fs.cwd().access(record.source_path, .{}) catch {
+    std.Io.Dir.cwd().access(io_globals.global_io, record.source_path, .{}) catch {
         try appendIssue(allocator, issues, record.id, record.source_path, "源文件不存在或不可读");
     };
 
@@ -166,7 +167,7 @@ fn validateRecord(
             validated_output_count.* += record.outputs.len;
         },
         .shader => {
-            const bytes = std.fs.cwd().readFileAlloc(allocator, record.source_path, 8 * 1024 * 1024) catch |err| {
+            const bytes = std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, record.source_path, allocator, .limited(8 * 1024 * 1024)) catch |err| {
                 const message = try std.fmt.allocPrint(allocator, "Shader 读取失败: {}", .{err});
                 defer allocator.free(message);
                 try appendIssue(allocator, issues, record.id, record.source_path, message);
@@ -178,7 +179,7 @@ fn validateRecord(
             }
         },
         .scene => {
-            const bytes = std.fs.cwd().readFileAlloc(allocator, record.source_path, 32 * 1024 * 1024) catch |err| {
+            const bytes = std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, record.source_path, allocator, .limited(32 * 1024 * 1024)) catch |err| {
                 const message = try std.fmt.allocPrint(allocator, "场景读取失败: {}", .{err});
                 defer allocator.free(message);
                 try appendIssue(allocator, issues, record.id, record.source_path, message);

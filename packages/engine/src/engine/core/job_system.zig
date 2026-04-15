@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 
 pub const JobPriority = enum {
     high,
@@ -82,8 +83,8 @@ pub const JobSystem = struct {
     allocator: std.mem.Allocator,
     threads: []std.Thread,
     queue: std.ArrayList(Job),
-    mutex: std.Thread.Mutex,
-    condition: std.Thread.Condition,
+    mutex: std.Io.Mutex,
+    condition: std.Io.Condition,
     running: std.atomic.Value(bool),
     job_id_counter: std.atomic.Value(u64),
 
@@ -94,8 +95,8 @@ pub const JobSystem = struct {
             .allocator = allocator,
             .threads = try allocator.alloc(std.Thread, actual_thread_count),
             .queue = std.ArrayList(Job).empty,
-            .mutex = .{},
-            .condition = .{},
+            .mutex = std.Io.Mutex.init,
+            .condition = std.Io.Condition.init,
             .running = std.atomic.Value(bool).init(true),
             .job_id_counter = std.atomic.Value(u64).init(0),
         };
@@ -110,14 +111,14 @@ pub const JobSystem = struct {
     pub fn deinit(self: *JobSystem) void {
         var queued_jobs = std.ArrayList(Job).empty;
         {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(io_globals.global_io);
+            defer self.mutex.unlock(io_globals.global_io);
 
             self.running.store(false, .release);
             queued_jobs = self.queue;
             self.queue = .empty;
         }
-        self.condition.broadcast();
+        self.condition.broadcast(io_globals.global_io);
 
         for (queued_jobs.items) |job| {
             job.state.status.store(.failed, .release);
@@ -161,13 +162,13 @@ pub const JobSystem = struct {
         };
 
         {
-            self.mutex.lock();
-            defer self.mutex.unlock();
+            self.mutex.lockUncancelable(io_globals.global_io);
+            defer self.mutex.unlock(io_globals.global_io);
             try self.queue.append(self.allocator, job);
         }
 
         state.retain();
-        self.condition.signal();
+        self.condition.signal(io_globals.global_io);
         return JobHandle{ .id = id, .state = state };
     }
 
@@ -175,14 +176,14 @@ pub const JobSystem = struct {
         while (true) {
             var job: ?Job = null;
             {
-                self.mutex.lock();
-                defer self.mutex.unlock();
+                self.mutex.lockUncancelable(io_globals.global_io);
+                defer self.mutex.unlock(io_globals.global_io);
 
                 while (self.queue.items.len == 0) {
                     if (!self.running.load(.acquire)) {
                         return;
                     }
-                    self.condition.wait(&self.mutex);
+                    self.condition.waitUncancelable(io_globals.global_io, &self.mutex);
                 }
 
                 if (self.queue.items.len > 0) {

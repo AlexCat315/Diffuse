@@ -1,5 +1,6 @@
 const std = @import("std");
 const engine = @import("guava");
+const io_globals = @import("io_globals");
 const EditorState = @import("state.zig").EditorState;
 const utils = @import("../common/utils.zig");
 const ai_collaboration = @import("../ai_native/collaboration.zig");
@@ -98,7 +99,7 @@ pub const EditorLayer = struct {
         if (start_scene.len > 0) {
             // Only attempt load if the file actually exists (avoids clearing
             // transform tools & VFX state in loadScenePath for no reason).
-            if (std.fs.cwd().access(start_scene, .{})) |_| {
+            if (std.Io.Dir.cwd().access(io_globals.global_io, start_scene, .{})) |_| {
                 std.log.info("Editor: auto-loading start scene: {s}", .{start_scene});
                 const entity_count_before = layer_context.world.entities.items.len;
                 history.loadScenePath(&self.state, layer_context, start_scene) catch {};

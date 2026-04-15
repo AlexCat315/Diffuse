@@ -99,7 +99,7 @@ pub fn generateCompileCommandsJson(
         appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.engine_cpp_flags, &.{"../editor/native/src/shm_view.cpp"}, napi_includes);
     }
 
-    var out: std.io.Writer.Allocating = .init(b.allocator);
+    var out: std.Io.Writer.Allocating = .init(b.allocator);
     defer out.deinit();
     std.json.Stringify.value(entries.items, .{ .whitespace = .indent_2 }, &out.writer) catch @panic("OOM");
     out.writer.writeAll("\n") catch @panic("OOM");

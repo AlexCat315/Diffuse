@@ -8,6 +8,7 @@
 ///! collaboration staged-transaction system which parses sub-commands into
 ///! `command_mod.Command` objects.
 const std = @import("std");
+const io_globals = @import("io_globals");
 const handles = @import("../assets/handles.zig");
 const command_mod = @import("../core/command.zig");
 const core = @import("../core/layer.zig");
@@ -66,8 +67,8 @@ pub const ProcessPendingOutcome = struct {
 
 pub const Bridge = struct {
     allocator: std.mem.Allocator,
-    mutex: std.Thread.Mutex = .{},
-    condition: std.Thread.Condition = .{},
+    mutex: std.Io.Mutex = std.Io.Mutex.init,
+    condition: std.Io.Condition = std.Io.Condition.init,
     pending: ?RpcDispatchRequest = null,
     response: ?CallResponse = null,
     shutting_down: bool = false,
@@ -92,8 +93,8 @@ pub const Bridge = struct {
     pub fn deinit(self: *Bridge) void {
         self.shutdown();
 
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
 
         if (self.pending) |*pending| {
             pending.deinit(self.allocator);
@@ -106,10 +107,10 @@ pub const Bridge = struct {
     }
 
     pub fn shutdown(self: *Bridge) void {
-        self.mutex.lock();
+        self.mutex.lockUncancelable(io_globals.global_io);
         self.shutting_down = true;
-        self.condition.broadcast();
-        self.mutex.unlock();
+        self.condition.broadcast(io_globals.global_io);
+        self.mutex.unlock(io_globals.global_io);
     }
 
     /// Submit an MCP tool call that maps to an RPC method.
@@ -118,18 +119,16 @@ pub const Bridge = struct {
         // Build a JSON-RPC payload: {"jsonrpc":"2.0","id":1,"method":"<rpc_method>","params":{...}}
         var payload_buf = std.ArrayList(u8).empty;
         defer payload_buf.deinit(self.allocator);
-        const w = payload_buf.writer(self.allocator);
-        try w.writeAll("{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"");
-        try w.writeAll(rpc_method);
-        try w.writeAll("\"");
+        try payload_buf.appendSlice(self.allocator, "{\"jsonrpc\":\"2.0\",\"id\":1,\"method\":\"");
+        try payload_buf.appendSlice(self.allocator, rpc_method);
+        try payload_buf.appendSlice(self.allocator, "\"");
         if (arguments) |args| {
-            try w.writeAll(",\"params\":");
-            var adapter_buf: [4096]u8 = undefined;
-            var writer_adapter = w.adaptToNewApi(&adapter_buf);
-            try std.json.Stringify.value(args, .{}, &writer_adapter.new_interface);
-            try writer_adapter.new_interface.flush();
+            try payload_buf.appendSlice(self.allocator, ",\"params\":");
+            const params_json = try std.json.Stringify.valueAlloc(self.allocator, args, .{});
+            defer self.allocator.free(params_json);
+            try payload_buf.appendSlice(self.allocator, params_json);
         }
-        try w.writeAll("}");
+        try payload_buf.appendSlice(self.allocator, "}");
 
         const owned_tool_name = try self.allocator.dupe(u8, tool_name);
         errdefer self.allocator.free(owned_tool_name);
@@ -142,21 +141,21 @@ pub const Bridge = struct {
         };
         errdefer request.deinit(self.allocator);
 
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
 
         while ((self.pending != null or self.response != null) and !self.shutting_down) {
-            self.condition.wait(&self.mutex);
+            self.condition.waitUncancelable(io_globals.global_io, &self.mutex);
         }
         if (self.shutting_down) {
             return error.ShuttingDown;
         }
 
         self.pending = request;
-        self.condition.broadcast();
+        self.condition.broadcast(io_globals.global_io);
 
         while (self.response == null and !self.shutting_down) {
-            self.condition.wait(&self.mutex);
+            self.condition.waitUncancelable(io_globals.global_io, &self.mutex);
         }
         if (self.shutting_down and self.response == null) {
             return error.ShuttingDown;
@@ -164,26 +163,26 @@ pub const Bridge = struct {
 
         const response = self.response.?;
         self.response = null;
-        self.condition.broadcast();
+        self.condition.broadcast(io_globals.global_io);
         return response;
     }
 
     pub fn processPending(self: *Bridge, layer_context: *core.LayerContext) !ProcessPendingOutcome {
-        self.mutex.lock();
+        self.mutex.lockUncancelable(io_globals.global_io);
         if (self.pending == null or self.response != null) {
-            self.mutex.unlock();
+            self.mutex.unlock(io_globals.global_io);
             return .{};
         }
         var request = self.pending.?;
         self.pending = null;
-        self.mutex.unlock();
+        self.mutex.unlock(io_globals.global_io);
 
         const response = try self.executeRpcRequest(layer_context, &request);
 
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         self.response = response;
-        self.condition.broadcast();
+        self.condition.broadcast(io_globals.global_io);
         return .{
             .handled = true,
             .snapshot_dirty = true,

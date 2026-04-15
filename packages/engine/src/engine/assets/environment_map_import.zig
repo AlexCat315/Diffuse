@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const image_decoder = @import("image_decoder.zig");
 const registry_mod = @import("registry.zig");
 const library_mod = @import("library.zig");
@@ -110,7 +111,7 @@ pub fn ensureCookedIBLData(
 
     const cooked_ibl_path = try cookedIBLPathAlloc(allocator, record.outputs[0].path);
     const should_recook = recook: {
-        std.fs.cwd().access(cooked_ibl_path, .{}) catch |err| switch (err) {
+        std.Io.Dir.cwd().access(io_globals.global_io, cooked_ibl_path, .{}) catch |err| switch (err) {
             error.FileNotFound => break :recook true,
             else => return err,
         };
@@ -149,7 +150,7 @@ pub fn loadIBLData(
     const cooked_ibl_path = try ensureCookedIBLData(allocator, registry, asset_id);
     defer allocator.free(cooked_ibl_path);
 
-    const encoded = try std.fs.cwd().readFileAlloc(allocator, cooked_ibl_path, 512 * 1024 * 1024);
+    const encoded = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, cooked_ibl_path, allocator, .limited(512 * 1024 * 1024));
     defer allocator.free(encoded);
 
     var parsed = try std.json.parseFromSlice(CookedIBLData, allocator, encoded, .{
@@ -219,7 +220,7 @@ fn cookedIBLDataIsCurrent(
     record: *const registry_mod.AssetRecord,
     cooked_path: []const u8,
 ) !bool {
-    const encoded = try std.fs.cwd().readFileAlloc(allocator, cooked_path, 512 * 1024 * 1024);
+    const encoded = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, cooked_path, allocator, .limited(512 * 1024 * 1024));
     defer allocator.free(encoded);
 
     var parsed = std.json.parseFromSlice(CookedIBLData, allocator, encoded, .{
@@ -241,7 +242,7 @@ fn cookIBLDataRecord(
     record: *const registry_mod.AssetRecord,
     cooked_ibl_path: []const u8,
 ) !void {
-    const encoded = try std.fs.cwd().readFileAlloc(allocator, record.source_path, 128 * 1024 * 1024);
+    const encoded = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, record.source_path, allocator, .limited(128 * 1024 * 1024));
     defer allocator.free(encoded);
 
     var decoded = try image_decoder.decodeRgba32f(allocator, encoded);
@@ -261,9 +262,9 @@ fn cookIBLDataRecord(
     defer allocator.free(cooked_ibl);
 
     if (std.fs.path.dirname(cooked_ibl_path)) |directory| {
-        try std.fs.cwd().makePath(directory);
+        try std.Io.Dir.cwd().createDirPath(io_globals.global_io, directory);
     }
-    try std.fs.cwd().writeFile(.{
+    try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{
         .sub_path = cooked_ibl_path,
         .data = cooked_ibl,
     });
@@ -340,16 +341,5 @@ fn hexCharToValue(c: u8) !u8 {
 }
 
 fn stringifyAlloc(allocator: std.mem.Allocator, value: anytype) ![]u8 {
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
-
-    var writer = output.writer(allocator);
-    var adapter_buffer: [2048]u8 = undefined;
-    var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
-    try std.json.Stringify.value(value, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
-    try writer_adapter.new_interface.flush();
-    if (writer_adapter.err) |err| {
-        return err;
-    }
-    return output.toOwnedSlice(allocator);
+    return try std.json.Stringify.valueAlloc(allocator, value, .{ .whitespace = .indent_2 });
 }

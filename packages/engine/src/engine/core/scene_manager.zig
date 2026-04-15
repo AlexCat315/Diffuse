@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const job_system_mod = @import("job_system.zig");
 const command_queue_mod = @import("command_queue.zig");
 const renderer_mod = @import("../render/renderer.zig");
@@ -44,7 +45,7 @@ pub const Callbacks = struct {
 const AsyncReadShared = struct {
     allocator: std.mem.Allocator,
     path: []u8,
-    mutex: std.Thread.Mutex = .{},
+    mutex: std.Io.Mutex = std.Io.Mutex.init,
     source: ?[]u8 = null,
     error_message: ?[]u8 = null,
 
@@ -58,28 +59,28 @@ const AsyncReadShared = struct {
     }
 
     fn publishSource(self: *AsyncReadShared, source: []u8) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         self.source = source;
     }
 
     fn publishError(self: *AsyncReadShared, message: []u8) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         self.error_message = message;
     }
 
     fn takeSource(self: *AsyncReadShared) ?[]u8 {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         const source = self.source;
         self.source = null;
         return source;
     }
 
     fn takeError(self: *AsyncReadShared) ?[]u8 {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         const message = self.error_message;
         self.error_message = null;
         return message;
@@ -110,7 +111,7 @@ fn asyncReadSceneTask(context: ?*anyopaque) void {
     const ctx: *AsyncReadContext = @ptrCast(@alignCast(context));
     defer ctx.deinit();
 
-    const source = std.fs.cwd().readFileAlloc(ctx.shared.allocator, ctx.shared.path, 128 * 1024 * 1024) catch |err| {
+    const source = std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, ctx.shared.path, ctx.shared.allocator, .limited(128 * 1024 * 1024)) catch |err| {
         const message = std.fmt.allocPrint(ctx.shared.allocator, "{s}", .{@errorName(err)}) catch return;
         ctx.shared.publishError(message);
         return;
@@ -612,7 +613,7 @@ fn resolveScenePathAlloc(allocator: std.mem.Allocator, requested_path: []const u
 }
 
 fn pathExists(path: []const u8) bool {
-    std.fs.cwd().access(path, .{}) catch return false;
+    std.Io.Dir.cwd().access(io_globals.global_io, path, .{}) catch return false;
     return true;
 }
 
@@ -682,8 +683,8 @@ test "scene manager load preserves persistent entities and unload keeps them" {
     var tmp = std.testing.tmpDir(.{});
     defer tmp.cleanup();
 
-    var previous_cwd = try std.fs.cwd().openDir(".", .{});
-    defer previous_cwd.close();
+    var previous_cwd = try std.Io.Dir.cwd().openDir(io_globals.global_io, ".", .{});
+    defer previous_cwd.close(io_globals.global_io);
     defer previous_cwd.setAsCwd() catch {};
     try tmp.dir.setAsCwd();
     try tmp.dir.makePath("assets/scenes");

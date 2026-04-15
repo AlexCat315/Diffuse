@@ -211,6 +211,7 @@ pub fn configureEngineModule(
     module: *std.Build.Module,
     os_tag: std.Target.Os.Tag,
     sdl_prefix: []const u8,
+    c_translations: CTranslations,
 ) void {
     const sdl_include_path = b.pathJoin(&.{ sdl_prefix, "include" });
     const sdl_library_path = b.pathJoin(&.{ sdl_prefix, "lib" });
@@ -274,4 +275,103 @@ pub fn configureEngineModule(
     module.linkSystemLibrary("vulkan", .{});
 
     module.linkSystemLibrary("SDL3", .{});
+
+    // C Translation modules (replacing @cImport)
+    module.addImport("c_stb_image", c_translations.stb_image);
+    module.addImport("c_stb_image_write", c_translations.stb_image_write);
+    module.addImport("c_stb_truetype", c_translations.stb_truetype);
+    module.addImport("c_svg_bridge", c_translations.svg_bridge);
+    module.addImport("c_soloud", c_translations.soloud);
+    module.addImport("c_recast", c_translations.recast);
+    module.addImport("c_sdl3", c_translations.sdl3);
+}
+
+// ─── C Translation modules (replacing @cImport) ───────────────────────────
+
+pub const CTranslations = struct {
+    stb_image: *std.Build.Module,
+    stb_image_write: *std.Build.Module,
+    stb_truetype: *std.Build.Module,
+    svg_bridge: *std.Build.Module,
+    soloud: *std.Build.Module,
+    recast: *std.Build.Module,
+    sdl3: *std.Build.Module,
+};
+
+pub fn createCTranslations(
+    b: *std.Build,
+    target: std.Build.ResolvedTarget,
+    optimize: std.builtin.OptimizeMode,
+    sdl_prefix: []const u8,
+) CTranslations {
+    const sdl_include_path = b.pathJoin(&.{ sdl_prefix, "include" });
+
+    // stb_image
+    const tc_stb_image = b.addTranslateC(.{
+        .root_source_file = b.path("src/c_headers/stb_image.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    tc_stb_image.addIncludePath(.{ .cwd_relative = "third_party/stb" });
+
+    // stb_image_write
+    const tc_stb_image_write = b.addTranslateC(.{
+        .root_source_file = b.path("src/c_headers/stb_image_write.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    tc_stb_image_write.addIncludePath(.{ .cwd_relative = "third_party/stb" });
+
+    // stb_truetype
+    const tc_stb_truetype = b.addTranslateC(.{
+        .root_source_file = b.path("src/c_headers/stb_truetype.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    tc_stb_truetype.addIncludePath(.{ .cwd_relative = "third_party/stb" });
+
+    // svg_bridge
+    const tc_svg_bridge = b.addTranslateC(.{
+        .root_source_file = b.path("src/c_headers/svg_bridge.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    tc_svg_bridge.addIncludePath(.{ .cwd_relative = "src/engine/assets" });
+
+    // soloud
+    const tc_soloud = b.addTranslateC(.{
+        .root_source_file = b.path("src/c_headers/soloud.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    tc_soloud.addIncludePath(.{ .cwd_relative = "third_party/soloud/include" });
+
+    // recast
+    const tc_recast = b.addTranslateC(.{
+        .root_source_file = b.path("src/c_headers/recast.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    tc_recast.addIncludePath(.{ .cwd_relative = "src/engine/navigation" });
+    tc_recast.addIncludePath(.{ .cwd_relative = "third_party/recast/Recast/Include" });
+    tc_recast.addIncludePath(.{ .cwd_relative = "third_party/recast/Detour/Include" });
+    tc_recast.addIncludePath(.{ .cwd_relative = "third_party/recast/DetourCrowd/Include" });
+
+    // sdl3
+    const tc_sdl3 = b.addTranslateC(.{
+        .root_source_file = b.path("src/c_headers/sdl3.h"),
+        .target = target,
+        .optimize = optimize,
+    });
+    tc_sdl3.addIncludePath(.{ .cwd_relative = sdl_include_path });
+
+    return .{
+        .stb_image = tc_stb_image.createModule(),
+        .stb_image_write = tc_stb_image_write.createModule(),
+        .stb_truetype = tc_stb_truetype.createModule(),
+        .svg_bridge = tc_svg_bridge.createModule(),
+        .soloud = tc_soloud.createModule(),
+        .recast = tc_recast.createModule(),
+        .sdl3 = tc_sdl3.createModule(),
+    };
 }

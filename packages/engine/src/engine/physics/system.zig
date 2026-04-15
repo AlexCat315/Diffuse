@@ -3,6 +3,7 @@ const AABB = @import("../math/aabb.zig").AABB;
 const components = @import("../scene/components.zig");
 const scene_mod = @import("../scene/scene.zig");
 const vec3 = @import("../math/vec3.zig");
+const io_globals = @import("io_globals");
 
 // 从 scene 模块导入 EntityId
 const EntityId = scene_mod.EntityId;
@@ -78,16 +79,16 @@ pub const PhysicsState = struct {
 
     /// Event queue: World mutations → Jolt sync
     event_queue: std.ArrayListUnmanaged(PhysicsEvent) = .empty,
-    event_mutex: std.Thread.Mutex = .{},
+    event_mutex: std.Io.Mutex = std.Io.Mutex.init,
 
     /// Trigger events from Jolt callback
     trigger_queue: std.ArrayListUnmanaged(TriggerEvent) = .empty,
-    trigger_mutex: std.Thread.Mutex = .{},
+    trigger_mutex: std.Io.Mutex = std.Io.Mutex.init,
     trigger_callback: ?*const fn (TriggerEvent) void = null,
 
     /// Collision events from Jolt callback (non-sensor rigid body contacts)
     collision_queue: std.ArrayListUnmanaged(CollisionEvent) = .empty,
-    collision_mutex: std.Thread.Mutex = .{},
+    collision_mutex: std.Io.Mutex = std.Io.Mutex.init,
 
     /// Log deduplication flags
     logged_config: bool = false,
@@ -97,31 +98,31 @@ pub const PhysicsState = struct {
 
     /// Jolt world state cache (keyed by @intFromPtr(world))
     jolt_world_states: std.AutoHashMapUnmanaged(usize, JoltWorldState) = .empty,
-    jolt_world_states_mutex: std.Thread.Mutex = .{},
+    jolt_world_states_mutex: std.Io.Mutex = std.Io.Mutex.init,
 
     /// Tracks which worlds have been initialized for Jolt
     jolt_initialized_for_world: std.AutoHashMapUnmanaged(usize, bool) = .empty,
-    jolt_initialized_mutex: std.Thread.Mutex = .{},
+    jolt_initialized_mutex: std.Io.Mutex = std.Io.Mutex.init,
 
     pub fn init(allocator: std.mem.Allocator) PhysicsState {
         return .{ .allocator = allocator };
     }
 
     pub fn deinit(self: *PhysicsState) void {
-        self.event_mutex.lock();
-        defer self.event_mutex.unlock();
+        self.event_mutex.lockUncancelable(io_globals.global_io);
+        defer self.event_mutex.unlock(io_globals.global_io);
         self.event_queue.deinit(self.allocator);
 
-        self.trigger_mutex.lock();
-        defer self.trigger_mutex.unlock();
+        self.trigger_mutex.lockUncancelable(io_globals.global_io);
+        defer self.trigger_mutex.unlock(io_globals.global_io);
         self.trigger_queue.deinit(self.allocator);
 
-        self.collision_mutex.lock();
-        defer self.collision_mutex.unlock();
+        self.collision_mutex.lockUncancelable(io_globals.global_io);
+        defer self.collision_mutex.unlock(io_globals.global_io);
         self.collision_queue.deinit(self.allocator);
 
-        self.jolt_world_states_mutex.lock();
-        defer self.jolt_world_states_mutex.unlock();
+        self.jolt_world_states_mutex.lockUncancelable(io_globals.global_io);
+        defer self.jolt_world_states_mutex.unlock(io_globals.global_io);
         // Destroy all remaining Jolt contexts
         var it = self.jolt_world_states.valueIterator();
         while (it.next()) |state| {
@@ -129,8 +130,8 @@ pub const PhysicsState = struct {
         }
         self.jolt_world_states.deinit(self.allocator);
 
-        self.jolt_initialized_mutex.lock();
-        defer self.jolt_initialized_mutex.unlock();
+        self.jolt_initialized_mutex.lockUncancelable(io_globals.global_io);
+        defer self.jolt_initialized_mutex.unlock(io_globals.global_io);
         self.jolt_initialized_for_world.deinit(self.allocator);
 
         self.debug_info.deinit(self.allocator);
@@ -141,26 +142,26 @@ pub const PhysicsState = struct {
     }
 
     pub fn pollTriggerEvents(self: *PhysicsState) []const TriggerEvent {
-        self.trigger_mutex.lock();
-        defer self.trigger_mutex.unlock();
+        self.trigger_mutex.lockUncancelable(io_globals.global_io);
+        defer self.trigger_mutex.unlock(io_globals.global_io);
         return self.trigger_queue.items;
     }
 
     pub fn clearTriggerEvents(self: *PhysicsState) void {
-        self.trigger_mutex.lock();
-        defer self.trigger_mutex.unlock();
+        self.trigger_mutex.lockUncancelable(io_globals.global_io);
+        defer self.trigger_mutex.unlock(io_globals.global_io);
         self.trigger_queue.clearRetainingCapacity();
     }
 
     pub fn pollCollisionEvents(self: *PhysicsState) []const CollisionEvent {
-        self.collision_mutex.lock();
-        defer self.collision_mutex.unlock();
+        self.collision_mutex.lockUncancelable(io_globals.global_io);
+        defer self.collision_mutex.unlock(io_globals.global_io);
         return self.collision_queue.items;
     }
 
     pub fn clearCollisionEvents(self: *PhysicsState) void {
-        self.collision_mutex.lock();
-        defer self.collision_mutex.unlock();
+        self.collision_mutex.lockUncancelable(io_globals.global_io);
+        defer self.collision_mutex.unlock(io_globals.global_io);
         self.collision_queue.clearRetainingCapacity();
     }
 
@@ -212,15 +213,15 @@ pub const PhysicsState = struct {
     }
 
     pub fn enqueuePhysicsEvent(self: *PhysicsState, event: PhysicsEvent) void {
-        self.event_mutex.lock();
-        defer self.event_mutex.unlock();
+        self.event_mutex.lockUncancelable(io_globals.global_io);
+        defer self.event_mutex.unlock(io_globals.global_io);
         self.event_queue.append(self.allocator, event) catch return;
     }
 
     pub fn deinitWorld(self: *PhysicsState, world: *scene_mod.World) void {
-        self.event_mutex.lock();
+        self.event_mutex.lockUncancelable(io_globals.global_io);
         self.event_queue.clearRetainingCapacity();
-        self.event_mutex.unlock();
+        self.event_mutex.unlock(io_globals.global_io);
 
         self.releaseJoltWorldState(@intFromPtr(world));
     }
@@ -422,8 +423,8 @@ pub const PhysicsState = struct {
     }
 
     fn processPhysicsEvents(self: *PhysicsState, world: *scene_mod.World, context: *JoltContext, config: Config) void {
-        self.event_mutex.lock();
-        defer self.event_mutex.unlock();
+        self.event_mutex.lockUncancelable(io_globals.global_io);
+        defer self.event_mutex.unlock(io_globals.global_io);
 
         for (self.event_queue.items) |event| {
             switch (event) {
@@ -476,8 +477,8 @@ pub const PhysicsState = struct {
     }
 
     fn ensureJoltInitializedForWorld(self: *PhysicsState, world: *scene_mod.World, context: *JoltContext, config: Config) void {
-        self.jolt_initialized_mutex.lock();
-        defer self.jolt_initialized_mutex.unlock();
+        self.jolt_initialized_mutex.lockUncancelable(io_globals.global_io);
+        defer self.jolt_initialized_mutex.unlock(io_globals.global_io);
 
         const key = @intFromPtr(world);
         if (self.jolt_initialized_for_world.contains(key)) {
@@ -503,8 +504,8 @@ pub const PhysicsState = struct {
         limits: JoltBackendLimits,
     ) ?*JoltContext {
         const key = @intFromPtr(world);
-        self.jolt_world_states_mutex.lock();
-        defer self.jolt_world_states_mutex.unlock();
+        self.jolt_world_states_mutex.lockUncancelable(io_globals.global_io);
+        defer self.jolt_world_states_mutex.unlock(io_globals.global_io);
 
         if (self.jolt_world_states.getPtr(key)) |state| {
             if (state.limits.eql(limits)) {
@@ -544,8 +545,8 @@ pub const PhysicsState = struct {
         const create_config = buildJoltStepConfig(query_config, 0.0, limits);
 
         const key = @intFromPtr(world);
-        self.jolt_world_states_mutex.lock();
-        defer self.jolt_world_states_mutex.unlock();
+        self.jolt_world_states_mutex.lockUncancelable(io_globals.global_io);
+        defer self.jolt_world_states_mutex.unlock(io_globals.global_io);
 
         if (self.jolt_world_states.getPtr(key)) |state| {
             if (joltBackendLimitsCover(state.limits, limits)) {
@@ -576,15 +577,15 @@ pub const PhysicsState = struct {
     }
 
     fn releaseJoltWorldState(self: *PhysicsState, key: usize) void {
-        self.jolt_world_states_mutex.lock();
-        defer self.jolt_world_states_mutex.unlock();
+        self.jolt_world_states_mutex.lockUncancelable(io_globals.global_io);
+        defer self.jolt_world_states_mutex.unlock(io_globals.global_io);
 
         if (self.jolt_world_states.fetchRemove(key)) |removed| {
             guava_jolt_context_destroy(removed.value.context);
         }
 
-        self.jolt_initialized_mutex.lock();
-        defer self.jolt_initialized_mutex.unlock();
+        self.jolt_initialized_mutex.lockUncancelable(io_globals.global_io);
+        defer self.jolt_initialized_mutex.unlock(io_globals.global_io);
         _ = self.jolt_initialized_for_world.fetchRemove(key);
     }
 
@@ -1056,8 +1057,8 @@ export fn GuavaJoltEnqueueTriggerEvent(event: *const extern struct {
     kind: u8,
 }) void {
     const state = g_active_state orelse return;
-    state.trigger_mutex.lock();
-    defer state.trigger_mutex.unlock();
+    state.trigger_mutex.lockUncancelable(io_globals.global_io);
+    defer state.trigger_mutex.unlock(io_globals.global_io);
 
     const trigger_event = TriggerEvent{
         .entity_a = event.entity_a,
@@ -1078,8 +1079,8 @@ export fn GuavaJoltEnqueueCollisionEvent(event: *const extern struct {
     kind: u8,
 }) void {
     const state = g_active_state orelse return;
-    state.collision_mutex.lock();
-    defer state.collision_mutex.unlock();
+    state.collision_mutex.lockUncancelable(io_globals.global_io);
+    defer state.collision_mutex.unlock(io_globals.global_io);
 
     const collision_event = CollisionEvent{
         .entity_a = event.entity_a,

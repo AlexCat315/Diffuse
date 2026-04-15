@@ -7,9 +7,7 @@ const std = @import("std");
 const rhi_mod = @import("../rhi/device.zig");
 const rhi_types = @import("../rhi/types.zig");
 
-const c = @cImport({
-    @cInclude("stb_truetype.h");
-});
+const c = @import("c_stb_truetype");
 
 /// Metrics for a single glyph.
 pub const GlyphMetrics = struct {

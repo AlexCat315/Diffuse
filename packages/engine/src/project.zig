@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 
 pub const marker_file_name = ".guava";
 pub const current_project_version: u32 = 1;
@@ -50,7 +51,8 @@ pub fn loadAlloc(allocator: std.mem.Allocator, project_root: []const u8) !Projec
     const marker_path = try markerPathAlloc(allocator, project_root);
     defer allocator.free(marker_path);
 
-    const encoded = try std.fs.cwd().readFileAlloc(allocator, marker_path, 1024 * 1024);
+    const io = io_globals.global_io;
+    const encoded = try std.Io.Dir.cwd().readFileAlloc(io, marker_path, allocator, .limited(1024 * 1024));
     defer allocator.free(encoded);
 
     var parsed = try std.json.parseFromSlice(PersistedProjectFile, allocator, encoded, .{
@@ -91,23 +93,26 @@ pub fn initializeAlloc(allocator: std.mem.Allocator, project_root: []const u8, p
         return error.InvalidProjectName;
     }
 
-    try std.fs.cwd().makePath(project_root);
+    const io = io_globals.global_io;
+    const cwd = std.Io.Dir.cwd();
+
+    try cwd.createDirPath(io, project_root);
 
     const content_path = try std.fs.path.join(allocator, &.{ project_root, default_content_dir });
     defer allocator.free(content_path);
-    try std.fs.cwd().makePath(content_path);
+    try cwd.createDirPath(io, content_path);
 
     const scenes_path = try std.fs.path.join(allocator, &.{ project_root, default_content_dir, "Scenes" });
     defer allocator.free(scenes_path);
-    try std.fs.cwd().makePath(scenes_path);
+    try cwd.createDirPath(io, scenes_path);
 
     const derived_path = try std.fs.path.join(allocator, &.{ project_root, "Derived" });
     defer allocator.free(derived_path);
-    try std.fs.cwd().makePath(derived_path);
+    try cwd.createDirPath(io, derived_path);
 
     const scripts_path = try std.fs.path.join(allocator, &.{ project_root, default_scripts_dir });
     defer allocator.free(scripts_path);
-    try std.fs.cwd().makePath(scripts_path);
+    try cwd.createDirPath(io, scripts_path);
 
     const marker_path = try markerPathAlloc(allocator, project_root);
     defer allocator.free(marker_path);
@@ -120,7 +125,7 @@ pub fn initializeAlloc(allocator: std.mem.Allocator, project_root: []const u8, p
     });
     defer allocator.free(payload);
 
-    try std.fs.cwd().writeFile(.{
+    try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{
         .sub_path = marker_path,
         .data = payload,
     });
@@ -150,7 +155,7 @@ fn isValidProjectName(name: []const u8) bool {
 }
 
 fn pathExists(path: []const u8) bool {
-    std.fs.cwd().access(path, .{}) catch return false;
+    std.Io.Dir.cwd().access(io_globals.global_io, path, .{}) catch return false;
     return true;
 }
 
@@ -181,11 +186,12 @@ test "project file initialize and load roundtrip" {
     var temp_dir = std.testing.tmpDir(.{});
     defer temp_dir.cleanup();
 
-    const cwd = std.fs.cwd();
-    var original = try cwd.openDir(".", .{});
-    defer original.close();
-    try temp_dir.dir.setAsCwd();
-    defer original.setAsCwd() catch {};
+    const io = io_globals.global_io;
+    const cwd = std.Io.Dir.cwd();
+    var original = try cwd.openDir(io, ".", .{});
+    defer original.close(io);
+    try temp_dir.dir.setAsCwd(io);
+    defer original.setAsCwd(io) catch {};
 
     var project = try createNewAlloc(std.testing.allocator, "Projects/MyGame", "MyGame");
     defer project.deinit(std.testing.allocator);

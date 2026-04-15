@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const collaboration_mod = @import("collaboration.zig");
 const core = @import("../core/layer.zig");
 const protocol = @import("protocol.zig");
@@ -193,16 +194,18 @@ const Server = struct {
     }
 
     fn run(self: *Server) !void {
+        const io = io_globals.global_io;
         var pending = std.ArrayList(u8).empty;
         defer pending.deinit(std.heap.page_allocator);
         defer self.unregisterClient();
 
-        var stdin_file = std.fs.File.stdin();
-        var stdout_file = std.fs.File.stdout();
+        const stdin_file = std.Io.File.stdin();
+        const stdout_file = std.Io.File.stdout();
         var read_buffer: [4096]u8 = undefined;
 
         while (true) {
-            const bytes_read = try stdin_file.read(&read_buffer);
+            var iovecs: [1][]u8 = .{read_buffer[0..]};
+            const bytes_read = try stdin_file.readStreaming(io, &iovecs);
             if (bytes_read == 0) {
                 self.requestExit();
                 return;
@@ -212,7 +215,7 @@ const Server = struct {
 
             while (try protocol.tryExtractMessageAlloc(std.heap.page_allocator, &pending)) |body| {
                 defer std.heap.page_allocator.free(body);
-                const should_stop = try self.handleMessage(&stdout_file, body);
+                const should_stop = try self.handleMessage(stdout_file, body);
                 if (should_stop) {
                     self.requestExit();
                     return;
@@ -221,7 +224,7 @@ const Server = struct {
         }
     }
 
-    fn handleMessage(self: *Server, stdout_file: *std.fs.File, body: []const u8) !bool {
+    fn handleMessage(self: *Server, stdout_file: std.Io.File, body: []const u8) !bool {
         var parsed = std.json.parseFromSlice(std.json.Value, std.heap.page_allocator, body, .{
             .allocate = .alloc_always,
             .ignore_unknown_fields = true,
@@ -274,7 +277,7 @@ const Server = struct {
 
     fn handleRequest(
         self: *Server,
-        stdout_file: *std.fs.File,
+        stdout_file: std.Io.File,
         id: std.json.Value,
         method: []const u8,
         params: ?std.json.Value,
@@ -427,7 +430,7 @@ const Server = struct {
             if (self.exit_requested.load(.acquire)) {
                 return error.ShuttingDown;
             }
-            std.Thread.sleep(5 * std.time.ns_per_ms);
+            try std.Io.sleep(io_globals.global_io, std.Io.Duration.fromMilliseconds(5), .real);
         }
     }
 };
@@ -519,24 +522,19 @@ fn freeResourceDescriptorOwned(allocator: std.mem.Allocator, descriptor: protoco
     if (descriptor.mimeType) |mime_type| allocator.free(mime_type);
 }
 
-fn writeToolList(stdout_file: *std.fs.File, id: std.json.Value) !void {
+fn writeToolList(stdout_file: std.Io.File, id: std.json.Value) !void {
     // Pre-rendered JSON for the tools array (generated at comptime from the RPC schema)
     const tools_json = comptime generateMcpToolsJson();
     const allocator = std.heap.page_allocator;
 
     // Serialize the "id" field
-    var id_buf = std.ArrayList(u8).empty;
-    defer id_buf.deinit(allocator);
-    var id_writer = id_buf.writer(allocator);
-    var id_adapter_buf: [256]u8 = undefined;
-    var id_adapter = id_writer.adaptToNewApi(&id_adapter_buf);
-    try std.json.Stringify.value(id, .{}, &id_adapter.new_interface);
-    try id_adapter.new_interface.flush();
+    const id_json = try std.json.Stringify.valueAlloc(allocator, id, .{});
+    defer allocator.free(id_json);
 
     // Compose the full JSON-RPC response body
     const body = try std.fmt.allocPrint(allocator, "{{\"jsonrpc\":\"{s}\",\"id\":{s},\"result\":{{\"tools\":{s}}}}}", .{
         protocol.jsonrpc_version,
-        id_buf.items,
+        id_json,
         tools_json,
     });
     defer allocator.free(body);
@@ -544,12 +542,13 @@ fn writeToolList(stdout_file: *std.fs.File, id: std.json.Value) !void {
     // Frame with Content-Length header
     const header = try std.fmt.allocPrint(allocator, "Content-Length: {d}\r\n\r\n", .{body.len});
     defer allocator.free(header);
-    try stdout_file.writeAll(header);
-    try stdout_file.writeAll(body);
+    const io = io_globals.global_io;
+    try stdout_file.writeStreamingAll(io, header);
+    try stdout_file.writeStreamingAll(io, body);
 }
 
 fn writeCollaborationToolResult(
-    stdout_file: *std.fs.File,
+    stdout_file: std.Io.File,
     id: std.json.Value,
     response: collaboration_mod.CallResponse,
     summary: []const u8,
@@ -615,18 +614,18 @@ fn writeCollaborationToolResult(
     }
 }
 
-fn writeResult(stdout_file: *std.fs.File, id: std.json.Value, result: anytype) !void {
+fn writeResult(stdout_file: std.Io.File, id: std.json.Value, result: anytype) !void {
     const framed = try protocol.encodeMessageAlloc(std.heap.page_allocator, .{
         .jsonrpc = protocol.jsonrpc_version,
         .id = id,
         .result = result,
     });
     defer std.heap.page_allocator.free(framed);
-    try stdout_file.writeAll(framed);
+    try stdout_file.writeStreamingAll(io_globals.global_io, framed);
 }
 
 fn writeErrorResponse(
-    stdout_file: *std.fs.File,
+    stdout_file: std.Io.File,
     id: ?std.json.Value,
     code: i64,
     message: []const u8,
@@ -642,7 +641,7 @@ fn writeErrorResponse(
         },
     });
     defer std.heap.page_allocator.free(framed);
-    try stdout_file.writeAll(framed);
+    try stdout_file.writeStreamingAll(io_globals.global_io, framed);
 }
 
 // ═══════════════════════════════════════════════════════════════════

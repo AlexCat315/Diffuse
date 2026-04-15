@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const asset_registry = @import("../assets/registry.zig");
 const assets_handles = @import("../assets/handles.zig");
 const mesh_mod = @import("../assets/mesh_resource.zig");
@@ -305,17 +306,7 @@ pub fn serializePrefabAlloc(
     // 构建 PrefabFile
     const prefab_file = try buildPrefabFile(arena, prefab);
 
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
-    var writer = output.writer(allocator);
-    var adapter_buffer: [4096]u8 = undefined;
-    var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
-    try std.json.Stringify.value(prefab_file, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
-    try writer_adapter.new_interface.flush();
-    if (writer_adapter.err) |err| {
-        return err;
-    }
-    return output.toOwnedSlice(allocator);
+    return try std.json.Stringify.valueAlloc(allocator, prefab_file, .{ .whitespace = .indent_2 });
 }
 
 /// 从 JSON 反序列化
@@ -344,9 +335,9 @@ pub fn savePrefabToPath(
     defer allocator.free(encoded);
 
     if (std.fs.path.dirname(path)) |directory| {
-        try std.fs.cwd().makePath(directory);
+        try std.Io.Dir.cwd().createDirPath(io_globals.global_io, directory);
     }
-    try std.fs.cwd().writeFile(.{
+    try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{
         .sub_path = path,
         .data = encoded,
     });
@@ -357,7 +348,7 @@ pub fn loadPrefabFromPath(
     allocator: std.mem.Allocator,
     path: []const u8,
 ) !PrefabResource {
-    const source = try std.fs.cwd().readFileAlloc(allocator, path, 16 * 1024 * 1024);
+    const source = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, path, allocator, .limited(16 * 1024 * 1024));
     defer allocator.free(source);
     var prefab = try deserializePrefabFromSlice(allocator, source);
     prefab.source_path = try allocator.dupe(u8, path);
@@ -1017,9 +1008,9 @@ test "Prefab save-load-resave is byte stable" {
     var temp_dir = std.testing.tmpDir(.{});
     defer temp_dir.cleanup();
 
-    const cwd = std.fs.cwd();
-    var original = try cwd.openDir(".", .{});
-    defer original.close();
+    const cwd = std.Io.Dir.cwd();
+    var original = try cwd.openDir(io_globals.global_io, ".", .{});
+    defer original.close(io_globals.global_io);
     try temp_dir.dir.setAsCwd();
     defer original.setAsCwd() catch {};
 
@@ -1057,9 +1048,9 @@ test "Prefab save-load-resave is byte stable" {
     defer loaded.deinit();
     try savePrefabToPath(allocator, &loaded, "assets/prefabs/test_resaved.prefab");
 
-    const first = try std.fs.cwd().readFileAlloc(allocator, "assets/prefabs/test.prefab", 1024 * 1024);
+    const first = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, "assets/prefabs/test.prefab", allocator, .limited(1024 * 1024));
     defer allocator.free(first);
-    const second = try std.fs.cwd().readFileAlloc(allocator, "assets/prefabs/test_resaved.prefab", 1024 * 1024);
+    const second = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, "assets/prefabs/test_resaved.prefab", allocator, .limited(1024 * 1024));
     defer allocator.free(second);
 
     try std.testing.expectEqualStrings(first, second);

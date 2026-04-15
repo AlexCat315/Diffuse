@@ -17,6 +17,7 @@
 ///!   canvas.appendToRoot(panel.id);
 ///!
 const std = @import("std");
+const io_globals = @import("io_globals");
 const node_mod = @import("node.zig");
 const layout_mod = @import("layout.zig");
 const renderer_mod = @import("renderer.zig");
@@ -80,15 +81,8 @@ pub const Canvas = struct {
     /// Load a TTF font from a file path and create the SDF atlas on the GPU.
     pub fn loadFont(self: *Canvas, device: *rhi_mod.RhiDevice, path: []const u8, font_size_px: f32) !void {
         // Read font file
-        const file = try std.fs.cwd().openFile(path, .{});
-        defer file.close();
-        const stat = try file.stat();
-        const data = try self.allocator.alloc(u8, stat.size);
-        const bytes_read = try file.readAll(data);
-        if (bytes_read != stat.size) {
-            self.allocator.free(data);
-            return error.IncompleteRead;
-        }
+        const io = io_globals.global_io;
+        const data = try std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, .unlimited);
         self.font_data = data;
 
         // Initialize font and generate atlas
@@ -352,4 +346,3 @@ pub const Canvas = struct {
         self.dirty = true;
     }
 };
-

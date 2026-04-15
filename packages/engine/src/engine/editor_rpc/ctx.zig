@@ -122,15 +122,7 @@ pub const Ctx = struct {
 // ═══════════════════════════════════════════════════════════════════
 
 pub fn json(allocator: std.mem.Allocator, value: anytype) ![]u8 {
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
-    var writer = output.writer(allocator);
-    var buf: [4096]u8 = undefined;
-    var adapter = writer.adaptToNewApi(&buf);
-    try std.json.Stringify.value(value, .{}, &adapter.new_interface);
-    try adapter.new_interface.flush();
-    if (adapter.err) |err| return err;
-    return try output.toOwnedSlice(allocator);
+    return try std.json.Stringify.valueAlloc(allocator, value, .{});
 }
 
 pub fn readVec3(val: std.json.Value) ?[3]f32 {

@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const components = @import("../scene/components.zig");
 const command_queue_mod = @import("../core/command_queue.zig");
 const world_mod = @import("../scene/world.zig");
@@ -582,13 +583,13 @@ pub const ScriptContext = struct {
     pub fn saveData(self: *ScriptContext, key: []const u8, value: []const u8) bool {
         const root = self.save_root_path orelse return false;
         // 确保目录存在
-        std.fs.cwd().makePath(root) catch return false;
+        std.Io.Dir.cwd().createDirPath(io_globals.global_io, root) catch return false;
 
         var path_buf: [512]u8 = undefined;
         const path = std.fmt.bufPrint(&path_buf, "{s}/{s}.dat", .{ root, key }) catch return false;
-        const file = std.fs.cwd().createFile(path, .{}) catch return false;
-        defer file.close();
-        file.writeAll(value) catch return false;
+        const file = std.Io.Dir.cwd().createFile(io_globals.global_io, path, .{}) catch return false;
+        defer file.close(io_globals.global_io);
+        file.writeStreamingAll(io_globals.global_io, value) catch return false;
         return true;
     }
 
@@ -598,9 +599,7 @@ pub const ScriptContext = struct {
         const root = self.save_root_path orelse return null;
         var path_buf: [512]u8 = undefined;
         const path = std.fmt.bufPrint(&path_buf, "{s}/{s}.dat", .{ root, key }) catch return null;
-        const file = std.fs.cwd().openFile(path, .{}) catch return null;
-        defer file.close();
-        return file.readToEndAlloc(self.allocator, 1024 * 1024) catch null;
+        return std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, path, self.allocator, .limited(1024 * 1024)) catch null;
     }
 
     // -----------------------------------------------------------------------

@@ -14,6 +14,7 @@
 ///! Heartbeat: both sides send periodic heartbeats.  If no packet is received
 ///! for `TIMEOUT_NS` the peer is considered disconnected.
 const std = @import("std");
+const io_globals = @import("io_globals");
 const protocol = @import("protocol.zig");
 const transport_mod = @import("transport.zig");
 
@@ -26,9 +27,9 @@ pub const SessionConfig = struct {
     /// Port to bind (host mode) or 0 for random (client mode).
     port: u16 = 7777,
     /// Heartbeat interval in nanoseconds (500ms).
-    heartbeat_interval_ns: i128 = 500_000_000,
+    heartbeat_interval_ns: i96 = 500_000_000,
     /// Connection timeout in nanoseconds (10s).
-    timeout_ns: i128 = 10_000_000_000,
+    timeout_ns: i96 = 10_000_000_000,
 };
 
 /// Unique player identifier (assigned by host, 1-based).
@@ -98,9 +99,9 @@ pub const NetworkSession = struct {
     /// Pending events for this frame.
     events: std.ArrayList(SessionEvent),
     /// Last heartbeat send time.
-    last_heartbeat_time: i128 = 0,
+    last_heartbeat_time: i96 = 0,
     /// Connection attempt start time (client mode).
-    connect_start_time: i128 = 0,
+    connect_start_time: i96 = 0,
     /// Client connection state.
     client_state: ClientState = .idle,
 
@@ -146,7 +147,7 @@ pub const NetworkSession = struct {
         self.role = .client;
         self.host_address = host_addr;
         self.client_state = .sending_request;
-        self.connect_start_time = std.time.nanoTimestamp();
+        self.connect_start_time = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
         log.info("connecting to host...", .{});
     }
 
@@ -179,7 +180,7 @@ pub const NetworkSession = struct {
         self.events.clearRetainingCapacity();
 
         var t = &(self.transport orelse return self.events.items);
-        const now = std.time.nanoTimestamp();
+        const now = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
 
         // Poll incoming packets.
         const packets = try t.poll();
@@ -277,10 +278,10 @@ pub const NetworkSession = struct {
         try t.send(addr, .control, buf[0 .. 1 + payload.len]);
     }
 
-    fn handleControl(self: *NetworkSession, from: transport_mod.Address, payload: []const u8, now: i128) void {
+    fn handleControl(self: *NetworkSession, from: transport_mod.Address, payload: []const u8, now: i96) void {
         _ = now;
         if (payload.len < 1) return;
-        const kind = std.meta.intToEnum(protocol.ControlKind, payload[0]) catch return;
+        const kind = std.enums.fromInt(protocol.ControlKind, payload[0]) orelse return;
         const ctrl_payload = payload[1..];
 
         switch (self.role) {
@@ -298,7 +299,7 @@ pub const NetworkSession = struct {
                     return;
                 }
                 // Generate challenge token.
-                const token = @as(u32, @truncate(@as(u128, @bitCast(std.time.nanoTimestamp()))));
+                const token = @as(u32, @truncate(@as(u96, @bitCast(std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds))));
                 var token_bytes: [4]u8 = undefined;
                 std.mem.writeInt(u32, &token_bytes, token, .little);
                 self.sendControl(from, .connect_challenge, &token_bytes) catch {};
@@ -374,7 +375,7 @@ pub const NetworkSession = struct {
         }
     }
 
-    fn tickClientHandshake(self: *NetworkSession, now: i128) void {
+    fn tickClientHandshake(self: *NetworkSession, now: i96) void {
         // Timeout check.
         if (self.client_state != .connected and self.client_state != .idle and self.client_state != .failed) {
             if (now - self.connect_start_time > self.config.timeout_ns) {
@@ -403,7 +404,7 @@ pub const NetworkSession = struct {
         }
     }
 
-    fn checkTimeouts(self: *NetworkSession, now: i128) void {
+    fn checkTimeouts(self: *NetworkSession, now: i96) void {
         const t = &(self.transport orelse return);
         if (self.role == .host) {
             var i: usize = 0;
@@ -453,11 +454,17 @@ pub const NetworkSession = struct {
 };
 
 fn addressKey(addr: transport_mod.Address) u64 {
-    switch (addr.any.family) {
-        std.posix.AF.INET => {
-            const in4: *const std.posix.sockaddr.in = @ptrCast(@alignCast(&addr.any));
-            return @as(u64, in4.addr) | (@as(u64, in4.port) << 32);
+    switch (addr) {
+        .ip4 => |ip4| {
+            const addr_int: u32 = @bitCast(ip4.bytes);
+            return @as(u64, addr_int) | (@as(u64, ip4.port) << 32);
         },
-        else => return 0,
+        .ip6 => |ip6| {
+            var hash: u64 = ip6.port;
+            for (ip6.bytes) |b| {
+                hash = hash *% 31 +% b;
+            }
+            return hash;
+        },
     }
 }

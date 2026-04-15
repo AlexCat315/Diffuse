@@ -346,7 +346,7 @@ pub const Decoder = struct {
 
         const raw_op = self.bytes[self.cursor];
         self.cursor += 1;
-        const op = std.meta.intToEnum(OpCode, raw_op) catch return error.InvalidOpcode;
+        const op = std.enums.fromInt(OpCode, raw_op) orelse return error.InvalidOpcode;
 
         return switch (op) {
             .begin_render_pass => .{ .begin_render_pass = try self.readStruct(BeginRenderPassCmd) },

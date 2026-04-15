@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const asset_registry = @import("../assets/registry.zig");
 const assets_handles = @import("../assets/handles.zig");
 const mesh_mod = @import("../assets/mesh_resource.zig");
@@ -512,20 +513,10 @@ pub fn serializeWorldWithRuntimeStateAlloc(
 
     const scene = try buildSceneFileFiltered(arena, world, null);
 
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
-    var legacy_writer = output.writer(allocator);
-    var adapter_buffer: [4096]u8 = undefined;
-    var writer_adapter = legacy_writer.adaptToNewApi(&adapter_buffer);
-    try std.json.Stringify.value(SceneRuntimeFile{
+    return std.json.Stringify.valueAlloc(allocator, SceneRuntimeFile{
         .scene = scene,
         .runtime_state = runtime_state,
-    }, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
-    try writer_adapter.new_interface.flush();
-    if (writer_adapter.err) |err| {
-        return err;
-    }
-    return output.toOwnedSlice(allocator);
+    }, .{ .whitespace = .indent_2 });
 }
 
 fn buildSceneFileAlloc(
@@ -539,17 +530,7 @@ fn buildSceneFileAlloc(
 
     const scene = try buildSceneFileFiltered(arena, world, included_entities);
 
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
-    var legacy_writer = output.writer(allocator);
-    var adapter_buffer: [4096]u8 = undefined;
-    var writer_adapter = legacy_writer.adaptToNewApi(&adapter_buffer);
-    try std.json.Stringify.value(scene, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
-    try writer_adapter.new_interface.flush();
-    if (writer_adapter.err) |err| {
-        return err;
-    }
-    return output.toOwnedSlice(allocator);
+    return std.json.Stringify.valueAlloc(allocator, scene, .{ .whitespace = .indent_2 });
 }
 
 pub fn deserializeWorldFromSlice(allocator: std.mem.Allocator, world: *world_mod.World, source: []const u8) !void {
@@ -629,9 +610,9 @@ pub fn saveWorldToPath(
     defer allocator.free(encoded);
 
     if (std.fs.path.dirname(path)) |directory| {
-        try std.fs.cwd().makePath(directory);
+        try std.Io.Dir.cwd().createDirPath(io_globals.global_io, directory);
     }
-    try std.fs.cwd().writeFile(.{
+    try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{
         .sub_path = path,
         .data = encoded,
     });
@@ -642,7 +623,7 @@ pub fn loadWorldFromPath(
     world: *world_mod.World,
     path: []const u8,
 ) !void {
-    const source = try std.fs.cwd().readFileAlloc(allocator, path, 128 * 1024 * 1024);
+    const source = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, path, allocator, .limited(128 * 1024 * 1024));
     defer allocator.free(source);
     try deserializeWorldFromSlice(allocator, world, source);
 }
@@ -657,9 +638,9 @@ pub fn saveWorldWithRuntimeStateToPath(
     defer allocator.free(encoded);
 
     if (std.fs.path.dirname(path)) |directory| {
-        try std.fs.cwd().makePath(directory);
+        try std.Io.Dir.cwd().createDirPath(io_globals.global_io, directory);
     }
-    try std.fs.cwd().writeFile(.{
+    try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{
         .sub_path = path,
         .data = encoded,
     });
@@ -671,7 +652,7 @@ pub fn loadWorldWithRuntimeStateFromPath(
     path: []const u8,
     runtime_state: ?*SceneRuntimeState,
 ) !void {
-    const source = try std.fs.cwd().readFileAlloc(allocator, path, 128 * 1024 * 1024);
+    const source = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, path, allocator, .limited(128 * 1024 * 1024));
     defer allocator.free(source);
     try deserializeWorldWithRuntimeStateFromSlice(allocator, world, source, runtime_state);
 }
@@ -3147,9 +3128,9 @@ test "scene save-load-resave is byte stable" {
     var temp_dir = std.testing.tmpDir(.{});
     defer temp_dir.cleanup();
 
-    const cwd = std.fs.cwd();
-    var original = try cwd.openDir(".", .{});
-    defer original.close();
+    const cwd = std.Io.Dir.cwd();
+    var original = try cwd.openDir(io_globals.global_io, ".", .{});
+    defer original.close(io_globals.global_io);
     try temp_dir.dir.setAsCwd();
     defer original.setAsCwd() catch {};
 
@@ -3210,9 +3191,9 @@ test "scene save-load-resave is byte stable" {
     try std.testing.expectEqualSlices(u8, &.{ 0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00 }, loaded_script.bytecode);
     try std.testing.expect(loaded.resources.scriptAssetId(loaded_root.script.?.script_handle.?) != null);
 
-    const first = try std.fs.cwd().readFileAlloc(std.testing.allocator, "assets/scenes/test.guava_scene", 4 * 1024 * 1024);
+    const first = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, "assets/scenes/test.guava_scene", std.testing.allocator, .limited(4 * 1024 * 1024));
     defer std.testing.allocator.free(first);
-    const second = try std.fs.cwd().readFileAlloc(std.testing.allocator, "assets/scenes/test_resaved.guava_scene", 4 * 1024 * 1024);
+    const second = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, "assets/scenes/test_resaved.guava_scene", std.testing.allocator, .limited(4 * 1024 * 1024));
     defer std.testing.allocator.free(second);
 
     try std.testing.expectEqualStrings(first, second);

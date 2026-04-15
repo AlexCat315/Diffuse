@@ -1,5 +1,6 @@
 ///! handlers/assets.zig — asset browser & file management.
 const std = @import("std");
+const io_globals = @import("io_globals");
 const ctx_mod = @import("../ctx.zig");
 const Ctx = ctx_mod.Ctx;
 const components = @import("../../scene/components.zig");
@@ -11,16 +12,16 @@ pub fn list(ctx: *Ctx) !void {
     const rel_path = (try ctx.paramOpt([]const u8, "path")) orelse blk: {
         // Prefer project "Content" directory; fall back to "assets"
         if (ctx.project_root) |root| {
-            var d = std.fs.openDirAbsolute(root, .{}) catch break :blk "Content";
-            defer d.close();
-            var content = d.openDir("Content", .{}) catch break :blk "assets";
-            content.close();
+            var d = std.Io.Dir.openDirAbsolute(io_globals.global_io, root, .{}) catch break :blk "Content";
+            defer d.close(io_globals.global_io);
+            var content = d.openDir(io_globals.global_io, "Content", .{}) catch break :blk "assets";
+            content.close(io_globals.global_io);
             break :blk "Content";
         }
-        var d = std.fs.cwd().openDir("Content", .{}) catch {
+        var d = std.Io.Dir.cwd().openDir(io_globals.global_io, "Content", .{}) catch {
             break :blk "assets";
         };
-        d.close();
+        d.close(io_globals.global_io);
         break :blk "Content";
     };
 
@@ -33,25 +34,25 @@ pub fn list(ctx: *Ctx) !void {
 
     // Open the target directory relative to project root (or CWD as fallback).
     // We need to track whether we opened a base Dir so we can close it.
-    var owned_base: ?std.fs.Dir = if (ctx.project_root) |root|
-        (std.fs.openDirAbsolute(root, .{}) catch null)
+    var owned_base: ?std.Io.Dir = if (ctx.project_root) |root|
+        (std.Io.Dir.openDirAbsolute(io_globals.global_io, root, .{}) catch null)
     else
         null;
-    defer if (owned_base) |*d| d.close();
+    defer if (owned_base) |*d| d.close(io_globals.global_io);
 
-    const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+    const base_dir: std.Io.Dir = owned_base orelse std.Io.Dir.cwd();
 
-    var dir = base_dir.openDir(rel_path, .{ .iterate = true }) catch {
+    var dir = base_dir.openDir(io_globals.global_io, rel_path, .{ .iterate = true }) catch {
         try ctx.reply(.{
             .path = rel_path,
             .entries = @as([]const Entry, &.{}),
         });
         return;
     };
-    defer dir.close();
+    defer dir.close(io_globals.global_io);
 
     var iter = dir.iterate();
-    while (try iter.next()) |entry| {
+    while (try iter.next(io_globals.global_io)) |entry| {
         // Skip hidden files and .meta files
         if (entry.name.len > 0 and entry.name[0] == '.') continue;
         if (std.mem.endsWith(u8, entry.name, ".meta")) continue;
@@ -125,19 +126,19 @@ pub fn listProjectRoot(ctx: *Ctx) !void {
 
     // Use project root if available, otherwise CWD
     var base_dir = if (ctx.project_root) |root|
-        std.fs.openDirAbsolute(root, .{ .iterate = true }) catch {
+        std.Io.Dir.openDirAbsolute(io_globals.global_io, root, .{ .iterate = true }) catch {
             try ctx.reply(.{ .path = ".", .entries = @as([]const Entry, &.{}) });
             return;
         }
     else
-        std.fs.cwd().openDir(".", .{ .iterate = true }) catch {
+        std.Io.Dir.cwd().openDir(io_globals.global_io, ".", .{ .iterate = true }) catch {
             try ctx.reply(.{ .path = ".", .entries = @as([]const Entry, &.{}) });
             return;
         };
-    defer base_dir.close();
+    defer base_dir.close(io_globals.global_io);
 
     var iter = base_dir.iterate();
-    while (try iter.next()) |entry| {
+    while (try iter.next(io_globals.global_io)) |entry| {
         // Skip hidden files, build artifacts, caches
         if (entry.name.len > 0 and entry.name[0] == '.') continue;
         if (std.mem.eql(u8, entry.name, "zig-out")) continue;

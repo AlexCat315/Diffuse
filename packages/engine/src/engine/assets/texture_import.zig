@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const environment_map_import = @import("environment_map_import.zig");
 const image_decoder = @import("image_decoder.zig");
 const registry_mod = @import("registry.zig");
@@ -33,7 +34,7 @@ pub fn ensureCookedTexture(allocator: std.mem.Allocator, registry: *const regist
 
     const cooked_path = record.outputs[0].path;
     const should_recook = recook: {
-        std.fs.cwd().access(cooked_path, .{}) catch |err| switch (err) {
+        std.Io.Dir.cwd().access(io_globals.global_io, cooked_path, .{}) catch |err| switch (err) {
             error.FileNotFound => break :recook true,
             else => return err,
         };
@@ -82,7 +83,7 @@ pub fn loadTextureAsset(
     }
 
     const cooked_path = try ensureCookedTexture(allocator, registry, asset_id);
-    const encoded = try std.fs.cwd().readFileAlloc(allocator, cooked_path, 512 * 1024 * 1024);
+    const encoded = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, cooked_path, allocator, .limited(512 * 1024 * 1024));
     defer allocator.free(encoded);
 
     var parsed = try std.json.parseFromSlice(CookedTexture, allocator, encoded, .{
@@ -131,7 +132,7 @@ fn cookTextureRecord(allocator: std.mem.Allocator, record: *const registry_mod.A
         height = rasterized.height;
         raw_pixels = try allocator.dupe(u8, rasterized.pixels);
     } else if (std.mem.endsWith(u8, record.source_path, ".hdr")) {
-        const encoded = try std.fs.cwd().readFileAlloc(allocator, record.source_path, 128 * 1024 * 1024);
+        const encoded = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, record.source_path, allocator, .limited(128 * 1024 * 1024));
         defer allocator.free(encoded);
 
         var decoded = try image_decoder.decodeRgba32f(allocator, encoded);
@@ -158,14 +159,14 @@ fn cookTextureRecord(allocator: std.mem.Allocator, record: *const registry_mod.A
         defer allocator.free(cooked_ibl);
 
         if (std.fs.path.dirname(cooked_ibl_path)) |directory| {
-            try std.fs.cwd().makePath(directory);
+            try std.Io.Dir.cwd().createDirPath(io_globals.global_io, directory);
         }
-        try std.fs.cwd().writeFile(.{
+        try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{
             .sub_path = cooked_ibl_path,
             .data = cooked_ibl,
         });
     } else {
-        const encoded = try std.fs.cwd().readFileAlloc(allocator, record.source_path, 128 * 1024 * 1024);
+        const encoded = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, record.source_path, allocator, .limited(128 * 1024 * 1024));
         defer allocator.free(encoded);
 
         var decoded = try image_decoder.decodeRgba8(allocator, encoded);
@@ -180,9 +181,9 @@ fn cookTextureRecord(allocator: std.mem.Allocator, record: *const registry_mod.A
     defer allocator.free(bin_path);
 
     if (std.fs.path.dirname(cooked_path)) |directory| {
-        try std.fs.cwd().makePath(directory);
+        try std.Io.Dir.cwd().createDirPath(io_globals.global_io, directory);
     }
-    try std.fs.cwd().writeFile(.{
+    try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{
         .sub_path = bin_path,
         .data = raw_pixels,
     });
@@ -202,29 +203,18 @@ fn cookTextureRecord(allocator: std.mem.Allocator, record: *const registry_mod.A
     const output = try stringifyAlloc(allocator, cooked);
     defer allocator.free(output);
 
-    try std.fs.cwd().writeFile(.{
+    try std.Io.Dir.cwd().writeFile(io_globals.global_io, .{
         .sub_path = cooked_path,
         .data = output,
     });
 }
 
 fn stringifyAlloc(allocator: std.mem.Allocator, value: anytype) ![]u8 {
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
-
-    var writer = output.writer(allocator);
-    var adapter_buffer: [2048]u8 = undefined;
-    var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
-    try std.json.Stringify.value(value, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
-    try writer_adapter.new_interface.flush();
-    if (writer_adapter.err) |err| {
-        return err;
-    }
-    return output.toOwnedSlice(allocator);
+    return try std.json.Stringify.valueAlloc(allocator, value, .{ .whitespace = .indent_2 });
 }
 
 fn readCookedTextureAlloc(allocator: std.mem.Allocator, cooked_path: []const u8) !CookedTexture {
-    const encoded = try std.fs.cwd().readFileAlloc(allocator, cooked_path, 512 * 1024 * 1024);
+    const encoded = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, cooked_path, allocator, .limited(512 * 1024 * 1024));
     defer allocator.free(encoded);
 
     var parsed = try std.json.parseFromSlice(CookedTexture, allocator, encoded, .{
@@ -297,7 +287,7 @@ fn decodeHexAlloc(allocator: std.mem.Allocator, encoded: []const u8) ![]u8 {
 /// Load pixel data from either a binary sidecar file or hex-encoded JSON field.
 fn loadCookedPixelsAlloc(allocator: std.mem.Allocator, cooked: CookedTexture) ![]u8 {
     if (cooked.pixels_bin_path.len > 0) {
-        return std.fs.cwd().readFileAlloc(allocator, cooked.pixels_bin_path, 512 * 1024 * 1024);
+        return std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, cooked.pixels_bin_path, allocator, .limited(512 * 1024 * 1024));
     }
     if (cooked.pixels_hex.len > 0) {
         return decodeHexAlloc(allocator, cooked.pixels_hex);
@@ -327,7 +317,7 @@ test "texture cache is created deterministically" {
 
     try temp_dir.dir.makePath("assets/textures");
 
-    const cwd = std.fs.cwd();
+    const cwd = std.Io.Dir.cwd();
     const source_png = try cwd.readFileAlloc(std.testing.allocator, "assets/models/guava_showcase/checker.png", 128 * 1024);
     defer std.testing.allocator.free(source_png);
 
@@ -336,8 +326,8 @@ test "texture cache is created deterministically" {
         .data = source_png,
     });
 
-    var original = try cwd.openDir(".", .{});
-    defer original.close();
+    var original = try cwd.openDir(io_globals.global_io, ".", .{});
+    defer original.close(io_globals.global_io);
     try temp_dir.dir.setAsCwd();
     defer original.setAsCwd() catch {};
 
@@ -347,12 +337,12 @@ test "texture cache is created deterministically" {
 
     const record = registry.recordByPath("assets/textures/example.png") orelse return error.AssetNotFound;
     const first_path = try ensureCookedTexture(std.testing.allocator, &registry, record.id);
-    const first_bytes = try std.fs.cwd().readFileAlloc(std.testing.allocator, first_path, 512 * 1024);
+    const first_bytes = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, first_path, std.testing.allocator, .limited(512 * 1024));
     defer std.testing.allocator.free(first_bytes);
 
-    try std.fs.cwd().deleteFile(first_path);
+    try std.Io.Dir.cwd().deleteFile(io_globals.global_io, first_path);
     const second_path = try ensureCookedTexture(std.testing.allocator, &registry, record.id);
-    const second_bytes = try std.fs.cwd().readFileAlloc(std.testing.allocator, second_path, 512 * 1024);
+    const second_bytes = try std.Io.Dir.cwd().readFileAlloc(io_globals.global_io, second_path, std.testing.allocator, .limited(512 * 1024));
     defer std.testing.allocator.free(second_bytes);
 
     try std.testing.expectEqualStrings(first_path, second_path);

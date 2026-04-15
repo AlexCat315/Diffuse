@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const engine = @import("guava");
 const sdl = engine.platform.sdl;
 
@@ -190,30 +191,26 @@ fn prefsPathAlloc(allocator: std.mem.Allocator, file_name: []const u8) ![]u8 {
 }
 
 fn writeJsonFileAtomically(allocator: std.mem.Allocator, path: []const u8, payload: anytype) !void {
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
-    var writer = output.writer(allocator);
-    var adapter_buffer: [4096]u8 = undefined;
-    var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
-    try std.json.Stringify.value(payload, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
-    try writer_adapter.new_interface.flush();
+    const output = try std.json.Stringify.valueAlloc(allocator, payload, .{ .whitespace = .indent_2 });
+    defer allocator.free(output);
 
+    const io = io_globals.global_io;
     if (std.fs.path.dirname(path)) |dir_path| {
-        try std.fs.cwd().makePath(dir_path);
+        try std.Io.Dir.cwd().createDirPath(io, dir_path);
     }
     const tmp_path = try std.fmt.allocPrint(allocator, "{s}.tmp", .{path});
     defer allocator.free(tmp_path);
 
-    const file = try std.fs.createFileAbsolute(tmp_path, .{ .truncate = true });
-    defer file.close();
-    try file.writeAll(output.items);
-    file.sync() catch {};
+    try std.Io.Dir.cwd().writeFile(io, .{
+        .sub_path = tmp_path,
+        .data = output,
+    });
 
-    std.fs.deleteFileAbsolute(path) catch |err| switch (err) {
+    std.Io.Dir.cwd().deleteFile(io, path) catch |err| switch (err) {
         error.FileNotFound => {},
         else => return err,
     };
-    try std.fs.renameAbsolute(tmp_path, path);
+    try std.Io.Dir.cwd().rename(tmp_path, std.Io.Dir.cwd(), path, io);
 }
 
 fn saveAiProviderSettingsToPath(state: *const EditorState, path: []const u8) !void {
@@ -256,7 +253,7 @@ fn saveAiProviderSettingsToPath(state: *const EditorState, path: []const u8) !vo
     }
 
     if (!has_meaningful_provider) {
-        std.fs.deleteFileAbsolute(path) catch |err| switch (err) {
+        std.Io.Dir.cwd().deleteFile(io_globals.global_io, path) catch |err| switch (err) {
             error.FileNotFound => {},
             else => return err,
         };
@@ -276,14 +273,12 @@ fn saveAiProviderSettingsToPath(state: *const EditorState, path: []const u8) !vo
 
 fn loadAiProviderSettingsFromPath(state: *EditorState, path: []const u8) !void {
     const allocator = state.allocator orelse return error.AllocatorNotInitialized;
+    const io = io_globals.global_io;
 
-    const file = std.fs.openFileAbsolute(path, .{}) catch |err| switch (err) {
+    const bytes = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_prefs_file_size)) catch |err| switch (err) {
         error.FileNotFound => return,
         else => return err,
     };
-    defer file.close();
-
-    const bytes = try file.readToEndAlloc(allocator, max_prefs_file_size);
     defer allocator.free(bytes);
 
     var parsed = try std.json.parseFromSlice(PersistedPrefs, allocator, bytes, .{
@@ -383,14 +378,12 @@ pub fn saveAiProviderSettings(state: *const EditorState) !void {
 
 fn loadEditorPreferencesFromPath(state: *EditorState, path: []const u8) !void {
     const allocator = state.allocator orelse return error.AllocatorNotInitialized;
+    const io = io_globals.global_io;
 
-    const file = std.fs.openFileAbsolute(path, .{}) catch |err| switch (err) {
+    const bytes = std.Io.Dir.cwd().readFileAlloc(io, path, allocator, .limited(max_prefs_file_size)) catch |err| switch (err) {
         error.FileNotFound => return,
         else => return err,
     };
-    defer file.close();
-
-    const bytes = try file.readToEndAlloc(allocator, max_prefs_file_size);
     defer allocator.free(bytes);
 
     var parsed = try std.json.parseFromSlice(PersistedEditorPrefs, allocator, bytes, .{

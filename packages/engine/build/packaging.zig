@@ -164,7 +164,7 @@ fn addMacOSBundle(
     // Pre-compiled scripts
     inline for (.{"csharp"}) |subdir| {
         const scripts_source_dir = b.getInstallPath(.{ .custom = "scripts/" ++ subdir }, "");
-        if (std.fs.cwd().access(scripts_source_dir, .{})) |_| {
+        if (std.Io.Dir.cwd().access(b.graph.io, scripts_source_dir, .{})) |_| {
             const install_scripts = b.addInstallDirectory(.{
                 .source_dir = .{ .cwd_relative = scripts_source_dir },
                 .install_dir = .{ .custom = bundle_base ++ "/scripts/" ++ subdir },
@@ -267,14 +267,14 @@ fn addScriptsStep(b: *std.Build, target: std.Build.ResolvedTarget) void {
     const runtime_id = rid orelse return;
     const csharp_output_dir = b.getInstallPath(.{ .custom = "scripts/csharp" }, "");
 
-    const dir = std.fs.cwd().openDir("examples/csharp", .{ .iterate = true }) catch return;
+    const dir = std.Io.Dir.cwd().openDir(b.graph.io, "examples/csharp", .{ .iterate = true }) catch return;
     var iter = dir.iterate();
-    while (iter.next() catch null) |entry| {
+    while (iter.next(b.graph.io) catch null) |entry| {
         if (entry.kind != .directory) continue;
         const csproj_glob = b.pathJoin(&.{ "examples/csharp", entry.name });
-        const subdir = std.fs.cwd().openDir(csproj_glob, .{ .iterate = true }) catch continue;
+        const subdir = std.Io.Dir.cwd().openDir(b.graph.io, csproj_glob, .{ .iterate = true }) catch continue;
         var sub_iter = subdir.iterate();
-        while (sub_iter.next() catch null) |sub_entry| {
+        while (sub_iter.next(b.graph.io) catch null) |sub_entry| {
             if (sub_entry.kind != .file) continue;
             const name = sub_entry.name;
             if (name.len > 7 and std.mem.eql(u8, name[name.len - 7 ..], ".csproj")) {

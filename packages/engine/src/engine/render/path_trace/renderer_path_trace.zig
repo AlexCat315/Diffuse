@@ -15,6 +15,7 @@ const rhi_types = @import("../../rhi/types.zig");
 const path_trace_common = @import("path_trace_common.zig");
 const rt_backend = @import("../../rt/rt_backend.zig");
 const image_export = @import("../image_export.zig");
+const io_globals = @import("io_globals");
 
 pub const PathTraceTriangle = path_trace_common.PathTraceTriangle;
 pub const PathTraceTexture = path_trace_common.PathTraceTexture;
@@ -1749,9 +1750,9 @@ pub fn buildPathTraceEnvironmentImportance(
     errdefer allocator.free(entries);
     var scaled = try allocator.alloc(f32, entry_count);
     defer allocator.free(scaled);
-    var small = std.ArrayListUnmanaged(usize){};
+    var small: std.ArrayListUnmanaged(usize) = .empty;
     defer small.deinit(allocator);
-    var large = std.ArrayListUnmanaged(usize){};
+    var large: std.ArrayListUnmanaged(usize) = .empty;
     defer large.deinit(allocator);
 
     const count_f = @as(f32, @floatFromInt(entry_count));
@@ -1865,7 +1866,7 @@ pub fn buildPathTraceEmissiveLights(
     allocator: std.mem.Allocator,
     triangles: []const PathTraceTriangle,
 ) !BuiltPathTraceEmissiveLights {
-    var list = std.ArrayListUnmanaged(PathTraceEmissiveLight){};
+    var list: std.ArrayListUnmanaged(PathTraceEmissiveLight) = .empty;
     defer list.deinit(allocator);
 
     var total_area: f32 = 0.0;
@@ -1898,7 +1899,7 @@ pub fn buildHwRtEmissiveLights(
     allocator: std.mem.Allocator,
     triangles: []const rt_backend.RtTriangle,
 ) !BuiltPathTraceEmissiveLights {
-    var list = std.ArrayListUnmanaged(PathTraceEmissiveLight){};
+    var list: std.ArrayListUnmanaged(PathTraceEmissiveLight) = .empty;
     defer list.deinit(allocator);
 
     var total_area: f32 = 0.0;
@@ -1996,12 +1997,12 @@ pub fn buildHwRtSamplingTables(
     };
 }
 
-pub fn renderCpuPathTraceTiles(pt: *PathTraceProgressiveState, use_progressive_budget: bool, budget_ns: i128) void {
+pub fn renderCpuPathTraceTiles(pt: *PathTraceProgressiveState, use_progressive_budget: bool, budget_ns: i96) void {
     if (pt.complete) return;
     const trace_linear = pt.trace_linear_rgb orelse return;
     if (pt.trace_width == 0 or pt.trace_height == 0 or pt.cached_samples == 0) return;
 
-    const start_time = std.time.nanoTimestamp();
+    const start_time = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
     const tile_span = pathTraceAdaptiveTileSpan(pt.sample_step);
     const use_adaptive_sampling = use_progressive_budget;
     const min_samples = if (use_adaptive_sampling)
@@ -2078,7 +2079,7 @@ pub fn renderCpuPathTraceTiles(pt: *PathTraceProgressiveState, use_progressive_b
         }
 
         advancePathTraceTileCursor(&pt.current_tile_x, &pt.current_tile_y, pt.trace_width, tile_span);
-        if (use_progressive_budget and std.time.nanoTimestamp() - start_time >= budget_ns) break;
+        if (use_progressive_budget and std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds - start_time >= budget_ns) break;
     }
 
     if (pt.current_tile_y >= pt.trace_height) {

@@ -42,6 +42,7 @@
 //! ```
 
 const std = @import("std");
+const io_globals = @import("io_globals");
 const assets_lib = @import("../assets/library.zig");
 const material_ast_mod = @import("../assets/material_ast.zig");
 const mesh_resource_mod = @import("../assets/mesh_resource.zig");
@@ -997,7 +998,7 @@ pub const Renderer = struct {
                 if (rec.manifest.path.len == 0) continue;
                 if (!std.mem.startsWith(u8, rec.manifest.path, root_path)) continue;
                 // Check if the manifest file still exists on disk
-                std.fs.cwd().access(rec.manifest.path, .{}) catch {
+                std.Io.Dir.cwd().access(io_globals.global_io, rec.manifest.path, .{}) catch {
                     stale_names.append(self.allocator, rec.manifest.name) catch |err| {
                         render_log.err("failed to append stale plugin name: {s}", .{@errorName(err)});
                     };
@@ -1687,9 +1688,9 @@ pub const Renderer = struct {
                 if (self.id_pass.isReady()) {
                     const id_texture = self.id_pass.texture().?;
                     const id_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.idPass(id_texture, scene_depth_target));
-                    const start = std.time.nanoTimestamp();
+                    const start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                     const id_stats = self.id_pass.draw(&self.rhi, frame, id_render_pass, &prepared_scene);
-                    self.graph.recordPassStat(pass_stats, .id_pass, durationNs(start, std.time.nanoTimestamp()), id_stats.draw_calls, id_stats.triangles_drawn);
+                    self.graph.recordPassStat(pass_stats, .id_pass, durationNs(start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), id_stats.draw_calls, id_stats.triangles_drawn);
                     draw_stats.add(id_stats);
                     self.rhi.endRenderPass(id_render_pass);
                 }
@@ -1698,9 +1699,9 @@ pub const Renderer = struct {
                 var current_taa_jitter_uv = [2]f32{ 0.0, 0.0 };
 
                 if (do_path_trace) {
-                    const path_trace_start = std.time.nanoTimestamp();
+                    const path_trace_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                     try self.renderPathTraceViewport(&prepared_scene, scene);
-                    const path_trace_end = std.time.nanoTimestamp();
+                    const path_trace_end = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                     self.graph.recordPassStat(pass_stats, .base_pass, durationNs(path_trace_start, path_trace_end), 0, 0);
 
                     const bloom_enabled = self.editor_viewport_state.bloom_enabled and self.scene_viewport.bloom() != null;
@@ -1709,7 +1710,7 @@ pub const Renderer = struct {
                     if (bloom_enabled) {
                         try self.bloom_pass.syncTexture(&self.rhi, self.scene_viewport.hdrColor().?);
                         const bloom_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.bloom().? }));
-                        const bloom_start = std.time.nanoTimestamp();
+                        const bloom_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                         const bloom_stats = self.bloom_pass.draw(&self.rhi, frame, bloom_render_pass, .{
                             .threshold_params = .{
                                 self.editor_viewport_state.bloom_threshold,
@@ -1719,7 +1720,7 @@ pub const Renderer = struct {
                             },
                         });
                         draw_stats.add(bloom_stats);
-                        self.graph.recordPassStat(pass_stats, .post_process, durationNs(bloom_start, std.time.nanoTimestamp()), bloom_stats.draw_calls, bloom_stats.triangles_drawn);
+                        self.graph.recordPassStat(pass_stats, .post_process, durationNs(bloom_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), bloom_stats.draw_calls, bloom_stats.triangles_drawn);
                         self.rhi.endRenderPass(bloom_render_pass);
                     }
 
@@ -1730,7 +1731,7 @@ pub const Renderer = struct {
                         null,
                     );
                     const tm_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.color().? }));
-                    const tm_start = std.time.nanoTimestamp();
+                    const tm_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                     const tonemap_stats = self.tonemap_pass.draw(&self.rhi, frame, tm_render_pass, .{
                         .exposure_params = .{
                             @as(f32, if (self.editor_viewport_state.exposure_enabled) 1.0 else 0.0),
@@ -1758,16 +1759,16 @@ pub const Renderer = struct {
                         },
                     });
                     draw_stats.add(tonemap_stats);
-                    self.graph.recordPassStat(pass_stats, .tonemap_pass, durationNs(tm_start, std.time.nanoTimestamp()), tonemap_stats.draw_calls, tonemap_stats.triangles_drawn);
+                    self.graph.recordPassStat(pass_stats, .tonemap_pass, durationNs(tm_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), tonemap_stats.draw_calls, tonemap_stats.triangles_drawn);
                     self.rhi.endRenderPass(tm_render_pass);
 
                     if (fxaa_enabled) {
-                        const fxaa_start = std.time.nanoTimestamp();
+                        const fxaa_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                         try self.fxaa_pass.syncTexture(&self.rhi, self.scene_viewport.color().?);
                         const fxaa_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.fxaa().? }));
                         const fxaa_stats = self.fxaa_pass.draw(&self.rhi, frame, fxaa_render_pass);
                         draw_stats.add(fxaa_stats);
-                        self.graph.recordPassStat(pass_stats, .post_process, durationNs(fxaa_start, std.time.nanoTimestamp()), fxaa_stats.draw_calls, fxaa_stats.triangles_drawn);
+                        self.graph.recordPassStat(pass_stats, .post_process, durationNs(fxaa_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), fxaa_stats.draw_calls, fxaa_stats.triangles_drawn);
                         self.rhi.endRenderPass(fxaa_render_pass);
                     }
                 } else {
@@ -1805,7 +1806,7 @@ pub const Renderer = struct {
                             }
                         } else {
                             self.shadow_map.cleared_for_rt = false;
-                            const shadow_start = std.time.nanoTimestamp();
+                            const shadow_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                             var cascade_stats = mesh_pass_mod.DrawStats{};
                             for (0..csm_cascade_count) |ci| {
                                 const shadow_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.shadowOnly(&self.shadow_map.depth_textures[ci].?));
@@ -1813,7 +1814,7 @@ pub const Renderer = struct {
                                 cascade_stats.add(cs);
                                 self.rhi.endRenderPass(shadow_render_pass);
                             }
-                            self.graph.recordPassStat(pass_stats, .shadow_map, durationNs(shadow_start, std.time.nanoTimestamp()), cascade_stats.draw_calls, cascade_stats.triangles_drawn);
+                            self.graph.recordPassStat(pass_stats, .shadow_map, durationNs(shadow_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), cascade_stats.draw_calls, cascade_stats.triangles_drawn);
                             draw_stats.add(cascade_stats);
                         }
                     }
@@ -1903,9 +1904,9 @@ pub const Renderer = struct {
                     var scene_pass: rhi_mod.RenderPass = undefined;
                     if (run_rt_shadow_denoise) {
                         const depth_prepass_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.depthOnly(scene_depth_target.?));
-                        const depth_start = std.time.nanoTimestamp();
+                        const depth_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                         const depth_stats = self.depth_prepass.draw(&self.rhi, frame, depth_prepass_pass, &prepared_scene);
-                        self.graph.recordPassStat(pass_stats, .depth_prepass, durationNs(depth_start, std.time.nanoTimestamp()), depth_stats.draw_calls, depth_stats.triangles_drawn);
+                        self.graph.recordPassStat(pass_stats, .depth_prepass, durationNs(depth_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), depth_stats.draw_calls, depth_stats.triangles_drawn);
                         draw_stats.add(depth_stats);
                         self.rhi.endRenderPass(depth_prepass_pass);
 
@@ -1927,7 +1928,7 @@ pub const Renderer = struct {
                                     .stencil_store_op = scene_depth_target.?.stencil_store_op,
                                 },
                             });
-                            const velocity_start = std.time.nanoTimestamp();
+                            const velocity_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                             const velocity_stats = self.velocity_pass.draw(
                                 &self.rhi,
                                 frame,
@@ -1937,14 +1938,14 @@ pub const Renderer = struct {
                                 self.prev_view_projection,
                                 &self.prev_mesh_models,
                             );
-                            self.graph.recordPassStat(pass_stats, .post_process, durationNs(velocity_start, std.time.nanoTimestamp()), velocity_stats.draw_calls, velocity_stats.triangles_drawn);
+                            self.graph.recordPassStat(pass_stats, .post_process, durationNs(velocity_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), velocity_stats.draw_calls, velocity_stats.triangles_drawn);
                             draw_stats.add(velocity_stats);
                             self.rhi.endRenderPass(velocity_render_pass);
                         }
 
                         try self.rt_shadow_denoise_pass.syncTextures(&self.rhi, &self.rt_shadow_mask_texture.?, self.scene_viewport.depth().?);
                         const denoise_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.rtShadowDenoised().? }));
-                        const denoise_start = std.time.nanoTimestamp();
+                        const denoise_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                         const denoise_stats = self.rt_shadow_denoise_pass.draw(&self.rhi, frame, denoise_render_pass, .{
                             .resolution = .{ @floatFromInt(self.scene_viewport.width), @floatFromInt(self.scene_viewport.height) },
                             .inv_resolution = .{
@@ -1953,7 +1954,7 @@ pub const Renderer = struct {
                             },
                             .filter_params = .{ 2.0, 140.0, 2.0, 0.0 },
                         });
-                        self.graph.recordPassStat(pass_stats, .post_process, durationNs(denoise_start, std.time.nanoTimestamp()), denoise_stats.draw_calls, denoise_stats.triangles_drawn);
+                        self.graph.recordPassStat(pass_stats, .post_process, durationNs(denoise_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), denoise_stats.draw_calls, denoise_stats.triangles_drawn);
                         draw_stats.add(denoise_stats);
                         self.rhi.endRenderPass(denoise_render_pass);
 
@@ -1980,9 +1981,9 @@ pub const Renderer = struct {
                     } else {
                         if (scene_depth_target != null) {
                             const depth_prepass_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.depthOnly(scene_depth_target.?));
-                            const depth_start = std.time.nanoTimestamp();
+                            const depth_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                             const depth_stats = self.depth_prepass.draw(&self.rhi, frame, depth_prepass_pass, &prepared_scene);
-                            self.graph.recordPassStat(pass_stats, .depth_prepass, durationNs(depth_start, std.time.nanoTimestamp()), depth_stats.draw_calls, depth_stats.triangles_drawn);
+                            self.graph.recordPassStat(pass_stats, .depth_prepass, durationNs(depth_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), depth_stats.draw_calls, depth_stats.triangles_drawn);
                             draw_stats.add(depth_stats);
                             self.rhi.endRenderPass(depth_prepass_pass);
 
@@ -2004,7 +2005,7 @@ pub const Renderer = struct {
                                         .stencil_store_op = scene_depth_target.?.stencil_store_op,
                                     },
                                 });
-                                const velocity_start = std.time.nanoTimestamp();
+                                const velocity_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                                 const velocity_stats = self.velocity_pass.draw(
                                     &self.rhi,
                                     frame,
@@ -2014,7 +2015,7 @@ pub const Renderer = struct {
                                     self.prev_view_projection,
                                     &self.prev_mesh_models,
                                 );
-                                self.graph.recordPassStat(pass_stats, .post_process, durationNs(velocity_start, std.time.nanoTimestamp()), velocity_stats.draw_calls, velocity_stats.triangles_drawn);
+                                self.graph.recordPassStat(pass_stats, .post_process, durationNs(velocity_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), velocity_stats.draw_calls, velocity_stats.triangles_drawn);
                                 draw_stats.add(velocity_stats);
                                 self.rhi.endRenderPass(velocity_render_pass);
                             }
@@ -2043,13 +2044,13 @@ pub const Renderer = struct {
                     }
 
                     // 渲染主几何（Opaque）：调用 BasePass.draw 来绘制不透明物体（会遍历 DrawItem 列表并发出 draw 调用）
-                    const opaque_start = std.time.nanoTimestamp();
+                    const opaque_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                     const opaque_stats = try self.base_pass.draw(&self.rhi, frame, scene_pass, &prepared_scene, .{
                         .render_mode = active_render_mode,
                         .target = if (viewport_active) .hdr else .ldr,
                         .phase = .opaque_pass,
                     });
-                    self.graph.recordPassStat(pass_stats, .base_pass, durationNs(opaque_start, std.time.nanoTimestamp()), opaque_stats.draw_calls, opaque_stats.triangles_drawn);
+                    self.graph.recordPassStat(pass_stats, .base_pass, durationNs(opaque_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), opaque_stats.draw_calls, opaque_stats.triangles_drawn);
                     draw_stats.add(opaque_stats);
 
                     // 渲染地形
@@ -2068,9 +2069,9 @@ pub const Renderer = struct {
                                     if (viewport_active) "hdr" else "ldr",
                                 });
                             }
-                            const skybox_start = std.time.nanoTimestamp();
+                            const skybox_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                             skybox_pass.draw(&self.rhi, frame, scene_pass, &prepared_scene, prepared_scene.environment_map.?, if (viewport_active) .hdr else .ldr, prepared_scene.sky_intensity);
-                            self.graph.recordPassStat(pass_stats, .skybox_pass, durationNs(skybox_start, std.time.nanoTimestamp()), 1, 1);
+                            self.graph.recordPassStat(pass_stats, .skybox_pass, durationNs(skybox_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), 1, 1);
                             draw_stats.draw_calls += 1;
                             draw_stats.triangles_drawn += 1;
                         }
@@ -2080,7 +2081,7 @@ pub const Renderer = struct {
                         prepared_preview_scene.rt_shadow_mask = prepared_scene.rt_shadow_mask;
                         prepared_preview_scene.rt_shadow_strength = prepared_scene.rt_shadow_strength;
                         prepared_preview_scene.rt_shadow_ambient_floor = prepared_scene.rt_shadow_ambient_floor;
-                        const preview_opaque_start = std.time.nanoTimestamp();
+                        const preview_opaque_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                         const preview_opaque_stats = try self.base_pass.draw(&self.rhi, frame, scene_pass, &prepared_preview_scene, .{
                             .render_mode = previewRenderMode(active_render_mode),
                             .target = if (viewport_active) .hdr else .ldr,
@@ -2089,22 +2090,22 @@ pub const Renderer = struct {
                             .alpha_multiplier = ghost_preview_tint_color[3],
                             .preview_tint_strength = ghost_preview_tint_strength,
                         });
-                        self.graph.recordPassStat(pass_stats, .base_pass, durationNs(preview_opaque_start, std.time.nanoTimestamp()), preview_opaque_stats.draw_calls, preview_opaque_stats.triangles_drawn);
+                        self.graph.recordPassStat(pass_stats, .base_pass, durationNs(preview_opaque_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), preview_opaque_stats.draw_calls, preview_opaque_stats.triangles_drawn);
                         draw_stats.add(preview_opaque_stats);
                     }
 
                     // 渲染透明物体：切换到透明通道（可能使用不同的 pipeline / 混合设置）
-                    const transparent_start = std.time.nanoTimestamp();
+                    const transparent_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                     const transparent_stats = try self.base_pass.draw(&self.rhi, frame, scene_pass, &prepared_scene, .{
                         .render_mode = active_render_mode,
                         .target = if (viewport_active) .hdr else .ldr,
                         .phase = .transparent_pass,
                     });
-                    self.graph.recordPassStat(pass_stats, .transparent, durationNs(transparent_start, std.time.nanoTimestamp()), transparent_stats.draw_calls, transparent_stats.triangles_drawn);
+                    self.graph.recordPassStat(pass_stats, .transparent, durationNs(transparent_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), transparent_stats.draw_calls, transparent_stats.triangles_drawn);
                     draw_stats.add(transparent_stats);
 
                     if (has_prepared_preview_scene) {
-                        const preview_transparent_start = std.time.nanoTimestamp();
+                        const preview_transparent_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                         const preview_transparent_stats = try self.base_pass.draw(&self.rhi, frame, scene_pass, &prepared_preview_scene, .{
                             .render_mode = previewRenderMode(active_render_mode),
                             .target = if (viewport_active) .hdr else .ldr,
@@ -2112,7 +2113,7 @@ pub const Renderer = struct {
                             .alpha_multiplier = ghost_preview_tint_color[3],
                             .preview_tint_strength = ghost_preview_tint_strength,
                         });
-                        self.graph.recordPassStat(pass_stats, .transparent, durationNs(preview_transparent_start, std.time.nanoTimestamp()), preview_transparent_stats.draw_calls, preview_transparent_stats.triangles_drawn);
+                        self.graph.recordPassStat(pass_stats, .transparent, durationNs(preview_transparent_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), preview_transparent_stats.draw_calls, preview_transparent_stats.triangles_drawn);
                         draw_stats.add(preview_transparent_stats);
                     }
 
@@ -2134,7 +2135,7 @@ pub const Renderer = struct {
                                     fog_light_dir = .{ ml.direction[0], ml.direction[1], ml.direction[2], 0.0 };
                                     fog_light_col = .{ ml.color[0], ml.color[1], ml.color[2], ml.intensity };
                                 }
-                                const fog_start = std.time.nanoTimestamp();
+                                const fog_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                                 volumetric_fog_pass_mod.VolumetricFogPass.execute(
                                     self.allocator,
                                     dev,
@@ -2157,7 +2158,7 @@ pub const Renderer = struct {
                                 ) catch |err| {
                                     render_log.err("volumetric fog pass execution failed: {s}", .{@errorName(err)});
                                 };
-                                self.graph.recordPassStat(pass_stats, .post_process, durationNs(fog_start, std.time.nanoTimestamp()), 1, 1);
+                                self.graph.recordPassStat(pass_stats, .post_process, durationNs(fog_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), 1, 1);
                             }
                         }
 
@@ -2266,7 +2267,7 @@ pub const Renderer = struct {
                                 break :cs_ld .{ dl.direction[0], dl.direction[1], dl.direction[2], 0.0 };
                             } else .{ 0.3, -0.9, -0.2, 0.0 };
 
-                            const cs_start = std.time.nanoTimestamp();
+                            const cs_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                             try self.contact_shadow_pass.syncTexture(&self.rhi, self.scene_viewport.depth().?);
                             const cs_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.contactShadow().? }));
                             const cs_stats = self.contact_shadow_pass.draw(&self.rhi, frame, cs_render_pass, .{
@@ -2299,7 +2300,7 @@ pub const Renderer = struct {
                             self.graph.recordPassStat(
                                 pass_stats,
                                 .post_process,
-                                durationNs(cs_start, std.time.nanoTimestamp()),
+                                durationNs(cs_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds),
                                 cs_stats.draw_calls + cs_composite_draw_calls,
                                 cs_stats.triangles_drawn + cs_composite_triangles,
                             );
@@ -2315,7 +2316,7 @@ pub const Renderer = struct {
                             const mat4_ssr = @import("../math/mat4.zig");
                             const inv_proj_ssr = mat4_ssr.inverse(prepared_scene.projection_matrix) orelse mat4_ssr.identity();
                             const inv_view_ssr = mat4_ssr.inverse(prepared_scene.view_matrix) orelse mat4_ssr.identity();
-                            const ssr_start = std.time.nanoTimestamp();
+                            const ssr_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
 
                             try self.ssr_pass.syncTextures(&self.rhi, self.scene_viewport.hdrColor().?, self.scene_viewport.depth().?);
                             const ssr_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.ssr().? }));
@@ -2378,7 +2379,7 @@ pub const Renderer = struct {
                             self.graph.recordPassStat(
                                 pass_stats,
                                 .post_process,
-                                durationNs(ssr_start, std.time.nanoTimestamp()),
+                                durationNs(ssr_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds),
                                 ssr_stats.draw_calls + ssr_composite_draw_calls,
                                 ssr_stats.triangles_drawn + ssr_composite_triangles,
                             );
@@ -2437,7 +2438,7 @@ pub const Renderer = struct {
                         if (bloom_enabled) {
                             try self.bloom_pass.syncTexture(&self.rhi, hdr_input_for_post);
                             const bloom_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.bloom().? }));
-                            const bloom_start = std.time.nanoTimestamp();
+                            const bloom_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                             const bloom_stats = self.bloom_pass.draw(&self.rhi, frame, bloom_render_pass, .{
                                 .threshold_params = .{
                                     self.editor_viewport_state.bloom_threshold,
@@ -2447,14 +2448,14 @@ pub const Renderer = struct {
                                 },
                             });
                             draw_stats.add(bloom_stats);
-                            self.graph.recordPassStat(pass_stats, .post_process, durationNs(bloom_start, std.time.nanoTimestamp()), bloom_stats.draw_calls, bloom_stats.triangles_drawn);
+                            self.graph.recordPassStat(pass_stats, .post_process, durationNs(bloom_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), bloom_stats.draw_calls, bloom_stats.triangles_drawn);
                             self.rhi.endRenderPass(bloom_render_pass);
                         }
 
                         // DOF dispatch — 3-subpass pipeline: CoC → Blur → Composite
                         if (self.editor_viewport_state.dof_enabled and self.dof_runtime_pass.isReady()) {
                             if (self.scene_viewport.depth()) |depth_tex| {
-                                const dof_start = std.time.nanoTimestamp();
+                                const dof_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                                 const dof_w = self.scene_viewport.width;
                                 const dof_h = self.scene_viewport.height;
 
@@ -2517,7 +2518,7 @@ pub const Renderer = struct {
                                         hdr_input_for_post = dof_out;
                                     }
 
-                                    self.graph.recordPassStat(pass_stats, .post_process, durationNs(dof_start, std.time.nanoTimestamp()), dof_total_stats.draw_calls, dof_total_stats.triangles_drawn);
+                                    self.graph.recordPassStat(pass_stats, .post_process, durationNs(dof_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), dof_total_stats.draw_calls, dof_total_stats.triangles_drawn);
                                 }
                             }
                         }
@@ -2529,7 +2530,7 @@ pub const Renderer = struct {
                             null,
                         );
                         const tm_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.color().? }));
-                        const tm_start = std.time.nanoTimestamp();
+                        const tm_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                         const tonemap_stats = self.tonemap_pass.draw(&self.rhi, frame, tm_render_pass, .{
                             .exposure_params = .{
                                 @as(f32, if (self.editor_viewport_state.exposure_enabled) 1.0 else 0.0),
@@ -2557,16 +2558,16 @@ pub const Renderer = struct {
                             },
                         });
                         draw_stats.add(tonemap_stats);
-                        self.graph.recordPassStat(pass_stats, .tonemap_pass, durationNs(tm_start, std.time.nanoTimestamp()), tonemap_stats.draw_calls, tonemap_stats.triangles_drawn);
+                        self.graph.recordPassStat(pass_stats, .tonemap_pass, durationNs(tm_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), tonemap_stats.draw_calls, tonemap_stats.triangles_drawn);
                         self.rhi.endRenderPass(tm_render_pass);
 
                         if (fxaa_enabled) {
-                            const fxaa_start = std.time.nanoTimestamp();
+                            const fxaa_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                             try self.fxaa_pass.syncTexture(&self.rhi, self.scene_viewport.color().?);
                             const fxaa_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.fxaa().? }));
                             const fxaa_stats = self.fxaa_pass.draw(&self.rhi, frame, fxaa_render_pass);
                             draw_stats.add(fxaa_stats);
-                            self.graph.recordPassStat(pass_stats, .post_process, durationNs(fxaa_start, std.time.nanoTimestamp()), fxaa_stats.draw_calls, fxaa_stats.triangles_drawn);
+                            self.graph.recordPassStat(pass_stats, .post_process, durationNs(fxaa_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), fxaa_stats.draw_calls, fxaa_stats.triangles_drawn);
                             self.rhi.endRenderPass(fxaa_render_pass);
                         }
                     }
@@ -2594,10 +2595,10 @@ pub const Renderer = struct {
                     }
                     fog_cfg.inv_view_projection = inv_vp_fog;
                     const fog_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.overlay(scene_color_target));
-                    const fog_start = std.time.nanoTimestamp();
+                    const fog_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                     const fog_stats = self.fog_of_war_pass.draw(&self.rhi, frame, fog_render_pass, fog_cfg);
                     draw_stats.add(fog_stats);
-                    self.graph.recordPassStat(pass_stats, .post_process, durationNs(fog_start, std.time.nanoTimestamp()), fog_stats.draw_calls, fog_stats.triangles_drawn);
+                    self.graph.recordPassStat(pass_stats, .post_process, durationNs(fog_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), fog_stats.draw_calls, fog_stats.triangles_drawn);
                     self.rhi.endRenderPass(fog_render_pass);
                 }
 
@@ -2607,13 +2608,13 @@ pub const Renderer = struct {
                 if (self.outline_pass.isReady() and self.id_pass.texture() != null and (selected_entities.len > 0 or ai_focus_entities.len > 0)) {
                     try self.outline_pass.syncTexture(&self.rhi, self.id_pass.texture().?);
                     const outline_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.overlay(scene_color_target));
-                    const outline_start = std.time.nanoTimestamp();
+                    const outline_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                     var outline_stats = mesh_pass_mod.DrawStats{};
                     if (selected_entities.len > 0) {
                         outline_stats.add(self.outline_pass.draw(&self.rhi, frame, outline_pass, selected_entities));
                     }
                     if (ai_focus_entities.len > 0) {
-                        const pulse = 0.65 + 0.35 * @sin(@as(f32, @floatCast(@as(f64, @floatFromInt(std.time.milliTimestamp())) / 220.0)));
+                        const pulse = 0.65 + 0.35 * @sin(@as(f32, @floatCast(@as(f64, @floatFromInt(@divTrunc(std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds, std.time.ns_per_ms))) / 220.0)));
                         outline_stats.add(self.outline_pass.drawWithColor(
                             &self.rhi,
                             frame,
@@ -2622,7 +2623,7 @@ pub const Renderer = struct {
                             .{ 0.70, 0.35, 1.0, pulse },
                         ));
                     }
-                    self.graph.recordPassStat(pass_stats, .outline_pass, durationNs(outline_start, std.time.nanoTimestamp()), outline_stats.draw_calls, outline_stats.triangles_drawn);
+                    self.graph.recordPassStat(pass_stats, .outline_pass, durationNs(outline_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), outline_stats.draw_calls, outline_stats.triangles_drawn);
                     draw_stats.add(outline_stats);
                     self.rhi.endRenderPass(outline_pass);
                 }
@@ -2641,7 +2642,7 @@ pub const Renderer = struct {
                     else
                         PassDescriptors.overlay(scene_color_target);
                     const gizmo_pass = try self.rhi.beginRenderPassWithDesc(frame, gizmo_pass_desc);
-                    const gizmo_start = std.time.nanoTimestamp();
+                    const gizmo_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                     var gizmo_overlay_stats = mesh_pass_mod.DrawStats{};
                     const gizmo_target_transform = if (self.editor_gizmo_transform_override) |override_transform|
                         override_transform
@@ -2667,7 +2668,7 @@ pub const Renderer = struct {
                     const debug_stats = try self.drawViewportDebugOverlays(frame, gizmo_pass, scene, &prepared_scene, physics_state_opt);
                     gizmo_overlay_stats.add(debug_stats);
                     draw_stats.add(debug_stats);
-                    self.graph.recordPassStat(pass_stats, .gizmo_overlay, durationNs(gizmo_start, std.time.nanoTimestamp()), gizmo_overlay_stats.draw_calls, gizmo_overlay_stats.triangles_drawn);
+                    self.graph.recordPassStat(pass_stats, .gizmo_overlay, durationNs(gizmo_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), gizmo_overlay_stats.draw_calls, gizmo_overlay_stats.triangles_drawn);
                     self.rhi.endRenderPass(gizmo_pass);
                 }
 
@@ -2698,7 +2699,7 @@ pub const Renderer = struct {
                     },
                     .depth = null,
                 });
-                const ui_start = std.time.nanoTimestamp();
+                const ui_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                 _ = ui_cmd;
 
                 // Draw runtime UI
@@ -2716,7 +2717,7 @@ pub const Renderer = struct {
                     uc.draw(&self.rhi, frame, ui_pass, sw, sh);
                 }
 
-                self.graph.recordPassStat(pass_stats, .ui_overlay, durationNs(ui_start, std.time.nanoTimestamp()), 0, 0);
+                self.graph.recordPassStat(pass_stats, .ui_overlay, durationNs(ui_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), 0, 0);
                 self.rhi.endRenderPass(ui_pass);
             }
 
@@ -4394,7 +4395,7 @@ pub const Renderer = struct {
         return renderer_thumbnails.releaseModelThumbnailRequests(self);
     }
 
-    fn durationNs(start: i128, end: i128) u64 {
+    fn durationNs(start: i96, end: i96) u64 {
         return if (end > start) @intCast(end - start) else 0;
     }
 

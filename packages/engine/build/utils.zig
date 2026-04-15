@@ -1,9 +1,9 @@
 const std = @import("std");
+const Io = std.Io;
 
 /// Run an external command and return its trimmed stdout, or null on failure.
 pub fn captureCommandOutput(b: *std.Build, argv: []const []const u8) ?[]const u8 {
-    const result = std.process.Child.run(.{
-        .allocator = b.allocator,
+    const result = std.process.run(b.allocator, b.graph.io, .{
         .argv = argv,
     }) catch return null;
     defer {
@@ -12,7 +12,7 @@ pub fn captureCommandOutput(b: *std.Build, argv: []const []const u8) ?[]const u8
     }
 
     switch (result.term) {
-        .Exited => |code| if (code != 0) return null,
+        .exited => |code| if (code != 0) return null,
         else => return null,
     }
 
@@ -25,17 +25,17 @@ pub fn collectSourceFiles(b: *std.Build, root: []const u8, extension: []const u8
     var list: std.ArrayList([]const u8) = .empty;
     defer list.deinit(b.allocator);
 
-    var dir = std.fs.cwd().openDir(root, .{ .iterate = true }) catch |err| {
+    var dir = Io.Dir.cwd().openDir(b.graph.io, root, .{ .iterate = true }) catch |err| {
         std.debug.panic("failed to open source root {s}: {s}", .{ root, @errorName(err) });
     };
-    defer dir.close();
+    defer dir.close(b.graph.io);
 
     var walker = dir.walk(b.allocator) catch |err| {
         std.debug.panic("failed to walk source root {s}: {s}", .{ root, @errorName(err) });
     };
     defer walker.deinit();
 
-    while (walker.next() catch |err| {
+    while (walker.next(b.graph.io) catch |err| {
         std.debug.panic("failed to iterate source root {s}: {s}", .{ root, @errorName(err) });
     }) |entry| {
         if (entry.kind != .file or !std.mem.endsWith(u8, entry.path, extension)) {

@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const types = @import("./types.zig");
 const runtime_mod = @import("./runtime.zig");
 const handles = @import("../assets/handles.zig");
@@ -7,7 +8,7 @@ const log = std.log.scoped(.hot_reload);
 
 const WatchedScript = struct {
     handle: handles.ScriptHandle,
-    last_mtime: i128,
+    last_mtime: i96,
 };
 
 /// 热重载管理器
@@ -21,7 +22,7 @@ pub const HotReloadManager = struct {
     /// 分配器
     allocator: std.mem.Allocator,
     /// 上次检查文件变更的时间戳（纳秒）
-    last_check_timestamp: i128 = 0,
+    last_check_timestamp: i96 = 0,
 
     pub fn init(allocator: std.mem.Allocator, rt: *runtime_mod.ScriptRuntime) HotReloadManager {
         return .{
@@ -63,7 +64,7 @@ pub const HotReloadManager = struct {
 
     /// 检查是否有脚本需要重载（节流：最多每秒检查一次）
     pub fn checkForChanges(self: *HotReloadManager) void {
-        const now = std.time.nanoTimestamp();
+        const now = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
         const elapsed_ns = now - self.last_check_timestamp;
         if (elapsed_ns < 1_000_000_000) return; // throttle to once per second
         self.last_check_timestamp = now;
@@ -104,12 +105,12 @@ pub const HotReloadManager = struct {
 };
 
 /// 获取文件修改时间
-fn getFileMtime(path: []const u8) !i128 {
-    const file = try std.fs.cwd().openFile(path, .{});
-    defer file.close();
+fn getFileMtime(path: []const u8) !i96 {
+    const file = try std.Io.Dir.cwd().openFile(io_globals.global_io, path, .{});
+    defer file.close(io_globals.global_io);
 
-    const stat = try file.stat();
-    return stat.mtime;
+    const stat = try file.stat(io_globals.global_io);
+    return stat.mtime.nanoseconds;
 }
 
 /// 文件监听器（未来可扩展为操作系统原生监听）
@@ -141,7 +142,7 @@ pub const FileWatcher = struct {
     }
 
     /// 检查变更（轮询实现）
-    pub fn pollChanges(self: *FileWatcher, last_mtimes: *std.AutoHashMap([]const u8, i128)) void {
+    pub fn pollChanges(self: *FileWatcher, last_mtimes: *std.AutoHashMap([]const u8, i96)) void {
         for (self.paths.items) |path| {
             const current_mtime = getFileMtime(path) catch continue;
             if (last_mtimes.get(path)) |last_mtime| {

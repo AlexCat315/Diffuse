@@ -18,8 +18,7 @@ const ScalarKeyframe = cinematic.keyframe.ScalarKeyframe;
 
 // ── Static state (process-lifetime) ─────────────────────────────
 
-var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-const alloc = gpa.allocator();
+const alloc = std.heap.page_allocator;
 
 var current_sequence: ?Sequence = null;
 var current_time: f32 = 0.0;

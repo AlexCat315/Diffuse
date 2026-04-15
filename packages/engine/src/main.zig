@@ -7,19 +7,21 @@ const cli = @import("cli.zig");
 const commands = @import("commands.zig");
 const project_mod = @import("project.zig");
 
+const io_globals = @import("io_globals");
+
 pub const std_options = std.Options{
     .logFn = editor_console.logFn,
     .log_level = .info,
 };
 
 fn ensureProjectRootAsCwd(allocator: std.mem.Allocator) !void {
-    std.fs.cwd().access("assets", .{}) catch |err| switch (err) {
+    std.Io.Dir.cwd().access(io_globals.global_io, "assets", .{}) catch |err| switch (err) {
         error.FileNotFound => {
             const resolved_root = try resolveProjectRootAlloc(allocator);
             defer if (resolved_root) |root| allocator.free(root);
 
             if (resolved_root) |root| {
-                try std.process.changeCurDir(root);
+                try std.process.setCurrentPath(io_globals.global_io, root);
             }
         },
         else => return err,
@@ -27,13 +29,13 @@ fn ensureProjectRootAsCwd(allocator: std.mem.Allocator) !void {
 }
 
 fn resolveProjectRootAlloc(allocator: std.mem.Allocator) !?[]u8 {
-    const cwd_path = try std.fs.cwd().realpathAlloc(allocator, ".");
+    const cwd_path = try std.Io.Dir.cwd().realPathFileAlloc(io_globals.global_io, ".", allocator);
     defer allocator.free(cwd_path);
     if (try findProjectRootFromAbsoluteAlloc(allocator, cwd_path)) |root| {
         return root;
     }
 
-    const exe_dir = try std.fs.selfExeDirPathAlloc(allocator);
+    const exe_dir = try std.process.executableDirPathAlloc(io_globals.global_io, allocator);
     defer allocator.free(exe_dir);
     return try findProjectRootFromAbsoluteAlloc(allocator, exe_dir);
 }
@@ -46,7 +48,7 @@ fn findProjectRootFromAbsoluteAlloc(allocator: std.mem.Allocator, start_path: []
         const assets_path = try std.fs.path.join(allocator, &.{ current, "assets" });
         defer allocator.free(assets_path);
 
-        if (std.fs.accessAbsolute(assets_path, .{})) |_| {
+        if (std.Io.Dir.cwd().access(io_globals.global_io, assets_path, .{})) |_| {
             return current;
         } else |err| switch (err) {
             error.FileNotFound => {},
@@ -80,7 +82,7 @@ const LoadedProject = struct {
 
 fn loadConfiguredProjectAlloc(allocator: std.mem.Allocator, options: cli.CliOptions) !?LoadedProject {
     const raw_project_path = options.project_path orelse return null;
-    const resolved_root = try std.fs.cwd().realpathAlloc(allocator, raw_project_path);
+    const resolved_root = try std.Io.Dir.cwd().realPathFileAlloc(io_globals.global_io, raw_project_path, allocator);
     errdefer allocator.free(resolved_root);
 
     var project_file = try project_mod.loadAlloc(allocator, resolved_root);
@@ -99,19 +101,9 @@ fn applicationNameAlloc(allocator: std.mem.Allocator, base_name: []const u8, loa
     return allocator.dupe(u8, base_name);
 }
 
-pub fn main() !u8 {
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
-    const allocator = gpa.allocator();
-
-    // GPA leak check must be the FIRST defer registered so it runs LAST (LIFO),
-    // after all other defers have freed their allocations.
-    defer {
-        const leaked = gpa.deinit();
-        if (leaked == .leak) {
-            std.debug.print("程序将以错误码 1 退出。\n", .{});
-            std.process.exit(1);
-        }
-    }
+pub fn main(init: std.process.Init) !u8 {
+    io_globals.init(init.io, init.minimal.args);
+    const allocator = init.gpa;
 
     try ensureProjectRootAsCwd(allocator);
 
@@ -195,7 +187,7 @@ fn runEngine(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
     const depth_state = if (report.runtime.has_depth) "ready" else "missing";
 
     var stdout_buffer: [1024]u8 = undefined;
-    var stdout_writer = std.fs.File.stdout().writer(&stdout_buffer);
+    var stdout_writer = std.Io.File.stdout().writer(io_globals.global_io, &stdout_buffer);
     const stdout = &stdout_writer.interface;
 
     try stdout.print(
@@ -257,15 +249,9 @@ fn runEditorServer(allocator: std.mem.Allocator, options: cli.CliOptions) !void 
 
         // Change CWD to project root so relative asset paths (e.g. "Content/file.hdr")
         // resolve correctly in the renderer, texture importer, and asset registry.
-        if (std.fs.openDirAbsolute(project.root_path, .{})) |dir| {
-            var d = dir;
-            d.setAsCwd() catch |err| {
-                std.log.warn("failed to chdir to project root: {s}", .{@errorName(err)});
-            };
-            d.close();
-        } else |err| {
-            std.log.warn("failed to open project root dir: {s}", .{@errorName(err)});
-        }
+        std.process.setCurrentPath(io_globals.global_io, project.root_path) catch |err| {
+            std.log.warn("failed to chdir to project root: {s}", .{@errorName(err)});
+        };
     }
 
     // Start MCP runtime for AI collaboration support (before EditorLayer push

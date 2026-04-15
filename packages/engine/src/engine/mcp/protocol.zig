@@ -66,15 +66,7 @@ pub fn tryExtractMessageAlloc(allocator: std.mem.Allocator, pending: *std.ArrayL
 }
 
 fn stringifyAlloc(allocator: std.mem.Allocator, value: anytype) ![]u8 {
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
-
-    var writer = output.writer(allocator);
-    var adapter_buffer: [4096]u8 = undefined;
-    var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
-    try std.json.Stringify.value(value, .{}, &writer_adapter.new_interface);
-    try writer_adapter.new_interface.flush();
-    return try output.toOwnedSlice(allocator);
+    return try std.json.Stringify.valueAlloc(allocator, value, .{});
 }
 
 const HeaderTerminator = struct {
@@ -95,7 +87,7 @@ fn findHeaderTerminator(bytes: []const u8) ?HeaderTerminator {
 fn parseContentLength(headers: []const u8) ?usize {
     var lines = std.mem.splitAny(u8, headers, "\n");
     while (lines.next()) |line_with_cr| {
-        const line = std.mem.trimRight(u8, line_with_cr, "\r");
+        const line = std.mem.trimEnd(u8, line_with_cr, "\r");
         if (line.len == 0) {
             continue;
         }

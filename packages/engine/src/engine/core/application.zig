@@ -103,6 +103,31 @@ const scene_mod = @import("../scene/scene.zig");
 const scene_components = @import("../scene/components.zig");
 const job_system_mod = @import("job_system.zig");
 const audio_mod = @import("../audio/mod.zig");
+const io_globals = @import("io_globals");
+
+/// Drop-in replacement for the removed std.time.Timer, backed by Io.Timestamp.
+const FrameTimer = struct {
+    last: std.Io.Timestamp,
+
+    fn start() FrameTimer {
+        return .{ .last = std.Io.Timestamp.now(io_globals.global_io, .boot) };
+    }
+
+    /// Returns nanoseconds since last lap/start and resets the reference point.
+    fn lap(self: *FrameTimer) u64 {
+        const now = std.Io.Timestamp.now(io_globals.global_io, .boot);
+        const elapsed_ns = now.nanoseconds - self.last.nanoseconds;
+        self.last = now;
+        return @intCast(@max(0, elapsed_ns));
+    }
+
+    /// Returns nanoseconds since last lap/start without resetting.
+    fn read(self: *const FrameTimer) u64 {
+        const now = std.Io.Timestamp.now(io_globals.global_io, .boot);
+        const elapsed_ns = now.nanoseconds - self.last.nanoseconds;
+        return @intCast(@max(0, elapsed_ns));
+    }
+};
 
 /// 应用程序配置
 ///
@@ -219,7 +244,7 @@ pub const Application = struct {
     /// 是否已初始化
     initialized: bool = false,
     /// 高精度计时器
-    timer: std.time.Timer,
+    timer: FrameTimer,
     /// 全局时间（秒）
     global_time: f32 = 0.0,
     /// 时间缩放（用于慢动作、暂停等）
@@ -312,7 +337,7 @@ pub const Application = struct {
             break :blk @as(?*audio_mod.AudioRuntime, null);
         };
 
-        const timer = try std.time.Timer.start();
+        const timer = FrameTimer.start();
 
         return .{
             .allocator = allocator,
@@ -603,7 +628,7 @@ pub const Application = struct {
                 self.playback_controller.consumeAdvance();
             }
 
-            const draw_start_ns = std.time.nanoTimestamp();
+            const draw_start_ns = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
 
             // ── Skip-frame optimisation ──────────────────────────────────────
             // If nothing visual has changed, skip the expensive drawFrame call.
@@ -637,7 +662,7 @@ pub const Application = struct {
             if (self.renderer.redraw_cooldown > 0) {
                 self.renderer.redraw_cooldown -= 1;
             }
-            const draw_end_ns = std.time.nanoTimestamp();
+            const draw_end_ns = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
             self.renderer.last_frame_report = last_frame;
 
             // Frame-budget profiling: log timing every 300 frames (~5s @ 60fps)
@@ -1113,18 +1138,20 @@ pub const Application = struct {
         const language = inferScriptLanguageFromPath(path);
         const is_binary_artifact = script_system.csharp_toolchain_mod.isSharedLibraryPath(path);
 
+        const io = io_globals.global_io;
+
         // Read script source relative to project root (or CWD as fallback).
-        var owned_base: ?std.fs.Dir = if (self.project_root) |root|
-            (std.fs.openDirAbsolute(root, .{}) catch null)
+        var owned_base: ?std.Io.Dir = if (self.project_root) |root|
+            (std.Io.Dir.openDirAbsolute(io, root, .{}) catch null)
         else
             null;
-        defer if (owned_base) |*d| d.close();
-        const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+        defer if (owned_base) |*d| d.close(io);
+        const base_dir: std.Io.Dir = owned_base orelse std.Io.Dir.cwd();
 
         const source_or_bytecode = if (is_binary_artifact)
-            try base_dir.readFileAlloc(self.allocator, path, 16 * 1024 * 1024)
+            try base_dir.readFileAlloc(io, path, self.allocator, .limited(16 * 1024 * 1024))
         else
-            try base_dir.readFileAlloc(self.allocator, path, 1024 * 1024);
+            try base_dir.readFileAlloc(io, path, self.allocator, .limited(1024 * 1024));
         defer self.allocator.free(source_or_bytecode);
 
         const script_resource = @import("../assets/script_resource.zig");
@@ -1177,23 +1204,24 @@ pub const Application = struct {
     /// Scan the configured scripts directory and auto-register any .zig/.cs scripts
     /// that are not already loaded in the resource library.
     fn discoverScripts(self: *Application) void {
+        const io = io_globals.global_io;
         const scripts_dir = self.scripts_dir;
 
         // Open scripts directory relative to project root (or CWD as fallback).
-        var owned_base: ?std.fs.Dir = if (self.project_root) |root|
-            (std.fs.openDirAbsolute(root, .{}) catch null)
+        var owned_base: ?std.Io.Dir = if (self.project_root) |root|
+            (std.Io.Dir.openDirAbsolute(io, root, .{}) catch null)
         else
             null;
-        defer if (owned_base) |*d| d.close();
-        const base_dir: std.fs.Dir = owned_base orelse std.fs.cwd();
+        defer if (owned_base) |*d| d.close(io);
+        const base_dir: std.Io.Dir = owned_base orelse std.Io.Dir.cwd();
 
-        var dir = base_dir.openDir(scripts_dir, .{ .iterate = true }) catch return;
-        defer dir.close();
+        var dir = base_dir.openDir(io, scripts_dir, .{ .iterate = true }) catch return;
+        defer dir.close(io);
 
         var walker = dir.walk(self.allocator) catch return;
         defer walker.deinit();
 
-        while (walker.next() catch null) |entry| {
+        while (walker.next(io) catch null) |entry| {
             if (entry.kind != .file) continue;
             const is_zig = std.mem.endsWith(u8, entry.path, ".zig");
             const is_cs = std.mem.endsWith(u8, entry.path, ".cs");

@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const types = @import("types.zig");
 
 const log = std.log.scoped(.plugin_hot_reload);
@@ -19,10 +20,10 @@ pub const PluginHotReloadManager = struct {
     /// Caller should drain this after each tick.
     pending_changes: std.ArrayListUnmanaged([]const u8) = .empty,
 
-    last_check_timestamp: i128 = 0,
+    last_check_timestamp: i96 = 0,
 
     /// Minimum interval between checks (1 second in nanoseconds).
-    const check_interval_ns: i128 = 1_000_000_000;
+    const check_interval_ns: i96 = 1_000_000_000;
 
     const WatchedDir = struct {
         /// mtime of the latest-modified manifest.json in this tree.
@@ -63,7 +64,7 @@ pub const PluginHotReloadManager = struct {
     /// Called once per frame.  Checks all watched directories for
     /// manifest.json mtime changes (throttled to 1 s).
     pub fn tick(self: *PluginHotReloadManager) void {
-        const now = std.time.nanoTimestamp();
+        const now = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
         const elapsed = now - self.last_check_timestamp;
         if (elapsed < check_interval_ns) return;
         self.last_check_timestamp = now;

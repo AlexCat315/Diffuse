@@ -1,8 +1,6 @@
 const std = @import("std");
 
-const c = @cImport({
-    @cInclude("svg_raster_bridge.h");
-});
+const c = @import("c_svg_bridge");
 
 pub const RasterizedSvg = struct {
     allocator: std.mem.Allocator,

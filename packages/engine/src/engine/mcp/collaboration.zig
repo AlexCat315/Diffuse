@@ -1,4 +1,5 @@
 const std = @import("std");
+const io_globals = @import("io_globals");
 const command_mod = @import("../core/command.zig");
 const command_queue_mod = @import("../core/command_queue.zig");
 const core = @import("../core/layer.zig");
@@ -410,7 +411,7 @@ pub const PreviewWorldSnapshot = struct {
 
 pub const Store = struct {
     allocator: std.mem.Allocator,
-    mutex: std.Thread.Mutex = .{},
+    mutex: std.Io.Mutex = std.Io.Mutex.init,
     context: ContextSnapshot = .{},
     intent_log: std.ArrayList(IntentEntry) = .empty,
     command_timeline: std.ArrayList(CommandTimelineEntry) = .empty,
@@ -426,8 +427,8 @@ pub const Store = struct {
     }
 
     pub fn deinit(self: *Store) void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         self.context.deinit(self.allocator);
         self.intent_log.deinit(self.allocator);
         self.command_timeline.deinit(self.allocator);
@@ -446,8 +447,8 @@ pub const Store = struct {
         command_kind: []const u8,
         meta: ?*const command_mod.CommandMeta,
     ) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         try self.appendCommandTimelineLocked(source, label, detail, command_kind, meta);
     }
 
@@ -483,8 +484,8 @@ pub const Store = struct {
         const drag_changed = dragPayloadChanged(self, args.drag_payload);
         const old_drag = self.peekDragPayload();
 
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
 
         try replaceEntitySlice(&self.context.selected_entities, self.allocator, args.selected_entities);
         self.context.revision += 1;
@@ -535,8 +536,8 @@ pub const Store = struct {
         detail: []const u8,
         meta: ?*const command_mod.CommandMeta,
     ) !void {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         try self.pushIntentLocked(source, action, detail, meta);
     }
 
@@ -596,8 +597,8 @@ pub const Store = struct {
 
         var stage_result = StageResult{};
 
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
 
         self.staged.clear(self.allocator);
         self.staged.active = true;
@@ -677,9 +678,9 @@ pub const Store = struct {
             local_commands.deinit(self.allocator);
         }
 
-        self.mutex.lock();
+        self.mutex.lockUncancelable(io_globals.global_io);
         if (!self.staged.active) {
-            self.mutex.unlock();
+            self.mutex.unlock(io_globals.global_io);
             return .{};
         }
 
@@ -700,7 +701,7 @@ pub const Store = struct {
                 staged_meta.base_revision = meta.base_revision;
             }
         }
-        self.mutex.unlock();
+        self.mutex.unlock(io_globals.global_io);
 
         var changed_count: usize = 0;
         var error_count: usize = 0;
@@ -743,8 +744,8 @@ pub const Store = struct {
 
         const kept_staged = base_revision_conflict_count > 0;
 
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         if (!kept_staged and self.staged.active and self.staged.id == staged_id.?) {
             self.staged.clear(self.allocator);
         }
@@ -804,8 +805,8 @@ pub const Store = struct {
         var staged_meta: command_mod.CommandMeta = .{};
         defer staged_meta.deinit(self.allocator);
 
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
 
         if (!self.staged.active) {
             return .{};
@@ -848,8 +849,8 @@ pub const Store = struct {
 
     pub fn overlaySnapshot(self: *const Store) OverlaySnapshot {
         const mutable: *Store = @constCast(self);
-        mutable.mutex.lock();
-        defer mutable.mutex.unlock();
+        mutable.mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.mutex.unlock(io_globals.global_io);
 
         var snapshot = OverlaySnapshot{};
         if (!mutable.staged.active) {
@@ -885,8 +886,8 @@ pub const Store = struct {
 
     pub fn aiStatusSnapshot(self: *const Store) AiStatusSnapshot {
         const mutable: *Store = @constCast(self);
-        mutable.mutex.lock();
-        defer mutable.mutex.unlock();
+        mutable.mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.mutex.unlock(io_globals.global_io);
 
         if (mutable.staged.active) {
             return .{
@@ -936,8 +937,8 @@ pub const Store = struct {
 
     pub fn copyPreviewWorldSnapshotAlloc(self: *const Store, allocator: std.mem.Allocator) !PreviewWorldSnapshot {
         const mutable: *Store = @constCast(self);
-        mutable.mutex.lock();
-        defer mutable.mutex.unlock();
+        mutable.mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.mutex.unlock(io_globals.global_io);
 
         if (!mutable.staged.active or mutable.staged.preview_world_snapshot == null) {
             return .{};
@@ -952,8 +953,8 @@ pub const Store = struct {
 
     pub fn copyPreviewEntityIdsAlloc(self: *const Store, allocator: std.mem.Allocator) ![]scene_mod.EntityId {
         const mutable: *Store = @constCast(self);
-        mutable.mutex.lock();
-        defer mutable.mutex.unlock();
+        mutable.mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.mutex.unlock(io_globals.global_io);
 
         var count: usize = 0;
         for (mutable.staged.preview_entries.items) |entry| {
@@ -986,14 +987,14 @@ pub const Store = struct {
         var staged_id: u64 = 0;
         var encoded_preview_world: []u8 = undefined;
 
-        self.mutex.lock();
+        self.mutex.lockUncancelable(io_globals.global_io);
         if (!self.staged.active or self.staged.preview_world_snapshot == null) {
-            self.mutex.unlock();
+            self.mutex.unlock(io_globals.global_io);
             return false;
         }
         staged_id = self.staged.id;
         encoded_preview_world = try allocator.dupe(u8, self.staged.preview_world_snapshot.?);
-        self.mutex.unlock();
+        self.mutex.unlock(io_globals.global_io);
         defer allocator.free(encoded_preview_world);
 
         var preview_world = scene_mod.World.init(allocator, null);
@@ -1013,8 +1014,8 @@ pub const Store = struct {
         const preview_entity = preview_world.getEntityConst(entity_id) orelse return false;
         const world_transform = preview_world.worldTransformConst(entity_id) orelse preview_entity.local_transform;
 
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         if (!self.staged.active or self.staged.id != staged_id) {
             allocator.free(next_snapshot);
             return false;
@@ -1093,8 +1094,8 @@ pub const Store = struct {
 
     fn buildContextJsonAlloc(self: *const Store, allocator: std.mem.Allocator) ![]u8 {
         const mutable: *Store = @constCast(self);
-        mutable.mutex.lock();
-        defer mutable.mutex.unlock();
+        mutable.mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.mutex.unlock(io_globals.global_io);
 
         const RayView = struct {
             origin: [3]f32,
@@ -1236,8 +1237,8 @@ pub const Store = struct {
 
     fn buildIntentLogJsonAlloc(self: *const Store, allocator: std.mem.Allocator) ![]u8 {
         const mutable: *Store = @constCast(self);
-        mutable.mutex.lock();
-        defer mutable.mutex.unlock();
+        mutable.mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.mutex.unlock(io_globals.global_io);
 
         const MetaView = struct {
             actor: ?[]const u8 = null,
@@ -1290,8 +1291,8 @@ pub const Store = struct {
 
     fn buildCommandTimelineJsonAlloc(self: *const Store, allocator: std.mem.Allocator) ![]u8 {
         const mutable: *Store = @constCast(self);
-        mutable.mutex.lock();
-        defer mutable.mutex.unlock();
+        mutable.mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.mutex.unlock(io_globals.global_io);
 
         const MetaView = struct {
             actor: ?[]const u8 = null,
@@ -1350,8 +1351,8 @@ pub const Store = struct {
 
     fn buildStagedPreviewJsonAlloc(self: *const Store, allocator: std.mem.Allocator) ![]u8 {
         const mutable: *Store = @constCast(self);
-        mutable.mutex.lock();
-        defer mutable.mutex.unlock();
+        mutable.mutex.lockUncancelable(io_globals.global_io);
+        defer mutable.mutex.unlock(io_globals.global_io);
 
         const TransformView = struct {
             translation: [3]f32,
@@ -1476,8 +1477,8 @@ pub const Store = struct {
     }
 
     fn peekDragPayload(self: *Store) ?DragPayload {
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         return self.context.drag_payload;
     }
 };
@@ -1485,8 +1486,8 @@ pub const Store = struct {
 pub const Bridge = struct {
     allocator: std.mem.Allocator,
     store: *Store,
-    mutex: std.Thread.Mutex = .{},
-    condition: std.Thread.Condition = .{},
+    mutex: std.Io.Mutex = std.Io.Mutex.init,
+    condition: std.Io.Condition = std.Io.Condition.init,
     pending: ?PendingRequest = null,
     response: ?CallResponse = null,
     shutting_down: bool = false,
@@ -1543,8 +1544,8 @@ pub const Bridge = struct {
     pub fn deinit(self: *Bridge) void {
         self.shutdown();
 
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         if (self.pending) |*pending| {
             pending.deinit(self.allocator);
             self.pending = null;
@@ -1556,10 +1557,10 @@ pub const Bridge = struct {
     }
 
     pub fn shutdown(self: *Bridge) void {
-        self.mutex.lock();
+        self.mutex.lockUncancelable(io_globals.global_io);
         self.shutting_down = true;
-        self.condition.broadcast();
-        self.mutex.unlock();
+        self.condition.broadcast(io_globals.global_io);
+        self.mutex.unlock(io_globals.global_io);
     }
 
     pub fn submitJson(self: *Bridge, tool_name: []const u8, arguments: ?std.json.Value) !CallResponse {
@@ -1575,21 +1576,21 @@ pub const Bridge = struct {
         var request = try parsePendingRequestAlloc(self.allocator, tool_name, arguments, meta);
         errdefer request.deinit(self.allocator);
 
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
 
         while ((self.pending != null or self.response != null) and !self.shutting_down) {
-            self.condition.wait(&self.mutex);
+            self.condition.waitUncancelable(io_globals.global_io, &self.mutex);
         }
         if (self.shutting_down) {
             return error.ShuttingDown;
         }
 
         self.pending = request;
-        self.condition.broadcast();
+        self.condition.broadcast(io_globals.global_io);
 
         while (self.response == null and !self.shutting_down) {
-            self.condition.wait(&self.mutex);
+            self.condition.waitUncancelable(io_globals.global_io, &self.mutex);
         }
         if (self.shutting_down and self.response == null) {
             return error.ShuttingDown;
@@ -1597,7 +1598,7 @@ pub const Bridge = struct {
 
         const response = self.response.?;
         self.response = null;
-        self.condition.broadcast();
+        self.condition.broadcast(io_globals.global_io);
         return response;
     }
 
@@ -1622,20 +1623,20 @@ pub const Bridge = struct {
     }
 
     pub fn processPending(self: *Bridge, layer_context: *core.LayerContext) !bool {
-        self.mutex.lock();
+        self.mutex.lockUncancelable(io_globals.global_io);
         if (self.pending == null or self.response != null) {
-            self.mutex.unlock();
+            self.mutex.unlock(io_globals.global_io);
             return false;
         }
         var request = self.pending.?;
         self.pending = null;
-        self.mutex.unlock();
+        self.mutex.unlock(io_globals.global_io);
         const execution = try self.executeOwnedRequest(layer_context, &request);
 
-        self.mutex.lock();
-        defer self.mutex.unlock();
+        self.mutex.lockUncancelable(io_globals.global_io);
+        defer self.mutex.unlock(io_globals.global_io);
         self.response = execution.response;
-        self.condition.broadcast();
+        self.condition.broadcast(io_globals.global_io);
         return execution.world_changed;
     }
 
@@ -1754,8 +1755,8 @@ const collaboration_resource_specs = [_]struct {
 };
 
 fn selectionChanged(self: *Store, primary_selection: ?scene_mod.EntityId, selected_entities: []const scene_mod.EntityId) bool {
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    self.mutex.lockUncancelable(io_globals.global_io);
+    defer self.mutex.unlock(io_globals.global_io);
     if (self.context.primary_selection != primary_selection) {
         return true;
     }
@@ -1763,8 +1764,8 @@ fn selectionChanged(self: *Store, primary_selection: ?scene_mod.EntityId, select
 }
 
 fn dragPayloadChanged(self: *Store, next: ?DragPayload) bool {
-    self.mutex.lock();
-    defer self.mutex.unlock();
+    self.mutex.lockUncancelable(io_globals.global_io);
+    defer self.mutex.unlock(io_globals.global_io);
     return !dragPayloadEqual(self.context.drag_payload, next);
 }
 
@@ -2291,15 +2292,7 @@ fn parseIntentSource(source_text: []const u8) ?IntentSource {
 }
 
 fn stringifyAlloc(allocator: std.mem.Allocator, value: anytype) ![]u8 {
-    var output = std.ArrayList(u8).empty;
-    defer output.deinit(allocator);
-
-    var writer = output.writer(allocator);
-    var adapter_buffer: [4096]u8 = undefined;
-    var writer_adapter = writer.adaptToNewApi(&adapter_buffer);
-    try std.json.Stringify.value(value, .{ .whitespace = .indent_2 }, &writer_adapter.new_interface);
-    try writer_adapter.new_interface.flush();
-    return try output.toOwnedSlice(allocator);
+    return std.json.Stringify.valueAlloc(allocator, value, .{ .whitespace = .indent_2 });
 }
 
 test "Store stages preview and applies it to the main world" {
