@@ -43,7 +43,6 @@ export default defineConfig({
           { tag: "script", attrs: { src: "app://citron/citron-serializer.js" }, injectTo: "head-prepend" },
           { tag: "script", attrs: { src: "app://citron/citron-events.js" }, injectTo: "head-prepend" },
           { tag: "script", attrs: { src: "app://citron/citron-core.js" }, injectTo: "head-prepend" },
-          { tag: "script", attrs: { src: "./guava-bridge.js" }, injectTo: "head-prepend" },
         ];
       },
     },

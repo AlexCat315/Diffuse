@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { IconClose } from "./Icons";
+import { buildPackage, cancelBuild, runBuiltGame, onBuildProgress } from "../citron-api";
 
 interface BuildProgress {
   stage: string;
@@ -23,7 +24,7 @@ export function BuildDialog({ open, onClose }: BuildDialogProps) {
 
   useEffect(() => {
     if (!open) return;
-    const unsub = window.guavaEngine.onBuildProgress((p) => {
+    const unsub = onBuildProgress((p) => {
       setProgress(p);
       if (p.log) {
         setLogs((prev) => {
@@ -45,7 +46,7 @@ export function BuildDialog({ open, onClose }: BuildDialogProps) {
     setLogs([]);
     setProgress({ stage: "init", percent: 0, detail: "Starting..." });
     try {
-      const res = await window.guavaEngine.buildPackage({ optimize, choosePath }) as { ok: boolean; path?: string; error?: string };
+      const res = await buildPackage({ optimize, choosePath }) as { ok: boolean; path?: string; error?: string };
       if (res.error === "Cancelled" || res.error === "Error: Build cancelled") {
         setBuilding(false);
         setProgress(null);
@@ -53,7 +54,7 @@ export function BuildDialog({ open, onClose }: BuildDialogProps) {
       }
       setResult(res);
       if (runAfter && res.ok && res.path) {
-        await window.guavaEngine.runBuiltGame(res.path);
+        await runBuiltGame(res.path);
       }
     } catch (err) {
       setResult({ ok: false, error: String(err) });
@@ -63,12 +64,12 @@ export function BuildDialog({ open, onClose }: BuildDialogProps) {
   }, [optimize]);
 
   const handleCancel = useCallback(async () => {
-    await window.guavaEngine.cancelBuild();
+    await cancelBuild();
   }, []);
 
   const handleRunGame = useCallback(async () => {
     if (!result?.path) return;
-    await window.guavaEngine.runBuiltGame(result.path);
+    await runBuiltGame(result.path);
   }, [result]);
 
   if (!open) return null;

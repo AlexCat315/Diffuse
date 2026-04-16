@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { EntityNode, GizmoMode } from "../../shared/rpc-types";
 import { withBroadcastSync } from "./broadcast-sync";
+import { engine } from "../engine-client";
 
 export type PlaybackState = "stopped" | "playing" | "paused";
 
@@ -49,7 +50,7 @@ export const useSceneStore = create<SceneState>(
 
       refreshHierarchy: async () => {
         try {
-          const result = await window.guavaEngine.call("scene.getHierarchy", {});
+          const result = await engine.call("scene.getHierarchy", {});
           set({ hierarchy: result.roots });
         } catch (e) {
           console.error("Failed to fetch hierarchy:", e);
@@ -59,7 +60,7 @@ export const useSceneStore = create<SceneState>(
       selectEntity: async (entityId) => {
         set({ selectedEntity: entityId });
         try {
-          await window.guavaEngine.call("editor.setSelection", { entityIds: [entityId] });
+          await engine.call("editor.setSelection", { entityIds: [entityId] });
         } catch (e) {
           console.error("Failed to set selection:", e);
         }
@@ -67,7 +68,7 @@ export const useSceneStore = create<SceneState>(
 
       changeGizmoMode: (mode) => {
         set({ gizmoMode: mode });
-        window.guavaEngine.call("viewport.setGizmoMode", { mode }).catch(() => {});
+        engine.call("viewport.setGizmoMode", { mode }).catch(() => {});
       },
     }),
   ),

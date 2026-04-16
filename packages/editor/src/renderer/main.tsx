@@ -7,6 +7,8 @@ import { Launcher } from "./Launcher";
 import { loader } from "@monaco-editor/react";
 import * as monaco from "monaco-editor";
 import editorWorker from "monaco-editor/esm/vs/editor/editor.worker?worker";
+import { engine } from "./engine-client";
+import { getAppMode } from "./citron-api";
 
 // Configure Monaco workers for Vite (must be before loader.config)
 self.MonacoEnvironment = {
@@ -28,13 +30,13 @@ function AppRoot() {
 
   useEffect(() => {
     // Ask main process what mode we're in
-    window.guavaEngine.getAppMode().then((appMode) => {
-      setMode(appMode);
+    getAppMode().then((appMode) => {
+      setMode(appMode as "loading" | "launcher" | "editor");
     });
 
     // When engine connects (from launcher → project open, or from HMR reload),
     // switch to editor mode.
-    const cleanupConnected = window.guavaEngine.onConnected(() => {
+    const cleanupConnected = engine.onConnected(() => {
       setMode("editor");
     });
 

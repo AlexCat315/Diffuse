@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { withBroadcastSync } from "./broadcast-sync";
+import { engine } from "../engine-client";
 
 export type ShadingMode = "solid" | "material" | "rendered" | "wireframe";
 export type FpsDisplay = "viewport" | "none";
@@ -38,13 +39,13 @@ export const useViewportSettingsStore = create<ViewportSettingsState>(
 
       setShadingMode: (mode) => {
         set({ shadingMode: mode });
-        window.guavaEngine
+        engine
           .call("viewport.setRenderSettings", { shadingMode: mode } as never)
           .catch(() => {});
       },
       setFpsLimit: (fps) => {
         set({ fpsLimit: fps });
-        window.guavaEngine
+        engine
           .call("viewport.setFrameRate", { fps } as never)
           .catch(() => {});
       },
@@ -59,11 +60,11 @@ export const useViewportSettingsStore = create<ViewportSettingsState>(
       },
       fetchFromEngine: async () => {
         try {
-          const rs = await window.guavaEngine.call("viewport.getRenderSettings", {});
+          const rs = await engine.call("viewport.getRenderSettings", {});
           if (rs.shadingMode) set({ shadingMode: rs.shadingMode as ShadingMode });
         } catch { /* ignore */ }
         try {
-          const fr = await window.guavaEngine.call("viewport.getFrameRate", {});
+          const fr = await engine.call("viewport.getFrameRate", {});
           if (fr.fps != null) set({ fpsLimit: Number(fr.fps) });
         } catch { /* ignore */ }
       },

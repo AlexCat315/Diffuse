@@ -4,6 +4,7 @@ import type { EntityNode } from "../../shared/rpc-types";
 import { useI18n } from "../i18n";
 import { IconClose, IconTriangleRight, IconTriangleDown, IconLockClosed, IconLockOpen, IconShadingRendered, IconEyeSlash } from "../components/Icons";
 import { useSceneStore } from "../store";
+import { engine } from "../engine-client";
 
 export function SceneHierarchy() {
   const roots = useSceneStore((s) => s.hierarchy);
@@ -30,7 +31,7 @@ export function SceneHierarchy() {
 
   const createEntity = useCallback(async (parentId?: number) => {
     try {
-      const result = await window.guavaEngine.call("scene.createEntity", {
+      const result = await engine.call("scene.createEntity", {
         name: t.hierarchy.defaultEntityName,
         ...(parentId != null && { parentId }),
       });
@@ -43,7 +44,7 @@ export function SceneHierarchy() {
 
   const deleteEntity = useCallback(async (entityId: number) => {
     try {
-      await window.guavaEngine.call("scene.deleteEntity", { entityId });
+      await engine.call("scene.deleteEntity", { entityId });
       onRefresh();
     } catch (e) {
       console.error("Failed to delete entity:", e);
@@ -52,7 +53,7 @@ export function SceneHierarchy() {
 
   const duplicateEntity = useCallback(async (entityId: number) => {
     try {
-      await window.guavaEngine.call("scene.duplicateEntity", { entityId });
+      await engine.call("scene.duplicateEntity", { entityId });
       onRefresh();
     } catch (e) {
       console.error("Failed to duplicate entity:", e);
@@ -63,7 +64,7 @@ export function SceneHierarchy() {
     setRenamingId(null);
     if (!name.trim()) return;
     try {
-      await window.guavaEngine.call("entity.setName", { entityId, name });
+      await engine.call("entity.setName", { entityId, name });
       onRefresh();
     } catch (e) {
       console.error("Failed to rename entity:", e);
@@ -72,7 +73,7 @@ export function SceneHierarchy() {
 
   const toggleVisible = useCallback(async (entityId: number, visible: boolean) => {
     try {
-      await window.guavaEngine.call("entity.setVisible", { entityId, visible });
+      await engine.call("entity.setVisible", { entityId, visible });
       onRefresh();
     } catch (e) {
       console.error("Failed to toggle visibility:", e);
@@ -81,7 +82,7 @@ export function SceneHierarchy() {
 
   const toggleSelectable = useCallback(async (entityId: number, selectable: boolean) => {
     try {
-      await window.guavaEngine.call("entity.setSelectable", { entityId, selectable });
+      await engine.call("entity.setSelectable", { entityId, selectable });
       onRefresh();
     } catch (e) {
       console.error("Failed to toggle selectable:", e);

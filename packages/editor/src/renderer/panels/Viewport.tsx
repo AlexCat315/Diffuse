@@ -10,6 +10,12 @@ import {
   IconCrosshair, IconClose, IconPlus, IconBox, IconCamera,
   IconLightPoint, IconLightSpot, IconLightSun, IconModel, IconFilledCircle, IconGrid,
 } from "../components/Icons";
+import { engine } from "../engine-client";
+import {
+  viewportAttachSurface, viewportUpdateSurface, viewportDetach,
+  viewportUpdateBounds, viewportUpdateExclusions,
+  onViewportOverlayActive, onViewportPixels, onViewportSharedBuffer,
+} from "../citron-api";
 
 
 /**
@@ -66,7 +72,7 @@ export function Viewport() {
 
   // Listen for native overlay activation from main process.
   useEffect(() => {
-    const unsub = window.guavaEngine.onViewportOverlayActive((active) => {
+    const unsub = onViewportOverlayActive((active) => {
       setNativeOverlay(active);
     });
     return unsub;
@@ -98,7 +104,7 @@ export function Viewport() {
           r.height,
         ]);
       }
-      window.guavaEngine.viewportUpdateExclusions(rects);
+      viewportUpdateExclusions(rects);
     };
 
     const ro = new ResizeObserver(reportExclusions);
@@ -146,7 +152,7 @@ export function Viewport() {
     // composition layer positions the 3D scene correctly.
     const report = () => {
       const rect = el.getBoundingClientRect();
-      window.guavaEngine.viewportUpdateBounds(rect.x, rect.y, rect.width, rect.height);
+      viewportUpdateBounds(rect.x, rect.y, rect.width, rect.height);
     };
     report(); // initial
     const ro = new ResizeObserver(report);
@@ -181,7 +187,7 @@ export function Viewport() {
   }, []);
 
   const sendInput = useCallback((params: Record<string, unknown>) => {
-    window.guavaEngine.call("viewport.sendInput", params as never).catch(() => {});
+    engine.call("viewport.sendInput", params as never).catch(() => {});
   }, []);
 
   // Track B key for box-select activation (Blender-style)
@@ -233,7 +239,7 @@ export function Viewport() {
       // Finalise box selection or click-to-pick
       if (boxSelect?.active) {
         const mode = boxSelect.shift ? "toggle" : "replace";
-        window.guavaEngine.call("viewport.boxSelect", {
+        engine.call("viewport.boxSelect", {
           x1: Math.round(Math.min(boxSelect.startX, x)),
           y1: Math.round(Math.min(boxSelect.startY, y)),
           x2: Math.round(Math.max(boxSelect.startX, x)),
@@ -251,7 +257,7 @@ export function Viewport() {
             // In mesh edit mode, element picking is handled engine-side via raycasting
             if (!useMeshEditStore.getState().active) {
               const mode = (e.shiftKey || e.ctrlKey || e.metaKey) ? "toggle" : "replace";
-              window.guavaEngine.call("viewport.pick", { x: Math.round(x), y: Math.round(y), mode } as never).catch(() => {});
+              engine.call("viewport.pick", { x: Math.round(x), y: Math.round(y), mode } as never).catch(() => {});
             }
           }
         }
@@ -301,7 +307,7 @@ export function Viewport() {
     const screenY = e.clientY;
 
     // Pick entity at cursor position, then build menu
-    window.guavaEngine
+    engine
       .call("viewport.pick", { x: Math.round(x), y: Math.round(y), mode: "replace" } as never)
       .then(() => {
         // Give a tiny delay for selection state to propagate
@@ -354,7 +360,7 @@ export function Viewport() {
           shortcut: "Ctrl+D",
           icon: <IconModel size={12} />,
           onClick: () => {
-            window.guavaEngine.call("scene.duplicateEntity", { entityId } as never).catch(() => {});
+            engine.call("scene.duplicateEntity", { entityId } as never).catch(() => {});
           },
         },
         {
@@ -362,7 +368,7 @@ export function Viewport() {
           shortcut: "Del",
           icon: <IconClose size={12} />,
           onClick: () => {
-            window.guavaEngine.call("scene.deleteEntity", { entityId } as never).catch(() => {});
+            engine.call("scene.deleteEntity", { entityId } as never).catch(() => {});
           },
         },
       );
@@ -395,7 +401,7 @@ export function Viewport() {
       items.push({
         label: t.contextMenu.clearSelection,
         onClick: () => {
-          window.guavaEngine.call("editor.setSelection", { entityIds: [] } as never).catch(() => {});
+          engine.call("editor.setSelection", { entityIds: [] } as never).catch(() => {});
         },
       });
     }
@@ -404,7 +410,7 @@ export function Viewport() {
   }, [t, sendInput]);
 
   const spawnActor = useCallback((kind: string) => {
-    window.guavaEngine.call("scene.spawnActor", { kind } as never).catch(() => {});
+    engine.call("scene.spawnActor", { kind } as never).catch(() => {});
   }, []);
 
   const mapKeyFn = (e: React.KeyboardEvent): string | null => {
@@ -496,7 +502,7 @@ export function Viewport() {
   useEffect(() => {
     if (!connected) {
       if (surfaceIdRef.current) {
-        window.guavaEngine.viewportDetach().catch(() => {});
+        viewportDetach().catch(() => {});
         setAttached(false);
       }
       surfaceIdRef.current = 0;
@@ -519,7 +525,7 @@ export function Viewport() {
 
       // Tell the engine the desired viewport dimensions.
       try {
-        await window.guavaEngine.call("viewport.setRect", {
+        await engine.call("viewport.setRect", {
           x: 0,
           y: 0,
           width: size.w,
@@ -536,11 +542,11 @@ export function Viewport() {
       // Poll until a valid surfaceId is available.
       for (let attempt = 0; attempt < 20 && !cancelled; attempt++) {
         try {
-          const res = await window.guavaEngine.call("viewport.getSurfaceId", {});
+          const res = await engine.call("viewport.getSurfaceId", {});
           if (res.surfaceId && res.surfaceId > 0) {
             surfaceIdRef.current = res.surfaceId;
             shmNameRef.current = res.shmName ?? undefined;
-            const ok = await window.guavaEngine.viewportAttachSurface(
+            const ok = await viewportAttachSurface(
               res.surfaceId,
               0,
               0,
@@ -580,7 +586,7 @@ export function Viewport() {
       const last = lastSizeRef.current;
       if (size.w !== last.w || size.h !== last.h) {
         lastSizeRef.current = size;
-        window.guavaEngine
+        engine
           .call("viewport.setRect", {
             x: 0,
             y: 0,
@@ -592,11 +598,11 @@ export function Viewport() {
             // poll for the new surface id.
             await new Promise((r) => setTimeout(r, 100));
             try {
-              const res = await window.guavaEngine.call("viewport.getSurfaceId", {});
+              const res = await engine.call("viewport.getSurfaceId", {});
               if (res.surfaceId && res.surfaceId !== surfaceIdRef.current) {
                 surfaceIdRef.current = res.surfaceId;
                 shmNameRef.current = res.shmName ?? undefined;
-                window.guavaEngine.viewportUpdateSurface(
+                viewportUpdateSurface(
                   res.surfaceId,
                   res.shmName ?? undefined,
                   res.width,
@@ -619,7 +625,7 @@ export function Viewport() {
   // Cleanup on unmount.
   useEffect(() => {
     return () => {
-      window.guavaEngine.viewportDetach().catch(() => {});
+      viewportDetach().catch(() => {});
     };
   }, []);
 
@@ -641,16 +647,16 @@ export function Viewport() {
         { id: "gizmo.scale", combo: { key: gizmoKeys.scale?.key ?? "r" }, handler: () => { changeGizmoMode("scale"); return true; } },
         { id: "entity.delete", combo: { key: "delete" }, handler: () => {
           const { selectedEntity: sel, setSelectedEntity, refreshHierarchy } = useSceneStore.getState();
-          if (sel != null) { window.guavaEngine.call("scene.deleteEntity", { entityId: sel }); setSelectedEntity(null); refreshHierarchy(); }
+          if (sel != null) { engine.call("scene.deleteEntity", { entityId: sel }); setSelectedEntity(null); refreshHierarchy(); }
           return true;
         }},
         { id: "entity.backspace", combo: { key: "backspace" }, handler: () => {
           const { selectedEntity: sel, setSelectedEntity, refreshHierarchy } = useSceneStore.getState();
-          if (sel != null) { window.guavaEngine.call("scene.deleteEntity", { entityId: sel }); setSelectedEntity(null); refreshHierarchy(); }
+          if (sel != null) { engine.call("scene.deleteEntity", { entityId: sel }); setSelectedEntity(null); refreshHierarchy(); }
           return true;
         }},
         { id: "viewport.tab", combo: { key: "tab" }, handler: (e) => {
-          window.guavaEngine.call("viewport.sendInput", {
+          engine.call("viewport.sendInput", {
             type: "keydown", key: "tab", shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey, alt: e.altKey,
           } as never).catch(() => {});
           return true;
@@ -757,7 +763,7 @@ export function Viewport() {
     let lastUploadTime = 0;
     const MIN_UPLOAD_INTERVAL = 16; // Cap texture uploads to ~60 fps
 
-    const unsubSAB = window.guavaEngine.onViewportSharedBuffer((sab) => {
+    const unsubSAB = onViewportSharedBuffer((sab) => {
       sabRef = sab;
       sabHeader = new Uint32Array(sab, 0, 4); // [width, height, generation, readIndex]
       sabPixels = new Uint8Array(sab, 16);     // pixel data starts at byte 16
@@ -789,7 +795,7 @@ export function Viewport() {
     raf = requestAnimationFrame(tick);
 
     // ── Path B: IPC fallback ─────────────────────────
-    const unsub = window.guavaEngine.onViewportPixels((pixels, width, height) => {
+    const unsub = onViewportPixels((pixels, width, height) => {
       // Skip IPC path if SAB is active
       if (sabHeader) return;
       const src = new Uint8Array(
@@ -858,7 +864,7 @@ export function Viewport() {
         if (!assetPath || assetType !== "model") return;
         e.preventDefault();
         try {
-          await window.guavaEngine.call("assets.importModel", { sourcePath: assetPath });
+          await engine.call("assets.importModel", { sourcePath: assetPath });
         } catch (err) {
           console.error("Failed to import model:", err);
         }
@@ -932,7 +938,7 @@ function ViewportMetricsOverlay() {
   const [metrics, setMetrics] = useLocalState<{ fps: number; frameTimeMs: number; drawCalls: number; triangles: number } | null>(null);
 
   useEffect(() => {
-    const cleanup = window.guavaEngine.onEvent((event, data) => {
+    const cleanup = engine.onNotification((event, data) => {
       if (event === "on:viewport.metrics") {
         setMetrics(data as { fps: number; frameTimeMs: number; drawCalls: number; triangles: number });
       }

@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useCallback } from "react";
 import { IconClose } from "./components/Icons";
 import { useI18n } from "./i18n";
+import { getRecentProjects, getTemplates, openProject, createProject, removeRecentProject, browseFolder } from "./citron-api";
 
 interface RecentProject {
   path: string;
@@ -34,15 +35,15 @@ export function Launcher({ onProjectOpened }: LauncherProps) {
 
   // Load recent projects and templates on mount
   useEffect(() => {
-    window.guavaEngine.getRecentProjects().then(setRecentProjects);
-    window.guavaEngine.getTemplates().then(setTemplates);
+    getRecentProjects().then(setRecentProjects);
+    getTemplates().then(setTemplates);
   }, []);
 
   const handleOpenProject = useCallback(async (projectPath: string) => {
     setLoading(true);
     setError(null);
     try {
-      const result = await window.guavaEngine.openProject(projectPath);
+      const result = await openProject(projectPath);
       if (result.ok) {
         onProjectOpened();
       } else {
@@ -56,14 +57,14 @@ export function Launcher({ onProjectOpened }: LauncherProps) {
   }, [onProjectOpened, lt]);
 
   const handleBrowseFolder = useCallback(async () => {
-    const result = await window.guavaEngine.browseFolder();
+    const result = await browseFolder();
     if (result) {
       await handleOpenProject(result);
     }
   }, [handleOpenProject]);
 
   const handleBrowseNewProjectLocation = useCallback(async () => {
-    const result = await window.guavaEngine.browseFolder();
+    const result = await browseFolder();
     if (result) {
       setNewProjectPath(result);
     }
@@ -77,7 +78,7 @@ export function Launcher({ onProjectOpened }: LauncherProps) {
       const fullPath = newProjectPath.endsWith(newProjectName)
         ? newProjectPath
         : `${newProjectPath}/${newProjectName}`;
-      const result = await window.guavaEngine.createProject(fullPath, newProjectName.trim(), selectedTemplate);
+      const result = await createProject(fullPath, newProjectName.trim(), selectedTemplate);
       if (result.ok) {
         onProjectOpened();
       } else {
@@ -92,7 +93,7 @@ export function Launcher({ onProjectOpened }: LauncherProps) {
 
   const handleRemoveRecent = useCallback(async (e: React.MouseEvent, projectPath: string) => {
     e.stopPropagation();
-    await window.guavaEngine.removeRecentProject(projectPath);
+    await removeRecentProject(projectPath);
     setRecentProjects((prev) => prev.filter((p) => p.path !== projectPath));
   }, []);
 

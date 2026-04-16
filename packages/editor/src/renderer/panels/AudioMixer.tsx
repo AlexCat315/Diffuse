@@ -2,6 +2,7 @@ import React, { useEffect, useCallback, useRef } from "react";
 import { useLocalState } from "../store/local-state";
 import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
+import { engine } from "../engine-client";
 
 interface BusInfo {
   id: string;
@@ -22,7 +23,7 @@ export function AudioMixer() {
   const refresh = useCallback(async () => {
     if (!connected) return;
     try {
-      const res = await window.guavaEngine.call("audio.getMixerStatus", {});
+      const res = await engine.call("audio.getMixerStatus", {});
       setAvailable(res.available);
       setActiveVoices(res.activeVoices);
       setBuses(res.buses);
@@ -41,7 +42,7 @@ export function AudioMixer() {
 
   const handleVolumeChange = async (busId: string, volume: number) => {
     try {
-      await window.guavaEngine.call("audio.setBusVolume", { busId, volume });
+      await engine.call("audio.setBusVolume", { busId, volume });
       setBuses((prev) => prev.map((b) => (b.id === busId ? { ...b, volume } : b)));
     } catch {
       /* ignore */

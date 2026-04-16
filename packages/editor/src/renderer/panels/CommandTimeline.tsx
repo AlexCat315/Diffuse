@@ -4,7 +4,7 @@ import { useI18n } from "../i18n";
 import { IconUndo, IconRedo } from "../components/Icons";
 import type { HistoryEntry } from "../../shared/rpc-types";
 import { useConnectionStore } from "../store";
-
+import { engine } from "../engine-client";
 
 export function CommandTimeline() {
   const connected = useConnectionStore((s) => s.connected);
@@ -16,7 +16,7 @@ export function CommandTimeline() {
   const fetchHistory = useCallback(async () => {
     if (!connected) return;
     try {
-      const result = await window.guavaEngine.call("editor.getHistory", {});
+      const result = await engine.call("editor.getHistory", {});
       setEntries(result.entries);
       setCursor(result.cursor);
     } catch {
@@ -30,7 +30,7 @@ export function CommandTimeline() {
 
   useEffect(() => {
     if (!connected) return;
-    const cleanup = window.guavaEngine.onEvent((event) => {
+    const cleanup = engine.onNotification((event) => {
       if (event === "on:editor.historyChanged") {
         fetchHistory();
       }
@@ -41,7 +41,7 @@ export function CommandTimeline() {
   const handleTimeTravel = useCallback(
     async (sequence: number) => {
       try {
-        await window.guavaEngine.call("editor.timeTravel", { targetSequence: sequence });
+        await engine.call("editor.timeTravel", { targetSequence: sequence });
         fetchHistory();
       } catch {
         // ignore
@@ -51,11 +51,11 @@ export function CommandTimeline() {
   );
 
   const handleUndo = useCallback(() => {
-    window.guavaEngine.call("editor.undo", {}).then(fetchHistory).catch(() => {});
+    engine.call("editor.undo", {}).then(fetchHistory).catch(() => {});
   }, [fetchHistory]);
 
   const handleRedo = useCallback(() => {
-    window.guavaEngine.call("editor.redo", {}).then(fetchHistory).catch(() => {});
+    engine.call("editor.redo", {}).then(fetchHistory).catch(() => {});
   }, [fetchHistory]);
 
   const cursorIndex = entries.findIndex((e) => e.sequence === cursor);

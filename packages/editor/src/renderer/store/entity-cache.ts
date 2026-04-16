@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { Transform, ComponentInfo } from "../../shared/rpc-types";
+import { engine } from "../engine-client";
 
 interface EntityData {
   transform: Transform | null;
@@ -43,8 +44,8 @@ export const useEntityCacheStore = create<EntityCacheState>((set, get) => ({
     }
     try {
       const [t, c] = await Promise.all([
-        window.guavaEngine.call("entity.getTransform", { entityId }),
-        window.guavaEngine.call("entity.getComponents", { entityId }),
+        engine.call("entity.getTransform", { entityId }),
+        engine.call("entity.getComponents", { entityId }),
       ]);
       const data: EntityData = {
         transform: t,
@@ -65,7 +66,7 @@ export const useEntityCacheStore = create<EntityCacheState>((set, get) => ({
 
   fetchMaterial: async (entityId) => {
     try {
-      const mat = await window.guavaEngine.call("material.getState", { entityId });
+      const mat = await engine.call("material.getState", { entityId });
       set((state) => {
         const next = new Map(state.cache);
         const existing = next.get(entityId);

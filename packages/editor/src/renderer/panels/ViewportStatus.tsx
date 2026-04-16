@@ -2,6 +2,7 @@ import { useLocalState } from "../store/local-state";
 import React, { useEffect } from "react";
 import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
+import { engine } from "../engine-client";
 
 interface ViewportMetrics {
   fps: number;
@@ -23,7 +24,7 @@ export function ViewportStatus() {
       return;
     }
 
-    const cleanup = window.guavaEngine.onEvent((event, data) => {
+    const cleanup = engine.onNotification((event, data) => {
       if (event === "on:viewport.metrics") {
         setMetrics(data as ViewportMetrics);
       }

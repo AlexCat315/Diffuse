@@ -6,6 +6,7 @@ import { useI18n } from "../i18n";
 import { IconTriangleRight, IconTriangleDown, IconScript, IconClose } from "../components/Icons";
 import { useSceneStore, useEntityCacheStore } from "../store";
 import { useSyncedState } from "../store/synced-state";
+import { engine } from "../engine-client";
 
 export function Inspector() {
   const entityId = useSceneStore((s) => s.selectedEntity);
@@ -38,14 +39,14 @@ export function Inspector() {
 
   const commitName = useCallback(() => {
     if (entityId != null && entityName.trim()) {
-      window.guavaEngine.call("entity.setName", { entityId, name: entityName });
+      engine.call("entity.setName", { entityId, name: entityName });
     }
   }, [entityId, entityName]);
 
   const commitTransform = useCallback(
     (partial: Partial<Transform>) => {
       if (entityId == null) return;
-      window.guavaEngine.call("entity.setTransform", { entityId, transform: partial });
+      engine.call("entity.setTransform", { entityId, transform: partial });
     },
     [entityId],
   );
@@ -69,9 +70,9 @@ export function Inspector() {
       e.preventDefault();
 
       // Always append a new Script to the scripts array
-      await window.guavaEngine.call("entity.addComponent", { entityId, componentType: "Script" });
+      await engine.call("entity.addComponent", { entityId, componentType: "Script" });
       // Refresh components to get the new scriptIndex
-      const data = await window.guavaEngine.call("entity.getComponents", { entityId });
+      const data = await engine.call("entity.getComponents", { entityId });
       const scriptComps = (data.components ?? []).filter(
         (c: { type: string }) => c.type === "Script",
       );
@@ -79,7 +80,7 @@ export function Inspector() {
       const lastScript = scriptComps[scriptComps.length - 1];
       const newIndex = lastScript?.scriptIndex ?? 0;
       // Assign the dropped script to the newly created slot
-      await window.guavaEngine.call("entity.setAssetField", {
+      await engine.call("entity.setAssetField", {
         entityId,
         componentType: "Script",
         fieldName: "script_handle",
@@ -235,7 +236,7 @@ export function Inspector() {
             collapsed={collapsedSections.has(sectionKey)}
             onToggle={() => toggleSection(sectionKey)}
             onRemove={() => {
-              window.guavaEngine.call("entity.removeComponent", {
+              engine.call("entity.removeComponent", {
                 entityId,
                 componentType: comp.type,
                 ...(scriptIdx != null ? { scriptIndex: scriptIdx } : {}),
@@ -412,7 +413,7 @@ function FieldEditor({
     (value: unknown) => {
       clearTimeout(commitTimer.current);
       commitTimer.current = setTimeout(() => {
-        window.guavaEngine.call("entity.setComponentField", {
+        engine.call("entity.setComponentField", {
           entityId,
           componentType,
           fieldName: field.name,
@@ -616,7 +617,7 @@ function AssetRefField({
     // Fetch available assets by type
     const assetType = field.assetType ?? "script";
     if (assetType === "script") {
-      window.guavaEngine
+      engine
         .call("script.listScripts", {})
         .then((res: { scripts?: { path: string }[] }) => {
           setOptions((res.scripts ?? []).map((s) => s.path));
@@ -624,7 +625,7 @@ function AssetRefField({
         .catch(() => {});
     } else {
       // For mesh/material/texture — browse assets directory
-      window.guavaEngine
+      engine
         .call("assets.list", { path: "" })
         .then((res: { entries?: { name: string; isDirectory: boolean }[] }) => {
           // Flatten — for now just show top-level files
@@ -639,7 +640,7 @@ function AssetRefField({
   }, [field.assetType]);
 
   const commitAsset = (assetPath: string | undefined) => {
-    window.guavaEngine.call("entity.setAssetField", {
+    engine.call("entity.setAssetField", {
       entityId,
       componentType,
       fieldName: field.name,
@@ -750,7 +751,7 @@ function SkyEnvironmentField({
     const found: HdrAssetEntry[] = [];
     const scanDir = async (dirPath: string) => {
       try {
-        const res = await window.guavaEngine.call("assets.list", { path: dirPath }) as {
+        const res = await engine.call("assets.list", { path: dirPath }) as {
           entries?: { name: string; path: string; isDirectory: boolean; assetType: string }[];
         };
         for (const entry of res.entries ?? []) {
@@ -766,7 +767,7 @@ function SkyEnvironmentField({
   }, []);
 
   const commitAsset = (assetPath: string | undefined) => {
-    window.guavaEngine.call("entity.setAssetField", {
+    engine.call("entity.setAssetField", {
       entityId,
       componentType: "Sky",
       fieldName: "environment_asset_id",
@@ -896,7 +897,7 @@ function AddComponentButton({
   );
 
   const handleAdd = (type: string) => {
-    window.guavaEngine.call("entity.addComponent", { entityId, componentType: type });
+    engine.call("entity.addComponent", { entityId, componentType: type });
     setTimeout(onAdded, 100);
   };
 
@@ -940,7 +941,7 @@ function ScriptParametersEditor({ entityId, scriptIndex }: { entityId: number; s
   const commitTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
-    window.guavaEngine
+    engine
       .call("script.getEntityParameters", {
         entityId,
         scriptIndex: scriptIndex ?? 0,
@@ -965,7 +966,7 @@ function ScriptParametersEditor({ entityId, scriptIndex }: { entityId: number; s
       }
       clearTimeout(commitTimer.current);
       commitTimer.current = setTimeout(() => {
-        window.guavaEngine.call("script.setEntityParameters", {
+        engine.call("script.setEntityParameters", {
           entityId,
           parameters: value.trim() || "{}",
           scriptIndex: scriptIndex ?? 0,

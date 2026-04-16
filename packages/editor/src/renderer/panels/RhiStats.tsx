@@ -2,6 +2,7 @@ import { useLocalState } from "../store/local-state";
 import React, { useEffect, useCallback, useRef } from "react";
 import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
+import { engine } from "../engine-client";
 
 interface BindingCacheStats {
   hits: number;
@@ -35,7 +36,7 @@ export function RhiStats() {
   const refresh = useCallback(async () => {
     if (!connected) return;
     try {
-      const res = await window.guavaEngine.call("debug.getRhiStats", {});
+      const res = await engine.call("debug.getRhiStats", {});
       setData(res);
     } catch {
       /* ignore */
@@ -51,7 +52,7 @@ export function RhiStats() {
   }, [refresh]);
 
   const handleReset = async () => {
-    await window.guavaEngine.call("debug.resetRhiStats", {});
+    await engine.call("debug.resetRhiStats", {});
     refresh();
   };
 
