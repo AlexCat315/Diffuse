@@ -11,8 +11,8 @@ var popout_manager: PopoutManager = undefined;
 
 fn setup(router: *citron.ipc.Router) !void {
     handlers.init(&app_state, &viewport_state, &popout_manager);
-    try handlers.register(router);
     try app_state.startInitialProject();
+    _ = router;
 }
 
 pub fn main(init: std.process.Init) !void {
@@ -26,6 +26,7 @@ pub fn main(init: std.process.Init) !void {
         .app_name = "Guava Editor",
         .bundle_id = "com.guava.editor",
         .exe_name = "guava-editor",
+        .commands = &handlers.commands,
         .setup = setup,
     });
 }
