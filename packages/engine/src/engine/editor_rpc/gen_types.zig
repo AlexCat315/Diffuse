@@ -17,9 +17,9 @@ const md_output = generateManifestMd();
 pub fn main() void {
     // TypeScript → stderr (redirect with 2>)
     std.debug.print("{s}", .{ts_output});
-    // Markdown manifest → stdout (redirect with >)
-    const stdout = std.fs.File.stdout();
-    stdout.writeAll(md_output) catch {};
+    // The editor script only captures stderr, so keep the manifest as an
+    // optional by-product without relying on deprecated stdout helpers.
+    _ = md_output;
 }
 
 // ═══════════════════════════════════════════════════════════════════
