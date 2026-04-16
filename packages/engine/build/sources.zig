@@ -218,7 +218,7 @@ pub fn configureEngineModule(
 
     module.addIncludePath(.{ .cwd_relative = sdl_include_path });
     for (engine_include_paths) |include_path| {
-        module.addIncludePath(.{ .cwd_relative = include_path });
+        module.addIncludePath(b.path(include_path));
     }
 
     module.addLibraryPath(.{ .cwd_relative = sdl_library_path });
@@ -258,6 +258,8 @@ pub fn configureEngineModule(
         module.linkFramework("MetalPerformanceShaders", .{});
         module.linkFramework("QuartzCore", .{});
         module.linkFramework("CoreFoundation", .{});
+        module.linkFramework("IOSurface", .{});
+        module.linkFramework("CoreVideo", .{});
         module.linkFramework("CoreAudio", .{});
         module.linkFramework("AudioUnit", .{});
         module.linkFramework("AudioToolbox", .{});
@@ -312,7 +314,7 @@ pub fn createCTranslations(
         .target = target,
         .optimize = optimize,
     });
-    tc_stb_image.addIncludePath(.{ .cwd_relative = "third_party/stb" });
+    tc_stb_image.addIncludePath(b.path("third_party/stb"));
 
     // stb_image_write
     const tc_stb_image_write = b.addTranslateC(.{
@@ -320,7 +322,7 @@ pub fn createCTranslations(
         .target = target,
         .optimize = optimize,
     });
-    tc_stb_image_write.addIncludePath(.{ .cwd_relative = "third_party/stb" });
+    tc_stb_image_write.addIncludePath(b.path("third_party/stb"));
 
     // stb_truetype
     const tc_stb_truetype = b.addTranslateC(.{
@@ -328,7 +330,7 @@ pub fn createCTranslations(
         .target = target,
         .optimize = optimize,
     });
-    tc_stb_truetype.addIncludePath(.{ .cwd_relative = "third_party/stb" });
+    tc_stb_truetype.addIncludePath(b.path("third_party/stb"));
 
     // svg_bridge
     const tc_svg_bridge = b.addTranslateC(.{
@@ -336,7 +338,7 @@ pub fn createCTranslations(
         .target = target,
         .optimize = optimize,
     });
-    tc_svg_bridge.addIncludePath(.{ .cwd_relative = "src/engine/assets" });
+    tc_svg_bridge.addIncludePath(b.path("src/engine/assets"));
 
     // soloud
     const tc_soloud = b.addTranslateC(.{
@@ -344,7 +346,7 @@ pub fn createCTranslations(
         .target = target,
         .optimize = optimize,
     });
-    tc_soloud.addIncludePath(.{ .cwd_relative = "third_party/soloud/include" });
+    tc_soloud.addIncludePath(b.path("third_party/soloud/include"));
 
     // recast
     const tc_recast = b.addTranslateC(.{
@@ -352,10 +354,10 @@ pub fn createCTranslations(
         .target = target,
         .optimize = optimize,
     });
-    tc_recast.addIncludePath(.{ .cwd_relative = "src/engine/navigation" });
-    tc_recast.addIncludePath(.{ .cwd_relative = "third_party/recast/Recast/Include" });
-    tc_recast.addIncludePath(.{ .cwd_relative = "third_party/recast/Detour/Include" });
-    tc_recast.addIncludePath(.{ .cwd_relative = "third_party/recast/DetourCrowd/Include" });
+    tc_recast.addIncludePath(b.path("src/engine/navigation"));
+    tc_recast.addIncludePath(b.path("third_party/recast/Recast/Include"));
+    tc_recast.addIncludePath(b.path("third_party/recast/Detour/Include"));
+    tc_recast.addIncludePath(b.path("third_party/recast/DetourCrowd/Include"));
 
     // sdl3
     const tc_sdl3 = b.addTranslateC(.{
