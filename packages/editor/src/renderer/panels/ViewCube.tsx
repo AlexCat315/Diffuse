@@ -1,6 +1,7 @@
 import { useLocalState } from "../store/local-state";
 import React, { useRef, useEffect, useCallback, useMemo } from "react";
 import { useConnectionStore } from "../store";
+import { engine } from "../engine-client";
 
 
 type Quat = [number, number, number, number]; // x,y,z,w
@@ -80,7 +81,7 @@ export function ViewCube() {
     const poll = () => {
       if (cancelled || pending) return;
       pending = true;
-      window.guavaEngine.call("camera.getState", {}).then((res) => {
+      engine.call("camera.getState", {}).then((res) => {
         pending = false;
         if (cancelled) return;
         if (res.rotation) {
@@ -128,7 +129,7 @@ export function ViewCube() {
     const look = positive
       ? ax.lookAxis
       : [ax.lookAxis[0] * -1, ax.lookAxis[1] * -1, ax.lookAxis[2] * -1] as Vec3;
-    window.guavaEngine.call("camera.lookAlongAxis", {
+    engine.call("camera.lookAlongAxis", {
       axisX: look[0], axisY: look[1], axisZ: look[2],
     } as never).catch(() => {});
   }, [connected]);
@@ -144,7 +145,7 @@ export function ViewCube() {
         dragRef.current.dragging = true;
       }
       if (dragRef.current.dragging) {
-        window.guavaEngine.call("camera.orbit", {
+        engine.call("camera.orbit", {
           deltaYaw: -(ev.clientX - dragRef.current.sx) * 0.008,
           deltaPitch: (ev.clientY - dragRef.current.sy) * 0.008,
         } as never).catch(() => {});

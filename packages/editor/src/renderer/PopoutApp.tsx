@@ -1,6 +1,6 @@
 import React, { useEffect, useCallback, useState } from "react";
 import { IconClose } from "./components/Icons";
-import type { GuavaEngineAPI } from "@shared/guava-engine";
+import { onInitState, closePopout } from "./citron-api";
 import { SceneHierarchy } from "./panels/SceneHierarchy";
 import { Inspector } from "./panels/Inspector";
 import { Console } from "./panels/Console";
@@ -36,12 +36,6 @@ import {
   useSceneStore,
   initRpcBridge,
 } from "./store";
-
-declare global {
-  interface Window {
-    guavaEngine: GuavaEngineAPI;
-  }
-}
 
 const PANEL_LABELS: Record<string, string> = {
   hierarchy: "Scene Hierarchy",
@@ -122,7 +116,7 @@ export function PopoutApp({ panels }: { panels: string[] }) {
     const cleanup = initRpcBridge();
 
     // Hydrate stores from initial state pushed by main window
-    const cleanupInit = window.guavaEngine.onInitState((state: unknown) => {
+    const cleanupInit = onInitState((state: unknown) => {
       const s = state as {
         consoleLogs?: Array<{ level: string; message: string; category?: string; timestamp?: number }>;
         sceneHierarchy?: unknown[];
@@ -159,7 +153,7 @@ export function PopoutApp({ panels }: { panels: string[] }) {
   }, [panels]);
 
   const handleClose = useCallback(() => {
-    window.guavaEngine.closePopout();
+    closePopout();
   }, []);
 
   if (error) {

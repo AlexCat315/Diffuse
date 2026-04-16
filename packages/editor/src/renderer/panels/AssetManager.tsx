@@ -6,6 +6,8 @@ import {
   IconScript, IconAudio, IconMaterial, IconFile, IconRefresh, IconGrid, IconList,
 } from "../components/Icons";
 import { useConnectionStore } from "../store";
+import { engine } from "../engine-client";
+import { fsImportFiles, fsImportPaths, onImportProgress } from "../citron-api";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -59,7 +61,7 @@ export function AssetManager() {
 
   // Listen for import progress events
   useEffect(() => {
-    const cleanup = window.guavaEngine.onImportProgress((progress) => {
+    const cleanup = onImportProgress((progress) => {
       if (progress.done) {
         setImportProgress(null);
       } else {
@@ -78,7 +80,7 @@ export function AssetManager() {
     const scanDir = async (dirPath: string) => {
       try {
         const rpcMethod = dirPath === "." ? "assets.listProjectRoot" : "assets.list";
-        const result = await window.guavaEngine.call(rpcMethod as "assets.list", { path: dirPath });
+        const result = await engine.call(rpcMethod as "assets.list", { path: dirPath });
         for (const entry of result.entries ?? []) {
           if (entry.isDirectory) {
             await scanDir(entry.path);
@@ -201,7 +203,7 @@ export function AssetManager() {
           }
         }
         if (paths.length > 0) {
-          const res = await window.guavaEngine.fsImportPaths("Content", paths);
+          const res = await fsImportPaths("Content", paths);
           if (res.ok && (res.files?.length ?? 0) > 0) {
             scanAll();
           }
@@ -217,7 +219,7 @@ export function AssetManager() {
         <button
           style={styles.iconBtn}
           onClick={async () => {
-            const res = await window.guavaEngine.fsImportFiles("Content");
+            const res = await fsImportFiles("Content");
             if (res.ok && (res.files?.length ?? 0) > 0) {
               scanAll();
             }

@@ -5,7 +5,8 @@ import { Layout, Model, Actions, DockLocation, type Action, type IJsonModel, typ
 import "flexlayout-react/style/light.css";
 import "./flexlayout-dark.css";
 
-import type { GuavaEngineAPI } from "@shared/guava-engine";
+import { engine } from "./engine-client";
+import { popoutPanel, onPopoutClosed } from "./citron-api";
 import { SceneHierarchy } from "./panels/SceneHierarchy";
 import { Inspector } from "./panels/Inspector";
 import { Console } from "./panels/Console";
@@ -50,12 +51,6 @@ import {
   initRpcBridge,
   toast,
 } from "./store";
-
-declare global {
-  interface Window {
-    guavaEngine: GuavaEngineAPI;
-  }
-}
 
 // ── All panels available in the editor ──────────────────
 const ALL_PANELS: { id: string; name: string }[] = [
@@ -292,17 +287,16 @@ export function App() {
 
     // If arriving from the launcher, the engine may already be connected
     // before initRpcBridge's onConnected listener was set up. Check now.
-    window.guavaEngine.getStatus().then((status) => {
-      if (status.rpcConnected) {
-        useConnectionStore.getState().setConnected(true);
-        useSceneStore.getState().refreshHierarchy();
-      }
-    });
+    const status = engine.getStatus();
+    if (status.rpcConnected) {
+      useConnectionStore.getState().setConnected(true);
+      useSceneStore.getState().refreshHierarchy();
+    }
 
     // ── Global keybinding context (lowest priority) ──────────────
     const globalBindings: KeyBinding[] = [
       { id: "save", combo: { key: "s", ctrl: true }, handler: () => {
-        window.guavaEngine.call("scene.save", {})
+        engine.call("scene.save", {})
           .then((res: { path: string; revision?: number }) => {
             useSceneStore.getState().markSaved(res.revision);
             toast.success("Scene saved");
@@ -311,12 +305,12 @@ export function App() {
         return true;
       }},
       { id: "undo", combo: { key: "z", ctrl: true }, handler: () => {
-        window.guavaEngine.call("editor.undo", {})
+        engine.call("editor.undo", {})
           .catch((e) => toast.warn(`Undo failed: ${e instanceof Error ? e.message : String(e)}`));
         return true;
       }},
       { id: "redo", combo: { key: "z", ctrl: true, shift: true }, handler: () => {
-        window.guavaEngine.call("editor.redo", {})
+        engine.call("editor.redo", {})
           .catch((e) => toast.warn(`Redo failed: ${e instanceof Error ? e.message : String(e)}`));
         return true;
       }},
@@ -331,13 +325,13 @@ export function App() {
         useEditorStore.getState().setSettingsOpen(true); return true;
       }},
       { id: "play", combo: { key: " " }, handler: () => {
-        window.guavaEngine.call("playback.play", {}).catch(() => {}); return true;
+        engine.call("playback.play", {}).catch(() => {}); return true;
       }},
       { id: "pause", combo: { key: " ", ctrl: true }, handler: () => {
-        window.guavaEngine.call("playback.pause", {}).catch(() => {}); return true;
+        engine.call("playback.pause", {}).catch(() => {}); return true;
       }},
       { id: "stop", combo: { key: " ", shift: true }, handler: () => {
-        window.guavaEngine.call("playback.stop", {}).catch(() => {}); return true;
+        engine.call("playback.stop", {}).catch(() => {}); return true;
       }},
     ];
 
@@ -401,7 +395,7 @@ export function App() {
 
   // Listen for popout windows being closed → re-add panels to layout
   useEffect(() => {
-    const cleanup = window.guavaEngine.onPopoutClosed((panels: string[], originInfo?: unknown, bounds?: { x: number; y: number; width: number; height: number }) => {
+    const cleanup = onPopoutClosed((panels: string[], originInfo?: unknown, bounds?: { x: number; y: number; width: number; height: number }) => {
       const origin = originInfo as { tabsetId?: string; tabIndex?: number; tabName?: string } | undefined;
 
       // Persist window bounds for each panel so next popout opens at the same size/position
@@ -495,7 +489,7 @@ export function App() {
     // Remove the tab from layout
     modelRef.current.doAction(Actions.deleteTab(node.getId()));
     // Open in new window with state + origin info + saved bounds
-    window.guavaEngine.popoutPanel([componentId], initialState, originInfo, savedBounds);
+    popoutPanel([componentId], initialState, originInfo, savedBounds);
   }, []);
 
   // ── onRenderTab: translate tab title + add popout button ──

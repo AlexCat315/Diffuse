@@ -2,6 +2,7 @@ import { useLocalState } from "../store/local-state";
 import React, { useEffect, useCallback, useRef } from "react";
 import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
+import { engine } from "../engine-client";
 
 interface PluginInfo {
   name: string;
@@ -21,7 +22,7 @@ export function PluginManager() {
   const refresh = useCallback(async () => {
     if (!connected) return;
     try {
-      const res = await window.guavaEngine.call("plugin.list", {});
+      const res = await engine.call("plugin.list", {});
       setPlugins(res.plugins);
     } catch {
       /* ignore */
@@ -38,7 +39,7 @@ export function PluginManager() {
 
   const handleEnable = async (name: string) => {
     try {
-      await window.guavaEngine.call("plugin.enable", { name });
+      await engine.call("plugin.enable", { name });
       refresh();
     } catch {
       /* ignore */
@@ -47,7 +48,7 @@ export function PluginManager() {
 
   const handleDisable = async (name: string) => {
     try {
-      await window.guavaEngine.call("plugin.disable", { name });
+      await engine.call("plugin.disable", { name });
       refresh();
     } catch {
       /* ignore */
@@ -56,7 +57,7 @@ export function PluginManager() {
 
   const handleUnload = async (name: string) => {
     try {
-      await window.guavaEngine.call("plugin.unload", { name });
+      await engine.call("plugin.unload", { name });
       refresh();
     } catch {
       /* ignore */
@@ -65,7 +66,7 @@ export function PluginManager() {
 
   const handleRescan = async () => {
     try {
-      await window.guavaEngine.call("plugin.rescan", {});
+      await engine.call("plugin.rescan", {});
       refresh();
     } catch {
       /* ignore */

@@ -1,4 +1,5 @@
 import type { LogEntry } from "../../shared/rpc-types";
+import { engine } from "../engine-client";
 import { useConnectionStore } from "./connection";
 import { useSceneStore } from "./scene";
 import { useConsoleStore } from "./console";
@@ -11,17 +12,17 @@ import type { MeshEditMode, MeshSelectionMode } from "./mesh-edit";
  * Call once at app startup. Returns a cleanup function.
  */
 export function initRpcBridge(): () => void {
-  const cleanupConnected = window.guavaEngine.onConnected(() => {
+  const cleanupConnected = engine.onConnected(() => {
     useConnectionStore.getState().setConnected(true);
     useSceneStore.getState().refreshHierarchy();
     useMeshEditStore.getState().refreshState();
   });
 
-  const cleanupError = window.guavaEngine.onError((err) => {
+  const cleanupError = engine.onError((err) => {
     useConnectionStore.getState().setError(err);
   });
 
-  const cleanupEvents = window.guavaEngine.onEvent((event, data) => {
+  const cleanupEvents = engine.onNotification((event, data) => {
     switch (event) {
       case "on:scene.changed": {
         const d = data as { revision: number; entityIds: number[] };
@@ -72,13 +73,12 @@ export function initRpcBridge(): () => void {
   });
 
   // Check if engine is already connected on startup
-  window.guavaEngine.getStatus().then((status) => {
-    if (status.rpcConnected) {
-      useConnectionStore.getState().setConnected(true);
-      useSceneStore.getState().refreshHierarchy();
-      useMeshEditStore.getState().refreshState();
-    }
-  });
+  const status = engine.getStatus();
+  if (status.rpcConnected) {
+    useConnectionStore.getState().setConnected(true);
+    useSceneStore.getState().refreshHierarchy();
+    useMeshEditStore.getState().refreshState();
+  }
 
   return () => {
     cleanupConnected();

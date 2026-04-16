@@ -18,6 +18,7 @@ import {
   streamChat,
   testConnection,
 } from "../services/ai-provider";
+import { engine } from "../engine-client";
 import { AI_TOOLS, findTool } from "../services/ai-tools";
 import { buildSystemPrompt, gatherSceneContext } from "../services/ai-prompts";
 import type { RpcMethodName } from "../../shared/rpc-types";
@@ -49,7 +50,7 @@ async function executeToolCall(call: ToolCallInfo): Promise<string> {
   if (!def) return JSON.stringify({ error: `Unknown tool: ${call.name}` });
 
   try {
-    const result = await window.guavaEngine.call(
+    const result = await engine.call(
       def.rpcMethod as RpcMethodName,
       call.arguments as never,
     );

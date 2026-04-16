@@ -3,6 +3,7 @@ import { useLocalState } from "../store/local-state";
 import { useConnectionStore } from "../store";
 import { useSyncedState } from "../store/synced-state";
 import { useI18n } from "../i18n";
+import { engine } from "../engine-client";
 
 interface RenderJobInfo {
   index: number;
@@ -45,7 +46,7 @@ export function RenderQueue() {
   const refresh = useCallback(async () => {
     if (!connected) return;
     try {
-      const res = await window.guavaEngine.call("renderqueue.listJobs", {});
+      const res = await engine.call("renderqueue.listJobs", {});
       setJobs(res.jobs);
       setIsRunning(res.isRunning);
     } catch {
@@ -64,7 +65,7 @@ export function RenderQueue() {
   const handleAddJob = async () => {
     if (!seqPath.trim()) return;
     try {
-      await window.guavaEngine.call("renderqueue.addJob", {
+      await engine.call("renderqueue.addJob", {
         sequencePath: seqPath,
         outputDir: outDir,
         width,
@@ -85,7 +86,7 @@ export function RenderQueue() {
 
   const handleRemoveJob = async (index: number) => {
     try {
-      await window.guavaEngine.call("renderqueue.removeJob", { index });
+      await engine.call("renderqueue.removeJob", { index });
       refresh();
     } catch {
       /* ignore */
@@ -94,7 +95,7 @@ export function RenderQueue() {
 
   const handleStart = async () => {
     try {
-      await window.guavaEngine.call("renderqueue.startQueue", {});
+      await engine.call("renderqueue.startQueue", {});
       refresh();
     } catch {
       /* ignore */
@@ -103,7 +104,7 @@ export function RenderQueue() {
 
   const handleCancel = async () => {
     try {
-      await window.guavaEngine.call("renderqueue.cancelQueue", {});
+      await engine.call("renderqueue.cancelQueue", {});
       refresh();
     } catch {
       /* ignore */
@@ -112,7 +113,7 @@ export function RenderQueue() {
 
   const handleClearCompleted = async () => {
     try {
-      await window.guavaEngine.call("renderqueue.clearCompleted", {});
+      await engine.call("renderqueue.clearCompleted", {});
       refresh();
     } catch {
       /* ignore */

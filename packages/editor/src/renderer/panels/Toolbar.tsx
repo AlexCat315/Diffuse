@@ -12,6 +12,8 @@ import { Tooltip } from "../components/Tooltip";
 import { useSceneStore } from "../store";
 import { toast } from "../store/toast";
 import { BuildDialog } from "../components/BuildDialog";
+import { engine } from "../engine-client";
+import { buildPackage, runBuiltGame, platform } from "../citron-api";
 
 interface ToolbarProps {
   onResetLayout?: () => void;
@@ -35,9 +37,9 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
     if (runningBuild) return;
     setRunningBuild(true);
     try {
-      const res = await window.guavaEngine.buildPackage({ optimize: "Debug" }) as { ok: boolean; path?: string; error?: string };
+      const res = await buildPackage({ optimize: "Debug" }) as { ok: boolean; path?: string; error?: string };
       if (res.ok && res.path) {
-        await window.guavaEngine.runBuiltGame(res.path);
+        await runBuiltGame(res.path);
       } else {
         toast.error(res.error ?? "Build failed");
       }
@@ -52,11 +54,11 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
   const handlePlay = async () => {
     try {
       if (sceneDirty) {
-        const res = await window.guavaEngine.call("scene.save", {}) as { path: string; revision?: number };
+        const res = await engine.call("scene.save", {}) as { path: string; revision?: number };
         markSaved(res.revision);
       }
       setPlaybackState("playing");
-      await window.guavaEngine.call("playback.play", {});
+      await engine.call("playback.play", {});
     } catch (e) {
       setPlaybackState("stopped");
       toast.error(`Play failed: ${e instanceof Error ? e.message : String(e)}`);
@@ -64,25 +66,25 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
   };
   const handlePause = () => {
     setPlaybackState("paused");
-    window.guavaEngine.call("playback.pause", {}).catch(() => setPlaybackState("stopped"));
+    engine.call("playback.pause", {}).catch(() => setPlaybackState("stopped"));
   };
   const handleStop = () => {
     setPlaybackState("stopped");
-    window.guavaEngine.call("playback.stop", {})
+    engine.call("playback.stop", {})
       .then(() => onRefreshHierarchy?.())
       .catch((e) => toast.error(`Stop failed: ${e instanceof Error ? e.message : String(e)}`));
   };
   const handleUndo = () => {
-    window.guavaEngine.call("editor.undo", {})
+    engine.call("editor.undo", {})
       .catch((e) => toast.warn(`Undo failed: ${e instanceof Error ? e.message : String(e)}`));
   };
   const handleRedo = () => {
-    window.guavaEngine.call("editor.redo", {})
+    engine.call("editor.redo", {})
       .catch((e) => toast.warn(`Redo failed: ${e instanceof Error ? e.message : String(e)}`));
   };
 
   const handleSave = useCallback(() => {
-    window.guavaEngine.call("scene.save", {})
+    engine.call("scene.save", {})
       .then((res: { path: string; revision?: number }) => {
         markSaved(res.revision);
         toast.success("Scene saved");
@@ -96,7 +98,7 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
       return;
     }
     try {
-      const result = await window.guavaEngine.call("scene.listScenes", {});
+      const result = await engine.call("scene.listScenes", {});
       setScenes(result.scenes);
     } catch {
       setScenes([]);
@@ -108,7 +110,7 @@ export function Toolbar({ onResetLayout, onOpenSettings }: ToolbarProps) {
     async (path: string) => {
       setSceneMenuOpen(false);
       try {
-        await window.guavaEngine.call("scene.load", { path });
+        await engine.call("scene.load", { path });
         onRefreshHierarchy?.();
       } catch (e) {
         console.error("Load failed:", e);
@@ -267,7 +269,7 @@ const styles = {
     display: "flex",
     alignItems: "center",
     padding: "4px 12px",
-    paddingLeft: window.guavaEngine?.platform === "darwin" ? 80 : 12,
+    paddingLeft: platform === "darwin" ? 80 : 12,
     background: "#181825",
     borderBottom: "1px solid #313244",
     gap: 4,

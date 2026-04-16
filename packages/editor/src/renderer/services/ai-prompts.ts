@@ -1,5 +1,6 @@
 import systemPromptMd from "../prompts/system.md?raw";
 import { AI_TOOLS } from "../services/ai-tools";
+import { engine } from "../engine-client";
 
 /** Build the full system prompt with tool list and optional scene context. */
 export function buildSystemPrompt(opts: {
@@ -41,7 +42,7 @@ export function buildSystemPrompt(opts: {
 /** Gather runtime scene context from the engine. */
 export async function gatherSceneContext(): Promise<string | undefined> {
   try {
-    const hierarchy = await window.guavaEngine.call("scene.getHierarchy" as never, {} as never);
+    const hierarchy = await engine.call("scene.getHierarchy" as never, {} as never);
     if (!hierarchy) return undefined;
     return "```json\n" + JSON.stringify(hierarchy, null, 2) + "\n```";
   } catch {

@@ -4,6 +4,7 @@ import { useI18n, type Locale } from "../i18n";
 import { useConnectionStore, useViewportSettingsStore, useConsoleStore } from "../store";
 import { useSyncedState } from "../store/synced-state";
 import { IconGlobe, IconGrid, IconChevronRight, IconSettings, IconRemote, IconAbout } from "../components/Icons";
+import { engine } from "../engine-client";
 
 // ── Local preferences (stored in localStorage) ───────────────────
 
@@ -94,7 +95,7 @@ export function SettingsPanel() {
 
   useEffect(() => {
     if (!connected) return;
-    window.guavaEngine.call("editor.getCapabilities", {})
+    engine.call("editor.getCapabilities", {})
       .then((res) => setEngineVersion(res.version))
       .catch(() => {});
   }, [connected]);
@@ -116,7 +117,7 @@ export function SettingsPanel() {
     setTestStatus("testing");
     setTestResult("");
     try {
-      const res = await window.guavaEngine.testRemoteConnection(remoteUrl);
+      const res = await engine.test(remoteUrl);
       if (res.ok) {
         setTestStatus("success");
         setTestResult(res.version ? `Guava Engine v${res.version}` : "Connected");
@@ -135,7 +136,17 @@ export function SettingsPanel() {
     setConnectError("");
     try {
       const targetUrl = targetMode === "local" ? "local" : remoteUrl;
-      const res = await window.guavaEngine.connectToServer(targetUrl);
+      let res: { ok: boolean; error?: string };
+      try {
+        if (targetUrl === "local") {
+          engine.connect();
+        } else {
+          engine.connect(targetUrl);
+        }
+        res = { ok: true };
+      } catch (err) {
+        res = { ok: false, error: err instanceof Error ? err.message : String(err) };
+      }
       if (res.ok) {
         setConnectMode(targetMode);
         localStorage.setItem(CONNECT_MODE_KEY, targetMode);

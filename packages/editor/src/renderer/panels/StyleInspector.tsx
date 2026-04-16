@@ -2,6 +2,7 @@ import { useLocalState } from "../store/local-state";
 import React, { useEffect, useCallback, useRef } from "react";
 import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
+import { engine } from "../engine-client";
 
 interface StyleParamSchema {
   name: string;
@@ -48,8 +49,8 @@ export function StyleInspector() {
     if (!connected) return;
     try {
       const [activeRes, listRes] = await Promise.all([
-        window.guavaEngine.call("style.getActiveStyle", {}),
-        window.guavaEngine.call("style.listStyles", {}),
+        engine.call("style.getActiveStyle", {}),
+        engine.call("style.listStyles", {}),
       ]);
       setActive(activeRes);
       setStyles(listRes.styles);
@@ -68,7 +69,7 @@ export function StyleInspector() {
 
   const handleStyleSwitch = async (name: string) => {
     try {
-      await window.guavaEngine.call("style.setActiveStyle", { name });
+      await engine.call("style.setActiveStyle", { name });
       refresh();
     } catch {
       /* ignore */
@@ -78,7 +79,7 @@ export function StyleInspector() {
   const handleParamChange = async (paramName: string, value: number) => {
     if (!active) return;
     try {
-      await window.guavaEngine.call("style.setParam", {
+      await engine.call("style.setParam", {
         styleName: active.name,
         paramName,
         value,

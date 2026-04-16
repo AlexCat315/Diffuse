@@ -6,6 +6,7 @@ import { useI18n } from "../i18n";
 import { useConnectionStore, useViewportSettingsStore } from "../store";
 import { useSyncedState } from "../store/synced-state";
 import type { ShadingMode } from "../store/viewport-settings";
+import { engine } from "../engine-client";
 
 type RenderSettings = RpcResult<"viewport.getRenderSettings">;
 
@@ -39,7 +40,7 @@ export function RenderSettingsPanel() {
   const fetchSettings = useCallback(async () => {
     if (!connected) return;
     try {
-      const result = await window.guavaEngine.call("viewport.getRenderSettings", {});
+      const result = await engine.call("viewport.getRenderSettings", {});
       setSettings(result);
     } catch {
       // ignore
@@ -65,7 +66,7 @@ export function RenderSettingsPanel() {
       setSettings((prev) => (prev ? { ...prev, ...partial } : prev));
       clearTimeout(commitTimer.current);
       commitTimer.current = setTimeout(() => {
-        window.guavaEngine.call("viewport.setRenderSettings", partial as never).catch(() => {});
+        engine.call("viewport.setRenderSettings", partial as never).catch(() => {});
       }, 80);
     },
     [],

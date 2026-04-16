@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import type { LogEntry } from "../../shared/rpc-types";
 import { withBroadcastSync } from "./broadcast-sync";
+import { engine } from "../engine-client";
 
 /** LogEntry with a stable unique id for React keys. */
 export interface ConsoleLogEntry extends LogEntry {
@@ -85,7 +86,7 @@ export const useConsoleStore = create<ConsoleState>(
 
       clearLogs: () => {
         set({ logs: [] });
-        window.guavaEngine.call("console.clear", {}).catch(() => {});
+        engine.call("console.clear", {}).catch(() => {});
       },
 
       setMaxLogs: (max) => {

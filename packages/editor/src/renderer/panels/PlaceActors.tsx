@@ -3,6 +3,7 @@ import { useLocalState } from "../store/local-state";
 import { useConnectionStore } from "../store";
 import { useI18n } from "../i18n";
 import { useSyncedState } from "../store/synced-state";
+import { engine } from "../engine-client";
 
 /** Actor categories with static entries — no RPC needed for the catalog. */
 const categories = [
@@ -59,12 +60,12 @@ export function PlaceActors() {
       if (!connected || spawning) return;
       setSpawning(true);
       try {
-        const res = await window.guavaEngine.call("scene.spawnActor", {
+        const res = await engine.call("scene.spawnActor", {
           kind,
         });
         // Optionally select the new entity
         if (res.entityId) {
-          await window.guavaEngine.call("editor.setSelection", {
+          await engine.call("editor.setSelection", {
             entityIds: [res.entityId],
           });
         }

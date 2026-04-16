@@ -10,6 +10,8 @@ import {
 import { useConnectionStore } from "../store";
 import { useEditorStore } from "../store/editor";
 import { IconTriangleRight, IconTriangleDown } from "../components/Icons";
+import { engine } from "../engine-client";
+import { fsMkdir, fsCreateFile, fsDelete, fsRename, fsImportFiles, fsImportPaths } from "../citron-api";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -53,7 +55,7 @@ export function AssetBrowser() {
       if (!connected) return [];
       try {
         const rpcMethod = dirPath === "." ? "assets.listProjectRoot" : "assets.list";
-        const result = await window.guavaEngine.call(rpcMethod as "assets.list", { path: dirPath });
+        const result = await engine.call(rpcMethod as "assets.list", { path: dirPath });
         return (result.entries ?? []).map((e: AssetEntry) => ({
           name: e.name,
           path: e.path,
@@ -156,7 +158,7 @@ export function AssetBrowser() {
       const siblings = parentPath === "." ? roots : parent?.children ?? [];
       const name = uniqueName(siblings, "New Folder", "");
       const newPath = parentPath === "." ? name : `${parentPath}/${name}`;
-      const res = await window.guavaEngine.fsMkdir(newPath);
+      const res = await fsMkdir(newPath);
       if (res.ok) {
         await refreshDir(parentPath);
         setExpanded((prev) => new Set(prev).add(parentPath));
@@ -175,7 +177,7 @@ export function AssetBrowser() {
       const name = uniqueName(siblings, "new_script", ".zig");
       const newPath = parentPath === "." ? name : `${parentPath}/${name}`;
       const template = "const guava = @import(\"guava\");\n\nexport fn guava_on_init() void {}\n\nexport fn guava_on_update(_dt: f32) void {}\n";
-      const res = await window.guavaEngine.fsCreateFile(newPath, template);
+      const res = await fsCreateFile(newPath, template);
       if (res.ok) {
         await refreshDir(parentPath);
         setExpanded((prev) => new Set(prev).add(parentPath));
@@ -189,7 +191,7 @@ export function AssetBrowser() {
   const handleDelete = useCallback(
     async (node: TreeNode) => {
       setContextMenu(null);
-      const res = await window.guavaEngine.fsDelete(node.path);
+      const res = await fsDelete(node.path);
       if (res.ok) {
         const parent = node.path.includes("/") ? node.path.substring(0, node.path.lastIndexOf("/")) : ".";
         await refreshDir(parent);
@@ -216,7 +218,7 @@ export function AssetBrowser() {
       const parent = oldPath.includes("/") ? oldPath.substring(0, oldPath.lastIndexOf("/")) : ".";
       const newPath = parent === "." ? renameValue.trim() : `${parent}/${renameValue.trim()}`;
       if (newPath !== oldPath) {
-        const res = await window.guavaEngine.fsRename(oldPath, newPath);
+        const res = await fsRename(oldPath, newPath);
         if (res.ok) {
           await refreshDir(parent);
         }
@@ -229,7 +231,7 @@ export function AssetBrowser() {
   const handleImport = useCallback(
     async (targetDir: string) => {
       setContextMenu(null);
-      const res = await window.guavaEngine.fsImportFiles(targetDir);
+      const res = await fsImportFiles(targetDir);
       if (res.ok && (res.files?.length ?? 0) > 0) {
         await refreshDir(targetDir);
       }
@@ -285,7 +287,7 @@ export function AssetBrowser() {
             const targetDir = selected
               ? (roots.some((r) => r.path === selected && r.isDirectory) ? selected : "Content")
               : "Content";
-            const res = await window.guavaEngine.fsImportPaths(targetDir, paths);
+            const res = await fsImportPaths(targetDir, paths);
             if (res.ok && (res.files?.length ?? 0) > 0) {
               await refreshDir(targetDir);
             }

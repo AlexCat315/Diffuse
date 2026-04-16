@@ -3,6 +3,7 @@ import { useLocalState } from "../store/local-state";
 import { useI18n } from "../i18n";
 import { useConnectionStore } from "../store";
 import { IconPlay, IconClose } from "../components/Icons";
+import { engine } from "../engine-client";
 
 interface Bookmark {
   index: number;
@@ -23,7 +24,7 @@ export function CameraBookmarks() {
   const refresh = useCallback(async () => {
     if (!connected) return;
     try {
-      const res = await window.guavaEngine.call("camera.listBookmarks", {});
+      const res = await engine.call("camera.listBookmarks", {});
       setBookmarks(res.bookmarks);
     } catch {
       /* ignore */
@@ -36,16 +37,16 @@ export function CameraBookmarks() {
 
   const handleAdd = async () => {
     const name = `${t.camera.defaultBookmarkName} ${bookmarks.length + 1}`;
-    await window.guavaEngine.call("camera.addBookmark", { name });
+    await engine.call("camera.addBookmark", { name });
     refresh();
   };
 
   const handleApply = async (index: number) => {
-    await window.guavaEngine.call("camera.applyBookmark", { index });
+    await engine.call("camera.applyBookmark", { index });
   };
 
   const handleRemove = async (index: number) => {
-    await window.guavaEngine.call("camera.removeBookmark", { index });
+    await engine.call("camera.removeBookmark", { index });
     refresh();
   };
 
@@ -56,7 +57,7 @@ export function CameraBookmarks() {
 
   const handleRenameCommit = async () => {
     if (editingIdx == null) return;
-    await window.guavaEngine.call("camera.renameBookmark", { index: editingIdx, name: editName });
+    await engine.call("camera.renameBookmark", { index: editingIdx, name: editName });
     setEditingIdx(null);
     refresh();
   };

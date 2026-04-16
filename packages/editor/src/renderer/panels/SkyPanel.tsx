@@ -3,6 +3,7 @@ import { useLocalState } from "../store/local-state";
 import type { EntityNode, ComponentField } from "../../shared/rpc-types";
 import { useConnectionStore, useSceneStore, useEntityCacheStore } from "../store";
 import { IconLightSun, IconCheck } from "../components/Icons";
+import { engine } from "../engine-client";
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -35,7 +36,7 @@ export function SkyPanel() {
     const found: HdrAssetEntry[] = [];
     const scanDir = async (dirPath: string) => {
       try {
-        const res = (await window.guavaEngine.call("assets.list", { path: dirPath })) as {
+        const res = (await engine.call("assets.list", { path: dirPath })) as {
           entries?: { name: string; path: string; isDirectory: boolean; assetType: string }[];
         };
         for (const entry of res.entries ?? []) {
@@ -134,8 +135,8 @@ export function SkyPanel() {
     if (!connected) return;
     setLoading(true);
     try {
-      const result = await window.guavaEngine.call("scene.createEntity", { name: "Sky" });
-      await window.guavaEngine.call("entity.addComponent", {
+      const result = await engine.call("scene.createEntity", { name: "Sky" });
+      await engine.call("entity.addComponent", {
         entityId: result.entityId,
         componentType: "Sky",
       });
@@ -154,7 +155,7 @@ export function SkyPanel() {
     (assetPath: string | undefined) => {
       if (!sky) return;
       console.log('[SkyPanel] commitAsset: calling setAssetField with path =', assetPath, 'entityId =', sky.entityId);
-      window.guavaEngine
+      engine
         .call("entity.setAssetField", {
           entityId: sky.entityId,
           componentType: "Sky",
@@ -178,7 +179,7 @@ export function SkyPanel() {
   const commitIntensity = useCallback(
     (value: number) => {
       if (!sky) return;
-      window.guavaEngine.call("entity.setComponentField", {
+      engine.call("entity.setComponentField", {
         entityId: sky.entityId,
         componentType: "Sky",
         fieldName: "intensity",
@@ -193,7 +194,7 @@ export function SkyPanel() {
   const commitEnabled = useCallback(
     (value: boolean) => {
       if (!sky) return;
-      window.guavaEngine.call("entity.setComponentField", {
+      engine.call("entity.setComponentField", {
         entityId: sky.entityId,
         componentType: "Sky",
         fieldName: "enabled",
