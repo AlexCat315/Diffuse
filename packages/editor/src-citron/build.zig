@@ -16,6 +16,11 @@ pub fn build(b: *std.Build) void {
         "engine_binary_fallback",
         b.pathResolve(&.{"../../engine/zig-out/bin/guava-engine"}),
     );
+    build_options.addOption(
+        []const u8,
+        "engine_root_fallback",
+        b.pathResolve(&.{"../../engine"}),
+    );
 
     const exe = b.addExecutable(.{
         .name = "guava-editor",
