@@ -282,14 +282,8 @@ fn viewportUpdateBounds(_: *RequestContext, params: struct {
     viewport().updateBounds(params.x, params.y, params.w, params.h);
 }
 
-fn handleViewportUpdateExclusions(ctx: *RequestContext) anyerror!Response {
-    const rects_parsed = std.json.parseFromSlice(struct { rects: std.json.Value }, ctx.allocator, if (ctx.payload.len == 0) "{}" else ctx.payload, .{
-        .ignore_unknown_fields = true,
-    }) catch return ok();
-    defer rects_parsed.deinit();
-    const rects_json = std.json.Stringify.valueAlloc(ctx.allocator, rects_parsed.value.rects, .{}) catch return ok();
-    defer ctx.allocator.free(rects_json);
-    viewport().updateExclusions(rects_json);
+fn handleViewportUpdateExclusions(_: *RequestContext) anyerror!Response {
+    // No-op: overlay is below the browser window, no exclusion zones needed.
     return ok();
 }
 

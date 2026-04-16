@@ -13,7 +13,7 @@ import {
 import { engine } from "../engine-client";
 import {
   viewportAttachSurface, viewportUpdateSurface, viewportDetach,
-  viewportUpdateBounds, viewportUpdateExclusions,
+  viewportUpdateBounds,
   onViewportOverlayActive, onViewportPixels, onViewportSharedBuffer,
 } from "../citron-api";
 
@@ -78,78 +78,31 @@ export function Viewport() {
     return unsub;
   }, []);
 
-  // When native overlay is active, the child NSWindow sits ABOVE the Electron
-  // window displaying the 3D scene.  A CAShapeLayer mask on the overlay punches
-  // transparent holes where HTML overlay elements (ViewCube, metrics) live.
-  // We collect bounding rects of those elements and send them to the native
-  // addon so the mask can be updated.
-  const viewCubeRef = useRef<HTMLDivElement>(null);
-  const metricsRef  = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!nativeOverlay || !ref.current) return;
-    const container = ref.current;
-
-    const reportExclusions = () => {
-      const containerRect = container.getBoundingClientRect();
-      const rects: number[][] = [];
-      for (const child of [viewCubeRef.current, metricsRef.current]) {
-        if (!child) continue;
-        const r = child.getBoundingClientRect();
-        if (r.width === 0 || r.height === 0) continue;
-        rects.push([
-          r.x - containerRect.x,
-          r.y - containerRect.y,
-          r.width,
-          r.height,
-        ]);
-      }
-      viewportUpdateExclusions(rects);
-    };
-
-    const ro = new ResizeObserver(reportExclusions);
-    ro.observe(container);
-    if (viewCubeRef.current) ro.observe(viewCubeRef.current);
-    if (metricsRef.current) ro.observe(metricsRef.current);
-    window.addEventListener("resize", reportExclusions);
-    // Delay initial report slightly so overlay window has been positioned.
-    const timer = setTimeout(reportExclusions, 100);
-    return () => {
-      clearTimeout(timer);
-      ro.disconnect();
-      window.removeEventListener("resize", reportExclusions);
-    };
-  }, [nativeOverlay]);
+  // When native overlay is active, the IOSurface child window sits BELOW the
+  // browser window.  The viewport area CSS is transparent, letting the 3D scene
+  // show through from behind.  React overlays (ViewCube, metrics) render
+  // normally on top as part of the browser's composited content.
 
   // Report viewport bounds to main process so the native overlay CALayer
-  // can be positioned to match the div.  Uses ResizeObserver + scroll/move.
+  // can be positioned to match the div.  Also clear ancestor backgrounds
+  // so the IOSurface below shows through.
   useEffect(() => {
     if (!nativeOverlay || !ref.current) return;
     const el = ref.current;
 
-    // Walk up the ENTIRE ancestor chain and clear any opaque backgrounds.
+    // Walk up ancestors and clear opaque backgrounds so the IOSurface
+    // (behind the browser window) shows through the viewport area.
     const modified: { el: HTMLElement; saved: string }[] = [];
     let node: HTMLElement | null = el.parentElement;
-    let depth = 0;
     while (node) {
       const bg = getComputedStyle(node).backgroundColor;
-      const tag = node.tagName.toLowerCase();
-      const cls = typeof node.className === "string" ? node.className : "";
       if (bg && bg !== "rgba(0, 0, 0, 0)" && bg !== "transparent") {
-        console.log("[VP-walk] SET TRANSPARENT: " + tag + " cls=" + cls + " was=" + bg);
         modified.push({ el: node, saved: node.style.background });
         node.style.setProperty("background", "transparent", "important");
-      } else {
-        console.log("[VP-walk] OK (already transparent): " + tag + " cls=" + cls);
       }
       node = node.parentElement;
-      depth++;
     }
-    console.log("[VP-walk] done, modified " + modified.length + " elements across " + depth + " ancestors");
 
-    // FlexLayout structural containers are made transparent by the Citron
-    // preload CSS.  We only need to report bounds here so the Metal
-    // composition layer positions the 3D scene correctly.
     const report = () => {
       const rect = el.getBoundingClientRect();
       viewportUpdateBounds(rect.x, rect.y, rect.width, rect.height);
@@ -157,7 +110,6 @@ export function Viewport() {
     report(); // initial
     const ro = new ResizeObserver(report);
     ro.observe(el);
-    // Also re-report when the window moves/resizes (panel layout changes).
     window.addEventListener("resize", report);
     return () => {
       ro.disconnect();
@@ -823,9 +775,9 @@ export function Viewport() {
       ref={ref}
       style={{
         ...styles.container,
-        // When the native overlay is active, the viewport background must be
-        // transparent so the CALayer (inserted below Chromium's compositor
-        // layer) shows through.  HTML overlays render on top normally.
+        // When the native overlay is active, the IOSurface child window sits
+        // BELOW this browser window.  Make the viewport transparent so the
+        // 3D scene shows through.  React overlays render on top naturally.
         ...(nativeOverlay ? { background: "transparent" } : {}),
         ...(modelDragOver ? { outline: "2px dashed #89b4fa", outlineOffset: -2, background: "rgba(137,180,250,0.04)" } : {}),
       }}
@@ -908,13 +860,13 @@ export function Viewport() {
           </p>
         </div>
       )}
-      {/* Floating overlays on top of the canvas */}
+      {/* Floating overlays on top of the canvas / native overlay */}
       {connected && (
         <>
-          <div ref={metricsRef}>
+          <div style={styles.metricsOverlay}>
             <ViewportMetricsOverlay />
           </div>
-          <div ref={viewCubeRef} style={styles.viewCubeOverlay}>
+          <div style={styles.viewCubeOverlay}>
             <ViewCube />
           </div>
         </>
@@ -975,10 +927,6 @@ function formatK(n: number): string {
 
 const metricsStyles: Record<string, React.CSSProperties> = {
   container: {
-    position: "absolute",
-    bottom: 8,
-    left: 8,
-    zIndex: 10,
     display: "flex",
     alignItems: "baseline",
     gap: 3,
@@ -1016,6 +964,12 @@ const styles: Record<string, React.CSSProperties> = {
     position: "absolute",
     top: 4,
     right: 4,
+    zIndex: 10,
+  },
+  metricsOverlay: {
+    position: "absolute",
+    bottom: 8,
+    left: 8,
     zIndex: 10,
   },
   toolbarSeparator: {
