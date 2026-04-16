@@ -1,19 +1,14 @@
 const std = @import("std");
 const citron = @import("citron");
 
+const overlay = citron.handlers.iosurface_overlay;
 const globals = citron.globals;
 
 /// Viewport state for managing the engine rendering surface connection.
 ///
-/// In the Citron CEF runtime, native IOSurface overlay is not available.
-/// Instead, the viewport uses an IPC pixel streaming path:
-/// 1. Frontend requests attach with surface_id from the engine
-/// 2. Backend tracks the surface state and periodically polls pixel data
-/// 3. Pixel data is pushed to frontend via `viewport.pixels` events
-///
-/// For the initial implementation, we manage the attachment state and let
-/// the frontend handle rendering via its existing WebSocket connection to
-/// the engine for viewport frame data.
+/// Uses the Citron IOSurface overlay module to create a zero-copy native
+/// overlay window (child NSWindow with CALayer + CVDisplayLink) that
+/// displays the engine's rendered frames directly from IOSurface.
 pub const ViewportState = struct {
     attached: bool = false,
     surface_id: i64 = 0,
@@ -21,6 +16,7 @@ pub const ViewportState = struct {
     bounds: Bounds = .{},
     exclusions: std.ArrayList(Rect) = std.ArrayList(Rect).empty,
     allocator: std.mem.Allocator,
+    overlay_created: bool = false,
 
     pub const Bounds = struct {
         x: f64 = 0,
@@ -47,9 +43,18 @@ pub const ViewportState = struct {
         if (shm_name) |name| {
             self.shm_name = try self.allocator.dupe(u8, name);
         }
+
+        // Attach to the IOSurface by ID
+        if (surface_id > 0) {
+            const sid: u32 = @intCast(@as(u64, @bitCast(surface_id)));
+            if (!overlay.attach(sid)) {
+                return false;
+            }
+        }
+
         self.attached = true;
 
-        // Notify frontend that viewport is now active
+        // Notify frontend
         const payload = std.json.Stringify.valueAlloc(self.allocator, .{
             .attached = true,
             .surfaceId = surface_id,
@@ -61,6 +66,23 @@ pub const ViewportState = struct {
         return true;
     }
 
+    /// Create the native overlay window. Must be called from the browser process
+    /// after attachSurface, with a valid CEF browser reference.
+    pub fn createNativeOverlay(self: *ViewportState, browser: *citron.cef.cef_browser_t) bool {
+        if (!self.attached) return false;
+        if (self.overlay_created) return true;
+
+        if (overlay.createOverlay(browser)) {
+            self.overlay_created = true;
+            // Apply current bounds
+            overlay.updateBounds(self.bounds.x, self.bounds.y, self.bounds.w, self.bounds.h);
+            // Notify frontend that overlay is active
+            citron.ipc.enqueueEventJson("viewport.overlay-active", "{\"active\":true}");
+            return true;
+        }
+        return false;
+    }
+
     pub fn updateSurface(self: *ViewportState, surface_id: i64, shm_name: ?[]const u8, width: ?f64, height: ?f64) void {
         if (!self.attached) return;
         self.surface_id = surface_id;
@@ -70,12 +92,23 @@ pub const ViewportState = struct {
         }
         if (width) |w| self.bounds.w = w;
         if (height) |h| self.bounds.h = h;
+
+        // Update the IOSurface overlay
+        if (surface_id > 0) {
+            const sid: u32 = @intCast(@as(u64, @bitCast(surface_id)));
+            _ = overlay.updateSurface(sid);
+        }
     }
 
     pub fn detach(self: *ViewportState) void {
         if (!self.attached) return;
         self.attached = false;
         self.surface_id = 0;
+        self.overlay_created = false;
+
+        // Destroy native overlay
+        overlay.detach();
+
         if (self.shm_name) |name| {
             self.allocator.free(name);
             self.shm_name = null;
@@ -91,6 +124,9 @@ pub const ViewportState = struct {
 
     pub fn updateBounds(self: *ViewportState, x: f64, y: f64, w: f64, h: f64) void {
         self.bounds = .{ .x = x, .y = y, .w = w, .h = h };
+        if (self.overlay_created) {
+            overlay.updateBounds(x, y, w, h);
+        }
     }
 
     pub fn updateExclusions(self: *ViewportState, rects_json: []const u8) void {
@@ -101,13 +137,18 @@ pub const ViewportState = struct {
         for (parsed.value) |r| {
             self.exclusions.append(self.allocator, .{ .x = r[0], .y = r[1], .w = r[2], .h = r[3] }) catch break;
         }
+
+        if (self.overlay_created) {
+            overlay.updateExclusions(parsed.value);
+        }
     }
 
-    pub fn getState(self: *const ViewportState) struct { attached: bool, surfaceId: i64, bounds: Bounds } {
+    pub fn getState(self: *const ViewportState) struct { attached: bool, surfaceId: i64, bounds: Bounds, overlayActive: bool } {
         return .{
             .attached = self.attached,
             .surfaceId = self.surface_id,
             .bounds = self.bounds,
+            .overlayActive = self.overlay_created,
         };
     }
 };

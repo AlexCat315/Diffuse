@@ -1,30 +1,19 @@
 {
   "name": "guava-editor",
   "version": "0.1.0",
-  "description": "Guava Engine Editor — Electron-based editor frontend",
-  "main": "dist/main/index.js",
+  "description": "Guava Engine Editor — Citron-based editor frontend",
   "scripts": {
-    "dev": "npm run codegen && vite",
-    "dev:citron": "citron dev",
-    "dev:citron:frontend": "vite --config vite.citron.config.ts",
-    "dev:citron:app": "cd src-citron && zig build && CITRON_DEV_URL=http://localhost:5173 open src-citron/zig-out/Guava\\ Editor.app",
-    "build": "npm run codegen && vite build",
-    "build:citron:frontend": "vite build --config vite.citron.config.ts",
-    "build:citron": "citron build",
-    "start": "electron dist/main/index.js",
-    "build:native": "cd native && npx cmake-js compile --runtime=electron --runtime-version=$(node -e \"console.log(require('electron/package.json').version)\")",
-    "rebuild": "cd native && npx cmake-js rebuild --runtime=electron --runtime-version=$(node -e \"console.log(require('electron/package.json').version)\")",
-    "postinstall": "npm run build:native || true",
+    "dev": "npm run codegen && citron dev",
+    "dev:frontend": "vite",
+    "build:frontend": "vite build",
+    "build": "npm run codegen && citron build",
     "codegen": "cd ../engine && zig run src/engine/editor_rpc/gen_types.zig 2> ../editor/src/shared/rpc-types.generated.ts",
-    "typecheck": "tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.json --noEmit",
-    "lint": "eslint src/",
-    "build:bytecode": "electron scripts/compile-bytecode.cjs",
-    "package": "npm run build && npm run build:bytecode && electron-builder --config electron-builder.yml"
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint src/"
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
     "@xyflow/react": "^12.10.2",
-    "bytenode": "^1.5.7",
     "flexlayout-react": "^0.8.19",
     "immer": "^11.1.4",
     "ws": "^8.20.0",
@@ -37,18 +26,11 @@
     "@types/react-dom": "^19.2.3",
     "@types/ws": "^8.5.10",
     "@vitejs/plugin-react": "^6.0.1",
-    "cmake-js": "^8.0.0",
-    "concurrently": "^9.2.1",
-    "electron": "^41.1.1",
-    "electron-builder": "^26.8.1",
     "eslint": "^10.2.0",
-    "node-addon-api": "^8.7.0",
     "react": "^19.2.4",
-    "react-devtools": "^7.0.1",
     "react-dom": "^19.2.4",
     "typescript": "^6.0.2",
     "typescript-eslint": "^8.58.0",
-    "vite": "^8.0.3",
-    "vite-plugin-electron": "^0.29.1"
+    "vite": "^8.0.3"
   }
 }

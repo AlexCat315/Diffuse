@@ -242,6 +242,14 @@ fn handleViewportAttachSurface(ctx: *RequestContext) anyerror!Response {
     defer parsed.deinit();
     const p = parsed.value;
     const attached = viewport().attachSurface(p.surfaceId, p.x, p.y, p.w, p.h, p.shmName) catch false;
+
+    // Create native IOSurface overlay if we have a browser reference
+    if (attached) {
+        if (ctx.browser) |browser| {
+            _ = viewport().createNativeOverlay(browser);
+        }
+    }
+
     return serializeBool(attached);
 }
 
