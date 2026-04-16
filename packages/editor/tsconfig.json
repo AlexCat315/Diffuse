@@ -14,6 +14,7 @@
     "rootDir": "src",
     "outDir": "dist/renderer",
     "paths": {
+      "@icons/*": ["./assets/icons/svg/*"],
       "@shared/*": ["./src/shared/*"]
     }
   },
