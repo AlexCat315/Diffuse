@@ -3,12 +3,56 @@
  *
  * These call the Citron CEF backend directly — no WebSocket, no engine.
  * Categories: launcher, viewport, fs, build, popout, misc.
+ *
+ * When running in a normal browser (citron global absent), a lightweight
+ * stub is injected so the editor can boot into editor mode directly.
  */
 
 declare const citron: {
   invoke(method: string, params?: Record<string, unknown>): Promise<unknown>;
   on(event: string, callback: (...args: unknown[]) => void): () => void;
 };
+
+/** True when running inside the Citron CEF shell. */
+export const isCitron: boolean = typeof citron !== 'undefined';
+
+// Browser polyfill: stub out `citron` so the rest of the module can call
+// citron.invoke / citron.on without guards everywhere.
+if (!isCitron) {
+  const noop = () => () => {};
+  const stubs: Record<string, () => unknown> = {
+    'launcher.getAppMode': () => 'editor',
+    'launcher.getRecentProjects': () => [],
+    'launcher.getTemplates': () => [],
+  };
+  (globalThis as Record<string, unknown>).citron = {
+    invoke(method: string) {
+      const stub = stubs[method];
+      if (stub) return Promise.resolve(stub());
+      return Promise.reject(new Error(`[citron-stub] ${method} not available in browser`));
+    },
+    on: noop,
+  };
+}
+
+type CommandResult = { ok: boolean; error?: string };
+
+function normalizeCommandResult(result: unknown): CommandResult {
+  if (result && typeof result === 'object') {
+    const record = result as Record<string, unknown>;
+    if (typeof record.ok === 'boolean') {
+      return {
+        ok: record.ok,
+        error: typeof record.error === 'string' ? record.error : undefined,
+      };
+    }
+    if (typeof record.error === 'string') {
+      return { ok: false, error: record.error };
+    }
+  }
+
+  return { ok: true };
+}
 
 // ── Platform ──
 
@@ -37,12 +81,14 @@ export function getTemplates() {
   return citron.invoke('launcher.getTemplates');
 }
 
-export async function openProject(projectPath: string): Promise<{ ok: boolean; error?: string }> {
-  return citron.invoke('launcher.openProject', { projectPath }) as Promise<{ ok: boolean; error?: string }>;
+export async function openProject(projectPath: string): Promise<CommandResult> {
+  const result = await citron.invoke('launcher.openProject', { projectPath });
+  return normalizeCommandResult(result);
 }
 
-export async function createProject(projectPath: string, projectName: string, templateId?: string): Promise<{ ok: boolean; error?: string }> {
-  return citron.invoke('launcher.createProject', { projectPath, projectName, templateId }) as Promise<{ ok: boolean; error?: string }>;
+export async function createProject(projectPath: string, projectName: string, templateId?: string): Promise<CommandResult> {
+  const result = await citron.invoke('launcher.createProject', { projectPath, projectName, templateId });
+  return normalizeCommandResult(result);
 }
 
 // ── Dialog ──

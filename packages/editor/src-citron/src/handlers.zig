@@ -358,12 +358,11 @@ fn handlePopoutIsPopout(ctx: *RequestContext) anyerror!Response {
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
 fn ok() Response {
-    return Response.okJsonOwned(std.heap.page_allocator.dupe(u8, "{\"ok\":true}") catch "{\"ok\":true}");
+    return Response.okJsonLiteral("{\"ok\":true}");
 }
 
 fn serializeBool(value: bool) Response {
-    const s = if (value) "true" else "false";
-    return Response.okJsonOwned(std.heap.page_allocator.dupe(u8, s) catch s);
+    return if (value) Response.okJsonLiteral("true") else Response.okJsonLiteral("false");
 }
 
 fn enqueueProgressEvent(allocator: std.mem.Allocator, event_name: []const u8, payload: anytype) void {

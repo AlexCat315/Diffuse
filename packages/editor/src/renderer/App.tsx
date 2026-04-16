@@ -275,9 +275,14 @@ export function App() {
     }, 500);
   }, []);
 
-  // Initialize RPC bridge + keyboard shortcuts
+  // Initialize RPC bridge + auto-connect engine + keyboard shortcuts
   useEffect(() => {
     const cleanupBridge = initRpcBridge();
+
+    // Auto-connect to engine WebSocket (started by Citron on project open)
+    engine.connect().catch((err) => {
+      console.warn('[App] Initial engine connect failed, will retry:', err);
+    });
 
     // Prevent Electron from navigating when files are dropped outside designated areas.
     // Component-level handlers call e.preventDefault() to accept drops selectively.
@@ -751,6 +756,7 @@ const styles: Record<string, React.CSSProperties> = {
     justifyContent: "center",
     height: "100vh",
     gap: 16,
+    color: "#cdd6f4",
     background: "#1e1e2e",
   },
   errorContainer: {

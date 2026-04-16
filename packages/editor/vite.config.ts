@@ -35,21 +35,8 @@ export default defineConfig({
       },
     },
     react(),
-    {
-      name: "citron-runtime-inject",
-      transformIndexHtml() {
-        // Order: head-prepend inserts each before previous, so list in reverse load order.
-        // Actual load order: bridge → serializer → events → core
-        return [
-          { tag: "script", attrs: { src: "app://citron/citron-core.js" }, injectTo: "head-prepend" },
-          { tag: "script", attrs: { src: "app://citron/citron-events.js" }, injectTo: "head-prepend" },
-          { tag: "script", attrs: { src: "app://citron/citron-serializer.js" }, injectTo: "head-prepend" },
-          { tag: "script", attrs: { src: "app://citron/citron-bridgnts.js" }, injectTo: "head-prepend" },
-          { tag: "script", attrs: { src: "app://citron/citron-serializer.js" }, injectTo: "head-prepend" },
-          { tag: "script", attrs: { src: "app://citron/citron-bridge.js" }, injectTo: "head-prepend" },
-        ];
-      },
-    },
+    // Runtime JS (citron-bridge.js + 子模块) 由 V8 binding 在 onContextCreated 时注入，
+    // 无需通过 <script> 标签重复加载。
   ],
   server: {
     host: "127.0.0.1",
