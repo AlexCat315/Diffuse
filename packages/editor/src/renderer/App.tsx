@@ -5,7 +5,7 @@ import { Layout, Model, Actions, DockLocation, type Action, type IJsonModel, typ
 import "flexlayout-react/style/light.css";
 import "./flexlayout-dark.css";
 
-import type { GuavaEngineAPI } from "../preload/preload";
+import type { GuavaEngineAPI } from "@shared/guava-engine";
 import { SceneHierarchy } from "./panels/SceneHierarchy";
 import { Inspector } from "./panels/Inspector";
 import { Console } from "./panels/Console";

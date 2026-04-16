@@ -412,16 +412,31 @@
       }
     },
 
-    popoutPanel() {
-      return Promise.resolve(-1);
+    async popoutPanel(panelId, options = {}) {
+      try {
+        const url = `${window.location.origin}${window.location.pathname}?popout=${encodeURIComponent(panelId)}`;
+        const result = await window.__citron__.invoke("window.create", {
+          url,
+          title: options.title || `Guava — ${panelId}`,
+          width: options.width || 800,
+          height: options.height || 600,
+        });
+        return result ? 1 : -1;
+      } catch {
+        return -1;
+      }
     },
 
     closePopout() {
+      // Close current window if it's a popout
+      if (new URLSearchParams(window.location.search).has("popout")) {
+        window.__citron__.invoke("window.close");
+      }
       return Promise.resolve();
     },
 
     isPopoutWindow() {
-      return false;
+      return new URLSearchParams(window.location.search).has("popout");
     },
 
     getPopoutPanels() {
