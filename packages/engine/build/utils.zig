@@ -25,7 +25,7 @@ pub fn collectSourceFiles(b: *std.Build, root: []const u8, extension: []const u8
     var list: std.ArrayList([]const u8) = .empty;
     defer list.deinit(b.allocator);
 
-    var dir = Io.Dir.cwd().openDir(b.graph.io, root, .{ .iterate = true }) catch |err| {
+    var dir = b.build_root.handle.openDir(b.graph.io, root, .{ .iterate = true }) catch |err| {
         std.debug.panic("failed to open source root {s}: {s}", .{ root, @errorName(err) });
     };
     defer dir.close(b.graph.io);
