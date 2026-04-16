@@ -1,0 +1,18 @@
+{
+  "productName": "Guava Editor",
+  "identifier": "com.guava.editor",
+  "version": "0.1.0",
+  "build": {
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "npx vite --config vite.citron.config.ts",
+    "beforeBuildCommand": "npx vite build --config vite.citron.config.ts",
+    "frontendDist": "./dist-citron"
+  },
+  "app": {
+    "window": {
+      "title": "Guava Editor",
+      "width": 1440,
+      "height": 900
+    }
+  }
+}
