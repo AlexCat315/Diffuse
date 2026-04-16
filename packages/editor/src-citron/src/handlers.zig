@@ -6,15 +6,30 @@ const RequestContext = citron.ipc.Context;
 const Response = citron.ipc.HandlerResult;
 const state_mod = @import("state.zig");
 const templates = @import("project_templates.zig");
+const build_pipeline = @import("build_pipeline.zig");
+const ViewportState = @import("viewport.zig").ViewportState;
+const PopoutManager = @import("popout.zig").PopoutManager;
 
 var g_state: ?*state_mod.AppState = null;
+var g_viewport: ?*ViewportState = null;
+var g_popout: ?*PopoutManager = null;
 
-pub fn init(state: *state_mod.AppState) void {
+pub fn init(state: *state_mod.AppState, vp: *ViewportState, po: *PopoutManager) void {
     g_state = state;
+    g_viewport = vp;
+    g_popout = po;
 }
 
 fn appState() *state_mod.AppState {
     return g_state orelse unreachable;
+}
+
+fn viewport() *ViewportState {
+    return g_viewport orelse unreachable;
+}
+
+fn popout() *PopoutManager {
+    return g_popout orelse unreachable;
 }
 
 fn jsonResponse(value: anytype) Response {
@@ -69,10 +84,16 @@ pub fn register(router: *citron.ipc.Router) !void {
     try router.registerMethod("fs.importPaths", handleFsImportPaths, protocol.MethodDef.init("fs.importPaths", .{ .fs_write = true }));
 
     try router.registerMethod("viewport.attachSurface", handleViewportAttachSurface, protocol.MethodDef.init("viewport.attachSurface", .{}));
-    try router.registerMethod("viewport.updateSurface", handleViewportNoop, protocol.MethodDef.init("viewport.updateSurface", .{}));
-    try router.registerMethod("viewport.detach", handleViewportNoop, protocol.MethodDef.init("viewport.detach", .{}));
-    try router.registerMethod("viewport.updateBounds", handleViewportNoop, protocol.MethodDef.init("viewport.updateBounds", .{}));
-    try router.registerMethod("viewport.updateExclusions", handleViewportNoop, protocol.MethodDef.init("viewport.updateExclusions", .{}));
+    try router.registerMethod("viewport.updateSurface", handleViewportUpdateSurface, protocol.MethodDef.init("viewport.updateSurface", .{}));
+    try router.registerMethod("viewport.detach", handleViewportDetach, protocol.MethodDef.init("viewport.detach", .{}));
+    try router.registerMethod("viewport.updateBounds", handleViewportUpdateBounds, protocol.MethodDef.init("viewport.updateBounds", .{}));
+    try router.registerMethod("viewport.updateExclusions", handleViewportUpdateExclusions, protocol.MethodDef.init("viewport.updateExclusions", .{}));
+    try router.registerMethod("viewport.getState", handleViewportGetState, protocol.MethodDef.init("viewport.getState", .{}));
+
+    try router.registerMethod("popout.panel", handlePopoutPanel, protocol.MethodDef.init("popout.panel", .{}));
+    try router.registerMethod("popout.close", handlePopoutClose, protocol.MethodDef.init("popout.close", .{}));
+    try router.registerMethod("popout.getPanels", handlePopoutGetPanels, protocol.MethodDef.init("popout.getPanels", .{}));
+    try router.registerMethod("popout.isPopout", handlePopoutIsPopout, protocol.MethodDef.init("popout.isPopout", .{}));
 }
 
 fn okObject(message: ?[]const u8) Response {
@@ -147,12 +168,26 @@ pub fn handleLauncherCreateProject(ctx: *RequestContext) anyerror!Response {
 }
 
 pub fn handleBuildPackage(ctx: *RequestContext) anyerror!Response {
-    _ = ctx;
-    return errorObject("Citron build packaging is not implemented yet");
+    var params = ParsedParams.init(ctx.allocator, ctx.payload) catch return errorObject("Invalid params");
+    defer params.deinit();
+
+    const project_path = appState().current_project_path orelse return errorObject("No project open");
+    const output_dir = params.getString("outputDir") orelse return errorObject("Missing outputDir");
+    const optimize = params.getString("optimize") orelse "ReleaseSafe";
+
+    const result_path = build_pipeline.buildPackage(ctx.allocator, project_path, output_dir, optimize) catch |err| {
+        return errorObject(@errorName(err));
+    };
+    defer ctx.allocator.free(result_path);
+
+    return jsonResponse(.{ .ok = true, .path = result_path });
 }
 
 pub fn handleBuildCancel(ctx: *RequestContext) anyerror!Response {
     _ = ctx;
+    if (build_pipeline.requestCancel()) {
+        return okObject("Build cancellation requested");
+    }
     return errorObject("No active build");
 }
 
@@ -288,11 +323,158 @@ pub fn handleFsImportPaths(ctx: *RequestContext) anyerror!Response {
 }
 
 pub fn handleViewportAttachSurface(ctx: *RequestContext) anyerror!Response {
-    _ = ctx;
-    return simpleBoolResponse(false);
+    var params = ParsedParams.init(ctx.allocator, ctx.payload) catch return errorObject("Invalid params");
+    defer params.deinit();
+
+    const surface_id = blk: {
+        const v = params.parsed.value.object.get("surfaceId") orelse break :blk @as(i64, 0);
+        if (v == .integer) break :blk v.integer;
+        break :blk @as(i64, 0);
+    };
+
+    const x = getFloat(&params, "x") orelse 0;
+    const y = getFloat(&params, "y") orelse 0;
+    const w = getFloat(&params, "w") orelse 0;
+    const h = getFloat(&params, "h") orelse 0;
+    const shm_name = params.getString("shmName");
+
+    const attached = viewport().attachSurface(surface_id, x, y, w, h, shm_name) catch false;
+    return simpleBoolResponse(attached);
 }
 
-pub fn handleViewportNoop(ctx: *RequestContext) anyerror!Response {
-    _ = ctx;
+pub fn handleViewportUpdateSurface(ctx: *RequestContext) anyerror!Response {
+    var params = ParsedParams.init(ctx.allocator, ctx.payload) catch return okObject(null);
+    defer params.deinit();
+
+    const surface_id = blk: {
+        const v = params.parsed.value.object.get("surfaceId") orelse break :blk @as(i64, 0);
+        if (v == .integer) break :blk v.integer;
+        break :blk @as(i64, 0);
+    };
+
+    const shm_name = params.getString("shmName");
+    const width = getFloat(&params, "width");
+    const height = getFloat(&params, "height");
+
+    viewport().updateSurface(surface_id, shm_name, width, height);
     return okObject(null);
+}
+
+pub fn handleViewportDetach(ctx: *RequestContext) anyerror!Response {
+    _ = ctx;
+    viewport().detach();
+    return okObject(null);
+}
+
+pub fn handleViewportUpdateBounds(ctx: *RequestContext) anyerror!Response {
+    var params = ParsedParams.init(ctx.allocator, ctx.payload) catch return okObject(null);
+    defer params.deinit();
+
+    const x = getFloat(&params, "x") orelse 0;
+    const y = getFloat(&params, "y") orelse 0;
+    const w = getFloat(&params, "w") orelse 0;
+    const h = getFloat(&params, "h") orelse 0;
+
+    viewport().updateBounds(x, y, w, h);
+    return okObject(null);
+}
+
+pub fn handleViewportUpdateExclusions(ctx: *RequestContext) anyerror!Response {
+    var params = ParsedParams.init(ctx.allocator, ctx.payload) catch return okObject(null);
+    defer params.deinit();
+
+    const rects_val = params.parsed.value.object.get("rects") orelse return okObject(null);
+    const rects_json = std.json.Stringify.valueAlloc(ctx.allocator, rects_val, .{}) catch return okObject(null);
+    defer ctx.allocator.free(rects_json);
+
+    viewport().updateExclusions(rects_json);
+    return okObject(null);
+}
+
+pub fn handleViewportGetState(ctx: *RequestContext) anyerror!Response {
+    _ = ctx;
+    const state = viewport().getState();
+    return jsonResponse(state);
+}
+
+// ── Popout handlers ───────────────────────────────────────────────
+
+pub fn handlePopoutPanel(ctx: *RequestContext) anyerror!Response {
+    var params = ParsedParams.init(ctx.allocator, ctx.payload) catch return errorObject("Invalid params");
+    defer params.deinit();
+
+    const panels_val = params.parsed.value.object.get("panels") orelse return errorObject("Missing panels");
+    const panels_json = std.json.Stringify.valueAlloc(ctx.allocator, panels_val, .{}) catch return errorObject("Invalid panels");
+    defer ctx.allocator.free(panels_json);
+
+    const origin_json = blk: {
+        const v = params.parsed.value.object.get("originInfo") orelse break :blk null;
+        const s = std.json.Stringify.valueAlloc(ctx.allocator, v, .{}) catch break :blk null;
+        break :blk s;
+    };
+    defer if (origin_json) |j| ctx.allocator.free(j);
+
+    const bounds_json = blk: {
+        const v = params.parsed.value.object.get("bounds") orelse break :blk null;
+        const s = std.json.Stringify.valueAlloc(ctx.allocator, v, .{}) catch break :blk null;
+        break :blk s;
+    };
+    defer if (bounds_json) |j| ctx.allocator.free(j);
+
+    const id = popout().popoutPanel(panels_json, origin_json, bounds_json) catch |err| {
+        return errorObject(@errorName(err));
+    };
+    return jsonResponse(id);
+}
+
+pub fn handlePopoutClose(ctx: *RequestContext) anyerror!Response {
+    var params = ParsedParams.init(ctx.allocator, ctx.payload) catch return errorObject("Invalid params");
+    defer params.deinit();
+
+    const id = blk: {
+        const v = params.parsed.value.object.get("id") orelse return errorObject("Missing id");
+        if (v == .integer) break :blk @as(i32, @intCast(v.integer));
+        return errorObject("Invalid id");
+    };
+
+    popout().closePopout(id);
+    return okObject(null);
+}
+
+pub fn handlePopoutGetPanels(ctx: *RequestContext) anyerror!Response {
+    const entries = popout().getPanels();
+    var result = std.ArrayList(struct { id: i32, panels: []const []const u8 }).empty;
+    defer result.deinit(ctx.allocator);
+
+    for (entries) |entry| {
+        const panel_slices = ctx.allocator.alloc([]const u8, entry.panels.len) catch continue;
+        for (entry.panels, 0..) |p, i| {
+            panel_slices[i] = p;
+        }
+        result.append(ctx.allocator, .{ .id = entry.id, .panels = panel_slices }) catch continue;
+    }
+
+    return jsonResponse(result.items);
+}
+
+pub fn handlePopoutIsPopout(ctx: *RequestContext) anyerror!Response {
+    var params = ParsedParams.init(ctx.allocator, ctx.payload) catch return simpleBoolResponse(false);
+    defer params.deinit();
+
+    const id = blk: {
+        const v = params.parsed.value.object.get("id") orelse return simpleBoolResponse(false);
+        if (v == .integer) break :blk @as(i32, @intCast(v.integer));
+        return simpleBoolResponse(false);
+    };
+
+    return simpleBoolResponse(popout().isPopoutId(id));
+}
+
+fn getFloat(params: *ParsedParams, key: []const u8) ?f64 {
+    const value = params.parsed.value.object.get(key) orelse return null;
+    return switch (value) {
+        .float => value.float,
+        .integer => @floatFromInt(value.integer),
+        else => null,
+    };
 }
