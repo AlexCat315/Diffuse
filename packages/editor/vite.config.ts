@@ -38,11 +38,15 @@ export default defineConfig({
     {
       name: "citron-runtime-inject",
       transformIndexHtml() {
+        // Order: head-prepend inserts each before previous, so list in reverse load order.
+        // Actual load order: bridge → serializer → events → core
         return [
-          { tag: "script", attrs: { src: "app://citron/citron-bridge.js" }, injectTo: "head-prepend" },
-          { tag: "script", attrs: { src: "app://citron/citron-serializer.js" }, injectTo: "head-prepend" },
-          { tag: "script", attrs: { src: "app://citron/citron-events.js" }, injectTo: "head-prepend" },
           { tag: "script", attrs: { src: "app://citron/citron-core.js" }, injectTo: "head-prepend" },
+          { tag: "script", attrs: { src: "app://citron/citron-events.js" }, injectTo: "head-prepend" },
+          { tag: "script", attrs: { src: "app://citron/citron-serializer.js" }, injectTo: "head-prepend" },
+          { tag: "script", attrs: { src: "app://citron/citron-bridgnts.js" }, injectTo: "head-prepend" },
+          { tag: "script", attrs: { src: "app://citron/citron-serializer.js" }, injectTo: "head-prepend" },
+          { tag: "script", attrs: { src: "app://citron/citron-bridge.js" }, injectTo: "head-prepend" },
         ];
       },
     },
