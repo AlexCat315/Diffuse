@@ -163,21 +163,60 @@ pub const AppState = struct {
         const project_path = self.current_project_path orelse return error.NoProjectOpen;
         self.stopEngine();
 
+        // Kill any orphaned engine processes left from previous dev-mode restarts.
+        // Without this, hot-reload causes multiple engines to compete on the same port.
+        killOrphanedEngines(self.allocator, engine_port);
+
         const engine_binary = try self.resolveEngineBinaryPath(self.allocator);
         defer self.allocator.free(engine_binary);
 
+        const engine_dir = std.fs.path.dirname(engine_binary) orelse ".";
+        const logs_dir = try self.engineLogsDirPath(self.allocator);
+        defer self.allocator.free(logs_dir);
+        try std.Io.Dir.createDirPath(std.Io.Dir.cwd(), globals.global_io, logs_dir);
+
+        const launch_log = try std.fs.path.join(self.allocator, &.{ logs_dir, "engine-launch.log" });
+        defer self.allocator.free(launch_log);
+        const runtime_log = try std.fs.path.join(self.allocator, &.{ logs_dir, "engine-runtime.log" });
+        defer self.allocator.free(runtime_log);
+
+        const timestamp = try currentIsoTimestamp(self.allocator);
+        defer self.allocator.free(timestamp);
+        const launch_entry = try std.fmt.allocPrint(
+            self.allocator,
+            "time={s}\nengine={s}\nproject={s}\n",
+            .{ timestamp, engine_binary, project_path },
+        );
+        defer self.allocator.free(launch_entry);
+        try std.Io.Dir.writeFile(std.Io.Dir.cwd(), globals.global_io, .{
+            .sub_path = launch_log,
+            .data = launch_entry,
+        });
+
+        const quoted_engine_binary = try shellQuoteAlloc(self.allocator, engine_binary);
+        defer self.allocator.free(quoted_engine_binary);
+        const quoted_engine_dir = try shellQuoteAlloc(self.allocator, engine_dir);
+        defer self.allocator.free(quoted_engine_dir);
+        const quoted_project_path = try shellQuoteAlloc(self.allocator, project_path);
+        defer self.allocator.free(quoted_project_path);
+        const quoted_runtime_log = try shellQuoteAlloc(self.allocator, runtime_log);
+        defer self.allocator.free(quoted_runtime_log);
+
+        const command = try std.fmt.allocPrint(
+            self.allocator,
+            "cd {s} && exec {s} --editor-server --editor-port {d} --project-path {s} >> {s} 2>&1",
+            .{ quoted_engine_dir, quoted_engine_binary, engine_port, quoted_project_path, quoted_runtime_log },
+        );
+        defer self.allocator.free(command);
+
         const argv = [_][]const u8{
-            engine_binary,
-            "--editor-server",
-            "--editor-port",
-            "9100",
-            "--project-path",
-            project_path,
+            "/bin/sh",
+            "-c",
+            command,
         };
 
         self.engine_child = try std.process.spawn(globals.global_io, .{
             .argv = &argv,
-            .cwd = .{ .path = std.fs.path.dirname(engine_binary) orelse "." },
             .stdin = .ignore,
             .stdout = .ignore,
             .stderr = .ignore,
@@ -202,7 +241,7 @@ pub const AppState = struct {
             allocator.free(bundled);
         }
 
-        return allocator.dupe(u8, build_options.engine_binary_fallback);
+        return resolveFallbackPathAlloc(allocator, build_options.engine_binary_fallback);
     }
 
     pub fn loadRecentProjects(self: *const AppState, allocator: std.mem.Allocator) !std.json.Parsed([]RecentProject) {
@@ -299,11 +338,68 @@ pub const AppState = struct {
 
     fn recentProjectsFilePath(self: *const AppState, allocator: std.mem.Allocator) ![]u8 {
         _ = self;
-        const home_c = std.c.getenv("HOME") orelse return error.HomeNotFound;
-        const home = std.mem.span(home_c);
+        const home = try homeDir();
         return std.fs.path.join(allocator, &.{ home, "Library", "Application Support", "guava-editor", "recent-projects.json" });
     }
+
+    fn engineLogsDirPath(self: *const AppState, allocator: std.mem.Allocator) ![]u8 {
+        _ = self;
+        const home = try homeDir();
+        return std.fs.path.join(allocator, &.{ home, "Library", "Logs", "guava-editor" });
+    }
 };
+
+fn homeDir() ![]const u8 {
+    const home_c = std.c.getenv("HOME") orelse return error.HomeNotFound;
+    return std.mem.span(home_c);
+}
+
+fn shellQuoteAlloc(allocator: std.mem.Allocator, value: []const u8) ![]u8 {
+    var quoted = std.ArrayList(u8).empty;
+    defer quoted.deinit(allocator);
+
+    try quoted.append(allocator, '\'');
+    for (value) |char| {
+        if (char == '\'') {
+            try quoted.appendSlice(allocator, "'\"'\"'");
+        } else {
+            try quoted.append(allocator, char);
+        }
+    }
+    try quoted.append(allocator, '\'');
+    return quoted.toOwnedSlice(allocator);
+}
+
+fn resolveFallbackPathAlloc(allocator: std.mem.Allocator, fallback_path: []const u8) ![]u8 {
+    if (std.fs.path.isAbsolute(fallback_path)) {
+        return allocator.dupe(u8, fallback_path);
+    }
+
+    if (std.Io.Dir.cwd().realPathFileAlloc(globals.global_io, fallback_path, allocator)) |resolved| {
+        return resolved;
+    } else |_| {}
+
+    const exe_dir = std.fs.path.dirname(globals.exe_path) orelse ".";
+    var search_dir = try allocator.dupe(u8, exe_dir);
+    defer allocator.free(search_dir);
+
+    var depth: usize = 0;
+    while (depth < 8) : (depth += 1) {
+        const candidate = try std.fs.path.join(allocator, &.{ search_dir, fallback_path });
+        defer allocator.free(candidate);
+
+        if (std.Io.Dir.cwd().realPathFileAlloc(globals.global_io, candidate, allocator)) |resolved| {
+            return resolved;
+        } else |_| {}
+
+        const parent = std.fs.path.dirname(search_dir) orelse break;
+        const next_dir = try allocator.dupe(u8, parent);
+        allocator.free(search_dir);
+        search_dir = next_dir;
+    }
+
+    return allocator.dupe(u8, fallback_path);
+}
 
 fn emptyRecentProjects(allocator: std.mem.Allocator) !std.json.Parsed([]RecentProject) {
     return std.json.parseFromSlice([]RecentProject, allocator, "[]", .{});
@@ -319,4 +415,22 @@ fn currentIsoTimestamp(allocator: std.mem.Allocator) ![]u8 {
     defer allocator.free(result.stderr);
 
     return allocator.dupe(u8, std.mem.trim(u8, result.stdout, "\r\n"));
+}
+
+/// Kill orphaned guava-engine processes that are still listening on the
+/// given port.  This happens when the Citron app restarts during dev-mode
+/// hot-reload: the old engine_child handle is lost, so stopEngine() does
+/// nothing, but the old engine process keeps running.
+fn killOrphanedEngines(allocator: std.mem.Allocator, port: u16) void {
+    var buf: [32]u8 = undefined;
+    const pattern = std.fmt.bufPrint(&buf, "guava-engine.*--editor-port {d}", .{port}) catch return;
+    // pkill -f sends SIGTERM to all matching processes.
+    _ = std.process.run(allocator, globals.global_io, .{
+        .argv = &.{ "/usr/bin/pkill", "-f", pattern },
+        .stdout_limit = .limited(64),
+        .stderr_limit = .limited(64),
+    }) catch {};
+    // std.process.run blocks until pkill exits, so targets have received
+    // SIGTERM by now.  The engine's listener uses reuse_address so the
+    // new process can bind immediately even if the old socket lingers.
 }

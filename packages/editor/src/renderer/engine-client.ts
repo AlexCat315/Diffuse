@@ -68,18 +68,28 @@ class EngineClient {
   // ── Connection ──
 
   async connect(url?: string): Promise<void> {
+    const nextUrl = url ?? this.targetUrl;
+    if (this.connected && this.targetUrl === nextUrl) return;
+    if (this.socket?.readyState === WebSocket.CONNECTING && this.targetUrl === nextUrl) return;
+
     if (url) this.targetUrl = url;
-    if (this.connected && this.targetUrl === url) return;
     this.manualClose = false;
-    if (this.socket?.readyState === WebSocket.CONNECTING) return;
-    if (this.socket?.readyState === WebSocket.OPEN) this.socket.close();
+
+    if (this.socket?.readyState === WebSocket.OPEN) {
+      this.socket.close();
+    }
 
     return new Promise((resolve, reject) => {
       let settled = false;
       const socket = new WebSocket(this.targetUrl);
       this.socket = socket;
+      const isCurrentSocket = () => this.socket === socket;
 
       socket.addEventListener('open', () => {
+        if (!isCurrentSocket()) {
+          socket.close();
+          return;
+        }
         this._connected = true;
         settled = true;
         this.clearReconnect();
@@ -87,14 +97,19 @@ class EngineClient {
         resolve();
       });
 
-      socket.addEventListener('message', (e) => this.handleMessage(e.data as string));
+      socket.addEventListener('message', (e) => {
+        if (!isCurrentSocket()) return;
+        this.handleMessage(e.data as string);
+      });
 
       socket.addEventListener('error', () => {
+        if (!isCurrentSocket()) return;
         this.events.emit('error', 'Failed to connect to engine');
         if (!settled) { settled = true; reject(new Error('Failed to connect to engine')); }
       });
 
       socket.addEventListener('close', (e) => {
+        if (!isCurrentSocket()) return;
         const wasConnected = this._connected;
         this._connected = false;
         this.rejectPending(new Error('Engine disconnected'));
@@ -102,6 +117,9 @@ class EngineClient {
           this.events.emit('disconnected', { code: e.code ?? null, restarting: !this.manualClose });
         }
         if (!this.manualClose) this.scheduleReconnect();
+        if (this.socket === socket) {
+          this.socket = null;
+        }
         if (!settled) { settled = true; reject(new Error('Connection closed before ready')); }
       });
     });

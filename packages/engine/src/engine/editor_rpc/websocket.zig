@@ -4,7 +4,6 @@
 ///! Only supports text frames (opcode 0x1) and close frames (opcode 0x8).
 ///! Designed for trusted localhost connections from the Electron editor.
 const std = @import("std");
-const io_globals = @import("io_globals");
 
 const log = std.log.scoped(.websocket);
 
@@ -26,6 +25,7 @@ pub const Frame = struct {
 /// Perform the WebSocket upgrade handshake on an accepted TCP connection.
 /// Returns true if the handshake succeeded, false otherwise.
 pub fn performHandshake(stream: std.Io.net.Stream) !void {
+    log.info("Starting WebSocket handshake", .{});
     // Read the HTTP request (up to 4KB should be enough for the upgrade request)
     var buf: [4096]u8 = undefined;
     var total_read: usize = 0;
@@ -34,6 +34,7 @@ pub fn performHandshake(stream: std.Io.net.Stream) !void {
         const n = streamRead(stream, buf[total_read..]) catch return error.ConnectionClosed;
         if (n == 0) return error.ConnectionClosed;
         total_read += n;
+        log.info("Handshake read {d} bytes (total {d})", .{ n, total_read });
 
         // Check if we have the full HTTP request (ends with \r\n\r\n)
         if (std.mem.indexOf(u8, buf[0..total_read], "\r\n\r\n") != null) {
@@ -65,6 +66,7 @@ pub fn performHandshake(stream: std.Io.net.Stream) !void {
     try streamWriteAll(stream, response);
     try streamWriteAll(stream, &accept_key);
     try streamWriteAll(stream, "\r\n\r\n");
+    log.info("Completed WebSocket handshake", .{});
 }
 
 /// Read a single WebSocket frame from the stream.
@@ -174,19 +176,23 @@ fn readExact(stream: std.Io.net.Stream, buf: []u8) !void {
     }
 }
 
-/// Read from a net.Stream handle.
+/// Read from a net.Stream handle using blocking POSIX I/O.
+/// The Io-based reader/writer path goes through kqueue which is not safe
+/// to call from the per-client OS threads spawned by std.Thread.spawn.
 fn streamRead(stream: std.Io.net.Stream, buf: []u8) !usize {
-    var reader_buffer: [0]u8 = undefined;
-    var reader = stream.reader(io_globals.global_io, &reader_buffer);
-    return reader.interface.readSliceShort(buf);
+    const n = std.posix.read(stream.socket.handle, buf) catch return error.ReadFailed;
+    return n;
 }
 
-/// Write all bytes to a net.Stream handle, retrying on partial writes.
+/// Write all bytes to a net.Stream handle using blocking POSIX I/O.
 fn streamWriteAll(stream: std.Io.net.Stream, data: []const u8) !void {
-    var writer_buffer: [0]u8 = undefined;
-    var writer = stream.writer(io_globals.global_io, &writer_buffer);
-    try writer.interface.writeAll(data);
-    try writer.interface.flush();
+    var written: usize = 0;
+    while (written < data.len) {
+        const result = std.c.write(stream.socket.handle, data[written..].ptr, data[written..].len);
+        if (result < 0) return error.WriteFailed;
+        if (result == 0) return error.WriteFailed;
+        written += @intCast(result);
+    }
 }
 
 fn extractHeader(request: []const u8, name: []const u8) ?[]const u8 {

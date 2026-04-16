@@ -61,6 +61,7 @@ pub fn consoleLogTrampoline(level: []const u8, message: []const u8, source: []co
 const Client = struct {
     stream: std.Io.net.Stream,
     alive: bool = true,
+    handshake_complete: bool = false,
     id: u32 = 0,
 };
 
@@ -364,10 +365,9 @@ pub const Server = struct {
                 client_slot.* = .{
                     .stream = stream,
                     .alive = true,
+                    .handshake_complete = false,
                     .id = client_id,
                 };
-
-                _ = self.active_client_count.fetchAdd(1, .acq_rel);
 
                 // Join old thread if any
                 if (thread_slot.*) |old_thread| {
@@ -375,7 +375,6 @@ pub const Server = struct {
                 }
 
                 thread_slot.* = try std.Thread.spawn(.{}, clientMain, .{ self, client_id });
-                log.info("Client {d} connected", .{client_id});
                 return;
             }
         }
@@ -386,8 +385,10 @@ pub const Server = struct {
 
     fn clientMain(self: *Server, client_id: u32) void {
         defer {
-            self.removeClient(client_id);
-            _ = self.active_client_count.fetchSub(1, .acq_rel);
+            const was_active = self.removeClient(client_id);
+            if (was_active) {
+                _ = self.active_client_count.fetchSub(1, .acq_rel);
+            }
             log.info("Client {d} disconnected", .{client_id});
         }
 
@@ -402,7 +403,11 @@ pub const Server = struct {
         const stream = self.getClientStream(client_id) orelse return;
 
         // Perform WebSocket handshake
+        log.info("Client {d} awaiting handshake", .{client_id});
         try ws.performHandshake(stream);
+        self.markClientHandshakeComplete(client_id);
+        _ = self.active_client_count.fetchAdd(1, .acq_rel);
+        log.info("Client {d} connected", .{client_id});
 
         while (!self.shutdown.load(.acquire)) {
             const frame = ws.readFrame(self.allocator, stream) catch |err| {
@@ -455,15 +460,30 @@ pub const Server = struct {
         return null;
     }
 
-    fn removeClient(self: *Server, client_id: u32) void {
+    fn removeClient(self: *Server, client_id: u32) bool {
         self.clients_mutex.lockUncancelable(io_globals.global_io);
         defer self.clients_mutex.unlock(io_globals.global_io);
         for (&self.clients) |*slot| {
             if (slot.*) |*client| {
                 if (client.id == client_id) {
+                    const was_active = client.handshake_complete;
                     client.alive = false;
                     client.stream.close(io_globals.global_io);
                     slot.* = null;
+                    return was_active;
+                }
+            }
+        }
+        return false;
+    }
+
+    fn markClientHandshakeComplete(self: *Server, client_id: u32) void {
+        self.clients_mutex.lockUncancelable(io_globals.global_io);
+        defer self.clients_mutex.unlock(io_globals.global_io);
+        for (&self.clients) |*slot| {
+            if (slot.*) |*client| {
+                if (client.id == client_id) {
+                    client.handshake_complete = true;
                     return;
                 }
             }
@@ -494,14 +514,14 @@ pub const Server = struct {
         if (count == 0) return;
 
         // Snapshot live client handles so we can write outside the mutex.
-        const ClientSnapshot = struct { stream: std.Io.net.Stream, alive: bool, id: u32 };
+        const ClientSnapshot = struct { stream: std.Io.net.Stream, alive: bool, handshake_complete: bool, id: u32 };
         var snap_buf: [max_clients]?ClientSnapshot = undefined;
         {
             self.clients_mutex.lockUncancelable(io_globals.global_io);
             defer self.clients_mutex.unlock(io_globals.global_io);
             for (&self.clients, 0..) |*slot, i| {
                 if (slot.*) |c| {
-                    snap_buf[i] = .{ .stream = c.stream, .alive = c.alive, .id = c.id };
+                    snap_buf[i] = .{ .stream = c.stream, .alive = c.alive, .handshake_complete = c.handshake_complete, .id = c.id };
                 } else {
                     snap_buf[i] = null;
                 }
@@ -516,7 +536,7 @@ pub const Server = struct {
                 // Broadcast
                 for (&snap_buf) |snap| {
                     if (snap) |c| {
-                        if (c.alive) {
+                        if (c.alive and c.handshake_complete) {
                             ws.writeTextFrame(c.stream, msg.payload) catch {};
                         }
                     }
@@ -525,7 +545,7 @@ pub const Server = struct {
                 // Targeted send
                 for (&snap_buf) |snap| {
                     if (snap) |c| {
-                        if (c.id == msg.client_id and c.alive) {
+                        if (c.id == msg.client_id and c.alive and c.handshake_complete) {
                             ws.writeTextFrame(c.stream, msg.payload) catch {};
                             break;
                         }
