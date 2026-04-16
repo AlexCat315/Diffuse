@@ -27,11 +27,17 @@ const popoutPanels = popoutParam ? popoutParam.split(",").map(decodeURIComponent
 
 function AppRoot() {
   const [mode, setMode] = useState<"loading" | "launcher" | "editor">("loading");
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     // Ask main process what mode we're in
     getAppMode().then((appMode) => {
       setMode(appMode as "loading" | "launcher" | "editor");
+    }).catch((err) => {
+      console.error('[main] getAppMode failed:', err);
+      setError(String(err));
+      // Fallback to launcher mode
+      setMode("launcher");
     });
 
     // When engine connects (from launcher → project open, or from HMR reload),
@@ -47,8 +53,9 @@ function AppRoot() {
 
   if (mode === "loading") {
     return (
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100vh", background: "#1e1e2e" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100vh", background: "#1e1e2e", color: "#cdd6f4" }}>
         <div style={{ width: 24, height: 24, border: "3px solid #45475a", borderTop: "3px solid #89b4fa", borderRadius: "50%", animation: "spin 1s linear infinite" }} />
+        {error && <p style={{ marginTop: 16, fontSize: 12, color: "#f38ba8" }}>{error}</p>}
       </div>
     );
   }
