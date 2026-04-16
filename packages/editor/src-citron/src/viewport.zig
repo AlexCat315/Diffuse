@@ -77,7 +77,7 @@ pub const ViewportState = struct {
             // Apply current bounds
             overlay.updateBounds(self.bounds.x, self.bounds.y, self.bounds.w, self.bounds.h);
             // Notify frontend that overlay is active
-            citron.ipc.enqueueEventJson("viewport.overlay-active", "{\"active\":true}");
+            citron.ipc.enqueueEventJson("viewport.overlayActive", "{\"active\":true}");
             return true;
         }
         return false;
