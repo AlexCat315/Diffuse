@@ -1,0 +1,15 @@
+.{
+    .name = .guava_editor,
+    .fingerprint = 0xa119012a907e9ab5,
+    .version = "0.1.0",
+    .dependencies = .{
+        .citron = .{
+            .path = "../../../../citron",
+        },
+    },
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+    },
+}
