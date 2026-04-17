@@ -1,4 +1,6 @@
 ﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+using Avalonia;
 using Dock.Model.Controls;
 
 namespace Guava.Editor.ViewModels;
@@ -26,5 +28,14 @@ public partial class MainWindowViewModel : ViewModelBase
         var layout = _factory.CreateLayout();
         _factory.InitLayout(layout);
         Layout = layout;
+    }
+
+    [RelayCommand]
+    private void ToggleTheme()
+    {
+        if (Application.Current is App app)
+        {
+            app.ToggleTheme();
+        }
     }
 }

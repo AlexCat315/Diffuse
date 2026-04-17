@@ -8,13 +8,13 @@
         <!-- Toolbar -->
         <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,6" Spacing="4">
             <Button Classes="ghost" ToolTip.Tip="Clear" Padding="5">
-                <svg:Svg Path="{StaticResource DeleteIcon}" Width="13" Height="13" Css="{StaticResource SvgCssOverlay0}"/>
+                <svg:Svg Path="{StaticResource DeleteIcon}" Width="13" Height="13" Css="{DynamicResource SvgCssOverlay0}"/>
             </Button>
             <Border Width="1" Height="16" Background="{DynamicResource Surface1Brush}" VerticalAlignment="Center" Margin="2,0"/>
             <Grid>
                 <TextBox PlaceholderText="Filter logs..." FontSize="11" Width="220" Padding="28,5,8,5"/>
                 <svg:Svg Path="{StaticResource SearchIcon}" Width="12" Height="12"
-                         Css="{StaticResource SvgCssOverlay0}"
+                         Css="{DynamicResource SvgCssOverlay0}"
                          HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0"
                          IsHitTestVisible="False"/>
             </Grid>
@@ -29,7 +29,7 @@
             <ListBox Background="Transparent">
                 <ListBoxItem Padding="8,5">
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <svg:Svg Path="{StaticResource InfoIcon}" Width="12" Height="12" Css="{StaticResource SvgCssBlue}" VerticalAlignment="Center"/>
+                        <svg:Svg Path="{StaticResource InfoIcon}" Width="12" Height="12" Css="{DynamicResource SvgCssBlue}" VerticalAlignment="Center"/>
                         <TextBlock Text="14:23:01" FontSize="10.5" Foreground="{DynamicResource Overlay0Brush}"
                                    FontFamily="Consolas,Menlo,monospace" Width="56" VerticalAlignment="Center"/>
                         <TextBlock Text="Engine initialized" FontSize="11"
@@ -39,7 +39,7 @@
                 </ListBoxItem>
                 <ListBoxItem Padding="8,5">
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <svg:Svg Path="{StaticResource InfoIcon}" Width="12" Height="12" Css="{StaticResource SvgCssBlue}" VerticalAlignment="Center"/>
+                        <svg:Svg Path="{StaticResource InfoIcon}" Width="12" Height="12" Css="{DynamicResource SvgCssBlue}" VerticalAlignment="Center"/>
                         <TextBlock Text="14:23:02" FontSize="10.5" Foreground="{DynamicResource Overlay0Brush}"
                                    FontFamily="Consolas,Menlo,monospace" Width="56" VerticalAlignment="Center"/>
                         <TextBlock Text="Scene loaded: DefaultScene" FontSize="11"
@@ -49,7 +49,7 @@
                 </ListBoxItem>
                 <ListBoxItem Padding="8,5">
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <svg:Svg Path="{StaticResource WarningIcon}" Width="12" Height="12" Css="{StaticResource SvgCssYellow}" VerticalAlignment="Center"/>
+                        <svg:Svg Path="{StaticResource WarningIcon}" Width="12" Height="12" Css="{DynamicResource SvgCssYellow}" VerticalAlignment="Center"/>
                         <TextBlock Text="14:23:03" FontSize="10.5" Foreground="{DynamicResource Overlay0Brush}"
                                    FontFamily="Consolas,Menlo,monospace" Width="56" VerticalAlignment="Center"/>
                         <TextBlock Text="Missing texture: brick_normal.png" FontSize="11"
@@ -59,7 +59,7 @@
                 </ListBoxItem>
                 <ListBoxItem Padding="8,5">
                     <StackPanel Orientation="Horizontal" Spacing="8">
-                        <svg:Svg Path="{StaticResource ErrorIcon}" Width="12" Height="12" Css="{StaticResource SvgCssRed}" VerticalAlignment="Center"/>
+                        <svg:Svg Path="{StaticResource ErrorIcon}" Width="12" Height="12" Css="{DynamicResource SvgCssRed}" VerticalAlignment="Center"/>
                         <TextBlock Text="14:23:04" FontSize="10.5" Foreground="{DynamicResource Overlay0Brush}"
                                    FontFamily="Consolas,Menlo,monospace" Width="56" VerticalAlignment="Center"/>
                         <TextBlock Text="Shader compile failed: PBR_lit.frag" FontSize="11"

@@ -10,14 +10,14 @@
         <native:IOSurfaceHost x:Name="ViewportHost"/>
 
         <!-- Floating overlays — ON TOP of viewport, no airspace issue -->
-        <Border Background="#CCeff1f5"
+        <Border Background="{DynamicResource ViewportOverlayBgBrush}"
                 CornerRadius="8" Padding="12"
                 HorizontalAlignment="Right" VerticalAlignment="Top"
                 Margin="8" MinWidth="180"
                 BoxShadow="0 2 8 0 #20000000">
             <StackPanel>
                 <StackPanel Orientation="Horizontal" Spacing="6">
-                    <svg:Svg Path="{StaticResource CrosshairIcon}" Width="14" Height="14" Css="{StaticResource SvgCssBlue}"/>
+                    <svg:Svg Path="{StaticResource CrosshairIcon}" Width="14" Height="14" Css="{DynamicResource SvgCssBlue}"/>
                     <TextBlock Text="Inspector Overlay"
                                Foreground="{DynamicResource TextBrush}"
                                FontSize="12" FontWeight="SemiBold"/>
@@ -31,12 +31,12 @@
         </Border>
 
         <!-- FPS counter -->
-        <Border Background="#CCdce0e8"
+        <Border Background="{DynamicResource ViewportFpsBgBrush}"
                 CornerRadius="4" Padding="6,3"
                 HorizontalAlignment="Left" VerticalAlignment="Bottom"
                 Margin="6">
             <StackPanel Orientation="Horizontal" Spacing="4">
-                <svg:Svg Path="{StaticResource CrosshairIcon}" Width="12" Height="12" Css="{StaticResource SvgCssGreen}"/>
+                <svg:Svg Path="{StaticResource CrosshairIcon}" Width="12" Height="12" Css="{DynamicResource SvgCssGreen}"/>
                 <TextBlock Text="{Binding FpsText}"
                            Foreground="{DynamicResource GreenBrush}"
                            FontSize="11" FontFamily="Consolas,Menlo,monospace"/>
@@ -44,12 +44,12 @@
         </Border>
 
         <!-- ViewCube placeholder -->
-        <Border Background="#BBe6e9ef"
+        <Border Background="{DynamicResource ViewportCubeBgBrush}"
                 CornerRadius="4" Width="50" Height="50"
                 HorizontalAlignment="Right" VerticalAlignment="Bottom"
                 Margin="8">
             <svg:Svg Path="{StaticResource CubeIcon}" Width="24" Height="24"
-                     Css="{StaticResource SvgCssText}"
+                     Css="{DynamicResource SvgCssText}"
                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
     </Grid>

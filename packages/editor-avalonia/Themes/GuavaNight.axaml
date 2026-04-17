@@ -1,0 +1,79 @@
+<ResourceDictionary xmlns="https://github.com/avaloniaui"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        <!--
+            Guava Night — deep warm dark theme
+            Tailwind Zinc grays + pastel accents for dark backgrounds
+        -->
+        <Color x:Key="Rosewater">#f5c2c7</Color>
+        <Color x:Key="Flamingo">#f2a8a8</Color>
+        <Color x:Key="Pink">#f5a0d0</Color>
+        <Color x:Key="Mauve">#c4b5fd</Color>
+        <Color x:Key="Red">#fb7185</Color>
+        <Color x:Key="Maroon">#fda4af</Color>
+        <Color x:Key="Peach">#fdba74</Color>
+        <Color x:Key="Yellow">#fcd34d</Color>
+        <Color x:Key="Green">#86efac</Color>
+        <Color x:Key="Teal">#5eead4</Color>
+        <Color x:Key="Sky">#7dd3fc</Color>
+        <Color x:Key="Sapphire">#67e8f9</Color>
+        <Color x:Key="Blue">#93c5fd</Color>
+        <Color x:Key="Lavender">#a5b4fc</Color>
+
+        <Color x:Key="Text">#f0f0f3</Color>
+        <Color x:Key="Subtext1">#d4d4d8</Color>
+        <Color x:Key="Subtext0">#a1a1aa</Color>
+        <Color x:Key="Overlay2">#71717a</Color>
+        <Color x:Key="Overlay1">#52525b</Color>
+        <Color x:Key="Overlay0">#3f3f46</Color>
+        <Color x:Key="Surface2">#333338</Color>
+        <Color x:Key="Surface1">#27272a</Color>
+        <Color x:Key="Surface0">#1e1e21</Color>
+        <Color x:Key="Base">#141417</Color>
+        <Color x:Key="Mantle">#0e0e10</Color>
+        <Color x:Key="Crust">#09090b</Color>
+
+        <!-- Brushes for easy binding -->
+        <!-- Viewport overlay colors (with alpha) -->
+        <Color x:Key="ViewportOverlayBg">#CC141417</Color>
+        <Color x:Key="ViewportFpsBg">#CC0e0e10</Color>
+        <Color x:Key="ViewportCubeBg">#BB1e1e21</Color>
+
+        <SolidColorBrush x:Key="ViewportOverlayBgBrush" Color="{DynamicResource ViewportOverlayBg}" />
+        <SolidColorBrush x:Key="ViewportFpsBgBrush" Color="{DynamicResource ViewportFpsBg}" />
+        <SolidColorBrush x:Key="ViewportCubeBgBrush" Color="{DynamicResource ViewportCubeBg}" />
+
+        <SolidColorBrush x:Key="BaseBrush" Color="{DynamicResource Base}" />
+        <SolidColorBrush x:Key="MantleBrush" Color="{DynamicResource Mantle}" />
+        <SolidColorBrush x:Key="CrustBrush" Color="{DynamicResource Crust}" />
+        <SolidColorBrush x:Key="Surface0Brush" Color="{DynamicResource Surface0}" />
+        <SolidColorBrush x:Key="Surface1Brush" Color="{DynamicResource Surface1}" />
+        <SolidColorBrush x:Key="Surface2Brush" Color="{DynamicResource Surface2}" />
+        <SolidColorBrush x:Key="TextBrush" Color="{DynamicResource Text}" />
+        <SolidColorBrush x:Key="Subtext1Brush" Color="{DynamicResource Subtext1}" />
+        <SolidColorBrush x:Key="Subtext0Brush" Color="{DynamicResource Subtext0}" />
+        <SolidColorBrush x:Key="Overlay0Brush" Color="{DynamicResource Overlay0}" />
+        <SolidColorBrush x:Key="Overlay2Brush" Color="{DynamicResource Overlay2}" />
+        <SolidColorBrush x:Key="BlueBrush" Color="{DynamicResource Blue}" />
+        <SolidColorBrush x:Key="GreenBrush" Color="{DynamicResource Green}" />
+        <SolidColorBrush x:Key="RedBrush" Color="{DynamicResource Red}" />
+        <SolidColorBrush x:Key="YellowBrush" Color="{DynamicResource Yellow}" />
+        <SolidColorBrush x:Key="PeachBrush" Color="{DynamicResource Peach}" />
+        <SolidColorBrush x:Key="MauveBrush" Color="{DynamicResource Mauve}" />
+        <SolidColorBrush x:Key="SapphireBrush" Color="{DynamicResource Sapphire}" />
+        <SolidColorBrush x:Key="TealBrush" Color="{DynamicResource Teal}" />
+        <SolidColorBrush x:Key="SkyBrush" Color="{DynamicResource Sky}" />
+        <SolidColorBrush x:Key="LavenderBrush" Color="{DynamicResource Lavender}" />
+
+        <!-- SVG CSS color overrides (for Svg.Controls.Skia.Avalonia) -->
+        <x:String x:Key="SvgCssText">path[fill] { fill: #f0f0f3; } path[stroke] { stroke: #f0f0f3; }</x:String>
+        <x:String x:Key="SvgCssOverlay0">path[fill] { fill: #3f3f46; } path[stroke] { stroke: #3f3f46; }</x:String>
+        <x:String x:Key="SvgCssBlue">path[fill] { fill: #93c5fd; } path[stroke] { stroke: #93c5fd; }</x:String>
+        <x:String x:Key="SvgCssGreen">path[fill] { fill: #86efac; } path[stroke] { stroke: #86efac; }</x:String>
+        <x:String x:Key="SvgCssRed">path[fill] { fill: #fb7185; } path[stroke] { stroke: #fb7185; }</x:String>
+        <x:String x:Key="SvgCssYellow">path[fill] { fill: #fcd34d; } path[stroke] { stroke: #fcd34d; }</x:String>
+        <x:String x:Key="SvgCssPeach">path[fill] { fill: #fdba74; } path[stroke] { stroke: #fdba74; }</x:String>
+        <x:String x:Key="SvgCssMauve">path[fill] { fill: #c4b5fd; } path[stroke] { stroke: #c4b5fd; }</x:String>
+        <x:String x:Key="SvgCssSapphire">path[fill] { fill: #67e8f9; } path[stroke] { stroke: #67e8f9; }</x:String>
+        <x:String x:Key="SvgCssTeal">path[fill] { fill: #5eead4; } path[stroke] { stroke: #5eead4; }</x:String>
+        <x:String x:Key="SvgCssOverlay2">path[fill] { fill: #71717a; } path[stroke] { stroke: #71717a; }</x:String>
+</ResourceDictionary>

@@ -10,7 +10,7 @@
             <TextBox PlaceholderText="Search entities..."
                      FontSize="11" Padding="28,5,8,5"/>
             <svg:Svg Path="{StaticResource SearchIcon}" Width="12" Height="12"
-                     Css="{StaticResource SvgCssOverlay0}"
+                     Css="{DynamicResource SvgCssOverlay0}"
                      HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0"
                      IsHitTestVisible="False"/>
         </Grid>
@@ -21,14 +21,14 @@
                 <TreeViewItem IsExpanded="True">
                     <TreeViewItem.Header>
                         <StackPanel Orientation="Horizontal" Spacing="6">
-                            <svg:Svg Path="{StaticResource GlobeIcon}" Width="14" Height="14" Css="{StaticResource SvgCssBlue}"/>
+                            <svg:Svg Path="{StaticResource GlobeIcon}" Width="14" Height="14" Css="{DynamicResource SvgCssBlue}"/>
                             <TextBlock Text="Scene Root" FontSize="12" FontWeight="SemiBold"/>
                         </StackPanel>
                     </TreeViewItem.Header>
                     <TreeViewItem>
                         <TreeViewItem.Header>
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <svg:Svg Path="{StaticResource CameraIcon}" Width="13" Height="13" Css="{StaticResource SvgCssOverlay2}"/>
+                                <svg:Svg Path="{StaticResource CameraIcon}" Width="13" Height="13" Css="{DynamicResource SvgCssOverlay2}"/>
                                 <TextBlock Text="Main Camera" FontSize="11.5"/>
                             </StackPanel>
                         </TreeViewItem.Header>
@@ -36,7 +36,7 @@
                     <TreeViewItem>
                         <TreeViewItem.Header>
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <svg:Svg Path="{StaticResource SunIcon}" Width="13" Height="13" Css="{StaticResource SvgCssYellow}"/>
+                                <svg:Svg Path="{StaticResource SunIcon}" Width="13" Height="13" Css="{DynamicResource SvgCssYellow}"/>
                                 <TextBlock Text="Directional Light" FontSize="11.5"/>
                             </StackPanel>
                         </TreeViewItem.Header>
@@ -44,7 +44,7 @@
                     <TreeViewItem>
                         <TreeViewItem.Header>
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <svg:Svg Path="{StaticResource CubeIcon}" Width="13" Height="13" Css="{StaticResource SvgCssSapphire}"/>
+                                <svg:Svg Path="{StaticResource CubeIcon}" Width="13" Height="13" Css="{DynamicResource SvgCssSapphire}"/>
                                 <TextBlock Text="Cube" FontSize="11.5"/>
                             </StackPanel>
                         </TreeViewItem.Header>
@@ -52,7 +52,7 @@
                     <TreeViewItem>
                         <TreeViewItem.Header>
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <svg:Svg Path="{StaticResource SphereIcon}" Width="13" Height="13" Css="{StaticResource SvgCssTeal}"/>
+                                <svg:Svg Path="{StaticResource SphereIcon}" Width="13" Height="13" Css="{DynamicResource SvgCssTeal}"/>
                                 <TextBlock Text="Sphere" FontSize="11.5"/>
                             </StackPanel>
                         </TreeViewItem.Header>
@@ -60,7 +60,7 @@
                     <TreeViewItem>
                         <TreeViewItem.Header>
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <svg:Svg Path="{StaticResource GroundIcon}" Width="13" Height="13" Css="{StaticResource SvgCssOverlay2}"/>
+                                <svg:Svg Path="{StaticResource GroundIcon}" Width="13" Height="13" Css="{DynamicResource SvgCssOverlay2}"/>
                                 <TextBlock Text="Ground Plane" FontSize="11.5"/>
                             </StackPanel>
                         </TreeViewItem.Header>

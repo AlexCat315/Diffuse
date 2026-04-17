@@ -9,12 +9,12 @@
         <Border DockPanel.Dock="Top" Background="{DynamicResource MantleBrush}" CornerRadius="6" Padding="6,4" Margin="0,0,0,6">
             <StackPanel Orientation="Horizontal" Spacing="6">
                 <Button Classes="ghost" ToolTip.Tip="Back" Padding="4">
-                    <svg:Svg Path="{StaticResource BackIcon}" Width="13" Height="13" Css="{StaticResource SvgCssOverlay0}"/>
+                    <svg:Svg Path="{StaticResource BackIcon}" Width="13" Height="13" Css="{DynamicResource SvgCssOverlay0}"/>
                 </Button>
                 <Border Width="1" Height="16" Background="{DynamicResource Surface1Brush}" VerticalAlignment="Center"/>
-                <svg:Svg Path="{StaticResource FolderIcon}" Width="12" Height="12" Css="{StaticResource SvgCssBlue}" VerticalAlignment="Center"/>
+                <svg:Svg Path="{StaticResource FolderIcon}" Width="12" Height="12" Css="{DynamicResource SvgCssBlue}" VerticalAlignment="Center"/>
                 <TextBlock Text="Assets" FontSize="11.5" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold"/>
-                <svg:Svg Path="{StaticResource ChevronRightIcon}" Width="10" Height="10" Css="{StaticResource SvgCssOverlay0}" VerticalAlignment="Center"/>
+                <svg:Svg Path="{StaticResource ChevronRightIcon}" Width="10" Height="10" Css="{DynamicResource SvgCssOverlay0}" VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 
@@ -25,14 +25,14 @@
                     <TreeViewItem IsExpanded="True">
                         <TreeViewItem.Header>
                             <StackPanel Orientation="Horizontal" Spacing="6">
-                                <svg:Svg Path="{StaticResource FolderIcon}" Width="13" Height="13" Css="{StaticResource SvgCssBlue}"/>
+                                <svg:Svg Path="{StaticResource FolderIcon}" Width="13" Height="13" Css="{DynamicResource SvgCssBlue}"/>
                                 <TextBlock Text="Assets" FontSize="12" FontWeight="SemiBold"/>
                             </StackPanel>
                         </TreeViewItem.Header>
                         <TreeViewItem>
                             <TreeViewItem.Header>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <svg:Svg Path="{StaticResource FolderIcon}" Width="12" Height="12" Css="{StaticResource SvgCssSapphire}"/>
+                                    <svg:Svg Path="{StaticResource FolderIcon}" Width="12" Height="12" Css="{DynamicResource SvgCssSapphire}"/>
                                     <TextBlock Text="Models" FontSize="11.5"/>
                                 </StackPanel>
                             </TreeViewItem.Header>
@@ -40,7 +40,7 @@
                         <TreeViewItem>
                             <TreeViewItem.Header>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <svg:Svg Path="{StaticResource FolderIcon}" Width="12" Height="12" Css="{StaticResource SvgCssSapphire}"/>
+                                    <svg:Svg Path="{StaticResource FolderIcon}" Width="12" Height="12" Css="{DynamicResource SvgCssSapphire}"/>
                                     <TextBlock Text="Materials" FontSize="11.5"/>
                                 </StackPanel>
                             </TreeViewItem.Header>
@@ -48,7 +48,7 @@
                         <TreeViewItem>
                             <TreeViewItem.Header>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <svg:Svg Path="{StaticResource PhotoIcon}" Width="12" Height="12" Css="{StaticResource SvgCssSapphire}"/>
+                                    <svg:Svg Path="{StaticResource PhotoIcon}" Width="12" Height="12" Css="{DynamicResource SvgCssSapphire}"/>
                                     <TextBlock Text="Textures" FontSize="11.5"/>
                                 </StackPanel>
                             </TreeViewItem.Header>
@@ -56,7 +56,7 @@
                         <TreeViewItem>
                             <TreeViewItem.Header>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <svg:Svg Path="{StaticResource CodeIcon}" Width="12" Height="12" Css="{StaticResource SvgCssSapphire}"/>
+                                    <svg:Svg Path="{StaticResource CodeIcon}" Width="12" Height="12" Css="{DynamicResource SvgCssSapphire}"/>
                                     <TextBlock Text="Scripts" FontSize="11.5"/>
                                 </StackPanel>
                             </TreeViewItem.Header>
@@ -64,7 +64,7 @@
                         <TreeViewItem>
                             <TreeViewItem.Header>
                                 <StackPanel Orientation="Horizontal" Spacing="6">
-                                    <svg:Svg Path="{StaticResource GlobeIcon}" Width="12" Height="12" Css="{StaticResource SvgCssSapphire}"/>
+                                    <svg:Svg Path="{StaticResource GlobeIcon}" Width="12" Height="12" Css="{DynamicResource SvgCssSapphire}"/>
                                     <TextBlock Text="Scenes" FontSize="11.5"/>
                                 </StackPanel>
                             </TreeViewItem.Header>
@@ -84,7 +84,7 @@
                                 CornerRadius="8" Width="60" Height="60"
                                 HorizontalAlignment="Center">
                             <svg:Svg Path="{StaticResource CubeIcon}" Width="26" Height="26"
-                                     Css="{StaticResource SvgCssSapphire}"
+                                     Css="{DynamicResource SvgCssSapphire}"
                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="Cube.obj" FontSize="10" Margin="0,4,0,0"
@@ -96,7 +96,7 @@
                                 CornerRadius="8" Width="60" Height="60"
                                 HorizontalAlignment="Center">
                             <svg:Svg Path="{StaticResource PaintBrushIcon}" Width="26" Height="26"
-                                     Css="{StaticResource SvgCssMauve}"
+                                     Css="{DynamicResource SvgCssMauve}"
                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="Metal.mat" FontSize="10" Margin="0,4,0,0"
@@ -108,7 +108,7 @@
                                 CornerRadius="8" Width="60" Height="60"
                                 HorizontalAlignment="Center">
                             <svg:Svg Path="{StaticResource CodeIcon}" Width="26" Height="26"
-                                     Css="{StaticResource SvgCssGreen}"
+                                     Css="{DynamicResource SvgCssGreen}"
                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="Player.zig" FontSize="10" Margin="0,4,0,0"
@@ -120,7 +120,7 @@
                                 CornerRadius="8" Width="60" Height="60"
                                 HorizontalAlignment="Center">
                             <svg:Svg Path="{StaticResource PhotoIcon}" Width="26" Height="26"
-                                     Css="{StaticResource SvgCssPeach}"
+                                     Css="{DynamicResource SvgCssPeach}"
                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="brick.png" FontSize="10" Margin="0,4,0,0"
@@ -132,7 +132,7 @@
                                 CornerRadius="8" Width="60" Height="60"
                                 HorizontalAlignment="Center">
                             <svg:Svg Path="{StaticResource DocumentIcon}" Width="26" Height="26"
-                                     Css="{StaticResource SvgCssOverlay0}"
+                                     Css="{DynamicResource SvgCssOverlay0}"
                                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
                         </Border>
                         <TextBlock Text="scene.json" FontSize="10" Margin="0,4,0,0"

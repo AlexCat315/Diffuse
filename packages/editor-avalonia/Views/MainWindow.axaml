@@ -33,30 +33,30 @@
                 <!-- Center: transport controls -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="2">
                     <Button Classes="ghost" ToolTip.Tip="Play">
-                        <svg:Svg Path="{StaticResource PlayIcon}" Width="15" Height="15" Css="{StaticResource SvgCssGreen}"/>
+                        <svg:Svg Path="{StaticResource PlayIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssGreen}"/>
                     </Button>
                     <Button Classes="ghost" ToolTip.Tip="Pause">
-                        <svg:Svg Path="{StaticResource PauseIcon}" Width="15" Height="15" Css="{StaticResource SvgCssText}"/>
+                        <svg:Svg Path="{StaticResource PauseIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssText}"/>
                     </Button>
                     <Button Classes="ghost" ToolTip.Tip="Stop">
-                        <svg:Svg Path="{StaticResource StopIcon}" Width="15" Height="15" Css="{StaticResource SvgCssRed}"/>
+                        <svg:Svg Path="{StaticResource StopIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssRed}"/>
                     </Button>
                 </StackPanel>
 
                 <!-- Right: file actions -->
                 <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16,0" Spacing="2">
                     <Button Classes="ghost" ToolTip.Tip="Save">
-                        <svg:Svg Path="{StaticResource SaveIcon}" Width="15" Height="15" Css="{StaticResource SvgCssText}"/>
+                        <svg:Svg Path="{StaticResource SaveIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssText}"/>
                     </Button>
                     <Button Classes="ghost" ToolTip.Tip="Undo">
-                        <svg:Svg Path="{StaticResource UndoIcon}" Width="15" Height="15" Css="{StaticResource SvgCssText}"/>
+                        <svg:Svg Path="{StaticResource UndoIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssText}"/>
                     </Button>
                     <Button Classes="ghost" ToolTip.Tip="Redo">
-                        <svg:Svg Path="{StaticResource RedoIcon}" Width="15" Height="15" Css="{StaticResource SvgCssText}"/>
+                        <svg:Svg Path="{StaticResource RedoIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssText}"/>
                     </Button>
                     <Border Width="1" Height="18" Background="{DynamicResource Surface1Brush}" VerticalAlignment="Center" Margin="6,0"/>
-                    <Button Classes="ghost" ToolTip.Tip="Settings">
-                        <svg:Svg Path="{StaticResource CogIcon}" Width="15" Height="15" Css="{StaticResource SvgCssOverlay0}"/>
+                    <Button Classes="ghost" ToolTip.Tip="Toggle Theme" Command="{Binding ToggleThemeCommand}">
+                        <svg:Svg Path="{StaticResource CogIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssOverlay0}"/>
                     </Button>
                 </StackPanel>
             </Grid>
