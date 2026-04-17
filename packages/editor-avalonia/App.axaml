@@ -2,14 +2,40 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              x:Class="Guava.Editor.App"
              xmlns:local="using:Guava.Editor"
+             xmlns:core="using:Dock.Model.Core"
              RequestedThemeVariant="Dark">
 
     <Application.DataTemplates>
         <local:ViewLocator/>
     </Application.DataTemplates>
 
+    <Application.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceInclude Source="avares://Dock.Avalonia.Themes.Fluent/Presets/Ide/Default.axaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </Application.Resources>
+
     <Application.Styles>
         <FluentTheme />
+        <DockFluentTheme DensityStyle="Normal" />
         <StyleInclude Source="avares://Guava.Editor/Themes/CatppuccinMocha.axaml" />
+
+        <Style Selector="ToolControl">
+            <Setter Property="HeaderTemplate">
+                <DataTemplate DataType="core:IDockable">
+                    <TextBlock Text="{Binding Title}" Padding="2" />
+                </DataTemplate>
+            </Setter>
+        </Style>
+
+        <Style Selector="DocumentControl">
+            <Setter Property="HeaderTemplate">
+                <DataTemplate DataType="core:IDockable">
+                    <TextBlock Text="{Binding Title}" VerticalAlignment="Center" Padding="2" />
+                </DataTemplate>
+            </Setter>
+        </Style>
     </Application.Styles>
 </Application>

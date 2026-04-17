@@ -1,0 +1,24 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Guava.Editor.ViewModels.Panels"
+             x:Class="Guava.Editor.Views.Panels.SceneHierarchyPanelView"
+             x:DataType="vm:SceneHierarchyPanelViewModel">
+    <DockPanel Margin="4">
+        <!-- Search box -->
+        <TextBox DockPanel.Dock="Top"
+                 PlaceholderText="Search entities..."
+                 Margin="0,0,0,4"
+                 FontSize="11"/>
+
+        <!-- Placeholder tree -->
+        <TreeView>
+            <TreeViewItem Header="🌍 Scene Root" IsExpanded="True">
+                <TreeViewItem Header="📷 Main Camera"/>
+                <TreeViewItem Header="💡 Directional Light"/>
+                <TreeViewItem Header="🧊 Cube"/>
+                <TreeViewItem Header="🟢 Sphere"/>
+                <TreeViewItem Header="📦 Ground Plane"/>
+            </TreeViewItem>
+        </TreeView>
+    </DockPanel>
+</UserControl>

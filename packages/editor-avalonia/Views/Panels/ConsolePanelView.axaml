@@ -1,0 +1,35 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Guava.Editor.ViewModels.Panels"
+             x:Class="Guava.Editor.Views.Panels.ConsolePanelView"
+             x:DataType="vm:ConsolePanelViewModel">
+    <DockPanel Margin="4">
+        <!-- Toolbar -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+            <Button Content="Clear" FontSize="11" Padding="8,2" Margin="0,0,4,0"/>
+            <TextBox PlaceholderText="Filter logs..." FontSize="11" Width="200" Margin="0,0,4,0"/>
+            <CheckBox Content="Info" FontSize="11" IsChecked="True" Margin="4,0"/>
+            <CheckBox Content="Warn" FontSize="11" IsChecked="True" Margin="4,0"/>
+            <CheckBox Content="Error" FontSize="11" IsChecked="True" Margin="4,0"/>
+        </StackPanel>
+
+        <!-- Log entries placeholder -->
+        <ListBox>
+            <ListBoxItem>
+                <TextBlock Text="[INFO]  Engine initialized" FontSize="11"
+                           FontFamily="Consolas,Menlo,monospace"
+                           Foreground="{DynamicResource Subtext1Brush}"/>
+            </ListBoxItem>
+            <ListBoxItem>
+                <TextBlock Text="[INFO]  Scene loaded: DefaultScene" FontSize="11"
+                           FontFamily="Consolas,Menlo,monospace"
+                           Foreground="{DynamicResource Subtext1Brush}"/>
+            </ListBoxItem>
+            <ListBoxItem>
+                <TextBlock Text="[WARN]  Missing texture: brick_normal.png" FontSize="11"
+                           FontFamily="Consolas,Menlo,monospace"
+                           Foreground="{DynamicResource YellowBrush}"/>
+            </ListBoxItem>
+        </ListBox>
+    </DockPanel>
+</UserControl>

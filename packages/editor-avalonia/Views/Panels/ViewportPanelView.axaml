@@ -1,0 +1,47 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Guava.Editor.ViewModels.Panels"
+             xmlns:native="using:Guava.Editor.Native"
+             x:Class="Guava.Editor.Views.Panels.ViewportPanelView"
+             x:DataType="vm:ViewportPanelViewModel">
+    <Grid>
+        <!-- Engine viewport (Avalonia visual tree, not NativeControlHost) -->
+        <native:IOSurfaceHost x:Name="ViewportHost"/>
+
+        <!-- Floating overlays — ON TOP of viewport, no airspace issue -->
+        <Border Background="#AA1e1e2e"
+                CornerRadius="8" Padding="12"
+                HorizontalAlignment="Right" VerticalAlignment="Top"
+                Margin="8" MinWidth="180">
+            <StackPanel>
+                <TextBlock Text="📊 Inspector Overlay"
+                           Foreground="{DynamicResource TextBrush}"
+                           FontSize="12" FontWeight="SemiBold"/>
+                <Separator Margin="0,4" Background="{DynamicResource Surface1Brush}"/>
+                <TextBlock Text="Position: (0, 0, 0)"
+                           Foreground="{DynamicResource Subtext1Brush}" FontSize="11"/>
+                <TextBlock Text="Rotation: (0, 0, 0)"
+                           Foreground="{DynamicResource Subtext1Brush}" FontSize="11"/>
+            </StackPanel>
+        </Border>
+
+        <!-- FPS counter -->
+        <Border Background="#CC11111b"
+                CornerRadius="4" Padding="6,3"
+                HorizontalAlignment="Left" VerticalAlignment="Bottom"
+                Margin="6">
+            <TextBlock Text="{Binding FpsText}"
+                       Foreground="{DynamicResource GreenBrush}"
+                       FontSize="11" FontFamily="Consolas,Menlo,monospace"/>
+        </Border>
+
+        <!-- ViewCube placeholder -->
+        <Border Background="#88313244"
+                CornerRadius="4" Width="50" Height="50"
+                HorizontalAlignment="Right" VerticalAlignment="Bottom"
+                Margin="8">
+            <TextBlock Text="🧊" FontSize="24"
+                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+        </Border>
+    </Grid>
+</UserControl>

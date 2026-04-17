@@ -1,0 +1,64 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Guava.Editor.ViewModels.Panels"
+             x:Class="Guava.Editor.Views.Panels.ContentBrowserPanelView"
+             x:DataType="vm:ContentBrowserPanelViewModel">
+    <DockPanel Margin="4">
+        <!-- Path bar -->
+        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
+            <Button Content="⬅" FontSize="11" Padding="6,2" Margin="0,0,4,0"/>
+            <TextBlock Text="Assets/" FontSize="11" VerticalAlignment="Center"
+                       Foreground="{DynamicResource TextBrush}"/>
+        </StackPanel>
+
+        <Grid ColumnDefinitions="180,*">
+            <!-- Directory tree -->
+            <TreeView Grid.Column="0">
+                <TreeViewItem Header="📁 Assets" IsExpanded="True">
+                    <TreeViewItem Header="📁 Models"/>
+                    <TreeViewItem Header="📁 Materials"/>
+                    <TreeViewItem Header="📁 Textures"/>
+                    <TreeViewItem Header="📁 Scripts"/>
+                    <TreeViewItem Header="📁 Scenes"/>
+                </TreeViewItem>
+            </TreeView>
+
+            <!-- File grid placeholder -->
+            <WrapPanel Grid.Column="1" Margin="4">
+                <StackPanel Width="64" Margin="4">
+                    <Border Background="{DynamicResource Surface0Brush}"
+                            CornerRadius="4" Width="56" Height="56"
+                            HorizontalAlignment="Center">
+                        <TextBlock Text="🧊" FontSize="28"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="Cube.obj" FontSize="10"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource Subtext1Brush}"/>
+                </StackPanel>
+                <StackPanel Width="64" Margin="4">
+                    <Border Background="{DynamicResource Surface0Brush}"
+                            CornerRadius="4" Width="56" Height="56"
+                            HorizontalAlignment="Center">
+                        <TextBlock Text="🎨" FontSize="28"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="Metal.mat" FontSize="10"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource Subtext1Brush}"/>
+                </StackPanel>
+                <StackPanel Width="64" Margin="4">
+                    <Border Background="{DynamicResource Surface0Brush}"
+                            CornerRadius="4" Width="56" Height="56"
+                            HorizontalAlignment="Center">
+                        <TextBlock Text="📜" FontSize="28"
+                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                    </Border>
+                    <TextBlock Text="Player.zig" FontSize="10"
+                               HorizontalAlignment="Center"
+                               Foreground="{DynamicResource Subtext1Brush}"/>
+                </StackPanel>
+            </WrapPanel>
+        </Grid>
+    </DockPanel>
+</UserControl>

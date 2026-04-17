@@ -1,0 +1,34 @@
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Guava.Editor.ViewModels.Panels"
+             x:Class="Guava.Editor.Views.Panels.InspectorPanelView"
+             x:DataType="vm:InspectorPanelViewModel">
+    <ScrollViewer>
+        <StackPanel Margin="8">
+            <TextBlock Text="Transform" FontSize="12" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextBrush}" Margin="0,4,0,8"/>
+            <Grid ColumnDefinitions="40,*" RowDefinitions="Auto,Auto,Auto" Margin="0,0,0,8">
+                <TextBlock Grid.Row="0" Grid.Column="0" Text="X" FontSize="11" VerticalAlignment="Center"
+                           Foreground="{DynamicResource RedBrush}"/>
+                <TextBox Grid.Row="0" Grid.Column="1" Text="0.00" FontSize="11" Margin="4,1"/>
+                <TextBlock Grid.Row="1" Grid.Column="0" Text="Y" FontSize="11" VerticalAlignment="Center"
+                           Foreground="{DynamicResource GreenBrush}"/>
+                <TextBox Grid.Row="1" Grid.Column="1" Text="0.00" FontSize="11" Margin="4,1"/>
+                <TextBlock Grid.Row="2" Grid.Column="0" Text="Z" FontSize="11" VerticalAlignment="Center"
+                           Foreground="{DynamicResource BlueBrush}"/>
+                <TextBox Grid.Row="2" Grid.Column="1" Text="0.00" FontSize="11" Margin="4,1"/>
+            </Grid>
+
+            <Separator Background="{DynamicResource Surface1Brush}" Margin="0,4"/>
+
+            <TextBlock Text="Components" FontSize="12" FontWeight="SemiBold"
+                       Foreground="{DynamicResource TextBrush}" Margin="0,8,0,4"/>
+            <TextBlock Text="  MeshRenderer" FontSize="11" Foreground="{DynamicResource BlueBrush}"/>
+            <TextBlock Text="  RigidBody" FontSize="11" Foreground="{DynamicResource BlueBrush}"/>
+            <TextBlock Text="  BoxCollider" FontSize="11" Foreground="{DynamicResource BlueBrush}"/>
+
+            <Button Content="+ Add Component" FontSize="11" Margin="0,8"
+                    HorizontalAlignment="Stretch"/>
+        </StackPanel>
+    </ScrollViewer>
+</UserControl>
