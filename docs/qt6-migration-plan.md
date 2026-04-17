@@ -1,6 +1,6 @@
 # Guava Editor: Qt6 迁移计划
 
-> 从当前 Avalonia/Citron 路线收敛到 Qt6 原生桌面栈  
+>  Qt6 原生桌面栈  
 > 目标：统一 UI 技术栈、稳定 Dock/多窗口体验、保持引擎通信协议不变，并可平滑替换现有编辑器壳层
 
 ## 1. 迁移目标与边界
@@ -31,9 +31,9 @@
 ### 2.2 Qt6 价值
 
 - 工业级桌面 UI 生态，Dock/多窗口行为稳定
-- QDockWidget + QMainWindow 工作流贴近 DCC/游戏编辑器
+- QML/Qt Quick 在动画、叠加层、可视化面板上表达力更强
 - QAbstractItemModel 适合 Scene/Asset/Inspector 等高频树模型
-- 可直接使用 QWindow/QWidget 混合承载原生渲染视口
+- 可直接使用 QQuickItem + 原生层桥接承载渲染视口
 
 ### 2.3 授权与合规
 
@@ -52,12 +52,11 @@
 ```text
 +------------------------------------------------------+
 |                 Qt6 Editor (C++)                     |
-|  +------------------+  +--------------------------+  |
-|  | QMainWindow      |  | Dock Panels              |  |
-|  | Menu/Toolbar     |  | Scene/Inspector/Console  |  |
-|  +------------------+  +--------------------------+  |
 |  +-----------------------------------------------+   |
-|  | Viewport Host (QWindow/QWidget + native view) |   |
+|  | QML Shell (ApplicationWindow + Panels/Overlay)|   |
+|  +-----------------------------------------------+   |
+|  +-----------------------------------------------+   |
+|  | Viewport Host (QQuickItem + native bridge)    |   |
 |  +-----------------------------------------------+   |
 +--------------------------|---------------------------+
                            |
@@ -80,22 +79,23 @@
 
 | 能力 | 旧方案 | Qt6 方案 |
 |------|--------|----------|
-| 主框架 | Avalonia/Citron | Qt6 Widgets（优先） |
-| 停靠布局 | Dock.Avalonia | QMainWindow + QDockWidget |
-| 属性面板 | XAML 表单 | QWidget + QFormLayout + Delegate |
+| 主框架 | Avalonia/Citron | Qt6 QML/Qt Quick（优先） |
+| 停靠布局 | Dock.Avalonia | QML SplitView/布局管理（必要时局部补 Widgets） |
+| 属性面板 | XAML 表单 | QML Form + C++ Model/Delegate |
 | 树结构 | Avalonia TreeDataGrid | QTreeView + QAbstractItemModel |
-| 代码编辑器 | AvaloniaEdit/Monaco | QPlainTextEdit（P0）-> QScintilla/KSyntaxHighlighting（P1） |
-| 视口承载 | NativeControlHost + IOSurfaceHost | QWindow/QWidget 宿主 + 原生层桥接 |
+| 代码编辑器 | AvaloniaEdit/Monaco | QML TextArea（P0）-> Scintilla/KSyntaxHighlighting（P1） |
+| 视口承载 | NativeControlHost + IOSurfaceHost | QQuickItem 宿主 + 原生层桥接 |
 | IPC | WebSocket JSON-RPC | QtWebSockets + QJsonDocument |
-| 持久化布局 | Serializer | QMainWindow::saveState/restoreState |
-| 主题 | Fluent/自定义 | QPalette + QSS + 图标主题 |
+| 持久化布局 | Serializer | QML 布局状态 JSON 持久化 |
+| 主题 | Fluent/自定义 | QML Theme Tokens + 统一调色板 |
 
 ### 4.1 推荐 UI 模式
 
-- 第一版使用 Qt Widgets，不建议首版上 Qt Quick
-- 原因：
-  - 与 QDockWidget、QTreeView、QMenuBar 等编辑器经典组件天然匹配
-  - 团队落地快、调试路径短
+- 第一版使用 QML/Qt Quick 为主
+- 非必要不上 Widgets；仅在下列场景允许局部使用：
+  - 原生视口桥接需要 createWindowContainer
+  - 第三方控件暂无 QML 等价实现
+  - 诊断工具临时性嵌入
 
 ---
 
@@ -109,11 +109,15 @@ packages/
       app/
         main.cpp
         Application.cpp
-        MainWindow.cpp
+        Backend.cpp
+      qml/
+        Main.qml
+        panels/
+        overlays/
       docking/
         DockLayoutManager.cpp
       viewport/
-        ViewportHostWidget.cpp
+        ViewportHostItem.cpp
         ViewportBridge_mac.mm
       rpc/
         RpcClient.cpp
@@ -150,7 +154,7 @@ packages/
 
 - 路线 A（推荐）：
   - 使用 NSView/CAMetalLayer 作为原生宿主
-  - Qt 层使用 QWidget::createWindowContainer 或原生句柄桥接
+  - Qt 层优先通过 QQuickItem 桥接；必要时退回 QWidget::createWindowContainer
 - 路线 B：
   - 使用共享纹理 + Qt 渲染通道绘制（复杂，首版不建议）
 
@@ -221,8 +225,8 @@ packages/
 
 ### 9.2 用户布局保存
 
-- 退出时保存：QMainWindow::saveGeometry + saveState
-- 启动时恢复：restoreGeometry + restoreState
+- 退出时保存：QML 布局状态（JSON）
+- 启动时恢复：读取 JSON 并恢复 SplitView/Panel 状态
 - 增加版本号：布局结构变化时可自动回退默认布局
 
 ---
@@ -233,7 +237,7 @@ packages/
 
 - CMake >= 3.24
 - C++20
-- Qt6::Core Qt6::Gui Qt6::Widgets Qt6::WebSockets
+- Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick Qt6::QuickControls2 Qt6::WebSockets
 
 ### 10.2 macOS 打包要点
 
@@ -339,7 +343,7 @@ packages/
 
 - [ ] 建立 packages/editor_qt6 与 CMake 工程
 - [ ] 接入 QtWebSockets JSON-RPC 客户端
-- [ ] 接入 MainWindow + QDockWidget 框架
+- [ ] 接入 QML 主壳与基础面板布局
 - [ ] 打通 Viewport 宿主与输入转发
 - [ ] 完成 Scene/Inspector/Content Browser/Console
 - [ ] 实现布局保存恢复
