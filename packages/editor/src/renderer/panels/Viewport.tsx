@@ -90,6 +90,13 @@ export function Viewport() {
     if (!nativeOverlay || !ref.current) return;
     const el = ref.current;
 
+    // Set chroma-key background on the viewport container itself.
+    // The native side matches this exact color (#010201) and replaces
+    // matching pixels with transparent, letting the 3D scene show through.
+    // UI overlays (ViewCube, metrics) have different colors and are preserved.
+    const savedElBg = el.style.background;
+    el.style.setProperty("background", "#010201", "important");
+
     // Walk up ancestors and clear opaque backgrounds so the IOSurface
     // (behind the browser window) shows through the viewport area.
     const modified: { el: HTMLElement; saved: string }[] = [];
@@ -115,6 +122,7 @@ export function Viewport() {
       ro.disconnect();
       window.removeEventListener("resize", report);
       // Restore original backgrounds when overlay deactivates.
+      el.style.background = savedElBg;
       for (const { el: n, saved } of modified) {
         n.style.background = saved;
       }
@@ -778,7 +786,7 @@ export function Viewport() {
         // When the native overlay is active, the IOSurface child window sits
         // BELOW this browser window.  Make the viewport transparent so the
         // 3D scene shows through.  React overlays render on top naturally.
-        ...(nativeOverlay ? { background: "transparent" } : {}),
+        ...(nativeOverlay ? { background: "#010201" } : {}),
         ...(modelDragOver ? { outline: "2px dashed #89b4fa", outlineOffset: -2, background: "rgba(137,180,250,0.04)" } : {}),
       }}
       tabIndex={0}

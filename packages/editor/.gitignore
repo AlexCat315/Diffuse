@@ -111,3 +111,7 @@ packages/engine/sdk/csharp/**/**/obj/**
 # Allow build/development scripts in engine package
 !packages/engine/build/merge_compile_commands.py
 dist-*
+
+
+*.meta
+
