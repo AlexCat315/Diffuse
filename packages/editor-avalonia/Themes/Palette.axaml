@@ -151,4 +151,12 @@
 
     <!-- Transparent helper -->
     <SolidColorBrush x:Key="TransparentBrush" Color="Transparent" />
+
+    <!--
+        Dock drop-indicator highlight fill.
+        Overrides the DockFluentTheme token used by DockTarget / GlobalDockTarget
+        templates. Translucent blue so the half-screen drop zone lights up softly
+        rather than with an opaque bar. See Themes/DockIndicators.axaml.
+    -->
+    <SolidColorBrush x:Key="DockTargetIndicatorBrush" Color="{DynamicResource Blue}" Opacity="0.28" />
 </ResourceDictionary>

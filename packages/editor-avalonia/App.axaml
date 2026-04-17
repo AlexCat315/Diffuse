@@ -24,6 +24,7 @@
         <DockFluentTheme DensityStyle="Normal" />
 
         <StyleInclude Source="avares://Guava.Editor/Themes/FluentOverrides.axaml" />
+        <StyleInclude Source="avares://Guava.Editor/Themes/DockIndicators.axaml" />
         <StyleInclude Source="avares://Guava.Editor/Themes/Controls/Buttons.axaml" />
         <StyleInclude Source="avares://Guava.Editor/Themes/Controls/Inputs.axaml" />
         <StyleInclude Source="avares://Guava.Editor/Themes/Controls/Panels.axaml" />

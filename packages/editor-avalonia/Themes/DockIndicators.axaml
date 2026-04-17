@@ -1,0 +1,241 @@
+<!--
+    Dock drop-indicator restyling.
+
+    Replaces the default Dock.Avalonia DockTarget / GlobalDockTarget control themes:
+      * Indicator panels (Top/Bottom/Left/Right/Center) gain a rounded-corner translucent
+        fill + subtle accent border — no more hard-edged half-screen rectangles.
+      * Selector icons (the "ugly cross-pattern mini-window tiles", originally 40×40
+        PNGs at /Assets/DockAnchorable*.png) are replaced with Catppuccin-styled
+        mini-cards: surface-coloured Border with a coloured strip showing where the
+        drop will land (top/bottom/left/right/center).
+
+    Engine contract preserved:
+      * PART_*Indicator are typeof(Panel) as required by DockTargetBase.TemplatePart.
+      * PART_*Selector are typeof(Control); we use Border (Control subclass) instead
+        of Image so we can render custom content.
+      * DockProperties.IndicatorDockOperation is set on each PART identically to the
+        stock theme, so DockTargetBase's AddIndicator/AddSelector wiring works.
+-->
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:dock="using:Dock.Avalonia.Controls"
+        xmlns:settings="using:Dock.Settings">
+
+    <!-- ============================================================ -->
+    <!-- DockTarget (local per-dock drop indicator)                   -->
+    <!-- ============================================================ -->
+    <Style Selector="dock|DockTarget">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Grid x:Name="PART_IndicatorGrid" RowDefinitions="*,*" ColumnDefinitions="*,*">
+
+                    <!-- Highlight panels: engine toggles Opacity on the Panel wrapper; the
+                         child Border provides the rounded translucent fill. -->
+                    <Panel x:Name="PART_TopIndicator"
+                           Grid.Row="0" Grid.ColumnSpan="2" Grid.Column="0"
+                           IsVisible="{TemplateBinding ShowVerticalTargets}"
+                           settings:DockProperties.IndicatorDockOperation="Top">
+                        <Border Background="{DynamicResource DockTargetIndicatorBrush}"
+                                BorderBrush="{DynamicResource BlueBrush}"
+                                BorderThickness="1.5" CornerRadius="8" Margin="6,6,6,3" />
+                    </Panel>
+                    <Panel x:Name="PART_BottomIndicator"
+                           Grid.Row="1" Grid.ColumnSpan="2" Grid.Column="0"
+                           IsVisible="{TemplateBinding ShowVerticalTargets}"
+                           settings:DockProperties.IndicatorDockOperation="Bottom">
+                        <Border Background="{DynamicResource DockTargetIndicatorBrush}"
+                                BorderBrush="{DynamicResource BlueBrush}"
+                                BorderThickness="1.5" CornerRadius="8" Margin="6,3,6,6" />
+                    </Panel>
+                    <Panel x:Name="PART_LeftIndicator"
+                           Grid.Row="0" Grid.RowSpan="2" Grid.Column="0"
+                           IsVisible="{TemplateBinding ShowHorizontalTargets}"
+                           settings:DockProperties.IndicatorDockOperation="Left">
+                        <Border Background="{DynamicResource DockTargetIndicatorBrush}"
+                                BorderBrush="{DynamicResource BlueBrush}"
+                                BorderThickness="1.5" CornerRadius="8" Margin="6,6,3,6" />
+                    </Panel>
+                    <Panel x:Name="PART_RightIndicator"
+                           Grid.Column="1" Grid.Row="0" Grid.RowSpan="2"
+                           IsVisible="{TemplateBinding ShowHorizontalTargets}"
+                           settings:DockProperties.IndicatorDockOperation="Right">
+                        <Border Background="{DynamicResource DockTargetIndicatorBrush}"
+                                BorderBrush="{DynamicResource BlueBrush}"
+                                BorderThickness="1.5" CornerRadius="8" Margin="3,6,6,6" />
+                    </Panel>
+                    <Panel x:Name="PART_CenterIndicator"
+                           Grid.ColumnSpan="2" Grid.Column="0" Grid.Row="0" Grid.RowSpan="2"
+                           settings:DockProperties.IndicatorDockOperation="Fill">
+                        <Border Background="{DynamicResource DockTargetIndicatorBrush}"
+                                BorderBrush="{DynamicResource BlueBrush}"
+                                BorderThickness="1.5" CornerRadius="8" Margin="6" />
+                    </Panel>
+
+                    <!-- Selector cards in a 3×3 plus-pattern -->
+                    <Panel x:Name="PART_SelectorPanel"
+                           Grid.Row="0" Grid.RowSpan="2" Grid.ColumnSpan="2" Grid.Column="0">
+                        <Grid x:Name="PART_SelectorGrid" RowDefinitions="*,*,*" ColumnDefinitions="*,*,*"
+                              MaxWidth="160" MaxHeight="160">
+
+                            <Border x:Name="PART_TopSelector" Classes="selector-card"
+                                    Grid.Row="0" Grid.Column="1"
+                                    IsVisible="{TemplateBinding ShowVerticalTargets}"
+                                    settings:DockProperties.IndicatorDockOperation="Top">
+                                <Border Height="10" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                                        Background="{DynamicResource BlueBrush}"
+                                        CornerRadius="4,4,0,0" Margin="2,2,2,0" />
+                            </Border>
+
+                            <Border x:Name="PART_BottomSelector" Classes="selector-card"
+                                    Grid.Row="2" Grid.Column="1"
+                                    IsVisible="{TemplateBinding ShowVerticalTargets}"
+                                    settings:DockProperties.IndicatorDockOperation="Bottom">
+                                <Border Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Stretch"
+                                        Background="{DynamicResource BlueBrush}"
+                                        CornerRadius="0,0,4,4" Margin="2,0,2,2" />
+                            </Border>
+
+                            <Border x:Name="PART_LeftSelector" Classes="selector-card"
+                                    Grid.Row="1" Grid.Column="0"
+                                    IsVisible="{TemplateBinding ShowHorizontalTargets}"
+                                    settings:DockProperties.IndicatorDockOperation="Left">
+                                <Border Width="10" HorizontalAlignment="Left" VerticalAlignment="Stretch"
+                                        Background="{DynamicResource BlueBrush}"
+                                        CornerRadius="4,0,0,4" Margin="2,2,0,2" />
+                            </Border>
+
+                            <Border x:Name="PART_RightSelector" Classes="selector-card"
+                                    Grid.Row="1" Grid.Column="2"
+                                    IsVisible="{TemplateBinding ShowHorizontalTargets}"
+                                    settings:DockProperties.IndicatorDockOperation="Right">
+                                <Border Width="10" HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                                        Background="{DynamicResource BlueBrush}"
+                                        CornerRadius="0,4,4,0" Margin="0,2,2,2" />
+                            </Border>
+
+                            <Border x:Name="PART_CenterSelector" Classes="selector-card"
+                                    Grid.Row="1" Grid.Column="1"
+                                    settings:DockProperties.IndicatorDockOperation="Fill">
+                                <Border Width="14" Height="14"
+                                        HorizontalAlignment="Center" VerticalAlignment="Center"
+                                        Background="{DynamicResource BlueBrush}"
+                                        CornerRadius="3" />
+                            </Border>
+
+                        </Grid>
+                    </Panel>
+                </Grid>
+            </ControlTemplate>
+        </Setter>
+    </Style>
+
+    <!-- ============================================================ -->
+    <!-- GlobalDockTarget (root-level drop indicator, full window)    -->
+    <!-- ============================================================ -->
+    <Style Selector="dock|GlobalDockTarget">
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Panel>
+                    <ProportionalStackPanel Orientation="Horizontal">
+                        <Panel x:Name="PART_LeftIndicator"
+                               ProportionalStackPanel.Proportion="{x:Static settings:DockSettings.GlobalDockingProportion}"
+                               settings:DockProperties.IndicatorDockOperation="Left">
+                            <Border Background="{DynamicResource DockTargetIndicatorBrush}"
+                                    BorderBrush="{DynamicResource BlueBrush}"
+                                    BorderThickness="1.5" CornerRadius="8" Margin="6,6,3,6" />
+                        </Panel>
+                        <Border />
+                        <Panel x:Name="PART_RightIndicator"
+                               ProportionalStackPanel.Proportion="{x:Static settings:DockSettings.GlobalDockingProportion}"
+                               settings:DockProperties.IndicatorDockOperation="Right">
+                            <Border Background="{DynamicResource DockTargetIndicatorBrush}"
+                                    BorderBrush="{DynamicResource BlueBrush}"
+                                    BorderThickness="1.5" CornerRadius="8" Margin="3,6,6,6" />
+                        </Panel>
+                    </ProportionalStackPanel>
+                    <ProportionalStackPanel Orientation="Vertical">
+                        <Panel x:Name="PART_TopIndicator"
+                               ProportionalStackPanel.Proportion="{x:Static settings:DockSettings.GlobalDockingProportion}"
+                               settings:DockProperties.IndicatorDockOperation="Top">
+                            <Border Background="{DynamicResource DockTargetIndicatorBrush}"
+                                    BorderBrush="{DynamicResource BlueBrush}"
+                                    BorderThickness="1.5" CornerRadius="8" Margin="6,6,6,3" />
+                        </Panel>
+                        <Border />
+                        <Panel x:Name="PART_BottomIndicator"
+                               ProportionalStackPanel.Proportion="{x:Static settings:DockSettings.GlobalDockingProportion}"
+                               settings:DockProperties.IndicatorDockOperation="Bottom">
+                            <Border Background="{DynamicResource DockTargetIndicatorBrush}"
+                                    BorderBrush="{DynamicResource BlueBrush}"
+                                    BorderThickness="1.5" CornerRadius="8" Margin="6,3,6,6" />
+                        </Panel>
+                    </ProportionalStackPanel>
+
+                    <Grid RowDefinitions="*,*" ColumnDefinitions="*,*">
+                        <Panel x:Name="PART_SelectorPanel"
+                               Grid.Row="0" Grid.RowSpan="2" Grid.ColumnSpan="2" Grid.Column="0">
+
+                            <Border x:Name="PART_TopSelector" Classes="selector-card"
+                                    HorizontalAlignment="Center" VerticalAlignment="Top" Margin="24"
+                                    settings:DockProperties.IndicatorDockOperation="Top">
+                                <Border Height="10" VerticalAlignment="Top" HorizontalAlignment="Stretch"
+                                        Background="{DynamicResource BlueBrush}"
+                                        CornerRadius="4,4,0,0" Margin="2,2,2,0" />
+                            </Border>
+
+                            <Border x:Name="PART_BottomSelector" Classes="selector-card"
+                                    HorizontalAlignment="Center" VerticalAlignment="Bottom" Margin="24"
+                                    settings:DockProperties.IndicatorDockOperation="Bottom">
+                                <Border Height="10" VerticalAlignment="Bottom" HorizontalAlignment="Stretch"
+                                        Background="{DynamicResource BlueBrush}"
+                                        CornerRadius="0,0,4,4" Margin="2,0,2,2" />
+                            </Border>
+
+                            <Border x:Name="PART_LeftSelector" Classes="selector-card"
+                                    HorizontalAlignment="Left" VerticalAlignment="Center" Margin="24"
+                                    settings:DockProperties.IndicatorDockOperation="Left">
+                                <Border Width="10" HorizontalAlignment="Left" VerticalAlignment="Stretch"
+                                        Background="{DynamicResource BlueBrush}"
+                                        CornerRadius="4,0,0,4" Margin="2,2,0,2" />
+                            </Border>
+
+                            <Border x:Name="PART_RightSelector" Classes="selector-card"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center" Margin="24"
+                                    settings:DockProperties.IndicatorDockOperation="Right">
+                                <Border Width="10" HorizontalAlignment="Right" VerticalAlignment="Stretch"
+                                        Background="{DynamicResource BlueBrush}"
+                                        CornerRadius="0,4,4,0" Margin="0,2,2,2" />
+                            </Border>
+
+                        </Panel>
+                    </Grid>
+                </Panel>
+            </ControlTemplate>
+        </Setter>
+
+        <!-- Dock Fluent convention: ShowIndicatorsOnly hides the selector cluster. -->
+        <Style Selector="^[ShowIndicatorsOnly=True] /template/ Panel#PART_SelectorPanel">
+            <Setter Property="IsVisible" Value="False" />
+        </Style>
+    </Style>
+
+    <!-- ============================================================ -->
+    <!-- Shared selector-card visual (applies to the outer PART_* Borders
+         inside both DockTarget and GlobalDockTarget templates).       -->
+    <!-- ============================================================ -->
+    <Style Selector="Border.selector-card">
+        <Setter Property="Width" Value="36" />
+        <Setter Property="Height" Value="36" />
+        <Setter Property="Margin" Value="4" />
+        <Setter Property="Background" Value="{DynamicResource Surface0Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Overlay1Brush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="5" />
+        <Setter Property="BoxShadow" Value="0 2 6 0 #55000000" />
+    </Style>
+
+    <Style Selector="Border.selector-card:pointerover">
+        <Setter Property="BorderBrush" Value="{DynamicResource BlueBrush}" />
+        <Setter Property="Background" Value="{DynamicResource Surface1Brush}" />
+    </Style>
+</Styles>
