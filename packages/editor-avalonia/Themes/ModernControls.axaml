@@ -1,0 +1,79 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- ===== Button Styles ===== -->
+    <Style Selector="Button">
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="FontSize" Value="12"/>
+    </Style>
+
+    <!-- Ghost / icon-only buttons -->
+    <Style Selector="Button.ghost">
+        <Setter Property="Background" Value="Transparent"/>
+        <Setter Property="BorderThickness" Value="0"/>
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="6"/>
+        <Setter Property="Opacity" Value="0.75"/>
+    </Style>
+    <Style Selector="Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource Surface0Brush}"/>
+    </Style>
+    <Style Selector="Button.ghost:pointerover">
+        <Setter Property="Opacity" Value="1"/>
+    </Style>
+
+    <!-- ===== TextBox Styles ===== -->
+    <Style Selector="TextBox">
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="BorderThickness" Value="1"/>
+        <Setter Property="BorderBrush" Value="{DynamicResource Surface1Brush}"/>
+        <Setter Property="Background" Value="{DynamicResource BaseBrush}"/>
+        <Setter Property="FontSize" Value="12"/>
+        <Setter Property="Padding" Value="8,5"/>
+    </Style>
+    <Style Selector="TextBox:focus /template/ Border#PART_BorderElement">
+        <Setter Property="BorderBrush" Value="{DynamicResource BlueBrush}"/>
+        <Setter Property="BorderThickness" Value="1"/>
+    </Style>
+    <Style Selector="TextBox:pointerover /template/ Border#PART_BorderElement">
+        <Setter Property="BorderBrush" Value="{DynamicResource Surface2Brush}"/>
+    </Style>
+
+    <!-- ===== TreeViewItem Styles ===== -->
+    <Style Selector="TreeViewItem">
+        <Setter Property="Padding" Value="0"/>
+        <Setter Property="MinHeight" Value="28"/>
+    </Style>
+
+    <!-- ===== ListBoxItem Styles ===== -->
+    <Style Selector="ListBoxItem">
+        <Setter Property="CornerRadius" Value="4"/>
+        <Setter Property="Margin" Value="2,1"/>
+        <Setter Property="Padding" Value="8,4"/>
+    </Style>
+
+    <!-- ===== CheckBox Styles ===== -->
+    <Style Selector="CheckBox">
+        <Setter Property="FontSize" Value="12"/>
+    </Style>
+
+    <!-- ===== Separator ===== -->
+    <Style Selector="Separator">
+        <Setter Property="Background" Value="{DynamicResource Surface0Brush}"/>
+        <Setter Property="Height" Value="1"/>
+        <Setter Property="Margin" Value="0,6"/>
+    </Style>
+
+    <!-- ===== ScrollBar thin rail ===== -->
+    <Style Selector="ScrollViewer">
+        <Setter Property="AllowAutoHide" Value="True"/>
+    </Style>
+
+    <!-- ===== ToolTip ===== -->
+    <Style Selector="ToolTip">
+        <Setter Property="CornerRadius" Value="6"/>
+        <Setter Property="Padding" Value="8,4"/>
+        <Setter Property="FontSize" Value="11"/>
+    </Style>
+
+</Styles>

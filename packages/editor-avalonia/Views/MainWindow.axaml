@@ -2,6 +2,7 @@
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Guava.Editor.ViewModels"
         xmlns:idc="clr-namespace:Dock.Avalonia.Controls;assembly=Dock.Avalonia"
+        xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Svg.Controls.Skia.Avalonia"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="900"
@@ -16,36 +17,63 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <Grid RowDefinitions="40,*,28">
+    <Grid RowDefinitions="44,*,24">
         <!-- Toolbar -->
-        <Border Grid.Row="0" Background="{DynamicResource MantleBrush}">
-            <DockPanel Margin="12,0">
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock Text="🥑 Guava Editor" Foreground="{DynamicResource TextBrush}" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
-                    <TextBlock Text="  |  " Foreground="{DynamicResource Overlay0}" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding ConnectionStatus}" Foreground="{DynamicResource GreenBrush}" FontSize="12" VerticalAlignment="Center"/>
+        <Border Grid.Row="0" Background="{DynamicResource MantleBrush}"
+                BorderBrush="{DynamicResource Surface0Brush}" BorderThickness="0,0,0,1">
+            <Grid>
+                <!-- Left: brand + status -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="16,0" Spacing="10">
+                    <TextBlock Text="Guava" Foreground="{DynamicResource TextBrush}" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                    <Border Width="1" Height="18" Background="{DynamicResource Surface1Brush}" VerticalAlignment="Center"/>
+                    <Ellipse Width="7" Height="7" Fill="{DynamicResource GreenBrush}" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding ConnectionStatus}" Foreground="{DynamicResource Overlay0Brush}" FontSize="11" VerticalAlignment="Center"/>
                 </StackPanel>
-                <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right">
-                    <Button Content="💾" FontSize="14" Padding="6,2" Margin="2,0" ToolTip.Tip="Save"/>
-                    <Button Content="↩" FontSize="14" Padding="6,2" Margin="2,0" ToolTip.Tip="Undo"/>
-                    <Button Content="↪" FontSize="14" Padding="6,2" Margin="2,0" ToolTip.Tip="Redo"/>
-                    <TextBlock Text="  |  " Foreground="{DynamicResource Overlay0}" VerticalAlignment="Center"/>
-                    <Button Content="▶" FontSize="14" Padding="8,2" Margin="2,0" ToolTip.Tip="Play"
-                            Foreground="{DynamicResource GreenBrush}"/>
-                    <Button Content="⏸" FontSize="14" Padding="8,2" Margin="2,0" ToolTip.Tip="Pause"/>
-                    <Button Content="⏹" FontSize="14" Padding="8,2" Margin="2,0" ToolTip.Tip="Stop"/>
+
+                <!-- Center: transport controls -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="2">
+                    <Button Classes="ghost" ToolTip.Tip="Play">
+                        <svg:Svg Path="{StaticResource PlayIcon}" Width="15" Height="15" Css="{StaticResource SvgCssGreen}"/>
+                    </Button>
+                    <Button Classes="ghost" ToolTip.Tip="Pause">
+                        <svg:Svg Path="{StaticResource PauseIcon}" Width="15" Height="15" Css="{StaticResource SvgCssText}"/>
+                    </Button>
+                    <Button Classes="ghost" ToolTip.Tip="Stop">
+                        <svg:Svg Path="{StaticResource StopIcon}" Width="15" Height="15" Css="{StaticResource SvgCssRed}"/>
+                    </Button>
                 </StackPanel>
-            </DockPanel>
+
+                <!-- Right: file actions -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16,0" Spacing="2">
+                    <Button Classes="ghost" ToolTip.Tip="Save">
+                        <svg:Svg Path="{StaticResource SaveIcon}" Width="15" Height="15" Css="{StaticResource SvgCssText}"/>
+                    </Button>
+                    <Button Classes="ghost" ToolTip.Tip="Undo">
+                        <svg:Svg Path="{StaticResource UndoIcon}" Width="15" Height="15" Css="{StaticResource SvgCssText}"/>
+                    </Button>
+                    <Button Classes="ghost" ToolTip.Tip="Redo">
+                        <svg:Svg Path="{StaticResource RedoIcon}" Width="15" Height="15" Css="{StaticResource SvgCssText}"/>
+                    </Button>
+                    <Border Width="1" Height="18" Background="{DynamicResource Surface1Brush}" VerticalAlignment="Center" Margin="6,0"/>
+                    <Button Classes="ghost" ToolTip.Tip="Settings">
+                        <svg:Svg Path="{StaticResource CogIcon}" Width="15" Height="15" Css="{StaticResource SvgCssOverlay0}"/>
+                    </Button>
+                </StackPanel>
+            </Grid>
         </Border>
 
         <!-- Dock Control -->
         <idc:DockControl Grid.Row="1" Layout="{Binding Layout}"/>
 
         <!-- Status bar -->
-        <Border Grid.Row="2" Background="{DynamicResource MantleBrush}">
-            <DockPanel Margin="12,0">
-                <TextBlock DockPanel.Dock="Left" Text="{Binding StatusText}" Foreground="{DynamicResource Subtext1Brush}" FontSize="11" VerticalAlignment="Center"/>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding ConnectionStatus}" Foreground="{DynamicResource GreenBrush}" FontSize="11" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+        <Border Grid.Row="2" Background="{DynamicResource CrustBrush}"
+                BorderBrush="{DynamicResource Surface0Brush}" BorderThickness="0,1,0,0">
+            <DockPanel Margin="16,0">
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                    <Ellipse Width="6" Height="6" Fill="{DynamicResource GreenBrush}"/>
+                    <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource Overlay0Brush}" FontSize="10.5" VerticalAlignment="Center"/>
+                </StackPanel>
+                <TextBlock DockPanel.Dock="Right" Text="{Binding ConnectionStatus}" Foreground="{DynamicResource Overlay0Brush}" FontSize="10.5" VerticalAlignment="Center" HorizontalAlignment="Right"/>
             </DockPanel>
         </Border>
     </Grid>

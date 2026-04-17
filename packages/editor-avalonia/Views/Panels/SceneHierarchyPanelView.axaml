@@ -1,24 +1,72 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Guava.Editor.ViewModels.Panels"
+             xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Svg.Controls.Skia.Avalonia"
              x:Class="Guava.Editor.Views.Panels.SceneHierarchyPanelView"
              x:DataType="vm:SceneHierarchyPanelViewModel">
-    <DockPanel Margin="4">
+    <DockPanel Margin="8,6">
         <!-- Search box -->
-        <TextBox DockPanel.Dock="Top"
-                 PlaceholderText="Search entities..."
-                 Margin="0,0,0,4"
-                 FontSize="11"/>
+        <Grid DockPanel.Dock="Top" Margin="0,0,0,6">
+            <TextBox PlaceholderText="Search entities..."
+                     FontSize="11" Padding="28,5,8,5"/>
+            <svg:Svg Path="{StaticResource SearchIcon}" Width="12" Height="12"
+                     Css="{StaticResource SvgCssOverlay0}"
+                     HorizontalAlignment="Left" VerticalAlignment="Center" Margin="8,0"
+                     IsHitTestVisible="False"/>
+        </Grid>
 
         <!-- Placeholder tree -->
-        <TreeView>
-            <TreeViewItem Header="🌍 Scene Root" IsExpanded="True">
-                <TreeViewItem Header="📷 Main Camera"/>
-                <TreeViewItem Header="💡 Directional Light"/>
-                <TreeViewItem Header="🧊 Cube"/>
-                <TreeViewItem Header="🟢 Sphere"/>
-                <TreeViewItem Header="📦 Ground Plane"/>
-            </TreeViewItem>
-        </TreeView>
+        <Border Background="{DynamicResource MantleBrush}" CornerRadius="6" Padding="4">
+            <TreeView Background="Transparent">
+                <TreeViewItem IsExpanded="True">
+                    <TreeViewItem.Header>
+                        <StackPanel Orientation="Horizontal" Spacing="6">
+                            <svg:Svg Path="{StaticResource GlobeIcon}" Width="14" Height="14" Css="{StaticResource SvgCssBlue}"/>
+                            <TextBlock Text="Scene Root" FontSize="12" FontWeight="SemiBold"/>
+                        </StackPanel>
+                    </TreeViewItem.Header>
+                    <TreeViewItem>
+                        <TreeViewItem.Header>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <svg:Svg Path="{StaticResource CameraIcon}" Width="13" Height="13" Css="{StaticResource SvgCssOverlay2}"/>
+                                <TextBlock Text="Main Camera" FontSize="11.5"/>
+                            </StackPanel>
+                        </TreeViewItem.Header>
+                    </TreeViewItem>
+                    <TreeViewItem>
+                        <TreeViewItem.Header>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <svg:Svg Path="{StaticResource SunIcon}" Width="13" Height="13" Css="{StaticResource SvgCssYellow}"/>
+                                <TextBlock Text="Directional Light" FontSize="11.5"/>
+                            </StackPanel>
+                        </TreeViewItem.Header>
+                    </TreeViewItem>
+                    <TreeViewItem>
+                        <TreeViewItem.Header>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <svg:Svg Path="{StaticResource CubeIcon}" Width="13" Height="13" Css="{StaticResource SvgCssSapphire}"/>
+                                <TextBlock Text="Cube" FontSize="11.5"/>
+                            </StackPanel>
+                        </TreeViewItem.Header>
+                    </TreeViewItem>
+                    <TreeViewItem>
+                        <TreeViewItem.Header>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <svg:Svg Path="{StaticResource SphereIcon}" Width="13" Height="13" Css="{StaticResource SvgCssTeal}"/>
+                                <TextBlock Text="Sphere" FontSize="11.5"/>
+                            </StackPanel>
+                        </TreeViewItem.Header>
+                    </TreeViewItem>
+                    <TreeViewItem>
+                        <TreeViewItem.Header>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <svg:Svg Path="{StaticResource GroundIcon}" Width="13" Height="13" Css="{StaticResource SvgCssOverlay2}"/>
+                                <TextBlock Text="Ground Plane" FontSize="11.5"/>
+                            </StackPanel>
+                        </TreeViewItem.Header>
+                    </TreeViewItem>
+                </TreeViewItem>
+            </TreeView>
+        </Border>
     </DockPanel>
 </UserControl>

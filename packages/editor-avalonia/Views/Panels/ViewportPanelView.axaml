@@ -2,6 +2,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Guava.Editor.ViewModels.Panels"
              xmlns:native="using:Guava.Editor.Native"
+             xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Svg.Controls.Skia.Avalonia"
              x:Class="Guava.Editor.Views.Panels.ViewportPanelView"
              x:DataType="vm:ViewportPanelViewModel">
     <Grid>
@@ -9,39 +10,47 @@
         <native:IOSurfaceHost x:Name="ViewportHost"/>
 
         <!-- Floating overlays — ON TOP of viewport, no airspace issue -->
-        <Border Background="#AA1e1e2e"
+        <Border Background="#CCeff1f5"
                 CornerRadius="8" Padding="12"
                 HorizontalAlignment="Right" VerticalAlignment="Top"
-                Margin="8" MinWidth="180">
+                Margin="8" MinWidth="180"
+                BoxShadow="0 2 8 0 #20000000">
             <StackPanel>
-                <TextBlock Text="📊 Inspector Overlay"
-                           Foreground="{DynamicResource TextBrush}"
-                           FontSize="12" FontWeight="SemiBold"/>
-                <Separator Margin="0,4" Background="{DynamicResource Surface1Brush}"/>
+                <StackPanel Orientation="Horizontal" Spacing="6">
+                    <svg:Svg Path="{StaticResource CrosshairIcon}" Width="14" Height="14" Css="{StaticResource SvgCssBlue}"/>
+                    <TextBlock Text="Inspector Overlay"
+                               Foreground="{DynamicResource TextBrush}"
+                               FontSize="12" FontWeight="SemiBold"/>
+                </StackPanel>
+                <Separator Margin="0,6" Background="{DynamicResource Surface0Brush}"/>
                 <TextBlock Text="Position: (0, 0, 0)"
-                           Foreground="{DynamicResource Subtext1Brush}" FontSize="11"/>
+                           Foreground="{DynamicResource Subtext0Brush}" FontSize="11"/>
                 <TextBlock Text="Rotation: (0, 0, 0)"
-                           Foreground="{DynamicResource Subtext1Brush}" FontSize="11"/>
+                           Foreground="{DynamicResource Subtext0Brush}" FontSize="11"/>
             </StackPanel>
         </Border>
 
         <!-- FPS counter -->
-        <Border Background="#CC11111b"
+        <Border Background="#CCdce0e8"
                 CornerRadius="4" Padding="6,3"
                 HorizontalAlignment="Left" VerticalAlignment="Bottom"
                 Margin="6">
-            <TextBlock Text="{Binding FpsText}"
-                       Foreground="{DynamicResource GreenBrush}"
-                       FontSize="11" FontFamily="Consolas,Menlo,monospace"/>
+            <StackPanel Orientation="Horizontal" Spacing="4">
+                <svg:Svg Path="{StaticResource CrosshairIcon}" Width="12" Height="12" Css="{StaticResource SvgCssGreen}"/>
+                <TextBlock Text="{Binding FpsText}"
+                           Foreground="{DynamicResource GreenBrush}"
+                           FontSize="11" FontFamily="Consolas,Menlo,monospace"/>
+            </StackPanel>
         </Border>
 
         <!-- ViewCube placeholder -->
-        <Border Background="#88313244"
+        <Border Background="#BBe6e9ef"
                 CornerRadius="4" Width="50" Height="50"
                 HorizontalAlignment="Right" VerticalAlignment="Bottom"
                 Margin="8">
-            <TextBlock Text="🧊" FontSize="24"
-                       HorizontalAlignment="Center" VerticalAlignment="Center"/>
+            <svg:Svg Path="{StaticResource CubeIcon}" Width="24" Height="24"
+                     Css="{StaticResource SvgCssText}"
+                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
         </Border>
     </Grid>
 </UserControl>

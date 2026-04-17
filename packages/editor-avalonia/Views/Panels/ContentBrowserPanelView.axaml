@@ -1,64 +1,146 @@
 <UserControl xmlns="https://github.com/avaloniaui"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="using:Guava.Editor.ViewModels.Panels"
+             xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Svg.Controls.Skia.Avalonia"
              x:Class="Guava.Editor.Views.Panels.ContentBrowserPanelView"
              x:DataType="vm:ContentBrowserPanelViewModel">
-    <DockPanel Margin="4">
+    <DockPanel Margin="8,6">
         <!-- Path bar -->
-        <StackPanel DockPanel.Dock="Top" Orientation="Horizontal" Margin="0,0,0,4">
-            <Button Content="⬅" FontSize="11" Padding="6,2" Margin="0,0,4,0"/>
-            <TextBlock Text="Assets/" FontSize="11" VerticalAlignment="Center"
-                       Foreground="{DynamicResource TextBrush}"/>
-        </StackPanel>
+        <Border DockPanel.Dock="Top" Background="{DynamicResource MantleBrush}" CornerRadius="6" Padding="6,4" Margin="0,0,0,6">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <Button Classes="ghost" ToolTip.Tip="Back" Padding="4">
+                    <svg:Svg Path="{StaticResource BackIcon}" Width="13" Height="13" Css="{StaticResource SvgCssOverlay0}"/>
+                </Button>
+                <Border Width="1" Height="16" Background="{DynamicResource Surface1Brush}" VerticalAlignment="Center"/>
+                <svg:Svg Path="{StaticResource FolderIcon}" Width="12" Height="12" Css="{StaticResource SvgCssBlue}" VerticalAlignment="Center"/>
+                <TextBlock Text="Assets" FontSize="11.5" VerticalAlignment="Center" Foreground="{DynamicResource TextBrush}" FontWeight="SemiBold"/>
+                <svg:Svg Path="{StaticResource ChevronRightIcon}" Width="10" Height="10" Css="{StaticResource SvgCssOverlay0}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
 
-        <Grid ColumnDefinitions="180,*">
+        <Grid ColumnDefinitions="170,1,*">
             <!-- Directory tree -->
-            <TreeView Grid.Column="0">
-                <TreeViewItem Header="📁 Assets" IsExpanded="True">
-                    <TreeViewItem Header="📁 Models"/>
-                    <TreeViewItem Header="📁 Materials"/>
-                    <TreeViewItem Header="📁 Textures"/>
-                    <TreeViewItem Header="📁 Scripts"/>
-                    <TreeViewItem Header="📁 Scenes"/>
-                </TreeViewItem>
-            </TreeView>
+            <Border Grid.Column="0" Background="{DynamicResource MantleBrush}" CornerRadius="6" Padding="4">
+                <TreeView Background="Transparent">
+                    <TreeViewItem IsExpanded="True">
+                        <TreeViewItem.Header>
+                            <StackPanel Orientation="Horizontal" Spacing="6">
+                                <svg:Svg Path="{StaticResource FolderIcon}" Width="13" Height="13" Css="{StaticResource SvgCssBlue}"/>
+                                <TextBlock Text="Assets" FontSize="12" FontWeight="SemiBold"/>
+                            </StackPanel>
+                        </TreeViewItem.Header>
+                        <TreeViewItem>
+                            <TreeViewItem.Header>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <svg:Svg Path="{StaticResource FolderIcon}" Width="12" Height="12" Css="{StaticResource SvgCssSapphire}"/>
+                                    <TextBlock Text="Models" FontSize="11.5"/>
+                                </StackPanel>
+                            </TreeViewItem.Header>
+                        </TreeViewItem>
+                        <TreeViewItem>
+                            <TreeViewItem.Header>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <svg:Svg Path="{StaticResource FolderIcon}" Width="12" Height="12" Css="{StaticResource SvgCssSapphire}"/>
+                                    <TextBlock Text="Materials" FontSize="11.5"/>
+                                </StackPanel>
+                            </TreeViewItem.Header>
+                        </TreeViewItem>
+                        <TreeViewItem>
+                            <TreeViewItem.Header>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <svg:Svg Path="{StaticResource PhotoIcon}" Width="12" Height="12" Css="{StaticResource SvgCssSapphire}"/>
+                                    <TextBlock Text="Textures" FontSize="11.5"/>
+                                </StackPanel>
+                            </TreeViewItem.Header>
+                        </TreeViewItem>
+                        <TreeViewItem>
+                            <TreeViewItem.Header>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <svg:Svg Path="{StaticResource CodeIcon}" Width="12" Height="12" Css="{StaticResource SvgCssSapphire}"/>
+                                    <TextBlock Text="Scripts" FontSize="11.5"/>
+                                </StackPanel>
+                            </TreeViewItem.Header>
+                        </TreeViewItem>
+                        <TreeViewItem>
+                            <TreeViewItem.Header>
+                                <StackPanel Orientation="Horizontal" Spacing="6">
+                                    <svg:Svg Path="{StaticResource GlobeIcon}" Width="12" Height="12" Css="{StaticResource SvgCssSapphire}"/>
+                                    <TextBlock Text="Scenes" FontSize="11.5"/>
+                                </StackPanel>
+                            </TreeViewItem.Header>
+                        </TreeViewItem>
+                    </TreeViewItem>
+                </TreeView>
+            </Border>
 
-            <!-- File grid placeholder -->
-            <WrapPanel Grid.Column="1" Margin="4">
-                <StackPanel Width="64" Margin="4">
-                    <Border Background="{DynamicResource Surface0Brush}"
-                            CornerRadius="4" Width="56" Height="56"
-                            HorizontalAlignment="Center">
-                        <TextBlock Text="🧊" FontSize="28"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <TextBlock Text="Cube.obj" FontSize="10"
-                               HorizontalAlignment="Center"
-                               Foreground="{DynamicResource Subtext1Brush}"/>
-                </StackPanel>
-                <StackPanel Width="64" Margin="4">
-                    <Border Background="{DynamicResource Surface0Brush}"
-                            CornerRadius="4" Width="56" Height="56"
-                            HorizontalAlignment="Center">
-                        <TextBlock Text="🎨" FontSize="28"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <TextBlock Text="Metal.mat" FontSize="10"
-                               HorizontalAlignment="Center"
-                               Foreground="{DynamicResource Subtext1Brush}"/>
-                </StackPanel>
-                <StackPanel Width="64" Margin="4">
-                    <Border Background="{DynamicResource Surface0Brush}"
-                            CornerRadius="4" Width="56" Height="56"
-                            HorizontalAlignment="Center">
-                        <TextBlock Text="📜" FontSize="28"
-                                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
-                    </Border>
-                    <TextBlock Text="Player.zig" FontSize="10"
-                               HorizontalAlignment="Center"
-                               Foreground="{DynamicResource Subtext1Brush}"/>
-                </StackPanel>
-            </WrapPanel>
+            <!-- Splitter -->
+            <Border Grid.Column="1" Background="{DynamicResource Surface0Brush}" Margin="0,4"/>
+
+            <!-- File grid -->
+            <ScrollViewer Grid.Column="2" HorizontalScrollBarVisibility="Disabled">
+                <WrapPanel Margin="8,4">
+                    <StackPanel Width="72" Margin="4">
+                        <Border Background="{DynamicResource MantleBrush}"
+                                CornerRadius="8" Width="60" Height="60"
+                                HorizontalAlignment="Center">
+                            <svg:Svg Path="{StaticResource CubeIcon}" Width="26" Height="26"
+                                     Css="{StaticResource SvgCssSapphire}"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="Cube.obj" FontSize="10" Margin="0,4,0,0"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource Subtext0Brush}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <StackPanel Width="72" Margin="4">
+                        <Border Background="{DynamicResource MantleBrush}"
+                                CornerRadius="8" Width="60" Height="60"
+                                HorizontalAlignment="Center">
+                            <svg:Svg Path="{StaticResource PaintBrushIcon}" Width="26" Height="26"
+                                     Css="{StaticResource SvgCssMauve}"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="Metal.mat" FontSize="10" Margin="0,4,0,0"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource Subtext0Brush}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <StackPanel Width="72" Margin="4">
+                        <Border Background="{DynamicResource MantleBrush}"
+                                CornerRadius="8" Width="60" Height="60"
+                                HorizontalAlignment="Center">
+                            <svg:Svg Path="{StaticResource CodeIcon}" Width="26" Height="26"
+                                     Css="{StaticResource SvgCssGreen}"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="Player.zig" FontSize="10" Margin="0,4,0,0"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource Subtext0Brush}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <StackPanel Width="72" Margin="4">
+                        <Border Background="{DynamicResource MantleBrush}"
+                                CornerRadius="8" Width="60" Height="60"
+                                HorizontalAlignment="Center">
+                            <svg:Svg Path="{StaticResource PhotoIcon}" Width="26" Height="26"
+                                     Css="{StaticResource SvgCssPeach}"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="brick.png" FontSize="10" Margin="0,4,0,0"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource Subtext0Brush}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                    <StackPanel Width="72" Margin="4">
+                        <Border Background="{DynamicResource MantleBrush}"
+                                CornerRadius="8" Width="60" Height="60"
+                                HorizontalAlignment="Center">
+                            <svg:Svg Path="{StaticResource DocumentIcon}" Width="26" Height="26"
+                                     Css="{StaticResource SvgCssOverlay0}"
+                                     HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <TextBlock Text="scene.json" FontSize="10" Margin="0,4,0,0"
+                                   HorizontalAlignment="Center"
+                                   Foreground="{DynamicResource Subtext0Brush}" TextTrimming="CharacterEllipsis"/>
+                    </StackPanel>
+                </WrapPanel>
+            </ScrollViewer>
         </Grid>
     </DockPanel>
 </UserControl>
