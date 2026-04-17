@@ -1,0 +1,50 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <Styles.Resources>
+        <!-- Catppuccin Mocha palette -->
+        <Color x:Key="Rosewater">#f5e0dc</Color>
+        <Color x:Key="Flamingo">#f2cdcd</Color>
+        <Color x:Key="Pink">#f5c2e7</Color>
+        <Color x:Key="Mauve">#cba6f7</Color>
+        <Color x:Key="Red">#f38ba8</Color>
+        <Color x:Key="Maroon">#eba0ac</Color>
+        <Color x:Key="Peach">#fab387</Color>
+        <Color x:Key="Yellow">#f9e2af</Color>
+        <Color x:Key="Green">#a6e3a1</Color>
+        <Color x:Key="Teal">#94e2d5</Color>
+        <Color x:Key="Sky">#89dceb</Color>
+        <Color x:Key="Sapphire">#74c7ec</Color>
+        <Color x:Key="Blue">#89b4fa</Color>
+        <Color x:Key="Lavender">#b4befe</Color>
+
+        <Color x:Key="Text">#cdd6f4</Color>
+        <Color x:Key="Subtext1">#bac2de</Color>
+        <Color x:Key="Subtext0">#a6adc8</Color>
+        <Color x:Key="Overlay2">#9399b2</Color>
+        <Color x:Key="Overlay1">#7f849c</Color>
+        <Color x:Key="Overlay0">#6c7086</Color>
+        <Color x:Key="Surface2">#585b70</Color>
+        <Color x:Key="Surface1">#45475a</Color>
+        <Color x:Key="Surface0">#313244</Color>
+        <Color x:Key="Base">#1e1e2e</Color>
+        <Color x:Key="Mantle">#181825</Color>
+        <Color x:Key="Crust">#11111b</Color>
+
+        <!-- Brushes for easy binding -->
+        <SolidColorBrush x:Key="BaseBrush" Color="{DynamicResource Base}" />
+        <SolidColorBrush x:Key="MantleBrush" Color="{DynamicResource Mantle}" />
+        <SolidColorBrush x:Key="CrustBrush" Color="{DynamicResource Crust}" />
+        <SolidColorBrush x:Key="Surface0Brush" Color="{DynamicResource Surface0}" />
+        <SolidColorBrush x:Key="Surface1Brush" Color="{DynamicResource Surface1}" />
+        <SolidColorBrush x:Key="Surface2Brush" Color="{DynamicResource Surface2}" />
+        <SolidColorBrush x:Key="TextBrush" Color="{DynamicResource Text}" />
+        <SolidColorBrush x:Key="Subtext1Brush" Color="{DynamicResource Subtext1}" />
+        <SolidColorBrush x:Key="BlueBrush" Color="{DynamicResource Blue}" />
+        <SolidColorBrush x:Key="GreenBrush" Color="{DynamicResource Green}" />
+        <SolidColorBrush x:Key="RedBrush" Color="{DynamicResource Red}" />
+        <SolidColorBrush x:Key="YellowBrush" Color="{DynamicResource Yellow}" />
+        <SolidColorBrush x:Key="PeachBrush" Color="{DynamicResource Peach}" />
+    </Styles.Resources>
+
+</Styles>

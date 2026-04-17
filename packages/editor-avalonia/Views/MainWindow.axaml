@@ -1,0 +1,128 @@
+<Window xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:vm="using:Guava.Editor.ViewModels"
+        xmlns:native="using:Guava.Editor.Native"
+        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+        mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="900"
+        x:Class="Guava.Editor.Views.MainWindow"
+        x:DataType="vm:MainWindowViewModel"
+        Title="Guava Editor"
+        Width="1440" Height="900"
+        WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource Base}">
+
+    <Design.DataContext>
+        <vm:MainWindowViewModel/>
+    </Design.DataContext>
+
+    <Grid>
+        <!-- Simulated editor layout -->
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="200"/>
+            <ColumnDefinition Width="*"/>
+            <ColumnDefinition Width="280"/>
+        </Grid.ColumnDefinitions>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="40"/>
+            <RowDefinition Height="*"/>
+            <RowDefinition Height="28"/>
+        </Grid.RowDefinitions>
+
+        <!-- Toolbar -->
+        <Border Grid.Row="0" Grid.ColumnSpan="3" Background="{DynamicResource MantleBrush}">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center" Margin="12,0">
+                <TextBlock Text="🥑 Guava Editor" Foreground="{DynamicResource TextBrush}" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                <TextBlock Text="  |  " Foreground="{DynamicResource Overlay0}" VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding ConnectionStatus}" Foreground="{DynamicResource GreenBrush}" FontSize="12" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Left panel: Scene Hierarchy placeholder -->
+        <Border Grid.Row="1" Grid.Column="0" Background="{DynamicResource CrustBrush}" Margin="2">
+            <StackPanel Margin="8">
+                <TextBlock Text="Scene Hierarchy" Foreground="{DynamicResource Subtext1Brush}" FontSize="12" FontWeight="SemiBold" Margin="0,4"/>
+                <TextBlock Text="(placeholder)" Foreground="{DynamicResource Overlay0}" FontSize="11"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Center: Viewport area with overlay test -->
+        <Grid Grid.Row="1" Grid.Column="1" Margin="2">
+            <!-- Layer 0: NativeControlHost (engine IOSurface) -->
+            <native:IOSurfaceHost x:Name="ViewportHost"/>
+
+            <!-- Layer 1: FLOATING OVERLAY — this is what we're validating! -->
+            <!-- A semi-transparent panel sitting ON TOP of the native viewport -->
+            <Border Background="#AA1e1e2e"
+                    CornerRadius="8"
+                    Padding="12"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Top"
+                    Margin="12"
+                    MinWidth="200">
+                <StackPanel>
+                    <TextBlock Text="📊 Floating Inspector"
+                               Foreground="{DynamicResource TextBrush}"
+                               FontSize="13" FontWeight="SemiBold"/>
+                    <Separator Margin="0,6" Background="{DynamicResource Surface1Brush}"/>
+                    <TextBlock Text="Position: (0, 0, 0)"
+                               Foreground="{DynamicResource Subtext1Brush}" FontSize="11"/>
+                    <TextBlock Text="Rotation: (0, 0, 0)"
+                               Foreground="{DynamicResource Subtext1Brush}" FontSize="11"/>
+                    <TextBlock Text="Scale: (1, 1, 1)"
+                               Foreground="{DynamicResource Subtext1Brush}" FontSize="11"/>
+                    <Separator Margin="0,6" Background="{DynamicResource Surface1Brush}"/>
+                    <TextBlock Text="✅ This overlay is ABOVE the viewport"
+                               Foreground="{DynamicResource GreenBrush}" FontSize="11" TextWrapping="Wrap"/>
+                    <TextBlock Text="No chroma-key needed!"
+                               Foreground="{DynamicResource PeachBrush}" FontSize="11"/>
+                </StackPanel>
+            </Border>
+
+            <!-- Layer 2: Another floating element (bottom-left FPS) -->
+            <Border Background="#CC11111b"
+                    CornerRadius="4"
+                    Padding="8,4"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Bottom"
+                    Margin="8">
+                <TextBlock Text="{Binding FpsText}"
+                           Foreground="{DynamicResource GreenBrush}"
+                           FontSize="12" FontFamily="Consolas,Menlo,monospace"/>
+            </Border>
+
+            <!-- Layer 3: ViewCube placeholder (top-right corner) -->
+            <Border Background="#88313244"
+                    CornerRadius="4"
+                    Width="60" Height="60"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Margin="12">
+                <TextBlock Text="🧊"
+                           FontSize="28"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"/>
+            </Border>
+        </Grid>
+
+        <!-- Right panel: Inspector placeholder -->
+        <Border Grid.Row="1" Grid.Column="2" Background="{DynamicResource CrustBrush}" Margin="2">
+            <StackPanel Margin="8">
+                <TextBlock Text="Inspector" Foreground="{DynamicResource Subtext1Brush}" FontSize="12" FontWeight="SemiBold" Margin="0,4"/>
+                <TextBlock Text="Transform" Foreground="{DynamicResource TextBrush}" FontSize="11" Margin="0,8,0,4"/>
+                <TextBlock Text="  X: 0.00  Y: 0.00  Z: 0.00" Foreground="{DynamicResource Overlay2}" FontSize="11" FontFamily="Consolas,Menlo,monospace"/>
+                <TextBlock Text="Components" Foreground="{DynamicResource TextBrush}" FontSize="11" Margin="0,12,0,4"/>
+                <TextBlock Text="  MeshRenderer" Foreground="{DynamicResource BlueBrush}" FontSize="11"/>
+                <TextBlock Text="  RigidBody" Foreground="{DynamicResource BlueBrush}" FontSize="11"/>
+            </StackPanel>
+        </Border>
+
+        <!-- Status bar -->
+        <Border Grid.Row="2" Grid.ColumnSpan="3" Background="{DynamicResource MantleBrush}">
+            <StackPanel Orientation="Horizontal" Margin="12,0" VerticalAlignment="Center">
+                <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource Subtext1Brush}" FontSize="11"/>
+            </StackPanel>
+        </Border>
+    </Grid>
+
+</Window>

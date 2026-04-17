@@ -90,12 +90,12 @@ export function Viewport() {
     if (!nativeOverlay || !ref.current) return;
     const el = ref.current;
 
-    // Set chroma-key background on the viewport container itself.
-    // The native side matches this exact color (#010201) and replaces
-    // matching pixels with transparent, letting the 3D scene show through.
-    // UI overlays (ViewCube, metrics) have different colors and are preserved.
+    // CEF runs in GPU shared-texture mode with `background_color = 0`; any
+    // DOM area with `background: transparent` produces alpha=0 pixels in the
+    // browser IOSurface, which CALayer composites over the scene layer below.
+    // Force transparent here to guarantee the viewport region punches through.
     const savedElBg = el.style.background;
-    el.style.setProperty("background", "#010201", "important");
+    el.style.setProperty("background", "transparent", "important");
 
     // Walk up ancestors and clear opaque backgrounds so the IOSurface
     // (behind the browser window) shows through the viewport area.
@@ -783,10 +783,10 @@ export function Viewport() {
       ref={ref}
       style={{
         ...styles.container,
-        // When the native overlay is active, the IOSurface child window sits
-        // BELOW this browser window.  Make the viewport transparent so the
-        // 3D scene shows through.  React overlays render on top naturally.
-        ...(nativeOverlay ? { background: "#010201" } : {}),
+        // When the native overlay is active, the scene CALayer sits BELOW the
+        // browser CALayer. CEF emits premultiplied BGRA; `transparent` produces
+        // alpha=0 pixels and Core Animation lets the scene show through.
+        ...(nativeOverlay ? { background: "transparent" } : {}),
         ...(modelDragOver ? { outline: "2px dashed #89b4fa", outlineOffset: -2, background: "rgba(137,180,250,0.04)" } : {}),
       }}
       tabIndex={0}
