@@ -159,4 +159,11 @@
         rather than with an opaque bar. See Themes/DockIndicators.axaml.
     -->
     <SolidColorBrush x:Key="DockTargetIndicatorBrush" Color="{DynamicResource Blue}" Opacity="0.28" />
+
+    <!--
+        Collapse the stippled drag-handle strip (PART_Grid) in ToolChromeControl
+        headers. The Fluent theme drives PART_Grid's Height from this resource;
+        setting it to 0 removes the visual without affecting the title row.
+    -->
+    <x:Double x:Key="DockChromeGripHeight">0</x:Double>
 </ResourceDictionary>

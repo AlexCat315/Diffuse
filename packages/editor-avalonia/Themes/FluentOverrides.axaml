@@ -305,6 +305,11 @@
     <Style Selector="ToolChromeControl /template/ Button#PART_MenuButton">
         <Setter Property="IsVisible" Value="False" />
     </Style>
+
+    <!-- PART_Grip (dotted drag-handle strip) is bound to IToolDock.GripMode via
+         a CompiledBinding, so an IsVisible Style setter is overridden. The grip
+         is hidden at the data layer by setting GripMode=Hidden on each ToolDock
+         in DockFactory.cs. -->
     <!-- Hide the tab-strip "create new document" (+) button (no action wired). -->
     <Style Selector="DocumentTabStrip /template/ Button">
         <Setter Property="IsVisible" Value="False" />
