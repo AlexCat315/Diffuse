@@ -15,18 +15,36 @@ namespace Guava.Editor.Native;
 /// </summary>
 public class IOSurfaceHost : Control
 {
+    public static readonly StyledProperty<uint> SurfaceIdProperty =
+        AvaloniaProperty.Register<IOSurfaceHost, uint>(nameof(SurfaceId));
+
+    static IOSurfaceHost()
+    {
+        SurfaceIdProperty.Changed.AddClassHandler<IOSurfaceHost>((h, e) => h.OnSurfaceIdChanged((uint)e.NewValue!));
+    }
+
     private uint _surfaceId;
     private WriteableBitmap? _bitmap;
     private DispatcherTimer? _timer;
 
     public uint SurfaceId
     {
-        get => _surfaceId;
-        set
+        get => GetValue(SurfaceIdProperty);
+        set => SetValue(SurfaceIdProperty, value);
+    }
+
+    private void OnSurfaceIdChanged(uint value)
+    {
+        _surfaceId = value;
+        if (value != 0)
         {
-            _surfaceId = value;
-            if (value != 0)
-                StartRendering();
+            StartRendering();
+        }
+        else
+        {
+            _timer?.Stop();
+            _timer = null;
+            InvalidateVisual();
         }
     }
 
@@ -97,23 +115,17 @@ public class IOSurfaceHost : Control
 
     public override void Render(DrawingContext context)
     {
+        // Background always filled so adjacent panels don't bleed through.
+        context.DrawRectangle(Brushes.Black, null, new Rect(Bounds.Size));
+
         if (_bitmap != null)
         {
-            context.DrawImage(_bitmap, new Rect(0, 0, _bitmap.PixelSize.Width, _bitmap.PixelSize.Height),
+            context.DrawImage(_bitmap,
+                new Rect(0, 0, _bitmap.PixelSize.Width, _bitmap.PixelSize.Height),
                 new Rect(Bounds.Size));
         }
-        else
-        {
-            // Placeholder: dark background with message
-            context.DrawRectangle(Brushes.Black, null, new Rect(Bounds.Size));
-            var text = new FormattedText("Waiting for engine viewport...",
-                System.Globalization.CultureInfo.CurrentCulture,
-                FlowDirection.LeftToRight,
-                new Typeface("Inter, Segoe UI, sans-serif"),
-                14, Brushes.Gray);
-            context.DrawText(text,
-                new Point(Bounds.Width / 2 - text.Width / 2, Bounds.Height / 2 - text.Height / 2));
-        }
+        // Placeholder text is owned by the view model (StatusText TextBlock) —
+        // the host only renders engine pixels.
     }
 
     protected override Size MeasureOverride(Size availableSize) => availableSize;

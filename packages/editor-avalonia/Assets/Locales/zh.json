@@ -45,5 +45,17 @@
     "connecting": "连接中…",
     "connected": "已连接",
     "disconnected": "已断开"
+  },
+  "settings": {
+    "title": "设置",
+    "navLanguage": "语言",
+    "navAppearance": "外观",
+    "navConsole": "控制台",
+    "navRemote": "引擎",
+    "navAbout": "关于",
+    "showFps": "显示 FPS 叠加层",
+    "maxLogs": "控制台日志上限",
+    "test": "测试",
+    "reconnect": "重连"
   }
 }

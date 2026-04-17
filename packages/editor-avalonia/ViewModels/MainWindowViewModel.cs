@@ -1,17 +1,17 @@
 using System.ComponentModel;
 using Avalonia;
+using Avalonia.Controls.ApplicationLifetimes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Controls;
 using Guava.Editor.Services;
+using Guava.Editor.State;
+using Guava.Editor.Views;
 
 namespace Guava.Editor.ViewModels;
 
 public partial class MainWindowViewModel : ViewModelBase
 {
-    [ObservableProperty]
-    private string _connectionStatus = "";
-
     [ObservableProperty]
     private string _statusText = "Guava Editor";
 
@@ -23,6 +23,7 @@ public partial class MainWindowViewModel : ViewModelBase
     }
 
     public string CurrentLanguageLabel => I18nService.Instance.Language.ToUpperInvariant();
+    public ConnectionStore Connection { get; }
 
     private readonly DockFactory _factory;
 
@@ -32,6 +33,8 @@ public partial class MainWindowViewModel : ViewModelBase
         var layout = _factory.CreateLayout();
         _factory.InitLayout(layout);
         Layout = layout;
+
+        Connection = ServiceLocator.TryGet<ConnectionStore>() ?? new ConnectionStore();
 
         I18nService.Instance.PropertyChanged += OnI18nChanged;
     }
@@ -52,4 +55,17 @@ public partial class MainWindowViewModel : ViewModelBase
     {
         if (Application.Current is App app) app.ToggleLanguage();
     }
+
+    [RelayCommand]
+    private void OpenSettings()
+    {
+        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop) return;
+        var window = new SettingsWindow
+        {
+            DataContext = new SettingsWindowViewModel(),
+        };
+        window.ShowDialog(desktop.MainWindow!);
+    }
 }
+
+

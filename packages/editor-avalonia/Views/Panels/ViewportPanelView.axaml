@@ -5,49 +5,41 @@
              xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Svg.Controls.Skia.Avalonia"
              x:Class="Guava.Editor.Views.Panels.ViewportPanelView"
              x:DataType="vm:ViewportPanelViewModel">
-    <Grid>
-        <!-- Engine viewport (Avalonia visual tree, not NativeControlHost) -->
-        <native:IOSurfaceHost x:Name="ViewportHost"/>
+    <Grid SizeChanged="OnRootSizeChanged">
 
-        <!-- Floating overlays — ON TOP of viewport, no airspace issue -->
-        <Border Background="{DynamicResource ViewportOverlayBgBrush}"
-                CornerRadius="8" Padding="12"
-                HorizontalAlignment="Right" VerticalAlignment="Top"
-                Margin="8" MinWidth="180"
-                BoxShadow="0 2 8 0 #20000000">
-            <StackPanel>
-                <StackPanel Orientation="Horizontal" Spacing="6">
-                    <svg:Svg Path="{StaticResource CrosshairIcon}" Width="14" Height="14" Css="{DynamicResource SvgCssBlue}"/>
-                    <TextBlock Text="Inspector Overlay"
-                               Foreground="{DynamicResource TextBrush}"
-                               FontSize="12" FontWeight="SemiBold"/>
-                </StackPanel>
-                <Separator Margin="0,6" Background="{DynamicResource Surface0Brush}"/>
-                <TextBlock Text="Position: (0, 0, 0)"
-                           Foreground="{DynamicResource Subtext0Brush}" FontSize="11"/>
-                <TextBlock Text="Rotation: (0, 0, 0)"
-                           Foreground="{DynamicResource Subtext0Brush}" FontSize="11"/>
-            </StackPanel>
-        </Border>
+        <!-- Engine viewport via IOSurface (zero-copy GPU, Avalonia visual tree) -->
+        <native:IOSurfaceHost x:Name="ViewportHost"
+                              SurfaceId="{Binding SurfaceId}" />
+
+        <!-- Status when not yet connected -->
+        <TextBlock Text="{Binding StatusText}"
+                   IsVisible="{Binding !SurfaceId}"
+                   Foreground="{DynamicResource Overlay1Brush}"
+                   FontSize="13"
+                   HorizontalAlignment="Center" VerticalAlignment="Center"/>
 
         <!-- FPS counter -->
         <Border Background="{DynamicResource ViewportFpsBgBrush}"
                 CornerRadius="4" Padding="6,3"
-                HorizontalAlignment="Left" VerticalAlignment="Bottom"
-                Margin="6">
-            <StackPanel Orientation="Horizontal" Spacing="4">
-                <svg:Svg Path="{StaticResource CrosshairIcon}" Width="12" Height="12" Css="{DynamicResource SvgCssGreen}"/>
+                HorizontalAlignment="Left" VerticalAlignment="Bottom" Margin="6">
+            <StackPanel Orientation="Horizontal" Spacing="6">
+                <svg:Svg Path="{StaticResource CrosshairIcon}" Width="12" Height="12"
+                         Css="{DynamicResource SvgCssGreen}"/>
                 <TextBlock Text="{Binding FpsText}"
                            Foreground="{DynamicResource GreenBrush}"
-                           FontSize="11" FontFamily="Consolas,Menlo,monospace"/>
+                           FontSize="11" FontFamily="Menlo,Consolas,monospace"
+                           VerticalAlignment="Center"/>
+                <TextBlock Text="{Binding DrawCallsText}"
+                           Foreground="{DynamicResource Subtext0Brush}"
+                           FontSize="11" FontFamily="Menlo,Consolas,monospace"
+                           VerticalAlignment="Center"/>
             </StackPanel>
         </Border>
 
         <!-- ViewCube placeholder -->
         <Border Background="{DynamicResource ViewportCubeBgBrush}"
                 CornerRadius="4" Width="50" Height="50"
-                HorizontalAlignment="Right" VerticalAlignment="Bottom"
-                Margin="8">
+                HorizontalAlignment="Right" VerticalAlignment="Bottom" Margin="8">
             <svg:Svg Path="{StaticResource CubeIcon}" Width="24" Height="24"
                      Css="{DynamicResource SvgCssText}"
                      HorizontalAlignment="Center" VerticalAlignment="Center"/>
