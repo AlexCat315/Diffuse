@@ -1,0 +1,1475 @@
+{
+  "version": 1,
+  "records": [
+    {
+      "id": "91ec19a11ae54cda9d4f7c87c8cc3d07",
+      "type": "texture",
+      "source_path": "assets/icons/Guava_Engine_Logo.png",
+      "source_hash": "368f3ba8b63431be999ea6b7766a3c6372d0bf8a682ef160a10c2c1b051e519d",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/82b5b02cf6ca63f6-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "Guava_Engine_Logo.png",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".png"
+      },
+      "version": 2
+    },
+    {
+      "id": "09a25daf5a87ebed91024db7cbbad8b0",
+      "type": "texture",
+      "source_path": "assets/icons/svg/Mesh Collider.svg",
+      "source_hash": "5eb5bb12232b6079d9dcaf61c3c6d7fa76d27e49dc025a68b7117ad7d8ac5920",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/1e2d27f73995addc-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "Mesh Collider.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "cce91bd4b73b41791783ba59160e4701",
+      "type": "texture",
+      "source_path": "assets/icons/svg/about.svg",
+      "source_hash": "49b181a6deda4e29e86dafb6cd9324cdb49300185a35bea826a848a737732ca6",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/668bae7a83e13155-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "about.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "16dcf053e96d8be065a2ce9565e89a80",
+      "type": "texture",
+      "source_path": "assets/icons/svg/arrow-big-up.svg",
+      "source_hash": "53a8e4defb97244831f20e0d1f763e6fb853bc9b67d21dafba071d30807de1ce",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/4f3c519d348215d3-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "arrow-big-up.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "efe0a7e375ab7711e58f2841a8f6c476",
+      "type": "texture",
+      "source_path": "assets/icons/svg/arrow-path.svg",
+      "source_hash": "4294f2b9bf7fc341bdedb3ddd29900fd463dbd40f9155b8f2bf9b6506b6b492c",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/83038602278bc534-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "arrow-path.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "ac51961e8b0d816c079bc94e5b3e3cc5",
+      "type": "texture",
+      "source_path": "assets/icons/svg/arrows-pointing-out.svg",
+      "source_hash": "00d5710a7ee81fe429d59657009c89bbd4fa199bd474b783f0be3fa82b3d50e9",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/e1f3bf0a67509ab2-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "arrows-pointing-out.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "5662e230436d2eab6e58385c12e1113a",
+      "type": "texture",
+      "source_path": "assets/icons/svg/arrows-up-down.svg",
+      "source_hash": "660a8ab86728841ddfdd243903cb3f0c5085e4e5866a49b58565af3827ee9722",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/ecd9e51b2cd619c2-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "arrows-up-down.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "6c8d3bd52fd6c620bc60c760c70361d4",
+      "type": "texture",
+      "source_path": "assets/icons/svg/box.svg",
+      "source_hash": "7778236fc876221ca8147d3bb8ed7e9a5b74783b3c32ae74b32aada6596f3adf",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/62f5709374aa5ef1-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "box.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "9ff15e0da9278a90f9aaface2ff95214",
+      "type": "texture",
+      "source_path": "assets/icons/svg/camera.svg",
+      "source_hash": "361377f0589db27b8ab00d3e31d0904977bef7269bfa7e99b01aab809dca2fd9",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/ca81ca1521763730-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "camera.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "9dfe6aa7368caa00a3f22e081e49839d",
+      "type": "texture",
+      "source_path": "assets/icons/svg/capsule-fill.svg",
+      "source_hash": "4533657704a1931a49606cc09ee56655f5c81b637821d864d87b2780399a74c8",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/b7b408db19d3957d-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "capsule-fill.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "29c33f03921f668d8cd5841a499a4409",
+      "type": "texture",
+      "source_path": "assets/icons/svg/check.svg",
+      "source_hash": "ff9da9eba26867e57aabc0a8af7df5cdf25be8a0eb8614cd182966d1d7be4017",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/7ae4dd3b4d5359c1-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "check.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "ed4a8d3f6c8e469089270d62108a1926",
+      "type": "texture",
+      "source_path": "assets/icons/svg/chevron-down.svg",
+      "source_hash": "7cbaaeb6e099db24044bd787bb841fd8cb06e05a69178ed241cb86823478366b",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/a3a69973ab9b7cfa-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "chevron-down.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "466711df0b194e5024fb4bbaf01242ee",
+      "type": "texture",
+      "source_path": "assets/icons/svg/chevron-right.svg",
+      "source_hash": "1444c04174f2a8fdd6c140da783ea725a4974dcf6050ed9e77eb7f9e9278215d",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/9f02b6901a3e7269-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "chevron-right.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "da792d9374e00c69019308cc7342a17b",
+      "type": "texture",
+      "source_path": "assets/icons/svg/chevron-up.svg",
+      "source_hash": "e835bd0603d37d96065abffd14e2ae393ccbc554a4fd9f4de6a8fc74d5b5417c",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/ce3b4a6d298c8355-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "chevron-up.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "ab6ccc9fd735a71d1feefb9d46624267",
+      "type": "texture",
+      "source_path": "assets/icons/svg/clock.svg",
+      "source_hash": "dd11edc4d34dcc9593980b39a6171d3711fb9f5b72a67e1480be89f00a492f94",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/3a9b66de43366ffb-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "clock.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "30513e1f2aaed9805fe4f97d66ab42e5",
+      "type": "texture",
+      "source_path": "assets/icons/svg/code-bracket.svg",
+      "source_hash": "7e32791b5272cf6130ab16817692815c2ddc1ad7aa0dc879688f973d66e72ae0",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/711db284ef7f912c-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "code-bracket.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "6f957b67cd8855a58ece51cf5496797b",
+      "type": "texture",
+      "source_path": "assets/icons/svg/cog-6-tooth.svg",
+      "source_hash": "cd405e057019bd2f5bc74bc5be723b49b049d87e7ee77b52af924b063da8bbea",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/0076bd6f70b66688-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "cog-6-tooth.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "e4af19c766b40b794c1c29c59d598cf7",
+      "type": "texture",
+      "source_path": "assets/icons/svg/crosshair.svg",
+      "source_hash": "0d57b3ad12288b9902d26e059c6cfad15958d8841653896153b80305718405e2",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/1b302ad8c91f33fe-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "crosshair.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "fa1e8fb9375988140d119c0289f5bf2d",
+      "type": "texture",
+      "source_path": "assets/icons/svg/csharp.svg",
+      "source_hash": "b229c12fded0b1417dbb71f0f70625596d57ea842a22fc0db1e190a9cabe550f",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/b878c4009dbab176-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "csharp.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "8e5afd892be504641385e1e75b70a3a7",
+      "type": "texture",
+      "source_path": "assets/icons/svg/cube.svg",
+      "source_hash": "b91e4bb6152a21d68b66c914feef08e8b45e0ecb82bb97f3e9c6d1f30f9ff46b",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/e212d9b6641151ad-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "cube.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "28304d2d2135c67ff1b9082dd504b89c",
+      "type": "texture",
+      "source_path": "assets/icons/svg/cursor-arrow-rays.svg",
+      "source_hash": "e891af32d077c5cfe070e530bd8bc2c8e666af72eec5dddf52686df5d988fb7c",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/02fd0b217a44f4d1-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "cursor-arrow-rays.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "1a781ac657d9643a957aec02d3478fbe",
+      "type": "texture",
+      "source_path": "assets/icons/svg/data.svg",
+      "source_hash": "733aa9454ce856b949e8c9bb8db1c856ffd17ccda22ef9741e5b55e4ffd11339",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/76dcc09993d31a8e-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "data.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "910e58e956274b1680e2bb7e14c38d0d",
+      "type": "texture",
+      "source_path": "assets/icons/svg/delete.svg",
+      "source_hash": "a601439eec4b012e5ac914126244b4dcf58717c7b4b6a1e4566fa8d3a36c714f",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/2e969be6b03692a2-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "delete.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "07482e9fe4a5f0a854c8384ae02b19fe",
+      "type": "texture",
+      "source_path": "assets/icons/svg/direction-arrows.svg",
+      "source_hash": "3515eb7218f3ac58eb179b9dc4a3ce218eecc3c1c2b4a54d686ee465a5375290",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/9a8b8f93b7762fe7-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "direction-arrows.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "a717edc730da62bad3229a8a3b3994cb",
+      "type": "texture",
+      "source_path": "assets/icons/svg/discover.svg",
+      "source_hash": "bc10f22e06fbfd2e53e8ab2813a316ce2fe7e283dfd9a2ee60162275f57eb247",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/92cf56b83c146921-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "discover.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "7c9f021da14d207d9506b3d293fd5824",
+      "type": "texture",
+      "source_path": "assets/icons/svg/document-text.svg",
+      "source_hash": "0043278c4e5006ce3232208c5386c43adeb8f7a6f795483cd9a51c89593a0734",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/e43480e33284b1e7-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "document-text.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "a942848f111ce19f0d9650e07cdcfe9a",
+      "type": "texture",
+      "source_path": "assets/icons/svg/drawer_completion_report_006.svg",
+      "source_hash": "773789cd1dde13333123a1b464edce175d5f203f3965acb533f2ab8121b06ded",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/f0070c3fbbd13f9d-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "drawer_completion_report_006.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "c9c10d13e26fab2277ebc878ea61daa9",
+      "type": "texture",
+      "source_path": "assets/icons/svg/drawer_delivery_000.svg",
+      "source_hash": "0ebc297c64303e137c5811a7f542702b9b088bd0bcbf2b97233b2a8b30d5d8d4",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/3c69535050ee5008-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "drawer_delivery_000.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "64599426a4bfe824932b90efdf7b6e78",
+      "type": "texture",
+      "source_path": "assets/icons/svg/drawer_personal_center_008.svg",
+      "source_hash": "bf9a357fbd94218fb63195917df0b3a258f7701c22157a8719b1ac97f8f58523",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/3204d099d04f1fa3-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "drawer_personal_center_008.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "2a3741ea9ce807a5a38a141b70442ef2",
+      "type": "texture",
+      "source_path": "assets/icons/svg/drawer_weekly_report_007.svg",
+      "source_hash": "1578abfb8c3dfaddb82fcce47ec5eec47016f95b1fbbf6cb2bb0473ab9bc6f7e",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/8991a535d7d20ad2-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "drawer_weekly_report_007.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "8c37d1ce90c50f731356403f5ce159b6",
+      "type": "texture",
+      "source_path": "assets/icons/svg/eye-slash.svg",
+      "source_hash": "84884f1d6dd46cba8f835b6530494bbea534029036d1406c80196b5a6a1ac68d",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/0905447595f54814-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "eye-slash.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "22d16333a98c89c502e0a4bc5455f6be",
+      "type": "texture",
+      "source_path": "assets/icons/svg/eye.svg",
+      "source_hash": "f997e6f9e3fc90592b01aed8fd810b5062617f6bade3b1e35fe68a57e53290c9",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/16b9f439f45fabd6-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "eye.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "e26b5b5a54586b00ca1f2798f959997b",
+      "type": "texture",
+      "source_path": "assets/icons/svg/film.svg",
+      "source_hash": "32c9360211b424f38ccbfe59e451b60242b11432c4e71b1c581fa0cb0aee0648",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/ecc74811b15918fc-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "film.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "7b7239cb2fcd684870526bc1d1e31588",
+      "type": "texture",
+      "source_path": "assets/icons/svg/folder-f.svg",
+      "source_hash": "601f3e29bbf1860473b482c9ca69888f01dc287fcbf6814396724b6e77aa932c",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/504f3364e1fd13ec-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "folder-f.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "e450e6e3b01c04a83fd450d9f6116c84",
+      "type": "texture",
+      "source_path": "assets/icons/svg/folder.svg",
+      "source_hash": "9d86799d2d550e0b6672e6f12e4623c83384c6b6090c2ae5e7342c454fa6c08c",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/1e50f0c10df6707b-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "folder.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "201f669377e89c8ea3f9478389123f36",
+      "type": "texture",
+      "source_path": "assets/icons/svg/forward.svg",
+      "source_hash": "a5481e8390b2adecede1d32b6b2a1f876ea4c8b292428d95ef3ef39811cbecf2",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/eec54e00e2e7a73a-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "forward.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "a4201e3a72cdb417da3484a21ce3f10f",
+      "type": "texture",
+      "source_path": "assets/icons/svg/globe.svg",
+      "source_hash": "290b5719ae046a596735631267cb203b44e5e37052b116f9008e887477c04dbb",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/b381604724187780-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "globe.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "66e8a3306a4384c5703d001d326b3938",
+      "type": "texture",
+      "source_path": "assets/icons/svg/grid-pattern.svg",
+      "source_hash": "d0d5ecd1f88528d1f4fbf673fa69ed7104de734c44a2feba2164eb716cc10c0f",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/8722e734de691908-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "grid-pattern.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "38d575d1b501a3cf3e00c87ad95f0a25",
+      "type": "texture",
+      "source_path": "assets/icons/svg/icon-box collider.svg",
+      "source_hash": "0060f0adfc668495482253141524fe4aff81a4e7c39f8114310829b2ee8aca91",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/7976fa457b3ca47e-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "icon-box collider.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "3ff05a7d0572b077b1b9f0c0dff4fe65",
+      "type": "texture",
+      "source_path": "assets/icons/svg/icon-filled-circle.svg",
+      "source_hash": "3a544c92925e2013ab44f19fdb24155f30f08c9eb398a20db6747008b810d1a2",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/8f93c42373036c7a-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "icon-filled-circle.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "afe1b921b550be4c25d483160e1b7d2f",
+      "type": "texture",
+      "source_path": "assets/icons/svg/icon-sphere Collider.svg",
+      "source_hash": "ef56d60c50098ec9ae85451b967fcc88a84e6bfca418bce5c579ad2bb0531062",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/8f9d290079fdf3ad-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "icon-sphere Collider.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "256a11e42a490dc024a242f2bf84ed27",
+      "type": "texture",
+      "source_path": "assets/icons/svg/index_onboarding_004.svg",
+      "source_hash": "f3d258ee77dcab573572dd70921f0b089b31c99e704ae21d37a26101dbe3c573",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/ac145bbe1b72f6ea-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "index_onboarding_004.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "c26daae137d1d49e310e591e06b3e7cf",
+      "type": "texture",
+      "source_path": "assets/icons/svg/keyboard.svg",
+      "source_hash": "32f330ee766a9106fe723b2b61ea3cb985bff53eedd513f94d4fbd8056297c4e",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/1e9df781c4b3e431-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "keyboard.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "ec32bd9aaa48a5bf2ac3b10c9ac18f20",
+      "type": "texture",
+      "source_path": "assets/icons/svg/light-bulb.svg",
+      "source_hash": "f19f646399235317ddcdbf3d9fd9578bdbe74bf26a23d9b50b9b13d2c9896ffb",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/1b79195b8eed9dc7-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "light-bulb.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "da63afedb7387afd79b29807472f4c37",
+      "type": "texture",
+      "source_path": "assets/icons/svg/light_point.svg",
+      "source_hash": "2b72ed7ceb17c68abeeb2f7a2fe1b84f818d83f6b383ccf23a9a4675e689c986",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/0a514bfe84c56afe-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "light_point.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "dc8b00c73ca670cf05d74d4188404062",
+      "type": "texture",
+      "source_path": "assets/icons/svg/light_spot.svg",
+      "source_hash": "e1b194c763ce115be8fcaa51d00bbcc33dde380188ee1cfe70fe26a97373bcdb",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/967cfe977ad3a755-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "light_spot.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "0979460195f9a17321e1781ddc0410b0",
+      "type": "texture",
+      "source_path": "assets/icons/svg/light_sun.svg",
+      "source_hash": "12eb6dc9b3b7b518719ed1b8db56ab174416664baa72f25ec41d40d7165cd9e8",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/91cecdbd60c3bdf4-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "light_sun.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "e871b6d8f293457afb31a0ea03337ba1",
+      "type": "texture",
+      "source_path": "assets/icons/svg/list.svg",
+      "source_hash": "8ac8e411d900f5204cb9327c6fc513c29230376c6ff268a8c42c57a86853a577",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/5aa847b3341a8d70-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "list.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "658d7ad6d847e577b25a22d16fe68529",
+      "type": "texture",
+      "source_path": "assets/icons/svg/lock-closed.svg",
+      "source_hash": "7f5e44951490951a21446866e4eecf6774b2775edfabde9444f5cbf7cc06fafb",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/071d50c6b292e477-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "lock-closed.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "3de716d8a02e0f3b87d1782550fa7d8d",
+      "type": "texture",
+      "source_path": "assets/icons/svg/lock-open.svg",
+      "source_hash": "6b62444fad4c92937c47da9dad41151061d64aec74f761d9a7551b1c8f71ff1e",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/2877942e3087fb9b-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "lock-open.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "b641e2db6a74dc4854eeb2feb2158df4",
+      "type": "texture",
+      "source_path": "assets/icons/svg/mic.svg",
+      "source_hash": "3a4e2b010bce039a225b4c6575d1dd7b3f176bb2ea1138f9c24f9166937082b7",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/484983c965ea994f-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "mic.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "b6303abf0a5df06d092ac2a0d84c597a",
+      "type": "texture",
+      "source_path": "assets/icons/svg/models.svg",
+      "source_hash": "6dc8c49870e43fd330224943dfbded4a8be63ad9796ac74735754a11764a43f4",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/55c2266d6b128886-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "models.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "80757b64ad8498fd31d6b9f5c2d359ba",
+      "type": "texture",
+      "source_path": "assets/icons/svg/package.svg",
+      "source_hash": "e941e0cc7a3ea89610d7be59408f8621c78a1e0ece89b99483f4424dc3b2abef",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/76e79fad2bc149b3-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "package.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "3f949db24022b52477edf57dba6838fe",
+      "type": "texture",
+      "source_path": "assets/icons/svg/paint-brush.svg",
+      "source_hash": "fab57331d1e1255f6199d37d1e8804d4f65b6a192029bdaafbb0be62241d2067",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/90f799ec77fa37fc-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "paint-brush.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "5c7a14dcc42b0609984d8b55232a1bb5",
+      "type": "texture",
+      "source_path": "assets/icons/svg/pause.svg",
+      "source_hash": "2d2ee25d84dbc4448f55b4cfeb41ece3f9646dacb87cf258dfc2171740f964a9",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/2c7075786c4240a6-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "pause.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "15813706c61ce2a365550436e0ccce09",
+      "type": "texture",
+      "source_path": "assets/icons/svg/photo.svg",
+      "source_hash": "cd4949e70b881b5962552f0ef2262f55ab29ed856dcb39669cbd8a97918914dc",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/d68e6238bd2f4b87-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "photo.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "3831557bf43923856154823ec60ec7cc",
+      "type": "texture",
+      "source_path": "assets/icons/svg/play.svg",
+      "source_hash": "6fa913de23f0fa385bac3d584762aa325fcdddeab2cde79aff24fa26d823e1e7",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/d8d8250ed2aa9e2d-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "play.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "0531f2a4f52a763621fbf61b71aace63",
+      "type": "texture",
+      "source_path": "assets/icons/svg/plus.svg",
+      "source_hash": "3a5ccb69abc3760c3185c612f0e48b87288e14b5d7d2d311cb7e4072086d1dbd",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/096dd572bfd31eab-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "plus.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "573ac88b987831e65a902790594f95bf",
+      "type": "texture",
+      "source_path": "assets/icons/svg/redo.svg",
+      "source_hash": "d9311db9a3108bfa64fc264bd224e8e2b13c9106d9f4b66c9e26e7be22a1fb84",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/a920591b89f83153-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "redo.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "aebc4d424e0d18b1ea64a1c7b2c20a53",
+      "type": "texture",
+      "source_path": "assets/icons/svg/refresh.svg",
+      "source_hash": "1c5f0b70861f21a133a38bbdb4d0ec560531c813e07398fe8941312cf15bc1f7",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/82936d30dad66d1e-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "refresh.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "6ddebe97a8e83e9adfc2b7e1d585100b",
+      "type": "texture",
+      "source_path": "assets/icons/svg/remote.svg",
+      "source_hash": "6f83769f9f50eee30cc36f6a8e691e6d562bef3b10d799b31ecfc99ec8d456a4",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/a5b9d41beb6dc5e3-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "remote.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "f62faae9181c1cf973951ae3aa8c272a",
+      "type": "texture",
+      "source_path": "assets/icons/svg/save.svg",
+      "source_hash": "c7235e3acc8074e2a70dc04ced9f16d1e25297da26d38b8f9beb47b15c38c93f",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/0cd9260d42dad044-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "save.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "9ef0fc8ddc6ddacd2c1a95c1307ca533",
+      "type": "texture",
+      "source_path": "assets/icons/svg/scripts.svg",
+      "source_hash": "9b8cbab75095cf0f1ae2fd44d65a4da2376ba0ec3d137e86e6267ebdf036f7f0",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/a6600ebf7e600e6a-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "scripts.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "27dcc37a9594c5a9dcccb3b36064b158",
+      "type": "texture",
+      "source_path": "assets/icons/svg/sparkle.svg",
+      "source_hash": "d9848568b1e455075277adef3c4cefa7f123ffec29b3962bee123738f48709c7",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/605cabcd20cfc364-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "sparkle.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "c92596d293ffff7f52c8c3cf47b0e3ba",
+      "type": "texture",
+      "source_path": "assets/icons/svg/squares-2x2.svg",
+      "source_hash": "3cfd63033afa629fded62a70826ca1a2d07368db0d137a2e52bd225fe5c17409",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/5281ce6e3ee11b27-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "squares-2x2.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "ec9a21b98cd0fb0284f3017fa1782109",
+      "type": "texture",
+      "source_path": "assets/icons/svg/stop.svg",
+      "source_hash": "7bc9b7017ec9772f59595c410714f106561f155fcf0387eb2cbdf28bb33d2e9d",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/c65fa58d84cda0e4-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "stop.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "4f46b793a09aa80ecb5171d0b8e0140e",
+      "type": "texture",
+      "source_path": "assets/icons/svg/triangle-down.svg",
+      "source_hash": "f6f61abecc453a8a62819de9c446e005a4fe533ed20e64c90a417e9ebd657c11",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/adcf64dbf5075103-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "triangle-down.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "f3ed37cd1a5a6a206862dad9e10ce431",
+      "type": "texture",
+      "source_path": "assets/icons/svg/triangle-right.svg",
+      "source_hash": "71795db0e5d23c287b323139538b11ccb763254484bd7f1348cefbc5fbb45cac",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/f57e5c4e710a66cf-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "triangle-right.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "cf6512bf1e96a3520ec014830a0f3efe",
+      "type": "texture",
+      "source_path": "assets/icons/svg/undo.svg",
+      "source_hash": "86799ebf3cc9b3ff53d963316baa64da8e1e83c7b6026df8dc32ad415fbacfb8",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/115f8671f3a6c5b1-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "undo.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    },
+    {
+      "id": "3cd2e99ca7209c914d48222a8082c275",
+      "type": "texture",
+      "source_path": "assets/icons/svg/x-mark.svg",
+      "source_hash": "260571268f727a8518356d698c88fe1d5c48f2e9379ed2f843dec9d49f29daef",
+      "import_settings_hash": "84b15b414ba9aeca2400e95aa49970ac333c88418164d369e6eec9328128099c",
+      "import_version": 2,
+      "dependency_ids": [],
+      "outputs": [
+        {
+          "path": "assets/derived/textures/e4b252c4fd6de671-v2.guava_texture.json",
+          "kind": "texture"
+        }
+      ],
+      "metadata": {
+        "display_name": "x-mark.svg",
+        "importer": "texture-bgra8-v1",
+        "source_extension": ".svg"
+      },
+      "version": 2
+    }
+  ]
+}
