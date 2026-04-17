@@ -3,77 +3,112 @@
         xmlns:vm="using:Guava.Editor.ViewModels"
         xmlns:idc="clr-namespace:Dock.Avalonia.Controls;assembly=Dock.Avalonia"
         xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Svg.Controls.Skia.Avalonia"
+        xmlns:loc="using:Guava.Editor.Markup"
         xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
         xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
         mc:Ignorable="d" d:DesignWidth="1440" d:DesignHeight="900"
         x:Class="Guava.Editor.Views.MainWindow"
         x:DataType="vm:MainWindowViewModel"
-        Title="Guava Editor"
+        Title="{loc:T app.title}"
         Width="1440" Height="900"
         WindowStartupLocation="CenterScreen"
-        Background="{DynamicResource Base}">
+        Background="{DynamicResource BaseBrush}">
 
     <Design.DataContext>
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
     <Grid RowDefinitions="44,*,24">
-        <!-- Toolbar -->
-        <Border Grid.Row="0" Background="{DynamicResource MantleBrush}"
-                BorderBrush="{DynamicResource Surface0Brush}" BorderThickness="0,0,0,1">
+
+        <!-- ============== Toolbar ============== -->
+        <Border Grid.Row="0"
+                Background="{DynamicResource MantleBrush}"
+                BorderBrush="{DynamicResource Surface0Brush}"
+                BorderThickness="0,0,0,1">
             <Grid>
-                <!-- Left: brand + status -->
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Left" Margin="16,0" Spacing="10">
-                    <TextBlock Text="Guava" Foreground="{DynamicResource TextBrush}" FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
-                    <Border Width="1" Height="18" Background="{DynamicResource Surface1Brush}" VerticalAlignment="Center"/>
-                    <Ellipse Width="7" Height="7" Fill="{DynamicResource GreenBrush}" VerticalAlignment="Center"/>
-                    <TextBlock Text="{Binding ConnectionStatus}" Foreground="{DynamicResource Overlay0Brush}" FontSize="11" VerticalAlignment="Center"/>
+                <!-- Left: brand + connection -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                            HorizontalAlignment="Left" Margin="16,0" Spacing="10">
+                    <TextBlock Text="{loc:T toolbar.brand}"
+                               Foreground="{DynamicResource TextBrush}"
+                               FontSize="14" FontWeight="Bold" VerticalAlignment="Center"/>
+                    <Border Classes="vsep" Height="18"/>
+                    <Ellipse Classes="status-dot" Fill="{DynamicResource GreenBrush}"/>
+                    <TextBlock Text="{Binding ConnectionStatus}"
+                               Foreground="{DynamicResource Overlay0Brush}"
+                               FontSize="11" VerticalAlignment="Center"/>
                 </StackPanel>
 
-                <!-- Center: transport controls -->
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Center" Spacing="2">
-                    <Button Classes="ghost" ToolTip.Tip="Play">
-                        <svg:Svg Path="{StaticResource PlayIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssGreen}"/>
+                <!-- Center: transport -->
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                            HorizontalAlignment="Center" Spacing="2">
+                    <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.play}">
+                        <svg:Svg Path="{StaticResource PlayIcon}" Width="15" Height="15"
+                                 Css="{DynamicResource SvgCssGreen}"/>
                     </Button>
-                    <Button Classes="ghost" ToolTip.Tip="Pause">
-                        <svg:Svg Path="{StaticResource PauseIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssText}"/>
+                    <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.pause}">
+                        <svg:Svg Path="{StaticResource PauseIcon}" Width="15" Height="15"
+                                 Css="{DynamicResource SvgCssText}"/>
                     </Button>
-                    <Button Classes="ghost" ToolTip.Tip="Stop">
-                        <svg:Svg Path="{StaticResource StopIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssRed}"/>
+                    <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.stop}">
+                        <svg:Svg Path="{StaticResource StopIcon}" Width="15" Height="15"
+                                 Css="{DynamicResource SvgCssRed}"/>
                     </Button>
                 </StackPanel>
 
                 <!-- Right: file actions -->
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center" HorizontalAlignment="Right" Margin="16,0" Spacing="2">
-                    <Button Classes="ghost" ToolTip.Tip="Save">
-                        <svg:Svg Path="{StaticResource SaveIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssText}"/>
+                <StackPanel Orientation="Horizontal" VerticalAlignment="Center"
+                            HorizontalAlignment="Right" Margin="16,0" Spacing="2">
+                    <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.save}">
+                        <svg:Svg Path="{StaticResource SaveIcon}" Width="15" Height="15"
+                                 Css="{DynamicResource SvgCssText}"/>
                     </Button>
-                    <Button Classes="ghost" ToolTip.Tip="Undo">
-                        <svg:Svg Path="{StaticResource UndoIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssText}"/>
+                    <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.undo}">
+                        <svg:Svg Path="{StaticResource UndoIcon}" Width="15" Height="15"
+                                 Css="{DynamicResource SvgCssText}"/>
                     </Button>
-                    <Button Classes="ghost" ToolTip.Tip="Redo">
-                        <svg:Svg Path="{StaticResource RedoIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssText}"/>
+                    <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.redo}">
+                        <svg:Svg Path="{StaticResource RedoIcon}" Width="15" Height="15"
+                                 Css="{DynamicResource SvgCssText}"/>
                     </Button>
-                    <Border Width="1" Height="18" Background="{DynamicResource Surface1Brush}" VerticalAlignment="Center" Margin="6,0"/>
-                    <Button Classes="ghost" ToolTip.Tip="Toggle Theme" Command="{Binding ToggleThemeCommand}">
-                        <svg:Svg Path="{StaticResource CogIcon}" Width="15" Height="15" Css="{DynamicResource SvgCssOverlay0}"/>
+                    <Border Classes="vsep" Height="18" Margin="6,0"/>
+                    <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.toggle_theme}"
+                            Command="{Binding ToggleThemeCommand}">
+                        <svg:Svg Path="{StaticResource CogIcon}" Width="15" Height="15"
+                                 Css="{DynamicResource SvgCssOverlay0}"/>
+                    </Button>
+                    <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.settings}"
+                            Command="{Binding ToggleLanguageCommand}">
+                        <TextBlock Text="{Binding CurrentLanguageLabel}"
+                                   FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource Subtext0Brush}"
+                                   VerticalAlignment="Center"/>
                     </Button>
                 </StackPanel>
             </Grid>
         </Border>
 
-        <!-- Dock Control -->
+        <!-- ============== Dock ============== -->
         <idc:DockControl Grid.Row="1" Layout="{Binding Layout}"/>
 
-        <!-- Status bar -->
-        <Border Grid.Row="2" Background="{DynamicResource CrustBrush}"
-                BorderBrush="{DynamicResource Surface0Brush}" BorderThickness="0,1,0,0">
+        <!-- ============== Status bar ============== -->
+        <Border Grid.Row="2"
+                Background="{DynamicResource CrustBrush}"
+                BorderBrush="{DynamicResource Surface0Brush}"
+                BorderThickness="0,1,0,0">
             <DockPanel Margin="16,0">
-                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8" VerticalAlignment="Center">
+                <StackPanel DockPanel.Dock="Left" Orientation="Horizontal" Spacing="8"
+                            VerticalAlignment="Center">
                     <Ellipse Width="6" Height="6" Fill="{DynamicResource GreenBrush}"/>
-                    <TextBlock Text="{Binding StatusText}" Foreground="{DynamicResource Overlay0Brush}" FontSize="10.5" VerticalAlignment="Center"/>
+                    <TextBlock Text="{Binding StatusText}"
+                               Foreground="{DynamicResource Overlay0Brush}"
+                               FontSize="10.5" VerticalAlignment="Center"/>
                 </StackPanel>
-                <TextBlock DockPanel.Dock="Right" Text="{Binding ConnectionStatus}" Foreground="{DynamicResource Overlay0Brush}" FontSize="10.5" VerticalAlignment="Center" HorizontalAlignment="Right"/>
+                <TextBlock DockPanel.Dock="Right"
+                           Text="{Binding ConnectionStatus}"
+                           Foreground="{DynamicResource Overlay0Brush}"
+                           FontSize="10.5" VerticalAlignment="Center"
+                           HorizontalAlignment="Right"/>
             </DockPanel>
         </Border>
     </Grid>

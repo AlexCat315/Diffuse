@@ -1,0 +1,49 @@
+{
+  "app": {
+    "title": "Guava 编辑器",
+    "status_default": "Guava 编辑器"
+  },
+  "toolbar": {
+    "brand": "Guava",
+    "play": "播放",
+    "pause": "暂停",
+    "stop": "停止",
+    "save": "保存",
+    "undo": "撤销",
+    "redo": "重做",
+    "settings": "设置",
+    "toggle_theme": "切换主题"
+  },
+  "panel": {
+    "viewport": "视口",
+    "scene_hierarchy": "场景层级",
+    "inspector": "检查器",
+    "console": "控制台",
+    "content_browser": "内容"
+  },
+  "inspector": {
+    "transform": "变换",
+    "position": "位置",
+    "rotation": "旋转",
+    "scale": "缩放",
+    "components": "组件",
+    "add_component": "添加组件"
+  },
+  "scene": {
+    "search_placeholder": "搜索实体…",
+    "world": "世界"
+  },
+  "console": {
+    "clear": "清空",
+    "filter_placeholder": "过滤日志…"
+  },
+  "content": {
+    "back": "返回",
+    "assets_root": "资源"
+  },
+  "connection": {
+    "connecting": "连接中…",
+    "connected": "已连接",
+    "disconnected": "已断开"
+  }
+}

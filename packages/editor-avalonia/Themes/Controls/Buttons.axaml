@@ -1,0 +1,102 @@
+<Styles xmlns="https://github.com/avaloniaui"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!--
+        Button variants.
+        Usage:
+            <Button Classes="primary" .../>
+            <Button Classes="ghost" .../>
+            <Button Classes="toolbar" .../>   ← icon-only transparent, slightly opaque
+            <Button Classes="danger" .../>
+            <Button Classes="tab" .../>
+    -->
+
+    <!-- Default: neutral surface button -->
+    <Style Selector="Button">
+        <Setter Property="Background" Value="{DynamicResource Surface0Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Surface1Brush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="FontSize" Value="12" />
+        <Setter Property="Padding" Value="12,6" />
+        <Setter Property="HorizontalContentAlignment" Value="Center" />
+        <Setter Property="VerticalContentAlignment" Value="Center" />
+    </Style>
+    <Style Selector="Button:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource Surface1Brush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Surface2Brush}" />
+    </Style>
+    <Style Selector="Button:pressed /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource Surface2Brush}" />
+    </Style>
+    <Style Selector="Button:disabled /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Opacity" Value="0.5" />
+    </Style>
+
+    <!-- ===== Primary (blue) ===== -->
+    <Style Selector="Button.primary">
+        <Setter Property="Background" Value="{DynamicResource BlueBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource CrustBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+    <Style Selector="Button.primary:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource SapphireBrush}" />
+    </Style>
+
+    <!-- ===== Ghost (transparent, hover reveals surface) ===== -->
+    <Style Selector="Button.ghost">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="6" />
+        <Setter Property="Padding" Value="6" />
+        <Setter Property="Opacity" Value="0.75" />
+    </Style>
+    <Style Selector="Button.ghost:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource Surface0Brush}" />
+    </Style>
+    <Style Selector="Button.ghost:pointerover">
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!-- ===== Toolbar (slim icon button for top bar / panel headers) ===== -->
+    <Style Selector="Button.toolbar">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="5" />
+        <Setter Property="Padding" Value="7,5" />
+        <Setter Property="MinWidth" Value="28" />
+        <Setter Property="MinHeight" Value="28" />
+        <Setter Property="Opacity" Value="0.8" />
+    </Style>
+    <Style Selector="Button.toolbar:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource Surface0Brush}" />
+    </Style>
+    <Style Selector="Button.toolbar:pointerover">
+        <Setter Property="Opacity" Value="1" />
+    </Style>
+
+    <!-- ===== Danger ===== -->
+    <Style Selector="Button.danger">
+        <Setter Property="Background" Value="{DynamicResource RedBrush}" />
+        <Setter Property="Foreground" Value="{DynamicResource CrustBrush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="FontWeight" Value="SemiBold" />
+    </Style>
+
+    <!-- ===== Tab-like button (used in panels for segmented sections) ===== -->
+    <Style Selector="Button.tab">
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="Foreground" Value="{DynamicResource Subtext0Brush}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="CornerRadius" Value="5" />
+        <Setter Property="Padding" Value="10,5" />
+    </Style>
+    <Style Selector="Button.tab:pointerover /template/ ContentPresenter#PART_ContentPresenter">
+        <Setter Property="Background" Value="{DynamicResource Surface0Brush}" />
+    </Style>
+    <Style Selector="Button.tab.active">
+        <Setter Property="Background" Value="{DynamicResource Surface1Brush}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextBrush}" />
+    </Style>
+</Styles>
