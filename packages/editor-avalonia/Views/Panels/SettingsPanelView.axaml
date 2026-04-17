@@ -1,23 +1,9 @@
-<Window xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-        xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
-        xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
-        xmlns:vm="using:Guava.Editor.ViewModels"
-        xmlns:loc="using:Guava.Editor.Markup"
-        mc:Ignorable="d"
-        x:Class="Guava.Editor.Views.SettingsWindow"
-        x:DataType="vm:SettingsWindowViewModel"
-        Title="{loc:T settings.title}"
-        Width="780" Height="540"
-        MinWidth="620" MinHeight="420"
-        WindowStartupLocation="CenterOwner"
-        TransparencyLevelHint="Mica"
-        Background="{DynamicResource BaseBrush}"
-        ExtendClientAreaToDecorationsHint="False">
-    <Design.DataContext>
-        <vm:SettingsWindowViewModel/>
-    </Design.DataContext>
-
+<UserControl xmlns="https://github.com/avaloniaui"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="using:Guava.Editor.ViewModels.Panels"
+             xmlns:loc="using:Guava.Editor.Markup"
+             x:Class="Guava.Editor.Views.Panels.SettingsPanelView"
+             x:DataType="vm:SettingsPanelViewModel">
     <Grid ColumnDefinitions="180,*" Background="{DynamicResource BaseBrush}">
 
         <!-- Left nav -->
@@ -120,4 +106,4 @@
             </StackPanel>
         </ScrollViewer>
     </Grid>
-</Window>
+</UserControl>

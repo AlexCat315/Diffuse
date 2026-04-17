@@ -221,4 +221,38 @@
     <Style Selector="ScrollViewer">
         <Setter Property="AllowAutoHide" Value="True" />
     </Style>
+
+    <!-- ===================================================================== -->
+    <!-- Dock.Avalonia ToolChromeControl — Fluent IDE preset renders pin /     -->
+    <!-- maximize / close mini-buttons whose PathIcon resources aren't always  -->
+    <!-- wired up, producing empty "dot" placeholders in each panel header.    -->
+    <!-- Hide them for a cleaner look; panels can still be closed via tab X    -->
+    <!-- and floated via drag.                                                 -->
+    <!-- ===================================================================== -->
+    <Style Selector="ToolChromeControl /template/ Button">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <!-- Belt and suspenders: match by PART_* name for theme variants that   -->
+    <!-- don't expose the buttons through a generic Button selector.          -->
+    <Style Selector="ToolChromeControl /template/ Button#PART_PinButton">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="ToolChromeControl /template/ Button#PART_MaximizeRestoreButton">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="ToolChromeControl /template/ Button#PART_CloseButton">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <Style Selector="ToolChromeControl /template/ Button#PART_MenuButton">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <!-- Hide the tab-strip "create new document" (+) button and any chrome   -->
+    <!-- button rendered inside DocumentControl / DocumentTabStrip headers.    -->
+    <Style Selector="DocumentTabStrip /template/ Button">
+        <Setter Property="IsVisible" Value="False" />
+    </Style>
+    <!-- DocumentTabStripItem renders a Close X per tab, keep that visible.   -->
+    <!-- The above selector matches ONLY buttons in the strip template, not   -->
+    <!-- items, so tab-close stays functional.                                 -->
 </Styles>
+

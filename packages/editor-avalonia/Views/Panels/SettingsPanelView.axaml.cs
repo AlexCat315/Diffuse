@@ -1,11 +1,11 @@
 using Avalonia.Controls;
 using Avalonia.Markup.Xaml;
 
-namespace Guava.Editor.Views;
+namespace Guava.Editor.Views.Panels;
 
-public partial class SettingsWindow : Window
+public partial class SettingsPanelView : UserControl
 {
-    public SettingsWindow()
+    public SettingsPanelView()
     {
         InitializeComponent();
     }

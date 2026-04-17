@@ -62,28 +62,26 @@
                             HorizontalAlignment="Right" Margin="16,0" Spacing="2">
                     <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.save}">
                         <svg:Svg Path="{StaticResource SaveIcon}" Width="15" Height="15"
+                                 IsHitTestVisible="False"
                                  Css="{DynamicResource SvgCssText}"/>
                     </Button>
                     <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.undo}">
                         <svg:Svg Path="{StaticResource UndoIcon}" Width="15" Height="15"
+                                 IsHitTestVisible="False"
                                  Css="{DynamicResource SvgCssText}"/>
                     </Button>
                     <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.redo}">
                         <svg:Svg Path="{StaticResource RedoIcon}" Width="15" Height="15"
+                                 IsHitTestVisible="False"
                                  Css="{DynamicResource SvgCssText}"/>
                     </Button>
                     <Border Classes="vsep" Height="18" Margin="6,0"/>
-                    <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.settings}"
-                            Command="{Binding OpenSettingsCommand}">
+                    <Button x:Name="SettingsButton" Classes="toolbar"
+                            ToolTip.Tip="{loc:T toolbar.settings}"
+                            Click="OnSettingsClick">
                         <svg:Svg Path="{StaticResource CogIcon}" Width="15" Height="15"
+                                 IsHitTestVisible="False"
                                  Css="{DynamicResource SvgCssOverlay0}"/>
-                    </Button>
-                    <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.toggle_theme}"
-                            Command="{Binding ToggleLanguageCommand}">
-                        <TextBlock Text="{Binding CurrentLanguageLabel}"
-                                   FontSize="11" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource Subtext0Brush}"
-                                   VerticalAlignment="Center"/>
                     </Button>
                 </StackPanel>
             </Grid>

@@ -23,8 +23,10 @@ public partial class App : Application
 
     public override void OnFrameworkInitializationCompleted()
     {
+        Log.Info($"Editor startup · BaseDir={AppContext.BaseDirectory}");
         // Load persisted preferences BEFORE I18n/theme consumers bind.
         var prefs = AppPreferencesStore.Load();
+        Log.Info($"Prefs loaded · lang={prefs.Language} theme={prefs.ThemeVariant}");
         ServiceLocator.Register(prefs);
 
         I18nService.Instance.Language = prefs.Language;
@@ -101,7 +103,9 @@ public partial class App : Application
     public void ToggleLanguage()
     {
         var svc = I18nService.Instance;
-        svc.Language = svc.Language == "en" ? "zh" : "en";
+        var next = svc.Language == "en" ? "zh" : "en";
+        Log.Info($"ToggleLanguage · {svc.Language} → {next}");
+        svc.Language = next;
         if (ServiceLocator.TryGet<AppPreferencesStore>() is { } prefs)
             prefs.Language = svc.Language;
     }

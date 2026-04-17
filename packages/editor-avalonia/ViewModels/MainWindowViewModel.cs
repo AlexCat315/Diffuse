@@ -1,12 +1,10 @@
 using System.ComponentModel;
 using Avalonia;
-using Avalonia.Controls.ApplicationLifetimes;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Controls;
 using Guava.Editor.Services;
 using Guava.Editor.State;
-using Guava.Editor.Views;
 
 namespace Guava.Editor.ViewModels;
 
@@ -56,15 +54,14 @@ public partial class MainWindowViewModel : ViewModelBase
         if (Application.Current is App app) app.ToggleLanguage();
     }
 
+    // Single-instance guard so rapid clicks can't queue up multiple dialogs.
+
     [RelayCommand]
     private void OpenSettings()
     {
-        if (Application.Current?.ApplicationLifetime is not IClassicDesktopStyleApplicationLifetime desktop) return;
-        var window = new SettingsWindow
-        {
-            DataContext = new SettingsWindowViewModel(),
-        };
-        window.ShowDialog(desktop.MainWindow!);
+        Services.Log.Info("OpenSettings command invoked");
+        try { _factory.OpenOrFocusSettings(); }
+        catch (System.Exception ex) { Services.Log.Error($"OpenSettings failed: {ex}"); }
     }
 }
 

@@ -4,18 +4,22 @@ using Avalonia;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
+using Dock.Model.Mvvm.Controls;
 using Guava.Editor.Services;
 using Guava.Editor.State;
 
-namespace Guava.Editor.ViewModels;
+namespace Guava.Editor.ViewModels.Panels;
 
 /// <summary>
-/// VM for the Settings window. Provides a small section list and reflects the
-/// shared <see cref="AppPreferencesStore"/>. Changes are persisted on assignment
-/// via the store's PropertyChanged hook.
+/// Settings as a Dock Document — opens as a tab in the center document area.
+/// Users can drag the tab to any dock region or out into a floating window,
+/// matching the old React editor's panel flexibility while avoiding the
+/// latency/reliability issues of opening a fresh modal Window on every click.
 /// </summary>
-public sealed partial class SettingsWindowViewModel : ObservableObject
+public sealed partial class SettingsPanelViewModel : Document
 {
+    public const string PanelId = "Settings";
+
     public AppPreferencesStore Prefs { get; }
     public ConnectionStore Connection { get; }
 
@@ -54,13 +58,19 @@ public sealed partial class SettingsWindowViewModel : ObservableObject
         }
     }
 
-    public SettingsWindowViewModel()
+    public SettingsPanelViewModel()
         : this(ServiceLocator.TryGet<AppPreferencesStore>() ?? AppPreferencesStore.Load(),
                ServiceLocator.TryGet<ConnectionStore>() ?? new ConnectionStore())
     { }
 
-    public SettingsWindowViewModel(AppPreferencesStore prefs, ConnectionStore connection)
+    public SettingsPanelViewModel(AppPreferencesStore prefs, ConnectionStore connection)
     {
+        Id = PanelId;
+        Title = "Settings";
+        CanClose = true;
+        CanFloat = true;
+        CanPin = false;
+
         Prefs = prefs;
         Connection = connection;
         Prefs.PropertyChanged += (_, e) =>
@@ -77,14 +87,10 @@ public sealed partial class SettingsWindowViewModel : ObservableObject
         TestStatus = "Testing…";
         try
         {
-            var rpc = ServiceLocator.TryGet<IEngineRpcClient>();
-            if (rpc == null) { TestStatus = "RPC service not available"; return; }
-
             var url = Prefs.EngineMode == "remote"
                 ? Prefs.RemoteEngineUrl
                 : $"ws://127.0.0.1:{Prefs.EnginePort}";
 
-            // Quick probe: spin up a throwaway client; leaves the live one alone.
             using var probe = new EngineRpcClient();
             var ok = await probe.ConnectAsync(url);
             if (!ok) { TestStatus = "❌ Failed to connect"; return; }

@@ -39,6 +39,7 @@ public sealed class I18nService : INotifyPropertyChanged
             if (_language == value) return;
             _language = value;
             LoadLanguage(value);
+            Log.Info($"I18n language changed to '{value}' · {_strings.Count} strings loaded");
             // Empty-string property name refreshes every binding on this instance.
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(string.Empty));
             PropertyChanged?.Invoke(this, new PropertyChangedEventArgs("Item[]"));

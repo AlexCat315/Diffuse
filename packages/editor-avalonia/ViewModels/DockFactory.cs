@@ -133,6 +133,7 @@ public class DockFactory : Factory
             ["Inspector"] = () => new InspectorPanelView(),
             ["Console"] = () => new ConsolePanelView(),
             ["ContentBrowser"] = () => new ContentBrowserPanelView(),
+            [SettingsPanelViewModel.PanelId] = () => new SettingsPanelView(),
         };
 
         DockableLocator = new Dictionary<string, Func<IDockable?>>
@@ -147,5 +148,37 @@ public class DockFactory : Factory
         };
 
         base.InitLayout(layout);
+    }
+
+    /// <summary>
+    /// Open (or re-focus) the Settings document as a tab in the center dock.
+    /// Creating a tab is essentially free compared to spawning a fresh Window,
+    /// and Dock.Avalonia lets users drag it out to float when they want a
+    /// separate window — mirroring the old editor's pop-out behavior.
+    /// </summary>
+    public void OpenOrFocusSettings()
+    {
+        Services.Log.Info($"OpenOrFocusSettings · _documentDock={(_documentDock is null ? "null" : "set")} visible={_documentDock?.VisibleDockables?.Count ?? -1}");
+        if (_documentDock is null) return;
+
+        // Already open → just make it the active tab.
+        if (_documentDock.VisibleDockables is { } docs)
+        {
+            foreach (var d in docs)
+            {
+                if (d is SettingsPanelViewModel existing)
+                {
+                    Services.Log.Info("Settings tab already exists · focusing");
+                    SetActiveDockable(existing);
+                    SetFocusedDockable(_documentDock, existing);
+                    return;
+                }
+            }
+        }
+
+        var settings = new SettingsPanelViewModel();
+        // DocumentDock.AddDocument() correctly inserts + activates + focuses in one shot.
+        _documentDock.AddDocument(settings);
+        Services.Log.Info($"Settings tab added · count={_documentDock.VisibleDockables?.Count}");
     }
 }
