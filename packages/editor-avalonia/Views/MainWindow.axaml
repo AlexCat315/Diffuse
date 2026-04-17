@@ -1,6 +1,7 @@
 <Window xmlns="https://github.com/avaloniaui"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:vm="using:Guava.Editor.ViewModels"
+        xmlns:panels="using:Guava.Editor.Views.Panels"
         xmlns:idc="clr-namespace:Dock.Avalonia.Controls;assembly=Dock.Avalonia"
         xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Svg.Controls.Skia.Avalonia"
         xmlns:loc="using:Guava.Editor.Markup"
@@ -18,7 +19,14 @@
         <vm:MainWindowViewModel/>
     </Design.DataContext>
 
-    <Grid RowDefinitions="44,*,24">
+    <Window.KeyBindings>
+        <!-- Ctrl+, opens Settings (matches old React editor's keybinding) -->
+        <KeyBinding Gesture="Ctrl+OemComma" Command="{Binding OpenSettingsCommand}"/>
+    </Window.KeyBindings>
+
+    <!-- Panel layer: Dock + toolbar + status bar in a Grid; Settings modal overlays everything -->
+    <Panel>
+        <Grid RowDefinitions="44,*,24">
 
         <!-- ============== Toolbar ============== -->
         <Border Grid.Row="0"
@@ -45,14 +53,17 @@
                             HorizontalAlignment="Center" Spacing="2">
                     <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.play}">
                         <svg:Svg Path="{StaticResource PlayIcon}" Width="15" Height="15"
+                                 IsHitTestVisible="False"
                                  Css="{DynamicResource SvgCssGreen}"/>
                     </Button>
                     <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.pause}">
                         <svg:Svg Path="{StaticResource PauseIcon}" Width="15" Height="15"
+                                 IsHitTestVisible="False"
                                  Css="{DynamicResource SvgCssText}"/>
                     </Button>
                     <Button Classes="toolbar" ToolTip.Tip="{loc:T toolbar.stop}">
                         <svg:Svg Path="{StaticResource StopIcon}" Width="15" Height="15"
+                                 IsHitTestVisible="False"
                                  Css="{DynamicResource SvgCssRed}"/>
                     </Button>
                 </StackPanel>
@@ -110,5 +121,62 @@
                            HorizontalAlignment="Right"/>
             </DockPanel>
         </Border>
-    </Grid>
+        </Grid>
+
+        <!-- ============== Settings draggable-modal overlay ============== -->
+        <!-- Mirrors old React editor's DraggableSettingsModal: semi-transparent
+             backdrop (click to dismiss) + centered card with draggable header. -->
+        <Border x:Name="SettingsBackdrop"
+                IsVisible="{Binding IsSettingsOpen}"
+                Background="#99000000"
+                PointerPressed="OnSettingsBackdropPressed">
+            <Border x:Name="SettingsCard"
+                    Width="860" Height="560"
+                    HorizontalAlignment="Center" VerticalAlignment="Center"
+                    Background="{DynamicResource BaseBrush}"
+                    BorderBrush="{DynamicResource Surface0Brush}"
+                    BorderThickness="1"
+                    CornerRadius="6"
+                    BoxShadow="0 16 48 0 #80000000"
+                    PointerPressed="OnSettingsCardPressed"
+                    RenderTransformOrigin="0.5,0.5">
+                <Border.RenderTransform>
+                    <TranslateTransform X="0" Y="0"/>
+                </Border.RenderTransform>
+                <Grid RowDefinitions="36,*">
+                    <!-- Draggable header -->
+                    <Border x:Name="SettingsHeader" Grid.Row="0"
+                            Background="{DynamicResource MantleBrush}"
+                            BorderBrush="{DynamicResource Surface0Brush}"
+                            BorderThickness="0,0,0,1"
+                            PointerPressed="OnSettingsHeaderPressed"
+                            PointerMoved="OnSettingsHeaderMoved"
+                            PointerReleased="OnSettingsHeaderReleased"
+                            Cursor="SizeAll">
+                        <Grid>
+                            <TextBlock Text="{loc:T settings.title}"
+                                       Margin="16,0" VerticalAlignment="Center"
+                                       FontSize="13" FontWeight="SemiBold"
+                                       Foreground="{DynamicResource TextBrush}"/>
+                            <Button x:Name="SettingsCloseButton"
+                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                    Margin="0,0,6,0" Width="28" Height="26"
+                                    Background="Transparent" BorderThickness="0"
+                                    Command="{Binding CloseSettingsCommand}"
+                                    ToolTip.Tip="Close (Esc)">
+                                <svg:Svg Path="{StaticResource CloseIcon}"
+                                         Width="12" Height="12"
+                                         Css="{DynamicResource SvgCssSubtext0}"
+                                         IsHitTestVisible="False"/>
+                            </Button>
+                        </Grid>
+                    </Border>
+
+                    <!-- Settings body -->
+                    <panels:SettingsPanelView Grid.Row="1" DataContext="{Binding Settings}"/>
+                </Grid>
+            </Border>
+        </Border>
+
+    </Panel>
 </Window>

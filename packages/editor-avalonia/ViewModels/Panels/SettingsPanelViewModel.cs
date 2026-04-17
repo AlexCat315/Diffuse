@@ -4,19 +4,17 @@ using Avalonia;
 using Avalonia.Styling;
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
-using Dock.Model.Mvvm.Controls;
 using Guava.Editor.Services;
 using Guava.Editor.State;
 
 namespace Guava.Editor.ViewModels.Panels;
 
 /// <summary>
-/// Settings as a Dock Document — opens as a tab in the center document area.
-/// Users can drag the tab to any dock region or out into a floating window,
-/// matching the old React editor's panel flexibility while avoiding the
-/// latency/reliability issues of opening a fresh modal Window on every click.
+/// Settings content view-model. Hosted as an in-app draggable modal overlay
+/// on top of the main window (mirroring the old React editor's
+/// <c>DraggableSettingsModal</c>), NOT as a dock tab or separate OS window.
 /// </summary>
-public sealed partial class SettingsPanelViewModel : Document
+public sealed partial class SettingsPanelViewModel : ViewModelBase
 {
     public const string PanelId = "Settings";
 
@@ -65,12 +63,6 @@ public sealed partial class SettingsPanelViewModel : Document
 
     public SettingsPanelViewModel(AppPreferencesStore prefs, ConnectionStore connection)
     {
-        Id = PanelId;
-        Title = "Settings";
-        CanClose = true;
-        CanFloat = true;
-        CanPin = false;
-
         Prefs = prefs;
         Connection = connection;
         Prefs.PropertyChanged += (_, e) =>

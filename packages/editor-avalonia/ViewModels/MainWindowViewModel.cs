@@ -5,6 +5,7 @@ using CommunityToolkit.Mvvm.Input;
 using Dock.Model.Controls;
 using Guava.Editor.Services;
 using Guava.Editor.State;
+using Guava.Editor.ViewModels.Panels;
 
 namespace Guava.Editor.ViewModels;
 
@@ -23,6 +24,12 @@ public partial class MainWindowViewModel : ViewModelBase
     public string CurrentLanguageLabel => I18nService.Instance.Language.ToUpperInvariant();
     public ConnectionStore Connection { get; }
 
+    /// <summary>Shared, persistent Settings modal VM (one instance per app).</summary>
+    public SettingsPanelViewModel Settings { get; }
+
+    /// <summary>Visibility flag for the Settings draggable-modal overlay.</summary>
+    [ObservableProperty] private bool _isSettingsOpen;
+
     private readonly DockFactory _factory;
 
     public MainWindowViewModel()
@@ -33,6 +40,7 @@ public partial class MainWindowViewModel : ViewModelBase
         Layout = layout;
 
         Connection = ServiceLocator.TryGet<ConnectionStore>() ?? new ConnectionStore();
+        Settings = new SettingsPanelViewModel();
 
         I18nService.Instance.PropertyChanged += OnI18nChanged;
     }
@@ -54,14 +62,17 @@ public partial class MainWindowViewModel : ViewModelBase
         if (Application.Current is App app) app.ToggleLanguage();
     }
 
-    // Single-instance guard so rapid clicks can't queue up multiple dialogs.
-
     [RelayCommand]
     private void OpenSettings()
     {
-        Services.Log.Info("OpenSettings command invoked");
-        try { _factory.OpenOrFocusSettings(); }
-        catch (System.Exception ex) { Services.Log.Error($"OpenSettings failed: {ex}"); }
+        Log.Info("OpenSettings → showing overlay");
+        IsSettingsOpen = true;
+    }
+
+    [RelayCommand]
+    private void CloseSettings()
+    {
+        IsSettingsOpen = false;
     }
 }
 

@@ -1,5 +1,6 @@
 <Styles xmlns="https://github.com/avaloniaui"
-        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:svg="clr-namespace:Avalonia.Svg.Skia;assembly=Svg.Controls.Skia.Avalonia">
     <!--
         Fluent theme semantic overrides.
         Fluent theme renders many controls (ScrollBar, MenuFlyout, ComboBox, TabControl, ToolTip,
@@ -223,36 +224,90 @@
     </Style>
 
     <!-- ===================================================================== -->
-    <!-- Dock.Avalonia ToolChromeControl — Fluent IDE preset renders pin /     -->
-    <!-- maximize / close mini-buttons whose PathIcon resources aren't always  -->
-    <!-- wired up, producing empty "dot" placeholders in each panel header.    -->
-    <!-- Hide them for a cleaner look; panels can still be closed via tab X    -->
-    <!-- and floated via drag.                                                 -->
+    <!-- Dock.Avalonia ToolChromeControl chrome buttons (pin / maximize /      -->
+    <!-- close). The Fluent preset's default PathIcon resources don't render  -->
+    <!-- correctly here; we supply proper SVG content via a Template override. -->
     <!-- ===================================================================== -->
-    <Style Selector="ToolChromeControl /template/ Button">
-        <Setter Property="IsVisible" Value="False" />
-    </Style>
-    <!-- Belt and suspenders: match by PART_* name for theme variants that   -->
-    <!-- don't expose the buttons through a generic Button selector.          -->
+    <!-- PART_PinButton slot is repurposed as a "popout to floating window" button.
+         MainWindow.axaml.cs intercepts the Click event and calls factory.FloatDockable()
+         instead of the default PinDockable action (see OnChromeButtonClick). -->
     <Style Selector="ToolChromeControl /template/ Button#PART_PinButton">
-        <Setter Property="IsVisible" Value="False" />
+        <Setter Property="Width" Value="18" />
+        <Setter Property="Height" Value="18" />
+        <Setter Property="Margin" Value="1,0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="ToolTip.Tip" Value="Pop out to new window" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}" CornerRadius="3">
+                    <svg:Svg Path="{StaticResource PopoutIcon}" Width="13" Height="13"
+                             Css="{DynamicResource SvgCssText}"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                             IsHitTestVisible="False" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
     </Style>
+    <Style Selector="ToolChromeControl /template/ Button#PART_PinButton:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Surface1Brush}" />
+    </Style>
+
     <Style Selector="ToolChromeControl /template/ Button#PART_MaximizeRestoreButton">
-        <Setter Property="IsVisible" Value="False" />
+        <Setter Property="Width" Value="18" />
+        <Setter Property="Height" Value="18" />
+        <Setter Property="Margin" Value="1,0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}" CornerRadius="3">
+                    <svg:Svg Path="{StaticResource MaximizeIcon}" Width="13" Height="13"
+                             Css="{DynamicResource SvgCssText}"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                             IsHitTestVisible="False" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
     </Style>
+    <Style Selector="ToolChromeControl /template/ Button#PART_MaximizeRestoreButton:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Surface1Brush}" />
+    </Style>
+
     <Style Selector="ToolChromeControl /template/ Button#PART_CloseButton">
-        <Setter Property="IsVisible" Value="False" />
+        <Setter Property="Width" Value="18" />
+        <Setter Property="Height" Value="18" />
+        <Setter Property="Margin" Value="1,0" />
+        <Setter Property="Padding" Value="0" />
+        <Setter Property="Background" Value="Transparent" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <ControlTemplate>
+                <Border Background="{TemplateBinding Background}" CornerRadius="3">
+                    <svg:Svg Path="{StaticResource CloseIcon}" Width="13" Height="13"
+                             Css="{DynamicResource SvgCssText}"
+                             HorizontalAlignment="Center" VerticalAlignment="Center"
+                             IsHitTestVisible="False" />
+                </Border>
+            </ControlTemplate>
+        </Setter>
     </Style>
+    <Style Selector="ToolChromeControl /template/ Button#PART_CloseButton:pointerover">
+        <Setter Property="Background" Value="{DynamicResource Surface1Brush}" />
+    </Style>
+
+    <!-- Menu (grip) button: no use case in current shell; hide for cleanliness. -->
     <Style Selector="ToolChromeControl /template/ Button#PART_MenuButton">
         <Setter Property="IsVisible" Value="False" />
     </Style>
-    <!-- Hide the tab-strip "create new document" (+) button and any chrome   -->
-    <!-- button rendered inside DocumentControl / DocumentTabStrip headers.    -->
+    <!-- Hide the tab-strip "create new document" (+) button (no action wired). -->
     <Style Selector="DocumentTabStrip /template/ Button">
         <Setter Property="IsVisible" Value="False" />
     </Style>
-    <!-- DocumentTabStripItem renders a Close X per tab, keep that visible.   -->
-    <!-- The above selector matches ONLY buttons in the strip template, not   -->
-    <!-- items, so tab-close stays functional.                                 -->
 </Styles>
 

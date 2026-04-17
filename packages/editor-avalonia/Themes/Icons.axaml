@@ -50,4 +50,9 @@
     <x:String x:Key="WarningIcon">/Assets/Icons/exclamation-triangle.svg</x:String>
     <x:String x:Key="ErrorIcon">/Assets/Icons/x-circle.svg</x:String>
 
+    <!-- Panel chrome -->
+    <x:String x:Key="CloseIcon">/Assets/Icons/x-mark.svg</x:String>
+    <x:String x:Key="PopoutIcon">/Assets/Icons/popout.svg</x:String>
+    <x:String x:Key="MaximizeIcon">/Assets/Icons/window-maximize.svg</x:String>
+
 </ResourceDictionary>
