@@ -1,5 +1,5 @@
 const std = @import("std");
-const external_gfx_types = @import("guava_gfx").types;
+const external_gfx_types = @import("guava_rhi").types;
 
 pub const GraphicsAPI = external_gfx_types.GraphicsAPI;
 pub const BackendSelectionPolicy = external_gfx_types.BackendSelectionPolicy;

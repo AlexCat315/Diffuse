@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_types = @import("guava_gfx").types;
+const gfx_types = @import("guava_rhi").types;
 const AABB = @import("../math/aabb.zig").AABB;
 
 // CPU 侧顶点布局：资产/模型使用的原始顶点格式

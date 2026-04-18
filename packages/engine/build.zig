@@ -54,7 +54,6 @@ pub fn build(b: *std.Build) void {
         .imports = &.{
             .{ .name = "io_globals", .module = io_globals_mod },
             .{ .name = "guava_rhi", .module = guava_rhi_dep.module("guava_rhi") },
-            .{ .name = "guava_gfx", .module = guava_rhi_dep.module("guava_rhi") },
         },
     });
     sources.configureEngineModule(b, engine_mod, target.result.os.tag, sdl_prefix, c_translations);

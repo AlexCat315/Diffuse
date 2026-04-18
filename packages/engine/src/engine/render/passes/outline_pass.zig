@@ -2,7 +2,7 @@ const std = @import("std");
 const id_pass_mod = @import("id_pass.zig");
 const mesh_pass_mod = @import("mesh_pass.zig");
 const gfx_mod = @import("../render_context.zig");
-const gfx_types = @import("guava_gfx").types;
+const gfx_types = @import("guava_rhi").types;
 const scene_mod = @import("../../scene/scene.zig");
 const shader_support = @import("../shader_support.zig");
 

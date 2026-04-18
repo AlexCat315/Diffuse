@@ -142,18 +142,13 @@ pub const engine_cpp_sources = [_][]const u8{
 // ─── Platform-specific sources ─────────────────────────────────────────────
 
 pub const macos_objcpp_sources = [_][]const u8{
-    "src/engine/platform/window_native_macos.mm",
     "src/engine/render/path_trace/path_trace_denoise_bridge.mm",
     "src/engine/rt/metal_rt_bridge.mm",
 };
 
-pub const windows_cpp_sources = [_][]const u8{
-    "src/engine/platform/window_native_windows.cpp",
-};
+pub const windows_cpp_sources = [_][]const u8{};
 
-pub const vulkan_c_sources = [_][]const u8{
-    "src/engine/platform/window_vulkan_sdl.c",
-};
+pub const vulkan_c_sources = [_][]const u8{};
 
 pub const vulkan_cpp_sources = [_][]const u8{};
 

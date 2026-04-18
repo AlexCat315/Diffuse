@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx = @import("guava_gfx").gfx;
+const gfx = @import("guava_rhi").gfx;
 const render_graph = @import("../render_graph.zig");
 
 /// Depth-of-Field pass

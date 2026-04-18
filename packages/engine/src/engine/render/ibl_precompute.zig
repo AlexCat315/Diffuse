@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_types = @import("guava_gfx").types;
+const gfx_types = @import("guava_rhi").types;
 
 // SH coefficients for efficient irradiance calculation
 pub const SH9 = struct {

@@ -4,15 +4,15 @@ const std = @import("std");
 const builtin = @import("builtin");
 const platform_mod = @import("../core/platform.zig");
 const window_mod = @import("../platform/window.zig");
-const types = @import("guava_gfx").types;
-const gfx = @import("guava_gfx").gfx;
-const command_buffer = @import("guava_gfx").command_buffer;
-const metal_device_mod = @import("guava_gfx").metal_device;
-const metal_backend_mod = @import("guava_gfx").metal_backend;
+const types = @import("guava_rhi").types;
+const gfx = @import("guava_rhi").gfx;
+const command_buffer = @import("guava_rhi").command_buffer;
+const metal_device_mod = @import("guava_rhi").metal_device;
+const metal_backend_mod = @import("guava_rhi").metal_backend;
 const mock_backend_factory = @import("render_context_mock_backend_factory.zig");
 const rt_device_mod = @import("../rt/rt_device.zig");
 const rt_backend = @import("../rt/rt_backend.zig");
-const vulkan_device_mod = @import("guava_gfx").vulkan_device;
+const vulkan_device_mod = @import("guava_rhi").vulkan_device;
 const rt_bridge = @import("render_context_rt_bridge.zig");
 
 // Combined error set that includes both old and new GFX errors

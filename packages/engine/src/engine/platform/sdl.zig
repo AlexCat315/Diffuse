@@ -1,1 +1,1 @@
-pub const c = @import("c_sdl3");
+pub const c = @import("guava_rhi").sdl.c;

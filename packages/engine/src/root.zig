@@ -43,11 +43,6 @@
 
 const std = @import("std");
 
-/// 外部图形基础设施依赖。
-///
-/// 当前先显式暴露 `guava_gfx`，用于逐步把 Guava 的底层图形能力迁移到独立仓库。
-pub const guava_gfx = @import("guava_gfx");
-
 /// 核心系统模块
 ///
 /// 提供应用程序生命周期管理、输入处理、层栈管理和平台抽象。
@@ -243,88 +238,88 @@ pub const script = @import("engine/script/script.zig");
 /// ```
 pub const gfx = struct {
     /// 外部独立 GFX 仓库入口（迁移中的新路径）
-    pub const external = @import("guava_gfx");
+    pub const external = @import("guava_rhi");
     /// GPU 缓冲区
-    pub const Buffer = @import("guava_gfx").gfx.Buffer;
+    pub const Buffer = @import("guava_rhi").gfx.Buffer;
     /// 图形渲染管线
-    pub const GraphicsPipeline = @import("guava_gfx").gfx.GraphicsPipeline;
+    pub const GraphicsPipeline = @import("guava_rhi").gfx.GraphicsPipeline;
     /// 图形渲染管线描述
-    pub const GraphicsPipelineDesc = @import("guava_gfx").gfx.GraphicsPipelineDesc;
+    pub const GraphicsPipelineDesc = @import("guava_rhi").gfx.GraphicsPipelineDesc;
     /// 纹理采样器
-    pub const Sampler = @import("guava_gfx").gfx.Sampler;
+    pub const Sampler = @import("guava_rhi").gfx.Sampler;
     /// 采样器描述
-    pub const SamplerDesc = @import("guava_gfx").gfx.SamplerDesc;
+    pub const SamplerDesc = @import("guava_rhi").gfx.SamplerDesc;
     /// 着色器模块
-    pub const ShaderModule = @import("guava_gfx").gfx.ShaderModule;
+    pub const ShaderModule = @import("guava_rhi").gfx.ShaderModule;
     /// 着色器模块描述
-    pub const ShaderModuleDesc = @import("guava_gfx").gfx.ShaderModuleDesc;
+    pub const ShaderModuleDesc = @import("guava_rhi").gfx.ShaderModuleDesc;
     /// GPU 纹理
-    pub const Texture = @import("guava_gfx").gfx.Texture;
+    pub const Texture = @import("guava_rhi").gfx.Texture;
     /// 后端选择策略
-    pub const BackendSelectionPolicy = @import("guava_gfx").types.BackendSelectionPolicy;
+    pub const BackendSelectionPolicy = @import("guava_rhi").types.BackendSelectionPolicy;
     /// 比较操作（用于深度/模板测试）
-    pub const CompareOp = @import("guava_gfx").types.CompareOp;
+    pub const CompareOp = @import("guava_rhi").types.CompareOp;
     /// 剔除模式
-    pub const CullMode = @import("guava_gfx").types.CullMode;
+    pub const CullMode = @import("guava_rhi").types.CullMode;
     /// 填充模式
-    pub const FillMode = @import("guava_gfx").types.FillMode;
+    pub const FillMode = @import("guava_rhi").types.FillMode;
     /// 正面朝向定义
-    pub const FrontFace = @import("guava_gfx").types.FrontFace;
+    pub const FrontFace = @import("guava_rhi").types.FrontFace;
     /// 图形 API 枚举
-    pub const GraphicsAPI = @import("guava_gfx").types.GraphicsAPI;
+    pub const GraphicsAPI = @import("guava_rhi").types.GraphicsAPI;
     /// 设备配置
-    pub const DeviceConfig = @import("guava_gfx").types.DeviceConfig;
+    pub const DeviceConfig = @import("guava_rhi").types.DeviceConfig;
     /// 缓冲区用途
-    pub const BufferUsage = @import("guava_gfx").types.BufferUsage;
+    pub const BufferUsage = @import("guava_rhi").types.BufferUsage;
     /// 索引元素大小
-    pub const IndexElementSize = @import("guava_gfx").types.IndexElementSize;
+    pub const IndexElementSize = @import("guava_rhi").types.IndexElementSize;
     /// 图元类型
-    pub const PrimitiveType = @import("guava_gfx").types.PrimitiveType;
+    pub const PrimitiveType = @import("guava_rhi").types.PrimitiveType;
     /// 采样器寻址模式
-    pub const SamplerAddressMode = @import("guava_gfx").types.SamplerAddressMode;
+    pub const SamplerAddressMode = @import("guava_rhi").types.SamplerAddressMode;
     /// 采样器过滤模式
-    pub const SamplerFilter = @import("guava_gfx").types.SamplerFilter;
+    pub const SamplerFilter = @import("guava_rhi").types.SamplerFilter;
     /// 采样器 Mipmap 模式
-    pub const SamplerMipmapMode = @import("guava_gfx").types.SamplerMipmapMode;
+    pub const SamplerMipmapMode = @import("guava_rhi").types.SamplerMipmapMode;
     /// 着色器格式
-    pub const ShaderFormat = @import("guava_gfx").types.ShaderFormat;
+    pub const ShaderFormat = @import("guava_rhi").types.ShaderFormat;
     /// 着色器阶段
-    pub const ShaderStage = @import("guava_gfx").types.ShaderStage;
+    pub const ShaderStage = @import("guava_rhi").types.ShaderStage;
     /// 纹理用途
-    pub const TextureUsage = @import("guava_gfx").types.TextureUsage;
+    pub const TextureUsage = @import("guava_rhi").types.TextureUsage;
     /// 缓冲区描述
-    pub const BufferDesc = @import("guava_gfx").types.BufferDesc;
+    pub const BufferDesc = @import("guava_rhi").types.BufferDesc;
     /// 纹理描述
-    pub const TextureDesc = @import("guava_gfx").types.TextureDesc;
+    pub const TextureDesc = @import("guava_rhi").types.TextureDesc;
     /// 传输缓冲区描述
-    pub const TransferBufferDesc = @import("guava_gfx").types.TransferBufferDesc;
+    pub const TransferBufferDesc = @import("guava_rhi").types.TransferBufferDesc;
     /// 顶点元素格式
-    pub const VertexElementFormat = @import("guava_gfx").types.VertexElementFormat;
+    pub const VertexElementFormat = @import("guava_rhi").types.VertexElementFormat;
     /// 顶点输入速率
-    pub const VertexInputRate = @import("guava_gfx").types.VertexInputRate;
+    pub const VertexInputRate = @import("guava_rhi").types.VertexInputRate;
     /// 清除状态
-    pub const ClearState = @import("guava_gfx").types.ClearState;
+    pub const ClearState = @import("guava_rhi").types.ClearState;
     /// 运行时信息
-    pub const RuntimeInfo = @import("guava_gfx").types.RuntimeInfo;
+    pub const RuntimeInfo = @import("guava_rhi").types.RuntimeInfo;
     /// 获取图形 API 名称
-    pub const graphicsApiName = @import("guava_gfx").types.graphicsApiName;
+    pub const graphicsApiName = @import("guava_rhi").types.graphicsApiName;
 
     /// GFX 设备抽象（显式队列 + 软件命令缓冲）
-    pub const Device = @import("guava_gfx").gfx.Device;
+    pub const Device = @import("guava_rhi").gfx.Device;
     /// GFX 能力查询
-    pub const Capabilities = @import("guava_gfx").gfx.Capabilities;
+    pub const Capabilities = @import("guava_rhi").gfx.Capabilities;
     /// GFX 软件命令缓冲
-    pub const CommandBuffer = @import("guava_gfx").gfx.CommandBuffer;
+    pub const CommandBuffer = @import("guava_rhi").gfx.CommandBuffer;
     /// GFX 资源状态追踪
-    pub const StateTracker = @import("guava_gfx").gfx.StateTracker;
+    pub const StateTracker = @import("guava_rhi").gfx.StateTracker;
     /// GFX 队列类型
-    pub const QueueClass = @import("guava_gfx").gfx.QueueClass;
+    pub const QueueClass = @import("guava_rhi").gfx.QueueClass;
     /// GFX 提交描述
-    pub const SubmitDesc = @import("guava_gfx").gfx.SubmitDesc;
+    pub const SubmitDesc = @import("guava_rhi").gfx.SubmitDesc;
     /// GFX 上传环分配器
-    pub const UploadRing = @import("guava_gfx").upload_ring.UploadRing;
+    pub const UploadRing = @import("guava_rhi").upload_ring.UploadRing;
     /// Metal 原生后端
-    pub const MetalBackend = @import("guava_gfx").metal_backend.MetalBackend;
+    pub const MetalBackend = @import("guava_rhi").metal_backend.MetalBackend;
 };
 
 /// 渲染系统模块
