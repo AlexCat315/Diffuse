@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_types = @import("guava_gfx").types;
+const gfx_types = @import("guava_rhi").types;
 const mat4_mod = @import("../../math/mat4.zig");
 const AABB = @import("../../math/aabb.zig").AABB;
 

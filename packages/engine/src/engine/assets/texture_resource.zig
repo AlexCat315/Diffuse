@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_types = @import("guava_gfx").types;
+const gfx_types = @import("guava_rhi").types;
 
 pub const TextureResource = struct {
     name: []u8,

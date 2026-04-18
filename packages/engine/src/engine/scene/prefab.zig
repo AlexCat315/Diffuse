@@ -3,7 +3,7 @@ const io_globals = @import("io_globals");
 const asset_registry = @import("../assets/registry.zig");
 const assets_handles = @import("../assets/handles.zig");
 const mesh_mod = @import("../assets/mesh_resource.zig");
-const gfx_types = @import("guava_gfx").types;
+const gfx_types = @import("guava_rhi").types;
 const components = @import("components.zig");
 const world_mod = @import("world.zig");
 

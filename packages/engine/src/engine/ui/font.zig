@@ -5,7 +5,7 @@
 ///! text layout (advance, bearing, bounds).
 const std = @import("std");
 const gfx_mod = @import("../render/render_context.zig");
-const gfx_types = @import("guava_gfx").types;
+const gfx_types = @import("guava_rhi").types;
 
 const c = @import("c_stb_truetype");
 
