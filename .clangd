@@ -19,11 +19,11 @@ CompileFlags:
 # Global diagnostics and editor assistance.
 Diagnostics:
   ClangTidy:
-    Checks: '-*'
-    CheckOptions: {}
+    Add: [performance-*, modernize-*, bugprone-*, clang-analyzer-*]
+    Remove: [readability-identifier-length]
   Suppress:
-    - 'readability-named-parameter'
-    - 'misc-non-private-member-variables-in-classes'
+    - "readability-named-parameter"
+    - "misc-non-private-member-variables-in-classes"
 
 InlayHints:
   Enabled: true
@@ -32,4 +32,3 @@ InlayHints:
 
 Completion:
   AllScopes: true
-  BundleOverloads: true
