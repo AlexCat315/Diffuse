@@ -108,14 +108,18 @@ pub const BindingSetCache = struct {
     }
 
     pub fn putByHash(self: *BindingSetCache, hash: u64, binding_set_id: u32) !void {
-        // Evict oldest entry when at capacity
-        if (self.map.count() >= max_entries and self.insertion_order.items.len > 0) {
-            const oldest_hash = self.insertion_order.orderedRemove(0);
-            _ = self.map.remove(.{ .hash = oldest_hash });
-            self.stats.evictions += 1;
-        }
         try self.map.put(.{ .hash = hash }, binding_set_id);
         try self.insertion_order.append(self.allocator, hash);
+    }
+
+    pub fn evictOldest(self: *BindingSetCache) ?u32 {
+        if (self.insertion_order.items.len == 0) return null;
+        const oldest_hash = self.insertion_order.orderedRemove(0);
+        const key = Key{ .hash = oldest_hash };
+        const id = self.map.get(key) orelse return null;
+        _ = self.map.remove(key);
+        self.stats.evictions += 1;
+        return id;
     }
 
     pub fn nextSyntheticId(self: *BindingSetCache) u32 {

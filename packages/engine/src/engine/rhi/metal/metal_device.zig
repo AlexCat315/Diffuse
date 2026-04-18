@@ -39,6 +39,9 @@ pub const MetalDevice = struct {
         extern fn guava_metal_rhi_get_texture_handle(ctx: *anyopaque, texture_id: u32) ?*anyopaque;
         // Binding set registration
         extern fn guava_metal_rhi_register_binding_set(ctx: *anyopaque, set_id: u32, entries: [*]const BindingEntryC, count: u32) void;
+        extern fn guava_metal_rhi_unregister_binding_set(ctx: *anyopaque, set_id: u32) void;
+        // Diagnostic counters
+        extern fn guava_metal_rhi_get_resource_counts(ctx: *anyopaque, out_textures: *u32, out_buffers: *u32, out_pipelines: *u32, out_binding_sets: *u32) void;
         // Command submission
         extern fn guava_metal_rhi_submit(ctx: *anyopaque, queue_class: u32, cmd_bytes: [*]const u8, cmd_len: u32, desc: *const SubmitDescC) bool;
         // Swapchain
@@ -578,6 +581,16 @@ fn vtRegisterBindingSet(ctx: *anyopaque, set_id: u32, layout_entries: []const rh
     self.registerBindingSet(set_id, layout_entries, set_entries);
 }
 
+fn vtUnregisterBindingSet(ctx: *anyopaque, set_id: u32) void {
+    const self: *MetalDevice = @ptrCast(@alignCast(ctx));
+    MetalDevice.bridge.guava_metal_rhi_unregister_binding_set(self.bridge_ctx, set_id);
+}
+
+fn vtGetResourceCounts(ctx: *anyopaque, out_textures: *u32, out_buffers: *u32, out_pipelines: *u32, out_binding_sets: *u32) void {
+    const self: *MetalDevice = @ptrCast(@alignCast(ctx));
+    MetalDevice.bridge.guava_metal_rhi_get_resource_counts(self.bridge_ctx, out_textures, out_buffers, out_pipelines, out_binding_sets);
+}
+
 fn vtUploadTextureData(ctx: *anyopaque, texture: rhi.Texture, data: []const u8, width: u32, height: u32, bytes_per_row: u32) rhi.Error!void {
     const self: *MetalDevice = @ptrCast(@alignCast(ctx));
     if (!MetalDevice.bridge.guava_metal_rhi_upload_texture_data(
@@ -625,6 +638,8 @@ const device_vtable = rhi.DeviceVTable{
     .upload_texture_data = vtUploadTextureData,
     .read_texture_data = vtReadTextureData,
     .register_binding_set = vtRegisterBindingSet,
+    .unregister_binding_set = vtUnregisterBindingSet,
+    .get_resource_counts = vtGetResourceCounts,
 };
 
 test "marshalSubmitDesc encodes timeline semaphores" {

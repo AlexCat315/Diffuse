@@ -18,6 +18,9 @@ const log = std.log.scoped(.editor_rpc);
 
 const max_clients = 8;
 const max_console_log_entries = 256;
+const max_process_per_frame = 2048;
+const max_pending_incoming_bytes = 64 * 1024 * 1024;
+const max_pending_outgoing_bytes = 64 * 1024 * 1024;
 
 /// A buffered console log entry for broadcasting to the editor.
 pub const ConsoleLogEntry = struct {
@@ -96,8 +99,12 @@ pub const Server = struct {
     // Thread-safe queues
     incoming_mutex: std.Io.Mutex = std.Io.Mutex.init,
     incoming: std.ArrayList(IncomingMessage) = .empty,
+    incoming_bytes: usize = 0,
+    dropped_incoming_messages: u64 = 0,
     outgoing_mutex: std.Io.Mutex = std.Io.Mutex.init,
     outgoing: std.ArrayList(OutgoingMessage) = .empty,
+    outgoing_bytes: usize = 0,
+    dropped_outgoing_messages: u64 = 0,
 
     // Connected clients (accessed from listener + client threads)
     clients_mutex: std.Io.Mutex = std.Io.Mutex.init,
@@ -129,6 +136,7 @@ pub const Server = struct {
     // Project root path — set from main.zig when a project is loaded.
     project_root: ?[]const u8 = null,
     scripts_dir: []const u8 = "Content/Scripts",
+    diag_frame_index: u64 = 0,
 
     pub fn init(allocator: std.mem.Allocator, port: u16) Server {
         return .{
@@ -177,41 +185,54 @@ pub const Server = struct {
     /// Process pending RPC requests on the main thread (called each frame).
     /// Returns the number of requests processed.
     pub fn processPending(self: *Server, layer_context: *core.LayerContext) !u32 {
-        // 1. Drain incoming queue
-        var batch: [64]IncomingMessage = undefined;
-        var count: u32 = 0;
-        {
-            self.incoming_mutex.lockUncancelable(io_globals.global_io);
-            defer self.incoming_mutex.unlock(io_globals.global_io);
-            const n = @min(self.incoming.items.len, batch.len);
-            if (n > 0) {
-                @memcpy(batch[0..n], self.incoming.items[0..n]);
-                // Remove processed items
-                const remaining = self.incoming.items.len - n;
-                if (remaining > 0) {
-                    std.mem.copyForwards(
-                        IncomingMessage,
-                        self.incoming.items[0..remaining],
-                        self.incoming.items[n..],
-                    );
+        self.diag_frame_index += 1;
+
+        // 1. Drain incoming queue in batches with per-frame cap to avoid backlog.
+        var processed: u32 = 0;
+        while (processed < max_process_per_frame) {
+            var batch: [64]IncomingMessage = undefined;
+            var count: u32 = 0;
+            {
+                self.incoming_mutex.lockUncancelable(io_globals.global_io);
+                defer self.incoming_mutex.unlock(io_globals.global_io);
+                const remaining_budget: usize = max_process_per_frame - processed;
+                const n = @min(self.incoming.items.len, @min(batch.len, remaining_budget));
+                if (n > 0) {
+                    @memcpy(batch[0..n], self.incoming.items[0..n]);
+                    for (batch[0..n]) |msg| {
+                        self.incoming_bytes -|= msg.payload.len;
+                    }
+                    // Remove processed items
+                    const remaining = self.incoming.items.len - n;
+                    if (remaining > 0) {
+                        std.mem.copyForwards(
+                            IncomingMessage,
+                            self.incoming.items[0..remaining],
+                            self.incoming.items[n..],
+                        );
+                    }
+                    self.incoming.shrinkRetainingCapacity(remaining);
+                    count = @intCast(n);
                 }
-                self.incoming.shrinkRetainingCapacity(remaining);
-                count = @intCast(n);
             }
-        }
 
-        // 2. Dispatch each request
-        for (batch[0..count]) |*msg| {
-            defer msg.deinit(self.allocator);
+            if (count == 0) break;
 
-            const response_json = methods.dispatch(self.allocator, msg.payload, layer_context, &self.settings, self.mesh_ops, self.collaboration_store, self.project_root, self.scripts_dir) catch |err| {
-                log.warn("RPC dispatch error: {s}", .{@errorName(err)});
-                continue;
-            };
+            // 2. Dispatch each request
+            for (batch[0..count]) |*msg| {
+                defer msg.deinit(self.allocator);
 
-            if (response_json) |json| {
-                self.enqueueOutgoing(msg.client_id, json);
+                const response_json = methods.dispatch(self.allocator, msg.payload, layer_context, &self.settings, self.mesh_ops, self.collaboration_store, self.project_root, self.scripts_dir) catch |err| {
+                    log.warn("RPC dispatch error: {s}", .{@errorName(err)});
+                    continue;
+                };
+
+                if (response_json) |json| {
+                    self.enqueueOutgoing(msg.client_id, json);
+                }
             }
+
+            processed += count;
         }
 
         // 3. Check subscription state changes and broadcast notifications
@@ -220,19 +241,53 @@ pub const Server = struct {
         // 4. Flush outgoing queue to clients
         self.flushOutgoing();
 
-        return count;
+        if (self.diag_frame_index % 300 == 0) {
+            var incoming_len: usize = 0;
+            var outgoing_len: usize = 0;
+            var incoming_bytes: usize = 0;
+            var outgoing_bytes: usize = 0;
+            var dropped_in: u64 = 0;
+            var dropped_out: u64 = 0;
+            {
+                self.incoming_mutex.lockUncancelable(io_globals.global_io);
+                defer self.incoming_mutex.unlock(io_globals.global_io);
+                incoming_len = self.incoming.items.len;
+                incoming_bytes = self.incoming_bytes;
+                dropped_in = self.dropped_incoming_messages;
+            }
+            {
+                self.outgoing_mutex.lockUncancelable(io_globals.global_io);
+                defer self.outgoing_mutex.unlock(io_globals.global_io);
+                outgoing_len = self.outgoing.items.len;
+                outgoing_bytes = self.outgoing_bytes;
+                dropped_out = self.dropped_outgoing_messages;
+            }
+            log.info(
+                "[editor-rpc queue] frame={d} processed={d} in_len={d} in_bytes={d} out_len={d} out_bytes={d} drop_in={d} drop_out={d}",
+                .{ self.diag_frame_index, processed, incoming_len, incoming_bytes, outgoing_len, outgoing_bytes, dropped_in, dropped_out },
+            );
+        }
+
+        return processed;
     }
 
     /// Enqueue a response or notification for a specific client (or broadcast if client_id=0).
     pub fn enqueueOutgoing(self: *Server, client_id: u32, payload: []u8) void {
         self.outgoing_mutex.lockUncancelable(io_globals.global_io);
         defer self.outgoing_mutex.unlock(io_globals.global_io);
+        if (self.outgoing_bytes + payload.len > max_pending_outgoing_bytes) {
+            self.dropped_outgoing_messages += 1;
+            self.allocator.free(payload);
+            return;
+        }
         self.outgoing.append(self.allocator, .{
             .client_id = client_id,
             .payload = payload,
         }) catch {
             self.allocator.free(payload);
+            return;
         };
+        self.outgoing_bytes += payload.len;
     }
 
     /// Broadcast a notification to all connected clients.
@@ -422,12 +477,19 @@ pub const Server = struct {
                     // Enqueue for main-thread processing
                     self.incoming_mutex.lockUncancelable(io_globals.global_io);
                     defer self.incoming_mutex.unlock(io_globals.global_io);
+                    if (self.incoming_bytes + frame.payload.len > max_pending_incoming_bytes) {
+                        self.dropped_incoming_messages += 1;
+                        self.allocator.free(frame.payload);
+                        continue;
+                    }
                     self.incoming.append(self.allocator, .{
                         .client_id = client_id,
                         .payload = @constCast(frame.payload),
                     }) catch {
                         self.allocator.free(frame.payload);
+                        continue;
                     };
+                    self.incoming_bytes += frame.payload.len;
                 },
                 .close => {
                     ws.writeCloseFrame(stream) catch {};
@@ -499,6 +561,9 @@ pub const Server = struct {
             count = @min(self.outgoing.items.len, batch_buf.len);
             if (count > 0) {
                 @memcpy(batch_buf[0..count], self.outgoing.items[0..count]);
+                for (batch_buf[0..count]) |msg| {
+                    self.outgoing_bytes -|= msg.payload.len;
+                }
                 const remaining = self.outgoing.items.len - count;
                 if (remaining > 0) {
                     std.mem.copyForwards(

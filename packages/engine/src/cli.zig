@@ -12,6 +12,7 @@ pub const McpTransport = enum {
 
 pub const CliOptions = struct {
     frame_count: usize = 0,
+    memory_leak_check: bool = false,
     backend_order: [3]engine.render.GraphicsAPI = engine.render.defaultBackendOrder(),
     backend_count: usize = 3,
     mcp_enabled: bool = false,
@@ -256,6 +257,10 @@ fn parseRunOptionsAlloc(allocator: std.mem.Allocator, args: []const []const u8) 
             index += 1;
             if (index >= args.len) return error.InvalidArguments;
             options.frame_count = try std.fmt.parseUnsigned(usize, args[index], 10);
+            continue;
+        }
+        if (std.mem.eql(u8, arg, "--memory-leak-check")) {
+            options.memory_leak_check = true;
             continue;
         }
         if (std.mem.eql(u8, arg, "--transport")) {

@@ -145,10 +145,14 @@ void* guava_metal_rhi_get_mtl_device(void* ctx);
 // Returns id<MTLTexture> as opaque pointer for a texture ID.
 void* guava_metal_rhi_get_texture_handle(void* ctx, uint32_t texture_id);
 
+// ── Diagnostic counters ────────────────────────────────────────────────────
+void guava_metal_rhi_get_resource_counts(void* ctx, uint32_t* out_textures, uint32_t* out_buffers, uint32_t* out_pipelines, uint32_t* out_binding_sets);
+
 // ── Binding set registration ──────────────────────────────────────────────
 void guava_metal_rhi_register_binding_set(void* ctx, uint32_t set_id,
                                           const GuavaMetalBindingEntry* entries,
                                           uint32_t count);
+void guava_metal_rhi_unregister_binding_set(void* ctx, uint32_t set_id);
 
 // ── Command buffer submission ─────────────────────────────────────────────
 // Decodes the RHI v2 serialized command buffer and translates to Metal calls.

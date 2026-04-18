@@ -299,6 +299,7 @@ pub const RhiDevice = struct {
     current_frame: ?Frame = null,
     default_binding_layout: ?rhi.BindingLayout = null,
     default_pipeline_layout: ?rhi.PipelineLayout = null,
+    legacy_bind_group_layouts: ?std.AutoHashMap(u64, rhi.BindingLayout) = null,
     owned_device: bool = false,
     owned_metal_device: ?*metal_device_mod.MetalDevice = null,
     owned_vulkan_device: ?*vulkan_device_mod.VulkanDevice = null,
@@ -309,6 +310,7 @@ pub const RhiDevice = struct {
     pending_texture_blits: std.ArrayList(PendingTextureBlit) = .empty,
     next_fence_id: u64 = 1,
     vsync_enabled: bool = true,
+    diag_frame_index: u64 = 0,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -352,6 +354,7 @@ pub const RhiDevice = struct {
                 .owned_device = true,
                 .owned_metal_device = md_ptr,
                 .metal_layer_binding = metal_layer_binding,
+                .legacy_bind_group_layouts = std.AutoHashMap(u64, rhi.BindingLayout).init(allocator),
                 .vsync_enabled = config.vsync_enabled,
             };
             out.setFramesInFlight(config.frames_in_flight);
@@ -392,6 +395,7 @@ pub const RhiDevice = struct {
                 },
                 .owned_device = true,
                 .owned_vulkan_device = vk_ptr,
+                .legacy_bind_group_layouts = std.AutoHashMap(u64, rhi.BindingLayout).init(allocator),
                 .vsync_enabled = config.vsync_enabled,
             };
             out.setFramesInFlight(config.frames_in_flight);
@@ -425,6 +429,7 @@ pub const RhiDevice = struct {
             },
             .owned_device = true,
             .owned_mock_backend = backend_ptr,
+            .legacy_bind_group_layouts = std.AutoHashMap(u64, rhi.BindingLayout).init(allocator),
             .vsync_enabled = config.vsync_enabled,
         };
         out.setFramesInFlight(config.frames_in_flight);
@@ -441,6 +446,7 @@ pub const RhiDevice = struct {
         return .{
             .allocator = allocator,
             .device = device,
+            .legacy_bind_group_layouts = std.AutoHashMap(u64, rhi.BindingLayout).init(allocator),
             .owned_device = false,
         };
     }
@@ -449,6 +455,9 @@ pub const RhiDevice = struct {
         self.releaseAllDepthTextures();
         self.pending_pixel_downloads.deinit(self.allocator);
         self.pending_texture_blits.deinit(self.allocator);
+        if (self.legacy_bind_group_layouts) |*layouts| {
+            layouts.deinit();
+        }
         self.releaseRtDevice();
         if (self.owned_device) {
             self.device.deinit();
@@ -718,6 +727,12 @@ pub const RhiDevice = struct {
         self.advanceFrame();
         self.depth_texture = self.depth_textures[self.current_depth_index];
         self.current_frame = null;
+
+        // Periodic RHI tracking diagnostics — log every 300 frames (~5s @ 60fps)
+        self.diag_frame_index += 1;
+        if (self.diag_frame_index % 300 == 0) {
+            self.device.logTrackingDiagnostics(self.diag_frame_index);
+        }
     }
 
     pub fn submitFrameAndAcquireFence(self: *RhiDevice, frame: Frame) Error!Fence {
@@ -1314,7 +1329,18 @@ pub const RhiDevice = struct {
             };
         }
 
-        const layout = try self.device.createBindingLayout(.{ .entries = layout_entries.items, .label = "legacy_bind_group_layout" });
+        const layout = blk: {
+            const key = hashLegacyBindGroupLayout(layout_entries.items);
+            if (self.legacy_bind_group_layouts) |*layouts| {
+                if (layouts.get(key)) |existing| {
+                    break :blk existing;
+                }
+                const created = try self.device.createBindingLayout(.{ .entries = layout_entries.items, .label = "legacy_bind_group_layout" });
+                try layouts.put(key, created);
+                break :blk created;
+            }
+            break :blk try self.device.createBindingLayout(.{ .entries = layout_entries.items, .label = "legacy_bind_group_layout" });
+        };
         const set = try self.device.createBindingSetCached(layout, .{ .entries = set_entries.items, .label = "legacy_bind_group" });
 
         return .{
@@ -1700,6 +1726,18 @@ pub const RhiDevice = struct {
         const pipeline_layout = try self.device.resolvePipelineLayout(&.{layout});
         self.default_pipeline_layout = pipeline_layout;
         return pipeline_layout;
+    }
+
+    fn hashLegacyBindGroupLayout(entries: []const rhi.BindingLayoutEntry) u64 {
+        var hasher = std.hash.Wyhash.init(0);
+        for (entries) |entry| {
+            hasher.update(std.mem.asBytes(&entry.slot));
+            const binding_type = @intFromEnum(entry.binding_type);
+            hasher.update(std.mem.asBytes(&binding_type));
+            const stage = @intFromEnum(entry.stage);
+            hasher.update(std.mem.asBytes(&stage));
+        }
+        return hasher.final();
     }
 };
 
