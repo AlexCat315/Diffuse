@@ -30,39 +30,71 @@ pub fn generateCompileCommandsJson(
     var entries: std.ArrayList(CompileCommand) = .empty;
     defer entries.deinit(b.allocator);
 
-    // PlutoVG / stb
-    appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, c_compiler, &sources.plutovg_c_flags, &sources.plutovg_c_sources, &.{});
+    // Auto-scan all native sources used by engine build.
+    const c_files = collectFromRoots(
+        b,
+        &.{
+            "third_party/lunasvg/plutovg/source",
+            "third_party/soloud/src",
+            "src/engine",
+        },
+        ".c",
+    );
+    defer b.allocator.free(c_files);
 
-    // Engine C++ (LunaSVG, Jolt bridge, Recast bridge)
-    appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.engine_cpp_flags, &sources.engine_cpp_sources, &.{});
+    const cpp_files = collectFromRoots(
+        b,
+        &.{
+            "third_party/lunasvg/source",
+            "third_party/soloud/src",
+            "third_party/jolt/Jolt",
+            "third_party/recast/Recast/Source",
+            "third_party/recast/Detour/Source",
+            "third_party/recast/DetourCrowd/Source",
+            "src/engine",
+        },
+        ".cpp",
+    );
+    defer b.allocator.free(cpp_files);
 
-    // SoLoud audio
-    appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.soloud_cpp_flags, &sources.soloud_core_cpp_sources, &.{});
-    appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.soloud_cpp_flags, &sources.soloud_wav_cpp_sources, &.{});
-    appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.soloud_cpp_flags, &sources.soloud_extra_audiosource_cpp_sources, &.{});
-    appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.soloud_cpp_flags, &sources.soloud_filter_cpp_sources, &.{});
-    appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.soloud_cpp_flags, &sources.soloud_backend_cpp_sources, &.{});
-    appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.soloud_cpp_flags, &sources.soloud_c_api_cpp_sources, &.{});
-    appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, c_compiler, &sources.soloud_c_flags, &sources.soloud_support_c_sources, &.{});
+    appendAutoScannedCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        c_compiler,
+        .c,
+        c_files,
+        &.{},
+    );
 
-    // Jolt Physics (auto-collected)
-    const jolt_cpp_sources = utils.collectSourceFiles(b, "third_party/jolt/Jolt", ".cpp");
-    appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.engine_cpp_flags, jolt_cpp_sources, &.{});
+    appendAutoScannedCommands(
+        b,
+        &entries,
+        root_dir,
+        sdl_include_path,
+        sysroot,
+        cpp_compiler,
+        .cpp,
+        cpp_files,
+        &.{},
+    );
 
-    // Recast/Detour navigation (auto-collected)
-    const recast_cpp_sources = utils.collectSourceFiles(b, "third_party/recast/Recast/Source", ".cpp");
-    appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.engine_cpp_flags, recast_cpp_sources, &.{});
-    const detour_cpp_sources = utils.collectSourceFiles(b, "third_party/recast/Detour/Source", ".cpp");
-    appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.engine_cpp_flags, detour_cpp_sources, &.{});
-    const detour_crowd_cpp_sources = utils.collectSourceFiles(b, "third_party/recast/DetourCrowd/Source", ".cpp");
-    appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.engine_cpp_flags, detour_crowd_cpp_sources, &.{});
-
-    // Platform-specific
     if (os_tag == .macos) {
-        appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, objcpp_compiler, &sources.macos_objcpp_flags, &sources.macos_objcpp_sources, &.{});
-    }
-    if (os_tag == .windows) {
-        appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.windows_platform_cpp_flags, &sources.windows_cpp_sources, &.{});
+        const objcpp_files = collectFromRoots(b, &.{"src/engine"}, ".mm");
+        defer b.allocator.free(objcpp_files);
+        appendAutoScannedCommands(
+            b,
+            &entries,
+            root_dir,
+            sdl_include_path,
+            sysroot,
+            objcpp_compiler,
+            .objcpp,
+            objcpp_files,
+            &.{},
+        );
     }
 
     // Vulkan C bridge — detect include path via pkg-config
@@ -74,7 +106,17 @@ pub fn generateCompileCommandsJson(
         defer vulkan_extra_includes.deinit(b.allocator);
         if (vulkan_include) |p| vulkan_extra_includes.append(b.allocator, p) catch @panic("OOM");
         const vk_includes = vulkan_extra_includes.toOwnedSlice(b.allocator) catch @panic("OOM");
-        appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, c_compiler, &sources.vulkan_c_flags, &sources.vulkan_c_sources, vk_includes);
+        appendAutoScannedCommands(
+            b,
+            &entries,
+            root_dir,
+            sdl_include_path,
+            sysroot,
+            c_compiler,
+            .c,
+            &sources.vulkan_c_sources,
+            vk_includes,
+        );
     }
 
     // Electron native addon (N-API)
@@ -94,9 +136,29 @@ pub fn generateCompileCommandsJson(
         const napi_includes = napi_extra_includes.toOwnedSlice(b.allocator) catch @panic("OOM");
 
         if (os_tag == .macos) {
-            appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, objcpp_compiler, &sources.macos_objcpp_flags, &.{"../editor/native/src/iosurface_view.mm"}, napi_includes);
+            appendAutoScannedCommands(
+                b,
+                &entries,
+                root_dir,
+                sdl_include_path,
+                sysroot,
+                objcpp_compiler,
+                .objcpp,
+                &.{"../editor/native/src/iosurface_view.mm"},
+                napi_includes,
+            );
         }
-        appendCompileCommands(b, &entries, root_dir, sdl_include_path, sysroot, cpp_compiler, &sources.engine_cpp_flags, &.{"../editor/native/src/shm_view.cpp"}, napi_includes);
+        appendAutoScannedCommands(
+            b,
+            &entries,
+            root_dir,
+            sdl_include_path,
+            sysroot,
+            cpp_compiler,
+            .cpp,
+            &.{"../editor/native/src/shm_view.cpp"},
+            napi_includes,
+        );
     }
 
     var out: std.Io.Writer.Allocating = .init(b.allocator);
@@ -106,14 +168,14 @@ pub fn generateCompileCommandsJson(
     return b.allocator.dupe(u8, out.written()) catch @panic("OOM");
 }
 
-fn appendCompileCommands(
+fn appendAutoScannedCommands(
     b: *std.Build,
     entries: *std.ArrayList(CompileCommand),
     root_dir: []const u8,
     sdl_include_path: []const u8,
     sysroot: ?[]const u8,
     compiler: []const u8,
-    flags: []const []const u8,
+    language: Language,
     files: []const []const u8,
     extra_include_paths: []const []const u8,
 ) void {
@@ -127,11 +189,19 @@ fn appendCompileCommands(
             arguments.append(b.allocator, "-isysroot") catch @panic("OOM");
             arguments.append(b.allocator, sdk_path) catch @panic("OOM");
         }
-        arguments.appendSlice(b.allocator, flags) catch @panic("OOM");
+        appendAutoFlagsForFile(b, &arguments, language, file) catch @panic("OOM");
         arguments.append(b.allocator, b.fmt("-I{s}", .{sdl_include_path})) catch @panic("OOM");
         for (sources.engine_include_paths) |include_path| {
             arguments.append(b.allocator, b.fmt("-I{s}", .{b.pathFromRoot(include_path)})) catch @panic("OOM");
         }
+
+        // Optional Vulkan include path improves clangd resolution for bridge files.
+        if (std.mem.indexOf(u8, file, "vulkan") != null) {
+            if (utils.captureCommandOutput(b, &.{ "pkg-config", "--variable=includedir", "vulkan" })) |vk_inc| {
+                arguments.append(b.allocator, b.fmt("-I{s}", .{vk_inc})) catch @panic("OOM");
+            }
+        }
+
         for (extra_include_paths) |include_path| {
             arguments.append(b.allocator, b.fmt("-I{s}", .{include_path})) catch @panic("OOM");
         }
@@ -143,6 +213,78 @@ fn appendCompileCommands(
             .arguments = arguments.toOwnedSlice(b.allocator) catch @panic("OOM"),
         }) catch @panic("OOM");
     }
+}
+
+fn appendAutoFlagsForFile(
+    b: *std.Build,
+    arguments: *std.ArrayList([]const u8),
+    language: Language,
+    file: []const u8,
+) !void {
+    switch (language) {
+        .c => try arguments.append(b.allocator, "-std=c11"),
+        .cpp, .objcpp => try arguments.append(b.allocator, "-std=c++17"),
+    }
+
+    if (language == .objcpp) {
+        try arguments.append(b.allocator, "-fobjc-arc");
+    }
+
+    if (std.mem.indexOf(u8, file, "third_party/lunasvg/plutovg") != null) {
+        try arguments.appendSlice(b.allocator, &.{
+            "-DPLUTOVG_BUILD=1",
+            "-DPLUTOVG_BUILD_STATIC=1",
+        });
+    } else if (std.mem.indexOf(u8, file, "third_party/lunasvg") != null) {
+        try arguments.appendSlice(b.allocator, &.{
+            "-DLUNASVG_BUILD=1",
+            "-DLUNASVG_BUILD_STATIC=1",
+            "-DPLUTOVG_BUILD=1",
+            "-DPLUTOVG_BUILD_STATIC=1",
+        });
+    }
+
+    if (std.mem.indexOf(u8, file, "third_party/soloud") != null and language != .c) {
+        try arguments.appendSlice(b.allocator, &.{
+            "-DWITH_MINIAUDIO=1",
+            "-DWITH_COREAUDIO=1",
+        });
+    }
+}
+
+fn collectFromRoots(
+    b: *std.Build,
+    roots: []const []const u8,
+    extension: []const u8,
+) []const []const u8 {
+    var all: std.ArrayList([]const u8) = .empty;
+    defer all.deinit(b.allocator);
+
+    for (roots) |root| {
+        const files = utils.collectSourceFiles(b, root, extension);
+        defer b.allocator.free(files);
+        all.appendSlice(b.allocator, files) catch @panic("OOM");
+    }
+
+    std.mem.sort([]const u8, all.items, {}, struct {
+        fn lessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
+            return std.mem.lessThan(u8, lhs, rhs);
+        }
+    }.lessThan);
+
+    var unique = std.ArrayList([]const u8).empty;
+    defer unique.deinit(b.allocator);
+
+    var previous: ?[]const u8 = null;
+    for (all.items) |item| {
+        if (previous) |p| {
+            if (std.mem.eql(u8, p, item)) continue;
+        }
+        unique.append(b.allocator, item) catch @panic("OOM");
+        previous = item;
+    }
+
+    return unique.toOwnedSlice(b.allocator) catch @panic("OOM");
 }
 
 fn compilerPath(b: *std.Build, language: Language, os_tag: std.Target.Os.Tag) []const u8 {
