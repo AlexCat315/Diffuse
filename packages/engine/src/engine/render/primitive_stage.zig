@@ -289,7 +289,6 @@ pub const PrimitiveStage = struct {
             .code = @embedFile("shaders/vulkan/primitive.vert.spv"),
             .stage = .vertex,
             .format = .spirv,
-            .num_uniform_buffers = 1,
         });
         errdefer if (self.vertex_shader) |*shader| {
             device.releaseShaderModule(shader);
@@ -299,7 +298,6 @@ pub const PrimitiveStage = struct {
             .code = @embedFile("shaders/vulkan/primitive.frag.spv"),
             .stage = .fragment,
             .format = .spirv,
-            .num_samplers = 1,
         });
         errdefer if (self.fragment_shader) |*shader| {
             device.releaseShaderModule(shader);
