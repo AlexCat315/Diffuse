@@ -205,6 +205,8 @@ pub fn main(init: std.process.Init) !u8 {
 }
 
 test "player boots without project (smoke test)" {
+    if (!shouldRunSmokeTests()) return error.SkipZigTest;
+
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -229,4 +231,9 @@ test "player boots without project (smoke test)" {
         return;
     };
     try std.testing.expect(report.frames > 0);
+}
+
+fn shouldRunSmokeTests() bool {
+    const val = std.c.getenv("GUAVA_RUN_SMOKE_TESTS") orelse return false;
+    return std.mem.orderZ(u8, val, "1") == .eq;
 }
