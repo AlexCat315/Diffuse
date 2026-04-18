@@ -54,12 +54,12 @@ pub const IconTextureEntry = struct {
     height: u32,
     tint: [4]u8,
     has_tint: bool,
-    texture: engine.gfx.Texture,
+    texture: engine.render.Texture,
 };
 
 pub const ImageThumbnailEntry = struct {
     path: []u8,
-    texture: engine.gfx.Texture,
+    texture: engine.render.Texture,
 };
 
 pub const ManipulationMode = @import("guava").editor_rpc.schema.types.ManipulationMode;
@@ -823,14 +823,14 @@ pub const EditorState = struct {
     playback_toolbar_drag_offset: [2]f32 = .{ 0.0, 0.0 },
     top_bar_drag_active: bool = false,
     top_bar_drag_offset: [2]f32 = .{ 0.0, 0.0 },
-    preview_device: ?*engine.gfx.Device = null,
-    icon_device: ?*engine.gfx.Device = null,
-    preview_texture: ?engine.gfx.Texture = null,
+    preview_device: ?*engine.render.RenderContext = null,
+    icon_device: ?*engine.render.RenderContext = null,
+    preview_texture: ?engine.render.Texture = null,
     preview_texture_key: ?[]u8 = null,
     preview_texture_size: [2]u32 = .{ 0, 0 },
     icon_textures: std.ArrayList(IconTextureEntry) = .empty,
     image_thumbnail_textures: std.ArrayListUnmanaged(ImageThumbnailEntry) = .empty,
-    image_thumbnail_device: ?*engine.gfx.Device = null,
+    image_thumbnail_device: ?*engine.render.RenderContext = null,
     image_thumbnail_failed: std.ArrayListUnmanaged([]u8) = .empty,
     frozen_entities: std.ArrayList(engine.scene.EntityId) = .empty,
     selection_locked_entities: std.ArrayList(engine.scene.EntityId) = .empty,

@@ -22,7 +22,7 @@ const node_mod = @import("node.zig");
 const layout_mod = @import("layout.zig");
 const renderer_mod = @import("renderer.zig");
 const font_mod = @import("font.zig");
-const gfx_mod = @import("engine/render/render_context.zig");
+const gfx_mod = @import("../render/render_context.zig");
 
 pub const Node = node_mod.Node;
 pub const NodeTag = node_mod.NodeTag;

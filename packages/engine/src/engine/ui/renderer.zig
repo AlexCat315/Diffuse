@@ -4,7 +4,7 @@ const std = @import("std");
 const node_mod = @import("node.zig");
 const style_mod = @import("style.zig");
 const font_mod = @import("font.zig");
-const gfx_mod = @import("engine/render/render_context.zig");
+const gfx_mod = @import("../render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../render/shader_support.zig");
 

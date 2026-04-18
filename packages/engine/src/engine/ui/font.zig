@@ -4,7 +4,7 @@
 ///! for GPU-accelerated text rendering. Glyph metrics are stored for
 ///! text layout (advance, bearing, bounds).
 const std = @import("std");
-const gfx_mod = @import("engine/render/render_context.zig");
+const gfx_mod = @import("../render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 
 const c = @import("c_stb_truetype");

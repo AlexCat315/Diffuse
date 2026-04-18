@@ -76,7 +76,7 @@ fn generateShaderModule(
 
     try writer.writeAll(
         \\const std = @import("std");
-        \\const rhi_types = @import("../rhi/types.zig");
+        \\const rhi_types = @import("guava_gfx").types;
         \\
         \\pub const ShaderStageReflection = struct {
         \\    num_samplers: u32 = 0,

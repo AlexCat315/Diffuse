@@ -363,6 +363,10 @@ pub const render = struct {
     pub const EditorViewportState = @import("engine/render/types.zig").EditorViewportState;
     /// 渲染器主类，管理整个渲染管线
     pub const Renderer = @import("engine/render/renderer.zig").Renderer;
+    /// 渲染上下文（底层 GPU 资源与提交接口）
+    pub const RenderContext = @import("engine/render/render_context.zig").RenderContext;
+    /// 渲染纹理句柄类型
+    pub const Texture = @import("engine/render/render_context.zig").Texture;
     /// 渲染器配置
     pub const RendererConfig = @import("engine/render/renderer.zig").RendererConfig;
     /// 帧报告，包含渲染统计信息

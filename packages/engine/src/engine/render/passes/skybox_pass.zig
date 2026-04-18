@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_mod = @import("engine/render/render_context.zig");
+const gfx_mod = @import("../render_context.zig");
 const shader_support = @import("../shader_support.zig");
 const math = @import("../../math/mat4.zig");
 const mesh_pass_mod = @import("mesh_pass.zig");
