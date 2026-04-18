@@ -108,3 +108,11 @@ packages/engine/sdk/csharp/**/**/obj/**
 /packages/*/build/
 /CMakeFiles/
 zig-pkg/
+
+# Keep build script sources under src/build tracked.
+!src/build/
+src/build/*
+!src/build/compile_commands.zig
+!src/build/sources.zig
+!src/build/packaging.zig
+!src/build/utils.zig
