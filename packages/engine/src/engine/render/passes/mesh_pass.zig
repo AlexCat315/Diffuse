@@ -778,10 +778,11 @@ pub const MeshSceneCache = struct {
                     cached.source_format != texture.format;
 
                 if (source_changed) {
+                    const cached_desc = device.textureDesc(&cached.texture);
                     const size_or_format_changed =
-                        cached.texture.desc.width != texture.width or
-                        cached.texture.desc.height != texture.height or
-                        cached.texture.desc.format != texture.format;
+                        cached_desc.width != texture.width or
+                        cached_desc.height != texture.height or
+                        cached_desc.format != texture.format;
 
                     if (size_or_format_changed) {
                         device.releaseTexture(&cached.texture);

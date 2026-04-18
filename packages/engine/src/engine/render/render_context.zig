@@ -76,21 +76,14 @@ pub const VertexAttributeDesc = struct {
 };
 
 // NEW: Resource types now hold u32 IDs instead of backend-native pointers
-pub const Buffer = struct {
-    id: u32,
-    desc: types.BufferDesc,
-};
+pub const Buffer = gfx.Buffer;
 
 pub const TransferBuffer = struct {
     id: u32,
-    desc: types.TransferBufferDesc,
     shadow_data: ?[]u8 = null,
 };
 
-pub const Texture = struct {
-    id: u32,
-    desc: types.TextureDesc,
-};
+pub const Texture = gfx.Texture;
 
 pub const ShaderModule = gfx.ShaderModule;
 
@@ -251,6 +244,9 @@ pub const RenderContext = struct {
 
     perf_stats: types.PerformanceStats = .{},
     bind_state: BindGroupState = .{},
+    texture_descs: std.AutoHashMap(u32, types.TextureDesc),
+    buffer_descs: std.AutoHashMap(u32, types.BufferDesc),
+    transfer_buffer_descs: std.AutoHashMap(u32, types.TransferBufferDesc),
     // Current frame state
     current_frame: ?Frame = null,
     default_binding_layout: ?gfx.BindingLayout = null,
@@ -310,6 +306,9 @@ pub const RenderContext = struct {
                 .owned_device = true,
                 .owned_metal_device = md_ptr,
                 .metal_layer_binding = metal_layer_binding,
+                .texture_descs = std.AutoHashMap(u32, types.TextureDesc).init(allocator),
+                .buffer_descs = std.AutoHashMap(u32, types.BufferDesc).init(allocator),
+                .transfer_buffer_descs = std.AutoHashMap(u32, types.TransferBufferDesc).init(allocator),
                 .bind_group_layout_cache = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
                 .vsync_enabled = config.vsync_enabled,
             };
@@ -351,6 +350,9 @@ pub const RenderContext = struct {
                 },
                 .owned_device = true,
                 .owned_vulkan_device = vk_ptr,
+                .texture_descs = std.AutoHashMap(u32, types.TextureDesc).init(allocator),
+                .buffer_descs = std.AutoHashMap(u32, types.BufferDesc).init(allocator),
+                .transfer_buffer_descs = std.AutoHashMap(u32, types.TransferBufferDesc).init(allocator),
                 .bind_group_layout_cache = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
                 .vsync_enabled = config.vsync_enabled,
             };
@@ -371,6 +373,9 @@ pub const RenderContext = struct {
             .runtime_info = mock_init.runtime_info,
             .owned_device = true,
             .owned_mock_backend = mock_init.backend,
+            .texture_descs = std.AutoHashMap(u32, types.TextureDesc).init(allocator),
+            .buffer_descs = std.AutoHashMap(u32, types.BufferDesc).init(allocator),
+            .transfer_buffer_descs = std.AutoHashMap(u32, types.TransferBufferDesc).init(allocator),
             .bind_group_layout_cache = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
             .vsync_enabled = config.vsync_enabled,
         };
@@ -385,6 +390,9 @@ pub const RenderContext = struct {
         return .{
             .allocator = allocator,
             .device = device,
+            .texture_descs = std.AutoHashMap(u32, types.TextureDesc).init(allocator),
+            .buffer_descs = std.AutoHashMap(u32, types.BufferDesc).init(allocator),
+            .transfer_buffer_descs = std.AutoHashMap(u32, types.TransferBufferDesc).init(allocator),
             .bind_group_layout_cache = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
             .owned_device = false,
         };
@@ -394,6 +402,9 @@ pub const RenderContext = struct {
         self.releaseAllDepthTextures();
         self.pending_pixel_downloads.deinit(self.allocator);
         self.pending_texture_blits.deinit(self.allocator);
+        self.texture_descs.deinit();
+        self.buffer_descs.deinit();
+        self.transfer_buffer_descs.deinit();
         if (self.bind_group_layout_cache) |*layouts| {
             layouts.deinit();
         }
@@ -942,13 +953,12 @@ pub const RenderContext = struct {
             .label = desc.label,
         };
         const buf = try self.device.createBuffer(gfx_desc);
-        return .{
-            .id = buf.id,
-            .desc = desc,
-        };
+        try self.buffer_descs.put(buf.id, desc);
+        return buf;
     }
 
     pub fn releaseBuffer(self: *RenderContext, buffer: *Buffer) void {
+        _ = self.buffer_descs.remove(buffer.id);
         self.device.vtable.destroy_buffer(self.device.ctx, .{ .id = buffer.id });
         buffer.* = undefined;
     }
@@ -967,9 +977,9 @@ pub const RenderContext = struct {
         });
         const shadow = try self.allocator.alloc(u8, desc.size);
         @memset(shadow, 0);
+        try self.transfer_buffer_descs.put(buf.id, desc);
         return .{
             .id = buf.id,
-            .desc = desc,
             .shadow_data = shadow,
         };
     }
@@ -978,6 +988,7 @@ pub const RenderContext = struct {
         if (transfer_buffer.shadow_data) |shadow| {
             self.allocator.free(shadow);
         }
+        _ = self.transfer_buffer_descs.remove(transfer_buffer.id);
         self.device.destroyBuffer(.{ .id = transfer_buffer.id });
         transfer_buffer.* = undefined;
     }
@@ -992,10 +1003,8 @@ pub const RenderContext = struct {
             .label = desc.label,
         };
         const tex = try self.device.createTexture(gfx_desc);
-        return .{
-            .id = tex.id,
-            .desc = desc,
-        };
+        try self.texture_descs.put(tex.id, desc);
+        return tex;
     }
 
     /// Create a texture backed by an IOSurface for cross-process GPU sharing (macOS only).
@@ -1010,8 +1019,9 @@ pub const RenderContext = struct {
             if (desc.label) |l| @ptrCast(l.ptr) else null,
         );
         if (result.texture_id == 0) return error.OutOfMemory;
+        try self.texture_descs.put(result.texture_id, desc);
         return .{
-            .texture = .{ .id = result.texture_id, .desc = desc },
+            .texture = .{ .id = result.texture_id },
             .surface_id = result.surface_id,
         };
     }
@@ -1038,8 +1048,9 @@ pub const RenderContext = struct {
                 if (desc.label) |l| @ptrCast(l.ptr) else null,
             );
             if (result.texture_id == 0) return error.OutOfMemory;
+            try self.texture_descs.put(result.texture_id, desc);
             return .{
-                .texture = .{ .id = result.texture_id, .desc = desc },
+                .texture = .{ .id = result.texture_id },
                 .iosurface_id = result.surface_id,
             };
         }
@@ -1053,8 +1064,9 @@ pub const RenderContext = struct {
                 if (desc.label) |l| @ptrCast(l.ptr) else null,
             );
             if (result.texture_id == 0) return error.DeviceCreateFailed;
+            try self.texture_descs.put(result.texture_id, desc);
             return .{
-                .texture = .{ .id = result.texture_id, .desc = desc },
+                .texture = .{ .id = result.texture_id },
                 .shm_name = result.shm_name,
             };
         }
@@ -1095,8 +1107,22 @@ pub const RenderContext = struct {
     }
 
     pub fn releaseTexture(self: *RenderContext, texture: *Texture) void {
+        _ = self.texture_descs.remove(texture.id);
         self.device.vtable.destroy_texture(self.device.ctx, .{ .id = texture.id });
         texture.* = undefined;
+    }
+
+    pub fn textureDesc(self: *const RenderContext, texture: *const Texture) types.TextureDesc {
+        return self.texture_descs.get(texture.id) orelse .{
+            .width = 0,
+            .height = 0,
+            .format = .unknown,
+            .usage = 0,
+        };
+    }
+
+    pub fn transferBufferDesc(self: *const RenderContext, transfer_buffer: *const TransferBuffer) types.TransferBufferDesc {
+        return self.transfer_buffer_descs.get(transfer_buffer.id) orelse .{ .size = 0 };
     }
 
     pub fn createShaderModule(self: *RenderContext, desc: ShaderModuleDesc) Error!ShaderModule {
@@ -1354,15 +1380,17 @@ pub const RenderContext = struct {
         rows_per_layer: u32,
     ) Error!void {
         _ = rows_per_layer;
-        const width = texture.desc.width;
-        const height = texture.desc.height;
-        const bytes_per_row = pixels_per_row * texture.desc.format.bytesPerPixel();
+        const desc = self.textureDesc(texture);
+        const width = desc.width;
+        const height = desc.height;
+        const bytes_per_row = pixels_per_row * desc.format.bytesPerPixel();
         try self.device.uploadTextureData(.{ .id = texture.id }, data, width, height, bytes_per_row);
     }
 
     pub fn readTextureData(self: *RenderContext, texture: *const Texture, bytes_per_row: u32, destination: []u8) Error!void {
-        const width = texture.desc.width;
-        const height = texture.desc.height;
+        const desc = self.textureDesc(texture);
+        const width = desc.width;
+        const height = desc.height;
         try self.device.readTextureData(.{ .id = texture.id }, width, height, bytes_per_row, destination);
     }
 
@@ -1372,7 +1400,8 @@ pub const RenderContext = struct {
 
     pub fn downloadTexturePixelToOffset(self: *RenderContext, pass: CopyPass, texture: *const Texture, transfer_buffer: *const TransferBuffer, offset: u32, x: u32, y: u32) void {
         _ = pass;
-        if (offset > transfer_buffer.desc.size or transfer_buffer.desc.size - offset < 4) return;
+        const desc = self.transferBufferDesc(transfer_buffer);
+        if (offset > desc.size or desc.size - offset < 4) return;
         self.pending_pixel_downloads.append(self.allocator, .{
             .texture = texture,
             .transfer_buffer = @constCast(transfer_buffer),
@@ -1397,10 +1426,11 @@ pub const RenderContext = struct {
 
     pub fn readTexturePixel(self: *RenderContext, texture: *const Texture, x: u32, y: u32) Error![4]u8 {
         var all: [4]u8 = .{ 0, 0, 0, 0 };
-        if (x >= texture.desc.width or y >= texture.desc.height) return error.InvalidArgument;
+        const desc = self.textureDesc(texture);
+        if (x >= desc.width or y >= desc.height) return error.InvalidArgument;
 
-        const row_bytes = texture.desc.width * 4;
-        const needed = row_bytes * texture.desc.height;
+        const row_bytes = desc.width * 4;
+        const needed = row_bytes * desc.height;
         const temp = try self.allocator.alloc(u8, needed);
         defer self.allocator.free(temp);
 
@@ -1470,20 +1500,22 @@ pub const RenderContext = struct {
         defer self.pending_texture_blits.clearRetainingCapacity();
 
         for (self.pending_texture_blits.items) |blit| {
-            if (blit.src.desc.width != blit.dst.desc.width or
-                blit.src.desc.height != blit.dst.desc.height or
-                blit.src.desc.format != blit.dst.desc.format)
+            const src_desc = self.textureDesc(blit.src);
+            const dst_desc = self.textureDesc(blit.dst);
+            if (src_desc.width != dst_desc.width or
+                src_desc.height != dst_desc.height or
+                src_desc.format != dst_desc.format)
             {
                 continue;
             }
 
-            const bytes_per_row = blit.src.desc.width * blit.src.desc.format.bytesPerPixel();
-            const total_size = bytes_per_row * blit.src.desc.height;
+            const bytes_per_row = src_desc.width * src_desc.format.bytesPerPixel();
+            const total_size = bytes_per_row * src_desc.height;
             const temp = self.allocator.alloc(u8, total_size) catch continue;
             defer self.allocator.free(temp);
 
             self.readTextureData(blit.src, bytes_per_row, temp) catch continue;
-            self.uploadTextureData(blit.dst, temp, blit.src.desc.width, blit.src.desc.height) catch continue;
+            self.uploadTextureData(blit.dst, temp, src_desc.width, src_desc.height) catch continue;
         }
     }
 
@@ -1506,7 +1538,8 @@ pub const RenderContext = struct {
         var all_match = true;
         for (0..self.frames_in_flight) |i| {
             if (self.depth_textures[i]) |depth_texture| {
-                if (depth_texture.desc.width != width or depth_texture.desc.height != height) {
+                const depth_desc = self.textureDesc(&depth_texture);
+                if (depth_desc.width != width or depth_desc.height != height) {
                     all_match = false;
                     break;
                 }

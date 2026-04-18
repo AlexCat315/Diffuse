@@ -38,8 +38,9 @@ pub fn enqueueSelectionReadbacks(
     in_flight_batches: *std.ArrayList(InFlightSelectionBatch),
 ) !void {
     const total_buffer_size = std.math.cast(u32, pending.len * @as(usize, selection_readback_bytes)) orelse return error.OutOfMemory;
+    const id_texture_desc = gfx.textureDesc(id_texture);
 
-    if (id_texture.desc.width == 0 or id_texture.desc.height == 0) {
+    if (id_texture_desc.width == 0 or id_texture_desc.height == 0) {
         try gfx.submitFrame(frame);
         for (pending) |request| {
             _ = request;
@@ -66,8 +67,8 @@ pub fn enqueueSelectionReadbacks(
     const copy_pass = try gfx.beginCopyPass(frame);
 
     for (readbacks) |readback| {
-        const pixel_x = @min(readback.request.pixel_x, id_texture.desc.width - 1);
-        const pixel_y = @min(readback.request.pixel_y, id_texture.desc.height - 1);
+        const pixel_x = @min(readback.request.pixel_x, id_texture_desc.width - 1);
+        const pixel_y = @min(readback.request.pixel_y, id_texture_desc.height - 1);
         gfx.downloadTexturePixelToOffset(copy_pass, id_texture, &transfer_buffer, readback.offset, pixel_x, pixel_y);
     }
 

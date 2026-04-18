@@ -9,13 +9,6 @@ CompileFlags:
   CompilationDatabase: packages/engine
 
 ---
-# Qt6 editor sources: use CMake-generated database.
-If:
-  PathMatch: ^packages/editor_qt6/(src|qml|build)/.*
-CompileFlags:
-  CompilationDatabase: packages/editor_qt6/build
-
----
 # Global diagnostics and editor assistance.
 Diagnostics:
   ClangTidy:

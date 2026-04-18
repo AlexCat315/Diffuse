@@ -2071,8 +2071,9 @@ pub const Renderer = struct {
                             if (self.skybox_log_count < 5) {
                                 self.skybox_log_count += 1;
                                 const env_tex = prepared_scene.environment_map.?;
+                                const env_desc = self.gfx.textureDesc(env_tex);
                                 render_log.info("skybox draw #{d}: env_map {d}x{d} intensity={d:.3} gpu_id={d} viewport_active={} target={s}", .{
-                                    self.skybox_log_count,                 env_tex.desc.width, env_tex.desc.height, prepared_scene.sky_intensity, env_tex.id, viewport_active,
+                                    self.skybox_log_count,                 env_desc.width, env_desc.height, prepared_scene.sky_intensity, env_tex.id, viewport_active,
                                     if (viewport_active) "hdr" else "ldr",
                                 });
                             }
@@ -3165,8 +3166,9 @@ pub const Renderer = struct {
 
     fn renderPathTraceViewport(self: *Renderer, prepared_scene: *const mesh_pass_mod.PreparedScene, scene: *scene_mod.Scene) !void {
         const target = self.scene_viewport.hdrColor() orelse return;
-        const width = target.desc.width;
-        const height = target.desc.height;
+        const target_desc = self.gfx.textureDesc(target);
+        const width = target_desc.width;
+        const height = target_desc.height;
         if (width == 0 or height == 0) return;
 
         const path_trace_environment = resolvePathTraceEnvironment(self, scene);
@@ -3474,9 +3476,10 @@ pub const Renderer = struct {
         defer if (trace_w != width or trace_h != height) self.allocator.free(upload_pixels);
 
         // --- 管理 GPU 纹理 ---
+        const rt_shadow_desc: gfx_types.TextureDesc = if (self.rt_shadow_mask_texture) |t| self.gfx.textureDesc(&t) else .{ .width = 0, .height = 0, .format = .unknown, .usage = 0 };
         if (self.rt_shadow_mask_texture == null or
-            self.rt_shadow_mask_texture.?.desc.width != width or
-            self.rt_shadow_mask_texture.?.desc.height != height)
+            rt_shadow_desc.width != width or
+            rt_shadow_desc.height != height)
         {
             if (self.rt_shadow_mask_texture) |*t| self.gfx.releaseTexture(t);
             self.rt_shadow_mask_texture = self.gfx.createTexture(.{
@@ -4659,8 +4662,9 @@ pub const Renderer = struct {
     fn enqueueSelectionReadbacks(self: *Renderer, frame: gfx_mod.Frame, id_texture: *const gfx_mod.Texture) !void {
         const pending = self.pending_selection_readbacks.items;
         const total_buffer_size = std.math.cast(u32, pending.len * @as(usize, selection_readback_bytes)) orelse return error.OutOfMemory;
+        const id_desc = self.gfx.textureDesc(id_texture);
 
-        if (id_texture.desc.width == 0 or id_texture.desc.height == 0) {
+        if (id_desc.width == 0 or id_desc.height == 0) {
             try self.gfx.submitFrame(frame);
             try self.applyPendingSelectionMisses();
             return;
@@ -4685,8 +4689,8 @@ pub const Renderer = struct {
         const copy_pass = try self.gfx.beginCopyPass(frame);
 
         for (readbacks) |readback| {
-            const pixel_x = @min(readback.request.pixel_x, id_texture.desc.width - 1);
-            const pixel_y = @min(readback.request.pixel_y, id_texture.desc.height - 1);
+            const pixel_x = @min(readback.request.pixel_x, id_desc.width - 1);
+            const pixel_y = @min(readback.request.pixel_y, id_desc.height - 1);
             self.gfx.downloadTexturePixelToOffset(copy_pass, id_texture, &transfer_buffer, readback.offset, pixel_x, pixel_y);
         }
 
@@ -4721,8 +4725,8 @@ pub const Renderer = struct {
                 try self.gfx.readTransferBufferBytesAt(&batch.transfer_buffer, readback.offset, pixel[0..]);
                 const entity = id_pass_mod.decodeEntityIdBgra(pixel);
                 const id_tex = self.id_pass.texture();
-                const tw: u32 = if (id_tex) |t| t.desc.width else 0;
-                const th: u32 = if (id_tex) |t| t.desc.height else 0;
+                const tw: u32 = if (id_tex) |t| self.gfx.textureDesc(t).width else 0;
+                const th: u32 = if (id_tex) |t| self.gfx.textureDesc(t).height else 0;
                 std.log.info("[PICK] pixel=({d},{d}) id_texture={d}x{d} rgba=[{d},{d},{d},{d}] entity={?d}", .{
                     readback.request.pixel_x,
                     readback.request.pixel_y,
