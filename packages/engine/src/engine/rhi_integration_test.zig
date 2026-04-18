@@ -1,6 +1,6 @@
 const std = @import("std");
 
-const metal_backend = @import("rhi/metal/metal_backend.zig");
+const metal_backend = @import("guava_rhi").metal_backend;
 const rhi = @import("guava_rhi").rhi;
 const binding_cache = @import("guava_rhi").binding_cache;
 const command_buffer = @import("guava_rhi").command_buffer;

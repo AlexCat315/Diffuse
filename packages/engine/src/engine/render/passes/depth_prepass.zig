@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("../../rhi/device.zig");
+const rhi_mod = @import("engine/rhi_legacy/mod.zig");
 const shader_support = @import("../shader_support.zig");
 
 pub const DepthPrepass = struct {

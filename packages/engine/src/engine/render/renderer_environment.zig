@@ -6,7 +6,7 @@ const environment_map_import_mod = @import("../assets/environment_map_import.zig
 const texture_import_mod = @import("../assets/texture_import.zig");
 const mesh_pass_mod = @import("passes/mesh_pass.zig");
 const path_trace_common = @import("path_trace/path_trace_common.zig");
-const rhi_mod = @import("../rhi/device.zig");
+const rhi_mod = @import("engine/rhi_legacy/mod.zig");
 const scene_mod = @import("../scene/scene.zig");
 
 const render_log = std.log.scoped(.viewport_render);

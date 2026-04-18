@@ -244,36 +244,36 @@ pub const script = @import("engine/script/script.zig");
 pub const rhi = struct {
     /// 外部独立 RHI 仓库入口（迁移中的新路径）
     pub const external = @import("guava_rhi");
-    /// 旧版 RHI 设备（基于 SDL3 GPU API，逐步迁移中）
-    pub const LegacyDevice = @import("engine/rhi/device.zig").RhiDevice;
+    /// 旧版导出名保留，但类型已切到 guava_rhi 原生 Device
+    pub const LegacyDevice = @import("guava_rhi").rhi.Device;
     /// GPU 缓冲区
-    pub const Buffer = @import("engine/rhi/device.zig").Buffer;
+    pub const Buffer = @import("guava_rhi").rhi.Buffer;
     /// 绑定组，用于绑定资源到着色器
-    pub const BindGroup = @import("engine/rhi/device.zig").BindGroup;
+    pub const BindGroup = @import("engine/rhi_legacy/mod.zig").BindGroup;
     /// 拷贝通道，用于资源拷贝操作
-    pub const CopyPass = @import("engine/rhi/device.zig").CopyPass;
+    pub const CopyPass = @import("engine/rhi_legacy/mod.zig").CopyPass;
     /// GPU 围栏，用于同步
-    pub const Fence = @import("engine/rhi/device.zig").Fence;
+    pub const Fence = @import("engine/rhi_legacy/mod.zig").Fence;
     /// 帧对象，表示一帧的渲染
-    pub const Frame = @import("engine/rhi/device.zig").Frame;
+    pub const Frame = @import("engine/rhi_legacy/mod.zig").Frame;
     /// 图形渲染管线
-    pub const GraphicsPipeline = @import("engine/rhi/device.zig").GraphicsPipeline;
+    pub const GraphicsPipeline = @import("guava_rhi").rhi.GraphicsPipeline;
     /// 图形渲染管线描述
-    pub const GraphicsPipelineDesc = @import("engine/rhi/device.zig").GraphicsPipelineDesc;
+    pub const GraphicsPipelineDesc = @import("guava_rhi").rhi.GraphicsPipelineDesc;
     /// 纹理采样器
-    pub const Sampler = @import("engine/rhi/device.zig").Sampler;
+    pub const Sampler = @import("guava_rhi").rhi.Sampler;
     /// 采样器描述
-    pub const SamplerDesc = @import("engine/rhi/device.zig").SamplerDesc;
+    pub const SamplerDesc = @import("guava_rhi").rhi.SamplerDesc;
     /// 着色器模块
-    pub const ShaderModule = @import("engine/rhi/device.zig").ShaderModule;
+    pub const ShaderModule = @import("guava_rhi").rhi.ShaderModule;
     /// 着色器模块描述
-    pub const ShaderModuleDesc = @import("engine/rhi/device.zig").ShaderModuleDesc;
+    pub const ShaderModuleDesc = @import("guava_rhi").rhi.ShaderModuleDesc;
     /// GPU 纹理
-    pub const Texture = @import("engine/rhi/device.zig").Texture;
+    pub const Texture = @import("guava_rhi").rhi.Texture;
     /// 纹理-采样器绑定
-    pub const TextureSamplerBinding = @import("engine/rhi/device.zig").TextureSamplerBinding;
+    pub const TextureSamplerBinding = @import("engine/rhi_legacy/mod.zig").TextureSamplerBinding;
     /// 传输缓冲区，用于 CPU-GPU 数据传输
-    pub const TransferBuffer = @import("engine/rhi/device.zig").TransferBuffer;
+    pub const TransferBuffer = @import("engine/rhi_legacy/mod.zig").TransferBuffer;
     /// 后端选择策略
     pub const BackendSelectionPolicy = @import("guava_rhi").types.BackendSelectionPolicy;
     /// 比较操作（用于深度/模板测试）
@@ -338,7 +338,7 @@ pub const rhi = struct {
     /// RHI 上传环分配器
     pub const UploadRing = @import("guava_rhi").upload_ring.UploadRing;
     /// Metal 原生后端
-    pub const MetalBackend = @import("engine/rhi/metal/metal_backend.zig").MetalBackend;
+    pub const MetalBackend = @import("guava_rhi").metal_backend.MetalBackend;
 };
 
 /// 渲染系统模块
