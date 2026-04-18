@@ -9,6 +9,13 @@ Rectangle {
     border.width: 1
 
     required property string statusText
+    required property bool leftPanelVisible
+    required property bool rightPanelVisible
+    required property bool bottomPanelVisible
+
+    signal toggleLeftPanel()
+    signal toggleRightPanel()
+    signal toggleBottomPanel()
 
     RowLayout {
         anchors.fill: parent
@@ -24,6 +31,27 @@ Rectangle {
         Button { text: "Play" }
         Button { text: "Pause" }
         Button { text: "Stop" }
+
+        ToolButton {
+            text: "Scene"
+            checkable: true
+            checked: root.leftPanelVisible
+            onClicked: root.toggleLeftPanel()
+        }
+
+        ToolButton {
+            text: "Inspector"
+            checkable: true
+            checked: root.rightPanelVisible
+            onClicked: root.toggleRightPanel()
+        }
+
+        ToolButton {
+            text: "Bottom"
+            checkable: true
+            checked: root.bottomPanelVisible
+            onClicked: root.toggleBottomPanel()
+        }
 
         Item { Layout.fillWidth: true }
 
