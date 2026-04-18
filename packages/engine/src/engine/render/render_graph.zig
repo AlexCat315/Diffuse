@@ -19,7 +19,7 @@
 
 const std = @import("std");
 const io_globals = @import("io_globals");
-const rhi = @import("../rhi/rhi.zig");
+const rhi = @import("guava_rhi").rhi;
 
 /// GPU queue type for pass execution.
 pub const QueueClass = enum {

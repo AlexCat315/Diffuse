@@ -1,5 +1,5 @@
 const std = @import("std");
-const rhi = @import("../../rhi/rhi.zig");
+const rhi = @import("guava_rhi").rhi;
 const render_graph = @import("../render_graph.zig");
 
 pub const FullscreenPostPass = struct {

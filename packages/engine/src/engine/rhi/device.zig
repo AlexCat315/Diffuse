@@ -5,11 +5,11 @@ const builtin = @import("builtin");
 const platform_mod = @import("../core/platform.zig");
 const window_mod = @import("../platform/window.zig");
 const types = @import("guava_rhi").types;
-const rhi = @import("rhi.zig");
+const rhi = @import("guava_rhi").rhi;
 const command_buffer = @import("guava_rhi").command_buffer;
 const metal_device_mod = @import("metal/metal_device.zig");
 const metal_backend_mod = @import("metal/metal_backend.zig");
-const rt_device_mod = @import("rt_device.zig");
+const rt_device_mod = @import("../rt/rhi_rt_device.zig");
 const rt_backend = @import("../rt/rt_backend.zig");
 const vulkan_device_mod = @import("vulkan/vk_device.zig");
 
