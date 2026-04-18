@@ -324,19 +324,19 @@ pub const rhi = struct {
     pub const graphicsApiName = @import("guava_rhi").types.graphicsApiName;
 
     /// RHI 设备抽象（显式队列 + 软件命令缓冲）
-    pub const Device = @import("engine/rhi/rhi.zig").Device;
+    pub const Device = @import("guava_rhi").rhi.Device;
     /// RHI 能力查询
-    pub const Capabilities = @import("engine/rhi/rhi.zig").Capabilities;
+    pub const Capabilities = @import("guava_rhi").rhi.Capabilities;
     /// RHI 软件命令缓冲
-    pub const CommandBuffer = @import("engine/rhi/rhi.zig").CommandBuffer;
+    pub const CommandBuffer = @import("guava_rhi").rhi.CommandBuffer;
     /// RHI 资源状态追踪
-    pub const StateTracker = @import("engine/rhi/rhi.zig").StateTracker;
+    pub const StateTracker = @import("guava_rhi").rhi.StateTracker;
     /// RHI 队列类型
-    pub const QueueClass = @import("engine/rhi/rhi.zig").QueueClass;
+    pub const QueueClass = @import("guava_rhi").rhi.QueueClass;
     /// RHI 提交描述
-    pub const SubmitDesc = @import("engine/rhi/rhi.zig").SubmitDesc;
+    pub const SubmitDesc = @import("guava_rhi").rhi.SubmitDesc;
     /// RHI 上传环分配器
-    pub const UploadRing = @import("engine/rhi/upload_ring.zig").UploadRing;
+    pub const UploadRing = @import("guava_rhi").upload_ring.UploadRing;
     /// Metal 原生后端
     pub const MetalBackend = @import("engine/rhi/metal/metal_backend.zig").MetalBackend;
 };
