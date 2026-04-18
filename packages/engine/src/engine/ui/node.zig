@@ -114,6 +114,9 @@ pub const NodePool = struct {
 pub const Tree = struct {
     pool: *NodePool,
 
+    var dead_layout: Layout = .{};
+    var dead_computed: ComputedRect = .{};
+
     pub fn appendChild(self: Tree, parent_id: u32, child_id: u32) void {
         const parent = self.pool.get(parent_id) orelse return;
         const child = self.pool.get(child_id) orelse return;
@@ -187,12 +190,12 @@ pub const Tree = struct {
     }
 
     pub fn nodeLayout(self: Tree, id: usize) *Layout {
-        const node = self.pool.get(@intCast(id)) orelse unreachable;
+        const node = self.pool.get(@intCast(id)) orelse return &dead_layout;
         return &node.layout;
     }
 
     pub fn nodeComputed(self: Tree, id: usize) *ComputedRect {
-        const node = self.pool.get(@intCast(id)) orelse unreachable;
+        const node = self.pool.get(@intCast(id)) orelse return &dead_computed;
         return &node.computed;
     }
 };

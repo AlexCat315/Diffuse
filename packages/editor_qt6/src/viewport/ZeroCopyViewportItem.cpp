@@ -17,7 +17,9 @@ ZeroCopyViewportItem::ZeroCopyViewportItem(QQuickItem *parent)
 
 ZeroCopyViewportItem::~ZeroCopyViewportItem()
 {
-    clearTextureResources();
+    m_sgTexture = nullptr;
+    m_rhiTexture = nullptr;
+    m_nativeMetalTexture = nullptr;
 }
 
 void ZeroCopyViewportItem::setSurfaceHandle(qint64 surfaceId, int width, int height)
@@ -70,7 +72,11 @@ QSGNode *ZeroCopyViewportItem::updatePaintNode(QSGNode *oldNode, UpdatePaintNode
 
 void ZeroCopyViewportItem::releaseResources()
 {
-    clearTextureResources();
+    // During window teardown, scene graph resources may already be partially
+    // released by Qt internals. Only detach handles here to avoid double free.
+    m_sgTexture = nullptr;
+    m_rhiTexture = nullptr;
+    m_nativeMetalTexture = nullptr;
     QQuickItem::releaseResources();
 }
 
@@ -82,11 +88,9 @@ void ZeroCopyViewportItem::clearTextureResources()
     delete m_rhiTexture;
     m_rhiTexture = nullptr;
 
-    if (m_nativeMetalTexture)
-    {
-        guava_release_metal_texture(m_nativeMetalTexture);
-        m_nativeMetalTexture = nullptr;
-    }
+    // The imported native texture may be owned/released by QRhi backend lifecycle.
+    // Avoid manual release here to prevent double-release on teardown.
+    m_nativeMetalTexture = nullptr;
 }
 
 bool ZeroCopyViewportItem::ensureTextureReady()

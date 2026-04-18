@@ -1439,6 +1439,13 @@ pub const Renderer = struct {
         const pass_stats = try self.graph.allocatePassStats(self.allocator);
         defer self.allocator.free(pass_stats);
 
+        // Editor-server 的 IOSurface 路径可能在高频提交下积压大量 GPU 命令缓冲，
+        // 导致 IOAccelerator(graphics) 内存持续上涨。这里做帧级回压，确保上一帧
+        // GPU 工作完成后再进入下一帧提交。
+        if (self.scene_viewport.use_iosurface) {
+            self.rhi.waitForPreviousFrame();
+        }
+
         // 构建场景快照：捕获可见实体、资源引用与当前相机/灯光状态，供后续场景提取与渲染准备使用。
         const snapshot = buildSceneSnapshot(scene);
         const result = blk: {

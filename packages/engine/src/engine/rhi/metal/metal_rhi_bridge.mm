@@ -3,6 +3,7 @@
 #import <IOSurface/IOSurface.h>
 #include <cstdio>
 #include <cstring>
+#include <atomic>
 #include <unordered_map>
 #include <vector>
 #include "metal_rhi_bridge.h"
@@ -51,6 +52,12 @@ struct GuavaMetalRhiContext {
 
     // Last committed command buffer — used for GPU completion sync
     id<MTLCommandBuffer> last_command_buffer = nil;
+
+    // Submission diagnostics for detecting command-buffer backlog.
+    std::atomic<uint64_t> submit_count{0};
+    std::atomic<uint64_t> completed_count{0};
+    std::atomic<uint32_t> in_flight_cmd_buffers{0};
+    std::atomic<uint32_t> max_in_flight_cmd_buffers{0};
 
     // Shader libraries cached per shader module (for Metal library compilation)
     std::unordered_map<uint32_t, id<MTLLibrary>>              shader_libraries;
@@ -306,6 +313,12 @@ void guava_metal_rhi_destroy(void* raw) {
     @autoreleasepool {
         auto* ctx = static_cast<GuavaMetalRhiContext*>(raw);
         // ARC handles Metal object release
+        for (auto& kv : ctx->iosurfaces) {
+            if (kv.second) {
+                CFRelease(kv.second);
+            }
+        }
+        ctx->iosurfaces.clear();
         ctx->buffers.clear();
         ctx->textures.clear();
         ctx->samplers.clear();
@@ -762,6 +775,18 @@ void* guava_metal_rhi_get_texture_handle(void* raw, uint32_t texture_id) {
 }
 
 // ---------------------------------------------------------------------------
+// Diagnostic counters
+// ---------------------------------------------------------------------------
+
+void guava_metal_rhi_get_resource_counts(void* raw, uint32_t* out_textures, uint32_t* out_buffers, uint32_t* out_pipelines, uint32_t* out_binding_sets) {
+    auto* ctx = static_cast<GuavaMetalRhiContext*>(raw);
+    if (out_textures)    *out_textures    = (uint32_t)ctx->textures.size();
+    if (out_buffers)     *out_buffers     = (uint32_t)ctx->buffers.size();
+    if (out_pipelines)   *out_pipelines   = (uint32_t)(ctx->gfx_pipelines.size() + ctx->cmp_pipelines.size());
+    if (out_binding_sets)*out_binding_sets = (uint32_t)ctx->binding_sets.size();
+}
+
+// ---------------------------------------------------------------------------
 // Binding set registration
 // ---------------------------------------------------------------------------
 
@@ -772,6 +797,11 @@ void guava_metal_rhi_register_binding_set(void* raw, uint32_t set_id,
     BindingSetData bsd;
     bsd.entries.assign(entries, entries + count);
     ctx->binding_sets[set_id] = std::move(bsd);
+}
+
+void guava_metal_rhi_unregister_binding_set(void* raw, uint32_t set_id) {
+    auto* ctx = static_cast<GuavaMetalRhiContext*>(raw);
+    ctx->binding_sets.erase(set_id);
 }
 
 // ---------------------------------------------------------------------------
@@ -1227,6 +1257,28 @@ bool guava_metal_rhi_submit(void* raw, uint32_t queue_class,
             }
         }
 
+        const uint64_t submit_idx = ctx->submit_count.fetch_add(1, std::memory_order_relaxed) + 1;
+        const uint32_t in_flight = ctx->in_flight_cmd_buffers.fetch_add(1, std::memory_order_relaxed) + 1;
+        uint32_t prev_max = ctx->max_in_flight_cmd_buffers.load(std::memory_order_relaxed);
+        while (in_flight > prev_max and !ctx->max_in_flight_cmd_buffers.compare_exchange_weak(prev_max, in_flight, std::memory_order_relaxed)) {}
+
+        [mtlCmd addCompletedHandler:^(id<MTLCommandBuffer> /*buf*/) {
+            ctx->completed_count.fetch_add(1, std::memory_order_relaxed);
+            const uint32_t current = ctx->in_flight_cmd_buffers.load(std::memory_order_relaxed);
+            if (current > 0) {
+                ctx->in_flight_cmd_buffers.fetch_sub(1, std::memory_order_relaxed);
+            }
+        }];
+
+        if (submit_idx % 300 == 0) {
+            fprintf(stderr,
+                    "[GuavaMetal diag] submit=%llu completed=%llu inflight=%u max_inflight=%u\n",
+                    (unsigned long long)submit_idx,
+                    (unsigned long long)ctx->completed_count.load(std::memory_order_relaxed),
+                    ctx->in_flight_cmd_buffers.load(std::memory_order_relaxed),
+                    ctx->max_in_flight_cmd_buffers.load(std::memory_order_relaxed));
+        }
+
         [mtlCmd commit];
         ctx->last_command_buffer = mtlCmd;
         return true;
@@ -1474,38 +1526,33 @@ uint32_t guava_metal_rhi_copy_to_staging(void* raw, uint32_t src_texture_id) {
             g_staging_height = (uint32_t)height;
         }
 
-        // GPU blit: texture-to-texture copy via blit command encoder.
-        // Submitted ASYNC on the same graphics queue — Metal guarantees FIFO
-        // ordering, so the blit completes before the next frame's render starts.
-        // No waitUntilCompleted needed, saving ~200-400µs per frame.
-        id<MTLCommandBuffer> blitCmd = [ctx->graphics_queue commandBuffer];
-        if (!blitCmd) return g_staging_surface_id;
+        // Stability-first path: wait for the current frame GPU work to finish,
+        // then copy pixels with CPU between IOSurfaces. This avoids per-frame
+        // async blit command buffers and completion handlers accumulating over
+        // long editor sessions.
+        if (ctx->last_command_buffer) {
+            [ctx->last_command_buffer waitUntilCompleted];
+            ctx->last_command_buffer = nil;
+        }
 
-        id<MTLBlitCommandEncoder> blit = [blitCmd blitCommandEncoder];
-        [blit copyFromTexture:srcTexture
-                  sourceSlice:0
-                  sourceLevel:0
-                 sourceOrigin:MTLOriginMake(0, 0, 0)
-                   sourceSize:MTLSizeMake(width, height, 1)
-                    toTexture:g_staging_texture
-             destinationSlice:0
-             destinationLevel:0
-            destinationOrigin:MTLOriginMake(0, 0, 0)];
-        [blit endEncoding];
+        IOSurfaceLock(srcSurface, kIOSurfaceLockReadOnly, nullptr);
+        IOSurfaceLock(g_staging_surface, 0, nullptr);
+        const size_t src_bpr = IOSurfaceGetBytesPerRow(srcSurface);
+        const size_t dst_bpr = IOSurfaceGetBytesPerRow(g_staging_surface);
+        const size_t src_h = IOSurfaceGetHeight(srcSurface);
+        const size_t dst_h = IOSurfaceGetHeight(g_staging_surface);
+        const size_t rows = src_h < dst_h ? src_h : dst_h;
+        const size_t row_bytes = src_bpr < dst_bpr ? src_bpr : dst_bpr;
 
-        // Bump IOSurface seed in a completion handler so the addon's poll-based
-        // seed check only sees the new frame after the blit is actually done.
-        IOSurfaceRef staging = g_staging_surface;
-        CFRetain(staging); // prevent dealloc before handler runs
-        [blitCmd addCompletedHandler:^(id<MTLCommandBuffer> /*buf*/) {
-            IOSurfaceLock(staging, 0, nullptr);
-            IOSurfaceUnlock(staging, 0, nullptr);
-            CFRelease(staging);
-        }];
-
-        [blitCmd commit];
-        // Don't wait — the blit runs async on the GPU, and the completion
-        // handler bumps the seed when done.
+        const uint8_t* src_base = static_cast<const uint8_t*>(IOSurfaceGetBaseAddress(srcSurface));
+        uint8_t* dst_base = static_cast<uint8_t*>(IOSurfaceGetBaseAddress(g_staging_surface));
+        if (src_base && dst_base && row_bytes > 0) {
+            for (size_t y = 0; y < rows; ++y) {
+                memcpy(dst_base + y * dst_bpr, src_base + y * src_bpr, row_bytes);
+            }
+        }
+        IOSurfaceUnlock(g_staging_surface, 0, nullptr);
+        IOSurfaceUnlock(srcSurface, kIOSurfaceLockReadOnly, nullptr);
 
         return g_staging_surface_id;
     }

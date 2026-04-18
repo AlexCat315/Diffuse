@@ -257,6 +257,8 @@ pub const DeviceVTable = struct {
     upload_texture_data: ?*const fn (ctx: *anyopaque, texture: Texture, data: []const u8, width: u32, height: u32, bytes_per_row: u32) Error!void = null,
     read_texture_data: ?*const fn (ctx: *anyopaque, texture: Texture, width: u32, height: u32, bytes_per_row: u32, out_data: []u8) Error!void = null,
     register_binding_set: ?*const fn (ctx: *anyopaque, set_id: u32, layout_entries: []const BindingLayoutEntry, set_entries: []const BindingSetEntry) void = null,
+    unregister_binding_set: ?*const fn (ctx: *anyopaque, set_id: u32) void = null,
+    get_resource_counts: ?*const fn (ctx: *anyopaque, out_textures: *u32, out_buffers: *u32, out_pipelines: *u32, out_binding_sets: *u32) void = null,
 };
 
 const SubmissionTracking = struct {
@@ -434,6 +436,12 @@ pub const Device = struct {
             return .{ .id = id };
         }
 
+        if (self.binding_set_cache.entryCount() >= binding_cache.BindingSetCache.max_entries) {
+            if (self.binding_set_cache.evictOldest()) |evicted_id| {
+                self.destroyBindingSetSyntheticId(evicted_id);
+            }
+        }
+
         const id = self.binding_set_cache.nextSyntheticId();
         self.binding_set_cache.putByHash(key_hash, id) catch return error.OutOfMemory;
         self.binding_set_layouts.put(id, layout.id) catch return error.OutOfMemory;
@@ -450,6 +458,16 @@ pub const Device = struct {
         };
 
         return .{ .id = id };
+    }
+
+    fn destroyBindingSetSyntheticId(self: *Device, set_id: u32) void {
+        _ = self.binding_set_layouts.remove(set_id);
+        if (self.submission_tracking.binding_set_entries.fetchRemove(set_id)) |kv| {
+            self.pipeline_layout_cache.allocator.free(kv.value);
+        }
+        if (self.vtable.unregister_binding_set) |unreg_fn| {
+            unreg_fn(self.ctx, set_id);
+        }
     }
 
     pub fn validateBindingSetForPipelineSlot(self: *const Device, pipeline_layout: PipelineLayout, slot: u32, binding_set: BindingSet) Error!void {
@@ -522,8 +540,43 @@ pub const Device = struct {
         return self.executeSubmitPlan(&submit_plan);
     }
 
-    pub fn present(self: *const Device, image: SwapchainImage) Error!void {
-        return self.vtable.present(self.ctx, image);
+    pub fn present(self: *Device, image: SwapchainImage) Error!void {
+        try self.vtable.present(self.ctx, image);
+        if (image.id != 0) {
+            const resource = ResourceRef{ .kind = .texture, .id = image.id };
+            self.submission_tracking.state_tracker.removeResource(resource);
+            _ = self.submission_tracking.resource_queues.remove(resource);
+            _ = self.submission_tracking.pending_transfers.remove(resource);
+        }
+    }
+
+    /// Log diagnostic counters to stderr. Call periodically to track growth.
+    pub fn logTrackingDiagnostics(self: *const Device, frame_index: u64) void {
+        const st = self.submission_tracking;
+        var metal_tex: u32 = 0;
+        var metal_buf: u32 = 0;
+        var metal_pip: u32 = 0;
+        var metal_bnd: u32 = 0;
+        if (self.vtable.get_resource_counts) |fn_ptr| {
+            fn_ptr(self.ctx, &metal_tex, &metal_buf, &metal_pip, &metal_bnd);
+        }
+        std.debug.print(
+            "[RHI diag f={d}] state_tracker={d} resource_queues={d} pending_xfers={d} bind_set_entries={d} bind_set_layouts={d} bind_layout_descs={d} pipeline_layout_sets={d} | metal tex={d} buf={d} pip={d} bnd={d}\n",
+            .{
+                frame_index,
+                st.state_tracker.current_states.count(),
+                st.resource_queues.count(),
+                st.pending_transfers.count(),
+                st.binding_set_entries.count(),
+                self.binding_set_layouts.count(),
+                self.binding_layout_descs.count(),
+                self.pipeline_layout_sets.count(),
+                metal_tex,
+                metal_buf,
+                metal_pip,
+                metal_bnd,
+            },
+        );
     }
 
     pub fn getQueue(self: *const Device, class: QueueClass) Error!Queue {

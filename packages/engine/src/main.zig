@@ -1,5 +1,6 @@
 const std = @import("std");
 const engine = @import("guava");
+const zprof = @import("zprof");
 const editor_layer_mod = @import("engine/editor_backend/core/layer.zig");
 const editor_console = @import("engine/editor_backend/core/logging.zig");
 const mesh_bridge = @import("mesh_bridge.zig");
@@ -13,6 +14,78 @@ pub const std_options = std.Options{
     .logFn = editor_console.logFn,
     .log_level = .info,
 };
+
+const MemoryProfiler = zprof.Zprof(.{ .thread_safe = true });
+
+fn reportMemoryProfile(mem_profiler: *MemoryProfiler) bool {
+    const has_leaks = mem_profiler.profiler.hasLeaks();
+    std.log.info(
+        "zprof: allocated={d} freed={d} live={d} peak={d} allocs={d} frees={d}",
+        .{
+            mem_profiler.profiler.allocated.get(),
+            mem_profiler.profiler.freed.get(),
+            mem_profiler.profiler.live_requested.get(),
+            mem_profiler.profiler.peak_requested.get(),
+            mem_profiler.profiler.alloc_count.get(),
+            mem_profiler.profiler.free_count.get(),
+        },
+    );
+    if (has_leaks) {
+        std.log.err("zprof: memory leak detected (live bytes={d})", .{mem_profiler.profiler.live_requested.get()});
+    } else {
+        std.log.info("zprof: no live allocations detected at shutdown", .{});
+    }
+    return has_leaks;
+}
+
+fn rawArgsContainFlag(raw_args: anytype, flag: []const u8) bool {
+    var args = raw_args.iterate();
+    defer args.deinit();
+    while (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, flag)) {
+            return true;
+        }
+    }
+    return false;
+}
+
+fn runMain(allocator: std.mem.Allocator) !u8 {
+    try ensureProjectRootAsCwd(allocator);
+
+    try editor_console.initLogFile();
+    defer editor_console.deinitLogFile();
+
+    std.log.info("Guava Engine initialized successfully", .{});
+    std.log.debug("Debug logging enabled", .{});
+
+    var command = try cli.parseCommandAlloc(allocator);
+    defer command.deinit(allocator);
+
+    switch (command) {
+        .run => |options| {
+            if (options.editor_server) {
+                try runEditorServer(allocator, options);
+            } else if (options.mcp_enabled) {
+                try runMcp(allocator, options);
+            } else {
+                try runEngine(allocator, options);
+            }
+        },
+        .validate => |options| try commands.runValidate(allocator, options),
+        .benchmark => |options| try commands.runBenchmark(allocator, options.scene_path, options.update_golden),
+        .@"generate-benchmark" => |options| try commands.runGenerateBenchmark(allocator, options.output_path),
+        .@"compare-render" => |options| try commands.runCompareRender(allocator, options.scene_path, options.output_dir),
+        .@"render-test" => |options| {
+            if (options.suite) {
+                try commands.runRenderTestSuite(allocator, options);
+            } else {
+                try commands.runRenderTest(allocator, options);
+            }
+        },
+    }
+
+    return 0;
+}
 
 fn ensureProjectRootAsCwd(allocator: std.mem.Allocator) !void {
     std.Io.Dir.cwd().access(io_globals.global_io, "assets", .{}) catch |err| switch (err) {
@@ -103,43 +176,25 @@ fn applicationNameAlloc(allocator: std.mem.Allocator, base_name: []const u8, loa
 
 pub fn main(init: std.process.Init) !u8 {
     io_globals.init(init.io, init.minimal.args);
-    const allocator = init.gpa;
+    const leak_check_requested = rawArgsContainFlag(init.minimal.args, "--memory-leak-check");
+    var mem_profiler: MemoryProfiler = .init(init.gpa, undefined);
+    const allocator = mem_profiler.allocator();
 
-    try ensureProjectRootAsCwd(allocator);
+    const result = runMain(allocator);
 
-    try editor_console.initLogFile();
-    defer editor_console.deinitLogFile();
-
-    std.log.info("Guava Engine initialized successfully", .{});
-    std.log.debug("Debug logging enabled", .{});
-
-    var command = try cli.parseCommandAlloc(allocator);
-    defer command.deinit(allocator);
-
-    switch (command) {
-        .run => |options| {
-            if (options.editor_server) {
-                try runEditorServer(allocator, options);
-            } else if (options.mcp_enabled) {
-                try runMcp(allocator, options);
-            } else {
-                try runEngine(allocator, options);
+    if (leak_check_requested) {
+        const leaked = reportMemoryProfile(&mem_profiler);
+        if (leaked) {
+            if (result) |_| {
+                return error.MemoryLeakDetected;
+            } else |err| {
+                std.log.err("zprof: leak check observed an application error before shutdown: {s}", .{@errorName(err)});
+                return err;
             }
-        },
-        .validate => |options| try commands.runValidate(allocator, options),
-        .benchmark => |options| try commands.runBenchmark(allocator, options.scene_path, options.update_golden),
-        .@"generate-benchmark" => |options| try commands.runGenerateBenchmark(allocator, options.output_path),
-        .@"compare-render" => |options| try commands.runCompareRender(allocator, options.scene_path, options.output_dir),
-        .@"render-test" => |options| {
-            if (options.suite) {
-                try commands.runRenderTestSuite(allocator, options);
-            } else {
-                try commands.runRenderTest(allocator, options);
-            }
-        },
+        }
     }
 
-    return 0;
+    return result;
 }
 
 fn runEngine(allocator: std.mem.Allocator, options: cli.CliOptions) !void {

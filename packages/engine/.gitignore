@@ -1,0 +1,110 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+node_modules/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+.codebuddy/
+.workbuddy/
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+._*
+dist/
+.zig-cache/
+zig-out/
+
+# CMake build directories
+**/build/
+**/cmake-build-*/
+**/CMakeUserPresets.json
+
+# Qt/compiled artifacts
+**/moc_*.cpp
+**/ui_*.h
+**/qrc_*.cpp
+**/*.o
+**/*.a
+**/*.so
+**/*.dylib
+compile_commands.json
+packages/engine/assets/derived/
+packages/engine/assets/scenes/editor_autosave.guava_scene
+packages/engine/assets/scenes/editor_autosave.guava_scene.meta
+
+# Temporary files
+*.orig
+*.rej
+*.diff
+patch*.py
+patch*.diff
+test_*.zig
+test_*.cpp
+test_*.c
+test_*
+!test_*/
+*.spv
+*.spv.meta
+
+# Backup directories
+assets_backup_*/
+.zig-global-cache/
+.github/
+.cache/
+# Generated code
+packages/engine/src/engine/generated/
+nohup.out
+renders_test_out/
+zig-cache/
+examples/csharp/**/bin/
+examples/csharp/**/obj/
+
+# Electron native addon build artifacts
+packages/editor/native/build/
+packages/editor/native/bin/
+packages/editor/dist-package
+.guava_scene
+packages/engine/sdk/csharp/**/**/bin/**
+packages/engine/sdk/csharp/**/**/obj/**
+
+*.o
+/build/
+/packages/*/build/
+/CMakeFiles/
+zig-pkg/

@@ -6,6 +6,11 @@ const packaging = @import("build/packaging.zig");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const zprof_dep = b.dependency("zprof", .{
+        .target = target,
+        .optimize = optimize,
+    });
+    const zprof_mod = zprof_dep.module("zprof");
     const default_sdl_prefix = switch (target.result.os.tag) {
         .macos => "/opt/homebrew",
         .windows => "C:/SDL3",
@@ -58,6 +63,7 @@ pub fn build(b: *std.Build) void {
             .imports = &.{
                 .{ .name = "guava", .module = engine_mod },
                 .{ .name = "io_globals", .module = io_globals_mod },
+                .{ .name = "zprof", .module = zprof_mod },
             },
         }),
     });
@@ -99,6 +105,14 @@ pub fn build(b: *std.Build) void {
 
     const run_engine_step = b.step("run-engine", "Run the engine directly (alias for run)");
     run_engine_step.dependOn(&run_engine_cmd.step);
+
+    const leak_check_cmd = b.addRunArtifact(exe);
+    leak_check_cmd.step.dependOn(b.getInstallStep());
+    leak_check_cmd.addArgs(&.{ "--frames", "120", "--memory-leak-check" });
+    if (b.args) |args| leak_check_cmd.addArgs(args);
+
+    const leak_check_step = b.step("leak-check", "Run the engine with zprof leak detection enabled");
+    leak_check_step.dependOn(&leak_check_cmd.step);
 
     const run_player_cmd = b.addRunArtifact(player);
     run_player_cmd.step.dependOn(b.getInstallStep());

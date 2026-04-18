@@ -668,11 +668,17 @@ pub const Application = struct {
             // Frame-budget profiling: log timing every 300 frames (~5s @ 60fps)
             if (frames_rendered > 0 and frames_rendered % 300 == 0) {
                 const draw_us: u64 = @intCast(@divTrunc(draw_end_ns - draw_start_ns, 1000));
-                std.log.info("[frame-budget] frame={d} draw={d}us elapsed_prev={d}us delay={d}ms", .{
+                const binding_entries: u32 = if (self.renderer.rhi_device) |dev| dev.bindingSetCacheEntryCount() else 0;
+                std.log.info("[frame-budget] frame={d} draw={d}us elapsed_prev={d}us delay={d}ms bind_hits={d} bind_misses={d} bind_misses_delta={d} bind_evictions_delta={d} bind_entries={d}", .{
                     frames_rendered,
                     draw_us,
                     elapsed_ns / 1000,
                     self.config.frame_delay_ms,
+                    last_frame.binding_cache_hits,
+                    last_frame.binding_cache_misses,
+                    last_frame.binding_cache_misses_delta,
+                    last_frame.binding_cache_evictions_delta,
+                    binding_entries,
                 });
             }
 
