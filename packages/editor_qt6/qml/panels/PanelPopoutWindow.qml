@@ -6,29 +6,31 @@ Window {
     id: root
     width: 860
     height: 560
-    visible: false
-    title: panelId === "assets" ? "Content Browser" : "Console"
+    visible: true
+    title: panelTitle
 
     required property string panelId
+    required property string panelTitle
+    required property var panelComponent
+    required property string originZone
+    required property int originIndex
 
-    signal returnPanel(string panelId)
+    signal returnPanel(string panelId, string originZone, int originIndex)
 
     onClosing: function(close) {
-        root.returnPanel(root.panelId)
+        root.returnPanel(root.panelId, root.originZone, root.originIndex)
     }
 
     Loader {
         anchors.fill: parent
-        sourceComponent: root.panelId === "assets" ? assetsComponent : consoleComponent
+        sourceComponent: root.panelComponent ? root.panelComponent : fallbackComponent
     }
 
     Component {
-        id: consoleComponent
-        ConsolePanel { anchors.fill: parent }
-    }
-
-    Component {
-        id: assetsComponent
-        ContentBrowserPanel { anchors.fill: parent }
+        id: fallbackComponent
+        GenericPanel {
+            anchors.fill: parent
+            title: root.panelTitle
+        }
     }
 }

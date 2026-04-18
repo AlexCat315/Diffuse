@@ -22,7 +22,8 @@ ApplicationWindow {
     property string activeBottomTab: "console"
     property var bottomTabs: ["console", "assets"]
     property bool restoringLayout: false
-    property string popoutPanelId: ""
+    property var popoutSessions: []
+    property bool showDockConfigurator: false
     property var panelRegistry: [
         { id: "scene", title: "Scene", zones: ["left", "right"] },
         { id: "inspector", title: "Inspector", zones: ["left", "right"] },
@@ -116,6 +117,56 @@ ApplicationWindow {
         }
     }
 
+    function isPanelPoppedOut(panelId) {
+        return popoutSessions.findIndex(function(session) { return session.panelId === panelId }) >= 0
+    }
+
+    function removePanelFromZones(panelId) {
+        if (leftPanelId === panelId) {
+            leftPanelVisible = false
+        }
+        if (rightPanelId === panelId) {
+            rightPanelVisible = false
+        }
+        if (bottomTabs.indexOf(panelId) >= 0) {
+            bottomTabs = bottomTabs.filter(function(id) { return id !== panelId })
+            if (activeBottomTab === panelId) {
+                activeBottomTab = bottomTabs.length > 0 ? bottomTabs[0] : "console"
+            }
+            if (bottomTabs.length === 0) {
+                bottomPanelVisible = false
+            }
+        }
+    }
+
+    function dockPanelToZone(panelId, zone) {
+        if (!panelId || panelId.length === 0) {
+            return
+        }
+
+        if (isPanelPoppedOut(panelId)) {
+            return
+        }
+
+        removePanelFromZones(panelId)
+
+        if (zone === "left") {
+            leftPanelId = panelId
+            leftPanelVisible = true
+        } else if (zone === "right") {
+            rightPanelId = panelId
+            rightPanelVisible = true
+        } else if (zone === "bottom") {
+            if (bottomTabs.indexOf(panelId) < 0) {
+                bottomTabs = bottomTabs.concat([panelId])
+            }
+            bottomPanelVisible = true
+            activeBottomTab = panelId
+        }
+
+        layoutSaveDebounce.restart()
+    }
+
     function applyDockLayoutModel(model) {
         restoringLayout = true
         leftPanelSize = Number(model.leftPanelSize) > 0 ? Number(model.leftPanelSize) : 240
@@ -160,43 +211,69 @@ ApplicationWindow {
         saveDockLayoutModel()
     }
 
-    function popoutActiveBottomPanel() {
-        if (popoutPanelId.length > 0 || !bottomPanelVisible || bottomTabs.length === 0) {
-            return
-        }
+    function popoutPanelFromZone(zone) {
+        let panelId = ""
+        let originIndex = -1
 
-        const panelId = activeBottomTab
-        if (bottomTabs.indexOf(panelId) < 0) {
-            return
-        }
-
-        popoutPanelId = panelId
-        bottomTabs = bottomTabs.filter(function(id) { return id !== panelId })
-
-        if (bottomTabs.length === 0) {
-            bottomPanelVisible = false
-            activeBottomTab = "console"
+        if (zone === "left") {
+            if (!leftPanelVisible) {
+                return
+            }
+            panelId = leftPanelId
+        } else if (zone === "right") {
+            if (!rightPanelVisible) {
+                return
+            }
+            panelId = rightPanelId
+        } else if (zone === "bottom") {
+            if (!bottomPanelVisible || bottomTabs.length === 0) {
+                return
+            }
+            panelId = activeBottomTab
+            originIndex = bottomTabs.indexOf(panelId)
+            if (originIndex < 0) {
+                return
+            }
         } else {
-            activeBottomTab = bottomTabs[0]
+            return
         }
 
-        popoutWindow.show()
+        if (!panelId || isPanelPoppedOut(panelId)) {
+            return
+        }
+
+        removePanelFromZones(panelId)
+        popoutSessions = popoutSessions.concat([{
+            panelId: panelId,
+            originZone: zone,
+            originIndex: originIndex,
+        }])
         layoutSaveDebounce.restart()
     }
 
-    function returnPopoutPanel(panelId) {
+    function returnPopoutPanel(panelId, originZone, originIndex) {
         if (!panelId || panelId.length === 0) {
-            popoutPanelId = ""
             return
         }
 
-        if (bottomTabs.indexOf(panelId) < 0) {
-            bottomTabs = bottomTabs.concat([panelId])
+        if (originZone === "left") {
+            leftPanelId = panelId
+            leftPanelVisible = true
+        } else if (originZone === "right") {
+            rightPanelId = panelId
+            rightPanelVisible = true
+        } else if (originZone === "bottom") {
+            if (bottomTabs.indexOf(panelId) < 0) {
+                const next = bottomTabs.slice()
+                const insertAt = Math.max(0, Math.min(originIndex, next.length))
+                next.splice(insertAt, 0, panelId)
+                bottomTabs = next
+            }
+            bottomPanelVisible = true
+            activeBottomTab = panelId
         }
 
-        bottomPanelVisible = true
-        activeBottomTab = panelId
-        popoutPanelId = ""
+        popoutSessions = popoutSessions.filter(function(session) { return session.panelId !== panelId })
         layoutSaveDebounce.restart()
     }
 
@@ -250,11 +327,15 @@ ApplicationWindow {
             leftPanelVisible: root.leftPanelVisible
             rightPanelVisible: root.rightPanelVisible
             bottomPanelVisible: root.bottomPanelVisible
+            dockConfiguratorVisible: root.showDockConfigurator
             onToggleLeftPanel: root.leftPanelVisible = !root.leftPanelVisible
             onToggleRightPanel: root.rightPanelVisible = !root.rightPanelVisible
             onToggleBottomPanel: root.bottomPanelVisible = !root.bottomPanelVisible
+            onToggleDockConfigurator: root.showDockConfigurator = !root.showDockConfigurator
             onResetLayout: root.resetDockLayout()
-            onPopoutBottomPanel: root.popoutActiveBottomPanel()
+            onPopoutLeftPanel: root.popoutPanelFromZone("left")
+            onPopoutRightPanel: root.popoutPanelFromZone("right")
+            onPopoutBottomPanel: root.popoutPanelFromZone("bottom")
         }
 
         Rectangle {
@@ -264,12 +345,13 @@ ApplicationWindow {
             anchors.topMargin: 8
             anchors.rightMargin: 8
             width: 300
-            height: 120
+            height: 176
             color: "#111827"
             border.color: "#334155"
             border.width: 1
             radius: 6
             z: 50
+            visible: root.showDockConfigurator
 
             ColumnLayout {
                 anchors.fill: parent
@@ -346,15 +428,69 @@ ApplicationWindow {
                         }
                     }
                 }
+
+                Label {
+                    text: "Drag To Dock"
+                    color: "#93c5fd"
+                }
+
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Repeater {
+                        model: root.panelRegistry
+
+                        Rectangle {
+                            required property var modelData
+                            property string panelId: modelData.id
+                            width: 90
+                            height: 24
+                            radius: 4
+                            color: "#1f2937"
+                            border.color: "#334155"
+                            border.width: 1
+
+                            Drag.active: dragHandle.drag.active
+                            Drag.hotSpot.x: width / 2
+                            Drag.hotSpot.y: height / 2
+
+                            Text {
+                                anchors.centerIn: parent
+                                text: modelData.title
+                                color: "#e2e8f0"
+                                font.pixelSize: 11
+                            }
+
+                            MouseArea {
+                                id: dragHandle
+                                anchors.fill: parent
+                                drag.target: parent
+                                drag.axis: Drag.XAndYAxis
+                                onReleased: {
+                                    parent.x = 0
+                                    parent.y = 0
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
-        PanelPopoutWindow {
-            id: popoutWindow
-            panelId: root.popoutPanelId
-            visible: false
-            onReturnPanel: function(panelId) {
-                root.returnPopoutPanel(panelId)
+        Repeater {
+            model: root.popoutSessions
+
+            delegate: PanelPopoutWindow {
+                required property var modelData
+                panelId: modelData.panelId
+                panelTitle: root.panelTitle(modelData.panelId)
+                panelComponent: root.componentForPanel(modelData.panelId)
+                originZone: modelData.originZone
+                originIndex: modelData.originIndex
+                onReturnPanel: function(panelId, originZone, originIndex) {
+                    root.returnPopoutPanel(panelId, originZone, originIndex)
+                }
             }
         }
 
@@ -375,6 +511,23 @@ ApplicationWindow {
                 onWidthChanged: if (visible && width > 0) {
                     root.leftPanelSize = width
                     layoutSaveDebounce.restart()
+                }
+
+                DropArea {
+                    id: leftDropArea
+                    anchors.fill: parent
+                    onDropped: function(drop) {
+                        const id = drop.source && drop.source.panelId ? drop.source.panelId : ""
+                        root.dockPanelToZone(id, "left")
+                    }
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    color: "#334155"
+                    opacity: leftDropArea.containsDrag ? 0.16 : 0
+                    visible: leftDropArea.containsDrag
+                    z: 99
                 }
             }
 
@@ -541,11 +694,28 @@ ApplicationWindow {
 
                                 TabButton {
                                     required property string modelData
+                                    property string panelId: modelData
                                     text: root.panelTitle(modelData)
                                     checked: root.activeBottomTab === modelData
+
+                                    Drag.active: tabDragHandle.drag.active
+                                    Drag.hotSpot.x: width / 2
+                                    Drag.hotSpot.y: height / 2
+
                                     onClicked: {
                                         root.activeBottomTab = modelData
                                         layoutSaveDebounce.restart()
+                                    }
+
+                                    MouseArea {
+                                        id: tabDragHandle
+                                        anchors.fill: parent
+                                        drag.target: parent
+                                        drag.axis: Drag.XAndYAxis
+                                        onReleased: {
+                                            parent.x = 0
+                                            parent.y = 0
+                                        }
                                     }
                                 }
                             }
@@ -569,6 +739,23 @@ ApplicationWindow {
                             }
                         }
                     }
+
+                    DropArea {
+                        id: bottomDropArea
+                        anchors.fill: parent
+                        onDropped: function(drop) {
+                            const id = drop.source && drop.source.panelId ? drop.source.panelId : ""
+                            root.dockPanelToZone(id, "bottom")
+                        }
+                    }
+
+                    Rectangle {
+                        anchors.fill: parent
+                        color: "#334155"
+                        opacity: bottomDropArea.containsDrag ? 0.16 : 0
+                        visible: bottomDropArea.containsDrag
+                        z: 99
+                    }
                 }
             }
 
@@ -581,6 +768,23 @@ ApplicationWindow {
                 onWidthChanged: if (visible && width > 0) {
                     root.rightPanelSize = width
                     layoutSaveDebounce.restart()
+                }
+
+                DropArea {
+                    id: rightDropArea
+                    anchors.fill: parent
+                    onDropped: function(drop) {
+                        const id = drop.source && drop.source.panelId ? drop.source.panelId : ""
+                        root.dockPanelToZone(id, "right")
+                    }
+                }
+
+                Rectangle {
+                    anchors.fill: parent
+                    color: "#334155"
+                    opacity: rightDropArea.containsDrag ? 0.16 : 0
+                    visible: rightDropArea.containsDrag
+                    z: 99
                 }
             }
         }
