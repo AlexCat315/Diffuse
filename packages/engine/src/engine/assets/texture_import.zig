@@ -4,7 +4,7 @@ const environment_map_import = @import("environment_map_import.zig");
 const image_decoder = @import("image_decoder.zig");
 const registry_mod = @import("registry.zig");
 const svg_decoder = @import("svg_decoder.zig");
-const rhi_types = @import("../rhi/types.zig");
+const rhi_types = @import("guava_rhi").types;
 const library_mod = @import("library.zig");
 
 pub const current_texture_cache_version: u32 = registry_mod.AssetType.texture.importVersion();

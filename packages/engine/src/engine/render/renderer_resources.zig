@@ -1,6 +1,6 @@
 const std = @import("std");
 const rhi_mod = @import("../rhi/device.zig");
-const rhi_types = @import("../rhi/types.zig");
+const rhi_types = @import("guava_rhi").types;
 const mat4_mod = @import("../math/mat4.zig");
 const render_log = std.log.scoped(.viewport_render);
 

@@ -1,7 +1,7 @@
 const std = @import("std");
 const math = @import("../math/mat4.zig");
 const rhi_mod = @import("../rhi/device.zig");
-const rhi_types = @import("../rhi/types.zig");
+const rhi_types = @import("guava_rhi").types;
 const components = @import("../scene/components.zig");
 const scene_mod = @import("../scene/scene.zig");
 

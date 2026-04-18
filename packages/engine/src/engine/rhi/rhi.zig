@@ -1,9 +1,11 @@
 const std = @import("std");
-const command_buffer = @import("command_buffer.zig");
-const queue_mod = @import("queue.zig");
-const state_tracker = @import("state_tracker.zig");
-const binding_cache = @import("binding_cache.zig");
-const rhi_types = @import("types.zig");
+const command_buffer = @import("guava_rhi").command_buffer;
+const queue_mod = @import("guava_rhi").queue;
+const state_tracker = @import("guava_rhi").state_tracker;
+const binding_cache = @import("guava_rhi").binding_cache;
+const rhi_types = @import("guava_rhi").types;
+
+pub const external = @import("guava_rhi");
 
 pub const Error = error{
     UnsupportedBackend,

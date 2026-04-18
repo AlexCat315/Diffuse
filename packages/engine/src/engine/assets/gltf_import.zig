@@ -185,7 +185,7 @@ const current_model_cache_version: u32 = registry_mod.AssetType.model.importVers
 const CookedMeshRecord = struct {
     asset_id: []const u8,
     name: []const u8,
-    primitive_type: @import("../rhi/types.zig").PrimitiveType = .triangle_list,
+    primitive_type: @import("guava_rhi").types.PrimitiveType = .triangle_list,
     vertices: []const mesh_mod.Vertex = &.{},
     indices: []const u32 = &.{},
     // Binary sidecar offsets (used when mesh_bin_path is set on CookedModelFile)
