@@ -54,12 +54,12 @@ pub const IconTextureEntry = struct {
     height: u32,
     tint: [4]u8,
     has_tint: bool,
-    texture: engine.rhi.Texture,
+    texture: engine.gfx.Texture,
 };
 
 pub const ImageThumbnailEntry = struct {
     path: []u8,
-    texture: engine.rhi.Texture,
+    texture: engine.gfx.Texture,
 };
 
 pub const ManipulationMode = @import("guava").editor_rpc.schema.types.ManipulationMode;
@@ -784,7 +784,7 @@ pub const EditorState = struct {
     particle_editor_open: bool = false,
     physics_visualization_open: bool = false,
     post_process_editor_open: bool = false,
-    rhi_stats_open: bool = false,
+    gfx_stats_open: bool = false,
     plugin_manager_open: bool = false,
     style_inspector_open: bool = false,
     prefab_editor_open: bool = false,
@@ -823,14 +823,14 @@ pub const EditorState = struct {
     playback_toolbar_drag_offset: [2]f32 = .{ 0.0, 0.0 },
     top_bar_drag_active: bool = false,
     top_bar_drag_offset: [2]f32 = .{ 0.0, 0.0 },
-    preview_device: ?*engine.rhi.LegacyDevice = null,
-    icon_device: ?*engine.rhi.LegacyDevice = null,
-    preview_texture: ?engine.rhi.Texture = null,
+    preview_device: ?*engine.gfx.LegacyDevice = null,
+    icon_device: ?*engine.gfx.LegacyDevice = null,
+    preview_texture: ?engine.gfx.Texture = null,
     preview_texture_key: ?[]u8 = null,
     preview_texture_size: [2]u32 = .{ 0, 0 },
     icon_textures: std.ArrayList(IconTextureEntry) = .empty,
     image_thumbnail_textures: std.ArrayListUnmanaged(ImageThumbnailEntry) = .empty,
-    image_thumbnail_device: ?*engine.rhi.LegacyDevice = null,
+    image_thumbnail_device: ?*engine.gfx.LegacyDevice = null,
     image_thumbnail_failed: std.ArrayListUnmanaged([]u8) = .empty,
     frozen_entities: std.ArrayList(engine.scene.EntityId) = .empty,
     selection_locked_entities: std.ArrayList(engine.scene.EntityId) = .empty,
@@ -1131,7 +1131,7 @@ pub const EditorState = struct {
         }
         self.layout_templates.deinit(allocator);
 
-        // 释放 icon_textures 中的每个条目（纹理由 RHI 管理，只释放路径）
+        // 释放 icon_textures 中的每个条目（纹理由 GFX 管理，只释放路径）
         for (self.icon_textures.items) |entry| {
             allocator.free(entry.path);
         }
@@ -1181,7 +1181,7 @@ pub const EditorState = struct {
         }
 
         // 注意：preview_device 和 icon_device 是外部指针，不在此释放
-        // preview_texture 由 RHI 管理，不在此释放
+        // preview_texture 由 GFX 管理，不在此释放
     }
 };
 

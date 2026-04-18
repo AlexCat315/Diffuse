@@ -1,7 +1,7 @@
 const std = @import("std");
 const scene_mod = @import("../scene/scene.zig");
 const renderer_mod = @import("../render/renderer.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
+const gfx_mod = @import("gfx_legacy/mod.zig");
 const input_mod = @import("input.zig");
 const input_action_mod = @import("input_action.zig");
 const command_queue_mod = @import("command_queue.zig");
@@ -116,7 +116,7 @@ pub const LayerContext = struct {
     frame_index: usize,
     delta_seconds: f32,
 
-    pub fn rhi(self: *LayerContext) *rhi_mod.RhiDevice {
+    pub fn gfx(self: *LayerContext) *gfx_mod.GfxDevice {
         return self.renderer.device();
     }
 };

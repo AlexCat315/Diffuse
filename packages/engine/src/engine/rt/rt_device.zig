@@ -1,9 +1,9 @@
 const rt_backend = @import("../rt/rt_backend.zig");
 
-/// RHI-level Ray Tracing abstraction.
+/// GFX-level Ray Tracing abstraction.
 ///
 /// Wraps the platform-specific RT backend (Metal RT on macOS, future Vulkan RT)
-/// behind a unified interface that integrates with the rest of the RHI.
+/// behind a unified interface that integrates with the rest of the GFX.
 /// The renderer uses this instead of directly touching rt_metal.zig.
 pub const RtDevice = struct {
     backend: ?rt_backend.HardwareRtBackend = null,
@@ -65,7 +65,7 @@ pub const RtDevice = struct {
         return b.uploadSamplingTables(table_data, meta);
     }
 
-    /// Synchronize scene-side RT resources behind a single RHI-level call.
+    /// Synchronize scene-side RT resources behind a single GFX-level call.
     pub fn syncScene(self: *RtDevice, desc: SceneSyncDesc) bool {
         if (desc.triangles) |triangles| {
             if (!self.buildAccelerationStructure(triangles)) return false;

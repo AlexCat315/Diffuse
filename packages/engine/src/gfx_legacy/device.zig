@@ -1,20 +1,21 @@
-/// New RHI adapter layer - implements old device.zig API using new rhi.Device + CommandBuffer
-/// This maintains backward compatibility with all 24 render pass files while using the new RHI internally.
+/// New GFX adapter layer - implements old device.zig API using new gfx.Device + CommandBuffer
+/// This maintains backward compatibility with all 24 render pass files while using the new GFX internally.
 const std = @import("std");
 const builtin = @import("builtin");
-const platform_mod = @import("../core/platform.zig");
-const window_mod = @import("../platform/window.zig");
-const types = @import("guava_rhi").types;
-const rhi = @import("guava_rhi").rhi;
-const command_buffer = @import("guava_rhi").command_buffer;
-const metal_device_mod = @import("guava_rhi").metal_device;
-const metal_backend_mod = @import("guava_rhi").metal_backend;
-const rt_device_mod = @import("../rt/rhi_rt_device.zig");
-const rt_backend = @import("../rt/rt_backend.zig");
-const vulkan_device_mod = @import("guava_rhi").vulkan_device;
+const platform_mod = @import("../engine/core/platform.zig");
+const window_mod = @import("../engine/platform/window.zig");
+const types = @import("guava_gfx").types;
+const gfx = @import("guava_gfx").gfx;
+const command_buffer = @import("guava_gfx").command_buffer;
+const metal_device_mod = @import("guava_gfx").metal_device;
+const metal_backend_mod = @import("guava_gfx").metal_backend;
+const mock_backend_factory = @import("mock_backend_factory.zig");
+const rt_device_mod = @import("../engine/rt/rt_device.zig");
+const rt_backend = @import("../engine/rt/rt_backend.zig");
+const vulkan_device_mod = @import("guava_gfx").vulkan_device;
 const rt_bridge = @import("rt_bridge.zig");
 
-// Combined error set that includes both old and new RHI errors
+// Combined error set that includes both old and new GFX errors
 pub const Error = error{
     // Device errors
     UnsupportedBackend,
@@ -40,7 +41,7 @@ pub const Error = error{
     CopyPassBeginFailed,
     ComputePassBeginFailed,
     ComputePipelineCreateFailed,
-    // RHI-specific errors (can occur during operation)
+    // GFX-specific errors (can occur during operation)
     InvalidArgument,
     LayoutMismatch,
     SubmitFailed,
@@ -189,13 +190,13 @@ pub const BindGroup = struct {
     storage_buffer_ids: []const u32,
     storage_texture_ids: []const u32,
     slot_offset: u32 = 0,
-    layout: ?rhi.BindingLayout = null,
-    set: ?rhi.BindingSet = null,
+    layout: ?gfx.BindingLayout = null,
+    set: ?gfx.BindingSet = null,
 };
 
 // NEW: Frame now holds swapchain_image ID instead of backend command buffers
 pub const Frame = struct {
-    swapchain_image: rhi.SwapchainImage,
+    swapchain_image: gfx.SwapchainImage,
     command_buffer: command_buffer.CommandBuffer,
 };
 
@@ -278,10 +279,10 @@ pub const BindGroupState = struct {
         self.bound_index_buffer = null;
     }
 };
-// NEW: Main device struct - now wraps rhi.Device directly
-pub const RhiDevice = struct {
+// NEW: Main device struct - now wraps gfx.Device directly
+pub const GfxDevice = struct {
     allocator: std.mem.Allocator,
-    device: *rhi.Device,
+    device: *gfx.Device,
     api: types.GraphicsAPI = .metal,
     runtime_info: types.RuntimeInfo = .{},
 
@@ -294,9 +295,9 @@ pub const RhiDevice = struct {
     bind_state: BindGroupState = .{},
     // Current frame state
     current_frame: ?Frame = null,
-    default_binding_layout: ?rhi.BindingLayout = null,
-    default_pipeline_layout: ?rhi.PipelineLayout = null,
-    legacy_bind_group_layouts: ?std.AutoHashMap(u64, rhi.BindingLayout) = null,
+    default_binding_layout: ?gfx.BindingLayout = null,
+    default_pipeline_layout: ?gfx.PipelineLayout = null,
+    legacy_bind_group_layouts: ?std.AutoHashMap(u64, gfx.BindingLayout) = null,
     owned_device: bool = false,
     owned_metal_device: ?*metal_device_mod.MetalDevice = null,
     owned_vulkan_device: ?*vulkan_device_mod.VulkanDevice = null,
@@ -314,7 +315,7 @@ pub const RhiDevice = struct {
         platform: platform_mod.Platform,
         window: *window_mod.Window,
         config: types.DeviceConfig,
-    ) Error!RhiDevice {
+    ) Error!GfxDevice {
         _ = platform;
         if (builtin.os.tag == .macos) {
             const md_ptr = allocator.create(metal_device_mod.MetalDevice) catch return error.OutOfMemory;
@@ -332,11 +333,11 @@ pub const RhiDevice = struct {
             }
             md_ptr.setVSyncEnabled(config.vsync_enabled);
 
-            const dev_ptr = allocator.create(rhi.Device) catch return error.OutOfMemory;
+            const dev_ptr = allocator.create(gfx.Device) catch return error.OutOfMemory;
             errdefer allocator.destroy(dev_ptr);
             dev_ptr.* = md_ptr.createDevice();
 
-            var out = RhiDevice{
+            var out = GfxDevice{
                 .allocator = allocator,
                 .device = dev_ptr,
                 .api = .metal,
@@ -351,13 +352,13 @@ pub const RhiDevice = struct {
                 .owned_device = true,
                 .owned_metal_device = md_ptr,
                 .metal_layer_binding = metal_layer_binding,
-                .legacy_bind_group_layouts = std.AutoHashMap(u64, rhi.BindingLayout).init(allocator),
+                .legacy_bind_group_layouts = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
                 .vsync_enabled = config.vsync_enabled,
             };
             out.setFramesInFlight(config.frames_in_flight);
             copyCStringSlice(out.runtime_info.device_name[0..], md_ptr.getDeviceName());
             copyCStringSlice(out.runtime_info.driver_name[0..], "Metal");
-            copyCStringSlice(out.runtime_info.driver_info[0..], "Guava Metal RHI");
+            copyCStringSlice(out.runtime_info.driver_info[0..], "Guava Metal GFX");
             return out;
         }
 
@@ -374,11 +375,11 @@ pub const RhiDevice = struct {
                 _ = vk_ptr.createSwapchain(window.drawable_width, window.drawable_height, config.vsync_enabled);
             }
 
-            const dev_ptr = allocator.create(rhi.Device) catch return error.OutOfMemory;
+            const dev_ptr = allocator.create(gfx.Device) catch return error.OutOfMemory;
             errdefer allocator.destroy(dev_ptr);
             dev_ptr.* = vk_ptr.createDevice();
 
-            var out = RhiDevice{
+            var out = GfxDevice{
                 .allocator = allocator,
                 .device = dev_ptr,
                 .api = .vulkan,
@@ -392,63 +393,46 @@ pub const RhiDevice = struct {
                 },
                 .owned_device = true,
                 .owned_vulkan_device = vk_ptr,
-                .legacy_bind_group_layouts = std.AutoHashMap(u64, rhi.BindingLayout).init(allocator),
+                .legacy_bind_group_layouts = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
                 .vsync_enabled = config.vsync_enabled,
             };
             out.setFramesInFlight(config.frames_in_flight);
             copyCStringSlice(out.runtime_info.device_name[0..], vk_ptr.getDeviceName());
             copyCStringSlice(out.runtime_info.driver_name[0..], "Vulkan");
-            copyCStringSlice(out.runtime_info.driver_info[0..], "Guava Vulkan RHI");
+            copyCStringSlice(out.runtime_info.driver_info[0..], "Guava Vulkan GFX");
             return out;
         }
 
         // Fallback: mock backend
-        const backend_ptr = allocator.create(metal_backend_mod.MetalBackend) catch return error.OutOfMemory;
-        errdefer allocator.destroy(backend_ptr);
-        backend_ptr.* = metal_backend_mod.MetalBackend.init(allocator);
-        errdefer backend_ptr.deinit();
+        const mock_init = try mock_backend_factory.init(allocator, window);
 
-        const dev_ptr = allocator.create(rhi.Device) catch return error.OutOfMemory;
-        errdefer allocator.destroy(dev_ptr);
-        dev_ptr.* = backend_ptr.createDevice();
-
-        var out = RhiDevice{
+        var out = GfxDevice{
             .allocator = allocator,
-            .device = dev_ptr,
+            .device = mock_init.device,
             .api = .metal,
-            .runtime_info = .{
-                .backend = .metal,
-                .drawable_width = window.drawable_width,
-                .drawable_height = window.drawable_height,
-                .swapchain_format = .bgra8_unorm_srgb,
-                .depth_format = .d32_float,
-                .has_depth = true,
-            },
+            .runtime_info = mock_init.runtime_info,
             .owned_device = true,
-            .owned_mock_backend = backend_ptr,
-            .legacy_bind_group_layouts = std.AutoHashMap(u64, rhi.BindingLayout).init(allocator),
+            .owned_mock_backend = mock_init.backend,
+            .legacy_bind_group_layouts = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
             .vsync_enabled = config.vsync_enabled,
         };
         out.setFramesInFlight(config.frames_in_flight);
-        copyCStringSlice(out.runtime_info.device_name[0..], "Mock Metal Device");
-        copyCStringSlice(out.runtime_info.driver_name[0..], "Mock");
-        copyCStringSlice(out.runtime_info.driver_info[0..], "Guava Mock RHI");
         return out;
     }
 
     pub fn initWithDevice(
         allocator: std.mem.Allocator,
-        device: *rhi.Device,
-    ) RhiDevice {
+        device: *gfx.Device,
+    ) GfxDevice {
         return .{
             .allocator = allocator,
             .device = device,
-            .legacy_bind_group_layouts = std.AutoHashMap(u64, rhi.BindingLayout).init(allocator),
+            .legacy_bind_group_layouts = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
             .owned_device = false,
         };
     }
 
-    pub fn deinit(self: *RhiDevice) void {
+    pub fn deinit(self: *GfxDevice) void {
         self.releaseAllDepthTextures();
         self.pending_pixel_downloads.deinit(self.allocator);
         self.pending_texture_blits.deinit(self.allocator);
@@ -479,43 +463,43 @@ pub const RhiDevice = struct {
         self.* = undefined;
     }
 
-    pub fn ensureRtDevice(self: *RhiDevice) RtInitStatus {
+    pub fn ensureRtDevice(self: *GfxDevice) RtInitStatus {
         return rt_bridge.ensureRtDevice(&self.rt_device);
     }
 
-    pub fn releaseRtDevice(self: *RhiDevice) void {
+    pub fn releaseRtDevice(self: *GfxDevice) void {
         rt_bridge.releaseRtDevice(&self.rt_device);
     }
 
-    pub fn rtBackendName(_: *const RhiDevice) []const u8 {
+    pub fn rtBackendName(_: *const GfxDevice) []const u8 {
         return rt_bridge.rtBackendName();
     }
 
-    pub fn rtBuildAccelerationStructure(self: *RhiDevice, triangles: []const rt_backend.RtTriangle) bool {
+    pub fn rtBuildAccelerationStructure(self: *GfxDevice, triangles: []const rt_backend.RtTriangle) bool {
         return rt_bridge.rtBuildAccelerationStructure(&self.rt_device, triangles);
     }
 
-    pub fn rtUploadTextures(self: *RhiDevice, pixel_data: []const u8, meta: []const rt_backend.RtTextureMeta) bool {
+    pub fn rtUploadTextures(self: *GfxDevice, pixel_data: []const u8, meta: []const rt_backend.RtTextureMeta) bool {
         return rt_bridge.rtUploadTextures(&self.rt_device, pixel_data, meta);
     }
 
-    pub fn rtUploadSamplingTables(self: *RhiDevice, table_data: []const u8, meta: []const rt_backend.RtSamplingTableMeta) bool {
+    pub fn rtUploadSamplingTables(self: *GfxDevice, table_data: []const u8, meta: []const rt_backend.RtSamplingTableMeta) bool {
         return rt_bridge.rtUploadSamplingTables(&self.rt_device, table_data, meta);
     }
 
-    pub fn rtTraceRays(self: *RhiDevice, params: *const rt_backend.RtParams, output: []u8) bool {
+    pub fn rtTraceRays(self: *GfxDevice, params: *const rt_backend.RtParams, output: []u8) bool {
         return rt_bridge.rtTraceRays(&self.rt_device, params, output);
     }
 
-    pub fn rtTraceRaysAsync(self: *RhiDevice, params: *const rt_backend.RtParams) bool {
+    pub fn rtTraceRaysAsync(self: *GfxDevice, params: *const rt_backend.RtParams) bool {
         return rt_bridge.rtTraceRaysAsync(&self.rt_device, params);
     }
 
-    pub fn rtIsTraceComplete(self: *RhiDevice) bool {
+    pub fn rtIsTraceComplete(self: *GfxDevice) bool {
         return rt_bridge.rtIsTraceComplete(&self.rt_device);
     }
 
-    pub fn rtGetTraceResult(self: *RhiDevice, output: []u8) bool {
+    pub fn rtGetTraceResult(self: *GfxDevice, output: []u8) bool {
         return rt_bridge.rtGetTraceResult(&self.rt_device, output);
     }
 
@@ -523,15 +507,15 @@ pub const RhiDevice = struct {
     // Performance statistics (stub - kept for compatibility)
     // ────────────────────────────────────────────────────────────────────
 
-    pub fn performanceStats(self: *const RhiDevice) types.PerformanceStats {
+    pub fn performanceStats(self: *const GfxDevice) types.PerformanceStats {
         return self.perf_stats;
     }
 
-    pub fn recordFrame(self: *RhiDevice, frame_time_ns: u64) void {
+    pub fn recordFrame(self: *GfxDevice, frame_time_ns: u64) void {
         self.perf_stats.recordFrame(frame_time_ns);
     }
 
-    pub fn recordDrawCalls(self: *RhiDevice, draw_calls: u64, triangles: u64, vertices: u64, instanced: u64) void {
+    pub fn recordDrawCalls(self: *GfxDevice, draw_calls: u64, triangles: u64, vertices: u64, instanced: u64) void {
         self.perf_stats.draw_calls += draw_calls;
         self.perf_stats.triangles_drawn += triangles;
         self.perf_stats.vertices_drawn += vertices;
@@ -539,7 +523,7 @@ pub const RhiDevice = struct {
     }
 
     pub fn recordBindings(
-        self: *RhiDevice,
+        self: *GfxDevice,
         pipelines: u64,
         bind_groups: u64,
         vertex_buffers: u64,
@@ -553,14 +537,14 @@ pub const RhiDevice = struct {
         self.perf_stats.sampler_binds += samplers;
     }
 
-    pub fn recordTransfer(self: *RhiDevice, texture_uploads: u64, buffer_uploads: u64, bytes: u64) void {
+    pub fn recordTransfer(self: *GfxDevice, texture_uploads: u64, buffer_uploads: u64, bytes: u64) void {
         self.perf_stats.texture_uploads += texture_uploads;
         self.perf_stats.buffer_uploads += buffer_uploads;
         self.perf_stats.bytes_uploaded += bytes;
     }
 
     pub fn recordRedundantBindsAvoided(
-        self: *RhiDevice,
+        self: *GfxDevice,
         pipelines: u64,
         bind_groups: u64,
         vertex_buffers: u64,
@@ -572,7 +556,7 @@ pub const RhiDevice = struct {
         self.perf_stats.redundant_index_buffer_binds_avoided += index_buffers;
     }
 
-    pub fn resetPerformanceStats(self: *RhiDevice) void {
+    pub fn resetPerformanceStats(self: *GfxDevice) void {
         self.perf_stats.reset();
     }
 
@@ -580,22 +564,22 @@ pub const RhiDevice = struct {
     // Binding state tracking
     // ────────────────────────────────────────────────────────────────────
 
-    pub fn bindingState(self: *RhiDevice) *BindGroupState {
+    pub fn bindingState(self: *GfxDevice) *BindGroupState {
         return &self.bind_state;
     }
 
-    pub fn resetBindingState(self: *RhiDevice) void {
+    pub fn resetBindingState(self: *GfxDevice) void {
         self.bind_state.reset();
     }
 
-    pub fn depthTexture(self: *RhiDevice) ?*const Texture {
+    pub fn depthTexture(self: *GfxDevice) ?*const Texture {
         if (self.depth_texture) |*texture| {
             return texture;
         }
         return null;
     }
 
-    pub fn depthTextureForFrame(self: *RhiDevice) ?*const Texture {
+    pub fn depthTextureForFrame(self: *GfxDevice) ?*const Texture {
         const idx = self.current_depth_index;
         if (self.depth_textures[idx]) |*texture| {
             return texture;
@@ -603,28 +587,28 @@ pub const RhiDevice = struct {
         return null;
     }
 
-    pub fn advanceFrame(self: *RhiDevice) void {
+    pub fn advanceFrame(self: *GfxDevice) void {
         self.current_depth_index = (self.current_depth_index + 1) % self.frames_in_flight;
     }
 
-    pub fn frameIndex(self: *const RhiDevice) u32 {
+    pub fn frameIndex(self: *const GfxDevice) u32 {
         return self.current_depth_index;
     }
 
-    pub fn setFramesInFlight(self: *RhiDevice, frames: u32) void {
+    pub fn setFramesInFlight(self: *GfxDevice, frames: u32) void {
         self.frames_in_flight = @min(frames, 3);
         if (self.frames_in_flight < 2) self.frames_in_flight = 2;
     }
 
-    pub fn runtimeInfo(self: *const RhiDevice) types.RuntimeInfo {
+    pub fn runtimeInfo(self: *const GfxDevice) types.RuntimeInfo {
         return self.runtime_info;
     }
 
-    pub fn vsyncEnabled(self: *const RhiDevice) bool {
+    pub fn vsyncEnabled(self: *const GfxDevice) bool {
         return self.vsync_enabled;
     }
 
-    pub fn setVSyncEnabled(self: *RhiDevice, enabled: bool) Error!void {
+    pub fn setVSyncEnabled(self: *GfxDevice, enabled: bool) Error!void {
         if (self.vsync_enabled == enabled) return;
         self.vsync_enabled = enabled;
 
@@ -647,14 +631,14 @@ pub const RhiDevice = struct {
         }
     }
 
-    pub fn activeCommandBuffer(self: *RhiDevice) ?*command_buffer.CommandBuffer {
+    pub fn activeCommandBuffer(self: *GfxDevice) ?*command_buffer.CommandBuffer {
         if (self.current_frame) |*frame| {
             return &frame.command_buffer;
         }
         return null;
     }
 
-    pub fn waitForIdle(self: *RhiDevice) bool {
+    pub fn waitForIdle(self: *GfxDevice) bool {
         if (self.current_frame != null) return false;
         self.flushPendingPostSubmitWork();
         return true;
@@ -663,7 +647,7 @@ pub const RhiDevice = struct {
     // ────────────────────────────────────────────────────────────────────
     // Frame management
     // ────────────────────────────────────────────────────────────────────
-    pub fn acquireCommandBuffer(self: *RhiDevice) Error!*command_buffer.CommandBuffer {
+    pub fn acquireCommandBuffer(self: *GfxDevice) Error!*command_buffer.CommandBuffer {
         // Old API for acquiring command buffers independently - used for offscreen operations
         // In Phase 2 adapter, return standalone CommandBuffer via allocation
         const ptr = try self.allocator.create(command_buffer.CommandBuffer);
@@ -671,14 +655,14 @@ pub const RhiDevice = struct {
         return ptr;
     }
 
-    pub fn releaseCommandBuffer(self: *RhiDevice, cmd_buffer: *command_buffer.CommandBuffer) void {
+    pub fn releaseCommandBuffer(self: *GfxDevice, cmd_buffer: *command_buffer.CommandBuffer) void {
         cmd_buffer.deinit();
         self.allocator.destroy(cmd_buffer);
     }
 
-    pub fn beginFrame(self: *RhiDevice) Error!Frame {
+    pub fn beginFrame(self: *GfxDevice) Error!Frame {
         const swapchain_image = self.device.acquireSwapchainImage() catch |err| switch (err) {
-            error.SwapchainAcquireFailed => rhi.SwapchainImage{ .id = 0, .width = self.runtime_info.drawable_width, .height = self.runtime_info.drawable_height },
+            error.SwapchainAcquireFailed => gfx.SwapchainImage{ .id = 0, .width = self.runtime_info.drawable_width, .height = self.runtime_info.drawable_height },
             else => return err,
         };
         const cmd = try self.device.createCommandBuffer(self.allocator);
@@ -691,7 +675,7 @@ pub const RhiDevice = struct {
         return frame;
     }
 
-    pub fn cancelFrame(self: *RhiDevice, frame: Frame) Error!void {
+    pub fn cancelFrame(self: *GfxDevice, frame: Frame) Error!void {
         const active = self.current_frame orelse frame;
         var cmd_mut = active.command_buffer;
         cmd_mut.deinit();
@@ -699,7 +683,7 @@ pub const RhiDevice = struct {
         self.current_frame = null;
     }
 
-    pub fn submitFrame(self: *RhiDevice, frame: Frame) Error!void {
+    pub fn submitFrame(self: *GfxDevice, frame: Frame) Error!void {
         const active = self.current_frame orelse frame;
         try self.device.submitCommandBuffer(.graphics, &active.command_buffer, .{});
         const swapchain_image = active.swapchain_image;
@@ -713,14 +697,14 @@ pub const RhiDevice = struct {
         self.depth_texture = self.depth_textures[self.current_depth_index];
         self.current_frame = null;
 
-        // Periodic RHI tracking diagnostics — log every 300 frames (~5s @ 60fps)
+        // Periodic GFX tracking diagnostics — log every 300 frames (~5s @ 60fps)
         self.diag_frame_index += 1;
         if (self.diag_frame_index % 300 == 0) {
             self.device.logTrackingDiagnostics(self.diag_frame_index);
         }
     }
 
-    pub fn submitFrameAndAcquireFence(self: *RhiDevice, frame: Frame) Error!Fence {
+    pub fn submitFrameAndAcquireFence(self: *GfxDevice, frame: Frame) Error!Fence {
         const active = self.current_frame orelse frame;
         try self.device.submitCommandBuffer(.graphics, &active.command_buffer, .{});
         const swapchain_image = active.swapchain_image;
@@ -741,7 +725,7 @@ pub const RhiDevice = struct {
         return fence;
     }
 
-    pub fn clearAndPresent(self: *RhiDevice, frame: Frame, clear: types.ClearState) Error!void {
+    pub fn clearAndPresent(self: *GfxDevice, frame: Frame, clear: types.ClearState) Error!void {
         if (frame.swapchain_image.id == 0) {
             return self.cancelFrame(frame);
         }
@@ -754,7 +738,7 @@ pub const RhiDevice = struct {
     // Render pass
     // ────────────────────────────────────────────────────────────────────
 
-    pub fn beginRenderPass(self: *RhiDevice, frame: Frame, clear: types.ClearState) Error!RenderPass {
+    pub fn beginRenderPass(self: *GfxDevice, frame: Frame, clear: types.ClearState) Error!RenderPass {
         return self.beginRenderPassWithDesc(frame, .{
             .color = .{
                 .target = .swapchain,
@@ -777,7 +761,7 @@ pub const RhiDevice = struct {
         });
     }
 
-    pub fn beginRenderPassWithDesc(self: *RhiDevice, frame: Frame, desc: RenderPassDesc) Error!RenderPass {
+    pub fn beginRenderPassWithDesc(self: *GfxDevice, frame: Frame, desc: RenderPassDesc) Error!RenderPass {
         if (self.current_frame == null) {
             self.current_frame = frame;
         }
@@ -817,14 +801,14 @@ pub const RhiDevice = struct {
         return .{};
     }
 
-    pub fn endRenderPass(self: *RhiDevice, pass: RenderPass) void {
+    pub fn endRenderPass(self: *GfxDevice, pass: RenderPass) void {
         if (self.current_frame) |*frame| {
             frame.command_buffer.encodeEndRenderPass() catch {};
         }
         _ = pass;
     }
 
-    pub fn beginCopyPass(self: *RhiDevice, frame: Frame) Error!CopyPass {
+    pub fn beginCopyPass(self: *GfxDevice, frame: Frame) Error!CopyPass {
         if (self.current_frame == null) {
             self.current_frame = frame;
         }
@@ -834,7 +818,7 @@ pub const RhiDevice = struct {
         return .{};
     }
 
-    pub fn endCopyPass(self: *RhiDevice, pass: CopyPass) void {
+    pub fn endCopyPass(self: *GfxDevice, pass: CopyPass) void {
         if (self.current_frame) |*frame| {
             frame.command_buffer.encodeEndCopyPass() catch {};
         }
@@ -845,7 +829,7 @@ pub const RhiDevice = struct {
     // Compute pass
     // ────────────────────────────────────────────────────────────────────
     pub fn beginComputePass(
-        self: *RhiDevice,
+        self: *GfxDevice,
         frame: Frame,
         rw_storage_textures: []const *const Texture,
         rw_storage_buffers: []const *const Buffer,
@@ -861,26 +845,26 @@ pub const RhiDevice = struct {
         return .{};
     }
 
-    pub fn endComputePass(self: *RhiDevice, pass: ComputePass) void {
+    pub fn endComputePass(self: *GfxDevice, pass: ComputePass) void {
         if (self.current_frame) |*frame| {
             frame.command_buffer.encodeEndComputePass() catch {};
         }
         _ = pass;
     }
 
-    pub fn bindComputePipeline(self: *RhiDevice, pass: ComputePass, pipeline: *const ComputePipeline) void {
+    pub fn bindComputePipeline(self: *GfxDevice, pass: ComputePass, pipeline: *const ComputePipeline) void {
         if (self.current_frame) |*frame| {
             frame.command_buffer.encodeSetPipeline(.{ .pipeline_id = pipeline.id }) catch {};
         }
         _ = pass;
     }
 
-    pub fn bindComputeSamplers(self: *RhiDevice, pass: ComputePass, first_slot: u32, bindings: []const TextureSamplerBinding) void {
+    pub fn bindComputeSamplers(self: *GfxDevice, pass: ComputePass, first_slot: u32, bindings: []const TextureSamplerBinding) void {
         _ = pass;
         if (self.current_frame == null) return;
-        var layout_entries = std.ArrayList(rhi.BindingLayoutEntry).empty;
+        var layout_entries = std.ArrayList(gfx.BindingLayoutEntry).empty;
         defer layout_entries.deinit(self.allocator);
-        var set_entries = std.ArrayList(rhi.BindingSetEntry).empty;
+        var set_entries = std.ArrayList(gfx.BindingSetEntry).empty;
         defer set_entries.deinit(self.allocator);
 
         for (bindings, 0..) |binding, i| {
@@ -902,7 +886,7 @@ pub const RhiDevice = struct {
     }
 
     pub fn bindComputeSampledTextureBinding(
-        self: *RhiDevice,
+        self: *GfxDevice,
         pass: ComputePass,
         binding: u32,
         texture: *const Texture,
@@ -914,12 +898,12 @@ pub const RhiDevice = struct {
         }});
     }
 
-    pub fn bindComputeStorageTextures(self: *RhiDevice, pass: ComputePass, first_slot: u32, textures: []const *const Texture) void {
+    pub fn bindComputeStorageTextures(self: *GfxDevice, pass: ComputePass, first_slot: u32, textures: []const *const Texture) void {
         _ = pass;
         if (self.current_frame == null) return;
-        var layout_entries = std.ArrayList(rhi.BindingLayoutEntry).empty;
+        var layout_entries = std.ArrayList(gfx.BindingLayoutEntry).empty;
         defer layout_entries.deinit(self.allocator);
-        var set_entries = std.ArrayList(rhi.BindingSetEntry).empty;
+        var set_entries = std.ArrayList(gfx.BindingSetEntry).empty;
         defer set_entries.deinit(self.allocator);
 
         for (textures, 0..) |tex, i| {
@@ -937,7 +921,7 @@ pub const RhiDevice = struct {
     }
 
     pub fn bindComputeStorageTextureBinding(
-        self: *RhiDevice,
+        self: *GfxDevice,
         pass: ComputePass,
         binding: u32,
         texture: *const Texture,
@@ -945,12 +929,12 @@ pub const RhiDevice = struct {
         self.bindComputeStorageTextures(pass, binding * 2, &.{texture});
     }
 
-    pub fn bindComputeStorageBuffers(self: *RhiDevice, pass: ComputePass, first_slot: u32, buffers: []const *const Buffer) void {
+    pub fn bindComputeStorageBuffers(self: *GfxDevice, pass: ComputePass, first_slot: u32, buffers: []const *const Buffer) void {
         _ = pass;
         if (self.current_frame == null) return;
-        var layout_entries = std.ArrayList(rhi.BindingLayoutEntry).empty;
+        var layout_entries = std.ArrayList(gfx.BindingLayoutEntry).empty;
         defer layout_entries.deinit(self.allocator);
-        var set_entries = std.ArrayList(rhi.BindingSetEntry).empty;
+        var set_entries = std.ArrayList(gfx.BindingSetEntry).empty;
         defer set_entries.deinit(self.allocator);
 
         for (buffers, 0..) |buf, i| {
@@ -967,21 +951,21 @@ pub const RhiDevice = struct {
         }
     }
 
-    pub fn dispatchCompute(self: *RhiDevice, pass: ComputePass, groupcount_x: u32, groupcount_y: u32, groupcount_z: u32) void {
+    pub fn dispatchCompute(self: *GfxDevice, pass: ComputePass, groupcount_x: u32, groupcount_y: u32, groupcount_z: u32) void {
         if (self.current_frame) |*frame| {
             frame.command_buffer.encodeDispatch(.{ .x = groupcount_x, .y = groupcount_y, .z = groupcount_z }) catch {};
         }
         _ = pass;
     }
 
-    pub fn pushComputeUniformData(self: *RhiDevice, frame: Frame, slot: u32, data: []const u8) void {
+    pub fn pushComputeUniformData(self: *GfxDevice, frame: Frame, slot: u32, data: []const u8) void {
         _ = frame;
         if (self.current_frame) |*active| {
             active.command_buffer.encodePushUniform(2, @intCast(slot), data) catch {};
         }
     }
 
-    pub fn blitTexture(self: *RhiDevice, frame: Frame, src: *const Texture, dst: *const Texture) void {
+    pub fn blitTexture(self: *GfxDevice, frame: Frame, src: *const Texture, dst: *const Texture) void {
         _ = frame;
         self.pending_texture_blits.append(self.allocator, .{
             .src = src,
@@ -993,26 +977,26 @@ pub const RhiDevice = struct {
     // Resource creation / destruction
     // ────────────────────────────────────────────────────────────────────
 
-    pub fn createBuffer(self: *RhiDevice, desc: types.BufferDesc) Error!Buffer {
-        const rhi_desc = rhi.BufferDesc{
+    pub fn createBuffer(self: *GfxDevice, desc: types.BufferDesc) Error!Buffer {
+        const gfx_desc = gfx.BufferDesc{
             .size = desc.size,
             .usage = legacyBufferUsageToRhi(desc.usage),
             .label = desc.label,
         };
-        const buf = try self.device.createBuffer(rhi_desc);
+        const buf = try self.device.createBuffer(gfx_desc);
         return .{
             .id = buf.id,
             .desc = desc,
         };
     }
 
-    pub fn releaseBuffer(self: *RhiDevice, buffer: *Buffer) void {
+    pub fn releaseBuffer(self: *GfxDevice, buffer: *Buffer) void {
         self.device.vtable.destroy_buffer(self.device.ctx, .{ .id = buffer.id });
         buffer.* = undefined;
     }
 
-    pub fn createTransferBuffer(self: *RhiDevice, desc: types.TransferBufferDesc) Error!TransferBuffer {
-        const usage = rhi.BufferUsageFlags{
+    pub fn createTransferBuffer(self: *GfxDevice, desc: types.TransferBufferDesc) Error!TransferBuffer {
+        const usage = gfx.BufferUsageFlags{
             .transfer_src = desc.upload,
             .transfer_dst = !desc.upload,
             .storage_read = true,
@@ -1032,7 +1016,7 @@ pub const RhiDevice = struct {
         };
     }
 
-    pub fn releaseTransferBuffer(self: *RhiDevice, transfer_buffer: *TransferBuffer) void {
+    pub fn releaseTransferBuffer(self: *GfxDevice, transfer_buffer: *TransferBuffer) void {
         if (transfer_buffer.shadow_data) |shadow| {
             self.allocator.free(shadow);
         }
@@ -1040,8 +1024,8 @@ pub const RhiDevice = struct {
         transfer_buffer.* = undefined;
     }
 
-    pub fn createTexture(self: *RhiDevice, desc: types.TextureDesc) Error!Texture {
-        const rhi_desc = rhi.TextureDesc{
+    pub fn createTexture(self: *GfxDevice, desc: types.TextureDesc) Error!Texture {
+        const gfx_desc = gfx.TextureDesc{
             .width = desc.width,
             .height = desc.height,
             .format = desc.format,
@@ -1049,7 +1033,7 @@ pub const RhiDevice = struct {
             .sample_count = desc.sample_count,
             .label = desc.label,
         };
-        const tex = try self.device.createTexture(rhi_desc);
+        const tex = try self.device.createTexture(gfx_desc);
         return .{
             .id = tex.id,
             .desc = desc,
@@ -1058,7 +1042,7 @@ pub const RhiDevice = struct {
 
     /// Create a texture backed by an IOSurface for cross-process GPU sharing (macOS only).
     /// Returns the Texture handle and the IOSurface id for the other process.
-    pub fn createIOSurfaceTexture(self: *RhiDevice, desc: types.TextureDesc) Error!struct { texture: Texture, surface_id: u32 } {
+    pub fn createIOSurfaceTexture(self: *GfxDevice, desc: types.TextureDesc) Error!struct { texture: Texture, surface_id: u32 } {
         const md = self.owned_metal_device orelse return error.DeviceCreateFailed;
         const result = md.createIOSurfaceTexture(
             desc.width,
@@ -1085,7 +1069,7 @@ pub const RhiDevice = struct {
         shm_name: [64]u8 = [_]u8{0} ** 64,
     };
 
-    pub fn createSharedTexture(self: *RhiDevice, desc: types.TextureDesc) Error!SharedTextureResult {
+    pub fn createSharedTexture(self: *GfxDevice, desc: types.TextureDesc) Error!SharedTextureResult {
         // macOS Metal → IOSurface
         if (self.owned_metal_device) |md| {
             const result = md.createIOSurfaceTexture(
@@ -1127,7 +1111,7 @@ pub const RhiDevice = struct {
     /// frame, giving the GPU the entire frame delay sleep + CPU prep time
     /// to finish the previous frame.  By the time this runs, the GPU work
     /// is typically already done, making the wait nearly instant.
-    pub fn waitForPreviousFrame(self: *RhiDevice) void {
+    pub fn waitForPreviousFrame(self: *GfxDevice) void {
         if (self.owned_metal_device) |md| {
             md.waitForGpu();
         }
@@ -1142,7 +1126,7 @@ pub const RhiDevice = struct {
     /// On Vulkan, performs a GPU→CPU readback into the POSIX shm segment
     /// (includes its own synchronization).
     /// Returns the staging IOSurface ID on Metal (0 if N/A).
-    pub fn blitSharedTexture(self: *RhiDevice, texture: Texture) u32 {
+    pub fn blitSharedTexture(self: *GfxDevice, texture: Texture) u32 {
         if (self.owned_vulkan_device) |vk| {
             _ = vk.blitSharedTexture(texture.id);
         }
@@ -1152,32 +1136,32 @@ pub const RhiDevice = struct {
         return 0;
     }
 
-    pub fn releaseTexture(self: *RhiDevice, texture: *Texture) void {
+    pub fn releaseTexture(self: *GfxDevice, texture: *Texture) void {
         self.device.vtable.destroy_texture(self.device.ctx, .{ .id = texture.id });
         texture.* = undefined;
     }
 
-    pub fn createShaderModule(self: *RhiDevice, desc: ShaderModuleDesc) Error!ShaderModule {
-        const rhi_desc = rhi.ShaderModuleDesc{
+    pub fn createShaderModule(self: *GfxDevice, desc: ShaderModuleDesc) Error!ShaderModule {
+        const gfx_desc = gfx.ShaderModuleDesc{
             .stage = desc.stage,
             .format = desc.format,
             .code = desc.code,
             .entry_point = desc.entry_point,
         };
-        const shader = try self.device.createShaderModule(rhi_desc);
+        const shader = try self.device.createShaderModule(gfx_desc);
         return .{
             .id = shader.id,
             .desc = desc,
         };
     }
 
-    pub fn releaseShaderModule(self: *RhiDevice, shader: *ShaderModule) void {
+    pub fn releaseShaderModule(self: *GfxDevice, shader: *ShaderModule) void {
         _ = self;
         _ = shader;
     }
 
-    pub fn createSampler(self: *RhiDevice, desc: SamplerDesc) Error!Sampler {
-        const rhi_desc = rhi.SamplerDesc{
+    pub fn createSampler(self: *GfxDevice, desc: SamplerDesc) Error!Sampler {
+        const gfx_desc = gfx.SamplerDesc{
             .min_filter = desc.min_filter,
             .mag_filter = desc.mag_filter,
             .mipmap_mode = desc.mipmap_mode,
@@ -1187,22 +1171,22 @@ pub const RhiDevice = struct {
             .enable_compare = desc.enable_compare,
             .compare_op = desc.compare_op,
         };
-        const sampler = try self.device.createSampler(rhi_desc);
+        const sampler = try self.device.createSampler(gfx_desc);
         return .{
             .id = sampler.id,
             .desc = desc,
         };
     }
 
-    pub fn releaseSampler(self: *RhiDevice, sampler: *Sampler) void {
+    pub fn releaseSampler(self: *GfxDevice, sampler: *Sampler) void {
         self.device.vtable.destroy_sampler(self.device.ctx, .{ .id = sampler.id });
         sampler.* = undefined;
     }
 
-    pub fn createGraphicsPipeline(self: *RhiDevice, desc: GraphicsPipelineDesc) Error!GraphicsPipeline {
+    pub fn createGraphicsPipeline(self: *GfxDevice, desc: GraphicsPipelineDesc) Error!GraphicsPipeline {
         const layout = try self.ensureDefaultPipelineLayout();
 
-        var attrs = std.ArrayList(rhi.VertexAttribute).empty;
+        var attrs = std.ArrayList(gfx.VertexAttribute).empty;
         defer attrs.deinit(self.allocator);
         for (desc.vertex_attributes) |a| {
             attrs.append(self.allocator, .{
@@ -1213,7 +1197,7 @@ pub const RhiDevice = struct {
             }) catch return error.OutOfMemory;
         }
 
-        var buffer_layouts = std.ArrayList(rhi.VertexBufferLayout).empty;
+        var buffer_layouts = std.ArrayList(gfx.VertexBufferLayout).empty;
         defer buffer_layouts.deinit(self.allocator);
         for (desc.vertex_buffer_layouts) |l| {
             buffer_layouts.append(self.allocator, .{
@@ -1245,12 +1229,12 @@ pub const RhiDevice = struct {
         return .{ .id = pipeline.id };
     }
 
-    pub fn releaseGraphicsPipeline(self: *RhiDevice, pipeline: *GraphicsPipeline) void {
+    pub fn releaseGraphicsPipeline(self: *GfxDevice, pipeline: *GraphicsPipeline) void {
         self.device.vtable.destroy_graphics_pipeline(self.device.ctx, .{ .id = pipeline.id });
         pipeline.* = undefined;
     }
 
-    pub fn createComputePipeline(self: *RhiDevice, desc: ComputePipelineDesc) Error!ComputePipeline {
+    pub fn createComputePipeline(self: *GfxDevice, desc: ComputePipelineDesc) Error!ComputePipeline {
         const layout = try self.ensureDefaultPipelineLayout();
         const shader = try self.device.createShaderModule(.{
             .stage = .compute,
@@ -1265,15 +1249,15 @@ pub const RhiDevice = struct {
         return .{ .id = pipeline.id };
     }
 
-    pub fn releaseComputePipeline(self: *RhiDevice, pipeline: *ComputePipeline) void {
+    pub fn releaseComputePipeline(self: *GfxDevice, pipeline: *ComputePipeline) void {
         self.device.vtable.destroy_compute_pipeline(self.device.ctx, .{ .id = pipeline.id });
         pipeline.* = undefined;
     }
 
-    pub fn createBindGroup(self: *RhiDevice, desc: BindGroupDesc) Error!BindGroup {
-        var layout_entries = std.ArrayList(rhi.BindingLayoutEntry).empty;
+    pub fn createBindGroup(self: *GfxDevice, desc: BindGroupDesc) Error!BindGroup {
+        var layout_entries = std.ArrayList(gfx.BindingLayoutEntry).empty;
         defer layout_entries.deinit(self.allocator);
-        var set_entries = std.ArrayList(rhi.BindingSetEntry).empty;
+        var set_entries = std.ArrayList(gfx.BindingSetEntry).empty;
         defer set_entries.deinit(self.allocator);
 
         for (desc.texture_sampler_bindings, 0..) |binding, i| {
@@ -1340,7 +1324,7 @@ pub const RhiDevice = struct {
         };
     }
 
-    pub fn releaseBindGroup(self: *RhiDevice, bind_group: *BindGroup) void {
+    pub fn releaseBindGroup(self: *GfxDevice, bind_group: *BindGroup) void {
         _ = self;
         _ = bind_group;
     }
@@ -1349,21 +1333,21 @@ pub const RhiDevice = struct {
     // Pipeline binding
     // ────────────────────────────────────────────────────────────────────
 
-    pub fn bindGraphicsPipeline(self: *RhiDevice, pass: RenderPass, pipeline: *const GraphicsPipeline) void {
+    pub fn bindGraphicsPipeline(self: *GfxDevice, pass: RenderPass, pipeline: *const GraphicsPipeline) void {
         if (self.current_frame) |*frame| {
             frame.command_buffer.encodeSetPipeline(.{ .pipeline_id = pipeline.id }) catch {};
         }
         _ = pass;
     }
 
-    pub fn bindVertexBuffer(self: *RhiDevice, pass: RenderPass, slot: u32, buffer: *const Buffer, offset: u32) void {
+    pub fn bindVertexBuffer(self: *GfxDevice, pass: RenderPass, slot: u32, buffer: *const Buffer, offset: u32) void {
         if (self.current_frame) |*frame| {
             frame.command_buffer.encodeSetVertexBuffer(.{ .slot = slot, .buffer_id = buffer.id, .offset = offset }) catch {};
         }
         _ = pass;
     }
 
-    pub fn bindIndexBuffer(self: *RhiDevice, pass: RenderPass, buffer: *const Buffer, index_size: types.IndexElementSize, offset: u32) void {
+    pub fn bindIndexBuffer(self: *GfxDevice, pass: RenderPass, buffer: *const Buffer, index_size: types.IndexElementSize, offset: u32) void {
         if (self.current_frame) |*frame| {
             const fmt: u32 = switch (index_size) {
                 .u16 => 0,
@@ -1374,7 +1358,7 @@ pub const RhiDevice = struct {
         _ = pass;
     }
 
-    pub fn bindGroup(self: *RhiDevice, pass: RenderPass, bind_group: *const BindGroup) void {
+    pub fn bindGroup(self: *GfxDevice, pass: RenderPass, bind_group: *const BindGroup) void {
         if (self.current_frame) |*frame| {
             if (bind_group.set) |set| {
                 frame.command_buffer.encodeSetBindingSet(.{ .slot = bind_group.slot_offset, .set_id = set.id }) catch {};
@@ -1383,21 +1367,21 @@ pub const RhiDevice = struct {
         _ = pass;
     }
 
-    pub fn pushVertexUniformData(self: *RhiDevice, frame: Frame, slot: u32, data: []const u8) void {
+    pub fn pushVertexUniformData(self: *GfxDevice, frame: Frame, slot: u32, data: []const u8) void {
         _ = frame;
         if (self.current_frame) |*active| {
             active.command_buffer.encodePushUniform(0, @intCast(slot), data) catch {};
         }
     }
 
-    pub fn pushFragmentUniformData(self: *RhiDevice, frame: Frame, slot: u32, data: []const u8) void {
+    pub fn pushFragmentUniformData(self: *GfxDevice, frame: Frame, slot: u32, data: []const u8) void {
         _ = frame;
         if (self.current_frame) |*active| {
             active.command_buffer.encodePushUniform(1, @intCast(slot), data) catch {};
         }
     }
 
-    pub fn drawPrimitives(self: *RhiDevice, pass: RenderPass, vertex_count: u32, instance_count: u32, first_vertex: u32, first_instance: u32) void {
+    pub fn drawPrimitives(self: *GfxDevice, pass: RenderPass, vertex_count: u32, instance_count: u32, first_vertex: u32, first_instance: u32) void {
         if (self.current_frame) |*frame| {
             frame.command_buffer.encodeDraw(.{
                 .vertex_count = vertex_count,
@@ -1409,7 +1393,7 @@ pub const RhiDevice = struct {
         _ = pass;
     }
 
-    pub fn drawIndexedPrimitives(self: *RhiDevice, pass: RenderPass, index_count: u32, instance_count: u32, first_index: u32, vertex_offset: i32, first_instance: u32) void {
+    pub fn drawIndexedPrimitives(self: *GfxDevice, pass: RenderPass, index_count: u32, instance_count: u32, first_index: u32, vertex_offset: i32, first_instance: u32) void {
         if (self.current_frame) |*frame| {
             frame.command_buffer.encodeDrawIndexed(.{
                 .index_count = index_count,
@@ -1426,12 +1410,12 @@ pub const RhiDevice = struct {
     // Data upload / download
     // ────────────────────────────────────────────────────────────────────
 
-    pub fn uploadBufferData(self: *RhiDevice, buffer: *const Buffer, data: []const u8) Error!void {
+    pub fn uploadBufferData(self: *GfxDevice, buffer: *const Buffer, data: []const u8) Error!void {
         try self.device.uploadBufferData(.{ .id = buffer.id }, 0, data);
     }
 
     pub fn uploadTextureData(
-        self: *RhiDevice,
+        self: *GfxDevice,
         texture: *const Texture,
         data: []const u8,
         pixels_per_row: u32,
@@ -1444,17 +1428,17 @@ pub const RhiDevice = struct {
         try self.device.uploadTextureData(.{ .id = texture.id }, data, width, height, bytes_per_row);
     }
 
-    pub fn readTextureData(self: *RhiDevice, texture: *const Texture, bytes_per_row: u32, destination: []u8) Error!void {
+    pub fn readTextureData(self: *GfxDevice, texture: *const Texture, bytes_per_row: u32, destination: []u8) Error!void {
         const width = texture.desc.width;
         const height = texture.desc.height;
         try self.device.readTextureData(.{ .id = texture.id }, width, height, bytes_per_row, destination);
     }
 
-    pub fn downloadTexturePixel(self: *RhiDevice, pass: CopyPass, texture: *const Texture, transfer_buffer: *const TransferBuffer, x: u32, y: u32) void {
+    pub fn downloadTexturePixel(self: *GfxDevice, pass: CopyPass, texture: *const Texture, transfer_buffer: *const TransferBuffer, x: u32, y: u32) void {
         self.downloadTexturePixelToOffset(pass, texture, transfer_buffer, 0, x, y);
     }
 
-    pub fn downloadTexturePixelToOffset(self: *RhiDevice, pass: CopyPass, texture: *const Texture, transfer_buffer: *const TransferBuffer, offset: u32, x: u32, y: u32) void {
+    pub fn downloadTexturePixelToOffset(self: *GfxDevice, pass: CopyPass, texture: *const Texture, transfer_buffer: *const TransferBuffer, offset: u32, x: u32, y: u32) void {
         _ = pass;
         if (offset > transfer_buffer.desc.size or transfer_buffer.desc.size - offset < 4) return;
         self.pending_pixel_downloads.append(self.allocator, .{
@@ -1466,11 +1450,11 @@ pub const RhiDevice = struct {
         }) catch {};
     }
 
-    pub fn readTransferBufferBytes(self: *RhiDevice, transfer_buffer: *const TransferBuffer, destination: []u8) Error!void {
+    pub fn readTransferBufferBytes(self: *GfxDevice, transfer_buffer: *const TransferBuffer, destination: []u8) Error!void {
         return self.readTransferBufferBytesAt(transfer_buffer, 0, destination);
     }
 
-    pub fn readTransferBufferBytesAt(self: *RhiDevice, transfer_buffer: *const TransferBuffer, offset: u32, destination: []u8) Error!void {
+    pub fn readTransferBufferBytesAt(self: *GfxDevice, transfer_buffer: *const TransferBuffer, offset: u32, destination: []u8) Error!void {
         _ = self;
         const shadow = transfer_buffer.shadow_data orelse return error.TransferBufferMapFailed;
         const start = offset;
@@ -1479,7 +1463,7 @@ pub const RhiDevice = struct {
         @memcpy(destination, shadow[start..end]);
     }
 
-    pub fn readTexturePixel(self: *RhiDevice, texture: *const Texture, x: u32, y: u32) Error![4]u8 {
+    pub fn readTexturePixel(self: *GfxDevice, texture: *const Texture, x: u32, y: u32) Error![4]u8 {
         var all: [4]u8 = .{ 0, 0, 0, 0 };
         if (x >= texture.desc.width or y >= texture.desc.height) return error.InvalidArgument;
 
@@ -1497,24 +1481,24 @@ pub const RhiDevice = struct {
         return all;
     }
 
-    pub fn isFenceSignaled(self: *RhiDevice, fence: *const Fence) bool {
+    pub fn isFenceSignaled(self: *GfxDevice, fence: *const Fence) bool {
         _ = self;
         return fence.signaled;
     }
 
-    pub fn releaseFence(self: *RhiDevice, fence: *Fence) void {
+    pub fn releaseFence(self: *GfxDevice, fence: *Fence) void {
         _ = self;
         fence.* = undefined;
     }
 
-    fn releaseDepthTexture(self: *RhiDevice) void {
+    fn releaseDepthTexture(self: *GfxDevice) void {
         if (self.depth_texture) |*depth_texture| {
             self.releaseTexture(depth_texture);
         }
         self.depth_texture = null;
     }
 
-    fn releaseAllDepthTextures(self: *RhiDevice) void {
+    fn releaseAllDepthTextures(self: *GfxDevice) void {
         for (0..self.depth_textures.len) |i| {
             if (self.depth_textures[i]) |*depth_texture| {
                 self.releaseTexture(depth_texture);
@@ -1524,17 +1508,17 @@ pub const RhiDevice = struct {
         self.depth_texture = null;
     }
 
-    fn clearPendingPostSubmitWork(self: *RhiDevice) void {
+    fn clearPendingPostSubmitWork(self: *GfxDevice) void {
         self.pending_pixel_downloads.clearRetainingCapacity();
         self.pending_texture_blits.clearRetainingCapacity();
     }
 
-    fn flushPendingPostSubmitWork(self: *RhiDevice) void {
+    fn flushPendingPostSubmitWork(self: *GfxDevice) void {
         self.flushPendingPixelDownloads();
         self.flushPendingTextureBlits();
     }
 
-    fn flushPendingPixelDownloads(self: *RhiDevice) void {
+    fn flushPendingPixelDownloads(self: *GfxDevice) void {
         defer self.pending_pixel_downloads.clearRetainingCapacity();
 
         for (self.pending_pixel_downloads.items) |download| {
@@ -1550,7 +1534,7 @@ pub const RhiDevice = struct {
         }
     }
 
-    fn flushPendingTextureBlits(self: *RhiDevice) void {
+    fn flushPendingTextureBlits(self: *GfxDevice) void {
         defer self.pending_texture_blits.clearRetainingCapacity();
 
         for (self.pending_texture_blits.items) |blit| {
@@ -1571,7 +1555,7 @@ pub const RhiDevice = struct {
         }
     }
 
-    pub fn resize(self: *RhiDevice, width: u32, height: u32) Error!void {
+    pub fn resize(self: *GfxDevice, width: u32, height: u32) Error!void {
         self.runtime_info.drawable_width = width;
         self.runtime_info.drawable_height = height;
 
@@ -1621,7 +1605,7 @@ pub const RhiDevice = struct {
     }
 
     pub fn bindGroupOptimized(
-        self: *RhiDevice,
+        self: *GfxDevice,
         pass: RenderPass,
         bind_group: *const BindGroup,
         state: *BindGroupState,
@@ -1631,7 +1615,7 @@ pub const RhiDevice = struct {
     }
 
     pub fn bindGraphicsPipelineOptimized(
-        self: *RhiDevice,
+        self: *GfxDevice,
         pass: RenderPass,
         pipeline: *const GraphicsPipeline,
         state: *BindGroupState,
@@ -1641,7 +1625,7 @@ pub const RhiDevice = struct {
     }
 
     pub fn bindVertexBufferOptimized(
-        self: *RhiDevice,
+        self: *GfxDevice,
         pass: RenderPass,
         slot: u32,
         buffer: *const Buffer,
@@ -1653,7 +1637,7 @@ pub const RhiDevice = struct {
     }
 
     pub fn bindIndexBufferOptimized(
-        self: *RhiDevice,
+        self: *GfxDevice,
         pass: RenderPass,
         buffer: *const Buffer,
         index_size: types.IndexElementSize,
@@ -1664,7 +1648,7 @@ pub const RhiDevice = struct {
         _ = state;
     }
 
-    fn legacyBufferUsageToRhi(usage: u32) rhi.BufferUsageFlags {
+    fn legacyBufferUsageToRhi(usage: u32) gfx.BufferUsageFlags {
         return .{
             .vertex = (usage & types.BufferUsage.vertex) != 0,
             .index = (usage & types.BufferUsage.index) != 0,
@@ -1678,7 +1662,7 @@ pub const RhiDevice = struct {
         };
     }
 
-    fn legacyTextureUsageToRhi(usage: u32) rhi.TextureUsageFlags {
+    fn legacyTextureUsageToRhi(usage: u32) gfx.TextureUsageFlags {
         return .{
             .sampled = (usage & types.TextureUsage.sampler) != 0,
             .color_target = (usage & types.TextureUsage.color_target) != 0,
@@ -1694,7 +1678,7 @@ pub const RhiDevice = struct {
         };
     }
 
-    fn ensureDefaultPipelineLayout(self: *RhiDevice) Error!rhi.PipelineLayout {
+    fn ensureDefaultPipelineLayout(self: *GfxDevice) Error!gfx.PipelineLayout {
         if (self.default_pipeline_layout) |layout| return layout;
 
         const layout = if (self.default_binding_layout) |existing| blk: {
@@ -1713,7 +1697,7 @@ pub const RhiDevice = struct {
         return pipeline_layout;
     }
 
-    fn hashLegacyBindGroupLayout(entries: []const rhi.BindingLayoutEntry) u64 {
+    fn hashLegacyBindGroupLayout(entries: []const gfx.BindingLayoutEntry) u64 {
         var hasher = std.hash.Wyhash.init(0);
         for (entries) |entry| {
             hasher.update(std.mem.asBytes(&entry.slot));

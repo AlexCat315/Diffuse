@@ -5,18 +5,18 @@
 const std = @import("std");
 const terrain_mod = @import("terrain.zig");
 const mesh_pass_mod = @import("../render/passes/mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../render/shader_support.zig");
 const components = @import("../scene/components.zig");
 const scene_mod = @import("../scene/scene.zig");
 
 pub const TerrainRenderer = struct {
     allocator: std.mem.Allocator,
-    vertex_buffer: ?rhi_mod.Buffer = null,
-    index_buffer: ?rhi_mod.Buffer = null,
+    vertex_buffer: ?gfx_mod.Buffer = null,
+    index_buffer: ?gfx_mod.Buffer = null,
     index_count: u32 = 0,
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
     pipeline_failed: bool = false,
 
@@ -31,7 +31,7 @@ pub const TerrainRenderer = struct {
         return .{ .allocator = allocator };
     }
 
-    pub fn deinit(self: *TerrainRenderer, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *TerrainRenderer, device: *gfx_mod.GfxDevice) void {
         if (self.pipeline) |*p| device.releaseGraphicsPipeline(p);
         if (self.stages) |*s| s.deinit(device);
         if (self.vertex_buffer) |*b| device.releaseBuffer(b);
@@ -44,7 +44,7 @@ pub const TerrainRenderer = struct {
     }
 
     /// Create shader pipeline. Call once during init.
-    pub fn createPipeline(self: *TerrainRenderer, device: *rhi_mod.RhiDevice) !void {
+    pub fn createPipeline(self: *TerrainRenderer, device: *gfx_mod.GfxDevice) !void {
         self.stages = try shader_support.loadProgramStages(device, "terrain");
         errdefer if (self.stages) |*s| s.deinit(device);
 
@@ -69,7 +69,7 @@ pub const TerrainRenderer = struct {
     }
 
     /// Upload terrain mesh to GPU. Call after terrain.rebuildMesh().
-    pub fn uploadMesh(self: *TerrainRenderer, device: *rhi_mod.RhiDevice, mesh: *const terrain_mod.TerrainMesh) !void {
+    pub fn uploadMesh(self: *TerrainRenderer, device: *gfx_mod.GfxDevice, mesh: *const terrain_mod.TerrainMesh) !void {
         // Release old buffers if any.
         if (self.vertex_buffer) |*b| device.releaseBuffer(b);
         if (self.index_buffer) |*b| device.releaseBuffer(b);
@@ -77,7 +77,7 @@ pub const TerrainRenderer = struct {
         const vb_size: u32 = @intCast(mesh.vertices.len * @sizeOf(mesh_pass_mod.GpuVertex));
         self.vertex_buffer = try device.createBuffer(.{
             .size = vb_size,
-            .usage = rhi_types.BufferUsage.vertex,
+            .usage = gfx_types.BufferUsage.vertex,
             .label = "terrain_vb",
         });
         try device.uploadBufferData(&self.vertex_buffer.?, std.mem.sliceAsBytes(mesh.vertices));
@@ -85,7 +85,7 @@ pub const TerrainRenderer = struct {
         const ib_size: u32 = @intCast(mesh.indices.len * @sizeOf(u32));
         self.index_buffer = try device.createBuffer(.{
             .size = ib_size,
-            .usage = rhi_types.BufferUsage.index,
+            .usage = gfx_types.BufferUsage.index,
             .label = "terrain_ib",
         });
         try device.uploadBufferData(&self.index_buffer.?, std.mem.sliceAsBytes(mesh.indices));
@@ -95,9 +95,9 @@ pub const TerrainRenderer = struct {
     /// Draw terrain. Call inside an active render pass after binding the scene.
     pub fn draw(
         self: *TerrainRenderer,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
         model: [16]f32,
     ) mesh_pass_mod.DrawStats {
@@ -130,9 +130,9 @@ pub const TerrainRenderer = struct {
     /// and issues draw calls for each terrain entity.
     pub fn syncAndDraw(
         self: *TerrainRenderer,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         scene: *scene_mod.Scene,
         view_projection: [16]f32,
     ) mesh_pass_mod.DrawStats {

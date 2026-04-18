@@ -1,12 +1,12 @@
 const std = @import("std");
-const external_rhi_types = @import("guava_rhi").types;
+const external_gfx_types = @import("guava_gfx").types;
 
-pub const GraphicsAPI = external_rhi_types.GraphicsAPI;
-pub const BackendSelectionPolicy = external_rhi_types.BackendSelectionPolicy;
-pub const RuntimeInfo = external_rhi_types.RuntimeInfo;
-pub const graphicsApiName = external_rhi_types.graphicsApiName;
-pub const defaultPreferredBackends = external_rhi_types.defaultPreferredBackends;
-pub const defaultBackendOrder = external_rhi_types.defaultBackendOrder;
+pub const GraphicsAPI = external_gfx_types.GraphicsAPI;
+pub const BackendSelectionPolicy = external_gfx_types.BackendSelectionPolicy;
+pub const RuntimeInfo = external_gfx_types.RuntimeInfo;
+pub const graphicsApiName = external_gfx_types.graphicsApiName;
+pub const defaultPreferredBackends = external_gfx_types.defaultPreferredBackends;
+pub const defaultBackendOrder = external_gfx_types.defaultBackendOrder;
 
 pub const EditorViewportRenderMode = enum {
     textured,

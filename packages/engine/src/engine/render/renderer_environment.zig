@@ -6,7 +6,7 @@ const environment_map_import_mod = @import("../assets/environment_map_import.zig
 const texture_import_mod = @import("../assets/texture_import.zig");
 const mesh_pass_mod = @import("passes/mesh_pass.zig");
 const path_trace_common = @import("path_trace/path_trace_common.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
+const gfx_mod = @import("gfx_legacy/mod.zig");
 const scene_mod = @import("../scene/scene.zig");
 
 const render_log = std.log.scoped(.viewport_render);
@@ -65,22 +65,22 @@ pub fn resolveEnvironmentTextures(
         // Cache hit — re-resolve handles to fresh pointers each frame; the GPU texture ArrayList
         // may have been reallocated since last frame due to other texture uploads.
         prepared_scene.environment_map = if (self.cached_env_textures.environment_map_handle) |h|
-            self.scene_cache.ensureTextureHandle(&self.rhi, scene, h) catch |err| blk: {
+            self.scene_cache.ensureTextureHandle(&self.gfx, scene, h) catch |err| blk: {
                 render_log.warn("cache-hit ensureTextureHandle(env_map) failed: {s}", .{@errorName(err)});
                 break :blk &self.scene_cache.fallback_texture.?;
             }
         else
             &self.scene_cache.fallback_texture.?;
         prepared_scene.irradiance_map = if (self.cached_env_textures.irradiance_map_handle) |h|
-            self.scene_cache.ensureTextureHandle(&self.rhi, scene, h) catch &self.scene_cache.fallback_texture.?
+            self.scene_cache.ensureTextureHandle(&self.gfx, scene, h) catch &self.scene_cache.fallback_texture.?
         else
             &self.scene_cache.fallback_texture.?;
         prepared_scene.prefiltered_env_map = if (self.cached_env_textures.prefiltered_env_map_handle) |h|
-            self.scene_cache.ensureTextureHandle(&self.rhi, scene, h) catch &self.scene_cache.fallback_texture.?
+            self.scene_cache.ensureTextureHandle(&self.gfx, scene, h) catch &self.scene_cache.fallback_texture.?
         else
             &self.scene_cache.fallback_texture.?;
         prepared_scene.brdf_lut = if (self.cached_env_textures.brdf_lut_handle) |h|
-            self.scene_cache.ensureTextureHandle(&self.rhi, scene, h) catch self.scene_cache.fallbackBrdfLut()
+            self.scene_cache.ensureTextureHandle(&self.gfx, scene, h) catch self.scene_cache.fallbackBrdfLut()
         else
             self.scene_cache.fallbackBrdfLut();
         if (self.gpu_brdf_lut) |*lut| {
@@ -164,25 +164,25 @@ pub fn resolveEnvironmentTextures(
     // Phase 1: Ensure all IBL textures are cached in the GPU texture array.
     // This may cause ArrayList reallocations, so we must NOT hold pointers yet.
     if (environment.environment_map_handle) |handle| {
-        _ = self.scene_cache.ensureTextureHandle(&self.rhi, scene, handle) catch |err| {
+        _ = self.scene_cache.ensureTextureHandle(&self.gfx, scene, handle) catch |err| {
             render_log.warn("ensureTextureHandle failed for environment_map: {s}; using fallback", .{@errorName(err)});
             return;
         };
     }
     if (environment.irradiance_map_handle) |handle| {
-        _ = self.scene_cache.ensureTextureHandle(&self.rhi, scene, handle) catch |err| {
+        _ = self.scene_cache.ensureTextureHandle(&self.gfx, scene, handle) catch |err| {
             render_log.warn("ensureTextureHandle failed for irradiance_map: {s}; using fallback", .{@errorName(err)});
             return;
         };
     }
     if (environment.prefiltered_map_handle) |handle| {
-        _ = self.scene_cache.ensureTextureHandle(&self.rhi, scene, handle) catch |err| {
+        _ = self.scene_cache.ensureTextureHandle(&self.gfx, scene, handle) catch |err| {
             render_log.warn("ensureTextureHandle failed for prefiltered_env_map: {s}; using fallback", .{@errorName(err)});
             return;
         };
     }
     if (environment.brdf_lut_handle) |handle| {
-        _ = self.scene_cache.ensureTextureHandle(&self.rhi, scene, handle) catch |err| {
+        _ = self.scene_cache.ensureTextureHandle(&self.gfx, scene, handle) catch |err| {
             render_log.warn("ensureTextureHandle failed for brdf_lut: {s}; using fallback", .{@errorName(err)});
             return;
         };
@@ -191,25 +191,25 @@ pub fn resolveEnvironmentTextures(
     // Phase 2: All textures are now cached — re-fetch stable pointers
     // (no more ArrayList appends, so these pointers remain valid).
     if (environment.environment_map_handle) |handle| {
-        prepared_scene.environment_map = self.scene_cache.ensureTextureHandle(&self.rhi, scene, handle) catch |err| {
+        prepared_scene.environment_map = self.scene_cache.ensureTextureHandle(&self.gfx, scene, handle) catch |err| {
             render_log.warn("ensureTextureHandle (phase2) failed for environment_map: {s}", .{@errorName(err)});
             return;
         };
     }
     if (environment.irradiance_map_handle) |handle| {
-        prepared_scene.irradiance_map = self.scene_cache.ensureTextureHandle(&self.rhi, scene, handle) catch |err| {
+        prepared_scene.irradiance_map = self.scene_cache.ensureTextureHandle(&self.gfx, scene, handle) catch |err| {
             render_log.warn("ensureTextureHandle (phase2) failed for irradiance_map: {s}", .{@errorName(err)});
             return;
         };
     }
     if (environment.prefiltered_map_handle) |handle| {
-        prepared_scene.prefiltered_env_map = self.scene_cache.ensureTextureHandle(&self.rhi, scene, handle) catch |err| {
+        prepared_scene.prefiltered_env_map = self.scene_cache.ensureTextureHandle(&self.gfx, scene, handle) catch |err| {
             render_log.warn("ensureTextureHandle (phase2) failed for prefiltered_env_map: {s}", .{@errorName(err)});
             return;
         };
     }
     if (environment.brdf_lut_handle) |handle| {
-        prepared_scene.brdf_lut = self.scene_cache.ensureTextureHandle(&self.rhi, scene, handle) catch |err| {
+        prepared_scene.brdf_lut = self.scene_cache.ensureTextureHandle(&self.gfx, scene, handle) catch |err| {
             render_log.warn("ensureTextureHandle (phase2) failed for brdf_lut: {s}", .{@errorName(err)});
             return;
         };

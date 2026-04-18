@@ -1,7 +1,7 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
 const FullscreenVertex = extern struct {
@@ -20,20 +20,20 @@ const fullscreen_triangle = [_]FullscreenVertex{
 
 /// RT 阴影遮罩合成 Pass — 将屏幕空间 RT 阴影遮罩以乘法混合叠加到 HDR 颜色缓冲。
 pub const RtShadowCompositePass = struct {
-    fullscreen_vertex_buffer: ?rhi_mod.Buffer = null,
-    sampler: ?rhi_mod.Sampler = null,
-    bind_group: ?rhi_mod.BindGroup = null,
+    fullscreen_vertex_buffer: ?gfx_mod.Buffer = null,
+    sampler: ?gfx_mod.Sampler = null,
+    bind_group: ?gfx_mod.BindGroup = null,
     bound_texture_handle: usize = 0,
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !RtShadowCompositePass {
+    pub fn init(device: *gfx_mod.GfxDevice) !RtShadowCompositePass {
         var pass = RtShadowCompositePass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *RtShadowCompositePass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *RtShadowCompositePass, device: *gfx_mod.GfxDevice) void {
         if (self.bind_group) |*bg| device.releaseBindGroup(bg);
         if (self.sampler) |*s| device.releaseSampler(s);
         if (self.fullscreen_vertex_buffer) |*b| device.releaseBuffer(b);
@@ -49,15 +49,15 @@ pub const RtShadowCompositePass = struct {
     /// 绑定 RT 阴影遮罩纹理。
     pub fn syncTexture(
         self: *RtShadowCompositePass,
-        device: *rhi_mod.RhiDevice,
-        shadow_mask_texture: *const rhi_mod.Texture,
+        device: *gfx_mod.GfxDevice,
+        shadow_mask_texture: *const gfx_mod.Texture,
     ) !void {
         const handle = shadow_mask_texture.id;
         if (self.bind_group != null and self.bound_texture_handle == handle) return;
 
         if (self.bind_group) |*bg| device.releaseBindGroup(bg);
 
-        const bindings = [_]rhi_mod.TextureSamplerBinding{
+        const bindings = [_]gfx_mod.TextureSamplerBinding{
             .{ .texture = shadow_mask_texture, .sampler = &self.sampler.? },
         };
         self.bind_group = try device.createBindGroup(.{
@@ -69,9 +69,9 @@ pub const RtShadowCompositePass = struct {
 
     pub fn draw(
         self: *RtShadowCompositePass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         shadow_strength: f32,
     ) mesh_pass_mod.DrawStats {
         var stats = mesh_pass_mod.DrawStats{};
@@ -92,10 +92,10 @@ pub const RtShadowCompositePass = struct {
         return stats;
     }
 
-    fn createResources(self: *RtShadowCompositePass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *RtShadowCompositePass, device: *gfx_mod.GfxDevice) !void {
         self.fullscreen_vertex_buffer = try device.createBuffer(.{
             .size = @sizeOf(FullscreenVertex) * fullscreen_triangle.len,
-            .usage = rhi_types.BufferUsage.vertex,
+            .usage = gfx_types.BufferUsage.vertex,
         });
         errdefer if (self.fullscreen_vertex_buffer) |*b| device.releaseBuffer(b);
         try device.uploadBufferData(&self.fullscreen_vertex_buffer.?, std.mem.sliceAsBytes(fullscreen_triangle[0..]));
@@ -113,14 +113,14 @@ pub const RtShadowCompositePass = struct {
         self.stages = try shader_support.loadProgramStages(device, "rt_shadow_composite");
         errdefer if (self.stages) |*s| s.deinit(device);
 
-        const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{
+        const vertex_layouts = [_]gfx_mod.VertexBufferLayoutDesc{
             .{
                 .slot = 0,
                 .stride = @sizeOf(FullscreenVertex),
                 .input_rate = .per_vertex,
             },
         };
-        const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{
+        const vertex_attributes = [_]gfx_mod.VertexAttributeDesc{
             .{
                 .location = 0,
                 .buffer_slot = 0,

@@ -57,8 +57,8 @@ pub const EditorLayer = struct {
         const self: *EditorLayer = @ptrCast(@alignCast(context));
         self.state.allocator = layer_context.world.allocator;
         self.state.ai_preview_runtime = .init(layer_context.world.allocator, layer_context.world.job_system);
-        self.state.preview_device = layer_context.rhi();
-        self.state.icon_device = layer_context.rhi();
+        self.state.preview_device = layer_context.gfx();
+        self.state.icon_device = layer_context.gfx();
         self.state.asset_registry = engine.assets.AssetRegistry.init(layer_context.world.allocator);
         preferences.loadEditorPreferences(&self.state) catch |err| {
             std.log.warn("Editor: failed to load editor preferences: {s}", .{@errorName(err)});

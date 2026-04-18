@@ -1,17 +1,17 @@
 const std = @import("std");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
 /// GPU-accelerated IBL precomputation using compute shaders.
 /// Provides BRDF LUT generation and irradiance convolution on the GPU,
 /// replacing the CPU path in ibl_precompute.zig.
 pub const IBLComputePass = struct {
-    brdf_pipeline: ?rhi_mod.ComputePipeline = null,
-    irradiance_pipeline: ?rhi_mod.ComputePipeline = null,
-    linear_sampler: ?rhi_mod.Sampler = null,
+    brdf_pipeline: ?gfx_mod.ComputePipeline = null,
+    irradiance_pipeline: ?gfx_mod.ComputePipeline = null,
+    linear_sampler: ?gfx_mod.Sampler = null,
 
-    pub fn init(device: *rhi_mod.RhiDevice) IBLComputePass {
+    pub fn init(device: *gfx_mod.GfxDevice) IBLComputePass {
         var pass = IBLComputePass{};
         pass.brdf_pipeline = shader_support.loadComputePipelineRW(device, "brdf_lut", 1, 0) catch null;
         pass.irradiance_pipeline = shader_support.loadComputePipelineRW(device, "irradiance_convolve", 1, 0) catch null;
@@ -26,7 +26,7 @@ pub const IBLComputePass = struct {
         return pass;
     }
 
-    pub fn deinit(self: *IBLComputePass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *IBLComputePass, device: *gfx_mod.GfxDevice) void {
         if (self.brdf_pipeline) |*p| device.releaseComputePipeline(p);
         if (self.irradiance_pipeline) |*p| device.releaseComputePipeline(p);
         if (self.linear_sampler) |*s| device.releaseSampler(s);
@@ -45,9 +45,9 @@ pub const IBLComputePass = struct {
     /// The output texture must have usage compute_storage_write and format rg16_float.
     pub fn generateBRDFLUT(
         self: *IBLComputePass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        output: *const rhi_mod.Texture,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        output: *const gfx_mod.Texture,
         size: u32,
         sample_count: u32,
     ) !void {
@@ -79,10 +79,10 @@ pub const IBLComputePass = struct {
     /// output: target irradiance texture (compute_storage_write, rgba16f).
     pub fn generateIrradianceMap(
         self: *IBLComputePass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        env_texture: *const rhi_mod.Texture,
-        output: *const rhi_mod.Texture,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        env_texture: *const gfx_mod.Texture,
+        output: *const gfx_mod.Texture,
         output_size: u32,
         sample_count: u32,
     ) !void {

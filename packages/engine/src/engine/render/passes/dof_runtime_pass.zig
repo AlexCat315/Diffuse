@@ -1,7 +1,7 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
 const fullscreen_triangle_vertex_count: u32 = 3;
@@ -21,44 +21,44 @@ pub const DofUniforms = extern struct {
 };
 
 pub const DofRuntimePass = struct {
-    sampler: ?rhi_mod.Sampler = null,
+    sampler: ?gfx_mod.Sampler = null,
 
     // CoC subpass
     coc_stages: ?shader_support.ProgramStages = null,
-    coc_pipeline: ?rhi_mod.GraphicsPipeline = null,
-    coc_bind_group: ?rhi_mod.BindGroup = null,
+    coc_pipeline: ?gfx_mod.GraphicsPipeline = null,
+    coc_bind_group: ?gfx_mod.BindGroup = null,
     coc_bound_color: usize = 0,
     coc_bound_depth: usize = 0,
 
     // Blur subpass
     blur_stages: ?shader_support.ProgramStages = null,
-    blur_pipeline: ?rhi_mod.GraphicsPipeline = null,
-    blur_bind_group: ?rhi_mod.BindGroup = null,
+    blur_pipeline: ?gfx_mod.GraphicsPipeline = null,
+    blur_bind_group: ?gfx_mod.BindGroup = null,
     blur_bound_color: usize = 0,
     blur_bound_coc: usize = 0,
 
     // Composite subpass
     composite_stages: ?shader_support.ProgramStages = null,
-    composite_pipeline: ?rhi_mod.GraphicsPipeline = null,
-    composite_bind_group: ?rhi_mod.BindGroup = null,
+    composite_pipeline: ?gfx_mod.GraphicsPipeline = null,
+    composite_bind_group: ?gfx_mod.BindGroup = null,
     composite_bound_color: usize = 0,
     composite_bound_blur: usize = 0,
     composite_bound_coc: usize = 0,
 
     // Intermediate textures (owned)
-    coc_texture: ?rhi_mod.Texture = null,
-    blur_texture: ?rhi_mod.Texture = null,
-    output_texture: ?rhi_mod.Texture = null,
+    coc_texture: ?gfx_mod.Texture = null,
+    blur_texture: ?gfx_mod.Texture = null,
+    output_texture: ?gfx_mod.Texture = null,
     intermediate_width: u32 = 0,
     intermediate_height: u32 = 0,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !DofRuntimePass {
+    pub fn init(device: *gfx_mod.GfxDevice) !DofRuntimePass {
         var pass = DofRuntimePass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *DofRuntimePass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *DofRuntimePass, device: *gfx_mod.GfxDevice) void {
         self.releaseBindGroups(device);
         self.releaseIntermediateTextures(device);
         if (self.sampler) |*s| device.releaseSampler(s);
@@ -75,11 +75,11 @@ pub const DofRuntimePass = struct {
         return self.coc_pipeline != null and self.blur_pipeline != null and self.composite_pipeline != null and self.sampler != null;
     }
 
-    pub fn output(self: *const DofRuntimePass) ?*const rhi_mod.Texture {
+    pub fn output(self: *const DofRuntimePass) ?*const gfx_mod.Texture {
         return if (self.output_texture) |*t| t else null;
     }
 
-    pub fn ensureIntermediateTextures(self: *DofRuntimePass, device: *rhi_mod.RhiDevice, width: u32, height: u32) !void {
+    pub fn ensureIntermediateTextures(self: *DofRuntimePass, device: *gfx_mod.GfxDevice, width: u32, height: u32) !void {
         if (self.intermediate_width == width and self.intermediate_height == height and
             self.coc_texture != null and self.blur_texture != null and self.output_texture != null)
         {
@@ -88,7 +88,7 @@ pub const DofRuntimePass = struct {
         self.releaseIntermediateTextures(device);
         self.releaseBindGroups(device);
 
-        const usage = rhi_types.TextureUsage.color_target | rhi_types.TextureUsage.sampler;
+        const usage = gfx_types.TextureUsage.color_target | gfx_types.TextureUsage.sampler;
 
         self.coc_texture = try device.createTexture(.{
             .width = width,
@@ -114,13 +114,13 @@ pub const DofRuntimePass = struct {
 
     pub fn syncCocBindGroup(
         self: *DofRuntimePass,
-        device: *rhi_mod.RhiDevice,
-        color_texture: *const rhi_mod.Texture,
-        depth_texture: *const rhi_mod.Texture,
+        device: *gfx_mod.GfxDevice,
+        color_texture: *const gfx_mod.Texture,
+        depth_texture: *const gfx_mod.Texture,
     ) !void {
         if (self.coc_bind_group != null and self.coc_bound_color == color_texture.id and self.coc_bound_depth == depth_texture.id) return;
         if (self.coc_bind_group) |*bg| device.releaseBindGroup(bg);
-        const bindings = [_]rhi_mod.TextureSamplerBinding{
+        const bindings = [_]gfx_mod.TextureSamplerBinding{
             .{ .texture = color_texture, .sampler = &self.sampler.? },
             .{ .texture = depth_texture, .sampler = &self.sampler.? },
         };
@@ -131,13 +131,13 @@ pub const DofRuntimePass = struct {
 
     pub fn syncBlurBindGroup(
         self: *DofRuntimePass,
-        device: *rhi_mod.RhiDevice,
-        color_texture: *const rhi_mod.Texture,
+        device: *gfx_mod.GfxDevice,
+        color_texture: *const gfx_mod.Texture,
     ) !void {
         const coc_tex = self.coc_texture orelse return;
         if (self.blur_bind_group != null and self.blur_bound_color == color_texture.id and self.blur_bound_coc == coc_tex.id) return;
         if (self.blur_bind_group) |*bg| device.releaseBindGroup(bg);
-        const bindings = [_]rhi_mod.TextureSamplerBinding{
+        const bindings = [_]gfx_mod.TextureSamplerBinding{
             .{ .texture = color_texture, .sampler = &self.sampler.? },
             .{ .texture = &coc_tex, .sampler = &self.sampler.? },
         };
@@ -148,14 +148,14 @@ pub const DofRuntimePass = struct {
 
     pub fn syncCompositeBindGroup(
         self: *DofRuntimePass,
-        device: *rhi_mod.RhiDevice,
-        color_texture: *const rhi_mod.Texture,
+        device: *gfx_mod.GfxDevice,
+        color_texture: *const gfx_mod.Texture,
     ) !void {
         const blur_tex = self.blur_texture orelse return;
         const coc_tex = self.coc_texture orelse return;
         if (self.composite_bind_group != null and self.composite_bound_color == color_texture.id and self.composite_bound_blur == blur_tex.id and self.composite_bound_coc == coc_tex.id) return;
         if (self.composite_bind_group) |*bg| device.releaseBindGroup(bg);
-        const bindings = [_]rhi_mod.TextureSamplerBinding{
+        const bindings = [_]gfx_mod.TextureSamplerBinding{
             .{ .texture = color_texture, .sampler = &self.sampler.? },
             .{ .texture = &blur_tex, .sampler = &self.sampler.? },
             .{ .texture = &coc_tex, .sampler = &self.sampler.? },
@@ -168,9 +168,9 @@ pub const DofRuntimePass = struct {
 
     pub fn drawCoc(
         self: *DofRuntimePass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         uniforms: DofUniforms,
     ) mesh_pass_mod.DrawStats {
         var stats = mesh_pass_mod.DrawStats{};
@@ -186,9 +186,9 @@ pub const DofRuntimePass = struct {
 
     pub fn drawBlur(
         self: *DofRuntimePass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         uniforms: DofUniforms,
     ) mesh_pass_mod.DrawStats {
         var stats = mesh_pass_mod.DrawStats{};
@@ -204,9 +204,9 @@ pub const DofRuntimePass = struct {
 
     pub fn drawComposite(
         self: *DofRuntimePass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         uniforms: DofUniforms,
     ) mesh_pass_mod.DrawStats {
         var stats = mesh_pass_mod.DrawStats{};
@@ -220,7 +220,7 @@ pub const DofRuntimePass = struct {
         return stats;
     }
 
-    fn releaseBindGroups(self: *DofRuntimePass, device: *rhi_mod.RhiDevice) void {
+    fn releaseBindGroups(self: *DofRuntimePass, device: *gfx_mod.GfxDevice) void {
         if (self.coc_bind_group) |*bg| {
             device.releaseBindGroup(bg);
             self.coc_bind_group = null;
@@ -242,7 +242,7 @@ pub const DofRuntimePass = struct {
         self.composite_bound_coc = 0;
     }
 
-    fn releaseIntermediateTextures(self: *DofRuntimePass, device: *rhi_mod.RhiDevice) void {
+    fn releaseIntermediateTextures(self: *DofRuntimePass, device: *gfx_mod.GfxDevice) void {
         if (self.coc_texture) |*t| {
             device.releaseTexture(t);
             self.coc_texture = null;
@@ -259,7 +259,7 @@ pub const DofRuntimePass = struct {
         self.intermediate_height = 0;
     }
 
-    fn createResources(self: *DofRuntimePass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *DofRuntimePass, device: *gfx_mod.GfxDevice) !void {
         self.sampler = try device.createSampler(.{
             .min_filter = .linear,
             .mag_filter = .linear,
@@ -269,8 +269,8 @@ pub const DofRuntimePass = struct {
             .address_mode_w = .clamp_to_edge,
         });
 
-        const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{};
-        const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{};
+        const vertex_layouts = [_]gfx_mod.VertexBufferLayoutDesc{};
+        const vertex_attributes = [_]gfx_mod.VertexAttributeDesc{};
 
         self.coc_stages = try shader_support.loadProgramStages(device, "dof_coc");
         self.coc_pipeline = try device.createGraphicsPipeline(.{

@@ -1,5 +1,5 @@
-const rt_device_mod = @import("../rt/rhi_rt_device.zig");
-const rt_backend = @import("../rt/rt_backend.zig");
+const rt_device_mod = @import("../engine/rt/rt_device.zig");
+const rt_backend = @import("../engine/rt/rt_backend.zig");
 
 pub const RtInitStatus = enum {
     ready,

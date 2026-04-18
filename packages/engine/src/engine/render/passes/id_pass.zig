@@ -1,7 +1,7 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const scene_mod = @import("../../scene/scene.zig");
 const shader_support = @import("../shader_support.zig");
 
@@ -35,11 +35,11 @@ test "decodeEntityIdBgra decodes selection readback bytes" {
 }
 
 pub const IdPass = struct {
-    id_texture: ?rhi_mod.Texture = null,
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    id_texture: ?gfx_mod.Texture = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !IdPass {
+    pub fn init(device: *gfx_mod.GfxDevice) !IdPass {
         var pass = IdPass{};
         try pass.createResources(device);
         const runtime = device.runtimeInfo();
@@ -47,7 +47,7 @@ pub const IdPass = struct {
         return pass;
     }
 
-    pub fn deinit(self: *IdPass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *IdPass, device: *gfx_mod.GfxDevice) void {
         if (self.id_texture) |*id_texture| {
             device.releaseTexture(id_texture);
         }
@@ -64,19 +64,19 @@ pub const IdPass = struct {
         return self.pipeline != null and self.id_texture != null;
     }
 
-    pub fn texture(self: *IdPass) ?*const rhi_mod.Texture {
+    pub fn texture(self: *IdPass) ?*const gfx_mod.Texture {
         if (self.id_texture) |*id_texture| {
             return id_texture;
         }
         return null;
     }
 
-    pub fn ensureTarget(self: *IdPass, device: *rhi_mod.RhiDevice) !void {
+    pub fn ensureTarget(self: *IdPass, device: *gfx_mod.GfxDevice) !void {
         const runtime = device.runtimeInfo();
         try self.ensureTargetSize(device, runtime.drawable_width, runtime.drawable_height);
     }
 
-    pub fn ensureTargetSize(self: *IdPass, device: *rhi_mod.RhiDevice, width: u32, height: u32) !void {
+    pub fn ensureTargetSize(self: *IdPass, device: *gfx_mod.GfxDevice, width: u32, height: u32) !void {
         if (width == 0 or height == 0) {
             if (self.id_texture) |*id_texture| {
                 device.releaseTexture(id_texture);
@@ -99,15 +99,15 @@ pub const IdPass = struct {
             .width = width,
             .height = height,
             .format = .bgra8_unorm,
-            .usage = rhi_types.TextureUsage.color_target | rhi_types.TextureUsage.sampler,
+            .usage = gfx_types.TextureUsage.color_target | gfx_types.TextureUsage.sampler,
         });
     }
 
     pub fn draw(
         self: *IdPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
     ) mesh_pass_mod.DrawStats {
         var stats = mesh_pass_mod.DrawStats{};
@@ -143,7 +143,7 @@ pub const IdPass = struct {
         return stats;
     }
 
-    fn createResources(self: *IdPass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *IdPass, device: *gfx_mod.GfxDevice) !void {
         self.stages = try shader_support.loadProgramStages(device, "id_pass");
         errdefer if (self.stages) |*stages| {
             stages.deinit(device);

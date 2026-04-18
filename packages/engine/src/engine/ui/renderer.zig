@@ -1,11 +1,11 @@
 ///! Batched UI renderer — converts the node tree into vertex batches
-///! and issues draw calls through the RHI.
+///! and issues draw calls through the GFX.
 const std = @import("std");
 const node_mod = @import("node.zig");
 const style_mod = @import("style.zig");
 const font_mod = @import("font.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../render/shader_support.zig");
 
 pub const UIVertex = extern struct {
@@ -39,19 +39,19 @@ pub const UIRenderer = struct {
     vertices: std.ArrayListUnmanaged(UIVertex) = .empty,
     batches: std.ArrayListUnmanaged(DrawBatch) = .empty,
 
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
-    vertex_buffer: ?rhi_mod.Buffer = null,
-    white_texture: ?rhi_mod.Texture = null,
-    sampler: ?rhi_mod.Sampler = null,
-    bind_group: ?rhi_mod.BindGroup = null,
+    vertex_buffer: ?gfx_mod.Buffer = null,
+    white_texture: ?gfx_mod.Texture = null,
+    sampler: ?gfx_mod.Sampler = null,
+    bind_group: ?gfx_mod.BindGroup = null,
     font: ?*font_mod.Font = null,
 
     pub fn init(allocator: std.mem.Allocator) UIRenderer {
         return .{ .allocator = allocator };
     }
 
-    pub fn createGpuResources(self: *UIRenderer, device: *rhi_mod.RhiDevice) !void {
+    pub fn createGpuResources(self: *UIRenderer, device: *gfx_mod.GfxDevice) !void {
         // Shader
         self.stages = try shader_support.loadProgramStages(device, "ui");
         errdefer if (self.stages) |*s| {
@@ -61,7 +61,7 @@ pub const UIRenderer = struct {
         // Vertex buffer (dynamic, re-uploaded each frame)
         self.vertex_buffer = try device.createBuffer(.{
             .size = @intCast(@sizeOf(UIVertex) * max_vertices),
-            .usage = rhi_types.BufferUsage.vertex,
+            .usage = gfx_types.BufferUsage.vertex,
             .label = "ui_vertex_buffer",
         });
 
@@ -70,7 +70,7 @@ pub const UIRenderer = struct {
             .width = 1,
             .height = 1,
             .format = .rgba8_unorm,
-            .usage = rhi_types.TextureUsage.sampler,
+            .usage = gfx_types.TextureUsage.sampler,
             .label = "ui_white_1x1",
         });
         const white_pixel = [_]u8{ 255, 255, 255, 255 };
@@ -85,7 +85,7 @@ pub const UIRenderer = struct {
         });
 
         // Bind group (texture + sampler at set=2 for fragment stage)
-        const bindings = [_]rhi_mod.TextureSamplerBinding{
+        const bindings = [_]gfx_mod.TextureSamplerBinding{
             .{
                 .texture = &self.white_texture.?,
                 .sampler = &self.sampler.?,
@@ -98,14 +98,14 @@ pub const UIRenderer = struct {
         });
 
         // Pipeline
-        const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{
+        const vertex_layouts = [_]gfx_mod.VertexBufferLayoutDesc{
             .{
                 .slot = 0,
                 .stride = @sizeOf(UIVertex),
                 .input_rate = .per_vertex,
             },
         };
-        const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{
+        const vertex_attributes = [_]gfx_mod.VertexAttributeDesc{
             .{
                 .location = 0,
                 .buffer_slot = 0,
@@ -146,7 +146,7 @@ pub const UIRenderer = struct {
         });
     }
 
-    pub fn deinit(self: *UIRenderer, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *UIRenderer, device: *gfx_mod.GfxDevice) void {
         if (self.bind_group) |*bg| device.releaseBindGroup(bg);
         if (self.sampler) |*s| device.releaseSampler(s);
         if (self.white_texture) |*t| device.releaseTexture(t);
@@ -244,9 +244,9 @@ pub const UIRenderer = struct {
 
     pub fn flush(
         self: *UIRenderer,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         viewport_w: f32,
         viewport_h: f32,
     ) void {

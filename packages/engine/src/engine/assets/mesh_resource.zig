@@ -1,5 +1,5 @@
 const std = @import("std");
-const rhi_types = @import("guava_rhi").types;
+const gfx_types = @import("guava_gfx").types;
 const AABB = @import("../math/aabb.zig").AABB;
 
 // CPU 侧顶点布局：资产/模型使用的原始顶点格式
@@ -25,7 +25,7 @@ pub const MeshResource = struct {
     name: []u8,
     vertices: []Vertex,
     indices: []u32,
-    primitive_type: rhi_types.PrimitiveType = .triangle_list,
+    primitive_type: gfx_types.PrimitiveType = .triangle_list,
     local_bounds: AABB = .{},
 
     pub fn deinit(self: *MeshResource, allocator: std.mem.Allocator) void {
@@ -40,7 +40,7 @@ pub const MeshResourceDesc = struct {
     name: []const u8,
     vertices: []const Vertex,
     indices: []const u32,
-    primitive_type: rhi_types.PrimitiveType = .triangle_list,
+    primitive_type: gfx_types.PrimitiveType = .triangle_list,
 };
 
 pub fn computeLocalBounds(vertices: []const Vertex) AABB {

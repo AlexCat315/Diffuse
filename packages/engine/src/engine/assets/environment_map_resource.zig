@@ -3,7 +3,7 @@ const handles = @import("handles.zig");
 const ibl_precompute = @import("../render/ibl_precompute.zig");
 const library_mod = @import("library.zig");
 const registry_mod = @import("registry.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_types = @import("guava_gfx").types;
 
 const synthetic_importer_name = "ibl-derived-v1";
 const runtime_source_hash = "ibl-runtime-source-v1";
@@ -241,7 +241,7 @@ pub fn ensureDerivedTexture(
     dependencies: []const []const u8,
     width: u32,
     height: u32,
-    format: rhi_types.TextureFormat,
+    format: gfx_types.TextureFormat,
     pixels: []const u8,
 ) !handles.TextureHandle {
     // Use stack buffers instead of allocPrint to avoid Zig 0.15 Writer.Allocating.drain
@@ -281,7 +281,7 @@ pub fn ensureSyntheticTexture(
     dependencies: []const []const u8,
     width: u32,
     height: u32,
-    format: rhi_types.TextureFormat,
+    format: gfx_types.TextureFormat,
     pixels: []const u8,
 ) !handles.TextureHandle {
     if (library.textureHandleByAssetId(asset_id)) |handle| {

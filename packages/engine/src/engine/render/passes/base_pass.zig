@@ -1,7 +1,7 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 const render_types = @import("../types.zig");
 const vec3 = @import("../../math/vec3.zig");
@@ -31,31 +31,31 @@ pub const DrawSettings = struct {
 };
 
 pub const BasePass = struct {
-    fill_pipeline_hdr: ?rhi_mod.GraphicsPipeline = null,
-    fill_pipeline_ldr: ?rhi_mod.GraphicsPipeline = null,
-    ghost_fill_pipeline_hdr: ?rhi_mod.GraphicsPipeline = null,
-    ghost_fill_pipeline_ldr: ?rhi_mod.GraphicsPipeline = null,
-    transparent_fill_pipeline_hdr: ?rhi_mod.GraphicsPipeline = null,
-    transparent_fill_pipeline_ldr: ?rhi_mod.GraphicsPipeline = null,
-    wireframe_pipeline_hdr: ?rhi_mod.GraphicsPipeline = null,
-    wireframe_pipeline_ldr: ?rhi_mod.GraphicsPipeline = null,
+    fill_pipeline_hdr: ?gfx_mod.GraphicsPipeline = null,
+    fill_pipeline_ldr: ?gfx_mod.GraphicsPipeline = null,
+    ghost_fill_pipeline_hdr: ?gfx_mod.GraphicsPipeline = null,
+    ghost_fill_pipeline_ldr: ?gfx_mod.GraphicsPipeline = null,
+    transparent_fill_pipeline_hdr: ?gfx_mod.GraphicsPipeline = null,
+    transparent_fill_pipeline_ldr: ?gfx_mod.GraphicsPipeline = null,
+    wireframe_pipeline_hdr: ?gfx_mod.GraphicsPipeline = null,
+    wireframe_pipeline_ldr: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
     wireframe_stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !BasePass {
+    pub fn init(device: *gfx_mod.GfxDevice) !BasePass {
         var pass = BasePass{};
         try pass.createResources(device);
         return pass;
     }
 
-    fn releasePipeline(device: *rhi_mod.RhiDevice, p: *?rhi_mod.GraphicsPipeline) void {
+    fn releasePipeline(device: *gfx_mod.GfxDevice, p: *?gfx_mod.GraphicsPipeline) void {
         if (p.*) |*pipeline| {
             device.releaseGraphicsPipeline(pipeline);
             p.* = null;
         }
     }
 
-    pub fn deinit(self: *BasePass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *BasePass, device: *gfx_mod.GfxDevice) void {
         releasePipeline(device, &self.wireframe_pipeline_ldr);
         releasePipeline(device, &self.wireframe_pipeline_hdr);
         releasePipeline(device, &self.ghost_fill_pipeline_ldr);
@@ -86,9 +86,9 @@ pub const BasePass = struct {
 
     pub fn draw(
         self: *BasePass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
         settings: DrawSettings,
     ) !mesh_pass_mod.DrawStats {
@@ -116,25 +116,25 @@ pub const BasePass = struct {
         else
             self.pipelineFor(settings.target, .fill, true);
 
-        var shadow_bg: ?rhi_mod.BindGroup = null;
+        var shadow_bg: ?gfx_mod.BindGroup = null;
         defer if (shadow_bg) |*bind_group| {
             device.releaseBindGroup(bind_group);
         };
-        var ibl_bg: ?rhi_mod.BindGroup = null;
+        var ibl_bg: ?gfx_mod.BindGroup = null;
         defer if (ibl_bg) |*bind_group| {
             device.releaseBindGroup(bind_group);
         };
-        var rt_shadow_bg: ?rhi_mod.BindGroup = null;
+        var rt_shadow_bg: ?gfx_mod.BindGroup = null;
         defer if (rt_shadow_bg) |*bind_group| {
             device.releaseBindGroup(bind_group);
         };
-        var cluster_bg: ?rhi_mod.BindGroup = null;
+        var cluster_bg: ?gfx_mod.BindGroup = null;
         defer if (cluster_bg) |*bind_group| {
             device.releaseBindGroup(bind_group);
         };
         if (!use_metal_combined_bindings) {
             if (prepared_scene.shadow_maps[0]) |_| {
-                const shadow_bindings = [_]rhi_mod.TextureSamplerBinding{
+                const shadow_bindings = [_]gfx_mod.TextureSamplerBinding{
                     .{ .texture = prepared_scene.shadow_maps[0].?, .sampler = prepared_scene.shadow_sampler.? },
                     .{ .texture = prepared_scene.shadow_maps[1] orelse prepared_scene.shadow_maps[0].?, .sampler = prepared_scene.shadow_sampler.? },
                     .{ .texture = prepared_scene.shadow_maps[2] orelse prepared_scene.shadow_maps[0].?, .sampler = prepared_scene.shadow_sampler.? },
@@ -154,7 +154,7 @@ pub const BasePass = struct {
                 prepared_scene.environment_map != null and
                 prepared_scene.texture_sampler != null)
             {
-                const ibl_bindings = [_]rhi_mod.TextureSamplerBinding{
+                const ibl_bindings = [_]gfx_mod.TextureSamplerBinding{
                     .{ .texture = prepared_scene.irradiance_map.?, .sampler = prepared_scene.texture_sampler.? },
                     .{ .texture = prepared_scene.prefiltered_env_map.?, .sampler = prepared_scene.texture_sampler.? },
                     .{ .texture = prepared_scene.brdf_lut.?, .sampler = prepared_scene.texture_sampler.? },
@@ -171,7 +171,7 @@ pub const BasePass = struct {
             if (prepared_scene.texture_sampler != null) {
                 const rt_shadow_texture = prepared_scene.rt_shadow_mask orelse prepared_scene.brdf_lut orelse prepared_scene.environment_map orelse prepared_scene.irradiance_map;
                 if (rt_shadow_texture) |texture| {
-                    const rt_bindings = [_]rhi_mod.TextureSamplerBinding{
+                    const rt_bindings = [_]gfx_mod.TextureSamplerBinding{
                         .{ .texture = texture, .sampler = prepared_scene.texture_sampler.? },
                     };
                     rt_shadow_bg = try device.createBindGroup(.{
@@ -188,7 +188,7 @@ pub const BasePass = struct {
                 prepared_scene.cluster_indices_texture != null and
                 prepared_scene.cluster_nearest_sampler != null)
             {
-                const cluster_bindings = [_]rhi_mod.TextureSamplerBinding{
+                const cluster_bindings = [_]gfx_mod.TextureSamplerBinding{
                     .{ .texture = prepared_scene.cluster_count_texture.?, .sampler = prepared_scene.cluster_nearest_sampler.? },
                     .{ .texture = prepared_scene.cluster_indices_texture.?, .sampler = prepared_scene.cluster_nearest_sampler.? },
                 };
@@ -268,9 +268,9 @@ pub const BasePass = struct {
     // -> 推送 uniform 数据 -> 发出 drawIndexedPrimitives。
     fn drawMeshList(
         self: *BasePass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
         items: []const mesh_pass_mod.DrawItem,
         settings: DrawSettings,
@@ -321,7 +321,7 @@ pub const BasePass = struct {
                 const cluster_indices_tex = prepared_scene.cluster_indices_texture orelse brdf_lut;
                 const cluster_sampler = prepared_scene.cluster_nearest_sampler orelse texture_sampler;
 
-                const combined_bindings = [_]rhi_mod.TextureSamplerBinding{
+                const combined_bindings = [_]gfx_mod.TextureSamplerBinding{
                     .{ .texture = item.material_textures[0], .sampler = texture_sampler }, // binding 0: u_base_color_map
                     .{ .texture = item.material_textures[1], .sampler = texture_sampler }, // binding 1: u_metallic_roughness_map
                     .{ .texture = item.material_textures[2], .sampler = texture_sampler }, // binding 2: u_normal_map
@@ -470,7 +470,7 @@ pub const BasePass = struct {
         return fragment_uniforms;
     }
 
-    fn createResources(self: *BasePass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *BasePass, device: *gfx_mod.GfxDevice) !void {
         self.stages = try shader_support.loadProgramStages(device, "mesh");
         errdefer if (self.stages) |*stages| {
             stages.deinit(device);
@@ -521,7 +521,7 @@ pub const BasePass = struct {
         wireframe,
     };
 
-    fn pipelineFor(self: *BasePass, target: DrawTarget, mode: PipelineMode, transparent: bool) *rhi_mod.GraphicsPipeline {
+    fn pipelineFor(self: *BasePass, target: DrawTarget, mode: PipelineMode, transparent: bool) *gfx_mod.GraphicsPipeline {
         return switch (mode) {
             .fill => switch (target) {
                 .hdr => if (transparent) &self.transparent_fill_pipeline_hdr.? else &self.fill_pipeline_hdr.?,
@@ -540,15 +540,15 @@ pub const BasePass = struct {
 
     fn createPipeline(
         self: *BasePass,
-        device: *rhi_mod.RhiDevice,
-        vertex_layouts: []const rhi_mod.VertexBufferLayoutDesc,
-        vertex_attributes: []const rhi_mod.VertexAttributeDesc,
-        color_format: rhi_types.TextureFormat,
+        device: *gfx_mod.GfxDevice,
+        vertex_layouts: []const gfx_mod.VertexBufferLayoutDesc,
+        vertex_attributes: []const gfx_mod.VertexAttributeDesc,
+        color_format: gfx_types.TextureFormat,
         mode: PipelineMode,
         enable_blend: bool,
         depth_test: bool,
         depth_write: bool,
-    ) !rhi_mod.GraphicsPipeline {
+    ) !gfx_mod.GraphicsPipeline {
         const shader_stages = if (mode == .wireframe) self.wireframe_stages.? else self.stages.?;
         return device.createGraphicsPipeline(.{
             .vertex_shader = &shader_stages.vertex,
@@ -557,7 +557,7 @@ pub const BasePass = struct {
             .vertex_attributes = vertex_attributes,
             .color_format = color_format,
             .blend_state = if (enable_blend)
-                @as(?rhi_types.ColorTargetBlendState, .{
+                @as(?gfx_types.ColorTargetBlendState, .{
                     .enable_blend = true,
                 })
             else

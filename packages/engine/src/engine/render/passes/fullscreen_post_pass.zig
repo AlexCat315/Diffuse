@@ -1,11 +1,11 @@
 const std = @import("std");
-const rhi = @import("guava_rhi").rhi;
+const gfx = @import("guava_gfx").gfx;
 const render_graph = @import("../render_graph.zig");
 
 pub const FullscreenPostPass = struct {
     pub fn execute(
         allocator: std.mem.Allocator,
-        device: *rhi.Device,
+        device: *gfx.Device,
         graph: ?*const render_graph.RenderGraph,
         input_resource_id: u32,
         output_resource_id: u32,

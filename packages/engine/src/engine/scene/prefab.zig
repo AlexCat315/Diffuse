@@ -3,7 +3,7 @@ const io_globals = @import("io_globals");
 const asset_registry = @import("../assets/registry.zig");
 const assets_handles = @import("../assets/handles.zig");
 const mesh_mod = @import("../assets/mesh_resource.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_types = @import("guava_gfx").types;
 const components = @import("components.zig");
 const world_mod = @import("world.zig");
 
@@ -74,7 +74,7 @@ const PrefabFile = struct {
 const MeshRecord = struct {
     asset_id: []const u8,
     name: []const u8,
-    primitive_type: rhi_types.PrimitiveType,
+    primitive_type: gfx_types.PrimitiveType,
     vertices: []const mesh_mod.Vertex,
     indices: []const u32,
 };
@@ -84,7 +84,7 @@ const TextureRecord = struct {
     name: []const u8,
     width: u32,
     height: u32,
-    format: rhi_types.TextureFormat,
+    format: gfx_types.TextureFormat,
     pixels_hex: []const u8,
 };
 
