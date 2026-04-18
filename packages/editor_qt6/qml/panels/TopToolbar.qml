@@ -16,6 +16,8 @@ Rectangle {
     signal toggleLeftPanel()
     signal toggleRightPanel()
     signal toggleBottomPanel()
+    signal resetLayout()
+    signal popoutBottomPanel()
 
     RowLayout {
         anchors.fill: parent
@@ -51,6 +53,16 @@ Rectangle {
             checkable: true
             checked: root.bottomPanelVisible
             onClicked: root.toggleBottomPanel()
+        }
+
+        ToolButton {
+            text: "Reset Layout"
+            onClicked: root.resetLayout()
+        }
+
+        ToolButton {
+            text: "Popout Bottom"
+            onClicked: root.popoutBottomPanel()
         }
 
         Item { Layout.fillWidth: true }

@@ -17,16 +17,139 @@ ApplicationWindow {
     property bool leftPanelVisible: true
     property bool rightPanelVisible: true
     property bool bottomPanelVisible: true
+    property string activeBottomTab: "console"
+    property var bottomTabs: ["console", "assets"]
+    property bool restoringLayout: false
+    property string popoutPanelId: ""
+
+    readonly property int layoutSchemaVersion: 1
+
+    function defaultDockLayoutModel() {
+        return {
+            version: layoutSchemaVersion,
+            leftPanelSize: 240,
+            rightPanelSize: 300,
+            bottomPanelSize: 240,
+            leftPanelVisible: true,
+            rightPanelVisible: true,
+            bottomPanelVisible: true,
+            activeBottomTab: "console",
+            bottomTabs: ["console", "assets"]
+        }
+    }
+
+    function applyDockLayoutModel(model) {
+        restoringLayout = true
+        leftPanelSize = Number(model.leftPanelSize) > 0 ? Number(model.leftPanelSize) : 240
+        rightPanelSize = Number(model.rightPanelSize) > 0 ? Number(model.rightPanelSize) : 300
+        bottomPanelSize = Number(model.bottomPanelSize) > 0 ? Number(model.bottomPanelSize) : 240
+        leftPanelVisible = model.leftPanelVisible !== false
+        rightPanelVisible = model.rightPanelVisible !== false
+        bottomPanelVisible = model.bottomPanelVisible !== false
+
+        const tabs = Array.isArray(model.bottomTabs) && model.bottomTabs.length > 0
+            ? model.bottomTabs.filter(function(id) { return id === "console" || id === "assets" })
+            : ["console", "assets"]
+        bottomTabs = tabs.length > 0 ? tabs : ["console", "assets"]
+        activeBottomTab = bottomTabs.indexOf(model.activeBottomTab) >= 0 ? model.activeBottomTab : bottomTabs[0]
+        restoringLayout = false
+    }
+
+    function saveDockLayoutModel() {
+        if (restoringLayout) {
+            return
+        }
+
+        dockSettings.layoutJson = JSON.stringify({
+            version: layoutSchemaVersion,
+            leftPanelSize: leftPanelSize,
+            rightPanelSize: rightPanelSize,
+            bottomPanelSize: bottomPanelSize,
+            leftPanelVisible: leftPanelVisible,
+            rightPanelVisible: rightPanelVisible,
+            bottomPanelVisible: bottomPanelVisible,
+            activeBottomTab: activeBottomTab,
+            bottomTabs: bottomTabs
+        })
+    }
+
+    function resetDockLayout() {
+        applyDockLayoutModel(defaultDockLayoutModel())
+        saveDockLayoutModel()
+    }
+
+    function popoutActiveBottomPanel() {
+        if (popoutPanelId.length > 0 || !bottomPanelVisible || bottomTabs.length === 0) {
+            return
+        }
+
+        const panelId = activeBottomTab
+        if (bottomTabs.indexOf(panelId) < 0) {
+            return
+        }
+
+        popoutPanelId = panelId
+        bottomTabs = bottomTabs.filter(function(id) { return id !== panelId })
+
+        if (bottomTabs.length === 0) {
+            bottomPanelVisible = false
+            activeBottomTab = "console"
+        } else {
+            activeBottomTab = bottomTabs[0]
+        }
+
+        popoutWindow.show()
+        layoutSaveDebounce.restart()
+    }
+
+    function returnPopoutPanel(panelId) {
+        if (!panelId || panelId.length === 0) {
+            popoutPanelId = ""
+            return
+        }
+
+        if (bottomTabs.indexOf(panelId) < 0) {
+            bottomTabs = bottomTabs.concat([panelId])
+        }
+
+        bottomPanelVisible = true
+        activeBottomTab = panelId
+        popoutPanelId = ""
+        layoutSaveDebounce.restart()
+    }
+
+    Timer {
+        id: layoutSaveDebounce
+        interval: 120
+        repeat: false
+        onTriggered: saveDockLayoutModel()
+    }
 
     Settings {
         id: dockSettings
         category: "DockLayout"
-        property alias leftPanelSize: root.leftPanelSize
-        property alias rightPanelSize: root.rightPanelSize
-        property alias bottomPanelSize: root.bottomPanelSize
-        property alias leftPanelVisible: root.leftPanelVisible
-        property alias rightPanelVisible: root.rightPanelVisible
-        property alias bottomPanelVisible: root.bottomPanelVisible
+        property string layoutJson: ""
+    }
+
+    Component.onCompleted: {
+        if (!dockSettings.layoutJson || dockSettings.layoutJson.length === 0) {
+            applyDockLayoutModel(defaultDockLayoutModel())
+            saveDockLayoutModel()
+            return
+        }
+
+        try {
+            const parsed = JSON.parse(dockSettings.layoutJson)
+            if (!parsed || Number(parsed.version) !== layoutSchemaVersion) {
+                applyDockLayoutModel(defaultDockLayoutModel())
+                saveDockLayoutModel()
+                return
+            }
+            applyDockLayoutModel(parsed)
+        } catch (error) {
+            applyDockLayoutModel(defaultDockLayoutModel())
+            saveDockLayoutModel()
+        }
     }
 
     Rectangle {
@@ -48,6 +171,17 @@ ApplicationWindow {
             onToggleLeftPanel: root.leftPanelVisible = !root.leftPanelVisible
             onToggleRightPanel: root.rightPanelVisible = !root.rightPanelVisible
             onToggleBottomPanel: root.bottomPanelVisible = !root.bottomPanelVisible
+            onResetLayout: root.resetDockLayout()
+            onPopoutBottomPanel: root.popoutActiveBottomPanel()
+        }
+
+        PanelPopoutWindow {
+            id: popoutWindow
+            panelId: root.popoutPanelId
+            visible: false
+            onReturnPanel: function(panelId) {
+                root.returnPopoutPanel(panelId)
+            }
         }
 
         SplitView {
@@ -63,7 +197,10 @@ ApplicationWindow {
                 visible: root.leftPanelVisible
                 SplitView.preferredWidth: root.leftPanelSize
                 SplitView.minimumWidth: root.leftPanelVisible ? 200 : 0
-                onWidthChanged: if (visible && width > 0) root.leftPanelSize = width
+                onWidthChanged: if (visible && width > 0) {
+                    root.leftPanelSize = width
+                    layoutSaveDebounce.restart()
+                }
             }
 
             SplitView {
@@ -211,22 +348,49 @@ ApplicationWindow {
                     visible: root.bottomPanelVisible
                     SplitView.preferredHeight: root.bottomPanelSize
                     SplitView.minimumHeight: root.bottomPanelVisible ? 180 : 0
-                    onHeightChanged: if (visible && height > 0) root.bottomPanelSize = height
+                    onHeightChanged: if (visible && height > 0) {
+                        root.bottomPanelSize = height
+                        layoutSaveDebounce.restart()
+                    }
 
-                    RowLayout {
+                    ColumnLayout {
                         anchors.fill: parent
                         spacing: 0
 
-                        ConsolePanel {
+                        TabBar {
+                            id: bottomTabBar
                             Layout.fillWidth: true
-                            Layout.fillHeight: true
-                            Layout.preferredWidth: parent.width * 0.6
+
+                            Repeater {
+                                model: root.bottomTabs
+
+                                TabButton {
+                                    required property string modelData
+                                    text: modelData === "console" ? "Console" : "Content Browser"
+                                    checked: root.activeBottomTab === modelData
+                                    onClicked: {
+                                        root.activeBottomTab = modelData
+                                        layoutSaveDebounce.restart()
+                                    }
+                                }
+                            }
                         }
 
-                        ContentBrowserPanel {
+                        StackLayout {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
-                            Layout.preferredWidth: parent.width * 0.4
+
+                            currentIndex: root.activeBottomTab === "assets" ? 1 : 0
+
+                            ConsolePanel {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                            }
+
+                            ContentBrowserPanel {
+                                Layout.fillWidth: true
+                                Layout.fillHeight: true
+                            }
                         }
                     }
                 }
@@ -237,8 +401,15 @@ ApplicationWindow {
                 visible: root.rightPanelVisible
                 SplitView.preferredWidth: root.rightPanelSize
                 SplitView.minimumWidth: root.rightPanelVisible ? 240 : 0
-                onWidthChanged: if (visible && width > 0) root.rightPanelSize = width
+                onWidthChanged: if (visible && width > 0) {
+                    root.rightPanelSize = width
+                    layoutSaveDebounce.restart()
+                }
             }
         }
     }
+
+    onLeftPanelVisibleChanged: layoutSaveDebounce.restart()
+    onRightPanelVisibleChanged: layoutSaveDebounce.restart()
+    onBottomPanelVisibleChanged: layoutSaveDebounce.restart()
 }
