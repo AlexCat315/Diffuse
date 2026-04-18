@@ -30,31 +30,25 @@ pub fn generateCompileCommandsJson(
     var entries: std.ArrayList(CompileCommand) = .empty;
     defer entries.deinit(b.allocator);
 
-    // Auto-scan all native sources used by engine build.
-    const c_files = collectFromRoots(
-        b,
-        &.{
-            "third_party/lunasvg/plutovg/source",
-            "third_party/soloud/src",
-            "src/engine",
-        },
-        ".c",
-    );
+    const ignored_dirs = [_][]const u8{
+        ".git",
+        ".zig-cache",
+        "zig-cache",
+        "zig-out",
+        "node_modules",
+        "build",
+        "CMakeFiles",
+        "cmake-build-debug",
+        "cmake-build-release",
+        "dist",
+        "dist-citron",
+    };
+
+    // Auto-scan from repository root and filter by ignored directory segments.
+    const c_files = collectFromRootWithIgnores(b, ".", ".c", &ignored_dirs);
     defer b.allocator.free(c_files);
 
-    const cpp_files = collectFromRoots(
-        b,
-        &.{
-            "third_party/lunasvg/source",
-            "third_party/soloud/src",
-            "third_party/jolt/Jolt",
-            "third_party/recast/Recast/Source",
-            "third_party/recast/Detour/Source",
-            "third_party/recast/DetourCrowd/Source",
-            "src/engine",
-        },
-        ".cpp",
-    );
+    const cpp_files = collectFromRootWithIgnores(b, ".", ".cpp", &ignored_dirs);
     defer b.allocator.free(cpp_files);
 
     appendAutoScannedCommands(
@@ -82,7 +76,7 @@ pub fn generateCompileCommandsJson(
     );
 
     if (os_tag == .macos) {
-        const objcpp_files = collectFromRoots(b, &.{"src/engine"}, ".mm");
+        const objcpp_files = collectFromRootWithIgnores(b, ".", ".mm", &ignored_dirs);
         defer b.allocator.free(objcpp_files);
         appendAutoScannedCommands(
             b,
@@ -252,21 +246,24 @@ fn appendAutoFlagsForFile(
     }
 }
 
-fn collectFromRoots(
+fn collectFromRootWithIgnores(
     b: *std.Build,
-    roots: []const []const u8,
+    root: []const u8,
     extension: []const u8,
+    ignored_dirs: []const []const u8,
 ) []const []const u8 {
-    var all: std.ArrayList([]const u8) = .empty;
-    defer all.deinit(b.allocator);
+    const files = utils.collectSourceFiles(b, root, extension);
+    defer b.allocator.free(files);
 
-    for (roots) |root| {
-        const files = utils.collectSourceFiles(b, root, extension);
-        defer b.allocator.free(files);
-        all.appendSlice(b.allocator, files) catch @panic("OOM");
+    var filtered: std.ArrayList([]const u8) = .empty;
+    defer filtered.deinit(b.allocator);
+
+    for (files) |file| {
+        if (hasIgnoredPathSegment(file, ignored_dirs)) continue;
+        filtered.append(b.allocator, file) catch @panic("OOM");
     }
 
-    std.mem.sort([]const u8, all.items, {}, struct {
+    std.mem.sort([]const u8, filtered.items, {}, struct {
         fn lessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
             return std.mem.lessThan(u8, lhs, rhs);
         }
@@ -276,7 +273,7 @@ fn collectFromRoots(
     defer unique.deinit(b.allocator);
 
     var previous: ?[]const u8 = null;
-    for (all.items) |item| {
+    for (filtered.items) |item| {
         if (previous) |p| {
             if (std.mem.eql(u8, p, item)) continue;
         }
@@ -285,6 +282,16 @@ fn collectFromRoots(
     }
 
     return unique.toOwnedSlice(b.allocator) catch @panic("OOM");
+}
+
+fn hasIgnoredPathSegment(path: []const u8, ignored_dirs: []const []const u8) bool {
+    var it = std.mem.splitScalar(u8, path, '/');
+    while (it.next()) |segment| {
+        for (ignored_dirs) |ignored| {
+            if (std.mem.eql(u8, segment, ignored)) return true;
+        }
+    }
+    return false;
 }
 
 fn compilerPath(b: *std.Build, language: Language, os_tag: std.Target.Os.Tag) []const u8 {
