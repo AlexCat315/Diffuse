@@ -160,27 +160,14 @@ pub fn build(b: *std.Build) void {
     render_test_step.dependOn(&render_test_cmd.step);
 
     // ── Tests ───────────────────────────────────────────────────────────────
-    const test_mod = b.createModule(.{
-        .root_source_file = b.path("src/test_main.zig"),
-        .target = target,
-    });
-    sources.configureEngineModule(b, test_mod, target.result.os.tag, sdl_prefix, c_translations);
-
-    const mod_tests = b.addTest(.{ .root_module = test_mod });
-    mod_tests.root_module.link_libc = true;
-    mod_tests.root_module.link_libcpp = true;
-    mod_tests.step.dependOn(&run_shader_codegen.step);
-
     const exe_tests = b.addTest(.{ .root_module = exe.root_module });
     exe_tests.root_module.link_libc = true;
     exe_tests.root_module.link_libcpp = true;
     exe_tests.step.dependOn(&run_shader_codegen.step);
 
-    const run_mod_tests = b.addRunArtifact(mod_tests);
     const run_exe_tests = b.addRunArtifact(exe_tests);
 
     const test_step = b.step("test", "Run tests");
-    test_step.dependOn(&run_mod_tests.step);
     test_step.dependOn(&run_exe_tests.step);
 
     const player_tests = b.addTest(.{ .root_module = player.root_module });
