@@ -469,7 +469,7 @@ fn ensureImageThumbnailTexture(
     state: *EditorState,
     layer_context: *engine.core.LayerContext,
     file_path: []const u8,
-) !*const engine.gfx.Texture {
+) !*const engine.render.Texture {
     // Check cache for existing thumbnail
     for (state.image_thumbnail_textures.items) |*entry| {
         if (std.mem.eql(u8, entry.path, file_path)) {
@@ -574,7 +574,7 @@ fn queueAndResolveModelThumbnailTexture(
     state: *EditorState,
     layer_context: *engine.core.LayerContext,
     entry: *const AssetEntry,
-) !?*const engine.gfx.Texture {
+) !?*const engine.render.Texture {
     if (entry.kind != .model or entry.is_directory) return null;
     try queueModelThumbnailRequest(state, entry.path);
     return layer_context.renderer.modelThumbnailTexture(entry.path);
@@ -605,7 +605,7 @@ fn ensureImageThumbnailTextureAs(
     layer_context: *engine.core.LayerContext,
     file_path: []const u8,
     cache_key: []const u8,
-) !*const engine.gfx.Texture {
+) !*const engine.render.Texture {
     // Check cache under cache_key
     for (state.image_thumbnail_textures.items) |*entry| {
         if (std.mem.eql(u8, entry.path, cache_key)) {
@@ -748,7 +748,7 @@ fn queueAndResolveMaterialThumbnailTexture(
     state: *EditorState,
     layer_context: *engine.core.LayerContext,
     entry: *const AssetEntry,
-) !?*const engine.gfx.Texture {
+) !?*const engine.render.Texture {
     if (entry.kind != .material) {
         return null;
     }
