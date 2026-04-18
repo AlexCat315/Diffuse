@@ -15,6 +15,16 @@ ApplicationWindow {
         anchors.fill: parent
         color: "#111827"
 
+        TopToolbar {
+            id: topToolbar
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.top: parent.top
+            height: 48
+            z: 40
+            statusText: appBackend.statusText
+        }
+
         Image {
             id: engineFrame
             anchors.fill: parent
@@ -141,20 +151,14 @@ ApplicationWindow {
             id: leftPanel
             width: 220
             anchors.left: parent.left
-            anchors.top: parent.top
+            anchors.top: topToolbar.bottom
             anchors.bottom: parent.bottom
             color: "#0f172a"
             opacity: 0.9
             z: 10
 
-            Label {
-                text: "Scene"
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.leftMargin: 12
-                anchors.topMargin: 10
-                color: "#e2e8f0"
-                font.bold: true
+            ScenePanel {
+                anchors.fill: parent
             }
         }
 
@@ -162,42 +166,53 @@ ApplicationWindow {
             id: rightPanel
             width: 260
             anchors.right: parent.right
-            anchors.top: parent.top
+            anchors.top: topToolbar.bottom
             anchors.bottom: parent.bottom
             color: "#0f172a"
             opacity: 0.9
             z: 10
 
-            Label {
-                text: "Inspector"
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.leftMargin: 12
-                anchors.topMargin: 10
-                color: "#e2e8f0"
-                font.bold: true
+            InspectorPanel {
+                anchors.fill: parent
             }
         }
 
         Rectangle {
             id: bottomPanel
-            height: 180
+            height: 220
             anchors.left: leftPanel.right
             anchors.right: rightPanel.left
             anchors.bottom: parent.bottom
+            anchors.top: undefined
             color: "#0b1220"
             opacity: 0.92
             z: 12
 
-            Label {
-                text: "Console"
-                anchors.left: parent.left
-                anchors.top: parent.top
-                anchors.leftMargin: 12
-                anchors.topMargin: 10
-                color: "#e2e8f0"
-                font.bold: true
+            RowLayout {
+                anchors.fill: parent
+                spacing: 0
+
+                ConsolePanel {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: parent.width * 0.6
+                }
+
+                ContentBrowserPanel {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    Layout.preferredWidth: parent.width * 0.4
+                }
             }
+        }
+
+        ViewportInputLayer {
+            appBackend: appBackend
+            anchors.left: leftPanel.right
+            anchors.right: rightPanel.left
+            anchors.top: topToolbar.bottom
+            anchors.bottom: bottomPanel.top
+            z: 20
         }
     }
 }
