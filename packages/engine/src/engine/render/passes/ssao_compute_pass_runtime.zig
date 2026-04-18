@@ -1,6 +1,6 @@
 const std = @import("std");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
 pub const SSAOUniforms = extern struct {
@@ -27,18 +27,18 @@ comptime {
 }
 
 pub const SSAOComputePass = struct {
-    pipeline: ?rhi_mod.ComputePipeline = null,
-    sampler: ?rhi_mod.Sampler = null,
-    noise_sampler: ?rhi_mod.Sampler = null,
-    noise_texture: ?rhi_mod.Texture = null,
+    pipeline: ?gfx_mod.ComputePipeline = null,
+    sampler: ?gfx_mod.Sampler = null,
+    noise_sampler: ?gfx_mod.Sampler = null,
+    noise_texture: ?gfx_mod.Texture = null,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !SSAOComputePass {
+    pub fn init(device: *gfx_mod.GfxDevice) !SSAOComputePass {
         var pass = SSAOComputePass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *SSAOComputePass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *SSAOComputePass, device: *gfx_mod.GfxDevice) void {
         if (self.pipeline) |*p| device.releaseComputePipeline(p);
         if (self.sampler) |*s| device.releaseSampler(s);
         if (self.noise_sampler) |*s| device.releaseSampler(s);
@@ -52,10 +52,10 @@ pub const SSAOComputePass = struct {
 
     pub fn dispatch(
         self: *SSAOComputePass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        depth_texture: *const rhi_mod.Texture,
-        output_texture: *const rhi_mod.Texture,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        depth_texture: *const gfx_mod.Texture,
+        output_texture: *const gfx_mod.Texture,
         uniforms: SSAOUniforms,
     ) void {
         if (!self.isReady()) return;
@@ -73,7 +73,7 @@ pub const SSAOComputePass = struct {
         device.endComputePass(compute_pass);
     }
 
-    fn createResources(self: *SSAOComputePass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *SSAOComputePass, device: *gfx_mod.GfxDevice) !void {
         self.pipeline = try shader_support.loadComputePipelineRW(device, "ssao_compute", 1, 0);
         errdefer if (self.pipeline) |*p| {
             device.releaseComputePipeline(p);
@@ -125,7 +125,7 @@ pub const SSAOComputePass = struct {
             .width = 4,
             .height = 4,
             .format = .rgba8_unorm,
-            .usage = rhi_types.TextureUsage.sampler,
+            .usage = gfx_types.TextureUsage.sampler,
         });
         errdefer if (self.noise_texture) |*t| {
             device.releaseTexture(t);

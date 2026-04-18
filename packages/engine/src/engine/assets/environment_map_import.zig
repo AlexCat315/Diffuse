@@ -6,7 +6,7 @@ const library_mod = @import("library.zig");
 const ibl_precompute = @import("../render/ibl_precompute.zig");
 const environment_map_resource = @import("environment_map_resource.zig");
 const handles = @import("handles.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_types = @import("guava_gfx").types;
 
 pub const current_environment_map_cache_version: u32 = registry_mod.AssetType.texture.importVersion() + 3;
 

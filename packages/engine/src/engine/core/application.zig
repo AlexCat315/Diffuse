@@ -377,14 +377,14 @@ pub const Application = struct {
     /// 1. **Layer/Script 层** - 先销毁应用层和脚本，避免它们访问正在销毁的系统
     /// 2. **Physics 系统** - 物理世界必须在 World 资源之前销毁
     /// 3. **World (Resources)** - World 包含 ResourceLibrary，持有 GPU 纹理/网格等资源
-    /// 4. **Renderer (Device)** - Renderer 拥有 RhiDevice，必须在 World 资源释放后销毁
+    /// 4. **Renderer (Device)** - Renderer 拥有 GfxDevice，必须在 World 资源释放后销毁
     /// 5. **Window** - 窗口在 Renderer 之后销毁
     /// 6. **JobSystem** - 作业系统最后销毁
     ///
     /// 关键依赖：`Renderer.deinit()` 必须在 `World.deinit()` **之前**调用，因为：
     /// - World 的 ResourceLibrary 持有 GPU 纹理/网格资源
-    /// - Renderer 的 RhiDevice 必须在这些资源释放前保持有效
-    /// - 如果先销毁 World，ResourceLibrary 释放 GPU 资源时 RhiDevice 可能已被销毁
+    /// - Renderer 的 GfxDevice 必须在这些资源释放前保持有效
+    /// - 如果先销毁 World，ResourceLibrary 释放 GPU 资源时 GfxDevice 可能已被销毁
     pub fn deinit(self: *Application) void {
         self.bindRuntimeContext();
         self.script_runtime.callDestroyAll(&self.world);
@@ -576,7 +576,7 @@ pub const Application = struct {
                 if (self.fog_system.update(&self.world)) |fog_data| {
                     if (self.fog_system.gridSize()) |size| {
                         self.renderer.fog_of_war_pass.uploadVisibility(
-                            &self.renderer.rhi,
+                            &self.renderer.gfx,
                             fog_data,
                             size.width,
                             size.height,
@@ -668,7 +668,7 @@ pub const Application = struct {
             // Frame-budget profiling: log timing every 300 frames (~5s @ 60fps)
             if (frames_rendered > 0 and frames_rendered % 300 == 0) {
                 const draw_us: u64 = @intCast(@divTrunc(draw_end_ns - draw_start_ns, 1000));
-                const binding_entries: u32 = if (self.renderer.rhi_device) |dev| dev.bindingSetCacheEntryCount() else 0;
+                const binding_entries: u32 = if (self.renderer.gfx_device) |dev| dev.bindingSetCacheEntryCount() else 0;
                 std.log.info("[frame-budget] frame={d} draw={d}us elapsed_prev={d}us delay={d}ms bind_hits={d} bind_misses={d} bind_misses_delta={d} bind_evictions_delta={d} bind_entries={d}", .{
                     frames_rendered,
                     draw_us,

@@ -4,8 +4,8 @@ const vec3 = @import("../../math/vec3.zig");
 const axis_mod = @import("../../math/axis.zig");
 const components = @import("../../scene/components.zig");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
 pub const EditorGizmoMode = enum {
@@ -65,33 +65,33 @@ const center_cube_vertex_count = center_cube_vertices.len;
 const ring_vertex_count = ring_vertices.len;
 
 pub const GizmoPass = struct {
-    line_axis_vertex_buffer: ?rhi_mod.Buffer = null,
-    translate_axis_vertex_buffer: ?rhi_mod.Buffer = null,
-    scale_axis_vertex_buffer: ?rhi_mod.Buffer = null,
-    center_cube_vertex_buffer: ?rhi_mod.Buffer = null,
-    ring_vertex_buffer: ?rhi_mod.Buffer = null,
+    line_axis_vertex_buffer: ?gfx_mod.Buffer = null,
+    translate_axis_vertex_buffer: ?gfx_mod.Buffer = null,
+    scale_axis_vertex_buffer: ?gfx_mod.Buffer = null,
+    center_cube_vertex_buffer: ?gfx_mod.Buffer = null,
+    ring_vertex_buffer: ?gfx_mod.Buffer = null,
     /// Temporary per-frame buffers for drawWorldLines.  Kept alive until the
     /// next frame so the Metal command buffer can reference them after encoding.
-    temp_world_line_buffers: [8]rhi_mod.Buffer = undefined,
+    temp_world_line_buffers: [8]gfx_mod.Buffer = undefined,
     temp_world_line_count: u32 = 0,
-    line_pipeline: ?rhi_mod.GraphicsPipeline = null,
+    line_pipeline: ?gfx_mod.GraphicsPipeline = null,
     /// Overlay line pipeline — same as line_pipeline but depth_test = false
     /// so mesh edit overlay elements always draw on top of geometry.
-    overlay_line_pipeline: ?rhi_mod.GraphicsPipeline = null,
-    triangle_pipeline: ?rhi_mod.GraphicsPipeline = null,
+    overlay_line_pipeline: ?gfx_mod.GraphicsPipeline = null,
+    triangle_pipeline: ?gfx_mod.GraphicsPipeline = null,
     /// Mesh-edit overlay triangle pipeline — depth_test=false + alpha blending.
     /// Used for drawThickOverlayLines / drawVertexDots so teal is semi-transparent
     /// and gold (alpha=1.0) fully replaces teal wherever it overlaps.
-    overlay_triangle_pipeline: ?rhi_mod.GraphicsPipeline = null,
+    overlay_triangle_pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !GizmoPass {
+    pub fn init(device: *gfx_mod.GfxDevice) !GizmoPass {
         var pass = GizmoPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *GizmoPass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *GizmoPass, device: *gfx_mod.GfxDevice) void {
         var i: u32 = 0;
         while (i < self.temp_world_line_count) : (i += 1) {
             device.releaseBuffer(&self.temp_world_line_buffers[i]);
@@ -144,7 +144,7 @@ pub const GizmoPass = struct {
 
     /// Release all temporary world-line buffers from the previous frame.
     /// Call this once per frame BEFORE any drawWorldLines calls.
-    pub fn releaseWorldLineBuffers(self: *GizmoPass, device: *rhi_mod.RhiDevice) void {
+    pub fn releaseWorldLineBuffers(self: *GizmoPass, device: *gfx_mod.GfxDevice) void {
         var i: u32 = 0;
         while (i < self.temp_world_line_count) : (i += 1) {
             device.releaseBuffer(&self.temp_world_line_buffers[i]);
@@ -154,9 +154,9 @@ pub const GizmoPass = struct {
 
     pub fn draw(
         self: *GizmoPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
         selected_transform: components.Transform,
         state: EditorGizmoState,
@@ -196,9 +196,9 @@ pub const GizmoPass = struct {
 
     pub fn drawWorldLines(
         self: *GizmoPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
         vertices: []const WorldLineVertex,
         color: [4]f32,
@@ -235,9 +235,9 @@ pub const GizmoPass = struct {
     /// (depth test disabled). Intended for mesh-edit overlay highlight lines.
     pub fn drawOverlayLines(
         self: *GizmoPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
         vertices: []const WorldLineVertex,
         color: [4]f32,
@@ -275,9 +275,9 @@ pub const GizmoPass = struct {
     /// `viewport_height` = render-target height in pixels.
     pub fn drawThickOverlayLines(
         self: *GizmoPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
         line_vertices: []const WorldLineVertex,
         camera_pos: [3]f32,
@@ -371,9 +371,9 @@ pub const GizmoPass = struct {
     /// line pair).  The billboard is `dot_size_px` × `dot_size_px` pixels.
     pub fn drawVertexDots(
         self: *GizmoPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
         positions: []const WorldLineVertex,
         camera_pos: [3]f32,
@@ -452,7 +452,7 @@ pub const GizmoPass = struct {
         return stats;
     }
 
-    fn createResources(self: *GizmoPass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *GizmoPass, device: *gfx_mod.GfxDevice) !void {
         self.line_axis_vertex_buffer = try createVertexBuffer(device, line_axis_vertices[0..]);
         errdefer if (self.line_axis_vertex_buffer) |*buffer| {
             device.releaseBuffer(buffer);
@@ -483,14 +483,14 @@ pub const GizmoPass = struct {
             stages.deinit(device);
         };
 
-        const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{
+        const vertex_layouts = [_]gfx_mod.VertexBufferLayoutDesc{
             .{
                 .slot = 0,
                 .stride = @sizeOf(GizmoVertex),
                 .input_rate = .per_vertex,
             },
         };
-        const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{
+        const vertex_attributes = [_]gfx_mod.VertexAttributeDesc{
             .{
                 .location = 0,
                 .buffer_slot = 0,
@@ -571,9 +571,9 @@ pub const GizmoPass = struct {
 
     fn drawTranslateAxes(
         self: *GizmoPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
         translation: [3]f32,
         rotation: [3]f32,
@@ -593,9 +593,9 @@ pub const GizmoPass = struct {
 
     fn drawScaleAxes(
         self: *GizmoPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
         translation: [3]f32,
         rotation: [3]f32,
@@ -613,9 +613,9 @@ pub const GizmoPass = struct {
 
     fn drawRotateRings(
         self: *GizmoPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
         translation: [3]f32,
         rotation: [3]f32,
@@ -633,10 +633,10 @@ pub const GizmoPass = struct {
 
     fn drawAxisMesh(
         self: *GizmoPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
-        buffer: rhi_mod.Buffer,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
+        buffer: gfx_mod.Buffer,
         vertex_count: usize,
         view_projection: [16]f32,
         translation: [3]f32,
@@ -652,9 +652,9 @@ pub const GizmoPass = struct {
 
     fn drawRingCluster(
         self: *GizmoPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
         translation: [3]f32,
         rotation: [3]f32,
@@ -669,9 +669,9 @@ pub const GizmoPass = struct {
 
     fn drawScaleBox(
         self: *GizmoPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
         translation: [3]f32,
         rotation: [3]f32,
@@ -683,9 +683,9 @@ pub const GizmoPass = struct {
 
     fn drawCenterCube(
         self: *GizmoPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
         translation: [3]f32,
         rotation: [3]f32,
@@ -699,10 +699,10 @@ pub const GizmoPass = struct {
 
     fn drawShape(
         self: *GizmoPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
-        buffer: rhi_mod.Buffer,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
+        buffer: gfx_mod.Buffer,
         first_vertex: usize,
         vertex_count: usize,
         view_projection: [16]f32,
@@ -731,10 +731,10 @@ pub const GizmoPass = struct {
     }
 };
 
-fn createVertexBuffer(device: *rhi_mod.RhiDevice, vertices: []const GizmoVertex) !rhi_mod.Buffer {
+fn createVertexBuffer(device: *gfx_mod.GfxDevice, vertices: []const GizmoVertex) !gfx_mod.Buffer {
     const buffer = try device.createBuffer(.{
         .size = @intCast(@sizeOf(GizmoVertex) * vertices.len),
-        .usage = rhi_types.BufferUsage.vertex,
+        .usage = gfx_types.BufferUsage.vertex,
     });
     errdefer {
         var owned = buffer;

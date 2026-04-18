@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
+const gfx_mod = @import("gfx_legacy/mod.zig");
 const shader_support = @import("../shader_support.zig");
 
 pub const RtShadowDenoiseUniforms = extern struct {
@@ -10,20 +10,20 @@ pub const RtShadowDenoiseUniforms = extern struct {
 };
 
 pub const RtShadowDenoisePass = struct {
-    sampler: ?rhi_mod.Sampler = null,
-    bind_group: ?rhi_mod.BindGroup = null,
+    sampler: ?gfx_mod.Sampler = null,
+    bind_group: ?gfx_mod.BindGroup = null,
     bound_shadow_handle: usize = 0,
     bound_depth_handle: usize = 0,
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !RtShadowDenoisePass {
+    pub fn init(device: *gfx_mod.GfxDevice) !RtShadowDenoisePass {
         var pass = RtShadowDenoisePass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *RtShadowDenoisePass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *RtShadowDenoisePass, device: *gfx_mod.GfxDevice) void {
         if (self.bind_group) |*bg| device.releaseBindGroup(bg);
         if (self.sampler) |*s| device.releaseSampler(s);
         if (self.pipeline) |*p| device.releaseGraphicsPipeline(p);
@@ -37,9 +37,9 @@ pub const RtShadowDenoisePass = struct {
 
     pub fn syncTextures(
         self: *RtShadowDenoisePass,
-        device: *rhi_mod.RhiDevice,
-        shadow_mask_texture: *const rhi_mod.Texture,
-        depth_texture: *const rhi_mod.Texture,
+        device: *gfx_mod.GfxDevice,
+        shadow_mask_texture: *const gfx_mod.Texture,
+        depth_texture: *const gfx_mod.Texture,
     ) !void {
         const shadow_handle = shadow_mask_texture.id;
         const depth_handle = depth_texture.id;
@@ -49,7 +49,7 @@ pub const RtShadowDenoisePass = struct {
 
         if (self.bind_group) |*bg| device.releaseBindGroup(bg);
 
-        const bindings = [_]rhi_mod.TextureSamplerBinding{
+        const bindings = [_]gfx_mod.TextureSamplerBinding{
             .{ .texture = shadow_mask_texture, .sampler = &self.sampler.? },
             .{ .texture = depth_texture, .sampler = &self.sampler.? },
         };
@@ -63,9 +63,9 @@ pub const RtShadowDenoisePass = struct {
 
     pub fn draw(
         self: *RtShadowDenoisePass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         uniforms: RtShadowDenoiseUniforms,
     ) mesh_pass_mod.DrawStats {
         var stats = mesh_pass_mod.DrawStats{};
@@ -81,7 +81,7 @@ pub const RtShadowDenoisePass = struct {
         return stats;
     }
 
-    fn createResources(self: *RtShadowDenoisePass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *RtShadowDenoisePass, device: *gfx_mod.GfxDevice) !void {
         self.sampler = try device.createSampler(.{
             .min_filter = .linear,
             .mag_filter = .linear,
@@ -95,8 +95,8 @@ pub const RtShadowDenoisePass = struct {
         self.stages = try shader_support.loadProgramStages(device, "rt_shadow_denoise");
         errdefer if (self.stages) |*s| s.deinit(device);
 
-        const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{};
-        const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{};
+        const vertex_layouts = [_]gfx_mod.VertexBufferLayoutDesc{};
+        const vertex_attributes = [_]gfx_mod.VertexAttributeDesc{};
 
         self.pipeline = try device.createGraphicsPipeline(.{
             .vertex_shader = &self.stages.?.vertex,

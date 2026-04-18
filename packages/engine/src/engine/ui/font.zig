@@ -4,8 +4,8 @@
 ///! for GPU-accelerated text rendering. Glyph metrics are stored for
 ///! text layout (advance, bearing, bounds).
 const std = @import("std");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 
 const c = @import("c_stb_truetype");
 
@@ -41,11 +41,11 @@ pub const Font = struct {
     /// Atlas pixel data (R8, owned).
     atlas_pixels: ?[]u8 = null,
     /// GPU texture handle (created after upload).
-    atlas_texture: ?rhi_mod.Texture = null,
+    atlas_texture: ?gfx_mod.Texture = null,
     /// GPU sampler.
-    atlas_sampler: ?rhi_mod.Sampler = null,
+    atlas_sampler: ?gfx_mod.Sampler = null,
     /// GPU bind group for the atlas (fragment stage set=2).
-    atlas_bind_group: ?rhi_mod.BindGroup = null,
+    atlas_bind_group: ?gfx_mod.BindGroup = null,
     /// Font pixel size used during rasterization.
     font_size: f32 = 32,
     /// Line height (ascent - descent + lineGap) scaled to font_size.
@@ -192,14 +192,14 @@ pub const Font = struct {
     }
 
     /// Upload the atlas to the GPU and create the bind group.
-    pub fn createGpuResources(self: *Font, device: *rhi_mod.RhiDevice) !void {
+    pub fn createGpuResources(self: *Font, device: *gfx_mod.GfxDevice) !void {
         const pixels = self.atlas_pixels orelse return error.NoAtlasData;
 
         self.atlas_texture = try device.createTexture(.{
             .width = self.atlas_width,
             .height = self.atlas_height,
             .format = .r8_unorm,
-            .usage = rhi_types.TextureUsage.sampler,
+            .usage = gfx_types.TextureUsage.sampler,
             .label = "ui_font_atlas",
         });
         try device.uploadTextureData(
@@ -216,7 +216,7 @@ pub const Font = struct {
             .address_mode_v = .clamp_to_edge,
         });
 
-        const bindings = [_]rhi_mod.TextureSamplerBinding{
+        const bindings = [_]gfx_mod.TextureSamplerBinding{
             .{
                 .texture = &self.atlas_texture.?,
                 .sampler = &self.atlas_sampler.?,
@@ -235,7 +235,7 @@ pub const Font = struct {
         return self.glyphs.items[idx];
     }
 
-    pub fn deinit(self: *Font, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *Font, device: *gfx_mod.GfxDevice) void {
         if (self.atlas_bind_group) |*bg| device.releaseBindGroup(bg);
         if (self.atlas_sampler) |*s| device.releaseSampler(s);
         if (self.atlas_texture) |*t| device.releaseTexture(t);

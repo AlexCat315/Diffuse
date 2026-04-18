@@ -22,7 +22,7 @@ const node_mod = @import("node.zig");
 const layout_mod = @import("layout.zig");
 const renderer_mod = @import("renderer.zig");
 const font_mod = @import("font.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
+const gfx_mod = @import("gfx_legacy/mod.zig");
 
 pub const Node = node_mod.Node;
 pub const NodeTag = node_mod.NodeTag;
@@ -67,19 +67,19 @@ pub const Canvas = struct {
         return canvas;
     }
 
-    pub fn deinit(self: *Canvas, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *Canvas, device: *gfx_mod.GfxDevice) void {
         if (self.font) |*f| f.deinit(device);
         if (self.font_data) |d| self.allocator.free(d);
         self.renderer.deinit(device);
         self.pool.deinit(self.allocator);
     }
 
-    pub fn createGpuResources(self: *Canvas, device: *rhi_mod.RhiDevice) !void {
+    pub fn createGpuResources(self: *Canvas, device: *gfx_mod.GfxDevice) !void {
         try self.renderer.createGpuResources(device);
     }
 
     /// Load a TTF font from a file path and create the SDF atlas on the GPU.
-    pub fn loadFont(self: *Canvas, device: *rhi_mod.RhiDevice, path: []const u8, font_size_px: f32) !void {
+    pub fn loadFont(self: *Canvas, device: *gfx_mod.GfxDevice, path: []const u8, font_size_px: f32) !void {
         // Read font file
         const io = io_globals.global_io;
         const data = try std.Io.Dir.cwd().readFileAlloc(io, path, self.allocator, .unlimited);
@@ -150,9 +150,9 @@ pub const Canvas = struct {
 
     pub fn draw(
         self: *Canvas,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         viewport_w: f32,
         viewport_h: f32,
     ) void {

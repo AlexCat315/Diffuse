@@ -4,7 +4,7 @@ const environment_map_import = @import("environment_map_import.zig");
 const image_decoder = @import("image_decoder.zig");
 const registry_mod = @import("registry.zig");
 const svg_decoder = @import("svg_decoder.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_types = @import("guava_gfx").types;
 const library_mod = @import("library.zig");
 
 pub const current_texture_cache_version: u32 = registry_mod.AssetType.texture.importVersion();
@@ -18,7 +18,7 @@ const CookedTexture = struct {
     import_version: u32 = current_texture_cache_version,
     width: u32,
     height: u32,
-    format: rhi_types.TextureFormat = .rgba8_unorm,
+    format: gfx_types.TextureFormat = .rgba8_unorm,
     pixels_hex: []const u8 = "",
     pixels_bin_path: []const u8 = "",
 };
@@ -121,7 +121,7 @@ fn cookTextureRecord(allocator: std.mem.Allocator, record: *const registry_mod.A
     var width: u32 = 0;
     var height: u32 = 0;
     var raw_pixels: []u8 = undefined;
-    var format: rhi_types.TextureFormat = .rgba8_unorm;
+    var format: gfx_types.TextureFormat = .rgba8_unorm;
     defer allocator.free(raw_pixels);
 
     if (std.mem.endsWith(u8, record.source_path, ".svg")) {

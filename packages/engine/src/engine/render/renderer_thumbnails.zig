@@ -10,8 +10,8 @@ const texture_resource_mod = @import("../assets/texture_resource.zig");
 const aabb_mod = @import("../math/aabb.zig");
 const mesh_pass_mod = @import("passes/mesh_pass.zig");
 const scene_extraction = @import("scene_extraction.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const components = @import("../scene/components.zig");
 const scene_mod = @import("../scene/scene.zig");
 const types = @import("types.zig");
@@ -47,7 +47,7 @@ pub const ModelThumbnailCacheEntry = struct {
     queued: bool = false,
     last_requested_frame: usize = 0,
 
-    pub fn deinit(self: *ModelThumbnailCacheEntry, allocator: std.mem.Allocator, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *ModelThumbnailCacheEntry, allocator: std.mem.Allocator, device: *gfx_mod.GfxDevice) void {
         allocator.free(self.path);
         self.target.deinit(device);
         self.* = undefined;
@@ -58,7 +58,7 @@ pub const MaterialThumbnailTextureFingerprint = struct {
     handle: ?handles.TextureHandle = null,
     width: u32 = 0,
     height: u32 = 0,
-    format: rhi_types.TextureFormat = .unknown,
+    format: gfx_types.TextureFormat = .unknown,
 };
 
 pub const MaterialThumbnailSignature = struct {
@@ -95,15 +95,15 @@ pub const MaterialThumbnailSource = struct {
 };
 
 pub const ThumbnailRenderTarget = struct {
-    color_texture: rhi_mod.Texture,
-    depth_texture: rhi_mod.Texture,
+    color_texture: gfx_mod.Texture,
+    depth_texture: gfx_mod.Texture,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !ThumbnailRenderTarget {
+    pub fn init(device: *gfx_mod.GfxDevice) !ThumbnailRenderTarget {
         const color_texture = try device.createTexture(.{
             .width = material_thumbnail_dimension,
             .height = material_thumbnail_dimension,
             .format = .bgra8_unorm_srgb,
-            .usage = rhi_types.TextureUsage.color_target | rhi_types.TextureUsage.sampler,
+            .usage = gfx_types.TextureUsage.color_target | gfx_types.TextureUsage.sampler,
         });
         errdefer {
             var owned = color_texture;
@@ -114,7 +114,7 @@ pub const ThumbnailRenderTarget = struct {
             .width = material_thumbnail_dimension,
             .height = material_thumbnail_dimension,
             .format = .d32_float,
-            .usage = rhi_types.TextureUsage.depth_stencil_target,
+            .usage = gfx_types.TextureUsage.depth_stencil_target,
         });
         errdefer {
             var owned = depth_texture;
@@ -127,7 +127,7 @@ pub const ThumbnailRenderTarget = struct {
         };
     }
 
-    pub fn deinit(self: *ThumbnailRenderTarget, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *ThumbnailRenderTarget, device: *gfx_mod.GfxDevice) void {
         device.releaseTexture(&self.color_texture);
         device.releaseTexture(&self.depth_texture);
         self.* = undefined;
@@ -143,7 +143,7 @@ pub const MaterialThumbnailCacheEntry = struct {
     ready: bool = false,
     last_requested_frame: usize = 0,
 
-    pub fn deinit(self: *MaterialThumbnailCacheEntry, allocator: std.mem.Allocator, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *MaterialThumbnailCacheEntry, allocator: std.mem.Allocator, device: *gfx_mod.GfxDevice) void {
         allocator.free(self.asset_id);
         self.target.deinit(device);
         self.* = undefined;
@@ -358,7 +358,7 @@ pub fn requestMaterialThumbnail(self: anytype, scene: *const scene_mod.Scene, as
     }
 }
 
-pub fn materialThumbnailTexture(self: anytype, asset_id: []const u8) ?*const rhi_mod.Texture {
+pub fn materialThumbnailTexture(self: anytype, asset_id: []const u8) ?*const gfx_mod.Texture {
     const entry = findMaterialThumbnailCacheIndex(self, asset_id) orelse return null;
     if (!entry.ready) return null;
     return &entry.target.color_texture;
@@ -366,7 +366,7 @@ pub fn materialThumbnailTexture(self: anytype, asset_id: []const u8) ?*const rhi
 
 pub fn processMaterialThumbnailRequests(
     self: anytype,
-    frame: rhi_mod.Frame,
+    frame: gfx_mod.Frame,
     scene: *const scene_mod.Scene,
 ) !mesh_pass_mod.DrawStats {
     var stats = mesh_pass_mod.DrawStats{};
@@ -388,7 +388,7 @@ pub fn processMaterialThumbnailRequests(
         };
 
         try self.material_thumbnail_preview.syncFromSource(source);
-        self.thumbnail_scene_cache.invalidateMaterialResources(&self.rhi);
+        self.thumbnail_scene_cache.invalidateMaterialResources(&self.gfx);
         const preview_stats = try renderMaterialPreviewTarget(self, frame, &entry_ptr.target);
         stats.add(preview_stats);
 
@@ -402,7 +402,7 @@ pub fn processMaterialThumbnailRequests(
 
 pub fn renderMaterialPreviewTarget(
     self: anytype,
-    frame: rhi_mod.Frame,
+    frame: gfx_mod.Frame,
     target: *ThumbnailRenderTarget,
 ) !mesh_pass_mod.DrawStats {
     var stats = mesh_pass_mod.DrawStats{};
@@ -416,7 +416,7 @@ pub fn renderMaterialPreviewTarget(
     );
 
     var prepared_scene = try self.thumbnail_scene_cache.prepareScene(
-        &self.rhi,
+        &self.gfx,
         &self.material_thumbnail_preview.world,
         &self.thumbnail_render_world,
         material_thumbnail_dimension,
@@ -424,7 +424,7 @@ pub fn renderMaterialPreviewTarget(
     );
     defer prepared_scene.deinit();
 
-    const render_pass = try self.rhi.beginRenderPassWithDesc(frame, .{
+    const render_pass = try self.gfx.beginRenderPassWithDesc(frame, .{
         .color = .{
             .target = .{ .texture = &target.color_texture },
             .clear_color = material_thumbnail_clear_color,
@@ -442,14 +442,14 @@ pub fn renderMaterialPreviewTarget(
         },
     });
 
-    const depth_stats = self.depth_prepass.draw(&self.rhi, frame, render_pass, &prepared_scene);
+    const depth_stats = self.depth_prepass.draw(&self.gfx, frame, render_pass, &prepared_scene);
     stats.add(depth_stats);
-    const base_stats = try self.base_pass.draw(&self.rhi, frame, render_pass, &prepared_scene, .{
+    const base_stats = try self.base_pass.draw(&self.gfx, frame, render_pass, &prepared_scene, .{
         .render_mode = thumbnail_viewport_state.render_mode,
         .target = .ldr,
     });
     stats.add(base_stats);
-    self.rhi.endRenderPass(render_pass);
+    self.gfx.endRenderPass(render_pass);
 
     return stats;
 }
@@ -506,10 +506,10 @@ pub fn ensureMaterialThumbnailEntry(self: anytype, asset_id: []const u8) !*Mater
     const owned_asset_id = try self.allocator.dupe(u8, asset_id);
     errdefer self.allocator.free(owned_asset_id);
 
-    const target = try ThumbnailRenderTarget.init(&self.rhi);
+    const target = try ThumbnailRenderTarget.init(&self.gfx);
     errdefer {
         var owned = target;
-        owned.deinit(&self.rhi);
+        owned.deinit(&self.gfx);
     }
 
     const entry = MaterialThumbnailCacheEntry{
@@ -555,7 +555,7 @@ pub fn evictMaterialThumbnailEntry(self: anytype, keep_asset_id: []const u8) voi
     if (key_to_remove) |key| {
         if (self.material_thumbnail_cache.fetchRemove(key)) |kv| {
             var value = kv.value;
-            value.deinit(self.allocator, &self.rhi);
+            value.deinit(self.allocator, &self.gfx);
         }
     }
 }
@@ -563,14 +563,14 @@ pub fn evictMaterialThumbnailEntry(self: anytype, keep_asset_id: []const u8) voi
 pub fn removeMaterialThumbnail(self: anytype, asset_id: []const u8) void {
     if (self.material_thumbnail_cache.fetchRemove(asset_id)) |kv| {
         var value = kv.value;
-        value.deinit(self.allocator, &self.rhi);
+        value.deinit(self.allocator, &self.gfx);
     }
 }
 
 pub fn releaseMaterialThumbnailCache(self: anytype) void {
     var it = self.material_thumbnail_cache.iterator();
     while (it.next()) |entry| {
-        entry.value_ptr.deinit(self.allocator, &self.rhi);
+        entry.value_ptr.deinit(self.allocator, &self.gfx);
     }
     self.material_thumbnail_cache.deinit();
     self.material_thumbnail_cache = undefined;
@@ -700,7 +700,7 @@ pub fn requestModelThumbnail(self: anytype, model_path: []const u8, frame_index:
     }
 }
 
-pub fn modelThumbnailTexture(self: anytype, model_path: []const u8) ?*const rhi_mod.Texture {
+pub fn modelThumbnailTexture(self: anytype, model_path: []const u8) ?*const gfx_mod.Texture {
     const entry = findModelThumbnailCacheEntry(self, model_path) orelse return null;
     if (!entry.ready) return null;
     return &entry.target.color_texture;
@@ -708,7 +708,7 @@ pub fn modelThumbnailTexture(self: anytype, model_path: []const u8) ?*const rhi_
 
 pub fn processModelThumbnailRequests(
     self: anytype,
-    frame: rhi_mod.Frame,
+    frame: gfx_mod.Frame,
 ) !mesh_pass_mod.DrawStats {
     var stats = mesh_pass_mod.DrawStats{};
     if (!self.depth_prepass.isReady() or !self.base_pass.isReady()) {
@@ -738,7 +738,7 @@ pub fn processModelThumbnailRequests(
 
 fn renderModelThumbnail(
     self: anytype,
-    frame: rhi_mod.Frame,
+    frame: gfx_mod.Frame,
     model_path: []const u8,
     target: *ThumbnailRenderTarget,
 ) !mesh_pass_mod.DrawStats {
@@ -821,7 +821,7 @@ fn renderModelThumbnail(
     });
 
     // Invalidate scene cache (new geometry each time)
-    self.model_thumbnail_scene_cache.invalidateAllResources(&self.rhi);
+    self.model_thumbnail_scene_cache.invalidateAllResources(&self.gfx);
 
     // Extract world to render world
     _ = try scene_extraction.extractWorld(
@@ -834,7 +834,7 @@ fn renderModelThumbnail(
 
     // Prepare scene and render
     var prepared_scene = try self.model_thumbnail_scene_cache.prepareScene(
-        &self.rhi,
+        &self.gfx,
         &temp_world,
         &self.model_thumbnail_render_world,
         model_thumbnail_dimension,
@@ -842,7 +842,7 @@ fn renderModelThumbnail(
     );
     defer prepared_scene.deinit();
 
-    const render_pass = try self.rhi.beginRenderPassWithDesc(frame, .{
+    const render_pass = try self.gfx.beginRenderPassWithDesc(frame, .{
         .color = .{
             .target = .{ .texture = &target.color_texture },
             .clear_color = model_thumbnail_clear_color,
@@ -860,14 +860,14 @@ fn renderModelThumbnail(
         },
     });
 
-    const depth_stats = self.depth_prepass.draw(&self.rhi, frame, render_pass, &prepared_scene);
+    const depth_stats = self.depth_prepass.draw(&self.gfx, frame, render_pass, &prepared_scene);
     stats.add(depth_stats);
-    const base_stats = try self.base_pass.draw(&self.rhi, frame, render_pass, &prepared_scene, .{
+    const base_stats = try self.base_pass.draw(&self.gfx, frame, render_pass, &prepared_scene, .{
         .render_mode = thumbnail_viewport_state.render_mode,
         .target = .ldr,
     });
     stats.add(base_stats);
-    self.rhi.endRenderPass(render_pass);
+    self.gfx.endRenderPass(render_pass);
 
     return stats;
 }
@@ -888,10 +888,10 @@ pub fn ensureModelThumbnailEntry(self: anytype, model_path: []const u8) !*ModelT
     const owned_path = try self.allocator.dupe(u8, model_path);
     errdefer self.allocator.free(owned_path);
 
-    const target = try ThumbnailRenderTarget.init(&self.rhi);
+    const target = try ThumbnailRenderTarget.init(&self.gfx);
     errdefer {
         var owned = target;
-        owned.deinit(&self.rhi);
+        owned.deinit(&self.gfx);
     }
 
     const entry = ModelThumbnailCacheEntry{
@@ -924,7 +924,7 @@ fn evictModelThumbnailEntry(self: anytype, keep_path: []const u8) void {
     if (oldest_key) |key| {
         if (self.model_thumbnail_cache.fetchRemove(key)) |kv| {
             var value = kv.value;
-            value.deinit(self.allocator, &self.rhi);
+            value.deinit(self.allocator, &self.gfx);
         }
     }
 }
@@ -932,7 +932,7 @@ fn evictModelThumbnailEntry(self: anytype, keep_path: []const u8) void {
 pub fn releaseModelThumbnailCache(self: anytype) void {
     var it = self.model_thumbnail_cache.iterator();
     while (it.next()) |entry| {
-        entry.value_ptr.deinit(self.allocator, &self.rhi);
+        entry.value_ptr.deinit(self.allocator, &self.gfx);
     }
     self.model_thumbnail_cache.deinit();
     self.model_thumbnail_cache = undefined;

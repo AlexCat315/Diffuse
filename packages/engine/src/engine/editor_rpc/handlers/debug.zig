@@ -4,7 +4,7 @@ const ctx_mod = @import("../ctx.zig");
 const Ctx = ctx_mod.Ctx;
 
 pub fn getRhiStats(ctx: *Ctx) !void {
-    const dev = ctx.layer.renderer.rhi_device orelse {
+    const dev = ctx.layer.renderer.gfx_device orelse {
         try ctx.reply(.{
             .bindingCache = .{
                 .hits = @as(u64, 0),
@@ -46,28 +46,28 @@ const PassInfo = struct { name: []const u8, status: []const u8 };
 
 const passes = [_]PassInfo{
     .{ .name = "SSAO", .status = "compute" },
-    .{ .name = "FXAA", .status = "RHI" },
-    .{ .name = "Bloom", .status = "RHI" },
-    .{ .name = "Tonemap", .status = "RHI" },
-    .{ .name = "Contact Shadow", .status = "RHI" },
-    .{ .name = "DOF", .status = "RHI" },
-    .{ .name = "SSR", .status = "RHI" },
-    .{ .name = "Volumetric Fog", .status = "RHI" },
-    .{ .name = "Depth Prepass", .status = "RHI" },
-    .{ .name = "Shadow Pass", .status = "RHI" },
-    .{ .name = "Outline", .status = "RHI" },
-    .{ .name = "Skybox", .status = "RHI" },
-    .{ .name = "TAA", .status = "RHI" },
-    .{ .name = "IBL Compute", .status = "RHI (BRDF + Irradiance)" },
-    .{ .name = "Gizmo", .status = "RHI (line geometry)" },
-    .{ .name = "ID Pass", .status = "RHI (entity picking)" },
-    .{ .name = "Omni Shadow", .status = "RHI (6-face cubemap)" },
-    .{ .name = "RT Shadow Composite", .status = "RHI (fullscreen multiply)" },
-    .{ .name = "Base Pass", .status = "RHI (10-set PBR + IBL + CSM)" },
+    .{ .name = "FXAA", .status = "GFX" },
+    .{ .name = "Bloom", .status = "GFX" },
+    .{ .name = "Tonemap", .status = "GFX" },
+    .{ .name = "Contact Shadow", .status = "GFX" },
+    .{ .name = "DOF", .status = "GFX" },
+    .{ .name = "SSR", .status = "GFX" },
+    .{ .name = "Volumetric Fog", .status = "GFX" },
+    .{ .name = "Depth Prepass", .status = "GFX" },
+    .{ .name = "Shadow Pass", .status = "GFX" },
+    .{ .name = "Outline", .status = "GFX" },
+    .{ .name = "Skybox", .status = "GFX" },
+    .{ .name = "TAA", .status = "GFX" },
+    .{ .name = "IBL Compute", .status = "GFX (BRDF + Irradiance)" },
+    .{ .name = "Gizmo", .status = "GFX (line geometry)" },
+    .{ .name = "ID Pass", .status = "GFX (entity picking)" },
+    .{ .name = "Omni Shadow", .status = "GFX (6-face cubemap)" },
+    .{ .name = "RT Shadow Composite", .status = "GFX (fullscreen multiply)" },
+    .{ .name = "Base Pass", .status = "GFX (10-set PBR + IBL + CSM)" },
 };
 
 pub fn resetRhiStats(ctx: *Ctx) !void {
-    if (ctx.layer.renderer.rhi_device) |dev| {
+    if (ctx.layer.renderer.gfx_device) |dev| {
         dev.resetBindingSetCacheStats();
     }
     try ctx.reply(.{});

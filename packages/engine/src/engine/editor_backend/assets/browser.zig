@@ -469,7 +469,7 @@ fn ensureImageThumbnailTexture(
     state: *EditorState,
     layer_context: *engine.core.LayerContext,
     file_path: []const u8,
-) !*const engine.rhi.Texture {
+) !*const engine.gfx.Texture {
     // Check cache for existing thumbnail
     for (state.image_thumbnail_textures.items) |*entry| {
         if (std.mem.eql(u8, entry.path, file_path)) {
@@ -545,15 +545,15 @@ fn ensureImageThumbnailTexture(
     }
 
     // Create GPU texture
-    var texture = try layer_context.rhi().createTexture(.{
+    var texture = try layer_context.gfx().createTexture(.{
         .width = thumb_w,
         .height = thumb_h,
         .format = .rgba8_unorm,
-        .usage = engine.rhi.TextureUsage.sampler,
+        .usage = engine.gfx.TextureUsage.sampler,
     });
-    errdefer layer_context.rhi().releaseTexture(&texture);
+    errdefer layer_context.gfx().releaseTexture(&texture);
 
-    try layer_context.rhi().uploadTextureData(&texture, thumb_pixels, thumb_w, thumb_h);
+    try layer_context.gfx().uploadTextureData(&texture, thumb_pixels, thumb_w, thumb_h);
 
     // Cache it
     const owned_path = try allocator.dupe(u8, file_path);
@@ -563,7 +563,7 @@ fn ensureImageThumbnailTexture(
         .path = owned_path,
         .texture = texture,
     });
-    state.image_thumbnail_device = layer_context.rhi();
+    state.image_thumbnail_device = layer_context.gfx();
 
     return &state.image_thumbnail_textures.items[state.image_thumbnail_textures.items.len - 1].texture;
 }
@@ -574,7 +574,7 @@ fn queueAndResolveModelThumbnailTexture(
     state: *EditorState,
     layer_context: *engine.core.LayerContext,
     entry: *const AssetEntry,
-) !?*const engine.rhi.Texture {
+) !?*const engine.gfx.Texture {
     if (entry.kind != .model or entry.is_directory) return null;
     try queueModelThumbnailRequest(state, entry.path);
     return layer_context.renderer.modelThumbnailTexture(entry.path);
@@ -605,7 +605,7 @@ fn ensureImageThumbnailTextureAs(
     layer_context: *engine.core.LayerContext,
     file_path: []const u8,
     cache_key: []const u8,
-) !*const engine.rhi.Texture {
+) !*const engine.gfx.Texture {
     // Check cache under cache_key
     for (state.image_thumbnail_textures.items) |*entry| {
         if (std.mem.eql(u8, entry.path, cache_key)) {
@@ -671,15 +671,15 @@ fn ensureImageThumbnailTextureAs(
         thumb_h = new_h;
     }
 
-    var texture = try layer_context.rhi().createTexture(.{
+    var texture = try layer_context.gfx().createTexture(.{
         .width = thumb_w,
         .height = thumb_h,
         .format = .rgba8_unorm,
-        .usage = engine.rhi.TextureUsage.sampler,
+        .usage = engine.gfx.TextureUsage.sampler,
     });
-    errdefer layer_context.rhi().releaseTexture(&texture);
+    errdefer layer_context.gfx().releaseTexture(&texture);
 
-    try layer_context.rhi().uploadTextureData(&texture, thumb_pixels, thumb_w, thumb_h);
+    try layer_context.gfx().uploadTextureData(&texture, thumb_pixels, thumb_w, thumb_h);
 
     const owned_path = try allocator.dupe(u8, cache_key);
     errdefer allocator.free(owned_path);
@@ -688,7 +688,7 @@ fn ensureImageThumbnailTextureAs(
         .path = owned_path,
         .texture = texture,
     });
-    state.image_thumbnail_device = layer_context.rhi();
+    state.image_thumbnail_device = layer_context.gfx();
 
     return &state.image_thumbnail_textures.items[state.image_thumbnail_textures.items.len - 1].texture;
 }
@@ -748,7 +748,7 @@ fn queueAndResolveMaterialThumbnailTexture(
     state: *EditorState,
     layer_context: *engine.core.LayerContext,
     entry: *const AssetEntry,
-) !?*const engine.rhi.Texture {
+) !?*const engine.gfx.Texture {
     if (entry.kind != .material) {
         return null;
     }

@@ -1,5 +1,5 @@
 const std = @import("std");
-const rhi = @import("guava_rhi").rhi;
+const gfx = @import("guava_gfx").gfx;
 const render_graph = @import("../render_graph.zig");
 
 /// Depth-of-Field pass
@@ -27,12 +27,12 @@ pub const DOFPass = struct {
     };
 
     pub const LayoutIds = struct {
-        texture_layout_a: rhi.BindingLayout,
-        texture_layout_b: rhi.BindingLayout,
-        uniform_layout: rhi.BindingLayout,
+        texture_layout_a: gfx.BindingLayout,
+        texture_layout_b: gfx.BindingLayout,
+        uniform_layout: gfx.BindingLayout,
     };
 
-    pub fn createLayouts(device: *rhi.Device) !LayoutIds {
+    pub fn createLayouts(device: *gfx.Device) !LayoutIds {
         const texture_layout_a = try device.createBindingLayout(.{
             .entries = &.{.{
                 .slot = 0,
@@ -70,7 +70,7 @@ pub const DOFPass = struct {
     /// Encodes the full DOF pipeline: CoC → Blur → Composite.
     pub fn execute(
         allocator: std.mem.Allocator,
-        device: *rhi.Device,
+        device: *gfx.Device,
         graph: ?*const render_graph.RenderGraph,
         input_resource_id: u32,
         output_resource_id: u32,

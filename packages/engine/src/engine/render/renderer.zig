@@ -87,11 +87,11 @@ const window_mod = @import("../platform/window.zig");
 const graph_mod = @import("render_graph.zig");
 const mesh_pass_mod = @import("passes/mesh_pass.zig");
 const scene_extraction = @import("scene_extraction.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
-const rhi_api = @import("guava_rhi").rhi;
-const rhi_mock_backend_mod = @import("guava_rhi").metal_backend;
-const metal_device_mod = @import("guava_rhi").metal_device;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
+const gfx_api = @import("guava_gfx").gfx;
+const gfx_mock_backend_mod = @import("guava_gfx").metal_backend;
+const metal_device_mod = @import("guava_gfx").metal_device;
 const components = @import("../scene/components.zig");
 const scene_mod = @import("../scene/scene.zig");
 const types = @import("types.zig");
@@ -127,9 +127,9 @@ var g_logged_path_trace_active: bool = false;
 const CachedEnvironmentTextures = renderer_environment.CachedEnvironmentTextures;
 
 /// 图形 API 类型
-pub const GraphicsAPI = rhi_types.GraphicsAPI;
+pub const GraphicsAPI = gfx_types.GraphicsAPI;
 /// 运行时信息
-pub const RuntimeInfo = rhi_types.RuntimeInfo;
+pub const RuntimeInfo = gfx_types.RuntimeInfo;
 /// 选择历史管理
 pub const SelectionHistory = selection_history_mod.SelectionHistory;
 /// 选择更新模式
@@ -154,9 +154,9 @@ pub const EditorViewportState = types.EditorViewportState;
 /// 用于初始化渲染器时指定各种参数。
 pub const RendererConfig = struct {
     /// 请求的图形后端列表（按优先级排序）
-    requested_backends: []const rhi_types.GraphicsAPI = &.{},
+    requested_backends: []const gfx_types.GraphicsAPI = &.{},
     /// 后端选择策略
-    selection_policy: rhi_types.BackendSelectionPolicy = .explicit_order,
+    selection_policy: gfx_types.BackendSelectionPolicy = .explicit_order,
     /// 是否启用验证层（调试用）
     enable_validation: bool = true,
     /// 帧在飞数量（用于帧同步）
@@ -181,17 +181,17 @@ pub const FrameReport = struct {
     draw_calls: usize = 0,
     /// 绘制的三角形数量
     triangles_drawn: usize = 0,
-    /// RHI BindingSet 缓存命中次数
+    /// GFX BindingSet 缓存命中次数
     binding_cache_hits: u64 = 0,
-    /// RHI BindingSet 缓存未命中次数
+    /// GFX BindingSet 缓存未命中次数
     binding_cache_misses: u64 = 0,
-    /// RHI slot-layout 校验失败数
+    /// GFX slot-layout 校验失败数
     slot_layout_errors: usize = 0,
-    /// 本帧 RHI 缓存命中增量
+    /// 本帧 GFX 缓存命中增量
     binding_cache_hits_delta: u64 = 0,
-    /// 本帧 RHI 缓存未命中增量
+    /// 本帧 GFX 缓存未命中增量
     binding_cache_misses_delta: u64 = 0,
-    /// 本帧 RHI 缓存淘汰增量
+    /// 本帧 GFX 缓存淘汰增量
     binding_cache_evictions_delta: u64 = 0,
 };
 
@@ -308,8 +308,8 @@ pub const Renderer = struct {
     allocator: std.mem.Allocator,
     /// 平台抽象
     platform: platform_mod.Platform,
-    /// RHI 设备（GPU 资源管理）
-    rhi: rhi_mod.RhiDevice,
+    /// GFX 设备（GPU 资源管理）
+    gfx: gfx_mod.GfxDevice,
     /// 渲染图（管理渲染通道依赖）
     graph: graph_mod.RenderGraph,
     /// 场景缓存（优化场景数据访问）
@@ -364,18 +364,18 @@ pub const Renderer = struct {
     contact_shadow_pass: contact_shadow_pass_mod.ContactShadowPass,
     ssgi_compute_pass: ?ssgi_compute_pass_mod.SSGIComputePass = null,
     ssgi_composite_pass: ssgi_composite_pass_mod.SSGICompositePass,
-    /// RHI 设备（抽象后端）
-    rhi_device: ?*rhi_api.Device = null,
-    /// RHI mock 后端存储（仅测试用；生产环境使用 real Metal）
-    rhi_mock_backend: ?*rhi_mock_backend_mod.MetalBackend = null,
+    /// GFX 设备（抽象后端）
+    gfx_device: ?*gfx_api.Device = null,
+    /// GFX mock 后端存储（仅测试用；生产环境使用 real Metal）
+    gfx_mock_backend: ?*gfx_mock_backend_mod.MetalBackend = null,
     /// Real Metal backend device（生产环境使用）
-    rhi_metal_device: ?*metal_device_mod.MetalDevice = null,
+    gfx_metal_device: ?*metal_device_mod.MetalDevice = null,
     /// Platform metal layer binding（需要在 deinit 时销毁）
     metal_layer_binding: ?window_mod.MetalLayerBinding = null,
     /// IBL Compute 通道（GPU Compute 加速 BRDF LUT + Irradiance）
     ibl_compute_pass: ?ibl_compute_pass_mod.IBLComputePass = null,
     /// GPU 生成的 BRDF LUT 纹理（256x256 RGBA16F）
-    gpu_brdf_lut: ?rhi_mod.Texture = null,
+    gpu_brdf_lut: ?gfx_mod.Texture = null,
     /// GPU BRDF LUT 是否已生成
     gpu_brdf_lut_generated: bool = false,
     /// TAA 抗锯齿通道
@@ -403,7 +403,7 @@ pub const Renderer = struct {
     /// Contact Shadows 合成通道 — 将接触阴影遮罩以乘法混合叠加到 HDR 缓冲
     contact_shadow_composite_pass: rt_shadow_composite_pass_mod.RtShadowCompositePass,
     /// RT 阴影遮罩纹理（屏幕分辨率，BGRA8）
-    rt_shadow_mask_texture: ?rhi_mod.Texture = null,
+    rt_shadow_mask_texture: ?gfx_mod.Texture = null,
     /// RT 阴影遮罩像素缓冲 (CPU 侧)
     rt_shadow_pixels: ?[]u8 = null,
     rt_shadow_width: u32 = 0,
@@ -546,7 +546,7 @@ pub const Renderer = struct {
         var renderer = Renderer{
             .allocator = allocator,
             .platform = platform,
-            .rhi = try rhi_mod.RhiDevice.init(
+            .gfx = try gfx_mod.GfxDevice.init(
                 allocator,
                 platform,
                 window,
@@ -610,43 +610,43 @@ pub const Renderer = struct {
         errdefer renderer.pending_selection_readbacks.deinit(allocator);
         errdefer renderer.selection_history.deinit();
         errdefer renderer.graph.deinit();
-        errdefer renderer.rhi.deinit();
+        errdefer renderer.gfx.deinit();
 
-        renderer.scene_cache = try mesh_pass_mod.MeshSceneCache.init(allocator, &renderer.rhi);
-        errdefer renderer.scene_cache.deinit(&renderer.rhi);
+        renderer.scene_cache = try mesh_pass_mod.MeshSceneCache.init(allocator, &renderer.gfx);
+        errdefer renderer.scene_cache.deinit(&renderer.gfx);
 
-        renderer.preview_scene_cache = try mesh_pass_mod.MeshSceneCache.init(allocator, &renderer.rhi);
-        errdefer renderer.preview_scene_cache.deinit(&renderer.rhi);
+        renderer.preview_scene_cache = try mesh_pass_mod.MeshSceneCache.init(allocator, &renderer.gfx);
+        errdefer renderer.preview_scene_cache.deinit(&renderer.gfx);
 
-        renderer.thumbnail_scene_cache = try mesh_pass_mod.MeshSceneCache.init(allocator, &renderer.rhi);
-        errdefer renderer.thumbnail_scene_cache.deinit(&renderer.rhi);
+        renderer.thumbnail_scene_cache = try mesh_pass_mod.MeshSceneCache.init(allocator, &renderer.gfx);
+        errdefer renderer.thumbnail_scene_cache.deinit(&renderer.gfx);
 
-        renderer.model_thumbnail_scene_cache = try mesh_pass_mod.MeshSceneCache.init(allocator, &renderer.rhi);
-        errdefer renderer.model_thumbnail_scene_cache.deinit(&renderer.rhi);
+        renderer.model_thumbnail_scene_cache = try mesh_pass_mod.MeshSceneCache.init(allocator, &renderer.gfx);
+        errdefer renderer.model_thumbnail_scene_cache.deinit(&renderer.gfx);
 
         renderer.material_thumbnail_preview = try MaterialThumbnailPreview.init(allocator);
         errdefer renderer.material_thumbnail_preview.deinit();
 
-        renderer.material_editor_preview_target = try ThumbnailRenderTarget.init(&renderer.rhi);
-        errdefer renderer.material_editor_preview_target.deinit(&renderer.rhi);
+        renderer.material_editor_preview_target = try ThumbnailRenderTarget.init(&renderer.gfx);
+        errdefer renderer.material_editor_preview_target.deinit(&renderer.gfx);
 
-        renderer.id_pass = try id_pass_mod.IdPass.init(&renderer.rhi);
-        errdefer renderer.id_pass.deinit(&renderer.rhi);
+        renderer.id_pass = try id_pass_mod.IdPass.init(&renderer.gfx);
+        errdefer renderer.id_pass.deinit(&renderer.gfx);
 
-        renderer.depth_prepass = try depth_prepass_mod.DepthPrepass.init(&renderer.rhi);
-        errdefer renderer.depth_prepass.deinit(&renderer.rhi);
+        renderer.depth_prepass = try depth_prepass_mod.DepthPrepass.init(&renderer.gfx);
+        errdefer renderer.depth_prepass.deinit(&renderer.gfx);
 
-        renderer.velocity_pass = try velocity_pass_mod.VelocityPass.init(&renderer.rhi);
-        errdefer renderer.velocity_pass.deinit(&renderer.rhi);
+        renderer.velocity_pass = try velocity_pass_mod.VelocityPass.init(&renderer.gfx);
+        errdefer renderer.velocity_pass.deinit(&renderer.gfx);
 
-        renderer.shadow_pass = try shadow_pass_mod.ShadowPass.init(&renderer.rhi);
-        errdefer renderer.shadow_pass.deinit(&renderer.rhi);
+        renderer.shadow_pass = try shadow_pass_mod.ShadowPass.init(&renderer.gfx);
+        errdefer renderer.shadow_pass.deinit(&renderer.gfx);
 
-        renderer.shadow_map = try ShadowMapState.init(&renderer.rhi);
-        errdefer renderer.shadow_map.deinit(&renderer.rhi);
+        renderer.shadow_map = try ShadowMapState.init(&renderer.gfx);
+        errdefer renderer.shadow_map.deinit(&renderer.gfx);
 
-        renderer.base_pass = try base_pass_mod.BasePass.init(&renderer.rhi);
-        errdefer renderer.base_pass.deinit(&renderer.rhi);
+        renderer.base_pass = try base_pass_mod.BasePass.init(&renderer.gfx);
+        errdefer renderer.base_pass.deinit(&renderer.gfx);
 
         renderer.style_registry = style_plugin_mod.StyleRegistry.init(allocator);
 
@@ -659,26 +659,26 @@ pub const Renderer = struct {
 
         renderer.plugin_hot_reload = plugin_mod.PluginHotReloadManager.init(allocator);
 
-        renderer.skybox_pass = try skybox_pass_mod.SkyboxPass.init(&renderer.rhi);
+        renderer.skybox_pass = try skybox_pass_mod.SkyboxPass.init(&renderer.gfx);
         errdefer if (renderer.skybox_pass) |*pass| {
-            pass.deinit(&renderer.rhi);
+            pass.deinit(&renderer.gfx);
         };
 
-        renderer.ssao_compute_pass = ssao_compute_pass_mod.SSAOComputePass.init(&renderer.rhi) catch |err| blk: {
+        renderer.ssao_compute_pass = ssao_compute_pass_mod.SSAOComputePass.init(&renderer.gfx) catch |err| blk: {
             std.log.warn("SSAO compute pass init failed: {}", .{err});
             break :blk null;
         };
 
-        renderer.cluster_lights_pass = cluster_lights_pass_mod.ClusterLightsPass.init(&renderer.rhi) catch |err| blk: {
+        renderer.cluster_lights_pass = cluster_lights_pass_mod.ClusterLightsPass.init(&renderer.gfx) catch |err| blk: {
             std.log.warn("Cluster lights pass init failed (clustered Forward+ disabled): {}", .{err});
             break :blk null;
         };
 
-        renderer.contact_shadow_pass = try contact_shadow_pass_mod.ContactShadowPass.init(&renderer.rhi);
-        errdefer renderer.contact_shadow_pass.deinit(&renderer.rhi);
+        renderer.contact_shadow_pass = try contact_shadow_pass_mod.ContactShadowPass.init(&renderer.gfx);
+        errdefer renderer.contact_shadow_pass.deinit(&renderer.gfx);
 
         renderer.ibl_compute_pass = blk: {
-            const p = ibl_compute_pass_mod.IBLComputePass.init(&renderer.rhi);
+            const p = ibl_compute_pass_mod.IBLComputePass.init(&renderer.gfx);
             if (!p.hasBRDF() and !p.hasIrradiance()) {
                 std.log.warn("IBL compute pass: no pipelines available, GPU IBL disabled", .{});
                 break :blk null;
@@ -686,60 +686,60 @@ pub const Renderer = struct {
             break :blk p;
         };
 
-        renderer.taa_pass = try taa_pass_mod.TAAPass.init(&renderer.rhi);
-        errdefer renderer.taa_pass.deinit(&renderer.rhi);
+        renderer.taa_pass = try taa_pass_mod.TAAPass.init(&renderer.gfx);
+        errdefer renderer.taa_pass.deinit(&renderer.gfx);
 
-        renderer.ssr_pass = try ssr_pass_mod.SSRPass.init(&renderer.rhi);
-        errdefer renderer.ssr_pass.deinit(&renderer.rhi);
+        renderer.ssr_pass = try ssr_pass_mod.SSRPass.init(&renderer.gfx);
+        errdefer renderer.ssr_pass.deinit(&renderer.gfx);
 
-        renderer.ssr_blur_pass = try ssr_blur_pass_mod.SSRBlurPass.init(&renderer.rhi);
-        errdefer renderer.ssr_blur_pass.deinit(&renderer.rhi);
+        renderer.ssr_blur_pass = try ssr_blur_pass_mod.SSRBlurPass.init(&renderer.gfx);
+        errdefer renderer.ssr_blur_pass.deinit(&renderer.gfx);
 
-        renderer.bloom_pass = try bloom_pass_mod.BloomPass.init(&renderer.rhi);
-        errdefer renderer.bloom_pass.deinit(&renderer.rhi);
+        renderer.bloom_pass = try bloom_pass_mod.BloomPass.init(&renderer.gfx);
+        errdefer renderer.bloom_pass.deinit(&renderer.gfx);
 
-        renderer.tonemap_pass = try tonemap_pass_mod.TonemapPass.init(&renderer.rhi);
-        errdefer renderer.tonemap_pass.deinit(&renderer.rhi);
+        renderer.tonemap_pass = try tonemap_pass_mod.TonemapPass.init(&renderer.gfx);
+        errdefer renderer.tonemap_pass.deinit(&renderer.gfx);
 
-        renderer.dof_runtime_pass = try dof_runtime_pass_mod.DofRuntimePass.init(&renderer.rhi);
-        errdefer renderer.dof_runtime_pass.deinit(&renderer.rhi);
+        renderer.dof_runtime_pass = try dof_runtime_pass_mod.DofRuntimePass.init(&renderer.gfx);
+        errdefer renderer.dof_runtime_pass.deinit(&renderer.gfx);
 
-        renderer.fxaa_pass = try fxaa_pass_mod.FxaaPass.init(&renderer.rhi);
-        errdefer renderer.fxaa_pass.deinit(&renderer.rhi);
+        renderer.fxaa_pass = try fxaa_pass_mod.FxaaPass.init(&renderer.gfx);
+        errdefer renderer.fxaa_pass.deinit(&renderer.gfx);
 
-        renderer.fog_of_war_pass = try fog_of_war_pass_mod.FogOfWarPass.init(&renderer.rhi);
-        errdefer renderer.fog_of_war_pass.deinit(&renderer.rhi);
+        renderer.fog_of_war_pass = try fog_of_war_pass_mod.FogOfWarPass.init(&renderer.gfx);
+        errdefer renderer.fog_of_war_pass.deinit(&renderer.gfx);
 
-        renderer.rt_shadow_composite_pass = try rt_shadow_composite_pass_mod.RtShadowCompositePass.init(&renderer.rhi);
-        errdefer renderer.rt_shadow_composite_pass.deinit(&renderer.rhi);
+        renderer.rt_shadow_composite_pass = try rt_shadow_composite_pass_mod.RtShadowCompositePass.init(&renderer.gfx);
+        errdefer renderer.rt_shadow_composite_pass.deinit(&renderer.gfx);
 
-        renderer.rt_shadow_denoise_pass = try rt_shadow_denoise_pass_mod.RtShadowDenoisePass.init(&renderer.rhi);
-        errdefer renderer.rt_shadow_denoise_pass.deinit(&renderer.rhi);
+        renderer.rt_shadow_denoise_pass = try rt_shadow_denoise_pass_mod.RtShadowDenoisePass.init(&renderer.gfx);
+        errdefer renderer.rt_shadow_denoise_pass.deinit(&renderer.gfx);
 
         // SSAO 合成通道复用 RT 阴影合成的 multiply-blend 管线
-        renderer.ssao_composite_pass = try rt_shadow_composite_pass_mod.RtShadowCompositePass.init(&renderer.rhi);
-        errdefer renderer.ssao_composite_pass.deinit(&renderer.rhi);
+        renderer.ssao_composite_pass = try rt_shadow_composite_pass_mod.RtShadowCompositePass.init(&renderer.gfx);
+        errdefer renderer.ssao_composite_pass.deinit(&renderer.gfx);
 
-        renderer.contact_shadow_composite_pass = try rt_shadow_composite_pass_mod.RtShadowCompositePass.init(&renderer.rhi);
-        errdefer renderer.contact_shadow_composite_pass.deinit(&renderer.rhi);
+        renderer.contact_shadow_composite_pass = try rt_shadow_composite_pass_mod.RtShadowCompositePass.init(&renderer.gfx);
+        errdefer renderer.contact_shadow_composite_pass.deinit(&renderer.gfx);
 
-        renderer.ssgi_compute_pass = ssgi_compute_pass_mod.SSGIComputePass.init(&renderer.rhi) catch |err| blk: {
+        renderer.ssgi_compute_pass = ssgi_compute_pass_mod.SSGIComputePass.init(&renderer.gfx) catch |err| blk: {
             std.log.warn("SSGI compute pass init failed (falling back to fragment): {}", .{err});
             break :blk null;
         };
-        errdefer if (renderer.ssgi_compute_pass) |*p| p.deinit(&renderer.rhi);
+        errdefer if (renderer.ssgi_compute_pass) |*p| p.deinit(&renderer.gfx);
 
-        renderer.ssgi_composite_pass = try ssgi_composite_pass_mod.SSGICompositePass.init(&renderer.rhi);
-        errdefer renderer.ssgi_composite_pass.deinit(&renderer.rhi);
+        renderer.ssgi_composite_pass = try ssgi_composite_pass_mod.SSGICompositePass.init(&renderer.gfx);
+        errdefer renderer.ssgi_composite_pass.deinit(&renderer.gfx);
 
-        // RHI Metal backend — real GPU via ObjC++ bridge on macOS,
+        // GFX Metal backend — real GPU via ObjC++ bridge on macOS,
         // falls back to mock MetalBackend otherwise.
-        rhi_init: {
+        gfx_init: {
             if (comptime @import("builtin").os.tag == .macos) {
-                const md_ptr = allocator.create(metal_device_mod.MetalDevice) catch break :rhi_init;
+                const md_ptr = allocator.create(metal_device_mod.MetalDevice) catch break :gfx_init;
                 const md = metal_device_mod.MetalDevice.init(allocator) orelse {
                     allocator.destroy(md_ptr);
-                    break :rhi_init;
+                    break :gfx_init;
                 };
                 md_ptr.* = md;
 
@@ -751,43 +751,43 @@ pub const Renderer = struct {
                     }
                 }
 
-                const dev_ptr = allocator.create(rhi_api.Device) catch {
+                const dev_ptr = allocator.create(gfx_api.Device) catch {
                     md_ptr.deinit();
                     allocator.destroy(md_ptr);
-                    break :rhi_init;
+                    break :gfx_init;
                 };
                 dev_ptr.* = md_ptr.createDevice();
-                renderer.rhi_metal_device = md_ptr;
-                renderer.rhi_device = dev_ptr;
+                renderer.gfx_metal_device = md_ptr;
+                renderer.gfx_device = dev_ptr;
             } else {
                 // Non-macOS: use mock backend
-                const backend_ptr = allocator.create(rhi_mock_backend_mod.MetalBackend) catch break :rhi_init;
-                backend_ptr.* = rhi_mock_backend_mod.MetalBackend.init(allocator);
-                const dev_ptr = allocator.create(rhi_api.Device) catch {
+                const backend_ptr = allocator.create(gfx_mock_backend_mod.MetalBackend) catch break :gfx_init;
+                backend_ptr.* = gfx_mock_backend_mod.MetalBackend.init(allocator);
+                const dev_ptr = allocator.create(gfx_api.Device) catch {
                     backend_ptr.deinit();
                     allocator.destroy(backend_ptr);
-                    break :rhi_init;
+                    break :gfx_init;
                 };
                 dev_ptr.* = backend_ptr.createDevice();
-                renderer.rhi_mock_backend = backend_ptr;
-                renderer.rhi_device = dev_ptr;
+                renderer.gfx_mock_backend = backend_ptr;
+                renderer.gfx_device = dev_ptr;
             }
         }
 
-        renderer.outline_pass = try outline_pass_mod.OutlinePass.init(&renderer.rhi);
-        errdefer renderer.outline_pass.deinit(&renderer.rhi);
+        renderer.outline_pass = try outline_pass_mod.OutlinePass.init(&renderer.gfx);
+        errdefer renderer.outline_pass.deinit(&renderer.gfx);
 
-        renderer.gizmo_pass = try gizmo_pass_mod.GizmoPass.init(&renderer.rhi);
+        renderer.gizmo_pass = try gizmo_pass_mod.GizmoPass.init(&renderer.gfx);
 
         // Terrain renderer
         renderer.terrain_renderer = terrain_renderer_mod.TerrainRenderer.init(allocator);
 
         // Runtime UI canvas
         renderer.ui_canvas = try ui_canvas_mod.Canvas.init(allocator);
-        try renderer.ui_canvas.?.createGpuResources(&renderer.rhi);
+        try renderer.ui_canvas.?.createGpuResources(&renderer.gfx);
 
         // Load default UI font
-        renderer.ui_canvas.?.loadFont(&renderer.rhi, "assets/fonts/Roboto-Regular.ttf", 32) catch |err| {
+        renderer.ui_canvas.?.loadFont(&renderer.gfx, "assets/fonts/Roboto-Regular.ttf", 32) catch |err| {
             std.log.warn("failed to load UI font: {}", .{err});
         };
 
@@ -809,80 +809,80 @@ pub const Renderer = struct {
         self.mesh_edit_wireframe_lines.deinit(self.allocator);
         self.mesh_edit_selected_lines.deinit(self.allocator);
         self.mesh_edit_vertex_lines.deinit(self.allocator);
-        self.scene_viewport.deinit(&self.rhi);
+        self.scene_viewport.deinit(&self.gfx);
         self.releaseMaterialThumbnailRequests();
         self.releaseMaterialThumbnailCache();
         self.releaseModelThumbnailRequests();
         self.releaseModelThumbnailCache();
         self.material_thumbnail_preview.deinit();
-        self.material_editor_preview_target.deinit(&self.rhi);
-        self.thumbnail_scene_cache.deinit(&self.rhi);
-        self.model_thumbnail_scene_cache.deinit(&self.rhi);
-        self.preview_scene_cache.deinit(&self.rhi);
+        self.material_editor_preview_target.deinit(&self.gfx);
+        self.thumbnail_scene_cache.deinit(&self.gfx);
+        self.model_thumbnail_scene_cache.deinit(&self.gfx);
+        self.preview_scene_cache.deinit(&self.gfx);
         if (self.skybox_pass) |*pass| {
-            pass.deinit(&self.rhi);
+            pass.deinit(&self.gfx);
         }
-        if (self.ssao_compute_pass) |*p| p.deinit(&self.rhi);
-        if (self.cluster_lights_pass) |*p| p.deinit(&self.rhi);
-        self.contact_shadow_pass.deinit(&self.rhi);
-        if (self.gpu_brdf_lut) |*t| self.rhi.releaseTexture(t);
-        if (self.ibl_compute_pass) |*p| p.deinit(&self.rhi);
-        self.taa_pass.deinit(&self.rhi);
-        self.ssr_pass.deinit(&self.rhi);
-        self.ssr_blur_pass.deinit(&self.rhi);
-        self.bloom_pass.deinit(&self.rhi);
-        self.tonemap_pass.deinit(&self.rhi);
-        self.dof_runtime_pass.deinit(&self.rhi);
-        self.fxaa_pass.deinit(&self.rhi);
-        self.fog_of_war_pass.deinit(&self.rhi);
-        self.rt_shadow_composite_pass.deinit(&self.rhi);
-        self.rt_shadow_denoise_pass.deinit(&self.rhi);
-        self.ssao_composite_pass.deinit(&self.rhi);
-        self.contact_shadow_composite_pass.deinit(&self.rhi);
-        if (self.ssgi_compute_pass) |*p| p.deinit(&self.rhi);
-        self.ssgi_composite_pass.deinit(&self.rhi);
-        if (self.rt_shadow_mask_texture) |*t| self.rhi.releaseTexture(t);
+        if (self.ssao_compute_pass) |*p| p.deinit(&self.gfx);
+        if (self.cluster_lights_pass) |*p| p.deinit(&self.gfx);
+        self.contact_shadow_pass.deinit(&self.gfx);
+        if (self.gpu_brdf_lut) |*t| self.gfx.releaseTexture(t);
+        if (self.ibl_compute_pass) |*p| p.deinit(&self.gfx);
+        self.taa_pass.deinit(&self.gfx);
+        self.ssr_pass.deinit(&self.gfx);
+        self.ssr_blur_pass.deinit(&self.gfx);
+        self.bloom_pass.deinit(&self.gfx);
+        self.tonemap_pass.deinit(&self.gfx);
+        self.dof_runtime_pass.deinit(&self.gfx);
+        self.fxaa_pass.deinit(&self.gfx);
+        self.fog_of_war_pass.deinit(&self.gfx);
+        self.rt_shadow_composite_pass.deinit(&self.gfx);
+        self.rt_shadow_denoise_pass.deinit(&self.gfx);
+        self.ssao_composite_pass.deinit(&self.gfx);
+        self.contact_shadow_composite_pass.deinit(&self.gfx);
+        if (self.ssgi_compute_pass) |*p| p.deinit(&self.gfx);
+        self.ssgi_composite_pass.deinit(&self.gfx);
+        if (self.rt_shadow_mask_texture) |*t| self.gfx.releaseTexture(t);
         if (self.rt_shadow_pixels) |p| self.allocator.free(p);
-        if (self.rhi_device) |dp| {
+        if (self.gfx_device) |dp| {
             dp.deinit();
             self.allocator.destroy(dp);
         }
-        if (self.rhi_metal_device) |md| {
+        if (self.gfx_metal_device) |md| {
             md.deinit();
             self.allocator.destroy(md);
         }
         if (self.metal_layer_binding) |binding| {
             window_mod.destroyMetalLayerBinding(binding);
         }
-        if (self.rhi_mock_backend) |bp| {
+        if (self.gfx_mock_backend) |bp| {
             bp.deinit();
             self.allocator.destroy(bp);
         }
-        if (self.ui_canvas) |*uc| uc.deinit(&self.rhi);
-        self.terrain_renderer.deinit(&self.rhi);
-        self.gizmo_pass.deinit(&self.rhi);
-        self.outline_pass.deinit(&self.rhi);
-        self.base_pass.deinit(&self.rhi);
+        if (self.ui_canvas) |*uc| uc.deinit(&self.gfx);
+        self.terrain_renderer.deinit(&self.gfx);
+        self.gizmo_pass.deinit(&self.gfx);
+        self.outline_pass.deinit(&self.gfx);
+        self.base_pass.deinit(&self.gfx);
         self.plugin_hot_reload.deinit();
         self.typed_loader_registry.deinit();
         self.style_registry.deinit();
         self.plugin_registry.deinit();
-        self.shadow_map.deinit(&self.rhi);
-        self.shadow_pass.deinit(&self.rhi);
-        self.velocity_pass.deinit(&self.rhi);
-        self.depth_prepass.deinit(&self.rhi);
-        self.id_pass.deinit(&self.rhi);
-        self.scene_cache.deinit(&self.rhi);
+        self.shadow_map.deinit(&self.gfx);
+        self.shadow_pass.deinit(&self.gfx);
+        self.velocity_pass.deinit(&self.gfx);
+        self.depth_prepass.deinit(&self.gfx);
+        self.id_pass.deinit(&self.gfx);
+        self.scene_cache.deinit(&self.gfx);
         self.thumbnail_render_world.deinit();
         self.model_thumbnail_render_world.deinit();
         self.preview_render_world.deinit();
         self.render_world.deinit();
-        self.rhi.deinit();
+        self.gfx.deinit();
         self.graph.deinit();
     }
 
-    pub fn backendApi(self: *const Renderer) rhi_types.GraphicsAPI {
-        return self.rhi.api;
+    pub fn backendApi(self: *const Renderer) gfx_types.GraphicsAPI {
+        return self.gfx.api;
     }
 
     fn cachePreviousMeshModels(self: *Renderer, prepared_scene: *const mesh_pass_mod.PreparedScene) !void {
@@ -897,19 +897,19 @@ pub const Renderer = struct {
     }
 
     pub fn runtimeInfo(self: *const Renderer) types.RuntimeInfo {
-        return self.rhi.runtimeInfo();
+        return self.gfx.runtimeInfo();
     }
 
     pub fn vsyncEnabled(self: *const Renderer) bool {
-        return self.rhi.vsyncEnabled();
+        return self.gfx.vsyncEnabled();
     }
 
     pub fn setVSyncEnabled(self: *Renderer, enabled: bool) !void {
-        try self.rhi.setVSyncEnabled(enabled);
+        try self.gfx.setVSyncEnabled(enabled);
     }
 
-    pub fn device(self: *Renderer) *rhi_mod.RhiDevice {
-        return &self.rhi;
+    pub fn device(self: *Renderer) *gfx_mod.GfxDevice {
+        return &self.gfx;
     }
 
     pub fn styleRegistry(self: *Renderer) *style_plugin_mod.StyleRegistry {
@@ -1033,7 +1033,7 @@ pub const Renderer = struct {
         }
     }
     pub fn handleResize(self: *Renderer, width: u32, height: u32) !void {
-        try self.rhi.resize(width, height);
+        try self.gfx.resize(width, height);
     }
 
     pub fn requestSelectionReadback(
@@ -1124,11 +1124,11 @@ pub const Renderer = struct {
         self.selection_seeded = false;
         self.releaseMaterialThumbnailRequests();
         self.releaseMaterialThumbnailCache();
-        self.thumbnail_scene_cache.invalidateMaterialResources(&self.rhi);
-        self.preview_scene_cache.deinit(&self.rhi);
-        self.preview_scene_cache = try mesh_pass_mod.MeshSceneCache.init(self.allocator, &self.rhi);
-        self.scene_cache.deinit(&self.rhi);
-        self.scene_cache = try mesh_pass_mod.MeshSceneCache.init(self.allocator, &self.rhi);
+        self.thumbnail_scene_cache.invalidateMaterialResources(&self.gfx);
+        self.preview_scene_cache.deinit(&self.gfx);
+        self.preview_scene_cache = try mesh_pass_mod.MeshSceneCache.init(self.allocator, &self.gfx);
+        self.scene_cache.deinit(&self.gfx);
+        self.scene_cache = try mesh_pass_mod.MeshSceneCache.init(self.allocator, &self.gfx);
         self.cached_env_textures = .{};
         self.preview_scene = null;
         self.editor_gizmo_transform_override = null;
@@ -1164,7 +1164,7 @@ pub const Renderer = struct {
     }
 
     pub fn invalidateMainWorldMeshResource(self: *Renderer, handle: handles.MeshHandle) void {
-        self.scene_cache.invalidateMeshResource(&self.rhi, handle);
+        self.scene_cache.invalidateMeshResource(&self.gfx, handle);
         self.resetPathTraceState();
     }
 
@@ -1300,7 +1300,7 @@ pub const Renderer = struct {
     }
 
     pub fn setSceneViewportSize(self: *Renderer, width: u32, height: u32) !void {
-        try self.scene_viewport.ensure(&self.rhi, width, height);
+        try self.scene_viewport.ensure(&self.gfx, width, height);
         self.needs_redraw = true;
     }
 
@@ -1311,7 +1311,7 @@ pub const Renderer = struct {
         self.needs_redraw = true;
     }
 
-    pub fn sceneViewportTexture(self: *Renderer) ?*const rhi_mod.Texture {
+    pub fn sceneViewportTexture(self: *Renderer) ?*const gfx_mod.Texture {
         if (self.scene_viewport.color_texture) |*texture| {
             return texture;
         }
@@ -1343,7 +1343,7 @@ pub const Renderer = struct {
         }
     }
 
-    pub fn materialThumbnailTexture(self: *const Renderer, asset_id: []const u8) ?*const rhi_mod.Texture {
+    pub fn materialThumbnailTexture(self: *const Renderer, asset_id: []const u8) ?*const gfx_mod.Texture {
         const entry = self.findMaterialThumbnailCacheIndex(asset_id) orelse return null;
         if (!entry.ready) {
             return null;
@@ -1355,7 +1355,7 @@ pub const Renderer = struct {
         return renderer_thumbnails.requestModelThumbnail(self, model_path, frame_index);
     }
 
-    pub fn modelThumbnailTexture(self: *const Renderer, model_path: []const u8) ?*const rhi_mod.Texture {
+    pub fn modelThumbnailTexture(self: *const Renderer, model_path: []const u8) ?*const gfx_mod.Texture {
         return renderer_thumbnails.modelThumbnailTexture(self, model_path);
     }
 
@@ -1380,13 +1380,13 @@ pub const Renderer = struct {
         }
 
         try self.material_thumbnail_preview.syncFromSource(source);
-        self.thumbnail_scene_cache.invalidateMaterialResources(&self.rhi);
+        self.thumbnail_scene_cache.invalidateMaterialResources(&self.gfx);
         self.material_editor_preview_signature = source.signature;
         self.material_editor_preview_dirty = true;
         self.material_editor_preview_ready = false;
     }
 
-    pub fn materialEditorPreviewTexture(self: *const Renderer) ?*const rhi_mod.Texture {
+    pub fn materialEditorPreviewTexture(self: *const Renderer) ?*const gfx_mod.Texture {
         if (!self.material_editor_preview_ready) {
             return null;
         }
@@ -1397,8 +1397,8 @@ pub const Renderer = struct {
         self: *Renderer,
         world: *const scene_mod.World,
         handle: handles.TextureHandle,
-    ) ?*const rhi_mod.Texture {
-        return self.thumbnail_scene_cache.ensureTextureHandle(&self.rhi, world, handle) catch null;
+    ) ?*const gfx_mod.Texture {
+        return self.thumbnail_scene_cache.ensureTextureHandle(&self.gfx, world, handle) catch null;
     }
 
     /// Renders a complete frame: processes scene data, executes render graph passes, and returns statistics.
@@ -1411,7 +1411,7 @@ pub const Renderer = struct {
     /// scene snapshot, and GPU runtime info (backend, total VRAM).
     ///
     /// Side-effects:
-    /// - Submits GPU work to RHI device (non-blocking from CPU perspective).
+    /// - Submits GPU work to GFX device (non-blocking from CPU perspective).
     /// - Updates material thumbnail cache (processes material_thumbnail_jobs_per_frame thumbnails).
     /// - Processes selection readbacks from previous frame (object picking for editor).
     /// - May trigger async resource compilations (shaders, pipelines) on first use.
@@ -1433,7 +1433,7 @@ pub const Renderer = struct {
 
         // Release temporary world-line buffers from the previous frame now
         // that the GPU has finished using them.
-        self.gizmo_pass.releaseWorldLineBuffers(&self.rhi);
+        self.gizmo_pass.releaseWorldLineBuffers(&self.gfx);
 
         // 为本帧分配 RenderGraph 的统计结构，用于记录每个 pass 的耗时与绘制统计
         const pass_stats = try self.graph.allocatePassStats(self.allocator);
@@ -1443,14 +1443,14 @@ pub const Renderer = struct {
         // 导致 IOAccelerator(graphics) 内存持续上涨。这里做帧级回压，确保上一帧
         // GPU 工作完成后再进入下一帧提交。
         if (self.scene_viewport.use_iosurface) {
-            self.rhi.waitForPreviousFrame();
+            self.gfx.waitForPreviousFrame();
         }
 
         // 构建场景快照：捕获可见实体、资源引用与当前相机/灯光状态，供后续场景提取与渲染准备使用。
         const snapshot = buildSceneSnapshot(scene);
         const result = blk: {
-            // 开始 GPU 帧：从 RHI 获取命令帧并尝试获取 swapchain 图像（若存在）
-            const frame = try self.rhi.beginFrame();
+            // 开始 GPU 帧：从 GFX 获取命令帧并尝试获取 swapchain 图像（若存在）
+            const frame = try self.gfx.beginFrame();
             // 计算清屏参数（颜色/深度），基于当前场景与渲染图的需要
             const clear = clearAndDepthForScene(snapshot, self.passCount());
             const has_swapchain = frame.swapchain_image.id != 0;
@@ -1459,12 +1459,12 @@ pub const Renderer = struct {
             // 这样可以避免后续对未就绪资源的引用，并让系统在后台完成缺失资源的准备。
             if (!self.depth_prepass.isReady() or !self.base_pass.isReady()) {
                 if (has_swapchain) {
-                    try self.rhi.clearAndPresent(frame, clear);
+                    try self.gfx.clearAndPresent(frame, clear);
                 } else {
-                    try self.rhi.submitFrame(frame);
+                    try self.gfx.submitFrame(frame);
                 }
                 break :blk FrameReport{
-                    .backend = self.rhi.api,
+                    .backend = self.gfx.api,
                     .passes_executed = self.passCount(),
                     .graph_resources = self.graph.resourceCount(),
                     .scene = snapshot,
@@ -1502,12 +1502,12 @@ pub const Renderer = struct {
             if (can_render_scene) {
                 if (!g_logged_viewport_backend) {
                     render_log.info(
-                        "draw frame backend={s} viewport_active={} swapchain={} rhi_device={} skybox_ready={}",
+                        "draw frame backend={s} viewport_active={} swapchain={} gfx_device={} skybox_ready={}",
                         .{
-                            @tagName(self.rhi.api),
+                            @tagName(self.gfx.api),
                             viewport_active,
                             has_swapchain,
-                            self.rhi_device != null,
+                            self.gfx_device != null,
                             if (self.skybox_pass) |*pass| pass.isReady() else false,
                         },
                     );
@@ -1539,7 +1539,7 @@ pub const Renderer = struct {
 
                 // 场景准备（prepareScene）：执行视锥剔除、构建 DrawItem 列表，并确保所需的 GPU 资源（纹理/mesh）已就绪或已上传。
                 var prepared_scene = try self.scene_cache.prepareScene(
-                    &self.rhi,
+                    &self.gfx,
                     scene,
                     &self.render_world,
                     render_width,
@@ -1557,7 +1557,7 @@ pub const Renderer = struct {
                 }
 
                 // ID pass：渲染物体 ID 到独立纹理，用于编辑器的物体拾取（selection）。先确保目标纹理尺寸正确。
-                try self.id_pass.ensureTargetSize(&self.rhi, render_width, render_height);
+                try self.id_pass.ensureTargetSize(&self.gfx, render_width, render_height);
 
                 // 计算级联阴影贴图 (CSM) 的 light-space 矩阵：为每个 cascade 生成光照空间投影矩阵并写入 shadow_map
                 const light_space_matrix = blk_lsm: {
@@ -1614,16 +1614,16 @@ pub const Renderer = struct {
                     if (self.ibl_compute_pass) |*ibl_pass| {
                         if (ibl_pass.hasBRDF()) {
                             const brdf_size: u32 = 256;
-                            self.gpu_brdf_lut = self.rhi.createTexture(.{
+                            self.gpu_brdf_lut = self.gfx.createTexture(.{
                                 .width = brdf_size,
                                 .height = brdf_size,
                                 .format = .rgba16_float,
-                                .usage = rhi_types.TextureUsage.sampler | rhi_types.TextureUsage.compute_storage_write,
+                                .usage = gfx_types.TextureUsage.sampler | gfx_types.TextureUsage.compute_storage_write,
                             }) catch null;
                             if (self.gpu_brdf_lut) |*lut| {
-                                ibl_pass.generateBRDFLUT(&self.rhi, frame, lut, brdf_size, 1024) catch |err| {
+                                ibl_pass.generateBRDFLUT(&self.gfx, frame, lut, brdf_size, 1024) catch |err| {
                                     render_log.warn("GPU BRDF LUT generation failed: {s}", .{@errorName(err)});
-                                    self.rhi.releaseTexture(lut);
+                                    self.gfx.releaseTexture(lut);
                                     self.gpu_brdf_lut = null;
                                 };
                                 if (self.gpu_brdf_lut != null) {
@@ -1657,7 +1657,7 @@ pub const Renderer = struct {
                         preview_frustum,
                     );
                     prepared_preview_scene = try self.preview_scene_cache.preparePreviewScene(
-                        &self.rhi,
+                        &self.gfx,
                         self.preview_scene.?,
                         &self.preview_render_world,
                         &prepared_scene,
@@ -1671,16 +1671,16 @@ pub const Renderer = struct {
                 const do_path_trace = path_trace_viewport;
 
                 // scene_color_target 在所有模式下都需要（用于 overlay passes: gizmo, outline, debug）
-                const scene_color_target: rhi_mod.ColorTarget = if (viewport_active)
+                const scene_color_target: gfx_mod.ColorTarget = if (viewport_active)
                     .{ .texture = self.scene_viewport.color().? }
                 else
                     .swapchain;
 
-                const scene_depth_target: ?rhi_mod.DepthAttachmentDesc = blk_depth: {
+                const scene_depth_target: ?gfx_mod.DepthAttachmentDesc = blk_depth: {
                     const depth_texture = if (viewport_active)
                         self.scene_viewport.depth().?
                     else
-                        self.rhi.depthTexture() orelse break :blk_depth null;
+                        self.gfx.depthTexture() orelse break :blk_depth null;
                     break :blk_depth .{
                         .texture = depth_texture,
                         .clear_depth = 1.0,
@@ -1694,12 +1694,12 @@ pub const Renderer = struct {
 
                 if (self.id_pass.isReady()) {
                     const id_texture = self.id_pass.texture().?;
-                    const id_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.idPass(id_texture, scene_depth_target));
+                    const id_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.idPass(id_texture, scene_depth_target));
                     const start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                    const id_stats = self.id_pass.draw(&self.rhi, frame, id_render_pass, &prepared_scene);
+                    const id_stats = self.id_pass.draw(&self.gfx, frame, id_render_pass, &prepared_scene);
                     self.graph.recordPassStat(pass_stats, .id_pass, durationNs(start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), id_stats.draw_calls, id_stats.triangles_drawn);
                     draw_stats.add(id_stats);
-                    self.rhi.endRenderPass(id_render_pass);
+                    self.gfx.endRenderPass(id_render_pass);
                 }
 
                 var current_unjittered_view_projection = prepared_scene.view_projection;
@@ -1715,10 +1715,10 @@ pub const Renderer = struct {
                     const fxaa_enabled = self.editor_viewport_state.fxaa_enabled and self.scene_viewport.fxaa() != null;
 
                     if (bloom_enabled) {
-                        try self.bloom_pass.syncTexture(&self.rhi, self.scene_viewport.hdrColor().?);
-                        const bloom_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.bloom().? }));
+                        try self.bloom_pass.syncTexture(&self.gfx, self.scene_viewport.hdrColor().?);
+                        const bloom_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.bloom().? }));
                         const bloom_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                        const bloom_stats = self.bloom_pass.draw(&self.rhi, frame, bloom_render_pass, .{
+                        const bloom_stats = self.bloom_pass.draw(&self.gfx, frame, bloom_render_pass, .{
                             .threshold_params = .{
                                 self.editor_viewport_state.bloom_threshold,
                                 0.5,
@@ -1728,18 +1728,18 @@ pub const Renderer = struct {
                         });
                         draw_stats.add(bloom_stats);
                         self.graph.recordPassStat(pass_stats, .post_process, durationNs(bloom_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), bloom_stats.draw_calls, bloom_stats.triangles_drawn);
-                        self.rhi.endRenderPass(bloom_render_pass);
+                        self.gfx.endRenderPass(bloom_render_pass);
                     }
 
                     try self.tonemap_pass.syncTextures(
-                        &self.rhi,
+                        &self.gfx,
                         self.scene_viewport.hdrColor().?,
                         if (bloom_enabled) self.scene_viewport.bloom().? else null,
                         null,
                     );
-                    const tm_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.color().? }));
+                    const tm_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.color().? }));
                     const tm_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                    const tonemap_stats = self.tonemap_pass.draw(&self.rhi, frame, tm_render_pass, .{
+                    const tonemap_stats = self.tonemap_pass.draw(&self.gfx, frame, tm_render_pass, .{
                         .exposure_params = .{
                             @as(f32, if (self.editor_viewport_state.exposure_enabled) 1.0 else 0.0),
                             self.editor_viewport_state.exposure,
@@ -1767,19 +1767,19 @@ pub const Renderer = struct {
                     });
                     draw_stats.add(tonemap_stats);
                     self.graph.recordPassStat(pass_stats, .tonemap_pass, durationNs(tm_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), tonemap_stats.draw_calls, tonemap_stats.triangles_drawn);
-                    self.rhi.endRenderPass(tm_render_pass);
+                    self.gfx.endRenderPass(tm_render_pass);
 
                     if (fxaa_enabled) {
                         const fxaa_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                        try self.fxaa_pass.syncTexture(&self.rhi, self.scene_viewport.color().?);
-                        const fxaa_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.fxaa().? }));
-                        const fxaa_stats = self.fxaa_pass.draw(&self.rhi, frame, fxaa_render_pass);
+                        try self.fxaa_pass.syncTexture(&self.gfx, self.scene_viewport.color().?);
+                        const fxaa_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.fxaa().? }));
+                        const fxaa_stats = self.fxaa_pass.draw(&self.gfx, frame, fxaa_render_pass);
                         draw_stats.add(fxaa_stats);
                         self.graph.recordPassStat(pass_stats, .post_process, durationNs(fxaa_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), fxaa_stats.draw_calls, fxaa_stats.triangles_drawn);
-                        self.rhi.endRenderPass(fxaa_render_pass);
+                        self.gfx.endRenderPass(fxaa_render_pass);
                     }
                 } else {
-                    const scene_hdr_color_target: rhi_mod.ColorTarget = if (viewport_active)
+                    const scene_hdr_color_target: gfx_mod.ColorTarget = if (viewport_active)
                         .{ .texture = self.scene_viewport.hdrColor().? }
                     else
                         scene_color_target;
@@ -1806,8 +1806,8 @@ pub const Renderer = struct {
                             // 后续帧完全跳过 shadow pass
                             if (!self.shadow_map.cleared_for_rt) {
                                 for (0..csm_cascade_count) |ci| {
-                                    const rp = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.shadowOnly(&self.shadow_map.depth_textures[ci].?));
-                                    self.rhi.endRenderPass(rp);
+                                    const rp = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.shadowOnly(&self.shadow_map.depth_textures[ci].?));
+                                    self.gfx.endRenderPass(rp);
                                 }
                                 self.shadow_map.cleared_for_rt = true;
                             }
@@ -1816,10 +1816,10 @@ pub const Renderer = struct {
                             const shadow_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                             var cascade_stats = mesh_pass_mod.DrawStats{};
                             for (0..csm_cascade_count) |ci| {
-                                const shadow_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.shadowOnly(&self.shadow_map.depth_textures[ci].?));
-                                const cs = self.shadow_pass.draw(&self.rhi, frame, shadow_render_pass, &prepared_scene, self.shadow_map.cascade_matrices[ci]);
+                                const shadow_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.shadowOnly(&self.shadow_map.depth_textures[ci].?));
+                                const cs = self.shadow_pass.draw(&self.gfx, frame, shadow_render_pass, &prepared_scene, self.shadow_map.cascade_matrices[ci]);
                                 cascade_stats.add(cs);
-                                self.rhi.endRenderPass(shadow_render_pass);
+                                self.gfx.endRenderPass(shadow_render_pass);
                             }
                             self.graph.recordPassStat(pass_stats, .shadow_map, durationNs(shadow_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), cascade_stats.draw_calls, cascade_stats.triangles_drawn);
                             draw_stats.add(cascade_stats);
@@ -1899,7 +1899,7 @@ pub const Renderer = struct {
                                 };
                             }
 
-                            cluster_pass.dispatch(&self.rhi, frame, cluster_uniforms);
+                            cluster_pass.dispatch(&self.gfx, frame, cluster_uniforms);
 
                             prepared_scene.cluster_count_texture = if (cluster_pass.cluster_count_texture) |*t| t else null;
                             prepared_scene.cluster_indices_texture = if (cluster_pass.cluster_indices_texture) |*t| t else null;
@@ -1908,17 +1908,17 @@ pub const Renderer = struct {
                         }
                     }
 
-                    var scene_pass: rhi_mod.RenderPass = undefined;
+                    var scene_pass: gfx_mod.RenderPass = undefined;
                     if (run_rt_shadow_denoise) {
-                        const depth_prepass_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.depthOnly(scene_depth_target.?));
+                        const depth_prepass_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.depthOnly(scene_depth_target.?));
                         const depth_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                        const depth_stats = self.depth_prepass.draw(&self.rhi, frame, depth_prepass_pass, &prepared_scene);
+                        const depth_stats = self.depth_prepass.draw(&self.gfx, frame, depth_prepass_pass, &prepared_scene);
                         self.graph.recordPassStat(pass_stats, .depth_prepass, durationNs(depth_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), depth_stats.draw_calls, depth_stats.triangles_drawn);
                         draw_stats.add(depth_stats);
-                        self.rhi.endRenderPass(depth_prepass_pass);
+                        self.gfx.endRenderPass(depth_prepass_pass);
 
                         if (velocity_enabled) {
-                            const velocity_render_pass = try self.rhi.beginRenderPassWithDesc(frame, .{
+                            const velocity_render_pass = try self.gfx.beginRenderPassWithDesc(frame, .{
                                 .color = .{
                                     .target = .{ .texture = self.scene_viewport.velocity().? },
                                     .clear_color = .{ 0.0, 0.0, 0.0, 1.0 },
@@ -1937,7 +1937,7 @@ pub const Renderer = struct {
                             });
                             const velocity_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                             const velocity_stats = self.velocity_pass.draw(
-                                &self.rhi,
+                                &self.gfx,
                                 frame,
                                 velocity_render_pass,
                                 &prepared_scene,
@@ -1947,13 +1947,13 @@ pub const Renderer = struct {
                             );
                             self.graph.recordPassStat(pass_stats, .post_process, durationNs(velocity_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), velocity_stats.draw_calls, velocity_stats.triangles_drawn);
                             draw_stats.add(velocity_stats);
-                            self.rhi.endRenderPass(velocity_render_pass);
+                            self.gfx.endRenderPass(velocity_render_pass);
                         }
 
-                        try self.rt_shadow_denoise_pass.syncTextures(&self.rhi, &self.rt_shadow_mask_texture.?, self.scene_viewport.depth().?);
-                        const denoise_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.rtShadowDenoised().? }));
+                        try self.rt_shadow_denoise_pass.syncTextures(&self.gfx, &self.rt_shadow_mask_texture.?, self.scene_viewport.depth().?);
+                        const denoise_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.rtShadowDenoised().? }));
                         const denoise_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                        const denoise_stats = self.rt_shadow_denoise_pass.draw(&self.rhi, frame, denoise_render_pass, .{
+                        const denoise_stats = self.rt_shadow_denoise_pass.draw(&self.gfx, frame, denoise_render_pass, .{
                             .resolution = .{ @floatFromInt(self.scene_viewport.width), @floatFromInt(self.scene_viewport.height) },
                             .inv_resolution = .{
                                 1.0 / @as(f32, @floatFromInt(self.scene_viewport.width)),
@@ -1963,11 +1963,11 @@ pub const Renderer = struct {
                         });
                         self.graph.recordPassStat(pass_stats, .post_process, durationNs(denoise_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), denoise_stats.draw_calls, denoise_stats.triangles_drawn);
                         draw_stats.add(denoise_stats);
-                        self.rhi.endRenderPass(denoise_render_pass);
+                        self.gfx.endRenderPass(denoise_render_pass);
 
                         prepared_scene.rt_shadow_mask = self.scene_viewport.rtShadowDenoised().?;
 
-                        const loaded_depth_target: rhi_mod.DepthAttachmentDesc = .{
+                        const loaded_depth_target: gfx_mod.DepthAttachmentDesc = .{
                             .texture = scene_depth_target.?.texture,
                             .clear_depth = scene_depth_target.?.clear_depth,
                             .clear_stencil = scene_depth_target.?.clear_stencil,
@@ -1976,7 +1976,7 @@ pub const Renderer = struct {
                             .stencil_load_op = scene_depth_target.?.stencil_load_op,
                             .stencil_store_op = scene_depth_target.?.stencil_store_op,
                         };
-                        scene_pass = try self.rhi.beginRenderPassWithDesc(frame, .{
+                        scene_pass = try self.gfx.beginRenderPassWithDesc(frame, .{
                             .color = .{
                                 .target = base_pass_target,
                                 .clear_color = scene_clear_color,
@@ -1987,15 +1987,15 @@ pub const Renderer = struct {
                         });
                     } else {
                         if (scene_depth_target != null) {
-                            const depth_prepass_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.depthOnly(scene_depth_target.?));
+                            const depth_prepass_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.depthOnly(scene_depth_target.?));
                             const depth_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                            const depth_stats = self.depth_prepass.draw(&self.rhi, frame, depth_prepass_pass, &prepared_scene);
+                            const depth_stats = self.depth_prepass.draw(&self.gfx, frame, depth_prepass_pass, &prepared_scene);
                             self.graph.recordPassStat(pass_stats, .depth_prepass, durationNs(depth_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), depth_stats.draw_calls, depth_stats.triangles_drawn);
                             draw_stats.add(depth_stats);
-                            self.rhi.endRenderPass(depth_prepass_pass);
+                            self.gfx.endRenderPass(depth_prepass_pass);
 
                             if (velocity_enabled) {
-                                const velocity_render_pass = try self.rhi.beginRenderPassWithDesc(frame, .{
+                                const velocity_render_pass = try self.gfx.beginRenderPassWithDesc(frame, .{
                                     .color = .{
                                         .target = .{ .texture = self.scene_viewport.velocity().? },
                                         .clear_color = .{ 0.0, 0.0, 0.0, 1.0 },
@@ -2014,7 +2014,7 @@ pub const Renderer = struct {
                                 });
                                 const velocity_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                                 const velocity_stats = self.velocity_pass.draw(
-                                    &self.rhi,
+                                    &self.gfx,
                                     frame,
                                     velocity_render_pass,
                                     &prepared_scene,
@@ -2024,10 +2024,10 @@ pub const Renderer = struct {
                                 );
                                 self.graph.recordPassStat(pass_stats, .post_process, durationNs(velocity_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), velocity_stats.draw_calls, velocity_stats.triangles_drawn);
                                 draw_stats.add(velocity_stats);
-                                self.rhi.endRenderPass(velocity_render_pass);
+                                self.gfx.endRenderPass(velocity_render_pass);
                             }
 
-                            const loaded_depth_target: rhi_mod.DepthAttachmentDesc = .{
+                            const loaded_depth_target: gfx_mod.DepthAttachmentDesc = .{
                                 .texture = scene_depth_target.?.texture,
                                 .clear_depth = scene_depth_target.?.clear_depth,
                                 .clear_stencil = scene_depth_target.?.clear_stencil,
@@ -2036,7 +2036,7 @@ pub const Renderer = struct {
                                 .stencil_load_op = scene_depth_target.?.stencil_load_op,
                                 .stencil_store_op = scene_depth_target.?.stencil_store_op,
                             };
-                            scene_pass = try self.rhi.beginRenderPassWithDesc(frame, .{
+                            scene_pass = try self.gfx.beginRenderPassWithDesc(frame, .{
                                 .color = .{
                                     .target = base_pass_target,
                                     .clear_color = scene_clear_color,
@@ -2046,13 +2046,13 @@ pub const Renderer = struct {
                                 .depth = loaded_depth_target,
                             });
                         } else {
-                            scene_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.colorWithDepth(base_pass_target, scene_clear_color, scene_depth_target));
+                            scene_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.colorWithDepth(base_pass_target, scene_clear_color, scene_depth_target));
                         }
                     }
 
                     // 渲染主几何（Opaque）：调用 BasePass.draw 来绘制不透明物体（会遍历 DrawItem 列表并发出 draw 调用）
                     const opaque_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                    const opaque_stats = try self.base_pass.draw(&self.rhi, frame, scene_pass, &prepared_scene, .{
+                    const opaque_stats = try self.base_pass.draw(&self.gfx, frame, scene_pass, &prepared_scene, .{
                         .render_mode = active_render_mode,
                         .target = if (viewport_active) .hdr else .ldr,
                         .phase = .opaque_pass,
@@ -2062,7 +2062,7 @@ pub const Renderer = struct {
 
                     // 渲染地形
                     {
-                        const terrain_stats = self.terrain_renderer.syncAndDraw(&self.rhi, frame, scene_pass, scene, prepared_scene.view_projection);
+                        const terrain_stats = self.terrain_renderer.syncAndDraw(&self.gfx, frame, scene_pass, scene, prepared_scene.view_projection);
                         draw_stats.add(terrain_stats);
                     }
 
@@ -2077,7 +2077,7 @@ pub const Renderer = struct {
                                 });
                             }
                             const skybox_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                            skybox_pass.draw(&self.rhi, frame, scene_pass, &prepared_scene, prepared_scene.environment_map.?, if (viewport_active) .hdr else .ldr, prepared_scene.sky_intensity);
+                            skybox_pass.draw(&self.gfx, frame, scene_pass, &prepared_scene, prepared_scene.environment_map.?, if (viewport_active) .hdr else .ldr, prepared_scene.sky_intensity);
                             self.graph.recordPassStat(pass_stats, .skybox_pass, durationNs(skybox_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), 1, 1);
                             draw_stats.draw_calls += 1;
                             draw_stats.triangles_drawn += 1;
@@ -2089,7 +2089,7 @@ pub const Renderer = struct {
                         prepared_preview_scene.rt_shadow_strength = prepared_scene.rt_shadow_strength;
                         prepared_preview_scene.rt_shadow_ambient_floor = prepared_scene.rt_shadow_ambient_floor;
                         const preview_opaque_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                        const preview_opaque_stats = try self.base_pass.draw(&self.rhi, frame, scene_pass, &prepared_preview_scene, .{
+                        const preview_opaque_stats = try self.base_pass.draw(&self.gfx, frame, scene_pass, &prepared_preview_scene, .{
                             .render_mode = previewRenderMode(active_render_mode),
                             .target = if (viewport_active) .hdr else .ldr,
                             .phase = .opaque_pass,
@@ -2103,7 +2103,7 @@ pub const Renderer = struct {
 
                     // 渲染透明物体：切换到透明通道（可能使用不同的 pipeline / 混合设置）
                     const transparent_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                    const transparent_stats = try self.base_pass.draw(&self.rhi, frame, scene_pass, &prepared_scene, .{
+                    const transparent_stats = try self.base_pass.draw(&self.gfx, frame, scene_pass, &prepared_scene, .{
                         .render_mode = active_render_mode,
                         .target = if (viewport_active) .hdr else .ldr,
                         .phase = .transparent_pass,
@@ -2113,7 +2113,7 @@ pub const Renderer = struct {
 
                     if (has_prepared_preview_scene) {
                         const preview_transparent_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                        const preview_transparent_stats = try self.base_pass.draw(&self.rhi, frame, scene_pass, &prepared_preview_scene, .{
+                        const preview_transparent_stats = try self.base_pass.draw(&self.gfx, frame, scene_pass, &prepared_preview_scene, .{
                             .render_mode = previewRenderMode(active_render_mode),
                             .target = if (viewport_active) .hdr else .ldr,
                             .phase = .transparent_pass,
@@ -2125,7 +2125,7 @@ pub const Renderer = struct {
                     }
 
                     // 结束主 scene render pass
-                    self.rhi.endRenderPass(scene_pass);
+                    self.gfx.endRenderPass(scene_pass);
 
                     // 如果正在渲染到 viewport（编辑器视口），执行后处理与 overlay 流程
                     if (viewport_active) {
@@ -2133,7 +2133,7 @@ pub const Renderer = struct {
                         // Volumetric fog: composite onto HDR color before bloom/tonemap
                         const fog_enabled = self.editor_viewport_state.volumetric_fog_enabled and self.scene_viewport.hdrColor() != null;
                         if (fog_enabled) {
-                            if (self.rhi_device) |dev| {
+                            if (self.gfx_device) |dev| {
                                 const inv_vp_fog = mat4_mod.inverse(prepared_scene.view_projection) orelse mat4_mod.identity();
                                 var fog_light_dir = [4]f32{ 0.0, -1.0, 0.0, 0.0 };
                                 var fog_light_col = [4]f32{ 1.0, 1.0, 1.0, 1.0 };
@@ -2199,7 +2199,7 @@ pub const Renderer = struct {
                             if (self.ssao_compute_pass) |*compute_pass| {
                                 if (compute_pass.isReady()) {
                                     compute_pass.dispatch(
-                                        &self.rhi,
+                                        &self.gfx,
                                         frame,
                                         self.scene_viewport.depth().?,
                                         self.scene_viewport.ssao().?,
@@ -2211,11 +2211,11 @@ pub const Renderer = struct {
                             // SSAO 合成: 将 SSAO 纹理以乘法混合叠加到颜色缓冲，
                             // 使遮蔽区域（角落/缝隙）自然变暗，增强场景接地感。
                             if (self.ssao_composite_pass.isReady() and self.scene_viewport.hdrColor() != null) {
-                                try self.ssao_composite_pass.syncTexture(&self.rhi, self.scene_viewport.ssao().?);
-                                const ssao_composite_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.overlay(.{ .texture = self.scene_viewport.hdrColor().? }));
-                                const ssao_composite_stats = self.ssao_composite_pass.draw(&self.rhi, frame, ssao_composite_render_pass, self.editor_viewport_state.ssao_intensity);
+                                try self.ssao_composite_pass.syncTexture(&self.gfx, self.scene_viewport.ssao().?);
+                                const ssao_composite_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.overlay(.{ .texture = self.scene_viewport.hdrColor().? }));
+                                const ssao_composite_stats = self.ssao_composite_pass.draw(&self.gfx, frame, ssao_composite_render_pass, self.editor_viewport_state.ssao_intensity);
                                 draw_stats.add(ssao_composite_stats);
-                                self.rhi.endRenderPass(ssao_composite_render_pass);
+                                self.gfx.endRenderPass(ssao_composite_render_pass);
                             }
 
                             // SSGI (Screen Space Global Illumination)
@@ -2240,7 +2240,7 @@ pub const Renderer = struct {
                                         };
 
                                         ssgi_compute.execute(
-                                            &self.rhi,
+                                            &self.gfx,
                                             frame,
                                             self.scene_viewport.ssgi().?,
                                             self.scene_viewport.depth().?,
@@ -2250,11 +2250,11 @@ pub const Renderer = struct {
 
                                         // SSGI 合成 (Additive blend to HDR color)
                                         if (self.ssgi_composite_pass.isReady()) {
-                                            try self.ssgi_composite_pass.syncTexture(&self.rhi, self.scene_viewport.ssgi().?);
-                                            const ssgi_composite_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.overlay(.{ .texture = self.scene_viewport.hdrColor().? }));
-                                            const ssgi_composite_stats = self.ssgi_composite_pass.draw(&self.rhi, frame, ssgi_composite_render_pass, 1.0);
+                                            try self.ssgi_composite_pass.syncTexture(&self.gfx, self.scene_viewport.ssgi().?);
+                                            const ssgi_composite_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.overlay(.{ .texture = self.scene_viewport.hdrColor().? }));
+                                            const ssgi_composite_stats = self.ssgi_composite_pass.draw(&self.gfx, frame, ssgi_composite_render_pass, 1.0);
                                             draw_stats.add(ssgi_composite_stats);
-                                            self.rhi.endRenderPass(ssgi_composite_render_pass);
+                                            self.gfx.endRenderPass(ssgi_composite_render_pass);
                                         }
                                     }
                                 }
@@ -2275,9 +2275,9 @@ pub const Renderer = struct {
                             } else .{ 0.3, -0.9, -0.2, 0.0 };
 
                             const cs_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                            try self.contact_shadow_pass.syncTexture(&self.rhi, self.scene_viewport.depth().?);
-                            const cs_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.contactShadow().? }));
-                            const cs_stats = self.contact_shadow_pass.draw(&self.rhi, frame, cs_render_pass, .{
+                            try self.contact_shadow_pass.syncTexture(&self.gfx, self.scene_viewport.depth().?);
+                            const cs_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.contactShadow().? }));
+                            const cs_stats = self.contact_shadow_pass.draw(&self.gfx, frame, cs_render_pass, .{
                                 .projection = prepared_scene.projection_matrix,
                                 .inv_projection = inv_proj_cs,
                                 .view = prepared_scene.view_matrix,
@@ -2290,18 +2290,18 @@ pub const Renderer = struct {
                                 .num_steps = @intCast(self.editor_viewport_state.contact_shadows_steps),
                             });
                             draw_stats.add(cs_stats);
-                            self.rhi.endRenderPass(cs_render_pass);
+                            self.gfx.endRenderPass(cs_render_pass);
 
                             var cs_composite_draw_calls: usize = 0;
                             var cs_composite_triangles: usize = 0;
                             if (self.contact_shadow_composite_pass.isReady()) {
-                                try self.contact_shadow_composite_pass.syncTexture(&self.rhi, self.scene_viewport.contactShadow().?);
-                                const cs_composite_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.overlay(.{ .texture = self.scene_viewport.hdrColor().? }));
-                                const cs_composite_stats = self.contact_shadow_composite_pass.draw(&self.rhi, frame, cs_composite_pass, 1.0);
+                                try self.contact_shadow_composite_pass.syncTexture(&self.gfx, self.scene_viewport.contactShadow().?);
+                                const cs_composite_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.overlay(.{ .texture = self.scene_viewport.hdrColor().? }));
+                                const cs_composite_stats = self.contact_shadow_composite_pass.draw(&self.gfx, frame, cs_composite_pass, 1.0);
                                 draw_stats.add(cs_composite_stats);
                                 cs_composite_draw_calls = cs_composite_stats.draw_calls;
                                 cs_composite_triangles = cs_composite_stats.triangles_drawn;
-                                self.rhi.endRenderPass(cs_composite_pass);
+                                self.gfx.endRenderPass(cs_composite_pass);
                             }
 
                             self.graph.recordPassStat(
@@ -2325,9 +2325,9 @@ pub const Renderer = struct {
                             const inv_view_ssr = mat4_ssr.inverse(prepared_scene.view_matrix) orelse mat4_ssr.identity();
                             const ssr_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
 
-                            try self.ssr_pass.syncTextures(&self.rhi, self.scene_viewport.hdrColor().?, self.scene_viewport.depth().?);
-                            const ssr_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.ssr().? }));
-                            const ssr_stats = self.ssr_pass.draw(&self.rhi, frame, ssr_render_pass, .{
+                            try self.ssr_pass.syncTextures(&self.gfx, self.scene_viewport.hdrColor().?, self.scene_viewport.depth().?);
+                            const ssr_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.ssr().? }));
+                            const ssr_stats = self.ssr_pass.draw(&self.gfx, frame, ssr_render_pass, .{
                                 .projection = prepared_scene.projection_matrix,
                                 .inv_projection = inv_proj_ssr,
                                 .view = prepared_scene.view_matrix,
@@ -2341,7 +2341,7 @@ pub const Renderer = struct {
                                 .edge_fade = self.editor_viewport_state.ssr_edge_fade,
                             });
                             draw_stats.add(ssr_stats);
-                            self.rhi.endRenderPass(ssr_render_pass);
+                            self.gfx.endRenderPass(ssr_render_pass);
 
                             // SSR roughness blur: 2-pass separable bilateral Gaussian
                             if (self.editor_viewport_state.ssr_roughness_blur_strength > 0.001 and
@@ -2351,36 +2351,36 @@ pub const Renderer = struct {
                                 const blur_strength = self.editor_viewport_state.ssr_roughness_blur_strength;
 
                                 // Horizontal pass: ssr_texture → ssr_blur_texture
-                                try self.ssr_blur_pass.syncTextures(&self.rhi, self.scene_viewport.ssr().?, self.scene_viewport.depth().?);
-                                const h_blur_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.ssrBlur().? }));
-                                _ = self.ssr_blur_pass.draw(&self.rhi, frame, h_blur_pass, .{
+                                try self.ssr_blur_pass.syncTextures(&self.gfx, self.scene_viewport.ssr().?, self.scene_viewport.depth().?);
+                                const h_blur_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.ssrBlur().? }));
+                                _ = self.ssr_blur_pass.draw(&self.gfx, frame, h_blur_pass, .{
                                     .direction = .{ 1.0, 0.0 },
                                     .blur_strength = blur_strength,
                                     .depth_threshold = 0.01,
                                 });
-                                self.rhi.endRenderPass(h_blur_pass);
+                                self.gfx.endRenderPass(h_blur_pass);
 
                                 // Vertical pass: ssr_blur_texture → ssr_texture
-                                try self.ssr_blur_pass.syncTextures(&self.rhi, self.scene_viewport.ssrBlur().?, self.scene_viewport.depth().?);
-                                const v_blur_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.ssr().? }));
-                                _ = self.ssr_blur_pass.draw(&self.rhi, frame, v_blur_pass, .{
+                                try self.ssr_blur_pass.syncTextures(&self.gfx, self.scene_viewport.ssrBlur().?, self.scene_viewport.depth().?);
+                                const v_blur_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.ssr().? }));
+                                _ = self.ssr_blur_pass.draw(&self.gfx, frame, v_blur_pass, .{
                                     .direction = .{ 0.0, 1.0 },
                                     .blur_strength = blur_strength,
                                     .depth_threshold = 0.01,
                                 });
-                                self.rhi.endRenderPass(v_blur_pass);
+                                self.gfx.endRenderPass(v_blur_pass);
                             }
 
                             var ssr_composite_draw_calls: usize = 0;
                             var ssr_composite_triangles: usize = 0;
                             if (self.ssgi_composite_pass.isReady()) {
-                                try self.ssgi_composite_pass.syncTexture(&self.rhi, self.scene_viewport.ssr().?);
-                                const ssr_composite_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.overlay(.{ .texture = self.scene_viewport.hdrColor().? }));
-                                const ssr_composite_stats = self.ssgi_composite_pass.draw(&self.rhi, frame, ssr_composite_pass, 1.0);
+                                try self.ssgi_composite_pass.syncTexture(&self.gfx, self.scene_viewport.ssr().?);
+                                const ssr_composite_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.overlay(.{ .texture = self.scene_viewport.hdrColor().? }));
+                                const ssr_composite_stats = self.ssgi_composite_pass.draw(&self.gfx, frame, ssr_composite_pass, 1.0);
                                 draw_stats.add(ssr_composite_stats);
                                 ssr_composite_draw_calls = ssr_composite_stats.draw_calls;
                                 ssr_composite_triangles = ssr_composite_stats.triangles_drawn;
-                                self.rhi.endRenderPass(ssr_composite_pass);
+                                self.gfx.endRenderPass(ssr_composite_pass);
                             }
 
                             self.graph.recordPassStat(
@@ -2395,17 +2395,17 @@ pub const Renderer = struct {
                         // TAA resolve: blend current frame with history
                         var taa_resolved = false;
                         if (taa_enabled) {
-                            try self.taa_pass.ensureHistoryTexture(&self.rhi, self.scene_viewport.width, self.scene_viewport.height);
+                            try self.taa_pass.ensureHistoryTexture(&self.gfx, self.scene_viewport.width, self.scene_viewport.height);
                             const taa_requires_seed = !self.taa_pass.hasValidHistory();
 
                             if (taa_requires_seed) {
-                                self.rhi.blitTexture(frame, self.scene_viewport.hdrColor().?, &self.scene_viewport.taa_texture.?);
-                                self.rhi.blitTexture(frame, self.scene_viewport.hdrColor().?, &self.taa_pass.history_texture.?);
+                                self.gfx.blitTexture(frame, self.scene_viewport.hdrColor().?, &self.scene_viewport.taa_texture.?);
+                                self.gfx.blitTexture(frame, self.scene_viewport.hdrColor().?, &self.taa_pass.history_texture.?);
                                 self.taa_pass.markHistoryValid();
                                 taa_resolved = true;
                             } else {
-                                try self.taa_pass.syncTextures(&self.rhi, self.scene_viewport.hdrColor().?, self.scene_viewport.velocity(), self.scene_viewport.depth());
-                                const taa_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.taa().? }));
+                                try self.taa_pass.syncTextures(&self.gfx, self.scene_viewport.hdrColor().?, self.scene_viewport.velocity(), self.scene_viewport.depth());
+                                const taa_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.taa().? }));
 
                                 const inv_proj_taa = mat4_mod.inverse(unjittered_projection) orelse mat4_mod.identity();
                                 const jitter_history_delta = [2]f32{
@@ -2425,11 +2425,11 @@ pub const Renderer = struct {
                                     .feedback_min = self.editor_viewport_state.taa_feedback_min,
                                     .feedback_max = self.editor_viewport_state.taa_feedback_max,
                                 };
-                                const taa_stats = self.taa_pass.draw(&self.rhi, frame, taa_render_pass, taa_uniforms);
+                                const taa_stats = self.taa_pass.draw(&self.gfx, frame, taa_render_pass, taa_uniforms);
                                 draw_stats.add(taa_stats);
-                                self.rhi.endRenderPass(taa_render_pass);
+                                self.gfx.endRenderPass(taa_render_pass);
 
-                                self.rhi.blitTexture(frame, self.scene_viewport.taa().?, &self.taa_pass.history_texture.?);
+                                self.gfx.blitTexture(frame, self.scene_viewport.taa().?, &self.taa_pass.history_texture.?);
                                 self.taa_pass.markHistoryValid();
                                 taa_resolved = true;
                             }
@@ -2443,10 +2443,10 @@ pub const Renderer = struct {
                         var hdr_input_for_post = if (taa_resolved) self.scene_viewport.taa().? else self.scene_viewport.hdrColor().?;
 
                         if (bloom_enabled) {
-                            try self.bloom_pass.syncTexture(&self.rhi, hdr_input_for_post);
-                            const bloom_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.bloom().? }));
+                            try self.bloom_pass.syncTexture(&self.gfx, hdr_input_for_post);
+                            const bloom_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.bloom().? }));
                             const bloom_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                            const bloom_stats = self.bloom_pass.draw(&self.rhi, frame, bloom_render_pass, .{
+                            const bloom_stats = self.bloom_pass.draw(&self.gfx, frame, bloom_render_pass, .{
                                 .threshold_params = .{
                                     self.editor_viewport_state.bloom_threshold,
                                     0.5,
@@ -2456,7 +2456,7 @@ pub const Renderer = struct {
                             });
                             draw_stats.add(bloom_stats);
                             self.graph.recordPassStat(pass_stats, .post_process, durationNs(bloom_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), bloom_stats.draw_calls, bloom_stats.triangles_drawn);
-                            self.rhi.endRenderPass(bloom_render_pass);
+                            self.gfx.endRenderPass(bloom_render_pass);
                         }
 
                         // DOF dispatch — 3-subpass pipeline: CoC → Blur → Composite
@@ -2480,7 +2480,7 @@ pub const Renderer = struct {
                                     .quality = self.editor_viewport_state.dof_quality,
                                 };
 
-                                self.dof_runtime_pass.ensureIntermediateTextures(&self.rhi, dof_w, dof_h) catch |err| {
+                                self.dof_runtime_pass.ensureIntermediateTextures(&self.gfx, dof_w, dof_h) catch |err| {
                                     render_log.err("failed to ensure DoF intermediate textures: {s}", .{@errorName(err)});
                                 };
 
@@ -2491,33 +2491,33 @@ pub const Renderer = struct {
                                     var dof_total_stats = mesh_pass_mod.DrawStats{};
 
                                     // Subpass 0: CoC generation (reads color + depth)
-                                    self.dof_runtime_pass.syncCocBindGroup(&self.rhi, hdr_input_for_post, depth_tex) catch |err| {
+                                    self.dof_runtime_pass.syncCocBindGroup(&self.gfx, hdr_input_for_post, depth_tex) catch |err| {
                                         render_log.err("failed to sync DoF CoC bind group: {s}", .{@errorName(err)});
                                     };
-                                    const coc_render_pass = self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = &self.dof_runtime_pass.coc_texture.? })) catch null;
+                                    const coc_render_pass = self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = &self.dof_runtime_pass.coc_texture.? })) catch null;
                                     if (coc_render_pass) |coc_rp| {
-                                        dof_total_stats.add(self.dof_runtime_pass.drawCoc(&self.rhi, frame, coc_rp, dof_uniforms));
-                                        self.rhi.endRenderPass(coc_rp);
+                                        dof_total_stats.add(self.dof_runtime_pass.drawCoc(&self.gfx, frame, coc_rp, dof_uniforms));
+                                        self.gfx.endRenderPass(coc_rp);
                                     }
 
                                     // Subpass 1: Blur (reads color + CoC)
-                                    self.dof_runtime_pass.syncBlurBindGroup(&self.rhi, hdr_input_for_post) catch |err| {
+                                    self.dof_runtime_pass.syncBlurBindGroup(&self.gfx, hdr_input_for_post) catch |err| {
                                         render_log.err("failed to sync DoF blur bind group: {s}", .{@errorName(err)});
                                     };
-                                    const blur_render_pass = self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = &self.dof_runtime_pass.blur_texture.? })) catch null;
+                                    const blur_render_pass = self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = &self.dof_runtime_pass.blur_texture.? })) catch null;
                                     if (blur_render_pass) |blur_rp| {
-                                        dof_total_stats.add(self.dof_runtime_pass.drawBlur(&self.rhi, frame, blur_rp, dof_uniforms));
-                                        self.rhi.endRenderPass(blur_rp);
+                                        dof_total_stats.add(self.dof_runtime_pass.drawBlur(&self.gfx, frame, blur_rp, dof_uniforms));
+                                        self.gfx.endRenderPass(blur_rp);
                                     }
 
                                     // Subpass 2: Composite (reads color + blur + CoC → output)
-                                    self.dof_runtime_pass.syncCompositeBindGroup(&self.rhi, hdr_input_for_post) catch |err| {
+                                    self.dof_runtime_pass.syncCompositeBindGroup(&self.gfx, hdr_input_for_post) catch |err| {
                                         render_log.err("failed to sync DoF composite bind group: {s}", .{@errorName(err)});
                                     };
-                                    const composite_render_pass = self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = &self.dof_runtime_pass.output_texture.? })) catch null;
+                                    const composite_render_pass = self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = &self.dof_runtime_pass.output_texture.? })) catch null;
                                     if (composite_render_pass) |comp_rp| {
-                                        dof_total_stats.add(self.dof_runtime_pass.drawComposite(&self.rhi, frame, comp_rp, dof_uniforms));
-                                        self.rhi.endRenderPass(comp_rp);
+                                        dof_total_stats.add(self.dof_runtime_pass.drawComposite(&self.gfx, frame, comp_rp, dof_uniforms));
+                                        self.gfx.endRenderPass(comp_rp);
                                     }
 
                                     // Swap tonemap input to DOF output
@@ -2531,14 +2531,14 @@ pub const Renderer = struct {
                         }
 
                         try self.tonemap_pass.syncTextures(
-                            &self.rhi,
+                            &self.gfx,
                             hdr_input_for_post,
                             if (bloom_enabled) self.scene_viewport.bloom().? else null,
                             null,
                         );
-                        const tm_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.color().? }));
+                        const tm_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.color().? }));
                         const tm_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                        const tonemap_stats = self.tonemap_pass.draw(&self.rhi, frame, tm_render_pass, .{
+                        const tonemap_stats = self.tonemap_pass.draw(&self.gfx, frame, tm_render_pass, .{
                             .exposure_params = .{
                                 @as(f32, if (self.editor_viewport_state.exposure_enabled) 1.0 else 0.0),
                                 self.editor_viewport_state.exposure,
@@ -2566,16 +2566,16 @@ pub const Renderer = struct {
                         });
                         draw_stats.add(tonemap_stats);
                         self.graph.recordPassStat(pass_stats, .tonemap_pass, durationNs(tm_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), tonemap_stats.draw_calls, tonemap_stats.triangles_drawn);
-                        self.rhi.endRenderPass(tm_render_pass);
+                        self.gfx.endRenderPass(tm_render_pass);
 
                         if (fxaa_enabled) {
                             const fxaa_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                            try self.fxaa_pass.syncTexture(&self.rhi, self.scene_viewport.color().?);
-                            const fxaa_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.fxaa().? }));
-                            const fxaa_stats = self.fxaa_pass.draw(&self.rhi, frame, fxaa_render_pass);
+                            try self.fxaa_pass.syncTexture(&self.gfx, self.scene_viewport.color().?);
+                            const fxaa_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.postProcess(.{ .texture = self.scene_viewport.fxaa().? }));
+                            const fxaa_stats = self.fxaa_pass.draw(&self.gfx, frame, fxaa_render_pass);
                             draw_stats.add(fxaa_stats);
                             self.graph.recordPassStat(pass_stats, .post_process, durationNs(fxaa_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), fxaa_stats.draw_calls, fxaa_stats.triangles_drawn);
-                            self.rhi.endRenderPass(fxaa_render_pass);
+                            self.gfx.endRenderPass(fxaa_render_pass);
                         }
                     }
                 }
@@ -2601,29 +2601,29 @@ pub const Renderer = struct {
                         }
                     }
                     fog_cfg.inv_view_projection = inv_vp_fog;
-                    const fog_render_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.overlay(scene_color_target));
+                    const fog_render_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.overlay(scene_color_target));
                     const fog_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-                    const fog_stats = self.fog_of_war_pass.draw(&self.rhi, frame, fog_render_pass, fog_cfg);
+                    const fog_stats = self.fog_of_war_pass.draw(&self.gfx, frame, fog_render_pass, fog_cfg);
                     draw_stats.add(fog_stats);
                     self.graph.recordPassStat(pass_stats, .post_process, durationNs(fog_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), fog_stats.draw_calls, fog_stats.triangles_drawn);
-                    self.rhi.endRenderPass(fog_render_pass);
+                    self.gfx.endRenderPass(fog_render_pass);
                 }
 
                 // --- 公共 overlay passes：所有模式（Raster/PathTrace/HW RT）都运行 ---
                 const selected_entities = self.selection_history.currentSelection();
                 const ai_focus_entities = self.ai_focus_entity_ids[0..self.ai_focus_entity_count];
                 if (self.outline_pass.isReady() and self.id_pass.texture() != null and (selected_entities.len > 0 or ai_focus_entities.len > 0)) {
-                    try self.outline_pass.syncTexture(&self.rhi, self.id_pass.texture().?);
-                    const outline_pass = try self.rhi.beginRenderPassWithDesc(frame, PassDescriptors.overlay(scene_color_target));
+                    try self.outline_pass.syncTexture(&self.gfx, self.id_pass.texture().?);
+                    const outline_pass = try self.gfx.beginRenderPassWithDesc(frame, PassDescriptors.overlay(scene_color_target));
                     const outline_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                     var outline_stats = mesh_pass_mod.DrawStats{};
                     if (selected_entities.len > 0) {
-                        outline_stats.add(self.outline_pass.draw(&self.rhi, frame, outline_pass, selected_entities));
+                        outline_stats.add(self.outline_pass.draw(&self.gfx, frame, outline_pass, selected_entities));
                     }
                     if (ai_focus_entities.len > 0) {
                         const pulse = 0.65 + 0.35 * @sin(@as(f32, @floatCast(@as(f64, @floatFromInt(@divTrunc(std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds, std.time.ns_per_ms))) / 220.0)));
                         outline_stats.add(self.outline_pass.drawWithColor(
-                            &self.rhi,
+                            &self.gfx,
                             frame,
                             outline_pass,
                             ai_focus_entities,
@@ -2632,7 +2632,7 @@ pub const Renderer = struct {
                     }
                     self.graph.recordPassStat(pass_stats, .outline_pass, durationNs(outline_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), outline_stats.draw_calls, outline_stats.triangles_drawn);
                     draw_stats.add(outline_stats);
-                    self.rhi.endRenderPass(outline_pass);
+                    self.gfx.endRenderPass(outline_pass);
                 }
 
                 if (self.gizmoPassRequired(scene)) {
@@ -2648,7 +2648,7 @@ pub const Renderer = struct {
                         })
                     else
                         PassDescriptors.overlay(scene_color_target);
-                    const gizmo_pass = try self.rhi.beginRenderPassWithDesc(frame, gizmo_pass_desc);
+                    const gizmo_pass = try self.gfx.beginRenderPassWithDesc(frame, gizmo_pass_desc);
                     const gizmo_start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
                     var gizmo_overlay_stats = mesh_pass_mod.DrawStats{};
                     const gizmo_target_transform = if (self.editor_gizmo_transform_override) |override_transform|
@@ -2661,7 +2661,7 @@ pub const Renderer = struct {
                         null;
                     if (gizmo_target_transform) |selected_transform| {
                         const gizmo_stats = self.gizmo_pass.draw(
-                            &self.rhi,
+                            &self.gfx,
                             frame,
                             gizmo_pass,
                             &prepared_scene,
@@ -2676,7 +2676,7 @@ pub const Renderer = struct {
                     gizmo_overlay_stats.add(debug_stats);
                     draw_stats.add(debug_stats);
                     self.graph.recordPassStat(pass_stats, .gizmo_overlay, durationNs(gizmo_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), gizmo_overlay_stats.draw_calls, gizmo_overlay_stats.triangles_drawn);
-                    self.rhi.endRenderPass(gizmo_pass);
+                    self.gfx.endRenderPass(gizmo_pass);
                 }
 
                 // Store previous-frame camera/object state for TAA reprojection and velocity.
@@ -2696,8 +2696,8 @@ pub const Renderer = struct {
             draw_stats.add(model_thumbnail_stats);
 
             if (has_swapchain) {
-                const ui_cmd = self.rhi.activeCommandBuffer() orelse return error.CommandBufferAcquireFailed;
-                const ui_pass = try self.rhi.beginRenderPassWithDesc(frame, .{
+                const ui_cmd = self.gfx.activeCommandBuffer() orelse return error.CommandBufferAcquireFailed;
+                const ui_pass = try self.gfx.beginRenderPassWithDesc(frame, .{
                     .color = .{
                         .target = .swapchain,
                         .clear_color = clear.color,
@@ -2715,17 +2715,17 @@ pub const Renderer = struct {
                     const sh: f32 = @floatFromInt(frame.swapchain_image.height);
 
                     // Update debug HUD overlay
-                    const stats = self.rhi.performanceStats();
+                    const stats = self.gfx.performanceStats();
                     const fps_val: usize = @intFromFloat(@min(stats.fps(), 9999.0));
                     const entity_count = scene.entities.items.len;
                     uc.updateDebugHud(fps_val, stats.draw_calls, entity_count);
 
                     uc.update(sw, sh);
-                    uc.draw(&self.rhi, frame, ui_pass, sw, sh);
+                    uc.draw(&self.gfx, frame, ui_pass, sw, sh);
                 }
 
                 self.graph.recordPassStat(pass_stats, .ui_overlay, durationNs(ui_start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), 0, 0);
-                self.rhi.endRenderPass(ui_pass);
+                self.gfx.endRenderPass(ui_pass);
             }
 
             if (self.pending_selection_readbacks.items.len > 0) {
@@ -2734,11 +2734,11 @@ pub const Renderer = struct {
                     const id_texture = self.id_pass.texture().?;
                     try self.enqueueSelectionReadbacks(frame, id_texture);
                 } else {
-                    try self.rhi.submitFrame(frame);
+                    try self.gfx.submitFrame(frame);
                     try self.applyPendingSelectionMisses();
                 }
             } else {
-                try self.rhi.submitFrame(frame);
+                try self.gfx.submitFrame(frame);
             }
             try self.resolveSelectionReadbacks();
 
@@ -2750,21 +2750,21 @@ pub const Renderer = struct {
             // that was previously done at the top of drawFrame.
             if (viewport_active and self.scene_viewport.use_iosurface) {
                 if (self.scene_viewport.color_texture) |tex| {
-                    const staging_id = self.rhi.blitSharedTexture(tex);
+                    const staging_id = self.gfx.blitSharedTexture(tex);
                     if (staging_id != 0) {
                         self.scene_viewport.staging_iosurface_id = staging_id;
                     }
                 }
             }
 
-            // Collect RHI stats
+            // Collect GFX stats
             var cache_hits: u64 = 0;
             var cache_misses: u64 = 0;
             var delta_hits: u64 = 0;
             var delta_misses: u64 = 0;
             var delta_evictions: u64 = 0;
             var slot_errors: usize = 0;
-            if (self.rhi_device) |dev| {
+            if (self.gfx_device) |dev| {
                 const cs = dev.bindingSetCacheStats();
                 cache_hits = cs.hits;
                 cache_misses = cs.misses;
@@ -2785,7 +2785,7 @@ pub const Renderer = struct {
             }
 
             break :blk FrameReport{
-                .backend = self.rhi.api,
+                .backend = self.gfx.api,
                 .passes_executed = self.passCount(),
                 .graph_resources = self.graph.resourceCount(),
                 .scene = snapshot,
@@ -2803,11 +2803,11 @@ pub const Renderer = struct {
 
         // Only write frame report on first frame to avoid per-frame disk I/O
         if (!g_logged_viewport_backend) {
-            const entry_count: u32 = if (self.rhi_device) |dev| dev.bindingSetCacheEntryCount() else 0;
+            const entry_count: u32 = if (self.gfx_device) |dev| dev.bindingSetCacheEntryCount() else 0;
             self.graph.writeFrameReportWithCacheStats(
                 self.allocator,
                 "dist/reports/latest_frame_report.json",
-                rhi_types.graphicsApiName(self.rhi.api),
+                gfx_types.graphicsApiName(self.gfx.api),
                 result.draw_calls,
                 result.triangles_drawn,
                 pass_stats,
@@ -3135,7 +3135,7 @@ pub const Renderer = struct {
         );
 
         var prepared_scene = try self.scene_cache.prepareScene(
-            &self.rhi,
+            &self.gfx,
             scene,
             &self.render_world,
             width,
@@ -3226,7 +3226,7 @@ pub const Renderer = struct {
 
         // 如果已经渲染完成，直接上传缓存结果
         if (pt.complete) {
-            try self.rhi.uploadTextureData(target, pt.display_pixels.?, width, height);
+            try self.gfx.uploadTextureData(target, pt.display_pixels.?, width, height);
             return;
         }
 
@@ -3238,7 +3238,7 @@ pub const Renderer = struct {
 
         renderer_path_trace.renderCpuPathTraceTiles(pt, !self.editor_viewport_state.path_trace_force_cpu, 8_000_000);
         renderer_path_trace.resolvePathTraceDisplayPixels(pt);
-        try self.rhi.uploadTextureData(target, pt.display_pixels.?, width, height);
+        try self.gfx.uploadTextureData(target, pt.display_pixels.?, width, height);
     }
 
     // ==================================================================
@@ -3256,7 +3256,7 @@ pub const Renderer = struct {
         if (width == 0 or height == 0) return false;
 
         // 懒初始化硬件 RT 后端
-        switch (self.rhi.ensureRtDevice()) {
+        switch (self.gfx.ensureRtDevice()) {
             .ready, .initialized => {},
             .unavailable => return false,
         }
@@ -3275,7 +3275,7 @@ pub const Renderer = struct {
             var triangle_list: std.ArrayListUnmanaged(rt_backend.RtTriangle) = .empty;
             defer triangle_list.deinit(self.allocator);
 
-            var texture_list = std.ArrayList(struct { pixels: []const u8, width: u32, height: u32, format: rhi_types.TextureFormat }).empty;
+            var texture_list = std.ArrayList(struct { pixels: []const u8, width: u32, height: u32, format: gfx_types.TextureFormat }).empty;
             defer texture_list.deinit(self.allocator);
             var texture_index_map = std.AutoHashMap(u32, i32).init(self.allocator);
             defer texture_index_map.deinit();
@@ -3378,20 +3378,20 @@ pub const Renderer = struct {
 
         // --- 构建加速结构 ---
         if (!mrt.accel_built) {
-            if (!self.rhi.rtBuildAccelerationStructure(mrt.triangles.?)) return false;
+            if (!self.gfx.rtBuildAccelerationStructure(mrt.triangles.?)) return false;
             mrt.accel_built = true;
         }
 
         // --- 上传纹理图集到 GPU ---
         if (!mrt.textures_uploaded) {
             if (mrt.texture_atlas != null and mrt.texture_meta != null) {
-                if (!self.rhi.rtUploadTextures(mrt.texture_atlas.?, mrt.texture_meta.?)) {
-                    render_log.err("{s} texture upload failed for RT shadows", .{self.rhi.rtBackendName()});
+                if (!self.gfx.rtUploadTextures(mrt.texture_atlas.?, mrt.texture_meta.?)) {
+                    render_log.err("{s} texture upload failed for RT shadows", .{self.gfx.rtBackendName()});
                     return false;
                 }
             } else {
-                if (!self.rhi.rtUploadTextures(&.{}, &.{})) {
-                    render_log.err("{s} empty texture upload failed for RT shadows", .{self.rhi.rtBackendName()});
+                if (!self.gfx.rtUploadTextures(&.{}, &.{})) {
+                    render_log.err("{s} empty texture upload failed for RT shadows", .{self.gfx.rtBackendName()});
                     return false;
                 }
             }
@@ -3435,7 +3435,7 @@ pub const Renderer = struct {
             .shadow_samples = self.editor_viewport_state.rt_shadow_samples,
         };
 
-        if (!self.rhi.rtTraceRays(&params, self.rt_shadow_pixels.?)) return false;
+        if (!self.gfx.rtTraceRays(&params, self.rt_shadow_pixels.?)) return false;
 
         // --- 上采样 (如果 trace 分辨率 < 输出分辨率) ---
         const upload_pixels: []u8 = if (trace_w == width and trace_h == height)
@@ -3478,16 +3478,16 @@ pub const Renderer = struct {
             self.rt_shadow_mask_texture.?.desc.width != width or
             self.rt_shadow_mask_texture.?.desc.height != height)
         {
-            if (self.rt_shadow_mask_texture) |*t| self.rhi.releaseTexture(t);
-            self.rt_shadow_mask_texture = self.rhi.createTexture(.{
+            if (self.rt_shadow_mask_texture) |*t| self.gfx.releaseTexture(t);
+            self.rt_shadow_mask_texture = self.gfx.createTexture(.{
                 .width = width,
                 .height = height,
                 .format = .bgra8_unorm,
-                .usage = rhi_types.TextureUsage.sampler,
+                .usage = gfx_types.TextureUsage.sampler,
             }) catch return false;
         }
 
-        self.rhi.uploadTextureData(&self.rt_shadow_mask_texture.?, upload_pixels, width, height) catch return false;
+        self.gfx.uploadTextureData(&self.rt_shadow_mask_texture.?, upload_pixels, width, height) catch return false;
         return true;
     }
 
@@ -3513,16 +3513,16 @@ pub const Renderer = struct {
             return false;
         }
 
-        switch (self.rhi.ensureRtDevice()) {
+        switch (self.gfx.ensureRtDevice()) {
             .unavailable => {
                 if (!g_logged_path_trace_active) {
-                    render_log.info("{s} not available, using CPU path trace", .{self.rhi.rtBackendName()});
+                    render_log.info("{s} not available, using CPU path trace", .{self.gfx.rtBackendName()});
                 }
                 return false;
             },
             .initialized, .ready => {
                 if (!g_logged_path_trace_active) {
-                    render_log.info("{s} backend initialized — GPU path trace active", .{self.rhi.rtBackendName()});
+                    render_log.info("{s} backend initialized — GPU path trace active", .{self.gfx.rtBackendName()});
                     g_logged_path_trace_active = true;
                 }
             },
@@ -3590,7 +3590,7 @@ pub const Renderer = struct {
 
         // 渐进式累积完成 → 直接上传缓存
         if (mrt.accum_frame_count >= samples and mrt.accel_built) {
-            self.rhi.uploadTextureData(target, mrt.display_pixels.?, width, height) catch return false;
+            self.gfx.uploadTextureData(target, mrt.display_pixels.?, width, height) catch return false;
             return true;
         }
 
@@ -3599,7 +3599,7 @@ pub const Renderer = struct {
             var triangle_list: std.ArrayListUnmanaged(rt_backend.RtTriangle) = .empty;
             defer triangle_list.deinit(self.allocator);
 
-            var texture_list = std.ArrayList(struct { pixels: []const u8, width: u32, height: u32, format: rhi_types.TextureFormat }).empty;
+            var texture_list = std.ArrayList(struct { pixels: []const u8, width: u32, height: u32, format: gfx_types.TextureFormat }).empty;
             defer texture_list.deinit(self.allocator);
             var texture_index_map = std.AutoHashMap(u32, i32).init(self.allocator);
             defer texture_index_map.deinit();
@@ -3837,8 +3837,8 @@ pub const Renderer = struct {
 
         // --- 构建加速结构 ---
         if (!mrt.accel_built) {
-            if (!self.rhi.rtBuildAccelerationStructure(mrt.triangles.?)) {
-                render_log.err("{s} acceleration structure build failed", .{self.rhi.rtBackendName()});
+            if (!self.gfx.rtBuildAccelerationStructure(mrt.triangles.?)) {
+                render_log.err("{s} acceleration structure build failed", .{self.gfx.rtBackendName()});
                 return false;
             }
             mrt.accel_built = true;
@@ -3847,13 +3847,13 @@ pub const Renderer = struct {
         // --- 上传纹理图集到 GPU ---
         if (!mrt.textures_uploaded) {
             if (mrt.texture_atlas != null and mrt.texture_meta != null) {
-                if (!self.rhi.rtUploadTextures(mrt.texture_atlas.?, mrt.texture_meta.?)) {
-                    render_log.err("{s} texture atlas upload failed", .{self.rhi.rtBackendName()});
+                if (!self.gfx.rtUploadTextures(mrt.texture_atlas.?, mrt.texture_meta.?)) {
+                    render_log.err("{s} texture atlas upload failed", .{self.gfx.rtBackendName()});
                     return false;
                 }
             } else {
-                if (!self.rhi.rtUploadTextures(&.{}, &.{})) {
-                    render_log.err("{s} empty texture atlas upload failed", .{self.rhi.rtBackendName()});
+                if (!self.gfx.rtUploadTextures(&.{}, &.{})) {
+                    render_log.err("{s} empty texture atlas upload failed", .{self.gfx.rtBackendName()});
                     return false;
                 }
             }
@@ -3862,13 +3862,13 @@ pub const Renderer = struct {
 
         if (!mrt.sampling_tables_uploaded) {
             if (mrt.sampling_table_data != null and mrt.sampling_table_meta != null) {
-                if (!self.rhi.rtUploadSamplingTables(mrt.sampling_table_data.?, mrt.sampling_table_meta.?)) {
-                    render_log.err("{s} sampling-table upload failed", .{self.rhi.rtBackendName()});
+                if (!self.gfx.rtUploadSamplingTables(mrt.sampling_table_data.?, mrt.sampling_table_meta.?)) {
+                    render_log.err("{s} sampling-table upload failed", .{self.gfx.rtBackendName()});
                     return false;
                 }
             } else {
-                if (!self.rhi.rtUploadSamplingTables(&.{}, &.{})) {
-                    render_log.err("{s} empty sampling-table upload failed", .{self.rhi.rtBackendName()});
+                if (!self.gfx.rtUploadSamplingTables(&.{}, &.{})) {
+                    render_log.err("{s} empty sampling-table upload failed", .{self.gfx.rtBackendName()});
                     return false;
                 }
             }
@@ -3935,8 +3935,8 @@ pub const Renderer = struct {
         if (is_interactive_frame) {
             // 交互帧：异步 GPU 调度，显示上一帧结果，不阻塞 CPU
             // 1. 检查上一次异步 trace 是否完成 → 取回结果并上采样
-            if (self.rhi.rtIsTraceComplete()) {
-                if (self.rhi.rtGetTraceResult(trace_pixels)) {
+            if (self.gfx.rtIsTraceComplete()) {
+                if (self.gfx.rtGetTraceResult(trace_pixels)) {
                     const trace_half: [*]const f16 = @ptrCast(@alignCast(trace_pixels.ptr));
                     const display_half: [*]f16 = @ptrCast(@alignCast(display_pixels.ptr));
                     var out_y: u32 = 0;
@@ -3958,12 +3958,12 @@ pub const Renderer = struct {
             // else: display_pixels 保留上一帧的有效画面（收敛帧或上一次 async 结果）
 
             // 2. 发射新的异步 trace（不等待 GPU）
-            _ = self.rhi.rtTraceRaysAsync(&params);
+            _ = self.gfx.rtTraceRaysAsync(&params);
             mrt.accum_frame_count = 0;
         } else {
             // 静态帧：同步 trace + 渐进式 f32 累积
-            if (!self.rhi.rtTraceRays(&params, trace_pixels)) {
-                render_log.err("{s} trace failed", .{self.rhi.rtBackendName()});
+            if (!self.gfx.rtTraceRays(&params, trace_pixels)) {
+                render_log.err("{s} trace failed", .{self.gfx.rtBackendName()});
                 return false;
             }
 
@@ -4000,7 +4000,7 @@ pub const Renderer = struct {
             }
         }
 
-        self.rhi.uploadTextureData(target, display_pixels, width, height) catch return false;
+        self.gfx.uploadTextureData(target, display_pixels, width, height) catch return false;
 
         return true;
     }
@@ -4024,13 +4024,13 @@ pub const Renderer = struct {
     ///
     /// Thread-safety: NOT thread-safe. Must be called from render thread.
     pub fn downloadFinalFrameAlloc(self: *Renderer, allocator: std.mem.Allocator) ![]u8 {
-        return renderer_export.downloadFinalFrameAlloc(&self.rhi, self.scene_viewport.color_texture, allocator);
+        return renderer_export.downloadFinalFrameAlloc(&self.gfx, self.scene_viewport.color_texture, allocator);
     }
 
     /// Download final frame pixels as raw BGRA byte data from the LDR color texture.
     /// Returns allocated byte slice (caller owns memory).
     pub fn downloadFramePixelsAlloc(self: *Renderer, allocator: std.mem.Allocator) !FramePixels {
-        return renderer_export.downloadFramePixelsAlloc(&self.rhi, self.scene_viewport.color_texture, allocator);
+        return renderer_export.downloadFramePixelsAlloc(&self.gfx, self.scene_viewport.color_texture, allocator);
     }
 
     fn copyHalfTracePixelsToRgbAlloc(
@@ -4043,19 +4043,19 @@ pub const Renderer = struct {
     }
 
     pub fn downloadHdrFramePixelsAlloc(self: *Renderer, allocator: std.mem.Allocator) !HdrFramePixels {
-        return renderer_export.downloadHdrFramePixelsAlloc(&self.rhi, self.scene_viewport.hdr_color_texture, allocator);
+        return renderer_export.downloadHdrFramePixelsAlloc(&self.gfx, self.scene_viewport.hdr_color_texture, allocator);
     }
 
     pub fn downloadHdrFrameExrAlloc(self: *Renderer, allocator: std.mem.Allocator) ![]u8 {
-        return renderer_export.downloadHdrFrameExrAlloc(&self.rhi, self.scene_viewport.hdr_color_texture, allocator);
+        return renderer_export.downloadHdrFrameExrAlloc(&self.gfx, self.scene_viewport.hdr_color_texture, allocator);
     }
 
     pub fn exportFramePng(self: *Renderer, allocator: std.mem.Allocator, out_path: []const u8) !void {
-        return renderer_export.exportFramePng(&self.rhi, self.scene_viewport.color_texture, allocator, out_path);
+        return renderer_export.exportFramePng(&self.gfx, self.scene_viewport.color_texture, allocator, out_path);
     }
 
     pub fn exportFrameExr(self: *Renderer, allocator: std.mem.Allocator, out_path: []const u8) !void {
-        return renderer_export.exportFrameExr(&self.rhi, self.scene_viewport.hdr_color_texture, allocator, out_path);
+        return renderer_export.exportFrameExr(&self.gfx, self.scene_viewport.hdr_color_texture, allocator, out_path);
     }
 
     pub const FramePixels = renderer_export.FramePixels;
@@ -4319,7 +4319,7 @@ pub const Renderer = struct {
         };
     }
 
-    fn clearAndDepthForScene(snapshot: types.SceneSnapshot, pass_count: usize) rhi_types.ClearState {
+    fn clearAndDepthForScene(snapshot: types.SceneSnapshot, pass_count: usize) gfx_types.ClearState {
         const mesh_bias = @as(f32, @floatFromInt(@min(snapshot.mesh_count, 12))) * 0.01;
         const light_bias = @as(f32, @floatFromInt(@min(snapshot.light_count, 4))) * 0.02;
         const pass_bias = @as(f32, @floatFromInt(@min(pass_count, 8))) * 0.005;
@@ -4337,7 +4337,7 @@ pub const Renderer = struct {
 
     pub fn processMaterialThumbnailRequests(
         self: *Renderer,
-        frame: rhi_mod.Frame,
+        frame: gfx_mod.Frame,
         scene: *const scene_mod.Scene,
     ) !mesh_pass_mod.DrawStats {
         return renderer_thumbnails.processMaterialThumbnailRequests(self, frame, scene);
@@ -4345,12 +4345,12 @@ pub const Renderer = struct {
 
     pub fn processModelThumbnailRequests(
         self: *Renderer,
-        frame: rhi_mod.Frame,
+        frame: gfx_mod.Frame,
     ) !mesh_pass_mod.DrawStats {
         return renderer_thumbnails.processModelThumbnailRequests(self, frame);
     }
 
-    pub fn processMaterialEditorPreview(self: *Renderer, frame: rhi_mod.Frame) !mesh_pass_mod.DrawStats {
+    pub fn processMaterialEditorPreview(self: *Renderer, frame: gfx_mod.Frame) !mesh_pass_mod.DrawStats {
         defer self.material_editor_preview_requested = false;
 
         if (!self.material_editor_preview_requested or !self.material_editor_preview_dirty) {
@@ -4423,8 +4423,8 @@ pub const Renderer = struct {
 
     fn drawViewportDebugOverlays(
         self: *Renderer,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         scene: *scene_mod.Scene,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
         physics_state_opt: ?*physics_mod.PhysicsState,
@@ -4436,7 +4436,7 @@ pub const Renderer = struct {
             defer grid_lines.deinit(self.allocator);
             try renderer_debug.appendGridLines(self.allocator, &grid_lines, prepared_scene.camera_world_position);
             const grid_stats = try self.gizmo_pass.drawWorldLines(
-                &self.rhi,
+                &self.gfx,
                 frame,
                 pass,
                 prepared_scene.view_projection,
@@ -4451,7 +4451,7 @@ pub const Renderer = struct {
             defer bone_lines.deinit(self.allocator);
             try renderer_debug.appendBoneLines(self.allocator, scene, &bone_lines);
             const bone_stats = try self.gizmo_pass.drawWorldLines(
-                &self.rhi,
+                &self.gfx,
                 frame,
                 pass,
                 prepared_scene.view_projection,
@@ -4472,7 +4472,7 @@ pub const Renderer = struct {
             var collision_stats = mesh_pass_mod.DrawStats{};
             if (solid_lines.items.len > 0) {
                 const solid_stats = try self.gizmo_pass.drawWorldLines(
-                    &self.rhi,
+                    &self.gfx,
                     frame,
                     pass,
                     prepared_scene.view_projection,
@@ -4483,7 +4483,7 @@ pub const Renderer = struct {
             }
             if (trigger_lines.items.len > 0) {
                 const trigger_stats = try self.gizmo_pass.drawWorldLines(
-                    &self.rhi,
+                    &self.gfx,
                     frame,
                     pass,
                     prepared_scene.view_projection,
@@ -4498,7 +4498,7 @@ pub const Renderer = struct {
         // Camera path spline preview (set by Sequencer panel)
         if (self.camera_path_preview_lines.items.len >= 2) {
             const path_stats = try self.gizmo_pass.drawWorldLines(
-                &self.rhi,
+                &self.gfx,
                 frame,
                 pass,
                 prepared_scene.view_projection,
@@ -4514,7 +4514,7 @@ pub const Renderer = struct {
         //   sel  = gold/yellow (selected elements, always on top)
         if (self.mesh_edit_wireframe_lines.items.len >= 2) {
             const wire_stats = try self.gizmo_pass.drawWorldLines(
-                &self.rhi,
+                &self.gfx,
                 frame,
                 pass,
                 prepared_scene.view_projection,
@@ -4525,7 +4525,7 @@ pub const Renderer = struct {
         }
         if (self.mesh_edit_vertex_lines.items.len >= 2) {
             const vtx_stats = try self.gizmo_pass.drawThickOverlayLines(
-                &self.rhi,
+                &self.gfx,
                 frame,
                 pass,
                 prepared_scene.view_projection,
@@ -4542,7 +4542,7 @@ pub const Renderer = struct {
         }
         if (self.mesh_edit_selected_lines.items.len >= 2) {
             const sel_stats = try self.gizmo_pass.drawThickOverlayLines(
-                &self.rhi,
+                &self.gfx,
                 frame,
                 pass,
                 prepared_scene.view_projection,
@@ -4560,7 +4560,7 @@ pub const Renderer = struct {
         // Unselected vertex / face-centroid dots (teal squares)
         if (self.mesh_edit_vtx_dot_positions.items.len > 0) {
             const dot_stats = try self.gizmo_pass.drawVertexDots(
-                &self.rhi,
+                &self.gfx,
                 frame,
                 pass,
                 prepared_scene.view_projection,
@@ -4577,7 +4577,7 @@ pub const Renderer = struct {
         // Selected vertex / face-centroid dots (gold squares, drawn after teal)
         if (self.mesh_edit_sel_dot_positions.items.len > 0) {
             const dot_stats = try self.gizmo_pass.drawVertexDots(
-                &self.rhi,
+                &self.gfx,
                 frame,
                 pass,
                 prepared_scene.view_projection,
@@ -4600,7 +4600,7 @@ pub const Renderer = struct {
             try renderer_debug.appendCameraIconLines(self.allocator, scene, &camera_lines);
             if (camera_lines.items.len > 0) {
                 const cam_stats = try self.gizmo_pass.drawOverlayLines(
-                    &self.rhi,
+                    &self.gfx,
                     frame,
                     pass,
                     prepared_scene.view_projection,
@@ -4620,7 +4620,7 @@ pub const Renderer = struct {
             try renderer_debug.appendLightIconLines(self.allocator, scene, &dir_lines, &point_lines, &spot_lines);
             if (dir_lines.items.len > 0) {
                 const dir_stats = try self.gizmo_pass.drawOverlayLines(
-                    &self.rhi,
+                    &self.gfx,
                     frame,
                     pass,
                     prepared_scene.view_projection,
@@ -4631,7 +4631,7 @@ pub const Renderer = struct {
             }
             if (point_lines.items.len > 0) {
                 const pt_stats = try self.gizmo_pass.drawOverlayLines(
-                    &self.rhi,
+                    &self.gfx,
                     frame,
                     pass,
                     prepared_scene.view_projection,
@@ -4642,7 +4642,7 @@ pub const Renderer = struct {
             }
             if (spot_lines.items.len > 0) {
                 const sp_stats = try self.gizmo_pass.drawOverlayLines(
-                    &self.rhi,
+                    &self.gfx,
                     frame,
                     pass,
                     prepared_scene.view_projection,
@@ -4656,12 +4656,12 @@ pub const Renderer = struct {
         return stats;
     }
 
-    fn enqueueSelectionReadbacks(self: *Renderer, frame: rhi_mod.Frame, id_texture: *const rhi_mod.Texture) !void {
+    fn enqueueSelectionReadbacks(self: *Renderer, frame: gfx_mod.Frame, id_texture: *const gfx_mod.Texture) !void {
         const pending = self.pending_selection_readbacks.items;
         const total_buffer_size = std.math.cast(u32, pending.len * @as(usize, selection_readback_bytes)) orelse return error.OutOfMemory;
 
         if (id_texture.desc.width == 0 or id_texture.desc.height == 0) {
-            try self.rhi.submitFrame(frame);
+            try self.gfx.submitFrame(frame);
             try self.applyPendingSelectionMisses();
             return;
         }
@@ -4669,11 +4669,11 @@ pub const Renderer = struct {
         var readbacks = try self.allocator.alloc(InFlightSelectionReadback, pending.len);
         errdefer self.allocator.free(readbacks);
 
-        var transfer_buffer = try self.rhi.createTransferBuffer(.{
+        var transfer_buffer = try self.gfx.createTransferBuffer(.{
             .size = total_buffer_size,
             .upload = false,
         });
-        errdefer self.rhi.releaseTransferBuffer(&transfer_buffer);
+        errdefer self.gfx.releaseTransferBuffer(&transfer_buffer);
 
         for (pending, 0..) |request, index| {
             readbacks[index] = .{
@@ -4682,18 +4682,18 @@ pub const Renderer = struct {
             };
         }
 
-        const copy_pass = try self.rhi.beginCopyPass(frame);
+        const copy_pass = try self.gfx.beginCopyPass(frame);
 
         for (readbacks) |readback| {
             const pixel_x = @min(readback.request.pixel_x, id_texture.desc.width - 1);
             const pixel_y = @min(readback.request.pixel_y, id_texture.desc.height - 1);
-            self.rhi.downloadTexturePixelToOffset(copy_pass, id_texture, &transfer_buffer, readback.offset, pixel_x, pixel_y);
+            self.gfx.downloadTexturePixelToOffset(copy_pass, id_texture, &transfer_buffer, readback.offset, pixel_x, pixel_y);
         }
 
-        self.rhi.endCopyPass(copy_pass);
+        self.gfx.endCopyPass(copy_pass);
 
-        var fence = try self.rhi.submitFrameAndAcquireFence(frame);
-        errdefer self.rhi.releaseFence(&fence);
+        var fence = try self.gfx.submitFrameAndAcquireFence(frame);
+        errdefer self.gfx.releaseFence(&fence);
 
         try self.in_flight_selection_batches.append(self.allocator, .{
             .fence = fence,
@@ -4705,12 +4705,12 @@ pub const Renderer = struct {
 
     fn resolveSelectionReadbacks(self: *Renderer) !void {
         while (self.in_flight_selection_batches.items.len > 0) {
-            if (!self.rhi.isFenceSignaled(&self.in_flight_selection_batches.items[0].fence)) {
+            if (!self.gfx.isFenceSignaled(&self.in_flight_selection_batches.items[0].fence)) {
                 break;
             }
 
             var batch = self.in_flight_selection_batches.orderedRemove(0);
-            defer batch.deinit(self.allocator, &self.rhi);
+            defer batch.deinit(self.allocator, &self.gfx);
 
             // Skip applying picks when gizmo drag is active to prevent
             // entity selection from overriding gizmo axis interaction.
@@ -4718,7 +4718,7 @@ pub const Renderer = struct {
 
             for (batch.readbacks) |readback| {
                 var pixel: [4]u8 = undefined;
-                try self.rhi.readTransferBufferBytesAt(&batch.transfer_buffer, readback.offset, pixel[0..]);
+                try self.gfx.readTransferBufferBytesAt(&batch.transfer_buffer, readback.offset, pixel[0..]);
                 const entity = id_pass_mod.decodeEntityIdBgra(pixel);
                 const id_tex = self.id_pass.texture();
                 const tw: u32 = if (id_tex) |t| t.desc.width else 0;
@@ -4748,7 +4748,7 @@ pub const Renderer = struct {
 
     fn releaseInFlightSelectionBatches(self: *Renderer) void {
         for (self.in_flight_selection_batches.items) |*batch| {
-            batch.deinit(self.allocator, &self.rhi);
+            batch.deinit(self.allocator, &self.gfx);
         }
         self.in_flight_selection_batches.deinit(self.allocator);
     }

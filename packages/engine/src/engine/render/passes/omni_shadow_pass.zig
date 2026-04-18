@@ -1,24 +1,24 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
 pub const OmniShadowPass = struct {
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
-    cube_texture: ?rhi_mod.Texture = null,
-    sampler: ?rhi_mod.Sampler = null,
-    render_passes: [6]?rhi_mod.RenderPass = [_]?rhi_mod.RenderPass{null} ** 6,
-    framebuffers: [6]?rhi_mod.Framebuffer = [_]?rhi_mod.Framebuffer{null} ** 6,
+    cube_texture: ?gfx_mod.Texture = null,
+    sampler: ?gfx_mod.Sampler = null,
+    render_passes: [6]?gfx_mod.RenderPass = [_]?gfx_mod.RenderPass{null} ** 6,
+    framebuffers: [6]?gfx_mod.Framebuffer = [_]?gfx_mod.Framebuffer{null} ** 6,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !OmniShadowPass {
+    pub fn init(device: *gfx_mod.GfxDevice) !OmniShadowPass {
         var pass = OmniShadowPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *OmniShadowPass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *OmniShadowPass, device: *gfx_mod.GfxDevice) void {
         for (self.render_passes) |*rp| {
             if (rp.*) |*render_pass| {
                 device.releaseRenderPass(render_pass);
@@ -48,15 +48,15 @@ pub const OmniShadowPass = struct {
         return self.pipeline != null and self.cube_texture != null;
     }
 
-    pub fn getCubeTexture(self: *const OmniShadowPass) ?*const rhi_mod.Texture {
+    pub fn getCubeTexture(self: *const OmniShadowPass) ?*const gfx_mod.Texture {
         return &self.cube_texture.?;
     }
 
-    pub fn getSampler(self: *const OmniShadowPass) ?*const rhi_mod.Sampler {
+    pub fn getSampler(self: *const OmniShadowPass) ?*const gfx_mod.Sampler {
         return &self.sampler.?;
     }
 
-    pub fn resize(self: *OmniShadowPass, device: *rhi_mod.RhiDevice, size: u32) !void {
+    pub fn resize(self: *OmniShadowPass, device: *gfx_mod.GfxDevice, size: u32) !void {
         if (self.cube_texture) |*texture| {
             device.releaseTexture(texture);
         }
@@ -80,7 +80,7 @@ pub const OmniShadowPass = struct {
             .height = size,
             .depth_or_array_layers = 6,
             .format = .depth32_float,
-            .usage = rhi_types.TextureUsage.render_target | rhi_types.TextureUsage.sampled,
+            .usage = gfx_types.TextureUsage.render_target | gfx_types.TextureUsage.sampled,
             .dimension = .cube,
         });
 
@@ -106,8 +106,8 @@ pub const OmniShadowPass = struct {
 
     pub fn draw(
         self: *OmniShadowPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
         light_position: [3]f32,
         far_plane: f32,
@@ -159,7 +159,7 @@ pub const OmniShadowPass = struct {
         return stats;
     }
 
-    fn createResources(self: *OmniShadowPass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *OmniShadowPass, device: *gfx_mod.GfxDevice) !void {
         self.stages = try shader_support.loadProgramStages(device, "omni_shadow_pass");
         errdefer if (self.stages) |*stages| {
             stages.deinit(device);
@@ -181,14 +181,14 @@ pub const OmniShadowPass = struct {
 
         try self.resize(device, 512);
 
-        const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{
+        const vertex_layouts = [_]gfx_mod.VertexBufferLayoutDesc{
             .{
                 .slot = 0,
                 .stride = @sizeOf(mesh_pass_mod.GpuVertex),
                 .input_rate = .per_vertex,
             },
         };
-        const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{
+        const vertex_attributes = [_]gfx_mod.VertexAttributeDesc{
             .{
                 .location = 0,
                 .buffer_slot = 0,

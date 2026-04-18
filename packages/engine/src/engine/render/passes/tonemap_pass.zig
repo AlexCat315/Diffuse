@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
+const gfx_mod = @import("gfx_legacy/mod.zig");
 const shader_support = @import("../shader_support.zig");
 
 const fullscreen_triangle_vertex_count: u32 = 3;
@@ -13,21 +13,21 @@ pub const TonemapPass = struct {
         lut_params: [4]f32 = .{ 0.0, 1.0, 0.0, 0.0 },
     };
 
-    sampler: ?rhi_mod.Sampler = null,
-    bind_group: ?rhi_mod.BindGroup = null,
+    sampler: ?gfx_mod.Sampler = null,
+    bind_group: ?gfx_mod.BindGroup = null,
     bound_hdr_handle: usize = 0,
     bound_bloom_handle: usize = 0,
     bound_lut_handle: usize = 0,
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !TonemapPass {
+    pub fn init(device: *gfx_mod.GfxDevice) !TonemapPass {
         var pass = TonemapPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *TonemapPass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *TonemapPass, device: *gfx_mod.GfxDevice) void {
         if (self.bind_group) |*bind_group| {
             device.releaseBindGroup(bind_group);
         }
@@ -49,10 +49,10 @@ pub const TonemapPass = struct {
 
     pub fn syncTextures(
         self: *TonemapPass,
-        device: *rhi_mod.RhiDevice,
-        hdr_texture: *const rhi_mod.Texture,
-        bloom_texture: ?*const rhi_mod.Texture,
-        lut_texture: ?*const rhi_mod.Texture,
+        device: *gfx_mod.GfxDevice,
+        hdr_texture: *const gfx_mod.Texture,
+        bloom_texture: ?*const gfx_mod.Texture,
+        lut_texture: ?*const gfx_mod.Texture,
     ) !void {
         const bloom_tex = bloom_texture orelse hdr_texture;
         const lut_tex = lut_texture orelse hdr_texture;
@@ -72,7 +72,7 @@ pub const TonemapPass = struct {
             device.releaseBindGroup(bind_group);
         }
 
-        const bindings = [3]rhi_mod.TextureSamplerBinding{
+        const bindings = [3]gfx_mod.TextureSamplerBinding{
             .{ .texture = hdr_texture, .sampler = &self.sampler.? },
             .{ .texture = bloom_tex, .sampler = &self.sampler.? },
             .{ .texture = lut_tex, .sampler = &self.sampler.? },
@@ -88,9 +88,9 @@ pub const TonemapPass = struct {
 
     pub fn draw(
         self: *TonemapPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         params: TonemapParams,
     ) mesh_pass_mod.DrawStats {
         var stats = mesh_pass_mod.DrawStats{};
@@ -108,7 +108,7 @@ pub const TonemapPass = struct {
         return stats;
     }
 
-    fn createResources(self: *TonemapPass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *TonemapPass, device: *gfx_mod.GfxDevice) !void {
         self.sampler = try device.createSampler(.{
             .min_filter = .linear,
             .mag_filter = .linear,
@@ -126,8 +126,8 @@ pub const TonemapPass = struct {
             stages.deinit(device);
         };
 
-        const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{};
-        const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{};
+        const vertex_layouts = [_]gfx_mod.VertexBufferLayoutDesc{};
+        const vertex_attributes = [_]gfx_mod.VertexAttributeDesc{};
 
         self.pipeline = try device.createGraphicsPipeline(.{
             .vertex_shader = &self.stages.?.vertex,

@@ -1,5 +1,5 @@
 const std = @import("std");
-const rhi_types = @import("guava_rhi").types;
+const gfx_types = @import("guava_gfx").types;
 const mat4_mod = @import("../../math/mat4.zig");
 const AABB = @import("../../math/aabb.zig").AABB;
 
@@ -31,7 +31,7 @@ pub const PathTraceTexture = struct {
     pixels: []const u8,
     width: u32,
     height: u32,
-    format: rhi_types.TextureFormat,
+    format: gfx_types.TextureFormat,
 };
 
 pub const PathTraceEnvironment = struct {

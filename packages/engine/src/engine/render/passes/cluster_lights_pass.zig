@@ -1,6 +1,6 @@
 const std = @import("std");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
 // ── Constants (must match cluster_lights.comp.glsl) ─────────────────────────
@@ -44,21 +44,21 @@ comptime {
 // ── Pass struct ───────────────────────────────────────────────────────────────
 
 pub const ClusterLightsPass = struct {
-    pipeline: ?rhi_mod.ComputePipeline = null,
+    pipeline: ?gfx_mod.ComputePipeline = null,
     /// R32UI  width=3456  height=1   — per-cluster light count
-    cluster_count_texture: ?rhi_mod.Texture = null,
+    cluster_count_texture: ?gfx_mod.Texture = null,
     /// R32UI  width=64  height=3456  — per-cluster light indices
-    cluster_indices_texture: ?rhi_mod.Texture = null,
+    cluster_indices_texture: ?gfx_mod.Texture = null,
     /// Nearest sampler used when these textures are bound in the fragment pass.
-    nearest_sampler: ?rhi_mod.Sampler = null,
+    nearest_sampler: ?gfx_mod.Sampler = null,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !ClusterLightsPass {
+    pub fn init(device: *gfx_mod.GfxDevice) !ClusterLightsPass {
         var pass = ClusterLightsPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *ClusterLightsPass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *ClusterLightsPass, device: *gfx_mod.GfxDevice) void {
         if (self.pipeline) |*p| device.releaseComputePipeline(p);
         if (self.cluster_count_texture) |*t| device.releaseTexture(t);
         if (self.cluster_indices_texture) |*t| device.releaseTexture(t);
@@ -77,8 +77,8 @@ pub const ClusterLightsPass = struct {
     /// Call this every frame before the base (mesh) pass.
     pub fn dispatch(
         self: *ClusterLightsPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
         uniforms: ClusterLightsUniforms,
     ) void {
         if (!self.isReady()) return;
@@ -104,7 +104,7 @@ pub const ClusterLightsPass = struct {
         device.endComputePass(compute_pass);
     }
 
-    fn createResources(self: *ClusterLightsPass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *ClusterLightsPass, device: *gfx_mod.GfxDevice) !void {
         // 2 writeonly storage images (r32ui), 0 readonly, 0 storage buffers.
         self.pipeline = try shader_support.loadComputePipelineRW(device, "cluster_lights", 2, 0);
         errdefer {
@@ -117,8 +117,8 @@ pub const ClusterLightsPass = struct {
             .width = total_clusters,
             .height = 1,
             .format = .r32_uint,
-            .usage = rhi_types.TextureUsage.sampler |
-                rhi_types.TextureUsage.compute_storage_write,
+            .usage = gfx_types.TextureUsage.sampler |
+                gfx_types.TextureUsage.compute_storage_write,
             .label = "cluster_counts",
         });
         errdefer {
@@ -133,8 +133,8 @@ pub const ClusterLightsPass = struct {
             .width = max_lights_per_cluster,
             .height = total_clusters,
             .format = .r32_uint,
-            .usage = rhi_types.TextureUsage.sampler |
-                rhi_types.TextureUsage.compute_storage_write,
+            .usage = gfx_types.TextureUsage.sampler |
+                gfx_types.TextureUsage.compute_storage_write,
             .label = "cluster_light_indices",
         });
         errdefer {

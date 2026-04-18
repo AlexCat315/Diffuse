@@ -1,6 +1,6 @@
 const std = @import("std");
 const io_globals = @import("io_globals");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
+const gfx_mod = @import("gfx_legacy/mod.zig");
 const mesh_pass_mod = @import("passes/mesh_pass.zig");
 const graph_mod = @import("render_graph.zig");
 
@@ -8,21 +8,21 @@ const graph_mod = @import("render_graph.zig");
 /// Encapsulates the begin → draw → record stats → end pattern from Hazel's
 /// SceneRenderer, reducing boilerplate in drawFrame().
 pub fn executePass(
-    rhi: *rhi_mod.RhiDevice,
-    frame: rhi_mod.Frame,
-    desc: rhi_mod.RenderPassDesc,
+    gfx: *gfx_mod.GfxDevice,
+    frame: gfx_mod.Frame,
+    desc: gfx_mod.RenderPassDesc,
     graph: *graph_mod.RenderGraph,
     pass_stats: []graph_mod.PassStat,
     pass_id: graph_mod.PassId,
     draw_stats: *mesh_pass_mod.DrawStats,
-    drawFn: *const fn (*rhi_mod.RhiDevice, rhi_mod.Frame, rhi_mod.RenderPass) mesh_pass_mod.DrawStats,
+    drawFn: *const fn (*gfx_mod.GfxDevice, gfx_mod.Frame, gfx_mod.RenderPass) mesh_pass_mod.DrawStats,
 ) !void {
-    const render_pass = try rhi.beginRenderPassWithDesc(frame, desc);
+    const render_pass = try gfx.beginRenderPassWithDesc(frame, desc);
     const start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;
-    const stats = drawFn(rhi, frame, render_pass);
+    const stats = drawFn(gfx, frame, render_pass);
     graph.recordPassStat(pass_stats, pass_id, durationNs(start, std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds), stats.draw_calls, stats.triangles_drawn);
     draw_stats.add(stats);
-    rhi.endRenderPass(render_pass);
+    gfx.endRenderPass(render_pass);
 }
 
 fn durationNs(start: i96, end: i96) u64 {
@@ -33,7 +33,7 @@ fn durationNs(start: i96, end: i96) u64 {
 /// Instead of constructing inline descriptors at each call site, passes
 /// declare their descriptor configuration here.
 pub const PassDescriptors = struct {
-    pub fn shadowOnly(depth_texture: *const rhi_mod.Texture) rhi_mod.RenderPassDesc {
+    pub fn shadowOnly(depth_texture: *const gfx_mod.Texture) gfx_mod.RenderPassDesc {
         return .{
             .color = .{ .target = .none, .load_op = .dont_care, .store_op = .dont_care },
             .depth = .{
@@ -45,14 +45,14 @@ pub const PassDescriptors = struct {
         };
     }
 
-    pub fn depthOnly(depth: rhi_mod.DepthAttachmentDesc) rhi_mod.RenderPassDesc {
+    pub fn depthOnly(depth: gfx_mod.DepthAttachmentDesc) gfx_mod.RenderPassDesc {
         return .{
             .color = .{ .target = .none, .load_op = .dont_care, .store_op = .dont_care },
             .depth = depth,
         };
     }
 
-    pub fn idPass(id_texture: *const rhi_mod.Texture, depth: ?rhi_mod.DepthAttachmentDesc) rhi_mod.RenderPassDesc {
+    pub fn idPass(id_texture: *const gfx_mod.Texture, depth: ?gfx_mod.DepthAttachmentDesc) gfx_mod.RenderPassDesc {
         return .{
             .color = .{
                 .target = .{ .texture = id_texture },
@@ -64,7 +64,7 @@ pub const PassDescriptors = struct {
         };
     }
 
-    pub fn colorWithDepth(target: rhi_mod.ColorTarget, clear_color: [4]f32, depth: ?rhi_mod.DepthAttachmentDesc) rhi_mod.RenderPassDesc {
+    pub fn colorWithDepth(target: gfx_mod.ColorTarget, clear_color: [4]f32, depth: ?gfx_mod.DepthAttachmentDesc) gfx_mod.RenderPassDesc {
         return .{
             .color = .{
                 .target = target,
@@ -76,7 +76,7 @@ pub const PassDescriptors = struct {
         };
     }
 
-    pub fn postProcess(target: rhi_mod.ColorTarget) rhi_mod.RenderPassDesc {
+    pub fn postProcess(target: gfx_mod.ColorTarget) gfx_mod.RenderPassDesc {
         return .{
             .color = .{
                 .target = target,
@@ -88,7 +88,7 @@ pub const PassDescriptors = struct {
         };
     }
 
-    pub fn overlay(target: rhi_mod.ColorTarget) rhi_mod.RenderPassDesc {
+    pub fn overlay(target: gfx_mod.ColorTarget) gfx_mod.RenderPassDesc {
         return .{
             .color = .{
                 .target = target,
@@ -99,7 +99,7 @@ pub const PassDescriptors = struct {
         };
     }
 
-    pub fn overlayWithDepth(target: rhi_mod.ColorTarget, depth: rhi_mod.DepthAttachmentDesc) rhi_mod.RenderPassDesc {
+    pub fn overlayWithDepth(target: gfx_mod.ColorTarget, depth: gfx_mod.DepthAttachmentDesc) gfx_mod.RenderPassDesc {
         return .{
             .color = .{
                 .target = target,

@@ -1,7 +1,7 @@
 const std = @import("std");
 const math = @import("../math/mat4.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const components = @import("../scene/components.zig");
 const scene_mod = @import("../scene/scene.zig");
 
@@ -97,17 +97,17 @@ const checker_texture_bgra = [_]u8{
 pub const PrimitiveStage = struct {
     allocator: std.mem.Allocator,
     supported: bool = false,
-    triangle_vertex_buffer: ?rhi_mod.Buffer = null,
-    cube_vertex_buffer: ?rhi_mod.Buffer = null,
-    cube_index_buffer: ?rhi_mod.Buffer = null,
-    checker_texture: ?rhi_mod.Texture = null,
-    sampler: ?rhi_mod.Sampler = null,
-    fragment_bind_group: ?rhi_mod.BindGroup = null,
-    vertex_shader: ?rhi_mod.ShaderModule = null,
-    fragment_shader: ?rhi_mod.ShaderModule = null,
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    triangle_vertex_buffer: ?gfx_mod.Buffer = null,
+    cube_vertex_buffer: ?gfx_mod.Buffer = null,
+    cube_index_buffer: ?gfx_mod.Buffer = null,
+    checker_texture: ?gfx_mod.Texture = null,
+    sampler: ?gfx_mod.Sampler = null,
+    fragment_bind_group: ?gfx_mod.BindGroup = null,
+    vertex_shader: ?gfx_mod.ShaderModule = null,
+    fragment_shader: ?gfx_mod.ShaderModule = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
 
-    pub fn init(allocator: std.mem.Allocator, device: *rhi_mod.RhiDevice) !PrimitiveStage {
+    pub fn init(allocator: std.mem.Allocator, device: *gfx_mod.GfxDevice) !PrimitiveStage {
         var stage = PrimitiveStage{
             .allocator = allocator,
         };
@@ -120,7 +120,7 @@ pub const PrimitiveStage = struct {
         return stage;
     }
 
-    pub fn deinit(self: *PrimitiveStage, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *PrimitiveStage, device: *gfx_mod.GfxDevice) void {
         if (self.pipeline) |*pipeline| {
             device.releaseGraphicsPipeline(pipeline);
         }
@@ -157,9 +157,9 @@ pub const PrimitiveStage = struct {
 
     pub fn draw(
         self: *PrimitiveStage,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         scene: *const scene_mod.Scene,
     ) !DrawStats {
         var stats = DrawStats{};
@@ -220,10 +220,10 @@ pub const PrimitiveStage = struct {
         return stats;
     }
 
-    fn createResources(self: *PrimitiveStage, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *PrimitiveStage, device: *gfx_mod.GfxDevice) !void {
         self.triangle_vertex_buffer = try device.createBuffer(.{
             .size = @sizeOf(Vertex) * triangle_vertices.len,
-            .usage = rhi_types.BufferUsage.vertex,
+            .usage = gfx_types.BufferUsage.vertex,
         });
         errdefer if (self.triangle_vertex_buffer) |*buffer| {
             device.releaseBuffer(buffer);
@@ -232,7 +232,7 @@ pub const PrimitiveStage = struct {
 
         self.cube_vertex_buffer = try device.createBuffer(.{
             .size = @sizeOf(Vertex) * cube_vertices.len,
-            .usage = rhi_types.BufferUsage.vertex,
+            .usage = gfx_types.BufferUsage.vertex,
         });
         errdefer if (self.cube_vertex_buffer) |*buffer| {
             device.releaseBuffer(buffer);
@@ -241,7 +241,7 @@ pub const PrimitiveStage = struct {
 
         self.cube_index_buffer = try device.createBuffer(.{
             .size = @sizeOf(u16) * cube_indices.len,
-            .usage = rhi_types.BufferUsage.index,
+            .usage = gfx_types.BufferUsage.index,
         });
         errdefer if (self.cube_index_buffer) |*buffer| {
             device.releaseBuffer(buffer);
@@ -252,7 +252,7 @@ pub const PrimitiveStage = struct {
             .width = 2,
             .height = 2,
             .format = .bgra8_unorm,
-            .usage = rhi_types.TextureUsage.sampler,
+            .usage = gfx_types.TextureUsage.sampler,
         });
         errdefer if (self.checker_texture) |*texture| {
             device.releaseTexture(texture);
@@ -271,7 +271,7 @@ pub const PrimitiveStage = struct {
             device.releaseSampler(sampler);
         };
 
-        const fragment_bindings = [_]rhi_mod.TextureSamplerBinding{
+        const fragment_bindings = [_]gfx_mod.TextureSamplerBinding{
             .{
                 .texture = &self.checker_texture.?,
                 .sampler = &self.sampler.?,
@@ -305,14 +305,14 @@ pub const PrimitiveStage = struct {
             device.releaseShaderModule(shader);
         };
 
-        const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{
+        const vertex_layouts = [_]gfx_mod.VertexBufferLayoutDesc{
             .{
                 .slot = 0,
                 .stride = @sizeOf(Vertex),
                 .input_rate = .per_vertex,
             },
         };
-        const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{
+        const vertex_attributes = [_]gfx_mod.VertexAttributeDesc{
             .{
                 .location = 0,
                 .buffer_slot = 0,

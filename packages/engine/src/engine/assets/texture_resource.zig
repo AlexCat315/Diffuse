@@ -1,11 +1,11 @@
 const std = @import("std");
-const rhi_types = @import("guava_rhi").types;
+const gfx_types = @import("guava_gfx").types;
 
 pub const TextureResource = struct {
     name: []u8,
     width: u32,
     height: u32,
-    format: rhi_types.TextureFormat = .bgra8_unorm,
+    format: gfx_types.TextureFormat = .bgra8_unorm,
     pixels: []u8,
 
     pub fn deinit(self: *TextureResource, allocator: std.mem.Allocator) void {
@@ -19,7 +19,7 @@ pub const TextureResourceDesc = struct {
     name: []const u8,
     width: u32,
     height: u32,
-    format: rhi_types.TextureFormat = .bgra8_unorm,
+    format: gfx_types.TextureFormat = .bgra8_unorm,
     pixels: []const u8,
 };
 

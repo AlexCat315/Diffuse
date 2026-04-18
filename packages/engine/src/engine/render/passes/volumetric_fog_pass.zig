@@ -1,5 +1,5 @@
 const std = @import("std");
-const rhi = @import("guava_rhi").rhi;
+const gfx = @import("guava_gfx").gfx;
 const render_graph = @import("../render_graph.zig");
 
 /// Volumetric fog pass
@@ -23,14 +23,14 @@ pub const VolumetricFogPass = struct {
     };
 
     pub const LayoutIds = struct {
-        depth_layout: rhi.BindingLayout,
-        shadow_layout: rhi.BindingLayout,
-        sampler_layout: rhi.BindingLayout,
-        shadow_sampler_layout: rhi.BindingLayout,
-        uniform_layout: rhi.BindingLayout,
+        depth_layout: gfx.BindingLayout,
+        shadow_layout: gfx.BindingLayout,
+        sampler_layout: gfx.BindingLayout,
+        shadow_sampler_layout: gfx.BindingLayout,
+        uniform_layout: gfx.BindingLayout,
     };
 
-    pub fn createLayouts(device: *rhi.Device) !LayoutIds {
+    pub fn createLayouts(device: *gfx.Device) !LayoutIds {
         const depth_layout = try device.createBindingLayout(.{
             .entries = &.{.{
                 .slot = 0,
@@ -88,7 +88,7 @@ pub const VolumetricFogPass = struct {
     /// Encode and submit volumetric fog pass via command buffer.
     pub fn execute(
         allocator: std.mem.Allocator,
-        device: *rhi.Device,
+        device: *gfx.Device,
         graph: ?*const render_graph.RenderGraph,
         input_resource_id: u32,
         output_resource_id: u32,

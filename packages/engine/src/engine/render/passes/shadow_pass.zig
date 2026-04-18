@@ -1,19 +1,19 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
+const gfx_mod = @import("gfx_legacy/mod.zig");
 const shader_support = @import("../shader_support.zig");
 
 pub const ShadowPass = struct {
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
-    vertex_stage: ?rhi_mod.ShaderModule = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
+    vertex_stage: ?gfx_mod.ShaderModule = null,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !ShadowPass {
+    pub fn init(device: *gfx_mod.GfxDevice) !ShadowPass {
         var pass = ShadowPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *ShadowPass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *ShadowPass, device: *gfx_mod.GfxDevice) void {
         if (self.pipeline) |*pipeline| {
             device.releaseGraphicsPipeline(pipeline);
         }
@@ -29,9 +29,9 @@ pub const ShadowPass = struct {
 
     pub fn draw(
         self: *ShadowPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
         light_space_matrix: [16]f32,
     ) mesh_pass_mod.DrawStats {
@@ -59,7 +59,7 @@ pub const ShadowPass = struct {
         return stats;
     }
 
-    fn createResources(self: *ShadowPass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *ShadowPass, device: *gfx_mod.GfxDevice) !void {
         self.vertex_stage = try shader_support.loadVertexStage(device, "shadow_pass");
         errdefer if (self.vertex_stage) |*vertex_stage| {
             device.releaseShaderModule(vertex_stage);

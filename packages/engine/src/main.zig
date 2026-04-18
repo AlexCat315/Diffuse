@@ -264,7 +264,7 @@ fn runEngine(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
             report.scene.light_count,
         },
     );
-    try stdout.print("RHI driver: {s}\n", .{driver_name});
+    try stdout.print("GFX driver: {s}\n", .{driver_name});
     try stdout.print("Driver info: {s}\n", .{driver_info});
     try stdout.flush();
 }

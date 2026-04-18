@@ -7,8 +7,8 @@ const texture_mod = @import("../../assets/texture_resource.zig");
 const math = @import("../../math/mat4.zig");
 const vec3 = @import("../../math/vec3.zig");
 const quat = @import("../../math/quat.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const components = @import("../../scene/components.zig");
 const scene_mod = @import("../../scene/scene.zig");
 const scene_extraction = @import("../scene_extraction.zig");
@@ -27,7 +27,7 @@ pub const GpuVertex = extern struct {
     weights: [4]f32,
 };
 
-pub fn gpuVertexBufferLayouts() [1]rhi_mod.VertexBufferLayoutDesc {
+pub fn gpuVertexBufferLayouts() [1]gfx_mod.VertexBufferLayoutDesc {
     return .{
         .{
             .slot = 0,
@@ -37,7 +37,7 @@ pub fn gpuVertexBufferLayouts() [1]rhi_mod.VertexBufferLayoutDesc {
     };
 }
 
-pub fn gpuVertexAttributes() [6]rhi_mod.VertexAttributeDesc {
+pub fn gpuVertexAttributes() [6]gfx_mod.VertexAttributeDesc {
     return .{
         .{
             .location = 0,
@@ -131,13 +131,13 @@ pub const DrawItem = struct {
     entity_id: scene_mod.EntityId,
     pickable: bool,
     mesh_handle: handles.MeshHandle = .invalid,
-    vertex_buffer: rhi_mod.Buffer,
-    index_buffer: rhi_mod.Buffer,
+    vertex_buffer: gfx_mod.Buffer,
+    index_buffer: gfx_mod.Buffer,
     index_count: u32,
-    wireframe_index_buffer: rhi_mod.Buffer,
+    wireframe_index_buffer: gfx_mod.Buffer,
     wireframe_index_count: u32,
-    bind_group: rhi_mod.BindGroup,
-    material_textures: [5]*const rhi_mod.Texture, // [0]=base_color [1]=mr [2]=normal [3]=occlusion [4]=emissive
+    bind_group: gfx_mod.BindGroup,
+    material_textures: [5]*const gfx_mod.Texture, // [0]=base_color [1]=mr [2]=normal [3]=occlusion [4]=emissive
     base_color_factor: [4]f32,
     emissive_factor: [4]f32,
     pbr_factors: [4]f32,
@@ -201,23 +201,23 @@ pub const PreparedScene = struct {
     light_space_matrix: [16]f32,
     cascade_matrices: [csm_cascade_count][16]f32 = .{ math.identity(), math.identity(), math.identity(), math.identity() },
     cascade_splits: [4]f32 = .{ 0.0, 0.0, 0.0, 0.0 },
-    shadow_maps: [csm_cascade_count]?*const rhi_mod.Texture = .{ null, null, null, null },
-    shadow_sampler: ?*const rhi_mod.Sampler,
-    texture_sampler: ?*const rhi_mod.Sampler,
-    rt_shadow_mask: ?*const rhi_mod.Texture = null,
+    shadow_maps: [csm_cascade_count]?*const gfx_mod.Texture = .{ null, null, null, null },
+    shadow_sampler: ?*const gfx_mod.Sampler,
+    texture_sampler: ?*const gfx_mod.Sampler,
+    rt_shadow_mask: ?*const gfx_mod.Texture = null,
     rt_shadow_strength: f32 = 1.0,
     rt_shadow_ambient_floor: f32 = 0.12,
-    environment_map: ?*const rhi_mod.Texture = null,
-    irradiance_map: ?*const rhi_mod.Texture = null,
-    prefiltered_env_map: ?*const rhi_mod.Texture = null,
-    brdf_lut: ?*const rhi_mod.Texture = null,
+    environment_map: ?*const gfx_mod.Texture = null,
+    irradiance_map: ?*const gfx_mod.Texture = null,
+    prefiltered_env_map: ?*const gfx_mod.Texture = null,
+    brdf_lut: ?*const gfx_mod.Texture = null,
     sky_intensity: f32 = 1.0,
     sky_enabled: bool = true,
     ambient_color: [4]f32,
     // Clustered Forward+ — written by cluster_lights_pass, read by the base pass.
-    cluster_count_texture: ?*const rhi_mod.Texture = null,
-    cluster_indices_texture: ?*const rhi_mod.Texture = null,
-    cluster_nearest_sampler: ?*const rhi_mod.Sampler = null,
+    cluster_count_texture: ?*const gfx_mod.Texture = null,
+    cluster_indices_texture: ?*const gfx_mod.Texture = null,
+    cluster_nearest_sampler: ?*const gfx_mod.Sampler = null,
     /// Cluster params for the fragment UBO: x=near, y=far, z=viewport_w, w=viewport_h
     cluster_params: [4]f32 = .{ 0.0, 0.0, 0.0, 0.0 },
     opaque_meshes: []DrawItem,
@@ -254,32 +254,32 @@ const PointLightState = struct {
 
 const CachedMesh = struct {
     handle: handles.MeshHandle,
-    vertex_buffer: rhi_mod.Buffer,
-    index_buffer: rhi_mod.Buffer,
+    vertex_buffer: gfx_mod.Buffer,
+    index_buffer: gfx_mod.Buffer,
     index_count: u32,
-    wireframe_index_buffer: rhi_mod.Buffer,
+    wireframe_index_buffer: gfx_mod.Buffer,
     wireframe_index_count: u32,
-    primitive_type: rhi_types.PrimitiveType,
+    primitive_type: gfx_types.PrimitiveType,
 };
 
 const CachedTexture = struct {
     handle: handles.TextureHandle,
-    texture: rhi_mod.Texture,
+    texture: gfx_mod.Texture,
     source_pixels_ptr: usize,
     source_pixels_len: usize,
     source_width: u32,
     source_height: u32,
-    source_format: rhi_types.TextureFormat,
+    source_format: gfx_types.TextureFormat,
 };
 
 const CachedMaterial = struct {
     handle: handles.MaterialHandle,
-    bind_group: rhi_mod.BindGroup,
+    bind_group: gfx_mod.BindGroup,
 };
 
 const MaterialState = struct {
-    bind_group: rhi_mod.BindGroup,
-    material_textures: [5]*const rhi_mod.Texture, // [0]=base_color [1]=mr [2]=normal [3]=occlusion [4]=emissive
+    bind_group: gfx_mod.BindGroup,
+    material_textures: [5]*const gfx_mod.Texture, // [0]=base_color [1]=mr [2]=normal [3]=occlusion [4]=emissive
     base_color_factor: [4]f32,
     emissive_factor: [4]f32,
     pbr_factors: [4]f32,
@@ -301,12 +301,12 @@ pub const MeshSceneCache = struct {
     meshes: std.ArrayList(CachedMesh) = .empty,
     textures: std.ArrayList(CachedTexture) = .empty,
     materials: std.ArrayList(CachedMaterial) = .empty,
-    fallback_texture: ?rhi_mod.Texture = null,
-    fallback_brdf_lut: ?rhi_mod.Texture = null,
-    sampler: ?rhi_mod.Sampler = null,
-    fallback_bind_group: ?rhi_mod.BindGroup = null,
+    fallback_texture: ?gfx_mod.Texture = null,
+    fallback_brdf_lut: ?gfx_mod.Texture = null,
+    sampler: ?gfx_mod.Sampler = null,
+    fallback_bind_group: ?gfx_mod.BindGroup = null,
 
-    pub fn init(allocator: std.mem.Allocator, device: *rhi_mod.RhiDevice) !MeshSceneCache {
+    pub fn init(allocator: std.mem.Allocator, device: *gfx_mod.GfxDevice) !MeshSceneCache {
         var cache = MeshSceneCache{
             .allocator = allocator,
         };
@@ -314,7 +314,7 @@ pub const MeshSceneCache = struct {
         return cache;
     }
 
-    pub fn deinit(self: *MeshSceneCache, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *MeshSceneCache, device: *gfx_mod.GfxDevice) void {
         for (self.materials.items) |*material| {
             device.releaseBindGroup(&material.bind_group);
         }
@@ -347,7 +347,7 @@ pub const MeshSceneCache = struct {
         self.* = undefined;
     }
 
-    pub fn invalidateMaterialResources(self: *MeshSceneCache, device: *rhi_mod.RhiDevice) void {
+    pub fn invalidateMaterialResources(self: *MeshSceneCache, device: *gfx_mod.GfxDevice) void {
         for (self.materials.items) |*material| {
             device.releaseBindGroup(&material.bind_group);
         }
@@ -361,7 +361,7 @@ pub const MeshSceneCache = struct {
         self.textures = .empty;
     }
 
-    pub fn invalidateAllResources(self: *MeshSceneCache, device: *rhi_mod.RhiDevice) void {
+    pub fn invalidateAllResources(self: *MeshSceneCache, device: *gfx_mod.GfxDevice) void {
         self.invalidateMaterialResources(device);
         for (self.meshes.items) |*cached_mesh| {
             device.releaseBuffer(&cached_mesh.wireframe_index_buffer);
@@ -374,7 +374,7 @@ pub const MeshSceneCache = struct {
 
     pub fn invalidateMeshResource(
         self: *MeshSceneCache,
-        device: *rhi_mod.RhiDevice,
+        device: *gfx_mod.GfxDevice,
         handle: handles.MeshHandle,
     ) void {
         var index: usize = 0;
@@ -432,7 +432,7 @@ pub const MeshSceneCache = struct {
 
     pub fn prepareScene(
         self: *MeshSceneCache,
-        device: *rhi_mod.RhiDevice,
+        device: *gfx_mod.GfxDevice,
         world: *const scene_mod.World,
         render_world: *const scene_extraction.RenderWorld,
         width: u32,
@@ -496,7 +496,7 @@ pub const MeshSceneCache = struct {
 
     pub fn preparePreviewScene(
         self: *MeshSceneCache,
-        device: *rhi_mod.RhiDevice,
+        device: *gfx_mod.GfxDevice,
         world: *const scene_mod.World,
         render_world: *const scene_extraction.RenderWorld,
         reference: *const PreparedScene,
@@ -574,7 +574,7 @@ pub const MeshSceneCache = struct {
         return null;
     }
 
-    pub fn fallbackBrdfLut(self: *const MeshSceneCache) ?*const rhi_mod.Texture {
+    pub fn fallbackBrdfLut(self: *const MeshSceneCache) ?*const gfx_mod.Texture {
         if (self.fallback_brdf_lut) |*texture| {
             return texture;
         }
@@ -583,20 +583,20 @@ pub const MeshSceneCache = struct {
 
     pub fn ensureTextureHandle(
         self: *MeshSceneCache,
-        device: *rhi_mod.RhiDevice,
+        device: *gfx_mod.GfxDevice,
         world: *const scene_mod.World,
         handle: handles.TextureHandle,
-    ) !*rhi_mod.Texture {
+    ) !*gfx_mod.Texture {
         const texture = world.resources.texture(handle) orelse return error.TextureNotFound;
         return self.ensureTexture(device, handle, texture);
     }
 
-    fn createFallbackResources(self: *MeshSceneCache, device: *rhi_mod.RhiDevice) !void {
+    fn createFallbackResources(self: *MeshSceneCache, device: *gfx_mod.GfxDevice) !void {
         self.fallback_texture = try device.createTexture(.{
             .width = 1,
             .height = 1,
             .format = .bgra8_unorm,
-            .usage = rhi_types.TextureUsage.sampler,
+            .usage = gfx_types.TextureUsage.sampler,
         });
         try device.uploadTextureData(&self.fallback_texture.?, fallback_white_bgra[0..], 1, 1);
 
@@ -607,7 +607,7 @@ pub const MeshSceneCache = struct {
             .width = 128,
             .height = 128,
             .format = .rgba32_float,
-            .usage = rhi_types.TextureUsage.sampler,
+            .usage = gfx_types.TextureUsage.sampler,
         });
         errdefer if (self.fallback_brdf_lut) |*texture| {
             device.releaseTexture(texture);
@@ -623,7 +623,7 @@ pub const MeshSceneCache = struct {
             .address_mode_w = .repeat,
         });
 
-        const bindings = [_]rhi_mod.TextureSamplerBinding{
+        const bindings = [_]gfx_mod.TextureSamplerBinding{
             .{ .texture = &self.fallback_texture.?, .sampler = &self.sampler.? },
             .{ .texture = &self.fallback_texture.?, .sampler = &self.sampler.? },
             .{ .texture = &self.fallback_texture.?, .sampler = &self.sampler.? },
@@ -643,7 +643,7 @@ pub const MeshSceneCache = struct {
     // 4) 将结果写入缓存并返回
     fn ensureMesh(
         self: *MeshSceneCache,
-        device: *rhi_mod.RhiDevice,
+        device: *gfx_mod.GfxDevice,
         handle: handles.MeshHandle,
         mesh: *const mesh_mod.MeshResource,
     ) !CachedMesh {
@@ -657,7 +657,7 @@ pub const MeshSceneCache = struct {
         // 创建顶点缓冲（GPU），大小按 GpuVertex * 顶点数
         const vertex_buffer = try device.createBuffer(.{
             .size = @intCast(@sizeOf(GpuVertex) * mesh.vertices.len),
-            .usage = rhi_types.BufferUsage.vertex,
+            .usage = gfx_types.BufferUsage.vertex,
         });
         // 出错时释放已经创建的 buffer
         errdefer {
@@ -690,7 +690,7 @@ pub const MeshSceneCache = struct {
         // 创建并上传索引缓冲（u32）
         const index_buffer = try device.createBuffer(.{
             .size = @intCast(@sizeOf(u32) * mesh.indices.len),
-            .usage = rhi_types.BufferUsage.index,
+            .usage = gfx_types.BufferUsage.index,
         });
         errdefer {
             var copy = index_buffer;
@@ -703,7 +703,7 @@ pub const MeshSceneCache = struct {
         defer self.allocator.free(wireframe_indices);
         const wireframe_index_buffer = try device.createBuffer(.{
             .size = @intCast(@sizeOf(u32) * wireframe_indices.len),
-            .usage = rhi_types.BufferUsage.index,
+            .usage = gfx_types.BufferUsage.index,
         });
         errdefer {
             var copy = wireframe_index_buffer;
@@ -764,10 +764,10 @@ pub const MeshSceneCache = struct {
 
     fn ensureTexture(
         self: *MeshSceneCache,
-        device: *rhi_mod.RhiDevice,
+        device: *gfx_mod.GfxDevice,
         handle: handles.TextureHandle,
         texture: *const texture_mod.TextureResource,
-    ) !*rhi_mod.Texture {
+    ) !*gfx_mod.Texture {
         for (self.textures.items) |*cached| {
             if (cached.handle == handle) {
                 const src_ptr = if (texture.pixels.len > 0) @intFromPtr(texture.pixels.ptr) else 0;
@@ -789,7 +789,7 @@ pub const MeshSceneCache = struct {
                             .width = texture.width,
                             .height = texture.height,
                             .format = texture.format,
-                            .usage = rhi_types.TextureUsage.sampler,
+                            .usage = gfx_types.TextureUsage.sampler,
                         });
                     }
                     try device.uploadTextureData(&cached.texture, texture.pixels, texture.width, texture.height);
@@ -807,7 +807,7 @@ pub const MeshSceneCache = struct {
             .width = texture.width,
             .height = texture.height,
             .format = texture.format,
-            .usage = rhi_types.TextureUsage.sampler,
+            .usage = gfx_types.TextureUsage.sampler,
         });
         errdefer {
             var copy = gpu_texture;
@@ -829,11 +829,11 @@ pub const MeshSceneCache = struct {
 
     fn ensureMaterial(
         self: *MeshSceneCache,
-        device: *rhi_mod.RhiDevice,
+        device: *gfx_mod.GfxDevice,
         handle: handles.MaterialHandle,
         material: *const material_mod.MaterialResource,
         scene: *const scene_mod.World,
-    ) !?rhi_mod.BindGroup {
+    ) !?gfx_mod.BindGroup {
         for (self.materials.items) |cached| {
             if (cached.handle == handle) {
                 return cached.bind_group;
@@ -846,7 +846,7 @@ pub const MeshSceneCache = struct {
         const occlusion_tex = if (material.occlusion_texture) |h| try self.ensureTexture(device, h, scene.resources.texture(h).?) else &self.fallback_texture.?;
         const emissive_tex = if (material.emissive_texture) |h| try self.ensureTexture(device, h, scene.resources.texture(h).?) else &self.fallback_texture.?;
 
-        const bindings = [_]rhi_mod.TextureSamplerBinding{
+        const bindings = [_]gfx_mod.TextureSamplerBinding{
             .{ .texture = base_color_tex, .sampler = &self.sampler.? },
             .{ .texture = metallic_roughness_tex, .sampler = &self.sampler.? },
             .{ .texture = normal_tex, .sampler = &self.sampler.? },
@@ -867,7 +867,7 @@ pub const MeshSceneCache = struct {
 
     fn resolveMaterial(
         self: *MeshSceneCache,
-        device: *rhi_mod.RhiDevice,
+        device: *gfx_mod.GfxDevice,
         scene: *const scene_mod.World,
         material_component: ?components.Material,
     ) !MaterialState {
@@ -1020,7 +1020,7 @@ pub const MeshSceneCache = struct {
 
     fn appendPreparedMeshes(
         self: *MeshSceneCache,
-        device: *rhi_mod.RhiDevice,
+        device: *gfx_mod.GfxDevice,
         world: *const scene_mod.World,
         render_world: *const scene_extraction.RenderWorld,
         pickable: bool,

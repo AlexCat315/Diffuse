@@ -1,5 +1,5 @@
 const std = @import("std");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
+const gfx_mod = @import("gfx_legacy/mod.zig");
 const id_pass_mod = @import("passes/id_pass.zig");
 const selection_history_mod = @import("selection_history.zig");
 
@@ -17,11 +17,11 @@ pub const InFlightSelectionReadback = struct {
 };
 
 pub const InFlightSelectionBatch = struct {
-    fence: rhi_mod.Fence,
-    transfer_buffer: rhi_mod.TransferBuffer,
+    fence: gfx_mod.Fence,
+    transfer_buffer: gfx_mod.TransferBuffer,
     readbacks: []InFlightSelectionReadback,
 
-    pub fn deinit(self: *InFlightSelectionBatch, allocator: std.mem.Allocator, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *InFlightSelectionBatch, allocator: std.mem.Allocator, device: *gfx_mod.GfxDevice) void {
         device.releaseTransferBuffer(&self.transfer_buffer);
         allocator.free(self.readbacks);
         device.releaseFence(&self.fence);
@@ -31,16 +31,16 @@ pub const InFlightSelectionBatch = struct {
 
 pub fn enqueueSelectionReadbacks(
     allocator: std.mem.Allocator,
-    rhi: *rhi_mod.RhiDevice,
-    frame: rhi_mod.Frame,
-    id_texture: *const rhi_mod.Texture,
+    gfx: *gfx_mod.GfxDevice,
+    frame: gfx_mod.Frame,
+    id_texture: *const gfx_mod.Texture,
     pending: []SelectionReadbackRequest,
     in_flight_batches: *std.ArrayList(InFlightSelectionBatch),
 ) !void {
     const total_buffer_size = std.math.cast(u32, pending.len * @as(usize, selection_readback_bytes)) orelse return error.OutOfMemory;
 
     if (id_texture.desc.width == 0 or id_texture.desc.height == 0) {
-        try rhi.submitFrame(frame);
+        try gfx.submitFrame(frame);
         for (pending) |request| {
             _ = request;
         }
@@ -50,11 +50,11 @@ pub fn enqueueSelectionReadbacks(
     var readbacks = try allocator.alloc(InFlightSelectionReadback, pending.len);
     errdefer allocator.free(readbacks);
 
-    var transfer_buffer = try rhi.createTransferBuffer(.{
+    var transfer_buffer = try gfx.createTransferBuffer(.{
         .size = total_buffer_size,
         .upload = false,
     });
-    errdefer rhi.releaseTransferBuffer(&transfer_buffer);
+    errdefer gfx.releaseTransferBuffer(&transfer_buffer);
 
     for (pending, 0..) |request, index| {
         readbacks[index] = .{
@@ -63,18 +63,18 @@ pub fn enqueueSelectionReadbacks(
         };
     }
 
-    const copy_pass = try rhi.beginCopyPass(frame);
+    const copy_pass = try gfx.beginCopyPass(frame);
 
     for (readbacks) |readback| {
         const pixel_x = @min(readback.request.pixel_x, id_texture.desc.width - 1);
         const pixel_y = @min(readback.request.pixel_y, id_texture.desc.height - 1);
-        rhi.downloadTexturePixelToOffset(copy_pass, id_texture, &transfer_buffer, readback.offset, pixel_x, pixel_y);
+        gfx.downloadTexturePixelToOffset(copy_pass, id_texture, &transfer_buffer, readback.offset, pixel_x, pixel_y);
     }
 
-    rhi.endCopyPass(copy_pass);
+    gfx.endCopyPass(copy_pass);
 
-    var fence = try rhi.submitFrameAndAcquireFence(frame);
-    errdefer rhi.releaseFence(&fence);
+    var fence = try gfx.submitFrameAndAcquireFence(frame);
+    errdefer gfx.releaseFence(&fence);
 
     try in_flight_batches.append(allocator, .{
         .fence = fence,
@@ -85,21 +85,21 @@ pub fn enqueueSelectionReadbacks(
 
 pub fn resolveSelectionReadbacks(
     allocator: std.mem.Allocator,
-    rhi: *rhi_mod.RhiDevice,
+    gfx: *gfx_mod.GfxDevice,
     in_flight_batches: *std.ArrayList(InFlightSelectionBatch),
     selection_history: *selection_history_mod.SelectionHistory,
 ) !void {
     while (in_flight_batches.items.len > 0) {
-        if (!rhi.isFenceSignaled(&in_flight_batches.items[0].fence)) {
+        if (!gfx.isFenceSignaled(&in_flight_batches.items[0].fence)) {
             break;
         }
 
         var batch = in_flight_batches.orderedRemove(0);
-        defer batch.deinit(allocator, rhi);
+        defer batch.deinit(allocator, gfx);
 
         for (batch.readbacks) |readback| {
             var pixel: [4]u8 = undefined;
-            try rhi.readTransferBufferBytesAt(&batch.transfer_buffer, readback.offset, pixel[0..]);
+            try gfx.readTransferBufferBytesAt(&batch.transfer_buffer, readback.offset, pixel[0..]);
             const entity = id_pass_mod.decodeEntityIdBgra(pixel);
             _ = try selection_history.applyPick(entity, readback.request.mode);
         }
@@ -108,11 +108,11 @@ pub fn resolveSelectionReadbacks(
 
 pub fn releaseInFlightSelectionBatches(
     allocator: std.mem.Allocator,
-    rhi: *rhi_mod.RhiDevice,
+    gfx: *gfx_mod.GfxDevice,
     in_flight_batches: *std.ArrayList(InFlightSelectionBatch),
 ) void {
     for (in_flight_batches.items) |*batch| {
-        batch.deinit(allocator, rhi);
+        batch.deinit(allocator, gfx);
     }
     in_flight_batches.deinit(allocator);
 }

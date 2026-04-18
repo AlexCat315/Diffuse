@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
+const gfx_mod = @import("gfx_legacy/mod.zig");
 const shader_support = @import("../shader_support.zig");
 
 const fullscreen_triangle_vertex_count: u32 = 3;
@@ -23,20 +23,20 @@ pub const SSRParams = extern struct {
 };
 
 pub const SSRPass = struct {
-    sampler: ?rhi_mod.Sampler = null,
-    bind_group: ?rhi_mod.BindGroup = null,
+    sampler: ?gfx_mod.Sampler = null,
+    bind_group: ?gfx_mod.BindGroup = null,
     bound_color_handle: usize = 0,
     bound_depth_handle: usize = 0,
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !SSRPass {
+    pub fn init(device: *gfx_mod.GfxDevice) !SSRPass {
         var pass = SSRPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *SSRPass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *SSRPass, device: *gfx_mod.GfxDevice) void {
         if (self.bind_group) |*bind_group| {
             device.releaseBindGroup(bind_group);
         }
@@ -58,9 +58,9 @@ pub const SSRPass = struct {
 
     pub fn syncTextures(
         self: *SSRPass,
-        device: *rhi_mod.RhiDevice,
-        color_texture: *const rhi_mod.Texture,
-        depth_texture: *const rhi_mod.Texture,
+        device: *gfx_mod.GfxDevice,
+        color_texture: *const gfx_mod.Texture,
+        depth_texture: *const gfx_mod.Texture,
     ) !void {
         const color_handle = color_texture.id;
         const depth_handle = depth_texture.id;
@@ -72,7 +72,7 @@ pub const SSRPass = struct {
             device.releaseBindGroup(bind_group);
         }
 
-        const bindings = [2]rhi_mod.TextureSamplerBinding{
+        const bindings = [2]gfx_mod.TextureSamplerBinding{
             .{ .texture = color_texture, .sampler = &self.sampler.? },
             .{ .texture = depth_texture, .sampler = &self.sampler.? },
         };
@@ -86,9 +86,9 @@ pub const SSRPass = struct {
 
     pub fn draw(
         self: *SSRPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         uniforms: SSRParams,
     ) mesh_pass_mod.DrawStats {
         var stats = mesh_pass_mod.DrawStats{};
@@ -106,7 +106,7 @@ pub const SSRPass = struct {
         return stats;
     }
 
-    fn createResources(self: *SSRPass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *SSRPass, device: *gfx_mod.GfxDevice) !void {
         self.sampler = try device.createSampler(.{
             .min_filter = .linear,
             .mag_filter = .linear,
@@ -124,8 +124,8 @@ pub const SSRPass = struct {
             stages.deinit(device);
         };
 
-        const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{};
-        const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{};
+        const vertex_layouts = [_]gfx_mod.VertexBufferLayoutDesc{};
+        const vertex_attributes = [_]gfx_mod.VertexAttributeDesc{};
 
         self.pipeline = try device.createGraphicsPipeline(.{
             .vertex_shader = &self.stages.?.vertex,

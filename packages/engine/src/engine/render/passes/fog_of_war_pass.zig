@@ -5,8 +5,8 @@
 
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
 const fullscreen_triangle_vertex_count: u32 = 3;
@@ -29,23 +29,23 @@ comptime {
 }
 
 pub const FogOfWarPass = struct {
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
-    sampler: ?rhi_mod.Sampler = null,
-    bind_group: ?rhi_mod.BindGroup = null,
+    sampler: ?gfx_mod.Sampler = null,
+    bind_group: ?gfx_mod.BindGroup = null,
     bound_texture_handle: usize = 0,
     /// 可见性纹理（R8）
-    fog_texture: ?rhi_mod.Texture = null,
+    fog_texture: ?gfx_mod.Texture = null,
     fog_texture_width: u16 = 0,
     fog_texture_height: u16 = 0,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !FogOfWarPass {
+    pub fn init(device: *gfx_mod.GfxDevice) !FogOfWarPass {
         var pass = FogOfWarPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *FogOfWarPass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *FogOfWarPass, device: *gfx_mod.GfxDevice) void {
         if (self.bind_group) |*bg| device.releaseBindGroup(bg);
         if (self.sampler) |*s| device.releaseSampler(s);
         if (self.pipeline) |*p| device.releaseGraphicsPipeline(p);
@@ -61,7 +61,7 @@ pub const FogOfWarPass = struct {
     /// 上传可见性数据到 GPU 纹理。如果尺寸变化则重新创建纹理。
     pub fn uploadVisibility(
         self: *FogOfWarPass,
-        device: *rhi_mod.RhiDevice,
+        device: *gfx_mod.GfxDevice,
         data: []const u8,
         width: u16,
         height: u16,
@@ -77,7 +77,7 @@ pub const FogOfWarPass = struct {
                 .width = width,
                 .height = height,
                 .format = .r8_unorm,
-                .usage = rhi_types.TextureUsage.sampler,
+                .usage = gfx_types.TextureUsage.sampler,
             });
             self.fog_texture_width = width;
             self.fog_texture_height = height;
@@ -89,7 +89,7 @@ pub const FogOfWarPass = struct {
         const tex_handle = self.fog_texture.?.id;
         if (self.bind_group == null or self.bound_texture_handle != tex_handle) {
             if (self.bind_group) |*bg| device.releaseBindGroup(bg);
-            const bindings = [_]rhi_mod.TextureSamplerBinding{
+            const bindings = [_]gfx_mod.TextureSamplerBinding{
                 .{ .texture = &self.fog_texture.?, .sampler = &self.sampler.? },
             };
             self.bind_group = try device.createBindGroup(.{
@@ -103,9 +103,9 @@ pub const FogOfWarPass = struct {
     /// 绘制迷雾叠加
     pub fn draw(
         self: *FogOfWarPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         uniforms: FogUniforms,
     ) mesh_pass_mod.DrawStats {
         var stats = mesh_pass_mod.DrawStats{};
@@ -123,7 +123,7 @@ pub const FogOfWarPass = struct {
         return stats;
     }
 
-    fn createResources(self: *FogOfWarPass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *FogOfWarPass, device: *gfx_mod.GfxDevice) !void {
         self.sampler = try device.createSampler(.{
             .min_filter = .linear,
             .mag_filter = .linear,
@@ -137,8 +137,8 @@ pub const FogOfWarPass = struct {
         self.stages = try shader_support.loadProgramStages(device, "fog_of_war");
         errdefer if (self.stages) |*s| s.deinit(device);
 
-        const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{};
-        const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{};
+        const vertex_layouts = [_]gfx_mod.VertexBufferLayoutDesc{};
+        const vertex_attributes = [_]gfx_mod.VertexAttributeDesc{};
 
         self.pipeline = try device.createGraphicsPipeline(.{
             .vertex_shader = &self.stages.?.vertex,

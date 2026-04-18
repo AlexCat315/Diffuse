@@ -1,24 +1,24 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
+const gfx_mod = @import("gfx_legacy/mod.zig");
 const shader_support = @import("../shader_support.zig");
 
 const fullscreen_triangle_vertex_count: u32 = 3;
 
 pub const FxaaPass = struct {
-    sampler: ?rhi_mod.Sampler = null,
-    bind_group: ?rhi_mod.BindGroup = null,
+    sampler: ?gfx_mod.Sampler = null,
+    bind_group: ?gfx_mod.BindGroup = null,
     bound_input_handle: usize = 0,
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !FxaaPass {
+    pub fn init(device: *gfx_mod.GfxDevice) !FxaaPass {
         var pass = FxaaPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *FxaaPass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *FxaaPass, device: *gfx_mod.GfxDevice) void {
         if (self.bind_group) |*bind_group| {
             device.releaseBindGroup(bind_group);
         }
@@ -40,8 +40,8 @@ pub const FxaaPass = struct {
 
     pub fn syncTexture(
         self: *FxaaPass,
-        device: *rhi_mod.RhiDevice,
-        input_texture: *const rhi_mod.Texture,
+        device: *gfx_mod.GfxDevice,
+        input_texture: *const gfx_mod.Texture,
     ) !void {
         const input_handle = input_texture.id;
         if (self.bind_group != null and self.bound_input_handle == input_handle) {
@@ -52,7 +52,7 @@ pub const FxaaPass = struct {
             device.releaseBindGroup(bind_group);
         }
 
-        const bindings = [_]rhi_mod.TextureSamplerBinding{
+        const bindings = [_]gfx_mod.TextureSamplerBinding{
             .{ .texture = input_texture, .sampler = &self.sampler.? },
         };
         self.bind_group = try device.createBindGroup(.{
@@ -64,9 +64,9 @@ pub const FxaaPass = struct {
 
     pub fn draw(
         self: *FxaaPass,
-        device: *rhi_mod.RhiDevice,
-        _: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        _: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
     ) mesh_pass_mod.DrawStats {
         var stats = mesh_pass_mod.DrawStats{};
         if (!self.isReady() or self.bind_group == null) {
@@ -82,7 +82,7 @@ pub const FxaaPass = struct {
         return stats;
     }
 
-    fn createResources(self: *FxaaPass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *FxaaPass, device: *gfx_mod.GfxDevice) !void {
         self.sampler = try device.createSampler(.{
             .min_filter = .linear,
             .mag_filter = .linear,
@@ -100,8 +100,8 @@ pub const FxaaPass = struct {
             stages.deinit(device);
         };
 
-        const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{};
-        const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{};
+        const vertex_layouts = [_]gfx_mod.VertexBufferLayoutDesc{};
+        const vertex_attributes = [_]gfx_mod.VertexAttributeDesc{};
 
         self.pipeline = try device.createGraphicsPipeline(.{
             .vertex_shader = &self.stages.?.vertex,

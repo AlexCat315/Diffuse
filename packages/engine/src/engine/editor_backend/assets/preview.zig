@@ -58,21 +58,21 @@ pub fn ensurePreviewTextureForResource(
 
     clearPreviewTexture(state);
 
-    var texture = try layer_context.rhi().createTexture(.{
+    var texture = try layer_context.gfx().createTexture(.{
         .width = width,
         .height = height,
         .format = .bgra8_unorm,
-        .usage = engine.rhi.TextureUsage.sampler,
+        .usage = engine.gfx.TextureUsage.sampler,
     });
-    errdefer layer_context.rhi().releaseTexture(&texture);
+    errdefer layer_context.gfx().releaseTexture(&texture);
 
-    try layer_context.rhi().uploadTextureData(&texture, pixels, width, height);
+    try layer_context.gfx().uploadTextureData(&texture, pixels, width, height);
 
     const allocator = state.allocator orelse layer_context.world.allocator;
     state.preview_texture = texture;
     state.preview_texture_key = try allocator.dupe(u8, cache_key);
     state.preview_texture_size = .{ width, height };
-    state.preview_device = layer_context.rhi();
+    state.preview_device = layer_context.gfx();
 }
 
 pub fn clearPreviewTexture(state: *EditorState) void {

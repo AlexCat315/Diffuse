@@ -1,8 +1,8 @@
 const std = @import("std");
 const id_pass_mod = @import("id_pass.zig");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const scene_mod = @import("../../scene/scene.zig");
 const shader_support = @import("../shader_support.zig");
 
@@ -22,20 +22,20 @@ pub const OutlineUniforms = extern struct {
 };
 
 pub const OutlinePass = struct {
-    fullscreen_vertex_buffer: ?rhi_mod.Buffer = null,
-    sampler: ?rhi_mod.Sampler = null,
-    bind_group: ?rhi_mod.BindGroup = null,
+    fullscreen_vertex_buffer: ?gfx_mod.Buffer = null,
+    sampler: ?gfx_mod.Sampler = null,
+    bind_group: ?gfx_mod.BindGroup = null,
     bound_texture_handle: usize = 0,
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !OutlinePass {
+    pub fn init(device: *gfx_mod.GfxDevice) !OutlinePass {
         var pass = OutlinePass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *OutlinePass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *OutlinePass, device: *gfx_mod.GfxDevice) void {
         if (self.bind_group) |*bind_group| {
             device.releaseBindGroup(bind_group);
         }
@@ -60,8 +60,8 @@ pub const OutlinePass = struct {
 
     pub fn syncTexture(
         self: *OutlinePass,
-        device: *rhi_mod.RhiDevice,
-        id_texture: *const rhi_mod.Texture,
+        device: *gfx_mod.GfxDevice,
+        id_texture: *const gfx_mod.Texture,
     ) !void {
         const texture_handle = id_texture.id;
         if (self.bind_group != null and self.bound_texture_handle == texture_handle) {
@@ -72,7 +72,7 @@ pub const OutlinePass = struct {
             device.releaseBindGroup(bind_group);
         }
 
-        const bindings = [_]rhi_mod.TextureSamplerBinding{
+        const bindings = [_]gfx_mod.TextureSamplerBinding{
             .{
                 .texture = id_texture,
                 .sampler = &self.sampler.?,
@@ -87,9 +87,9 @@ pub const OutlinePass = struct {
 
     pub fn draw(
         self: *OutlinePass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         selected_entities: []const scene_mod.EntityId,
     ) mesh_pass_mod.DrawStats {
         var stats = mesh_pass_mod.DrawStats{};
@@ -119,9 +119,9 @@ pub const OutlinePass = struct {
     /// Draw outlines with a custom color (used for AI Ghost Highlight — purple pulse).
     pub fn drawWithColor(
         self: *OutlinePass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         entities: []const scene_mod.EntityId,
         color: [4]f32,
     ) mesh_pass_mod.DrawStats {
@@ -149,10 +149,10 @@ pub const OutlinePass = struct {
         return stats;
     }
 
-    fn createResources(self: *OutlinePass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *OutlinePass, device: *gfx_mod.GfxDevice) !void {
         self.fullscreen_vertex_buffer = try device.createBuffer(.{
             .size = @sizeOf(FullscreenVertex) * fullscreen_triangle.len,
-            .usage = rhi_types.BufferUsage.vertex,
+            .usage = gfx_types.BufferUsage.vertex,
         });
         errdefer if (self.fullscreen_vertex_buffer) |*buffer| {
             device.releaseBuffer(buffer);
@@ -176,14 +176,14 @@ pub const OutlinePass = struct {
             stages.deinit(device);
         };
 
-        const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{
+        const vertex_layouts = [_]gfx_mod.VertexBufferLayoutDesc{
             .{
                 .slot = 0,
                 .stride = @sizeOf(FullscreenVertex),
                 .input_rate = .per_vertex,
             },
         };
-        const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{
+        const vertex_attributes = [_]gfx_mod.VertexAttributeDesc{
             .{
                 .location = 0,
                 .buffer_slot = 0,

@@ -19,7 +19,7 @@
 
 const std = @import("std");
 const io_globals = @import("io_globals");
-const rhi = @import("guava_rhi").rhi;
+const gfx = @import("guava_gfx").gfx;
 
 /// GPU queue type for pass execution.
 pub const QueueClass = enum {
@@ -153,7 +153,7 @@ pub const RenderPass = struct {
     inputs: []const PassResourceUse = &.{},
     /// Resources written by this pass; compile() adds output barriers for subsequent readers.
     outputs: []const PassResourceUse = &.{},
-    /// Binding slot-layout constraints: which RHI binding layout each slot must use.
+    /// Binding slot-layout constraints: which GFX binding layout each slot must use.
     binding_constraints: []const SlotLayoutConstraint = &.{},
 };
 
@@ -615,8 +615,8 @@ pub const RenderGraph = struct {
     pub fn encodeBarrierPlansToCommandBuffer(
         self: *const RenderGraph,
         allocator: std.mem.Allocator,
-        device: *const rhi.Device,
-        cmd: *rhi.CommandBuffer,
+        device: *const gfx.Device,
+        cmd: *gfx.CommandBuffer,
     ) !void {
         _ = device;
         const plans = try self.buildBarrierPlanAlloc(allocator);
@@ -628,9 +628,9 @@ pub const RenderGraph = struct {
     }
 
     pub fn encodeBarrierTransition(
-        cmd: *rhi.CommandBuffer,
+        cmd: *gfx.CommandBuffer,
         resource_id: u32,
-        resource_kind: rhi.ResourceKind,
+        resource_kind: gfx.ResourceKind,
         src_state: BarrierState,
         dst_state: BarrierState,
         src_queue: QueueClass,
@@ -656,12 +656,12 @@ pub const RenderGraph = struct {
     };
 
     /// Validate all compiled passes' binding slot-layout constraints against
-    /// the pipeline layouts registered on the given RHI device.
+    /// the pipeline layouts registered on the given GFX device.
     /// Returns a list of mismatches (empty = all good).
     pub fn validateSlotLayoutConstraints(
         self: *const RenderGraph,
         allocator: std.mem.Allocator,
-        device: *const rhi.Device,
+        device: *const gfx.Device,
     ) ![]SlotLayoutValidationError {
         const compiled = self.compiled orelse return allocator.alloc(SlotLayoutValidationError, 0);
 
@@ -915,7 +915,7 @@ fn resolveBarrierState(use_ref: PassResourceUse, kind: ResourceKind) BarrierStat
     };
 }
 
-fn trackedResourceKindForNode(kind: ResourceKind) rhi.ResourceKind {
+fn trackedResourceKindForNode(kind: ResourceKind) gfx.ResourceKind {
     return switch (kind) {
         .buffer => .buffer,
         .accel_structure => .accel_structure,
@@ -925,22 +925,22 @@ fn trackedResourceKindForNode(kind: ResourceKind) rhi.ResourceKind {
 
 fn barrierStateToBits(state: BarrierState) u32 {
     return switch (state) {
-        .unknown => (rhi.ResourceStates{}).asBits(),
-        .shader_read => (rhi.ResourceStates{ .shader_resource = true }).asBits(),
-        .shader_write => (rhi.ResourceStates{ .unordered_access = true }).asBits(),
-        .shader_read_write => (rhi.ResourceStates{ .shader_resource = true, .unordered_access = true }).asBits(),
-        .constant_buffer => (rhi.ResourceStates{ .constant_buffer = true }).asBits(),
-        .vertex_buffer => (rhi.ResourceStates{ .vertex_buffer = true }).asBits(),
-        .index_buffer => (rhi.ResourceStates{ .index_buffer = true }).asBits(),
-        .indirect_argument => (rhi.ResourceStates{ .indirect_argument = true }).asBits(),
-        .render_target => (rhi.ResourceStates{ .render_target = true }).asBits(),
-        .depth_write => (rhi.ResourceStates{ .depth_write = true }).asBits(),
-        .depth_read => (rhi.ResourceStates{ .depth_read = true }).asBits(),
-        .copy_source => (rhi.ResourceStates{ .copy_source = true }).asBits(),
-        .copy_dest => (rhi.ResourceStates{ .copy_dest = true }).asBits(),
-        .accel_struct_read => (rhi.ResourceStates{ .accel_struct_read = true }).asBits(),
-        .accel_struct_write => (rhi.ResourceStates{ .accel_struct_write = true }).asBits(),
-        .present => (rhi.ResourceStates{ .present = true }).asBits(),
+        .unknown => (gfx.ResourceStates{}).asBits(),
+        .shader_read => (gfx.ResourceStates{ .shader_resource = true }).asBits(),
+        .shader_write => (gfx.ResourceStates{ .unordered_access = true }).asBits(),
+        .shader_read_write => (gfx.ResourceStates{ .shader_resource = true, .unordered_access = true }).asBits(),
+        .constant_buffer => (gfx.ResourceStates{ .constant_buffer = true }).asBits(),
+        .vertex_buffer => (gfx.ResourceStates{ .vertex_buffer = true }).asBits(),
+        .index_buffer => (gfx.ResourceStates{ .index_buffer = true }).asBits(),
+        .indirect_argument => (gfx.ResourceStates{ .indirect_argument = true }).asBits(),
+        .render_target => (gfx.ResourceStates{ .render_target = true }).asBits(),
+        .depth_write => (gfx.ResourceStates{ .depth_write = true }).asBits(),
+        .depth_read => (gfx.ResourceStates{ .depth_read = true }).asBits(),
+        .copy_source => (gfx.ResourceStates{ .copy_source = true }).asBits(),
+        .copy_dest => (gfx.ResourceStates{ .copy_dest = true }).asBits(),
+        .accel_struct_read => (gfx.ResourceStates{ .accel_struct_read = true }).asBits(),
+        .accel_struct_write => (gfx.ResourceStates{ .accel_struct_write = true }).asBits(),
+        .present => (gfx.ResourceStates{ .present = true }).asBits(),
     };
 }
 

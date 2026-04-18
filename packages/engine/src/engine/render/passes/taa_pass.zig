@@ -1,7 +1,7 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("engine/rhi_legacy/mod.zig");
-const rhi_types = @import("guava_rhi").types;
+const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
 const FullscreenVertex = extern struct {
@@ -29,28 +29,28 @@ pub const TAAUniforms = extern struct {
 };
 
 pub const TAAPass = struct {
-    fullscreen_vertex_buffer: ?rhi_mod.Buffer = null,
-    sampler: ?rhi_mod.Sampler = null,
-    bind_group: ?rhi_mod.BindGroup = null,
+    fullscreen_vertex_buffer: ?gfx_mod.Buffer = null,
+    sampler: ?gfx_mod.Sampler = null,
+    bind_group: ?gfx_mod.BindGroup = null,
     bound_color_handle: usize = 0,
     bound_history_handle: usize = 0,
     bound_velocity_handle: usize = 0,
     bound_depth_handle: usize = 0,
-    pipeline: ?rhi_mod.GraphicsPipeline = null,
+    pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
-    history_texture: ?rhi_mod.Texture = null,
+    history_texture: ?gfx_mod.Texture = null,
     history_valid: bool = false,
     frame_index: u32 = 0,
     halton_sequence: [8][2]f32 = undefined,
 
-    pub fn init(device: *rhi_mod.RhiDevice) !TAAPass {
+    pub fn init(device: *gfx_mod.GfxDevice) !TAAPass {
         var pass = TAAPass{};
         try pass.createResources(device);
         pass.generateHaltonSequence();
         return pass;
     }
 
-    pub fn deinit(self: *TAAPass, device: *rhi_mod.RhiDevice) void {
+    pub fn deinit(self: *TAAPass, device: *gfx_mod.GfxDevice) void {
         if (self.bind_group) |*bind_group| {
             device.releaseBindGroup(bind_group);
         }
@@ -97,7 +97,7 @@ pub const TAAPass = struct {
         self.history_valid = self.history_texture != null;
     }
 
-    pub fn ensureHistoryTexture(self: *TAAPass, device: *rhi_mod.RhiDevice, width: u32, height: u32) !void {
+    pub fn ensureHistoryTexture(self: *TAAPass, device: *gfx_mod.GfxDevice, width: u32, height: u32) !void {
         if (self.history_texture) |ht| {
             if (ht.desc.width == width and ht.desc.height == height) return;
             var tex = self.history_texture.?;
@@ -109,17 +109,17 @@ pub const TAAPass = struct {
             .width = width,
             .height = height,
             .format = .rgba16_float,
-            .usage = rhi_types.TextureUsage.color_target | rhi_types.TextureUsage.sampler,
+            .usage = gfx_types.TextureUsage.color_target | gfx_types.TextureUsage.sampler,
         });
         self.history_valid = false;
     }
 
     pub fn syncTextures(
         self: *TAAPass,
-        device: *rhi_mod.RhiDevice,
-        color_texture: *const rhi_mod.Texture,
-        velocity_texture: ?*const rhi_mod.Texture,
-        depth_texture: ?*const rhi_mod.Texture,
+        device: *gfx_mod.GfxDevice,
+        color_texture: *const gfx_mod.Texture,
+        velocity_texture: ?*const gfx_mod.Texture,
+        depth_texture: ?*const gfx_mod.Texture,
     ) !void {
         const color_handle = color_texture.id;
         const history_handle = if (self.history_texture) |ht| ht.id else 0;
@@ -141,11 +141,11 @@ pub const TAAPass = struct {
 
         // Always bind 4 textures to match shader layout (set=2, binding 0-3).
         // Use current color as fallback for missing history/velocity/depth.
-        const history_tex = if (self.history_texture) |*ht| @as(*const rhi_mod.Texture, ht) else color_texture;
+        const history_tex = if (self.history_texture) |*ht| @as(*const gfx_mod.Texture, ht) else color_texture;
         const velocity_tex = if (velocity_texture) |vt| vt else color_texture;
         const depth_tex = if (depth_texture) |dt| dt else color_texture;
 
-        const bindings = [4]rhi_mod.TextureSamplerBinding{
+        const bindings = [4]gfx_mod.TextureSamplerBinding{
             .{ .texture = color_texture, .sampler = &self.sampler.? },
             .{ .texture = history_tex, .sampler = &self.sampler.? },
             .{ .texture = velocity_tex, .sampler = &self.sampler.? },
@@ -164,9 +164,9 @@ pub const TAAPass = struct {
 
     pub fn draw(
         self: *TAAPass,
-        device: *rhi_mod.RhiDevice,
-        frame: rhi_mod.Frame,
-        pass: rhi_mod.RenderPass,
+        device: *gfx_mod.GfxDevice,
+        frame: gfx_mod.Frame,
+        pass: gfx_mod.RenderPass,
         uniforms: TAAUniforms,
     ) mesh_pass_mod.DrawStats {
         var stats = mesh_pass_mod.DrawStats{};
@@ -195,10 +195,10 @@ pub const TAAPass = struct {
         }
     }
 
-    fn createResources(self: *TAAPass, device: *rhi_mod.RhiDevice) !void {
+    fn createResources(self: *TAAPass, device: *gfx_mod.GfxDevice) !void {
         self.fullscreen_vertex_buffer = try device.createBuffer(.{
             .size = @sizeOf(FullscreenVertex) * fullscreen_triangle.len,
-            .usage = rhi_types.BufferUsage.vertex,
+            .usage = gfx_types.BufferUsage.vertex,
         });
         errdefer if (self.fullscreen_vertex_buffer) |*buffer| {
             device.releaseBuffer(buffer);
@@ -222,14 +222,14 @@ pub const TAAPass = struct {
             stages.deinit(device);
         };
 
-        const vertex_layouts = [_]rhi_mod.VertexBufferLayoutDesc{
+        const vertex_layouts = [_]gfx_mod.VertexBufferLayoutDesc{
             .{
                 .slot = 0,
                 .stride = @sizeOf(FullscreenVertex),
                 .input_rate = .per_vertex,
             },
         };
-        const vertex_attributes = [_]rhi_mod.VertexAttributeDesc{
+        const vertex_attributes = [_]gfx_mod.VertexAttributeDesc{
             .{
                 .location = 0,
                 .buffer_slot = 0,
