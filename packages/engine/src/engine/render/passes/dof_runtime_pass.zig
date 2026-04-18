@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
@@ -52,13 +52,13 @@ pub const DofRuntimePass = struct {
     intermediate_width: u32 = 0,
     intermediate_height: u32 = 0,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !DofRuntimePass {
+    pub fn init(device: *gfx_mod.RenderContext) !DofRuntimePass {
         var pass = DofRuntimePass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *DofRuntimePass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *DofRuntimePass, device: *gfx_mod.RenderContext) void {
         self.releaseBindGroups(device);
         self.releaseIntermediateTextures(device);
         if (self.sampler) |*s| device.releaseSampler(s);
@@ -79,7 +79,7 @@ pub const DofRuntimePass = struct {
         return if (self.output_texture) |*t| t else null;
     }
 
-    pub fn ensureIntermediateTextures(self: *DofRuntimePass, device: *gfx_mod.GfxDevice, width: u32, height: u32) !void {
+    pub fn ensureIntermediateTextures(self: *DofRuntimePass, device: *gfx_mod.RenderContext, width: u32, height: u32) !void {
         if (self.intermediate_width == width and self.intermediate_height == height and
             self.coc_texture != null and self.blur_texture != null and self.output_texture != null)
         {
@@ -114,7 +114,7 @@ pub const DofRuntimePass = struct {
 
     pub fn syncCocBindGroup(
         self: *DofRuntimePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         color_texture: *const gfx_mod.Texture,
         depth_texture: *const gfx_mod.Texture,
     ) !void {
@@ -131,7 +131,7 @@ pub const DofRuntimePass = struct {
 
     pub fn syncBlurBindGroup(
         self: *DofRuntimePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         color_texture: *const gfx_mod.Texture,
     ) !void {
         const coc_tex = self.coc_texture orelse return;
@@ -148,7 +148,7 @@ pub const DofRuntimePass = struct {
 
     pub fn syncCompositeBindGroup(
         self: *DofRuntimePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         color_texture: *const gfx_mod.Texture,
     ) !void {
         const blur_tex = self.blur_texture orelse return;
@@ -168,7 +168,7 @@ pub const DofRuntimePass = struct {
 
     pub fn drawCoc(
         self: *DofRuntimePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         uniforms: DofUniforms,
@@ -186,7 +186,7 @@ pub const DofRuntimePass = struct {
 
     pub fn drawBlur(
         self: *DofRuntimePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         uniforms: DofUniforms,
@@ -204,7 +204,7 @@ pub const DofRuntimePass = struct {
 
     pub fn drawComposite(
         self: *DofRuntimePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         uniforms: DofUniforms,
@@ -220,7 +220,7 @@ pub const DofRuntimePass = struct {
         return stats;
     }
 
-    fn releaseBindGroups(self: *DofRuntimePass, device: *gfx_mod.GfxDevice) void {
+    fn releaseBindGroups(self: *DofRuntimePass, device: *gfx_mod.RenderContext) void {
         if (self.coc_bind_group) |*bg| {
             device.releaseBindGroup(bg);
             self.coc_bind_group = null;
@@ -242,7 +242,7 @@ pub const DofRuntimePass = struct {
         self.composite_bound_coc = 0;
     }
 
-    fn releaseIntermediateTextures(self: *DofRuntimePass, device: *gfx_mod.GfxDevice) void {
+    fn releaseIntermediateTextures(self: *DofRuntimePass, device: *gfx_mod.RenderContext) void {
         if (self.coc_texture) |*t| {
             device.releaseTexture(t);
             self.coc_texture = null;
@@ -259,7 +259,7 @@ pub const DofRuntimePass = struct {
         self.intermediate_height = 0;
     }
 
-    fn createResources(self: *DofRuntimePass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *DofRuntimePass, device: *gfx_mod.RenderContext) !void {
         self.sampler = try device.createSampler(.{
             .min_filter = .linear,
             .mag_filter = .linear,

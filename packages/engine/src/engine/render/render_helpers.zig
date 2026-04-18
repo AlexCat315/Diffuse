@@ -1,6 +1,6 @@
 const std = @import("std");
 const io_globals = @import("io_globals");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const mesh_pass_mod = @import("passes/mesh_pass.zig");
 const graph_mod = @import("render_graph.zig");
 
@@ -8,14 +8,14 @@ const graph_mod = @import("render_graph.zig");
 /// Encapsulates the begin → draw → record stats → end pattern from Hazel's
 /// SceneRenderer, reducing boilerplate in drawFrame().
 pub fn executePass(
-    gfx: *gfx_mod.GfxDevice,
+    gfx: *gfx_mod.RenderContext,
     frame: gfx_mod.Frame,
     desc: gfx_mod.RenderPassDesc,
     graph: *graph_mod.RenderGraph,
     pass_stats: []graph_mod.PassStat,
     pass_id: graph_mod.PassId,
     draw_stats: *mesh_pass_mod.DrawStats,
-    drawFn: *const fn (*gfx_mod.GfxDevice, gfx_mod.Frame, gfx_mod.RenderPass) mesh_pass_mod.DrawStats,
+    drawFn: *const fn (*gfx_mod.RenderContext, gfx_mod.Frame, gfx_mod.RenderPass) mesh_pass_mod.DrawStats,
 ) !void {
     const render_pass = try gfx.beginRenderPassWithDesc(frame, desc);
     const start = std.Io.Timestamp.now(io_globals.global_io, .boot).nanoseconds;

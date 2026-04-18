@@ -1,19 +1,19 @@
 const generated_shaders = @import("../generated/shaders.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 
 pub const ProgramStages = struct {
     vertex: gfx_mod.ShaderModule,
     fragment: gfx_mod.ShaderModule,
 
-    pub fn deinit(self: *ProgramStages, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *ProgramStages, device: *gfx_mod.RenderContext) void {
         device.releaseShaderModule(&self.fragment);
         device.releaseShaderModule(&self.vertex);
         self.* = undefined;
     }
 };
 
-pub fn loadProgramStages(device: *gfx_mod.GfxDevice, name: []const u8) !ProgramStages {
+pub fn loadProgramStages(device: *gfx_mod.RenderContext, name: []const u8) !ProgramStages {
     const program = generated_shaders.findProgram(name) orelse return error.MissingShaderProgram;
     const vertex_variant = program.stageForBackend(device.api, .vertex) orelse return error.UnsupportedShaderBackend;
     const fragment_variant = program.stageForBackend(device.api, .fragment) orelse return error.UnsupportedShaderBackend;
@@ -54,7 +54,7 @@ pub fn loadProgramStages(device: *gfx_mod.GfxDevice, name: []const u8) !ProgramS
     };
 }
 
-pub fn loadVertexStage(device: *gfx_mod.GfxDevice, name: []const u8) !gfx_mod.ShaderModule {
+pub fn loadVertexStage(device: *gfx_mod.RenderContext, name: []const u8) !gfx_mod.ShaderModule {
     const program = generated_shaders.findProgram(name) orelse return error.MissingShaderProgram;
     const vertex_variant = program.stageForBackend(device.api, .vertex) orelse return error.UnsupportedShaderBackend;
 
@@ -71,7 +71,7 @@ pub fn loadVertexStage(device: *gfx_mod.GfxDevice, name: []const u8) !gfx_mod.Sh
 }
 
 /// Load a compute shader program by name and create the compute pipeline.
-pub fn loadComputePipeline(device: *gfx_mod.GfxDevice, name: []const u8) !gfx_mod.ComputePipeline {
+pub fn loadComputePipeline(device: *gfx_mod.RenderContext, name: []const u8) !gfx_mod.ComputePipeline {
     const program = generated_shaders.findComputeProgram(name) orelse return error.MissingShaderProgram;
     const variant = program.variantForBackend(device.api) orelse return error.UnsupportedShaderBackend;
 
@@ -93,7 +93,7 @@ pub fn loadComputePipeline(device: *gfx_mod.GfxDevice, name: []const u8) !gfx_mo
 
 /// Load a compute shader program with explicit readwrite storage counts.
 pub fn loadComputePipelineRW(
-    device: *gfx_mod.GfxDevice,
+    device: *gfx_mod.RenderContext,
     name: []const u8,
     num_rw_storage_textures: u32,
     num_rw_storage_buffers: u32,

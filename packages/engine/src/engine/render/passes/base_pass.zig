@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 const render_types = @import("../types.zig");
@@ -42,20 +42,20 @@ pub const BasePass = struct {
     stages: ?shader_support.ProgramStages = null,
     wireframe_stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !BasePass {
+    pub fn init(device: *gfx_mod.RenderContext) !BasePass {
         var pass = BasePass{};
         try pass.createResources(device);
         return pass;
     }
 
-    fn releasePipeline(device: *gfx_mod.GfxDevice, p: *?gfx_mod.GraphicsPipeline) void {
+    fn releasePipeline(device: *gfx_mod.RenderContext, p: *?gfx_mod.GraphicsPipeline) void {
         if (p.*) |*pipeline| {
             device.releaseGraphicsPipeline(pipeline);
             p.* = null;
         }
     }
 
-    pub fn deinit(self: *BasePass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *BasePass, device: *gfx_mod.RenderContext) void {
         releasePipeline(device, &self.wireframe_pipeline_ldr);
         releasePipeline(device, &self.wireframe_pipeline_hdr);
         releasePipeline(device, &self.ghost_fill_pipeline_ldr);
@@ -86,7 +86,7 @@ pub const BasePass = struct {
 
     pub fn draw(
         self: *BasePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
@@ -268,7 +268,7 @@ pub const BasePass = struct {
     // -> 推送 uniform 数据 -> 发出 drawIndexedPrimitives。
     fn drawMeshList(
         self: *BasePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
@@ -470,7 +470,7 @@ pub const BasePass = struct {
         return fragment_uniforms;
     }
 
-    fn createResources(self: *BasePass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *BasePass, device: *gfx_mod.RenderContext) !void {
         self.stages = try shader_support.loadProgramStages(device, "mesh");
         errdefer if (self.stages) |*stages| {
             stages.deinit(device);
@@ -540,7 +540,7 @@ pub const BasePass = struct {
 
     fn createPipeline(
         self: *BasePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         vertex_layouts: []const gfx_mod.VertexBufferLayoutDesc,
         vertex_attributes: []const gfx_mod.VertexAttributeDesc,
         color_format: gfx_types.TextureFormat,

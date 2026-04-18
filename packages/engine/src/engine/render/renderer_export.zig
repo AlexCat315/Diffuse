@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const image_export = @import("image_export.zig");
 const renderer_path_trace = @import("path_trace/renderer_path_trace.zig");
 const types = @import("types.zig");
@@ -29,7 +29,7 @@ pub const PathTraceExrExportOptions = struct {
     write_aov_layers: bool = true,
 };
 
-pub fn downloadFramePixelsAlloc(gfx: *gfx_mod.GfxDevice, color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator) !FramePixels {
+pub fn downloadFramePixelsAlloc(gfx: *gfx_mod.RenderContext, color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator) !FramePixels {
     const texture = color_texture orelse return error.TextureNotFound;
     const width = texture.desc.width;
     const height = texture.desc.height;
@@ -39,12 +39,12 @@ pub fn downloadFramePixelsAlloc(gfx: *gfx_mod.GfxDevice, color_texture: ?gfx_mod
     const data = try allocator.alloc(u8, byte_count);
     errdefer allocator.free(data);
 
-    try gfx.readTextureData(&texture, row_bytes, data);
+    try gfx.device.readTextureData(.{ .id = texture.id }, width, height, row_bytes, data);
 
     return .{ .data = data, .width = width, .height = height };
 }
 
-pub fn downloadFinalFrameAlloc(gfx: *gfx_mod.GfxDevice, color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator) ![]u8 {
+pub fn downloadFinalFrameAlloc(gfx: *gfx_mod.RenderContext, color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator) ![]u8 {
     const pixels = try downloadFramePixelsAlloc(gfx, color_texture, allocator);
     defer allocator.free(pixels.data);
 
@@ -66,7 +66,7 @@ pub fn downloadFinalFrameAlloc(gfx: *gfx_mod.GfxDevice, color_texture: ?gfx_mod.
     return ppm;
 }
 
-pub fn downloadHdrFramePixelsAlloc(gfx: *gfx_mod.GfxDevice, hdr_color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator) !HdrFramePixels {
+pub fn downloadHdrFramePixelsAlloc(gfx: *gfx_mod.RenderContext, hdr_color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator) !HdrFramePixels {
     const texture = hdr_color_texture orelse return error.TextureNotFound;
     const width = texture.desc.width;
     const height = texture.desc.height;
@@ -75,7 +75,7 @@ pub fn downloadHdrFramePixelsAlloc(gfx: *gfx_mod.GfxDevice, hdr_color_texture: ?
 
     const raw = try allocator.alloc(u8, byte_count);
     defer allocator.free(raw);
-    try gfx.readTextureData(&texture, row_bytes, raw);
+    try gfx.device.readTextureData(.{ .id = texture.id }, width, height, row_bytes, raw);
 
     const pixel_count = @as(usize, width) * @as(usize, height);
     const hdr = try allocator.alloc(f32, pixel_count * 4);
@@ -126,13 +126,13 @@ pub fn downloadHdrFramePixelsAlloc(gfx: *gfx_mod.GfxDevice, hdr_color_texture: ?
     return .{ .data = hdr, .width = width, .height = height };
 }
 
-pub fn downloadHdrFrameExrAlloc(gfx: *gfx_mod.GfxDevice, hdr_color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator) ![]u8 {
+pub fn downloadHdrFrameExrAlloc(gfx: *gfx_mod.RenderContext, hdr_color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator) ![]u8 {
     const pixels = try downloadHdrFramePixelsAlloc(gfx, hdr_color_texture, allocator);
     defer allocator.free(pixels.data);
     return image_export.encodeExrRgb32fAlloc(allocator, pixels.data, pixels.width, pixels.height);
 }
 
-pub fn exportFramePng(gfx: *gfx_mod.GfxDevice, color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator, out_path: []const u8) !void {
+pub fn exportFramePng(gfx: *gfx_mod.RenderContext, color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator, out_path: []const u8) !void {
     const pixels = try downloadFramePixelsAlloc(gfx, color_texture, allocator);
     defer allocator.free(pixels.data);
 
@@ -148,7 +148,7 @@ pub fn exportFramePng(gfx: *gfx_mod.GfxDevice, color_texture: ?gfx_mod.Texture, 
     try image_export.writeFileEnsuringParent(out_path, png);
 }
 
-pub fn exportFrameExr(gfx: *gfx_mod.GfxDevice, hdr_color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator, out_path: []const u8) !void {
+pub fn exportFrameExr(gfx: *gfx_mod.RenderContext, hdr_color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator, out_path: []const u8) !void {
     const exr = try downloadHdrFrameExrAlloc(gfx, hdr_color_texture, allocator);
     defer allocator.free(exr);
     try image_export.writeFileEnsuringParent(out_path, exr);

@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
@@ -27,13 +27,13 @@ pub const RtShadowCompositePass = struct {
     pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !RtShadowCompositePass {
+    pub fn init(device: *gfx_mod.RenderContext) !RtShadowCompositePass {
         var pass = RtShadowCompositePass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *RtShadowCompositePass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *RtShadowCompositePass, device: *gfx_mod.RenderContext) void {
         if (self.bind_group) |*bg| device.releaseBindGroup(bg);
         if (self.sampler) |*s| device.releaseSampler(s);
         if (self.fullscreen_vertex_buffer) |*b| device.releaseBuffer(b);
@@ -49,7 +49,7 @@ pub const RtShadowCompositePass = struct {
     /// 绑定 RT 阴影遮罩纹理。
     pub fn syncTexture(
         self: *RtShadowCompositePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         shadow_mask_texture: *const gfx_mod.Texture,
     ) !void {
         const handle = shadow_mask_texture.id;
@@ -69,7 +69,7 @@ pub const RtShadowCompositePass = struct {
 
     pub fn draw(
         self: *RtShadowCompositePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         shadow_strength: f32,
@@ -92,7 +92,7 @@ pub const RtShadowCompositePass = struct {
         return stats;
     }
 
-    fn createResources(self: *RtShadowCompositePass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *RtShadowCompositePass, device: *gfx_mod.RenderContext) !void {
         self.fullscreen_vertex_buffer = try device.createBuffer(.{
             .size = @sizeOf(FullscreenVertex) * fullscreen_triangle.len,
             .usage = gfx_types.BufferUsage.vertex,

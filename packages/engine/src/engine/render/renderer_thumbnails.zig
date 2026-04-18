@@ -10,7 +10,7 @@ const texture_resource_mod = @import("../assets/texture_resource.zig");
 const aabb_mod = @import("../math/aabb.zig");
 const mesh_pass_mod = @import("passes/mesh_pass.zig");
 const scene_extraction = @import("scene_extraction.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const components = @import("../scene/components.zig");
 const scene_mod = @import("../scene/scene.zig");
@@ -47,7 +47,7 @@ pub const ModelThumbnailCacheEntry = struct {
     queued: bool = false,
     last_requested_frame: usize = 0,
 
-    pub fn deinit(self: *ModelThumbnailCacheEntry, allocator: std.mem.Allocator, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *ModelThumbnailCacheEntry, allocator: std.mem.Allocator, device: *gfx_mod.RenderContext) void {
         allocator.free(self.path);
         self.target.deinit(device);
         self.* = undefined;
@@ -98,7 +98,7 @@ pub const ThumbnailRenderTarget = struct {
     color_texture: gfx_mod.Texture,
     depth_texture: gfx_mod.Texture,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !ThumbnailRenderTarget {
+    pub fn init(device: *gfx_mod.RenderContext) !ThumbnailRenderTarget {
         const color_texture = try device.createTexture(.{
             .width = material_thumbnail_dimension,
             .height = material_thumbnail_dimension,
@@ -127,7 +127,7 @@ pub const ThumbnailRenderTarget = struct {
         };
     }
 
-    pub fn deinit(self: *ThumbnailRenderTarget, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *ThumbnailRenderTarget, device: *gfx_mod.RenderContext) void {
         device.releaseTexture(&self.color_texture);
         device.releaseTexture(&self.depth_texture);
         self.* = undefined;
@@ -143,7 +143,7 @@ pub const MaterialThumbnailCacheEntry = struct {
     ready: bool = false,
     last_requested_frame: usize = 0,
 
-    pub fn deinit(self: *MaterialThumbnailCacheEntry, allocator: std.mem.Allocator, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *MaterialThumbnailCacheEntry, allocator: std.mem.Allocator, device: *gfx_mod.RenderContext) void {
         allocator.free(self.asset_id);
         self.target.deinit(device);
         self.* = undefined;

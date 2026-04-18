@@ -7,7 +7,7 @@ const texture_mod = @import("../../assets/texture_resource.zig");
 const math = @import("../../math/mat4.zig");
 const vec3 = @import("../../math/vec3.zig");
 const quat = @import("../../math/quat.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const components = @import("../../scene/components.zig");
 const scene_mod = @import("../../scene/scene.zig");
@@ -306,7 +306,7 @@ pub const MeshSceneCache = struct {
     sampler: ?gfx_mod.Sampler = null,
     fallback_bind_group: ?gfx_mod.BindGroup = null,
 
-    pub fn init(allocator: std.mem.Allocator, device: *gfx_mod.GfxDevice) !MeshSceneCache {
+    pub fn init(allocator: std.mem.Allocator, device: *gfx_mod.RenderContext) !MeshSceneCache {
         var cache = MeshSceneCache{
             .allocator = allocator,
         };
@@ -314,7 +314,7 @@ pub const MeshSceneCache = struct {
         return cache;
     }
 
-    pub fn deinit(self: *MeshSceneCache, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *MeshSceneCache, device: *gfx_mod.RenderContext) void {
         for (self.materials.items) |*material| {
             device.releaseBindGroup(&material.bind_group);
         }
@@ -347,7 +347,7 @@ pub const MeshSceneCache = struct {
         self.* = undefined;
     }
 
-    pub fn invalidateMaterialResources(self: *MeshSceneCache, device: *gfx_mod.GfxDevice) void {
+    pub fn invalidateMaterialResources(self: *MeshSceneCache, device: *gfx_mod.RenderContext) void {
         for (self.materials.items) |*material| {
             device.releaseBindGroup(&material.bind_group);
         }
@@ -361,7 +361,7 @@ pub const MeshSceneCache = struct {
         self.textures = .empty;
     }
 
-    pub fn invalidateAllResources(self: *MeshSceneCache, device: *gfx_mod.GfxDevice) void {
+    pub fn invalidateAllResources(self: *MeshSceneCache, device: *gfx_mod.RenderContext) void {
         self.invalidateMaterialResources(device);
         for (self.meshes.items) |*cached_mesh| {
             device.releaseBuffer(&cached_mesh.wireframe_index_buffer);
@@ -374,7 +374,7 @@ pub const MeshSceneCache = struct {
 
     pub fn invalidateMeshResource(
         self: *MeshSceneCache,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         handle: handles.MeshHandle,
     ) void {
         var index: usize = 0;
@@ -432,7 +432,7 @@ pub const MeshSceneCache = struct {
 
     pub fn prepareScene(
         self: *MeshSceneCache,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         world: *const scene_mod.World,
         render_world: *const scene_extraction.RenderWorld,
         width: u32,
@@ -496,7 +496,7 @@ pub const MeshSceneCache = struct {
 
     pub fn preparePreviewScene(
         self: *MeshSceneCache,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         world: *const scene_mod.World,
         render_world: *const scene_extraction.RenderWorld,
         reference: *const PreparedScene,
@@ -583,7 +583,7 @@ pub const MeshSceneCache = struct {
 
     pub fn ensureTextureHandle(
         self: *MeshSceneCache,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         world: *const scene_mod.World,
         handle: handles.TextureHandle,
     ) !*gfx_mod.Texture {
@@ -591,7 +591,7 @@ pub const MeshSceneCache = struct {
         return self.ensureTexture(device, handle, texture);
     }
 
-    fn createFallbackResources(self: *MeshSceneCache, device: *gfx_mod.GfxDevice) !void {
+    fn createFallbackResources(self: *MeshSceneCache, device: *gfx_mod.RenderContext) !void {
         self.fallback_texture = try device.createTexture(.{
             .width = 1,
             .height = 1,
@@ -643,7 +643,7 @@ pub const MeshSceneCache = struct {
     // 4) 将结果写入缓存并返回
     fn ensureMesh(
         self: *MeshSceneCache,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         handle: handles.MeshHandle,
         mesh: *const mesh_mod.MeshResource,
     ) !CachedMesh {
@@ -764,7 +764,7 @@ pub const MeshSceneCache = struct {
 
     fn ensureTexture(
         self: *MeshSceneCache,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         handle: handles.TextureHandle,
         texture: *const texture_mod.TextureResource,
     ) !*gfx_mod.Texture {
@@ -829,7 +829,7 @@ pub const MeshSceneCache = struct {
 
     fn ensureMaterial(
         self: *MeshSceneCache,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         handle: handles.MaterialHandle,
         material: *const material_mod.MaterialResource,
         scene: *const scene_mod.World,
@@ -867,7 +867,7 @@ pub const MeshSceneCache = struct {
 
     fn resolveMaterial(
         self: *MeshSceneCache,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         scene: *const scene_mod.World,
         material_component: ?components.Material,
     ) !MaterialState {
@@ -1020,7 +1020,7 @@ pub const MeshSceneCache = struct {
 
     fn appendPreparedMeshes(
         self: *MeshSceneCache,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         world: *const scene_mod.World,
         render_world: *const scene_extraction.RenderWorld,
         pickable: bool,

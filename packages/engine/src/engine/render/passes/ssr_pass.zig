@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const shader_support = @import("../shader_support.zig");
 
 const fullscreen_triangle_vertex_count: u32 = 3;
@@ -30,13 +30,13 @@ pub const SSRPass = struct {
     pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !SSRPass {
+    pub fn init(device: *gfx_mod.RenderContext) !SSRPass {
         var pass = SSRPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *SSRPass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *SSRPass, device: *gfx_mod.RenderContext) void {
         if (self.bind_group) |*bind_group| {
             device.releaseBindGroup(bind_group);
         }
@@ -58,7 +58,7 @@ pub const SSRPass = struct {
 
     pub fn syncTextures(
         self: *SSRPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         color_texture: *const gfx_mod.Texture,
         depth_texture: *const gfx_mod.Texture,
     ) !void {
@@ -86,7 +86,7 @@ pub const SSRPass = struct {
 
     pub fn draw(
         self: *SSRPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         uniforms: SSRParams,
@@ -106,7 +106,7 @@ pub const SSRPass = struct {
         return stats;
     }
 
-    fn createResources(self: *SSRPass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *SSRPass, device: *gfx_mod.RenderContext) !void {
         self.sampler = try device.createSampler(.{
             .min_filter = .linear,
             .mag_filter = .linear,

@@ -1,7 +1,7 @@
 const std = @import("std");
 const id_pass_mod = @import("id_pass.zig");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const scene_mod = @import("../../scene/scene.zig");
 const shader_support = @import("../shader_support.zig");
@@ -29,13 +29,13 @@ pub const OutlinePass = struct {
     pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !OutlinePass {
+    pub fn init(device: *gfx_mod.RenderContext) !OutlinePass {
         var pass = OutlinePass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *OutlinePass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *OutlinePass, device: *gfx_mod.RenderContext) void {
         if (self.bind_group) |*bind_group| {
             device.releaseBindGroup(bind_group);
         }
@@ -60,7 +60,7 @@ pub const OutlinePass = struct {
 
     pub fn syncTexture(
         self: *OutlinePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         id_texture: *const gfx_mod.Texture,
     ) !void {
         const texture_handle = id_texture.id;
@@ -87,7 +87,7 @@ pub const OutlinePass = struct {
 
     pub fn draw(
         self: *OutlinePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         selected_entities: []const scene_mod.EntityId,
@@ -119,7 +119,7 @@ pub const OutlinePass = struct {
     /// Draw outlines with a custom color (used for AI Ghost Highlight — purple pulse).
     pub fn drawWithColor(
         self: *OutlinePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         entities: []const scene_mod.EntityId,
@@ -149,7 +149,7 @@ pub const OutlinePass = struct {
         return stats;
     }
 
-    fn createResources(self: *OutlinePass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *OutlinePass, device: *gfx_mod.RenderContext) !void {
         self.fullscreen_vertex_buffer = try device.createBuffer(.{
             .size = @sizeOf(FullscreenVertex) * fullscreen_triangle.len,
             .usage = gfx_types.BufferUsage.vertex,

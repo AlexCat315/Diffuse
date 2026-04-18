@@ -4,7 +4,7 @@ const vec3 = @import("../../math/vec3.zig");
 const axis_mod = @import("../../math/axis.zig");
 const components = @import("../../scene/components.zig");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
@@ -85,13 +85,13 @@ pub const GizmoPass = struct {
     overlay_triangle_pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !GizmoPass {
+    pub fn init(device: *gfx_mod.RenderContext) !GizmoPass {
         var pass = GizmoPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *GizmoPass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *GizmoPass, device: *gfx_mod.RenderContext) void {
         var i: u32 = 0;
         while (i < self.temp_world_line_count) : (i += 1) {
             device.releaseBuffer(&self.temp_world_line_buffers[i]);
@@ -144,7 +144,7 @@ pub const GizmoPass = struct {
 
     /// Release all temporary world-line buffers from the previous frame.
     /// Call this once per frame BEFORE any drawWorldLines calls.
-    pub fn releaseWorldLineBuffers(self: *GizmoPass, device: *gfx_mod.GfxDevice) void {
+    pub fn releaseWorldLineBuffers(self: *GizmoPass, device: *gfx_mod.RenderContext) void {
         var i: u32 = 0;
         while (i < self.temp_world_line_count) : (i += 1) {
             device.releaseBuffer(&self.temp_world_line_buffers[i]);
@@ -154,7 +154,7 @@ pub const GizmoPass = struct {
 
     pub fn draw(
         self: *GizmoPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
@@ -196,7 +196,7 @@ pub const GizmoPass = struct {
 
     pub fn drawWorldLines(
         self: *GizmoPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
@@ -235,7 +235,7 @@ pub const GizmoPass = struct {
     /// (depth test disabled). Intended for mesh-edit overlay highlight lines.
     pub fn drawOverlayLines(
         self: *GizmoPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
@@ -275,7 +275,7 @@ pub const GizmoPass = struct {
     /// `viewport_height` = render-target height in pixels.
     pub fn drawThickOverlayLines(
         self: *GizmoPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
@@ -371,7 +371,7 @@ pub const GizmoPass = struct {
     /// line pair).  The billboard is `dot_size_px` × `dot_size_px` pixels.
     pub fn drawVertexDots(
         self: *GizmoPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
@@ -452,7 +452,7 @@ pub const GizmoPass = struct {
         return stats;
     }
 
-    fn createResources(self: *GizmoPass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *GizmoPass, device: *gfx_mod.RenderContext) !void {
         self.line_axis_vertex_buffer = try createVertexBuffer(device, line_axis_vertices[0..]);
         errdefer if (self.line_axis_vertex_buffer) |*buffer| {
             device.releaseBuffer(buffer);
@@ -571,7 +571,7 @@ pub const GizmoPass = struct {
 
     fn drawTranslateAxes(
         self: *GizmoPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
@@ -593,7 +593,7 @@ pub const GizmoPass = struct {
 
     fn drawScaleAxes(
         self: *GizmoPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
@@ -613,7 +613,7 @@ pub const GizmoPass = struct {
 
     fn drawRotateRings(
         self: *GizmoPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
@@ -633,7 +633,7 @@ pub const GizmoPass = struct {
 
     fn drawAxisMesh(
         self: *GizmoPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         buffer: gfx_mod.Buffer,
@@ -652,7 +652,7 @@ pub const GizmoPass = struct {
 
     fn drawRingCluster(
         self: *GizmoPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
@@ -669,7 +669,7 @@ pub const GizmoPass = struct {
 
     fn drawScaleBox(
         self: *GizmoPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
@@ -683,7 +683,7 @@ pub const GizmoPass = struct {
 
     fn drawCenterCube(
         self: *GizmoPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
@@ -699,7 +699,7 @@ pub const GizmoPass = struct {
 
     fn drawShape(
         self: *GizmoPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         buffer: gfx_mod.Buffer,
@@ -731,7 +731,7 @@ pub const GizmoPass = struct {
     }
 };
 
-fn createVertexBuffer(device: *gfx_mod.GfxDevice, vertices: []const GizmoVertex) !gfx_mod.Buffer {
+fn createVertexBuffer(device: *gfx_mod.RenderContext, vertices: []const GizmoVertex) !gfx_mod.Buffer {
     const buffer = try device.createBuffer(.{
         .size = @intCast(@sizeOf(GizmoVertex) * vertices.len),
         .usage = gfx_types.BufferUsage.vertex,

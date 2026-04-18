@@ -1,6 +1,6 @@
 const std = @import("std");
 const math = @import("../math/mat4.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const components = @import("../scene/components.zig");
 const scene_mod = @import("../scene/scene.zig");
@@ -107,7 +107,7 @@ pub const PrimitiveStage = struct {
     fragment_shader: ?gfx_mod.ShaderModule = null,
     pipeline: ?gfx_mod.GraphicsPipeline = null,
 
-    pub fn init(allocator: std.mem.Allocator, device: *gfx_mod.GfxDevice) !PrimitiveStage {
+    pub fn init(allocator: std.mem.Allocator, device: *gfx_mod.RenderContext) !PrimitiveStage {
         var stage = PrimitiveStage{
             .allocator = allocator,
         };
@@ -120,7 +120,7 @@ pub const PrimitiveStage = struct {
         return stage;
     }
 
-    pub fn deinit(self: *PrimitiveStage, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *PrimitiveStage, device: *gfx_mod.RenderContext) void {
         if (self.pipeline) |*pipeline| {
             device.releaseGraphicsPipeline(pipeline);
         }
@@ -157,7 +157,7 @@ pub const PrimitiveStage = struct {
 
     pub fn draw(
         self: *PrimitiveStage,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         scene: *const scene_mod.Scene,
@@ -220,7 +220,7 @@ pub const PrimitiveStage = struct {
         return stats;
     }
 
-    fn createResources(self: *PrimitiveStage, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *PrimitiveStage, device: *gfx_mod.RenderContext) !void {
         self.triangle_vertex_buffer = try device.createBuffer(.{
             .size = @sizeOf(Vertex) * triangle_vertices.len,
             .usage = gfx_types.BufferUsage.vertex,

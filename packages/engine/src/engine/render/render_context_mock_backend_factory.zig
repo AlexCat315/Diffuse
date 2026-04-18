@@ -2,7 +2,7 @@ const std = @import("std");
 const types = @import("guava_gfx").types;
 const gfx = @import("guava_gfx").gfx;
 const metal_backend_mod = @import("guava_gfx").metal_backend;
-const window_mod = @import("../engine/platform/window.zig");
+const window_mod = @import("../platform/window.zig");
 
 pub const Error = error{
     OutOfMemory,

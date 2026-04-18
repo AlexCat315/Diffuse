@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const shader_support = @import("../shader_support.zig");
 
 pub const RtShadowDenoiseUniforms = extern struct {
@@ -17,13 +17,13 @@ pub const RtShadowDenoisePass = struct {
     pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !RtShadowDenoisePass {
+    pub fn init(device: *gfx_mod.RenderContext) !RtShadowDenoisePass {
         var pass = RtShadowDenoisePass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *RtShadowDenoisePass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *RtShadowDenoisePass, device: *gfx_mod.RenderContext) void {
         if (self.bind_group) |*bg| device.releaseBindGroup(bg);
         if (self.sampler) |*s| device.releaseSampler(s);
         if (self.pipeline) |*p| device.releaseGraphicsPipeline(p);
@@ -37,7 +37,7 @@ pub const RtShadowDenoisePass = struct {
 
     pub fn syncTextures(
         self: *RtShadowDenoisePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         shadow_mask_texture: *const gfx_mod.Texture,
         depth_texture: *const gfx_mod.Texture,
     ) !void {
@@ -63,7 +63,7 @@ pub const RtShadowDenoisePass = struct {
 
     pub fn draw(
         self: *RtShadowDenoisePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         uniforms: RtShadowDenoiseUniforms,
@@ -81,7 +81,7 @@ pub const RtShadowDenoisePass = struct {
         return stats;
     }
 
-    fn createResources(self: *RtShadowDenoisePass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *RtShadowDenoisePass, device: *gfx_mod.RenderContext) !void {
         self.sampler = try device.createSampler(.{
             .min_filter = .linear,
             .mag_filter = .linear,

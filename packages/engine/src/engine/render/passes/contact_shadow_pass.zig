@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const shader_support = @import("../shader_support.zig");
 
 const fullscreen_triangle_vertex_count: u32 = 3;
@@ -26,13 +26,13 @@ pub const ContactShadowPass = struct {
     pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !ContactShadowPass {
+    pub fn init(device: *gfx_mod.RenderContext) !ContactShadowPass {
         var pass = ContactShadowPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *ContactShadowPass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *ContactShadowPass, device: *gfx_mod.RenderContext) void {
         if (self.bind_group) |*bind_group| {
             device.releaseBindGroup(bind_group);
         }
@@ -54,7 +54,7 @@ pub const ContactShadowPass = struct {
 
     pub fn syncTexture(
         self: *ContactShadowPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         depth_texture: *const gfx_mod.Texture,
     ) !void {
         const depth_handle = depth_texture.id;
@@ -78,7 +78,7 @@ pub const ContactShadowPass = struct {
 
     pub fn draw(
         self: *ContactShadowPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         uniforms: ContactShadowParams,
@@ -98,7 +98,7 @@ pub const ContactShadowPass = struct {
         return stats;
     }
 
-    fn createResources(self: *ContactShadowPass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *ContactShadowPass, device: *gfx_mod.RenderContext) !void {
         self.sampler = try device.createSampler(.{
             .min_filter = .linear,
             .mag_filter = .linear,

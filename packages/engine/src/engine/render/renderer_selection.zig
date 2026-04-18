@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const id_pass_mod = @import("passes/id_pass.zig");
 const selection_history_mod = @import("selection_history.zig");
 
@@ -21,7 +21,7 @@ pub const InFlightSelectionBatch = struct {
     transfer_buffer: gfx_mod.TransferBuffer,
     readbacks: []InFlightSelectionReadback,
 
-    pub fn deinit(self: *InFlightSelectionBatch, allocator: std.mem.Allocator, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *InFlightSelectionBatch, allocator: std.mem.Allocator, device: *gfx_mod.RenderContext) void {
         device.releaseTransferBuffer(&self.transfer_buffer);
         allocator.free(self.readbacks);
         device.releaseFence(&self.fence);
@@ -31,7 +31,7 @@ pub const InFlightSelectionBatch = struct {
 
 pub fn enqueueSelectionReadbacks(
     allocator: std.mem.Allocator,
-    gfx: *gfx_mod.GfxDevice,
+    gfx: *gfx_mod.RenderContext,
     frame: gfx_mod.Frame,
     id_texture: *const gfx_mod.Texture,
     pending: []SelectionReadbackRequest,
@@ -85,7 +85,7 @@ pub fn enqueueSelectionReadbacks(
 
 pub fn resolveSelectionReadbacks(
     allocator: std.mem.Allocator,
-    gfx: *gfx_mod.GfxDevice,
+    gfx: *gfx_mod.RenderContext,
     in_flight_batches: *std.ArrayList(InFlightSelectionBatch),
     selection_history: *selection_history_mod.SelectionHistory,
 ) !void {
@@ -108,7 +108,7 @@ pub fn resolveSelectionReadbacks(
 
 pub fn releaseInFlightSelectionBatches(
     allocator: std.mem.Allocator,
-    gfx: *gfx_mod.GfxDevice,
+    gfx: *gfx_mod.RenderContext,
     in_flight_batches: *std.ArrayList(InFlightSelectionBatch),
 ) void {
     for (in_flight_batches.items) |*batch| {

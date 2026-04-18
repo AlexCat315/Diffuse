@@ -5,7 +5,7 @@
 
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
@@ -39,13 +39,13 @@ pub const FogOfWarPass = struct {
     fog_texture_width: u16 = 0,
     fog_texture_height: u16 = 0,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !FogOfWarPass {
+    pub fn init(device: *gfx_mod.RenderContext) !FogOfWarPass {
         var pass = FogOfWarPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *FogOfWarPass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *FogOfWarPass, device: *gfx_mod.RenderContext) void {
         if (self.bind_group) |*bg| device.releaseBindGroup(bg);
         if (self.sampler) |*s| device.releaseSampler(s);
         if (self.pipeline) |*p| device.releaseGraphicsPipeline(p);
@@ -61,7 +61,7 @@ pub const FogOfWarPass = struct {
     /// 上传可见性数据到 GPU 纹理。如果尺寸变化则重新创建纹理。
     pub fn uploadVisibility(
         self: *FogOfWarPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         data: []const u8,
         width: u16,
         height: u16,
@@ -103,7 +103,7 @@ pub const FogOfWarPass = struct {
     /// 绘制迷雾叠加
     pub fn draw(
         self: *FogOfWarPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         uniforms: FogUniforms,
@@ -123,7 +123,7 @@ pub const FogOfWarPass = struct {
         return stats;
     }
 
-    fn createResources(self: *FogOfWarPass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *FogOfWarPass, device: *gfx_mod.RenderContext) !void {
         self.sampler = try device.createSampler(.{
             .min_filter = .linear,
             .mag_filter = .linear,

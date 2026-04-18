@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
@@ -43,14 +43,14 @@ pub const TAAPass = struct {
     frame_index: u32 = 0,
     halton_sequence: [8][2]f32 = undefined,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !TAAPass {
+    pub fn init(device: *gfx_mod.RenderContext) !TAAPass {
         var pass = TAAPass{};
         try pass.createResources(device);
         pass.generateHaltonSequence();
         return pass;
     }
 
-    pub fn deinit(self: *TAAPass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *TAAPass, device: *gfx_mod.RenderContext) void {
         if (self.bind_group) |*bind_group| {
             device.releaseBindGroup(bind_group);
         }
@@ -97,7 +97,7 @@ pub const TAAPass = struct {
         self.history_valid = self.history_texture != null;
     }
 
-    pub fn ensureHistoryTexture(self: *TAAPass, device: *gfx_mod.GfxDevice, width: u32, height: u32) !void {
+    pub fn ensureHistoryTexture(self: *TAAPass, device: *gfx_mod.RenderContext, width: u32, height: u32) !void {
         if (self.history_texture) |ht| {
             if (ht.desc.width == width and ht.desc.height == height) return;
             var tex = self.history_texture.?;
@@ -116,7 +116,7 @@ pub const TAAPass = struct {
 
     pub fn syncTextures(
         self: *TAAPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         color_texture: *const gfx_mod.Texture,
         velocity_texture: ?*const gfx_mod.Texture,
         depth_texture: ?*const gfx_mod.Texture,
@@ -164,7 +164,7 @@ pub const TAAPass = struct {
 
     pub fn draw(
         self: *TAAPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         uniforms: TAAUniforms,
@@ -195,7 +195,7 @@ pub const TAAPass = struct {
         }
     }
 
-    fn createResources(self: *TAAPass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *TAAPass, device: *gfx_mod.RenderContext) !void {
         self.fullscreen_vertex_buffer = try device.createBuffer(.{
             .size = @sizeOf(FullscreenVertex) * fullscreen_triangle.len,
             .usage = gfx_types.BufferUsage.vertex,
