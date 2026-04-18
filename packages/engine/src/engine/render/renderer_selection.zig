@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_mod = @import("gfx/mod.zig");
 const id_pass_mod = @import("passes/id_pass.zig");
 const selection_history_mod = @import("selection_history.zig");
 

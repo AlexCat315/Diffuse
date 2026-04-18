@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_mod = @import("gfx/mod.zig");
 const gfx_types = @import("guava_gfx").types;
 const mat4_mod = @import("../math/mat4.zig");
 const render_log = std.log.scoped(.viewport_render);

@@ -297,7 +297,7 @@ pub const GfxDevice = struct {
     current_frame: ?Frame = null,
     default_binding_layout: ?gfx.BindingLayout = null,
     default_pipeline_layout: ?gfx.PipelineLayout = null,
-    legacy_bind_group_layouts: ?std.AutoHashMap(u64, gfx.BindingLayout) = null,
+    bind_group_layout_cache: ?std.AutoHashMap(u64, gfx.BindingLayout) = null,
     owned_device: bool = false,
     owned_metal_device: ?*metal_device_mod.MetalDevice = null,
     owned_vulkan_device: ?*vulkan_device_mod.VulkanDevice = null,
@@ -352,7 +352,7 @@ pub const GfxDevice = struct {
                 .owned_device = true,
                 .owned_metal_device = md_ptr,
                 .metal_layer_binding = metal_layer_binding,
-                .legacy_bind_group_layouts = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
+                .bind_group_layout_cache = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
                 .vsync_enabled = config.vsync_enabled,
             };
             out.setFramesInFlight(config.frames_in_flight);
@@ -393,7 +393,7 @@ pub const GfxDevice = struct {
                 },
                 .owned_device = true,
                 .owned_vulkan_device = vk_ptr,
-                .legacy_bind_group_layouts = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
+                .bind_group_layout_cache = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
                 .vsync_enabled = config.vsync_enabled,
             };
             out.setFramesInFlight(config.frames_in_flight);
@@ -413,7 +413,7 @@ pub const GfxDevice = struct {
             .runtime_info = mock_init.runtime_info,
             .owned_device = true,
             .owned_mock_backend = mock_init.backend,
-            .legacy_bind_group_layouts = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
+            .bind_group_layout_cache = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
             .vsync_enabled = config.vsync_enabled,
         };
         out.setFramesInFlight(config.frames_in_flight);
@@ -427,7 +427,7 @@ pub const GfxDevice = struct {
         return .{
             .allocator = allocator,
             .device = device,
-            .legacy_bind_group_layouts = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
+            .bind_group_layout_cache = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
             .owned_device = false,
         };
     }
@@ -436,7 +436,7 @@ pub const GfxDevice = struct {
         self.releaseAllDepthTextures();
         self.pending_pixel_downloads.deinit(self.allocator);
         self.pending_texture_blits.deinit(self.allocator);
-        if (self.legacy_bind_group_layouts) |*layouts| {
+        if (self.bind_group_layout_cache) |*layouts| {
             layouts.deinit();
         }
         self.releaseRtDevice();
@@ -980,7 +980,7 @@ pub const GfxDevice = struct {
     pub fn createBuffer(self: *GfxDevice, desc: types.BufferDesc) Error!Buffer {
         const gfx_desc = gfx.BufferDesc{
             .size = desc.size,
-            .usage = legacyBufferUsageToRhi(desc.usage),
+            .usage = bufferUsageToRhi(desc.usage),
             .label = desc.label,
         };
         const buf = try self.device.createBuffer(gfx_desc);
@@ -1029,7 +1029,7 @@ pub const GfxDevice = struct {
             .width = desc.width,
             .height = desc.height,
             .format = desc.format,
-            .usage = legacyTextureUsageToRhi(desc.usage),
+            .usage = textureUsageToRhi(desc.usage),
             .sample_count = desc.sample_count,
             .label = desc.label,
         };
@@ -1299,18 +1299,18 @@ pub const GfxDevice = struct {
         }
 
         const layout = blk: {
-            const key = hashLegacyBindGroupLayout(layout_entries.items);
-            if (self.legacy_bind_group_layouts) |*layouts| {
+            const key = hashBindGroupLayout(layout_entries.items);
+            if (self.bind_group_layout_cache) |*layouts| {
                 if (layouts.get(key)) |existing| {
                     break :blk existing;
                 }
-                const created = try self.device.createBindingLayout(.{ .entries = layout_entries.items, .label = "legacy_bind_group_layout" });
+                const created = try self.device.createBindingLayout(.{ .entries = layout_entries.items, .label = "bind_group_layout" });
                 try layouts.put(key, created);
                 break :blk created;
             }
-            break :blk try self.device.createBindingLayout(.{ .entries = layout_entries.items, .label = "legacy_bind_group_layout" });
+            break :blk try self.device.createBindingLayout(.{ .entries = layout_entries.items, .label = "bind_group_layout" });
         };
-        const set = try self.device.createBindingSetCached(layout, .{ .entries = set_entries.items, .label = "legacy_bind_group" });
+        const set = try self.device.createBindingSetCached(layout, .{ .entries = set_entries.items, .label = "bind_group" });
 
         return .{
             .stage = desc.stage,
@@ -1648,7 +1648,7 @@ pub const GfxDevice = struct {
         _ = state;
     }
 
-    fn legacyBufferUsageToRhi(usage: u32) gfx.BufferUsageFlags {
+    fn bufferUsageToRhi(usage: u32) gfx.BufferUsageFlags {
         return .{
             .vertex = (usage & types.BufferUsage.vertex) != 0,
             .index = (usage & types.BufferUsage.index) != 0,
@@ -1662,7 +1662,7 @@ pub const GfxDevice = struct {
         };
     }
 
-    fn legacyTextureUsageToRhi(usage: u32) gfx.TextureUsageFlags {
+    fn textureUsageToRhi(usage: u32) gfx.TextureUsageFlags {
         return .{
             .sampled = (usage & types.TextureUsage.sampler) != 0,
             .color_target = (usage & types.TextureUsage.color_target) != 0,
@@ -1686,7 +1686,7 @@ pub const GfxDevice = struct {
         } else blk_new: {
             const binding_layout = try self.device.createBindingLayout(.{
                 .entries = &.{.{ .slot = 0, .binding_type = .uniform_buffer, .stage = .vertex }},
-                .label = "legacy_default_binding_layout",
+                .label = "default_binding_layout",
             });
             self.default_binding_layout = binding_layout;
             break :blk_new binding_layout;
@@ -1697,7 +1697,7 @@ pub const GfxDevice = struct {
         return pipeline_layout;
     }
 
-    fn hashLegacyBindGroupLayout(entries: []const gfx.BindingLayoutEntry) u64 {
+    fn hashBindGroupLayout(entries: []const gfx.BindingLayoutEntry) u64 {
         var hasher = std.hash.Wyhash.init(0);
         for (entries) |entry| {
             hasher.update(std.mem.asBytes(&entry.slot));

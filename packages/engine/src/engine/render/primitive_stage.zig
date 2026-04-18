@@ -1,6 +1,6 @@
 const std = @import("std");
 const math = @import("../math/mat4.zig");
-const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_mod = @import("gfx/mod.zig");
 const gfx_types = @import("guava_gfx").types;
 const components = @import("../scene/components.zig");
 const scene_mod = @import("../scene/scene.zig");

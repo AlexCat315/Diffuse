@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_mod = @import("gfx/mod.zig");
 const shader_support = @import("../shader_support.zig");
 const math = @import("../../math/mat4.zig");
 const mesh_pass_mod = @import("mesh_pass.zig");

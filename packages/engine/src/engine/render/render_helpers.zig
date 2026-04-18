@@ -1,6 +1,6 @@
 const std = @import("std");
 const io_globals = @import("io_globals");
-const gfx_mod = @import("gfx_legacy/mod.zig");
+const gfx_mod = @import("gfx/mod.zig");
 const mesh_pass_mod = @import("passes/mesh_pass.zig");
 const graph_mod = @import("render_graph.zig");
 
