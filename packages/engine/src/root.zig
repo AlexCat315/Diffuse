@@ -244,18 +244,16 @@ pub const script = @import("engine/script/script.zig");
 pub const gfx = struct {
     /// 外部独立 GFX 仓库入口（迁移中的新路径）
     pub const external = @import("guava_gfx");
-    /// 旧版导出名保留，但类型已切到 guava_gfx 原生 Device
-    pub const LegacyDevice = @import("guava_gfx").gfx.Device;
     /// GPU 缓冲区
     pub const Buffer = @import("guava_gfx").gfx.Buffer;
     /// 绑定组，用于绑定资源到着色器
-    pub const BindGroup = @import("gfx_legacy/mod.zig").BindGroup;
+    pub const BindGroup = @import("gfx/mod.zig").BindGroup;
     /// 拷贝通道，用于资源拷贝操作
-    pub const CopyPass = @import("gfx_legacy/mod.zig").CopyPass;
+    pub const CopyPass = @import("gfx/mod.zig").CopyPass;
     /// GPU 围栏，用于同步
-    pub const Fence = @import("gfx_legacy/mod.zig").Fence;
+    pub const Fence = @import("gfx/mod.zig").Fence;
     /// 帧对象，表示一帧的渲染
-    pub const Frame = @import("gfx_legacy/mod.zig").Frame;
+    pub const Frame = @import("gfx/mod.zig").Frame;
     /// 图形渲染管线
     pub const GraphicsPipeline = @import("guava_gfx").gfx.GraphicsPipeline;
     /// 图形渲染管线描述
@@ -271,9 +269,9 @@ pub const gfx = struct {
     /// GPU 纹理
     pub const Texture = @import("guava_gfx").gfx.Texture;
     /// 纹理-采样器绑定
-    pub const TextureSamplerBinding = @import("gfx_legacy/mod.zig").TextureSamplerBinding;
+    pub const TextureSamplerBinding = @import("gfx/mod.zig").TextureSamplerBinding;
     /// 传输缓冲区，用于 CPU-GPU 数据传输
-    pub const TransferBuffer = @import("gfx_legacy/mod.zig").TransferBuffer;
+    pub const TransferBuffer = @import("gfx/mod.zig").TransferBuffer;
     /// 后端选择策略
     pub const BackendSelectionPolicy = @import("guava_gfx").types.BackendSelectionPolicy;
     /// 比较操作（用于深度/模板测试）
