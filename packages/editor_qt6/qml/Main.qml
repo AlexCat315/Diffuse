@@ -17,10 +17,19 @@ ApplicationWindow {
     property bool leftPanelVisible: true
     property bool rightPanelVisible: true
     property bool bottomPanelVisible: true
+    property string leftPanelId: "scene"
+    property string rightPanelId: "inspector"
     property string activeBottomTab: "console"
     property var bottomTabs: ["console", "assets"]
     property bool restoringLayout: false
     property string popoutPanelId: ""
+    property var panelRegistry: [
+        { id: "scene", title: "Scene", zones: ["left", "right"] },
+        { id: "inspector", title: "Inspector", zones: ["left", "right"] },
+        { id: "rendersettings", title: "Render Settings", zones: ["left", "right"] },
+        { id: "console", title: "Console", zones: ["bottom"] },
+        { id: "assets", title: "Content Browser", zones: ["bottom"] }
+    ]
 
     readonly property int layoutSchemaVersion: 1
 
@@ -33,8 +42,77 @@ ApplicationWindow {
             leftPanelVisible: true,
             rightPanelVisible: true,
             bottomPanelVisible: true,
+            leftPanelId: "scene",
+            rightPanelId: "inspector",
             activeBottomTab: "console",
             bottomTabs: ["console", "assets"]
+        }
+    }
+
+    function panelTitle(panelId) {
+        for (let i = 0; i < panelRegistry.length; i += 1) {
+            if (panelRegistry[i].id === panelId) {
+                return panelRegistry[i].title
+            }
+        }
+        return panelId
+    }
+
+    function sidePanelOptions() {
+        return panelRegistry.filter(function(panel) {
+            return panel.zones.indexOf("left") >= 0 || panel.zones.indexOf("right") >= 0
+        })
+    }
+
+    function bottomPanelOptions() {
+        return panelRegistry.filter(function(panel) {
+            return panel.zones.indexOf("bottom") >= 0
+        })
+    }
+
+    function componentForPanel(panelId) {
+        if (panelId === "scene") {
+            return scenePanelComponent
+        }
+        if (panelId === "inspector") {
+            return inspectorPanelComponent
+        }
+        if (panelId === "console") {
+            return consolePanelComponent
+        }
+        if (panelId === "assets") {
+            return assetsPanelComponent
+        }
+        if (panelId === "rendersettings") {
+            return renderSettingsPanelComponent
+        }
+        return unknownPanelComponent
+    }
+
+    function bottomTabIndex(panelId) {
+        const idx = bottomTabs.indexOf(panelId)
+        return idx >= 0 ? idx : 0
+    }
+
+    function toggleBottomTab(panelId, enabled) {
+        const exists = bottomTabs.indexOf(panelId) >= 0
+        if (enabled && !exists) {
+            bottomTabs = bottomTabs.concat([panelId])
+            activeBottomTab = panelId
+            bottomPanelVisible = true
+            layoutSaveDebounce.restart()
+            return
+        }
+
+        if (!enabled && exists) {
+            bottomTabs = bottomTabs.filter(function(id) { return id !== panelId })
+            if (activeBottomTab === panelId) {
+                activeBottomTab = bottomTabs.length > 0 ? bottomTabs[0] : "console"
+            }
+            if (bottomTabs.length === 0) {
+                bottomPanelVisible = false
+            }
+            layoutSaveDebounce.restart()
         }
     }
 
@@ -46,6 +124,8 @@ ApplicationWindow {
         leftPanelVisible = model.leftPanelVisible !== false
         rightPanelVisible = model.rightPanelVisible !== false
         bottomPanelVisible = model.bottomPanelVisible !== false
+        leftPanelId = typeof model.leftPanelId === "string" ? model.leftPanelId : "scene"
+        rightPanelId = typeof model.rightPanelId === "string" ? model.rightPanelId : "inspector"
 
         const tabs = Array.isArray(model.bottomTabs) && model.bottomTabs.length > 0
             ? model.bottomTabs.filter(function(id) { return id === "console" || id === "assets" })
@@ -68,6 +148,8 @@ ApplicationWindow {
             leftPanelVisible: leftPanelVisible,
             rightPanelVisible: rightPanelVisible,
             bottomPanelVisible: bottomPanelVisible,
+            leftPanelId: leftPanelId,
+            rightPanelId: rightPanelId,
             activeBottomTab: activeBottomTab,
             bottomTabs: bottomTabs
         })
@@ -175,6 +257,98 @@ ApplicationWindow {
             onPopoutBottomPanel: root.popoutActiveBottomPanel()
         }
 
+        Rectangle {
+            id: panelConfigurator
+            anchors.top: topToolbar.bottom
+            anchors.right: parent.right
+            anchors.topMargin: 8
+            anchors.rightMargin: 8
+            width: 300
+            height: 120
+            color: "#111827"
+            border.color: "#334155"
+            border.width: 1
+            radius: 6
+            z: 50
+
+            ColumnLayout {
+                anchors.fill: parent
+                anchors.margins: 8
+                spacing: 6
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Label {
+                        text: "Left"
+                        color: "#cbd5e1"
+                        Layout.preferredWidth: 36
+                    }
+
+                    ComboBox {
+                        Layout.fillWidth: true
+                        model: root.sidePanelOptions()
+                        textRole: "title"
+                        valueRole: "id"
+                        currentIndex: Math.max(0, indexOfValue(root.leftPanelId))
+                        onActivated: function(index) {
+                            if (index >= 0 && index < model.length) {
+                                root.leftPanelId = model[index].id
+                            }
+                            layoutSaveDebounce.restart()
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+
+                    Label {
+                        text: "Right"
+                        color: "#cbd5e1"
+                        Layout.preferredWidth: 36
+                    }
+
+                    ComboBox {
+                        Layout.fillWidth: true
+                        model: root.sidePanelOptions()
+                        textRole: "title"
+                        valueRole: "id"
+                        currentIndex: Math.max(0, indexOfValue(root.rightPanelId))
+                        onActivated: function(index) {
+                            if (index >= 0 && index < model.length) {
+                                root.rightPanelId = model[index].id
+                            }
+                            layoutSaveDebounce.restart()
+                        }
+                    }
+                }
+
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+
+                    Label {
+                        text: "Bottom"
+                        color: "#cbd5e1"
+                    }
+
+                    Repeater {
+                        model: root.bottomPanelOptions()
+
+                        CheckBox {
+                            required property var modelData
+                            text: modelData.title
+                            checked: root.bottomTabs.indexOf(modelData.id) >= 0
+                            onToggled: root.toggleBottomTab(modelData.id, checked)
+                        }
+                    }
+                }
+            }
+        }
+
         PanelPopoutWindow {
             id: popoutWindow
             panelId: root.popoutPanelId
@@ -192,11 +366,12 @@ ApplicationWindow {
             anchors.bottom: parent.bottom
             orientation: Qt.Horizontal
 
-            ScenePanel {
+            Loader {
                 id: leftPanel
                 visible: root.leftPanelVisible
                 SplitView.preferredWidth: root.leftPanelSize
                 SplitView.minimumWidth: root.leftPanelVisible ? 200 : 0
+                sourceComponent: root.componentForPanel(root.leftPanelId)
                 onWidthChanged: if (visible && width > 0) {
                     root.leftPanelSize = width
                     layoutSaveDebounce.restart()
@@ -366,7 +541,7 @@ ApplicationWindow {
 
                                 TabButton {
                                     required property string modelData
-                                    text: modelData === "console" ? "Console" : "Content Browser"
+                                    text: root.panelTitle(modelData)
                                     checked: root.activeBottomTab === modelData
                                     onClicked: {
                                         root.activeBottomTab = modelData
@@ -380,27 +555,29 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
 
-                            currentIndex: root.activeBottomTab === "assets" ? 1 : 0
+                            currentIndex: root.bottomTabIndex(root.activeBottomTab)
 
-                            ConsolePanel {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
-                            }
+                            Repeater {
+                                model: root.bottomTabs
 
-                            ContentBrowserPanel {
-                                Layout.fillWidth: true
-                                Layout.fillHeight: true
+                                Loader {
+                                    required property string modelData
+                                    Layout.fillWidth: true
+                                    Layout.fillHeight: true
+                                    sourceComponent: root.componentForPanel(modelData)
+                                }
                             }
                         }
                     }
                 }
             }
 
-            InspectorPanel {
+            Loader {
                 id: rightPanel
                 visible: root.rightPanelVisible
                 SplitView.preferredWidth: root.rightPanelSize
                 SplitView.minimumWidth: root.rightPanelVisible ? 240 : 0
+                sourceComponent: root.componentForPanel(root.rightPanelId)
                 onWidthChanged: if (visible && width > 0) {
                     root.rightPanelSize = width
                     layoutSaveDebounce.restart()
@@ -412,4 +589,40 @@ ApplicationWindow {
     onLeftPanelVisibleChanged: layoutSaveDebounce.restart()
     onRightPanelVisibleChanged: layoutSaveDebounce.restart()
     onBottomPanelVisibleChanged: layoutSaveDebounce.restart()
+    onLeftPanelIdChanged: layoutSaveDebounce.restart()
+    onRightPanelIdChanged: layoutSaveDebounce.restart()
+
+    Component {
+        id: scenePanelComponent
+        ScenePanel { }
+    }
+
+    Component {
+        id: inspectorPanelComponent
+        InspectorPanel { }
+    }
+
+    Component {
+        id: consolePanelComponent
+        ConsolePanel { }
+    }
+
+    Component {
+        id: assetsPanelComponent
+        ContentBrowserPanel { }
+    }
+
+    Component {
+        id: renderSettingsPanelComponent
+        GenericPanel {
+            title: "Render Settings"
+        }
+    }
+
+    Component {
+        id: unknownPanelComponent
+        GenericPanel {
+            title: "Unknown Panel"
+        }
+    }
 }

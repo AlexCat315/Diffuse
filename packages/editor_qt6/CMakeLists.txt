@@ -37,6 +37,7 @@ qt_add_qml_module(guava_editor_qt6
     qml/panels/InspectorPanel.qml
     qml/panels/ContentBrowserPanel.qml
     qml/panels/ConsolePanel.qml
+    qml/panels/GenericPanel.qml
     qml/panels/PanelPopoutWindow.qml
     qml/viewport/ViewportInputLayer.qml
 )
