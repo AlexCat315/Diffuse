@@ -1,7 +1,7 @@
 const std = @import("std");
-const sources = @import("build/sources.zig");
-const compile_commands = @import("build/compile_commands.zig");
-const packaging = @import("build/packaging.zig");
+const sources = @import("src/build/sources.zig");
+const compile_commands = @import("src/build/compile_commands.zig");
+const packaging = @import("src/build/packaging.zig");
 
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
