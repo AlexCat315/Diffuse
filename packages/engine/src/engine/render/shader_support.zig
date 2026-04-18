@@ -23,10 +23,6 @@ pub fn loadProgramStages(device: *gfx_mod.RenderContext, name: []const u8) !Prog
         .stage = .vertex,
         .format = vertex_variant.format,
         .entry_point = vertex_variant.entry_point,
-        .num_samplers = vertex_variant.reflection.num_samplers,
-        .num_storage_textures = vertex_variant.reflection.num_storage_textures,
-        .num_storage_buffers = vertex_variant.reflection.num_storage_buffers,
-        .num_uniform_buffers = vertex_variant.reflection.num_uniform_buffers,
     });
     errdefer {
         var shader = vertex;
@@ -38,10 +34,6 @@ pub fn loadProgramStages(device: *gfx_mod.RenderContext, name: []const u8) !Prog
         .stage = .fragment,
         .format = fragment_variant.format,
         .entry_point = fragment_variant.entry_point,
-        .num_samplers = fragment_variant.reflection.num_samplers,
-        .num_storage_textures = fragment_variant.reflection.num_storage_textures,
-        .num_storage_buffers = fragment_variant.reflection.num_storage_buffers,
-        .num_uniform_buffers = fragment_variant.reflection.num_uniform_buffers,
     });
     errdefer {
         var shader = fragment;
@@ -63,10 +55,6 @@ pub fn loadVertexStage(device: *gfx_mod.RenderContext, name: []const u8) !gfx_mo
         .stage = .vertex,
         .format = vertex_variant.format,
         .entry_point = vertex_variant.entry_point,
-        .num_samplers = vertex_variant.reflection.num_samplers,
-        .num_storage_textures = vertex_variant.reflection.num_storage_textures,
-        .num_storage_buffers = vertex_variant.reflection.num_storage_buffers,
-        .num_uniform_buffers = vertex_variant.reflection.num_uniform_buffers,
     });
 }
 
@@ -79,15 +67,6 @@ pub fn loadComputePipeline(device: *gfx_mod.RenderContext, name: []const u8) !gf
         .code = variant.code,
         .entry_point = variant.entry_point,
         .format = variant.format,
-        .num_samplers = variant.reflection.num_samplers,
-        .num_readonly_storage_textures = variant.reflection.num_storage_textures,
-        .num_readonly_storage_buffers = variant.reflection.num_storage_buffers,
-        .num_readwrite_storage_textures = 0,
-        .num_readwrite_storage_buffers = 0,
-        .num_uniform_buffers = variant.reflection.num_uniform_buffers,
-        .threadcount_x = program.threadcount_x,
-        .threadcount_y = program.threadcount_y,
-        .threadcount_z = program.threadcount_z,
     });
 }
 
@@ -101,25 +80,12 @@ pub fn loadComputePipelineRW(
     const program = generated_shaders.findComputeProgram(name) orelse return error.MissingShaderProgram;
     const variant = program.variantForBackend(device.api) orelse return error.UnsupportedShaderBackend;
 
-    // The reflection "images" count covers both readonly and readwrite storage textures.
-    // Caller specifies how many are readwrite; the rest are readonly.
-    const total_storage_tex = variant.reflection.num_storage_textures;
-    const readonly_tex = if (total_storage_tex >= num_rw_storage_textures) total_storage_tex - num_rw_storage_textures else 0;
-    const total_storage_buf = variant.reflection.num_storage_buffers;
-    const readonly_buf = if (total_storage_buf >= num_rw_storage_buffers) total_storage_buf - num_rw_storage_buffers else 0;
+    _ = num_rw_storage_textures;
+    _ = num_rw_storage_buffers;
 
     return device.createComputePipeline(.{
         .code = variant.code,
         .entry_point = variant.entry_point,
         .format = variant.format,
-        .num_samplers = variant.reflection.num_samplers,
-        .num_readonly_storage_textures = readonly_tex,
-        .num_readonly_storage_buffers = readonly_buf,
-        .num_readwrite_storage_textures = num_rw_storage_textures,
-        .num_readwrite_storage_buffers = num_rw_storage_buffers,
-        .num_uniform_buffers = variant.reflection.num_uniform_buffers,
-        .threadcount_x = program.threadcount_x,
-        .threadcount_y = program.threadcount_y,
-        .threadcount_z = program.threadcount_z,
     });
 }

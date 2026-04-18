@@ -58,32 +58,9 @@ pub const RtInitStatus = rt_bridge.RtInitStatus;
 // PUBLIC TYPE DEFINITIONS - Kept for backward compatibility
 // ============================================================================
 
-pub const ShaderModuleDesc = struct {
-    code: []const u8,
-    stage: types.ShaderStage,
-    format: types.ShaderFormat = .spirv,
-    entry_point: [:0]const u8 = "main",
-    num_samplers: u32 = 0,
-    num_storage_textures: u32 = 0,
-    num_storage_buffers: u32 = 0,
-    num_uniform_buffers: u32 = 0,
-};
+pub const ShaderModuleDesc = gfx.ShaderModuleDesc;
 
-pub const SamplerDesc = struct {
-    min_filter: types.SamplerFilter = .linear,
-    mag_filter: types.SamplerFilter = .linear,
-    mipmap_mode: types.SamplerMipmapMode = .linear,
-    address_mode_u: types.SamplerAddressMode = .repeat,
-    address_mode_v: types.SamplerAddressMode = .repeat,
-    address_mode_w: types.SamplerAddressMode = .repeat,
-    mip_lod_bias: f32 = 0.0,
-    max_anisotropy: f32 = 1.0,
-    compare_op: types.CompareOp = .always,
-    min_lod: f32 = 0.0,
-    max_lod: f32 = 0.0,
-    enable_anisotropy: bool = false,
-    enable_compare: bool = false,
-};
+pub const SamplerDesc = gfx.SamplerDesc;
 
 pub const VertexBufferLayoutDesc = struct {
     slot: u32 = 0,
@@ -115,15 +92,9 @@ pub const Texture = struct {
     desc: types.TextureDesc,
 };
 
-pub const ShaderModule = struct {
-    id: u32,
-    desc: ShaderModuleDesc,
-};
+pub const ShaderModule = gfx.ShaderModule;
 
-pub const Sampler = struct {
-    id: u32,
-    desc: SamplerDesc,
-};
+pub const Sampler = gfx.Sampler;
 
 pub const GraphicsPipelineDesc = struct {
     vertex_shader: *const ShaderModule,
@@ -155,27 +126,14 @@ pub const BindGroupDesc = struct {
     slot_offset: u32 = 0,
 };
 
-pub const GraphicsPipeline = struct {
-    id: u32,
-};
+pub const GraphicsPipeline = gfx.GraphicsPipeline;
 
-pub const ComputePipeline = struct {
-    id: u32,
-};
+pub const ComputePipeline = gfx.ComputePipeline;
 
 pub const ComputePipelineDesc = struct {
     code: []const u8,
     entry_point: [:0]const u8 = "main",
     format: types.ShaderFormat = .spirv,
-    num_samplers: u32 = 0,
-    num_readonly_storage_textures: u32 = 0,
-    num_readonly_storage_buffers: u32 = 0,
-    num_readwrite_storage_textures: u32 = 0,
-    num_readwrite_storage_buffers: u32 = 0,
-    num_uniform_buffers: u32 = 0,
-    threadcount_x: u32 = 1,
-    threadcount_y: u32 = 1,
-    threadcount_z: u32 = 1,
 };
 
 pub const ComputePass = struct {
@@ -1142,17 +1100,7 @@ pub const RenderContext = struct {
     }
 
     pub fn createShaderModule(self: *RenderContext, desc: ShaderModuleDesc) Error!ShaderModule {
-        const gfx_desc = gfx.ShaderModuleDesc{
-            .stage = desc.stage,
-            .format = desc.format,
-            .code = desc.code,
-            .entry_point = desc.entry_point,
-        };
-        const shader = try self.device.createShaderModule(gfx_desc);
-        return .{
-            .id = shader.id,
-            .desc = desc,
-        };
+        return try self.device.createShaderModule(desc);
     }
 
     pub fn releaseShaderModule(self: *RenderContext, shader: *ShaderModule) void {
@@ -1161,21 +1109,7 @@ pub const RenderContext = struct {
     }
 
     pub fn createSampler(self: *RenderContext, desc: SamplerDesc) Error!Sampler {
-        const gfx_desc = gfx.SamplerDesc{
-            .min_filter = desc.min_filter,
-            .mag_filter = desc.mag_filter,
-            .mipmap_mode = desc.mipmap_mode,
-            .address_mode_u = desc.address_mode_u,
-            .address_mode_v = desc.address_mode_v,
-            .address_mode_w = desc.address_mode_w,
-            .enable_compare = desc.enable_compare,
-            .compare_op = desc.compare_op,
-        };
-        const sampler = try self.device.createSampler(gfx_desc);
-        return .{
-            .id = sampler.id,
-            .desc = desc,
-        };
+        return try self.device.createSampler(desc);
     }
 
     pub fn releaseSampler(self: *RenderContext, sampler: *Sampler) void {
@@ -1206,7 +1140,7 @@ pub const RenderContext = struct {
             }) catch return error.OutOfMemory;
         }
 
-        const pipeline = try self.device.createGraphicsPipeline(.{
+        return try self.device.createGraphicsPipeline(.{
             .layout = layout,
             .vertex = .{ .id = desc.vertex_shader.id },
             .fragment = if (desc.fragment_shader) |fragment_shader| .{ .id = fragment_shader.id } else null,
@@ -1226,7 +1160,6 @@ pub const RenderContext = struct {
                 null,
             .blend_state = desc.blend_state,
         });
-        return .{ .id = pipeline.id };
     }
 
     pub fn releaseGraphicsPipeline(self: *RenderContext, pipeline: *GraphicsPipeline) void {
@@ -1242,11 +1175,10 @@ pub const RenderContext = struct {
             .code = desc.code,
             .entry_point = desc.entry_point,
         });
-        const pipeline = try self.device.createComputePipeline(.{
+        return try self.device.createComputePipeline(.{
             .layout = layout,
             .shader = shader,
         });
-        return .{ .id = pipeline.id };
     }
 
     pub fn releaseComputePipeline(self: *RenderContext, pipeline: *ComputePipeline) void {
