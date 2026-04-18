@@ -1,33 +1,35 @@
 ---
-# Clangd configuration for Guava Editor project
-# Provides full Qt + Engine compilation database support
+# Clangd configuration for Guava workspace.
+# Use per-project compilation databases, no merged database.
 
+# Engine sources: use Zig-generated database.
+If:
+  PathMatch: ^packages/engine/.*
 CompileFlags:
-  # Use the merged compile_commands.json (engine + Qt)
-  CompilationDatabase: .
-  
-# Include paths can be configured here if needed
-# This is mainly handled through compile_commands.json
+  CompilationDatabase: packages/engine
 
-# Diagnostics settings
+---
+# Qt6 editor sources: use CMake-generated database.
+If:
+  PathMatch: ^packages/editor_qt6/(src|qml|build)/.*
+CompileFlags:
+  CompilationDatabase: packages/editor_qt6/build
+
+---
+# Global diagnostics and editor assistance.
 Diagnostics:
-  # Show clang warnings
   ClangTidy:
-    Checks: '-*'  # Disable clang-tidy checks
+    Checks: '-*'
     CheckOptions: {}
-  
-  # Suppress warnings from Qt generated files
   Suppress:
     - 'readability-named-parameter'
     - 'misc-non-private-member-variables-in-classes'
 
-# Inlay hints for better code understanding
 InlayHints:
   Enabled: true
   ParameterNames: true
   DeducedTypes: true
 
-# Code completion
 Completion:
   AllScopes: true
   BundleOverloads: true
