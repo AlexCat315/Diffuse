@@ -86,7 +86,8 @@ pub const IdPass = struct {
         }
 
         if (self.id_texture) |existing_texture| {
-            if (existing_texture.desc.width == width and existing_texture.desc.height == height) {
+            const existing_desc = device.textureDesc(&existing_texture);
+            if (existing_desc.width == width and existing_desc.height == height) {
                 return;
             }
 

@@ -82,7 +82,8 @@ pub const SceneViewportState = struct {
         }
 
         if (self.color_texture) |color_texture| {
-            if (self.depth_texture != null and self.hdr_color_texture != null and self.taa_texture != null and self.velocity_texture != null and self.ssao_texture != null and self.ssr_texture != null and self.ssr_blur_texture != null and self.ssgi_texture != null and self.contact_shadow_texture != null and self.rt_shadow_denoised_texture != null and self.bloom_texture != null and self.fxaa_texture != null and color_texture.desc.width == width and color_texture.desc.height == height) {
+            const color_desc = device.textureDesc(&color_texture);
+            if (self.depth_texture != null and self.hdr_color_texture != null and self.taa_texture != null and self.velocity_texture != null and self.ssao_texture != null and self.ssr_texture != null and self.ssr_blur_texture != null and self.ssgi_texture != null and self.contact_shadow_texture != null and self.rt_shadow_denoised_texture != null and self.bloom_texture != null and self.fxaa_texture != null and color_desc.width == width and color_desc.height == height) {
                 self.width = width;
                 self.height = height;
                 return;
@@ -261,9 +262,9 @@ pub const SceneViewportState = struct {
             .{
                 width,
                 height,
-                @tagName(self.hdr_color_texture.?.desc.format),
-                @tagName(self.color_texture.?.desc.format),
-                @tagName(self.depth_texture.?.desc.format),
+                @tagName(device.textureDesc(&self.hdr_color_texture.?).format),
+                @tagName(device.textureDesc(&self.color_texture.?).format),
+                @tagName(device.textureDesc(&self.depth_texture.?).format),
             },
         );
     }

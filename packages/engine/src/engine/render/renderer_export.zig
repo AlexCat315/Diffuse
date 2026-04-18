@@ -31,8 +31,9 @@ pub const PathTraceExrExportOptions = struct {
 
 pub fn downloadFramePixelsAlloc(gfx: *gfx_mod.RenderContext, color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator) !FramePixels {
     const texture = color_texture orelse return error.TextureNotFound;
-    const width = texture.desc.width;
-    const height = texture.desc.height;
+    const texture_desc = gfx.textureDesc(&texture);
+    const width = texture_desc.width;
+    const height = texture_desc.height;
     const row_bytes = width * 4;
     const byte_count = row_bytes * height;
 
@@ -68,9 +69,10 @@ pub fn downloadFinalFrameAlloc(gfx: *gfx_mod.RenderContext, color_texture: ?gfx_
 
 pub fn downloadHdrFramePixelsAlloc(gfx: *gfx_mod.RenderContext, hdr_color_texture: ?gfx_mod.Texture, allocator: std.mem.Allocator) !HdrFramePixels {
     const texture = hdr_color_texture orelse return error.TextureNotFound;
-    const width = texture.desc.width;
-    const height = texture.desc.height;
-    const row_bytes = width * texture.desc.format.bytesPerPixel();
+    const texture_desc = gfx.textureDesc(&texture);
+    const width = texture_desc.width;
+    const height = texture_desc.height;
+    const row_bytes = width * texture_desc.format.bytesPerPixel();
     const byte_count = row_bytes * height;
 
     const raw = try allocator.alloc(u8, byte_count);
@@ -81,7 +83,7 @@ pub fn downloadHdrFramePixelsAlloc(gfx: *gfx_mod.RenderContext, hdr_color_textur
     const hdr = try allocator.alloc(f32, pixel_count * 4);
     errdefer allocator.free(hdr);
 
-    switch (texture.desc.format) {
+    switch (texture_desc.format) {
         .rgba16_float => {
             var pixel_index: usize = 0;
             while (pixel_index < pixel_count) : (pixel_index += 1) {

@@ -62,8 +62,9 @@ pub const SSGIComputePass = struct {
         device.bindComputeSampledTextureBinding(compute_pass, 3, &self.noise_texture.?, &self.noise_sampler.?);
         device.pushComputeUniformData(frame, 0, std.mem.asBytes(&uniforms));
 
-        const group_x = (output_texture.desc.width + 7) / 8;
-        const group_y = (output_texture.desc.height + 7) / 8;
+        const output_desc = device.textureDesc(output_texture);
+        const group_x = (output_desc.width + 7) / 8;
+        const group_y = (output_desc.height + 7) / 8;
         device.dispatchCompute(compute_pass, group_x, group_y, 1);
         device.endComputePass(compute_pass);
     }

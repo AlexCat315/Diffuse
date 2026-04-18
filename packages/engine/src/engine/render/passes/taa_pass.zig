@@ -99,7 +99,8 @@ pub const TAAPass = struct {
 
     pub fn ensureHistoryTexture(self: *TAAPass, device: *gfx_mod.RenderContext, width: u32, height: u32) !void {
         if (self.history_texture) |ht| {
-            if (ht.desc.width == width and ht.desc.height == height) return;
+            const history_desc = device.textureDesc(&ht);
+            if (history_desc.width == width and history_desc.height == height) return;
             var tex = self.history_texture.?;
             device.releaseTexture(&tex);
             self.history_texture = null;
