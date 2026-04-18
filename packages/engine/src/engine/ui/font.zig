@@ -5,7 +5,7 @@
 ///! text layout (advance, bearing, bounds).
 const std = @import("std");
 const rhi_mod = @import("../rhi/device.zig");
-const rhi_types = @import("../rhi/types.zig");
+const rhi_types = @import("guava_rhi").types;
 
 const c = @import("c_stb_truetype");
 

@@ -5,7 +5,7 @@ const node_mod = @import("node.zig");
 const style_mod = @import("style.zig");
 const font_mod = @import("font.zig");
 const rhi_mod = @import("../rhi/device.zig");
-const rhi_types = @import("../rhi/types.zig");
+const rhi_types = @import("guava_rhi").types;
 const shader_support = @import("../render/shader_support.zig");
 
 pub const UIVertex = extern struct {

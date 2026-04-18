@@ -1,8 +1,8 @@
 const std = @import("std");
 const rhi = @import("../rhi.zig");
-const rhi_types = @import("../types.zig");
-const command_buffer = @import("../command_buffer.zig");
-const queue_mod = @import("../queue.zig");
+const rhi_types = @import("guava_rhi").types;
+const command_buffer = @import("guava_rhi").command_buffer;
+const queue_mod = @import("guava_rhi").queue;
 
 /// DX12 backend — stub skeleton (Windows only).
 ///

@@ -1,5 +1,5 @@
 const std = @import("std");
-const rhi_types = @import("../rhi/types.zig");
+const rhi_types = @import("guava_rhi").types;
 
 // SH coefficients for efficient irradiance calculation
 pub const SH9 = struct {

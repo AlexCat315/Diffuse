@@ -2,8 +2,8 @@ const std = @import("std");
 
 const metal_backend = @import("rhi/metal/metal_backend.zig");
 const rhi = @import("rhi/rhi.zig");
-const binding_cache = @import("rhi/binding_cache.zig");
-const command_buffer = @import("rhi/command_buffer.zig");
+const binding_cache = @import("guava_rhi").binding_cache;
+const command_buffer = @import("guava_rhi").command_buffer;
 const fullscreen_post = @import("render/passes/fullscreen_post_pass.zig");
 const bloom_pass = @import("render/passes/bloom_pass.zig");
 const tonemap_pass = @import("render/passes/tonemap_pass.zig");

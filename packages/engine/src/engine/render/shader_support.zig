@@ -1,6 +1,6 @@
 const generated_shaders = @import("../generated/shaders.zig");
 const rhi_mod = @import("../rhi/device.zig");
-const rhi_types = @import("../rhi/types.zig");
+const rhi_types = @import("guava_rhi").types;
 
 pub const ProgramStages = struct {
     vertex: rhi_mod.ShaderModule,

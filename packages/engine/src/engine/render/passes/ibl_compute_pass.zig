@@ -1,6 +1,6 @@
 const std = @import("std");
 const rhi_mod = @import("../../rhi/device.zig");
-const rhi_types = @import("../../rhi/types.zig");
+const rhi_types = @import("guava_rhi").types;
 const shader_support = @import("../shader_support.zig");
 
 /// GPU-accelerated IBL precomputation using compute shaders.

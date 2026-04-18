@@ -3,7 +3,7 @@ const handles = @import("handles.zig");
 const ibl_precompute = @import("../render/ibl_precompute.zig");
 const library_mod = @import("library.zig");
 const registry_mod = @import("registry.zig");
-const rhi_types = @import("../rhi/types.zig");
+const rhi_types = @import("guava_rhi").types;
 
 const synthetic_importer_name = "ibl-derived-v1";
 const runtime_source_hash = "ibl-runtime-source-v1";

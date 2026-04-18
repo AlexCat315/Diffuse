@@ -32,6 +32,9 @@
     // Once all dependencies are fetched, `zig build` no longer requires
     // internet connectivity.
     .dependencies = .{
+        .guava_rhi = .{
+            .path = "../../../guava-rhi",
+        },
         .zprof = .{
             .url = "https://github.com/ANDRVV/zprof/archive/refs/tags/v4.0.0.tar.gz",
             .hash = "zprof-4.0.0-Z3ILTVZ3AACiAIXUpC9F65Hr8zsqpqHc6f-Xu4ic4E8E",

@@ -6,6 +6,10 @@ const packaging = @import("build/packaging.zig");
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
+    const guava_rhi_dep = b.dependency("guava_rhi", .{
+        .target = target,
+        .optimize = optimize,
+    });
     const zprof_dep = b.dependency("zprof", .{
         .target = target,
         .optimize = optimize,
@@ -49,6 +53,7 @@ pub fn build(b: *std.Build) void {
         .target = target,
         .imports = &.{
             .{ .name = "io_globals", .module = io_globals_mod },
+            .{ .name = "guava_rhi", .module = guava_rhi_dep.module("guava_rhi") },
         },
     });
     sources.configureEngineModule(b, engine_mod, target.result.os.tag, sdl_prefix, c_translations);

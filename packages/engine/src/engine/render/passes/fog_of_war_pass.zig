@@ -6,7 +6,7 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
 const rhi_mod = @import("../../rhi/device.zig");
-const rhi_types = @import("../../rhi/types.zig");
+const rhi_types = @import("guava_rhi").types;
 const shader_support = @import("../shader_support.zig");
 
 const fullscreen_triangle_vertex_count: u32 = 3;

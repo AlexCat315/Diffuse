@@ -43,6 +43,11 @@
 
 const std = @import("std");
 
+/// 外部图形基础设施依赖。
+///
+/// 当前先显式暴露 `guava_rhi`，用于逐步把 Guava 的底层图形能力迁移到独立仓库。
+pub const guava_rhi = @import("guava_rhi");
+
 /// 核心系统模块
 ///
 /// 提供应用程序生命周期管理、输入处理、层栈管理和平台抽象。
@@ -237,6 +242,8 @@ pub const script = @import("engine/script/script.zig");
 /// });
 /// ```
 pub const rhi = struct {
+    /// 外部独立 RHI 仓库入口（迁移中的新路径）
+    pub const external = @import("guava_rhi");
     /// 旧版 RHI 设备（基于 SDL3 GPU API，逐步迁移中）
     pub const LegacyDevice = @import("engine/rhi/device.zig").RhiDevice;
     /// GPU 缓冲区
@@ -268,53 +275,53 @@ pub const rhi = struct {
     /// 传输缓冲区，用于 CPU-GPU 数据传输
     pub const TransferBuffer = @import("engine/rhi/device.zig").TransferBuffer;
     /// 后端选择策略
-    pub const BackendSelectionPolicy = @import("engine/rhi/types.zig").BackendSelectionPolicy;
+    pub const BackendSelectionPolicy = @import("guava_rhi").types.BackendSelectionPolicy;
     /// 比较操作（用于深度/模板测试）
-    pub const CompareOp = @import("engine/rhi/types.zig").CompareOp;
+    pub const CompareOp = @import("guava_rhi").types.CompareOp;
     /// 剔除模式
-    pub const CullMode = @import("engine/rhi/types.zig").CullMode;
+    pub const CullMode = @import("guava_rhi").types.CullMode;
     /// 填充模式
-    pub const FillMode = @import("engine/rhi/types.zig").FillMode;
+    pub const FillMode = @import("guava_rhi").types.FillMode;
     /// 正面朝向定义
-    pub const FrontFace = @import("engine/rhi/types.zig").FrontFace;
+    pub const FrontFace = @import("guava_rhi").types.FrontFace;
     /// 图形 API 枚举
-    pub const GraphicsAPI = @import("engine/rhi/types.zig").GraphicsAPI;
+    pub const GraphicsAPI = @import("guava_rhi").types.GraphicsAPI;
     /// 设备配置
-    pub const DeviceConfig = @import("engine/rhi/types.zig").DeviceConfig;
+    pub const DeviceConfig = @import("guava_rhi").types.DeviceConfig;
     /// 缓冲区用途
-    pub const BufferUsage = @import("engine/rhi/types.zig").BufferUsage;
+    pub const BufferUsage = @import("guava_rhi").types.BufferUsage;
     /// 索引元素大小
-    pub const IndexElementSize = @import("engine/rhi/types.zig").IndexElementSize;
+    pub const IndexElementSize = @import("guava_rhi").types.IndexElementSize;
     /// 图元类型
-    pub const PrimitiveType = @import("engine/rhi/types.zig").PrimitiveType;
+    pub const PrimitiveType = @import("guava_rhi").types.PrimitiveType;
     /// 采样器寻址模式
-    pub const SamplerAddressMode = @import("engine/rhi/types.zig").SamplerAddressMode;
+    pub const SamplerAddressMode = @import("guava_rhi").types.SamplerAddressMode;
     /// 采样器过滤模式
-    pub const SamplerFilter = @import("engine/rhi/types.zig").SamplerFilter;
+    pub const SamplerFilter = @import("guava_rhi").types.SamplerFilter;
     /// 采样器 Mipmap 模式
-    pub const SamplerMipmapMode = @import("engine/rhi/types.zig").SamplerMipmapMode;
+    pub const SamplerMipmapMode = @import("guava_rhi").types.SamplerMipmapMode;
     /// 着色器格式
-    pub const ShaderFormat = @import("engine/rhi/types.zig").ShaderFormat;
+    pub const ShaderFormat = @import("guava_rhi").types.ShaderFormat;
     /// 着色器阶段
-    pub const ShaderStage = @import("engine/rhi/types.zig").ShaderStage;
+    pub const ShaderStage = @import("guava_rhi").types.ShaderStage;
     /// 纹理用途
-    pub const TextureUsage = @import("engine/rhi/types.zig").TextureUsage;
+    pub const TextureUsage = @import("guava_rhi").types.TextureUsage;
     /// 缓冲区描述
-    pub const BufferDesc = @import("engine/rhi/types.zig").BufferDesc;
+    pub const BufferDesc = @import("guava_rhi").types.BufferDesc;
     /// 纹理描述
-    pub const TextureDesc = @import("engine/rhi/types.zig").TextureDesc;
+    pub const TextureDesc = @import("guava_rhi").types.TextureDesc;
     /// 传输缓冲区描述
-    pub const TransferBufferDesc = @import("engine/rhi/types.zig").TransferBufferDesc;
+    pub const TransferBufferDesc = @import("guava_rhi").types.TransferBufferDesc;
     /// 顶点元素格式
-    pub const VertexElementFormat = @import("engine/rhi/types.zig").VertexElementFormat;
+    pub const VertexElementFormat = @import("guava_rhi").types.VertexElementFormat;
     /// 顶点输入速率
-    pub const VertexInputRate = @import("engine/rhi/types.zig").VertexInputRate;
+    pub const VertexInputRate = @import("guava_rhi").types.VertexInputRate;
     /// 清除状态
-    pub const ClearState = @import("engine/rhi/types.zig").ClearState;
+    pub const ClearState = @import("guava_rhi").types.ClearState;
     /// 运行时信息
-    pub const RuntimeInfo = @import("engine/rhi/types.zig").RuntimeInfo;
+    pub const RuntimeInfo = @import("guava_rhi").types.RuntimeInfo;
     /// 获取图形 API 名称
-    pub const graphicsApiName = @import("engine/rhi/types.zig").graphicsApiName;
+    pub const graphicsApiName = @import("guava_rhi").types.graphicsApiName;
 
     /// RHI 设备抽象（显式队列 + 软件命令缓冲）
     pub const Device = @import("engine/rhi/rhi.zig").Device;
