@@ -42,6 +42,16 @@ public:
     Q_INVOKABLE void frameRendered();
     Q_INVOKABLE void updateViewportRect(int x, int y, int width, int height);
     Q_INVOKABLE void reportOverlayPulse();
+    Q_INVOKABLE void sendViewportInput(const QString &type,
+                                       double x,
+                                       double y,
+                                       int button,
+                                       int key,
+                                       bool shift,
+                                       bool ctrl,
+                                       bool alt,
+                                       int deltaX = 0,
+                                       int deltaY = 0);
 
 signals:
     void fpsChanged();

@@ -227,6 +227,37 @@ void AppBackend::reportOverlayPulse()
     m_lastOverlayPulseMs = m_benchmarkClock.elapsed();
 }
 
+void AppBackend::sendViewportInput(const QString &type,
+                                   double x,
+                                   double y,
+                                   int button,
+                                   int key,
+                                   bool shift,
+                                   bool ctrl,
+                                   bool alt,
+                                   int deltaX,
+                                   int deltaY)
+{
+    if (!m_engineConnected)
+    {
+        return;
+    }
+
+    QJsonObject payload;
+    payload["type"] = type;
+    payload["x"] = x;
+    payload["y"] = y;
+    payload["button"] = button;
+    payload["key"] = key;
+    payload["shift"] = shift;
+    payload["ctrl"] = ctrl;
+    payload["alt"] = alt;
+    payload["deltaX"] = deltaX;
+    payload["deltaY"] = deltaY;
+
+    m_rpc.invoke(QStringLiteral("viewport.sendInput"), payload);
+}
+
 void AppBackend::onStatsTick()
 {
     const qint64 frameDelta = m_totalFrames - m_lastFrames;

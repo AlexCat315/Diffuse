@@ -32,6 +32,12 @@ qt_add_qml_module(guava_editor_qt6
     VERSION 1.0
     QML_FILES
         qml/Main.qml
+    qml/panels/TopToolbar.qml
+    qml/panels/ScenePanel.qml
+    qml/panels/InspectorPanel.qml
+    qml/panels/ContentBrowserPanel.qml
+    qml/panels/ConsolePanel.qml
+    qml/viewport/ViewportInputLayer.qml
 )
 
 target_link_libraries(guava_editor_qt6
