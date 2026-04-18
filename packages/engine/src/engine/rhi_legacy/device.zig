@@ -7,11 +7,12 @@ const window_mod = @import("../platform/window.zig");
 const types = @import("guava_rhi").types;
 const rhi = @import("guava_rhi").rhi;
 const command_buffer = @import("guava_rhi").command_buffer;
-const metal_device_mod = @import("metal/metal_device.zig");
-const metal_backend_mod = @import("metal/metal_backend.zig");
+const metal_device_mod = @import("guava_rhi").metal_device;
+const metal_backend_mod = @import("guava_rhi").metal_backend;
 const rt_device_mod = @import("../rt/rhi_rt_device.zig");
 const rt_backend = @import("../rt/rt_backend.zig");
-const vulkan_device_mod = @import("vulkan/vk_device.zig");
+const vulkan_device_mod = @import("guava_rhi").vulkan_device;
+const rt_bridge = @import("rt_bridge.zig");
 
 // Combined error set that includes both old and new RHI errors
 pub const Error = error{
@@ -50,11 +51,7 @@ pub const Error = error{
     TruncatedStream,
 };
 
-pub const RtInitStatus = enum {
-    ready,
-    initialized,
-    unavailable,
-};
+pub const RtInitStatus = rt_bridge.RtInitStatus;
 
 // ============================================================================
 // PUBLIC TYPE DEFINITIONS - Kept for backward compatibility
@@ -483,55 +480,43 @@ pub const RhiDevice = struct {
     }
 
     pub fn ensureRtDevice(self: *RhiDevice) RtInitStatus {
-        if (self.rt_device != null) return .ready;
-        self.rt_device = rt_device_mod.RtDevice.initAvailable() orelse return .unavailable;
-        return .initialized;
+        return rt_bridge.ensureRtDevice(&self.rt_device);
     }
 
     pub fn releaseRtDevice(self: *RhiDevice) void {
-        if (self.rt_device) |*dev| {
-            dev.deinit();
-        }
-        self.rt_device = null;
+        rt_bridge.releaseRtDevice(&self.rt_device);
     }
 
     pub fn rtBackendName(_: *const RhiDevice) []const u8 {
-        return rt_device_mod.RtDevice.backendName();
+        return rt_bridge.rtBackendName();
     }
 
     pub fn rtBuildAccelerationStructure(self: *RhiDevice, triangles: []const rt_backend.RtTriangle) bool {
-        if (self.rt_device) |*dev| return dev.buildAccelerationStructure(triangles);
-        return false;
+        return rt_bridge.rtBuildAccelerationStructure(&self.rt_device, triangles);
     }
 
     pub fn rtUploadTextures(self: *RhiDevice, pixel_data: []const u8, meta: []const rt_backend.RtTextureMeta) bool {
-        if (self.rt_device) |*dev| return dev.uploadTextures(pixel_data, meta);
-        return false;
+        return rt_bridge.rtUploadTextures(&self.rt_device, pixel_data, meta);
     }
 
     pub fn rtUploadSamplingTables(self: *RhiDevice, table_data: []const u8, meta: []const rt_backend.RtSamplingTableMeta) bool {
-        if (self.rt_device) |*dev| return dev.uploadSamplingTables(table_data, meta);
-        return false;
+        return rt_bridge.rtUploadSamplingTables(&self.rt_device, table_data, meta);
     }
 
     pub fn rtTraceRays(self: *RhiDevice, params: *const rt_backend.RtParams, output: []u8) bool {
-        if (self.rt_device) |*dev| return dev.traceRays(params, output);
-        return false;
+        return rt_bridge.rtTraceRays(&self.rt_device, params, output);
     }
 
     pub fn rtTraceRaysAsync(self: *RhiDevice, params: *const rt_backend.RtParams) bool {
-        if (self.rt_device) |*dev| return dev.traceRaysAsync(params);
-        return false;
+        return rt_bridge.rtTraceRaysAsync(&self.rt_device, params);
     }
 
     pub fn rtIsTraceComplete(self: *RhiDevice) bool {
-        if (self.rt_device) |*dev| return dev.isTraceComplete();
-        return true;
+        return rt_bridge.rtIsTraceComplete(&self.rt_device);
     }
 
     pub fn rtGetTraceResult(self: *RhiDevice, output: []u8) bool {
-        if (self.rt_device) |*dev| return dev.getTraceResult(output);
-        return false;
+        return rt_bridge.rtGetTraceResult(&self.rt_device, output);
     }
 
     // ────────────────────────────────────────────────────────────────────

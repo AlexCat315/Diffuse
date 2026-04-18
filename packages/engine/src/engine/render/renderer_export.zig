@@ -1,5 +1,5 @@
 const std = @import("std");
-const rhi_mod = @import("../rhi/device.zig");
+const rhi_mod = @import("engine/rhi_legacy/mod.zig");
 const image_export = @import("image_export.zig");
 const renderer_path_trace = @import("path_trace/renderer_path_trace.zig");
 const types = @import("types.zig");

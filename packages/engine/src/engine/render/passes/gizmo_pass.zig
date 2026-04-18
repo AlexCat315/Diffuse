@@ -4,7 +4,7 @@ const vec3 = @import("../../math/vec3.zig");
 const axis_mod = @import("../../math/axis.zig");
 const components = @import("../../scene/components.zig");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const rhi_mod = @import("../../rhi/device.zig");
+const rhi_mod = @import("engine/rhi_legacy/mod.zig");
 const rhi_types = @import("guava_rhi").types;
 const shader_support = @import("../shader_support.zig");
 

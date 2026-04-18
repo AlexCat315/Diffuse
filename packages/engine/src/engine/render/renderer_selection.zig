@@ -1,5 +1,5 @@
 const std = @import("std");
-const rhi_mod = @import("../rhi/device.zig");
+const rhi_mod = @import("engine/rhi_legacy/mod.zig");
 const id_pass_mod = @import("passes/id_pass.zig");
 const selection_history_mod = @import("selection_history.zig");
 
