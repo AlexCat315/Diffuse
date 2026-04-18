@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const scene_mod = @import("../../scene/scene.zig");
 const shader_support = @import("../shader_support.zig");
 
@@ -17,13 +17,13 @@ pub const VelocityPass = struct {
     pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !VelocityPass {
+    pub fn init(device: *gfx_mod.RenderContext) !VelocityPass {
         var pass = VelocityPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *VelocityPass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *VelocityPass, device: *gfx_mod.RenderContext) void {
         if (self.pipeline) |*pipeline| {
             device.releaseGraphicsPipeline(pipeline);
         }
@@ -39,7 +39,7 @@ pub const VelocityPass = struct {
 
     pub fn draw(
         self: *VelocityPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
@@ -76,7 +76,7 @@ pub const VelocityPass = struct {
         return stats;
     }
 
-    fn createResources(self: *VelocityPass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *VelocityPass, device: *gfx_mod.RenderContext) !void {
         self.stages = try shader_support.loadProgramStages(device, "velocity");
         errdefer if (self.stages) |*stages| {
             stages.deinit(device);

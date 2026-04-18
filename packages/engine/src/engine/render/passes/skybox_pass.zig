@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const shader_support = @import("../shader_support.zig");
 const math = @import("../../math/mat4.zig");
 const mesh_pass_mod = @import("mesh_pass.zig");
@@ -24,13 +24,13 @@ pub const SkyboxPass = struct {
     pipeline_ldr: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !SkyboxPass {
+    pub fn init(device: *gfx_mod.RenderContext) !SkyboxPass {
         var pass = SkyboxPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *SkyboxPass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *SkyboxPass, device: *gfx_mod.RenderContext) void {
         if (self.sampler) |*sampler| {
             device.releaseSampler(sampler);
         }
@@ -52,7 +52,7 @@ pub const SkyboxPass = struct {
 
     pub fn draw(
         self: *SkyboxPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
@@ -116,7 +116,7 @@ pub const SkyboxPass = struct {
         device.drawPrimitives(pass, fullscreen_triangle_vertex_count, 1, 0, 0);
     }
 
-    fn createResources(self: *SkyboxPass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *SkyboxPass, device: *gfx_mod.RenderContext) !void {
         self.sampler = try device.createSampler(.{
             .min_filter = .linear,
             .mag_filter = .linear,

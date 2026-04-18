@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
@@ -23,13 +23,13 @@ pub const SSGIComputePass = struct {
     noise_texture: ?gfx_mod.Texture = null,
     noise_sampler: ?gfx_mod.Sampler = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !SSGIComputePass {
+    pub fn init(device: *gfx_mod.RenderContext) !SSGIComputePass {
         var pass = SSGIComputePass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *SSGIComputePass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *SSGIComputePass, device: *gfx_mod.RenderContext) void {
         if (self.pipeline) |*p| device.releaseComputePipeline(p);
         if (self.sampler) |*s| device.releaseSampler(s);
         if (self.noise_sampler) |*s| device.releaseSampler(s);
@@ -45,7 +45,7 @@ pub const SSGIComputePass = struct {
 
     pub fn execute(
         self: *SSGIComputePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         output_texture: *const gfx_mod.Texture,
         depth_texture: *const gfx_mod.Texture,
@@ -68,7 +68,7 @@ pub const SSGIComputePass = struct {
         device.endComputePass(compute_pass);
     }
 
-    fn createResources(self: *SSGIComputePass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *SSGIComputePass, device: *gfx_mod.RenderContext) !void {
         self.pipeline = try shader_support.loadComputePipelineRW(device, "ssgi_compute", 1, 0);
 
         errdefer {

@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const mat4_mod = @import("../math/mat4.zig");
 const render_log = std.log.scoped(.viewport_render);
@@ -30,7 +30,7 @@ pub const SceneViewportState = struct {
     /// When true, color_texture is backed by a cross-process shared resource.
     use_iosurface: bool = false,
 
-    pub fn deinit(self: *SceneViewportState, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *SceneViewportState, device: *gfx_mod.RenderContext) void {
         if (self.hdr_color_texture) |*texture| {
             device.releaseTexture(texture);
         }
@@ -75,7 +75,7 @@ pub const SceneViewportState = struct {
         self.use_iosurface = preserve_iosurface;
     }
 
-    pub fn ensure(self: *SceneViewportState, device: *gfx_mod.GfxDevice, width: u32, height: u32) !void {
+    pub fn ensure(self: *SceneViewportState, device: *gfx_mod.RenderContext, width: u32, height: u32) !void {
         if (width == 0 or height == 0) {
             self.deinit(device);
             return;
@@ -379,7 +379,7 @@ pub const ShadowMapState = struct {
     /// Light-space view-projection per cascade (computed each frame).
     cascade_matrices: [csm_cascade_count][16]f32 = .{ mat4_mod.identity(), mat4_mod.identity(), mat4_mod.identity(), mat4_mod.identity() },
 
-    pub fn init(device: *gfx_mod.GfxDevice) !ShadowMapState {
+    pub fn init(device: *gfx_mod.RenderContext) !ShadowMapState {
         const size: u32 = 2048;
         var textures: [csm_cascade_count]?gfx_mod.Texture = .{ null, null, null, null };
         errdefer for (&textures) |*t| {
@@ -420,7 +420,7 @@ pub const ShadowMapState = struct {
         };
     }
 
-    pub fn deinit(self: *ShadowMapState, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *ShadowMapState, device: *gfx_mod.RenderContext) void {
         for (&self.depth_textures) |*texture| {
             if (texture.*) |*tex| {
                 device.releaseTexture(tex);

@@ -87,7 +87,7 @@ const window_mod = @import("../platform/window.zig");
 const graph_mod = @import("render_graph.zig");
 const mesh_pass_mod = @import("passes/mesh_pass.zig");
 const scene_extraction = @import("scene_extraction.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const gfx_api = @import("guava_gfx").gfx;
 const gfx_mock_backend_mod = @import("guava_gfx").metal_backend;
@@ -309,7 +309,7 @@ pub const Renderer = struct {
     /// 平台抽象
     platform: platform_mod.Platform,
     /// GFX 设备（GPU 资源管理）
-    gfx: gfx_mod.GfxDevice,
+    gfx: gfx_mod.RenderContext,
     /// 渲染图（管理渲染通道依赖）
     graph: graph_mod.RenderGraph,
     /// 场景缓存（优化场景数据访问）
@@ -546,7 +546,7 @@ pub const Renderer = struct {
         var renderer = Renderer{
             .allocator = allocator,
             .platform = platform,
-            .gfx = try gfx_mod.GfxDevice.init(
+            .gfx = try gfx_mod.RenderContext.init(
                 allocator,
                 platform,
                 window,
@@ -908,7 +908,7 @@ pub const Renderer = struct {
         try self.gfx.setVSyncEnabled(enabled);
     }
 
-    pub fn device(self: *Renderer) *gfx_mod.GfxDevice {
+    pub fn device(self: *Renderer) *gfx_mod.RenderContext {
         return &self.gfx;
     }
 

@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
@@ -12,13 +12,13 @@ pub const OmniShadowPass = struct {
     render_passes: [6]?gfx_mod.RenderPass = [_]?gfx_mod.RenderPass{null} ** 6,
     framebuffers: [6]?gfx_mod.Framebuffer = [_]?gfx_mod.Framebuffer{null} ** 6,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !OmniShadowPass {
+    pub fn init(device: *gfx_mod.RenderContext) !OmniShadowPass {
         var pass = OmniShadowPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *OmniShadowPass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *OmniShadowPass, device: *gfx_mod.RenderContext) void {
         for (self.render_passes) |*rp| {
             if (rp.*) |*render_pass| {
                 device.releaseRenderPass(render_pass);
@@ -56,7 +56,7 @@ pub const OmniShadowPass = struct {
         return &self.sampler.?;
     }
 
-    pub fn resize(self: *OmniShadowPass, device: *gfx_mod.GfxDevice, size: u32) !void {
+    pub fn resize(self: *OmniShadowPass, device: *gfx_mod.RenderContext, size: u32) !void {
         if (self.cube_texture) |*texture| {
             device.releaseTexture(texture);
         }
@@ -106,7 +106,7 @@ pub const OmniShadowPass = struct {
 
     pub fn draw(
         self: *OmniShadowPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
         light_position: [3]f32,
@@ -159,7 +159,7 @@ pub const OmniShadowPass = struct {
         return stats;
     }
 
-    fn createResources(self: *OmniShadowPass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *OmniShadowPass, device: *gfx_mod.RenderContext) !void {
         self.stages = try shader_support.loadProgramStages(device, "omni_shadow_pass");
         errdefer if (self.stages) |*stages| {
             stages.deinit(device);

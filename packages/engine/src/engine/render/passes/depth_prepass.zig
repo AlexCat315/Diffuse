@@ -1,19 +1,19 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const shader_support = @import("../shader_support.zig");
 
 pub const DepthPrepass = struct {
     pipeline: ?gfx_mod.GraphicsPipeline = null,
     vertex_stage: ?gfx_mod.ShaderModule = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !DepthPrepass {
+    pub fn init(device: *gfx_mod.RenderContext) !DepthPrepass {
         var pass = DepthPrepass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *DepthPrepass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *DepthPrepass, device: *gfx_mod.RenderContext) void {
         if (self.pipeline) |*pipeline| {
             device.releaseGraphicsPipeline(pipeline);
         }
@@ -29,7 +29,7 @@ pub const DepthPrepass = struct {
 
     pub fn draw(
         self: *DepthPrepass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
@@ -58,7 +58,7 @@ pub const DepthPrepass = struct {
         return stats;
     }
 
-    fn createResources(self: *DepthPrepass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *DepthPrepass, device: *gfx_mod.RenderContext) !void {
         self.vertex_stage = try shader_support.loadVertexStage(device, "depth_prepass");
         errdefer if (self.vertex_stage) |*vertex_stage| {
             device.releaseShaderModule(vertex_stage);
@@ -72,7 +72,7 @@ pub const DepthPrepass = struct {
 
     fn createPipeline(
         self: *DepthPrepass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         vertex_layouts: []const gfx_mod.VertexBufferLayoutDesc,
         vertex_attributes: []const gfx_mod.VertexAttributeDesc,
     ) !gfx_mod.GraphicsPipeline {

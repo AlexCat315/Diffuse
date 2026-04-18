@@ -4,7 +4,7 @@ const std = @import("std");
 const node_mod = @import("node.zig");
 const style_mod = @import("style.zig");
 const font_mod = @import("font.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../render/shader_support.zig");
 
@@ -51,7 +51,7 @@ pub const UIRenderer = struct {
         return .{ .allocator = allocator };
     }
 
-    pub fn createGpuResources(self: *UIRenderer, device: *gfx_mod.GfxDevice) !void {
+    pub fn createGpuResources(self: *UIRenderer, device: *gfx_mod.RenderContext) !void {
         // Shader
         self.stages = try shader_support.loadProgramStages(device, "ui");
         errdefer if (self.stages) |*s| {
@@ -146,7 +146,7 @@ pub const UIRenderer = struct {
         });
     }
 
-    pub fn deinit(self: *UIRenderer, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *UIRenderer, device: *gfx_mod.RenderContext) void {
         if (self.bind_group) |*bg| device.releaseBindGroup(bg);
         if (self.sampler) |*s| device.releaseSampler(s);
         if (self.white_texture) |*t| device.releaseTexture(t);
@@ -244,7 +244,7 @@ pub const UIRenderer = struct {
 
     pub fn flush(
         self: *UIRenderer,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         viewport_w: f32,

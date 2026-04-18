@@ -4,7 +4,7 @@
 ///! for GPU-accelerated text rendering. Glyph metrics are stored for
 ///! text layout (advance, bearing, bounds).
 const std = @import("std");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 
 const c = @import("c_stb_truetype");
@@ -192,7 +192,7 @@ pub const Font = struct {
     }
 
     /// Upload the atlas to the GPU and create the bind group.
-    pub fn createGpuResources(self: *Font, device: *gfx_mod.GfxDevice) !void {
+    pub fn createGpuResources(self: *Font, device: *gfx_mod.RenderContext) !void {
         const pixels = self.atlas_pixels orelse return error.NoAtlasData;
 
         self.atlas_texture = try device.createTexture(.{
@@ -235,7 +235,7 @@ pub const Font = struct {
         return self.glyphs.items[idx];
     }
 
-    pub fn deinit(self: *Font, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *Font, device: *gfx_mod.RenderContext) void {
         if (self.atlas_bind_group) |*bg| device.releaseBindGroup(bg);
         if (self.atlas_sampler) |*s| device.releaseSampler(s);
         if (self.atlas_texture) |*t| device.releaseTexture(t);

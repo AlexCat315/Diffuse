@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
@@ -32,13 +32,13 @@ pub const SSAOComputePass = struct {
     noise_sampler: ?gfx_mod.Sampler = null,
     noise_texture: ?gfx_mod.Texture = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !SSAOComputePass {
+    pub fn init(device: *gfx_mod.RenderContext) !SSAOComputePass {
         var pass = SSAOComputePass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *SSAOComputePass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *SSAOComputePass, device: *gfx_mod.RenderContext) void {
         if (self.pipeline) |*p| device.releaseComputePipeline(p);
         if (self.sampler) |*s| device.releaseSampler(s);
         if (self.noise_sampler) |*s| device.releaseSampler(s);
@@ -52,7 +52,7 @@ pub const SSAOComputePass = struct {
 
     pub fn dispatch(
         self: *SSAOComputePass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         depth_texture: *const gfx_mod.Texture,
         output_texture: *const gfx_mod.Texture,
@@ -73,7 +73,7 @@ pub const SSAOComputePass = struct {
         device.endComputePass(compute_pass);
     }
 
-    fn createResources(self: *SSAOComputePass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *SSAOComputePass, device: *gfx_mod.RenderContext) !void {
         self.pipeline = try shader_support.loadComputePipelineRW(device, "ssao_compute", 1, 0);
         errdefer if (self.pipeline) |*p| {
             device.releaseComputePipeline(p);

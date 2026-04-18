@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const scene_mod = @import("../../scene/scene.zig");
 const shader_support = @import("../shader_support.zig");
@@ -39,7 +39,7 @@ pub const IdPass = struct {
     pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !IdPass {
+    pub fn init(device: *gfx_mod.RenderContext) !IdPass {
         var pass = IdPass{};
         try pass.createResources(device);
         const runtime = device.runtimeInfo();
@@ -47,7 +47,7 @@ pub const IdPass = struct {
         return pass;
     }
 
-    pub fn deinit(self: *IdPass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *IdPass, device: *gfx_mod.RenderContext) void {
         if (self.id_texture) |*id_texture| {
             device.releaseTexture(id_texture);
         }
@@ -71,12 +71,12 @@ pub const IdPass = struct {
         return null;
     }
 
-    pub fn ensureTarget(self: *IdPass, device: *gfx_mod.GfxDevice) !void {
+    pub fn ensureTarget(self: *IdPass, device: *gfx_mod.RenderContext) !void {
         const runtime = device.runtimeInfo();
         try self.ensureTargetSize(device, runtime.drawable_width, runtime.drawable_height);
     }
 
-    pub fn ensureTargetSize(self: *IdPass, device: *gfx_mod.GfxDevice, width: u32, height: u32) !void {
+    pub fn ensureTargetSize(self: *IdPass, device: *gfx_mod.RenderContext, width: u32, height: u32) !void {
         if (width == 0 or height == 0) {
             if (self.id_texture) |*id_texture| {
                 device.releaseTexture(id_texture);
@@ -105,7 +105,7 @@ pub const IdPass = struct {
 
     pub fn draw(
         self: *IdPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         prepared_scene: *const mesh_pass_mod.PreparedScene,
@@ -143,7 +143,7 @@ pub const IdPass = struct {
         return stats;
     }
 
-    fn createResources(self: *IdPass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *IdPass, device: *gfx_mod.RenderContext) !void {
         self.stages = try shader_support.loadProgramStages(device, "id_pass");
         errdefer if (self.stages) |*stages| {
             stages.deinit(device);

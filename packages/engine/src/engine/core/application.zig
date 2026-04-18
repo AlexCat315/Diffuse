@@ -377,14 +377,14 @@ pub const Application = struct {
     /// 1. **Layer/Script 层** - 先销毁应用层和脚本，避免它们访问正在销毁的系统
     /// 2. **Physics 系统** - 物理世界必须在 World 资源之前销毁
     /// 3. **World (Resources)** - World 包含 ResourceLibrary，持有 GPU 纹理/网格等资源
-    /// 4. **Renderer (Device)** - Renderer 拥有 GfxDevice，必须在 World 资源释放后销毁
+    /// 4. **Renderer (Device)** - Renderer 拥有 RenderContext，必须在 World 资源释放后销毁
     /// 5. **Window** - 窗口在 Renderer 之后销毁
     /// 6. **JobSystem** - 作业系统最后销毁
     ///
     /// 关键依赖：`Renderer.deinit()` 必须在 `World.deinit()` **之前**调用，因为：
     /// - World 的 ResourceLibrary 持有 GPU 纹理/网格资源
-    /// - Renderer 的 GfxDevice 必须在这些资源释放前保持有效
-    /// - 如果先销毁 World，ResourceLibrary 释放 GPU 资源时 GfxDevice 可能已被销毁
+    /// - Renderer 的 RenderContext 必须在这些资源释放前保持有效
+    /// - 如果先销毁 World，ResourceLibrary 释放 GPU 资源时 RenderContext 可能已被销毁
     pub fn deinit(self: *Application) void {
         self.bindRuntimeContext();
         self.script_runtime.callDestroyAll(&self.world);

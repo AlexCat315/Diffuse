@@ -5,7 +5,7 @@
 const std = @import("std");
 const terrain_mod = @import("terrain.zig");
 const mesh_pass_mod = @import("../render/passes/mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../render/shader_support.zig");
 const components = @import("../scene/components.zig");
@@ -31,7 +31,7 @@ pub const TerrainRenderer = struct {
         return .{ .allocator = allocator };
     }
 
-    pub fn deinit(self: *TerrainRenderer, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *TerrainRenderer, device: *gfx_mod.RenderContext) void {
         if (self.pipeline) |*p| device.releaseGraphicsPipeline(p);
         if (self.stages) |*s| s.deinit(device);
         if (self.vertex_buffer) |*b| device.releaseBuffer(b);
@@ -44,7 +44,7 @@ pub const TerrainRenderer = struct {
     }
 
     /// Create shader pipeline. Call once during init.
-    pub fn createPipeline(self: *TerrainRenderer, device: *gfx_mod.GfxDevice) !void {
+    pub fn createPipeline(self: *TerrainRenderer, device: *gfx_mod.RenderContext) !void {
         self.stages = try shader_support.loadProgramStages(device, "terrain");
         errdefer if (self.stages) |*s| s.deinit(device);
 
@@ -69,7 +69,7 @@ pub const TerrainRenderer = struct {
     }
 
     /// Upload terrain mesh to GPU. Call after terrain.rebuildMesh().
-    pub fn uploadMesh(self: *TerrainRenderer, device: *gfx_mod.GfxDevice, mesh: *const terrain_mod.TerrainMesh) !void {
+    pub fn uploadMesh(self: *TerrainRenderer, device: *gfx_mod.RenderContext, mesh: *const terrain_mod.TerrainMesh) !void {
         // Release old buffers if any.
         if (self.vertex_buffer) |*b| device.releaseBuffer(b);
         if (self.index_buffer) |*b| device.releaseBuffer(b);
@@ -95,7 +95,7 @@ pub const TerrainRenderer = struct {
     /// Draw terrain. Call inside an active render pass after binding the scene.
     pub fn draw(
         self: *TerrainRenderer,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         view_projection: [16]f32,
@@ -130,7 +130,7 @@ pub const TerrainRenderer = struct {
     /// and issues draw calls for each terrain entity.
     pub fn syncAndDraw(
         self: *TerrainRenderer,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         scene: *scene_mod.Scene,

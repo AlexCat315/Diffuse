@@ -1,6 +1,6 @@
 const std = @import("std");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("gfx/mod.zig");
+const gfx_mod = @import("engine/render/render_context.zig");
 const shader_support = @import("../shader_support.zig");
 
 const fullscreen_triangle_vertex_count: u32 = 3;
@@ -21,13 +21,13 @@ pub const TonemapPass = struct {
     pipeline: ?gfx_mod.GraphicsPipeline = null,
     stages: ?shader_support.ProgramStages = null,
 
-    pub fn init(device: *gfx_mod.GfxDevice) !TonemapPass {
+    pub fn init(device: *gfx_mod.RenderContext) !TonemapPass {
         var pass = TonemapPass{};
         try pass.createResources(device);
         return pass;
     }
 
-    pub fn deinit(self: *TonemapPass, device: *gfx_mod.GfxDevice) void {
+    pub fn deinit(self: *TonemapPass, device: *gfx_mod.RenderContext) void {
         if (self.bind_group) |*bind_group| {
             device.releaseBindGroup(bind_group);
         }
@@ -49,7 +49,7 @@ pub const TonemapPass = struct {
 
     pub fn syncTextures(
         self: *TonemapPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         hdr_texture: *const gfx_mod.Texture,
         bloom_texture: ?*const gfx_mod.Texture,
         lut_texture: ?*const gfx_mod.Texture,
@@ -88,7 +88,7 @@ pub const TonemapPass = struct {
 
     pub fn draw(
         self: *TonemapPass,
-        device: *gfx_mod.GfxDevice,
+        device: *gfx_mod.RenderContext,
         frame: gfx_mod.Frame,
         pass: gfx_mod.RenderPass,
         params: TonemapParams,
@@ -108,7 +108,7 @@ pub const TonemapPass = struct {
         return stats;
     }
 
-    fn createResources(self: *TonemapPass, device: *gfx_mod.GfxDevice) !void {
+    fn createResources(self: *TonemapPass, device: *gfx_mod.RenderContext) !void {
         self.sampler = try device.createSampler(.{
             .min_filter = .linear,
             .mag_filter = .linear,
