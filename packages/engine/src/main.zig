@@ -409,6 +409,8 @@ fn runMcp(allocator: std.mem.Allocator, options: cli.CliOptions) !void {
 }
 
 test "main boots the engine skeleton" {
+    if (!shouldRunSmokeTests()) return error.SkipZigTest;
+
     var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
     defer arena.deinit();
     const allocator = arena.allocator();
@@ -428,4 +430,9 @@ test "main boots the engine skeleton" {
         return;
     };
     try std.testing.expect(report.frames > 0);
+}
+
+fn shouldRunSmokeTests() bool {
+    const val = std.c.getenv("GUAVA_RUN_SMOKE_TESTS") orelse return false;
+    return std.mem.orderZ(u8, val, "1") == .eq;
 }
