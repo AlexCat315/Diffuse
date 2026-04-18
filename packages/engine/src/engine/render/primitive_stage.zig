@@ -1,6 +1,6 @@
 const std = @import("std");
 const math = @import("../math/mat4.zig");
-const gfx_mod = @import("engine/render/render_context.zig");
+const gfx_mod = @import("render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const components = @import("../scene/components.zig");
 const scene_mod = @import("../scene/scene.zig");

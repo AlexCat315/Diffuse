@@ -59,6 +59,20 @@ pub fn build(b: *std.Build) void {
     });
     sources.configureEngineModule(b, engine_mod, target.result.os.tag, sdl_prefix, c_translations);
 
+    // ── guava-rhi native bridge files (compiled in engine context) ───────────
+    if (target.result.os.tag == .macos) {
+        engine_mod.addCSourceFile(.{
+            .file = guava_rhi_dep.path("src/metal/metal_rhi_bridge.mm"),
+            .flags = &[_][]const u8{ "-std=c++17", "-fobjc-arc" },
+        });
+    }
+    // Vulkan C bridge (used on all platforms that support Vulkan)
+    engine_mod.addIncludePath(b.path("src/engine/platform"));
+    engine_mod.addCSourceFile(.{
+        .file = guava_rhi_dep.path("src/vulkan/vk_bridge.c"),
+        .flags = &[_][]const u8{"-std=c11"},
+    });
+
     // ── Executables ─────────────────────────────────────────────────────────
     const exe = b.addExecutable(.{
         .name = "guava-engine",

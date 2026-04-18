@@ -1,5 +1,5 @@
 const generated_shaders = @import("../generated/shaders.zig");
-const gfx_mod = @import("engine/render/render_context.zig");
+const gfx_mod = @import("render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 
 pub const ProgramStages = struct {

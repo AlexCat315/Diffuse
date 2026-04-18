@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_mod = @import("engine/render/render_context.zig");
+const gfx_mod = @import("render_context.zig");
 const image_export = @import("image_export.zig");
 const renderer_path_trace = @import("path_trace/renderer_path_trace.zig");
 const types = @import("types.zig");

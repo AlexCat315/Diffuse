@@ -1,5 +1,5 @@
 const std = @import("std");
-const gfx_mod = @import("engine/render/render_context.zig");
+const gfx_mod = @import("render_context.zig");
 const id_pass_mod = @import("passes/id_pass.zig");
 const selection_history_mod = @import("selection_history.zig");
 

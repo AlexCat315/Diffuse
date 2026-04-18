@@ -4,7 +4,7 @@ const vec3 = @import("../../math/vec3.zig");
 const axis_mod = @import("../../math/axis.zig");
 const components = @import("../../scene/components.zig");
 const mesh_pass_mod = @import("mesh_pass.zig");
-const gfx_mod = @import("engine/render/render_context.zig");
+const gfx_mod = @import("../render_context.zig");
 const gfx_types = @import("guava_gfx").types;
 const shader_support = @import("../shader_support.zig");
 
