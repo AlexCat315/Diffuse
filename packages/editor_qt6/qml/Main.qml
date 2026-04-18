@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import GuavaEditor 1.0
 
 ApplicationWindow {
     id: root
@@ -14,6 +15,39 @@ ApplicationWindow {
         anchors.fill: parent
         color: "#111827"
 
+        Image {
+            id: engineFrame
+            anchors.fill: parent
+            source: appBackend.frameDataUrl
+            fillMode: Image.PreserveAspectCrop
+            smooth: false
+            cache: false
+            asynchronous: true
+            visible: !zeroCopyViewport.active && source !== ""
+        }
+
+        ZeroCopyViewport {
+            id: zeroCopyViewport
+            anchors.fill: parent
+            z: 1
+
+            Component.onCompleted: {
+                appBackend.updateViewportRect(0, 0, width, height)
+                setSurfaceHandle(appBackend.surfaceId, appBackend.surfaceWidth, appBackend.surfaceHeight)
+            }
+
+            onWidthChanged: appBackend.updateViewportRect(0, 0, width, height)
+            onHeightChanged: appBackend.updateViewportRect(0, 0, width, height)
+        }
+
+        Connections {
+            target: appBackend
+
+            function onZeroCopyReadyChanged() {
+                zeroCopyViewport.setSurfaceHandle(appBackend.surfaceId, appBackend.surfaceWidth, appBackend.surfaceHeight)
+            }
+        }
+
         Timer {
             id: renderTick
             interval: 0
@@ -25,6 +59,14 @@ ApplicationWindow {
             }
         }
 
+        Timer {
+            id: overlayPulse
+            interval: 120
+            repeat: true
+            running: true
+            onTriggered: appBackend.reportOverlayPulse()
+        }
+
         Repeater {
             model: Math.ceil(viewport.width / 24)
             Rectangle {
@@ -33,7 +75,7 @@ ApplicationWindow {
                 x: index * 24
                 y: 0
                 color: "#334155"
-                opacity: 0.5
+                opacity: (engineFrame.visible || zeroCopyViewport.active) ? 0.08 : 0.5
             }
         }
 
@@ -45,7 +87,7 @@ ApplicationWindow {
                 x: 0
                 y: index * 24
                 color: "#334155"
-                opacity: 0.5
+                opacity: (engineFrame.visible || zeroCopyViewport.active) ? 0.08 : 0.5
             }
         }
 
@@ -56,6 +98,7 @@ ApplicationWindow {
             y: viewport.height / 2 - height / 2
             radius: 12
             color: "#be0ea5e9"
+            opacity: (engineFrame.visible || zeroCopyViewport.active) ? 0.25 : 1.0
         }
 
         Rectangle {

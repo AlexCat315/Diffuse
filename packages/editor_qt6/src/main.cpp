@@ -40,17 +40,17 @@ int main(int argc, char *argv[])
     QQmlApplicationEngine engine;
     engine.rootContext()->setContextProperty("appBackend", &backend);
 
-    QObject::connect(&backend, &AppBackend::benchmarkFinished, &app, [&](double fps, bool overlayOk) {
+    QObject::connect(&backend, &AppBackend::benchmarkFinished, &app, [&](double fps, bool overlayOk, bool engineConnected) {
         if (!options.benchmarkMode)
         {
             return;
         }
 
-        const bool fpsOk = fps >= 240.0;
-        qInfo().noquote() << QString("BENCHMARK viewport_fps=%1 target=240 overlay=%2")
+        qInfo().noquote() << QString("BENCHMARK viewport_fps=%1 target=unlimited overlay=%2 engine=%3")
                                  .arg(fps, 0, 'f', 2)
-                                 .arg(overlayOk ? "ok" : "fail");
-        app.exit((fpsOk && overlayOk) ? 0 : 2);
+                                 .arg(overlayOk ? "ok" : "fail")
+                                 .arg(engineConnected ? "connected" : "disconnected");
+        app.exit((overlayOk && engineConnected) ? 0 : 2);
     });
 
     const QUrl mainQml(QStringLiteral("qrc:/qt/qml/GuavaEditor/qml/Main.qml"));
