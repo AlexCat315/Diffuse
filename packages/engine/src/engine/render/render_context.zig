@@ -245,8 +245,6 @@ pub const RenderContext = struct {
     perf_stats: types.PerformanceStats = .{},
     bind_state: BindGroupState = .{},
     texture_descs: std.AutoHashMap(u32, types.TextureDesc),
-    buffer_descs: std.AutoHashMap(u32, types.BufferDesc),
-    transfer_buffer_descs: std.AutoHashMap(u32, types.TransferBufferDesc),
     // Current frame state
     current_frame: ?Frame = null,
     default_binding_layout: ?gfx.BindingLayout = null,
@@ -307,8 +305,6 @@ pub const RenderContext = struct {
                 .owned_metal_device = md_ptr,
                 .metal_layer_binding = metal_layer_binding,
                 .texture_descs = std.AutoHashMap(u32, types.TextureDesc).init(allocator),
-                .buffer_descs = std.AutoHashMap(u32, types.BufferDesc).init(allocator),
-                .transfer_buffer_descs = std.AutoHashMap(u32, types.TransferBufferDesc).init(allocator),
                 .bind_group_layout_cache = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
                 .vsync_enabled = config.vsync_enabled,
             };
@@ -351,8 +347,6 @@ pub const RenderContext = struct {
                 .owned_device = true,
                 .owned_vulkan_device = vk_ptr,
                 .texture_descs = std.AutoHashMap(u32, types.TextureDesc).init(allocator),
-                .buffer_descs = std.AutoHashMap(u32, types.BufferDesc).init(allocator),
-                .transfer_buffer_descs = std.AutoHashMap(u32, types.TransferBufferDesc).init(allocator),
                 .bind_group_layout_cache = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
                 .vsync_enabled = config.vsync_enabled,
             };
@@ -374,8 +368,6 @@ pub const RenderContext = struct {
             .owned_device = true,
             .owned_mock_backend = mock_init.backend,
             .texture_descs = std.AutoHashMap(u32, types.TextureDesc).init(allocator),
-            .buffer_descs = std.AutoHashMap(u32, types.BufferDesc).init(allocator),
-            .transfer_buffer_descs = std.AutoHashMap(u32, types.TransferBufferDesc).init(allocator),
             .bind_group_layout_cache = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
             .vsync_enabled = config.vsync_enabled,
         };
@@ -391,8 +383,6 @@ pub const RenderContext = struct {
             .allocator = allocator,
             .device = device,
             .texture_descs = std.AutoHashMap(u32, types.TextureDesc).init(allocator),
-            .buffer_descs = std.AutoHashMap(u32, types.BufferDesc).init(allocator),
-            .transfer_buffer_descs = std.AutoHashMap(u32, types.TransferBufferDesc).init(allocator),
             .bind_group_layout_cache = std.AutoHashMap(u64, gfx.BindingLayout).init(allocator),
             .owned_device = false,
         };
@@ -403,8 +393,6 @@ pub const RenderContext = struct {
         self.pending_pixel_downloads.deinit(self.allocator);
         self.pending_texture_blits.deinit(self.allocator);
         self.texture_descs.deinit();
-        self.buffer_descs.deinit();
-        self.transfer_buffer_descs.deinit();
         if (self.bind_group_layout_cache) |*layouts| {
             layouts.deinit();
         }
@@ -953,12 +941,10 @@ pub const RenderContext = struct {
             .label = desc.label,
         };
         const buf = try self.device.createBuffer(gfx_desc);
-        try self.buffer_descs.put(buf.id, desc);
         return buf;
     }
 
     pub fn releaseBuffer(self: *RenderContext, buffer: *Buffer) void {
-        _ = self.buffer_descs.remove(buffer.id);
         self.device.vtable.destroy_buffer(self.device.ctx, .{ .id = buffer.id });
         buffer.* = undefined;
     }
@@ -977,7 +963,6 @@ pub const RenderContext = struct {
         });
         const shadow = try self.allocator.alloc(u8, desc.size);
         @memset(shadow, 0);
-        try self.transfer_buffer_descs.put(buf.id, desc);
         return .{
             .id = buf.id,
             .shadow_data = shadow,
@@ -988,7 +973,6 @@ pub const RenderContext = struct {
         if (transfer_buffer.shadow_data) |shadow| {
             self.allocator.free(shadow);
         }
-        _ = self.transfer_buffer_descs.remove(transfer_buffer.id);
         self.device.destroyBuffer(.{ .id = transfer_buffer.id });
         transfer_buffer.* = undefined;
     }
@@ -1119,10 +1103,6 @@ pub const RenderContext = struct {
             .format = .unknown,
             .usage = 0,
         };
-    }
-
-    pub fn transferBufferDesc(self: *const RenderContext, transfer_buffer: *const TransferBuffer) types.TransferBufferDesc {
-        return self.transfer_buffer_descs.get(transfer_buffer.id) orelse .{ .size = 0 };
     }
 
     pub fn createShaderModule(self: *RenderContext, desc: ShaderModuleDesc) Error!ShaderModule {
@@ -1400,8 +1380,9 @@ pub const RenderContext = struct {
 
     pub fn downloadTexturePixelToOffset(self: *RenderContext, pass: CopyPass, texture: *const Texture, transfer_buffer: *const TransferBuffer, offset: u32, x: u32, y: u32) void {
         _ = pass;
-        const desc = self.transferBufferDesc(transfer_buffer);
-        if (offset > desc.size or desc.size - offset < 4) return;
+        const shadow = transfer_buffer.shadow_data orelse return;
+        const size: u32 = @intCast(shadow.len);
+        if (offset > size or size - offset < 4) return;
         self.pending_pixel_downloads.append(self.allocator, .{
             .texture = texture,
             .transfer_buffer = @constCast(transfer_buffer),
