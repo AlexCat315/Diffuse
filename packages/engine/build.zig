@@ -21,6 +21,16 @@ pub fn build(b: *std.Build) void {
         else => "/usr/local",
     };
     const sdl_prefix = b.option([]const u8, "sdl-prefix", "Prefix path for an SDL3 installation") orelse default_sdl_prefix;
+    const extra_include_paths_csv = b.option([]const u8, "extra-include-paths", "Comma-separated extra include paths for compile_commands") orelse "";
+    const sdl_include_path = b.pathJoin(&.{ sdl_prefix, "include" });
+
+    var compile_commands_includes: std.ArrayList([]const u8) = .empty;
+    defer compile_commands_includes.deinit(b.allocator);
+    compile_commands_includes.append(b.allocator, sdl_include_path) catch @panic("OOM");
+    for (sources.engine_include_paths) |include_path| {
+        compile_commands_includes.append(b.allocator, b.pathFromRoot(include_path)) catch @panic("OOM");
+    }
+    appendCommaSeparatedPaths(b, &compile_commands_includes, extra_include_paths_csv);
 
     // ── C Translations (replacing @cImport) ─────────────────────────────────
     const c_translations = sources.createCTranslations(b, target, optimize, sdl_prefix);
@@ -232,9 +242,22 @@ pub fn build(b: *std.Build) void {
     // Generate engine compile_commands.json
     const update_compile_commands = b.addUpdateSourceFiles();
     update_compile_commands.addBytesToSource(
-        compile_commands.generateCompileCommandsJson(b, target.result.os.tag, sdl_prefix),
+        compile_commands.generateCompileCommandsJson(b, target.result.os.tag, compile_commands_includes.items),
         "compile_commands.json",
     );
 
     compile_commands_step.dependOn(&update_compile_commands.step);
+}
+
+fn appendCommaSeparatedPaths(
+    b: *std.Build,
+    out_paths: *std.ArrayList([]const u8),
+    csv: []const u8,
+) void {
+    var it = std.mem.splitScalar(u8, csv, ',');
+    while (it.next()) |raw_item| {
+        const trimmed = std.mem.trim(u8, raw_item, " \t\r\n");
+        if (trimmed.len == 0) continue;
+        out_paths.append(b.allocator, trimmed) catch @panic("OOM");
+    }
 }
