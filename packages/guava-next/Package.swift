@@ -10,6 +10,11 @@ let package = Package(
         .executable(name: "EditorApp", targets: ["EditorApp"]),
         .library(name: "EditorCore", targets: ["EditorCore"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
+        .library(name: "EngineKernel", targets: ["EngineKernel"]),
+        .library(name: "RHIWGPU", targets: ["RHIWGPU"]),
+        .library(name: "SceneRuntime", targets: ["SceneRuntime"]),
+        .library(name: "AssetPipeline", targets: ["AssetPipeline"]),
+        .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
         .library(name: "RenderBackend", targets: ["RenderBackend"]),
         .library(name: "PlatformShell", targets: ["PlatformShell"])
     ],
@@ -20,8 +25,28 @@ let package = Package(
             publicHeadersPath: "include"
         ),
         .target(
+            name: "CWGPUBridge",
+            path: "Sources/CWGPUBridge",
+            publicHeadersPath: "include"
+        ),
+        .target(name: "EngineKernel"),
+        .target(
+            name: "RHIWGPU",
+            dependencies: ["CWGPUBridge"]
+        ),
+        .target(name: "SceneRuntime"),
+        .target(name: "AssetPipeline"),
+        .target(name: "ScriptRuntime"),
+        .target(
             name: "EngineCore",
-            dependencies: ["CEngineBridge"]
+            dependencies: [
+                "CEngineBridge",
+                "EngineKernel",
+                "RHIWGPU",
+                "SceneRuntime",
+                "AssetPipeline",
+                "ScriptRuntime",
+            ]
         ),
         .target(name: "RenderBackend"),
         .target(
