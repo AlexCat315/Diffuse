@@ -5,6 +5,8 @@ public enum WGPUBackendState: Sendable {
     case uninitialized
     case bridgeReady
     case instanceReady
+    case adapterReady
+    case deviceReady
 }
 
 public struct WGPUDeviceConfig: Sendable {
@@ -22,6 +24,10 @@ public struct WGPUDeviceConfig: Sendable {
 public enum WGPUBackendError: Error {
     case bridgeInitializeFailed(String)
     case createInstanceFailed(String)
+    case requestAdapterFailed(String)
+    case requestDeviceFailed(String)
+    case releaseDeviceFailed(String)
+    case releaseAdapterFailed(String)
     case releaseInstanceFailed(String)
 }
 
@@ -29,6 +35,8 @@ public final class WGPUBackend {
     public private(set) var state: WGPUBackendState = .uninitialized
     public private(set) var config: WGPUDeviceConfig
     private var instance: UnsafeMutableRawPointer?
+    private var adapter: UnsafeMutableRawPointer?
+    private var device: UnsafeMutableRawPointer?
 
     public init(config: WGPUDeviceConfig = .init()) {
         self.config = config
@@ -68,9 +76,45 @@ public final class WGPUBackend {
 
         instance = out
         state = .instanceReady
+
+        var outAdapter: UnsafeMutableRawPointer?
+        let adapterOk = wgpu_bridge_request_adapter(out, &outAdapter)
+        guard adapterOk == 1, let outAdapter else {
+            let message = lastBridgeError()
+            try? shutdown()
+            throw WGPUBackendError.requestAdapterFailed(message)
+        }
+        adapter = outAdapter
+        state = .adapterReady
+
+        var outDevice: UnsafeMutableRawPointer?
+        let deviceOk = wgpu_bridge_request_device(outAdapter, &outDevice)
+        guard deviceOk == 1, let outDevice else {
+            let message = lastBridgeError()
+            try? shutdown()
+            throw WGPUBackendError.requestDeviceFailed(message)
+        }
+        device = outDevice
+        state = .deviceReady
     }
 
     public func shutdown() throws {
+        if let device {
+            let ok = wgpu_bridge_release_device(device)
+            guard ok == 1 else {
+                throw WGPUBackendError.releaseDeviceFailed(lastBridgeError())
+            }
+            self.device = nil
+        }
+
+        if let adapter {
+            let ok = wgpu_bridge_release_adapter(adapter)
+            guard ok == 1 else {
+                throw WGPUBackendError.releaseAdapterFailed(lastBridgeError())
+            }
+            self.adapter = nil
+        }
+
         if let instance {
             let ok = wgpu_bridge_release_instance(instance)
             guard ok == 1 else {
