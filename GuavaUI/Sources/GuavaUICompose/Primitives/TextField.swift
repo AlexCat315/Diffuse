@@ -62,10 +62,17 @@ public struct TextField: _PrimitiveView {
     }
 
     public func _updateNode(_ node: Node) {
-        let state = FieldState()
+        // Reuse FieldState if this node is being recycled by reconcile;
+        // otherwise create one and seed cursor at the end of the current text.
+        let state: FieldState
+        if let existing = node.attachments["__textfield_state"] as? FieldState {
+            state = existing
+        } else {
+            state = FieldState()
+            state.cursorIndex = text.wrappedValue.count
+            node.attachments["__textfield_state"] = state
+        }
         let snapshot = self
-        // Initial cursor at end of current text.
-        state.cursorIndex = snapshot.text.wrappedValue.count
 
         if let registry = InteractionRegistryHolder.current {
             registry.setText(node) { incoming, _ in

@@ -70,4 +70,12 @@ public struct State<Value>: DynamicProperty {
     public func _setOnChange(_ handler: (() -> Void)?) {
         _storage.onChange = handler
     }
+
+    /// Copy the underlying value from `other` into this state's storage,
+    /// without firing `onChange`. Used by `ViewGraph` when a parent recompose
+    /// produces a new view value at the same slot — the new view's @State
+    /// would otherwise reset to its initial value.
+    public func _copyRuntimeValue(from other: State<Value>) {
+        _storage.value = other._storage.value
+    }
 }

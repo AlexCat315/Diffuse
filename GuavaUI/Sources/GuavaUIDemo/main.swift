@@ -6,16 +6,10 @@ import RHIWGPU
 
 // MARK: - Root view (compose)
 
-/// Process-wide demo state. The compose graph is rebuilt on the same `RootView`
-/// reference each frame; persisting `inputText` outside the struct keeps the
-/// `Binding` stable without depending on a `@State` runtime that does not yet
-/// exist in GuavaUICompose.
-final class DemoState {
-    nonisolated(unsafe) static let shared = DemoState()
-    var inputText: String = ""
-}
-
 struct RootView: View {
+    @State var inputText: String = ""
+    @State var clickCount: Int = 0
+
     var body: some View {
         Row(spacing: 1) {
             Column(alignment: .leading, spacing: 8) {
@@ -25,8 +19,8 @@ struct RootView: View {
                 Text("Item B", color: Color(r: 0.85, g: 0.85, b: 0.9))
                 Text("Item C", color: Color(r: 0.85, g: 0.85, b: 0.9))
                 Spacer()
-                Button(action: { print("[demo] sidebar button tapped") }) {
-                    Text("Click me", color: Color.white)
+                Button(action: { clickCount += 1 }) {
+                    Text("Tapped \(clickCount)x", color: Color.white)
                         .padding(8)
                         .background(Color(r: 0.30, g: 0.55, b: 0.95))
                 }
@@ -36,27 +30,24 @@ struct RootView: View {
             .background(Color(r: 0.16, g: 0.18, b: 0.22))
 
             Column(alignment: .leading, spacing: 12) {
-                Text("GuavaUI — Phase 6.4", color: Color.white)
+                Text("GuavaUI — Phase 6.6", color: Color.white)
                 Divider()
                 Text("Compose -> Yoga -> DrawList -> wgpu",
                      color: Color(r: 0.7, g: 0.85, b: 1.0))
-                Text("Button + ScrollView + TextField live",
+                Text("@State + Recomposer reconcile live",
                      color: Color(r: 0.94, g: 0.94, b: 0.98))
 
                 TextField(
                     "Type here…",
-                    text: Binding(
-                        get: { DemoState.shared.inputText },
-                        set: {
-                            DemoState.shared.inputText = $0
-                            print("[demo] input → \"\($0)\"")
-                        }
-                    ),
-                    onSubmit: { print("[demo] submit: \(DemoState.shared.inputText)") }
+                    text: $inputText,
+                    onSubmit: { print("[demo] submit: \(inputText)") }
                 )
                 .padding(8)
                 .background(Color(r: 0.20, g: 0.22, b: 0.28))
                 .frame(height: 36)
+
+                Text("echo: \(inputText)",
+                     color: Color(r: 0.85, g: 0.92, b: 1.0))
 
                 ScrollView(.vertical) {
                     Column(alignment: .leading, spacing: 6) {
