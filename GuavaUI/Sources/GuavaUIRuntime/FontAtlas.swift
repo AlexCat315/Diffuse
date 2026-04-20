@@ -1,5 +1,4 @@
 import CFreeType
-import CoreGraphics
 
 /// Rasterizes glyphs with FreeType and packs them into an alpha-only texture atlas.
 ///
