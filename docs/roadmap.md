@@ -81,7 +81,7 @@ cd Editor && swift run EditorApp
 # [WGPURenderer] surface ready, size=(width: 2560, height: 1440), pipeline=true, depth=true
 ```
 
-#### 轨道 B：GuavaUI Phase 1–2（NodeTree + Recomposer）
+#### 轨道 B：GuavaUI Phase 1–2（NodeTree + Recomposer）✅ 已完成
 
 必须实现的文件：
 
