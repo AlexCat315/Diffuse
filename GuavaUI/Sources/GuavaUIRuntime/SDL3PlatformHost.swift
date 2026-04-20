@@ -16,6 +16,9 @@ public final class SDL3PlatformHost: PlatformHost {
 
     public var isRunning: Bool { _isRunning }
 
+    /// Called each frame with the native render surface. Set this to submit GPU work.
+    public var onFrame: (@MainActor (NativeRenderSurface) -> Void)?
+
     /// - Parameters:
     ///   - title: Window title bar text.
     ///   - recomposer: The recomposer to drain each frame. Defaults to `Recomposer.shared`.
@@ -44,7 +47,11 @@ public final class SDL3PlatformHost: PlatformHost {
             recomposer.commitAll()
             // 2. Flush dirty nodes (layout + draw callbacks in later phases).
             tree.flush()
-            // 3. Poll platform events; event routing to hit-test added in Phase 6.
+            // 3. Render frame if callback is set.
+            if let surface = host.renderSurface {
+                onFrame?(surface)
+            }
+            // 4. Poll platform events; event routing to hit-test added in Phase 6.
             _ = host.pollEvents()
         }
 
