@@ -11,6 +11,7 @@ public protocol Renderer {
     func queueRenderSettings(_ settings: RenderSettings)
     func forceRenderSettings(_ settings: RenderSettings)
     func currentFrameStats() -> RenderFrameStats
+    func currentViewportSurfaceState() -> ViewportSurfaceState
 }
 
 public extension Renderer {
@@ -23,6 +24,10 @@ public extension Renderer {
     }
 
     func currentFrameStats() -> RenderFrameStats {
+        .init()
+    }
+
+    func currentViewportSurfaceState() -> ViewportSurfaceState {
         .init()
     }
 }
@@ -81,6 +86,7 @@ public final class WGPURenderer: Renderer {
     private var activeRenderSettings: RenderSettings = .init()
     private var pendingRenderSettings: RenderSettings?
     private var settingsGeneration: UInt64 = 0
+    private var viewportSurfaceState: ViewportSurfaceState = .init()
 
     public private(set) var lastFrameStats: RenderFrameStats = .init()
 
@@ -121,6 +127,10 @@ public final class WGPURenderer: Renderer {
         lastFrameStats
     }
 
+    public func currentViewportSurfaceState() -> ViewportSurfaceState {
+        viewportSurfaceState
+    }
+
     public func renderFrame(frameIndex: Int) {
         guard let surface else { return }
         do {
@@ -141,6 +151,7 @@ public final class WGPURenderer: Renderer {
 
             let framePlan = RenderFramePlanner.makePlan(settings: activeRenderSettings)
             var drawCallCount = 0
+            var viewportResolved = false
             let encoder = try backend.createCommandEncoder()
             for passKind in framePlan.passes {
                 switch passKind {
@@ -154,13 +165,21 @@ public final class WGPURenderer: Renderer {
 
                     case .depthPrepass,
                          .shadowPass,
-                         .viewportResolve,
                          .ssao,
                          .bloom,
                          .fxaa,
                          .tonemap:
                         emitPlannedPassLog(passKind, frameIndex: frameIndex)
+
+                    case .viewportResolve:
+                        registerViewportSurface(texture: acquired.texture)
+                        viewportResolved = true
+                        emitPlannedPassLog(passKind, frameIndex: frameIndex)
                 }
+            }
+
+            if !viewportResolved {
+                viewportSurfaceState = .init()
             }
 
             let cmd = try encoder.finish()
@@ -271,6 +290,16 @@ public final class WGPURenderer: Renderer {
 
     private func shouldEmitPlannerLog(frameIndex: Int) -> Bool {
         frameIndex == 0 || frameIndex % 120 == 0
+    }
+
+    private func registerViewportSurface(texture: GPUTexture) {
+        let pointerValue = UInt64(UInt(bitPattern: Unmanaged.passUnretained(texture).toOpaque()))
+        viewportSurfaceState = ViewportSurfaceState(
+            surfaceID: pointerValue,
+            width: configuredSize.width,
+            height: configuredSize.height,
+            zeroCopy: true
+        )
     }
 
     // MARK: - Pipeline + scene construction
