@@ -116,8 +116,10 @@ viewport 相关 handler 在 [packages/engine/src/engine/editor_rpc/handlers/view
 
 1. EngineHost（Swift）：生命周期与帧调度总控。
 2. RuntimeAdapters（Swift）：连接 Scene/Asset/Script 子系统。
-3. RenderBackend（Swift 接口 + Metal 首实现）：渲染提交与呈现。
+3. RenderBackend（Swift 接口 + wgpu 实现）：渲染提交与呈现。
 4. NativeBridge（C ABI）：复用或承接 C/C++ 热点模块。
+5. GuavaUI（Swift + wgpu）：自渲染编辑器 UI，跨平台，与引擎共享 wgpu 实例。
+6. PlatformShell（SDL3）：跨平台窗口创建与输入事件。
 
 当前脚手架：
 
@@ -181,9 +183,10 @@ As-Is：
 
 To-Be：
 
-1. RenderBackend 首先实现 Metal 主路径。
+1. RenderBackend 先实现 wgpu 主路径。
 2. 视口状态仍保留同语义字段，先实现高频字段，低频字段分批补。
-3. 外部接口继续提供 surface 句柄语义，避免 editor 同步重构。
+3. viewport 渲染到 wgpu 纹理，GuavaUI 在 viewport 面板区域采样该纹理，零拷贝。
+4. 外部接口继续提供 surface 句柄语义，避免 editor 同步重构。
 
 实现动作：
 
@@ -246,25 +249,28 @@ To-Be：
 1. 可连续运行 30 分钟。
 2. 无明显泄漏增长。
 
-## Phase 2（4-8 周）：渲染主路径替换
+## Phase 2（4-8 周）：渲染主路径替换 + GuavaUI 基础
 
 任务：
 
-1. Metal 后端首版可渲染场景。
+1. wgpu 后端首版可渲染场景。
 2. 视口高频设置可读写。
 3. 帧统计对齐现有指标。
+4. GuavaUI 2D 渲染器最小原型（矩形 + 文字）。
+5. Yoga 布局集成。
 
 验收：
 
 1. 目标场景稳定渲染。
 2. 与基线对比不出现灾难性退化。
 
-## Phase 3（持续）：子系统分批替换
+## Phase 3（持续）：子系统分批替换 + GuavaUI 编辑器完善
 
 任务：
 
 1. Scene/Asset/Script 按优先级迁移。
 2. C/C++ 热点保留到 NativeBridge。
+3. GuavaUI DockContainer、TreeView、PropertyGrid、编辑器面板逐步完善。
 
 验收：
 
@@ -349,6 +355,7 @@ To-Be：
 下一份是 Editor 迁移方案，内容将与本文一一对应：
 
 1. As-Is 面板架构与能力。
-2. To-Be 的 PanelModel 与 DockModel。
+2. To-Be 的 GuavaUI 自渲染架构、DockModel 与 PanelModel。
 3. 与 EngineHost 的命令总线契约。
+4. GuavaUI 框架详细设计参见 [guava-ui-blueprint.md](guava-ui-blueprint.md)。
 

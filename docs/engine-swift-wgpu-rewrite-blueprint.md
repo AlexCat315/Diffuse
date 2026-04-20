@@ -5,27 +5,49 @@
 - 引擎主体语言：Swift。
 - 性能敏感模块：C/C++，通过 C ABI 接入（首选稳定方案）。
 - 渲染抽象：wgpu。
-- 编辑器 UI：SwiftUI 或 AppKit，同进程内嵌视口。
-- 首发平台：macOS，架构保留 iOS / 其他桌面平台扩展位。
+- 编辑器 UI：GuavaUI（自渲染，wgpu 后端），跨平台。
+- 布局引擎：Yoga（Facebook，C，MIT），通过 C ABI 接入。
+- 文字渲染：HarfBuzz + FreeType（跨平台），macOS 可选 CoreText 加速。
+- 窗口层：SDL3（跨平台窗口创建与输入事件）。
+- 首发平台：macOS，架构保留 Windows / Linux / iOS 扩展位。
+
+### 0.1 UI 方案选型历程
+
+| 方案 | 尝试结果 | 放弃原因 |
+|------|----------|----------|
+| Zig + ImGui | 已实现 | C++ 绑定维护成本高，ImGui 样式调试困难 |
+| Electron | 已实现 | 浏览器渲染进程与 Zig 引擎进程无法零拷贝，viewport 无法 240fps |
+| 自定义 CEF | 已验证 | 同 Electron，跨进程共享 surface 存在相同瓶颈 |
+| Qt | 已验证 | 许可协议不可接受 |
+| Avalonia | 已验证 | 生态薄弱，dock 样式问题无法解决 |
+| SwiftUI / AppKit | 设计阶段 | 不跨平台，锁死 Apple 生态 |
+| GuavaUI（自渲染） | **当前方案** | 与引擎共享 wgpu 实例，零拷贝，跨平台，完全可控 |
 
 ## 1. 架构总览
 
 ```mermaid
 flowchart LR
-    UI[Main Thread\nSwiftUI/AppKit\nInput + Commands] -->|lock-free queue| Sim[Simulation Thread\nSwift EngineHost\nScene/Script/Physics Tick]
+    UI[Main Thread\nGuavaUI Event Loop\nSDL3 Window + Input] -->|lock-free queue| Sim[Simulation Thread\nSwift EngineHost\nScene/Script/Physics Tick]
     Sim -->|render packet ring buffer| RT[Render Thread\nwgpu encode + submit]
-    RT --> Surf[CAMetalLayer Surface]
+    RT --> UIR[UI Render Pass\nGuavaUI 2D 图元]
+    RT --> VPR[Viewport Render Pass\n3D 场景渲染到纹理]
+    UIR --> Surf[wgpu Surface\nSDL3 Window]
+    VPR --> UIR
     Worker[Worker Pool\nAsset IO\nShader compile\nStreaming] --> Sim
     Worker --> RT
 
     CPP[C/C++ Modules\nPhysics/Collision/Math] <-->|C ABI| Sim
+    Yoga[Yoga Layout Engine\nC ABI] <-->|布局计算| UI
+    Text[HarfBuzz + FreeType\nC ABI] <-->|文字 shaping| RT
     RT --> Metrics[Profiler + Telemetry]
 ```
 
 线程职责：
 
 1. Main Thread
-- 处理 UI 事件与命令。
+- 运行 GuavaUI 事件循环（SDL3 事件泵）。
+- 处理输入事件、hit test、命令派发。
+- 调用 Yoga 计算布局（布局脏标记优化，非每帧重算）。
 - 不阻塞等待 GPU。
 
 2. Simulation Thread
@@ -34,8 +56,9 @@ flowchart LR
 
 3. Render Thread
 - 从环形缓冲读取 RenderPacket。
-- 编码 wgpu 命令并提交。
-- 直接 present 到 CAMetalLayer（零 CPU 回读）。
+- 先执行 Viewport Render Pass（3D 场景渲染到离屏纹理）。
+- 再执行 UI Render Pass（GuavaUI 2D 图元 + viewport 纹理采样）。
+- 编码 wgpu 命令并 present 到 SDL3 窗口 surface（零 CPU 回读）。
 
 4. Worker Pool
 - 资源加载、后台编译、异步任务。
@@ -428,88 +451,131 @@ public struct RenderPacket {
 
 压测场景：
 
-1. SwiftUI 视口中显示动态立方体（Phase 0 先 triangle/clear，Phase 1 上 cube）。
-2. 渲染目标直接为 CAMetalLayer drawable。
+1. SDL3 窗口中，GuavaUI 渲染编辑器面板，viewport 区域显示动态立方体（Phase 0 先 triangle/clear，Phase 1 上 cube）。
+2. 3D 场景渲染到 wgpu 纹理，GuavaUI 在 DockContainer 的 viewport 面板中采样该纹理。
 3. 严禁 CPU readback。
 4. 记录 FPS、CPU 占用、主线程阻塞时间。
 
-文件：Sources/Viewport/ViewportRepresentable.swift
+文件：Sources/Platform/SDLWindowBackend.swift
 
 ```swift
-import SwiftUI
-import MetalKit
-import EngineHost
-import RenderBackend
+import Foundation
+import CSDL3
 
-public struct ViewportRepresentable: NSViewRepresentable {
-    private let host: EngineHost
+public final class SDLWindowBackend {
+    private var window: OpaquePointer?
+    private var running = false
 
-    public init(host: EngineHost) {
-        self.host = host
+    public init(title: String, width: Int32, height: Int32) {
+        SDL_Init(SDL_INIT_VIDEO | SDL_INIT_EVENTS)
+        window = SDL_CreateWindow(
+            title,
+            width, height,
+            SDL_WINDOW_RESIZABLE | SDL_WINDOW_HIGH_PIXEL_DENSITY
+        )
     }
 
-    public func makeNSView(context: Context) -> MTKView {
-        let view = MTKView(frame: .zero, device: MTLCreateSystemDefaultDevice())
-        view.colorPixelFormat = .bgra8Unorm
-        view.enableSetNeedsDisplay = false
-        view.isPaused = false
-        view.preferredFramesPerSecond = 240
-        view.framebufferOnly = true
+    deinit {
+        if let w = window { SDL_DestroyWindow(w) }
+        SDL_Quit()
+    }
 
-        if let layer = view.layer as? CAMetalLayer {
-            host.initialize(layer: layer)
-            host.start()
+    /// 返回用于创建 wgpu surface 的原生窗口句柄
+    public func nativeHandle() -> UnsafeMutableRawPointer? {
+        guard let w = window else { return nil }
+        return SDL_GetPointerProperty(
+            SDL_GetWindowProperties(w),
+            SDL_PROP_WINDOW_COCOA_WINDOW_POINTER, nil
+        )
+    }
+
+    public func runEventLoop(onEvent: (SDL_Event) -> Void, onTick: () -> Void) {
+        running = true
+        while running {
+            var event = SDL_Event()
+            while SDL_PollEvent(&event) {
+                if event.type == SDL_EVENT_QUIT.rawValue {
+                    running = false
+                    return
+                }
+                onEvent(event)
+            }
+            onTick()
         }
-        return view
     }
 
-    public func updateNSView(_ nsView: MTKView, context: Context) {}
+    public func stop() { running = false }
 }
 ```
 
 文件：Sources/EditorApp/main.swift
 
 ```swift
-import SwiftUI
+import Foundation
 import EngineHost
 import RenderBackend
-import Viewport
+import Platform
+import GuavaUI
 
-@main
-struct EditorAppMain: App {
-    private let host = EngineHost(renderer: WGPUBackend())
+let windowBackend = SDLWindowBackend(title: "Guava Editor", width: 1600, height: 900)
+let wgpuBackend = WGPUBackend()
+let engineHost = EngineHost(renderer: wgpuBackend)
+let uiRenderer = UIRenderer(device: wgpuBackend.device)
+let dockModel = DockModel.defaultEditorLayout()
 
-    var body: some Scene {
-        WindowGroup {
-            ViewportRepresentable(host: host)
-                .ignoresSafeArea()
-        }
-    }
+// 使用窗口原生句柄创建 wgpu surface
+if let handle = windowBackend.nativeHandle() {
+    wgpuBackend.createSurface(windowHandle: handle)
 }
+
+engineHost.start()
+
+windowBackend.runEventLoop(
+    onEvent: { event in
+        // SDL 事件 → GuavaUI 事件转换 → hit test → 派发
+        uiRenderer.dispatchEvent(SDLEventAdapter.convert(event))
+    },
+    onTick: {
+        // 1. 引擎 tick（simulation + render 3D 场景到纹理）
+        engineHost.tick()
+
+        // 2. GuavaUI 布局计算（dirty 时才重算）
+        dockModel.layoutIfNeeded()
+
+        // 3. GuavaUI 2D 渲染（包含 viewport 纹理采样）
+        uiRenderer.render(root: dockModel.rootNode, viewportTexture: engineHost.viewportTexture)
+
+        // 4. present
+        wgpuBackend.present()
+    }
+)
 ```
 
 验证命令：
 
 1. 运行：swift run EditorApp
-2. 帧率采样：xcrun xctrace record --template "Metal System Trace" --time-limit 10s --launch -- swift run EditorApp
+2. 帧率采样（macOS）：xcrun xctrace record --template "Metal System Trace" --time-limit 10s --launch -- swift run EditorApp
 3. CPU 占用：sample EditorApp 5 1
 
 ## 6. 任务分解（2 天粒度，可并行）
 
 | 阶段 | 任务 | 产出文件路径 | 代码行数预估 | 前置任务 | 自动化测试命令 |
 |---|---|---|---:|---|---|
-| Phase 0 (3天) | P0-T1 建立 SwiftPM 工程骨架 | EnginePrototype/Package.swift | 80 | 无 | swift build |
+| Phase 0 (3天) | P0-T1 建立 SwiftPM 工程骨架 | Package.swift | 120 | 无 | swift build |
 | Phase 0 | P0-T2 C ABI 物理桥接最小跑通 | Sources/CPhysicsBridge/* + Sources/Bridge/PhysicsBridge.swift | 220 | P0-T1 | swift test --filter PhysicsBridgeTests |
-| Phase 0 | P0-T3 视口内嵌与 present 路径 | Sources/Viewport/ViewportRepresentable.swift | 120 | P0-T1 | swift run EditorApp |
-| Phase 1 (5天) | P1-T1 引入 wgpu-native C API | Sources/RenderBackend/CHeaders/wgpu.h + WGPUBackend.swift | 380 | P0-T1 | swift test --filter WGPUInitTests |
+| Phase 0 | P0-T3 SDL3 窗口 + wgpu surface 创建 | Sources/Platform/SDLWindowBackend.swift | 180 | P0-T1 | swift run EditorApp |
+| Phase 1 (5天) | P1-T1 wgpu-native C API 接入 | Sources/RenderBackend/CHeaders/wgpu.h + WGPUBackend.swift | 380 | P0-T1 | swift test --filter WGPUInitTests |
 | Phase 1 | P1-T2 主循环单线程验证 | Sources/EngineHost/EngineHost.swift | 260 | P0-T2 | swift test --filter EngineTickTests |
 | Phase 1 | P1-T3 三角形渲染 + 红色清屏 | Sources/RenderBackend/WGPUBackend.swift | 300 | P1-T1 | swift test --filter TriangleRenderTests |
 | Phase 2 (7天) | P2-T1 渲染线程拆分与环形缓冲 | Sources/EngineHost/EngineHost.swift | 280 | P1-T2 | swift test --filter RenderThreadTests |
-| Phase 2 | P2-T2 240fps 视口压测 | Tests/Performance/Viewport240FPSTests.swift | 200 | P2-T1 | swift test --filter Viewport240FPSTests |
-| Phase 2 | P2-T3 输入-物理-渲染链路联测 | Tests/Integration/EngineLoopIntegrationTests.swift | 260 | P2-T1 | swift test --filter EngineLoopIntegrationTests |
-| Phase 3 (持续) | P3-T1 场景系统迁移 | Sources/EngineHost/Scene/* | 600+ | P2-T3 | swift test --filter SceneMigrationTests |
-| Phase 3 | P3-T2 资源系统迁移 | Sources/EngineHost/Assets/* | 700+ | P3-T1 | swift test --filter AssetPipelineTests |
-| Phase 3 | P3-T3 Zig 逻辑替换收尾 | Sources/EngineHost/**/* | 1000+ | P3-T2 | swift test |
+| Phase 2 | P2-T2 GuavaUI 最小原型（矩形 + 文字） | Sources/GuavaUI/* | 600 | P1-T3 | swift test --filter UIRenderTests |
+| Phase 2 | P2-T3 Yoga 布局集成 + 基础 widget | Sources/GuavaUI/Layout/* + Sources/GuavaUI/Widgets/* | 500 | P2-T2 | swift test --filter LayoutTests |
+| Phase 3 (7天) | P3-T1 DockContainer + 拖拽分割 | Sources/GuavaUI/Dock/* | 450 | P2-T3 | swift test --filter DockTests |
+| Phase 3 | P3-T2 240fps 视口压测 | Tests/Performance/Viewport240FPSTests.swift | 200 | P3-T1 | swift test --filter Viewport240FPSTests |
+| Phase 3 | P3-T3 输入-物理-渲染链路联测 | Tests/Integration/EngineLoopIntegrationTests.swift | 260 | P2-T1 | swift test --filter EngineLoopIntegrationTests |
+| Phase 4 (持续) | P4-T1 场景系统迁移 | Sources/EngineHost/Scene/* | 600+ | P3-T3 | swift test --filter SceneMigrationTests |
+| Phase 4 | P4-T2 资源系统迁移 | Sources/EngineHost/Assets/* | 700+ | P4-T1 | swift test --filter AssetPipelineTests |
+| Phase 4 | P4-T3 Zig 逻辑替换收尾 | Sources/EngineHost/**/* | 1000+ | P4-T2 | swift test |
 
 ## 7. 风险与缓解（含代码）
 
@@ -593,7 +659,20 @@ fi
 cmake -S third_party/wgpu-native -B third_party/wgpu-native/build -DCMAKE_BUILD_TYPE=Release
 cmake --build third_party/wgpu-native/build -j
 
-# 3) 安装头文件与库到本地路径（示例）
+# 3) 拉取并构建 SDL3
+if [ ! -d third_party/SDL ]; then
+  git clone https://github.com/libsdl-org/SDL.git third_party/SDL
+fi
+
+cmake -S third_party/SDL -B third_party/SDL/build -DCMAKE_BUILD_TYPE=Release
+cmake --build third_party/SDL/build -j
+
+# 4) 拉取并构建 Yoga layout engine
+if [ ! -d third_party/yoga ]; then
+  git clone https://github.com/aspect-build/rules_yoga.git third_party/yoga
+fi
+
+# 5) 安装头文件与库到本地路径（示例）
 mkdir -p /usr/local/include /usr/local/lib || true
 cp third_party/wgpu-native/ffi/webgpu.h /usr/local/include/wgpu.h || true
 cp third_party/wgpu-native/build/libwgpu_native.* /usr/local/lib/ || true
@@ -606,15 +685,18 @@ swift run EditorApp
 ## 9. Phase 0 验收标准
 
 1. 命令 swift build 成功。
-2. 命令 swift run EditorApp 可打开窗口并持续渲染。
+2. 命令 swift run EditorApp 可打开 SDL3 窗口并持续渲染。
 3. 命令 swift test --filter PhysicsBridgeTests 通过。
 4. xctrace 报告中无 CPU readback 路径。
+5. 窗口内可见 wgpu 渲染输出（红色清屏或三角形）。
 
 ## 10. 备注
 
 如果你要求第一天就“完全 wgpu 三角形渲染”，建议保留两条并行路径：
 
-1. 路径 A：先跑 CAMetalLayer 零拷贝 present，确保同进程视口链路稳定。
+1. 路径 A：先跑 SDL3 窗口 + wgpu surface 零拷贝 present，确保同进程视口链路稳定。
 2. 路径 B：并行打通 wgpu-native C API 三角形。
 
 当路径 B 完成后，替换路径 A 的占位渲染实现。
+
+GuavaUI 框架的详细设计参见 [guava-ui-blueprint.md](guava-ui-blueprint.md)。
