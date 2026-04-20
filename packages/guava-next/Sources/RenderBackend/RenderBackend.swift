@@ -13,17 +13,25 @@ public protocol Renderer {
 @MainActor
 public struct MetalPlaceholderRenderer: Renderer {
     public init() {}
-
-    public func initialize() {
-        print("[RenderBackend] initialize Metal placeholder")
-    }
-
-    public func renderFrame(frameIndex: Int) {
-        print("[RenderBackend] render frame \(frameIndex)")
-    }
+    public func initialize() { print("[RenderBackend] initialize Metal placeholder") }
+    public func renderFrame(frameIndex: Int) { print("[RenderBackend] render frame \(frameIndex)") }
 }
 
-/// R1-stage RHIWGPU renderer: lit cube mesh through a perspective camera with depth buffer.
+/// One mesh resident on the GPU.
+private struct GPUMesh {
+    let vertexBuffer: GPUBuffer
+    let indexBuffer: GPUBuffer
+    let indexCount: UInt32
+    let name: String
+}
+
+/// Per-instance GPU resources (uniform buffer + bind group). One slot per draw call.
+private struct InstanceResources {
+    let uniformBuffer: GPUBuffer
+    let bindGroup: GPUBindGroup
+}
+
+/// R2-stage RHIWGPU renderer: scene of multiple instances drawn through one shared pipeline.
 @MainActor
 public final class WGPURenderer: Renderer {
     private let backend: WGPUBackend
@@ -34,13 +42,12 @@ public final class WGPURenderer: Renderer {
     private let depthFormat: GPUTextureFormat = .depth32Float
 
     private var meshPipeline: GPURenderPipeline?
-    private var vertexBuffer: GPUBuffer?
-    private var indexBuffer: GPUBuffer?
-    private var indexCount: UInt32 = 0
-    private var uniformBuffer: GPUBuffer?
-    private var bindGroup: GPUBindGroup?
     private var depthTexture: GPUTexture?
     private var depthView: GPUTextureView?
+
+    private var meshes: [GPUMesh] = []
+    private var instanceResources: [InstanceResources] = []
+    private var scene: RenderScene = RenderScene(camera: RenderCamera(eye: SIMD3<Float>(0, 1.4, 3.0)))
 
     public init(backend: WGPUBackend, shell: any Shell) {
         self.backend = backend
@@ -56,8 +63,8 @@ public final class WGPURenderer: Renderer {
             let layerPtr = Unmanaged.passUnretained(layer).toOpaque()
             surface = try backend.createSurfaceMetal(layer: layerPtr)
             try ensureConfigured()
-            try ensureMeshPipeline()
-            print("[WGPURenderer] surface ready, format=\(format), size=\(configuredSize), pipeline=\(meshPipeline != nil), depth=\(depthView != nil)")
+            try ensureMeshPipelineAndScene()
+            print("[WGPURenderer] surface ready, size=\(configuredSize), pipeline=\(meshPipeline != nil), depth=\(depthView != nil), meshes=\(meshes.count), instances=\(instanceResources.count)")
         } catch {
             print("[WGPURenderer] initialize failed: \(error)")
         }
@@ -67,17 +74,21 @@ public final class WGPURenderer: Renderer {
         guard let surface else { return }
         do {
             try ensureConfigured()
-            try ensureMeshPipeline()
+            try ensureMeshPipelineAndScene()
             guard let acquired = try surface.getCurrentTextureView(),
-                  let depthView else {
+                  let depthView,
+                  let pipeline = meshPipeline else {
                 return
             }
 
-            if let uniformBuffer {
-                var matrix = computeMVP(frameIndex: frameIndex)
-                withUnsafeBytes(of: &matrix) { raw in
+            // Animate scene + upload per-instance MVPs.
+            updateSceneTransforms(frameIndex: frameIndex)
+            let viewProj = computeViewProj()
+            for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
+                var mvp = viewProj * instance.transform
+                withUnsafeBytes(of: &mvp) { raw in
                     if let base = raw.baseAddress {
-                        backend.writeBuffer(uniformBuffer, data: base, size: raw.count)
+                        backend.writeBuffer(instanceResources[i].uniformBuffer, data: base, size: raw.count)
                     }
                 }
             }
@@ -93,15 +104,14 @@ public final class WGPURenderer: Renderer {
                 depthStoreOp: .store,
                 depthClearValue: 1.0
             )
-            if let pipeline = meshPipeline,
-               let vb = vertexBuffer,
-               let ib = indexBuffer,
-               let bg = bindGroup {
-                pass.setPipeline(pipeline)
-                pass.setBindGroup(bg, index: 0)
-                pass.setVertexBuffer(vb, slot: 0)
-                pass.setIndexBuffer(ib, format: .uint32)
-                pass.drawIndexed(indexCount: indexCount)
+            pass.setPipeline(pipeline)
+            for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
+                guard meshes.indices.contains(instance.meshIndex) else { continue }
+                let mesh = meshes[instance.meshIndex]
+                pass.setBindGroup(instanceResources[i].bindGroup, index: 0)
+                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                pass.drawIndexed(indexCount: mesh.indexCount)
             }
             pass.end()
             let cmd = try encoder.finish()
@@ -112,46 +122,13 @@ public final class WGPURenderer: Renderer {
         }
     }
 
-    private func ensureMeshPipeline() throws {
+    // MARK: - Pipeline + scene construction
+
+    private func ensureMeshPipelineAndScene() throws {
         if meshPipeline != nil { return }
         guard backend.rawDevice != nil else { return }
 
-        let wgsl = """
-        struct Uniforms {
-            mvp : mat4x4<f32>,
-        };
-        @group(0) @binding(0) var<uniform> u : Uniforms;
-
-        struct VsIn {
-            @location(0) pos    : vec3<f32>,
-            @location(1) normal : vec3<f32>,
-            @location(2) color  : vec3<f32>,
-        };
-        struct VsOut {
-            @builtin(position) pos : vec4<f32>,
-            @location(0) color    : vec3<f32>,
-            @location(1) normal   : vec3<f32>,
-        };
-
-        @vertex
-        fn vs_main(in : VsIn) -> VsOut {
-            var out : VsOut;
-            out.pos = u.mvp * vec4<f32>(in.pos, 1.0);
-            out.color = in.color;
-            out.normal = in.normal;
-            return out;
-        }
-
-        @fragment
-        fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
-            let lightDir = normalize(vec3<f32>(0.4, 0.8, 0.6));
-            let n = normalize(in.normal);
-            let lambert = max(dot(n, lightDir), 0.0);
-            let lit = in.color * (0.25 + lambert * 0.85);
-            return vec4<f32>(lit, 1.0);
-        }
-        """
-        let module = try backend.createShaderModule(wgsl: wgsl, label: "mesh_lit")
+        let module = try backend.createShaderModule(wgsl: Self.wgsl, label: "mesh_lit")
 
         let vbLayout = GPUVertexBufferLayout(
             arrayStride: UInt64(MeshAsset.vertexStride),
@@ -174,35 +151,69 @@ public final class WGPURenderer: Renderer {
             )
         ))
         meshPipeline = pipeline
+        let bindGroupLayout = try pipeline.getBindGroupLayout(group: 0)
 
-        let mesh = loadFixtureMesh()
-        indexCount = mesh.indexCount
-        print("[WGPURenderer] mesh=\(mesh.name) verts=\(mesh.vertices.count / 9) tris=\(mesh.indices.count / 3)")
+        // 1. Build mesh table.
+        let cube = BuiltinMesh.cube()
+        let cubeMesh = try uploadMesh(cube)
+        var objMesh: GPUMesh?
+        if let url = Bundle.module.url(forResource: "FinalBaseMesh", withExtension: "obj") {
+            do {
+                var obj = try OBJLoader.load(path: url.path)
+                obj.normalizeToUnitBounds(targetSize: 2.0)
+                objMesh = try uploadMesh(obj)
+            } catch {
+                print("[WGPURenderer] OBJ load failed (\(error)); skipping fixture mesh")
+            }
+        }
+        meshes.append(cubeMesh)
+        if let objMesh { meshes.append(objMesh) }
 
+        let cubeIndex = 0
+        let objIndex = meshes.count > 1 ? 1 : 0
+
+        // 2. Build scene: 1 fixture mesh in center + 4 cubes orbiting.
+        var instances: [RenderInstance] = []
+        instances.append(RenderInstance(meshIndex: objIndex, transform: matrix_identity_float4x4))
+        for k in 0..<4 {
+            let angle = Float(k) * (.pi / 2)
+            let r: Float = 2.5
+            let pos = SIMD3<Float>(cos(angle) * r, 0, sin(angle) * r)
+            let m = translation(pos) * uniformScale(0.4)
+            instances.append(RenderInstance(meshIndex: cubeIndex, transform: m))
+        }
+        scene = RenderScene(
+            camera: RenderCamera(eye: SIMD3<Float>(0, 2.0, 5.5), target: .zero),
+            instances: instances
+        )
+
+        // 3. Allocate per-instance uniform buffer + bind group.
+        for _ in instances {
+            let ub = try backend.createBuffer(size: 64, usage: [.uniform, .copyDst])
+            let bg = try backend.createBindGroup(
+                layout: bindGroupLayout,
+                entries: [GPUBindGroupEntry(binding: 0, buffer: ub, offset: 0, size: 64)]
+            )
+            instanceResources.append(InstanceResources(uniformBuffer: ub, bindGroup: bg))
+        }
+
+        print("[WGPURenderer] scene built: meshes=\(meshes.map(\.name)) instances=\(instances.count)")
+    }
+
+    private func uploadMesh(_ mesh: MeshAsset) throws -> GPUMesh {
         let vb = try backend.createBuffer(size: UInt64(mesh.vertexBufferSize), usage: [.vertex, .copyDst])
         mesh.vertices.withUnsafeBytes { raw in
             if let base = raw.baseAddress {
                 backend.writeBuffer(vb, data: base, size: raw.count)
             }
         }
-        vertexBuffer = vb
-
         let ib = try backend.createBuffer(size: UInt64(mesh.indexBufferSize), usage: [.index, .copyDst])
         mesh.indices.withUnsafeBytes { raw in
             if let base = raw.baseAddress {
                 backend.writeBuffer(ib, data: base, size: raw.count)
             }
         }
-        indexBuffer = ib
-
-        let ub = try backend.createBuffer(size: 64, usage: [.uniform, .copyDst])
-        uniformBuffer = ub
-
-        let layout = try pipeline.getBindGroupLayout(group: 0)
-        bindGroup = try backend.createBindGroup(
-            layout: layout,
-            entries: [GPUBindGroupEntry(binding: 0, buffer: ub, offset: 0, size: 64)]
-        )
+        return GPUMesh(vertexBuffer: vb, indexBuffer: ib, indexCount: mesh.indexCount, name: mesh.name)
     }
 
     private func ensureConfigured() throws {
@@ -232,32 +243,71 @@ public final class WGPURenderer: Renderer {
         depthTexture = depth
     }
 
-    private func loadFixtureMesh() -> MeshAsset {
-        if let url = Bundle.module.url(forResource: "FinalBaseMesh", withExtension: "obj") {
-            do {
-                var mesh = try OBJLoader.load(path: url.path)
-                mesh.normalizeToUnitBounds(targetSize: 2.0)
-                return mesh
-            } catch {
-                print("[WGPURenderer] OBJ load failed (\(error)); falling back to cube")
-            }
-        } else {
-            print("[WGPURenderer] FinalBaseMesh.obj not found in bundle; using cube")
+    // MARK: - Per-frame animation
+
+    private func updateSceneTransforms(frameIndex: Int) {
+        let t = Float(frameIndex) * 0.015
+        // Center fixture rotates around Y.
+        if !scene.instances.isEmpty {
+            scene.instances[0].transform = rotationY(t)
         }
-        return BuiltinMesh.cube()
+        // Orbiting cubes rotate around the central axis and spin individually.
+        for k in 0..<4 {
+            let idx = 1 + k
+            guard idx < scene.instances.count else { break }
+            let baseAngle = Float(k) * (.pi / 2) + t * 0.5
+            let r: Float = 2.5
+            let pos = SIMD3<Float>(cos(baseAngle) * r, sin(t * 0.4 + Float(k)) * 0.4, sin(baseAngle) * r)
+            let m = translation(pos) * rotationY(t * 1.5 + Float(k)) * uniformScale(0.4)
+            scene.instances[idx].transform = m
+        }
     }
 
-    private func computeMVP(frameIndex: Int) -> simd_float4x4 {
+    private func computeViewProj() -> simd_float4x4 {
         let aspect = Float(max(configuredSize.width, 1)) / Float(max(configuredSize.height, 1))
-        let proj = perspective(fovYRadians: .pi / 4, aspect: aspect, near: 0.1, far: 100)
-        let eye = SIMD3<Float>(0, 1.4, 3.0)
-        let view = lookAt(eye: eye, target: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
-        let angle = Float(frameIndex) * 0.015
-        let modelY = rotationY(angle)
-        let modelX = rotationX(angle * 0.6)
-        let model = modelY * modelX
-        return proj * view * model
+        let cam = scene.camera
+        let proj = perspective(fovYRadians: cam.fovYRadians, aspect: aspect, near: cam.near, far: cam.far)
+        let view = lookAt(eye: cam.eye, target: cam.target, up: cam.up)
+        return proj * view
     }
+
+    // MARK: - Shader
+
+    private static let wgsl: String = """
+    struct Uniforms {
+        mvp : mat4x4<f32>,
+    };
+    @group(0) @binding(0) var<uniform> u : Uniforms;
+
+    struct VsIn {
+        @location(0) pos    : vec3<f32>,
+        @location(1) normal : vec3<f32>,
+        @location(2) color  : vec3<f32>,
+    };
+    struct VsOut {
+        @builtin(position) pos : vec4<f32>,
+        @location(0) color    : vec3<f32>,
+        @location(1) normal   : vec3<f32>,
+    };
+
+    @vertex
+    fn vs_main(in : VsIn) -> VsOut {
+        var out : VsOut;
+        out.pos = u.mvp * vec4<f32>(in.pos, 1.0);
+        out.color = in.color;
+        out.normal = in.normal;
+        return out;
+    }
+
+    @fragment
+    fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
+        let lightDir = normalize(vec3<f32>(0.4, 0.8, 0.6));
+        let n = normalize(in.normal);
+        let lambert = max(dot(n, lightDir), 0.0);
+        let lit = in.color * (0.25 + lambert * 0.85);
+        return vec4<f32>(lit, 1.0);
+    }
+    """
 }
 
 // MARK: - Math helpers (right-handed, depth 0..1)
@@ -285,6 +335,19 @@ private func lookAt(eye: SIMD3<Float>, target: SIMD3<Float>, up: SIMD3<Float>) -
     ])
 }
 
+private func translation(_ t: SIMD3<Float>) -> simd_float4x4 {
+    simd_float4x4(rows: [
+        SIMD4<Float>(1, 0, 0, t.x),
+        SIMD4<Float>(0, 1, 0, t.y),
+        SIMD4<Float>(0, 0, 1, t.z),
+        SIMD4<Float>(0, 0, 0, 1),
+    ])
+}
+
+private func uniformScale(_ s: Float) -> simd_float4x4 {
+    simd_float4x4(diagonal: SIMD4<Float>(s, s, s, 1))
+}
+
 private func rotationY(_ angle: Float) -> simd_float4x4 {
     let c = cos(angle); let s = sin(angle)
     return simd_float4x4(rows: [
@@ -292,15 +355,5 @@ private func rotationY(_ angle: Float) -> simd_float4x4 {
         SIMD4<Float>(0,  1, 0, 0),
         SIMD4<Float>(-s, 0, c, 0),
         SIMD4<Float>(0,  0, 0, 1),
-    ])
-}
-
-private func rotationX(_ angle: Float) -> simd_float4x4 {
-    let c = cos(angle); let s = sin(angle)
-    return simd_float4x4(rows: [
-        SIMD4<Float>(1, 0,  0, 0),
-        SIMD4<Float>(0, c, -s, 0),
-        SIMD4<Float>(0, s,  c, 0),
-        SIMD4<Float>(0, 0,  0, 1),
     ])
 }
