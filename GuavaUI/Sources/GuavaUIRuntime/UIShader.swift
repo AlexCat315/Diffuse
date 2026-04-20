@@ -2,12 +2,16 @@
 ///
 /// Vertex layout (matches `UIVertex`, 20 bytes):
 ///   loc 0: float32x2  pos      (screen pixels)
-///   loc 1: float32x2  uv       (atlas uv 0..1, or sentinel `(-1, _)` for solid)
-///   loc 2: unorm8x4   color    (linear RGBA, alpha-premultiplied at fragment time)
+///   loc 1: float32x2  uv       — sentinel-encoded:
+///                                * `u < 0`         → solid color (no sample)
+///                                * `0 ≤ u ≤ 1`    → alpha texture (font atlas)
+///                                * `u ≥ 10`        → RGBA texture (Image),
+///                                                    actual u = u - 10
+///   loc 2: unorm8x4   color    (linear RGBA, used as tint)
 ///
 /// Bindings:
 ///   group 0, binding 0: uniform { viewport: vec2<f32> } — screen size in pixels
-///   group 0, binding 1: alpha texture (R8Unorm font atlas)
+///   group 0, binding 1: 2D texture (alpha font atlas, or RGBA color image)
 ///   group 0, binding 2: linear sampler
 enum UIShader {
     static let wgsl: String = """
@@ -49,7 +53,14 @@ enum UIShader {
         if (in.uv.x < 0.0) {
             return in.color;
         }
-        // Textured glyph: alpha texture modulates color alpha.
+        // u >= 10 → RGBA color image; subtract the 10-unit offset to recover
+        // the real uv. Result is the texture sample tinted by `color`.
+        if (in.uv.x >= 10.0) {
+            let real_uv = vec2<f32>(in.uv.x - 10.0, in.uv.y);
+            let s = textureSample(atlas_tex, atlas_sampler, real_uv);
+            return in.color * s;
+        }
+        // Otherwise: alpha-only texture (font glyph). Sample .r as coverage.
         let a = textureSample(atlas_tex, atlas_sampler, in.uv).r;
         return vec4<f32>(in.color.rgb, in.color.a * a);
     }
