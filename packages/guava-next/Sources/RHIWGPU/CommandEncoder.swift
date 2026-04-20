@@ -18,7 +18,10 @@ public final class GPUCommandEncoder {
                                 depthView: GPUTextureView? = nil,
                                 depthLoadOp: GPULoadOp = .clear,
                                 depthStoreOp: GPUStoreOp = .store,
-                                depthClearValue: Float = 1.0) throws -> GPURenderPassEncoder {
+                                depthClearValue: Float = 1.0,
+                                stencilLoadOp: GPULoadOp = .clear,
+                                stencilStoreOp: GPUStoreOp = .discard,
+                                stencilClearValue: UInt32 = 0) throws -> GPURenderPassEncoder {
         var passPtr: UnsafeMutableRawPointer?
 
         var depthAttachment: WGPUBridgeDepthStencilAttachment?
@@ -27,7 +30,10 @@ public final class GPUCommandEncoder {
                 view: depthView.handle,
                 depth_load_op: depthLoadOp.bridgeValue,
                 depth_store_op: depthStoreOp.bridgeValue,
-                clear_depth: depthClearValue
+                clear_depth: depthClearValue,
+                stencil_load_op: stencilLoadOp.bridgeValue,
+                stencil_store_op: stencilStoreOp.bridgeValue,
+                stencil_clear_value: stencilClearValue
             )
         }
 
@@ -78,6 +84,20 @@ public final class GPUCommandEncoder {
                                             source.handle, sourceMip,
                                             destination.handle, destinationMip,
                                             width, height, depthOrLayers)
+    }
+
+    public func copyTextureToBuffer(source: GPUTexture, sourceMip: UInt32 = 0,
+                                    destination: GPUBuffer,
+                                    bufferOffset: UInt64 = 0,
+                                    bytesPerRow: UInt32,
+                                    rowsPerImage: UInt32,
+                                    width: UInt32, height: UInt32,
+                                    depthOrLayers: UInt32 = 1) {
+        wgpu_bridge_copy_texture_to_buffer(handle,
+                                           source.handle, sourceMip,
+                                           destination.handle, bufferOffset,
+                                           bytesPerRow, rowsPerImage,
+                                           width, height, depthOrLayers)
     }
 }
 

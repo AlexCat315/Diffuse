@@ -51,11 +51,20 @@ typedef enum {
 } WGPUBridgePrimitiveTopology;
 
 typedef enum {
-    WGPUBridge_VertexFormat_Float32x2 = 0,
+    WGPUBridge_VertexFormat_Float32 = 0,
+    WGPUBridge_VertexFormat_Float32x2,
     WGPUBridge_VertexFormat_Float32x3,
     WGPUBridge_VertexFormat_Float32x4,
-    WGPUBridge_VertexFormat_Float32,
     WGPUBridge_VertexFormat_Uint32,
+    WGPUBridge_VertexFormat_Uint8x4,
+    WGPUBridge_VertexFormat_Unorm8x4,
+    WGPUBridge_VertexFormat_Snorm8x4,
+    WGPUBridge_VertexFormat_Uint16x2,
+    WGPUBridge_VertexFormat_Uint16x4,
+    WGPUBridge_VertexFormat_Sint16x2,
+    WGPUBridge_VertexFormat_Snorm16x2,
+    WGPUBridge_VertexFormat_Float16x2,
+    WGPUBridge_VertexFormat_Float16x4,
 } WGPUBridgeVertexFormat;
 
 typedef enum {
@@ -65,6 +74,32 @@ typedef enum {
 } WGPUBridgeCullMode;
 
 typedef enum {
+    WGPUBridge_FrontFace_CCW = 0,
+    WGPUBridge_FrontFace_CW,
+} WGPUBridgeFrontFace;
+
+typedef enum {
+    WGPUBridge_TextureViewDimension_2D = 0,
+    WGPUBridge_TextureViewDimension_2DArray,
+    WGPUBridge_TextureViewDimension_Cube,
+    WGPUBridge_TextureViewDimension_CubeArray,
+    WGPUBridge_TextureViewDimension_3D,
+} WGPUBridgeTextureViewDimension;
+
+typedef enum {
+    WGPUBridge_StencilOp_Keep = 0,
+    WGPUBridge_StencilOp_Zero,
+    WGPUBridge_StencilOp_Replace,
+    WGPUBridge_StencilOp_Invert,
+    WGPUBridge_StencilOp_IncrClamp,
+    WGPUBridge_StencilOp_DecrClamp,
+    WGPUBridge_StencilOp_IncrWrap,
+    WGPUBridge_StencilOp_DecrWrap,
+} WGPUBridgeStencilOp;
+
+typedef enum {
+    WGPUBridge_BufferUsage_MapRead  = 0x0001,
+    WGPUBridge_BufferUsage_CopySrc  = 0x0004,
     WGPUBridge_BufferUsage_CopyDst  = 0x0008,
     WGPUBridge_BufferUsage_Index    = 0x0010,
     WGPUBridge_BufferUsage_Vertex   = 0x0020,
@@ -209,17 +244,31 @@ typedef struct WGPUBridgeBindGroupEntry {
     void* texture_view;
 } WGPUBridgeBindGroupEntry;
 
+typedef struct WGPUBridgeStencilFaceState {
+    WGPUBridgeCompareFunction compare;
+    WGPUBridgeStencilOp fail_op;
+    WGPUBridgeStencilOp depth_fail_op;
+    WGPUBridgeStencilOp pass_op;
+} WGPUBridgeStencilFaceState;
+
 typedef struct WGPUBridgeDepthStencilAttachment {
     void* view;
     WGPUBridgeLoadOp depth_load_op;
     WGPUBridgeStoreOp depth_store_op;
     float clear_depth;
+    WGPUBridgeLoadOp stencil_load_op;
+    WGPUBridgeStoreOp stencil_store_op;
+    uint32_t stencil_clear_value;
 } WGPUBridgeDepthStencilAttachment;
 
 typedef struct WGPUBridgeDepthStencilPipelineState {
     WGPUBridgeTextureFormat format;
     int depth_write_enabled;
     WGPUBridgeCompareFunction depth_compare;
+    WGPUBridgeStencilFaceState stencil_front;
+    WGPUBridgeStencilFaceState stencil_back;
+    uint32_t stencil_read_mask;
+    uint32_t stencil_write_mask;
 } WGPUBridgeDepthStencilPipelineState;
 
 typedef struct WGPUBridgeColorAttachment {
@@ -276,6 +325,19 @@ int wgpu_bridge_create_texture(void* device,
 int wgpu_bridge_create_texture_view_default(void* texture,
                                             void** out_view);
 
+typedef struct WGPUBridgeTextureViewDesc {
+    WGPUBridgeTextureFormat format;
+    WGPUBridgeTextureViewDimension dimension;
+    uint32_t base_mip_level;
+    uint32_t mip_level_count;
+    uint32_t base_array_layer;
+    uint32_t array_layer_count;
+} WGPUBridgeTextureViewDesc;
+
+int wgpu_bridge_create_texture_view(void* texture,
+                                    const WGPUBridgeTextureViewDesc* desc,
+                                    void** out_view);
+
 void wgpu_bridge_release_texture(void* texture);
 void wgpu_bridge_release_texture_view(void* view);
 
@@ -297,6 +359,7 @@ int wgpu_bridge_create_render_pipeline(
     const char* fragment_entry,
     WGPUBridgeTextureFormat color_format,
     WGPUBridgePrimitiveTopology topology,
+    WGPUBridgeFrontFace front_face,
     WGPUBridgeCullMode cull_mode,
     const WGPUBridgeVertexBufferLayout* vertex_buffers,
     uint32_t vertex_buffer_count,
@@ -475,6 +538,7 @@ int wgpu_bridge_create_render_pipeline_mrt(
     const WGPUBridgeBlendState* blends,
     uint32_t color_format_count,
     WGPUBridgePrimitiveTopology topology,
+    WGPUBridgeFrontFace front_face,
     WGPUBridgeCullMode cull_mode,
     const WGPUBridgeVertexBufferLayout* vertex_buffers,
     uint32_t vertex_buffer_count,
@@ -488,6 +552,24 @@ void wgpu_bridge_copy_texture_to_texture(
     void* src_texture, uint32_t src_mip,
     void* dst_texture, uint32_t dst_mip,
     uint32_t width, uint32_t height, uint32_t depth_or_layers);
+
+/* ─── Texture Readback ───────────────────────────────────────────── */
+
+void wgpu_bridge_copy_texture_to_buffer(
+    void* encoder,
+    void* texture, uint32_t mip_level,
+    void* buffer, uint64_t buffer_offset,
+    uint32_t bytes_per_row, uint32_t rows_per_image,
+    uint32_t width, uint32_t height, uint32_t depth_or_layers);
+
+int wgpu_bridge_buffer_map_sync(void* device, void* buffer,
+                                uint64_t offset, uint64_t size);
+
+const void* wgpu_bridge_buffer_get_mapped_range(void* buffer,
+                                                uint64_t offset,
+                                                uint64_t size);
+
+void wgpu_bridge_buffer_unmap(void* buffer);
 
 #ifdef __cplusplus
 }
