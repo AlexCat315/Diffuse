@@ -23,8 +23,7 @@ public final class LayoutNode: @unchecked Sendable {
     }
 
     deinit {
-        // YGNodeFreeRecursive frees this node and the whole subtree.
-        YGNodeFreeRecursive(ygNode)
+        YGNodeFree(ygNode)
     }
 
     // MARK: - Tree
