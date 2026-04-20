@@ -48,6 +48,14 @@ public final class EditorApplication {
         shell.shutdown()
     }
 
+    public func queueViewportRenderSettings(_ settings: RenderSettings) {
+        renderer.queueRenderSettings(settings)
+    }
+
+    public func currentRenderStats() -> RenderFrameStats {
+        renderer.currentFrameStats()
+    }
+
     private static func locateWGPUDylib() -> String {
         let fm = FileManager.default
         let cwd = fm.currentDirectoryPath
