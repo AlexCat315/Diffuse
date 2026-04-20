@@ -1,6 +1,8 @@
 import Foundation
+import simd
 import RHIWGPU
 import PlatformShell
+import AssetPipeline
 
 @MainActor
 public protocol Renderer {
@@ -21,7 +23,7 @@ public struct MetalPlaceholderRenderer: Renderer {
     }
 }
 
-/// Real RHIWGPU-backed renderer that draws an animated clear color into the shell's CAMetalLayer.
+/// R1-stage RHIWGPU renderer: lit cube mesh through a perspective camera with depth buffer.
 @MainActor
 public final class WGPURenderer: Renderer {
     private let backend: WGPUBackend
@@ -29,12 +31,16 @@ public final class WGPURenderer: Renderer {
     private var surface: GPUSurface?
     private var configuredSize: (width: UInt32, height: UInt32) = (0, 0)
     private let format: GPUTextureFormat = .bgra8Unorm
+    private let depthFormat: GPUTextureFormat = .depth32Float
 
-    private var rainbowPipeline: GPURenderPipeline?
+    private var meshPipeline: GPURenderPipeline?
     private var vertexBuffer: GPUBuffer?
     private var indexBuffer: GPUBuffer?
+    private var indexCount: UInt32 = 0
     private var uniformBuffer: GPUBuffer?
     private var bindGroup: GPUBindGroup?
+    private var depthTexture: GPUTexture?
+    private var depthView: GPUTextureView?
 
     public init(backend: WGPUBackend, shell: any Shell) {
         self.backend = backend
@@ -50,8 +56,8 @@ public final class WGPURenderer: Renderer {
             let layerPtr = Unmanaged.passUnretained(layer).toOpaque()
             surface = try backend.createSurfaceMetal(layer: layerPtr)
             try ensureConfigured()
-            try ensureRainbowPipeline()
-            print("[WGPURenderer] surface ready, format=\(format), size=\(configuredSize), pipeline=\(rainbowPipeline != nil), bindGroup=\(bindGroup != nil)")
+            try ensureMeshPipeline()
+            print("[WGPURenderer] surface ready, format=\(format), size=\(configuredSize), pipeline=\(meshPipeline != nil), depth=\(depthView != nil)")
         } catch {
             print("[WGPURenderer] initialize failed: \(error)")
         }
@@ -61,36 +67,33 @@ public final class WGPURenderer: Renderer {
         guard let surface else { return }
         do {
             try ensureConfigured()
-            try ensureRainbowPipeline()
-            guard let acquired = try surface.getCurrentTextureView() else {
+            try ensureMeshPipeline()
+            guard let acquired = try surface.getCurrentTextureView(),
+                  let depthView else {
                 return
             }
 
-            // Update uniform: rotation angle advances per frame.
             if let uniformBuffer {
-                let uniforms: [Float] = [Float(frameIndex) * 0.02, 0, 0, 0]
-                uniforms.withUnsafeBytes { raw in
+                var matrix = computeMVP(frameIndex: frameIndex)
+                withUnsafeBytes(of: &matrix) { raw in
                     if let base = raw.baseAddress {
                         backend.writeBuffer(uniformBuffer, data: base, size: raw.count)
                     }
                 }
             }
 
-            // Background sweeps a dim color so the rotating triangle stays the focus.
-            let t = Double(frameIndex) * 0.03
-            let r = 0.10 + 0.05 * sin(t)
-            let g = 0.10 + 0.05 * sin(t + 2.094)
-            let b = 0.10 + 0.05 * sin(t + 4.188)
-            let clear = GPUColor(r: r, g: g, b: b, a: 1.0)
-
             let encoder = try backend.createCommandEncoder()
             let pass = try encoder.beginRenderPass(
                 colorView: acquired.view,
                 loadOp: .clear,
                 storeOp: .store,
-                clearColor: clear
+                clearColor: GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1.0),
+                depthView: depthView,
+                depthLoadOp: .clear,
+                depthStoreOp: .store,
+                depthClearValue: 1.0
             )
-            if let pipeline = rainbowPipeline,
+            if let pipeline = meshPipeline,
                let vb = vertexBuffer,
                let ib = indexBuffer,
                let bg = bindGroup {
@@ -98,7 +101,7 @@ public final class WGPURenderer: Renderer {
                 pass.setBindGroup(bg, index: 0)
                 pass.setVertexBuffer(vb, slot: 0)
                 pass.setIndexBuffer(ib, format: .uint32)
-                pass.drawIndexed(indexCount: 3)
+                pass.drawIndexed(indexCount: indexCount)
             }
             pass.end()
             let cmd = try encoder.finish()
@@ -109,94 +112,95 @@ public final class WGPURenderer: Renderer {
         }
     }
 
-    private func ensureRainbowPipeline() throws {
-        if rainbowPipeline != nil { return }
+    private func ensureMeshPipeline() throws {
+        if meshPipeline != nil { return }
         guard backend.rawDevice != nil else { return }
+
         let wgsl = """
         struct Uniforms {
-            angle : f32,
-            _pad0 : f32,
-            _pad1 : f32,
-            _pad2 : f32,
+            mvp : mat4x4<f32>,
         };
         @group(0) @binding(0) var<uniform> u : Uniforms;
 
         struct VsIn {
-            @location(0) pos   : vec2<f32>,
-            @location(1) color : vec3<f32>,
+            @location(0) pos    : vec3<f32>,
+            @location(1) normal : vec3<f32>,
+            @location(2) color  : vec3<f32>,
         };
         struct VsOut {
             @builtin(position) pos : vec4<f32>,
             @location(0) color    : vec3<f32>,
+            @location(1) normal   : vec3<f32>,
         };
 
         @vertex
         fn vs_main(in : VsIn) -> VsOut {
-            let c = cos(u.angle);
-            let s = sin(u.angle);
-            let rotated = vec2<f32>(in.pos.x * c - in.pos.y * s,
-                                    in.pos.x * s + in.pos.y * c);
             var out : VsOut;
-            out.pos = vec4<f32>(rotated, 0.0, 1.0);
+            out.pos = u.mvp * vec4<f32>(in.pos, 1.0);
             out.color = in.color;
+            out.normal = in.normal;
             return out;
         }
 
         @fragment
         fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
-            return vec4<f32>(in.color, 1.0);
+            let lightDir = normalize(vec3<f32>(0.4, 0.8, 0.6));
+            let n = normalize(in.normal);
+            let lambert = max(dot(n, lightDir), 0.0);
+            let lit = in.color * (0.25 + lambert * 0.85);
+            return vec4<f32>(lit, 1.0);
         }
         """
-        let module = try backend.createShaderModule(wgsl: wgsl, label: "rainbow")
+        let module = try backend.createShaderModule(wgsl: wgsl, label: "mesh_lit")
 
-        // Vertex layout: pos (vec2 f32) + color (vec3 f32), stride = 20 bytes.
         let vbLayout = GPUVertexBufferLayout(
-            arrayStride: 20,
+            arrayStride: UInt64(MeshAsset.vertexStride),
             attributes: [
-                GPUVertexAttribute(format: .float32x2, offset: 0, shaderLocation: 0),
-                GPUVertexAttribute(format: .float32x3, offset: 8, shaderLocation: 1),
+                GPUVertexAttribute(format: .float32x3, offset: UInt64(MeshAsset.positionOffset), shaderLocation: 0),
+                GPUVertexAttribute(format: .float32x3, offset: UInt64(MeshAsset.normalOffset),   shaderLocation: 1),
+                GPUVertexAttribute(format: .float32x3, offset: UInt64(MeshAsset.colorOffset),    shaderLocation: 2),
             ]
         )
 
         let pipeline = try backend.createRenderPipeline(desc: GPURenderPipelineDescriptor(
             shaderModule: module,
             colorFormat: format,
-            vertexBuffers: [vbLayout]
+            cullMode: .back,
+            vertexBuffers: [vbLayout],
+            depthStencil: GPUDepthStencilPipelineState(
+                format: depthFormat,
+                depthWriteEnabled: true,
+                depthCompare: .less
+            )
         ))
-        rainbowPipeline = pipeline
+        meshPipeline = pipeline
 
-        // Vertex/index/uniform buffers.
-        let vertices: [Float] = [
-             0.0,  0.6, 1.0, 0.0, 0.0,
-            -0.6, -0.5, 0.0, 1.0, 0.0,
-             0.6, -0.5, 0.0, 0.0, 1.0,
-        ]
-        let vbSize = UInt64(vertices.count * MemoryLayout<Float>.size)
-        let vb = try backend.createBuffer(size: vbSize, usage: [.vertex, .copyDst])
-        vertices.withUnsafeBytes { raw in
+        let mesh = BuiltinMesh.cube()
+        indexCount = mesh.indexCount
+
+        let vb = try backend.createBuffer(size: UInt64(mesh.vertexBufferSize), usage: [.vertex, .copyDst])
+        mesh.vertices.withUnsafeBytes { raw in
             if let base = raw.baseAddress {
                 backend.writeBuffer(vb, data: base, size: raw.count)
             }
         }
         vertexBuffer = vb
 
-        let indices: [UInt32] = [0, 1, 2]
-        let ibSize = UInt64(indices.count * MemoryLayout<UInt32>.size)
-        let ib = try backend.createBuffer(size: ibSize, usage: [.index, .copyDst])
-        indices.withUnsafeBytes { raw in
+        let ib = try backend.createBuffer(size: UInt64(mesh.indexBufferSize), usage: [.index, .copyDst])
+        mesh.indices.withUnsafeBytes { raw in
             if let base = raw.baseAddress {
                 backend.writeBuffer(ib, data: base, size: raw.count)
             }
         }
         indexBuffer = ib
 
-        let ub = try backend.createBuffer(size: 16, usage: [.uniform, .copyDst])
+        let ub = try backend.createBuffer(size: 64, usage: [.uniform, .copyDst])
         uniformBuffer = ub
 
         let layout = try pipeline.getBindGroupLayout(group: 0)
         bindGroup = try backend.createBindGroup(
             layout: layout,
-            entries: [GPUBindGroupEntry(binding: 0, buffer: ub, offset: 0, size: 16)]
+            entries: [GPUBindGroupEntry(binding: 0, buffer: ub, offset: 0, size: 64)]
         )
     }
 
@@ -214,5 +218,73 @@ public final class WGPURenderer: Renderer {
             presentMode: .fifo
         )
         configuredSize = size
+
+        depthView = nil
+        depthTexture = nil
+        let depth = try backend.createTexture(
+            width: size.width,
+            height: size.height,
+            format: depthFormat,
+            usage: .renderAttachment
+        )
+        depthView = try depth.createView()
+        depthTexture = depth
     }
+
+    private func computeMVP(frameIndex: Int) -> simd_float4x4 {
+        let aspect = Float(max(configuredSize.width, 1)) / Float(max(configuredSize.height, 1))
+        let proj = perspective(fovYRadians: .pi / 4, aspect: aspect, near: 0.1, far: 100)
+        let eye = SIMD3<Float>(0, 1.4, 3.0)
+        let view = lookAt(eye: eye, target: SIMD3<Float>(0, 0, 0), up: SIMD3<Float>(0, 1, 0))
+        let angle = Float(frameIndex) * 0.015
+        let modelY = rotationY(angle)
+        let modelX = rotationX(angle * 0.6)
+        let model = modelY * modelX
+        return proj * view * model
+    }
+}
+
+// MARK: - Math helpers (right-handed, depth 0..1)
+
+private func perspective(fovYRadians: Float, aspect: Float, near: Float, far: Float) -> simd_float4x4 {
+    let f = 1.0 / tan(fovYRadians * 0.5)
+    let nf = 1.0 / (near - far)
+    return simd_float4x4(rows: [
+        SIMD4<Float>(f / aspect, 0,  0,                      0),
+        SIMD4<Float>(0,          f,  0,                      0),
+        SIMD4<Float>(0,          0,  far * nf,               near * far * nf),
+        SIMD4<Float>(0,          0, -1,                      0),
+    ])
+}
+
+private func lookAt(eye: SIMD3<Float>, target: SIMD3<Float>, up: SIMD3<Float>) -> simd_float4x4 {
+    let f = simd_normalize(target - eye)
+    let s = simd_normalize(simd_cross(f, up))
+    let u = simd_cross(s, f)
+    return simd_float4x4(rows: [
+        SIMD4<Float>(s.x,  s.y,  s.z, -simd_dot(s, eye)),
+        SIMD4<Float>(u.x,  u.y,  u.z, -simd_dot(u, eye)),
+        SIMD4<Float>(-f.x, -f.y, -f.z, simd_dot(f, eye)),
+        SIMD4<Float>(0,    0,    0,   1),
+    ])
+}
+
+private func rotationY(_ angle: Float) -> simd_float4x4 {
+    let c = cos(angle); let s = sin(angle)
+    return simd_float4x4(rows: [
+        SIMD4<Float>(c,  0, s, 0),
+        SIMD4<Float>(0,  1, 0, 0),
+        SIMD4<Float>(-s, 0, c, 0),
+        SIMD4<Float>(0,  0, 0, 1),
+    ])
+}
+
+private func rotationX(_ angle: Float) -> simd_float4x4 {
+    let c = cos(angle); let s = sin(angle)
+    return simd_float4x4(rows: [
+        SIMD4<Float>(1, 0,  0, 0),
+        SIMD4<Float>(0, c, -s, 0),
+        SIMD4<Float>(0, s,  c, 0),
+        SIMD4<Float>(0, 0,  0, 1),
+    ])
 }
