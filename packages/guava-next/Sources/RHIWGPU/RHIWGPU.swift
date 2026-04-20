@@ -134,6 +134,7 @@ public final class WGPUBackend {
         let backendOrder = config.preferredBackends.isEmpty
             ? WGPUBackendPreference.platformDefaultOrder
             : config.preferredBackends
+        print("[WGPUBackend] requested backend order=\(backendOrder.map { $0.rawValue }.joined(separator: ","))")
 
         var outAdapter: UnsafeMutableRawPointer?
         var adapterErrors: [String] = []
@@ -146,6 +147,7 @@ public final class WGPUBackend {
             if adapterOk == 1, let outAdapter {
                 adapter = outAdapter
                 state = .adapterReady
+                print("[WGPUBackend] selected backend preference=\(backend.rawValue)")
                 break
             }
             adapterErrors.append("\(backend.rawValue): \(lastBridgeError())")
