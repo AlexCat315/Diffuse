@@ -20,7 +20,21 @@ public final class Node: @unchecked Sendable {
     public internal(set) var isDirty: Bool = false
 
     /// The rectangle assigned by the layout engine (Phase 3).
+    /// Coordinates are local to the parent node.
     public var frame: CGRect = .zero
+
+    // MARK: - Interaction (Phase 6.1)
+
+    /// When false, hit-testing skips this node (children are still visited
+    /// unless `clipsToBounds` excludes them by frame).
+    public var isHitTestable: Bool = true
+
+    /// When true, this node may receive keyboard focus (FocusChain consideration).
+    public var isFocusable: Bool = false
+
+    /// When true, hit-testing rejects child hits that fall outside this node's frame.
+    /// Also a hint to the renderer (Phase 6.3 `.clip()` modifier).
+    public var clipsToBounds: Bool = false
 
     public init() {}
 
