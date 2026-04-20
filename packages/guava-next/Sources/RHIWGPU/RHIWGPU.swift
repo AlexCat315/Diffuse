@@ -641,4 +641,75 @@ public final class WGPUBackend {
             throw WGPUBackendError.initFailed(Self.lastError())
         }
     }
+
+    // MARK: - Render Bundles
+
+    public func createRenderBundleEncoder(_ desc: GPURenderBundleEncoderDescriptor) throws -> GPURenderBundleEncoder {
+        guard let device else {
+            throw WGPUBackendError.initFailed("device not ready")
+        }
+        let formats = desc.colorFormats.map { $0.bridgeValue }
+        var out: UnsafeMutableRawPointer?
+        let ok = formats.withUnsafeBufferPointer { buf -> Int32 in
+            var d = WGPUBridgeRenderBundleEncoderDesc(
+                color_formats: buf.baseAddress,
+                color_format_count: UInt32(buf.count),
+                has_depth_stencil: desc.depthStencilFormat != nil ? 1 : 0,
+                depth_stencil_format: desc.depthStencilFormat?.bridgeValue ?? WGPUBridge_TextureFormat_Depth32Float,
+                sample_count: desc.sampleCount,
+                depth_read_only: desc.depthReadOnly ? 1 : 0,
+                stencil_read_only: desc.stencilReadOnly ? 1 : 0
+            )
+            return wgpu_bridge_create_render_bundle_encoder(device, &d, &out)
+        }
+        guard ok != 0, let h = out else {
+            throw RHIError.bundleEncoderCreationFailed
+        }
+        return GPURenderBundleEncoder(handle: h)
+    }
+
+    // MARK: - Async Pipeline Creation
+    //
+    // wgpu-native v22 公开了 wgpuDeviceCreateRenderPipelineAsync，但完整集成需要复制
+    // 全部描述符构建逻辑。当前以 Swift 层 Task.detached 封装作为务实方案：
+    // 调用线程不阻塞，shader 编译在后台线程执行。
+    // 待后续若启用真正 async，仅需把此处的实现替换为 callback-based withCheckedThrowingContinuation。
+
+    public func createRenderPipelineAsync(_ desc: GPURenderPipelineDescriptor) async throws -> GPURenderPipeline {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<GPURenderPipeline, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async {
+                do {
+                    let p = try self.createRenderPipeline(desc: desc)
+                    cont.resume(returning: p)
+                } catch {
+                    cont.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    public func createComputePipelineAsync(shaderModule: GPUShaderModule,
+                                           entryPoint: String = "main",
+                                           layout: GPUPipelineLayout? = nil) async throws -> GPUComputePipeline {
+        try await withCheckedThrowingContinuation { (cont: CheckedContinuation<GPUComputePipeline, Error>) in
+            DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+                guard let self else {
+                    cont.resume(throwing: RHIError.asyncPipelineFailed)
+                    return
+                }
+                do {
+                    let p = try self.createComputePipeline(
+                        shaderModule: shaderModule,
+                        entryPoint: entryPoint,
+                        layout: layout
+                    )
+                    cont.resume(returning: p)
+                } catch {
+                    cont.resume(throwing: error)
+                }
+            }
+        }
+    }
 }
+
+extension WGPUBackend: @unchecked Sendable {}

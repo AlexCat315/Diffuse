@@ -259,6 +259,7 @@ public struct GPUBufferUsage: OptionSet, Sendable {
     public static let storage = GPUBufferUsage(rawValue: 0x0080)
     public static let mapRead = GPUBufferUsage(rawValue: 0x0001)
     public static let copySrc = GPUBufferUsage(rawValue: 0x0004)
+    public static let indirect = GPUBufferUsage(rawValue: 0x0100)
 }
 
 // MARK: - Texture Usage

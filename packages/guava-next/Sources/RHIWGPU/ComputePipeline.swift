@@ -35,6 +35,10 @@ public final class GPUComputePassEncoder {
         wgpu_bridge_compute_pass_dispatch(handle, x, y, z)
     }
 
+    public func dispatchIndirect(buffer: GPUBuffer, offset: UInt64 = 0) {
+        wgpu_bridge_compute_pass_dispatch_indirect(handle, buffer.handle, offset)
+    }
+
     public func end() {
         wgpu_bridge_compute_pass_end(handle)
     }

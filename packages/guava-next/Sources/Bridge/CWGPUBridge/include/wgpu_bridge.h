@@ -105,6 +105,7 @@ typedef enum {
     WGPUBridge_BufferUsage_Vertex   = 0x0020,
     WGPUBridge_BufferUsage_Uniform  = 0x0040,
     WGPUBridge_BufferUsage_Storage  = 0x0080,
+    WGPUBridge_BufferUsage_Indirect = 0x0100,
 } WGPUBridgeBufferUsage;
 
 typedef enum {
@@ -423,6 +424,14 @@ void wgpu_bridge_render_pass_draw_indexed(void* pass,
                                           int32_t base_vertex,
                                           uint32_t first_instance);
 
+void wgpu_bridge_render_pass_draw_indirect(void* pass,
+                                           void* buffer,
+                                           uint64_t offset);
+
+void wgpu_bridge_render_pass_draw_indexed_indirect(void* pass,
+                                                   void* buffer,
+                                                   uint64_t offset);
+
 void wgpu_bridge_render_pass_set_bind_group(void* pass,
                                             uint32_t group_index,
                                             void* bind_group);
@@ -517,6 +526,10 @@ void wgpu_bridge_compute_pass_set_bind_group(void* pass,
 void wgpu_bridge_compute_pass_dispatch(void* pass,
                                        uint32_t x, uint32_t y, uint32_t z);
 
+void wgpu_bridge_compute_pass_dispatch_indirect(void* pass,
+                                                void* buffer,
+                                                uint64_t offset);
+
 void wgpu_bridge_compute_pass_end(void* pass);
 void wgpu_bridge_release_compute_pass_encoder(void* pass);
 
@@ -552,6 +565,45 @@ void wgpu_bridge_copy_texture_to_texture(
     void* src_texture, uint32_t src_mip,
     void* dst_texture, uint32_t dst_mip,
     uint32_t width, uint32_t height, uint32_t depth_or_layers);
+
+/* ─── Render Bundles ─────────────────────────────────────────────── */
+
+typedef struct WGPUBridgeRenderBundleEncoderDesc {
+    const WGPUBridgeTextureFormat* color_formats;
+    uint32_t color_format_count;
+    int has_depth_stencil;
+    WGPUBridgeTextureFormat depth_stencil_format;
+    uint32_t sample_count;
+    int depth_read_only;
+    int stencil_read_only;
+} WGPUBridgeRenderBundleEncoderDesc;
+
+int wgpu_bridge_create_render_bundle_encoder(void* device,
+                                             const WGPUBridgeRenderBundleEncoderDesc* desc,
+                                             void** out_encoder);
+
+int wgpu_bridge_render_bundle_encoder_finish(void* encoder, void** out_bundle);
+
+void wgpu_bridge_release_render_bundle_encoder(void* encoder);
+void wgpu_bridge_release_render_bundle(void* bundle);
+
+void wgpu_bridge_render_bundle_set_pipeline(void* enc, void* pipeline);
+void wgpu_bridge_render_bundle_set_vertex_buffer(void* enc, uint32_t slot,
+                                                 void* buffer, uint64_t offset, uint64_t size);
+void wgpu_bridge_render_bundle_set_index_buffer(void* enc, void* buffer,
+                                                WGPUBridgeIndexFormat format,
+                                                uint64_t offset, uint64_t size);
+void wgpu_bridge_render_bundle_set_bind_group(void* enc, uint32_t group_index, void* bind_group);
+void wgpu_bridge_render_bundle_draw(void* enc, uint32_t vertex_count, uint32_t instance_count,
+                                    uint32_t first_vertex, uint32_t first_instance);
+void wgpu_bridge_render_bundle_draw_indexed(void* enc, uint32_t index_count, uint32_t instance_count,
+                                            uint32_t first_index, int32_t base_vertex, uint32_t first_instance);
+void wgpu_bridge_render_bundle_draw_indirect(void* enc, void* buffer, uint64_t offset);
+void wgpu_bridge_render_bundle_draw_indexed_indirect(void* enc, void* buffer, uint64_t offset);
+
+void wgpu_bridge_render_pass_execute_bundles(void* pass,
+                                             void* const* bundles,
+                                             uint32_t count);
 
 /* ─── Texture Readback ───────────────────────────────────────────── */
 
