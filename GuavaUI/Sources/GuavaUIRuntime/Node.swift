@@ -41,6 +41,11 @@ public final class Node: @unchecked Sendable {
     /// Solid background fill. `nil` = transparent (no fill emitted).
     public var backgroundColor: Color?
 
+    /// Corner radius (in pixels) applied to the background fill. The clip
+    /// rectangle from `clipsToBounds` remains axis-aligned — child content
+    /// is not rounded yet (Phase 7).
+    public var cornerRadius: Float = 0
+
     /// Foreground tint. Used by Text and tinted Image. `nil` = renderer default.
     public var foregroundColor: Color?
 

@@ -100,6 +100,10 @@ let shaper = TextShaper()
 if let face = atlas.freetypeFace {
     shaper.setFont(ftFace: face, size: 18)
 }
+let fontResolver = TextFontResolver(
+    primaryFontName: provider.primaryFont?.postScriptName ?? "Helvetica Neue",
+    atlas: atlas
+)
 
 let atlasTextureID: TextureID = 1
 
@@ -108,7 +112,9 @@ TextEnvironmentHolder.current = TextEnvironment(
     shaper: shaper,
     atlasTextureID: atlasTextureID,
     defaultLineHeight: 22,
-    defaultColor: Color.white
+    defaultColor: Color.white,
+    defaultFont: Font.system(size: 18),
+    fontResolver: fontResolver
 )
 
 // MARK: - Compose graph

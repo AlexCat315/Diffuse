@@ -30,6 +30,12 @@ public struct Color: Equatable, Sendable {
         return rb | (gb << 8) | (bb << 16) | (ab << 24)
     }
 
+    public func multipliedAlpha(_ opacity: Float) -> Color {
+        let clamped = max(0, min(1, opacity))
+        guard clamped < 1 else { return self }
+        return Color(r: r, g: g, b: b, a: a * clamped)
+    }
+
     public static let clear = Color(r: 0, g: 0, b: 0, a: 0)
     public static let black = Color(r: 0, g: 0, b: 0)
     public static let white = Color(r: 1, g: 1, b: 1)

@@ -32,10 +32,13 @@ public struct NodeRenderer {
 
         // 2. Background fill.
         if let bg = node.backgroundColor, width > 0, height > 0 {
-            list.addRect(
-                UIRect(x: absX, y: absY, width: width, height: height),
-                color: applyOpacity(bg, node.opacity)
-            )
+            let rect = UIRect(x: absX, y: absY, width: width, height: height)
+            let color = applyOpacity(bg, node.opacity)
+            if node.cornerRadius > 0 {
+                list.addRoundedRect(rect, radius: node.cornerRadius, color: color)
+            } else {
+                list.addRect(rect, color: color)
+            }
         }
 
         // 3. Custom content (Text/Image/etc).

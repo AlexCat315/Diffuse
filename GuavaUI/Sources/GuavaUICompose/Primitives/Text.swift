@@ -11,17 +11,47 @@ public struct TextEnvironment {
     public let atlasTextureID: TextureID
     public var defaultLineHeight: Float
     public var defaultColor: Color
+    public var defaultFont: Font
+    public var fontResolver: TextFontResolver?
 
     public init(atlas: FontAtlas,
                 shaper: TextShaper,
                 atlasTextureID: TextureID,
                 defaultLineHeight: Float,
-                defaultColor: Color = .white) {
+                defaultColor: Color = .white,
+                defaultFont: Font? = nil,
+                fontResolver: TextFontResolver? = nil) {
         self.atlas = atlas
         self.shaper = shaper
         self.atlasTextureID = atlasTextureID
         self.defaultLineHeight = defaultLineHeight
         self.defaultColor = defaultColor
+        let fallbackSize = atlas.fontSize > 0 ? atlas.fontSize : max(1, defaultLineHeight)
+        self.defaultFont = defaultFont ?? Font.system(size: fallbackSize)
+        self.fontResolver = fontResolver
+    }
+
+    public func resolvedFont(_ override: Font?) -> Font {
+        override ?? defaultFont
+    }
+
+    public func resolvedLineHeight(font: Font, override: Float?) -> Float {
+        if let override {
+            return override
+        }
+        guard defaultFont.size > 0 else { return defaultLineHeight }
+        return defaultLineHeight * (font.size / defaultFont.size)
+    }
+
+    public func shape(text: String, font: Font?) -> [ShapedGlyph] {
+        let resolved = resolvedFont(font)
+        if let fontResolver {
+            let glyphs = fontResolver.shape(text: text, font: resolved)
+            if !glyphs.isEmpty || text.isEmpty {
+                return glyphs
+            }
+        }
+        return shaper.shape(text: text)
     }
 }
 
@@ -60,8 +90,17 @@ public struct Text: _PrimitiveView {
         let env = TextEnvironmentHolder.current
         node.draw = { list, origin in
             guard let env else { return }
-            let result = snapshot.shape(in: env, maxWidth: Float(node.frame.width))
-            let drawColor = snapshot.color ?? node.foregroundColor ?? env.defaultColor
+            let fontOverride = node.attachments[StyleAttachmentKey.font] as? Font
+            let lineHeightOverride = node.attachments[StyleAttachmentKey.lineHeight] as? Float
+            let resolvedFont = env.resolvedFont(fontOverride)
+            let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
+                                                            override: lineHeightOverride)
+            let result = snapshot.shape(in: env,
+                                        maxWidth: Float(node.frame.width),
+                                        font: resolvedFont,
+                                        lineHeight: resolvedLineHeight)
+            let baseColor = snapshot.color ?? node.foregroundColor ?? env.defaultColor
+            let drawColor = baseColor.multipliedAlpha(node.opacity)
             list.addText(result,
                          origin: (Float(origin.x), Float(origin.y)),
                          color: drawColor,
@@ -72,12 +111,20 @@ public struct Text: _PrimitiveView {
     public func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
         let snapshot = self
-        layout.setMeasureFunc { width, widthMode, _, _ in
+        layout.setMeasureFunc { [weak layout] width, widthMode, _, _ in
             guard let env = TextEnvironmentHolder.current else {
                 return CGSize(width: 0, height: 0)
             }
             let constraint: Float = (widthMode == .undefined) ? .infinity : width
-            let result = snapshot.shape(in: env, maxWidth: constraint)
+            let fontOverride = layout?.attachments[StyleAttachmentKey.font] as? Font
+            let lineHeightOverride = layout?.attachments[StyleAttachmentKey.lineHeight] as? Float
+            let resolvedFont = env.resolvedFont(fontOverride)
+            let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
+                                                            override: lineHeightOverride)
+            let result = snapshot.shape(in: env,
+                                        maxWidth: constraint,
+                                        font: resolvedFont,
+                                        lineHeight: resolvedLineHeight)
             return CGSize(width: CGFloat(result.totalWidth),
                           height: CGFloat(result.totalHeight))
         }
@@ -88,14 +135,17 @@ public struct Text: _PrimitiveView {
         layout.markDirty()
     }
 
-    private func shape(in env: TextEnvironment, maxWidth: Float) -> TextLayoutResult {
-        let glyphs = env.shaper.shape(text: string)
+    private func shape(in env: TextEnvironment,
+                       maxWidth: Float,
+                       font: Font,
+                       lineHeight: Float) -> TextLayoutResult {
+        let glyphs = env.shape(text: string, font: font)
         return TextLayout.layout(
             shapedGlyphs: glyphs,
             text: string,
             atlas: env.atlas,
             maxWidth: maxWidth.isFinite && maxWidth > 0 ? maxWidth : .infinity,
-            lineHeight: env.defaultLineHeight,
+            lineHeight: lineHeight,
             alignment: alignment
         )
     }
