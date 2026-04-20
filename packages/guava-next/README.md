@@ -20,17 +20,17 @@ A Swift-first refactor skeleton for engine + editor, with a C bridge reserved fo
 
 ## Build
 
+Install the native dependencies once on macOS:
+
+```bash
+brew install sdl3 pkg-config
+```
+
 The wgpu-native dylib is not committed. Fetch it once before the first build:
 
 ```bash
-cd guava-next
+cd packages/guava-next
 ./scripts/fetch-wgpu.sh   # downloads vendor/wgpu/ for current arch
-swift build
-swift run EditorApp
-```
-
-The pinned wgpu-native version lives in `scripts/fetch-wgpu.sh`. Update it
-there and re-run the script to upgrade.cripts/fetch-wgpu.sh   # downloads vendor/wgpu/ for current arch
 swift build
 swift run EditorApp
 ```
@@ -42,5 +42,5 @@ there and re-run the script to upgrade.
 
 1. Replace CEngineBridge stubs with real C/C++ runtime hooks.
 2. Add Metal-backed implementation in RenderBackend.
-3. Implement window/input/menu adapters in PlatformShell.
+3. Extend PlatformShell beyond the macOS Metal surface path.
 4. Move existing editor panel models into EditorCore.
