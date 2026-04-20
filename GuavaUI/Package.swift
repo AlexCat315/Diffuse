@@ -94,5 +94,9 @@ let package = Package(
             name: "GuavaUIRuntimeTests",
             dependencies: ["GuavaUIRuntime"]
         ),
+        .testTarget(
+            name: "GuavaUIComposeTests",
+            dependencies: ["GuavaUICompose", "GuavaUIRuntime"]
+        ),
     ]
 )
