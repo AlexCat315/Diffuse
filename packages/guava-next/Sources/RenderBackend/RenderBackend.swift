@@ -96,13 +96,15 @@ public final class WGPURenderer: Renderer {
     }
 
     public func initialize() {
-        guard let layer = shell.metalLayer else {
-            print("[WGPURenderer] no CAMetalLayer; skipping surface creation")
+        guard let renderSurface = shell.renderSurface else {
+            print("[WGPURenderer] no render surface; skipping surface creation")
             return
         }
         do {
-            let layerPtr = Unmanaged.passUnretained(layer).toOpaque()
-            surface = try backend.createSurfaceMetal(layer: layerPtr)
+            switch renderSurface {
+                case let .metalLayer(layerPointer):
+                    surface = try backend.createSurfaceMetal(layer: layerPointer)
+            }
             try ensureConfigured()
             try ensureMeshPipelineAndScene()
             print(
