@@ -22,6 +22,10 @@ public protocol ViewModifier {
     /// Called by `ViewGraph` after the underlying node is created/reused.
     func apply(node: Node)
 
+    /// Optional: write into the materialised layout node (padding/frame/...).
+    /// Called for each top-level node produced by the modified content.
+    func apply(layout: LayoutNode)
+
     /// Optional: wrap `content` into a new view subtree.
     /// Default: pass-through.
     @ViewBuilder func body(content: Content) -> Body
@@ -31,7 +35,8 @@ public protocol ViewModifier {
 }
 
 public extension ViewModifier {
-    func apply(node: Node) { /* no-op by default */ }
+    func apply(node: Node)         { /* no-op by default */ }
+    func apply(layout: LayoutNode) { /* no-op by default */ }
 }
 
 public extension ViewModifier where Body == _ViewModifier_Content<Self> {
