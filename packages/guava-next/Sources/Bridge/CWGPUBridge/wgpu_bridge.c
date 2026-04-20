@@ -506,7 +506,10 @@ int wgpu_bridge_surface_get_current_texture_view(void* surface,
        into Success. We treat it the same way the renderer treated v22:
        skip the frame silently without recording an error. The renderer
        checks the return value and simply waits for the next tick. */
-    if (st.status == WGPUSurfaceGetCurrentTextureStatus_Occluded) {
+    /* WGPUSurfaceGetCurrentTextureStatus_Occluded is declared inside the
+       WGPUNativeSurfaceGetCurrentTextureStatus enum (wgpu.h), separate from
+       webgpu.h's status enum. Cast to int to silence -Wenum-compare. */
+    if ((int)st.status == (int)WGPUSurfaceGetCurrentTextureStatus_Occluded) {
         if (st.texture) wgpuTextureRelease(st.texture);
         return 0;
     }

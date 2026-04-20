@@ -68,7 +68,7 @@ public final class WGPURenderer: Renderer {
 
             // Update uniform: rotation angle advances per frame.
             if let uniformBuffer {
-                var uniforms: [Float] = [Float(frameIndex) * 0.02, 0, 0, 0]
+                let uniforms: [Float] = [Float(frameIndex) * 0.02, 0, 0, 0]
                 uniforms.withUnsafeBytes { raw in
                     if let base = raw.baseAddress {
                         backend.writeBuffer(uniformBuffer, data: base, size: raw.count)
@@ -166,7 +166,7 @@ public final class WGPURenderer: Renderer {
         rainbowPipeline = pipeline
 
         // Vertex/index/uniform buffers.
-        var vertices: [Float] = [
+        let vertices: [Float] = [
              0.0,  0.6, 1.0, 0.0, 0.0,
             -0.6, -0.5, 0.0, 1.0, 0.0,
              0.6, -0.5, 0.0, 0.0, 1.0,
@@ -180,7 +180,7 @@ public final class WGPURenderer: Renderer {
         }
         vertexBuffer = vb
 
-        var indices: [UInt32] = [0, 1, 2]
+        let indices: [UInt32] = [0, 1, 2]
         let ibSize = UInt64(indices.count * MemoryLayout<UInt32>.size)
         let ib = try backend.createBuffer(size: ibSize, usage: [.index, .copyDst])
         indices.withUnsafeBytes { raw in
