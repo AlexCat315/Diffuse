@@ -1,3 +1,39 @@
+guava/
+├── Engine/          # Swift 引擎包 (SwiftPM)
+│   ├── Package.swift
+│   ├── Sources/
+│   │   ├── EngineKernel/    # 核心类型、协议（含 InGameUIProviding）
+│   │   ├── RHIWGPU/         # wgpu RHI 绑定
+│   │   ├── PlatformShell/   # SDL3 窗口/输入
+│   │   ├── RenderBackend/   # 高层渲染管线
+│   │   ├── SceneRuntime/    # 场景图
+│   │   ├── AssetPipeline/   # 资产加载
+│   │   ├── ScriptRuntime/   # 脚本 VM
+│   │   ├── EngineCore/      # 引擎 Host 编排
+│   │   └── Bridge/          # C bridges (CEngineBridge, CWGPUBridge, CSDL3)
+│   ├── vendor/wgpu/         # wgpu 预编译库
+│   └── scripts/             # fetch-wgpu.sh
+│
+├── GuavaUI/         # Swift UI 框架 (SwiftPM)，独立库
+│   ├── Package.swift        # → depends on Engine
+│   └── Sources/
+│       ├── GuavaUIRuntime/  # 平台/布局/文字/节点树（占位）
+│       └── GuavaUICompose/  # 声明式 API/组件（占位）
+│
+├── Editor/          # Swift 编辑器 (SwiftPM)
+│   ├── Package.swift        # → depends on Engine + GuavaUI
+│   └── Sources/
+│       ├── EditorCore/      # 状态、面板、Dock 布局
+│       └── EditorApp/       # 可执行入口
+│
+├── legacy/          # 旧实现存档，不删除
+│   ├── zig-engine/  # 原 packages/engine（Zig）
+│   └── react-editor/# 原 packages/editor（React/Electron）
+│
+└── docs/            # 架构蓝图文档
+
+
+
 # Engine 重写蓝图（Swift + wgpu + C/C++）
 
 ## 0. 决策摘要

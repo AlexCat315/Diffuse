@@ -103,10 +103,10 @@ public final class EditorApplication {
         let fm = FileManager.default
         let cwd = fm.currentDirectoryPath
         let candidates = [
+            "\(cwd)/Engine/vendor/wgpu/lib/libwgpu_native.dylib",
+            "\(cwd)/Engine/vendor/wgpu/libwgpu_native.dylib",
             "\(cwd)/vendor/wgpu/lib/libwgpu_native.dylib",
             "\(cwd)/vendor/wgpu/libwgpu_native.dylib",
-            "\(cwd)/packages/guava-next/vendor/wgpu/lib/libwgpu_native.dylib",
-            "\(cwd)/packages/guava-next/vendor/wgpu/libwgpu_native.dylib",
         ]
         for c in candidates where fm.fileExists(atPath: c) {
             return c
