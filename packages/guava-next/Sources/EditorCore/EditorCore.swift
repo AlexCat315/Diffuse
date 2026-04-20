@@ -56,6 +56,10 @@ public final class EditorApplication {
         renderer.currentFrameStats()
     }
 
+    public func currentViewportSurfaceState() -> ViewportSurfaceState {
+        renderer.currentViewportSurfaceState()
+    }
+
     private static func locateWGPUDylib() -> String {
         let fm = FileManager.default
         let cwd = fm.currentDirectoryPath
