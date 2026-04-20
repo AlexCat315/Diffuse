@@ -48,6 +48,14 @@ public final class Node: @unchecked Sendable {
     /// transitively in later phases). Default 1.
     public var opacity: Float = 1
 
+    /// Optional custom-draw hook invoked after the background fill but before
+    /// recursing into children. The closure receives the active `DrawList` and
+    /// the node's absolute origin (top-left in viewport space).
+    ///
+    /// Used by leaf primitives such as Text/Image to emit content-specific
+    /// geometry without subclassing `Node`.
+    public var draw: ((DrawList, CGPoint) -> Void)?
+
     public init() {}
 
     // MARK: - Tree mutation
