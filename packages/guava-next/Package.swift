@@ -27,7 +27,19 @@ let package = Package(
         .target(
             name: "CWGPUBridge",
             path: "Sources/Bridge/CWGPUBridge",
-            publicHeadersPath: "include"
+            publicHeadersPath: "include",
+            cSettings: [
+                .headerSearchPath("../../../vendor/wgpu/include")
+            ],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-L", "vendor/wgpu/lib",
+                    "-lwgpu_native",
+                    "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../../../../vendor/wgpu/lib",
+                    "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../../vendor/wgpu/lib",
+                    "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../../../vendor/wgpu/lib",
+                ])
+            ]
         ),
         .target(name: "EngineKernel"),
         .target(
@@ -48,7 +60,10 @@ let package = Package(
                 "ScriptRuntime",
             ]
         ),
-        .target(name: "RenderBackend"),
+        .target(
+            name: "RenderBackend",
+            dependencies: ["RHIWGPU", "PlatformShell"]
+        ),
         .target(
             name: "EditorCore",
             dependencies: ["EngineCore", "RenderBackend"]

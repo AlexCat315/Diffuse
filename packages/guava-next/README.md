@@ -20,11 +20,23 @@ A Swift-first refactor skeleton for engine + editor, with a C bridge reserved fo
 
 ## Build
 
+The wgpu-native dylib is not committed. Fetch it once before the first build:
+
 ```bash
 cd guava-next
+./scripts/fetch-wgpu.sh   # downloads vendor/wgpu/ for current arch
 swift build
 swift run EditorApp
 ```
+
+The pinned wgpu-native version lives in `scripts/fetch-wgpu.sh`. Update it
+there and re-run the script to upgrade.cripts/fetch-wgpu.sh   # downloads vendor/wgpu/ for current arch
+swift build
+swift run EditorApp
+```
+
+The pinned wgpu-native version lives in `scripts/fetch-wgpu.sh`. Update it
+there and re-run the script to upgrade.
 
 ## Next Steps
 
