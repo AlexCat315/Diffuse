@@ -41,6 +41,12 @@ there and re-run the script to upgrade.
 ## Next Steps
 
 1. Replace CEngineBridge stubs with real C/C++ runtime hooks.
-2. Add Metal-backed implementation in RenderBackend.
-3. Extend PlatformShell beyond the macOS Metal surface path.
+2. Validate the new Win32, Xlib, and Wayland surface paths on their target platforms.
+3. Tune backend preference order per target deployment if the defaults are not suitable.
 4. Move existing editor panel models into EditorCore.
+
+## Backend Defaults
+
+- macOS: Metal, then automatic fallback.
+- Windows: D3D12, then Vulkan, then automatic fallback.
+- Linux: Vulkan, then automatic fallback.

@@ -178,6 +178,16 @@ typedef enum {
     WGPUBridge_CompareFunction_Always,
 } WGPUBridgeCompareFunction;
 
+typedef enum {
+    WGPUBridge_BackendType_Undefined = 0,
+    WGPUBridge_BackendType_D3D11 = 3,
+    WGPUBridge_BackendType_D3D12 = 4,
+    WGPUBridge_BackendType_Metal = 5,
+    WGPUBridge_BackendType_Vulkan = 6,
+    WGPUBridge_BackendType_OpenGL = 7,
+    WGPUBridge_BackendType_OpenGLES = 8,
+} WGPUBridgeBackendType;
+
 /* ─── Bridge Descriptor Structs ──────────────────────────────────── */
 
 typedef struct WGPUBridgeColor {
@@ -285,6 +295,9 @@ typedef struct WGPUBridgeColorAttachment {
 int wgpu_bridge_initialize(const char* library_path);
 int wgpu_bridge_create_instance(void** out_instance);
 int wgpu_bridge_request_adapter(void* instance, void** out_adapter);
+int wgpu_bridge_request_adapter_with_backend(void* instance,
+                                             WGPUBridgeBackendType backend_type,
+                                             void** out_adapter);
 int wgpu_bridge_request_device(void* adapter, void** out_device);
 int wgpu_bridge_get_queue(void* device, void** out_queue);
 int wgpu_bridge_release_queue(void* queue);
@@ -299,6 +312,21 @@ const char* wgpu_bridge_last_error(void);
 int wgpu_bridge_create_surface_metal(void* instance,
                                      void* ca_metal_layer,
                                      void** out_surface);
+
+int wgpu_bridge_create_surface_win32(void* instance,
+                                     void* hwnd,
+                                     void* hinstance,
+                                     void** out_surface);
+
+int wgpu_bridge_create_surface_wayland(void* instance,
+                                       void* display,
+                                       void* surface,
+                                       void** out_surface);
+
+int wgpu_bridge_create_surface_xlib(void* instance,
+                                    void* display,
+                                    uint64_t window,
+                                    void** out_surface);
 
 int wgpu_bridge_configure_surface(void* surface,
                                   void* device,

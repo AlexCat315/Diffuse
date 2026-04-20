@@ -28,6 +28,24 @@ public final class SDL3Shell: Shell {
 #if os(macOS)
         guard let metalLayer else { return nil }
         return .metalLayer(Unmanaged.passUnretained(metalLayer).toOpaque())
+#elseif os(Windows)
+        guard let hwnd = pointerWindowProperty(named: "SDL.window.win32.hwnd") else { return nil }
+        let hinstance = pointerWindowProperty(named: "SDL.window.win32.instance")
+        return .win32Window(hwnd: hwnd, hinstance: hinstance)
+#elseif os(Linux)
+        if let display = pointerWindowProperty(named: "SDL.window.wayland.display"),
+           let surface = pointerWindowProperty(named: "SDL.window.wayland.surface") {
+            return .waylandSurface(display: display, surface: surface)
+        }
+
+        if let display = pointerWindowProperty(named: "SDL.window.x11.display") {
+            let windowNumber = numberWindowProperty(named: "SDL.window.x11.window")
+            if windowNumber > 0 {
+                return .xlibWindow(display: display, window: UInt64(windowNumber))
+            }
+        }
+
+        return nil
 #else
         return nil
 #endif
@@ -175,5 +193,29 @@ public final class SDL3Shell: Shell {
             return "unknown SDL error"
         }
         return String(cString: message)
+    }
+
+    private func windowProperties() -> SDL_PropertiesID? {
+        guard let window else { return nil }
+        let properties = SDL_GetWindowProperties(window)
+        return properties == 0 ? nil : properties
+    }
+
+    private func pointerWindowProperty(named propertyName: StaticString) -> UnsafeMutableRawPointer? {
+        guard let properties = windowProperties() else { return nil }
+        return propertyName.withUTF8Buffer { buffer in
+            guard let baseAddress = buffer.baseAddress else { return nil }
+            let cString = UnsafeRawPointer(baseAddress).assumingMemoryBound(to: CChar.self)
+            return SDL_GetPointerProperty(properties, cString, nil)
+        }
+    }
+
+    private func numberWindowProperty(named propertyName: StaticString) -> Int64 {
+        guard let properties = windowProperties() else { return 0 }
+        return propertyName.withUTF8Buffer { buffer in
+            guard let baseAddress = buffer.baseAddress else { return 0 }
+            let cString = UnsafeRawPointer(baseAddress).assumingMemoryBound(to: CChar.self)
+            return Int64(SDL_GetNumberProperty(properties, cString, 0))
+        }
     }
 }
