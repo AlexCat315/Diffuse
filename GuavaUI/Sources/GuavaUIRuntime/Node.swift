@@ -60,6 +60,20 @@ public final class Node: @unchecked Sendable {
     /// scroll its content while keeping its own clip rect anchored.
     public var contentOffset: CGPoint = .zero
 
+    // MARK: - Compose reconciliation (Phase 6.6)
+
+    /// Identifier for the View kind that materialised this node, derived from
+    /// `String(reflecting: type(of: view))`. ViewGraph uses it to decide
+    /// whether a recompose can reuse this node in place (preserving any
+    /// state in `attachments`) or must rebuild.
+    public var viewTag: String?
+
+    /// Side table for primitive-owned persistent state that must survive a
+    /// recompose. Keyed by an arbitrary string chosen by the primitive.
+    /// Example: `TextField` stores its `FieldState` (cursor, selection)
+    /// here so editing state is not reset every time the parent recomposes.
+    public var attachments: [String: Any] = [:]
+
     public init() {}
 
     // MARK: - Tree mutation
