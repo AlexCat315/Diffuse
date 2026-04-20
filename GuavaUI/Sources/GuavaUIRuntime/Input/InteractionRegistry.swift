@@ -14,6 +14,12 @@ public enum EventResult: Sendable {
     case ignored
 }
 
+/// Distinguishes button-down from button-up within the unified pointer handler.
+public enum PointerPhase: Sendable {
+    case down
+    case up
+}
+
 /// Per-node handler closures registered by Compose-layer modifiers.
 ///
 /// `Node` itself stays free of handler state so Runtime types remain
@@ -21,7 +27,7 @@ public enum EventResult: Sendable {
 public final class InteractionRegistry {
 
     public struct Handlers {
-        public var pointer: ((MouseButtonEvent, EventPhase) -> EventResult)?
+        public var pointer: ((MouseButtonEvent, PointerPhase, EventPhase) -> EventResult)?
         public var motion:  ((MouseMotionEvent, EventPhase) -> EventResult)?
         public var wheel:   ((MouseWheelEvent,  EventPhase) -> EventResult)?
         public var key:     ((KeyEvent,         EventPhase) -> EventResult)?
@@ -44,7 +50,7 @@ public final class InteractionRegistry {
     }
 
     public func setPointer(_ node: Node,
-                           _ handler: @escaping (MouseButtonEvent, EventPhase) -> EventResult) {
+                           _ handler: @escaping (MouseButtonEvent, PointerPhase, EventPhase) -> EventResult) {
         var h = handlers(for: node); h.pointer = handler
         table[ObjectIdentifier(node)] = h
     }

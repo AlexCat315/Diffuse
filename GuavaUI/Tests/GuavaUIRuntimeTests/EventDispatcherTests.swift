@@ -29,7 +29,7 @@ struct EventDispatcherTests {
             }
             return handle ? .handled : .ignored
         }
-        interactions.setPointer(node) { _, phase in record(phase) }
+        interactions.setPointer(node) { _, _, phase in record(phase) }
         interactions.setMotion(node)  { _, phase in record(phase) }
         interactions.setWheel(node)   { _, phase in record(phase) }
         interactions.setKey(node)     { _, phase in record(phase) }
