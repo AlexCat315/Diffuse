@@ -438,68 +438,290 @@ GuavaUI 不是独立渲染进程，而是与引擎同进程协作。
 
 这意味着 ViewportHost 是 GuavaUI 的关键边界组件。
 
-## 11. 首版里程碑
+## 11. 路线图
 
-### P0. Runtime 骨架
+### Phase 0 — 包骨架 ✅
 
-- NodeTree
-- dirty flags
-- Recomposer skeleton
-- SDL3 platform host
-- wgpu draw list renderer
+**状态：已完成**
 
-验收：
+| 产出物 | 路径 |
+|--------|------|
+| SwiftPM 包定义 | `GuavaUI/Package.swift` |
+| Runtime 占位 | `GuavaUI/Sources/GuavaUIRuntime/GuavaUIRuntime.swift` |
+| Compose 占位 | `GuavaUI/Sources/GuavaUICompose/GuavaUICompose.swift` |
 
-- 能开窗
-- 能显示简单按钮和文本
-- 状态变化能触发子树更新
+验收命令：
+```bash
+cd GuavaUI && swift build
+```
 
-### P1. Compose 最小集
+---
 
-- View / ComposeBuilder
-- Modifier
-- State / Binding
-- Row / Column / Box / Text / Button
+### Phase 1 — NodeTree + SDL3 平台宿主
 
-验收：
+**目标：能开窗，SDL3 事件进入 GuavaUI 事件流。**
 
-- 用声明式 API 写出简单工具栏和按钮行
+新增文件：
 
-### P2. Desktop Tooling 基础
+```
+GuavaUI/Sources/GuavaUIRuntime/
+├── Node.swift           # Node 类型、子节点列表、dirty flag
+├── NodeTree.swift       # 根节点持有、深度优先遍历
+├── PlatformHost.swift   # protocol PlatformHost { func run(root:) }
+└── SDL3PlatformHost.swift  # SDL3 实现：创建窗口、事件轮询、驱动 tick
+```
 
-- ScrollView
-- List
-- Tree
-- Tabs
-- Split
-- PropertyGrid
+关键接口：
+```swift
+// NodeTree.swift
+public final class NodeTree {
+    public var root: Node?
+    public func markDirty(_ node: Node)
+    public func flush()       // 深度优先遍历 dirty 节点，调用 layout + draw
+}
 
-验收：
-
-- 能搭出 hierarchy + inspector 基础界面
-
-### P3. Dock 与 Viewport
-
-- DockContainer
-- Panel 持久化
-- ViewportHost
-- 输入转发
-
-验收：
-
-- 能跑编辑器核心三块：Hierarchy、Viewport、Inspector
-
-### P4. 平台打磨
-
-- 剪贴板
-- 文件对话框
-- IME
-- 快捷键
-- 平台适配
+// SDL3PlatformHost.swift
+public final class SDL3PlatformHost: PlatformHost {
+    public init(title: String, width: Int, height: Int)
+    public func run(root: @escaping () -> Node)   // 事件轮询 + 帧驱动
+}
+```
 
 验收：
+```bash
+cd GuavaUI && swift run GuavaUIDemo  # 打开空白窗口，关闭不崩溃
+```
 
-- 桌面工具可用性达到日常开发级别
+---
+
+### Phase 2 — Recomposer + State / Binding
+
+**目标：状态变化能自动触发最小子树重组。**
+
+新增文件：
+
+```
+GuavaUI/Sources/GuavaUIRuntime/
+├── Recomposer.swift         # 收集 @State 写入，批量触发脏标记
+├── State.swift              # @State property wrapper
+├── Binding.swift            # Binding<T>，双向绑定
+└── CompositionLocal.swift   # 跨层传值（主题色、字号等）
+```
+
+关键接口：
+```swift
+// State.swift
+@propertyWrapper
+public struct State<Value>: DynamicProperty {
+    public var wrappedValue: Value { get nonmutating set }
+    public var projectedValue: Binding<Value> { get }
+}
+
+// Recomposer.swift
+public final class Recomposer {
+    public static let shared: Recomposer
+    public func invalidate(scope: AnyObject)   // 标记需要重组的作用域
+    public func commitAll()                     // 在帧开始时批量执行
+}
+```
+
+验收：
+```swift
+// 点击按钮后文本变化，不触发整棵树重组
+struct Counter: View {
+    @State var count = 0
+    var body: some View {
+        Button("count: \(count)") { count += 1 }
+    }
+}
+```
+
+---
+
+### Phase 3 — Layout 引擎（Yoga C ABI）
+
+**目标：支持 Flexbox 布局，Row / Column / Box 正确排列。**
+
+依赖：[Yoga](https://github.com/nicklockwood/Yoga) 通过 C ABI 接入，不引入任何 ObjC/C++ 依赖。
+
+新增文件：
+
+```
+GuavaUI/Sources/
+├── CYoga/                   # systemLibrary target，pkgConfig: "yoga"
+│   └── module.modulemap
+└── GuavaUIRuntime/
+    ├── LayoutNode.swift     # 封装 YGNodeRef，映射 FlexProps
+    ├── FlexProps.swift      # direction / align / justify / padding / margin
+    └── LayoutPass.swift     # 递归 YGNodeCalculateLayout，写回 Node.frame
+```
+
+关键接口：
+```swift
+// LayoutNode.swift
+public final class LayoutNode {
+    public var flexDirection: FlexDirection
+    public var alignItems: Align
+    public var padding: EdgeInsets
+    public func calculate(width: Float, height: Float)
+    public var frame: CGRect { get }      // 计算后可读
+}
+```
+
+验收：
+```bash
+# Row { Text("A"); Text("B") } 横向排列，无重叠
+cd GuavaUI && swift test --filter LayoutTests
+```
+
+---
+
+### Phase 4 — 文本系统（HarfBuzz + FreeType C ABI）
+
+**目标：UTF-8 文本正确 shaping，像素级渲染进 DrawList。**
+
+依赖：`libharfbuzz`、`libfreetype` 通过 `systemLibrary` 接入。
+
+新增文件：
+
+```
+GuavaUI/Sources/
+├── CHarfBuzz/               # systemLibrary, pkgConfig: "harfbuzz"
+├── CFreeType/               # systemLibrary, pkgConfig: "freetype2"
+└── GuavaUIRuntime/
+    ├── FontAtlas.swift      # FreeType 光栅化 → 位图 Atlas，上传 wgpu Texture
+    ├── TextShaper.swift     # HarfBuzz shaping → glyph run
+    └── TextLayout.swift     # 折行、对齐、行高计算
+```
+
+关键接口：
+```swift
+// TextShaper.swift
+public struct GlyphRun {
+    public let glyphs: [GlyphInfo]   // glyphId + advance + offset
+    public let font: FontRef
+    public let fontSize: Float
+}
+public final class TextShaper {
+    public func shape(text: String, font: FontRef, size: Float) -> GlyphRun
+}
+
+// FontAtlas.swift
+public final class FontAtlas {
+    public static let shared: FontAtlas
+    public func glyph(id: UInt32, font: FontRef, size: Float) -> AtlasEntry  // UV + metrics
+    public func flush(device: WGPUDevice)   // 上传脏 tiles
+}
+```
+
+验收：
+```bash
+# 渲染包含中文的文本行，字形正确，无乱码
+cd GuavaUI && swift run GuavaUIDemo --test-text
+```
+
+---
+
+### Phase 5 — DrawList + wgpu 渲染器
+
+**目标：所有 UI 元素写进 DrawList，单次 GPU Pass 提交。**
+
+新增文件：
+
+```
+GuavaUI/Sources/GuavaUIRuntime/
+├── DrawList.swift           # 矩形、圆角矩形、文本、图片、Clip 命令序列
+├── DrawListRenderer.swift   # 消费 DrawList，生成 wgpu RenderPass
+├── UIVertex.swift           # position + uv + color (packed)
+└── UIShader.metal           # 顶点/片段着色器（UI 专用管线）
+```
+
+共享 Engine wgpu device：
+```swift
+// GuavaUI 不创建自己的 device，由外部注入
+public final class DrawListRenderer {
+    public init(device: WGPUDevice, surface: WGPUSurface)
+    public func render(list: DrawList, viewport: CGRect)
+}
+```
+
+验收：
+```bash
+# 窗口内出现可见的圆角矩形 + 文本，帧率 ≥ 60fps
+cd GuavaUI && swift run GuavaUIDemo --benchmark
+```
+
+---
+
+### Phase 6 — Compose API + 基础组件
+
+**目标：声明式 API 可用，覆盖日常 70% 的布局需求。**
+
+新增文件：
+
+```
+GuavaUI/Sources/GuavaUICompose/
+├── View.swift               # protocol View { @ViewBuilder var body }
+├── ViewBuilder.swift        # @resultBuilder ViewBuilder
+├── Modifier.swift           # protocol ViewModifier，.modifier() chain
+├── BuiltinModifiers.swift   # .padding / .background / .foreground / .frame / .clip
+├── Box.swift
+├── Row.swift
+├── Column.swift
+├── Text.swift
+├── Button.swift
+├── Image.swift
+├── Spacer.swift
+├── Divider.swift
+└── ScrollView.swift
+```
+
+API 示例（目标形态）：
+```swift
+Row {
+    Image(systemName: "folder")
+    Text("Assets")
+        .foregroundColor(.secondary)
+    Spacer()
+    Button("Add") { /* ... */ }
+}
+.padding(8)
+.background(Color.surface)
+```
+
+验收：
+```bash
+cd GuavaUI && swift test --filter ComposeTests
+# 覆盖：View 组合、Modifier 链、State 驱动刷新、ScrollView 滚动
+```
+
+---
+
+### Phase 7 — 桌面工具组件
+
+**目标：Editor 可以完全切换到 GuavaUI，不再依赖占位渲染器。**
+
+新增文件：
+
+```
+GuavaUI/Sources/GuavaUICompose/
+├── List.swift               # 虚拟化列表，大数据集 O(visible) 渲染
+├── Tree.swift               # 可折叠树，支持拖拽排序
+├── Tabs.swift               # 选项卡条
+├── SplitView.swift          # 可拖拽分割面板
+├── PropertyGrid.swift       # 键值属性网格，支持自定义 cell
+├── ContextMenu.swift        # 右键菜单
+├── DockContainer.swift      # 多面板浮动/吸附布局（同 EditorCore.DockModel）
+├── Panel.swift              # DockContainer 内的一个面板
+└── ViewportHost.swift       # 在 GuavaUI 布局中嵌入原生 wgpu 渲染区域
+```
+
+验收：
+```bash
+# Editor 构建成功，核心面板（Hierarchy、Inspector、Viewport）
+# 全部运行在 GuavaUI 组件上，无 MetalPlaceholderRenderer 依赖
+cd Editor && swift build && swift run GuavaEditor
+```
 
 ## 12. 风险与约束
 
