@@ -1,15 +1,15 @@
 {
   "name": "guava-engine",
   "private": true,
-  "description": "Guava Engine — Zig game engine with Electron editor",
+  "description": "Guava Engine — Swift game engine with GuavaUI and editor",
   "scripts": {
-    "codegen": "cd packages/editor && npm run codegen",
-    "compile-commands": "cd packages/engine && zig build compile-commands",
-    "editor:dev": "cd packages/editor && npm run dev",
-    "editor:build": "cd packages/editor && npm run build",
-    "editor:install": "cd packages/editor && npm install",
-    "engine:build": "cd packages/engine && zig build install",
-    "engine:run-editor": "cd packages/engine && zig build run-editor",
-    "engine:run-editor-fast": "cd packages/engine && zig build run-editor -Doptimize=ReleaseFast"
+    "engine:build": "cd Engine && swift build",
+    "engine:run": "cd Engine && swift run",
+    "guavaui:build": "cd GuavaUI && swift build",
+    "editor:build": "cd Editor && swift build",
+    "editor:run": "cd Editor && swift run EditorApp",
+    "wgpu:fetch": "cd Engine && bash scripts/fetch-wgpu.sh",
+    "legacy:editor:dev": "cd legacy/react-editor && npm run dev",
+    "legacy:engine:build": "cd legacy/zig-engine && zig build install"
   }
 }

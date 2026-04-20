@@ -1,7 +1,0 @@
-# Build artifacts
-.build/
-.swiftpm/
-*.xcodeproj/
-
-# Vendored dependencies (fetched via scripts/fetch-wgpu.sh)
-vendor/
