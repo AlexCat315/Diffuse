@@ -12,6 +12,10 @@ public final class ManagedFont {
     internal let ftFace: FT_Face
     internal let hbFont: OpaquePointer  // hb_font_t*
 
+    /// Underlying FreeType face — exposed for callers that need to bind a
+    /// `TextShaper` directly (e.g. the Compose `Text` primitive).
+    public var rawFace: FT_Face { ftFace }
+
     // Pinned buffer — must stay alive as long as ftFace.
     private let buffer: UnsafeMutablePointer<UInt8>
     private let bufferSize: Int
