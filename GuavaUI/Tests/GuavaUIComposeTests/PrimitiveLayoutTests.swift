@@ -120,6 +120,42 @@ struct PrimitiveLayoutTests {
         #expect(box?.clipsToBounds == true)
     }
 
+    @Test("CornerRadius modifier sets node radius")
+    func cornerRadius() {
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: Box { EmptyView() }.cornerRadius(12))
+        let box = tree.root?.children.first
+        #expect(box?.cornerRadius == 12)
+    }
+
+    @Test("Image draw uses texture tint and fixed layout size")
+    func imageDrawUsesTintAndOpacity() {
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            Image(textureID: 7, width: 32, height: 24)
+                .foregroundColor(Color(red: 255, green: 0, blue: 0))
+                .opacity(0.5)
+                .cornerRadius(8)
+        )
+
+        graph.computeLayout(width: 100, height: 100)
+        let image = tree.root?.children.first
+        let list = DrawList()
+        image?.draw?(list, .zero)
+
+        #expect(image?.frame.size == CGSize(width: 32, height: 24))
+        #expect(list.batches.first?.textureID == 7)
+        #expect(list.vertices.count > 4)
+
+        let packed = list.vertices.first!.color
+        let redByte = packed & 0xFF
+        let alphaByte = (packed >> 24) & 0xFF
+        #expect(redByte >= 250)
+        #expect(alphaByte >= 126 && alphaByte <= 129)
+    }
+
     @Test("Modifier stack: padding + frame + background")
     func stack() {
         let tree = NodeTree()

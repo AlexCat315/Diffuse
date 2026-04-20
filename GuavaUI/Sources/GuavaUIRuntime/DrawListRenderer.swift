@@ -174,6 +174,47 @@ public final class DrawListRenderer {
         )
     }
 
+    /// Register or replace an RGBA color texture under `id`. The source data
+    /// must be tightly packed RGBA8 (4 bytes per pixel, `width * 4 * height`
+    /// total bytes); this is the path used by `Image` primitives.
+    public func registerColorTexture(id: TextureID,
+                                     pixels: UnsafePointer<UInt8>,
+                                     width: UInt32, height: UInt32) throws {
+        precondition(id != .none, "TextureID 0 is reserved")
+        guard bindGroupLayout != nil else {
+            preconditionFailure("registerColorTexture requires a prior configure(format:)")
+        }
+        let alignedRowBytes: UInt32 = (((width * 4) + 255) / 256) * 256
+        let srcRowBytes = Int(width * 4)
+        var aligned = [UInt8](repeating: 0, count: Int(alignedRowBytes * height))
+        for row in 0..<Int(height) {
+            let dstRowBase = row * Int(alignedRowBytes)
+            let srcRowBase = row * srcRowBytes
+            for col in 0..<srcRowBytes {
+                aligned[dstRowBase + col] = pixels[srcRowBase + col]
+            }
+        }
+        let tex = try backend.createTexture(
+            width: width, height: height,
+            format: .rgba8Unorm,
+            usage: [.textureBinding, .copyDst]
+        )
+        aligned.withUnsafeBytes { raw in
+            backend.writeTexture(tex,
+                                 data: raw.baseAddress!,
+                                 dataSize: aligned.count,
+                                 bytesPerRow: alignedRowBytes,
+                                 rowsPerImage: height,
+                                 width: width, height: height)
+        }
+        let view = try tex.createView()
+        let bg = try makeBindGroup(view: view)
+        textures[id] = GPUTextureSlot(
+            texture: tex, view: view,
+            bindGroup: bg, width: width, height: height
+        )
+    }
+
     // MARK: - Frame submission
 
     /// Issue draw calls for `list` inside an already-begun render pass.

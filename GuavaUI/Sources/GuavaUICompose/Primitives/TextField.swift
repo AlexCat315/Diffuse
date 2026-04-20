@@ -98,7 +98,9 @@ public struct TextField: _PrimitiveView {
             }
             registry.setMotion(node) { event, _ in
                 guard state.isDragging else { return .ignored }
-                let target = snapshot.characterIndex(atWindowX: event.x, state: state)
+                let target = snapshot.characterIndex(atWindowX: event.x,
+                                                    state: state,
+                                                    node: node)
                 if state.selectionAnchor == nil {
                     state.selectionAnchor = state.cursorIndex
                 }
@@ -277,31 +279,34 @@ public struct TextField: _PrimitiveView {
         let isFocused = (FocusChainHolder.current?.focused === node)
         let current = text.wrappedValue
         let displayText = current.isEmpty ? placeholder : current
-        let renderColor: Color =
+        let resolvedFont = resolvedFont(node: node, env: env)
+        let resolvedLineHeight = resolvedLineHeight(node: node, env: env)
+        let renderBaseColor: Color =
             current.isEmpty
                 ? placeholderColor
                 : (textColor ?? node.foregroundColor ?? env.defaultColor)
+        let renderColor = renderBaseColor.multipliedAlpha(node.opacity)
 
         // Selection highlight first (drawn under the glyphs).
         if isFocused, let range = selectionRange(state), !current.isEmpty {
-            let xLo = cursorX(in: current, upTo: range.lowerBound, env: env)
-            let xHi = cursorX(in: current, upTo: range.upperBound, env: env)
+            let xLo = cursorX(in: current, upTo: range.lowerBound, env: env, font: resolvedFont)
+            let xHi = cursorX(in: current, upTo: range.upperBound, env: env, font: resolvedFont)
             list.addRect(
                 UIRect(x: Float(origin.x) + xLo,
                        y: Float(origin.y),
                        width: max(1, xHi - xLo),
-                       height: env.defaultLineHeight),
-                color: selectionColor
+                       height: resolvedLineHeight),
+                color: selectionColor.multipliedAlpha(node.opacity)
             )
         }
 
-        let glyphs = env.shaper.shape(text: displayText)
+        let glyphs = env.shape(text: displayText, font: resolvedFont)
         let result = TextLayout.layout(
             shapedGlyphs: glyphs,
             text: displayText,
             atlas: env.atlas,
             maxWidth: .infinity,
-            lineHeight: env.defaultLineHeight,
+            lineHeight: resolvedLineHeight,
             alignment: .leading
         )
         list.addText(result,
@@ -313,30 +318,34 @@ public struct TextField: _PrimitiveView {
         guard isFocused, selectionRange(state) == nil else { return }
         let cursorXValue = cursorX(in: current,
                                    upTo: clamp(state.cursorIndex, 0, current.count),
-                                   env: env)
+                                   env: env,
+                                   font: resolvedFont)
         let cursorRect = UIRect(
             x: Float(origin.x) + cursorXValue,
             y: Float(origin.y),
             width: 1,
-            height: env.defaultLineHeight
+            height: resolvedLineHeight
         )
-        list.addRect(cursorRect, color: cursorColor)
+        list.addRect(cursorRect, color: cursorColor.multipliedAlpha(node.opacity))
     }
 
     /// Width of `text` shaped from index 0 up to `count` characters. Used to
     /// place the cursor and selection edges. Re-shapes each frame; v1
     /// simplicity over caching.
-    private func cursorX(in text: String, upTo count: Int, env: TextEnvironment) -> Float {
+    private func cursorX(in text: String,
+                         upTo count: Int,
+                         env: TextEnvironment,
+                         font: Font) -> Float {
         guard count > 0 else { return 0 }
         let endIdx = text.index(text.startIndex, offsetBy: count)
         let prefix = String(text[text.startIndex..<endIdx])
-        let glyphs = env.shaper.shape(text: prefix)
+        let glyphs = env.shape(text: prefix, font: font)
         let layout = TextLayout.layout(
             shapedGlyphs: glyphs,
             text: prefix,
             atlas: env.atlas,
             maxWidth: .infinity,
-            lineHeight: env.defaultLineHeight,
+            lineHeight: env.resolvedLineHeight(font: font, override: nil),
             alignment: .leading
         )
         return layout.totalWidth
@@ -345,22 +354,26 @@ public struct TextField: _PrimitiveView {
     /// Snap the cursor to the character boundary nearest a window-space x.
     /// Convenience wrapper around `characterIndex(atWindowX:)` that also
     /// writes the result back to `state.cursorIndex`.
-    private func positionCursor(atWindowX windowX: Float, state: FieldState) {
-        state.cursorIndex = characterIndex(atWindowX: windowX, state: state)
+    private func positionCursor(atWindowX windowX: Float,
+                                state: FieldState,
+                                node: Node) {
+        state.cursorIndex = characterIndex(atWindowX: windowX, state: state, node: node)
     }
 
     /// Map a window-space x coordinate to a character index.
     /// Walks shaped glyph advances and picks the side of the midline. Treats
     /// glyph index as character index — accurate for ASCII; ligatures, CJK,
     /// and emoji are still approximate.
-    private func characterIndex(atWindowX windowX: Float, state: FieldState) -> Int {
+    private func characterIndex(atWindowX windowX: Float,
+                                state: FieldState,
+                                node: Node) -> Int {
         let current = text.wrappedValue
         guard !current.isEmpty, let env = TextEnvironmentHolder.current else {
             return 0
         }
         let localX = windowX - Float(state.lastDrawOrigin.x)
         if localX <= 0 { return 0 }
-        let glyphs = env.shaper.shape(text: current)
+        let glyphs = env.shape(text: current, font: resolvedFont(node: node, env: env))
         var pen: Float = 0
         for (i, g) in glyphs.enumerated() {
             let mid = pen + g.xAdvance * 0.5
@@ -386,7 +399,7 @@ public struct TextField: _PrimitiveView {
             state.isDragging = false
         case 2:
             // Double click: select the word under the cursor.
-            let target = characterIndex(atWindowX: event.x, state: state)
+            let target = characterIndex(atWindowX: event.x, state: state, node: node)
             let (lo, hi) = wordBounds(in: text.wrappedValue, around: target)
             state.selectionAnchor = lo
             state.cursorIndex = hi
@@ -394,10 +407,21 @@ public struct TextField: _PrimitiveView {
         default:
             // Single click: place the cursor and start a drag selection.
             state.selectionAnchor = nil
-            positionCursor(atWindowX: event.x, state: state)
+            positionCursor(atWindowX: event.x, state: state, node: node)
             state.isDragging = true
             PointerCaptureHolder.current?.acquire(node)
         }
+    }
+
+    private func resolvedFont(node: Node, env: TextEnvironment) -> Font {
+        env.resolvedFont(node.attachments[StyleAttachmentKey.font] as? Font)
+    }
+
+    private func resolvedLineHeight(node: Node, env: TextEnvironment) -> Float {
+        env.resolvedLineHeight(
+            font: resolvedFont(node: node, env: env),
+            override: node.attachments[StyleAttachmentKey.lineHeight] as? Float
+        )
     }
 
     /// Find the word covering `index` in `s`. A "word" is a maximal run of

@@ -118,4 +118,34 @@ struct NodeRendererTests {
         // Child quad rendered at y = -contentOffset.y.
         #expect(list.vertices.first?.posY == -30)
     }
+
+    @Test("cornerRadius switches the background fill to a rounded-rect path")
+    func cornerRadiusEmitsRoundedRect() {
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        root.backgroundColor = Color.white
+        root.cornerRadius = 12
+
+        let list = DrawList()
+        NodeRenderer().render(root: root, into: list)
+
+        // Plain rect emits 4 verts; rounded-rect decomposes into many more
+        // (centre quad + edges + per-corner triangle fans).
+        #expect(list.vertices.count > 4)
+        #expect(list.batches.count == 1)
+        #expect(list.batches[0].textureID == .none)
+    }
+
+    @Test("cornerRadius == 0 keeps the plain rect path")
+    func cornerRadiusZeroIsPlain() {
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        root.backgroundColor = Color.white
+        root.cornerRadius = 0
+
+        let list = DrawList()
+        NodeRenderer().render(root: root, into: list)
+
+        #expect(list.vertices.count == 4)
+    }
 }

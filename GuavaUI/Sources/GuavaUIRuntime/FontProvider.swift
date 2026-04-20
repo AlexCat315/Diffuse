@@ -9,6 +9,8 @@ public final class ManagedFont {
     public let id: Int
     /// PostScript name (e.g. ".SFNS-Regular", "PingFangSC-Regular").
     public let postScriptName: String
+    /// Point size used when the FreeType face was configured.
+    public let pointSize: Float
     internal let ftFace: FT_Face
     internal let hbFont: OpaquePointer  // hb_font_t*
 
@@ -20,10 +22,12 @@ public final class ManagedFont {
     private let buffer: UnsafeMutablePointer<UInt8>
     private let bufferSize: Int
 
-    init(id: Int, postScriptName: String, ftFace: FT_Face, hbFont: OpaquePointer,
+    init(id: Int, postScriptName: String, pointSize: Float,
+         ftFace: FT_Face, hbFont: OpaquePointer,
          buffer: UnsafeMutablePointer<UInt8>, bufferSize: Int) {
         self.id = id
         self.postScriptName = postScriptName
+        self.pointSize = pointSize
         self.ftFace = ftFace
         self.hbFont = hbFont
         self.buffer = buffer
@@ -59,12 +63,13 @@ public final class FontProvider {
     private var primaryPSName: String?
 
     /// Creates a FontProvider with the given font size.
-    public init(size: Float) {
+    public init(size: Float, idBase: Int = 0) {
         var lib: FT_Library?
         let err = FT_Init_FreeType(&lib)
         precondition(err == 0, "FT_Init_FreeType failed: \(err)")
         self.ftLibrary = lib!
         self.size = size
+        self.nextFontID = idBase
     }
 
     deinit {
@@ -84,14 +89,15 @@ public final class FontProvider {
     /// Registers all loaded fonts into the given atlas for multi-font rasterization.
     public func registerAllFonts(in atlas: FontAtlas) {
         for font in fonts.values {
-            atlas.registerFace(font.ftFace, fontID: font.id)
+            atlas.registerFace(font.ftFace, fontID: font.id, size: font.pointSize)
         }
     }
 
     /// Loads the primary font by family name or PostScript name.
     @discardableResult
-    public func loadPrimaryFont(name: String) -> ManagedFont? {
-        let font = loadFontByName(name)
+    public func loadPrimaryFont(name: String,
+                                weight: FontWeight = .regular) -> ManagedFont? {
+        let font = loadFontByName(name, weight: weight)
         if let font {
             primaryPSName = font.postScriptName
         }
@@ -184,11 +190,27 @@ public final class FontProvider {
 
     // MARK: - Private
 
-    private func loadFontByName(_ name: String) -> ManagedFont? {
-        let ctFont = CTFontCreateWithName(name as CFString, CGFloat(size), nil)
+    private func loadFontByName(_ name: String,
+                                weight: FontWeight = .regular) -> ManagedFont? {
+        let ctFont = configuredCTFont(named: name, weight: weight)
         let psName = CTFontCopyPostScriptName(ctFont) as String
         if let existing = fonts[psName] { return existing }
         return loadFontFromCTFont(ctFont, psName: psName)
+    }
+
+    private func configuredCTFont(named name: String,
+                                  weight: FontWeight) -> CTFont {
+        let base = CTFontCreateWithName(name as CFString, CGFloat(size), nil)
+        guard weight != .regular else { return base }
+
+        let attrs: [CFString: Any] = [
+            kCTFontTraitsAttribute: [kCTFontWeightTrait: weight.coreTextWeight]
+        ]
+        let descriptor = CTFontDescriptorCreateCopyWithAttributes(
+            CTFontCopyFontDescriptor(base),
+            attrs as CFDictionary
+        )
+        return CTFontCreateWithFontDescriptor(descriptor, CGFloat(size), nil)
     }
 
     private func loadFontFromCTFont(_ ctFont: CTFont, psName: String) -> ManagedFont? {
@@ -223,7 +245,8 @@ public final class FontProvider {
         nextFontID += 1
 
         let managed = ManagedFont(
-            id: id, postScriptName: psName, ftFace: ftFace, hbFont: hbFont,
+            id: id, postScriptName: psName, pointSize: size,
+            ftFace: ftFace, hbFont: hbFont,
             buffer: buffer, bufferSize: data.count
         )
         fonts[psName] = managed

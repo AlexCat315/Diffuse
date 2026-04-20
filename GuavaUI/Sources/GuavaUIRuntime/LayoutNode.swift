@@ -16,6 +16,10 @@ public final class LayoutNode: @unchecked Sendable {
     /// Retained children — prevents the underlying YGNodeRefs from dangling.
     public private(set) var children: [LayoutNode] = []
 
+    /// Side table for style metadata that affects measurement but is not part
+    /// of Yoga's native style surface.
+    public var attachments: [String: Any] = [:]
+
     // MARK: - Init / deinit
 
     public init() {
