@@ -56,4 +56,18 @@ public struct State<Value>: DynamicProperty {
             }
         )
     }
+
+    // MARK: - ViewGraph escape hatch (Phase 6.2)
+
+    /// Identity of the underlying storage — `ViewGraph` uses this as a stable
+    /// scope key across body re-evaluations.
+    public var _storageIdentity: ObjectIdentifier {
+        ObjectIdentifier(_storage)
+    }
+
+    /// Install (or clear) the change observer. `ViewGraph` wires this to
+    /// `Recomposer.invalidate` so writes trigger a recompose.
+    public func _setOnChange(_ handler: (() -> Void)?) {
+        _storage.onChange = handler
+    }
 }
