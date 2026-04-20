@@ -10,7 +10,7 @@ import PlatformShell
 public final class SDL3PlatformHost: PlatformHost {
 
     private let title: String
-    private let recomposer: Recomposer
+    public let recomposer: Recomposer
     private var shell: (any Shell)?
     private var _isRunning: Bool = false
 
@@ -29,8 +29,10 @@ public final class SDL3PlatformHost: PlatformHost {
 
     /// - Parameters:
     ///   - title: Window title bar text.
-    ///   - recomposer: The recomposer to drain each frame. Defaults to `Recomposer.shared`.
-    public init(title: String = "GuavaUI", recomposer: Recomposer = .shared) {
+    ///   - recomposer: The recomposer to drain each frame. A fresh instance per
+    ///     host by default; pass an existing one only for cross-host coordination
+    ///     (currently no use case — see blueprint §9.4).
+    public init(title: String = "GuavaUI", recomposer: Recomposer = Recomposer()) {
         self.title = title
         self.recomposer = recomposer
     }
