@@ -1,705 +1,24 @@
+/* ════════════════════════════════════════════════════════════════════
+   wgpu_bridge.c — v29 native bridge.
+   Direct calls into wgpu-native v29 (no dlopen, no shadow structs).
+   ABI is fully checked by the C compiler against vendor/wgpu/include.
+   ════════════════════════════════════════════════════════════════════ */
+
 #include "wgpu_bridge.h"
 
-#include <dlfcn.h>
+#include <webgpu/webgpu.h>
+#include <webgpu/wgpu.h>
+
 #include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
-/* ═══════════════════════════════════════════════════════════════════
-   Internal wgpu types — must match the ABI of wgpu-native v22.x.
-   ═══════════════════════════════════════════════════════════════════ */
-
-typedef enum WGPURequestAdapterStatus {
-    WGPURequestAdapterStatus_Success = 0,
-    WGPURequestAdapterStatus_Unavailable = 1,
-    WGPURequestAdapterStatus_Error = 2,
-    WGPURequestAdapterStatus_Unknown = 3,
-} WGPURequestAdapterStatus;
-
-typedef enum WGPURequestDeviceStatus {
-    WGPURequestDeviceStatus_Success = 0,
-    WGPURequestDeviceStatus_Error = 1,
-    WGPURequestDeviceStatus_Unknown = 2,
-} WGPURequestDeviceStatus;
-
-typedef struct WGPUChainedStruct {
-    struct WGPUChainedStruct const* next;
-    uint32_t sType;
-} WGPUChainedStruct;
-
-/* sType constants (webgpu.h v22) */
-#define WGPU_STYPE_SURFACE_FROM_METAL_LAYER  0x00000004
-#define WGPU_STYPE_SURFACE_FROM_WINDOWS_HWND 0x00000005
-#define WGPU_STYPE_SURFACE_FROM_XLIB_WINDOW  0x00000006
-#define WGPU_STYPE_SHADER_SOURCE_WGSL        0x00000005
-
-/* ─── Adapter / Device request ──────────────────────────────────── */
-
-typedef struct WGPURequestAdapterOptions {
-    const void* nextInChain;
-    void* compatibleSurface;
-    int powerPreference;
-    int forceFallbackAdapter;
-} WGPURequestAdapterOptions;
-
-typedef struct WGPUDeviceDescriptor {
-    const void* nextInChain;
-    const char* label;
-} WGPUDeviceDescriptor;
-
-typedef void (*WGPURequestAdapterCallback)(WGPURequestAdapterStatus status, WGPUAdapter adapter, const char* message, void* userdata);
-typedef void (*WGPURequestDeviceCallback)(WGPURequestDeviceStatus status, WGPUDevice device, const char* message, void* userdata);
-
-/* ─── Surface types ─────────────────────────────────────────────── */
-
-typedef struct WGPUSurfaceImpl* WGPUSurface_T;
-typedef struct WGPUTextureImpl* WGPUTexture_T;
-typedef struct WGPUTextureViewImpl* WGPUTextureView_T;
-typedef struct WGPUShaderModuleImpl* WGPUShaderModule_T;
-typedef struct WGPURenderPipelineImpl* WGPURenderPipeline_T;
-typedef struct WGPUPipelineLayoutImpl* WGPUPipelineLayout_T;
-typedef struct WGPUBufferImpl* WGPUBuffer_T;
-typedef struct WGPUCommandEncoderImpl* WGPUCommandEncoder_T;
-typedef struct WGPUCommandBufferImpl* WGPUCommandBuffer_T;
-typedef struct WGPURenderPassEncoderImpl* WGPURenderPassEncoder_T;
-
-typedef struct {
-    WGPUChainedStruct chain;
-    void* layer;
-} WGPUSurfaceSourceMetalLayer;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-} WGPUSurfaceDescriptor;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    WGPUDevice device;
-    uint32_t format;
-    uint32_t usage;
-    size_t viewFormatCount;
-    const uint32_t* viewFormats;
-    uint32_t alphaMode;
-    uint32_t width;
-    uint32_t height;
-    uint32_t presentMode;
-} WGPUSurfaceConfiguration;
-
-typedef struct {
-    WGPUTexture_T texture;
-    uint32_t suboptimal;
-    uint32_t status;
-} WGPUSurfaceTexture;
-
-/* ─── Shader types ──────────────────────────────────────────────── */
-
-typedef struct {
-    WGPUChainedStruct chain;
-    const char* code;
-} WGPUShaderSourceWGSL;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-} WGPUShaderModuleDescriptor;
-
-/* ─── Texture types ─────────────────────────────────────────────── */
-
-typedef struct {
-    uint32_t width;
-    uint32_t height;
-    uint32_t depthOrArrayLayers;
-} WGPUExtent3D;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-    uint32_t usage;
-    uint32_t dimension;
-    WGPUExtent3D size;
-    uint32_t format;
-    uint32_t mipLevelCount;
-    uint32_t sampleCount;
-    size_t viewFormatCount;
-    const uint32_t* viewFormats;
-} WGPUTextureDescriptor_I;
-
-/* ─── Buffer types ──────────────────────────────────────────────── */
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-    uint32_t usage;
-    uint64_t size;
-    uint32_t mappedAtCreation;
-} WGPUBufferDescriptor_I;
-
-/* ─── Pipeline types ────────────────────────────────────────────── */
-
-typedef struct {
-    uint32_t format;
-    uint64_t offset;
-    uint32_t shaderLocation;
-} WGPUVertexAttribute_I;
-
-typedef struct {
-    uint64_t arrayStride;
-    uint32_t stepMode;
-    size_t attributeCount;
-    const WGPUVertexAttribute_I* attributes;
-} WGPUVertexBufferLayout_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    WGPUShaderModule_T module;
-    const char* entryPoint;
-    size_t constantCount;
-    const void* constants;
-    size_t bufferCount;
-    const WGPUVertexBufferLayout_I* buffers;
-} WGPUVertexState_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    uint32_t format;
-    uint32_t writeMask;
-    const void* blend;
-} WGPUColorTargetState_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    WGPUShaderModule_T module;
-    const char* entryPoint;
-    size_t constantCount;
-    const void* constants;
-    size_t targetCount;
-    const WGPUColorTargetState_I* targets;
-} WGPUFragmentState_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    uint32_t topology;
-    uint32_t stripIndexFormat;
-    uint32_t frontFace;
-    uint32_t cullMode;
-} WGPUPrimitiveState_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    uint32_t count;
-    uint32_t mask;
-    uint32_t alphaToCoverageEnabled;
-} WGPUMultisampleState_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-    size_t bindGroupLayoutCount;
-    const void* const* bindGroupLayouts;
-} WGPUPipelineLayoutDescriptor_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-    WGPUPipelineLayout_T layout;
-    WGPUVertexState_I vertex;
-    WGPUPrimitiveState_I primitive;
-    const void* depthStencil;
-    WGPUMultisampleState_I multisample;
-    const WGPUFragmentState_I* fragment;
-} WGPURenderPipelineDescriptor_I;
-
-/* ─── Command / RenderPass types ────────────────────────────────── */
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-} WGPUCommandEncoderDescriptor_I;
-
-typedef struct {
-    double r, g, b, a;
-} WGPUColor_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    WGPUTextureView_T view;
-    uint32_t depthSlice;
-    WGPUTextureView_T resolveTarget;
-    uint32_t loadOp;
-    uint32_t storeOp;
-    WGPUColor_I clearValue;
-} WGPURenderPassColorAttachment_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-    size_t colorAttachmentCount;
-    const WGPURenderPassColorAttachment_I* colorAttachments;
-    const void* depthStencilAttachment;
-    const void* occlusionQuerySet;
-    const void* timestampWrites;
-} WGPURenderPassDescriptor_I;
-
-typedef struct {
-    WGPUTextureView_T view;
-    uint32_t depthLoadOp;
-    uint32_t depthStoreOp;
-    float depthClearValue;
-    uint32_t depthReadOnly;
-    uint32_t stencilLoadOp;
-    uint32_t stencilStoreOp;
-    uint32_t stencilClearValue;
-    uint32_t stencilReadOnly;
-} WGPURenderPassDepthStencilAttachment_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    uint32_t format;
-    uint32_t depthWriteEnabled;
-    uint32_t depthCompare;
-    uint32_t stencilFront_compare;
-    uint32_t stencilFront_failOp;
-    uint32_t stencilFront_depthFailOp;
-    uint32_t stencilFront_passOp;
-    uint32_t stencilBack_compare;
-    uint32_t stencilBack_failOp;
-    uint32_t stencilBack_depthFailOp;
-    uint32_t stencilBack_passOp;
-    uint32_t stencilReadMask;
-    uint32_t stencilWriteMask;
-    int32_t depthBias;
-    float depthBiasSlopeScale;
-    float depthBiasClamp;
-} WGPUDepthStencilState_I;
-
-/* ─── ImageCopyTexture / TextureDataLayout types ────────────────── */
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    WGPUTexture_T texture;
-    uint32_t mipLevel;
-    uint32_t originX;
-    uint32_t originY;
-    uint32_t originZ;
-    uint32_t aspect;
-} WGPUImageCopyTexture_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    uint64_t offset;
-    uint32_t bytesPerRow;
-    uint32_t rowsPerImage;
-} WGPUTextureDataLayout_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    WGPUBuffer_T buffer;
-    uint64_t offset;
-    uint32_t bytesPerRow;
-    uint32_t rowsPerImage;
-} WGPUImageCopyBuffer_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-    uint32_t format;
-    uint32_t dimension;
-    uint32_t baseMipLevel;
-    uint32_t mipLevelCount;
-    uint32_t baseArrayLayer;
-    uint32_t arrayLayerCount;
-    uint32_t aspect;
-} WGPUTextureViewDescriptor_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-} WGPUCommandBufferDescriptor_I;
-
-/* ═══════════════════════════════════════════════════════════════════
-   Function pointer typedefs
-   ═══════════════════════════════════════════════════════════════════ */
-
-/* Existing */
-typedef WGPUInstance (*PFN_wgpuCreateInstance)(const WGPUInstanceDescriptor*);
-typedef void (*PFN_wgpuInstanceRelease)(WGPUInstance);
-typedef void (*PFN_wgpuInstanceRequestAdapter)(WGPUInstance, const WGPURequestAdapterOptions*, WGPURequestAdapterCallback, void*);
-typedef void (*PFN_wgpuAdapterRequestDevice)(WGPUAdapter, const WGPUDeviceDescriptor*, WGPURequestDeviceCallback, void*);
-typedef void (*PFN_wgpuAdapterRelease)(WGPUAdapter);
-typedef void (*PFN_wgpuDeviceRelease)(WGPUDevice);
-typedef WGPUQueue (*PFN_wgpuDeviceGetQueue)(WGPUDevice);
-typedef void (*PFN_wgpuQueueRelease)(WGPUQueue);
-
-/* Surface */
-typedef WGPUSurface_T (*PFN_wgpuInstanceCreateSurface)(WGPUInstance, const WGPUSurfaceDescriptor*);
-typedef void (*PFN_wgpuSurfaceConfigure)(WGPUSurface_T, const WGPUSurfaceConfiguration*);
-typedef void (*PFN_wgpuSurfaceGetCurrentTexture)(WGPUSurface_T, WGPUSurfaceTexture*);
-typedef void (*PFN_wgpuSurfacePresent)(WGPUSurface_T);
-typedef void (*PFN_wgpuSurfaceUnconfigure)(WGPUSurface_T);
-typedef void (*PFN_wgpuSurfaceRelease)(WGPUSurface_T);
-
-/* Texture */
-typedef WGPUTexture_T (*PFN_wgpuDeviceCreateTexture)(WGPUDevice, const WGPUTextureDescriptor_I*);
-typedef WGPUTextureView_T (*PFN_wgpuTextureCreateView)(WGPUTexture_T, const void*);
-typedef void (*PFN_wgpuTextureRelease)(WGPUTexture_T);
-typedef void (*PFN_wgpuTextureViewRelease)(WGPUTextureView_T);
-
-/* Shader */
-typedef WGPUShaderModule_T (*PFN_wgpuDeviceCreateShaderModule)(WGPUDevice, const WGPUShaderModuleDescriptor*);
-typedef void (*PFN_wgpuShaderModuleRelease)(WGPUShaderModule_T);
-
-/* Pipeline */
-typedef WGPURenderPipeline_T (*PFN_wgpuDeviceCreateRenderPipeline)(WGPUDevice, const WGPURenderPipelineDescriptor_I*);
-typedef void (*PFN_wgpuRenderPipelineRelease)(WGPURenderPipeline_T);
-typedef WGPUPipelineLayout_T (*PFN_wgpuDeviceCreatePipelineLayout)(WGPUDevice, const WGPUPipelineLayoutDescriptor_I*);
-typedef void (*PFN_wgpuPipelineLayoutRelease)(WGPUPipelineLayout_T);
-
-/* Buffer */
-typedef WGPUBuffer_T (*PFN_wgpuDeviceCreateBuffer)(WGPUDevice, const WGPUBufferDescriptor_I*);
-typedef void (*PFN_wgpuQueueWriteBuffer)(WGPUQueue, WGPUBuffer_T, uint64_t, const void*, size_t);
-typedef void (*PFN_wgpuBufferRelease)(WGPUBuffer_T);
-
-/* Command encoder */
-typedef WGPUCommandEncoder_T (*PFN_wgpuDeviceCreateCommandEncoder)(WGPUDevice, const WGPUCommandEncoderDescriptor_I*);
-typedef WGPURenderPassEncoder_T (*PFN_wgpuCommandEncoderBeginRenderPass)(WGPUCommandEncoder_T, const WGPURenderPassDescriptor_I*);
-typedef WGPUCommandBuffer_T (*PFN_wgpuCommandEncoderFinish)(WGPUCommandEncoder_T, const WGPUCommandBufferDescriptor_I*);
-typedef void (*PFN_wgpuCommandEncoderRelease)(WGPUCommandEncoder_T);
-
-/* Render pass encoder */
-typedef void (*PFN_wgpuRenderPassEncoderSetPipeline)(WGPURenderPassEncoder_T, WGPURenderPipeline_T);
-typedef void (*PFN_wgpuRenderPassEncoderSetVertexBuffer)(WGPURenderPassEncoder_T, uint32_t, WGPUBuffer_T, uint64_t, uint64_t);
-typedef void (*PFN_wgpuRenderPassEncoderSetIndexBuffer)(WGPURenderPassEncoder_T, WGPUBuffer_T, uint32_t, uint64_t, uint64_t);
-typedef void (*PFN_wgpuRenderPassEncoderDraw)(WGPURenderPassEncoder_T, uint32_t, uint32_t, uint32_t, uint32_t);
-typedef void (*PFN_wgpuRenderPassEncoderDrawIndexed)(WGPURenderPassEncoder_T, uint32_t, uint32_t, uint32_t, int32_t, uint32_t);
-typedef void (*PFN_wgpuRenderPassEncoderSetBindGroup)(WGPURenderPassEncoder_T, uint32_t, void*, size_t, const uint32_t*);
-typedef void (*PFN_wgpuRenderPassEncoderEnd)(WGPURenderPassEncoder_T);
-typedef void (*PFN_wgpuRenderPassEncoderRelease)(WGPURenderPassEncoder_T);
-typedef void (*PFN_wgpuRenderPassEncoderSetViewport)(WGPURenderPassEncoder_T, float, float, float, float, float, float);
-typedef void (*PFN_wgpuRenderPassEncoderSetScissorRect)(WGPURenderPassEncoder_T, uint32_t, uint32_t, uint32_t, uint32_t);
-
-/* Queue submit */
-typedef void (*PFN_wgpuQueueSubmit)(WGPUQueue, size_t, const WGPUCommandBuffer_T*);
-typedef void (*PFN_wgpuCommandBufferRelease)(WGPUCommandBuffer_T);
-typedef void (*PFN_wgpuQueueWriteTexture)(WGPUQueue, const WGPUImageCopyTexture_I*, const void*, size_t, const WGPUTextureDataLayout_I*, const WGPUExtent3D*);
-
-/* Sampler */
-typedef struct WGPUSamplerImpl* WGPUSampler_T;
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-    uint32_t addressModeU;
-    uint32_t addressModeV;
-    uint32_t addressModeW;
-    uint32_t magFilter;
-    uint32_t minFilter;
-    uint32_t mipmapFilter;
-    float lodMinClamp;
-    float lodMaxClamp;
-    uint32_t compare;
-    uint16_t maxAnisotropy;
-} WGPUSamplerDescriptor_I;
-
-typedef WGPUSampler_T (*PFN_wgpuDeviceCreateSampler)(WGPUDevice, const WGPUSamplerDescriptor_I*);
-typedef void (*PFN_wgpuSamplerRelease)(WGPUSampler_T);
-
-/* Bind Group */
-typedef struct WGPUBindGroupImpl* WGPUBindGroup_T;
-typedef struct WGPUBindGroupLayoutImpl* WGPUBindGroupLayout_T;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    uint32_t type;
-    uint32_t hasDynamicOffset;
-    uint64_t minBindingSize;
-} WGPUBufferBindingLayout_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    uint32_t type;
-} WGPUSamplerBindingLayout_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    uint32_t sampleType;
-    uint32_t viewDimension;
-    uint32_t multisampled;
-} WGPUTextureBindingLayout_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    uint32_t access;
-    uint32_t format;
-    uint32_t viewDimension;
-} WGPUStorageTextureBindingLayout_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    uint32_t binding;
-    uint32_t visibility;
-    WGPUBufferBindingLayout_I buffer;
-    WGPUSamplerBindingLayout_I sampler;
-    WGPUTextureBindingLayout_I texture;
-    WGPUStorageTextureBindingLayout_I storageTexture;
-} WGPUBindGroupLayoutEntry_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-    size_t entryCount;
-    const WGPUBindGroupLayoutEntry_I* entries;
-} WGPUBindGroupLayoutDescriptor_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    uint32_t binding;
-    WGPUBuffer_T buffer;
-    uint64_t offset;
-    uint64_t size;
-    WGPUSampler_T sampler;
-    WGPUTextureView_T textureView;
-} WGPUBindGroupEntry_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-    WGPUBindGroupLayout_T layout;
-    size_t entryCount;
-    const WGPUBindGroupEntry_I* entries;
-} WGPUBindGroupDescriptor_I;
-
-/* Blend internal */
-typedef struct {
-    uint32_t operation;
-    uint32_t srcFactor;
-    uint32_t dstFactor;
-} WGPUBlendComponent_I;
-
-typedef struct {
-    WGPUBlendComponent_I color;
-    WGPUBlendComponent_I alpha;
-} WGPUBlendState_I;
-
-/* Compute types */
-typedef struct WGPUComputePipelineImpl* WGPUComputePipeline_T;
-typedef struct WGPUComputePassEncoderImpl* WGPUComputePassEncoder_T;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-} WGPUComputePassDescriptor_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    WGPUShaderModule_T module;
-    const char* entryPoint;
-    size_t constantCount;
-    const void* constants;
-} WGPUProgrammableStageDescriptor_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-    WGPUPipelineLayout_T layout;
-    WGPUProgrammableStageDescriptor_I compute;
-} WGPUComputePipelineDescriptor_I;
-
-typedef WGPUBindGroupLayout_T (*PFN_wgpuDeviceCreateBindGroupLayout)(WGPUDevice, const WGPUBindGroupLayoutDescriptor_I*);
-typedef WGPUBindGroup_T (*PFN_wgpuDeviceCreateBindGroup)(WGPUDevice, const WGPUBindGroupDescriptor_I*);
-typedef void (*PFN_wgpuBindGroupLayoutRelease)(WGPUBindGroupLayout_T);
-typedef void (*PFN_wgpuBindGroupRelease)(WGPUBindGroup_T);
-
-/* Compute */
-typedef WGPUComputePipeline_T (*PFN_wgpuDeviceCreateComputePipeline)(WGPUDevice, const WGPUComputePipelineDescriptor_I*);
-typedef void (*PFN_wgpuComputePipelineRelease)(WGPUComputePipeline_T);
-typedef WGPUComputePassEncoder_T (*PFN_wgpuCommandEncoderBeginComputePass)(WGPUCommandEncoder_T, const WGPUComputePassDescriptor_I*);
-typedef void (*PFN_wgpuComputePassEncoderSetPipeline)(WGPUComputePassEncoder_T, WGPUComputePipeline_T);
-typedef void (*PFN_wgpuComputePassEncoderSetBindGroup)(WGPUComputePassEncoder_T, uint32_t, void*, size_t, const uint32_t*);
-typedef void (*PFN_wgpuComputePassEncoderDispatchWorkgroups)(WGPUComputePassEncoder_T, uint32_t, uint32_t, uint32_t);
-typedef void (*PFN_wgpuComputePassEncoderEnd)(WGPUComputePassEncoder_T);
-typedef void (*PFN_wgpuComputePassEncoderRelease)(WGPUComputePassEncoder_T);
-
-/* Texture copy */
-typedef void (*PFN_wgpuCommandEncoderCopyTextureToTexture)(WGPUCommandEncoder_T, const WGPUImageCopyTexture_I*, const WGPUImageCopyTexture_I*, const WGPUExtent3D*);
-typedef void (*PFN_wgpuCommandEncoderCopyTextureToBuffer)(WGPUCommandEncoder_T, const WGPUImageCopyTexture_I*, const WGPUImageCopyBuffer_I*, const WGPUExtent3D*);
-
-/* Buffer mapping */
-typedef void (*PFN_wgpuBufferMapAsync)(WGPUBuffer_T, uint32_t, uint64_t, uint64_t, void (*)(uint32_t, void*), void*);
-typedef const void* (*PFN_wgpuBufferGetConstMappedRange)(WGPUBuffer_T, uint64_t, uint64_t);
-typedef void (*PFN_wgpuBufferUnmap)(WGPUBuffer_T);
-typedef uint32_t (*PFN_wgpuDevicePoll)(WGPUDevice, uint32_t, const void*);
-
-/* Indirect */
-typedef void (*PFN_wgpuRenderPassEncoderDrawIndirect)(WGPURenderPassEncoder_T, WGPUBuffer_T, uint64_t);
-typedef void (*PFN_wgpuRenderPassEncoderDrawIndexedIndirect)(WGPURenderPassEncoder_T, WGPUBuffer_T, uint64_t);
-typedef void (*PFN_wgpuComputePassEncoderDispatchWorkgroupsIndirect)(WGPUComputePassEncoder_T, WGPUBuffer_T, uint64_t);
-
-/* Render Bundles */
-typedef struct WGPURenderBundleEncoderImpl* WGPURenderBundleEncoder_T;
-typedef struct WGPURenderBundleImpl* WGPURenderBundle_T;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-    size_t colorFormatCount;
-    const uint32_t* colorFormats;
-    uint32_t depthStencilFormat;
-    uint32_t sampleCount;
-    uint32_t depthReadOnly;
-    uint32_t stencilReadOnly;
-} WGPURenderBundleEncoderDescriptor_I;
-
-typedef struct {
-    const WGPUChainedStruct* nextInChain;
-    const char* label;
-} WGPURenderBundleDescriptor_I;
-
-typedef WGPURenderBundleEncoder_T (*PFN_wgpuDeviceCreateRenderBundleEncoder)(WGPUDevice, const WGPURenderBundleEncoderDescriptor_I*);
-typedef WGPURenderBundle_T (*PFN_wgpuRenderBundleEncoderFinish)(WGPURenderBundleEncoder_T, const WGPURenderBundleDescriptor_I*);
-typedef void (*PFN_wgpuRenderBundleEncoderRelease)(WGPURenderBundleEncoder_T);
-typedef void (*PFN_wgpuRenderBundleRelease)(WGPURenderBundle_T);
-typedef void (*PFN_wgpuRenderBundleEncoderSetPipeline)(WGPURenderBundleEncoder_T, WGPURenderPipeline_T);
-typedef void (*PFN_wgpuRenderBundleEncoderSetVertexBuffer)(WGPURenderBundleEncoder_T, uint32_t, WGPUBuffer_T, uint64_t, uint64_t);
-typedef void (*PFN_wgpuRenderBundleEncoderSetIndexBuffer)(WGPURenderBundleEncoder_T, WGPUBuffer_T, uint32_t, uint64_t, uint64_t);
-typedef void (*PFN_wgpuRenderBundleEncoderSetBindGroup)(WGPURenderBundleEncoder_T, uint32_t, void*, size_t, const uint32_t*);
-typedef void (*PFN_wgpuRenderBundleEncoderDraw)(WGPURenderBundleEncoder_T, uint32_t, uint32_t, uint32_t, uint32_t);
-typedef void (*PFN_wgpuRenderBundleEncoderDrawIndexed)(WGPURenderBundleEncoder_T, uint32_t, uint32_t, uint32_t, int32_t, uint32_t);
-typedef void (*PFN_wgpuRenderBundleEncoderDrawIndirect)(WGPURenderBundleEncoder_T, WGPUBuffer_T, uint64_t);
-typedef void (*PFN_wgpuRenderBundleEncoderDrawIndexedIndirect)(WGPURenderBundleEncoder_T, WGPUBuffer_T, uint64_t);
-typedef void (*PFN_wgpuRenderPassEncoderExecuteBundles)(WGPURenderPassEncoder_T, size_t, const WGPURenderBundle_T*);
-
-/* ═══════════════════════════════════════════════════════════════════
-   Globals
-   ═══════════════════════════════════════════════════════════════════ */
-
-static void* g_wgpu_lib = NULL;
-static char g_last_error[256] = {0};
-
-/* Existing function pointers */
-static PFN_wgpuCreateInstance           g_create_instance = NULL;
-static PFN_wgpuInstanceRelease          g_release_instance = NULL;
-static PFN_wgpuInstanceRequestAdapter   g_request_adapter = NULL;
-static PFN_wgpuAdapterRequestDevice     g_request_device = NULL;
-static PFN_wgpuAdapterRelease           g_release_adapter = NULL;
-static PFN_wgpuDeviceRelease            g_release_device = NULL;
-static PFN_wgpuDeviceGetQueue           g_get_queue = NULL;
-static PFN_wgpuQueueRelease             g_release_queue = NULL;
-
-/* Surface */
-static PFN_wgpuInstanceCreateSurface       g_create_surface = NULL;
-static PFN_wgpuSurfaceConfigure            g_configure_surface = NULL;
-static PFN_wgpuSurfaceGetCurrentTexture    g_surface_get_texture = NULL;
-static PFN_wgpuSurfacePresent              g_surface_present = NULL;
-static PFN_wgpuSurfaceUnconfigure          g_surface_unconfigure = NULL;
-static PFN_wgpuSurfaceRelease              g_surface_release = NULL;
-
-/* Texture */
-static PFN_wgpuDeviceCreateTexture    g_create_texture = NULL;
-static PFN_wgpuTextureCreateView      g_texture_create_view = NULL;
-static PFN_wgpuTextureRelease         g_texture_release = NULL;
-static PFN_wgpuTextureViewRelease     g_texture_view_release = NULL;
-
-/* Shader */
-static PFN_wgpuDeviceCreateShaderModule g_create_shader_module = NULL;
-static PFN_wgpuShaderModuleRelease      g_shader_module_release = NULL;
-
-/* Pipeline */
-static PFN_wgpuDeviceCreateRenderPipeline  g_create_render_pipeline = NULL;
-static PFN_wgpuRenderPipelineRelease       g_render_pipeline_release = NULL;
-static PFN_wgpuDeviceCreatePipelineLayout  g_create_pipeline_layout = NULL;
-static PFN_wgpuPipelineLayoutRelease       g_pipeline_layout_release = NULL;
-
-/* Buffer */
-static PFN_wgpuDeviceCreateBuffer  g_create_buffer = NULL;
-static PFN_wgpuQueueWriteBuffer    g_queue_write_buffer = NULL;
-static PFN_wgpuBufferRelease       g_buffer_release = NULL;
-
-/* Command encoder */
-static PFN_wgpuDeviceCreateCommandEncoder       g_create_command_encoder = NULL;
-static PFN_wgpuCommandEncoderBeginRenderPass    g_begin_render_pass = NULL;
-static PFN_wgpuCommandEncoderFinish             g_encoder_finish = NULL;
-static PFN_wgpuCommandEncoderRelease            g_command_encoder_release = NULL;
-
-/* Render pass encoder */
-static PFN_wgpuRenderPassEncoderSetPipeline      g_rp_set_pipeline = NULL;
-static PFN_wgpuRenderPassEncoderSetVertexBuffer  g_rp_set_vertex_buffer = NULL;
-static PFN_wgpuRenderPassEncoderSetIndexBuffer   g_rp_set_index_buffer = NULL;
-static PFN_wgpuRenderPassEncoderDraw             g_rp_draw = NULL;
-static PFN_wgpuRenderPassEncoderDrawIndexed      g_rp_draw_indexed = NULL;
-static PFN_wgpuRenderPassEncoderSetBindGroup     g_rp_set_bind_group = NULL;
-static PFN_wgpuRenderPassEncoderEnd              g_rp_end = NULL;
-static PFN_wgpuRenderPassEncoderRelease          g_rp_release = NULL;
-static PFN_wgpuRenderPassEncoderSetViewport      g_rp_set_viewport = NULL;
-static PFN_wgpuRenderPassEncoderSetScissorRect   g_rp_set_scissor_rect = NULL;
-
-/* Sampler */
-static PFN_wgpuDeviceCreateSampler  g_create_sampler = NULL;
-static PFN_wgpuSamplerRelease       g_sampler_release = NULL;
-
-/* Bind Group */
-static PFN_wgpuDeviceCreateBindGroupLayout  g_create_bind_group_layout = NULL;
-static PFN_wgpuDeviceCreateBindGroup        g_create_bind_group = NULL;
-static PFN_wgpuBindGroupLayoutRelease       g_bind_group_layout_release = NULL;
-static PFN_wgpuBindGroupRelease             g_bind_group_release = NULL;
-
-/* Compute */
-static PFN_wgpuDeviceCreateComputePipeline            g_create_compute_pipeline = NULL;
-static PFN_wgpuComputePipelineRelease                 g_compute_pipeline_release = NULL;
-static PFN_wgpuCommandEncoderBeginComputePass         g_begin_compute_pass = NULL;
-static PFN_wgpuComputePassEncoderSetPipeline          g_cp_set_pipeline = NULL;
-static PFN_wgpuComputePassEncoderSetBindGroup         g_cp_set_bind_group = NULL;
-static PFN_wgpuComputePassEncoderDispatchWorkgroups   g_cp_dispatch = NULL;
-static PFN_wgpuComputePassEncoderEnd                  g_cp_end = NULL;
-static PFN_wgpuComputePassEncoderRelease              g_cp_release = NULL;
-
-/* Texture copy */
-static PFN_wgpuCommandEncoderCopyTextureToTexture     g_copy_texture_to_texture = NULL;
-static PFN_wgpuCommandEncoderCopyTextureToBuffer       g_copy_texture_to_buffer = NULL;
-
-/* Buffer mapping */
-static PFN_wgpuBufferMapAsync                g_buffer_map_async = NULL;
-static PFN_wgpuBufferGetConstMappedRange     g_buffer_get_mapped_range = NULL;
-static PFN_wgpuBufferUnmap                   g_buffer_unmap = NULL;
-static PFN_wgpuDevicePoll                    g_device_poll = NULL;
-
-/* Indirect */
-static PFN_wgpuRenderPassEncoderDrawIndirect                  g_rp_draw_indirect = NULL;
-static PFN_wgpuRenderPassEncoderDrawIndexedIndirect           g_rp_draw_indexed_indirect = NULL;
-static PFN_wgpuComputePassEncoderDispatchWorkgroupsIndirect   g_cp_dispatch_indirect = NULL;
-
-/* Render Bundles */
-static PFN_wgpuDeviceCreateRenderBundleEncoder           g_dev_create_bundle_encoder = NULL;
-static PFN_wgpuRenderBundleEncoderFinish                 g_bundle_encoder_finish = NULL;
-static PFN_wgpuRenderBundleEncoderRelease                g_bundle_encoder_release = NULL;
-static PFN_wgpuRenderBundleRelease                       g_bundle_release = NULL;
-static PFN_wgpuRenderBundleEncoderSetPipeline            g_bundle_set_pipeline = NULL;
-static PFN_wgpuRenderBundleEncoderSetVertexBuffer        g_bundle_set_vertex_buffer = NULL;
-static PFN_wgpuRenderBundleEncoderSetIndexBuffer         g_bundle_set_index_buffer = NULL;
-static PFN_wgpuRenderBundleEncoderSetBindGroup           g_bundle_set_bind_group = NULL;
-static PFN_wgpuRenderBundleEncoderDraw                   g_bundle_draw = NULL;
-static PFN_wgpuRenderBundleEncoderDrawIndexed            g_bundle_draw_indexed = NULL;
-static PFN_wgpuRenderBundleEncoderDrawIndirect           g_bundle_draw_indirect = NULL;
-static PFN_wgpuRenderBundleEncoderDrawIndexedIndirect    g_bundle_draw_indexed_indirect = NULL;
-static PFN_wgpuRenderPassEncoderExecuteBundles           g_rp_execute_bundles = NULL;
-
-/* Queue submit */
-static PFN_wgpuQueueSubmit        g_queue_submit = NULL;
-static PFN_wgpuCommandBufferRelease g_command_buffer_release = NULL;
-static PFN_wgpuQueueWriteTexture  g_queue_write_texture = NULL;
-
-/* ═══════════════════════════════════════════════════════════════════
-   Helpers
-   ═══════════════════════════════════════════════════════════════════ */
-
-typedef struct AwaitResult {
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
-    int done;
-    int success;
-    void* object;
-    char message[128];
-} AwaitResult;
+/* ════════════════════════════════════════════════════════════════════
+   Error reporting
+   ════════════════════════════════════════════════════════════════════ */
+
+static char g_last_error[512] = {0};
 
 static void set_error(const char* msg) {
     if (msg == NULL) {
@@ -710,656 +29,442 @@ static void set_error(const char* msg) {
     g_last_error[sizeof(g_last_error) - 1] = '\0';
 }
 
-static void await_init(AwaitResult* ar) {
-    pthread_mutex_init(&ar->mutex, NULL);
-    pthread_cond_init(&ar->cond, NULL);
-    ar->done = 0;
-    ar->success = 0;
-    ar->object = NULL;
-    ar->message[0] = '\0';
+static void set_error_sv(WGPUStringView sv) {
+    if (sv.data == NULL || sv.length == 0) { g_last_error[0] = '\0'; return; }
+    size_t n = sv.length;
+    if (n >= sizeof(g_last_error)) n = sizeof(g_last_error) - 1;
+    memcpy(g_last_error, sv.data, n);
+    g_last_error[n] = '\0';
 }
 
-static void await_deinit(AwaitResult* ar) {
-    pthread_cond_destroy(&ar->cond);
-    pthread_mutex_destroy(&ar->mutex);
-}
+const char* wgpu_bridge_last_error(void) { return g_last_error; }
 
-static void await_finish(AwaitResult* ar, int success, void* object, const char* message) {
-    pthread_mutex_lock(&ar->mutex);
-    ar->done = 1;
-    ar->success = success;
-    ar->object = object;
-    if (message != NULL) {
-        strncpy(ar->message, message, sizeof(ar->message) - 1);
-        ar->message[sizeof(ar->message) - 1] = '\0';
+/* ════════════════════════════════════════════════════════════════════
+   StringView helpers
+   ════════════════════════════════════════════════════════════════════ */
+
+static WGPUStringView sv_from_cstr(const char* s) {
+    WGPUStringView v;
+    if (s == NULL) {
+        v.data = NULL;
+        v.length = WGPU_STRLEN; /* "no value" sentinel */
+    } else {
+        v.data = s;
+        v.length = strlen(s);
     }
-    pthread_cond_signal(&ar->cond);
-    pthread_mutex_unlock(&ar->mutex);
+    return v;
 }
 
-static void await_wait(AwaitResult* ar) {
-    pthread_mutex_lock(&ar->mutex);
-    while (!ar->done) {
-        pthread_cond_wait(&ar->cond, &ar->mutex);
-    }
-    pthread_mutex_unlock(&ar->mutex);
-}
+/* ════════════════════════════════════════════════════════════════════
+   Bridge enum → wgpu enum mapping
+   ════════════════════════════════════════════════════════════════════ */
 
-static void adapter_callback(WGPURequestAdapterStatus status, WGPUAdapter adapter, const char* message, void* userdata) {
-    AwaitResult* ar = (AwaitResult*)userdata;
-    const int ok = (status == WGPURequestAdapterStatus_Success && adapter != NULL) ? 1 : 0;
-    await_finish(ar, ok, (void*)adapter, message);
-}
-
-static void device_callback(WGPURequestDeviceStatus status, WGPUDevice device, const char* message, void* userdata) {
-    AwaitResult* ar = (AwaitResult*)userdata;
-    const int ok = (status == WGPURequestDeviceStatus_Success && device != NULL) ? 1 : 0;
-    await_finish(ar, ok, (void*)device, message);
-}
-
-/* ─── Bridge enum → wgpu enum mapping ───────────────────────────── */
-
-static uint32_t bridge_format_to_wgpu(WGPUBridgeTextureFormat f) {
+static WGPUTextureFormat to_wgpu_format(WGPUBridgeTextureFormat f) {
     switch (f) {
-        case WGPUBridge_TextureFormat_BGRA8Unorm:    return 0x17; /* 23 */
-        case WGPUBridge_TextureFormat_RGBA8Unorm:    return 0x12; /* 18 */
-        case WGPUBridge_TextureFormat_RGBA16Float:   return 0x1E; /* 30 */
-        case WGPUBridge_TextureFormat_Depth24Plus:   return 0x28; /* 40 */
-        case WGPUBridge_TextureFormat_Depth32Float:  return 0x29; /* 41 */
-        default:                                     return 0x17;
+        case WGPUBridge_TextureFormat_BGRA8Unorm:   return WGPUTextureFormat_BGRA8Unorm;
+        case WGPUBridge_TextureFormat_RGBA8Unorm:   return WGPUTextureFormat_RGBA8Unorm;
+        case WGPUBridge_TextureFormat_RGBA16Float:  return WGPUTextureFormat_RGBA16Float;
+        case WGPUBridge_TextureFormat_Depth24Plus:  return WGPUTextureFormat_Depth24Plus;
+        case WGPUBridge_TextureFormat_Depth32Float: return WGPUTextureFormat_Depth32Float;
+        default:                                    return WGPUTextureFormat_BGRA8Unorm;
     }
 }
 
-static uint32_t bridge_present_mode_to_wgpu(WGPUBridgePresentMode m) {
+static WGPUPresentMode to_wgpu_present_mode(WGPUBridgePresentMode m) {
     switch (m) {
-        case WGPUBridge_PresentMode_Fifo:        return 2;
-        case WGPUBridge_PresentMode_FifoRelaxed: return 3;
-        case WGPUBridge_PresentMode_Immediate:   return 0;
-        case WGPUBridge_PresentMode_Mailbox:     return 1;
-        default:                                 return 2;
+        case WGPUBridge_PresentMode_Fifo:        return WGPUPresentMode_Fifo;
+        case WGPUBridge_PresentMode_FifoRelaxed: return WGPUPresentMode_FifoRelaxed;
+        case WGPUBridge_PresentMode_Immediate:   return WGPUPresentMode_Immediate;
+        case WGPUBridge_PresentMode_Mailbox:     return WGPUPresentMode_Mailbox;
+        default:                                 return WGPUPresentMode_Fifo;
     }
 }
 
-static uint32_t bridge_load_op_to_wgpu(WGPUBridgeLoadOp op) {
+static WGPULoadOp to_wgpu_load_op(WGPUBridgeLoadOp op) {
     switch (op) {
-        case WGPUBridge_LoadOp_Clear: return 1;
-        case WGPUBridge_LoadOp_Load:  return 2;
-        default:                      return 1;
+        case WGPUBridge_LoadOp_Clear: return WGPULoadOp_Clear;
+        case WGPUBridge_LoadOp_Load:  return WGPULoadOp_Load;
+        default:                      return WGPULoadOp_Clear;
     }
 }
 
-static uint32_t bridge_store_op_to_wgpu(WGPUBridgeStoreOp op) {
+static WGPUStoreOp to_wgpu_store_op(WGPUBridgeStoreOp op) {
     switch (op) {
-        case WGPUBridge_StoreOp_Store:   return 1;
-        case WGPUBridge_StoreOp_Discard: return 2;
-        default:                         return 1;
+        case WGPUBridge_StoreOp_Store:   return WGPUStoreOp_Store;
+        case WGPUBridge_StoreOp_Discard: return WGPUStoreOp_Discard;
+        default:                         return WGPUStoreOp_Store;
     }
 }
 
-static uint32_t bridge_topology_to_wgpu(WGPUBridgePrimitiveTopology t) {
+static WGPUPrimitiveTopology to_wgpu_topology(WGPUBridgePrimitiveTopology t) {
     switch (t) {
-        case WGPUBridge_PrimitiveTopology_PointList:     return 0;
-        case WGPUBridge_PrimitiveTopology_LineList:      return 1;
-        case WGPUBridge_PrimitiveTopology_LineStrip:     return 2;
-        case WGPUBridge_PrimitiveTopology_TriangleList:  return 3;
-        case WGPUBridge_PrimitiveTopology_TriangleStrip: return 4;
-        default:                                         return 3;
+        case WGPUBridge_PrimitiveTopology_PointList:     return WGPUPrimitiveTopology_PointList;
+        case WGPUBridge_PrimitiveTopology_LineList:      return WGPUPrimitiveTopology_LineList;
+        case WGPUBridge_PrimitiveTopology_LineStrip:     return WGPUPrimitiveTopology_LineStrip;
+        case WGPUBridge_PrimitiveTopology_TriangleList:  return WGPUPrimitiveTopology_TriangleList;
+        case WGPUBridge_PrimitiveTopology_TriangleStrip: return WGPUPrimitiveTopology_TriangleStrip;
+        default:                                         return WGPUPrimitiveTopology_TriangleList;
     }
 }
 
-static uint32_t bridge_vertex_format_to_wgpu(WGPUBridgeVertexFormat f) {
+static WGPUVertexFormat to_wgpu_vertex_format(WGPUBridgeVertexFormat f) {
     switch (f) {
-        case WGPUBridge_VertexFormat_Float32:   return 0x13;
-        case WGPUBridge_VertexFormat_Float32x2: return 0x14;
-        case WGPUBridge_VertexFormat_Float32x3: return 0x15;
-        case WGPUBridge_VertexFormat_Float32x4: return 0x16;
-        case WGPUBridge_VertexFormat_Uint32:    return 0x17;
-        case WGPUBridge_VertexFormat_Uint8x4:   return 0x02;
-        case WGPUBridge_VertexFormat_Unorm8x4:  return 0x06;
-        case WGPUBridge_VertexFormat_Snorm8x4:  return 0x08;
-        case WGPUBridge_VertexFormat_Uint16x2:  return 0x09;
-        case WGPUBridge_VertexFormat_Uint16x4:  return 0x0A;
-        case WGPUBridge_VertexFormat_Sint16x2:  return 0x0B;
-        case WGPUBridge_VertexFormat_Snorm16x2: return 0x0F;
-        case WGPUBridge_VertexFormat_Float16x2: return 0x11;
-        case WGPUBridge_VertexFormat_Float16x4: return 0x12;
-        default:                                return 0x15;
+        case WGPUBridge_VertexFormat_Float32:   return WGPUVertexFormat_Float32;
+        case WGPUBridge_VertexFormat_Float32x2: return WGPUVertexFormat_Float32x2;
+        case WGPUBridge_VertexFormat_Float32x3: return WGPUVertexFormat_Float32x3;
+        case WGPUBridge_VertexFormat_Float32x4: return WGPUVertexFormat_Float32x4;
+        case WGPUBridge_VertexFormat_Uint32:    return WGPUVertexFormat_Uint32;
+        case WGPUBridge_VertexFormat_Uint8x4:   return WGPUVertexFormat_Uint8x4;
+        case WGPUBridge_VertexFormat_Unorm8x4:  return WGPUVertexFormat_Unorm8x4;
+        case WGPUBridge_VertexFormat_Snorm8x4:  return WGPUVertexFormat_Snorm8x4;
+        case WGPUBridge_VertexFormat_Uint16x2:  return WGPUVertexFormat_Uint16x2;
+        case WGPUBridge_VertexFormat_Uint16x4:  return WGPUVertexFormat_Uint16x4;
+        case WGPUBridge_VertexFormat_Sint16x2:  return WGPUVertexFormat_Sint16x2;
+        case WGPUBridge_VertexFormat_Snorm16x2: return WGPUVertexFormat_Snorm16x2;
+        case WGPUBridge_VertexFormat_Float16x2: return WGPUVertexFormat_Float16x2;
+        case WGPUBridge_VertexFormat_Float16x4: return WGPUVertexFormat_Float16x4;
+        default:                                return WGPUVertexFormat_Float32x3;
     }
 }
 
-static uint32_t bridge_cull_mode_to_wgpu(WGPUBridgeCullMode m) {
+static WGPUCullMode to_wgpu_cull_mode(WGPUBridgeCullMode m) {
     switch (m) {
-        case WGPUBridge_CullMode_None:  return 0;
-        case WGPUBridge_CullMode_Front: return 1;
-        case WGPUBridge_CullMode_Back:  return 2;
-        default:                        return 0;
+        case WGPUBridge_CullMode_None:  return WGPUCullMode_None;
+        case WGPUBridge_CullMode_Front: return WGPUCullMode_Front;
+        case WGPUBridge_CullMode_Back:  return WGPUCullMode_Back;
+        default:                        return WGPUCullMode_None;
     }
 }
 
-static uint32_t bridge_blend_op_to_wgpu(WGPUBridgeBlendOp op) {
+static WGPUFrontFace to_wgpu_front_face(WGPUBridgeFrontFace f) {
+    switch (f) {
+        case WGPUBridge_FrontFace_CCW: return WGPUFrontFace_CCW;
+        case WGPUBridge_FrontFace_CW:  return WGPUFrontFace_CW;
+        default:                       return WGPUFrontFace_CCW;
+    }
+}
+
+static WGPUBlendOperation to_wgpu_blend_op(WGPUBridgeBlendOp op) {
     switch (op) {
-        case WGPUBridge_BlendOp_Add:             return 1;
-        case WGPUBridge_BlendOp_Subtract:        return 2;
-        case WGPUBridge_BlendOp_ReverseSubtract: return 3;
-        case WGPUBridge_BlendOp_Min:             return 4;
-        case WGPUBridge_BlendOp_Max:             return 5;
-        default:                                 return 1;
+        case WGPUBridge_BlendOp_Add:             return WGPUBlendOperation_Add;
+        case WGPUBridge_BlendOp_Subtract:        return WGPUBlendOperation_Subtract;
+        case WGPUBridge_BlendOp_ReverseSubtract: return WGPUBlendOperation_ReverseSubtract;
+        case WGPUBridge_BlendOp_Min:             return WGPUBlendOperation_Min;
+        case WGPUBridge_BlendOp_Max:             return WGPUBlendOperation_Max;
+        default:                                 return WGPUBlendOperation_Add;
     }
 }
 
-static uint32_t bridge_blend_factor_to_wgpu(WGPUBridgeBlendFactor f) {
+static WGPUBlendFactor to_wgpu_blend_factor(WGPUBridgeBlendFactor f) {
     switch (f) {
-        case WGPUBridge_BlendFactor_Zero:             return 1;
-        case WGPUBridge_BlendFactor_One:              return 2;
-        case WGPUBridge_BlendFactor_Src:              return 3;
-        case WGPUBridge_BlendFactor_OneMinusSrc:      return 4;
-        case WGPUBridge_BlendFactor_SrcAlpha:         return 5;
-        case WGPUBridge_BlendFactor_OneMinusSrcAlpha: return 6;
-        case WGPUBridge_BlendFactor_Dst:              return 7;
-        case WGPUBridge_BlendFactor_OneMinusDst:      return 8;
-        case WGPUBridge_BlendFactor_DstAlpha:         return 9;
-        case WGPUBridge_BlendFactor_OneMinusDstAlpha: return 10;
-        default:                                      return 2;
+        case WGPUBridge_BlendFactor_Zero:             return WGPUBlendFactor_Zero;
+        case WGPUBridge_BlendFactor_One:              return WGPUBlendFactor_One;
+        case WGPUBridge_BlendFactor_Src:              return WGPUBlendFactor_Src;
+        case WGPUBridge_BlendFactor_OneMinusSrc:      return WGPUBlendFactor_OneMinusSrc;
+        case WGPUBridge_BlendFactor_SrcAlpha:         return WGPUBlendFactor_SrcAlpha;
+        case WGPUBridge_BlendFactor_OneMinusSrcAlpha: return WGPUBlendFactor_OneMinusSrcAlpha;
+        case WGPUBridge_BlendFactor_Dst:              return WGPUBlendFactor_Dst;
+        case WGPUBridge_BlendFactor_OneMinusDst:      return WGPUBlendFactor_OneMinusDst;
+        case WGPUBridge_BlendFactor_DstAlpha:         return WGPUBlendFactor_DstAlpha;
+        case WGPUBridge_BlendFactor_OneMinusDstAlpha: return WGPUBlendFactor_OneMinusDstAlpha;
+        default:                                      return WGPUBlendFactor_One;
     }
 }
 
-static uint32_t bridge_index_format_to_wgpu(WGPUBridgeIndexFormat f) {
+static WGPUIndexFormat to_wgpu_index_format(WGPUBridgeIndexFormat f) {
     switch (f) {
-        case WGPUBridge_IndexFormat_Uint16: return 1;
-        case WGPUBridge_IndexFormat_Uint32: return 2;
-        default:                            return 2;
+        case WGPUBridge_IndexFormat_Uint16: return WGPUIndexFormat_Uint16;
+        case WGPUBridge_IndexFormat_Uint32: return WGPUIndexFormat_Uint32;
+        default:                            return WGPUIndexFormat_Uint32;
     }
 }
 
-static uint32_t bridge_filter_mode_to_wgpu(WGPUBridgeFilterMode f) {
+static WGPUFilterMode to_wgpu_filter(WGPUBridgeFilterMode f) {
     switch (f) {
-        case WGPUBridge_FilterMode_Nearest: return 1;
-        case WGPUBridge_FilterMode_Linear:  return 2;
-        default:                            return 1;
+        case WGPUBridge_FilterMode_Nearest: return WGPUFilterMode_Nearest;
+        case WGPUBridge_FilterMode_Linear:  return WGPUFilterMode_Linear;
+        default:                            return WGPUFilterMode_Nearest;
     }
 }
 
-static uint32_t bridge_address_mode_to_wgpu(WGPUBridgeAddressMode a) {
+static WGPUMipmapFilterMode to_wgpu_mipmap_filter(WGPUBridgeFilterMode f) {
+    switch (f) {
+        case WGPUBridge_FilterMode_Nearest: return WGPUMipmapFilterMode_Nearest;
+        case WGPUBridge_FilterMode_Linear:  return WGPUMipmapFilterMode_Linear;
+        default:                            return WGPUMipmapFilterMode_Nearest;
+    }
+}
+
+static WGPUAddressMode to_wgpu_address_mode(WGPUBridgeAddressMode a) {
     switch (a) {
-        case WGPUBridge_AddressMode_ClampToEdge:  return 1;
-        case WGPUBridge_AddressMode_Repeat:       return 2;
-        case WGPUBridge_AddressMode_MirrorRepeat: return 3;
-        default:                                  return 1;
+        case WGPUBridge_AddressMode_ClampToEdge:  return WGPUAddressMode_ClampToEdge;
+        case WGPUBridge_AddressMode_Repeat:       return WGPUAddressMode_Repeat;
+        case WGPUBridge_AddressMode_MirrorRepeat: return WGPUAddressMode_MirrorRepeat;
+        default:                                  return WGPUAddressMode_ClampToEdge;
     }
 }
 
-static uint32_t bridge_binding_type_buffer(WGPUBridgeBindingType t) {
-    switch (t) {
-        case WGPUBridge_BindingType_UniformBuffer:         return 1;
-        case WGPUBridge_BindingType_StorageBuffer:         return 2;
-        case WGPUBridge_BindingType_ReadOnlyStorageBuffer: return 3;
-        default:                                           return 0;
-    }
-}
-
-static uint32_t bridge_compare_function_to_wgpu(WGPUBridgeCompareFunction f) {
+static WGPUCompareFunction to_wgpu_compare(WGPUBridgeCompareFunction f) {
     switch (f) {
-        case WGPUBridge_CompareFunction_Never:        return 1;
-        case WGPUBridge_CompareFunction_Less:         return 2;
-        case WGPUBridge_CompareFunction_Equal:        return 3;
-        case WGPUBridge_CompareFunction_LessEqual:    return 4;
-        case WGPUBridge_CompareFunction_Greater:      return 5;
-        case WGPUBridge_CompareFunction_NotEqual:     return 6;
-        case WGPUBridge_CompareFunction_GreaterEqual: return 7;
-        case WGPUBridge_CompareFunction_Always:       return 8;
-        default:                                      return 2;
+        case WGPUBridge_CompareFunction_Never:        return WGPUCompareFunction_Never;
+        case WGPUBridge_CompareFunction_Less:         return WGPUCompareFunction_Less;
+        case WGPUBridge_CompareFunction_Equal:        return WGPUCompareFunction_Equal;
+        case WGPUBridge_CompareFunction_LessEqual:    return WGPUCompareFunction_LessEqual;
+        case WGPUBridge_CompareFunction_Greater:      return WGPUCompareFunction_Greater;
+        case WGPUBridge_CompareFunction_NotEqual:     return WGPUCompareFunction_NotEqual;
+        case WGPUBridge_CompareFunction_GreaterEqual: return WGPUCompareFunction_GreaterEqual;
+        case WGPUBridge_CompareFunction_Always:       return WGPUCompareFunction_Always;
+        default:                                      return WGPUCompareFunction_Less;
     }
 }
 
-static uint32_t bridge_front_face_to_wgpu(WGPUBridgeFrontFace f) {
-    switch (f) {
-        case WGPUBridge_FrontFace_CCW: return 0;
-        case WGPUBridge_FrontFace_CW:  return 1;
-        default:                       return 0;
-    }
-}
-
-static uint32_t bridge_stencil_op_to_wgpu(WGPUBridgeStencilOp op) {
+static WGPUStencilOperation to_wgpu_stencil_op(WGPUBridgeStencilOp op) {
     switch (op) {
-        case WGPUBridge_StencilOp_Keep:      return 0;
-        case WGPUBridge_StencilOp_Zero:      return 1;
-        case WGPUBridge_StencilOp_Replace:   return 2;
-        case WGPUBridge_StencilOp_Invert:    return 3;
-        case WGPUBridge_StencilOp_IncrClamp: return 4;
-        case WGPUBridge_StencilOp_DecrClamp: return 5;
-        case WGPUBridge_StencilOp_IncrWrap:  return 6;
-        case WGPUBridge_StencilOp_DecrWrap:  return 7;
-        default:                             return 0;
+        case WGPUBridge_StencilOp_Keep:      return WGPUStencilOperation_Keep;
+        case WGPUBridge_StencilOp_Zero:      return WGPUStencilOperation_Zero;
+        case WGPUBridge_StencilOp_Replace:   return WGPUStencilOperation_Replace;
+        case WGPUBridge_StencilOp_Invert:    return WGPUStencilOperation_Invert;
+        case WGPUBridge_StencilOp_IncrClamp: return WGPUStencilOperation_IncrementClamp;
+        case WGPUBridge_StencilOp_DecrClamp: return WGPUStencilOperation_DecrementClamp;
+        case WGPUBridge_StencilOp_IncrWrap:  return WGPUStencilOperation_IncrementWrap;
+        case WGPUBridge_StencilOp_DecrWrap:  return WGPUStencilOperation_DecrementWrap;
+        default:                             return WGPUStencilOperation_Keep;
     }
 }
 
-static uint32_t bridge_texture_view_dimension_to_wgpu(WGPUBridgeTextureViewDimension d) {
+static WGPUTextureViewDimension to_wgpu_view_dim(WGPUBridgeTextureViewDimension d) {
     switch (d) {
-        case WGPUBridge_TextureViewDimension_2D:        return 2;
-        case WGPUBridge_TextureViewDimension_2DArray:   return 3;
-        case WGPUBridge_TextureViewDimension_Cube:      return 4;
-        case WGPUBridge_TextureViewDimension_CubeArray: return 5;
-        case WGPUBridge_TextureViewDimension_3D:        return 6;
-        default:                                        return 2;
+        case WGPUBridge_TextureViewDimension_2D:        return WGPUTextureViewDimension_2D;
+        case WGPUBridge_TextureViewDimension_2DArray:   return WGPUTextureViewDimension_2DArray;
+        case WGPUBridge_TextureViewDimension_Cube:      return WGPUTextureViewDimension_Cube;
+        case WGPUBridge_TextureViewDimension_CubeArray: return WGPUTextureViewDimension_CubeArray;
+        case WGPUBridge_TextureViewDimension_3D:        return WGPUTextureViewDimension_3D;
+        default:                                        return WGPUTextureViewDimension_2D;
     }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Initialization
-   ═══════════════════════════════════════════════════════════════════ */
-
-const char* wgpu_bridge_last_error(void) {
-    return g_last_error;
+/* Bridge BufferUsage flag bits map directly to WGPUBufferUsage_* values.
+   We translate by composing flags. */
+static WGPUBufferUsage to_wgpu_buffer_usage(int bridge_flags) {
+    WGPUBufferUsage u = WGPUBufferUsage_None;
+    if (bridge_flags & WGPUBridge_BufferUsage_MapRead)  u |= WGPUBufferUsage_MapRead;
+    if (bridge_flags & WGPUBridge_BufferUsage_CopySrc)  u |= WGPUBufferUsage_CopySrc;
+    if (bridge_flags & WGPUBridge_BufferUsage_CopyDst)  u |= WGPUBufferUsage_CopyDst;
+    if (bridge_flags & WGPUBridge_BufferUsage_Index)    u |= WGPUBufferUsage_Index;
+    if (bridge_flags & WGPUBridge_BufferUsage_Vertex)   u |= WGPUBufferUsage_Vertex;
+    if (bridge_flags & WGPUBridge_BufferUsage_Uniform)  u |= WGPUBufferUsage_Uniform;
+    if (bridge_flags & WGPUBridge_BufferUsage_Storage)  u |= WGPUBufferUsage_Storage;
+    if (bridge_flags & WGPUBridge_BufferUsage_Indirect) u |= WGPUBufferUsage_Indirect;
+    return u;
 }
 
-#define LOAD_SYM(name, type, var) do { \
-    var = (type)dlsym(g_wgpu_lib, #name); \
-} while(0)
+static WGPUTextureUsage to_wgpu_texture_usage(int bridge_flags) {
+    WGPUTextureUsage u = WGPUTextureUsage_None;
+    if (bridge_flags & WGPUBridge_TextureUsage_CopySrc)          u |= WGPUTextureUsage_CopySrc;
+    if (bridge_flags & WGPUBridge_TextureUsage_CopyDst)          u |= WGPUTextureUsage_CopyDst;
+    if (bridge_flags & WGPUBridge_TextureUsage_TextureBinding)   u |= WGPUTextureUsage_TextureBinding;
+    if (bridge_flags & WGPUBridge_TextureUsage_StorageBinding)   u |= WGPUTextureUsage_StorageBinding;
+    if (bridge_flags & WGPUBridge_TextureUsage_RenderAttachment) u |= WGPUTextureUsage_RenderAttachment;
+    return u;
+}
+
+static WGPUShaderStage to_wgpu_shader_stage(int bridge_flags) {
+    WGPUShaderStage s = WGPUShaderStage_None;
+    if (bridge_flags & WGPUBridge_ShaderStage_Vertex)   s |= WGPUShaderStage_Vertex;
+    if (bridge_flags & WGPUBridge_ShaderStage_Fragment) s |= WGPUShaderStage_Fragment;
+    if (bridge_flags & WGPUBridge_ShaderStage_Compute)  s |= WGPUShaderStage_Compute;
+    return s;
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Async wait helper (Future model)
+   ════════════════════════════════════════════════════════════════════ */
+
+typedef struct {
+    int done;
+    int success;
+    void* object; /* WGPUAdapter or WGPUDevice */
+    char message[256];
+} AsyncResult;
+
+static void on_request_adapter(WGPURequestAdapterStatus status,
+                               WGPUAdapter adapter,
+                               WGPUStringView message,
+                               void* userdata1, void* userdata2) {
+    (void)userdata2;
+    AsyncResult* r = (AsyncResult*)userdata1;
+    r->done = 1;
+    if (status == WGPURequestAdapterStatus_Success && adapter != NULL) {
+        r->success = 1;
+        r->object = (void*)adapter;
+    } else {
+        r->success = 0;
+        if (message.data && message.length > 0) {
+            size_t n = message.length < sizeof(r->message) - 1 ? message.length : sizeof(r->message) - 1;
+            memcpy(r->message, message.data, n);
+            r->message[n] = '\0';
+        }
+    }
+}
+
+static void on_request_device(WGPURequestDeviceStatus status,
+                              WGPUDevice device,
+                              WGPUStringView message,
+                              void* userdata1, void* userdata2) {
+    (void)userdata2;
+    AsyncResult* r = (AsyncResult*)userdata1;
+    r->done = 1;
+    if (status == WGPURequestDeviceStatus_Success && device != NULL) {
+        r->success = 1;
+        r->object = (void*)device;
+    } else {
+        r->success = 0;
+        if (message.data && message.length > 0) {
+            size_t n = message.length < sizeof(r->message) - 1 ? message.length : sizeof(r->message) - 1;
+            memcpy(r->message, message.data, n);
+            r->message[n] = '\0';
+        }
+    }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Lifecycle
+   ════════════════════════════════════════════════════════════════════ */
 
 int wgpu_bridge_initialize(const char* library_path) {
-    if (g_wgpu_lib != NULL) {
-        return 1;
-    }
-
-    const char* path = library_path;
-    if (path == NULL || path[0] == '\0') {
-#if defined(__APPLE__)
-        path = "libwgpu_native.dylib";
-#elif defined(_WIN32)
-        path = "wgpu_native.dll";
-#else
-        path = "libwgpu_native.so";
-#endif
-    }
-
-    g_wgpu_lib = dlopen(path, RTLD_NOW | RTLD_LOCAL);
-    if (g_wgpu_lib == NULL) {
-        set_error(dlerror());
-        return 0;
-    }
-
-    /* Core */
-    LOAD_SYM(wgpuCreateInstance,          PFN_wgpuCreateInstance,          g_create_instance);
-    LOAD_SYM(wgpuInstanceRelease,         PFN_wgpuInstanceRelease,         g_release_instance);
-    LOAD_SYM(wgpuInstanceRequestAdapter,  PFN_wgpuInstanceRequestAdapter,  g_request_adapter);
-    LOAD_SYM(wgpuAdapterRequestDevice,    PFN_wgpuAdapterRequestDevice,    g_request_device);
-    LOAD_SYM(wgpuAdapterRelease,          PFN_wgpuAdapterRelease,          g_release_adapter);
-    LOAD_SYM(wgpuDeviceRelease,           PFN_wgpuDeviceRelease,           g_release_device);
-    LOAD_SYM(wgpuDeviceGetQueue,          PFN_wgpuDeviceGetQueue,          g_get_queue);
-    LOAD_SYM(wgpuQueueRelease,            PFN_wgpuQueueRelease,            g_release_queue);
-
-    /* Surface */
-    LOAD_SYM(wgpuInstanceCreateSurface,       PFN_wgpuInstanceCreateSurface,      g_create_surface);
-    LOAD_SYM(wgpuSurfaceConfigure,            PFN_wgpuSurfaceConfigure,           g_configure_surface);
-    LOAD_SYM(wgpuSurfaceGetCurrentTexture,    PFN_wgpuSurfaceGetCurrentTexture,   g_surface_get_texture);
-    LOAD_SYM(wgpuSurfacePresent,              PFN_wgpuSurfacePresent,             g_surface_present);
-    LOAD_SYM(wgpuSurfaceUnconfigure,          PFN_wgpuSurfaceUnconfigure,         g_surface_unconfigure);
-    LOAD_SYM(wgpuSurfaceRelease,              PFN_wgpuSurfaceRelease,             g_surface_release);
-
-    /* Texture */
-    LOAD_SYM(wgpuDeviceCreateTexture,   PFN_wgpuDeviceCreateTexture,   g_create_texture);
-    LOAD_SYM(wgpuTextureCreateView,     PFN_wgpuTextureCreateView,     g_texture_create_view);
-    LOAD_SYM(wgpuTextureRelease,        PFN_wgpuTextureRelease,        g_texture_release);
-    LOAD_SYM(wgpuTextureViewRelease,    PFN_wgpuTextureViewRelease,    g_texture_view_release);
-
-    /* Shader */
-    LOAD_SYM(wgpuDeviceCreateShaderModule, PFN_wgpuDeviceCreateShaderModule, g_create_shader_module);
-    LOAD_SYM(wgpuShaderModuleRelease,      PFN_wgpuShaderModuleRelease,      g_shader_module_release);
-
-    /* Pipeline */
-    LOAD_SYM(wgpuDeviceCreateRenderPipeline,  PFN_wgpuDeviceCreateRenderPipeline, g_create_render_pipeline);
-    LOAD_SYM(wgpuRenderPipelineRelease,       PFN_wgpuRenderPipelineRelease,      g_render_pipeline_release);
-    LOAD_SYM(wgpuDeviceCreatePipelineLayout,  PFN_wgpuDeviceCreatePipelineLayout, g_create_pipeline_layout);
-    LOAD_SYM(wgpuPipelineLayoutRelease,       PFN_wgpuPipelineLayoutRelease,      g_pipeline_layout_release);
-
-    /* Buffer */
-    LOAD_SYM(wgpuDeviceCreateBuffer,  PFN_wgpuDeviceCreateBuffer,  g_create_buffer);
-    LOAD_SYM(wgpuQueueWriteBuffer,    PFN_wgpuQueueWriteBuffer,    g_queue_write_buffer);
-    LOAD_SYM(wgpuBufferRelease,       PFN_wgpuBufferRelease,       g_buffer_release);
-
-    /* Command encoder */
-    LOAD_SYM(wgpuDeviceCreateCommandEncoder,      PFN_wgpuDeviceCreateCommandEncoder,      g_create_command_encoder);
-    LOAD_SYM(wgpuCommandEncoderBeginRenderPass,   PFN_wgpuCommandEncoderBeginRenderPass,   g_begin_render_pass);
-    LOAD_SYM(wgpuCommandEncoderFinish,            PFN_wgpuCommandEncoderFinish,            g_encoder_finish);
-    LOAD_SYM(wgpuCommandEncoderRelease,           PFN_wgpuCommandEncoderRelease,           g_command_encoder_release);
-
-    /* Render pass encoder */
-    LOAD_SYM(wgpuRenderPassEncoderSetPipeline,     PFN_wgpuRenderPassEncoderSetPipeline,     g_rp_set_pipeline);
-    LOAD_SYM(wgpuRenderPassEncoderSetVertexBuffer, PFN_wgpuRenderPassEncoderSetVertexBuffer, g_rp_set_vertex_buffer);
-    LOAD_SYM(wgpuRenderPassEncoderSetIndexBuffer,  PFN_wgpuRenderPassEncoderSetIndexBuffer,  g_rp_set_index_buffer);
-    LOAD_SYM(wgpuRenderPassEncoderDraw,            PFN_wgpuRenderPassEncoderDraw,            g_rp_draw);
-    LOAD_SYM(wgpuRenderPassEncoderDrawIndexed,     PFN_wgpuRenderPassEncoderDrawIndexed,     g_rp_draw_indexed);
-    LOAD_SYM(wgpuRenderPassEncoderSetBindGroup,    PFN_wgpuRenderPassEncoderSetBindGroup,    g_rp_set_bind_group);
-    LOAD_SYM(wgpuRenderPassEncoderEnd,             PFN_wgpuRenderPassEncoderEnd,             g_rp_end);
-    LOAD_SYM(wgpuRenderPassEncoderRelease,         PFN_wgpuRenderPassEncoderRelease,         g_rp_release);
-    LOAD_SYM(wgpuRenderPassEncoderSetViewport,     PFN_wgpuRenderPassEncoderSetViewport,     g_rp_set_viewport);
-    LOAD_SYM(wgpuRenderPassEncoderSetScissorRect,  PFN_wgpuRenderPassEncoderSetScissorRect,  g_rp_set_scissor_rect);
-
-    /* Queue submit */
-    LOAD_SYM(wgpuQueueSubmit,          PFN_wgpuQueueSubmit,          g_queue_submit);
-    LOAD_SYM(wgpuCommandBufferRelease, PFN_wgpuCommandBufferRelease, g_command_buffer_release);
-    LOAD_SYM(wgpuQueueWriteTexture,    PFN_wgpuQueueWriteTexture,    g_queue_write_texture);
-
-    /* Sampler */
-    LOAD_SYM(wgpuDeviceCreateSampler, PFN_wgpuDeviceCreateSampler, g_create_sampler);
-    LOAD_SYM(wgpuSamplerRelease,      PFN_wgpuSamplerRelease,      g_sampler_release);
-
-    /* Bind Group */
-    LOAD_SYM(wgpuDeviceCreateBindGroupLayout, PFN_wgpuDeviceCreateBindGroupLayout, g_create_bind_group_layout);
-    LOAD_SYM(wgpuDeviceCreateBindGroup,       PFN_wgpuDeviceCreateBindGroup,       g_create_bind_group);
-    LOAD_SYM(wgpuBindGroupLayoutRelease,      PFN_wgpuBindGroupLayoutRelease,      g_bind_group_layout_release);
-    LOAD_SYM(wgpuBindGroupRelease,            PFN_wgpuBindGroupRelease,            g_bind_group_release);
-
-    /* Compute */
-    LOAD_SYM(wgpuDeviceCreateComputePipeline,          PFN_wgpuDeviceCreateComputePipeline,          g_create_compute_pipeline);
-    LOAD_SYM(wgpuComputePipelineRelease,               PFN_wgpuComputePipelineRelease,               g_compute_pipeline_release);
-    LOAD_SYM(wgpuCommandEncoderBeginComputePass,       PFN_wgpuCommandEncoderBeginComputePass,       g_begin_compute_pass);
-    LOAD_SYM(wgpuComputePassEncoderSetPipeline,        PFN_wgpuComputePassEncoderSetPipeline,        g_cp_set_pipeline);
-    LOAD_SYM(wgpuComputePassEncoderSetBindGroup,       PFN_wgpuComputePassEncoderSetBindGroup,       g_cp_set_bind_group);
-    LOAD_SYM(wgpuComputePassEncoderDispatchWorkgroups, PFN_wgpuComputePassEncoderDispatchWorkgroups, g_cp_dispatch);
-    LOAD_SYM(wgpuComputePassEncoderEnd,                PFN_wgpuComputePassEncoderEnd,                g_cp_end);
-    LOAD_SYM(wgpuComputePassEncoderRelease,            PFN_wgpuComputePassEncoderRelease,            g_cp_release);
-
-    /* Texture copy */
-    LOAD_SYM(wgpuCommandEncoderCopyTextureToTexture,   PFN_wgpuCommandEncoderCopyTextureToTexture,   g_copy_texture_to_texture);
-    LOAD_SYM(wgpuCommandEncoderCopyTextureToBuffer,    PFN_wgpuCommandEncoderCopyTextureToBuffer,    g_copy_texture_to_buffer);
-
-    /* Buffer mapping */
-    LOAD_SYM(wgpuBufferMapAsync,             PFN_wgpuBufferMapAsync,             g_buffer_map_async);
-    LOAD_SYM(wgpuBufferGetConstMappedRange,  PFN_wgpuBufferGetConstMappedRange,  g_buffer_get_mapped_range);
-    LOAD_SYM(wgpuBufferUnmap,                PFN_wgpuBufferUnmap,                g_buffer_unmap);
-    LOAD_SYM(wgpuDevicePoll,                 PFN_wgpuDevicePoll,                 g_device_poll);
-
-    /* Indirect */
-    LOAD_SYM(wgpuRenderPassEncoderDrawIndirect,                PFN_wgpuRenderPassEncoderDrawIndirect,                g_rp_draw_indirect);
-    LOAD_SYM(wgpuRenderPassEncoderDrawIndexedIndirect,         PFN_wgpuRenderPassEncoderDrawIndexedIndirect,         g_rp_draw_indexed_indirect);
-    LOAD_SYM(wgpuComputePassEncoderDispatchWorkgroupsIndirect, PFN_wgpuComputePassEncoderDispatchWorkgroupsIndirect, g_cp_dispatch_indirect);
-
-    /* Render Bundles */
-    LOAD_SYM(wgpuDeviceCreateRenderBundleEncoder,        PFN_wgpuDeviceCreateRenderBundleEncoder,        g_dev_create_bundle_encoder);
-    LOAD_SYM(wgpuRenderBundleEncoderFinish,              PFN_wgpuRenderBundleEncoderFinish,              g_bundle_encoder_finish);
-    LOAD_SYM(wgpuRenderBundleEncoderRelease,             PFN_wgpuRenderBundleEncoderRelease,             g_bundle_encoder_release);
-    LOAD_SYM(wgpuRenderBundleRelease,                    PFN_wgpuRenderBundleRelease,                    g_bundle_release);
-    LOAD_SYM(wgpuRenderBundleEncoderSetPipeline,         PFN_wgpuRenderBundleEncoderSetPipeline,         g_bundle_set_pipeline);
-    LOAD_SYM(wgpuRenderBundleEncoderSetVertexBuffer,     PFN_wgpuRenderBundleEncoderSetVertexBuffer,     g_bundle_set_vertex_buffer);
-    LOAD_SYM(wgpuRenderBundleEncoderSetIndexBuffer,      PFN_wgpuRenderBundleEncoderSetIndexBuffer,      g_bundle_set_index_buffer);
-    LOAD_SYM(wgpuRenderBundleEncoderSetBindGroup,        PFN_wgpuRenderBundleEncoderSetBindGroup,        g_bundle_set_bind_group);
-    LOAD_SYM(wgpuRenderBundleEncoderDraw,                PFN_wgpuRenderBundleEncoderDraw,                g_bundle_draw);
-    LOAD_SYM(wgpuRenderBundleEncoderDrawIndexed,         PFN_wgpuRenderBundleEncoderDrawIndexed,         g_bundle_draw_indexed);
-    LOAD_SYM(wgpuRenderBundleEncoderDrawIndirect,        PFN_wgpuRenderBundleEncoderDrawIndirect,        g_bundle_draw_indirect);
-    LOAD_SYM(wgpuRenderBundleEncoderDrawIndexedIndirect, PFN_wgpuRenderBundleEncoderDrawIndexedIndirect, g_bundle_draw_indexed_indirect);
-    LOAD_SYM(wgpuRenderPassEncoderExecuteBundles,        PFN_wgpuRenderPassEncoderExecuteBundles,        g_rp_execute_bundles);
-
-    /* Validate core symbols (non-core symbols are optional for graceful degradation) */
-    if (g_create_instance == NULL || g_release_instance == NULL ||
-        g_request_adapter == NULL || g_request_device == NULL ||
-        g_release_adapter == NULL || g_release_device == NULL ||
-        g_get_queue == NULL || g_release_queue == NULL) {
-        set_error("Failed to load required wgpu core symbols");
-        dlclose(g_wgpu_lib);
-        g_wgpu_lib = NULL;
-        return 0;
-    }
-
+    /* Direct linking — no symbol load required. Argument retained for ABI compat. */
+    (void)library_path;
     set_error(NULL);
     return 1;
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Instance / Adapter / Device (unchanged logic)
-   ═══════════════════════════════════════════════════════════════════ */
-
 int wgpu_bridge_create_instance(void** out_instance) {
-    if (out_instance == NULL) {
-        set_error("out_instance is null");
-        return 0;
-    }
+    if (out_instance == NULL) { set_error("out_instance is null"); return 0; }
     *out_instance = NULL;
-
-    if (g_create_instance == NULL) {
-        set_error("Bridge not initialized");
-        return 0;
-    }
-
-    WGPUInstanceDescriptor desc;
-    desc.nextInChain = NULL;
-
-    WGPUInstance instance = g_create_instance(&desc);
-    if (instance == NULL) {
-        set_error("wgpuCreateInstance returned null");
-        return 0;
-    }
-
-    *out_instance = (void*)instance;
+    WGPUInstanceDescriptor desc = WGPU_INSTANCE_DESCRIPTOR_INIT;
+    WGPUInstance inst = wgpuCreateInstance(&desc);
+    if (inst == NULL) { set_error("wgpuCreateInstance returned null"); return 0; }
+    *out_instance = (void*)inst;
     return 1;
 }
 
 int wgpu_bridge_request_adapter(void* instance, void** out_adapter) {
     if (instance == NULL || out_adapter == NULL) {
-        set_error("invalid adapter request arguments");
+        set_error("invalid request_adapter arguments");
         return 0;
     }
     *out_adapter = NULL;
 
-    if (g_request_adapter == NULL) {
-        set_error("Bridge not initialized");
+    AsyncResult result = {0};
+    WGPURequestAdapterOptions options = WGPU_REQUEST_ADAPTER_OPTIONS_INIT;
+    options.backendType = WGPUBackendType_Metal;
+    options.powerPreference = WGPUPowerPreference_HighPerformance;
+
+    WGPURequestAdapterCallbackInfo cb = WGPU_REQUEST_ADAPTER_CALLBACK_INFO_INIT;
+    cb.mode = WGPUCallbackMode_AllowProcessEvents;
+    cb.callback = on_request_adapter;
+    cb.userdata1 = &result;
+
+    wgpuInstanceRequestAdapter((WGPUInstance)instance, &options, cb);
+
+    /* Spin processEvents until callback fires (synchronous bridge contract). */
+    for (int i = 0; i < 10000 && !result.done; ++i) {
+        wgpuInstanceProcessEvents((WGPUInstance)instance);
+    }
+
+    if (!result.done) { set_error("wgpuInstanceRequestAdapter timed out"); return 0; }
+    if (!result.success) {
+        set_error(result.message[0] ? result.message : "wgpuInstanceRequestAdapter failed");
         return 0;
     }
 
-    WGPURequestAdapterOptions options;
-    memset(&options, 0, sizeof(options));
-
-    AwaitResult ar;
-    await_init(&ar);
-    g_request_adapter((WGPUInstance)instance, &options, adapter_callback, &ar);
-    await_wait(&ar);
-
-    if (!ar.success) {
-        set_error(ar.message[0] != '\0' ? ar.message : "wgpuInstanceRequestAdapter failed");
-        await_deinit(&ar);
-        return 0;
-    }
-
-    *out_adapter = ar.object;
-    await_deinit(&ar);
+    *out_adapter = result.object;
     return 1;
 }
 
 int wgpu_bridge_request_device(void* adapter, void** out_device) {
     if (adapter == NULL || out_device == NULL) {
-        set_error("invalid device request arguments");
+        set_error("invalid request_device arguments");
         return 0;
     }
     *out_device = NULL;
 
-    if (g_request_device == NULL) {
-        set_error("Bridge not initialized");
+    AsyncResult result = {0};
+    WGPUDeviceDescriptor desc = WGPU_DEVICE_DESCRIPTOR_INIT;
+
+    WGPURequestDeviceCallbackInfo cb = WGPU_REQUEST_DEVICE_CALLBACK_INFO_INIT;
+    cb.mode = WGPUCallbackMode_AllowProcessEvents;
+    cb.callback = on_request_device;
+    cb.userdata1 = &result;
+
+    wgpuAdapterRequestDevice((WGPUAdapter)adapter, &desc, cb);
+
+    /* The adapter's owning instance handle isn't directly exposed; v29
+       processes device callbacks via the same instance event loop. We poll
+       via wgpuDevicePoll once the device exists, but during request we
+       have to use the adapter's instance handle. wgpuAdapterGetInstance
+       isn't standard; instead the AllowProcessEvents mode means the
+       callback fires only inside wgpuInstanceProcessEvents. Without an
+       instance handle we drive completion via wgpuAdapterInfo style
+       blocking — wgpu-native fires this synchronously during the call. */
+    if (!result.done) { set_error("wgpuAdapterRequestDevice did not complete synchronously"); return 0; }
+    if (!result.success) {
+        set_error(result.message[0] ? result.message : "wgpuAdapterRequestDevice failed");
         return 0;
     }
 
-    WGPUDeviceDescriptor descriptor;
-    memset(&descriptor, 0, sizeof(descriptor));
-
-    AwaitResult ar;
-    await_init(&ar);
-    g_request_device((WGPUAdapter)adapter, &descriptor, device_callback, &ar);
-    await_wait(&ar);
-
-    if (!ar.success) {
-        set_error(ar.message[0] != '\0' ? ar.message : "wgpuAdapterRequestDevice failed");
-        await_deinit(&ar);
-        return 0;
-    }
-
-    *out_device = ar.object;
-    await_deinit(&ar);
+    *out_device = result.object;
     return 1;
 }
 
 int wgpu_bridge_get_queue(void* device, void** out_queue) {
-    if (device == NULL || out_queue == NULL) {
-        set_error("invalid get_queue arguments");
-        return 0;
-    }
-    if (g_get_queue == NULL) {
-        set_error("Bridge not initialized");
-        return 0;
-    }
-    *out_queue = (void*)g_get_queue((WGPUDevice)device);
-    return (*out_queue != NULL) ? 1 : 0;
+    if (device == NULL || out_queue == NULL) { set_error("invalid get_queue"); return 0; }
+    WGPUQueue q = wgpuDeviceGetQueue((WGPUDevice)device);
+    if (q == NULL) { set_error("wgpuDeviceGetQueue returned null"); return 0; }
+    *out_queue = (void*)q;
+    return 1;
 }
 
 int wgpu_bridge_release_queue(void* queue) {
-    if (queue == NULL) return 1;
-    if (g_release_queue == NULL) { set_error("Bridge not initialized"); return 0; }
-    g_release_queue((WGPUQueue)queue);
+    if (queue) wgpuQueueRelease((WGPUQueue)queue);
     return 1;
 }
-
 int wgpu_bridge_release_device(void* device) {
-    if (device == NULL) return 1;
-    if (g_release_device == NULL) { set_error("Bridge not initialized"); return 0; }
-    g_release_device((WGPUDevice)device);
+    if (device) wgpuDeviceRelease((WGPUDevice)device);
     return 1;
 }
-
 int wgpu_bridge_release_adapter(void* adapter) {
-    if (adapter == NULL) return 1;
-    if (g_release_adapter == NULL) { set_error("Bridge not initialized"); return 0; }
-    g_release_adapter((WGPUAdapter)adapter);
+    if (adapter) wgpuAdapterRelease((WGPUAdapter)adapter);
     return 1;
 }
-
 int wgpu_bridge_release_instance(void* instance) {
-    if (instance == NULL) return 1;
-    if (g_release_instance == NULL) { set_error("Bridge not initialized"); return 0; }
-    g_release_instance((WGPUInstance)instance);
+    if (instance) wgpuInstanceRelease((WGPUInstance)instance);
     return 1;
 }
 
 void wgpu_bridge_shutdown(void) {
-    g_create_instance = NULL;
-    g_release_instance = NULL;
-    g_request_adapter = NULL;
-    g_request_device = NULL;
-    g_release_adapter = NULL;
-    g_release_device = NULL;
-    g_get_queue = NULL;
-    g_release_queue = NULL;
-
-    g_create_surface = NULL;
-    g_configure_surface = NULL;
-    g_surface_get_texture = NULL;
-    g_surface_present = NULL;
-    g_surface_unconfigure = NULL;
-    g_surface_release = NULL;
-
-    g_create_texture = NULL;
-    g_texture_create_view = NULL;
-    g_texture_release = NULL;
-    g_texture_view_release = NULL;
-
-    g_create_shader_module = NULL;
-    g_shader_module_release = NULL;
-
-    g_create_render_pipeline = NULL;
-    g_render_pipeline_release = NULL;
-    g_create_pipeline_layout = NULL;
-    g_pipeline_layout_release = NULL;
-
-    g_create_buffer = NULL;
-    g_queue_write_buffer = NULL;
-    g_buffer_release = NULL;
-
-    g_create_command_encoder = NULL;
-    g_begin_render_pass = NULL;
-    g_encoder_finish = NULL;
-    g_command_encoder_release = NULL;
-
-    g_rp_set_pipeline = NULL;
-    g_rp_set_vertex_buffer = NULL;
-    g_rp_set_index_buffer = NULL;
-    g_rp_draw = NULL;
-    g_rp_draw_indexed = NULL;
-    g_rp_set_bind_group = NULL;
-    g_rp_end = NULL;
-    g_rp_release = NULL;
-
-    g_queue_submit = NULL;
-    g_command_buffer_release = NULL;
-
-    g_create_sampler = NULL;
-    g_sampler_release = NULL;
-
-    g_create_bind_group_layout = NULL;
-    g_create_bind_group = NULL;
-    g_bind_group_layout_release = NULL;
-    g_bind_group_release = NULL;
-
-    g_copy_texture_to_texture = NULL;
-    g_copy_texture_to_buffer = NULL;
-    g_buffer_map_async = NULL;
-    g_buffer_get_mapped_range = NULL;
-    g_buffer_unmap = NULL;
-    g_device_poll = NULL;
-
-    g_rp_draw_indirect = NULL;
-    g_rp_draw_indexed_indirect = NULL;
-    g_cp_dispatch_indirect = NULL;
-
-    g_dev_create_bundle_encoder = NULL;
-    g_bundle_encoder_finish = NULL;
-    g_bundle_encoder_release = NULL;
-    g_bundle_release = NULL;
-    g_bundle_set_pipeline = NULL;
-    g_bundle_set_vertex_buffer = NULL;
-    g_bundle_set_index_buffer = NULL;
-    g_bundle_set_bind_group = NULL;
-    g_bundle_draw = NULL;
-    g_bundle_draw_indexed = NULL;
-    g_bundle_draw_indirect = NULL;
-    g_bundle_draw_indexed_indirect = NULL;
-    g_rp_execute_bundles = NULL;
-
-    if (g_wgpu_lib != NULL) {
-        dlclose(g_wgpu_lib);
-        g_wgpu_lib = NULL;
-    }
-
+    /* Direct linking — no library handle to release. */
     set_error(NULL);
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Surface
-   ═══════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   Surface
+   ════════════════════════════════════════════════════════════════════ */
 
 int wgpu_bridge_create_surface_metal(void* instance, void* ca_metal_layer, void** out_surface) {
     if (instance == NULL || ca_metal_layer == NULL || out_surface == NULL) {
         set_error("invalid create_surface_metal arguments");
         return 0;
     }
-    if (g_create_surface == NULL) {
-        set_error("wgpuInstanceCreateSurface not loaded");
-        return 0;
-    }
 
-    WGPUSurfaceSourceMetalLayer metal_desc;
-    memset(&metal_desc, 0, sizeof(metal_desc));
-    metal_desc.chain.sType = WGPU_STYPE_SURFACE_FROM_METAL_LAYER;
-    metal_desc.chain.next = NULL;
-    metal_desc.layer = ca_metal_layer;
+    WGPUSurfaceSourceMetalLayer metal = WGPU_SURFACE_SOURCE_METAL_LAYER_INIT;
+    metal.layer = ca_metal_layer;
 
-    WGPUSurfaceDescriptor desc;
-    memset(&desc, 0, sizeof(desc));
-    desc.nextInChain = (const WGPUChainedStruct*)&metal_desc;
-    desc.label = NULL;
+    WGPUSurfaceDescriptor desc = WGPU_SURFACE_DESCRIPTOR_INIT;
+    desc.nextInChain = (WGPUChainedStruct*)&metal;
 
-    WGPUSurface_T surface = g_create_surface((WGPUInstance)instance, &desc);
-    if (surface == NULL) {
-        set_error("wgpuInstanceCreateSurface returned null");
-        return 0;
-    }
-
+    WGPUSurface surface = wgpuInstanceCreateSurface((WGPUInstance)instance, &desc);
+    if (surface == NULL) { set_error("wgpuInstanceCreateSurface returned null"); return 0; }
     *out_surface = (void*)surface;
     return 1;
 }
@@ -1372,22 +477,15 @@ int wgpu_bridge_configure_surface(void* surface, void* device,
         set_error("invalid configure_surface arguments");
         return 0;
     }
-    if (g_configure_surface == NULL) {
-        set_error("wgpuSurfaceConfigure not loaded");
-        return 0;
-    }
-
-    WGPUSurfaceConfiguration config;
-    memset(&config, 0, sizeof(config));
-    config.device = (WGPUDevice)device;
-    config.format = bridge_format_to_wgpu(format);
-    config.usage = 0x10; /* RenderAttachment */
-    config.alphaMode = 0; /* Auto */
-    config.width = width;
-    config.height = height;
-    config.presentMode = bridge_present_mode_to_wgpu(present_mode);
-
-    g_configure_surface((WGPUSurface_T)surface, &config);
+    WGPUSurfaceConfiguration cfg = WGPU_SURFACE_CONFIGURATION_INIT;
+    cfg.device      = (WGPUDevice)device;
+    cfg.format      = to_wgpu_format(format);
+    cfg.usage       = WGPUTextureUsage_RenderAttachment;
+    cfg.width       = width;
+    cfg.height      = height;
+    cfg.alphaMode   = WGPUCompositeAlphaMode_Auto;
+    cfg.presentMode = to_wgpu_present_mode(present_mode);
+    wgpuSurfaceConfigure((WGPUSurface)surface, &cfg);
     return 1;
 }
 
@@ -1398,48 +496,49 @@ int wgpu_bridge_surface_get_current_texture_view(void* surface,
         set_error("invalid surface_get_current_texture_view arguments");
         return 0;
     }
-    if (g_surface_get_texture == NULL || g_texture_create_view == NULL) {
-        set_error("surface/texture functions not loaded");
+
+    WGPUSurfaceTexture st = WGPU_SURFACE_TEXTURE_INIT;
+    wgpuSurfaceGetCurrentTexture((WGPUSurface)surface, &st);
+
+    /* v29 wgpu-native introduced an Occluded status for windows that the
+       compositor doesn't currently composite (e.g. fully covered, off-screen,
+       or in transient state right after creation). v22 collapsed this case
+       into Success. We treat it the same way the renderer treated v22:
+       skip the frame silently without recording an error. The renderer
+       checks the return value and simply waits for the next tick. */
+    if (st.status == WGPUSurfaceGetCurrentTextureStatus_Occluded) {
+        if (st.texture) wgpuTextureRelease(st.texture);
+        return 0;
+    }
+    if (st.texture == NULL ||
+        (st.status != WGPUSurfaceGetCurrentTextureStatus_SuccessOptimal &&
+         st.status != WGPUSurfaceGetCurrentTextureStatus_SuccessSuboptimal)) {
+        char buf[128];
+        snprintf(buf, sizeof(buf),
+                 "wgpuSurfaceGetCurrentTexture failed: status=0x%08x texture=%p",
+                 (unsigned)st.status, (void*)st.texture);
+        set_error(buf);
         return 0;
     }
 
-    WGPUSurfaceTexture st;
-    memset(&st, 0, sizeof(st));
-    g_surface_get_texture((WGPUSurface_T)surface, &st);
+    WGPUTextureView view = wgpuTextureCreateView(st.texture, NULL);
+    if (view == NULL) { set_error("wgpuTextureCreateView returned null"); return 0; }
 
-    if (st.texture == NULL || st.status != 0) {
-        set_error("wgpuSurfaceGetCurrentTexture failed");
-        return 0;
-    }
-
-    WGPUTextureView_T view = g_texture_create_view(st.texture, NULL);
-    if (view == NULL) {
-        set_error("wgpuTextureCreateView returned null");
-        return 0;
-    }
-
-    if (out_texture != NULL) {
-        *out_texture = (void*)st.texture;
-    }
+    if (out_texture) *out_texture = (void*)st.texture;
     *out_view = (void*)view;
     return 1;
 }
 
 void wgpu_bridge_surface_present(void* surface) {
-    if (surface != NULL && g_surface_present != NULL) {
-        g_surface_present((WGPUSurface_T)surface);
-    }
+    if (surface) wgpuSurfacePresent((WGPUSurface)surface);
 }
-
 void wgpu_bridge_release_surface(void* surface) {
-    if (surface != NULL && g_surface_release != NULL) {
-        g_surface_release((WGPUSurface_T)surface);
-    }
+    if (surface) wgpuSurfaceRelease((WGPUSurface)surface);
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Texture & View
-   ═══════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   Texture & View
+   ════════════════════════════════════════════════════════════════════ */
 
 int wgpu_bridge_create_texture(void* device,
                                const WGPUBridgeTextureDesc* desc,
@@ -1448,67 +547,65 @@ int wgpu_bridge_create_texture(void* device,
         set_error("invalid create_texture arguments");
         return 0;
     }
-    if (g_create_texture == NULL) {
-        set_error("wgpuDeviceCreateTexture not loaded");
-        return 0;
-    }
-
-    WGPUTextureDescriptor_I td;
-    memset(&td, 0, sizeof(td));
-    td.usage = (uint32_t)desc->usage_flags;
-    td.dimension = 1; /* 2D */
+    WGPUTextureDescriptor td = WGPU_TEXTURE_DESCRIPTOR_INIT;
+    td.usage = to_wgpu_texture_usage(desc->usage_flags);
+    td.dimension = WGPUTextureDimension_2D;
     td.size.width = desc->width;
     td.size.height = desc->height;
     td.size.depthOrArrayLayers = desc->depth_or_layers > 0 ? desc->depth_or_layers : 1;
-    td.format = bridge_format_to_wgpu(desc->format);
+    td.format = to_wgpu_format(desc->format);
     td.mipLevelCount = desc->mip_level_count > 0 ? desc->mip_level_count : 1;
     td.sampleCount = 1;
 
-    WGPUTexture_T texture = g_create_texture((WGPUDevice)device, &td);
-    if (texture == NULL) {
-        set_error("wgpuDeviceCreateTexture returned null");
-        return 0;
-    }
-
-    *out_texture = (void*)texture;
+    WGPUTexture tex = wgpuDeviceCreateTexture((WGPUDevice)device, &td);
+    if (tex == NULL) { set_error("wgpuDeviceCreateTexture returned null"); return 0; }
+    *out_texture = (void*)tex;
     return 1;
 }
 
 int wgpu_bridge_create_texture_view_default(void* texture, void** out_view) {
     if (texture == NULL || out_view == NULL) {
+        set_error("invalid create_texture_view_default arguments");
+        return 0;
+    }
+    WGPUTextureView v = wgpuTextureCreateView((WGPUTexture)texture, NULL);
+    if (v == NULL) { set_error("wgpuTextureCreateView returned null"); return 0; }
+    *out_view = (void*)v;
+    return 1;
+}
+
+int wgpu_bridge_create_texture_view(void* texture,
+                                    const WGPUBridgeTextureViewDesc* desc,
+                                    void** out_view) {
+    if (texture == NULL || desc == NULL || out_view == NULL) {
         set_error("invalid create_texture_view arguments");
         return 0;
     }
-    if (g_texture_create_view == NULL) {
-        set_error("wgpuTextureCreateView not loaded");
-        return 0;
-    }
+    WGPUTextureViewDescriptor vd = WGPU_TEXTURE_VIEW_DESCRIPTOR_INIT;
+    vd.format = to_wgpu_format(desc->format);
+    vd.dimension = to_wgpu_view_dim(desc->dimension);
+    vd.baseMipLevel = desc->base_mip_level;
+    vd.mipLevelCount = desc->mip_level_count > 0 ? desc->mip_level_count : 1;
+    vd.baseArrayLayer = desc->base_array_layer;
+    vd.arrayLayerCount = desc->array_layer_count > 0 ? desc->array_layer_count : 1;
+    vd.aspect = WGPUTextureAspect_All;
 
-    WGPUTextureView_T view = g_texture_create_view((WGPUTexture_T)texture, NULL);
-    if (view == NULL) {
-        set_error("wgpuTextureCreateView returned null");
-        return 0;
-    }
-
-    *out_view = (void*)view;
+    WGPUTextureView v = wgpuTextureCreateView((WGPUTexture)texture, &vd);
+    if (v == NULL) { set_error("wgpuTextureCreateView returned null"); return 0; }
+    *out_view = (void*)v;
     return 1;
 }
 
 void wgpu_bridge_release_texture(void* texture) {
-    if (texture != NULL && g_texture_release != NULL) {
-        g_texture_release((WGPUTexture_T)texture);
-    }
+    if (texture) wgpuTextureRelease((WGPUTexture)texture);
 }
-
 void wgpu_bridge_release_texture_view(void* view) {
-    if (view != NULL && g_texture_view_release != NULL) {
-        g_texture_view_release((WGPUTextureView_T)view);
-    }
+    if (view) wgpuTextureViewRelease((WGPUTextureView)view);
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Shader Module
-   ═══════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   Shader Module
+   ════════════════════════════════════════════════════════════════════ */
 
 int wgpu_bridge_create_shader_module(void* device,
                                      const char* wgsl_code,
@@ -1518,41 +615,45 @@ int wgpu_bridge_create_shader_module(void* device,
         set_error("invalid create_shader_module arguments");
         return 0;
     }
-    if (g_create_shader_module == NULL) {
-        set_error("wgpuDeviceCreateShaderModule not loaded");
-        return 0;
-    }
+    WGPUShaderSourceWGSL wgsl = WGPU_SHADER_SOURCE_WGSL_INIT;
+    wgsl.code = sv_from_cstr(wgsl_code);
 
-    WGPUShaderSourceWGSL wgsl;
-    memset(&wgsl, 0, sizeof(wgsl));
-    wgsl.chain.sType = WGPU_STYPE_SHADER_SOURCE_WGSL;
-    wgsl.chain.next = NULL;
-    wgsl.code = wgsl_code;
+    WGPUShaderModuleDescriptor desc = WGPU_SHADER_MODULE_DESCRIPTOR_INIT;
+    desc.nextInChain = &wgsl.chain;
+    desc.label = sv_from_cstr(label);
 
-    WGPUShaderModuleDescriptor desc;
-    memset(&desc, 0, sizeof(desc));
-    desc.nextInChain = (const WGPUChainedStruct*)&wgsl;
-    desc.label = label;
-
-    WGPUShaderModule_T module = g_create_shader_module((WGPUDevice)device, &desc);
-    if (module == NULL) {
-        set_error("wgpuDeviceCreateShaderModule returned null");
-        return 0;
-    }
-
-    *out_module = (void*)module;
+    WGPUShaderModule m = wgpuDeviceCreateShaderModule((WGPUDevice)device, &desc);
+    if (m == NULL) { set_error("wgpuDeviceCreateShaderModule returned null"); return 0; }
+    *out_module = (void*)m;
     return 1;
 }
 
 void wgpu_bridge_release_shader_module(void* module) {
-    if (module != NULL && g_shader_module_release != NULL) {
-        g_shader_module_release((WGPUShaderModule_T)module);
-    }
+    if (module) wgpuShaderModuleRelease((WGPUShaderModule)module);
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Render Pipeline
-   ═══════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   Render Pipeline (single target)
+   ════════════════════════════════════════════════════════════════════ */
+
+static void fill_depth_stencil_state(WGPUDepthStencilState* out,
+                                     const WGPUBridgeDepthStencilPipelineState* in) {
+    *out = (WGPUDepthStencilState)WGPU_DEPTH_STENCIL_STATE_INIT;
+    out->format = to_wgpu_format(in->format);
+    out->depthWriteEnabled = in->depth_write_enabled
+        ? WGPUOptionalBool_True : WGPUOptionalBool_False;
+    out->depthCompare = to_wgpu_compare(in->depth_compare);
+    out->stencilFront.compare = to_wgpu_compare(in->stencil_front.compare);
+    out->stencilFront.failOp = to_wgpu_stencil_op(in->stencil_front.fail_op);
+    out->stencilFront.depthFailOp = to_wgpu_stencil_op(in->stencil_front.depth_fail_op);
+    out->stencilFront.passOp = to_wgpu_stencil_op(in->stencil_front.pass_op);
+    out->stencilBack.compare = to_wgpu_compare(in->stencil_back.compare);
+    out->stencilBack.failOp = to_wgpu_stencil_op(in->stencil_back.fail_op);
+    out->stencilBack.depthFailOp = to_wgpu_stencil_op(in->stencil_back.depth_fail_op);
+    out->stencilBack.passOp = to_wgpu_stencil_op(in->stencil_back.pass_op);
+    out->stencilReadMask = in->stencil_read_mask;
+    out->stencilWriteMask = in->stencil_write_mask;
+}
 
 int wgpu_bridge_create_render_pipeline(
     void* device,
@@ -1573,124 +674,90 @@ int wgpu_bridge_create_render_pipeline(
         set_error("invalid create_render_pipeline arguments");
         return 0;
     }
-    if (g_create_render_pipeline == NULL) {
-        set_error("wgpuDeviceCreateRenderPipeline not loaded");
-        return 0;
-    }
 
-    /* Convert vertex buffer layouts */
-    WGPUVertexBufferLayout_I* vb_layouts = NULL;
-    WGPUVertexAttribute_I* all_attrs = NULL;
+    WGPUVertexBufferLayout* vb_layouts = NULL;
+    WGPUVertexAttribute* all_attrs = NULL;
 
     if (vertex_buffer_count > 0 && vertex_buffers != NULL) {
-        vb_layouts = (WGPUVertexBufferLayout_I*)calloc(vertex_buffer_count, sizeof(WGPUVertexBufferLayout_I));
-
-        /* Count total attributes for single allocation */
+        vb_layouts = (WGPUVertexBufferLayout*)calloc(vertex_buffer_count, sizeof(WGPUVertexBufferLayout));
         uint32_t total_attrs = 0;
-        for (uint32_t i = 0; i < vertex_buffer_count; i++) {
-            total_attrs += vertex_buffers[i].attribute_count;
-        }
-        all_attrs = (WGPUVertexAttribute_I*)calloc(total_attrs, sizeof(WGPUVertexAttribute_I));
+        for (uint32_t i = 0; i < vertex_buffer_count; ++i) total_attrs += vertex_buffers[i].attribute_count;
+        if (total_attrs > 0) all_attrs = (WGPUVertexAttribute*)calloc(total_attrs, sizeof(WGPUVertexAttribute));
 
-        uint32_t attr_offset = 0;
-        for (uint32_t i = 0; i < vertex_buffer_count; i++) {
+        uint32_t off = 0;
+        for (uint32_t i = 0; i < vertex_buffer_count; ++i) {
+            vb_layouts[i] = (WGPUVertexBufferLayout)WGPU_VERTEX_BUFFER_LAYOUT_INIT;
             vb_layouts[i].arrayStride = vertex_buffers[i].array_stride;
-            vb_layouts[i].stepMode = 0; /* Vertex */
+            vb_layouts[i].stepMode = WGPUVertexStepMode_Vertex;
             vb_layouts[i].attributeCount = vertex_buffers[i].attribute_count;
-            vb_layouts[i].attributes = &all_attrs[attr_offset];
-            for (uint32_t j = 0; j < vertex_buffers[i].attribute_count; j++) {
-                all_attrs[attr_offset + j].format = bridge_vertex_format_to_wgpu(vertex_buffers[i].attributes[j].format);
-                all_attrs[attr_offset + j].offset = vertex_buffers[i].attributes[j].offset;
-                all_attrs[attr_offset + j].shaderLocation = vertex_buffers[i].attributes[j].shader_location;
+            vb_layouts[i].attributes = vertex_buffers[i].attribute_count ? &all_attrs[off] : NULL;
+            for (uint32_t j = 0; j < vertex_buffers[i].attribute_count; ++j) {
+                all_attrs[off + j] = (WGPUVertexAttribute)WGPU_VERTEX_ATTRIBUTE_INIT;
+                all_attrs[off + j].format = to_wgpu_vertex_format(vertex_buffers[i].attributes[j].format);
+                all_attrs[off + j].offset = vertex_buffers[i].attributes[j].offset;
+                all_attrs[off + j].shaderLocation = vertex_buffers[i].attributes[j].shader_location;
             }
-            attr_offset += vertex_buffers[i].attribute_count;
+            off += vertex_buffers[i].attribute_count;
         }
     }
 
-    /* Color target */
-    WGPUBlendState_I blend_state;
-    WGPUColorTargetState_I color_target;
-    memset(&color_target, 0, sizeof(color_target));
-    color_target.format = bridge_format_to_wgpu(color_format);
-    color_target.writeMask = 0x0F; /* All */
-
+    WGPUBlendState blend_state = WGPU_BLEND_STATE_INIT;
     if (blend != NULL) {
-        blend_state.color.operation = bridge_blend_op_to_wgpu(blend->color.operation);
-        blend_state.color.srcFactor = bridge_blend_factor_to_wgpu(blend->color.src_factor);
-        blend_state.color.dstFactor = bridge_blend_factor_to_wgpu(blend->color.dst_factor);
-        blend_state.alpha.operation = bridge_blend_op_to_wgpu(blend->alpha.operation);
-        blend_state.alpha.srcFactor = bridge_blend_factor_to_wgpu(blend->alpha.src_factor);
-        blend_state.alpha.dstFactor = bridge_blend_factor_to_wgpu(blend->alpha.dst_factor);
-        color_target.blend = &blend_state;
+        blend_state.color.operation = to_wgpu_blend_op(blend->color.operation);
+        blend_state.color.srcFactor = to_wgpu_blend_factor(blend->color.src_factor);
+        blend_state.color.dstFactor = to_wgpu_blend_factor(blend->color.dst_factor);
+        blend_state.alpha.operation = to_wgpu_blend_op(blend->alpha.operation);
+        blend_state.alpha.srcFactor = to_wgpu_blend_factor(blend->alpha.src_factor);
+        blend_state.alpha.dstFactor = to_wgpu_blend_factor(blend->alpha.dst_factor);
     }
 
-    /* Fragment state */
-    WGPUFragmentState_I frag;
-    memset(&frag, 0, sizeof(frag));
-    frag.module = (WGPUShaderModule_T)shader_module;
-    frag.entryPoint = fragment_entry;
+    WGPUColorTargetState color_target = WGPU_COLOR_TARGET_STATE_INIT;
+    color_target.format = to_wgpu_format(color_format);
+    color_target.writeMask = WGPUColorWriteMask_All;
+    if (blend != NULL) color_target.blend = &blend_state;
+
+    WGPUFragmentState frag = WGPU_FRAGMENT_STATE_INIT;
+    frag.module = (WGPUShaderModule)shader_module;
+    frag.entryPoint = sv_from_cstr(fragment_entry);
     frag.targetCount = 1;
     frag.targets = &color_target;
 
-    /* Pipeline descriptor */
-    WGPURenderPipelineDescriptor_I desc;
-    memset(&desc, 0, sizeof(desc));
-    desc.vertex.module = (WGPUShaderModule_T)shader_module;
-    desc.vertex.entryPoint = vertex_entry;
+    WGPURenderPipelineDescriptor desc = WGPU_RENDER_PIPELINE_DESCRIPTOR_INIT;
+    desc.vertex.module = (WGPUShaderModule)shader_module;
+    desc.vertex.entryPoint = sv_from_cstr(vertex_entry);
     desc.vertex.bufferCount = vertex_buffer_count;
     desc.vertex.buffers = vb_layouts;
-    desc.primitive.topology = bridge_topology_to_wgpu(topology);
-    desc.primitive.stripIndexFormat = 0; /* Undefined */
-    desc.primitive.frontFace = bridge_front_face_to_wgpu(front_face);
-    desc.primitive.cullMode = bridge_cull_mode_to_wgpu(cull_mode);
+    desc.primitive.topology = to_wgpu_topology(topology);
+    desc.primitive.frontFace = to_wgpu_front_face(front_face);
+    desc.primitive.cullMode = to_wgpu_cull_mode(cull_mode);
     desc.multisample.count = 1;
     desc.multisample.mask = 0xFFFFFFFF;
     desc.fragment = &frag;
-    desc.layout = NULL; /* Auto layout */
+    desc.layout = NULL;
 
-    /* Depth stencil */
-    WGPUDepthStencilState_I ds;
+    WGPUDepthStencilState ds;
     if (depth_stencil != NULL) {
-        memset(&ds, 0, sizeof(ds));
-        ds.format = bridge_format_to_wgpu(depth_stencil->format);
-        ds.depthWriteEnabled = depth_stencil->depth_write_enabled ? 1 : 0;
-        ds.depthCompare = bridge_compare_function_to_wgpu(depth_stencil->depth_compare);
-        ds.stencilFront_compare = bridge_compare_function_to_wgpu(depth_stencil->stencil_front.compare);
-        ds.stencilFront_failOp = bridge_stencil_op_to_wgpu(depth_stencil->stencil_front.fail_op);
-        ds.stencilFront_depthFailOp = bridge_stencil_op_to_wgpu(depth_stencil->stencil_front.depth_fail_op);
-        ds.stencilFront_passOp = bridge_stencil_op_to_wgpu(depth_stencil->stencil_front.pass_op);
-        ds.stencilBack_compare = bridge_compare_function_to_wgpu(depth_stencil->stencil_back.compare);
-        ds.stencilBack_failOp = bridge_stencil_op_to_wgpu(depth_stencil->stencil_back.fail_op);
-        ds.stencilBack_depthFailOp = bridge_stencil_op_to_wgpu(depth_stencil->stencil_back.depth_fail_op);
-        ds.stencilBack_passOp = bridge_stencil_op_to_wgpu(depth_stencil->stencil_back.pass_op);
-        ds.stencilReadMask = depth_stencil->stencil_read_mask;
-        ds.stencilWriteMask = depth_stencil->stencil_write_mask;
+        fill_depth_stencil_state(&ds, depth_stencil);
         desc.depthStencil = &ds;
     }
 
-    WGPURenderPipeline_T pipeline = g_create_render_pipeline((WGPUDevice)device, &desc);
+    WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline((WGPUDevice)device, &desc);
 
     free(all_attrs);
     free(vb_layouts);
 
-    if (pipeline == NULL) {
-        set_error("wgpuDeviceCreateRenderPipeline returned null");
-        return 0;
-    }
-
+    if (pipeline == NULL) { set_error("wgpuDeviceCreateRenderPipeline returned null"); return 0; }
     *out_pipeline = (void*)pipeline;
     return 1;
 }
 
 void wgpu_bridge_release_render_pipeline(void* pipeline) {
-    if (pipeline != NULL && g_render_pipeline_release != NULL) {
-        g_render_pipeline_release((WGPURenderPipeline_T)pipeline);
-    }
+    if (pipeline) wgpuRenderPipelineRelease((WGPURenderPipeline)pipeline);
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Buffer
-   ═══════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   Buffer
+   ════════════════════════════════════════════════════════════════════ */
 
 int wgpu_bridge_create_buffer(void* device,
                               const WGPUBridgeBufferDesc* desc,
@@ -1699,64 +766,41 @@ int wgpu_bridge_create_buffer(void* device,
         set_error("invalid create_buffer arguments");
         return 0;
     }
-    if (g_create_buffer == NULL) {
-        set_error("wgpuDeviceCreateBuffer not loaded");
-        return 0;
-    }
-
-    WGPUBufferDescriptor_I bd;
-    memset(&bd, 0, sizeof(bd));
-    bd.usage = (uint32_t)desc->usage_flags;
+    WGPUBufferDescriptor bd = WGPU_BUFFER_DESCRIPTOR_INIT;
+    bd.usage = to_wgpu_buffer_usage(desc->usage_flags);
     bd.size = desc->size;
-    bd.mappedAtCreation = desc->mapped_at_creation ? 1 : 0;
+    bd.mappedAtCreation = desc->mapped_at_creation ? WGPU_TRUE : WGPU_FALSE;
 
-    WGPUBuffer_T buffer = g_create_buffer((WGPUDevice)device, &bd);
-    if (buffer == NULL) {
-        set_error("wgpuDeviceCreateBuffer returned null");
-        return 0;
-    }
-
-    *out_buffer = (void*)buffer;
+    WGPUBuffer buf = wgpuDeviceCreateBuffer((WGPUDevice)device, &bd);
+    if (buf == NULL) { set_error("wgpuDeviceCreateBuffer returned null"); return 0; }
+    *out_buffer = (void*)buf;
     return 1;
 }
 
 void wgpu_bridge_write_buffer(void* queue, void* buffer,
                               uint64_t offset, const void* data, size_t size) {
-    if (queue == NULL || buffer == NULL || data == NULL || size == 0) return;
-    if (g_queue_write_buffer == NULL) return;
-    g_queue_write_buffer((WGPUQueue)queue, (WGPUBuffer_T)buffer, offset, data, size);
-}
-
-void wgpu_bridge_release_buffer(void* buffer) {
-    if (buffer != NULL && g_buffer_release != NULL) {
-        g_buffer_release((WGPUBuffer_T)buffer);
+    if (queue && buffer && data && size > 0) {
+        wgpuQueueWriteBuffer((WGPUQueue)queue, (WGPUBuffer)buffer, offset, data, size);
     }
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Command Encoding
-   ═══════════════════════════════════════════════════════════════════ */
+void wgpu_bridge_release_buffer(void* buffer) {
+    if (buffer) wgpuBufferRelease((WGPUBuffer)buffer);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   Command Encoding & Render Pass
+   ════════════════════════════════════════════════════════════════════ */
 
 int wgpu_bridge_create_command_encoder(void* device, void** out_encoder) {
     if (device == NULL || out_encoder == NULL) {
         set_error("invalid create_command_encoder arguments");
         return 0;
     }
-    if (g_create_command_encoder == NULL) {
-        set_error("wgpuDeviceCreateCommandEncoder not loaded");
-        return 0;
-    }
-
-    WGPUCommandEncoderDescriptor_I desc;
-    memset(&desc, 0, sizeof(desc));
-
-    WGPUCommandEncoder_T encoder = g_create_command_encoder((WGPUDevice)device, &desc);
-    if (encoder == NULL) {
-        set_error("wgpuDeviceCreateCommandEncoder returned null");
-        return 0;
-    }
-
-    *out_encoder = (void*)encoder;
+    WGPUCommandEncoderDescriptor desc = WGPU_COMMAND_ENCODER_DESCRIPTOR_INIT;
+    WGPUCommandEncoder enc = wgpuDeviceCreateCommandEncoder((WGPUDevice)device, &desc);
+    if (enc == NULL) { set_error("wgpuDeviceCreateCommandEncoder returned null"); return 0; }
+    *out_encoder = (void*)enc;
     return 1;
 }
 
@@ -1771,20 +815,14 @@ int wgpu_bridge_begin_render_pass(void* encoder,
         set_error("invalid begin_render_pass arguments");
         return 0;
     }
-    if (g_begin_render_pass == NULL) {
-        set_error("wgpuCommandEncoderBeginRenderPass not loaded");
-        return 0;
-    }
 
-    WGPURenderPassColorAttachment_I ca;
-    memset(&ca, 0, sizeof(ca));
+    WGPURenderPassColorAttachment ca = WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
     size_t color_count = 0;
-
     if (color_view != NULL) {
-        ca.view = (WGPUTextureView_T)color_view;
-        ca.depthSlice = 0xFFFFFFFF; /* WGPU_DEPTH_SLICE_UNDEFINED */
-        ca.loadOp = bridge_load_op_to_wgpu(load_op);
-        ca.storeOp = bridge_store_op_to_wgpu(store_op);
+        ca.view = (WGPUTextureView)color_view;
+        ca.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+        ca.loadOp = to_wgpu_load_op(load_op);
+        ca.storeOp = to_wgpu_store_op(store_op);
         ca.clearValue.r = clear_color.r;
         ca.clearValue.g = clear_color.g;
         ca.clearValue.b = clear_color.b;
@@ -1792,64 +830,84 @@ int wgpu_bridge_begin_render_pass(void* encoder,
         color_count = 1;
     }
 
-    WGPURenderPassDepthStencilAttachment_I dsa;
-    WGPURenderPassDescriptor_I desc;
-    memset(&desc, 0, sizeof(desc));
+    WGPURenderPassDepthStencilAttachment dsa = WGPU_RENDER_PASS_DEPTH_STENCIL_ATTACHMENT_INIT;
+    WGPURenderPassDescriptor desc = WGPU_RENDER_PASS_DESCRIPTOR_INIT;
     desc.colorAttachmentCount = color_count;
     desc.colorAttachments = color_count > 0 ? &ca : NULL;
 
     if (depth != NULL && depth->view != NULL) {
-        memset(&dsa, 0, sizeof(dsa));
-        dsa.view = (WGPUTextureView_T)depth->view;
-        dsa.depthLoadOp = bridge_load_op_to_wgpu(depth->depth_load_op);
-        dsa.depthStoreOp = bridge_store_op_to_wgpu(depth->depth_store_op);
+        dsa.view = (WGPUTextureView)depth->view;
+        dsa.depthLoadOp = to_wgpu_load_op(depth->depth_load_op);
+        dsa.depthStoreOp = to_wgpu_store_op(depth->depth_store_op);
         dsa.depthClearValue = depth->clear_depth;
-        dsa.stencilLoadOp = bridge_load_op_to_wgpu(depth->stencil_load_op);
-        dsa.stencilStoreOp = bridge_store_op_to_wgpu(depth->stencil_store_op);
+        dsa.stencilLoadOp = to_wgpu_load_op(depth->stencil_load_op);
+        dsa.stencilStoreOp = to_wgpu_store_op(depth->stencil_store_op);
         dsa.stencilClearValue = depth->stencil_clear_value;
         desc.depthStencilAttachment = &dsa;
     }
 
-    WGPURenderPassEncoder_T pass = g_begin_render_pass((WGPUCommandEncoder_T)encoder, &desc);
-    if (pass == NULL) {
-        set_error("wgpuCommandEncoderBeginRenderPass returned null");
-        return 0;
-    }
-
+    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass((WGPUCommandEncoder)encoder, &desc);
+    if (pass == NULL) { set_error("wgpuCommandEncoderBeginRenderPass returned null"); return 0; }
     *out_pass = (void*)pass;
     return 1;
 }
 
 void wgpu_bridge_render_pass_set_pipeline(void* pass, void* pipeline) {
-    if (pass != NULL && pipeline != NULL && g_rp_set_pipeline != NULL) {
-        g_rp_set_pipeline((WGPURenderPassEncoder_T)pass, (WGPURenderPipeline_T)pipeline);
-    }
+    if (pass && pipeline)
+        wgpuRenderPassEncoderSetPipeline((WGPURenderPassEncoder)pass, (WGPURenderPipeline)pipeline);
 }
 
 void wgpu_bridge_render_pass_set_vertex_buffer(void* pass, uint32_t slot,
-                                               void* buffer, uint64_t offset,
-                                               uint64_t size) {
-    if (pass != NULL && buffer != NULL && g_rp_set_vertex_buffer != NULL) {
-        g_rp_set_vertex_buffer((WGPURenderPassEncoder_T)pass, slot,
-                               (WGPUBuffer_T)buffer, offset, size);
-    }
+                                               void* buffer, uint64_t offset, uint64_t size) {
+    if (pass && buffer)
+        wgpuRenderPassEncoderSetVertexBuffer((WGPURenderPassEncoder)pass, slot,
+                                             (WGPUBuffer)buffer, offset, size);
+}
+
+void wgpu_bridge_render_pass_set_index_buffer(void* pass, void* buffer,
+                                              WGPUBridgeIndexFormat format,
+                                              uint64_t offset, uint64_t size) {
+    if (pass && buffer)
+        wgpuRenderPassEncoderSetIndexBuffer((WGPURenderPassEncoder)pass, (WGPUBuffer)buffer,
+                                            to_wgpu_index_format(format), offset, size);
 }
 
 void wgpu_bridge_render_pass_draw(void* pass,
-                                  uint32_t vertex_count,
-                                  uint32_t instance_count,
-                                  uint32_t first_vertex,
-                                  uint32_t first_instance) {
-    if (pass != NULL && g_rp_draw != NULL) {
-        g_rp_draw((WGPURenderPassEncoder_T)pass,
-                  vertex_count, instance_count, first_vertex, first_instance);
-    }
+                                  uint32_t vertex_count, uint32_t instance_count,
+                                  uint32_t first_vertex, uint32_t first_instance) {
+    if (pass)
+        wgpuRenderPassEncoderDraw((WGPURenderPassEncoder)pass,
+                                  vertex_count, instance_count, first_vertex, first_instance);
+}
+
+void wgpu_bridge_render_pass_draw_indexed(void* pass,
+                                          uint32_t index_count, uint32_t instance_count,
+                                          uint32_t first_index, int32_t base_vertex,
+                                          uint32_t first_instance) {
+    if (pass)
+        wgpuRenderPassEncoderDrawIndexed((WGPURenderPassEncoder)pass,
+                                         index_count, instance_count, first_index,
+                                         base_vertex, first_instance);
+}
+
+void wgpu_bridge_render_pass_draw_indirect(void* pass, void* buffer, uint64_t offset) {
+    if (pass && buffer)
+        wgpuRenderPassEncoderDrawIndirect((WGPURenderPassEncoder)pass, (WGPUBuffer)buffer, offset);
+}
+
+void wgpu_bridge_render_pass_draw_indexed_indirect(void* pass, void* buffer, uint64_t offset) {
+    if (pass && buffer)
+        wgpuRenderPassEncoderDrawIndexedIndirect((WGPURenderPassEncoder)pass, (WGPUBuffer)buffer, offset);
+}
+
+void wgpu_bridge_render_pass_set_bind_group(void* pass, uint32_t group_index, void* bind_group) {
+    if (pass && bind_group)
+        wgpuRenderPassEncoderSetBindGroup((WGPURenderPassEncoder)pass, group_index,
+                                          (WGPUBindGroup)bind_group, 0, NULL);
 }
 
 void wgpu_bridge_render_pass_end(void* pass) {
-    if (pass != NULL && g_rp_end != NULL) {
-        g_rp_end((WGPURenderPassEncoder_T)pass);
-    }
+    if (pass) wgpuRenderPassEncoderEnd((WGPURenderPassEncoder)pass);
 }
 
 int wgpu_bridge_encoder_finish(void* encoder, void** out_command_buffer) {
@@ -1857,146 +915,77 @@ int wgpu_bridge_encoder_finish(void* encoder, void** out_command_buffer) {
         set_error("invalid encoder_finish arguments");
         return 0;
     }
-    if (g_encoder_finish == NULL) {
-        set_error("wgpuCommandEncoderFinish not loaded");
-        return 0;
-    }
-
-    WGPUCommandBufferDescriptor_I desc;
-    memset(&desc, 0, sizeof(desc));
-
-    WGPUCommandBuffer_T cb = g_encoder_finish((WGPUCommandEncoder_T)encoder, &desc);
-    if (cb == NULL) {
-        set_error("wgpuCommandEncoderFinish returned null");
-        return 0;
-    }
-
+    WGPUCommandBufferDescriptor desc = WGPU_COMMAND_BUFFER_DESCRIPTOR_INIT;
+    WGPUCommandBuffer cb = wgpuCommandEncoderFinish((WGPUCommandEncoder)encoder, &desc);
+    if (cb == NULL) { set_error("wgpuCommandEncoderFinish returned null"); return 0; }
     *out_command_buffer = (void*)cb;
     return 1;
 }
 
 void wgpu_bridge_queue_submit(void* queue, void** command_buffers, uint32_t count) {
-    if (queue == NULL || command_buffers == NULL || count == 0) return;
-    if (g_queue_submit == NULL) return;
-    g_queue_submit((WGPUQueue)queue, (size_t)count, (const WGPUCommandBuffer_T*)command_buffers);
+    if (queue && command_buffers && count > 0)
+        wgpuQueueSubmit((WGPUQueue)queue, (size_t)count, (const WGPUCommandBuffer*)command_buffers);
 }
 
-void wgpu_bridge_release_command_buffer(void* command_buffer) {
-    if (command_buffer != NULL && g_command_buffer_release != NULL) {
-        g_command_buffer_release((WGPUCommandBuffer_T)command_buffer);
-    }
+void wgpu_bridge_release_command_buffer(void* cb) {
+    if (cb) wgpuCommandBufferRelease((WGPUCommandBuffer)cb);
 }
-
-void wgpu_bridge_release_command_encoder(void* encoder) {
-    if (encoder != NULL && g_command_encoder_release != NULL) {
-        g_command_encoder_release((WGPUCommandEncoder_T)encoder);
-    }
+void wgpu_bridge_release_command_encoder(void* enc) {
+    if (enc) wgpuCommandEncoderRelease((WGPUCommandEncoder)enc);
 }
-
 void wgpu_bridge_release_render_pass_encoder(void* pass) {
-    if (pass != NULL && g_rp_release != NULL) {
-        g_rp_release((WGPURenderPassEncoder_T)pass);
-    }
+    if (pass) wgpuRenderPassEncoderRelease((WGPURenderPassEncoder)pass);
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Viewport / Scissor
-   ═══════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   Viewport / Scissor
+   ════════════════════════════════════════════════════════════════════ */
 
 void wgpu_bridge_render_pass_set_viewport(void* pass,
-                                          float x, float y,
-                                          float width, float height,
+                                          float x, float y, float w, float h,
                                           float min_depth, float max_depth) {
-    if (pass != NULL && g_rp_set_viewport != NULL) {
-        g_rp_set_viewport((WGPURenderPassEncoder_T)pass,
-                          x, y, width, height, min_depth, max_depth);
-    }
+    if (pass)
+        wgpuRenderPassEncoderSetViewport((WGPURenderPassEncoder)pass, x, y, w, h, min_depth, max_depth);
 }
 
 void wgpu_bridge_render_pass_set_scissor_rect(void* pass,
                                               uint32_t x, uint32_t y,
-                                              uint32_t width, uint32_t height) {
-    if (pass != NULL && g_rp_set_scissor_rect != NULL) {
-        g_rp_set_scissor_rect((WGPURenderPassEncoder_T)pass, x, y, width, height);
-    }
+                                              uint32_t w, uint32_t h) {
+    if (pass)
+        wgpuRenderPassEncoderSetScissorRect((WGPURenderPassEncoder)pass, x, y, w, h);
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Write Texture
-   ═══════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   Write Texture
+   ════════════════════════════════════════════════════════════════════ */
 
 void wgpu_bridge_write_texture(void* queue,
-                               void* texture,
-                               uint32_t mip_level,
-                               const void* data,
-                               size_t data_size,
-                               uint32_t bytes_per_row,
-                               uint32_t rows_per_image,
-                               uint32_t width,
-                               uint32_t height,
-                               uint32_t depth_or_layers) {
-    if (queue == NULL || texture == NULL || data == NULL || g_queue_write_texture == NULL) {
-        return;
-    }
+                               void* texture, uint32_t mip_level,
+                               const void* data, size_t data_size,
+                               uint32_t bytes_per_row, uint32_t rows_per_image,
+                               uint32_t width, uint32_t height, uint32_t depth_or_layers) {
+    if (queue == NULL || texture == NULL || data == NULL) return;
 
-    WGPUImageCopyTexture_I dst;
-    memset(&dst, 0, sizeof(dst));
-    dst.texture = (WGPUTexture_T)texture;
+    WGPUTexelCopyTextureInfo dst = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
+    dst.texture = (WGPUTexture)texture;
     dst.mipLevel = mip_level;
-    dst.aspect = 1; /* WGPUTextureAspect_All */
+    dst.aspect = WGPUTextureAspect_All;
 
-    WGPUTextureDataLayout_I layout;
-    memset(&layout, 0, sizeof(layout));
+    WGPUTexelCopyBufferLayout layout = WGPU_TEXEL_COPY_BUFFER_LAYOUT_INIT;
     layout.bytesPerRow = bytes_per_row;
     layout.rowsPerImage = rows_per_image;
 
-    WGPUExtent3D size;
+    WGPUExtent3D size = WGPU_EXTENT_3D_INIT;
     size.width = width;
     size.height = height;
     size.depthOrArrayLayers = depth_or_layers;
 
-    g_queue_write_texture((WGPUQueue)queue, &dst, data, data_size, &layout, &size);
+    wgpuQueueWriteTexture((WGPUQueue)queue, &dst, data, data_size, &layout, &size);
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Index Buffer / Draw Indexed / Bind Group
-   ═══════════════════════════════════════════════════════════════════ */
-
-void wgpu_bridge_render_pass_set_index_buffer(void* pass, void* buffer,
-                                              WGPUBridgeIndexFormat format,
-                                              uint64_t offset, uint64_t size) {
-    if (pass != NULL && buffer != NULL && g_rp_set_index_buffer != NULL) {
-        g_rp_set_index_buffer((WGPURenderPassEncoder_T)pass,
-                              (WGPUBuffer_T)buffer,
-                              bridge_index_format_to_wgpu(format),
-                              offset, size);
-    }
-}
-
-void wgpu_bridge_render_pass_draw_indexed(void* pass,
-                                          uint32_t index_count,
-                                          uint32_t instance_count,
-                                          uint32_t first_index,
-                                          int32_t base_vertex,
-                                          uint32_t first_instance) {
-    if (pass != NULL && g_rp_draw_indexed != NULL) {
-        g_rp_draw_indexed((WGPURenderPassEncoder_T)pass,
-                          index_count, instance_count, first_index,
-                          base_vertex, first_instance);
-    }
-}
-
-void wgpu_bridge_render_pass_set_bind_group(void* pass, uint32_t group_index,
-                                            void* bind_group) {
-    if (pass != NULL && bind_group != NULL && g_rp_set_bind_group != NULL) {
-        g_rp_set_bind_group((WGPURenderPassEncoder_T)pass,
-                            group_index, bind_group, 0, NULL);
-    }
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Sampler
-   ═══════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   Sampler
+   ════════════════════════════════════════════════════════════════════ */
 
 int wgpu_bridge_create_sampler(void* device,
                                const WGPUBridgeSamplerDesc* desc,
@@ -2005,42 +994,30 @@ int wgpu_bridge_create_sampler(void* device,
         set_error("invalid create_sampler arguments");
         return 0;
     }
-    if (g_create_sampler == NULL) {
-        set_error("wgpuDeviceCreateSampler not loaded");
-        return 0;
-    }
-
-    WGPUSamplerDescriptor_I sd;
-    memset(&sd, 0, sizeof(sd));
-    sd.addressModeU = bridge_address_mode_to_wgpu(desc->address_mode_u);
-    sd.addressModeV = bridge_address_mode_to_wgpu(desc->address_mode_v);
-    sd.addressModeW = bridge_address_mode_to_wgpu(desc->address_mode_u);
-    sd.magFilter = bridge_filter_mode_to_wgpu(desc->mag_filter);
-    sd.minFilter = bridge_filter_mode_to_wgpu(desc->min_filter);
-    sd.mipmapFilter = bridge_filter_mode_to_wgpu(desc->mipmap_filter);
+    WGPUSamplerDescriptor sd = WGPU_SAMPLER_DESCRIPTOR_INIT;
+    sd.addressModeU = to_wgpu_address_mode(desc->address_mode_u);
+    sd.addressModeV = to_wgpu_address_mode(desc->address_mode_v);
+    sd.addressModeW = to_wgpu_address_mode(desc->address_mode_u);
+    sd.magFilter = to_wgpu_filter(desc->mag_filter);
+    sd.minFilter = to_wgpu_filter(desc->min_filter);
+    sd.mipmapFilter = to_wgpu_mipmap_filter(desc->mipmap_filter);
     sd.lodMinClamp = 0.0f;
     sd.lodMaxClamp = 32.0f;
     sd.maxAnisotropy = 1;
 
-    WGPUSampler_T sampler = g_create_sampler((WGPUDevice)device, &sd);
-    if (sampler == NULL) {
-        set_error("wgpuDeviceCreateSampler returned null");
-        return 0;
-    }
-
-    *out_sampler = (void*)sampler;
+    WGPUSampler s = wgpuDeviceCreateSampler((WGPUDevice)device, &sd);
+    if (s == NULL) { set_error("wgpuDeviceCreateSampler returned null"); return 0; }
+    *out_sampler = (void*)s;
     return 1;
 }
 
 void wgpu_bridge_release_sampler(void* sampler) {
-    if (sampler != NULL && g_sampler_release != NULL) {
-        g_sampler_release((WGPUSampler_T)sampler);
-    }
+    if (sampler) wgpuSamplerRelease((WGPUSampler)sampler);
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Bind Group
-   ═══════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   Bind Group
+   ════════════════════════════════════════════════════════════════════ */
 
 int wgpu_bridge_create_bind_group_layout(void* device,
                                          const WGPUBridgeBindGroupLayoutEntry* entries,
@@ -2050,58 +1027,45 @@ int wgpu_bridge_create_bind_group_layout(void* device,
         set_error("invalid create_bind_group_layout arguments");
         return 0;
     }
-    if (g_create_bind_group_layout == NULL) {
-        set_error("wgpuDeviceCreateBindGroupLayout not loaded");
-        return 0;
-    }
-
-    WGPUBindGroupLayoutEntry_I* wgpu_entries = NULL;
+    WGPUBindGroupLayoutEntry* es = NULL;
     if (entry_count > 0 && entries != NULL) {
-        wgpu_entries = (WGPUBindGroupLayoutEntry_I*)calloc(entry_count, sizeof(WGPUBindGroupLayoutEntry_I));
-        for (uint32_t i = 0; i < entry_count; i++) {
-            wgpu_entries[i].binding = entries[i].binding;
-            wgpu_entries[i].visibility = entries[i].visibility;
-
+        es = (WGPUBindGroupLayoutEntry*)calloc(entry_count, sizeof(WGPUBindGroupLayoutEntry));
+        for (uint32_t i = 0; i < entry_count; ++i) {
+            es[i] = (WGPUBindGroupLayoutEntry)WGPU_BIND_GROUP_LAYOUT_ENTRY_INIT;
+            es[i].binding = entries[i].binding;
+            es[i].visibility = to_wgpu_shader_stage(entries[i].visibility);
             switch (entries[i].type) {
                 case WGPUBridge_BindingType_UniformBuffer:
-                    wgpu_entries[i].buffer.type = 1; /* Uniform */
+                    es[i].buffer.type = WGPUBufferBindingType_Uniform;
                     break;
                 case WGPUBridge_BindingType_StorageBuffer:
-                    wgpu_entries[i].buffer.type = 2; /* Storage */
+                    es[i].buffer.type = WGPUBufferBindingType_Storage;
                     break;
                 case WGPUBridge_BindingType_ReadOnlyStorageBuffer:
-                    wgpu_entries[i].buffer.type = 3; /* ReadOnlyStorage */
+                    es[i].buffer.type = WGPUBufferBindingType_ReadOnlyStorage;
                     break;
                 case WGPUBridge_BindingType_Sampler:
-                    wgpu_entries[i].sampler.type = 1; /* Filtering */
+                    es[i].sampler.type = WGPUSamplerBindingType_Filtering;
                     break;
                 case WGPUBridge_BindingType_SampledTexture:
-                    wgpu_entries[i].texture.sampleType = 1; /* Float */
-                    wgpu_entries[i].texture.viewDimension = 2; /* 2D */
+                    es[i].texture.sampleType = WGPUTextureSampleType_Float;
+                    es[i].texture.viewDimension = WGPUTextureViewDimension_2D;
                     break;
             }
         }
     }
-
-    WGPUBindGroupLayoutDescriptor_I desc;
-    memset(&desc, 0, sizeof(desc));
+    WGPUBindGroupLayoutDescriptor desc = WGPU_BIND_GROUP_LAYOUT_DESCRIPTOR_INIT;
     desc.entryCount = entry_count;
-    desc.entries = wgpu_entries;
+    desc.entries = es;
 
-    WGPUBindGroupLayout_T layout = g_create_bind_group_layout((WGPUDevice)device, &desc);
-    free(wgpu_entries);
-
-    if (layout == NULL) {
-        set_error("wgpuDeviceCreateBindGroupLayout returned null");
-        return 0;
-    }
-
+    WGPUBindGroupLayout layout = wgpuDeviceCreateBindGroupLayout((WGPUDevice)device, &desc);
+    free(es);
+    if (layout == NULL) { set_error("wgpuDeviceCreateBindGroupLayout returned null"); return 0; }
     *out_layout = (void*)layout;
     return 1;
 }
 
-int wgpu_bridge_create_bind_group(void* device,
-                                  void* layout,
+int wgpu_bridge_create_bind_group(void* device, void* layout,
                                   const WGPUBridgeBindGroupEntry* entries,
                                   uint32_t entry_count,
                                   void** out_bind_group) {
@@ -2109,38 +1073,27 @@ int wgpu_bridge_create_bind_group(void* device,
         set_error("invalid create_bind_group arguments");
         return 0;
     }
-    if (g_create_bind_group == NULL) {
-        set_error("wgpuDeviceCreateBindGroup not loaded");
-        return 0;
-    }
-
-    WGPUBindGroupEntry_I* wgpu_entries = NULL;
+    WGPUBindGroupEntry* es = NULL;
     if (entry_count > 0 && entries != NULL) {
-        wgpu_entries = (WGPUBindGroupEntry_I*)calloc(entry_count, sizeof(WGPUBindGroupEntry_I));
-        for (uint32_t i = 0; i < entry_count; i++) {
-            wgpu_entries[i].binding = entries[i].binding;
-            wgpu_entries[i].buffer = (WGPUBuffer_T)entries[i].buffer;
-            wgpu_entries[i].offset = entries[i].offset;
-            wgpu_entries[i].size = entries[i].size;
-            wgpu_entries[i].sampler = (WGPUSampler_T)entries[i].sampler;
-            wgpu_entries[i].textureView = (WGPUTextureView_T)entries[i].texture_view;
+        es = (WGPUBindGroupEntry*)calloc(entry_count, sizeof(WGPUBindGroupEntry));
+        for (uint32_t i = 0; i < entry_count; ++i) {
+            es[i] = (WGPUBindGroupEntry)WGPU_BIND_GROUP_ENTRY_INIT;
+            es[i].binding = entries[i].binding;
+            es[i].buffer = (WGPUBuffer)entries[i].buffer;
+            es[i].offset = entries[i].offset;
+            es[i].size = entries[i].size;
+            es[i].sampler = (WGPUSampler)entries[i].sampler;
+            es[i].textureView = (WGPUTextureView)entries[i].texture_view;
         }
     }
-
-    WGPUBindGroupDescriptor_I desc;
-    memset(&desc, 0, sizeof(desc));
-    desc.layout = (WGPUBindGroupLayout_T)layout;
+    WGPUBindGroupDescriptor desc = WGPU_BIND_GROUP_DESCRIPTOR_INIT;
+    desc.layout = (WGPUBindGroupLayout)layout;
     desc.entryCount = entry_count;
-    desc.entries = wgpu_entries;
+    desc.entries = es;
 
-    WGPUBindGroup_T bg = g_create_bind_group((WGPUDevice)device, &desc);
-    free(wgpu_entries);
-
-    if (bg == NULL) {
-        set_error("wgpuDeviceCreateBindGroup returned null");
-        return 0;
-    }
-
+    WGPUBindGroup bg = wgpuDeviceCreateBindGroup((WGPUDevice)device, &desc);
+    free(es);
+    if (bg == NULL) { set_error("wgpuDeviceCreateBindGroup returned null"); return 0; }
     *out_bind_group = (void*)bg;
     return 1;
 }
@@ -2153,47 +1106,29 @@ int wgpu_bridge_create_pipeline_layout(void* device,
         set_error("invalid create_pipeline_layout arguments");
         return 0;
     }
-    if (g_create_pipeline_layout == NULL) {
-        set_error("wgpuDeviceCreatePipelineLayout not loaded");
-        return 0;
-    }
-
-    WGPUPipelineLayoutDescriptor_I desc;
-    memset(&desc, 0, sizeof(desc));
+    WGPUPipelineLayoutDescriptor desc = WGPU_PIPELINE_LAYOUT_DESCRIPTOR_INIT;
     desc.bindGroupLayoutCount = layout_count;
-    desc.bindGroupLayouts = (const void* const*)bind_group_layouts;
+    desc.bindGroupLayouts = (const WGPUBindGroupLayout*)bind_group_layouts;
 
-    WGPUPipelineLayout_T pl = g_create_pipeline_layout((WGPUDevice)device, &desc);
-    if (pl == NULL) {
-        set_error("wgpuDeviceCreatePipelineLayout returned null");
-        return 0;
-    }
-
+    WGPUPipelineLayout pl = wgpuDeviceCreatePipelineLayout((WGPUDevice)device, &desc);
+    if (pl == NULL) { set_error("wgpuDeviceCreatePipelineLayout returned null"); return 0; }
     *out_layout = (void*)pl;
     return 1;
 }
 
 void wgpu_bridge_release_bind_group_layout(void* layout) {
-    if (layout != NULL && g_bind_group_layout_release != NULL) {
-        g_bind_group_layout_release((WGPUBindGroupLayout_T)layout);
-    }
+    if (layout) wgpuBindGroupLayoutRelease((WGPUBindGroupLayout)layout);
 }
-
-void wgpu_bridge_release_bind_group(void* bind_group) {
-    if (bind_group != NULL && g_bind_group_release != NULL) {
-        g_bind_group_release((WGPUBindGroup_T)bind_group);
-    }
+void wgpu_bridge_release_bind_group(void* bg) {
+    if (bg) wgpuBindGroupRelease((WGPUBindGroup)bg);
 }
-
 void wgpu_bridge_release_pipeline_layout(void* layout) {
-    if (layout != NULL && g_pipeline_layout_release != NULL) {
-        g_pipeline_layout_release((WGPUPipelineLayout_T)layout);
-    }
+    if (layout) wgpuPipelineLayoutRelease((WGPUPipelineLayout)layout);
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Compute Pipeline
-   ═══════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   Compute Pipeline & Pass
+   ════════════════════════════════════════════════════════════════════ */
 
 int wgpu_bridge_create_compute_pipeline(void* device,
                                         void* shader_module,
@@ -2204,118 +1139,78 @@ int wgpu_bridge_create_compute_pipeline(void* device,
         set_error("invalid create_compute_pipeline arguments");
         return 0;
     }
-    if (g_create_compute_pipeline == NULL) {
-        set_error("wgpuDeviceCreateComputePipeline not loaded");
-        return 0;
-    }
+    WGPUComputePipelineDescriptor desc = WGPU_COMPUTE_PIPELINE_DESCRIPTOR_INIT;
+    desc.layout = (WGPUPipelineLayout)pipeline_layout;
+    desc.compute.module = (WGPUShaderModule)shader_module;
+    desc.compute.entryPoint = sv_from_cstr(entry_point);
 
-    WGPUComputePipelineDescriptor_I desc;
-    memset(&desc, 0, sizeof(desc));
-    desc.layout = (WGPUPipelineLayout_T)pipeline_layout;
-    desc.compute.module = (WGPUShaderModule_T)shader_module;
-    desc.compute.entryPoint = entry_point;
-
-    WGPUComputePipeline_T cp = g_create_compute_pipeline((WGPUDevice)device, &desc);
-    if (cp == NULL) {
-        set_error("wgpuDeviceCreateComputePipeline returned null");
-        return 0;
-    }
-
+    WGPUComputePipeline cp = wgpuDeviceCreateComputePipeline((WGPUDevice)device, &desc);
+    if (cp == NULL) { set_error("wgpuDeviceCreateComputePipeline returned null"); return 0; }
     *out_pipeline = (void*)cp;
     return 1;
 }
 
-void wgpu_bridge_release_compute_pipeline(void* pipeline) {
-    if (pipeline != NULL && g_compute_pipeline_release != NULL) {
-        g_compute_pipeline_release((WGPUComputePipeline_T)pipeline);
-    }
+void wgpu_bridge_release_compute_pipeline(void* p) {
+    if (p) wgpuComputePipelineRelease((WGPUComputePipeline)p);
 }
-
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Compute Pass
-   ═══════════════════════════════════════════════════════════════════ */
 
 int wgpu_bridge_begin_compute_pass(void* encoder, void** out_pass) {
     if (encoder == NULL || out_pass == NULL) {
         set_error("invalid begin_compute_pass arguments");
         return 0;
     }
-    if (g_begin_compute_pass == NULL) {
-        set_error("wgpuCommandEncoderBeginComputePass not loaded");
-        return 0;
-    }
-
-    WGPUComputePassDescriptor_I desc;
-    memset(&desc, 0, sizeof(desc));
-
-    WGPUComputePassEncoder_T pass = g_begin_compute_pass((WGPUCommandEncoder_T)encoder, &desc);
-    if (pass == NULL) {
-        set_error("wgpuCommandEncoderBeginComputePass returned null");
-        return 0;
-    }
-
+    WGPUComputePassDescriptor desc = WGPU_COMPUTE_PASS_DESCRIPTOR_INIT;
+    WGPUComputePassEncoder pass = wgpuCommandEncoderBeginComputePass((WGPUCommandEncoder)encoder, &desc);
+    if (pass == NULL) { set_error("wgpuCommandEncoderBeginComputePass returned null"); return 0; }
     *out_pass = (void*)pass;
     return 1;
 }
 
 void wgpu_bridge_compute_pass_set_pipeline(void* pass, void* pipeline) {
-    if (pass != NULL && pipeline != NULL && g_cp_set_pipeline != NULL) {
-        g_cp_set_pipeline((WGPUComputePassEncoder_T)pass, (WGPUComputePipeline_T)pipeline);
-    }
+    if (pass && pipeline)
+        wgpuComputePassEncoderSetPipeline((WGPUComputePassEncoder)pass, (WGPUComputePipeline)pipeline);
 }
-
-void wgpu_bridge_compute_pass_set_bind_group(void* pass, uint32_t group_index, void* bind_group) {
-    if (pass != NULL && bind_group != NULL && g_cp_set_bind_group != NULL) {
-        g_cp_set_bind_group((WGPUComputePassEncoder_T)pass, group_index, bind_group, 0, NULL);
-    }
+void wgpu_bridge_compute_pass_set_bind_group(void* pass, uint32_t i, void* bg) {
+    if (pass && bg)
+        wgpuComputePassEncoderSetBindGroup((WGPUComputePassEncoder)pass, i, (WGPUBindGroup)bg, 0, NULL);
 }
-
 void wgpu_bridge_compute_pass_dispatch(void* pass, uint32_t x, uint32_t y, uint32_t z) {
-    if (pass != NULL && g_cp_dispatch != NULL) {
-        g_cp_dispatch((WGPUComputePassEncoder_T)pass, x, y, z);
-    }
+    if (pass) wgpuComputePassEncoderDispatchWorkgroups((WGPUComputePassEncoder)pass, x, y, z);
 }
-
+void wgpu_bridge_compute_pass_dispatch_indirect(void* pass, void* buf, uint64_t off) {
+    if (pass && buf)
+        wgpuComputePassEncoderDispatchWorkgroupsIndirect((WGPUComputePassEncoder)pass, (WGPUBuffer)buf, off);
+}
 void wgpu_bridge_compute_pass_end(void* pass) {
-    if (pass != NULL && g_cp_end != NULL) {
-        g_cp_end((WGPUComputePassEncoder_T)pass);
-    }
+    if (pass) wgpuComputePassEncoderEnd((WGPUComputePassEncoder)pass);
 }
-
 void wgpu_bridge_release_compute_pass_encoder(void* pass) {
-    if (pass != NULL && g_cp_release != NULL) {
-        g_cp_release((WGPUComputePassEncoder_T)pass);
-    }
+    if (pass) wgpuComputePassEncoderRelease((WGPUComputePassEncoder)pass);
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — MRT Render Pass
-   ═══════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   MRT Render Pass / Pipeline
+   ════════════════════════════════════════════════════════════════════ */
 
-int wgpu_bridge_begin_render_pass_mrt(
-    void* encoder,
-    const WGPUBridgeColorAttachment* color_attachments,
-    uint32_t color_count,
-    const WGPUBridgeDepthStencilAttachment* depth,
-    void** out_pass)
-{
+int wgpu_bridge_begin_render_pass_mrt(void* encoder,
+                                      const WGPUBridgeColorAttachment* color_attachments,
+                                      uint32_t color_count,
+                                      const WGPUBridgeDepthStencilAttachment* depth,
+                                      void** out_pass) {
     if (encoder == NULL || out_pass == NULL) {
         set_error("invalid begin_render_pass_mrt arguments");
         return 0;
     }
-    if (g_begin_render_pass == NULL) {
-        set_error("wgpuCommandEncoderBeginRenderPass not loaded");
-        return 0;
-    }
 
-    WGPURenderPassColorAttachment_I* cas = NULL;
+    WGPURenderPassColorAttachment* cas = NULL;
     if (color_count > 0 && color_attachments != NULL) {
-        cas = (WGPURenderPassColorAttachment_I*)calloc(color_count, sizeof(WGPURenderPassColorAttachment_I));
-        for (uint32_t i = 0; i < color_count; i++) {
-            cas[i].view = (WGPUTextureView_T)color_attachments[i].view;
-            cas[i].depthSlice = 0xFFFFFFFF;
-            cas[i].loadOp = bridge_load_op_to_wgpu(color_attachments[i].load_op);
-            cas[i].storeOp = bridge_store_op_to_wgpu(color_attachments[i].store_op);
+        cas = (WGPURenderPassColorAttachment*)calloc(color_count, sizeof(WGPURenderPassColorAttachment));
+        for (uint32_t i = 0; i < color_count; ++i) {
+            cas[i] = (WGPURenderPassColorAttachment)WGPU_RENDER_PASS_COLOR_ATTACHMENT_INIT;
+            cas[i].view = (WGPUTextureView)color_attachments[i].view;
+            cas[i].depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
+            cas[i].loadOp = to_wgpu_load_op(color_attachments[i].load_op);
+            cas[i].storeOp = to_wgpu_store_op(color_attachments[i].store_op);
             cas[i].clearValue.r = color_attachments[i].clear_color.r;
             cas[i].clearValue.g = color_attachments[i].clear_color.g;
             cas[i].clearValue.b = color_attachments[i].clear_color.b;
@@ -2323,41 +1218,33 @@ int wgpu_bridge_begin_render_pass_mrt(
         }
     }
 
-    WGPURenderPassDepthStencilAttachment_I dsa;
-    WGPURenderPassDescriptor_I desc;
-    memset(&desc, 0, sizeof(desc));
+    WGPURenderPassDepthStencilAttachment dsa = WGPU_RENDER_PASS_DEPTH_STENCIL_ATTACHMENT_INIT;
+    WGPURenderPassDescriptor desc = WGPU_RENDER_PASS_DESCRIPTOR_INIT;
     desc.colorAttachmentCount = color_count;
     desc.colorAttachments = cas;
 
     if (depth != NULL && depth->view != NULL) {
-        memset(&dsa, 0, sizeof(dsa));
-        dsa.view = (WGPUTextureView_T)depth->view;
-        dsa.depthLoadOp = bridge_load_op_to_wgpu(depth->depth_load_op);
-        dsa.depthStoreOp = bridge_store_op_to_wgpu(depth->depth_store_op);
+        dsa.view = (WGPUTextureView)depth->view;
+        dsa.depthLoadOp = to_wgpu_load_op(depth->depth_load_op);
+        dsa.depthStoreOp = to_wgpu_store_op(depth->depth_store_op);
         dsa.depthClearValue = depth->clear_depth;
-        dsa.stencilLoadOp = bridge_load_op_to_wgpu(depth->stencil_load_op);
-        dsa.stencilStoreOp = bridge_store_op_to_wgpu(depth->stencil_store_op);
+        dsa.stencilLoadOp = to_wgpu_load_op(depth->stencil_load_op);
+        dsa.stencilStoreOp = to_wgpu_store_op(depth->stencil_store_op);
         dsa.stencilClearValue = depth->stencil_clear_value;
         desc.depthStencilAttachment = &dsa;
     }
 
-    WGPURenderPassEncoder_T pass = g_begin_render_pass((WGPUCommandEncoder_T)encoder, &desc);
+    WGPURenderPassEncoder pass = wgpuCommandEncoderBeginRenderPass((WGPUCommandEncoder)encoder, &desc);
     free(cas);
 
-    if (pass == NULL) {
-        set_error("wgpuCommandEncoderBeginRenderPass (MRT) returned null");
-        return 0;
-    }
-
+    if (pass == NULL) { set_error("wgpuCommandEncoderBeginRenderPass (MRT) returned null"); return 0; }
     *out_pass = (void*)pass;
     return 1;
 }
 
 int wgpu_bridge_create_render_pipeline_mrt(
-    void* device,
-    void* shader_module,
-    const char* vertex_entry,
-    const char* fragment_entry,
+    void* device, void* shader_module,
+    const char* vertex_entry, const char* fragment_entry,
     const WGPUBridgeTextureFormat* color_formats,
     const WGPUBridgeBlendState* blends,
     uint32_t color_format_count,
@@ -2373,233 +1260,156 @@ int wgpu_bridge_create_render_pipeline_mrt(
         set_error("invalid create_render_pipeline_mrt arguments");
         return 0;
     }
-    if (g_create_render_pipeline == NULL) {
-        set_error("wgpuDeviceCreateRenderPipeline not loaded");
-        return 0;
-    }
 
-    /* Convert vertex buffer layouts (same as single-target version) */
-    WGPUVertexBufferLayout_I* vb_layouts = NULL;
-    WGPUVertexAttribute_I* all_attrs = NULL;
-
+    WGPUVertexBufferLayout* vb_layouts = NULL;
+    WGPUVertexAttribute* all_attrs = NULL;
     if (vertex_buffer_count > 0 && vertex_buffers != NULL) {
-        vb_layouts = (WGPUVertexBufferLayout_I*)calloc(vertex_buffer_count, sizeof(WGPUVertexBufferLayout_I));
+        vb_layouts = (WGPUVertexBufferLayout*)calloc(vertex_buffer_count, sizeof(WGPUVertexBufferLayout));
         uint32_t total_attrs = 0;
-        for (uint32_t i = 0; i < vertex_buffer_count; i++) {
-            total_attrs += vertex_buffers[i].attribute_count;
-        }
-        all_attrs = (WGPUVertexAttribute_I*)calloc(total_attrs, sizeof(WGPUVertexAttribute_I));
-        uint32_t attr_offset = 0;
-        for (uint32_t i = 0; i < vertex_buffer_count; i++) {
+        for (uint32_t i = 0; i < vertex_buffer_count; ++i) total_attrs += vertex_buffers[i].attribute_count;
+        if (total_attrs > 0) all_attrs = (WGPUVertexAttribute*)calloc(total_attrs, sizeof(WGPUVertexAttribute));
+        uint32_t off = 0;
+        for (uint32_t i = 0; i < vertex_buffer_count; ++i) {
+            vb_layouts[i] = (WGPUVertexBufferLayout)WGPU_VERTEX_BUFFER_LAYOUT_INIT;
             vb_layouts[i].arrayStride = vertex_buffers[i].array_stride;
-            vb_layouts[i].stepMode = 0;
+            vb_layouts[i].stepMode = WGPUVertexStepMode_Vertex;
             vb_layouts[i].attributeCount = vertex_buffers[i].attribute_count;
-            vb_layouts[i].attributes = &all_attrs[attr_offset];
-            for (uint32_t j = 0; j < vertex_buffers[i].attribute_count; j++) {
-                all_attrs[attr_offset + j].format = bridge_vertex_format_to_wgpu(vertex_buffers[i].attributes[j].format);
-                all_attrs[attr_offset + j].offset = vertex_buffers[i].attributes[j].offset;
-                all_attrs[attr_offset + j].shaderLocation = vertex_buffers[i].attributes[j].shader_location;
+            vb_layouts[i].attributes = vertex_buffers[i].attribute_count ? &all_attrs[off] : NULL;
+            for (uint32_t j = 0; j < vertex_buffers[i].attribute_count; ++j) {
+                all_attrs[off + j] = (WGPUVertexAttribute)WGPU_VERTEX_ATTRIBUTE_INIT;
+                all_attrs[off + j].format = to_wgpu_vertex_format(vertex_buffers[i].attributes[j].format);
+                all_attrs[off + j].offset = vertex_buffers[i].attributes[j].offset;
+                all_attrs[off + j].shaderLocation = vertex_buffers[i].attributes[j].shader_location;
             }
-            attr_offset += vertex_buffers[i].attribute_count;
+            off += vertex_buffers[i].attribute_count;
         }
     }
 
-    /* Color targets */
-    WGPUColorTargetState_I* targets = (WGPUColorTargetState_I*)calloc(color_format_count, sizeof(WGPUColorTargetState_I));
-    WGPUBlendState_I* blend_states = blends ? (WGPUBlendState_I*)calloc(color_format_count, sizeof(WGPUBlendState_I)) : NULL;
-
-    for (uint32_t i = 0; i < color_format_count; i++) {
-        targets[i].format = bridge_format_to_wgpu(color_formats[i]);
-        targets[i].writeMask = 0x0F;
+    WGPUColorTargetState* targets = (WGPUColorTargetState*)calloc(color_format_count, sizeof(WGPUColorTargetState));
+    WGPUBlendState* blend_states = blends ? (WGPUBlendState*)calloc(color_format_count, sizeof(WGPUBlendState)) : NULL;
+    for (uint32_t i = 0; i < color_format_count; ++i) {
+        targets[i] = (WGPUColorTargetState)WGPU_COLOR_TARGET_STATE_INIT;
+        targets[i].format = to_wgpu_format(color_formats[i]);
+        targets[i].writeMask = WGPUColorWriteMask_All;
         if (blends != NULL) {
-            blend_states[i].color.operation = bridge_blend_op_to_wgpu(blends[i].color.operation);
-            blend_states[i].color.srcFactor = bridge_blend_factor_to_wgpu(blends[i].color.src_factor);
-            blend_states[i].color.dstFactor = bridge_blend_factor_to_wgpu(blends[i].color.dst_factor);
-            blend_states[i].alpha.operation = bridge_blend_op_to_wgpu(blends[i].alpha.operation);
-            blend_states[i].alpha.srcFactor = bridge_blend_factor_to_wgpu(blends[i].alpha.src_factor);
-            blend_states[i].alpha.dstFactor = bridge_blend_factor_to_wgpu(blends[i].alpha.dst_factor);
+            blend_states[i] = (WGPUBlendState)WGPU_BLEND_STATE_INIT;
+            blend_states[i].color.operation = to_wgpu_blend_op(blends[i].color.operation);
+            blend_states[i].color.srcFactor = to_wgpu_blend_factor(blends[i].color.src_factor);
+            blend_states[i].color.dstFactor = to_wgpu_blend_factor(blends[i].color.dst_factor);
+            blend_states[i].alpha.operation = to_wgpu_blend_op(blends[i].alpha.operation);
+            blend_states[i].alpha.srcFactor = to_wgpu_blend_factor(blends[i].alpha.src_factor);
+            blend_states[i].alpha.dstFactor = to_wgpu_blend_factor(blends[i].alpha.dst_factor);
             targets[i].blend = &blend_states[i];
         }
     }
 
-    /* Fragment state */
-    WGPUFragmentState_I frag;
-    memset(&frag, 0, sizeof(frag));
-    frag.module = (WGPUShaderModule_T)shader_module;
-    frag.entryPoint = fragment_entry;
+    WGPUFragmentState frag = WGPU_FRAGMENT_STATE_INIT;
+    frag.module = (WGPUShaderModule)shader_module;
+    frag.entryPoint = sv_from_cstr(fragment_entry);
     frag.targetCount = color_format_count;
     frag.targets = targets;
 
-    /* Pipeline descriptor */
-    WGPURenderPipelineDescriptor_I desc;
-    memset(&desc, 0, sizeof(desc));
-    desc.vertex.module = (WGPUShaderModule_T)shader_module;
-    desc.vertex.entryPoint = vertex_entry;
+    WGPURenderPipelineDescriptor desc = WGPU_RENDER_PIPELINE_DESCRIPTOR_INIT;
+    desc.vertex.module = (WGPUShaderModule)shader_module;
+    desc.vertex.entryPoint = sv_from_cstr(vertex_entry);
     desc.vertex.bufferCount = vertex_buffer_count;
     desc.vertex.buffers = vb_layouts;
-    desc.primitive.topology = bridge_topology_to_wgpu(topology);
-    desc.primitive.frontFace = bridge_front_face_to_wgpu(front_face);
-    desc.primitive.cullMode = bridge_cull_mode_to_wgpu(cull_mode);
+    desc.primitive.topology = to_wgpu_topology(topology);
+    desc.primitive.frontFace = to_wgpu_front_face(front_face);
+    desc.primitive.cullMode = to_wgpu_cull_mode(cull_mode);
     desc.multisample.count = 1;
     desc.multisample.mask = 0xFFFFFFFF;
     desc.fragment = &frag;
     desc.layout = NULL;
 
-    WGPUDepthStencilState_I ds;
+    WGPUDepthStencilState ds;
     if (depth_stencil != NULL) {
-        memset(&ds, 0, sizeof(ds));
-        ds.format = bridge_format_to_wgpu(depth_stencil->format);
-        ds.depthWriteEnabled = depth_stencil->depth_write_enabled ? 1 : 0;
-        ds.depthCompare = bridge_compare_function_to_wgpu(depth_stencil->depth_compare);
-        ds.stencilFront_compare = bridge_compare_function_to_wgpu(depth_stencil->stencil_front.compare);
-        ds.stencilFront_failOp = bridge_stencil_op_to_wgpu(depth_stencil->stencil_front.fail_op);
-        ds.stencilFront_depthFailOp = bridge_stencil_op_to_wgpu(depth_stencil->stencil_front.depth_fail_op);
-        ds.stencilFront_passOp = bridge_stencil_op_to_wgpu(depth_stencil->stencil_front.pass_op);
-        ds.stencilBack_compare = bridge_compare_function_to_wgpu(depth_stencil->stencil_back.compare);
-        ds.stencilBack_failOp = bridge_stencil_op_to_wgpu(depth_stencil->stencil_back.fail_op);
-        ds.stencilBack_depthFailOp = bridge_stencil_op_to_wgpu(depth_stencil->stencil_back.depth_fail_op);
-        ds.stencilBack_passOp = bridge_stencil_op_to_wgpu(depth_stencil->stencil_back.pass_op);
-        ds.stencilReadMask = depth_stencil->stencil_read_mask;
-        ds.stencilWriteMask = depth_stencil->stencil_write_mask;
+        fill_depth_stencil_state(&ds, depth_stencil);
         desc.depthStencil = &ds;
     }
 
-    WGPURenderPipeline_T pipeline = g_create_render_pipeline((WGPUDevice)device, &desc);
+    WGPURenderPipeline pipeline = wgpuDeviceCreateRenderPipeline((WGPUDevice)device, &desc);
 
     free(blend_states);
     free(targets);
     free(all_attrs);
     free(vb_layouts);
 
-    if (pipeline == NULL) {
-        set_error("wgpuDeviceCreateRenderPipeline (MRT) returned null");
-        return 0;
-    }
-
+    if (pipeline == NULL) { set_error("wgpuDeviceCreateRenderPipeline (MRT) returned null"); return 0; }
     *out_pipeline = (void*)pipeline;
     return 1;
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Texture Copy
-   ═══════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   Texture Copy
+   ════════════════════════════════════════════════════════════════════ */
 
-void wgpu_bridge_copy_texture_to_texture(
-    void* encoder,
-    void* src_texture, uint32_t src_mip,
-    void* dst_texture, uint32_t dst_mip,
-    uint32_t width, uint32_t height, uint32_t depth_or_layers)
-{
-    if (encoder == NULL || src_texture == NULL || dst_texture == NULL || g_copy_texture_to_texture == NULL) {
-        return;
-    }
+void wgpu_bridge_copy_texture_to_texture(void* encoder,
+                                         void* src_texture, uint32_t src_mip,
+                                         void* dst_texture, uint32_t dst_mip,
+                                         uint32_t width, uint32_t height,
+                                         uint32_t depth_or_layers) {
+    if (encoder == NULL || src_texture == NULL || dst_texture == NULL) return;
 
-    WGPUImageCopyTexture_I src;
-    memset(&src, 0, sizeof(src));
-    src.texture = (WGPUTexture_T)src_texture;
+    WGPUTexelCopyTextureInfo src = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
+    src.texture = (WGPUTexture)src_texture;
     src.mipLevel = src_mip;
-    src.aspect = 1;
+    src.aspect = WGPUTextureAspect_All;
 
-    WGPUImageCopyTexture_I dst;
-    memset(&dst, 0, sizeof(dst));
-    dst.texture = (WGPUTexture_T)dst_texture;
+    WGPUTexelCopyTextureInfo dst = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
+    dst.texture = (WGPUTexture)dst_texture;
     dst.mipLevel = dst_mip;
-    dst.aspect = 1;
+    dst.aspect = WGPUTextureAspect_All;
 
-    WGPUExtent3D size;
+    WGPUExtent3D size = WGPU_EXTENT_3D_INIT;
     size.width = width;
     size.height = height;
     size.depthOrArrayLayers = depth_or_layers;
 
-    g_copy_texture_to_texture((WGPUCommandEncoder_T)encoder, &src, &dst, &size);
+    wgpuCommandEncoderCopyTextureToTexture((WGPUCommandEncoder)encoder, &src, &dst, &size);
 }
 
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Parameterized Texture View
-   ═══════════════════════════════════════════════════════════════════ */
+void wgpu_bridge_copy_texture_to_buffer(void* encoder,
+                                        void* texture, uint32_t mip_level,
+                                        void* buffer, uint64_t buffer_offset,
+                                        uint32_t bytes_per_row, uint32_t rows_per_image,
+                                        uint32_t width, uint32_t height, uint32_t depth_or_layers) {
+    if (encoder == NULL || texture == NULL || buffer == NULL) return;
 
-int wgpu_bridge_create_texture_view(void* texture,
-                                    const WGPUBridgeTextureViewDesc* desc,
-                                    void** out_view) {
-    if (texture == NULL || desc == NULL || out_view == NULL) {
-        set_error("invalid create_texture_view arguments");
-        return 0;
-    }
-    if (g_texture_create_view == NULL) {
-        set_error("wgpuTextureCreateView not loaded");
-        return 0;
-    }
-
-    WGPUTextureViewDescriptor_I vd;
-    memset(&vd, 0, sizeof(vd));
-    vd.format = bridge_format_to_wgpu(desc->format);
-    vd.dimension = bridge_texture_view_dimension_to_wgpu(desc->dimension);
-    vd.baseMipLevel = desc->base_mip_level;
-    vd.mipLevelCount = desc->mip_level_count > 0 ? desc->mip_level_count : 1;
-    vd.baseArrayLayer = desc->base_array_layer;
-    vd.arrayLayerCount = desc->array_layer_count > 0 ? desc->array_layer_count : 1;
-    vd.aspect = 1; /* All */
-
-    WGPUTextureView_T view = g_texture_create_view((WGPUTexture_T)texture, &vd);
-    if (view == NULL) {
-        set_error("wgpuTextureCreateView returned null");
-        return 0;
-    }
-
-    *out_view = (void*)view;
-    return 1;
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Texture Readback
-   ═══════════════════════════════════════════════════════════════════ */
-
-void wgpu_bridge_copy_texture_to_buffer(
-    void* encoder,
-    void* texture, uint32_t mip_level,
-    void* buffer, uint64_t buffer_offset,
-    uint32_t bytes_per_row, uint32_t rows_per_image,
-    uint32_t width, uint32_t height, uint32_t depth_or_layers)
-{
-    if (encoder == NULL || texture == NULL || buffer == NULL || g_copy_texture_to_buffer == NULL) {
-        return;
-    }
-
-    WGPUImageCopyTexture_I src;
-    memset(&src, 0, sizeof(src));
-    src.texture = (WGPUTexture_T)texture;
+    WGPUTexelCopyTextureInfo src = WGPU_TEXEL_COPY_TEXTURE_INFO_INIT;
+    src.texture = (WGPUTexture)texture;
     src.mipLevel = mip_level;
-    src.aspect = 1; /* All */
+    src.aspect = WGPUTextureAspect_All;
 
-    WGPUImageCopyBuffer_I dst;
-    memset(&dst, 0, sizeof(dst));
-    dst.buffer = (WGPUBuffer_T)buffer;
-    dst.offset = buffer_offset;
-    dst.bytesPerRow = bytes_per_row;
-    dst.rowsPerImage = rows_per_image;
+    WGPUTexelCopyBufferInfo dst = WGPU_TEXEL_COPY_BUFFER_INFO_INIT;
+    dst.buffer = (WGPUBuffer)buffer;
+    dst.layout.offset = buffer_offset;
+    dst.layout.bytesPerRow = bytes_per_row;
+    dst.layout.rowsPerImage = rows_per_image;
 
-    WGPUExtent3D size;
+    WGPUExtent3D size = WGPU_EXTENT_3D_INIT;
     size.width = width;
     size.height = height;
     size.depthOrArrayLayers = depth_or_layers;
 
-    g_copy_texture_to_buffer((WGPUCommandEncoder_T)encoder, &src, &dst, &size);
+    wgpuCommandEncoderCopyTextureToBuffer((WGPUCommandEncoder)encoder, &src, &dst, &size);
 }
+
+/* ════════════════════════════════════════════════════════════════════
+   Buffer Map (sync via device polling)
+   ════════════════════════════════════════════════════════════════════ */
 
 typedef struct {
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
     int done;
-    uint32_t status;
+    WGPUMapAsyncStatus status;
 } MapAwait;
 
-static void buffer_map_callback(uint32_t status, void* userdata) {
-    MapAwait* ma = (MapAwait*)userdata;
-    pthread_mutex_lock(&ma->mutex);
-    ma->done = 1;
-    ma->status = status;
-    pthread_cond_signal(&ma->cond);
-    pthread_mutex_unlock(&ma->mutex);
+static void on_buffer_map(WGPUMapAsyncStatus status, WGPUStringView msg,
+                          void* userdata1, void* userdata2) {
+    (void)msg; (void)userdata2;
+    MapAwait* a = (MapAwait*)userdata1;
+    a->status = status;
+    a->done = 1;
 }
 
 int wgpu_bridge_buffer_map_sync(void* device, void* buffer,
@@ -2608,194 +1418,128 @@ int wgpu_bridge_buffer_map_sync(void* device, void* buffer,
         set_error("invalid buffer_map_sync arguments");
         return 0;
     }
-    if (g_buffer_map_async == NULL || g_device_poll == NULL) {
-        set_error("buffer mapping functions not loaded");
-        return 0;
+    MapAwait a = {0};
+    WGPUBufferMapCallbackInfo cb = WGPU_BUFFER_MAP_CALLBACK_INFO_INIT;
+    cb.mode = WGPUCallbackMode_AllowProcessEvents;
+    cb.callback = on_buffer_map;
+    cb.userdata1 = &a;
+
+    wgpuBufferMapAsync((WGPUBuffer)buffer, WGPUMapMode_Read, offset, size, cb);
+
+    /* Drive completion via device poll. */
+    for (int i = 0; i < 10000 && !a.done; ++i) {
+        wgpuDevicePoll((WGPUDevice)device, WGPU_TRUE, NULL);
     }
 
-    MapAwait ma;
-    pthread_mutex_init(&ma.mutex, NULL);
-    pthread_cond_init(&ma.cond, NULL);
-    ma.done = 0;
-    ma.status = 0;
-
-    /* mode=1 → MapRead */
-    g_buffer_map_async((WGPUBuffer_T)buffer, 1, offset, size, buffer_map_callback, &ma);
-
-    /* Poll the device until the mapping completes (wait=true) */
-    g_device_poll((WGPUDevice)device, 1, NULL);
-
-    pthread_mutex_lock(&ma.mutex);
-    while (!ma.done) {
-        pthread_mutex_unlock(&ma.mutex);
-        g_device_poll((WGPUDevice)device, 1, NULL);
-        pthread_mutex_lock(&ma.mutex);
-    }
-    uint32_t status = ma.status;
-    pthread_mutex_unlock(&ma.mutex);
-
-    pthread_cond_destroy(&ma.cond);
-    pthread_mutex_destroy(&ma.mutex);
-
-    if (status != 0) {
-        set_error("buffer map failed");
+    if (!a.done || a.status != WGPUMapAsyncStatus_Success) {
+        set_error("wgpuBufferMapAsync failed");
         return 0;
     }
     return 1;
 }
 
 const void* wgpu_bridge_buffer_get_mapped_range(void* buffer,
-                                                uint64_t offset,
-                                                uint64_t size) {
-    if (buffer == NULL || g_buffer_get_mapped_range == NULL) {
-        return NULL;
-    }
-    return g_buffer_get_mapped_range((WGPUBuffer_T)buffer, offset, size);
+                                                uint64_t offset, uint64_t size) {
+    if (buffer == NULL) return NULL;
+    return wgpuBufferGetConstMappedRange((WGPUBuffer)buffer, offset, size);
 }
 
 void wgpu_bridge_buffer_unmap(void* buffer) {
-    if (buffer != NULL && g_buffer_unmap != NULL) {
-        g_buffer_unmap((WGPUBuffer_T)buffer);
-    }
+    if (buffer) wgpuBufferUnmap((WGPUBuffer)buffer);
 }
 
-/* ════════════════════════════════════════════════════════════════
-   Public API — Indirect Draw / Dispatch
-   ═══════════════════════════════════════════════════════════════ */
-
-void wgpu_bridge_render_pass_draw_indirect(void* pass, void* buffer, uint64_t offset) {
-    if (pass != NULL && buffer != NULL && g_rp_draw_indirect != NULL) {
-        g_rp_draw_indirect((WGPURenderPassEncoder_T)pass, (WGPUBuffer_T)buffer, offset);
-    }
-}
-
-void wgpu_bridge_render_pass_draw_indexed_indirect(void* pass, void* buffer, uint64_t offset) {
-    if (pass != NULL && buffer != NULL && g_rp_draw_indexed_indirect != NULL) {
-        g_rp_draw_indexed_indirect((WGPURenderPassEncoder_T)pass, (WGPUBuffer_T)buffer, offset);
-    }
-}
-
-void wgpu_bridge_compute_pass_dispatch_indirect(void* pass, void* buffer, uint64_t offset) {
-    if (pass != NULL && buffer != NULL && g_cp_dispatch_indirect != NULL) {
-        g_cp_dispatch_indirect((WGPUComputePassEncoder_T)pass, (WGPUBuffer_T)buffer, offset);
-    }
-}
-
-/* ═══════════════════════════════════════════════════════════════════
-   Public API — Render Bundles
-   ═══════════════════════════════════════════════════════════════════ */
+/* ════════════════════════════════════════════════════════════════════
+   Render Bundles
+   ════════════════════════════════════════════════════════════════════ */
 
 int wgpu_bridge_create_render_bundle_encoder(void* device,
                                              const WGPUBridgeRenderBundleEncoderDesc* desc,
                                              void** out_encoder) {
-    if (device == NULL || desc == NULL || out_encoder == NULL ||
-        g_dev_create_bundle_encoder == NULL) {
+    if (device == NULL || desc == NULL || out_encoder == NULL) {
+        set_error("invalid create_render_bundle_encoder arguments");
         return 0;
     }
+    if (desc->color_format_count > 8) { set_error("too many color formats"); return 0; }
 
-    uint32_t formats[8] = {0};
-    if (desc->color_format_count > 8) return 0;
+    WGPUTextureFormat formats[8] = {0};
     for (uint32_t i = 0; i < desc->color_format_count; ++i) {
-        formats[i] = bridge_format_to_wgpu(desc->color_formats[i]);
+        formats[i] = to_wgpu_format(desc->color_formats[i]);
     }
 
-    WGPURenderBundleEncoderDescriptor_I d = {0};
+    WGPURenderBundleEncoderDescriptor d = WGPU_RENDER_BUNDLE_ENCODER_DESCRIPTOR_INIT;
     d.colorFormatCount = desc->color_format_count;
-    d.colorFormats = (desc->color_format_count > 0) ? formats : NULL;
+    d.colorFormats = desc->color_format_count ? formats : NULL;
     d.depthStencilFormat = desc->has_depth_stencil
-        ? bridge_format_to_wgpu(desc->depth_stencil_format)
-        : 0; /* Undefined */
-    d.sampleCount = (desc->sample_count == 0) ? 1 : desc->sample_count;
-    d.depthReadOnly = desc->depth_read_only ? 1u : 0u;
-    d.stencilReadOnly = desc->stencil_read_only ? 1u : 0u;
+        ? to_wgpu_format(desc->depth_stencil_format)
+        : WGPUTextureFormat_Undefined;
+    d.sampleCount = desc->sample_count == 0 ? 1 : desc->sample_count;
+    d.depthReadOnly = desc->depth_read_only ? WGPU_TRUE : WGPU_FALSE;
+    d.stencilReadOnly = desc->stencil_read_only ? WGPU_TRUE : WGPU_FALSE;
 
-    WGPURenderBundleEncoder_T enc = g_dev_create_bundle_encoder((WGPUDevice)device, &d);
-    if (enc == NULL) return 0;
-    *out_encoder = (void*)enc;
+    WGPURenderBundleEncoder e = wgpuDeviceCreateRenderBundleEncoder((WGPUDevice)device, &d);
+    if (e == NULL) { set_error("wgpuDeviceCreateRenderBundleEncoder returned null"); return 0; }
+    *out_encoder = (void*)e;
     return 1;
 }
 
 int wgpu_bridge_render_bundle_encoder_finish(void* encoder, void** out_bundle) {
-    if (encoder == NULL || out_bundle == NULL || g_bundle_encoder_finish == NULL) return 0;
-    WGPURenderBundleDescriptor_I d = {0};
-    WGPURenderBundle_T b = g_bundle_encoder_finish((WGPURenderBundleEncoder_T)encoder, &d);
-    if (b == NULL) return 0;
+    if (encoder == NULL || out_bundle == NULL) {
+        set_error("invalid render_bundle_encoder_finish arguments");
+        return 0;
+    }
+    WGPURenderBundleDescriptor d = WGPU_RENDER_BUNDLE_DESCRIPTOR_INIT;
+    WGPURenderBundle b = wgpuRenderBundleEncoderFinish((WGPURenderBundleEncoder)encoder, &d);
+    if (b == NULL) { set_error("wgpuRenderBundleEncoderFinish returned null"); return 0; }
     *out_bundle = (void*)b;
     return 1;
 }
 
-void wgpu_bridge_release_render_bundle_encoder(void* encoder) {
-    if (encoder != NULL && g_bundle_encoder_release != NULL) {
-        g_bundle_encoder_release((WGPURenderBundleEncoder_T)encoder);
-    }
+void wgpu_bridge_release_render_bundle_encoder(void* enc) {
+    if (enc) wgpuRenderBundleEncoderRelease((WGPURenderBundleEncoder)enc);
 }
-
-void wgpu_bridge_release_render_bundle(void* bundle) {
-    if (bundle != NULL && g_bundle_release != NULL) {
-        g_bundle_release((WGPURenderBundle_T)bundle);
-    }
+void wgpu_bridge_release_render_bundle(void* b) {
+    if (b) wgpuRenderBundleRelease((WGPURenderBundle)b);
 }
 
 void wgpu_bridge_render_bundle_set_pipeline(void* enc, void* pipeline) {
-    if (enc != NULL && pipeline != NULL && g_bundle_set_pipeline != NULL) {
-        g_bundle_set_pipeline((WGPURenderBundleEncoder_T)enc, (WGPURenderPipeline_T)pipeline);
-    }
+    if (enc && pipeline)
+        wgpuRenderBundleEncoderSetPipeline((WGPURenderBundleEncoder)enc, (WGPURenderPipeline)pipeline);
 }
-
 void wgpu_bridge_render_bundle_set_vertex_buffer(void* enc, uint32_t slot,
                                                  void* buffer, uint64_t offset, uint64_t size) {
-    if (enc != NULL && g_bundle_set_vertex_buffer != NULL) {
-        g_bundle_set_vertex_buffer((WGPURenderBundleEncoder_T)enc, slot,
-                                   (WGPUBuffer_T)buffer, offset, size);
-    }
+    if (enc)
+        wgpuRenderBundleEncoderSetVertexBuffer((WGPURenderBundleEncoder)enc, slot,
+                                               (WGPUBuffer)buffer, offset, size);
 }
-
 void wgpu_bridge_render_bundle_set_index_buffer(void* enc, void* buffer,
-                                                WGPUBridgeIndexFormat format,
+                                                WGPUBridgeIndexFormat fmt,
                                                 uint64_t offset, uint64_t size) {
-    if (enc != NULL && buffer != NULL && g_bundle_set_index_buffer != NULL) {
-        uint32_t fmt = bridge_index_format_to_wgpu(format);
-        g_bundle_set_index_buffer((WGPURenderBundleEncoder_T)enc, (WGPUBuffer_T)buffer,
-                                  fmt, offset, size);
-    }
+    if (enc && buffer)
+        wgpuRenderBundleEncoderSetIndexBuffer((WGPURenderBundleEncoder)enc, (WGPUBuffer)buffer,
+                                              to_wgpu_index_format(fmt), offset, size);
 }
-
-void wgpu_bridge_render_bundle_set_bind_group(void* enc, uint32_t group_index, void* bind_group) {
-    if (enc != NULL && bind_group != NULL && g_bundle_set_bind_group != NULL) {
-        g_bundle_set_bind_group((WGPURenderBundleEncoder_T)enc, group_index, bind_group, 0, NULL);
-    }
+void wgpu_bridge_render_bundle_set_bind_group(void* enc, uint32_t i, void* bg) {
+    if (enc && bg)
+        wgpuRenderBundleEncoderSetBindGroup((WGPURenderBundleEncoder)enc, i, (WGPUBindGroup)bg, 0, NULL);
 }
-
 void wgpu_bridge_render_bundle_draw(void* enc, uint32_t vc, uint32_t ic, uint32_t fv, uint32_t fi) {
-    if (enc != NULL && g_bundle_draw != NULL) {
-        g_bundle_draw((WGPURenderBundleEncoder_T)enc, vc, ic, fv, fi);
-    }
+    if (enc) wgpuRenderBundleEncoderDraw((WGPURenderBundleEncoder)enc, vc, ic, fv, fi);
 }
-
 void wgpu_bridge_render_bundle_draw_indexed(void* enc, uint32_t ic, uint32_t inst,
                                             uint32_t fi, int32_t bv, uint32_t finst) {
-    if (enc != NULL && g_bundle_draw_indexed != NULL) {
-        g_bundle_draw_indexed((WGPURenderBundleEncoder_T)enc, ic, inst, fi, bv, finst);
-    }
+    if (enc) wgpuRenderBundleEncoderDrawIndexed((WGPURenderBundleEncoder)enc, ic, inst, fi, bv, finst);
 }
-
 void wgpu_bridge_render_bundle_draw_indirect(void* enc, void* buffer, uint64_t offset) {
-    if (enc != NULL && buffer != NULL && g_bundle_draw_indirect != NULL) {
-        g_bundle_draw_indirect((WGPURenderBundleEncoder_T)enc, (WGPUBuffer_T)buffer, offset);
-    }
+    if (enc && buffer)
+        wgpuRenderBundleEncoderDrawIndirect((WGPURenderBundleEncoder)enc, (WGPUBuffer)buffer, offset);
 }
-
 void wgpu_bridge_render_bundle_draw_indexed_indirect(void* enc, void* buffer, uint64_t offset) {
-    if (enc != NULL && buffer != NULL && g_bundle_draw_indexed_indirect != NULL) {
-        g_bundle_draw_indexed_indirect((WGPURenderBundleEncoder_T)enc, (WGPUBuffer_T)buffer, offset);
-    }
+    if (enc && buffer)
+        wgpuRenderBundleEncoderDrawIndexedIndirect((WGPURenderBundleEncoder)enc, (WGPUBuffer)buffer, offset);
 }
-
 void wgpu_bridge_render_pass_execute_bundles(void* pass,
-                                             void* const* bundles,
-                                             uint32_t count) {
-    if (pass == NULL || bundles == NULL || count == 0 || g_rp_execute_bundles == NULL) return;
-    /* Reinterpret as opaque handle array (same width on all targets) */
-    g_rp_execute_bundles((WGPURenderPassEncoder_T)pass, count,
-                         (const WGPURenderBundle_T*)bundles);
+                                             void* const* bundles, uint32_t count) {
+    if (pass && bundles && count > 0)
+        wgpuRenderPassEncoderExecuteBundles((WGPURenderPassEncoder)pass, count,
+                                            (const WGPURenderBundle*)bundles);
 }

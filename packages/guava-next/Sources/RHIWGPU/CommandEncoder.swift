@@ -2,13 +2,16 @@ import CWGPUBridge
 
 public final class GPUCommandEncoder {
     let handle: UnsafeMutableRawPointer
+    private var finished = false
 
     init(handle: UnsafeMutableRawPointer) {
         self.handle = handle
     }
 
     deinit {
-        wgpu_bridge_release_command_encoder(handle)
+        if !finished {
+            wgpu_bridge_release_command_encoder(handle)
+        }
     }
 
     public func beginRenderPass(colorView: GPUTextureView,
@@ -64,6 +67,9 @@ public final class GPUCommandEncoder {
         guard ok == 1, let cbPtr else {
             throw WGPUBackendError.initFailed(WGPUBackend.lastError())
         }
+        // wgpu requires the encoder to be released before submitting the command buffer.
+        wgpu_bridge_release_command_encoder(handle)
+        finished = true
         return GPUCommandBuffer(handle: cbPtr)
     }
 
@@ -103,13 +109,16 @@ public final class GPUCommandEncoder {
 
 public final class GPURenderPassEncoder {
     let handle: UnsafeMutableRawPointer
+    private var ended = false
 
     init(handle: UnsafeMutableRawPointer) {
         self.handle = handle
     }
 
     deinit {
-        wgpu_bridge_release_render_pass_encoder(handle)
+        if !ended {
+            wgpu_bridge_release_render_pass_encoder(handle)
+        }
     }
 
     public func setPipeline(_ pipeline: GPURenderPipeline) {
@@ -175,7 +184,11 @@ public final class GPURenderPassEncoder {
     }
 
     public func end() {
+        guard !ended else { return }
         wgpu_bridge_render_pass_end(handle)
+        // wgpu requires the render pass encoder to be released before encoder.finish()
+        wgpu_bridge_release_render_pass_encoder(handle)
+        ended = true
     }
 }
 
