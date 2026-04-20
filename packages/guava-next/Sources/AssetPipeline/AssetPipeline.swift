@@ -31,6 +31,33 @@ public struct MeshAsset: Sendable {
     public var indexCount: UInt32 { UInt32(indices.count) }
     public var vertexBufferSize: Int { vertices.count * MemoryLayout<Float>.size }
     public var indexBufferSize: Int { indices.count * MemoryLayout<UInt32>.size }
+
+    /// Recenter to origin and uniform-scale longest axis to `targetSize`.
+    public mutating func normalizeToUnitBounds(targetSize: Float = 2.0) {
+        let stride = MeshAsset.vertexStride / MemoryLayout<Float>.size
+        var minX: Float = .infinity, minY: Float = .infinity, minZ: Float = .infinity
+        var maxX: Float = -.infinity, maxY: Float = -.infinity, maxZ: Float = -.infinity
+        var i = 0
+        while i < vertices.count {
+            let x = vertices[i], y = vertices[i + 1], z = vertices[i + 2]
+            if x < minX { minX = x }; if x > maxX { maxX = x }
+            if y < minY { minY = y }; if y > maxY { maxY = y }
+            if z < minZ { minZ = z }; if z > maxZ { maxZ = z }
+            i += stride
+        }
+        let cx = (minX + maxX) * 0.5
+        let cy = (minY + maxY) * 0.5
+        let cz = (minZ + maxZ) * 0.5
+        let extent = max(maxX - minX, max(maxY - minY, maxZ - minZ))
+        let scale = extent > 0 ? (targetSize / extent) : 1.0
+        i = 0
+        while i < vertices.count {
+            vertices[i]     = (vertices[i]     - cx) * scale
+            vertices[i + 1] = (vertices[i + 1] - cy) * scale
+            vertices[i + 2] = (vertices[i + 2] - cz) * scale
+            i += stride
+        }
+    }
 }
 
 // MARK: - Built-in Cube
@@ -94,7 +121,7 @@ public enum OBJLoader {
         var indices: [UInt32] = []
         var nextIndex: UInt32 = 0
 
-        for rawLine in text.split(whereSeparator: { $0 == "\n" || $0 == "\r" }) {
+        for rawLine in text.split(omittingEmptySubsequences: true, whereSeparator: { $0.isNewline }) {
             let line = rawLine.trimmingCharacters(in: .whitespaces)
             if line.isEmpty || line.hasPrefix("#") { continue }
             let parts = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
@@ -162,6 +189,50 @@ public enum OBJLoader {
         if vertices.isEmpty {
             throw OBJLoaderError.parseFailed("no triangles parsed")
         }
+        fillMissingNormals(vertices: &vertices, indices: indices)
         return MeshAsset(name: name, vertices: vertices, indices: indices)
+    }
+
+    /// For any triangle whose three vertices all have a zero normal, generate a face normal
+    /// and write it to those slots. Triangles whose normals were already supplied by the OBJ
+    /// (via `vn` references) are left untouched.
+    private static func fillMissingNormals(vertices: inout [Float], indices: [UInt32]) {
+        let stride = MeshAsset.vertexStride / MemoryLayout<Float>.size // 9
+        var i = 0
+        while i + 2 < indices.count {
+            let i0 = Int(indices[i]) * stride
+            let i1 = Int(indices[i + 1]) * stride
+            let i2 = Int(indices[i + 2]) * stride
+
+            // Check if any of the three vertices already has a non-zero normal.
+            func hasNormal(_ base: Int) -> Bool {
+                vertices[base + 3] != 0 || vertices[base + 4] != 0 || vertices[base + 5] != 0
+            }
+            if hasNormal(i0) || hasNormal(i1) || hasNormal(i2) {
+                i += 3
+                continue
+            }
+
+            let p0x = vertices[i0], p0y = vertices[i0 + 1], p0z = vertices[i0 + 2]
+            let p1x = vertices[i1], p1y = vertices[i1 + 1], p1z = vertices[i1 + 2]
+            let p2x = vertices[i2], p2y = vertices[i2 + 1], p2z = vertices[i2 + 2]
+
+            let ax = p1x - p0x, ay = p1y - p0y, az = p1z - p0z
+            let bx = p2x - p0x, by = p2y - p0y, bz = p2z - p0z
+            var nx = ay * bz - az * by
+            var ny = az * bx - ax * bz
+            var nz = ax * by - ay * bx
+            let len = (nx * nx + ny * ny + nz * nz).squareRoot()
+            if len > 0 {
+                nx /= len; ny /= len; nz /= len
+            }
+
+            for slot in [i0, i1, i2] {
+                vertices[slot + 3] = nx
+                vertices[slot + 4] = ny
+                vertices[slot + 5] = nz
+            }
+            i += 3
+        }
     }
 }
