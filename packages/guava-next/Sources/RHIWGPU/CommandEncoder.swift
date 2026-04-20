@@ -14,16 +14,38 @@ public final class GPUCommandEncoder {
     public func beginRenderPass(colorView: GPUTextureView,
                                 loadOp: GPULoadOp = .clear,
                                 storeOp: GPUStoreOp = .store,
-                                clearColor: GPUColor = .black) throws -> GPURenderPassEncoder {
+                                clearColor: GPUColor = .black,
+                                depthView: GPUTextureView? = nil,
+                                depthLoadOp: GPULoadOp = .clear,
+                                depthStoreOp: GPUStoreOp = .store,
+                                depthClearValue: Float = 1.0) throws -> GPURenderPassEncoder {
         var passPtr: UnsafeMutableRawPointer?
-        let ok = wgpu_bridge_begin_render_pass(
-            handle,
-            colorView.handle,
-            loadOp.bridgeValue,
-            storeOp.bridgeValue,
-            clearColor.bridgeValue,
-            &passPtr
-        )
+
+        var depthAttachment: WGPUBridgeDepthStencilAttachment?
+        if let depthView {
+            depthAttachment = WGPUBridgeDepthStencilAttachment(
+                view: depthView.handle,
+                depth_load_op: depthLoadOp.bridgeValue,
+                depth_store_op: depthStoreOp.bridgeValue,
+                clear_depth: depthClearValue
+            )
+        }
+
+        let ok: Int32
+        if var da = depthAttachment {
+            ok = wgpu_bridge_begin_render_pass(
+                handle, colorView.handle,
+                loadOp.bridgeValue, storeOp.bridgeValue,
+                clearColor.bridgeValue, &da, &passPtr
+            )
+        } else {
+            ok = wgpu_bridge_begin_render_pass(
+                handle, colorView.handle,
+                loadOp.bridgeValue, storeOp.bridgeValue,
+                clearColor.bridgeValue, nil, &passPtr
+            )
+        }
+
         guard ok == 1, let passPtr else {
             throw WGPUBackendError.initFailed(WGPUBackend.lastError())
         }
@@ -70,6 +92,15 @@ public final class GPURenderPassEncoder {
 
     public func setBindGroup(_ bindGroup: GPUBindGroup, index: UInt32 = 0) {
         wgpu_bridge_render_pass_set_bind_group(handle, index, bindGroup.handle)
+    }
+
+    public func setViewport(x: Float, y: Float, width: Float, height: Float,
+                            minDepth: Float = 0.0, maxDepth: Float = 1.0) {
+        wgpu_bridge_render_pass_set_viewport(handle, x, y, width, height, minDepth, maxDepth)
+    }
+
+    public func setScissorRect(x: UInt32, y: UInt32, width: UInt32, height: UInt32) {
+        wgpu_bridge_render_pass_set_scissor_rect(handle, x, y, width, height)
     }
 
     public func draw(vertexCount: UInt32,
