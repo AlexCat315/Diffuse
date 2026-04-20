@@ -5,6 +5,9 @@ public enum EditorAction: Sendable {
     case setSelectedEntity(UInt64?)
     case setPlaybackState(PlaybackState)
     case setSceneRevision(UInt64)
+    case setWindowFocused(Bool)
+    case setWindowMinimized(Bool)
+    case setWindowOccluded(Bool)
 }
 
 public enum EditorReducer {
@@ -18,6 +21,12 @@ public enum EditorReducer {
             state.playbackState = value
         case let .setSceneRevision(value):
             state.sceneRevision = value
+        case let .setWindowFocused(value):
+            state.windowFocused = value
+        case let .setWindowMinimized(value):
+            state.windowMinimized = value
+        case let .setWindowOccluded(value):
+            state.windowOccluded = value
         }
     }
 }
