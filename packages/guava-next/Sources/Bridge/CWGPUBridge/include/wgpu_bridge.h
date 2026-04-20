@@ -499,6 +499,13 @@ void wgpu_bridge_release_bind_group_layout(void* layout);
 void wgpu_bridge_release_bind_group(void* bind_group);
 void wgpu_bridge_release_pipeline_layout(void* layout);
 
+/* Retrieves the auto-generated bind group layout from a render pipeline
+ * created with NULL pipeline layout (auto-layout mode). The returned layout
+ * must be released by the caller via wgpu_bridge_release_bind_group_layout. */
+int wgpu_bridge_render_pipeline_get_bind_group_layout(void* pipeline,
+                                                      uint32_t group_index,
+                                                      void** out_layout);
+
 /* ─── Compute Pipeline ───────────────────────────────────────────── */
 
 int wgpu_bridge_create_compute_pipeline(void* device,
