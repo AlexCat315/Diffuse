@@ -41,6 +41,9 @@ public struct TextField: _PrimitiveView {
     final class FieldState {
         /// Cursor index measured in `Character` units from the start of `text`.
         var cursorIndex: Int = 0
+        /// Absolute window-space origin captured during the last render pass;
+        /// used to translate pointer events into local coordinates.
+        var lastDrawOrigin: CGPoint = .zero
     }
 
     public func _makeNode() -> Node {
@@ -66,6 +69,13 @@ public struct TextField: _PrimitiveView {
             // ── Editing keys ──
             registry.setKey(node) { event, _ in
                 snapshot.handleKey(event, state: state) ? .handled : .ignored
+            }
+
+            // ── Click positions cursor at nearest character boundary ──
+            registry.setPointer(node) { event, phase, _ in
+                guard phase == .down else { return .ignored }
+                snapshot.positionCursor(atWindowX: event.x, state: state)
+                return .handled
             }
         }
 
@@ -141,6 +151,7 @@ public struct TextField: _PrimitiveView {
     // MARK: - Render
 
     private func render(node: Node, state: FieldState, list: DrawList, origin: CGPoint) {
+        state.lastDrawOrigin = origin
         guard let env = TextEnvironmentHolder.current else { return }
         let isFocused = (FocusChainHolder.current?.focused === node)
         let current = text.wrappedValue
@@ -195,6 +206,34 @@ public struct TextField: _PrimitiveView {
             alignment: .leading
         )
         return layout.totalWidth
+    }
+
+    /// Snap the cursor to the character boundary nearest a window-space x.
+    /// Walks shaped glyph advances and picks the side of the midline. Treats
+    /// glyph index as character index — accurate for ASCII; for ligatures /
+    /// CJK / emoji this is a Phase 6.4d concern.
+    private func positionCursor(atWindowX windowX: Float, state: FieldState) {
+        let current = text.wrappedValue
+        guard !current.isEmpty, let env = TextEnvironmentHolder.current else {
+            state.cursorIndex = 0
+            return
+        }
+        let localX = windowX - Float(state.lastDrawOrigin.x)
+        if localX <= 0 {
+            state.cursorIndex = 0
+            return
+        }
+        let glyphs = env.shaper.shape(text: current)
+        var pen: Float = 0
+        for (i, g) in glyphs.enumerated() {
+            let mid = pen + g.xAdvance * 0.5
+            if localX < mid {
+                state.cursorIndex = i
+                return
+            }
+            pen += g.xAdvance
+        }
+        state.cursorIndex = min(glyphs.count, current.count)
     }
 }
 
