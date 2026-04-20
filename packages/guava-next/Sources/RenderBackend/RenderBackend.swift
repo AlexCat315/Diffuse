@@ -8,6 +8,23 @@ import simd
 public protocol Renderer {
     func initialize()
     func renderFrame(frameIndex: Int)
+    func queueRenderSettings(_ settings: RenderSettings)
+    func forceRenderSettings(_ settings: RenderSettings)
+    func currentFrameStats() -> RenderFrameStats
+}
+
+public extension Renderer {
+    func queueRenderSettings(_ settings: RenderSettings) {
+        _ = settings
+    }
+
+    func forceRenderSettings(_ settings: RenderSettings) {
+        _ = settings
+    }
+
+    func currentFrameStats() -> RenderFrameStats {
+        .init()
+    }
 }
 
 @MainActor
@@ -61,6 +78,12 @@ public final class WGPURenderer: Renderer {
     private let dynamicOffsetThreshold = 64
     private let dynamicUniformStride: UInt64 = 256
 
+    private var activeRenderSettings: RenderSettings = .init()
+    private var pendingRenderSettings: RenderSettings?
+    private var settingsGeneration: UInt64 = 0
+
+    public private(set) var lastFrameStats: RenderFrameStats = .init()
+
     public init(backend: WGPUBackend, shell: any Shell) {
         self.backend = backend
         self.shell = shell
@@ -84,9 +107,24 @@ public final class WGPURenderer: Renderer {
         }
     }
 
+    public func queueRenderSettings(_ settings: RenderSettings) {
+        pendingRenderSettings = settings
+    }
+
+    public func forceRenderSettings(_ settings: RenderSettings) {
+        pendingRenderSettings = nil
+        activeRenderSettings = settings
+        settingsGeneration &+= 1
+    }
+
+    public func currentFrameStats() -> RenderFrameStats {
+        lastFrameStats
+    }
+
     public func renderFrame(frameIndex: Int) {
         guard let surface else { return }
         do {
+            applyPendingRenderSettingsIfNeeded(frameIndex: frameIndex)
             try ensureConfigured()
             try ensureMeshPipelineAndScene()
             guard let acquired = try surface.getCurrentTextureView(),
@@ -99,69 +137,140 @@ public final class WGPURenderer: Renderer {
             // Animate scene + upload per-instance MVPs.
             updateSceneTransforms(frameIndex: frameIndex)
             let viewProj = computeViewProj()
-            if let dyn = dynamicInstanceResources {
-                for (i, instance) in scene.instances.enumerated() {
-                    var mvp = viewProj * instance.transform
-                    let offset = UInt64(i) * dyn.stride
-                    withUnsafeBytes(of: &mvp) { raw in
-                        if let base = raw.baseAddress {
-                            backend.writeBuffer(
-                                dyn.uniformBuffer, data: base, size: raw.count, offset: offset)
-                        }
-                    }
-                }
-            } else {
-                for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
-                    var mvp = viewProj * instance.transform
-                    withUnsafeBytes(of: &mvp) { raw in
-                        if let base = raw.baseAddress {
-                            backend.writeBuffer(
-                                instanceResources[i].uniformBuffer, data: base, size: raw.count)
-                        }
-                    }
+            writeInstanceUniforms(viewProj: viewProj)
+
+            let framePlan = RenderFramePlanner.makePlan(settings: activeRenderSettings)
+            var drawCallCount = 0
+            let encoder = try backend.createCommandEncoder()
+            for passKind in framePlan.passes {
+                switch passKind {
+                    case .basePass:
+                        drawCallCount += try encodeBasePass(
+                            encoder: encoder,
+                            colorView: acquired.view,
+                            depthView: depthView,
+                            pipeline: pipeline
+                        )
+
+                    case .depthPrepass,
+                         .shadowPass,
+                         .viewportResolve,
+                         .ssao,
+                         .bloom,
+                         .fxaa,
+                         .tonemap:
+                        emitPlannedPassLog(passKind, frameIndex: frameIndex)
                 }
             }
 
-            let encoder = try backend.createCommandEncoder()
-            let pass = try encoder.beginRenderPass(
-                colorView: acquired.view,
-                loadOp: .clear,
-                storeOp: .store,
-                clearColor: GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1.0),
-                depthView: depthView,
-                depthLoadOp: .clear,
-                depthStoreOp: .store,
-                depthClearValue: 1.0
-            )
-            pass.setPipeline(pipeline)
-            if let dyn = dynamicInstanceResources {
-                for (i, instance) in scene.instances.enumerated() {
-                    guard meshes.indices.contains(instance.meshIndex) else { continue }
-                    let mesh = meshes[instance.meshIndex]
-                    let drawOffset = UInt64(i) * dyn.stride
-                    guard drawOffset <= UInt64(UInt32.max) else { continue }
-                    pass.setBindGroup(dyn.bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
-                    pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
-                    pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
-                    pass.drawIndexed(indexCount: mesh.indexCount)
-                }
-            } else {
-                for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
-                    guard meshes.indices.contains(instance.meshIndex) else { continue }
-                    let mesh = meshes[instance.meshIndex]
-                    pass.setBindGroup(instanceResources[i].bindGroup, index: 0)
-                    pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
-                    pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
-                    pass.drawIndexed(indexCount: mesh.indexCount)
-                }
-            }
-            pass.end()
             let cmd = try encoder.finish()
             backend.submit(cmd)
             surface.present()
+
+            lastFrameStats = RenderFrameStats(
+                frameIndex: frameIndex,
+                passCount: framePlan.passes.count,
+                drawCallCount: drawCallCount,
+                activePasses: framePlan.passes,
+                settingsGeneration: settingsGeneration
+            )
         } catch {
             print("[WGPURenderer] frame \(frameIndex) failed: \(error)")
         }
+    }
+
+    private func applyPendingRenderSettingsIfNeeded(frameIndex: Int) {
+        guard let pending = pendingRenderSettings else { return }
+        pendingRenderSettings = nil
+        activeRenderSettings = pending
+        settingsGeneration &+= 1
+
+        if shouldEmitPlannerLog(frameIndex: frameIndex) {
+            print(
+                "[WGPURenderer] applied render settings in-frame generation=\(settingsGeneration) stage=\(pending.stage.rawValue) fxaa=\(pending.enableFXAA) ssao=\(pending.enableSSAO) bloom=\(pending.enableBloom)"
+            )
+        }
+    }
+
+    private func writeInstanceUniforms(viewProj: simd_float4x4) {
+        if let dyn = dynamicInstanceResources {
+            for (i, instance) in scene.instances.enumerated() {
+                var mvp = viewProj * instance.transform
+                let offset = UInt64(i) * dyn.stride
+                withUnsafeBytes(of: &mvp) { raw in
+                    if let base = raw.baseAddress {
+                        backend.writeBuffer(
+                            dyn.uniformBuffer, data: base, size: raw.count, offset: offset)
+                    }
+                }
+            }
+            return
+        }
+
+        for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
+            var mvp = viewProj * instance.transform
+            withUnsafeBytes(of: &mvp) { raw in
+                if let base = raw.baseAddress {
+                    backend.writeBuffer(instanceResources[i].uniformBuffer, data: base, size: raw.count)
+                }
+            }
+        }
+    }
+
+    private func encodeBasePass(
+        encoder: GPUCommandEncoder,
+        colorView: GPUTextureView,
+        depthView: GPUTextureView,
+        pipeline: GPURenderPipeline
+    ) throws -> Int {
+        let pass = try encoder.beginRenderPass(
+            colorView: colorView,
+            loadOp: .clear,
+            storeOp: .store,
+            clearColor: GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1.0),
+            depthView: depthView,
+            depthLoadOp: .clear,
+            depthStoreOp: .store,
+            depthClearValue: 1.0
+        )
+
+        pass.setPipeline(pipeline)
+        var drawCallCount = 0
+        if let dyn = dynamicInstanceResources {
+            for (i, instance) in scene.instances.enumerated() {
+                guard meshes.indices.contains(instance.meshIndex) else { continue }
+                let mesh = meshes[instance.meshIndex]
+                let drawOffset = UInt64(i) * dyn.stride
+                guard drawOffset <= UInt64(UInt32.max) else { continue }
+                pass.setBindGroup(dyn.bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
+                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                pass.drawIndexed(indexCount: mesh.indexCount)
+                drawCallCount += 1
+            }
+        } else {
+            for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
+                guard meshes.indices.contains(instance.meshIndex) else { continue }
+                let mesh = meshes[instance.meshIndex]
+                pass.setBindGroup(instanceResources[i].bindGroup, index: 0)
+                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                pass.drawIndexed(indexCount: mesh.indexCount)
+                drawCallCount += 1
+            }
+        }
+        pass.end()
+
+        return drawCallCount
+    }
+
+    private func emitPlannedPassLog(_ passKind: RenderPassKind, frameIndex: Int) {
+        guard shouldEmitPlannerLog(frameIndex: frameIndex) else { return }
+        print("[WGPURenderer][plan] executing placeholder pass=\(passKind.rawValue)")
+    }
+
+    private func shouldEmitPlannerLog(frameIndex: Int) -> Bool {
+        frameIndex == 0 || frameIndex % 120 == 0
     }
 
     // MARK: - Pipeline + scene construction
