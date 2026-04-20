@@ -83,7 +83,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "EditorApp",
-            dependencies: ["EditorCore", "PlatformShell"]
+            dependencies: ["EditorCore", "PlatformShell", "RHIWGPU"]
         ),
     ]
 )

@@ -38,6 +38,41 @@ swift run EditorApp
 The pinned wgpu-native version lives in `scripts/fetch-wgpu.sh`. Update it
 there and re-run the script to upgrade.
 
+## Backend Configuration
+
+Choose backend order at startup:
+
+```bash
+swift run EditorApp --wgpu-backends metal,automatic
+swift run EditorApp --wgpu-backends d3d12,vulkan,automatic
+swift run EditorApp --wgpu-backends vulkan,automatic
+```
+
+You can also use a JSON file:
+
+```json
+{
+	"wgpu": {
+		"preferredBackends": ["vulkan", "automatic"],
+		"validationEnabled": true,
+		"framesInFlight": 2
+	}
+}
+```
+
+Run with:
+
+```bash
+swift run EditorApp --wgpu-config ./guava-next.json
+```
+
+Environment fallbacks are also supported:
+
+```bash
+export GUAVA_WGPU_BACKENDS="metal,automatic"
+export GUAVA_WGPU_CONFIG="./guava-next.json"
+```
+
 ## Next Steps
 
 1. Replace CEngineBridge stubs with real C/C++ runtime hooks.

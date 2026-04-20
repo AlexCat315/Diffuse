@@ -13,10 +13,13 @@ public final class EditorApplication {
     private(set) var panelRegistry: PanelRegistry
     private(set) var dockLayout: DockLayout
 
-    public init(shell: any Shell) {
+    public init(shell: any Shell, backendConfig: WGPUDeviceConfig? = nil) {
         self.shell = shell
-        let dylib = Self.locateWGPUDylib()
-        let backend = WGPUBackend(config: .init(libraryPath: dylib))
+        var resolvedBackendConfig = backendConfig ?? .init()
+        if resolvedBackendConfig.libraryPath == nil {
+            resolvedBackendConfig.libraryPath = Self.locateWGPUDylib()
+        }
+        let backend = WGPUBackend(config: resolvedBackendConfig)
         let host = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: backend)
         self.engine = host
         self.renderer = WGPURenderer(backend: host.wgpuBackend, shell: shell)
