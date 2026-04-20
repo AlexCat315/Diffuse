@@ -1,4 +1,5 @@
 import Foundation
+import os.log
 import PlatformShell
 
 /// `PlatformHost` backed by SDL3 via Engine's `PlatformShell`.
@@ -30,12 +31,13 @@ public final class SDL3PlatformHost: PlatformHost {
             host = try makeDefaultShell()
             try host.initializeWindow(title: title)
         } catch {
-            print("[SDL3PlatformHost] window open failed: \(error)")
+            Logger.runtime.error("window open failed: \(error, privacy: .public)")
             return
         }
         shell = host
         _isRunning = true
-        print("[SDL3PlatformHost] running — \(title)")
+        let _title = title
+        Logger.runtime.info("running — \(_title, privacy: .public)")
 
         while host.isRunning && _isRunning {
             // 1. Execute pending state-driven recomposes.
@@ -49,7 +51,7 @@ public final class SDL3PlatformHost: PlatformHost {
         _isRunning = false
         host.shutdown()
         shell = nil
-        print("[SDL3PlatformHost] stopped")
+        Logger.runtime.info("stopped")
     }
 
     public func stop() {

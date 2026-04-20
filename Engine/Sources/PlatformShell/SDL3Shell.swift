@@ -1,6 +1,7 @@
 import CSDL3
 import EngineKernel
 import Foundation
+import os.log
 
 #if os(macOS)
 import QuartzCore
@@ -113,7 +114,8 @@ public final class SDL3Shell: Shell {
 #endif
 
         syncDrawableSize()
-        print("[PlatformShell] SDL3 window ready, drawable=\(drawableSize.width)x\(drawableSize.height)")
+        let sz = "\(drawableSize.width)x\(drawableSize.height)"
+        Logger.platform.info("SDL3 window ready, drawable=\(sz, privacy: .public)")
     }
 
     @discardableResult
