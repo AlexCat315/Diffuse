@@ -36,6 +36,18 @@ public final class Node: @unchecked Sendable {
     /// Also a hint to the renderer (Phase 6.3 `.clip()` modifier).
     public var clipsToBounds: Bool = false
 
+    // MARK: - Visual (Phase 6.3)
+
+    /// Solid background fill. `nil` = transparent (no fill emitted).
+    public var backgroundColor: Color?
+
+    /// Foreground tint. Used by Text and tinted Image. `nil` = renderer default.
+    public var foregroundColor: Color?
+
+    /// Alpha multiplier in 0..1 applied to this node's draws (and inherited
+    /// transitively in later phases). Default 1.
+    public var opacity: Float = 1
+
     public init() {}
 
     // MARK: - Tree mutation
