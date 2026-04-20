@@ -213,4 +213,64 @@ public final class LayoutNode: @unchecked Sendable {
             height: Double(YGNodeLayoutGetHeight(ygNode))
         )
     }
+
+    // MARK: - Measure func (for leaf nodes such as Text)
+
+    /// How the parent has constrained the measurement.
+    public enum MeasureMode {
+        case undefined  // no constraint
+        case exactly    // must be exactly this size
+        case atMost     // up to this size
+
+        init(_ ygMode: YGMeasureMode) {
+            switch ygMode {
+            case YGMeasureMode.exactly: self = .exactly
+            case YGMeasureMode.atMost:  self = .atMost
+            default:                    self = .undefined
+            }
+        }
+    }
+
+    /// Closure invoked by Yoga when the node needs intrinsic measurement.
+    /// `width`/`height` may be `Float.nan` when the corresponding mode is
+    /// `.undefined`. Return the natural size.
+    public typealias MeasureFunc = (Float, MeasureMode, Float, MeasureMode) -> CGSize
+
+    private var measureClosure: MeasureFunc?
+
+    fileprivate var _measureClosure: MeasureFunc? { measureClosure }
+
+    /// Sets a measure callback for leaf nodes (e.g. Text). Calling `nil` clears it.
+    public func setMeasureFunc(_ closure: MeasureFunc?) {
+        self.measureClosure = closure
+        if closure == nil {
+            YGNodeSetMeasureFunc(ygNode, nil)
+            YGNodeSetContext(ygNode, nil)
+            return
+        }
+        YGNodeSetContext(ygNode, Unmanaged.passUnretained(self).toOpaque())
+        YGNodeSetMeasureFunc(ygNode, layoutNodeMeasureTrampoline)
+    }
+
+    /// Mark this node's measurement as stale (call after content changes).
+    public func markDirty() {
+        YGNodeMarkDirty(ygNode)
+    }
+}
+
+/// Trampoline that bridges Yoga's C measure callback to the Swift closure
+/// stored on `LayoutNode`. Looked up via `YGNodeGetContext`.
+private let layoutNodeMeasureTrampoline: @convention(c) (
+    YGNodeConstRef?, Float, YGMeasureMode, Float, YGMeasureMode
+) -> YGSize = { node, width, widthMode, height, heightMode in
+    guard let raw = YGNodeGetContext(node) else {
+        return YGSize(width: 0, height: 0)
+    }
+    let layoutNode = Unmanaged<LayoutNode>.fromOpaque(raw).takeUnretainedValue()
+    guard let closure = layoutNode._measureClosure else {
+        return YGSize(width: 0, height: 0)
+    }
+    let size = closure(width, LayoutNode.MeasureMode(widthMode),
+                       height, LayoutNode.MeasureMode(heightMode))
+    return YGSize(width: Float(size.width), height: Float(size.height))
 }
