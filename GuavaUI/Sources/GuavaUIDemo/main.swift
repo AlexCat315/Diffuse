@@ -4,33 +4,109 @@ import GuavaUICompose
 import PlatformShell
 import RHIWGPU
 
+struct DemoSceneNode: Identifiable {
+    let id: String
+    let title: String
+    let children: [DemoSceneNode]
+}
+
+struct DemoLogEntry: Identifiable {
+    let id: Int
+    let level: String
+    let message: String
+}
+
+let demoSceneTree: [DemoSceneNode] = [
+    DemoSceneNode(id: "scene", title: "Scene Root", children: [
+        DemoSceneNode(id: "camera", title: "Main Camera", children: []),
+        DemoSceneNode(id: "lights", title: "Lights", children: [
+            DemoSceneNode(id: "sun", title: "Directional Light", children: []),
+            DemoSceneNode(id: "fill", title: "Fill Light", children: [])
+        ]),
+        DemoSceneNode(id: "props", title: "Props", children: [
+            DemoSceneNode(id: "crate", title: "Crate_A", children: []),
+            DemoSceneNode(id: "monitor", title: "MonitorWall", children: []),
+            DemoSceneNode(id: "console", title: "ConsoleDesk", children: [])
+        ])
+    ])
+]
+
+let demoLogEntries: [DemoLogEntry] = [
+    DemoLogEntry(id: 1, level: "INFO", message: "Renderer warmed 1024 atlas glyphs."),
+    DemoLogEntry(id: 2, level: "INFO", message: "List and Tree compose components are active in the demo."),
+    DemoLogEntry(id: 3, level: "WARN", message: "Rounded clip is still axis-aligned at the subtree level."),
+    DemoLogEntry(id: 4, level: "INFO", message: "Scene hierarchy selection now feeds inspector text."),
+    DemoLogEntry(id: 5, level: "DEBUG", message: "ScrollView wheel routing drives both components."),
+    DemoLogEntry(id: 6, level: "INFO", message: "Phase 7 foundation is ready for SplitView and DockContainer."),
+]
+
+func demoLogColor(_ level: String) -> Color {
+    switch level {
+    case "WARN":
+        return Color(r: 1.0, g: 0.78, b: 0.46)
+    case "DEBUG":
+        return Color(r: 0.62, g: 0.78, b: 1.0)
+    default:
+        return Color(r: 0.56, g: 0.86, b: 0.62)
+    }
+}
+
+func demoSceneTitle(id: String?) -> String {
+    guard let id else { return "None" }
+    return findDemoSceneNode(id: id, in: demoSceneTree)?.title ?? id
+}
+
+func findDemoSceneNode(id: String,
+                       in nodes: [DemoSceneNode]) -> DemoSceneNode? {
+    for node in nodes {
+        if node.id == id { return node }
+        if let match = findDemoSceneNode(id: id, in: node.children) {
+            return match
+        }
+    }
+    return nil
+}
+
 // MARK: - Root view (compose)
 
 struct RootView: View {
     @State var inputText: String = ""
     @State var clickCount: Int = 0
+    @State var selectedSceneNodeID: String? = "camera"
+    @State var selectedLogID: Int? = 2
 
     var body: some View {
         Box(direction: .row, alignItems: .stretch, spacing: 1) {
             Column(alignment: .leading, spacing: 8) {
-                Text("Sidebar", color: Color.white)
+                Text("Hierarchy", color: Color.white)
+                    .font(.system(size: 20, weight: .bold))
                 Divider()
-                Text("Item A", color: Color(r: 0.85, g: 0.85, b: 0.9))
-                Text("Item B", color: Color(r: 0.85, g: 0.85, b: 0.9))
-                Text("Item C", color: Color(r: 0.85, g: 0.85, b: 0.9))
-                Spacer()
+
+                Tree(demoSceneTree,
+                     children: \.children,
+                     selection: $selectedSceneNodeID,
+                     rowHeight: 28,
+                     rowSpacing: 2) { node, isSelected, _, _ in
+                    Text(node.title,
+                         color: isSelected
+                            ? Color.white
+                            : Color(r: 0.83, g: 0.85, b: 0.90))
+                }
+                .flex()
+                .background(Color(r: 0.12, g: 0.14, b: 0.18))
+
                 Button(action: { clickCount += 1 }) {
-                    Text("Tapped \(clickCount)x", color: Color.white)
+                    Text("Refresh Snapshot \(clickCount)", color: Color.white)
                         .padding(8)
                         .background(Color(r: 0.30, g: 0.55, b: 0.95))
                 }
             }
             .padding(16)
-            .frame(width: 220)
+            .frame(width: 260)
             .background(Color(r: 0.16, g: 0.18, b: 0.22))
 
             Column(alignment: .leading, spacing: 12) {
-                Text("GuavaUI — Phase 6.6", color: Color.white)
+                Text("GuavaUI — Phase 7.0", color: Color.white)
                     .font(.system(size: 28, weight: .bold))
                     .lineHeight(32)
                 Divider()
@@ -77,21 +153,19 @@ struct RootView: View {
                 .padding(16)
                 .background(Color(r: 0.14, g: 0.17, b: 0.22))
 
-                ScrollView(.vertical) {
-                    Column(alignment: .leading, spacing: 6) {
-                        Text("Row 0", color: Color.white).frame(height: 40)
-                        Text("Row 1", color: Color.white).frame(height: 40)
-                        Text("Row 2", color: Color.white).frame(height: 40)
-                        Text("Row 3", color: Color.white).frame(height: 40)
-                        Text("Row 4", color: Color.white).frame(height: 40)
-                        Text("Row 5", color: Color.white).frame(height: 40)
-                        Text("Row 6", color: Color.white).frame(height: 40)
-                        Text("Row 7", color: Color.white).frame(height: 40)
-                        Text("Row 8", color: Color.white).frame(height: 40)
-                        Text("Row 9", color: Color.white).frame(height: 40)
+                Text("Console", color: Color.white)
+                    .font(.system(size: 18, weight: .bold))
+
+                List(demoLogEntries, selection: $selectedLogID, rowHeight: 34, rowSpacing: 2) { entry, isSelected in
+                    Row(alignment: .center, spacing: 10) {
+                        Text(entry.level, color: demoLogColor(entry.level))
+                            .font(.system(size: 12, weight: .bold))
+                        Text(entry.message,
+                             color: isSelected
+                                ? Color.white
+                                : Color(r: 0.84, g: 0.88, b: 0.94))
+                            .lineHeight(18)
                     }
-                    .padding(12)
-                    .background(Color(r: 0.18, g: 0.22, b: 0.28))
                 }
                 .flex()
                 .background(Color(r: 0.12, g: 0.14, b: 0.18))
@@ -102,9 +176,21 @@ struct RootView: View {
 
             Column(alignment: .leading, spacing: 6) {
                 Text("Inspector", color: Color.white)
+                    .font(.system(size: 20, weight: .bold))
                 Divider()
-                Text("type: Box", color: Color(r: 0.7, g: 0.7, b: 0.75))
+                Text("selected: \(demoSceneTitle(id: selectedSceneNodeID))",
+                     color: Color(r: 0.92, g: 0.94, b: 0.98))
+                    .lineHeight(20)
+                Text("type: EntityNode", color: Color(r: 0.7, g: 0.7, b: 0.75))
                 Text("layout: yoga", color: Color(r: 0.7, g: 0.7, b: 0.75))
+                Text("console focus: #\(selectedLogID ?? 0)",
+                     color: Color(r: 0.7, g: 0.7, b: 0.75))
+                Spacer().frame(height: 12)
+                Text("Phase 7 status", color: Color.white)
+                    .font(.system(size: 16, weight: .bold))
+                Text("List / Tree 可用于 Editor 的 Console / Hierarchy 原型。",
+                     color: Color(r: 0.74, g: 0.79, b: 0.86))
+                    .lineHeight(18)
                 Spacer()
             }
             .padding(16)
