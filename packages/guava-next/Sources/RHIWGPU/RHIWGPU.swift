@@ -215,7 +215,8 @@ public final class WGPUBackend {
                                 desc.topology.bridgeValue,
                                 desc.frontFace.bridgeValue,
                                 desc.cullMode.bridgeValue,
-                                layouts, count, &bs, &ds, &pipelinePtr)
+                                layouts, count, &bs, &ds,
+                                desc.pipelineLayout?.handle, &pipelinePtr)
                         } else {
                             return wgpu_bridge_create_render_pipeline(
                                 device, desc.shaderModule.handle,
@@ -224,7 +225,8 @@ public final class WGPUBackend {
                                 desc.topology.bridgeValue,
                                 desc.frontFace.bridgeValue,
                                 desc.cullMode.bridgeValue,
-                                layouts, count, &bs, nil, &pipelinePtr)
+                                layouts, count, &bs, nil,
+                                desc.pipelineLayout?.handle, &pipelinePtr)
                         }
                     } else {
                         if var ds = dsVal {
@@ -235,7 +237,8 @@ public final class WGPUBackend {
                                 desc.topology.bridgeValue,
                                 desc.frontFace.bridgeValue,
                                 desc.cullMode.bridgeValue,
-                                layouts, count, nil, &ds, &pipelinePtr)
+                                layouts, count, nil, &ds,
+                                desc.pipelineLayout?.handle, &pipelinePtr)
                         } else {
                             return wgpu_bridge_create_render_pipeline(
                                 device, desc.shaderModule.handle,
@@ -244,7 +247,8 @@ public final class WGPUBackend {
                                 desc.topology.bridgeValue,
                                 desc.frontFace.bridgeValue,
                                 desc.cullMode.bridgeValue,
-                                layouts, count, nil, nil, &pipelinePtr)
+                                layouts, count, nil, nil,
+                                desc.pipelineLayout?.handle, &pipelinePtr)
                         }
                     }
                 }
@@ -401,7 +405,8 @@ public final class WGPUBackend {
             WGPUBridgeBindGroupLayoutEntry(
                 binding: $0.binding,
                 visibility: $0.visibility.rawValue,
-                type: $0.type.bridgeValue
+                type: $0.type.bridgeValue,
+                has_dynamic_offset: $0.hasDynamicOffset ? 1 : 0
             )
         }
         var ptr: UnsafeMutableRawPointer?

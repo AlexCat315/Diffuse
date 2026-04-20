@@ -671,6 +671,7 @@ int wgpu_bridge_create_render_pipeline(
     uint32_t vertex_buffer_count,
     const WGPUBridgeBlendState* blend,
     const WGPUBridgeDepthStencilPipelineState* depth_stencil,
+    void* pipeline_layout,
     void** out_pipeline)
 {
     if (device == NULL || shader_module == NULL || out_pipeline == NULL) {
@@ -736,7 +737,7 @@ int wgpu_bridge_create_render_pipeline(
     desc.multisample.count = 1;
     desc.multisample.mask = 0xFFFFFFFF;
     desc.fragment = &frag;
-    desc.layout = NULL;
+    desc.layout = (WGPUPipelineLayout)pipeline_layout;
 
     WGPUDepthStencilState ds;
     if (depth_stencil != NULL) {
@@ -926,6 +927,17 @@ void wgpu_bridge_render_pass_set_bind_group(void* pass, uint32_t group_index, vo
                                           (WGPUBindGroup)bind_group, 0, NULL);
 }
 
+void wgpu_bridge_render_pass_set_bind_group_dynamic(void* pass,
+                                                    uint32_t group_index,
+                                                    void* bind_group,
+                                                    uint32_t dynamic_offset_count,
+                                                    const uint32_t* dynamic_offsets) {
+    if (pass && bind_group)
+        wgpuRenderPassEncoderSetBindGroup((WGPURenderPassEncoder)pass, group_index,
+                                          (WGPUBindGroup)bind_group,
+                                          dynamic_offset_count, dynamic_offsets);
+}
+
 void wgpu_bridge_render_pass_end(void* pass) {
     if (pass) wgpuRenderPassEncoderEnd((WGPURenderPassEncoder)pass);
 }
@@ -1057,12 +1069,18 @@ int wgpu_bridge_create_bind_group_layout(void* device,
             switch (entries[i].type) {
                 case WGPUBridge_BindingType_UniformBuffer:
                     es[i].buffer.type = WGPUBufferBindingType_Uniform;
+                    es[i].buffer.hasDynamicOffset = entries[i].has_dynamic_offset
+                        ? WGPU_TRUE : WGPU_FALSE;
                     break;
                 case WGPUBridge_BindingType_StorageBuffer:
                     es[i].buffer.type = WGPUBufferBindingType_Storage;
+                    es[i].buffer.hasDynamicOffset = entries[i].has_dynamic_offset
+                        ? WGPU_TRUE : WGPU_FALSE;
                     break;
                 case WGPUBridge_BindingType_ReadOnlyStorageBuffer:
                     es[i].buffer.type = WGPUBufferBindingType_ReadOnlyStorage;
+                    es[i].buffer.hasDynamicOffset = entries[i].has_dynamic_offset
+                        ? WGPU_TRUE : WGPU_FALSE;
                     break;
                 case WGPUBridge_BindingType_Sampler:
                     es[i].sampler.type = WGPUSamplerBindingType_Filtering;

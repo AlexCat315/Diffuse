@@ -16,6 +16,7 @@ extension GPUShaderModule: @unchecked Sendable {}
 
 public struct GPURenderPipelineDescriptor: @unchecked Sendable {
     public var shaderModule: GPUShaderModule
+    public var pipelineLayout: GPUPipelineLayout?
     public var vertexEntryPoint: String
     public var fragmentEntryPoint: String
     public var colorFormat: GPUTextureFormat
@@ -27,6 +28,7 @@ public struct GPURenderPipelineDescriptor: @unchecked Sendable {
     public var depthStencil: GPUDepthStencilPipelineState?
 
     public init(shaderModule: GPUShaderModule,
+                pipelineLayout: GPUPipelineLayout? = nil,
                 vertexEntryPoint: String = "vs_main",
                 fragmentEntryPoint: String = "fs_main",
                 colorFormat: GPUTextureFormat = .bgra8Unorm,
@@ -37,6 +39,7 @@ public struct GPURenderPipelineDescriptor: @unchecked Sendable {
                 blend: GPUBlendState? = nil,
                 depthStencil: GPUDepthStencilPipelineState? = nil) {
         self.shaderModule = shaderModule
+        self.pipelineLayout = pipelineLayout
         self.vertexEntryPoint = vertexEntryPoint
         self.fragmentEntryPoint = fragmentEntryPoint
         self.colorFormat = colorFormat
