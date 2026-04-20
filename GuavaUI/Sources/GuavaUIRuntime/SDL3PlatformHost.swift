@@ -1,6 +1,7 @@
 import Foundation
 import Logging
 import PlatformShell
+import EngineKernel
 
 /// `PlatformHost` backed by SDL3 via Engine's `PlatformShell`.
 ///
@@ -11,6 +12,9 @@ public final class SDL3PlatformHost: PlatformHost {
 
     private let title: String
     public let recomposer: Recomposer
+    public let interactions: InteractionRegistry
+    public let pointerCapture: PointerCapture
+    public let focusChain: FocusChain
     private var shell: (any Shell)?
     private var _isRunning: Bool = false
 
@@ -27,6 +31,10 @@ public final class SDL3PlatformHost: PlatformHost {
     /// surface, depth buffer, etc.
     public var onResize: (@MainActor (UInt32, UInt32) -> Void)?
 
+    /// Optional inspector hook for unhandled platform events (debugging, custom
+    /// shortcuts). Called after `EventDispatcher` has run.
+    public var onEvent: (@MainActor (InputEvent) -> Void)?
+
     /// - Parameters:
     ///   - title: Window title bar text.
     ///   - recomposer: The recomposer to drain each frame. A fresh instance per
@@ -35,6 +43,9 @@ public final class SDL3PlatformHost: PlatformHost {
     public init(title: String = "GuavaUI", recomposer: Recomposer = Recomposer()) {
         self.title = title
         self.recomposer = recomposer
+        self.interactions = InteractionRegistry()
+        self.pointerCapture = PointerCapture()
+        self.focusChain = FocusChain()
     }
 
     /// Open the window and block until the user closes it or `stop()` is called.
@@ -51,6 +62,15 @@ public final class SDL3PlatformHost: PlatformHost {
         _isRunning = true
         let _title = title
         Logger.runtime.info("running — \(_title)")
+
+        // Build the per-tree dispatcher.
+        let dispatcher = EventDispatcher(
+            tree: tree,
+            interactions: interactions,
+            capture: pointerCapture,
+            focusChain: focusChain,
+            windowID: .main
+        )
 
         // Fire onInit once after the window is fully realised.
         if let surface = host.renderSurface {
@@ -74,8 +94,11 @@ public final class SDL3PlatformHost: PlatformHost {
             if let surface = host.renderSurface {
                 onFrame?(surface)
             }
-            // 5. Poll platform events; event routing to hit-test added in Phase 6.
-            _ = host.pollEvents()
+            // 5. Drain platform events through the dispatcher.
+            for event in host.pollEvents() {
+                dispatcher.dispatch(event)
+                onEvent?(event)
+            }
         }
 
         _isRunning = false
