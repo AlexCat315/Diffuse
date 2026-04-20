@@ -16,18 +16,43 @@ struct RootView: View {
                 Text("Item B", color: Color(r: 0.85, g: 0.85, b: 0.9))
                 Text("Item C", color: Color(r: 0.85, g: 0.85, b: 0.9))
                 Spacer()
+                Button(action: { print("[demo] sidebar button tapped") }) {
+                    Text("Click me", color: Color.white)
+                        .padding(8)
+                        .background(Color(r: 0.30, g: 0.55, b: 0.95))
+                }
             }
             .padding(16)
             .frame(width: 220)
             .background(Color(r: 0.16, g: 0.18, b: 0.22))
 
             Column(alignment: .leading, spacing: 12) {
-                Text("GuavaUI — Phase 6.5", color: Color.white)
+                Text("GuavaUI — Phase 6.4", color: Color.white)
                 Divider()
                 Text("Compose -> Yoga -> DrawList -> wgpu",
                      color: Color(r: 0.7, g: 0.85, b: 1.0))
-                Text("end-to-end pipeline live",
+                Text("Button + ScrollView live",
                      color: Color(r: 0.94, g: 0.94, b: 0.98))
+
+                ScrollView(.vertical) {
+                    Column(alignment: .leading, spacing: 6) {
+                        Text("Row 0", color: Color.white).frame(height: 40)
+                        Text("Row 1", color: Color.white).frame(height: 40)
+                        Text("Row 2", color: Color.white).frame(height: 40)
+                        Text("Row 3", color: Color.white).frame(height: 40)
+                        Text("Row 4", color: Color.white).frame(height: 40)
+                        Text("Row 5", color: Color.white).frame(height: 40)
+                        Text("Row 6", color: Color.white).frame(height: 40)
+                        Text("Row 7", color: Color.white).frame(height: 40)
+                        Text("Row 8", color: Color.white).frame(height: 40)
+                        Text("Row 9", color: Color.white).frame(height: 40)
+                    }
+                    .padding(12)
+                    .background(Color(r: 0.18, g: 0.22, b: 0.28))
+                }
+                .frame(height: 220)
+                .background(Color(r: 0.12, g: 0.14, b: 0.18))
+
                 Spacer()
             }
             .padding(20)
@@ -76,6 +101,7 @@ TextEnvironmentHolder.current = TextEnvironment(
 let tree = NodeTree()
 let host = SDL3PlatformHost(title: "GuavaUI — Phase 6.5")
 let graph = ViewGraph(tree: tree, recomposer: host.recomposer)
+InteractionRegistryHolder.current = host.interactions
 graph.install(root: RootView())
 
 // MARK: - GPU stack

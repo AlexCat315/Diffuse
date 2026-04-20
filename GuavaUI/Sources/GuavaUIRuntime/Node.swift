@@ -56,6 +56,10 @@ public final class Node: @unchecked Sendable {
     /// geometry without subclassing `Node`.
     public var draw: ((DrawList, CGPoint) -> Void)?
 
+    /// Children render translated by `-contentOffset`. Used by ScrollView to
+    /// scroll its content while keeping its own clip rect anchored.
+    public var contentOffset: CGPoint = .zero
+
     public init() {}
 
     // MARK: - Tree mutation

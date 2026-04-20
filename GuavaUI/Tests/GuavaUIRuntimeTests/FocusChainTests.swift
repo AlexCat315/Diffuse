@@ -96,7 +96,7 @@ struct InteractionRegistryTests {
     func setAndRemove() {
         let reg = InteractionRegistry()
         let n = Node()
-        reg.setPointer(n) { _, _ in .handled }
+        reg.setPointer(n) { _, _, _ in .handled }
         #expect(reg.handlers(for: n).pointer != nil)
         reg.remove(n)
         #expect(reg.handlers(for: n).isEmpty)
