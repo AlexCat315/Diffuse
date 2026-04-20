@@ -7,6 +7,7 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
+        .executable(name: "GuavaUIDemo", targets: ["GuavaUIDemo"]),
         .library(name: "GuavaUIRuntime", targets: ["GuavaUIRuntime"]),
         .library(name: "GuavaUICompose", targets: ["GuavaUICompose"]),
     ],
@@ -31,6 +32,18 @@ let package = Package(
         // 不依赖 Engine，只依赖 GuavaUIRuntime。
         .target(
             name: "GuavaUICompose",
+            dependencies: ["GuavaUIRuntime"]
+        ),
+
+        // MARK: - Demo
+        .executableTarget(
+            name: "GuavaUIDemo",
+            dependencies: ["GuavaUIRuntime"]
+        ),
+
+        // MARK: - Tests
+        .testTarget(
+            name: "GuavaUIRuntimeTests",
             dependencies: ["GuavaUIRuntime"]
         ),
     ]
