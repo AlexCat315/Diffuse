@@ -39,6 +39,8 @@ typedef void (*PFN_wgpuInstanceRequestAdapter)(WGPUInstance, const WGPURequestAd
 typedef void (*PFN_wgpuAdapterRequestDevice)(WGPUAdapter, const WGPUDeviceDescriptor*, WGPURequestDeviceCallback, void*);
 typedef void (*PFN_wgpuAdapterRelease)(WGPUAdapter);
 typedef void (*PFN_wgpuDeviceRelease)(WGPUDevice);
+typedef WGPUQueue (*PFN_wgpuDeviceGetQueue)(WGPUDevice);
+typedef void (*PFN_wgpuQueueRelease)(WGPUQueue);
 
 static void* g_wgpu_lib = NULL;
 static PFN_wgpuCreateInstance g_create_instance = NULL;
@@ -47,6 +49,8 @@ static PFN_wgpuInstanceRequestAdapter g_request_adapter = NULL;
 static PFN_wgpuAdapterRequestDevice g_request_device = NULL;
 static PFN_wgpuAdapterRelease g_release_adapter = NULL;
 static PFN_wgpuDeviceRelease g_release_device = NULL;
+static PFN_wgpuDeviceGetQueue g_get_queue = NULL;
+static PFN_wgpuQueueRelease g_release_queue = NULL;
 static char g_last_error[256] = {0};
 
 typedef struct AwaitResult {
@@ -146,13 +150,17 @@ int wgpu_bridge_initialize(const char* library_path) {
     g_request_device = (PFN_wgpuAdapterRequestDevice)dlsym(g_wgpu_lib, "wgpuAdapterRequestDevice");
     g_release_adapter = (PFN_wgpuAdapterRelease)dlsym(g_wgpu_lib, "wgpuAdapterRelease");
     g_release_device = (PFN_wgpuDeviceRelease)dlsym(g_wgpu_lib, "wgpuDeviceRelease");
+    g_get_queue = (PFN_wgpuDeviceGetQueue)dlsym(g_wgpu_lib, "wgpuDeviceGetQueue");
+    g_release_queue = (PFN_wgpuQueueRelease)dlsym(g_wgpu_lib, "wgpuQueueRelease");
 
     if (g_create_instance == NULL ||
         g_release_instance == NULL ||
         g_request_adapter == NULL ||
         g_request_device == NULL ||
         g_release_adapter == NULL ||
-        g_release_device == NULL) {
+        g_release_device == NULL ||
+        g_get_queue == NULL ||
+        g_release_queue == NULL) {
         set_error("Failed to load required wgpu symbols");
         dlclose(g_wgpu_lib);
         g_wgpu_lib = NULL;
