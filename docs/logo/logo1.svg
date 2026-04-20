@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 500 500" width="100%" height="100%">
+  <defs>
+    <!-- 背景网格图案 -->
+    <pattern id="grid" width="40" height="40" patternUnits="userSpaceOnUse">
+      <circle cx="20" cy="20" r="1.5" fill="#1E2A3A" opacity="0.6"/>
+    </pattern>
+
+    <!-- 番石榴外皮渐变（绿色） -->
+    <linearGradient id="rindGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#00E676"/>
+      <stop offset="100%" stop-color="#009624"/>
+    </linearGradient>
+
+    <!-- 番石榴果肉渐变（粉红色） -->
+    <linearGradient id="fleshGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FF4081"/>
+      <stop offset="100%" stop-color="#C51162"/>
+    </linearGradient>
+
+    <!-- 番石榴种子渐变（金黄色） -->
+    <linearGradient id="seedGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#FFEA00"/>
+      <stop offset="100%" stop-color="#FF8F00"/>
+    </linearGradient>
+
+    <!-- 核心发光效果 -->
+    <radialGradient id="coreGlow">
+      <stop offset="0%" stop-color="#FFEA00" stop-opacity="0.8"/>
+      <stop offset="50%" stop-color="#FF4081" stop-opacity="0.4"/>
+      <stop offset="100%" stop-color="#FF4081" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- 全局暗角效果 -->
+    <radialGradient id="vignette" cx="50%" cy="50%" r="50%">
+      <stop offset="60%" stop-color="#000" stop-opacity="0"/>
+      <stop offset="100%" stop-color="#000" stop-opacity="0.5"/>
+    </radialGradient>
+
+    <!-- 外皮叶片组件（8个） -->
+    <g id="rind-petal">
+      <!-- 外皮主体 -->
+      <polygon points="30,-120 50,-170 0,-200 -50,-170 -30,-120" fill="url(#rindGrad)"/>
+      <!-- 3D 斜面高光 -->
+      <polygon points="30,-120 50,-170 0,-200 0,-120" fill="#FFFFFF" opacity="0.15"/>
+      <!-- 边缘描边 -->
+      <polygon points="30,-120 50,-170 0,-200 -50,-170 -30,-120" fill="none" stroke="#00E676" stroke-width="1" opacity="0.5"/>
+    </g>
+
+    <!-- 果肉叶片组件（8个） -->
+    <g id="flesh-petal">
+      <!-- 果肉主体 -->
+      <polygon points="20,-40 40,-100 0,-130 -40,-100 -20,-40" fill="url(#fleshGrad)"/>
+      <!-- 3D 斜面高光 -->
+      <polygon points="20,-40 40,-100 0,-130 0,-40" fill="#FFFFFF" opacity="0.2"/>
+      <!-- 边缘描边 -->
+      <polygon points="20,-40 40,-100 0,-130 -40,-100 -20,-40" fill="none" stroke="#FF80AB" stroke-width="1" opacity="0.4"/>
+      <!-- 番石榴种子 -->
+      <polygon points="0,-35 8,-40 0,-45 -8,-40" fill="url(#seedGrad)"/>
+      <!-- 种子高光 -->
+      <polygon points="0,-35 8,-40 0,-45 0,-35" fill="#FFFFFF" opacity="0.4"/>
+    </g>
+  </defs>
+
+  <!-- 背景层 -->
+  <rect width="500" height="500" fill="#0A0E17"/>
+  <rect width="500" height="500" fill="url(#grid)"/>
+
+  <!-- 外部科技光环 -->
+  <g transform="translate(250, 250)">
+    <circle cx="0" cy="0" r="230" fill="none" stroke="#00E676" stroke-width="1" opacity="0.3" stroke-dasharray="10 10"/>
+    <circle cx="0" cy="0" r="240" fill="none" stroke="#FF4081" stroke-width="0.5" opacity="0.2"/>
+    
+    <!-- 环绕的科技节点 -->
+    <g opacity="0.6">
+      <circle cx="0" cy="-230" r="3" fill="#00E676"/>
+      <circle cx="0" cy="-230" r="3" fill="#00E676" transform="rotate(45)"/>
+      <circle cx="0" cy="-230" r="3" fill="#00E676" transform="rotate(90)"/>
+      <circle cx="0" cy="-230" r="3" fill="#00E676" transform="rotate(135)"/>
+      <circle cx="0" cy="-230" r="3" fill="#00E676" transform="rotate(180)"/>
+      <circle cx="0" cy="-230" r="3" fill="#00E676" transform="rotate(225)"/>
+      <circle cx="0" cy="-230" r="3" fill="#00E676" transform="rotate(270)"/>
+      <circle cx="0" cy="-230" r="3" fill="#00E676" transform="rotate(315)"/>
+    </g>
+  </g>
+
+  <!-- 主图形层 -->
+  <g transform="translate(250, 250)">
+    <!-- 1. 外皮（8个叶片） -->
+    <use href="#rind-petal" transform="rotate(0)"/>
+    <use href="#rind-petal" transform="rotate(45)"/>
+    <use href="#rind-petal" transform="rotate(90)"/>
+    <use href="#rind-petal" transform="rotate(135)"/>
+    <use href="#rind-petal" transform="rotate(180)"/>
+    <use href="#rind-petal" transform="rotate(225)"/>
+    <use href="#rind-petal" transform="rotate(270)"/>
+    <use href="#rind-petal" transform="rotate(315)"/>
+
+    <!-- 2. 果肉（8个叶片） -->
+    <use href="#flesh-petal" transform="rotate(0)"/>
+    <use href="#flesh-petal" transform="rotate(45)"/>
+    <use href="#flesh-petal" transform="rotate(90)"/>
+    <use href="#flesh-petal" transform="rotate(135)"/>
+    <use href="#flesh-petal" transform="rotate(180)"/>
+    <use href="#flesh-petal" transform="rotate(225)"/>
+    <use href="#flesh-petal" transform="rotate(270)"/>
+    <use href="#flesh-petal" transform="rotate(315)"/>
+
+    <!-- 叶片间的发光缝隙（雷达/科技线） -->
+    <g opacity="0.4">
+      <line x1="0" y1="0" x2="0" y2="-200" stroke="#FF4081" stroke-width="1.5" transform="rotate(22.5)"/>
+      <line x1="0" y1="0" x2="0" y2="-200" stroke="#FF4081" stroke-width="1.5" transform="rotate(67.5)"/>
+      <line x1="0" y1="0" x2="0" y2="-200" stroke="#FF4081" stroke-width="1.5" transform="rotate(112.5)"/>
+      <line x1="0" y1="0" x2="0" y2="-200" stroke="#FF4081" stroke-width="1.5" transform="rotate(157.5)"/>
+      <line x1="0" y1="0" x2="0" y2="-200" stroke="#FF4081" stroke-width="1.5" transform="rotate(202.5)"/>
+      <line x1="0" y1="0" x2="0" y2="-200" stroke="#FF4081" stroke-width="1.5" transform="rotate(247.5)"/>
+      <line x1="0" y1="0" x2="0" y2="-200" stroke="#FF4081" stroke-width="1.5" transform="rotate(292.5)"/>
+      <line x1="0" y1="0" x2="0" y2="-200" stroke="#FF4081" stroke-width="1.5" transform="rotate(337.5)"/>
+    </g>
+
+    <!-- 3. 引擎核心区域 -->
+    <!-- 核心发光背景 -->
+    <circle cx="0" cy="0" r="60" fill="url(#coreGlow)"/>
+    
+    <!-- 中心八边形枢纽 -->
+    <polygon points="0,-30 20,-20 30,0 20,20 0,30 -20,20 -30,0 -20,-20" fill="url(#seedGrad)"/>
+    <!-- 八边形高光 -->
+    <polygon points="0,-30 20,-20 30,0 0,0" fill="#FFFFFF" opacity="0.3"/>
+    <!-- 八边形描边 -->
+    <polygon points="0,-30 20,-20 30,0 20,20 0,30 -20,20 -30,0 -20,-20" fill="none" stroke="#FFFFFF" stroke-width="1.5" opacity="0.8"/>
+
+    <!-- 核心内部科技环 -->
+    <circle cx="0" cy="0" r="15" fill="none" stroke="#0A0E17" stroke-width="3"/>
+    <circle cx="0" cy="0" r="18" fill="none" stroke="#FFEA00" stroke-width="1.5" stroke-dasharray="4 2" opacity="0.8"/>
+    <circle cx="0" cy="0" r="10" fill="none" stroke="#FFFFFF" stroke-width="1" opacity="0.6"/>
+    
+    <!-- 中心点 -->
+    <circle cx="0" cy="0" r="4" fill="#FFFFFF"/>
+
+    <!-- 4. 内部连接线（科技感） -->
+    <g stroke="#00E676" stroke-width="1" opacity="0.4">
+      <line x1="30" y1="0" x2="60" y2="0"/>
+      <line x1="0" y1="30" x2="0" y2="60"/>
+      <line x1="-30" y1="0" x2="-60" y2="0"/>
+      <line x1="0" y1="-30" x2="0" y2="-60"/>
+      
+      <line x1="20" y1="20" x2="40" y2="40"/>
+      <line x1="-20" y1="20" x2="-40" y2="40"/>
+      <line x1="20" y1="-20" x2="40" y2="-40"/>
+      <line x1="-20" y1="-20" x2="-40" y2="-40"/>
+    </g>
+  </g>
+
+  <!-- 暗角叠加层（增强 3D 深度） -->
+  <rect width="500" height="500" fill="url(#vignette)" pointer-events="none"/>
+
+  <!-- 文字标识区域 -->
+  <g transform="translate(250, 420)">
+    <!-- 引擎名称 -->
+    <text x="0" y="0" font-family="'Montserrat', 'Segoe UI', system-ui, sans-serif" font-size="34" font-weight="900" fill="#FFFFFF" letter-spacing="10" text-anchor="middle">GUAVA</text>
+    
+    <!-- 上下装饰线 -->
+    <line x1="-80" y1="-10" x2="-20" y2="-10" stroke="#00E676" stroke-width="2"/>
+    <line x1="20" y1="-10" x2="80" y2="-10" stroke="#FF4081" stroke-width="2"/>
+    
+    <!-- 引擎副标题 -->
+    <text x="0" y="28" font-family="'Segoe UI', system-ui, sans-serif" font-size="12" font-weight="600" fill="#888" letter-spacing="6" text-anchor="middle">GAME ENGINE</text>
+  </g>
+</svg>
