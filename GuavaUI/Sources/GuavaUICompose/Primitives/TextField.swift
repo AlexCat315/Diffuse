@@ -52,6 +52,9 @@ public struct TextField: _PrimitiveView {
         /// Absolute window-space origin captured during the last render pass;
         /// used to translate pointer events into local coordinates.
         var lastDrawOrigin: CGPoint = .zero
+        /// True between pointer-down and pointer-up while a drag is active.
+        /// Motion events extend the selection only when this is set.
+        var isDragging: Bool = false
     }
 
     public func _makeNode() -> Node {
@@ -83,9 +86,23 @@ public struct TextField: _PrimitiveView {
                 snapshot.handleKey(event, state: state) ? .handled : .ignored
             }
             registry.setPointer(node) { event, phase, _ in
-                guard phase == .down else { return .ignored }
-                state.selectionAnchor = nil
-                snapshot.positionCursor(atWindowX: event.x, state: state)
+                switch phase {
+                case .down:
+                    snapshot.handlePointerDown(event: event, state: state, node: node)
+                    return .handled
+                case .up:
+                    state.isDragging = false
+                    PointerCaptureHolder.current?.release()
+                    return .handled
+                }
+            }
+            registry.setMotion(node) { event, _ in
+                guard state.isDragging else { return .ignored }
+                let target = snapshot.characterIndex(atWindowX: event.x, state: state)
+                if state.selectionAnchor == nil {
+                    state.selectionAnchor = state.cursorIndex
+                }
+                state.cursorIndex = target
                 return .handled
             }
         }
@@ -326,31 +343,83 @@ public struct TextField: _PrimitiveView {
     }
 
     /// Snap the cursor to the character boundary nearest a window-space x.
+    /// Convenience wrapper around `characterIndex(atWindowX:)` that also
+    /// writes the result back to `state.cursorIndex`.
+    private func positionCursor(atWindowX windowX: Float, state: FieldState) {
+        state.cursorIndex = characterIndex(atWindowX: windowX, state: state)
+    }
+
+    /// Map a window-space x coordinate to a character index.
     /// Walks shaped glyph advances and picks the side of the midline. Treats
     /// glyph index as character index — accurate for ASCII; ligatures, CJK,
-    /// and emoji are Phase 6.4e concerns.
-    private func positionCursor(atWindowX windowX: Float, state: FieldState) {
+    /// and emoji are still approximate.
+    private func characterIndex(atWindowX windowX: Float, state: FieldState) -> Int {
         let current = text.wrappedValue
         guard !current.isEmpty, let env = TextEnvironmentHolder.current else {
-            state.cursorIndex = 0
-            return
+            return 0
         }
         let localX = windowX - Float(state.lastDrawOrigin.x)
-        if localX <= 0 {
-            state.cursorIndex = 0
-            return
-        }
+        if localX <= 0 { return 0 }
         let glyphs = env.shaper.shape(text: current)
         var pen: Float = 0
         for (i, g) in glyphs.enumerated() {
             let mid = pen + g.xAdvance * 0.5
-            if localX < mid {
-                state.cursorIndex = i
-                return
-            }
+            if localX < mid { return i }
             pen += g.xAdvance
         }
-        state.cursorIndex = min(glyphs.count, current.count)
+        return min(glyphs.count, current.count)
+    }
+
+    // MARK: - Pointer / multi-click
+
+    /// Handle a pointer-down event: dispatch to single-click cursor placement,
+    /// double-click word selection, or triple-click select-all based on
+    /// `event.clicks` (set by SDL3 to 1 / 2 / 3 for the click cadence).
+    private func handlePointerDown(event: MouseButtonEvent,
+                                   state: FieldState,
+                                   node: Node) {
+        switch event.clicks {
+        case 3...:
+            // Triple click: select the entire (single-line) field.
+            state.selectionAnchor = 0
+            state.cursorIndex = text.wrappedValue.count
+            state.isDragging = false
+        case 2:
+            // Double click: select the word under the cursor.
+            let target = characterIndex(atWindowX: event.x, state: state)
+            let (lo, hi) = wordBounds(in: text.wrappedValue, around: target)
+            state.selectionAnchor = lo
+            state.cursorIndex = hi
+            state.isDragging = false
+        default:
+            // Single click: place the cursor and start a drag selection.
+            state.selectionAnchor = nil
+            positionCursor(atWindowX: event.x, state: state)
+            state.isDragging = true
+            PointerCaptureHolder.current?.acquire(node)
+        }
+    }
+
+    /// Find the word covering `index` in `s`. A "word" is a maximal run of
+    /// characters whose `wordKind` matches; clicks on a non-word character
+    /// (whitespace / punctuation) select the run of the same kind.
+    private func wordBounds(in s: String, around index: Int) -> (Int, Int) {
+        let chars = Array(s)
+        guard !chars.isEmpty else { return (0, 0) }
+        let i = clamp(index, 0, chars.count - 1)
+        let kind = wordKind(chars[i])
+        var lo = i
+        while lo > 0 && wordKind(chars[lo - 1]) == kind { lo -= 1 }
+        var hi = i + 1
+        while hi < chars.count && wordKind(chars[hi]) == kind { hi += 1 }
+        return (lo, hi)
+    }
+
+    private enum CharKind { case word, space, other }
+    private func wordKind(_ c: Character) -> CharKind {
+        if c.isLetter || c.isNumber || c == "_" { return .word }
+        if c.isWhitespace { return .space }
+        return .other
     }
 }
 
