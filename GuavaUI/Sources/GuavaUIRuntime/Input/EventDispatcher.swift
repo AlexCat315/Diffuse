@@ -22,6 +22,11 @@ public final class EventDispatcher {
     public let focusChain: FocusChain
     public let windowID: WindowID
 
+    /// Last known pointer position from `mouseMotion`. Used to hit-test wheel
+    /// events (which carry no position on SDL3) so they reach the node under
+    /// the cursor instead of only the root or focused node.
+    private var lastCursor: CGPoint?
+
     public init(tree: NodeTree,
                 interactions: InteractionRegistry,
                 capture: PointerCapture,
@@ -56,7 +61,7 @@ public final class EventDispatcher {
         guard let root = tree.root else { return }
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         guard let hit = HitTester.hitTest(rootNode: root, point: point) else { return }
-        deliver(path: hit.path, kind: .pointer(event))
+        deliver(path: hit.path, kind: .pointer(event, .down))
         // Auto-focus on click for focusable targets.
         if hit.node.isFocusable {
             focusChain.focus(hit.node)
@@ -66,16 +71,17 @@ public final class EventDispatcher {
     private func dispatchPointerUp(_ event: MouseButtonEvent) {
         if let captured = capture.target {
             let path = pathFromRoot(to: captured)
-            deliver(path: path, kind: .pointer(event))
+            deliver(path: path, kind: .pointer(event, .up))
             return
         }
         guard let root = tree.root else { return }
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         guard let hit = HitTester.hitTest(rootNode: root, point: point) else { return }
-        deliver(path: hit.path, kind: .pointer(event))
+        deliver(path: hit.path, kind: .pointer(event, .up))
     }
 
     private func dispatchMotion(_ event: MouseMotionEvent) {
+        lastCursor = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         if let captured = capture.target {
             let path = pathFromRoot(to: captured)
             deliver(path: path, kind: .motion(event))
@@ -88,14 +94,21 @@ public final class EventDispatcher {
     }
 
     private func dispatchWheel(_ event: MouseWheelEvent) {
-        // Wheel events route to the focused node first; otherwise hit-test.
+        // Prefer hit-testing under the last known cursor so the scrollable
+        // region under the pointer wins. Fall back to the focused node, then
+        // the root node.
+        if let cursor = lastCursor,
+           let root = tree.root,
+           let hit = HitTester.hitTest(rootNode: root, point: cursor) {
+            deliver(path: hit.path, kind: .wheel(event))
+            return
+        }
         if let focused = focusChain.focused {
             let path = pathFromRoot(to: focused)
             deliver(path: path, kind: .wheel(event))
             return
         }
         guard let root = tree.root else { return }
-        // SDL3 wheel events don't carry a position; fall back to root traversal.
         deliver(path: [root], kind: .wheel(event))
     }
 
@@ -110,7 +123,7 @@ public final class EventDispatcher {
     // MARK: - Delivery
 
     private enum EventKind {
-        case pointer(MouseButtonEvent)
+        case pointer(MouseButtonEvent, PointerPhase)
         case motion(MouseMotionEvent)
         case wheel(MouseWheelEvent)
         case key(KeyEvent)
@@ -139,7 +152,7 @@ public final class EventDispatcher {
     private func invoke(node: Node, kind: EventKind, phase: EventPhase) -> EventResult {
         let handlers = interactions.handlers(for: node)
         switch kind {
-        case .pointer(let e): return handlers.pointer?(e, phase) ?? .ignored
+        case .pointer(let e, let pp): return handlers.pointer?(e, pp, phase) ?? .ignored
         case .motion(let e):  return handlers.motion?(e, phase)  ?? .ignored
         case .wheel(let e):   return handlers.wheel?(e, phase)   ?? .ignored
         case .key(let e):     return handlers.key?(e, phase)     ?? .ignored

@@ -43,9 +43,11 @@ public struct NodeRenderer {
             draw(list, CGPoint(x: Double(absX), y: Double(absY)))
         }
 
-        // 4. Children.
+        // 4. Children — translated by -contentOffset for scrollable containers.
+        let childOriginX = absX - Float(node.contentOffset.x)
+        let childOriginY = absY - Float(node.contentOffset.y)
         for child in node.children {
-            renderNode(child, list: list, originX: absX, originY: absY)
+            renderNode(child, list: list, originX: childOriginX, originY: childOriginY)
         }
 
         // 5. Pop clip.

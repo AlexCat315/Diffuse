@@ -97,4 +97,25 @@ struct NodeRendererTests {
         let alphaByte = (packed >> 24) & 0xFF
         #expect(alphaByte >= 126 && alphaByte <= 129)  // ~127 ± 1
     }
+
+    @Test("contentOffset translates children but not the parent's clip")
+    func contentOffsetTranslatesChildren() {
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 100, height: 100)
+        root.clipsToBounds = true
+        root.contentOffset = CGPoint(x: 0, y: 30)
+
+        let child = Node()
+        child.frame = CGRect(x: 0, y: 0, width: 50, height: 50)
+        child.backgroundColor = Color.white
+        root.addChild(child)
+
+        let list = DrawList()
+        NodeRenderer().render(root: root, into: list)
+
+        // Clip stays at the root's frame.
+        #expect(list.batches.first?.scissor == UIRect(x: 0, y: 0, width: 100, height: 100))
+        // Child quad rendered at y = -contentOffset.y.
+        #expect(list.vertices.first?.posY == -30)
+    }
 }
