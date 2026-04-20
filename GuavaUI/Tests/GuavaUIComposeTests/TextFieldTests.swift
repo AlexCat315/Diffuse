@@ -171,4 +171,103 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         let result = pointer(evt, .down, .target)
         #expect(result == .handled)
     } }
+
+    // MARK: - Phase 6.4d — selection + modifiers + clipboard
+
+    private func key(_ scancode: UInt32, shift: Bool = false, cmd: Bool = false) -> KeyEvent {
+        var mods = KeyModifiers()
+        if shift { mods.insert(.lshift) }
+        if cmd   { mods.insert(.lgui) }
+        return KeyEvent(scancode: scancode, keycode: 0, modifiers: mods, isRepeat: false)
+    }
+
+    @Test("Shift+arrow extends selection; plain arrow collapses it")
+    func shiftArrowSelection() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "abcdef"
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+        let node = rig.tree.root!.children.first!
+        let h = rig.registry.handlers(for: node).key!
+        // Cursor at end (6). Shift+Home → anchor=6, cursor=0 → selection [0,6).
+        _ = h(key(74, shift: true), .target)
+        // Type 'X' should replace whole selection.
+        let textHandler = rig.registry.handlers(for: node).text!
+        _ = textHandler("X", .target)
+        #expect(rig.store.value == "X")
+    } }
+
+    @Test("Cmd+A selects all; backspace clears the field")
+    func cmdASelectAll() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "hello"
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+        let node = rig.tree.root!.children.first!
+        let h = rig.registry.handlers(for: node).key!
+        _ = h(key(4, cmd: true), .target)        // Cmd+A
+        _ = h(key(42), .target)                  // backspace deletes selection
+        #expect(rig.store.value == "")
+    } }
+
+    @Test("Cmd+C / Cmd+V round-trip via ClipboardHolder")
+    func cmdCV() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "hello"
+        var pasteboard: String = ""
+        ClipboardHolder.write = { pasteboard = $0 }
+        ClipboardHolder.read  = { pasteboard }
+        defer {
+            ClipboardHolder.write = nil
+            ClipboardHolder.read  = nil
+        }
+
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+        let node = rig.tree.root!.children.first!
+        let h = rig.registry.handlers(for: node).key!
+        _ = h(key(4, cmd: true), .target)        // select all
+        _ = h(key(6, cmd: true), .target)        // copy
+        #expect(pasteboard == "hello")
+
+        _ = h(key(77), .target)                  // End — collapse to end
+        _ = h(key(25, cmd: true), .target)       // paste
+        #expect(rig.store.value == "hellohello")
+    } }
+
+    @Test("Cmd+X cuts the selection to the clipboard")
+    func cmdX() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "abcdef"
+        var pasteboard: String = ""
+        ClipboardHolder.write = { pasteboard = $0 }
+        ClipboardHolder.read  = { pasteboard }
+        defer {
+            ClipboardHolder.write = nil
+            ClipboardHolder.read  = nil
+        }
+
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+        let node = rig.tree.root!.children.first!
+        let h = rig.registry.handlers(for: node).key!
+        // Cursor at end (6). Shift+Left x3 → select last 3 chars.
+        _ = h(key(80, shift: true), .target)
+        _ = h(key(80, shift: true), .target)
+        _ = h(key(80, shift: true), .target)
+        _ = h(key(27, cmd: true), .target)       // cut
+        #expect(pasteboard == "def")
+        #expect(rig.store.value == "abc")
+    } }
+
+    @Test("Typing with an active selection replaces the selected range")
+    func typingReplacesSelection() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "abcdef"
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+        let node = rig.tree.root!.children.first!
+        let h = rig.registry.handlers(for: node).key!
+        let txt = rig.registry.handlers(for: node).text!
+        _ = h(key(74), .target)                  // Home → cursor=0, anchor=nil
+        _ = h(key(79, shift: true), .target)     // Shift+Right → select 'a'
+        _ = h(key(79, shift: true), .target)     // Shift+Right → select 'ab'
+        _ = txt("Z", .target)
+        #expect(rig.store.value == "Zcdef")
+    } }
 }

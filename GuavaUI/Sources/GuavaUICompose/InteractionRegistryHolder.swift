@@ -16,3 +16,14 @@ public enum InteractionRegistryHolder {
 public enum FocusChainHolder {
     nonisolated(unsafe) public static var current: FocusChain?
 }
+
+/// Process-wide clipboard bridge. The host installs read/write closures
+/// (typically wired to `SDL_GetClipboardText` / `SDL_SetClipboardText`);
+/// primitives such as `TextField` invoke them for copy / cut / paste.
+///
+/// Both closures are optional — if absent, the corresponding command is a
+/// no-op rather than a crash, which keeps tests headless without a clipboard.
+public enum ClipboardHolder {
+    nonisolated(unsafe) public static var read: (() -> String?)?
+    nonisolated(unsafe) public static var write: ((String) -> Void)?
+}
