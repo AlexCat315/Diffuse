@@ -1,5 +1,12 @@
 // swift-tools-version: 6.0
 import PackageDescription
+import Foundation
+
+// Resolve the absolute path to the Engine package directory so that linker
+// search paths work correctly whether this package is built standalone or as
+// a dependency of Editor / other packages.
+let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
+let wgpuLibDir = "\(packageDir)/vendor/wgpu/lib"
 
 let package = Package(
     name: "GuavaEngine",
@@ -40,8 +47,9 @@ let package = Package(
             ],
             linkerSettings: [
                 .unsafeFlags([
-                    "-L", "vendor/wgpu/lib",
+                    "-L", wgpuLibDir,
                     "-lwgpu_native",
+                    "-Xlinker", "-rpath", "-Xlinker", wgpuLibDir,
                     "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../../../../vendor/wgpu/lib",
                     "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../../vendor/wgpu/lib",
                     "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../../../vendor/wgpu/lib",

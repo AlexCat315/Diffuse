@@ -1,3 +1,5 @@
+import Foundation
+
 /// Engine 侧定义的游戏内 UI 抽象协议。
 ///
 /// GuavaUI 将在未来实现此协议，为引擎提供菜单、文本、HUD 等能力。
