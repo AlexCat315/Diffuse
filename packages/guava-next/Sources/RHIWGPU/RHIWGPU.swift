@@ -198,17 +198,33 @@ public final class WGPUBackend {
 
         let ok = try desc.vertexEntryPoint.withCString { vEntry in
             try desc.fragmentEntryPoint.withCString { fEntry -> Int32 in
+
+                func callCreate(layouts: UnsafePointer<WGPUBridgeVertexBufferLayout>?,
+                                count: UInt32) -> Int32 {
+                    if let blend = desc.blend {
+                        var bs = blend.bridgeValue
+                        return wgpu_bridge_create_render_pipeline(
+                            device, desc.shaderModule.handle,
+                            vEntry, fEntry,
+                            desc.colorFormat.bridgeValue,
+                            desc.topology.bridgeValue,
+                            desc.cullMode.bridgeValue,
+                            layouts, count, &bs, &pipelinePtr
+                        )
+                    } else {
+                        return wgpu_bridge_create_render_pipeline(
+                            device, desc.shaderModule.handle,
+                            vEntry, fEntry,
+                            desc.colorFormat.bridgeValue,
+                            desc.topology.bridgeValue,
+                            desc.cullMode.bridgeValue,
+                            layouts, count, nil, &pipelinePtr
+                        )
+                    }
+                }
+
                 if desc.vertexBuffers.isEmpty {
-                    return wgpu_bridge_create_render_pipeline(
-                        device,
-                        desc.shaderModule.handle,
-                        vEntry, fEntry,
-                        desc.colorFormat.bridgeValue,
-                        desc.topology.bridgeValue,
-                        desc.cullMode.bridgeValue,
-                        nil, 0,
-                        &pipelinePtr
-                    )
+                    return callCreate(layouts: nil, count: 0)
                 }
 
                 var bridgeLayouts: [WGPUBridgeVertexBufferLayout] = []
@@ -237,17 +253,7 @@ public final class WGPUBackend {
                     }
 
                     return bridgeLayouts.withUnsafeMutableBufferPointer { layoutBuf in
-                        wgpu_bridge_create_render_pipeline(
-                            device,
-                            desc.shaderModule.handle,
-                            vEntry, fEntry,
-                            desc.colorFormat.bridgeValue,
-                            desc.topology.bridgeValue,
-                            desc.cullMode.bridgeValue,
-                            layoutBuf.baseAddress,
-                            UInt32(layoutBuf.count),
-                            &pipelinePtr
-                        )
+                        callCreate(layouts: layoutBuf.baseAddress, count: UInt32(layoutBuf.count))
                     }
                 } ?? {
                     throw WGPUBackendError.initFailed("vertex buffer layout allocation failed")
@@ -324,5 +330,84 @@ public final class WGPUBackend {
         guard let cbHandle = commandBuffer.take() else { return }
         var buf: UnsafeMutableRawPointer? = cbHandle
         wgpu_bridge_queue_submit(queue, &buf, 1)
+    }
+
+    public func createSampler(desc: GPUSamplerDescriptor = .init()) throws -> GPUSampler {
+        guard let device else {
+            throw WGPUBackendError.initFailed("device not ready")
+        }
+        var sd = WGPUBridgeSamplerDesc(
+            address_mode_u: desc.addressModeU.bridgeValue,
+            address_mode_v: desc.addressModeV.bridgeValue,
+            mag_filter: desc.magFilter.bridgeValue,
+            min_filter: desc.minFilter.bridgeValue,
+            mipmap_filter: desc.mipmapFilter.bridgeValue
+        )
+        var ptr: UnsafeMutableRawPointer?
+        let ok = wgpu_bridge_create_sampler(device, &sd, &ptr)
+        guard ok == 1, let ptr else {
+            throw WGPUBackendError.initFailed(Self.lastError())
+        }
+        return GPUSampler(handle: ptr)
+    }
+
+    public func createBindGroupLayout(entries: [GPUBindGroupLayoutEntry]) throws -> GPUBindGroupLayout {
+        guard let device else {
+            throw WGPUBackendError.initFailed("device not ready")
+        }
+        var bridgeEntries = entries.map {
+            WGPUBridgeBindGroupLayoutEntry(
+                binding: $0.binding,
+                visibility: $0.visibility.rawValue,
+                type: $0.type.bridgeValue
+            )
+        }
+        var ptr: UnsafeMutableRawPointer?
+        let ok = bridgeEntries.withUnsafeMutableBufferPointer { buf in
+            wgpu_bridge_create_bind_group_layout(device, buf.baseAddress, UInt32(buf.count), &ptr)
+        }
+        guard ok == 1, let ptr else {
+            throw WGPUBackendError.initFailed(Self.lastError())
+        }
+        return GPUBindGroupLayout(handle: ptr)
+    }
+
+    public func createBindGroup(layout: GPUBindGroupLayout, entries: [GPUBindGroupEntry]) throws -> GPUBindGroup {
+        guard let device else {
+            throw WGPUBackendError.initFailed("device not ready")
+        }
+        var bridgeEntries = entries.map {
+            WGPUBridgeBindGroupEntry(
+                binding: $0.binding,
+                buffer: $0.buffer?.handle,
+                offset: $0.offset,
+                size: $0.size,
+                sampler: $0.sampler?.handle,
+                texture_view: $0.textureView?.handle
+            )
+        }
+        var ptr: UnsafeMutableRawPointer?
+        let ok = bridgeEntries.withUnsafeMutableBufferPointer { buf in
+            wgpu_bridge_create_bind_group(device, layout.handle, buf.baseAddress, UInt32(buf.count), &ptr)
+        }
+        guard ok == 1, let ptr else {
+            throw WGPUBackendError.initFailed(Self.lastError())
+        }
+        return GPUBindGroup(handle: ptr)
+    }
+
+    public func createPipelineLayout(bindGroupLayouts: [GPUBindGroupLayout]) throws -> GPUPipelineLayout {
+        guard let device else {
+            throw WGPUBackendError.initFailed("device not ready")
+        }
+        var handles: [UnsafeMutableRawPointer?] = bindGroupLayouts.map { $0.handle }
+        var ptr: UnsafeMutableRawPointer?
+        let ok = handles.withUnsafeMutableBufferPointer { buf in
+            wgpu_bridge_create_pipeline_layout(device, buf.baseAddress, UInt32(buf.count), &ptr)
+        }
+        guard ok == 1, let ptr else {
+            throw WGPUBackendError.initFailed(Self.lastError())
+        }
+        return GPUPipelineLayout(handle: ptr)
     }
 }
