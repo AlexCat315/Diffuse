@@ -1,32 +1,82 @@
 import Foundation
 import GuavaUIRuntime
+import GuavaUICompose
 import PlatformShell
 import RHIWGPU
 
-// MARK: - Text content
+// MARK: - Root view (compose)
 
-let provider = FontProvider(size: 28)
-provider.loadPrimaryFont(name: "Helvetica Neue")
+struct RootView: View {
+    var body: some View {
+        Row(spacing: 1) {
+            Column(alignment: .leading, spacing: 8) {
+                Text("Sidebar", color: Color.white)
+                Divider()
+                Text("Item A", color: Color(r: 0.85, g: 0.85, b: 0.9))
+                Text("Item B", color: Color(r: 0.85, g: 0.85, b: 0.9))
+                Text("Item C", color: Color(r: 0.85, g: 0.85, b: 0.9))
+                Spacer()
+            }
+            .padding(16)
+            .frame(width: 220)
+            .background(Color(r: 0.16, g: 0.18, b: 0.22))
 
-let text =
-    "Hello, GuavaUI!\n emoji:🦊🍅🦋\n Монгол хэлний шалгалт: Энэ бол Монгол хэлний шалгалт.\n Phase 5 — DrawList + wgpu Renderer\n排版引擎运行中"
+            Column(alignment: .leading, spacing: 12) {
+                Text("GuavaUI — Phase 6.5", color: Color.white)
+                Divider()
+                Text("Compose -> Yoga -> DrawList -> wgpu",
+                     color: Color(r: 0.7, g: 0.85, b: 1.0))
+                Text("end-to-end pipeline live",
+                     color: Color(r: 0.94, g: 0.94, b: 0.98))
+                Spacer()
+            }
+            .padding(20)
+            .background(Color(r: 0.10, g: 0.11, b: 0.14))
 
-let runs = provider.resolveRuns(text: text)
-var allGlyphs: [ShapedGlyph] = []
-for run in runs {
-    allGlyphs.append(contentsOf: provider.shapeRun(run))
+            Column(alignment: .leading, spacing: 6) {
+                Text("Inspector", color: Color.white)
+                Divider()
+                Text("type: Box", color: Color(r: 0.7, g: 0.7, b: 0.75))
+                Text("layout: yoga", color: Color(r: 0.7, g: 0.7, b: 0.75))
+                Spacer()
+            }
+            .padding(16)
+            .frame(width: 240)
+            .background(Color(r: 0.16, g: 0.18, b: 0.22))
+        }
+    }
 }
 
+// MARK: - Text environment (font atlas + shaper bound to primary face)
+
+let provider = FontProvider(size: 18)
+provider.loadPrimaryFont(name: "Helvetica Neue")
+
 let atlas = FontAtlas(width: 1024, height: 1024)
+atlas.loadFont(path: "/System/Library/Fonts/Helvetica.ttc", size: 18)
 provider.registerAllFonts(in: atlas)
 
-let layoutResult = TextLayout.layout(
-    shapedGlyphs: allGlyphs,
-    text: text,
+let shaper = TextShaper()
+if let face = atlas.freetypeFace {
+    shaper.setFont(ftFace: face, size: 18)
+}
+
+let atlasTextureID: TextureID = 1
+
+TextEnvironmentHolder.current = TextEnvironment(
     atlas: atlas,
-    maxWidth: 900,
-    lineHeight: 38
+    shaper: shaper,
+    atlasTextureID: atlasTextureID,
+    defaultLineHeight: 22,
+    defaultColor: Color.white
 )
+
+// MARK: - Compose graph
+
+let tree = NodeTree()
+let host = SDL3PlatformHost(title: "GuavaUI — Phase 6.5")
+let graph = ViewGraph(tree: tree, recomposer: host.recomposer)
+graph.install(root: RootView())
 
 // MARK: - GPU stack
 
@@ -34,22 +84,27 @@ let backend = WGPUBackend()
 try backend.initialize()
 let renderer = DrawListRenderer(backend: backend)
 let drawList = DrawList()
+let nodeRenderer = NodeRenderer()
 
 var surface: GPUSurface?
 var configured = false
 var drawableW: UInt32 = 0
 var drawableH: UInt32 = 0
 
-let atlasTextureID: TextureID = 1
-
-// MARK: - Window
-
-let tree = NodeTree()
-let host = SDL3PlatformHost(title: "GuavaUI — Phase 5")
+@MainActor
+func uploadAtlas() throws {
+    try atlas.atlasData.withUnsafeBufferPointer { buf in
+        try renderer.registerAlphaTexture(
+            id: atlasTextureID,
+            pixels: buf.baseAddress!,
+            width: UInt32(atlas.atlasWidth),
+            height: UInt32(atlas.atlasHeight)
+        )
+    }
+}
 
 host.onInit = { native, w, h in
-    drawableW = w
-    drawableH = h
+    drawableW = w; drawableH = h
     do {
         surface = try makeSurface(backend: backend, native: native)
         try surface?.configure(
@@ -58,14 +113,7 @@ host.onInit = { native, w, h in
             width: w, height: h,
             presentMode: .fifo)
         try renderer.configure(format: .bgra8Unorm)
-        try atlas.atlasData.withUnsafeBufferPointer { buf in
-            try renderer.registerAlphaTexture(
-                id: atlasTextureID,
-                pixels: buf.baseAddress!,
-                width: UInt32(atlas.atlasWidth),
-                height: UInt32(atlas.atlasHeight)
-            )
-        }
+        try uploadAtlas()
         configured = true
     } catch {
         print("[demo] init failed: \(error)")
@@ -73,42 +121,33 @@ host.onInit = { native, w, h in
 }
 
 host.onResize = { w, h in
-    drawableW = w
-    drawableH = h
+    drawableW = w; drawableH = h
     guard let surface, let device = backend.rawDevice else { return }
     do {
         try surface.configure(
-            device: device,
-            format: .bgra8Unorm,
-            width: w, height: h,
-            presentMode: .fifo)
+            device: device, format: .bgra8Unorm,
+            width: w, height: h, presentMode: .fifo)
     } catch {
         print("[demo] resize failed: \(error)")
     }
 }
 
 host.onFrame = { _ in
-    guard configured, let surface else { return }
+    guard configured, let surface, let root = tree.root else { return }
 
+    // 1. Layout against current viewport. Glyphs are rasterised lazily here as
+    //    the measure func runs.
+    graph.computeLayout(width: Float(drawableW), height: Float(drawableH))
+
+    // 2. Re-upload atlas in case new glyphs were rasterised this frame.
+    do { try uploadAtlas() }
+    catch { print("[demo] atlas reupload failed: \(error)") }
+
+    // 3. Walk node tree -> draw list.
     drawList.reset()
-    drawList.addRoundedRect(
-        UIRect(
-            x: 40, y: 40,
-            width: Float(drawableW) - 80, height: Float(drawableH) - 80),
-        radius: 24,
-        color: Color(r: 0.12, g: 0.14, b: 0.18, a: 1.0)
-    )
-    drawList.addRect(
-        UIRect(x: 40, y: 40, width: 6, height: Float(drawableH) - 80),
-        color: Color(r: 0.40, g: 0.78, b: 1.00, a: 1.0)
-    )
-    drawList.addText(
-        layoutResult,
-        origin: (x: 80, y: 90),
-        color: Color(r: 0.94, g: 0.94, b: 0.98, a: 1.0),
-        textureID: atlasTextureID
-    )
+    nodeRenderer.render(root: root, into: drawList)
 
+    // 4. Submit to wgpu.
     let acquired: (texture: GPUTexture, view: GPUTextureView)?
     do {
         acquired = try surface.getCurrentTextureView()
@@ -139,7 +178,7 @@ host.onFrame = { _ in
 
 host.run(tree: tree)
 
-// MARK: - Helpers
+// MARK: - Surface helper
 
 @MainActor
 func makeSurface(backend: WGPUBackend, native: NativeRenderSurface) throws -> GPUSurface {
