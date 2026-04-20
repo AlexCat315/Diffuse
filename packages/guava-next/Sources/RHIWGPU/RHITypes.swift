@@ -92,6 +92,15 @@ public enum GPUVertexFormat: Sendable {
     case float32x3
     case float32x4
     case uint32
+    case uint8x4
+    case unorm8x4
+    case snorm8x4
+    case uint16x2
+    case uint16x4
+    case sint16x2
+    case snorm16x2
+    case float16x2
+    case float16x4
 
     var bridgeValue: WGPUBridgeVertexFormat {
         switch self {
@@ -100,6 +109,15 @@ public enum GPUVertexFormat: Sendable {
         case .float32x3: return WGPUBridge_VertexFormat_Float32x3
         case .float32x4: return WGPUBridge_VertexFormat_Float32x4
         case .uint32:    return WGPUBridge_VertexFormat_Uint32
+        case .uint8x4:   return WGPUBridge_VertexFormat_Uint8x4
+        case .unorm8x4:  return WGPUBridge_VertexFormat_Unorm8x4
+        case .snorm8x4:  return WGPUBridge_VertexFormat_Snorm8x4
+        case .uint16x2:  return WGPUBridge_VertexFormat_Uint16x2
+        case .uint16x4:  return WGPUBridge_VertexFormat_Uint16x4
+        case .sint16x2:  return WGPUBridge_VertexFormat_Sint16x2
+        case .snorm16x2: return WGPUBridge_VertexFormat_Snorm16x2
+        case .float16x2: return WGPUBridge_VertexFormat_Float16x2
+        case .float16x4: return WGPUBridge_VertexFormat_Float16x4
         }
     }
 }
@@ -116,6 +134,66 @@ public enum GPUCullMode: Sendable {
         case .none:  return WGPUBridge_CullMode_None
         case .front: return WGPUBridge_CullMode_Front
         case .back:  return WGPUBridge_CullMode_Back
+        }
+    }
+}
+
+// MARK: - Front Face
+
+public enum GPUFrontFace: Sendable {
+    case ccw
+    case cw
+
+    var bridgeValue: WGPUBridgeFrontFace {
+        switch self {
+        case .ccw: return WGPUBridge_FrontFace_CCW
+        case .cw:  return WGPUBridge_FrontFace_CW
+        }
+    }
+}
+
+// MARK: - Texture View Dimension
+
+public enum GPUTextureViewDimension: Sendable {
+    case d2
+    case d2Array
+    case cube
+    case cubeArray
+    case d3
+
+    var bridgeValue: WGPUBridgeTextureViewDimension {
+        switch self {
+        case .d2:        return WGPUBridge_TextureViewDimension_2D
+        case .d2Array:   return WGPUBridge_TextureViewDimension_2DArray
+        case .cube:      return WGPUBridge_TextureViewDimension_Cube
+        case .cubeArray: return WGPUBridge_TextureViewDimension_CubeArray
+        case .d3:        return WGPUBridge_TextureViewDimension_3D
+        }
+    }
+}
+
+// MARK: - Stencil Operation
+
+public enum GPUStencilOp: Sendable {
+    case keep
+    case zero
+    case replace
+    case invert
+    case incrClamp
+    case decrClamp
+    case incrWrap
+    case decrWrap
+
+    var bridgeValue: WGPUBridgeStencilOp {
+        switch self {
+        case .keep:      return WGPUBridge_StencilOp_Keep
+        case .zero:      return WGPUBridge_StencilOp_Zero
+        case .replace:   return WGPUBridge_StencilOp_Replace
+        case .invert:    return WGPUBridge_StencilOp_Invert
+        case .incrClamp: return WGPUBridge_StencilOp_IncrClamp
+        case .decrClamp: return WGPUBridge_StencilOp_DecrClamp
+        case .incrWrap:  return WGPUBridge_StencilOp_IncrWrap
+        case .decrWrap:  return WGPUBridge_StencilOp_DecrWrap
         }
     }
 }
@@ -179,6 +257,8 @@ public struct GPUBufferUsage: OptionSet, Sendable {
     public static let vertex  = GPUBufferUsage(rawValue: 0x0020)
     public static let uniform = GPUBufferUsage(rawValue: 0x0040)
     public static let storage = GPUBufferUsage(rawValue: 0x0080)
+    public static let mapRead = GPUBufferUsage(rawValue: 0x0001)
+    public static let copySrc = GPUBufferUsage(rawValue: 0x0004)
 }
 
 // MARK: - Texture Usage
@@ -395,26 +475,70 @@ public enum GPUCompareFunction: Sendable {
     }
 }
 
+// MARK: - Stencil Face State
+
+public struct GPUStencilFaceState: Sendable {
+    public var compare: GPUCompareFunction
+    public var failOp: GPUStencilOp
+    public var depthFailOp: GPUStencilOp
+    public var passOp: GPUStencilOp
+
+    public init(compare: GPUCompareFunction = .always,
+                failOp: GPUStencilOp = .keep,
+                depthFailOp: GPUStencilOp = .keep,
+                passOp: GPUStencilOp = .keep) {
+        self.compare = compare
+        self.failOp = failOp
+        self.depthFailOp = depthFailOp
+        self.passOp = passOp
+    }
+
+    var bridgeValue: WGPUBridgeStencilFaceState {
+        WGPUBridgeStencilFaceState(
+            compare: compare.bridgeValue,
+            fail_op: failOp.bridgeValue,
+            depth_fail_op: depthFailOp.bridgeValue,
+            pass_op: passOp.bridgeValue
+        )
+    }
+}
+
 // MARK: - Depth Stencil Pipeline State
 
 public struct GPUDepthStencilPipelineState: Sendable {
     public var format: GPUTextureFormat
     public var depthWriteEnabled: Bool
     public var depthCompare: GPUCompareFunction
+    public var stencilFront: GPUStencilFaceState
+    public var stencilBack: GPUStencilFaceState
+    public var stencilReadMask: UInt32
+    public var stencilWriteMask: UInt32
 
     public init(format: GPUTextureFormat = .depth32Float,
                 depthWriteEnabled: Bool = true,
-                depthCompare: GPUCompareFunction = .less) {
+                depthCompare: GPUCompareFunction = .less,
+                stencilFront: GPUStencilFaceState = .init(),
+                stencilBack: GPUStencilFaceState = .init(),
+                stencilReadMask: UInt32 = 0xFFFFFFFF,
+                stencilWriteMask: UInt32 = 0xFFFFFFFF) {
         self.format = format
         self.depthWriteEnabled = depthWriteEnabled
         self.depthCompare = depthCompare
+        self.stencilFront = stencilFront
+        self.stencilBack = stencilBack
+        self.stencilReadMask = stencilReadMask
+        self.stencilWriteMask = stencilWriteMask
     }
 
     var bridgeValue: WGPUBridgeDepthStencilPipelineState {
         WGPUBridgeDepthStencilPipelineState(
             format: format.bridgeValue,
             depth_write_enabled: depthWriteEnabled ? 1 : 0,
-            depth_compare: depthCompare.bridgeValue
+            depth_compare: depthCompare.bridgeValue,
+            stencil_front: stencilFront.bridgeValue,
+            stencil_back: stencilBack.bridgeValue,
+            stencil_read_mask: stencilReadMask,
+            stencil_write_mask: stencilWriteMask
         )
     }
 }

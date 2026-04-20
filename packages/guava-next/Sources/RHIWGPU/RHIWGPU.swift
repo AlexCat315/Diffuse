@@ -213,6 +213,7 @@ public final class WGPUBackend {
                                 vEntry, fEntry,
                                 desc.colorFormat.bridgeValue,
                                 desc.topology.bridgeValue,
+                                desc.frontFace.bridgeValue,
                                 desc.cullMode.bridgeValue,
                                 layouts, count, &bs, &ds, &pipelinePtr)
                         } else {
@@ -221,6 +222,7 @@ public final class WGPUBackend {
                                 vEntry, fEntry,
                                 desc.colorFormat.bridgeValue,
                                 desc.topology.bridgeValue,
+                                desc.frontFace.bridgeValue,
                                 desc.cullMode.bridgeValue,
                                 layouts, count, &bs, nil, &pipelinePtr)
                         }
@@ -231,6 +233,7 @@ public final class WGPUBackend {
                                 vEntry, fEntry,
                                 desc.colorFormat.bridgeValue,
                                 desc.topology.bridgeValue,
+                                desc.frontFace.bridgeValue,
                                 desc.cullMode.bridgeValue,
                                 layouts, count, nil, &ds, &pipelinePtr)
                         } else {
@@ -239,6 +242,7 @@ public final class WGPUBackend {
                                 vEntry, fEntry,
                                 desc.colorFormat.bridgeValue,
                                 desc.topology.bridgeValue,
+                                desc.frontFace.bridgeValue,
                                 desc.cullMode.bridgeValue,
                                 layouts, count, nil, nil, &pipelinePtr)
                         }
@@ -471,7 +475,10 @@ public final class WGPUBackend {
                                    depthView: GPUTextureView? = nil,
                                    depthLoadOp: GPULoadOp = .clear,
                                    depthStoreOp: GPUStoreOp = .store,
-                                   depthClearValue: Float = 1.0) throws -> GPURenderPassEncoder {
+                                   depthClearValue: Float = 1.0,
+                                   stencilLoadOp: GPULoadOp = .clear,
+                                   stencilStoreOp: GPUStoreOp = .discard,
+                                   stencilClearValue: UInt32 = 0) throws -> GPURenderPassEncoder {
         var bridgeColors = colorAttachments.map {
             WGPUBridgeColorAttachment(
                 view: $0.view.handle,
@@ -487,7 +494,10 @@ public final class WGPUBackend {
                 view: depthView.handle,
                 depth_load_op: depthLoadOp.bridgeValue,
                 depth_store_op: depthStoreOp.bridgeValue,
-                clear_depth: depthClearValue
+                clear_depth: depthClearValue,
+                stencil_load_op: stencilLoadOp.bridgeValue,
+                stencil_store_op: stencilStoreOp.bridgeValue,
+                stencil_clear_value: stencilClearValue
             )
         }
 
@@ -520,6 +530,7 @@ public final class WGPUBackend {
         colorFormats: [GPUTextureFormat],
         blends: [GPUBlendState]? = nil,
         topology: GPUPrimitiveTopology = .triangleList,
+        frontFace: GPUFrontFace = .ccw,
         cullMode: GPUCullMode = .none,
         vertexBuffers: [GPUVertexBufferLayout] = [],
         depthStencil: GPUDepthStencilPipelineState? = nil
@@ -568,7 +579,8 @@ public final class WGPUBackend {
                                         vEntry, fEntry,
                                         fmtBuf.baseAddress, blBuf.baseAddress,
                                         UInt32(fmtBuf.count),
-                                        topology.bridgeValue, cullMode.bridgeValue,
+                                        topology.bridgeValue, frontFace.bridgeValue,
+                                        cullMode.bridgeValue,
                                         vbBuf.baseAddress, UInt32(vbBuf.count),
                                         &dsv, &pipelinePtr)
                                 }
@@ -578,7 +590,8 @@ public final class WGPUBackend {
                                     vEntry, fEntry,
                                     fmtBuf.baseAddress, nil,
                                     UInt32(fmtBuf.count),
-                                    topology.bridgeValue, cullMode.bridgeValue,
+                                    topology.bridgeValue, frontFace.bridgeValue,
+                                    cullMode.bridgeValue,
                                     vbBuf.baseAddress, UInt32(vbBuf.count),
                                     &dsv, &pipelinePtr)
                             }
@@ -590,7 +603,8 @@ public final class WGPUBackend {
                                         vEntry, fEntry,
                                         fmtBuf.baseAddress, blBuf.baseAddress,
                                         UInt32(fmtBuf.count),
-                                        topology.bridgeValue, cullMode.bridgeValue,
+                                        topology.bridgeValue, frontFace.bridgeValue,
+                                        cullMode.bridgeValue,
                                         vbBuf.baseAddress, UInt32(vbBuf.count),
                                         nil, &pipelinePtr)
                                 }
@@ -600,7 +614,8 @@ public final class WGPUBackend {
                                     vEntry, fEntry,
                                     fmtBuf.baseAddress, nil,
                                     UInt32(fmtBuf.count),
-                                    topology.bridgeValue, cullMode.bridgeValue,
+                                    topology.bridgeValue, frontFace.bridgeValue,
+                                    cullMode.bridgeValue,
                                     vbBuf.baseAddress, UInt32(vbBuf.count),
                                     nil, &pipelinePtr)
                             }
@@ -614,5 +629,16 @@ public final class WGPUBackend {
             throw WGPUBackendError.initFailed(Self.lastError())
         }
         return GPURenderPipeline(handle: pipelinePtr)
+    }
+
+    public func bufferMapSync(_ buffer: GPUBuffer, offset: UInt64 = 0, size: UInt64 = 0) throws {
+        guard let device else {
+            throw WGPUBackendError.initFailed("device not ready")
+        }
+        let sz = size > 0 ? size : buffer.size
+        let ok = wgpu_bridge_buffer_map_sync(device, buffer.handle, offset, sz)
+        guard ok == 1 else {
+            throw WGPUBackendError.initFailed(Self.lastError())
+        }
     }
 }
