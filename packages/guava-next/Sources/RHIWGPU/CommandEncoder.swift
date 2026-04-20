@@ -61,11 +61,31 @@ public final class GPURenderPassEncoder {
         wgpu_bridge_render_pass_set_vertex_buffer(handle, slot, buffer.handle, offset, sz)
     }
 
+    public func setIndexBuffer(_ buffer: GPUBuffer, format: GPUIndexFormat = .uint32,
+                               offset: UInt64 = 0, size: UInt64? = nil) {
+        let sz = size ?? buffer.size
+        wgpu_bridge_render_pass_set_index_buffer(handle, buffer.handle,
+                                                 format.bridgeValue, offset, sz)
+    }
+
+    public func setBindGroup(_ bindGroup: GPUBindGroup, index: UInt32 = 0) {
+        wgpu_bridge_render_pass_set_bind_group(handle, index, bindGroup.handle)
+    }
+
     public func draw(vertexCount: UInt32,
                      instanceCount: UInt32 = 1,
                      firstVertex: UInt32 = 0,
                      firstInstance: UInt32 = 0) {
         wgpu_bridge_render_pass_draw(handle, vertexCount, instanceCount, firstVertex, firstInstance)
+    }
+
+    public func drawIndexed(indexCount: UInt32,
+                            instanceCount: UInt32 = 1,
+                            firstIndex: UInt32 = 0,
+                            baseVertex: Int32 = 0,
+                            firstInstance: UInt32 = 0) {
+        wgpu_bridge_render_pass_draw_indexed(handle, indexCount, instanceCount,
+                                             firstIndex, baseVertex, firstInstance)
     }
 
     public func end() {

@@ -192,3 +192,160 @@ public struct GPUTextureUsage: OptionSet, Sendable {
     public static let textureBinding   = GPUTextureUsage(rawValue: 0x04)
     public static let renderAttachment = GPUTextureUsage(rawValue: 0x10)
 }
+
+// MARK: - Blend
+
+public enum GPUBlendOp: Sendable {
+    case add, subtract, reverseSubtract, min, max
+
+    var bridgeValue: WGPUBridgeBlendOp {
+        switch self {
+        case .add:             return WGPUBridge_BlendOp_Add
+        case .subtract:        return WGPUBridge_BlendOp_Subtract
+        case .reverseSubtract: return WGPUBridge_BlendOp_ReverseSubtract
+        case .min:             return WGPUBridge_BlendOp_Min
+        case .max:             return WGPUBridge_BlendOp_Max
+        }
+    }
+}
+
+public enum GPUBlendFactor: Sendable {
+    case zero, one, src, oneMinusSrc
+    case srcAlpha, oneMinusSrcAlpha
+    case dst, oneMinusDst
+    case dstAlpha, oneMinusDstAlpha
+
+    var bridgeValue: WGPUBridgeBlendFactor {
+        switch self {
+        case .zero:             return WGPUBridge_BlendFactor_Zero
+        case .one:              return WGPUBridge_BlendFactor_One
+        case .src:              return WGPUBridge_BlendFactor_Src
+        case .oneMinusSrc:      return WGPUBridge_BlendFactor_OneMinusSrc
+        case .srcAlpha:         return WGPUBridge_BlendFactor_SrcAlpha
+        case .oneMinusSrcAlpha: return WGPUBridge_BlendFactor_OneMinusSrcAlpha
+        case .dst:              return WGPUBridge_BlendFactor_Dst
+        case .oneMinusDst:      return WGPUBridge_BlendFactor_OneMinusDst
+        case .dstAlpha:         return WGPUBridge_BlendFactor_DstAlpha
+        case .oneMinusDstAlpha: return WGPUBridge_BlendFactor_OneMinusDstAlpha
+        }
+    }
+}
+
+public struct GPUBlendComponent: Sendable {
+    public var operation: GPUBlendOp
+    public var srcFactor: GPUBlendFactor
+    public var dstFactor: GPUBlendFactor
+
+    public init(operation: GPUBlendOp = .add,
+                srcFactor: GPUBlendFactor = .one,
+                dstFactor: GPUBlendFactor = .zero) {
+        self.operation = operation
+        self.srcFactor = srcFactor
+        self.dstFactor = dstFactor
+    }
+}
+
+public struct GPUBlendState: Sendable {
+    public var color: GPUBlendComponent
+    public var alpha: GPUBlendComponent
+
+    public init(color: GPUBlendComponent, alpha: GPUBlendComponent) {
+        self.color = color
+        self.alpha = alpha
+    }
+
+    public static let alphaBlending = GPUBlendState(
+        color: GPUBlendComponent(operation: .add, srcFactor: .srcAlpha, dstFactor: .oneMinusSrcAlpha),
+        alpha: GPUBlendComponent(operation: .add, srcFactor: .one, dstFactor: .oneMinusSrcAlpha)
+    )
+
+    public static let premultipliedAlpha = GPUBlendState(
+        color: GPUBlendComponent(operation: .add, srcFactor: .one, dstFactor: .oneMinusSrcAlpha),
+        alpha: GPUBlendComponent(operation: .add, srcFactor: .one, dstFactor: .oneMinusSrcAlpha)
+    )
+
+    var bridgeValue: WGPUBridgeBlendState {
+        WGPUBridgeBlendState(
+            color: WGPUBridgeBlendComponent(
+                operation: color.operation.bridgeValue,
+                src_factor: color.srcFactor.bridgeValue,
+                dst_factor: color.dstFactor.bridgeValue
+            ),
+            alpha: WGPUBridgeBlendComponent(
+                operation: alpha.operation.bridgeValue,
+                src_factor: alpha.srcFactor.bridgeValue,
+                dst_factor: alpha.dstFactor.bridgeValue
+            )
+        )
+    }
+}
+
+// MARK: - Index Format
+
+public enum GPUIndexFormat: Sendable {
+    case uint16
+    case uint32
+
+    var bridgeValue: WGPUBridgeIndexFormat {
+        switch self {
+        case .uint16: return WGPUBridge_IndexFormat_Uint16
+        case .uint32: return WGPUBridge_IndexFormat_Uint32
+        }
+    }
+}
+
+// MARK: - Filter / Address Mode
+
+public enum GPUFilterMode: Sendable {
+    case nearest, linear
+
+    var bridgeValue: WGPUBridgeFilterMode {
+        switch self {
+        case .nearest: return WGPUBridge_FilterMode_Nearest
+        case .linear:  return WGPUBridge_FilterMode_Linear
+        }
+    }
+}
+
+public enum GPUAddressMode: Sendable {
+    case clampToEdge, `repeat`, mirrorRepeat
+
+    var bridgeValue: WGPUBridgeAddressMode {
+        switch self {
+        case .clampToEdge:  return WGPUBridge_AddressMode_ClampToEdge
+        case .repeat:       return WGPUBridge_AddressMode_Repeat
+        case .mirrorRepeat: return WGPUBridge_AddressMode_MirrorRepeat
+        }
+    }
+}
+
+// MARK: - Shader Stage
+
+public struct GPUShaderStage: OptionSet, Sendable {
+    public let rawValue: Int32
+    public init(rawValue: Int32) { self.rawValue = rawValue }
+
+    public static let vertex   = GPUShaderStage(rawValue: 0x01)
+    public static let fragment = GPUShaderStage(rawValue: 0x02)
+    public static let compute  = GPUShaderStage(rawValue: 0x04)
+}
+
+// MARK: - Binding Type
+
+public enum GPUBindingType: Sendable {
+    case uniformBuffer
+    case storageBuffer
+    case readOnlyStorageBuffer
+    case sampler
+    case sampledTexture
+
+    var bridgeValue: WGPUBridgeBindingType {
+        switch self {
+        case .uniformBuffer:         return WGPUBridge_BindingType_UniformBuffer
+        case .storageBuffer:         return WGPUBridge_BindingType_StorageBuffer
+        case .readOnlyStorageBuffer: return WGPUBridge_BindingType_ReadOnlyStorageBuffer
+        case .sampler:               return WGPUBridge_BindingType_Sampler
+        case .sampledTexture:        return WGPUBridge_BindingType_SampledTexture
+        }
+    }
+}

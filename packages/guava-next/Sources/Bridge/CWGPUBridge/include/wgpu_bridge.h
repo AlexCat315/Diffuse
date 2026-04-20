@@ -78,11 +78,73 @@ typedef enum {
     WGPUBridge_TextureUsage_RenderAttachment = 0x10,
 } WGPUBridgeTextureUsage;
 
+typedef enum {
+    WGPUBridge_BlendOp_Add = 0,
+    WGPUBridge_BlendOp_Subtract,
+    WGPUBridge_BlendOp_ReverseSubtract,
+    WGPUBridge_BlendOp_Min,
+    WGPUBridge_BlendOp_Max,
+} WGPUBridgeBlendOp;
+
+typedef enum {
+    WGPUBridge_BlendFactor_Zero = 0,
+    WGPUBridge_BlendFactor_One,
+    WGPUBridge_BlendFactor_Src,
+    WGPUBridge_BlendFactor_OneMinusSrc,
+    WGPUBridge_BlendFactor_SrcAlpha,
+    WGPUBridge_BlendFactor_OneMinusSrcAlpha,
+    WGPUBridge_BlendFactor_Dst,
+    WGPUBridge_BlendFactor_OneMinusDst,
+    WGPUBridge_BlendFactor_DstAlpha,
+    WGPUBridge_BlendFactor_OneMinusDstAlpha,
+} WGPUBridgeBlendFactor;
+
+typedef enum {
+    WGPUBridge_IndexFormat_Uint16 = 0,
+    WGPUBridge_IndexFormat_Uint32,
+} WGPUBridgeIndexFormat;
+
+typedef enum {
+    WGPUBridge_FilterMode_Nearest = 0,
+    WGPUBridge_FilterMode_Linear,
+} WGPUBridgeFilterMode;
+
+typedef enum {
+    WGPUBridge_AddressMode_ClampToEdge = 0,
+    WGPUBridge_AddressMode_Repeat,
+    WGPUBridge_AddressMode_MirrorRepeat,
+} WGPUBridgeAddressMode;
+
+typedef enum {
+    WGPUBridge_ShaderStage_Vertex   = 0x01,
+    WGPUBridge_ShaderStage_Fragment = 0x02,
+    WGPUBridge_ShaderStage_Compute  = 0x04,
+} WGPUBridgeShaderStage;
+
+typedef enum {
+    WGPUBridge_BindingType_UniformBuffer = 0,
+    WGPUBridge_BindingType_StorageBuffer,
+    WGPUBridge_BindingType_ReadOnlyStorageBuffer,
+    WGPUBridge_BindingType_Sampler,
+    WGPUBridge_BindingType_SampledTexture,
+} WGPUBridgeBindingType;
+
 /* ─── Bridge Descriptor Structs ──────────────────────────────────── */
 
 typedef struct WGPUBridgeColor {
     double r, g, b, a;
 } WGPUBridgeColor;
+
+typedef struct WGPUBridgeBlendComponent {
+    WGPUBridgeBlendOp operation;
+    WGPUBridgeBlendFactor src_factor;
+    WGPUBridgeBlendFactor dst_factor;
+} WGPUBridgeBlendComponent;
+
+typedef struct WGPUBridgeBlendState {
+    WGPUBridgeBlendComponent color;
+    WGPUBridgeBlendComponent alpha;
+} WGPUBridgeBlendState;
 
 typedef struct WGPUBridgeVertexAttribute {
     WGPUBridgeVertexFormat format;
@@ -110,6 +172,29 @@ typedef struct WGPUBridgeBufferDesc {
     int usage_flags;
     int mapped_at_creation;
 } WGPUBridgeBufferDesc;
+
+typedef struct WGPUBridgeSamplerDesc {
+    WGPUBridgeAddressMode address_mode_u;
+    WGPUBridgeAddressMode address_mode_v;
+    WGPUBridgeFilterMode mag_filter;
+    WGPUBridgeFilterMode min_filter;
+    WGPUBridgeFilterMode mipmap_filter;
+} WGPUBridgeSamplerDesc;
+
+typedef struct WGPUBridgeBindGroupLayoutEntry {
+    uint32_t binding;
+    int visibility;
+    WGPUBridgeBindingType type;
+} WGPUBridgeBindGroupLayoutEntry;
+
+typedef struct WGPUBridgeBindGroupEntry {
+    uint32_t binding;
+    void* buffer;
+    uint64_t offset;
+    uint64_t size;
+    void* sampler;
+    void* texture_view;
+} WGPUBridgeBindGroupEntry;
 
 typedef struct WGPUInstanceDescriptor {
     const void* nextInChain;
@@ -182,6 +267,7 @@ int wgpu_bridge_create_render_pipeline(
     WGPUBridgeCullMode cull_mode,
     const WGPUBridgeVertexBufferLayout* vertex_buffers,
     uint32_t vertex_buffer_count,
+    const WGPUBridgeBlendState* blend,
     void** out_pipeline);
 
 void wgpu_bridge_release_render_pipeline(void* pipeline);
@@ -220,11 +306,28 @@ void wgpu_bridge_render_pass_set_vertex_buffer(void* pass,
                                                uint64_t offset,
                                                uint64_t size);
 
+void wgpu_bridge_render_pass_set_index_buffer(void* pass,
+                                              void* buffer,
+                                              WGPUBridgeIndexFormat format,
+                                              uint64_t offset,
+                                              uint64_t size);
+
 void wgpu_bridge_render_pass_draw(void* pass,
                                   uint32_t vertex_count,
                                   uint32_t instance_count,
                                   uint32_t first_vertex,
                                   uint32_t first_instance);
+
+void wgpu_bridge_render_pass_draw_indexed(void* pass,
+                                          uint32_t index_count,
+                                          uint32_t instance_count,
+                                          uint32_t first_index,
+                                          int32_t base_vertex,
+                                          uint32_t first_instance);
+
+void wgpu_bridge_render_pass_set_bind_group(void* pass,
+                                            uint32_t group_index,
+                                            void* bind_group);
 
 void wgpu_bridge_render_pass_end(void* pass);
 
@@ -238,6 +341,36 @@ void wgpu_bridge_queue_submit(void* queue,
 void wgpu_bridge_release_command_buffer(void* command_buffer);
 void wgpu_bridge_release_command_encoder(void* encoder);
 void wgpu_bridge_release_render_pass_encoder(void* pass);
+
+/* ─── Sampler ────────────────────────────────────────────────────── */
+
+int wgpu_bridge_create_sampler(void* device,
+                               const WGPUBridgeSamplerDesc* desc,
+                               void** out_sampler);
+
+void wgpu_bridge_release_sampler(void* sampler);
+
+/* ─── Bind Group ─────────────────────────────────────────────────── */
+
+int wgpu_bridge_create_bind_group_layout(void* device,
+                                         const WGPUBridgeBindGroupLayoutEntry* entries,
+                                         uint32_t entry_count,
+                                         void** out_layout);
+
+int wgpu_bridge_create_bind_group(void* device,
+                                  void* layout,
+                                  const WGPUBridgeBindGroupEntry* entries,
+                                  uint32_t entry_count,
+                                  void** out_bind_group);
+
+int wgpu_bridge_create_pipeline_layout(void* device,
+                                       void* const* bind_group_layouts,
+                                       uint32_t layout_count,
+                                       void** out_layout);
+
+void wgpu_bridge_release_bind_group_layout(void* layout);
+void wgpu_bridge_release_bind_group(void* bind_group);
+void wgpu_bridge_release_pipeline_layout(void* layout);
 
 #ifdef __cplusplus
 }
