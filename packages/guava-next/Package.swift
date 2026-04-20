@@ -16,17 +16,17 @@ let package = Package(
         .library(name: "AssetPipeline", targets: ["AssetPipeline"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
         .library(name: "RenderBackend", targets: ["RenderBackend"]),
-        .library(name: "PlatformShell", targets: ["PlatformShell"])
+        .library(name: "PlatformShell", targets: ["PlatformShell"]),
     ],
     targets: [
         .target(
             name: "CEngineBridge",
-            path: "Sources/CEngineBridge",
+            path: "Sources/Bridge/CEngineBridge",
             publicHeadersPath: "include"
         ),
         .target(
             name: "CWGPUBridge",
-            path: "Sources/CWGPUBridge",
+            path: "Sources/Bridge/CWGPUBridge",
             publicHeadersPath: "include"
         ),
         .target(name: "EngineKernel"),
@@ -57,6 +57,6 @@ let package = Package(
         .executableTarget(
             name: "EditorApp",
             dependencies: ["EditorCore", "PlatformShell"]
-        )
+        ),
     ]
 )
