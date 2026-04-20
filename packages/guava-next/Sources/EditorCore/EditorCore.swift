@@ -32,18 +32,20 @@ public final class EditorApplication {
         self.dockLayout = .default(panelIDs: panels.map(\ .id))
     }
 
-    public func bootstrap() {
-        shell.initializeWindow(title: "GuavaNext Editor")
+    public func bootstrap() throws {
+        try shell.initializeWindow(title: "GuavaNext Editor")
         engine.start()
         renderer.initialize()
         EditorReducer.reduce(state: &state, action: .setConnected(true))
     }
 
-    public func runMainLoop(iterations: Int) {
-        for frame in 0..<iterations {
+    public func runMainLoop(iterations: Int? = nil) {
+        var frame = 0
+        while shell.isRunning && (iterations.map { frame < $0 } ?? true) {
             shell.pollEvents()
             engine.tick(deltaTime: 1.0 / 60.0)
             renderer.renderFrame(frameIndex: frame)
+            frame += 1
         }
         shell.shutdown()
     }

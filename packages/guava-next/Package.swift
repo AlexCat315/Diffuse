@@ -19,6 +19,14 @@ let package = Package(
         .library(name: "PlatformShell", targets: ["PlatformShell"]),
     ],
     targets: [
+        .systemLibrary(
+            name: "CSDL3",
+            path: "Sources/Bridge/CSDL3",
+            pkgConfig: "sdl3",
+            providers: [
+                .brew(["sdl3", "pkg-config"])
+            ]
+        ),
         .target(
             name: "CEngineBridge",
             path: "Sources/Bridge/CEngineBridge",
@@ -69,7 +77,10 @@ let package = Package(
             name: "EditorCore",
             dependencies: ["EngineCore", "RenderBackend"]
         ),
-        .target(name: "PlatformShell"),
+        .target(
+            name: "PlatformShell",
+            dependencies: ["CSDL3"]
+        ),
         .executableTarget(
             name: "EditorApp",
             dependencies: ["EditorCore", "PlatformShell"]
