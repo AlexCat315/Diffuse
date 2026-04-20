@@ -21,12 +21,16 @@ public final class FontAtlas {
     /// Cached glyph metrics.
     private var cache: [GlyphKey: GlyphInfo] = [:]
 
+    /// Registered external FreeType faces for multi-font rendering.
+    private var registeredFaces: [Int: FT_Face] = [:]
+
     /// Current font size in points.
     public private(set) var fontSize: Float = 0
 
     // MARK: - Types
 
     private struct GlyphKey: Hashable {
+        let fontID: Int
         let glyphIndex: UInt32
         let size: Float
     }
@@ -96,16 +100,34 @@ public final class FontAtlas {
     /// The underlying FreeType face (for HarfBuzz integration).
     public var freetypeFace: FT_Face? { ftFace }
 
+    // MARK: - Multi-font registration
+
+    /// Registers an external FreeType face for multi-font rasterization.
+    ///
+    /// The caller is responsible for keeping the face alive while the atlas uses it.
+    public func registerFace(_ face: FT_Face, fontID: Int) {
+        registeredFaces[fontID] = face
+    }
+
+    private func resolveFace(fontID: Int) -> FT_Face? {
+        if let registered = registeredFaces[fontID] { return registered }
+        if fontID == 0 { return ftFace }
+        return nil
+    }
+
     // MARK: - Glyph rasterization
 
     /// Rasterizes a glyph by its glyph index (not codepoint) and packs it into the atlas.
     ///
-    /// Returns cached result if already rasterized.
-    public func rasterizeGlyph(glyphIndex: UInt32) -> GlyphInfo? {
-        let key = GlyphKey(glyphIndex: glyphIndex, size: fontSize)
+    /// - Parameters:
+    ///   - glyphIndex: FreeType glyph index.
+    ///   - fontID: Font identifier (0 = default/stored face, others = registered faces).
+    /// - Returns: Cached or newly rasterized glyph info, or nil on failure.
+    public func rasterizeGlyph(glyphIndex: UInt32, fontID: Int = 0) -> GlyphInfo? {
+        let key = GlyphKey(fontID: fontID, glyphIndex: glyphIndex, size: fontSize)
         if let cached = cache[key] { return cached }
 
-        guard let face = ftFace else { return nil }
+        guard let face = resolveFace(fontID: fontID) else { return nil }
 
         let err = FT_Load_Glyph(face, FT_UInt(glyphIndex), FT_Int32(FT_LOAD_RENDER))
         guard err == 0 else { return nil }
@@ -153,12 +175,12 @@ public final class FontAtlas {
         return info
     }
 
-    /// Rasterizes a glyph by Unicode codepoint. Convenience wrapper over `rasterizeGlyph(glyphIndex:)`.
-    public func rasterizeCodepoint(_ codepoint: UInt32) -> GlyphInfo? {
-        guard let face = ftFace else { return nil }
+    /// Rasterizes a glyph by Unicode codepoint. Convenience wrapper over `rasterizeGlyph(glyphIndex:fontID:)`.
+    public func rasterizeCodepoint(_ codepoint: UInt32, fontID: Int = 0) -> GlyphInfo? {
+        guard let face = resolveFace(fontID: fontID) else { return nil }
         let glyphIndex = FT_Get_Char_Index(face, FT_ULong(codepoint))
         guard glyphIndex != 0 else { return nil }
-        return rasterizeGlyph(glyphIndex: glyphIndex)
+        return rasterizeGlyph(glyphIndex: glyphIndex, fontID: fontID)
     }
 
     /// Clears the atlas and cache. Keeps the loaded font.
