@@ -60,6 +60,25 @@ public final class GPUCommandEncoder {
         }
         return GPUCommandBuffer(handle: cbPtr)
     }
+
+    public func beginComputePass() throws -> GPUComputePassEncoder {
+        var passPtr: UnsafeMutableRawPointer?
+        let ok = wgpu_bridge_begin_compute_pass(handle, &passPtr)
+        guard ok == 1, let passPtr else {
+            throw WGPUBackendError.initFailed(WGPUBackend.lastError())
+        }
+        return GPUComputePassEncoder(handle: passPtr)
+    }
+
+    public func copyTextureToTexture(source: GPUTexture, sourceMip: UInt32 = 0,
+                                     destination: GPUTexture, destinationMip: UInt32 = 0,
+                                     width: UInt32, height: UInt32,
+                                     depthOrLayers: UInt32 = 1) {
+        wgpu_bridge_copy_texture_to_texture(handle,
+                                            source.handle, sourceMip,
+                                            destination.handle, destinationMip,
+                                            width, height, depthOrLayers)
+    }
 }
 
 public final class GPURenderPassEncoder {

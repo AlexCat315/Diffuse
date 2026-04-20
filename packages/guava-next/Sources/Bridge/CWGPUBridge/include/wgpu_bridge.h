@@ -65,16 +65,18 @@ typedef enum {
 } WGPUBridgeCullMode;
 
 typedef enum {
-    WGPUBridge_BufferUsage_CopyDst = 0x0008,
-    WGPUBridge_BufferUsage_Index   = 0x0010,
-    WGPUBridge_BufferUsage_Vertex  = 0x0020,
-    WGPUBridge_BufferUsage_Uniform = 0x0040,
+    WGPUBridge_BufferUsage_CopyDst  = 0x0008,
+    WGPUBridge_BufferUsage_Index    = 0x0010,
+    WGPUBridge_BufferUsage_Vertex   = 0x0020,
+    WGPUBridge_BufferUsage_Uniform  = 0x0040,
+    WGPUBridge_BufferUsage_Storage  = 0x0080,
 } WGPUBridgeBufferUsage;
 
 typedef enum {
     WGPUBridge_TextureUsage_CopySrc          = 0x01,
     WGPUBridge_TextureUsage_CopyDst          = 0x02,
     WGPUBridge_TextureUsage_TextureBinding   = 0x04,
+    WGPUBridge_TextureUsage_StorageBinding   = 0x08,
     WGPUBridge_TextureUsage_RenderAttachment = 0x10,
 } WGPUBridgeTextureUsage;
 
@@ -219,6 +221,13 @@ typedef struct WGPUBridgeDepthStencilPipelineState {
     int depth_write_enabled;
     WGPUBridgeCompareFunction depth_compare;
 } WGPUBridgeDepthStencilPipelineState;
+
+typedef struct WGPUBridgeColorAttachment {
+    void* view;
+    WGPUBridgeLoadOp load_op;
+    WGPUBridgeStoreOp store_op;
+    WGPUBridgeColor clear_color;
+} WGPUBridgeColorAttachment;
 
 typedef struct WGPUInstanceDescriptor {
     const void* nextInChain;
@@ -421,6 +430,64 @@ int wgpu_bridge_create_pipeline_layout(void* device,
 void wgpu_bridge_release_bind_group_layout(void* layout);
 void wgpu_bridge_release_bind_group(void* bind_group);
 void wgpu_bridge_release_pipeline_layout(void* layout);
+
+/* ─── Compute Pipeline ───────────────────────────────────────────── */
+
+int wgpu_bridge_create_compute_pipeline(void* device,
+                                        void* shader_module,
+                                        const char* entry_point,
+                                        void* pipeline_layout,
+                                        void** out_pipeline);
+
+void wgpu_bridge_release_compute_pipeline(void* pipeline);
+
+/* ─── Compute Pass ───────────────────────────────────────────────── */
+
+int wgpu_bridge_begin_compute_pass(void* encoder, void** out_pass);
+
+void wgpu_bridge_compute_pass_set_pipeline(void* pass, void* pipeline);
+
+void wgpu_bridge_compute_pass_set_bind_group(void* pass,
+                                             uint32_t group_index,
+                                             void* bind_group);
+
+void wgpu_bridge_compute_pass_dispatch(void* pass,
+                                       uint32_t x, uint32_t y, uint32_t z);
+
+void wgpu_bridge_compute_pass_end(void* pass);
+void wgpu_bridge_release_compute_pass_encoder(void* pass);
+
+/* ─── MRT Render Pass ────────────────────────────────────────────── */
+
+int wgpu_bridge_begin_render_pass_mrt(
+    void* encoder,
+    const WGPUBridgeColorAttachment* color_attachments,
+    uint32_t color_count,
+    const WGPUBridgeDepthStencilAttachment* depth,
+    void** out_pass);
+
+int wgpu_bridge_create_render_pipeline_mrt(
+    void* device,
+    void* shader_module,
+    const char* vertex_entry,
+    const char* fragment_entry,
+    const WGPUBridgeTextureFormat* color_formats,
+    const WGPUBridgeBlendState* blends,
+    uint32_t color_format_count,
+    WGPUBridgePrimitiveTopology topology,
+    WGPUBridgeCullMode cull_mode,
+    const WGPUBridgeVertexBufferLayout* vertex_buffers,
+    uint32_t vertex_buffer_count,
+    const WGPUBridgeDepthStencilPipelineState* depth_stencil,
+    void** out_pipeline);
+
+/* ─── Texture Copy ───────────────────────────────────────────────── */
+
+void wgpu_bridge_copy_texture_to_texture(
+    void* encoder,
+    void* src_texture, uint32_t src_mip,
+    void* dst_texture, uint32_t dst_mip,
+    uint32_t width, uint32_t height, uint32_t depth_or_layers);
 
 #ifdef __cplusplus
 }

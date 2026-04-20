@@ -448,4 +448,171 @@ public final class WGPUBackend {
         }
         return GPUPipelineLayout(handle: ptr)
     }
+
+    public func createComputePipeline(shaderModule: GPUShaderModule,
+                                      entryPoint: String = "main",
+                                      layout: GPUPipelineLayout? = nil) throws -> GPUComputePipeline {
+        guard let device else {
+            throw WGPUBackendError.initFailed("device not ready")
+        }
+        var ptr: UnsafeMutableRawPointer?
+        let ok = entryPoint.withCString { entry in
+            wgpu_bridge_create_compute_pipeline(device, shaderModule.handle,
+                                                entry, layout?.handle, &ptr)
+        }
+        guard ok == 1, let ptr else {
+            throw WGPUBackendError.initFailed(Self.lastError())
+        }
+        return GPUComputePipeline(handle: ptr)
+    }
+
+    public func beginRenderPassMRT(encoder: GPUCommandEncoder,
+                                   colorAttachments: [GPUColorAttachment],
+                                   depthView: GPUTextureView? = nil,
+                                   depthLoadOp: GPULoadOp = .clear,
+                                   depthStoreOp: GPUStoreOp = .store,
+                                   depthClearValue: Float = 1.0) throws -> GPURenderPassEncoder {
+        var bridgeColors = colorAttachments.map {
+            WGPUBridgeColorAttachment(
+                view: $0.view.handle,
+                load_op: $0.loadOp.bridgeValue,
+                store_op: $0.storeOp.bridgeValue,
+                clear_color: $0.clearColor.bridgeValue
+            )
+        }
+
+        var depthAttachment: WGPUBridgeDepthStencilAttachment?
+        if let depthView {
+            depthAttachment = WGPUBridgeDepthStencilAttachment(
+                view: depthView.handle,
+                depth_load_op: depthLoadOp.bridgeValue,
+                depth_store_op: depthStoreOp.bridgeValue,
+                clear_depth: depthClearValue
+            )
+        }
+
+        var passPtr: UnsafeMutableRawPointer?
+        let ok: Int32
+        if var da = depthAttachment {
+            ok = bridgeColors.withUnsafeMutableBufferPointer { buf in
+                wgpu_bridge_begin_render_pass_mrt(encoder.handle,
+                                                  buf.baseAddress, UInt32(buf.count),
+                                                  &da, &passPtr)
+            }
+        } else {
+            ok = bridgeColors.withUnsafeMutableBufferPointer { buf in
+                wgpu_bridge_begin_render_pass_mrt(encoder.handle,
+                                                  buf.baseAddress, UInt32(buf.count),
+                                                  nil, &passPtr)
+            }
+        }
+
+        guard ok == 1, let passPtr else {
+            throw WGPUBackendError.initFailed(Self.lastError())
+        }
+        return GPURenderPassEncoder(handle: passPtr)
+    }
+
+    public func createRenderPipelineMRT(
+        shaderModule: GPUShaderModule,
+        vertexEntryPoint: String = "vs_main",
+        fragmentEntryPoint: String = "fs_main",
+        colorFormats: [GPUTextureFormat],
+        blends: [GPUBlendState]? = nil,
+        topology: GPUPrimitiveTopology = .triangleList,
+        cullMode: GPUCullMode = .none,
+        vertexBuffers: [GPUVertexBufferLayout] = [],
+        depthStencil: GPUDepthStencilPipelineState? = nil
+    ) throws -> GPURenderPipeline {
+        guard let device else {
+            throw WGPUBackendError.initFailed("device not ready")
+        }
+        var formats = colorFormats.map { $0.bridgeValue }
+        let bridgeBlends: [WGPUBridgeBlendState]? = blends?.map { $0.bridgeValue }
+
+        var vbLayouts: [WGPUBridgeVertexBufferLayout] = []
+        var attrArrays: [[WGPUBridgeVertexAttribute]] = []
+        for vbl in vertexBuffers {
+            let attrs = vbl.attributes.map {
+                WGPUBridgeVertexAttribute(format: $0.format.bridgeValue,
+                                          offset: $0.offset,
+                                          shader_location: $0.shaderLocation)
+            }
+            attrArrays.append(attrs)
+        }
+
+        var pipelinePtr: UnsafeMutableRawPointer?
+
+        let ok: Int32 = vertexEntryPoint.withCString { vEntry in
+            fragmentEntryPoint.withCString { fEntry -> Int32 in
+                for (i, vbl) in vertexBuffers.enumerated() {
+                    attrArrays[i].withUnsafeMutableBufferPointer { attrBuf in
+                        vbLayouts.append(WGPUBridgeVertexBufferLayout(
+                            array_stride: vbl.arrayStride,
+                            attributes: attrBuf.baseAddress,
+                            attribute_count: UInt32(attrBuf.count)
+                        ))
+                    }
+                }
+
+                var dsVal: WGPUBridgeDepthStencilPipelineState?
+                if let ds = depthStencil { dsVal = ds.bridgeValue }
+
+                return formats.withUnsafeMutableBufferPointer { fmtBuf in
+                    vbLayouts.withUnsafeMutableBufferPointer { vbBuf in
+                        if var dsv = dsVal {
+                            if var bl = bridgeBlends {
+                                return bl.withUnsafeMutableBufferPointer { blBuf in
+                                    wgpu_bridge_create_render_pipeline_mrt(
+                                        device, shaderModule.handle,
+                                        vEntry, fEntry,
+                                        fmtBuf.baseAddress, blBuf.baseAddress,
+                                        UInt32(fmtBuf.count),
+                                        topology.bridgeValue, cullMode.bridgeValue,
+                                        vbBuf.baseAddress, UInt32(vbBuf.count),
+                                        &dsv, &pipelinePtr)
+                                }
+                            } else {
+                                return wgpu_bridge_create_render_pipeline_mrt(
+                                    device, shaderModule.handle,
+                                    vEntry, fEntry,
+                                    fmtBuf.baseAddress, nil,
+                                    UInt32(fmtBuf.count),
+                                    topology.bridgeValue, cullMode.bridgeValue,
+                                    vbBuf.baseAddress, UInt32(vbBuf.count),
+                                    &dsv, &pipelinePtr)
+                            }
+                        } else {
+                            if var bl = bridgeBlends {
+                                return bl.withUnsafeMutableBufferPointer { blBuf in
+                                    wgpu_bridge_create_render_pipeline_mrt(
+                                        device, shaderModule.handle,
+                                        vEntry, fEntry,
+                                        fmtBuf.baseAddress, blBuf.baseAddress,
+                                        UInt32(fmtBuf.count),
+                                        topology.bridgeValue, cullMode.bridgeValue,
+                                        vbBuf.baseAddress, UInt32(vbBuf.count),
+                                        nil, &pipelinePtr)
+                                }
+                            } else {
+                                return wgpu_bridge_create_render_pipeline_mrt(
+                                    device, shaderModule.handle,
+                                    vEntry, fEntry,
+                                    fmtBuf.baseAddress, nil,
+                                    UInt32(fmtBuf.count),
+                                    topology.bridgeValue, cullMode.bridgeValue,
+                                    vbBuf.baseAddress, UInt32(vbBuf.count),
+                                    nil, &pipelinePtr)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        guard ok == 1, let pipelinePtr else {
+            throw WGPUBackendError.initFailed(Self.lastError())
+        }
+        return GPURenderPipeline(handle: pipelinePtr)
+    }
 }
