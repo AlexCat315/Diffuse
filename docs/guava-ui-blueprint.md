@@ -1,492 +1,550 @@
-# GuavaUI 框架蓝图（wgpu 自渲染，跨平台）
+# GuavaUI 架构蓝图（Runtime + Compose）
 
-## 0. 决策摘要
+## 0. 定位
+
+GuavaUI 从一开始就按独立 UI 库设计，不按“先做编辑器，后面再抽库”的路线走。
+
+GuavaUI 的目标不是复刻 SwiftUI，而是做一个：
+
+- 用 Swift 编写
+- 跨平台
+- 自渲染
+- 面向桌面工具和编辑器
+- API 风格接近 SwiftUI / Compose
+- 运行时完全可控
+
+GuavaUI 的产品形态分成两层：
+
+1. Runtime
+- 平台、输入、布局、文字、渲染、节点树、recompose 运行时。
+
+2. Compose
+- 声明式 API、状态系统、modifier、layout composable、组件集合。
+
+组件属于 Compose 层，不属于 Runtime 层。
+
+## 1. 设计原则
+
+### 1.1 必须满足
+
+- 与引擎共享 wgpu 设备和纹理。
+- 支持 viewport 零拷贝嵌入。
+- 支持 desktop-first 交互：鼠标、键盘、焦点、快捷键、拖拽、Dock。
+- 支持 retained-mode 运行时。
+- 支持声明式 UI 写法。
+- 支持跨平台窗口与输入。
+- 支持复杂工具类组件：Tree、PropertyGrid、Dock、ContextMenu、ViewportHost。
+
+### 1.2 明确不追求
+
+- 不追求 SwiftUI 兼容。
+- 不追求首版覆盖移动端控件生态。
+- 不追求首版做完整动画系统。
+- 不追求首版做无障碍系统。
+- 不追求首版做完整导航和应用生命周期框架。
+
+## 2. 技术选型
 
 | 项目 | 选型 | 理由 |
 |------|------|------|
-| 渲染后端 | wgpu | 与引擎共享同一 Device，零拷贝视口，跨平台（Metal/Vulkan/DX12） |
-| 布局引擎 | Yoga（C，MIT） | Facebook 成熟 flexbox 实现，支持 flex-grow/wrap/min-max，C ABI 直接包装 |
-| 文字 shaping | HarfBuzz + FreeType（C） | 跨平台统一字形排版，macOS 可选 CoreText 加速首版 |
-| 窗口/输入 | SDL3（C，zlib） | 跨平台窗口创建与输入事件，稳定且轻量 |
-| UI 范式 | Retained mode | 样式/布局与渲染帧解耦，dirty flag 优化，Widget 可持有内部状态 |
-| 主语言 | Swift | 与引擎统一，ARC 内存管理，表达力强 |
+| 主语言 | Swift | 与引擎一致，适合做 DSL 和框架边界 |
+| GPU 后端 | wgpu-native | 跨平台，支持 Metal / D3D12 / Vulkan |
+| 窗口层 | SDL3 | 跨平台窗口、事件泵、原生句柄抽取 |
+| 布局引擎 | Yoga（首版） | 先用成熟 flex layout，后续可替换局部布局器 |
+| 文字 shaping | HarfBuzz | 跨平台一致文本 shaping |
+| 字形光栅化 | FreeType | 跨平台稳定，便于做字形图集 |
+| UI 范式 | Retained mode + recompose | 更适合编辑器场景和脏区更新 |
+| 风格参考 | SwiftUI API + Compose 分层 | API 友好，运行时边界更清楚 |
 
-## 1. 模块结构
+## 3. 总体分层
 
-```
-Sources/GuavaUI/
-├── Core/
-│   ├── ViewTree.swift           // retained-mode 节点树
-│   ├── ViewNode.swift           // 节点基类：bounds、style、children、dirty flag
-│   ├── StyleSystem.swift        // 主题定义：颜色、间距、圆角、字体
-│   ├── Theme.swift              // 内置主题（dark/light）与自定义主题接口
-│   └── HitTest.swift            // 坐标 → 节点映射
-├── Event/
-│   ├── EventTypes.swift         // MouseDown/Up/Move/Scroll/KeyDown/KeyUp/Focus/Blur
-│   ├── EventDispatch.swift      // 捕获 → 目标 → 冒泡
-│   ├── FocusManager.swift       // Tab 焦点链、焦点环
-│   └── SDLEventAdapter.swift    // SDL3 事件 → GuavaUI 事件转换
-├── Layout/
-│   ├── YogaLayout.swift         // Yoga C API 的 Swift 封装
-│   ├── LayoutNode.swift         // ViewNode 与 YGNodeRef 的映射
-│   └── LayoutCache.swift        // 布局结果缓存与 dirty 传播
-├── Render/
-│   ├── UIRenderer.swift         // wgpu 2D 批处理渲染器总控
-│   ├── PrimitiveRenderer.swift  // 填充/圆角矩形、边框、阴影（SDF shader）
-│   ├── TextRenderer.swift       // glyph atlas + 文字四边形
-│   ├── ImageRenderer.swift      // 图片/纹理四边形
-│   ├── GlyphAtlas.swift         // 字形纹理图集管理
-│   ├── DrawList.swift           // 帧级绘制命令列表（排序、裁剪、批合并）
-│   └── Shaders/
-│       ├── ui_primitive.wgsl    // 圆角矩形 SDF + 边框 + 阴影
-│       └── ui_text.wgsl         // 文字四边形采样
-├── Widgets/
-│   ├── Label.swift
-│   ├── Button.swift
-│   ├── TextField.swift
-│   ├── Slider.swift
-│   ├── Checkbox.swift
-│   ├── ScrollView.swift
-│   ├── TreeView.swift
-│   ├── ListView.swift
-│   ├── PropertyGrid.swift
-│   ├── TabBar.swift
-│   ├── SplitPane.swift
-│   ├── ContextMenu.swift
-│   ├── Tooltip.swift
-│   └── ViewportWidget.swift     // 引擎 viewport 纹理采样 + 输入路由
-├── Dock/
-│   ├── DockModel.swift          // split/leaf 树数据模型
-│   ├── DockContainer.swift      // 拖拽分割、合并、tab 移动
-│   ├── DockSerializer.swift     // JSON 持久化与恢复
-│   └── DockDropZone.swift       // 拖拽放置区域计算
-├── Platform/
-│   ├── SDLWindowBackend.swift   // SDL3 窗口 + 事件泵
-│   ├── ClipboardBackend.swift   // SDL3 剪贴板封装
-│   └── FileDialogBackend.swift  // 平台文件对话框（SDL3 + 平台 fallback）
-└── Bridge/
-    ├── CYogaBridge/             // Yoga C 头文件包装（SwiftPM C target）
-    │   ├── include/yoga.h
-    │   └── yoga.c (stub or link)
-    ├── CTextBridge/             // HarfBuzz + FreeType C 头文件包装
-    │   ├── include/text_bridge.h
-    │   └── text_bridge.c
-    └── CSDL3/                   // SDL3 C 头文件包装
-        ├── include/sdl3.h
-        └── module.modulemap
+```mermaid
+flowchart TD
+    App[Editor / Tool App] --> Compose[GuavaUI Compose]
+    Compose --> Runtime[GuavaUI Runtime]
+    Runtime --> Platform[SDL3 Platform Host]
+    Runtime --> Text[Text System]
+    Runtime --> Layout[Layout Engine]
+    Runtime --> Render[WGPU Renderer]
+    Render --> GPU[Metal / DX12 / Vulkan]
 ```
 
-## 2. 渲染管线
+依赖方向只有一条：
 
-### 2.1 图元类型
+- Runtime 不依赖 Compose。
+- Compose 依赖 Runtime。
+- 应用依赖 Compose。
 
-GuavaUI 只实现编辑器 UI 所需的有限图元，不实现通用矢量图形：
+## 4. 模块边界
 
-| 图元 | 实现方式 | 用途 |
-|------|----------|------|
-| 填充矩形 | 顶点着色 | 面板背景、选中高亮 |
-| 圆角矩形 | SDF fragment shader | 按钮、输入框、面板边框 |
-| 边框 | SDF 内/外描边 | Widget 边界 |
-| 阴影 | 高斯模糊 SDF | 弹出层、浮动面板 |
-| 文字四边形 | Glyph atlas 采样 | 所有文字渲染 |
-| 图片四边形 | 纹理采样 | 图标、缩略图、viewport 纹理 |
+建议按 SwiftPM target 划分：
 
-### 2.2 批处理策略
-
-1. 遍历 ViewTree，生成 DrawList（有序绘制命令列表）。
-2. DrawList 按纹理/shader 分组合并，减少 draw call。
-3. 裁剪：scissor rect 按面板边界裁剪，不渲染可见区域外的 Widget。
-4. 所有顶点写入单个 vertex buffer，索引写入单个 index buffer。
-5. 每帧 draw call 目标：< 50（典型编辑器布局）。
-
-### 2.3 Shader 设计
-
-ui_primitive.wgsl（圆角矩形 + 边框 + 阴影）：
-
-```wgsl
-struct VertexInput {
-    @location(0) position: vec2<f32>,
-    @location(1) uv: vec2<f32>,
-    @location(2) color: vec4<f32>,
-    @location(3) rect: vec4<f32>,       // x, y, width, height
-    @location(4) params: vec4<f32>,     // corner_radius, border_width, shadow_radius, 0
-};
-
-@fragment
-fn fs_main(in: VertexInput) -> @location(0) vec4<f32> {
-    let half_size = in.rect.zw * 0.5;
-    let center = in.rect.xy + half_size;
-    let p = in.position - center;
-    let r = in.params.x;
-
-    // SDF for rounded rectangle
-    let q = abs(p) - half_size + vec2<f32>(r, r);
-    let d = length(max(q, vec2<f32>(0.0))) + min(max(q.x, q.y), 0.0) - r;
-
-    // 填充
-    let fill_alpha = 1.0 - smoothstep(-0.5, 0.5, d);
-
-    // 边框
-    let border_w = in.params.y;
-    let border_alpha = 1.0 - smoothstep(-0.5, 0.5, abs(d) - border_w * 0.5);
-
-    return in.color * fill_alpha;
-}
+```
+Sources/
+├── GuavaUIRuntime/
+│   ├── Platform/
+│   ├── Input/
+│   ├── Tree/
+│   ├── State/
+│   ├── Layout/
+│   ├── Text/
+│   ├── Render/
+│   ├── Resources/
+│   └── Diagnostics/
+├── GuavaUICompose/
+│   ├── Compose/
+│   ├── Modifier/
+│   ├── Environment/
+│   ├── Foundation/
+│   ├── Desktop/
+│   └── Viewport/
+└── App 层
+    └── Editor widgets / domain logic
 ```
 
-### 2.4 文字渲染流程
+### 4.1 Runtime 负责什么
 
-1. 文字 shaping（HarfBuzz）：输入 Unicode 字符串 → 输出 glyph ID + 位置偏移。
-2. 字形光栅化（FreeType）：glyph ID → 灰度位图。
-3. 写入 GlyphAtlas：灰度位图 → wgpu 纹理图集（按需扩展）。
-4. 生成四边形：每个 glyph 一个四边形，UV 指向 atlas 中的位置。
-5. 渲染：ui_text.wgsl 采样 glyph atlas 纹理。
+- 平台宿主
+- 事件接入
+- 焦点与命中测试
+- 节点树
+- 状态失效传播
+- recomposer
+- layout 计算
+- draw list 生成
+- 文本 shaping 与 atlas
+- GPU 提交
 
-GlyphAtlas 策略：
+### 4.2 Compose 负责什么
 
-- 初始大小 1024x1024。
-- 使用 shelf packing 算法。
-- LRU 淘汰不常用字形。
-- 支持多号字体共存（不同 size 分开缓存）。
+- 声明式 API
+- 状态读写接口
+- modifier 链
+- 环境注入
+- 通用 layout composable
+- 通用组件
+- 桌面工具组件
 
-## 3. 布局引擎（Yoga 集成）
+### 4.3 应用层负责什么
 
-### 3.1 核心封装
+- SceneHierarchy 的业务绑定
+- Inspector 的领域模型
+- MaterialEditor
+- AssetBrowser
+- AnimationEditor
+- Gizmo overlay 的编辑器语义
+
+## 5. Runtime 核心契约
+
+Runtime 需要先定清楚六个协议。
+
+### 5.1 Node Tree
+
+每个 compose 节点最终都会落成 RuntimeNode。
+
+RuntimeNode 至少包含：
+
+- identity
+- parent / children
+- layout style
+- computed frame
+- visual style
+- focusable / hit-testable 标记
+- dirty flags
+- 关联的渲染资源句柄
+
+dirty flag 至少分成四类：
+
+- structure dirty
+- layout dirty
+- paint dirty
+- state dirty
+
+### 5.2 Recomposer
+
+Recomposer 负责把 Compose 描述刷新成 RuntimeNode 树。
+
+职责：
+
+- 跟踪状态读取
+- 在状态变化时定位受影响子树
+- 重组受影响的 compose subtree
+- 输出节点更新计划
+- 驱动 layout / paint invalidation
+
+Recomposer 的单位不是“全树重建”，而是“子树重组”。
+
+### 5.3 State / Binding
+
+首版只做最小集：
+
+- State<Value>
+- Binding<Value>
+- ObservableObject 或等价机制
+- Environment 值读取
+
+原则：
+
+- 状态更新只触发订阅该状态的子树。
+- Binding 只是一层读写映射，不带业务逻辑。
+- 业务状态留在应用层 store，Compose 只消费。
+
+### 5.4 Modifier
+
+Modifier 不直接生成节点，它只描述节点属性变换。
+
+Modifier 至少分三类：
+
+- layout modifier
+- render modifier
+- interaction modifier
+
+例如：
+
+- padding、frame、flexGrow 属于 layout modifier。
+- background、border、shadow 属于 render modifier。
+- hover、focusable、onTap、onKeyDown 属于 interaction modifier。
+
+### 5.5 Layout
+
+首版 layout 不追求纯自研，先以 Yoga 为主。
+
+策略：
+
+- 通用 stack / flow / overlay 布局走 Yoga。
+- SplitPane、DockContainer 允许自定义布局器。
+- ViewportHost 允许固定约束布局。
+
+Layout 系统必须支持：
+
+- dirty subtree recompute
+- intrinsic size
+- min / max constraints
+- scrollable content measurement
+- panel docking 后的树结构重算
+
+### 5.6 Event System
+
+事件流采用三阶段：
+
+```text
+SDL3 Event
+-> Platform Event
+-> Runtime InputEvent
+-> HitTest
+-> Capture
+-> Target
+-> Bubble
+```
+
+必须内建：
+
+- pointer event
+- keyboard event
+- wheel event
+- drag state
+- focus chain
+- shortcut dispatch
+- pointer capture
+
+ViewportHost 有特殊输入路由：
+
+- 命中后可把事件直接转发给引擎。
+- 是否冒泡由 ViewportHost 策略决定。
+
+## 6. 渲染模型
+
+Runtime 的渲染分三层：
+
+1. 节点树
+- 表达 UI 结构。
+
+2. DrawList
+- 把节点树压平成绘制命令。
+
+3. Renderer
+- 把 DrawList 编码成 wgpu 命令。
+
+### 6.1 图元范围
+
+首版只做工具 UI 所需图元：
+
+- fill rect
+- rounded rect
+- border
+- shadow
+- image quad
+- glyph quad
+- viewport texture quad
+
+### 6.2 批处理原则
+
+- 按 shader / texture / scissor 合批。
+- 节点顺序决定默认绘制顺序。
+- overlay 层允许独立 pass。
+- viewport 纹理作为普通 image source 处理。
+
+### 6.3 文字系统
+
+文本链路：
+
+- string
+- shaping
+- glyph run
+- atlas upload
+- draw commands
+
+必须支持：
+
+- 多字体
+- 多字号
+- emoji / unicode 基本可用
+- IME 预编辑区预留接口
+
+## 7. Compose API 目标
+
+GuavaUI Compose 的目标是：
+
+- API 读起来接近 SwiftUI
+- 架构上更接近 Compose
+
+首版不做语言魔法优先，先做可维护的 API。
+
+### 7.1 首版抽象
+
+- View / Composable 协议
+- ComposeBuilder
+- Modifier
+- State / Binding
+- Environment
+- Layout composable
+
+### 7.2 参考 API 形态
 
 ```swift
-public final class YogaLayout {
-    private var nodeRef: YGNodeRef
+WindowRoot {
+    DockContainer {
+        Panel("Hierarchy") {
+            Tree(data: sceneTree)
+        }
 
-    public init() {
-        nodeRef = YGNodeNew()
-    }
+        Panel("Viewport") {
+            ViewportHost(surface: viewportSurface)
+        }
 
-    deinit {
-        YGNodeFree(nodeRef)
-    }
-
-    public func setFlexDirection(_ direction: FlexDirection) {
-        YGNodeStyleSetFlexDirection(nodeRef, direction.yogaValue)
-    }
-
-    public func setWidth(_ value: Float) {
-        YGNodeStyleSetWidth(nodeRef, value)
-    }
-
-    public func setHeight(_ value: Float) {
-        YGNodeStyleSetHeight(nodeRef, value)
-    }
-
-    public func setPadding(_ edge: Edge, _ value: Float) {
-        YGNodeStyleSetPadding(nodeRef, edge.yogaValue, value)
-    }
-
-    public func setMargin(_ edge: Edge, _ value: Float) {
-        YGNodeStyleSetMargin(nodeRef, edge.yogaValue, value)
-    }
-
-    public func setFlexGrow(_ value: Float) {
-        YGNodeStyleSetFlexGrow(nodeRef, value)
-    }
-
-    public func addChild(_ child: YogaLayout, at index: Int) {
-        YGNodeInsertChild(nodeRef, child.nodeRef, UInt32(index))
-    }
-
-    public func calculateLayout(width: Float, height: Float) {
-        YGNodeCalculateLayout(nodeRef, width, height, .LTR)
-    }
-
-    public var computedFrame: CGRect {
-        CGRect(
-            x: CGFloat(YGNodeLayoutGetLeft(nodeRef)),
-            y: CGFloat(YGNodeLayoutGetTop(nodeRef)),
-            width: CGFloat(YGNodeLayoutGetWidth(nodeRef)),
-            height: CGFloat(YGNodeLayoutGetHeight(nodeRef)),
-        )
+        Panel("Inspector") {
+            PropertyGrid(model: inspectorModel)
+        }
     }
 }
 ```
 
-### 3.2 ViewNode 与 YogaLayout 映射
+这里的重点不是完全复制 SwiftUI，而是让：
 
-每个 ViewNode 持有一个 YogaLayout 实例。当 ViewNode 的样式属性变更时：
+- UI 用声明式写法表达。
+- Runtime 仍然由我们自己掌控。
 
-1. 标记 dirty flag。
-2. 下一帧渲染前，从 dirty 节点向上传播到根节点。
-3. 根节点调用 `calculateLayout(width: windowWidth, height: windowHeight)`。
-4. 遍历树，将计算结果写入每个 ViewNode 的 `computedFrame`。
-5. 只有 dirty 子树才重新计算，其余跳过。
+## 8. 组件分层
 
-## 4. 事件系统
+Compose 层内部再分两个带宽。
 
-### 4.1 事件流
+### 8.1 Foundation Components
 
-```
-SDL3 Event → SDLEventAdapter.convert() → GuavaUI Event
-    → HitTest(position) → targetNode
-    → Capture phase（根 → 目标，依次调用 onCapture）
-    → Target phase（目标节点调用 onEvent）
-    → Bubble phase（目标 → 根，依次调用 onBubble）
-```
+这些是通用能力：
 
-### 4.2 焦点管理
+- Box
+- Row
+- Column
+- Overlay
+- Spacer
+- ScrollView
+- Text
+- TextField
+- Button
+- Image
+- List
+- Tree
+- Tabs
+- Split
 
-- Tab 键在可聚焦 Widget 间顺序切换。
-- FocusManager 维护焦点链（有序列表）。
-- 键盘事件只派发给当前焦点节点。
-- ESC 键清除焦点。
+### 8.2 Desktop / Tooling Components
 
-### 4.3 输入路由到引擎视口
-
-ViewportWidget 是 GuavaUI 的一个 Widget，其事件处理逻辑：
-
-1. 鼠标/键盘事件命中 ViewportWidget 区域时，不走 GuavaUI 冒泡。
-2. 转换为引擎输入格式，通过 EngineHost 命令队列发送。
-3. 框选、拾取、Gizmo 操作均通过此路径。
+这些仍然属于通用库，但偏桌面工具场景：
 
-## 5. Widget 系统
-
-### 5.1 Widget 协议
-
-```swift
-public protocol Widget: AnyObject {
-    var node: ViewNode { get }
+- DockContainer
+- DockTabs
+- Panel
+- Toolbar
+- ContextMenu
+- CommandPalette
+- PropertyGrid
+- ViewportHost
+- StatusBar
 
-    /// 布局属性发生变化时调用
-    func applyStyle()
+### 8.3 不进 GuavaUI 的组件
 
-    /// 生成绘制命令到 DrawList
-    func draw(list: inout DrawList, frame: CGRect)
+这些先留在应用层：
 
-    /// 处理事件，返回 true 表示已消费
-    func handleEvent(_ event: UIEvent) -> Bool
-}
-```
+- SceneHierarchy 的引擎绑定
+- Inspector 的具体字段面板
+- Material Graph 的业务节点
+- Animation timeline 的领域逻辑
+- Asset 管理器的资源协议
 
-### 5.2 关键 Widget 设计
-
-**TreeView**（用于 SceneHierarchy）：
-
-- 数据源协议：`TreeDataSource`（childCount、child(at:)、label(for:)）。
-- 虚拟化滚动：只渲染可见区域内的行。
-- 展开/折叠状态管理。
-- 拖拽重排（reparent）。
-
-**PropertyGrid**（用于 Inspector）：
-
-- 键值对列表，值域支持多种编辑器（TextField、Slider、ColorPicker、Dropdown）。
-- 分组与折叠。
-- 数据绑定：修改后通过命令总线发回引擎。
-
-**ViewportWidget**：
-
-- 采样引擎输出的 wgpu 纹理。
-- 输入路由到引擎。
-- Gizmo overlay 渲染（可选：在引擎侧渲染，或在 GuavaUI 侧叠加）。
-- 帧统计 HUD（FPS、draw calls、帧耗时）。
-
-## 6. Docking 系统
-
-### 6.1 数据模型
-
-```swift
-public indirect enum DockNode: Codable {
-    case leaf(LeafData)
-    case split(SplitData)
-
-    public struct LeafData: Codable {
-        public var tabs: [PanelId]
-        public var activeTab: Int
-    }
-
-    public struct SplitData: Codable {
-        public var direction: SplitDirection
-        public var ratio: Float
-        public var children: [DockNode]
-    }
-}
-
-public enum SplitDirection: String, Codable {
-    case horizontal
-    case vertical
-}
-
-public typealias PanelId = String
-```
-
-### 6.2 默认编辑器布局
-
-```
-DockNode.split(
-    direction: .horizontal,
-    ratio: 0.2,
-    children: [
-        .leaf(tabs: ["sceneHierarchy"]),                    // 左侧
-        .split(
-            direction: .horizontal,
-            ratio: 0.75,
-            children: [
-                .split(
-                    direction: .vertical,
-                    ratio: 0.7,
-                    children: [
-                        .leaf(tabs: ["viewport"]),          // 中心
-                        .leaf(tabs: ["console", "assets", "timeline"]) // 底部
-                    ]
-                ),
-                .leaf(tabs: ["inspector"])                  // 右侧
-            ]
-        )
-    ]
-)
-```
-
-### 6.3 拖拽操作
-
-1. 用户拖动 tab 标签。
-2. DockDropZone 计算放置位置（左/右/上/下/tab/浮动）。
-3. 视觉反馈：半透明蓝色矩形指示放置区域。
-4. 释放后，DockModel 执行树结构变换（移除 → 插入 → 清理空节点）。
-5. 变换后重新触发 Yoga 布局计算。
-
-### 6.4 持久化
-
-布局保存为 JSON，存储在用户配置目录下。启动时加载，找不到则使用默认布局。
-
-## 7. 主题系统
-
-```swift
-public struct Theme {
-    // 面板
-    public var panelBackground: Color
-    public var panelBorder: Color
-    public var panelBorderWidth: Float
-
-    // Widget
-    public var buttonBackground: Color
-    public var buttonHover: Color
-    public var buttonActive: Color
-    public var buttonCornerRadius: Float
-
-    // 文字
-    public var textPrimary: Color
-    public var textSecondary: Color
-    public var textDisabled: Color
-    public var fontFamily: String
-    public var fontSize: Float
-    public var fontSizeLarge: Float
-    public var fontSizeSmall: Float
-
-    // 间距
-    public var paddingSmall: Float
-    public var paddingMedium: Float
-    public var paddingLarge: Float
-    public var itemSpacing: Float
-
-    // 选中与焦点
-    public var selectionBackground: Color
-    public var focusBorder: Color
-    public var focusBorderWidth: Float
-
-    // Dock
-    public var tabBackground: Color
-    public var tabActive: Color
-    public var tabHover: Color
-    public var splitHandleColor: Color
-    public var splitHandleWidth: Float
-
-    // Viewport
-    public var viewportBorder: Color
-
-    public static let dark = Theme(/* dark theme values */)
-    public static let light = Theme(/* light theme values */)
-}
-```
-
-所有 Widget 从当前 Theme 读取样式，不硬编码颜色和间距。切换主题 = 替换 Theme 实例 + 标记全树 dirty。
-
-## 8. 跨平台策略
-
-### 8.1 平台抽象层
-
-| 功能 | macOS | Windows | Linux |
-|------|-------|---------|-------|
-| 窗口创建 | SDL3 | SDL3 | SDL3 |
-| 输入事件 | SDL3 | SDL3 | SDL3 |
-| wgpu 后端 | Metal | DX12 / Vulkan | Vulkan |
-| 文字 shaping | HarfBuzz | HarfBuzz | HarfBuzz |
-| 字形光栅化 | CoreText (首版) → FreeType | FreeType | FreeType |
-| 文件对话框 | NSOpenPanel (Obj-C bridge) | Win32 GetOpenFileName | zenity / GTK dialog |
-| 剪贴板 | SDL3 | SDL3 | SDL3 |
-| 系统菜单 | SDL3 (3.2+) 或平台桥接 | SDL3 或 Win32 | SDL3 |
-
-### 8.2 Swift 跨平台编译
-
-Swift 在 macOS / Linux 上已稳定。Windows 支持持续改善（Swift 6.0+ 官方支持）。
-
-构建命令统一：`swift build`，不依赖 Xcode。
-
-### 8.3 平台特定代码隔离
-
-```swift
-#if os(macOS)
-import AppKit
-func showFileDialog() -> String? {
-    // NSOpenPanel
-}
-#elseif os(Windows)
-func showFileDialog() -> String? {
-    // Win32 GetOpenFileName via C bridge
-}
-#elseif os(Linux)
-func showFileDialog() -> String? {
-    // zenity subprocess
-}
-#endif
-```
-
-平台特定代码集中在 `Platform/` 目录，其他所有模块不包含 `#if os()` 条件编译。
-
-## 9. 分阶段实施
-
-| 阶段 | 目标 | 验收 |
-|------|------|------|
-| UI-P0（1-2 周） | wgpu 2D 渲染器：彩色矩形 + 圆角矩形 + 文字渲染 | 在 SDL3 窗口中渲染带文字的按钮 |
-| UI-P1（1-2 周） | Yoga 集成 + ViewTree + EventDispatch + Label/Button/TextField | flexbox 布局可用，按钮可点击，文字可输入 |
-| UI-P2（2-3 周） | TreeView + PropertyGrid + TabBar + SplitPane + ScrollView | 能搭出 SceneHierarchy + Inspector 原型 |
-| UI-P3（2-3 周） | DockContainer + 拖拽分割合并 + 布局持久化 | 拖拽面板、分割窗口、保存/恢复布局 |
-| UI-P4（1-2 周） | ViewportWidget + 引擎纹理采样 + 输入路由 | viewport 区域渲染 3D 场景，鼠标交互正常 |
-| UI-P5（持续） | 主题打磨、动画、滚动惯性、右键菜单、快捷键 | 编辑器可用度对标当前 Electron 版本 |
-
-## 10. 风险与缓解
-
-风险 1：wgpu 2D 渲染性能不足以支撑复杂编辑器 UI。
-
-缓解：批处理 + scissor 裁剪 + dirty 区域重绘。典型编辑器 UI 的顶点量远小于 3D 场景，wgpu 处理无压力。测试目标：26 个面板全开时 UI 渲染耗时 < 1ms。
-
-风险 2：文字渲染质量不达标（模糊、间距异常）。
-
-缓解：HarfBuzz 做 shaping 保证排版正确，FreeType 做亚像素光栅化保证清晰度。macOS 首版可用 CoreText 对标系统字体质量。
-
-风险 3：Yoga 布局性能在大量节点时退化。
-
-缓解：dirty flag 机制避免全树重算。编辑器面板典型节点数 < 5000，Yoga 处理 < 0.1ms。
-
-风险 4：跨平台文件对话框体验不一致。
-
-缓解：各平台使用原生对话框 API，不自己画文件选择器。
-
-风险 5：自渲染 UI 的无障碍（accessibility）支持。
-
-缓解：首版不做无障碍支持。后续可通过平台 accessibility API 桥接（macOS NSAccessibility、Windows UIA）。
-
-## 11. 参考实现
-
-| 项目 | 相关度 | 参考价值 |
-|------|--------|----------|
-| Godot Editor | 高 | 同类方案：引擎自渲染编辑器 UI，retained mode，自带 docking |
-| Zed Editor (GPUI) | 高 | GPU 加速自渲染 UI，Rust + Metal/Vulkan，高性能文字渲染 |
-| egui | 中 | wgpu 后端 immediate-mode UI，可参考渲染器实现 |
-| Vello | 中 | wgpu 上的 2D 矢量渲染器，可参考 SDF 和批处理策略 |
-| Dear ImGui | 中 | wgpu 后端实现、docking branch 的树模型 |
+判断标准：
+
+- 脱离 Guava 编辑器语境仍然成立的能力，进 GuavaUI。
+- 一离开 scene / asset / material / gizmo 语境就失去意义的能力，留在应用层。
+
+## 9. 平台集成
+
+### 9.1 平台职责
+
+平台层只负责：
+
+- 创建窗口
+- 事件泵
+- 获取原生窗口句柄
+- 剪贴板
+- 光标
+- 文件对话框
+- IME / 文本输入桥接
+
+### 9.2 目标平台
+
+| 平台 | 窗口 | surface | 后端优先级 |
+|------|------|---------|------------|
+| macOS | SDL3 | Metal layer | Metal -> automatic |
+| Windows | SDL3 | HWND | D3D12 -> Vulkan -> automatic |
+| Linux | SDL3 | Wayland / X11 | Vulkan -> automatic |
+
+### 9.3 平台隔离规则
+
+- 平台特定代码集中在 Runtime/Platform。
+- Compose 层不出现平台条件编译。
+- 业务组件不直接依赖平台 API。
+
+## 10. 与引擎的关系
+
+GuavaUI 不是独立渲染进程，而是与引擎同进程协作。
+
+关系如下：
+
+- 引擎提供 viewport surface / texture。
+- GuavaUI 把 viewport 当成 compose 节点。
+- 输入事件可从 GuavaUI 转发到引擎。
+- 主题、布局、工具条由 GuavaUI 控制。
+- 场景渲染仍由引擎控制。
+
+这意味着 ViewportHost 是 GuavaUI 的关键边界组件。
+
+## 11. 首版里程碑
+
+### P0. Runtime 骨架
+
+- NodeTree
+- dirty flags
+- Recomposer skeleton
+- SDL3 platform host
+- wgpu draw list renderer
+
+验收：
+
+- 能开窗
+- 能显示简单按钮和文本
+- 状态变化能触发子树更新
+
+### P1. Compose 最小集
+
+- View / ComposeBuilder
+- Modifier
+- State / Binding
+- Row / Column / Box / Text / Button
+
+验收：
+
+- 用声明式 API 写出简单工具栏和按钮行
+
+### P2. Desktop Tooling 基础
+
+- ScrollView
+- List
+- Tree
+- Tabs
+- Split
+- PropertyGrid
+
+验收：
+
+- 能搭出 hierarchy + inspector 基础界面
+
+### P3. Dock 与 Viewport
+
+- DockContainer
+- Panel 持久化
+- ViewportHost
+- 输入转发
+
+验收：
+
+- 能跑编辑器核心三块：Hierarchy、Viewport、Inspector
+
+### P4. 平台打磨
+
+- 剪贴板
+- 文件对话框
+- IME
+- 快捷键
+- 平台适配
+
+验收：
+
+- 桌面工具可用性达到日常开发级别
+
+## 12. 风险与约束
+
+### 风险 1：一开始就把 API 做得太大
+
+缓解：
+
+- 先定义 Runtime 契约。
+- Compose 首版只做最小集。
+- 高级语法糖延后。
+
+### 风险 2：把业务组件错误地下沉到库层
+
+缓解：
+
+- 只把跨项目仍成立的能力放进 GuavaUI。
+- 业务绑定留在应用层。
+
+### 风险 3：文本、输入、Dock 三条线互相阻塞
+
+缓解：
+
+- 文本先做最小可用。
+- 输入系统先做统一事件模型。
+- Dock 可以晚于基础 compose 落地。
+
+### 风险 4：为了像 SwiftUI 而牺牲可维护性
+
+缓解：
+
+- 语义借鉴 SwiftUI。
+- 架构借鉴 Compose。
+- 实现边界由 Runtime 控制。
+
+## 13. 最终判断
+
+GuavaUI 应该从第一天起就是一个设计明确的 UI 库。
+
+但它的边界必须清楚：
+
+- Runtime 是内核。
+- Compose 是开发接口和组件层。
+- 编辑器业务组件在 GuavaUI 之上，而不在 GuavaUI 之内。
+
+这条路线允许它同时满足两件事：
+
+- 短期服务 Guava 编辑器。
+- 长期成长为通用的跨平台 Swift UI 库。
