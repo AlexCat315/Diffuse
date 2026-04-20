@@ -110,7 +110,7 @@ cd GuavaUI && swift test --filter RecomposerTests
 
 ### M2 — UI 可见帧
 
-**目标**：GuavaUI 能打开窗口并在屏幕上渲染出真实文本和矩形。
+**目标**：GuavaUI 能打开窗口并在屏幕上渲染出真实文本和矩形。✅ 已完成
 
 **依赖**：M1 两条轨道都完成。
 
@@ -127,7 +127,7 @@ GuavaUI/Sources/
     └── LayoutPass.swift
 ```
 
-#### GuavaUI Phase 4：HarfBuzz + FreeType 文本
+#### GuavaUI Phase 4：HarfBuzz + FreeType 文本 ✅ 已完成
 
 ```
 GuavaUI/Sources/
@@ -139,7 +139,7 @@ GuavaUI/Sources/
     └── TextLayout.swift
 ```
 
-#### GuavaUI Phase 5：DrawList + wgpu 渲染器
+#### GuavaUI Phase 5：DrawList + wgpu 渲染器 ✅ 已完成
 
 ```
 GuavaUI/Sources/GuavaUIRuntime/
