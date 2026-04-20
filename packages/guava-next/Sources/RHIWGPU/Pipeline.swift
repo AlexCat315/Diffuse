@@ -18,6 +18,7 @@ public struct GPURenderPipelineDescriptor {
     public var fragmentEntryPoint: String
     public var colorFormat: GPUTextureFormat
     public var topology: GPUPrimitiveTopology
+    public var frontFace: GPUFrontFace
     public var cullMode: GPUCullMode
     public var vertexBuffers: [GPUVertexBufferLayout]
     public var blend: GPUBlendState?
@@ -28,6 +29,7 @@ public struct GPURenderPipelineDescriptor {
                 fragmentEntryPoint: String = "fs_main",
                 colorFormat: GPUTextureFormat = .bgra8Unorm,
                 topology: GPUPrimitiveTopology = .triangleList,
+                frontFace: GPUFrontFace = .ccw,
                 cullMode: GPUCullMode = .none,
                 vertexBuffers: [GPUVertexBufferLayout] = [],
                 blend: GPUBlendState? = nil,
@@ -37,6 +39,7 @@ public struct GPURenderPipelineDescriptor {
         self.fragmentEntryPoint = fragmentEntryPoint
         self.colorFormat = colorFormat
         self.topology = topology
+        self.frontFace = frontFace
         self.cullMode = cullMode
         self.vertexBuffers = vertexBuffers
         self.blend = blend
