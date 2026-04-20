@@ -119,3 +119,4 @@ Engine/vendor/wgpu/lib/*.a
 
 # Allow build/development scripts in engine package
 !legacy/zig-engine/build/merge_compile_commands.py
+*.sln
