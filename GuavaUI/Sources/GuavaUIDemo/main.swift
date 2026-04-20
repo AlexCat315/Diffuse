@@ -1,19 +1,28 @@
 import GuavaUIRuntime
 
-// -- Text rendering demo --
-let atlas = FontAtlas(width: 1024, height: 256)
-atlas.loadFont(path: "/System/Library/Fonts/PingFang.ttc", size: 36)
-
-let shaper = TextShaper()
-shaper.setFont(ftFace: atlas.freetypeFace!, size: 36)
+// -- Font provider with CoreText fallback --
+let provider = FontProvider(size: 36)
+provider.loadPrimaryFont(name: "Helvetica Neue")
 
 let text = "Hello, GuavaUI! 🎨\n排版引擎 Phase 4 — HarfBuzz + FreeType"
-let shaped = shaper.shape(text: text)
+
+// Resolve font runs (CoreText picks the right font per script)
+let runs = provider.resolveRuns(text: text)
+
+// Shape each run with auto-detected script/language
+var allGlyphs: [ShapedGlyph] = []
+for run in runs {
+    allGlyphs.append(contentsOf: provider.shapeRun(run))
+}
+
+// Shared atlas — register every discovered font
+let atlas = FontAtlas(width: 2048, height: 512)
+provider.registerAllFonts(in: atlas)
 
 let fbWidth = 1280
 let fbHeight = 720
 let result = TextLayout.layout(
-    shapedGlyphs: shaped,
+    shapedGlyphs: allGlyphs,
     text: text,
     atlas: atlas,
     maxWidth: Float(fbWidth - 80),
