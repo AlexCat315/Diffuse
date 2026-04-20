@@ -135,4 +135,197 @@ struct LayoutTests {
         #expect(child.frame.minX >= 10)
         #expect(child.frame.minY >= 10)
     }
+
+    // MARK: - flexWrap
+
+    @Test("flexWrap wraps children to next line")
+    func flexWrapWraps() {
+        let root = LayoutNode()
+        root.flexDirection = .row
+        root.flexWrap = .wrap
+        root.width = 100
+        root.height = 200
+
+        let a = LayoutNode(); a.width = 60; a.height = 40
+        let b = LayoutNode(); b.width = 60; b.height = 40
+        root.addChild(a)
+        root.addChild(b)
+
+        root.calculateLayout()
+
+        // b wraps to second line (different Y)
+        #expect(b.frame.minY > a.frame.minY)
+    }
+
+    // MARK: - alignSelf
+
+    @Test("alignSelf overrides parent alignItems")
+    func alignSelfOverride() {
+        let root = LayoutNode()
+        root.flexDirection = .row
+        root.alignItems = .flexStart
+        root.width = 200
+        root.height = 100
+
+        let child = LayoutNode()
+        child.alignSelf = .center
+        child.width = 50
+        child.height = 30
+        root.addChild(child)
+
+        root.calculateLayout()
+
+        // (100 - 30) / 2 = 35
+        #expect(abs(Float(child.frame.minY) - 35) < 1)
+    }
+
+    // MARK: - positionType absolute
+
+    @Test("Absolute position places child at specified coordinates")
+    func absolutePosition() {
+        let root = LayoutNode()
+        root.width = 200
+        root.height = 200
+
+        let child = LayoutNode()
+        child.positionType = .absolute
+        child.setPosition(10, edge: .left)
+        child.setPosition(20, edge: .top)
+        child.width = 50
+        child.height = 50
+        root.addChild(child)
+
+        root.calculateLayout()
+
+        #expect(abs(Float(child.frame.minX) - 10) < 1)
+        #expect(abs(Float(child.frame.minY) - 20) < 1)
+    }
+
+    // MARK: - flexBasis
+
+    @Test("flexBasis sets initial main axis size")
+    func flexBasisSetsSize() {
+        let root = LayoutNode()
+        root.flexDirection = .row
+        root.width = 300
+        root.height = 100
+
+        let a = LayoutNode()
+        a.setFlexBasis(100)
+        a.height = 100
+        let b = LayoutNode()
+        b.flexGrow = 1
+        b.height = 100
+        root.addChild(a)
+        root.addChild(b)
+
+        root.calculateLayout()
+
+        #expect(abs(Float(a.frame.width) - 100) < 1)
+        #expect(abs(Float(b.frame.width) - 200) < 1)
+    }
+
+    // MARK: - gap
+
+    @Test("Gap adds spacing between children")
+    func gapSpacing() {
+        let root = LayoutNode()
+        root.flexDirection = .row
+        root.width = 200
+        root.height = 100
+        root.setGap(10, gutter: .column)
+
+        let a = LayoutNode(); a.width = 50; a.height = 100
+        let b = LayoutNode(); b.width = 50; b.height = 100
+        root.addChild(a)
+        root.addChild(b)
+
+        root.calculateLayout()
+
+        // b.minX should be a.maxX + 10 gap
+        #expect(abs(Float(b.frame.minX) - 60) < 1)
+    }
+
+    // MARK: - border
+
+    @Test("Border offsets child like padding")
+    func borderOffsetsChild() {
+        let root = LayoutNode()
+        root.flexDirection = .column
+        root.width = 100
+        root.height = 100
+        root.setBorder(5, edge: .all)
+
+        let child = LayoutNode(); child.width = 50; child.height = 50
+        root.addChild(child)
+
+        root.calculateLayout()
+
+        #expect(child.frame.minX >= 5)
+        #expect(child.frame.minY >= 5)
+    }
+
+    // MARK: - margin
+
+    @Test("Margin pushes child away from siblings")
+    func marginBetweenSiblings() {
+        let root = LayoutNode()
+        root.flexDirection = .row
+        root.width = 300
+        root.height = 100
+
+        let a = LayoutNode(); a.width = 50; a.height = 100
+        let b = LayoutNode(); b.width = 50; b.height = 100
+        b.setMargin(20, edge: .left)
+        root.addChild(a)
+        root.addChild(b)
+
+        root.calculateLayout()
+
+        // b should start at a.maxX + 20
+        #expect(abs(Float(b.frame.minX) - 70) < 1)
+    }
+
+    // MARK: - removeChild
+
+    @Test("removeChild detaches node from layout tree")
+    func removeChildWorks() {
+        let root = LayoutNode()
+        root.flexDirection = .row
+        root.width = 200
+        root.height = 100
+
+        let a = LayoutNode(); a.width = 80; a.height = 100
+        let b = LayoutNode(); b.width = 80; b.height = 100
+        root.addChild(a)
+        root.addChild(b)
+
+        root.removeChild(a)
+
+        root.calculateLayout()
+
+        #expect(root.children.count == 1)
+        #expect(abs(Float(b.frame.minX) - 0) < 1)
+    }
+
+    // MARK: - RTL direction
+
+    @Test("RTL direction reverses row order")
+    func rtlDirection() {
+        let root = LayoutNode()
+        root.flexDirection = .row
+        root.direction = .rtl
+        root.width = 200
+        root.height = 100
+
+        let a = LayoutNode(); a.width = 50; a.height = 100
+        let b = LayoutNode(); b.width = 50; b.height = 100
+        root.addChild(a)
+        root.addChild(b)
+
+        root.calculateLayout(direction: .rtl)
+
+        // In RTL, first child is on the right
+        #expect(a.frame.minX > b.frame.minX)
+    }
 }

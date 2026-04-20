@@ -33,7 +33,16 @@ public final class LayoutNode: @unchecked Sendable {
         children.append(child)
     }
 
-    // MARK: - Style setters
+    public func removeChild(_ child: LayoutNode) {
+        YGNodeRemoveChild(ygNode, child.ygNode)
+        children.removeAll { $0 === child }
+    }
+
+    // MARK: - Style setters (container)
+
+    public var direction: Direction = .inherit {
+        didSet { YGNodeStyleSetDirection(ygNode, direction.ygValue) }
+    }
 
     public var flexDirection: FlexDirection = .column {
         didSet { YGNodeStyleSetFlexDirection(ygNode, flexDirection.ygValue) }
@@ -43,23 +52,73 @@ public final class LayoutNode: @unchecked Sendable {
         didSet { YGNodeStyleSetAlignItems(ygNode, alignItems.ygValue) }
     }
 
+    public var alignContent: Align = .flexStart {
+        didSet { YGNodeStyleSetAlignContent(ygNode, alignContent.ygValue) }
+    }
+
     public var justifyContent: Justify = .flexStart {
         didSet { YGNodeStyleSetJustifyContent(ygNode, justifyContent.ygValue) }
+    }
+
+    public var flexWrap: Wrap = .noWrap {
+        didSet { YGNodeStyleSetFlexWrap(ygNode, flexWrap.ygValue) }
+    }
+
+    public var overflow: Overflow = .visible {
+        didSet { YGNodeStyleSetOverflow(ygNode, overflow.ygValue) }
+    }
+
+    public var display: Display = .flex {
+        didSet { YGNodeStyleSetDisplay(ygNode, display.ygValue) }
+    }
+
+    // MARK: - Style setters (child)
+
+    public var alignSelf: Align = .auto {
+        didSet { YGNodeStyleSetAlignSelf(ygNode, alignSelf.ygValue) }
+    }
+
+    public var positionType: PositionType = .relative {
+        didSet { YGNodeStyleSetPositionType(ygNode, positionType.ygValue) }
+    }
+
+    public var flex: Float = 0 {
+        didSet { YGNodeStyleSetFlex(ygNode, flex) }
     }
 
     public var flexGrow: Float = 0 {
         didSet { YGNodeStyleSetFlexGrow(ygNode, flexGrow) }
     }
 
-    public var flexShrink: Float = 1 {
+    public var flexShrink: Float = 0 {
         didSet { YGNodeStyleSetFlexShrink(ygNode, flexShrink) }
     }
+
+    // MARK: - Flex basis
+
+    public func setFlexBasis(_ value: Float) {
+        YGNodeStyleSetFlexBasis(ygNode, value)
+    }
+
+    public func setFlexBasisPercent(_ value: Float) {
+        YGNodeStyleSetFlexBasisPercent(ygNode, value)
+    }
+
+    public func setFlexBasisAuto() {
+        YGNodeStyleSetFlexBasisAuto(ygNode)
+    }
+
+    // MARK: - Dimensions
 
     public var width: Float? {
         didSet {
             if let w = width { YGNodeStyleSetWidth(ygNode, w) }
             else { YGNodeStyleSetWidthAuto(ygNode) }
         }
+    }
+
+    public func setWidthPercent(_ value: Float) {
+        YGNodeStyleSetWidthPercent(ygNode, value)
     }
 
     public var height: Float? {
@@ -69,12 +128,62 @@ public final class LayoutNode: @unchecked Sendable {
         }
     }
 
-    public func setPadding(_ value: Float, edge: Edge = .all) {
-        YGNodeStyleSetPadding(ygNode, edge.ygValue, value)
+    public func setHeightPercent(_ value: Float) {
+        YGNodeStyleSetHeightPercent(ygNode, value)
+    }
+
+    // MARK: - Position / Margin / Padding / Border
+
+    public func setPosition(_ value: Float, edge: Edge) {
+        YGNodeStyleSetPosition(ygNode, edge.ygValue, value)
+    }
+
+    public func setPositionPercent(_ value: Float, edge: Edge) {
+        YGNodeStyleSetPositionPercent(ygNode, edge.ygValue, value)
+    }
+
+    public func setPositionAuto(edge: Edge) {
+        YGNodeStyleSetPositionAuto(ygNode, edge.ygValue)
     }
 
     public func setMargin(_ value: Float, edge: Edge = .all) {
         YGNodeStyleSetMargin(ygNode, edge.ygValue, value)
+    }
+
+    public func setMarginPercent(_ value: Float, edge: Edge = .all) {
+        YGNodeStyleSetMarginPercent(ygNode, edge.ygValue, value)
+    }
+
+    public func setMarginAuto(edge: Edge = .all) {
+        YGNodeStyleSetMarginAuto(ygNode, edge.ygValue)
+    }
+
+    public func setPadding(_ value: Float, edge: Edge = .all) {
+        YGNodeStyleSetPadding(ygNode, edge.ygValue, value)
+    }
+
+    public func setPaddingPercent(_ value: Float, edge: Edge = .all) {
+        YGNodeStyleSetPaddingPercent(ygNode, edge.ygValue, value)
+    }
+
+    public func setBorder(_ value: Float, edge: Edge = .all) {
+        YGNodeStyleSetBorder(ygNode, edge.ygValue, value)
+    }
+
+    // MARK: - Gap
+
+    public func setGap(_ value: Float, gutter: Gutter = .all) {
+        YGNodeStyleSetGap(ygNode, gutter.ygValue, value)
+    }
+
+    public func setGapPercent(_ value: Float, gutter: Gutter = .all) {
+        YGNodeStyleSetGapPercent(ygNode, gutter.ygValue, value)
+    }
+
+    // MARK: - Box sizing
+
+    public var boxSizing: BoxSizing = .borderBox {
+        didSet { YGNodeStyleSetBoxSizing(ygNode, boxSizing.ygValue) }
     }
 
     // MARK: - Layout calculation
@@ -84,11 +193,13 @@ public final class LayoutNode: @unchecked Sendable {
     /// - Parameters:
     ///   - availableWidth: Container width (`Float.nan` = unconstrained).
     ///   - availableHeight: Container height (`Float.nan` = unconstrained).
+    ///   - direction: Layout direction (default `.ltr`).
     public func calculateLayout(
         availableWidth: Float = Float.nan,
-        availableHeight: Float = Float.nan
+        availableHeight: Float = Float.nan,
+        direction: Direction = .ltr
     ) {
-        YGNodeCalculateLayout(ygNode, availableWidth, availableHeight, YGDirection.LTR)
+        YGNodeCalculateLayout(ygNode, availableWidth, availableHeight, direction.ygValue)
     }
 
     // MARK: - Layout readback
