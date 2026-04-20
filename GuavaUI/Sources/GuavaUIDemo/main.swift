@@ -11,7 +11,7 @@ struct RootView: View {
     @State var clickCount: Int = 0
 
     var body: some View {
-        Row(spacing: 1) {
+        Box(direction: .row, alignItems: .stretch, spacing: 1) {
             Column(alignment: .leading, spacing: 8) {
                 Text("Sidebar", color: Color.white)
                 Divider()
@@ -31,6 +31,8 @@ struct RootView: View {
 
             Column(alignment: .leading, spacing: 12) {
                 Text("GuavaUI — Phase 6.6", color: Color.white)
+                    .font(.system(size: 28, weight: .bold))
+                    .lineHeight(32)
                 Divider()
                 Text("Compose -> Yoga -> DrawList -> wgpu",
                      color: Color(r: 0.7, g: 0.85, b: 1.0))
@@ -49,6 +51,32 @@ struct RootView: View {
                 Text("echo: \(inputText)",
                      color: Color(r: 0.85, g: 0.92, b: 1.0))
 
+                Row(alignment: .top, spacing: 16) {
+                    Image(textureID: previewTextureID, width: 112, height: 112)
+                        .cornerRadius(24)
+                        .foregroundColor(Color(r: 1.0, g: 0.92, b: 0.84, a: 0.92))
+                        .opacity(0.92)
+
+                    Column(alignment: .leading, spacing: 6) {
+                        Text("Style Preview", color: Color.white)
+                            .font(.system(size: 20, weight: .bold))
+                            .lineHeight(24)
+                        Text("Image + cornerRadius + foregroundColor + opacity",
+                             color: Color(r: 0.72, g: 0.79, b: 0.9))
+                            .lineHeight(18)
+                        Text("font(size: 28, weight: .bold)",
+                             color: Color(r: 0.95, g: 0.96, b: 0.98))
+                            .font(.system(size: 28, weight: .bold))
+                            .lineHeight(32)
+                        Text("lineHeight(24) keeps multi-line rhythm stable.",
+                             color: Color(r: 0.78, g: 0.84, b: 0.92))
+                            .lineHeight(24)
+                    }
+                    .flex()
+                }
+                .padding(16)
+                .background(Color(r: 0.14, g: 0.17, b: 0.22))
+
                 ScrollView(.vertical) {
                     Column(alignment: .leading, spacing: 6) {
                         Text("Row 0", color: Color.white).frame(height: 40)
@@ -65,11 +93,10 @@ struct RootView: View {
                     .padding(12)
                     .background(Color(r: 0.18, g: 0.22, b: 0.28))
                 }
-                .frame(height: 220)
+                .flex()
                 .background(Color(r: 0.12, g: 0.14, b: 0.18))
-
-                Spacer()
             }
+            .flex()
             .padding(20)
             .background(Color(r: 0.10, g: 0.11, b: 0.14))
 
@@ -84,6 +111,7 @@ struct RootView: View {
             .frame(width: 240)
             .background(Color(r: 0.16, g: 0.18, b: 0.22))
         }
+        .flex()
     }
 }
 
@@ -106,6 +134,30 @@ let fontResolver = TextFontResolver(
 )
 
 let atlasTextureID: TextureID = 1
+let previewTextureID: TextureID = 2
+
+let previewTexturePixels: [UInt8] = {
+    let width = 112
+    let height = 112
+    var pixels = [UInt8](repeating: 0, count: width * height * 4)
+
+    for y in 0..<height {
+        for x in 0..<width {
+            let index = (y * width + x) * 4
+            let checker = ((x / 14) + (y / 14)).isMultiple(of: 2)
+            let r = UInt8(min(255, 36 + x * 2))
+            let g = UInt8(min(255, 74 + y))
+            let b = checker ? UInt8(214) : UInt8(112)
+
+            pixels[index + 0] = r
+            pixels[index + 1] = g
+            pixels[index + 2] = b
+            pixels[index + 3] = 255
+        }
+    }
+
+    return pixels
+}()
 
 TextEnvironmentHolder.current = TextEnvironment(
     atlas: atlas,
@@ -154,6 +206,18 @@ func uploadAtlas() throws {
     }
 }
 
+@MainActor
+func uploadPreviewTexture() throws {
+    try previewTexturePixels.withUnsafeBufferPointer { buf in
+        try renderer.registerColorTexture(
+            id: previewTextureID,
+            pixels: buf.baseAddress!,
+            width: 112,
+            height: 112
+        )
+    }
+}
+
 host.onInit = { native, w, h in
     drawableW = w; drawableH = h
     do {
@@ -165,6 +229,7 @@ host.onInit = { native, w, h in
             presentMode: .fifo)
         try renderer.configure(format: .bgra8Unorm)
         try uploadAtlas()
+        try uploadPreviewTexture()
         configured = true
     } catch {
         print("[demo] init failed: \(error)")
