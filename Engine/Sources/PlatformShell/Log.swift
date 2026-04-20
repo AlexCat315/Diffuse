@@ -1,5 +1,5 @@
-import os.log
+import Logging
 
 extension Logger {
-    static let platform = Logger(subsystem: "com.guava.engine", category: "platform")
+    static let platform = Logger(label: "com.guava.engine.platform")
 }

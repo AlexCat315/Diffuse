@@ -18,6 +18,7 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../Engine"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
     ],
     targets: [
         // MARK: - Yoga C bridge (vendored static lib)
@@ -42,6 +43,7 @@ let package = Package(
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "PlatformShell", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "Logging", package: "swift-log"),
             ]
         ),
 

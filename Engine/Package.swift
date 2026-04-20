@@ -23,6 +23,9 @@ let package = Package(
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
     ],
+    dependencies: [
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
+    ],
     targets: [
         // MARK: - C Bridges
         .systemLibrary(
@@ -63,13 +66,20 @@ let package = Package(
         // MARK: - Rendering
         .target(
             name: "RHIWGPU",
-            dependencies: ["CWGPUBridge"]
+            dependencies: [
+                "CWGPUBridge",
+                .product(name: "Logging", package: "swift-log"),
+            ]
         ),
 
         // MARK: - Platform
         .target(
             name: "PlatformShell",
-            dependencies: ["CSDL3", "EngineKernel"]
+            dependencies: [
+                "CSDL3",
+                "EngineKernel",
+                .product(name: "Logging", package: "swift-log"),
+            ]
         ),
 
         // MARK: - Engine Services
@@ -78,7 +88,12 @@ let package = Package(
         .target(name: "ScriptRuntime"),
         .target(
             name: "RenderBackend",
-            dependencies: ["RHIWGPU", "PlatformShell", "AssetPipeline"],
+            dependencies: [
+                "RHIWGPU",
+                "PlatformShell",
+                "AssetPipeline",
+                .product(name: "Logging", package: "swift-log"),
+            ],
             resources: [.copy("Resources/FinalBaseMesh.obj")]
         ),
 
