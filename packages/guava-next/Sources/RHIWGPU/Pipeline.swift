@@ -59,4 +59,13 @@ public final class GPURenderPipeline {
     deinit {
         wgpu_bridge_release_render_pipeline(handle)
     }
+
+    public func getBindGroupLayout(group: UInt32) throws -> GPUBindGroupLayout {
+        var ptr: UnsafeMutableRawPointer?
+        let ok = wgpu_bridge_render_pipeline_get_bind_group_layout(handle, group, &ptr)
+        guard ok == 1, let ptr else {
+            throw WGPUBackendError.initFailed(WGPUBackend.lastError())
+        }
+        return GPUBindGroupLayout(handle: ptr)
+    }
 }

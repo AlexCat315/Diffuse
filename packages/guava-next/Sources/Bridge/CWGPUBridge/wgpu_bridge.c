@@ -755,6 +755,23 @@ void wgpu_bridge_release_render_pipeline(void* pipeline) {
     if (pipeline) wgpuRenderPipelineRelease((WGPURenderPipeline)pipeline);
 }
 
+int wgpu_bridge_render_pipeline_get_bind_group_layout(void* pipeline,
+                                                      uint32_t group_index,
+                                                      void** out_layout) {
+    if (pipeline == NULL || out_layout == NULL) {
+        set_error("invalid get_bind_group_layout arguments");
+        return 0;
+    }
+    WGPUBindGroupLayout bgl = wgpuRenderPipelineGetBindGroupLayout(
+        (WGPURenderPipeline)pipeline, group_index);
+    if (bgl == NULL) {
+        set_error("wgpuRenderPipelineGetBindGroupLayout returned null");
+        return 0;
+    }
+    *out_layout = (void*)bgl;
+    return 1;
+}
+
 /* ════════════════════════════════════════════════════════════════════
    Buffer
    ════════════════════════════════════════════════════════════════════ */
