@@ -21,6 +21,7 @@ public struct GPURenderPipelineDescriptor {
     public var cullMode: GPUCullMode
     public var vertexBuffers: [GPUVertexBufferLayout]
     public var blend: GPUBlendState?
+    public var depthStencil: GPUDepthStencilPipelineState?
 
     public init(shaderModule: GPUShaderModule,
                 vertexEntryPoint: String = "vs_main",
@@ -29,7 +30,8 @@ public struct GPURenderPipelineDescriptor {
                 topology: GPUPrimitiveTopology = .triangleList,
                 cullMode: GPUCullMode = .none,
                 vertexBuffers: [GPUVertexBufferLayout] = [],
-                blend: GPUBlendState? = nil) {
+                blend: GPUBlendState? = nil,
+                depthStencil: GPUDepthStencilPipelineState? = nil) {
         self.shaderModule = shaderModule
         self.vertexEntryPoint = vertexEntryPoint
         self.fragmentEntryPoint = fragmentEntryPoint
@@ -38,6 +40,7 @@ public struct GPURenderPipelineDescriptor {
         self.cullMode = cullMode
         self.vertexBuffers = vertexBuffers
         self.blend = blend
+        self.depthStencil = depthStencil
     }
 }
 

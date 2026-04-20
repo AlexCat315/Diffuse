@@ -201,25 +201,47 @@ public final class WGPUBackend {
 
                 func callCreate(layouts: UnsafePointer<WGPUBridgeVertexBufferLayout>?,
                                 count: UInt32) -> Int32 {
-                    if let blend = desc.blend {
-                        var bs = blend.bridgeValue
-                        return wgpu_bridge_create_render_pipeline(
-                            device, desc.shaderModule.handle,
-                            vEntry, fEntry,
-                            desc.colorFormat.bridgeValue,
-                            desc.topology.bridgeValue,
-                            desc.cullMode.bridgeValue,
-                            layouts, count, &bs, &pipelinePtr
-                        )
+                    var bsVal: WGPUBridgeBlendState?
+                    if let blend = desc.blend { bsVal = blend.bridgeValue }
+                    var dsVal: WGPUBridgeDepthStencilPipelineState?
+                    if let ds = desc.depthStencil { dsVal = ds.bridgeValue }
+
+                    if var bs = bsVal {
+                        if var ds = dsVal {
+                            return wgpu_bridge_create_render_pipeline(
+                                device, desc.shaderModule.handle,
+                                vEntry, fEntry,
+                                desc.colorFormat.bridgeValue,
+                                desc.topology.bridgeValue,
+                                desc.cullMode.bridgeValue,
+                                layouts, count, &bs, &ds, &pipelinePtr)
+                        } else {
+                            return wgpu_bridge_create_render_pipeline(
+                                device, desc.shaderModule.handle,
+                                vEntry, fEntry,
+                                desc.colorFormat.bridgeValue,
+                                desc.topology.bridgeValue,
+                                desc.cullMode.bridgeValue,
+                                layouts, count, &bs, nil, &pipelinePtr)
+                        }
                     } else {
-                        return wgpu_bridge_create_render_pipeline(
-                            device, desc.shaderModule.handle,
-                            vEntry, fEntry,
-                            desc.colorFormat.bridgeValue,
-                            desc.topology.bridgeValue,
-                            desc.cullMode.bridgeValue,
-                            layouts, count, nil, &pipelinePtr
-                        )
+                        if var ds = dsVal {
+                            return wgpu_bridge_create_render_pipeline(
+                                device, desc.shaderModule.handle,
+                                vEntry, fEntry,
+                                desc.colorFormat.bridgeValue,
+                                desc.topology.bridgeValue,
+                                desc.cullMode.bridgeValue,
+                                layouts, count, nil, &ds, &pipelinePtr)
+                        } else {
+                            return wgpu_bridge_create_render_pipeline(
+                                device, desc.shaderModule.handle,
+                                vEntry, fEntry,
+                                desc.colorFormat.bridgeValue,
+                                desc.topology.bridgeValue,
+                                desc.cullMode.bridgeValue,
+                                layouts, count, nil, nil, &pipelinePtr)
+                        }
                     }
                 }
 
@@ -287,6 +309,22 @@ public final class WGPUBackend {
     public func writeBuffer(_ buffer: GPUBuffer, data: UnsafeRawPointer, size: Int, offset: UInt64 = 0) {
         guard let queue else { return }
         wgpu_bridge_write_buffer(queue, buffer.handle, offset, data, size)
+    }
+
+    public func writeTexture(_ texture: GPUTexture,
+                             data: UnsafeRawPointer,
+                             dataSize: Int,
+                             bytesPerRow: UInt32,
+                             rowsPerImage: UInt32,
+                             width: UInt32,
+                             height: UInt32,
+                             depthOrLayers: UInt32 = 1,
+                             mipLevel: UInt32 = 0) {
+        guard let queue else { return }
+        wgpu_bridge_write_texture(queue, texture.handle, mipLevel,
+                                  data, dataSize,
+                                  bytesPerRow, rowsPerImage,
+                                  width, height, depthOrLayers)
     }
 
     public func createTexture(width: UInt32, height: UInt32,

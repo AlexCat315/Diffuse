@@ -241,6 +241,57 @@ typedef struct {
 } WGPURenderPassDescriptor_I;
 
 typedef struct {
+    WGPUTextureView_T view;
+    uint32_t depthLoadOp;
+    uint32_t depthStoreOp;
+    float depthClearValue;
+    uint32_t depthReadOnly;
+    uint32_t stencilLoadOp;
+    uint32_t stencilStoreOp;
+    uint32_t stencilClearValue;
+    uint32_t stencilReadOnly;
+} WGPURenderPassDepthStencilAttachment_I;
+
+typedef struct {
+    const WGPUChainedStruct* nextInChain;
+    uint32_t format;
+    uint32_t depthWriteEnabled;
+    uint32_t depthCompare;
+    uint32_t stencilFront_compare;
+    uint32_t stencilFront_failOp;
+    uint32_t stencilFront_depthFailOp;
+    uint32_t stencilFront_passOp;
+    uint32_t stencilBack_compare;
+    uint32_t stencilBack_failOp;
+    uint32_t stencilBack_depthFailOp;
+    uint32_t stencilBack_passOp;
+    uint32_t stencilReadMask;
+    uint32_t stencilWriteMask;
+    int32_t depthBias;
+    float depthBiasSlopeScale;
+    float depthBiasClamp;
+} WGPUDepthStencilState_I;
+
+/* ─── ImageCopyTexture / TextureDataLayout types ────────────────── */
+
+typedef struct {
+    const WGPUChainedStruct* nextInChain;
+    WGPUTexture_T texture;
+    uint32_t mipLevel;
+    uint32_t originX;
+    uint32_t originY;
+    uint32_t originZ;
+    uint32_t aspect;
+} WGPUImageCopyTexture_I;
+
+typedef struct {
+    const WGPUChainedStruct* nextInChain;
+    uint64_t offset;
+    uint32_t bytesPerRow;
+    uint32_t rowsPerImage;
+} WGPUTextureDataLayout_I;
+
+typedef struct {
     const WGPUChainedStruct* nextInChain;
     const char* label;
 } WGPUCommandBufferDescriptor_I;
@@ -303,10 +354,13 @@ typedef void (*PFN_wgpuRenderPassEncoderDrawIndexed)(WGPURenderPassEncoder_T, ui
 typedef void (*PFN_wgpuRenderPassEncoderSetBindGroup)(WGPURenderPassEncoder_T, uint32_t, void*, size_t, const uint32_t*);
 typedef void (*PFN_wgpuRenderPassEncoderEnd)(WGPURenderPassEncoder_T);
 typedef void (*PFN_wgpuRenderPassEncoderRelease)(WGPURenderPassEncoder_T);
+typedef void (*PFN_wgpuRenderPassEncoderSetViewport)(WGPURenderPassEncoder_T, float, float, float, float, float, float);
+typedef void (*PFN_wgpuRenderPassEncoderSetScissorRect)(WGPURenderPassEncoder_T, uint32_t, uint32_t, uint32_t, uint32_t);
 
 /* Queue submit */
 typedef void (*PFN_wgpuQueueSubmit)(WGPUQueue, size_t, const WGPUCommandBuffer_T*);
 typedef void (*PFN_wgpuCommandBufferRelease)(WGPUCommandBuffer_T);
+typedef void (*PFN_wgpuQueueWriteTexture)(WGPUQueue, const WGPUImageCopyTexture_I*, const void*, size_t, const WGPUTextureDataLayout_I*, const WGPUExtent3D*);
 
 /* Sampler */
 typedef struct WGPUSamplerImpl* WGPUSampler_T;
@@ -471,6 +525,8 @@ static PFN_wgpuRenderPassEncoderDrawIndexed      g_rp_draw_indexed = NULL;
 static PFN_wgpuRenderPassEncoderSetBindGroup     g_rp_set_bind_group = NULL;
 static PFN_wgpuRenderPassEncoderEnd              g_rp_end = NULL;
 static PFN_wgpuRenderPassEncoderRelease          g_rp_release = NULL;
+static PFN_wgpuRenderPassEncoderSetViewport      g_rp_set_viewport = NULL;
+static PFN_wgpuRenderPassEncoderSetScissorRect   g_rp_set_scissor_rect = NULL;
 
 /* Sampler */
 static PFN_wgpuDeviceCreateSampler  g_create_sampler = NULL;
@@ -485,6 +541,7 @@ static PFN_wgpuBindGroupRelease             g_bind_group_release = NULL;
 /* Queue submit */
 static PFN_wgpuQueueSubmit        g_queue_submit = NULL;
 static PFN_wgpuCommandBufferRelease g_command_buffer_release = NULL;
+static PFN_wgpuQueueWriteTexture  g_queue_write_texture = NULL;
 
 /* ═══════════════════════════════════════════════════════════════════
    Helpers
@@ -686,6 +743,20 @@ static uint32_t bridge_binding_type_buffer(WGPUBridgeBindingType t) {
     }
 }
 
+static uint32_t bridge_compare_function_to_wgpu(WGPUBridgeCompareFunction f) {
+    switch (f) {
+        case WGPUBridge_CompareFunction_Never:        return 1;
+        case WGPUBridge_CompareFunction_Less:         return 2;
+        case WGPUBridge_CompareFunction_Equal:        return 3;
+        case WGPUBridge_CompareFunction_LessEqual:    return 4;
+        case WGPUBridge_CompareFunction_Greater:      return 5;
+        case WGPUBridge_CompareFunction_NotEqual:     return 6;
+        case WGPUBridge_CompareFunction_GreaterEqual: return 7;
+        case WGPUBridge_CompareFunction_Always:       return 8;
+        default:                                      return 2;
+    }
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    Public API — Initialization
    ═══════════════════════════════════════════════════════════════════ */
@@ -774,10 +845,13 @@ int wgpu_bridge_initialize(const char* library_path) {
     LOAD_SYM(wgpuRenderPassEncoderSetBindGroup,    PFN_wgpuRenderPassEncoderSetBindGroup,    g_rp_set_bind_group);
     LOAD_SYM(wgpuRenderPassEncoderEnd,             PFN_wgpuRenderPassEncoderEnd,             g_rp_end);
     LOAD_SYM(wgpuRenderPassEncoderRelease,         PFN_wgpuRenderPassEncoderRelease,         g_rp_release);
+    LOAD_SYM(wgpuRenderPassEncoderSetViewport,     PFN_wgpuRenderPassEncoderSetViewport,     g_rp_set_viewport);
+    LOAD_SYM(wgpuRenderPassEncoderSetScissorRect,  PFN_wgpuRenderPassEncoderSetScissorRect,  g_rp_set_scissor_rect);
 
     /* Queue submit */
     LOAD_SYM(wgpuQueueSubmit,          PFN_wgpuQueueSubmit,          g_queue_submit);
     LOAD_SYM(wgpuCommandBufferRelease, PFN_wgpuCommandBufferRelease, g_command_buffer_release);
+    LOAD_SYM(wgpuQueueWriteTexture,    PFN_wgpuQueueWriteTexture,    g_queue_write_texture);
 
     /* Sampler */
     LOAD_SYM(wgpuDeviceCreateSampler, PFN_wgpuDeviceCreateSampler, g_create_sampler);
@@ -1239,6 +1313,7 @@ int wgpu_bridge_create_render_pipeline(
     const WGPUBridgeVertexBufferLayout* vertex_buffers,
     uint32_t vertex_buffer_count,
     const WGPUBridgeBlendState* blend,
+    const WGPUBridgeDepthStencilPipelineState* depth_stencil,
     void** out_pipeline)
 {
     if (device == NULL || shader_module == NULL || out_pipeline == NULL) {
@@ -1317,6 +1392,20 @@ int wgpu_bridge_create_render_pipeline(
     desc.multisample.mask = 0xFFFFFFFF;
     desc.fragment = &frag;
     desc.layout = NULL; /* Auto layout */
+
+    /* Depth stencil */
+    WGPUDepthStencilState_I ds;
+    if (depth_stencil != NULL) {
+        memset(&ds, 0, sizeof(ds));
+        ds.format = bridge_format_to_wgpu(depth_stencil->format);
+        ds.depthWriteEnabled = depth_stencil->depth_write_enabled ? 1 : 0;
+        ds.depthCompare = bridge_compare_function_to_wgpu(depth_stencil->depth_compare);
+        ds.stencilFront_compare = 8; /* Always */
+        ds.stencilBack_compare = 8;  /* Always */
+        ds.stencilReadMask = 0xFFFFFFFF;
+        ds.stencilWriteMask = 0xFFFFFFFF;
+        desc.depthStencil = &ds;
+    }
 
     WGPURenderPipeline_T pipeline = g_create_render_pipeline((WGPUDevice)device, &desc);
 
@@ -1415,8 +1504,9 @@ int wgpu_bridge_begin_render_pass(void* encoder,
                                   WGPUBridgeLoadOp load_op,
                                   WGPUBridgeStoreOp store_op,
                                   WGPUBridgeColor clear_color,
+                                  const WGPUBridgeDepthStencilAttachment* depth,
                                   void** out_pass) {
-    if (encoder == NULL || color_view == NULL || out_pass == NULL) {
+    if (encoder == NULL || out_pass == NULL) {
         set_error("invalid begin_render_pass arguments");
         return 0;
     }
@@ -1427,19 +1517,36 @@ int wgpu_bridge_begin_render_pass(void* encoder,
 
     WGPURenderPassColorAttachment_I ca;
     memset(&ca, 0, sizeof(ca));
-    ca.view = (WGPUTextureView_T)color_view;
-    ca.depthSlice = 0xFFFFFFFF; /* WGPU_DEPTH_SLICE_UNDEFINED */
-    ca.loadOp = bridge_load_op_to_wgpu(load_op);
-    ca.storeOp = bridge_store_op_to_wgpu(store_op);
-    ca.clearValue.r = clear_color.r;
-    ca.clearValue.g = clear_color.g;
-    ca.clearValue.b = clear_color.b;
-    ca.clearValue.a = clear_color.a;
+    size_t color_count = 0;
 
+    if (color_view != NULL) {
+        ca.view = (WGPUTextureView_T)color_view;
+        ca.depthSlice = 0xFFFFFFFF; /* WGPU_DEPTH_SLICE_UNDEFINED */
+        ca.loadOp = bridge_load_op_to_wgpu(load_op);
+        ca.storeOp = bridge_store_op_to_wgpu(store_op);
+        ca.clearValue.r = clear_color.r;
+        ca.clearValue.g = clear_color.g;
+        ca.clearValue.b = clear_color.b;
+        ca.clearValue.a = clear_color.a;
+        color_count = 1;
+    }
+
+    WGPURenderPassDepthStencilAttachment_I dsa;
     WGPURenderPassDescriptor_I desc;
     memset(&desc, 0, sizeof(desc));
-    desc.colorAttachmentCount = 1;
-    desc.colorAttachments = &ca;
+    desc.colorAttachmentCount = color_count;
+    desc.colorAttachments = color_count > 0 ? &ca : NULL;
+
+    if (depth != NULL && depth->view != NULL) {
+        memset(&dsa, 0, sizeof(dsa));
+        dsa.view = (WGPUTextureView_T)depth->view;
+        dsa.depthLoadOp = bridge_load_op_to_wgpu(depth->depth_load_op);
+        dsa.depthStoreOp = bridge_store_op_to_wgpu(depth->depth_store_op);
+        dsa.depthClearValue = depth->clear_depth;
+        dsa.stencilLoadOp = 1; /* Clear */
+        dsa.stencilStoreOp = 2; /* Discard */
+        desc.depthStencilAttachment = &dsa;
+    }
 
     WGPURenderPassEncoder_T pass = g_begin_render_pass((WGPUCommandEncoder_T)encoder, &desc);
     if (pass == NULL) {
@@ -1528,6 +1635,65 @@ void wgpu_bridge_release_render_pass_encoder(void* pass) {
     if (pass != NULL && g_rp_release != NULL) {
         g_rp_release((WGPURenderPassEncoder_T)pass);
     }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Public API — Viewport / Scissor
+   ═══════════════════════════════════════════════════════════════════ */
+
+void wgpu_bridge_render_pass_set_viewport(void* pass,
+                                          float x, float y,
+                                          float width, float height,
+                                          float min_depth, float max_depth) {
+    if (pass != NULL && g_rp_set_viewport != NULL) {
+        g_rp_set_viewport((WGPURenderPassEncoder_T)pass,
+                          x, y, width, height, min_depth, max_depth);
+    }
+}
+
+void wgpu_bridge_render_pass_set_scissor_rect(void* pass,
+                                              uint32_t x, uint32_t y,
+                                              uint32_t width, uint32_t height) {
+    if (pass != NULL && g_rp_set_scissor_rect != NULL) {
+        g_rp_set_scissor_rect((WGPURenderPassEncoder_T)pass, x, y, width, height);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Public API — Write Texture
+   ═══════════════════════════════════════════════════════════════════ */
+
+void wgpu_bridge_write_texture(void* queue,
+                               void* texture,
+                               uint32_t mip_level,
+                               const void* data,
+                               size_t data_size,
+                               uint32_t bytes_per_row,
+                               uint32_t rows_per_image,
+                               uint32_t width,
+                               uint32_t height,
+                               uint32_t depth_or_layers) {
+    if (queue == NULL || texture == NULL || data == NULL || g_queue_write_texture == NULL) {
+        return;
+    }
+
+    WGPUImageCopyTexture_I dst;
+    memset(&dst, 0, sizeof(dst));
+    dst.texture = (WGPUTexture_T)texture;
+    dst.mipLevel = mip_level;
+    dst.aspect = 1; /* WGPUTextureAspect_All */
+
+    WGPUTextureDataLayout_I layout;
+    memset(&layout, 0, sizeof(layout));
+    layout.bytesPerRow = bytes_per_row;
+    layout.rowsPerImage = rows_per_image;
+
+    WGPUExtent3D size;
+    size.width = width;
+    size.height = height;
+    size.depthOrArrayLayers = depth_or_layers;
+
+    g_queue_write_texture((WGPUQueue)queue, &dst, data, data_size, &layout, &size);
 }
 
 /* ═══════════════════════════════════════════════════════════════════
