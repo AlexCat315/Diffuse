@@ -9,15 +9,63 @@ public enum WGPUBackendState: Sendable {
     case deviceReady
 }
 
+public enum WGPUBackendPreference: String, Sendable, CaseIterable {
+    case automatic
+    case d3d11
+    case d3d12
+    case metal
+    case vulkan
+    case openGL
+    case openGLES
+
+    var bridgeValue: WGPUBridgeBackendType {
+        switch self {
+            case .automatic:
+                return WGPUBridge_BackendType_Undefined
+            case .d3d11:
+                return WGPUBridge_BackendType_D3D11
+            case .d3d12:
+                return WGPUBridge_BackendType_D3D12
+            case .metal:
+                return WGPUBridge_BackendType_Metal
+            case .vulkan:
+                return WGPUBridge_BackendType_Vulkan
+            case .openGL:
+                return WGPUBridge_BackendType_OpenGL
+            case .openGLES:
+                return WGPUBridge_BackendType_OpenGLES
+        }
+    }
+
+    public static var platformDefaultOrder: [WGPUBackendPreference] {
+#if os(macOS)
+        return [.metal, .automatic]
+#elseif os(Windows)
+        return [.d3d12, .vulkan, .automatic]
+#elseif os(Linux)
+        return [.vulkan, .automatic]
+#else
+        return [.automatic]
+#endif
+    }
+}
+
 public struct WGPUDeviceConfig: Sendable {
     public var validationEnabled: Bool
     public var framesInFlight: UInt32
     public var libraryPath: String?
+    public var preferredBackends: [WGPUBackendPreference]
 
-    public init(validationEnabled: Bool = true, framesInFlight: UInt32 = 2, libraryPath: String? = nil) {
+    public init(
+        validationEnabled: Bool = true,
+        framesInFlight: UInt32 = 2,
+        libraryPath: String? = nil,
+        preferredBackends: [WGPUBackendPreference] = WGPUBackendPreference.platformDefaultOrder
+    ) {
         self.validationEnabled = validationEnabled
         self.framesInFlight = framesInFlight
         self.libraryPath = libraryPath
+        self.preferredBackends = preferredBackends
     }
 }
 
@@ -83,15 +131,31 @@ public final class WGPUBackend {
         instance = out
         state = .instanceReady
 
+        let backendOrder = config.preferredBackends.isEmpty
+            ? WGPUBackendPreference.platformDefaultOrder
+            : config.preferredBackends
+
         var outAdapter: UnsafeMutableRawPointer?
-        let adapterOk = wgpu_bridge_request_adapter(out, &outAdapter)
-        guard adapterOk == 1, let outAdapter else {
-            let message = lastBridgeError()
+        var adapterErrors: [String] = []
+        for backend in backendOrder {
+            outAdapter = nil
+            let adapterOk = wgpu_bridge_request_adapter_with_backend(
+                out,
+                backend.bridgeValue,
+                &outAdapter)
+            if adapterOk == 1, let outAdapter {
+                adapter = outAdapter
+                state = .adapterReady
+                break
+            }
+            adapterErrors.append("\(backend.rawValue): \(lastBridgeError())")
+        }
+
+        guard let outAdapter = adapter else {
+            let message = adapterErrors.joined(separator: " | ")
             try? shutdown()
             throw WGPUBackendError.requestAdapterFailed(message)
         }
-        adapter = outAdapter
-        state = .adapterReady
 
         var outDevice: UnsafeMutableRawPointer?
         let deviceOk = wgpu_bridge_request_device(outAdapter, &outDevice)
@@ -163,6 +227,42 @@ public final class WGPUBackend {
         }
         var surfPtr: UnsafeMutableRawPointer?
         let ok = wgpu_bridge_create_surface_metal(instance, layer, &surfPtr)
+        guard ok == 1, let surfPtr else {
+            throw GPUSurfaceError.createFailed(Self.lastError())
+        }
+        return GPUSurface(handle: surfPtr)
+    }
+
+    public func createSurfaceWin32(hwnd: UnsafeMutableRawPointer, hinstance: UnsafeMutableRawPointer?) throws -> GPUSurface {
+        guard let instance else {
+            throw WGPUBackendError.initFailed("backend not initialized")
+        }
+        var surfPtr: UnsafeMutableRawPointer?
+        let ok = wgpu_bridge_create_surface_win32(instance, hwnd, hinstance, &surfPtr)
+        guard ok == 1, let surfPtr else {
+            throw GPUSurfaceError.createFailed(Self.lastError())
+        }
+        return GPUSurface(handle: surfPtr)
+    }
+
+    public func createSurfaceWayland(display: UnsafeMutableRawPointer, surface: UnsafeMutableRawPointer) throws -> GPUSurface {
+        guard let instance else {
+            throw WGPUBackendError.initFailed("backend not initialized")
+        }
+        var surfPtr: UnsafeMutableRawPointer?
+        let ok = wgpu_bridge_create_surface_wayland(instance, display, surface, &surfPtr)
+        guard ok == 1, let surfPtr else {
+            throw GPUSurfaceError.createFailed(Self.lastError())
+        }
+        return GPUSurface(handle: surfPtr)
+    }
+
+    public func createSurfaceXlib(display: UnsafeMutableRawPointer, window: UInt64) throws -> GPUSurface {
+        guard let instance else {
+            throw WGPUBackendError.initFailed("backend not initialized")
+        }
+        var surfPtr: UnsafeMutableRawPointer?
+        let ok = wgpu_bridge_create_surface_xlib(instance, display, window, &surfPtr)
         guard ok == 1, let surfPtr else {
             throw GPUSurfaceError.createFailed(Self.lastError())
         }
