@@ -530,6 +530,45 @@ typedef const void* (*PFN_wgpuBufferGetConstMappedRange)(WGPUBuffer_T, uint64_t,
 typedef void (*PFN_wgpuBufferUnmap)(WGPUBuffer_T);
 typedef uint32_t (*PFN_wgpuDevicePoll)(WGPUDevice, uint32_t, const void*);
 
+/* Indirect */
+typedef void (*PFN_wgpuRenderPassEncoderDrawIndirect)(WGPURenderPassEncoder_T, WGPUBuffer_T, uint64_t);
+typedef void (*PFN_wgpuRenderPassEncoderDrawIndexedIndirect)(WGPURenderPassEncoder_T, WGPUBuffer_T, uint64_t);
+typedef void (*PFN_wgpuComputePassEncoderDispatchWorkgroupsIndirect)(WGPUComputePassEncoder_T, WGPUBuffer_T, uint64_t);
+
+/* Render Bundles */
+typedef struct WGPURenderBundleEncoderImpl* WGPURenderBundleEncoder_T;
+typedef struct WGPURenderBundleImpl* WGPURenderBundle_T;
+
+typedef struct {
+    const WGPUChainedStruct* nextInChain;
+    const char* label;
+    size_t colorFormatCount;
+    const uint32_t* colorFormats;
+    uint32_t depthStencilFormat;
+    uint32_t sampleCount;
+    uint32_t depthReadOnly;
+    uint32_t stencilReadOnly;
+} WGPURenderBundleEncoderDescriptor_I;
+
+typedef struct {
+    const WGPUChainedStruct* nextInChain;
+    const char* label;
+} WGPURenderBundleDescriptor_I;
+
+typedef WGPURenderBundleEncoder_T (*PFN_wgpuDeviceCreateRenderBundleEncoder)(WGPUDevice, const WGPURenderBundleEncoderDescriptor_I*);
+typedef WGPURenderBundle_T (*PFN_wgpuRenderBundleEncoderFinish)(WGPURenderBundleEncoder_T, const WGPURenderBundleDescriptor_I*);
+typedef void (*PFN_wgpuRenderBundleEncoderRelease)(WGPURenderBundleEncoder_T);
+typedef void (*PFN_wgpuRenderBundleRelease)(WGPURenderBundle_T);
+typedef void (*PFN_wgpuRenderBundleEncoderSetPipeline)(WGPURenderBundleEncoder_T, WGPURenderPipeline_T);
+typedef void (*PFN_wgpuRenderBundleEncoderSetVertexBuffer)(WGPURenderBundleEncoder_T, uint32_t, WGPUBuffer_T, uint64_t, uint64_t);
+typedef void (*PFN_wgpuRenderBundleEncoderSetIndexBuffer)(WGPURenderBundleEncoder_T, WGPUBuffer_T, uint32_t, uint64_t, uint64_t);
+typedef void (*PFN_wgpuRenderBundleEncoderSetBindGroup)(WGPURenderBundleEncoder_T, uint32_t, void*, size_t, const uint32_t*);
+typedef void (*PFN_wgpuRenderBundleEncoderDraw)(WGPURenderBundleEncoder_T, uint32_t, uint32_t, uint32_t, uint32_t);
+typedef void (*PFN_wgpuRenderBundleEncoderDrawIndexed)(WGPURenderBundleEncoder_T, uint32_t, uint32_t, uint32_t, int32_t, uint32_t);
+typedef void (*PFN_wgpuRenderBundleEncoderDrawIndirect)(WGPURenderBundleEncoder_T, WGPUBuffer_T, uint64_t);
+typedef void (*PFN_wgpuRenderBundleEncoderDrawIndexedIndirect)(WGPURenderBundleEncoder_T, WGPUBuffer_T, uint64_t);
+typedef void (*PFN_wgpuRenderPassEncoderExecuteBundles)(WGPURenderPassEncoder_T, size_t, const WGPURenderBundle_T*);
+
 /* ═══════════════════════════════════════════════════════════════════
    Globals
    ═══════════════════════════════════════════════════════════════════ */
@@ -623,6 +662,26 @@ static PFN_wgpuBufferMapAsync                g_buffer_map_async = NULL;
 static PFN_wgpuBufferGetConstMappedRange     g_buffer_get_mapped_range = NULL;
 static PFN_wgpuBufferUnmap                   g_buffer_unmap = NULL;
 static PFN_wgpuDevicePoll                    g_device_poll = NULL;
+
+/* Indirect */
+static PFN_wgpuRenderPassEncoderDrawIndirect                  g_rp_draw_indirect = NULL;
+static PFN_wgpuRenderPassEncoderDrawIndexedIndirect           g_rp_draw_indexed_indirect = NULL;
+static PFN_wgpuComputePassEncoderDispatchWorkgroupsIndirect   g_cp_dispatch_indirect = NULL;
+
+/* Render Bundles */
+static PFN_wgpuDeviceCreateRenderBundleEncoder           g_dev_create_bundle_encoder = NULL;
+static PFN_wgpuRenderBundleEncoderFinish                 g_bundle_encoder_finish = NULL;
+static PFN_wgpuRenderBundleEncoderRelease                g_bundle_encoder_release = NULL;
+static PFN_wgpuRenderBundleRelease                       g_bundle_release = NULL;
+static PFN_wgpuRenderBundleEncoderSetPipeline            g_bundle_set_pipeline = NULL;
+static PFN_wgpuRenderBundleEncoderSetVertexBuffer        g_bundle_set_vertex_buffer = NULL;
+static PFN_wgpuRenderBundleEncoderSetIndexBuffer         g_bundle_set_index_buffer = NULL;
+static PFN_wgpuRenderBundleEncoderSetBindGroup           g_bundle_set_bind_group = NULL;
+static PFN_wgpuRenderBundleEncoderDraw                   g_bundle_draw = NULL;
+static PFN_wgpuRenderBundleEncoderDrawIndexed            g_bundle_draw_indexed = NULL;
+static PFN_wgpuRenderBundleEncoderDrawIndirect           g_bundle_draw_indirect = NULL;
+static PFN_wgpuRenderBundleEncoderDrawIndexedIndirect    g_bundle_draw_indexed_indirect = NULL;
+static PFN_wgpuRenderPassEncoderExecuteBundles           g_rp_execute_bundles = NULL;
 
 /* Queue submit */
 static PFN_wgpuQueueSubmit        g_queue_submit = NULL;
@@ -1011,6 +1070,26 @@ int wgpu_bridge_initialize(const char* library_path) {
     LOAD_SYM(wgpuBufferUnmap,                PFN_wgpuBufferUnmap,                g_buffer_unmap);
     LOAD_SYM(wgpuDevicePoll,                 PFN_wgpuDevicePoll,                 g_device_poll);
 
+    /* Indirect */
+    LOAD_SYM(wgpuRenderPassEncoderDrawIndirect,                PFN_wgpuRenderPassEncoderDrawIndirect,                g_rp_draw_indirect);
+    LOAD_SYM(wgpuRenderPassEncoderDrawIndexedIndirect,         PFN_wgpuRenderPassEncoderDrawIndexedIndirect,         g_rp_draw_indexed_indirect);
+    LOAD_SYM(wgpuComputePassEncoderDispatchWorkgroupsIndirect, PFN_wgpuComputePassEncoderDispatchWorkgroupsIndirect, g_cp_dispatch_indirect);
+
+    /* Render Bundles */
+    LOAD_SYM(wgpuDeviceCreateRenderBundleEncoder,        PFN_wgpuDeviceCreateRenderBundleEncoder,        g_dev_create_bundle_encoder);
+    LOAD_SYM(wgpuRenderBundleEncoderFinish,              PFN_wgpuRenderBundleEncoderFinish,              g_bundle_encoder_finish);
+    LOAD_SYM(wgpuRenderBundleEncoderRelease,             PFN_wgpuRenderBundleEncoderRelease,             g_bundle_encoder_release);
+    LOAD_SYM(wgpuRenderBundleRelease,                    PFN_wgpuRenderBundleRelease,                    g_bundle_release);
+    LOAD_SYM(wgpuRenderBundleEncoderSetPipeline,         PFN_wgpuRenderBundleEncoderSetPipeline,         g_bundle_set_pipeline);
+    LOAD_SYM(wgpuRenderBundleEncoderSetVertexBuffer,     PFN_wgpuRenderBundleEncoderSetVertexBuffer,     g_bundle_set_vertex_buffer);
+    LOAD_SYM(wgpuRenderBundleEncoderSetIndexBuffer,      PFN_wgpuRenderBundleEncoderSetIndexBuffer,      g_bundle_set_index_buffer);
+    LOAD_SYM(wgpuRenderBundleEncoderSetBindGroup,        PFN_wgpuRenderBundleEncoderSetBindGroup,        g_bundle_set_bind_group);
+    LOAD_SYM(wgpuRenderBundleEncoderDraw,                PFN_wgpuRenderBundleEncoderDraw,                g_bundle_draw);
+    LOAD_SYM(wgpuRenderBundleEncoderDrawIndexed,         PFN_wgpuRenderBundleEncoderDrawIndexed,         g_bundle_draw_indexed);
+    LOAD_SYM(wgpuRenderBundleEncoderDrawIndirect,        PFN_wgpuRenderBundleEncoderDrawIndirect,        g_bundle_draw_indirect);
+    LOAD_SYM(wgpuRenderBundleEncoderDrawIndexedIndirect, PFN_wgpuRenderBundleEncoderDrawIndexedIndirect, g_bundle_draw_indexed_indirect);
+    LOAD_SYM(wgpuRenderPassEncoderExecuteBundles,        PFN_wgpuRenderPassEncoderExecuteBundles,        g_rp_execute_bundles);
+
     /* Validate core symbols (non-core symbols are optional for graceful degradation) */
     if (g_create_instance == NULL || g_release_instance == NULL ||
         g_request_adapter == NULL || g_request_device == NULL ||
@@ -1223,6 +1302,24 @@ void wgpu_bridge_shutdown(void) {
     g_buffer_get_mapped_range = NULL;
     g_buffer_unmap = NULL;
     g_device_poll = NULL;
+
+    g_rp_draw_indirect = NULL;
+    g_rp_draw_indexed_indirect = NULL;
+    g_cp_dispatch_indirect = NULL;
+
+    g_dev_create_bundle_encoder = NULL;
+    g_bundle_encoder_finish = NULL;
+    g_bundle_encoder_release = NULL;
+    g_bundle_release = NULL;
+    g_bundle_set_pipeline = NULL;
+    g_bundle_set_vertex_buffer = NULL;
+    g_bundle_set_index_buffer = NULL;
+    g_bundle_set_bind_group = NULL;
+    g_bundle_draw = NULL;
+    g_bundle_draw_indexed = NULL;
+    g_bundle_draw_indirect = NULL;
+    g_bundle_draw_indexed_indirect = NULL;
+    g_rp_execute_bundles = NULL;
 
     if (g_wgpu_lib != NULL) {
         dlclose(g_wgpu_lib);
@@ -2560,4 +2657,145 @@ void wgpu_bridge_buffer_unmap(void* buffer) {
     if (buffer != NULL && g_buffer_unmap != NULL) {
         g_buffer_unmap((WGPUBuffer_T)buffer);
     }
+}
+
+/* ════════════════════════════════════════════════════════════════
+   Public API — Indirect Draw / Dispatch
+   ═══════════════════════════════════════════════════════════════ */
+
+void wgpu_bridge_render_pass_draw_indirect(void* pass, void* buffer, uint64_t offset) {
+    if (pass != NULL && buffer != NULL && g_rp_draw_indirect != NULL) {
+        g_rp_draw_indirect((WGPURenderPassEncoder_T)pass, (WGPUBuffer_T)buffer, offset);
+    }
+}
+
+void wgpu_bridge_render_pass_draw_indexed_indirect(void* pass, void* buffer, uint64_t offset) {
+    if (pass != NULL && buffer != NULL && g_rp_draw_indexed_indirect != NULL) {
+        g_rp_draw_indexed_indirect((WGPURenderPassEncoder_T)pass, (WGPUBuffer_T)buffer, offset);
+    }
+}
+
+void wgpu_bridge_compute_pass_dispatch_indirect(void* pass, void* buffer, uint64_t offset) {
+    if (pass != NULL && buffer != NULL && g_cp_dispatch_indirect != NULL) {
+        g_cp_dispatch_indirect((WGPUComputePassEncoder_T)pass, (WGPUBuffer_T)buffer, offset);
+    }
+}
+
+/* ═══════════════════════════════════════════════════════════════════
+   Public API — Render Bundles
+   ═══════════════════════════════════════════════════════════════════ */
+
+int wgpu_bridge_create_render_bundle_encoder(void* device,
+                                             const WGPUBridgeRenderBundleEncoderDesc* desc,
+                                             void** out_encoder) {
+    if (device == NULL || desc == NULL || out_encoder == NULL ||
+        g_dev_create_bundle_encoder == NULL) {
+        return 0;
+    }
+
+    uint32_t formats[8] = {0};
+    if (desc->color_format_count > 8) return 0;
+    for (uint32_t i = 0; i < desc->color_format_count; ++i) {
+        formats[i] = bridge_format_to_wgpu(desc->color_formats[i]);
+    }
+
+    WGPURenderBundleEncoderDescriptor_I d = {0};
+    d.colorFormatCount = desc->color_format_count;
+    d.colorFormats = (desc->color_format_count > 0) ? formats : NULL;
+    d.depthStencilFormat = desc->has_depth_stencil
+        ? bridge_format_to_wgpu(desc->depth_stencil_format)
+        : 0; /* Undefined */
+    d.sampleCount = (desc->sample_count == 0) ? 1 : desc->sample_count;
+    d.depthReadOnly = desc->depth_read_only ? 1u : 0u;
+    d.stencilReadOnly = desc->stencil_read_only ? 1u : 0u;
+
+    WGPURenderBundleEncoder_T enc = g_dev_create_bundle_encoder((WGPUDevice)device, &d);
+    if (enc == NULL) return 0;
+    *out_encoder = (void*)enc;
+    return 1;
+}
+
+int wgpu_bridge_render_bundle_encoder_finish(void* encoder, void** out_bundle) {
+    if (encoder == NULL || out_bundle == NULL || g_bundle_encoder_finish == NULL) return 0;
+    WGPURenderBundleDescriptor_I d = {0};
+    WGPURenderBundle_T b = g_bundle_encoder_finish((WGPURenderBundleEncoder_T)encoder, &d);
+    if (b == NULL) return 0;
+    *out_bundle = (void*)b;
+    return 1;
+}
+
+void wgpu_bridge_release_render_bundle_encoder(void* encoder) {
+    if (encoder != NULL && g_bundle_encoder_release != NULL) {
+        g_bundle_encoder_release((WGPURenderBundleEncoder_T)encoder);
+    }
+}
+
+void wgpu_bridge_release_render_bundle(void* bundle) {
+    if (bundle != NULL && g_bundle_release != NULL) {
+        g_bundle_release((WGPURenderBundle_T)bundle);
+    }
+}
+
+void wgpu_bridge_render_bundle_set_pipeline(void* enc, void* pipeline) {
+    if (enc != NULL && pipeline != NULL && g_bundle_set_pipeline != NULL) {
+        g_bundle_set_pipeline((WGPURenderBundleEncoder_T)enc, (WGPURenderPipeline_T)pipeline);
+    }
+}
+
+void wgpu_bridge_render_bundle_set_vertex_buffer(void* enc, uint32_t slot,
+                                                 void* buffer, uint64_t offset, uint64_t size) {
+    if (enc != NULL && g_bundle_set_vertex_buffer != NULL) {
+        g_bundle_set_vertex_buffer((WGPURenderBundleEncoder_T)enc, slot,
+                                   (WGPUBuffer_T)buffer, offset, size);
+    }
+}
+
+void wgpu_bridge_render_bundle_set_index_buffer(void* enc, void* buffer,
+                                                WGPUBridgeIndexFormat format,
+                                                uint64_t offset, uint64_t size) {
+    if (enc != NULL && buffer != NULL && g_bundle_set_index_buffer != NULL) {
+        uint32_t fmt = bridge_index_format_to_wgpu(format);
+        g_bundle_set_index_buffer((WGPURenderBundleEncoder_T)enc, (WGPUBuffer_T)buffer,
+                                  fmt, offset, size);
+    }
+}
+
+void wgpu_bridge_render_bundle_set_bind_group(void* enc, uint32_t group_index, void* bind_group) {
+    if (enc != NULL && bind_group != NULL && g_bundle_set_bind_group != NULL) {
+        g_bundle_set_bind_group((WGPURenderBundleEncoder_T)enc, group_index, bind_group, 0, NULL);
+    }
+}
+
+void wgpu_bridge_render_bundle_draw(void* enc, uint32_t vc, uint32_t ic, uint32_t fv, uint32_t fi) {
+    if (enc != NULL && g_bundle_draw != NULL) {
+        g_bundle_draw((WGPURenderBundleEncoder_T)enc, vc, ic, fv, fi);
+    }
+}
+
+void wgpu_bridge_render_bundle_draw_indexed(void* enc, uint32_t ic, uint32_t inst,
+                                            uint32_t fi, int32_t bv, uint32_t finst) {
+    if (enc != NULL && g_bundle_draw_indexed != NULL) {
+        g_bundle_draw_indexed((WGPURenderBundleEncoder_T)enc, ic, inst, fi, bv, finst);
+    }
+}
+
+void wgpu_bridge_render_bundle_draw_indirect(void* enc, void* buffer, uint64_t offset) {
+    if (enc != NULL && buffer != NULL && g_bundle_draw_indirect != NULL) {
+        g_bundle_draw_indirect((WGPURenderBundleEncoder_T)enc, (WGPUBuffer_T)buffer, offset);
+    }
+}
+
+void wgpu_bridge_render_bundle_draw_indexed_indirect(void* enc, void* buffer, uint64_t offset) {
+    if (enc != NULL && buffer != NULL && g_bundle_draw_indexed_indirect != NULL) {
+        g_bundle_draw_indexed_indirect((WGPURenderBundleEncoder_T)enc, (WGPUBuffer_T)buffer, offset);
+    }
+}
+
+void wgpu_bridge_render_pass_execute_bundles(void* pass,
+                                             void* const* bundles,
+                                             uint32_t count) {
+    if (pass == NULL || bundles == NULL || count == 0 || g_rp_execute_bundles == NULL) return;
+    /* Reinterpret as opaque handle array (same width on all targets) */
+    g_rp_execute_bundles((WGPURenderPassEncoder_T)pass, count,
+                         (const WGPURenderBundle_T*)bundles);
 }

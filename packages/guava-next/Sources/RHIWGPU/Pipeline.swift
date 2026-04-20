@@ -12,7 +12,9 @@ public final class GPUShaderModule {
     }
 }
 
-public struct GPURenderPipelineDescriptor {
+extension GPUShaderModule: @unchecked Sendable {}
+
+public struct GPURenderPipelineDescriptor: @unchecked Sendable {
     public var shaderModule: GPUShaderModule
     public var vertexEntryPoint: String
     public var fragmentEntryPoint: String

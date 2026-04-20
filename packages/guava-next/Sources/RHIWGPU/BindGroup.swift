@@ -70,3 +70,5 @@ public final class GPUPipelineLayout {
         wgpu_bridge_release_pipeline_layout(handle)
     }
 }
+
+extension GPUPipelineLayout: @unchecked Sendable {}
