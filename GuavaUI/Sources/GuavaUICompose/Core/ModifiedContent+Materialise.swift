@@ -27,9 +27,11 @@ extension ModifiedContent: _AnyModifiedContent {
             // reconciler knows this slot carries a particular modifier
             // combination.
             n.viewTag = ViewGraph.slotTag(self)
-            modifier.apply(node: n)
-            if let ln = graph.layoutNode(for: n) {
-                modifier.apply(layout: ln)
+            for target in modifierTargets(for: n, graph: graph) {
+                modifier.apply(node: target)
+                if let ln = graph.layoutNode(for: target) {
+                    modifier.apply(layout: ln)
+                }
             }
         }
         return nodes
@@ -45,9 +47,20 @@ extension ModifiedContent: _AnyModifiedContent {
         // have left the inner tag in place if it called something that wrote
         // viewTag; safe to overwrite unconditionally).
         node.viewTag = ViewGraph.slotTag(self)
-        modifier.apply(node: node)
-        if let ln = graph.layoutNode(for: node) {
-            modifier.apply(layout: ln)
+        for target in modifierTargets(for: node, graph: graph) {
+            modifier.apply(node: target)
+            if let ln = graph.layoutNode(for: target) {
+                modifier.apply(layout: ln)
+            }
         }
+    }
+
+    private func modifierTargets(for node: Node,
+                                 graph: ViewGraph) -> [Node] {
+        if graph.layoutNode(for: node) != nil || node.children.isEmpty {
+            return [node]
+        }
+
+        return node.children.flatMap { modifierTargets(for: $0, graph: graph) }
     }
 }

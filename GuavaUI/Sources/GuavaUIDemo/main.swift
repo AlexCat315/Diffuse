@@ -76,128 +76,129 @@ struct RootView: View {
     @State var selectedLogID: Int? = 2
 
     var body: some View {
-        Box(direction: .row, alignItems: .stretch, spacing: 1) {
-            Column(alignment: .leading, spacing: 8) {
-                Text("Hierarchy", color: Color.white)
-                    .font(.system(size: 20, weight: .bold))
-                Divider()
-
-                Tree(demoSceneTree,
-                     children: \.children,
-                     selection: $selectedSceneNodeID,
-                     rowHeight: 28,
-                     rowSpacing: 2) { node, isSelected, _, _ in
-                    Text(node.title,
-                         color: isSelected
-                            ? Color.white
-                            : Color(r: 0.83, g: 0.85, b: 0.90))
-                }
-                .flex()
-                .background(Color(r: 0.12, g: 0.14, b: 0.18))
-
-                Button(action: { clickCount += 1 }) {
-                    Text("Refresh Snapshot \(clickCount)", color: Color.white)
-                        .padding(8)
-                        .background(Color(r: 0.30, g: 0.55, b: 0.95))
-                }
-            }
-            .padding(16)
-            .frame(width: 260)
-            .background(Color(r: 0.16, g: 0.18, b: 0.22))
-
-            Column(alignment: .leading, spacing: 12) {
-                Text("GuavaUI — Phase 7.0", color: Color.white)
-                    .font(.system(size: 28, weight: .bold))
-                    .lineHeight(32)
-                Divider()
-                Text("Compose -> Yoga -> DrawList -> wgpu",
-                     color: Color(r: 0.7, g: 0.85, b: 1.0))
-                Text("@State + Recomposer reconcile live",
-                     color: Color(r: 0.94, g: 0.94, b: 0.98))
-
-                TextField(
-                    "Type here…",
-                    text: $inputText,
-                    onSubmit: { print("[demo] submit: \(inputText)") }
-                )
-                .padding(8)
-                .background(Color(r: 0.20, g: 0.22, b: 0.28))
-                .frame(height: 36)
-
-                Text("echo: \(inputText)",
-                     color: Color(r: 0.85, g: 0.92, b: 1.0))
-
-                Row(alignment: .top, spacing: 16) {
-                    Image(textureID: previewTextureID, width: 112, height: 112)
-                        .cornerRadius(24)
-                        .foregroundColor(Color(r: 1.0, g: 0.92, b: 0.84, a: 0.92))
-                        .opacity(0.92)
-
-                    Column(alignment: .leading, spacing: 6) {
-                        Text("Style Preview", color: Color.white)
-                            .font(.system(size: 20, weight: .bold))
-                            .lineHeight(24)
-                        Text("Image + cornerRadius + foregroundColor + opacity",
-                             color: Color(r: 0.72, g: 0.79, b: 0.9))
-                            .lineHeight(18)
-                        Text("font(size: 28, weight: .bold)",
-                             color: Color(r: 0.95, g: 0.96, b: 0.98))
-                            .font(.system(size: 28, weight: .bold))
-                            .lineHeight(32)
-                        Text("lineHeight(24) keeps multi-line rhythm stable.",
-                             color: Color(r: 0.78, g: 0.84, b: 0.92))
-                            .lineHeight(24)
-                    }
-                    .flex()
-                }
-                .padding(16)
-                .background(Color(r: 0.14, g: 0.17, b: 0.22))
-
-                Text("Console", color: Color.white)
-                    .font(.system(size: 18, weight: .bold))
-
-                List(demoLogEntries, selection: $selectedLogID, rowHeight: 34, rowSpacing: 2) { entry, isSelected in
-                    Row(alignment: .center, spacing: 10) {
-                        Text(entry.level, color: demoLogColor(entry.level))
-                            .font(.system(size: 12, weight: .bold))
-                        Text(entry.message,
+        SplitView(.horizontal, fraction: 0.22) {
+            Panel("Hierarchy", contentPadding: .zero) {
+                Column(alignment: .leading, spacing: 0) {
+                    Tree(demoSceneTree,
+                         children: \.children,
+                         selection: $selectedSceneNodeID,
+                         rowHeight: 28,
+                         rowSpacing: 2) { node, isSelected, _, _ in
+                        Text(node.title,
                              color: isSelected
                                 ? Color.white
-                                : Color(r: 0.84, g: 0.88, b: 0.94))
-                            .lineHeight(18)
+                                : Color(r: 0.83, g: 0.85, b: 0.90))
                     }
+                    .flex()
+
+                    Divider(color: Color(r: 0.23, g: 0.26, b: 0.31))
+
+                    Row(alignment: .center, spacing: 8) {
+                        Button(action: { clickCount += 1 }) {
+                            Text("Refresh Snapshot \(clickCount)", color: Color.white)
+                                .padding(8)
+                                .background(Color(r: 0.30, g: 0.55, b: 0.95))
+                        }
+                        Spacer(minLength: 0)
+                    }
+                    .padding(12)
                 }
                 .flex()
-                .background(Color(r: 0.12, g: 0.14, b: 0.18))
             }
-            .flex()
-            .padding(20)
-            .background(Color(r: 0.10, g: 0.11, b: 0.14))
+        } second: {
+            SplitView(.horizontal, fraction: 0.74) {
+                SplitView(.vertical, fraction: 0.68) {
+                    Panel("Workspace") {
+                        Column(alignment: .leading, spacing: 12) {
+                            Text("GuavaUI — Phase 7.1", color: Color.white)
+                                .font(.system(size: 28, weight: .bold))
+                                .lineHeight(32)
+                            Text("List / Tree 已接入，当前 demo 改用 SplitView + Panel 外壳。",
+                                 color: Color(r: 0.7, g: 0.85, b: 1.0))
+                                .lineHeight(20)
+                            Text("@State + Recomposer reconcile live",
+                                 color: Color(r: 0.94, g: 0.94, b: 0.98))
 
-            Column(alignment: .leading, spacing: 6) {
-                Text("Inspector", color: Color.white)
-                    .font(.system(size: 20, weight: .bold))
-                Divider()
-                Text("selected: \(demoSceneTitle(id: selectedSceneNodeID))",
-                     color: Color(r: 0.92, g: 0.94, b: 0.98))
-                    .lineHeight(20)
-                Text("type: EntityNode", color: Color(r: 0.7, g: 0.7, b: 0.75))
-                Text("layout: yoga", color: Color(r: 0.7, g: 0.7, b: 0.75))
-                Text("console focus: #\(selectedLogID ?? 0)",
-                     color: Color(r: 0.7, g: 0.7, b: 0.75))
-                Spacer().frame(height: 12)
-                Text("Phase 7 status", color: Color.white)
-                    .font(.system(size: 16, weight: .bold))
-                Text("List / Tree 可用于 Editor 的 Console / Hierarchy 原型。",
-                     color: Color(r: 0.74, g: 0.79, b: 0.86))
-                    .lineHeight(18)
-                Spacer()
+                            TextField(
+                                "Type here…",
+                                text: $inputText,
+                                onSubmit: { print("[demo] submit: \(inputText)") }
+                            )
+                            .padding(8)
+                            .background(Color(r: 0.20, g: 0.22, b: 0.28))
+                            .frame(height: 36)
+
+                            Text("echo: \(inputText)",
+                                 color: Color(r: 0.85, g: 0.92, b: 1.0))
+
+                            Row(alignment: .top, spacing: 16) {
+                                Image(textureID: previewTextureID, width: 112, height: 112)
+                                    .cornerRadius(24)
+                                    .foregroundColor(Color(r: 1.0, g: 0.92, b: 0.84, a: 0.92))
+                                    .opacity(0.92)
+
+                                Column(alignment: .leading, spacing: 6) {
+                                    Text("Style Preview", color: Color.white)
+                                        .font(.system(size: 20, weight: .bold))
+                                        .lineHeight(24)
+                                    Text("Image + cornerRadius + foregroundColor + opacity",
+                                         color: Color(r: 0.72, g: 0.79, b: 0.9))
+                                        .lineHeight(18)
+                                    Text("font(size: 28, weight: .bold)",
+                                         color: Color(r: 0.95, g: 0.96, b: 0.98))
+                                        .font(.system(size: 28, weight: .bold))
+                                        .lineHeight(32)
+                                    Text("lineHeight(24) keeps multi-line rhythm stable.",
+                                         color: Color(r: 0.78, g: 0.84, b: 0.92))
+                                        .lineHeight(24)
+                                }
+                                .flex()
+                            }
+                            .padding(16)
+                            .background(Color(r: 0.14, g: 0.17, b: 0.22))
+
+                            Spacer()
+                        }
+                    }
+                } second: {
+                    Panel("Console", contentPadding: .zero) {
+                        List(demoLogEntries, selection: $selectedLogID, rowHeight: 34, rowSpacing: 2) { entry, isSelected in
+                            Row(alignment: .center, spacing: 10) {
+                                Text(entry.level, color: demoLogColor(entry.level))
+                                    .font(.system(size: 12, weight: .bold))
+                                Text(entry.message,
+                                     color: isSelected
+                                        ? Color.white
+                                        : Color(r: 0.84, g: 0.88, b: 0.94))
+                                    .lineHeight(18)
+                            }
+                        }
+                        .flex()
+                    }
+                }
+            } second: {
+                Panel("Inspector") {
+                    Column(alignment: .leading, spacing: 6) {
+                        Text("selected: \(demoSceneTitle(id: selectedSceneNodeID))",
+                             color: Color(r: 0.92, g: 0.94, b: 0.98))
+                            .lineHeight(20)
+                        Text("type: EntityNode", color: Color(r: 0.7, g: 0.7, b: 0.75))
+                        Text("layout: yoga", color: Color(r: 0.7, g: 0.7, b: 0.75))
+                        Text("console focus: #\(selectedLogID ?? 0)",
+                             color: Color(r: 0.7, g: 0.7, b: 0.75))
+                        Spacer().frame(height: 12)
+                        Text("Phase 7 status", color: Color.white)
+                            .font(.system(size: 16, weight: .bold))
+                        Text("SplitView 当前是可嵌套二分外壳；Panel 提供标题栏和内容容器。",
+                             color: Color(r: 0.74, g: 0.79, b: 0.86))
+                            .lineHeight(18)
+                        Spacer()
+                    }
+                }
             }
-            .padding(16)
-            .frame(width: 240)
-            .background(Color(r: 0.16, g: 0.18, b: 0.22))
         }
         .flex()
+        .background(Color(r: 0.10, g: 0.11, b: 0.14))
     }
 }
 
