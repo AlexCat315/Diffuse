@@ -4,11 +4,16 @@ public struct GPUBindGroupLayoutEntry: Sendable {
     public var binding: UInt32
     public var visibility: GPUShaderStage
     public var type: GPUBindingType
+    public var hasDynamicOffset: Bool
 
-    public init(binding: UInt32, visibility: GPUShaderStage, type: GPUBindingType) {
+    public init(binding: UInt32,
+                visibility: GPUShaderStage,
+                type: GPUBindingType,
+                hasDynamicOffset: Bool = false) {
         self.binding = binding
         self.visibility = visibility
         self.type = type
+        self.hasDynamicOffset = hasDynamicOffset
     }
 }
 

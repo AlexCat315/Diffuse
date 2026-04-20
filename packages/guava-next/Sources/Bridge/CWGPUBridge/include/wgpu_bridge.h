@@ -234,6 +234,7 @@ typedef struct WGPUBridgeBindGroupLayoutEntry {
     uint32_t binding;
     int visibility;
     WGPUBridgeBindingType type;
+    int has_dynamic_offset;
 } WGPUBridgeBindGroupLayoutEntry;
 
 typedef struct WGPUBridgeBindGroupEntry {
@@ -362,6 +363,7 @@ int wgpu_bridge_create_render_pipeline(
     uint32_t vertex_buffer_count,
     const WGPUBridgeBlendState* blend,
     const WGPUBridgeDepthStencilPipelineState* depth_stencil,
+    void* pipeline_layout,
     void** out_pipeline);
 
 void wgpu_bridge_release_render_pipeline(void* pipeline);
@@ -431,6 +433,12 @@ void wgpu_bridge_render_pass_draw_indexed_indirect(void* pass,
 void wgpu_bridge_render_pass_set_bind_group(void* pass,
                                             uint32_t group_index,
                                             void* bind_group);
+
+void wgpu_bridge_render_pass_set_bind_group_dynamic(void* pass,
+                                                    uint32_t group_index,
+                                                    void* bind_group,
+                                                    uint32_t dynamic_offset_count,
+                                                    const uint32_t* dynamic_offsets);
 
 void wgpu_bridge_render_pass_end(void* pass);
 
