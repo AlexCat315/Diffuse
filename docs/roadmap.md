@@ -167,7 +167,14 @@ cd GuavaUI && swift run GuavaUIDemo
 
 **依赖**：M2 完成。
 
+**窗口范围**：M3 只交付**单窗口编辑器**。多窗口（撕下面板、独立预览窗）按
+`guava-ui-blueprint.md §9.4` 的窗口策略推迟到 M4–M5；当期所有 Runtime 接口
+必须满足"窗口前瞻约束"（无 `.shared` 单例、`InputEvent` 携带 `WindowID`、
+`EventDispatcher` 绑定单棵 `NodeTree`），以避免后期重构。
+
 **轨道 B：GuavaUI Phase 6–7**
+
+> Phase 6 详细设计见 `docs/guava-ui-phase6-design.md`。
 
 Phase 6（Compose API + 基础组件）：
 ```

@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200" width="400" height="400">
+  <!-- 白色背景 -->
+  <rect width="200" height="200" fill="white"/>
+
+  <!-- 最外层齿轮（蓝色系） -->
+  <g transform="translate(100, 100)">
+    <!-- 齿轮外圈 -->
+    <path d="M 0 -85
+             A 5 5 0 0 1 4.33 -82.5
+             L 78.3 -14.5
+             A 5 5 0 0 1 76.5 4.33
+             L 4.33 82.5
+             A 5 5 0 0 1 -4.33 82.5
+             L -76.5 4.33
+             A 5 5 0 0 1 -78.3 -14.5
+             L -4.33 -82.5
+             A 5 5 0 0 1 0 -85
+             Z"
+          fill="url(#gearGradient)" stroke="#1a5276" stroke-width="1"/>
+
+    <!-- 中间层：8个菱形镂空（交替实心与空心） -->
+    <g>
+      <circle cx="0" cy="0" r="52" fill="#1a5276"/>
+      <!-- 镂空菱形 -->
+      <g fill="white">
+        <path d="M 0 -40 L 10 -30 L 0 -20 L -10 -30 Z" transform="rotate(0)"/>
+        <path d="M 0 -40 L 10 -30 L 0 -20 L -10 -30 Z" transform="rotate(45)"/>
+        <path d="M 0 -40 L 10 -30 L 0 -20 L -10 -30 Z" transform="rotate(90)"/>
+        <path d="M 0 -40 L 10 -30 L 0 -20 L -10 -30 Z" transform="rotate(135)"/>
+        <path d="M 0 -40 L 10 -30 L 0 -20 L -10 -30 Z" transform="rotate(180)"/>
+        <path d="M 0 -40 L 10 -30 L 0 -20 L -10 -30 Z" transform="rotate(225)"/>
+        <path d="M 0 -40 L 10 -30 L 0 -20 L -10 -30 Z" transform="rotate(270)"/>
+        <path d="M 0 -40 L 10 -30 L 0 -20 L -10 -30 Z" transform="rotate(315)"/>
+      </g>
+    </g>
+
+    <!-- 最内层：6个六边形围绕中心圆 -->
+    <g>
+      <circle cx="0" cy="0" r="20" fill="#1a5276"/>
+      <!-- 围绕的小六边形 -->
+      <g fill="#3498db">
+        <polygon points="0,-10 8.66,-5 8.66,5 0,10 -8.66,5 -8.66,-5" transform="translate(0,-30)"/>
+        <polygon points="0,-10 8.66,-5 8.66,5 0,10 -8.66,5 -8.66,-5" transform="rotate(60) translate(0,-30)"/>
+        <polygon points="0,-10 8.66,-5 8.66,5 0,10 -8.66,5 -8.66,-5" transform="rotate(120) translate(0,-30)"/>
+        <polygon points="0,-10 8.66,-5 8.66,5 0,10 -8.66,5 -8.66,-5" transform="rotate(180) translate(0,-30)"/>
+        <polygon points="0,-10 8.66,-5 8.66,5 0,10 -8.66,5 -8.66,-5" transform="rotate(240) translate(0,-30)"/>
+        <polygon points="0,-10 8.66,-5 8.66,5 0,10 -8.66,5 -8.66,-5" transform="rotate(300) translate(0,-30)"/>
+      </g>
+      <!-- 中心小圆 -->
+      <circle cx="0" cy="0" r="6" fill="white"/>
+    </g>
+  </g>
+
+  <!-- 渐变色定义 -->
+  <defs>
+    <linearGradient id="gearGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#3498db"/>
+      <stop offset="100%" stop-color="#1a5276"/>
+    </linearGradient>
+  </defs>
+</svg>

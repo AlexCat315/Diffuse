@@ -424,6 +424,29 @@ Compose 层内部再分两个带宽。
 - Compose 层不出现平台条件编译。
 - 业务组件不直接依赖平台 API。
 
+### 9.4 窗口策略
+
+GuavaUI 的窗口模型分两期落地：
+
+| 阶段 | 实现 | 说明 |
+|------|------|------|
+| 当期（M3） | 单窗口实现 | `SDL3PlatformHost` 持有一个 `Shell`、一棵 `NodeTree`、一个 `Recomposer`、一个 `EventDispatcher`。 |
+| 远期（M4–M5） | 多窗口实现 | 引入 `WindowManager`，每个窗口拥有独立的 `Shell` / `NodeTree` / `Recomposer` / `EventDispatcher`；`InputEvent` 携带 `WindowID` 路由。 |
+
+**接口前瞻约束**（当期就必须满足，避免后期撕裂）：
+
+- `Recomposer` 不暴露 `.shared`，由 `PlatformHost` 持有
+- `NodeTree` 不是进程单例，作为参数显式传递
+- `InputEvent` 类型上携带 `windowID: WindowID`（默认 `0`）
+- `EventDispatcher` 通过构造函数绑定到一棵 `NodeTree`，不使用全局态
+- `Shell` 协议保持单窗口语义；将来由 `WindowManager` 拥有多个 `Shell`
+
+不在当期实现：
+
+- 第二个原生窗口的创建
+- 跨窗口事件路由 / 焦点跨窗策略
+- 跨窗口拖拽与 GPU 资源共享
+
 ## 10. 与引擎的关系
 
 GuavaUI 不是独立渲染进程，而是与引擎同进程协作。
