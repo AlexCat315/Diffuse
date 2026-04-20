@@ -6,6 +6,15 @@ import RHIWGPU
 
 // MARK: - Root view (compose)
 
+/// Process-wide demo state. The compose graph is rebuilt on the same `RootView`
+/// reference each frame; persisting `inputText` outside the struct keeps the
+/// `Binding` stable without depending on a `@State` runtime that does not yet
+/// exist in GuavaUICompose.
+final class DemoState {
+    nonisolated(unsafe) static let shared = DemoState()
+    var inputText: String = ""
+}
+
 struct RootView: View {
     var body: some View {
         Row(spacing: 1) {
@@ -31,8 +40,23 @@ struct RootView: View {
                 Divider()
                 Text("Compose -> Yoga -> DrawList -> wgpu",
                      color: Color(r: 0.7, g: 0.85, b: 1.0))
-                Text("Button + ScrollView live",
+                Text("Button + ScrollView + TextField live",
                      color: Color(r: 0.94, g: 0.94, b: 0.98))
+
+                TextField(
+                    "Type here…",
+                    text: Binding(
+                        get: { DemoState.shared.inputText },
+                        set: {
+                            DemoState.shared.inputText = $0
+                            print("[demo] input → \"\($0)\"")
+                        }
+                    ),
+                    onSubmit: { print("[demo] submit: \(DemoState.shared.inputText)") }
+                )
+                .padding(8)
+                .background(Color(r: 0.20, g: 0.22, b: 0.28))
+                .frame(height: 36)
 
                 ScrollView(.vertical) {
                     Column(alignment: .leading, spacing: 6) {
@@ -102,6 +126,7 @@ let tree = NodeTree()
 let host = SDL3PlatformHost(title: "GuavaUI — Phase 6.5")
 let graph = ViewGraph(tree: tree, recomposer: host.recomposer)
 InteractionRegistryHolder.current = host.interactions
+FocusChainHolder.current = host.focusChain
 graph.install(root: RootView())
 
 // MARK: - GPU stack

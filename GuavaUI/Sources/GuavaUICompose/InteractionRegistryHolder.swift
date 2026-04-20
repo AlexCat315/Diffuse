@@ -9,3 +9,10 @@ import GuavaUIRuntime
 public enum InteractionRegistryHolder {
     nonisolated(unsafe) public static var current: InteractionRegistry?
 }
+
+/// Process-wide focus chain holder. `TextField` (and other focus-aware
+/// primitives) read this during draw to decide whether to render a cursor /
+/// focus ring.
+public enum FocusChainHolder {
+    nonisolated(unsafe) public static var current: FocusChain?
+}

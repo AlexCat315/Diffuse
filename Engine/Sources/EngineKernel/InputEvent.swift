@@ -82,6 +82,11 @@ public enum InputEvent: Sendable {
     case keyDown(KeyEvent)
     case keyUp(KeyEvent)
 
+    /// IME / OS-composed text. The string is decoded UTF-8 from SDL3 and may
+    /// contain multiple grapheme clusters per event (e.g. dead-key composed
+    /// accents or pasted text).
+    case textInput(String)
+
     case mouseMotion(MouseMotionEvent)
     case mouseButtonDown(MouseButtonEvent)
     case mouseButtonUp(MouseButtonEvent)
