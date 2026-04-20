@@ -27,3 +27,11 @@ public enum ClipboardHolder {
     nonisolated(unsafe) public static var read: (() -> String?)?
     nonisolated(unsafe) public static var write: ((String) -> Void)?
 }
+
+/// Process-wide pointer-capture holder. Primitives that need to track the
+/// pointer outside their own bounds during a drag (e.g. `TextField` text
+/// selection) call `current?.acquire(node)` on pointer-down and
+/// `current?.release()` on pointer-up.
+public enum PointerCaptureHolder {
+    nonisolated(unsafe) public static var current: PointerCapture?
+}

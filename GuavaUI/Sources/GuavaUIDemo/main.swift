@@ -118,6 +118,7 @@ let host = SDL3PlatformHost(title: "GuavaUI — Phase 6.5")
 let graph = ViewGraph(tree: tree, recomposer: host.recomposer)
 InteractionRegistryHolder.current = host.interactions
 FocusChainHolder.current = host.focusChain
+PointerCaptureHolder.current = host.pointerCapture
 ClipboardHolder.read  = { SDL3Clipboard.read() }
 ClipboardHolder.write = { SDL3Clipboard.write($0) }
 graph.install(root: RootView())

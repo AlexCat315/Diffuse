@@ -270,4 +270,74 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         _ = txt("Z", .target)
         #expect(rig.store.value == "Zcdef")
     } }
+
+    // MARK: - Phase 6.4e — drag selection + multi-click
+
+    @Test("Triple click selects the entire field")
+    func tripleClickSelectsAll() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "hello world"
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+        let node = rig.tree.root!.children.first!
+        let pointer = rig.registry.handlers(for: node).pointer!
+        let evt = MouseButtonEvent(button: .left, x: 50, y: 5, clicks: 3)
+        _ = pointer(evt, .down, .target)
+
+        // Backspace must wipe the field — the entire range is selected.
+        let key = rig.registry.handlers(for: node).key!
+        _ = key(KeyEvent(scancode: 42, keycode: 0, modifiers: [], isRepeat: false), .target)
+        #expect(rig.store.value == "")
+    } }
+
+    @Test("Double click selects the word at the cursor; non-word click selects the run")
+    func doubleClickSelectsWord() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "hello   world"
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+        let node = rig.tree.root!.children.first!
+        let pointer = rig.registry.handlers(for: node).pointer!
+
+        // Without a TextEnvironment installed, characterIndex returns 0 → the
+        // double-click anchors on character 0, which lives in the word "hello".
+        let evt = MouseButtonEvent(button: .left, x: 0, y: 5, clicks: 2)
+        _ = pointer(evt, .down, .target)
+
+        // Type 'X' — the selected word is replaced.
+        let txt = rig.registry.handlers(for: node).text!
+        _ = txt("X", .target)
+        #expect(rig.store.value == "X   world")
+    } }
+
+    @Test("Pointer-down acquires capture; pointer-up releases it")
+    func dragAcquiresAndReleasesCapture() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "abc"
+        let capture = PointerCapture()
+        PointerCaptureHolder.current = capture
+        defer { PointerCaptureHolder.current = nil }
+
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+        let node = rig.tree.root!.children.first!
+        let pointer = rig.registry.handlers(for: node).pointer!
+
+        let down = MouseButtonEvent(button: .left, x: 5, y: 5, clicks: 1)
+        _ = pointer(down, .down, .target)
+        #expect(capture.target === node)
+
+        let up = MouseButtonEvent(button: .left, x: 5, y: 5, clicks: 1)
+        _ = pointer(up, .up, .target)
+        #expect(capture.target == nil)
+    } }
+
+    @Test("Motion events are ignored unless a drag is in progress")
+    func motionIgnoredWithoutDrag() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "abc"
+        rig.graph.install(root: TextField(text: makeBinding(rig.store)))
+        let node = rig.tree.root!.children.first!
+        let motion = rig.registry.handlers(for: node).motion!
+
+        let evt = MouseMotionEvent(x: 100, y: 5, deltaX: 1, deltaY: 0)
+        #expect(motion(evt, .target) == .ignored)
+    } }
 }
