@@ -86,7 +86,7 @@ let package = Package(
         // MARK: - Demo
         .executableTarget(
             name: "GuavaUIDemo",
-            dependencies: ["GuavaUIRuntime"]
+            dependencies: ["GuavaUIRuntime", "GuavaUICompose"]
         ),
 
         // MARK: - Tests
