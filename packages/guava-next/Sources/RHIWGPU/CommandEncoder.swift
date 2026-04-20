@@ -142,6 +142,24 @@ public final class GPURenderPassEncoder {
         wgpu_bridge_render_pass_set_bind_group(handle, index, bindGroup.handle)
     }
 
+    public func setBindGroup(_ bindGroup: GPUBindGroup,
+                             index: UInt32 = 0,
+                             dynamicOffsets: [UInt32]) {
+        if dynamicOffsets.isEmpty {
+            wgpu_bridge_render_pass_set_bind_group(handle, index, bindGroup.handle)
+            return
+        }
+        dynamicOffsets.withUnsafeBufferPointer { offsets in
+            wgpu_bridge_render_pass_set_bind_group_dynamic(
+                handle,
+                index,
+                bindGroup.handle,
+                UInt32(offsets.count),
+                offsets.baseAddress
+            )
+        }
+    }
+
     public func setViewport(x: Float, y: Float, width: Float, height: Float,
                             minDepth: Float = 0.0, maxDepth: Float = 1.0) {
         wgpu_bridge_render_pass_set_viewport(handle, x, y, width, height, minDepth, maxDepth)
