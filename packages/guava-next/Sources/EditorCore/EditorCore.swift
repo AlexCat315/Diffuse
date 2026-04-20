@@ -1,4 +1,5 @@
 import EngineCore
+import EngineKernel
 import RenderBackend
 import PlatformShell
 import RHIWGPU
@@ -12,6 +13,7 @@ public final class EditorApplication {
     private(set) var state: EditorState
     private(set) var panelRegistry: PanelRegistry
     private(set) var dockLayout: DockLayout
+    public let inputState: InputState
 
     public init(shell: any Shell, backendConfig: WGPUDeviceConfig? = nil) {
         self.shell = shell
@@ -24,6 +26,7 @@ public final class EditorApplication {
         self.engine = host
         self.renderer = WGPURenderer(backend: host.wgpuBackend, shell: shell)
         self.state = EditorState()
+        self.inputState = InputState()
 
         let panels = [
             BasicPanelModel(id: "hierarchy", title: "Scene Hierarchy"),
@@ -45,13 +48,44 @@ public final class EditorApplication {
     public func runMainLoop(iterations: Int? = nil) {
         var frame = 0
         while shell.isRunning && (iterations.map { frame < $0 } ?? true) {
-            shell.pollEvents()
-            engine.tick(deltaTime: 1.0 / 60.0)
-            renderer.renderFrame(frameIndex: frame)
+            let events = shell.pollEvents()
+            dispatchEvents(events)
+            engine.tick(deltaTime: 1.0 / 60.0, inputEvents: events)
+
+            if state.shouldRender {
+                renderer.renderFrame(frameIndex: frame)
+            }
             frame += 1
         }
         shell.shutdown()
     }
+
+    // MARK: - Event dispatch
+
+    private func dispatchEvents(_ events: [InputEvent]) {
+        inputState.process(events)
+
+        for event in events {
+            switch event {
+            case .windowFocusGained:
+                EditorReducer.reduce(state: &state, action: .setWindowFocused(true))
+            case .windowFocusLost:
+                EditorReducer.reduce(state: &state, action: .setWindowFocused(false))
+            case .windowMinimized:
+                EditorReducer.reduce(state: &state, action: .setWindowMinimized(true))
+            case .windowRestored:
+                EditorReducer.reduce(state: &state, action: .setWindowMinimized(false))
+            case .windowOccluded:
+                EditorReducer.reduce(state: &state, action: .setWindowOccluded(true))
+            case .windowExposed:
+                EditorReducer.reduce(state: &state, action: .setWindowOccluded(false))
+            default:
+                break
+            }
+        }
+    }
+
+    // MARK: - Render helpers
 
     public func queueViewportRenderSettings(_ settings: RenderSettings) {
         renderer.queueRenderSettings(settings)

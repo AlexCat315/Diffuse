@@ -1,4 +1,5 @@
 import Foundation
+import EngineKernel
 
 #if os(macOS)
 import AppKit
@@ -31,13 +32,19 @@ public protocol Shell: AnyObject {
     var renderSurface: NativeRenderSurface? { get }
     var drawableSize: (width: UInt32, height: UInt32) { get }
     var isRunning: Bool { get }
+    var isFocused: Bool { get }
+    var isMinimized: Bool { get }
+    var isOccluded: Bool { get }
     func initializeWindow(title: String) throws
-    func pollEvents()
+    @discardableResult func pollEvents() -> [InputEvent]
     func shutdown()
 }
 
 public extension Shell {
     var isRunning: Bool { true }
+    var isFocused: Bool { true }
+    var isMinimized: Bool { false }
+    var isOccluded: Bool { false }
 }
 
 @MainActor
@@ -107,7 +114,8 @@ public final class AppKitShell: Shell {
         print("[PlatformShell] window ready, drawable=\(layer.drawableSize)")
     }
 
-    public func pollEvents() {
+    @discardableResult
+    public func pollEvents() -> [InputEvent] {
         let app = NSApplication.shared
         while let event = app.nextEvent(matching: .any, until: nil, inMode: .default, dequeue: true) {
             app.sendEvent(event)
@@ -115,6 +123,7 @@ public final class AppKitShell: Shell {
         if window?.isVisible == false {
             isRunning = false
         }
+        return []
     }
 
     public func shutdown() {
