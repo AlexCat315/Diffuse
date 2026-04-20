@@ -129,6 +129,17 @@ typedef enum {
     WGPUBridge_BindingType_SampledTexture,
 } WGPUBridgeBindingType;
 
+typedef enum {
+    WGPUBridge_CompareFunction_Never = 0,
+    WGPUBridge_CompareFunction_Less,
+    WGPUBridge_CompareFunction_Equal,
+    WGPUBridge_CompareFunction_LessEqual,
+    WGPUBridge_CompareFunction_Greater,
+    WGPUBridge_CompareFunction_NotEqual,
+    WGPUBridge_CompareFunction_GreaterEqual,
+    WGPUBridge_CompareFunction_Always,
+} WGPUBridgeCompareFunction;
+
 /* ─── Bridge Descriptor Structs ──────────────────────────────────── */
 
 typedef struct WGPUBridgeColor {
@@ -195,6 +206,19 @@ typedef struct WGPUBridgeBindGroupEntry {
     void* sampler;
     void* texture_view;
 } WGPUBridgeBindGroupEntry;
+
+typedef struct WGPUBridgeDepthStencilAttachment {
+    void* view;
+    WGPUBridgeLoadOp depth_load_op;
+    WGPUBridgeStoreOp depth_store_op;
+    float clear_depth;
+} WGPUBridgeDepthStencilAttachment;
+
+typedef struct WGPUBridgeDepthStencilPipelineState {
+    WGPUBridgeTextureFormat format;
+    int depth_write_enabled;
+    WGPUBridgeCompareFunction depth_compare;
+} WGPUBridgeDepthStencilPipelineState;
 
 typedef struct WGPUInstanceDescriptor {
     const void* nextInChain;
@@ -268,6 +292,7 @@ int wgpu_bridge_create_render_pipeline(
     const WGPUBridgeVertexBufferLayout* vertex_buffers,
     uint32_t vertex_buffer_count,
     const WGPUBridgeBlendState* blend,
+    const WGPUBridgeDepthStencilPipelineState* depth_stencil,
     void** out_pipeline);
 
 void wgpu_bridge_release_render_pipeline(void* pipeline);
@@ -296,6 +321,7 @@ int wgpu_bridge_begin_render_pass(void* encoder,
                                   WGPUBridgeLoadOp load_op,
                                   WGPUBridgeStoreOp store_op,
                                   WGPUBridgeColor clear_color,
+                                  const WGPUBridgeDepthStencilAttachment* depth,
                                   void** out_pass);
 
 void wgpu_bridge_render_pass_set_pipeline(void* pass, void* pipeline);
@@ -341,6 +367,30 @@ void wgpu_bridge_queue_submit(void* queue,
 void wgpu_bridge_release_command_buffer(void* command_buffer);
 void wgpu_bridge_release_command_encoder(void* encoder);
 void wgpu_bridge_release_render_pass_encoder(void* pass);
+
+/* ─── Viewport / Scissor ─────────────────────────────────────────── */
+
+void wgpu_bridge_render_pass_set_viewport(void* pass,
+                                          float x, float y,
+                                          float width, float height,
+                                          float min_depth, float max_depth);
+
+void wgpu_bridge_render_pass_set_scissor_rect(void* pass,
+                                              uint32_t x, uint32_t y,
+                                              uint32_t width, uint32_t height);
+
+/* ─── Write Texture ──────────────────────────────────────────────── */
+
+void wgpu_bridge_write_texture(void* queue,
+                               void* texture,
+                               uint32_t mip_level,
+                               const void* data,
+                               size_t data_size,
+                               uint32_t bytes_per_row,
+                               uint32_t rows_per_image,
+                               uint32_t width,
+                               uint32_t height,
+                               uint32_t depth_or_layers);
 
 /* ─── Sampler ────────────────────────────────────────────────────── */
 

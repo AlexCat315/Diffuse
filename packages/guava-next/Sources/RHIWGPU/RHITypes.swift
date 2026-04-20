@@ -349,3 +349,53 @@ public enum GPUBindingType: Sendable {
         }
     }
 }
+
+// MARK: - Compare Function
+
+public enum GPUCompareFunction: Sendable {
+    case never
+    case less
+    case equal
+    case lessEqual
+    case greater
+    case notEqual
+    case greaterEqual
+    case always
+
+    var bridgeValue: WGPUBridgeCompareFunction {
+        switch self {
+        case .never:        return WGPUBridge_CompareFunction_Never
+        case .less:         return WGPUBridge_CompareFunction_Less
+        case .equal:        return WGPUBridge_CompareFunction_Equal
+        case .lessEqual:    return WGPUBridge_CompareFunction_LessEqual
+        case .greater:      return WGPUBridge_CompareFunction_Greater
+        case .notEqual:     return WGPUBridge_CompareFunction_NotEqual
+        case .greaterEqual: return WGPUBridge_CompareFunction_GreaterEqual
+        case .always:       return WGPUBridge_CompareFunction_Always
+        }
+    }
+}
+
+// MARK: - Depth Stencil Pipeline State
+
+public struct GPUDepthStencilPipelineState: Sendable {
+    public var format: GPUTextureFormat
+    public var depthWriteEnabled: Bool
+    public var depthCompare: GPUCompareFunction
+
+    public init(format: GPUTextureFormat = .depth32Float,
+                depthWriteEnabled: Bool = true,
+                depthCompare: GPUCompareFunction = .less) {
+        self.format = format
+        self.depthWriteEnabled = depthWriteEnabled
+        self.depthCompare = depthCompare
+    }
+
+    var bridgeValue: WGPUBridgeDepthStencilPipelineState {
+        WGPUBridgeDepthStencilPipelineState(
+            format: format.bridgeValue,
+            depth_write_enabled: depthWriteEnabled ? 1 : 0,
+            depth_compare: depthCompare.bridgeValue
+        )
+    }
+}
