@@ -4,11 +4,11 @@ import EngineKernel
 import GuavaUIRuntime
 @testable import GuavaUICompose
 
-@Suite("Phase 6.4 Button & ScrollView")
-struct ButtonScrollViewTests {
+@Suite("Phase 6.4 Button & ScrollView", .serialized)
+struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
 
     @Test("Button registers a pointer handler that fires on down+up")
-    func buttonFiresOnTap() {
+    func buttonFiresOnTap() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry
 
@@ -32,10 +32,10 @@ struct ButtonScrollViewTests {
         _ = handlers.pointer!(evt, .down, .target)
         _ = handlers.pointer!(evt, .up,   .target)
         #expect(taps == 1)
-    }
+    } }
 
     @Test("Button up without prior down does not fire action")
-    func buttonIgnoresStrayUp() {
+    func buttonIgnoresStrayUp() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry
 
@@ -53,10 +53,10 @@ struct ButtonScrollViewTests {
         let result = handlers.pointer!(evt, .up, .target)
         #expect(taps == 0)
         #expect(result == .ignored)
-    }
+    } }
 
     @Test("ScrollView is hit-testable, clips, and registers a wheel handler")
-    func scrollViewSetup() {
+    func scrollViewSetup() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry
 
@@ -74,10 +74,10 @@ struct ButtonScrollViewTests {
         #expect(sv.isHitTestable == true)
         #expect(sv.clipsToBounds == true)
         #expect(registry.handlers(for: sv).wheel != nil)
-    }
+    } }
 
     @Test("ScrollView wheel handler clamps and updates contentOffset")
-    func scrollViewClamps() {
+    func scrollViewClamps() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry
 
@@ -124,5 +124,5 @@ struct ButtonScrollViewTests {
             _ = wheel(MouseWheelEvent(x: 0, y: 1), .target)
         }
         #expect(sv.contentOffset.y == 0)
-    }
+    } }
 }

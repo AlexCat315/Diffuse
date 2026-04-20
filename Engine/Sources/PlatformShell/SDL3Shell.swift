@@ -114,6 +114,9 @@ public final class SDL3Shell: Shell {
 #endif
 
         syncDrawableSize()
+        // Always-on text input: TextField primitives rely on
+        // `SDL_EVENT_TEXT_INPUT` for IME-aware character entry.
+        SDL_StartTextInput(createdWindow)
         let sz = "\(drawableSize.width)x\(drawableSize.height)"
         Logger.platform.info("SDL3 window ready, drawable=\(sz)")
     }
@@ -186,6 +189,12 @@ public final class SDL3Shell: Shell {
             case UInt32(GUAVA_SDL_EVENT_KEY_UP):
                 let ke = makeKeyEvent(from: event)
                 collected.append(.keyUp(ke))
+
+            // ── IME / text input ──
+            case UInt32(GUAVA_SDL_EVENT_TEXT_INPUT):
+                if let cstr = event.text.text {
+                    collected.append(.textInput(String(cString: cstr)))
+                }
 
             // ── Mouse motion ──
             case UInt32(GUAVA_SDL_EVENT_MOUSE_MOTION):
