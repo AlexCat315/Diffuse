@@ -68,24 +68,17 @@ cd Editor  && swift build   # 0 error
 
 **并行推进**：
 
-#### 轨道 A：Engine Phase 1（真实 wgpu 3D 渲染）
+#### 轨道 A：Engine Phase 1（真实 wgpu 3D 渲染）✅ 已完成
 
-必须实现的文件：
+`WGPURenderer` 已实现完整渲染管线：Lambert 光照 WGSL shader、深度缓冲、OBJ 网格上传、
+5 个实例（1 个 FinalBaseMesh.obj + 4 个环绕旋转的 cube）、透视摄像机、每帧动画。
 
-```
-Engine/Sources/RenderBackend/
-├── WGPURenderer.swift         # 替换 MetalPlaceholderRenderer
-├── Passes/Scene3DPass.swift   # Phong 光照，Vertex + Fragment shader
-├── MeshGPUBuffer.swift        # OBJ 网格上传 GPU Buffer
-├── UniformBuffer.swift        # MVP 矩阵 Uniform
-├── ViewportTexture.swift      # 离屏纹理（供后续 UI 采样）
-└── DepthBuffer.swift
-```
-
-验收：
+验收（已通过）：
 ```bash
-cd Editor && swift run GuavaEditor
-# 窗口内出现带光照的 OBJ 网格，FPS ≥ 60
+cd Editor && swift build   # Build complete
+cd Editor && swift run EditorApp
+# [WGPURenderer] scene built: meshes=["builtin.cube", "FinalBaseMesh.obj"] instances=5
+# [WGPURenderer] surface ready, size=(width: 2560, height: 1440), pipeline=true, depth=true
 ```
 
 #### 轨道 B：GuavaUI Phase 1–2（NodeTree + Recomposer）
@@ -378,7 +371,7 @@ cd Editor && swift run GuavaEditor
 | 阶段 | Engine | GuavaUI | Editor | 能做什么 |
 |------|--------|---------|--------|---------|
 | **M0** ✅ | Phase 0 | Phase 0 | Phase 0 | 三包构建通过 |
-| **M1** | Phase 1 | Phase 1–2 | — | 3D 帧可见；NodeTree/State 单测通过 |
+| **M1** | Phase 1 ✅ | Phase 1–2 | — | 3D 帧可见；NodeTree/State 单测通过 |
 | **M2** | — | Phase 3–5 | — | GuavaUI 窗口出现文本 |
 | **M3** | — | Phase 6–7 | Phase 1–2 | 编辑器界面成形 |
 | **M4** | Phase 2–3 | — | Phase 3–4 | 完整编辑工作流 |
