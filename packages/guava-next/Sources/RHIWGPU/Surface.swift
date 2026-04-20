@@ -33,13 +33,19 @@ public final class GPUSurface {
         }
     }
 
-    public func getCurrentTextureView() throws -> (texture: GPUTexture, view: GPUTextureView) {
+    /// Returns nil when the surface is temporarily unavailable (e.g. the
+    /// window is occluded by the compositor). The caller should skip the
+    /// frame and try again on the next tick. Throws only for hard errors.
+    public func getCurrentTextureView() throws -> (texture: GPUTexture, view: GPUTextureView)? {
         var texPtr: UnsafeMutableRawPointer?
         var viewPtr: UnsafeMutableRawPointer?
         let ok = wgpu_bridge_surface_get_current_texture_view(handle, &texPtr, &viewPtr)
-        guard ok == 1, let texPtr, let viewPtr else {
-            throw GPUSurfaceError.acquireTextureFailed(WGPUBackend.lastError())
+        if ok != 1 {
+            let msg = WGPUBackend.lastError()
+            if msg.isEmpty { return nil }
+            throw GPUSurfaceError.acquireTextureFailed(msg)
         }
+        guard let texPtr, let viewPtr else { return nil }
         return (
             GPUTexture(handle: texPtr, owned: false),
             GPUTextureView(handle: viewPtr)

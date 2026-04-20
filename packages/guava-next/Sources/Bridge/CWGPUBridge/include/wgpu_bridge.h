@@ -279,10 +279,6 @@ typedef struct WGPUBridgeColorAttachment {
     WGPUBridgeColor clear_color;
 } WGPUBridgeColorAttachment;
 
-typedef struct WGPUInstanceDescriptor {
-    const void* nextInChain;
-} WGPUInstanceDescriptor;
-
 /* ─── Device Lifecycle ───────────────────────────────────────────── */
 
 int wgpu_bridge_initialize(const char* library_path);

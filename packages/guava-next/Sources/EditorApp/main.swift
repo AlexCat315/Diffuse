@@ -4,4 +4,4 @@ import PlatformShell
 let shell = MacShell()
 let app = EditorApplication(shell: shell)
 app.bootstrap()
-app.runMainLoop(iterations: 3)
+app.runMainLoop(iterations: 240)

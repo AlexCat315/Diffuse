@@ -33,17 +33,17 @@ public protocol EngineRuntime {
 public final class EngineHost {
     private let runtime: any EngineRuntime
     private var kernel: EngineKernelCoordinator
-    private var wgpuBackend: WGPUBackend
+    public let wgpuBackend: WGPUBackend
     private var sceneRuntime: SceneRuntime
     private var scriptRuntime: ScriptRuntime
     private var assetPipeline: AssetPipeline
 
     public private(set) var lastTimings: PhaseTimings = .init()
 
-    public init(runtime: any EngineRuntime) {
+    public init(runtime: any EngineRuntime, wgpuBackend: WGPUBackend = WGPUBackend()) {
         self.runtime = runtime
         self.kernel = EngineKernelCoordinator()
-        self.wgpuBackend = WGPUBackend()
+        self.wgpuBackend = wgpuBackend
         self.sceneRuntime = SceneRuntime()
         self.scriptRuntime = ScriptRuntime()
         self.assetPipeline = AssetPipeline()

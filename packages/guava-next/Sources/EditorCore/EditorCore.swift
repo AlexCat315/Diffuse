@@ -1,7 +1,10 @@
 import EngineCore
 import RenderBackend
 import PlatformShell
+import RHIWGPU
+import Foundation
 
+@MainActor
 public final class EditorApplication {
     private let shell: any Shell
     private let engine: EngineHost
@@ -12,8 +15,11 @@ public final class EditorApplication {
 
     public init(shell: any Shell) {
         self.shell = shell
-        self.engine = EngineHost(runtime: BridgedEngineRuntime())
-        self.renderer = MetalPlaceholderRenderer()
+        let dylib = Self.locateWGPUDylib()
+        let backend = WGPUBackend(config: .init(libraryPath: dylib))
+        let host = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: backend)
+        self.engine = host
+        self.renderer = WGPURenderer(backend: host.wgpuBackend, shell: shell)
         self.state = EditorState()
 
         let panels = [
@@ -40,5 +46,20 @@ public final class EditorApplication {
             renderer.renderFrame(frameIndex: frame)
         }
         shell.shutdown()
+    }
+
+    private static func locateWGPUDylib() -> String {
+        let fm = FileManager.default
+        let cwd = fm.currentDirectoryPath
+        let candidates = [
+            "\(cwd)/vendor/wgpu/lib/libwgpu_native.dylib",
+            "\(cwd)/vendor/wgpu/libwgpu_native.dylib",
+            "\(cwd)/packages/guava-next/vendor/wgpu/lib/libwgpu_native.dylib",
+            "\(cwd)/packages/guava-next/vendor/wgpu/libwgpu_native.dylib",
+        ]
+        for c in candidates where fm.fileExists(atPath: c) {
+            return c
+        }
+        return "libwgpu_native.dylib"
     }
 }
