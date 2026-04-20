@@ -62,7 +62,7 @@ let package = Package(
         ),
         .target(
             name: "RenderBackend",
-            dependencies: ["RHIWGPU", "PlatformShell"]
+            dependencies: ["RHIWGPU", "PlatformShell", "AssetPipeline"]
         ),
         .target(
             name: "EditorCore",
