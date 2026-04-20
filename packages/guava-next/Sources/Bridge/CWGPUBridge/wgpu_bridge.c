@@ -218,6 +218,19 @@ static WGPUCompareFunction to_wgpu_compare(WGPUBridgeCompareFunction f) {
     }
 }
 
+static WGPUBackendType to_wgpu_backend_type(WGPUBridgeBackendType type) {
+    switch (type) {
+        case WGPUBridge_BackendType_D3D11:   return WGPUBackendType_D3D11;
+        case WGPUBridge_BackendType_D3D12:   return WGPUBackendType_D3D12;
+        case WGPUBridge_BackendType_Metal:   return WGPUBackendType_Metal;
+        case WGPUBridge_BackendType_Vulkan:  return WGPUBackendType_Vulkan;
+        case WGPUBridge_BackendType_OpenGL:  return WGPUBackendType_OpenGL;
+        case WGPUBridge_BackendType_OpenGLES:return WGPUBackendType_OpenGLES;
+        case WGPUBridge_BackendType_Undefined:
+        default:                             return WGPUBackendType_Undefined;
+    }
+}
+
 static WGPUStencilOperation to_wgpu_stencil_op(WGPUBridgeStencilOp op) {
     switch (op) {
         case WGPUBridge_StencilOp_Keep:      return WGPUStencilOperation_Keep;
@@ -348,7 +361,9 @@ int wgpu_bridge_create_instance(void** out_instance) {
     return 1;
 }
 
-int wgpu_bridge_request_adapter(void* instance, void** out_adapter) {
+int wgpu_bridge_request_adapter_with_backend(void* instance,
+                                             WGPUBridgeBackendType backend_type,
+                                             void** out_adapter) {
     if (instance == NULL || out_adapter == NULL) {
         set_error("invalid request_adapter arguments");
         return 0;
@@ -357,7 +372,7 @@ int wgpu_bridge_request_adapter(void* instance, void** out_adapter) {
 
     AsyncResult result = {0};
     WGPURequestAdapterOptions options = WGPU_REQUEST_ADAPTER_OPTIONS_INIT;
-    options.backendType = WGPUBackendType_Metal;
+    options.backendType = to_wgpu_backend_type(backend_type);
     options.powerPreference = WGPUPowerPreference_HighPerformance;
 
     WGPURequestAdapterCallbackInfo cb = WGPU_REQUEST_ADAPTER_CALLBACK_INFO_INIT;
@@ -380,6 +395,13 @@ int wgpu_bridge_request_adapter(void* instance, void** out_adapter) {
 
     *out_adapter = result.object;
     return 1;
+}
+
+int wgpu_bridge_request_adapter(void* instance, void** out_adapter) {
+    return wgpu_bridge_request_adapter_with_backend(
+        instance,
+        WGPUBridge_BackendType_Undefined,
+        out_adapter);
 }
 
 int wgpu_bridge_request_device(void* adapter, void** out_device) {
@@ -451,8 +473,30 @@ void wgpu_bridge_shutdown(void) {
    Surface
    ════════════════════════════════════════════════════════════════════ */
 
+static int create_surface_from_chain(void* instance,
+                                     WGPUChainedStruct* chain,
+                                     void** out_surface,
+                                     const char* invalid_args_error) {
+    if (instance == NULL || chain == NULL || out_surface == NULL) {
+        set_error(invalid_args_error);
+        return 0;
+    }
+
+    WGPUSurfaceDescriptor desc = WGPU_SURFACE_DESCRIPTOR_INIT;
+    desc.nextInChain = chain;
+
+    WGPUSurface surface = wgpuInstanceCreateSurface((WGPUInstance)instance, &desc);
+    if (surface == NULL) {
+        set_error("wgpuInstanceCreateSurface returned null");
+        return 0;
+    }
+
+    *out_surface = (void*)surface;
+    return 1;
+}
+
 int wgpu_bridge_create_surface_metal(void* instance, void* ca_metal_layer, void** out_surface) {
-    if (instance == NULL || ca_metal_layer == NULL || out_surface == NULL) {
+    if (ca_metal_layer == NULL) {
         set_error("invalid create_surface_metal arguments");
         return 0;
     }
@@ -460,13 +504,62 @@ int wgpu_bridge_create_surface_metal(void* instance, void* ca_metal_layer, void*
     WGPUSurfaceSourceMetalLayer metal = WGPU_SURFACE_SOURCE_METAL_LAYER_INIT;
     metal.layer = ca_metal_layer;
 
-    WGPUSurfaceDescriptor desc = WGPU_SURFACE_DESCRIPTOR_INIT;
-    desc.nextInChain = (WGPUChainedStruct*)&metal;
+    return create_surface_from_chain(
+        instance,
+        (WGPUChainedStruct*)&metal,
+        out_surface,
+        "invalid create_surface_metal arguments");
+}
 
-    WGPUSurface surface = wgpuInstanceCreateSurface((WGPUInstance)instance, &desc);
-    if (surface == NULL) { set_error("wgpuInstanceCreateSurface returned null"); return 0; }
-    *out_surface = (void*)surface;
-    return 1;
+int wgpu_bridge_create_surface_win32(void* instance, void* hwnd, void* hinstance, void** out_surface) {
+    if (hwnd == NULL) {
+        set_error("invalid create_surface_win32 arguments");
+        return 0;
+    }
+
+    WGPUSurfaceSourceWindowsHWND win32 = WGPU_SURFACE_SOURCE_WINDOWS_HWND_INIT;
+    win32.hwnd = hwnd;
+    win32.hinstance = hinstance;
+
+    return create_surface_from_chain(
+        instance,
+        (WGPUChainedStruct*)&win32,
+        out_surface,
+        "invalid create_surface_win32 arguments");
+}
+
+int wgpu_bridge_create_surface_wayland(void* instance, void* display, void* surface, void** out_surface) {
+    if (display == NULL || surface == NULL) {
+        set_error("invalid create_surface_wayland arguments");
+        return 0;
+    }
+
+    WGPUSurfaceSourceWaylandSurface wayland = WGPU_SURFACE_SOURCE_WAYLAND_SURFACE_INIT;
+    wayland.display = display;
+    wayland.surface = surface;
+
+    return create_surface_from_chain(
+        instance,
+        (WGPUChainedStruct*)&wayland,
+        out_surface,
+        "invalid create_surface_wayland arguments");
+}
+
+int wgpu_bridge_create_surface_xlib(void* instance, void* display, uint64_t window, void** out_surface) {
+    if (display == NULL || window == 0) {
+        set_error("invalid create_surface_xlib arguments");
+        return 0;
+    }
+
+    WGPUSurfaceSourceXlibWindow xlib = WGPU_SURFACE_SOURCE_XLIB_WINDOW_INIT;
+    xlib.display = display;
+    xlib.window = window;
+
+    return create_surface_from_chain(
+        instance,
+        (WGPUChainedStruct*)&xlib,
+        out_surface,
+        "invalid create_surface_xlib arguments");
 }
 
 int wgpu_bridge_configure_surface(void* surface, void* device,

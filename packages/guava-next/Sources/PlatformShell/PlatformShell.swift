@@ -7,6 +7,9 @@ import QuartzCore
 
 public enum NativeRenderSurface {
     case metalLayer(UnsafeMutableRawPointer)
+    case win32Window(hwnd: UnsafeMutableRawPointer, hinstance: UnsafeMutableRawPointer?)
+    case xlibWindow(display: UnsafeMutableRawPointer, window: UInt64)
+    case waylandSurface(display: UnsafeMutableRawPointer, surface: UnsafeMutableRawPointer)
 }
 
 public enum ShellError: Error, CustomStringConvertible {
@@ -39,7 +42,7 @@ public extension Shell {
 
 @MainActor
 public func makeDefaultShell() throws -> any Shell {
-#if os(macOS)
+#if os(macOS) || os(Windows) || os(Linux)
     try SDL3Shell()
 #else
     throw ShellError.unsupportedPlatform("no default shell is implemented for this platform yet")

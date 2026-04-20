@@ -104,6 +104,15 @@ public final class WGPURenderer: Renderer {
             switch renderSurface {
                 case let .metalLayer(layerPointer):
                     surface = try backend.createSurfaceMetal(layer: layerPointer)
+
+                case let .win32Window(hwnd, hinstance):
+                    surface = try backend.createSurfaceWin32(hwnd: hwnd, hinstance: hinstance)
+
+                case let .xlibWindow(display, window):
+                    surface = try backend.createSurfaceXlib(display: display, window: window)
+
+                case let .waylandSurface(display, wlSurface):
+                    surface = try backend.createSurfaceWayland(display: display, surface: wlSurface)
             }
             try ensureConfigured()
             try ensureMeshPipelineAndScene()
