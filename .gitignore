@@ -64,9 +64,9 @@ zig-out/
 **/*.so
 **/*.dylib
 compile_commands.json
-packages/engine/assets/derived/
-packages/engine/assets/scenes/editor_autosave.guava_scene
-packages/engine/assets/scenes/editor_autosave.guava_scene.meta
+legacy/zig-engine/assets/derived/
+legacy/zig-engine/assets/scenes/editor_autosave.guava_scene
+legacy/zig-engine/assets/scenes/editor_autosave.guava_scene.meta
 
 # Temporary files
 *.orig
@@ -96,12 +96,21 @@ examples/csharp/**/bin/
 examples/csharp/**/obj/
 
 # Electron native addon build artifacts
-packages/editor/native/build/
-packages/editor/native/bin/
-packages/editor/dist-package
+legacy/react-editor/native/build/
+legacy/react-editor/native/bin/
+legacy/react-editor/dist-package
 .guava_scene
-packages/engine/sdk/csharp/**/**/bin/**
-packages/engine/sdk/csharp/**/**/obj/**
+legacy/zig-engine/sdk/csharp/**/**/bin/**
+legacy/zig-engine/sdk/csharp/**/**/obj/**
+
+# Swift package build artifacts
+Engine/.build/
+GuavaUI/.build/
+Editor/.build/
+
+# wgpu native dylib (fetched by scripts/fetch-wgpu.sh, not committed)
+Engine/vendor/wgpu/lib/*.dylib
+Engine/vendor/wgpu/lib/*.a
 
 *.o
 /build/
@@ -109,4 +118,4 @@ packages/engine/sdk/csharp/**/**/obj/**
 /CMakeFiles/
 
 # Allow build/development scripts in engine package
-!packages/engine/build/merge_compile_commands.py
+!legacy/zig-engine/build/merge_compile_commands.py
