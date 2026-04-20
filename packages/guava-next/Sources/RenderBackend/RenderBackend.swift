@@ -175,8 +175,9 @@ public final class WGPURenderer: Renderer {
         ))
         meshPipeline = pipeline
 
-        let mesh = BuiltinMesh.cube()
+        let mesh = loadFixtureMesh()
         indexCount = mesh.indexCount
+        print("[WGPURenderer] mesh=\(mesh.name) verts=\(mesh.vertices.count / 9) tris=\(mesh.indices.count / 3)")
 
         let vb = try backend.createBuffer(size: UInt64(mesh.vertexBufferSize), usage: [.vertex, .copyDst])
         mesh.vertices.withUnsafeBytes { raw in
@@ -229,6 +230,21 @@ public final class WGPURenderer: Renderer {
         )
         depthView = try depth.createView()
         depthTexture = depth
+    }
+
+    private func loadFixtureMesh() -> MeshAsset {
+        if let url = Bundle.module.url(forResource: "FinalBaseMesh", withExtension: "obj") {
+            do {
+                var mesh = try OBJLoader.load(path: url.path)
+                mesh.normalizeToUnitBounds(targetSize: 2.0)
+                return mesh
+            } catch {
+                print("[WGPURenderer] OBJ load failed (\(error)); falling back to cube")
+            }
+        } else {
+            print("[WGPURenderer] FinalBaseMesh.obj not found in bundle; using cube")
+        }
+        return BuiltinMesh.cube()
     }
 
     private func computeMVP(frameIndex: Int) -> simd_float4x4 {
