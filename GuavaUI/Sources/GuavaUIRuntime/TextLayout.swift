@@ -86,7 +86,7 @@ public struct TextLayout {
                 continue
             }
 
-            let info = atlas.rasterizeGlyph(glyphIndex: glyph.glyphID)
+            let info = atlas.rasterizeGlyph(glyphIndex: glyph.glyphID, fontID: glyph.fontID)
 
             // Is this a whitespace cluster? Check source text.
             let isSpace = clusterByte == UInt8(ascii: " ") || clusterByte == UInt8(ascii: "\t")

@@ -29,6 +29,8 @@ public struct ShapedGlyph {
     public let yAdvance: Float
     /// Index of the first character in the source string that maps to this glyph.
     public let cluster: UInt32
+    /// Font identifier (matches FontProvider's ManagedFont.id).
+    public let fontID: Int
 }
 
 /// Wraps HarfBuzz to perform text shaping on a FreeType font face.
@@ -115,7 +117,8 @@ public final class TextShaper {
                 yOffset: Float(pos.y_offset) / 64.0,
                 xAdvance: Float(pos.x_advance) / 64.0,
                 yAdvance: Float(pos.y_advance) / 64.0,
-                cluster: info.cluster
+                cluster: info.cluster,
+                fontID: 0
             ))
         }
 
