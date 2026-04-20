@@ -136,4 +136,39 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         dispatcher.dispatch(.textInput("ok"))
         #expect(rig.store.value == "ok")
     } }
+
+    @Test("Backspace removes a full grapheme cluster (emoji)")
+    func backspaceRemovesGrapheme() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "a😀b"  // 3 Characters
+        rig.graph.install(root:
+            TextField(text: makeBinding(rig.store))
+        )
+
+        let node = rig.tree.root!.children.first!
+        let key = rig.registry.handlers(for: node).key!
+        let backspace = KeyEvent(scancode: 42, keycode: 0, modifiers: [], isRepeat: false)
+        // Cursor at end (index 3). Backspace once → removes the emoji.
+        _ = key(backspace, .target)
+        #expect(rig.store.value == "a😀")
+        // Backspace again → removes the emoji.
+        _ = key(backspace, .target)
+        #expect(rig.store.value == "a")
+    } }
+
+    @Test("Click handler is registered and tolerates an empty text-environment")
+    func clickHandlerRegistered() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.graph.install(root:
+            TextField(text: makeBinding(rig.store))
+        )
+
+        let node = rig.tree.root!.children.first!
+        let pointer = rig.registry.handlers(for: node).pointer!
+        // No TextEnvironment installed; the click must not crash and must
+        // leave the cursor unchanged on an empty string.
+        let evt = MouseButtonEvent(button: .left, x: 100, y: 5, clicks: 1)
+        let result = pointer(evt, .down, .target)
+        #expect(result == .handled)
+    } }
 }
