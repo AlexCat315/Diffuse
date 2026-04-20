@@ -178,6 +178,7 @@ public struct GPUBufferUsage: OptionSet, Sendable {
     public static let index   = GPUBufferUsage(rawValue: 0x0010)
     public static let vertex  = GPUBufferUsage(rawValue: 0x0020)
     public static let uniform = GPUBufferUsage(rawValue: 0x0040)
+    public static let storage = GPUBufferUsage(rawValue: 0x0080)
 }
 
 // MARK: - Texture Usage
@@ -190,6 +191,7 @@ public struct GPUTextureUsage: OptionSet, Sendable {
     public static let copySrc          = GPUTextureUsage(rawValue: 0x01)
     public static let copyDst          = GPUTextureUsage(rawValue: 0x02)
     public static let textureBinding   = GPUTextureUsage(rawValue: 0x04)
+    public static let storageBinding   = GPUTextureUsage(rawValue: 0x08)
     public static let renderAttachment = GPUTextureUsage(rawValue: 0x10)
 }
 
@@ -351,6 +353,23 @@ public enum GPUBindingType: Sendable {
 }
 
 // MARK: - Compare Function
+
+public struct GPUColorAttachment {
+    public var view: GPUTextureView
+    public var loadOp: GPULoadOp
+    public var storeOp: GPUStoreOp
+    public var clearColor: GPUColor
+
+    public init(view: GPUTextureView,
+                loadOp: GPULoadOp = .clear,
+                storeOp: GPUStoreOp = .store,
+                clearColor: GPUColor = .black) {
+        self.view = view
+        self.loadOp = loadOp
+        self.storeOp = storeOp
+        self.clearColor = clearColor
+    }
+}
 
 public enum GPUCompareFunction: Sendable {
     case never
