@@ -1,71 +1,156 @@
+import Foundation
 import GuavaUIRuntime
+import PlatformShell
+import RHIWGPU
 
-// -- Font provider with CoreText fallback --
-let provider = FontProvider(size: 36)
+// MARK: - Text content
+
+let provider = FontProvider(size: 28)
 provider.loadPrimaryFont(name: "Helvetica Neue")
 
-let text = "Hello, GuavaUI! 🎨\n排版引擎 Phase 4 — HarfBuzz + FreeType"
+let text =
+    "Hello, GuavaUI!\n emoji:🦊🍅🦋\n Монгол хэлний шалгалт: Энэ бол Монгол хэлний шалгалт.\n Phase 5 — DrawList + wgpu Renderer\n排版引擎运行中"
 
-// Resolve font runs (CoreText picks the right font per script)
 let runs = provider.resolveRuns(text: text)
-
-// Shape each run with auto-detected script/language
 var allGlyphs: [ShapedGlyph] = []
 for run in runs {
     allGlyphs.append(contentsOf: provider.shapeRun(run))
 }
 
-// Shared atlas — register every discovered font
-let atlas = FontAtlas(width: 2048, height: 512)
+let atlas = FontAtlas(width: 1024, height: 1024)
 provider.registerAllFonts(in: atlas)
 
-let fbWidth = 1280
-let fbHeight = 720
-let result = TextLayout.layout(
+let layoutResult = TextLayout.layout(
     shapedGlyphs: allGlyphs,
     text: text,
     atlas: atlas,
-    maxWidth: Float(fbWidth - 80),
-    lineHeight: 48
+    maxWidth: 900,
+    lineHeight: 38
 )
 
-// Composite glyphs onto a framebuffer
-var framebuffer = [UInt8](repeating: 0, count: fbWidth * fbHeight)
-let offsetX = 40
-let offsetY = 40
+// MARK: - GPU stack
 
-for line in result.lines {
-    for glyph in line.glyphs {
-        guard let info = glyph.atlasInfo, info.width > 0, info.height > 0 else { continue }
-        let srcX = Int(info.uvMinX * Float(atlas.atlasWidth))
-        let srcY = Int(info.uvMinY * Float(atlas.atlasHeight))
-        let dstX = offsetX + Int(glyph.x) + info.bearingX
-        let dstY = offsetY + Int(glyph.y) - info.bearingY
+let backend = WGPUBackend()
+try backend.initialize()
+let renderer = DrawListRenderer(backend: backend)
+let drawList = DrawList()
 
-        for row in 0..<info.height {
-            for col in 0..<info.width {
-                let dx = dstX + col
-                let dy = dstY + row
-                guard dx >= 0, dx < fbWidth, dy >= 0, dy < fbHeight else { continue }
-                let srcIdx = (srcY + row) * atlas.atlasWidth + (srcX + col)
-                let dstIdx = dy * fbWidth + dx
-                framebuffer[dstIdx] = max(framebuffer[dstIdx], atlas.atlasData[srcIdx])
-            }
-        }
-    }
-}
+var surface: GPUSurface?
+var configured = false
+var drawableW: UInt32 = 0
+var drawableH: UInt32 = 0
 
-// -- Window --
+let atlasTextureID: TextureID = 1
+
+// MARK: - Window
+
 let tree = NodeTree()
-let host = SDL3PlatformHost(title: "GuavaUI — Text Demo")
+let host = SDL3PlatformHost(title: "GuavaUI — Phase 5")
 
-#if canImport(Metal)
-if let renderer = TextDemoRenderer() {
-    renderer.uploadFramebuffer(framebuffer, width: fbWidth, height: fbHeight)
-    host.onFrame = { surface in
-        renderer.render(surface: surface)
+host.onInit = { native, w, h in
+    drawableW = w
+    drawableH = h
+    do {
+        surface = try makeSurface(backend: backend, native: native)
+        try surface?.configure(
+            device: backend.rawDevice!,
+            format: .bgra8Unorm,
+            width: w, height: h,
+            presentMode: .fifo)
+        try renderer.configure(format: .bgra8Unorm)
+        try atlas.atlasData.withUnsafeBufferPointer { buf in
+            try renderer.registerAlphaTexture(
+                id: atlasTextureID,
+                pixels: buf.baseAddress!,
+                width: UInt32(atlas.atlasWidth),
+                height: UInt32(atlas.atlasHeight)
+            )
+        }
+        configured = true
+    } catch {
+        print("[demo] init failed: \(error)")
     }
 }
-#endif
+
+host.onResize = { w, h in
+    drawableW = w
+    drawableH = h
+    guard let surface, let device = backend.rawDevice else { return }
+    do {
+        try surface.configure(
+            device: device,
+            format: .bgra8Unorm,
+            width: w, height: h,
+            presentMode: .fifo)
+    } catch {
+        print("[demo] resize failed: \(error)")
+    }
+}
+
+host.onFrame = { _ in
+    guard configured, let surface else { return }
+
+    drawList.reset()
+    drawList.addRoundedRect(
+        UIRect(
+            x: 40, y: 40,
+            width: Float(drawableW) - 80, height: Float(drawableH) - 80),
+        radius: 24,
+        color: Color(r: 0.12, g: 0.14, b: 0.18, a: 1.0)
+    )
+    drawList.addRect(
+        UIRect(x: 40, y: 40, width: 6, height: Float(drawableH) - 80),
+        color: Color(r: 0.40, g: 0.78, b: 1.00, a: 1.0)
+    )
+    drawList.addText(
+        layoutResult,
+        origin: (x: 80, y: 90),
+        color: Color(r: 0.94, g: 0.94, b: 0.98, a: 1.0),
+        textureID: atlasTextureID
+    )
+
+    let acquired: (texture: GPUTexture, view: GPUTextureView)?
+    do {
+        acquired = try surface.getCurrentTextureView()
+    } catch {
+        print("[demo] surface acquire failed: \(error)")
+        return
+    }
+    guard let frame = acquired else { return }
+
+    do {
+        let encoder = try backend.createCommandEncoder()
+        let pass = try encoder.beginRenderPass(
+            colorView: frame.view,
+            loadOp: .clear, storeOp: .store,
+            clearColor: GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1)
+        )
+        try renderer.render(
+            list: drawList, pass: pass,
+            viewportPx: (drawableW, drawableH))
+        pass.end()
+        let buffer = try encoder.finish()
+        backend.submit(buffer)
+        surface.present()
+    } catch {
+        print("[demo] frame submit failed: \(error)")
+    }
+}
 
 host.run(tree: tree)
+
+// MARK: - Helpers
+
+@MainActor
+func makeSurface(backend: WGPUBackend, native: NativeRenderSurface) throws -> GPUSurface {
+    switch native {
+    case .metalLayer(let ptr):
+        return try backend.createSurfaceMetal(layer: ptr)
+    case .win32Window(let hwnd, let hinstance):
+        return try backend.createSurfaceWin32(hwnd: hwnd, hinstance: hinstance)
+    case .waylandSurface(let display, let surface):
+        return try backend.createSurfaceWayland(display: display, surface: surface)
+    case .xlibWindow(let display, let window):
+        return try backend.createSurfaceXlib(display: display, window: window)
+    }
+}

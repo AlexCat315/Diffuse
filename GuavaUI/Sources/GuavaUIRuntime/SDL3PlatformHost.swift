@@ -19,6 +19,14 @@ public final class SDL3PlatformHost: PlatformHost {
     /// Called each frame with the native render surface. Set this to submit GPU work.
     public var onFrame: (@MainActor (NativeRenderSurface) -> Void)?
 
+    /// Called once after the window is created, with the initial render surface
+    /// and drawable size. Use this to build pipelines and upload static textures.
+    public var onInit: (@MainActor (NativeRenderSurface, _ widthPx: UInt32, _ heightPx: UInt32) -> Void)?
+
+    /// Called when the window's drawable size changes. Use this to reconfigure
+    /// surface, depth buffer, etc.
+    public var onResize: (@MainActor (UInt32, UInt32) -> Void)?
+
     /// - Parameters:
     ///   - title: Window title bar text.
     ///   - recomposer: The recomposer to drain each frame. Defaults to `Recomposer.shared`.
@@ -42,16 +50,29 @@ public final class SDL3PlatformHost: PlatformHost {
         let _title = title
         Logger.runtime.info("running — \(_title)")
 
+        // Fire onInit once after the window is fully realised.
+        if let surface = host.renderSurface {
+            let (w, h) = host.drawableSize
+            onInit?(surface, w, h)
+        }
+        var lastSize = host.drawableSize
+
         while host.isRunning && _isRunning {
             // 1. Execute pending state-driven recomposes.
             recomposer.commitAll()
             // 2. Flush dirty nodes (layout + draw callbacks in later phases).
             tree.flush()
-            // 3. Render frame if callback is set.
+            // 3. Detect resize and notify.
+            let cur = host.drawableSize
+            if cur.0 != lastSize.0 || cur.1 != lastSize.1 {
+                onResize?(cur.0, cur.1)
+                lastSize = cur
+            }
+            // 4. Render frame if callback is set.
             if let surface = host.renderSurface {
                 onFrame?(surface)
             }
-            // 4. Poll platform events; event routing to hit-test added in Phase 6.
+            // 5. Poll platform events; event routing to hit-test added in Phase 6.
             _ = host.pollEvents()
         }
 
