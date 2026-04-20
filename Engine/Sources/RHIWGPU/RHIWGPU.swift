@@ -1,6 +1,6 @@
 import CWGPUBridge
 import Foundation
-import os.log
+import Logging
 
 public enum WGPUBackendState: Sendable {
     case uninitialized
@@ -135,7 +135,7 @@ public final class WGPUBackend {
         let backendOrder = config.preferredBackends.isEmpty
             ? WGPUBackendPreference.platformDefaultOrder
             : config.preferredBackends
-        Logger.renderer.debug("requested backend order=\(backendOrder.map { $0.rawValue }.joined(separator: ","), privacy: .public)")
+        Logger.renderer.debug("requested backend order=\(backendOrder.map { $0.rawValue }.joined(separator: ","))")
 
         var outAdapter: UnsafeMutableRawPointer?
         var adapterErrors: [String] = []
@@ -148,7 +148,7 @@ public final class WGPUBackend {
             if adapterOk == 1, let outAdapter {
                 adapter = outAdapter
                 state = .adapterReady
-                Logger.renderer.info("selected backend preference=\(backend.rawValue, privacy: .public)")
+                Logger.renderer.info("selected backend preference=\(backend.rawValue)")
                 break
             }
             adapterErrors.append("\(backend.rawValue): \(lastBridgeError())")

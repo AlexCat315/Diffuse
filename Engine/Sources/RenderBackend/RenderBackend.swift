@@ -1,6 +1,6 @@
 import AssetPipeline
 import Foundation
-import os.log
+import Logging
 import PlatformShell
 import RHIWGPU
 import simd
@@ -37,7 +37,7 @@ public extension Renderer {
 public struct MetalPlaceholderRenderer: Renderer {
     public init() {}
     public func initialize() { Logger.renderer.debug("initialize Metal placeholder") }
-    public func renderFrame(frameIndex: Int) { Logger.renderer.debug("render frame \(frameIndex, privacy: .public)") }
+    public func renderFrame(frameIndex: Int) { Logger.renderer.debug("render frame \(frameIndex)") }
 }
 
 /// One mesh resident on the GPU.
@@ -124,10 +124,10 @@ public final class WGPURenderer: Renderer {
             let _instCount = scene.instances.count
             let _hasDyn = dynamicInstanceResources != nil
             Logger.renderer.info(
-                "surface ready, size=\(_sz, privacy: .public), pipeline=\(_hasPipeline, privacy: .public), depth=\(_hasDepth, privacy: .public), meshes=\(_meshCount, privacy: .public), instances=\(_instCount, privacy: .public), dynamic=\(_hasDyn, privacy: .public)"
+                "surface ready, size=\(_sz), pipeline=\(_hasPipeline), depth=\(_hasDepth), meshes=\(_meshCount), instances=\(_instCount), dynamic=\(_hasDyn)"
             )
         } catch {
-            Logger.renderer.error("initialize failed: \(error, privacy: .public)")
+            Logger.renderer.error("initialize failed: \(error)")
         }
     }
 
@@ -212,7 +212,7 @@ public final class WGPURenderer: Renderer {
                 settingsGeneration: settingsGeneration
             )
         } catch {
-            Logger.renderer.error("frame \(frameIndex, privacy: .public) failed: \(error, privacy: .public)")
+            Logger.renderer.error("frame \(frameIndex) failed: \(error)")
         }
     }
 
@@ -225,7 +225,7 @@ public final class WGPURenderer: Renderer {
         if shouldEmitPlannerLog(frameIndex: frameIndex) {
             let gen = settingsGeneration
             Logger.renderer.debug(
-                "applied render settings generation=\(gen, privacy: .public) stage=\(pending.stage.rawValue, privacy: .public) fxaa=\(pending.enableFXAA, privacy: .public) ssao=\(pending.enableSSAO, privacy: .public) bloom=\(pending.enableBloom, privacy: .public)"
+                "applied render settings generation=\(gen) stage=\(pending.stage.rawValue) fxaa=\(pending.enableFXAA) ssao=\(pending.enableSSAO) bloom=\(pending.enableBloom)"
             )
         }
     }
@@ -304,7 +304,7 @@ public final class WGPURenderer: Renderer {
 
     private func emitPlannedPassLog(_ passKind: RenderPassKind, frameIndex: Int) {
         guard shouldEmitPlannerLog(frameIndex: frameIndex) else { return }
-        Logger.renderer.debug("executing placeholder pass=\(passKind.rawValue, privacy: .public)")
+        Logger.renderer.debug("executing placeholder pass=\(passKind.rawValue)")
     }
 
     private func shouldEmitPlannerLog(frameIndex: Int) -> Bool {
@@ -351,7 +351,7 @@ public final class WGPURenderer: Renderer {
                 obj.normalizeToUnitBounds(targetSize: 2.0)
                 objMesh = try uploadMesh(obj)
             } catch {
-                Logger.renderer.error("OBJ load failed (\(error, privacy: .public)); skipping fixture mesh")
+                Logger.renderer.error("OBJ load failed (\(error)); skipping fixture mesh")
             }
         }
         meshes.append(cubeMesh)
@@ -446,7 +446,7 @@ public final class WGPURenderer: Renderer {
 
         let _meshNames = meshes.map(\.name)
         Logger.renderer.info(
-            "scene built: meshes=\(_meshNames, privacy: .public) instances=\(instances.count, privacy: .public) dynamic=\(useDynamicOffsets, privacy: .public)"
+            "scene built: meshes=\(_meshNames) instances=\(instances.count) dynamic=\(useDynamicOffsets)"
         )
     }
 

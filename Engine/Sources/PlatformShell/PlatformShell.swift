@@ -1,5 +1,5 @@
 import Foundation
-import os.log
+import Logging
 import EngineKernel
 
 #if os(macOS)
@@ -112,7 +112,7 @@ public final class AppKitShell: Shell {
         self.metalLayer = layer
         self.isRunning = true
 
-        Logger.platform.info("window ready, drawable=\(String(describing: layer.drawableSize), privacy: .public)")
+        Logger.platform.info("window ready, drawable=\(String(describing: layer.drawableSize))")
     }
 
     @discardableResult
