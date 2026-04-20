@@ -4,19 +4,19 @@ import Foundation
 ///
 /// Data flow:
 /// 1. A `@State` write fires `StateStorage.onChange`.
-/// 2. The owning scope calls `Recomposer.shared.invalidate(scopeID:body:)`.
+/// 2. The owning scope calls `recomposer.invalidate(scopeID:body:)` on the
+///    `Recomposer` instance owned by the host.
 /// 3. A second call with the same `scopeID` in the same frame is dropped.
-/// 4. The platform host calls `Recomposer.shared.commitAll()` at frame start,
+/// 4. The platform host calls `recomposer.commitAll()` at frame start,
 ///    executing all pending recomposes and clearing the queue.
+///
+/// Each `PlatformHost` (and therefore each window) owns its own `Recomposer`
+/// instance — see blueprint §9.4 windowing strategy.
 public final class Recomposer: @unchecked Sendable {
-
-    /// Singleton driven by `SDL3PlatformHost` in the default configuration.
-    public static let shared = Recomposer()
 
     private var pending: [(id: ObjectIdentifier, body: () -> Void)] = []
     private let lock = NSLock()
 
-    /// Create an independent instance — useful for tests.
     public init() {}
 
     // MARK: - Invalidation
