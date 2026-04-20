@@ -75,11 +75,11 @@ let package = Package(
         ),
         .target(
             name: "EditorCore",
-            dependencies: ["EngineCore", "RenderBackend"]
+            dependencies: ["EngineCore", "EngineKernel", "RenderBackend", "PlatformShell"]
         ),
         .target(
             name: "PlatformShell",
-            dependencies: ["CSDL3"]
+            dependencies: ["CSDL3", "EngineKernel"]
         ),
         .executableTarget(
             name: "EditorApp",

@@ -1,4 +1,5 @@
 import CSDL3
+import EngineKernel
 import Foundation
 
 #if os(macOS)
@@ -18,6 +19,9 @@ public final class SDL3Shell: Shell {
 #endif
 
     public private(set) var isRunning = true
+    public private(set) var isFocused = true
+    public private(set) var isMinimized = false
+    public private(set) var isOccluded = false
 
     public init(width: Int32 = 1280, height: Int32 = 720) throws {
         self.initialWidth = width
@@ -112,29 +116,111 @@ public final class SDL3Shell: Shell {
         print("[PlatformShell] SDL3 window ready, drawable=\(drawableSize.width)x\(drawableSize.height)")
     }
 
-    public func pollEvents() {
-        guard window != nil else { return }
+    @discardableResult
+    public func pollEvents() -> [InputEvent] {
+        guard window != nil else { return [] }
 
+        var collected: [InputEvent] = []
         var event = SDL_Event()
+
         while SDL_PollEvent(&event) {
-              let eventType = event.type
+            let eventType = event.type
+
             switch eventType {
-                 case UInt32(GUAVA_SDL_EVENT_QUIT),
-                     UInt32(GUAVA_SDL_EVENT_WINDOW_CLOSE_REQUESTED),
-                     UInt32(GUAVA_SDL_EVENT_WINDOW_DESTROYED):
-                    isRunning = false
+            // ── Quit / close ──
+            case UInt32(GUAVA_SDL_EVENT_QUIT),
+                 UInt32(GUAVA_SDL_EVENT_WINDOW_CLOSE_REQUESTED),
+                 UInt32(GUAVA_SDL_EVENT_WINDOW_DESTROYED):
+                isRunning = false
 
-                 case UInt32(GUAVA_SDL_EVENT_WINDOW_RESIZED),
-                     UInt32(GUAVA_SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED),
-                     UInt32(GUAVA_SDL_EVENT_WINDOW_METAL_VIEW_RESIZED):
-                    syncDrawableSize()
+            // ── Window geometry ──
+            case UInt32(GUAVA_SDL_EVENT_WINDOW_RESIZED):
+                syncDrawableSize()
+                collected.append(.windowResized(
+                    width: event.window.data1,
+                    height: event.window.data2))
 
-                default:
-                    break
+            case UInt32(GUAVA_SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED):
+                syncDrawableSize()
+                collected.append(.windowPixelSizeChanged(
+                    width: event.window.data1,
+                    height: event.window.data2))
+
+            case UInt32(GUAVA_SDL_EVENT_WINDOW_METAL_VIEW_RESIZED):
+                syncDrawableSize()
+
+            // ── Window focus ──
+            case UInt32(GUAVA_SDL_EVENT_WINDOW_FOCUS_GAINED):
+                isFocused = true
+                collected.append(.windowFocusGained)
+
+            case UInt32(GUAVA_SDL_EVENT_WINDOW_FOCUS_LOST):
+                isFocused = false
+                collected.append(.windowFocusLost)
+
+            // ── Minimize / restore ──
+            case UInt32(GUAVA_SDL_EVENT_WINDOW_MINIMIZED):
+                isMinimized = true
+                collected.append(.windowMinimized)
+
+            case UInt32(GUAVA_SDL_EVENT_WINDOW_RESTORED):
+                isMinimized = false
+                collected.append(.windowRestored)
+
+            // ── Occluded / exposed ──
+            case UInt32(GUAVA_SDL_EVENT_WINDOW_OCCLUDED):
+                isOccluded = true
+                collected.append(.windowOccluded)
+
+            case UInt32(GUAVA_SDL_EVENT_WINDOW_EXPOSED):
+                isOccluded = false
+                collected.append(.windowExposed)
+
+            // ── Keyboard ──
+            case UInt32(GUAVA_SDL_EVENT_KEY_DOWN):
+                let ke = makeKeyEvent(from: event)
+                collected.append(.keyDown(ke))
+
+            case UInt32(GUAVA_SDL_EVENT_KEY_UP):
+                let ke = makeKeyEvent(from: event)
+                collected.append(.keyUp(ke))
+
+            // ── Mouse motion ──
+            case UInt32(GUAVA_SDL_EVENT_MOUSE_MOTION):
+                collected.append(.mouseMotion(MouseMotionEvent(
+                    x: event.motion.x,
+                    y: event.motion.y,
+                    deltaX: event.motion.xrel,
+                    deltaY: event.motion.yrel)))
+
+            // ── Mouse buttons ──
+            case UInt32(GUAVA_SDL_EVENT_MOUSE_BUTTON_DOWN):
+                if let btn = makeMouseButtonEvent(from: event) {
+                    collected.append(.mouseButtonDown(btn))
+                }
+
+            case UInt32(GUAVA_SDL_EVENT_MOUSE_BUTTON_UP):
+                if let btn = makeMouseButtonEvent(from: event) {
+                    collected.append(.mouseButtonUp(btn))
+                }
+
+            // ── Mouse wheel ──
+            case UInt32(GUAVA_SDL_EVENT_MOUSE_WHEEL):
+                var wx = event.wheel.x
+                var wy = event.wheel.y
+                if event.wheel.direction.rawValue == UInt32(GUAVA_SDL_MOUSEWHEEL_FLIPPED) {
+                    wx = -wx
+                    wy = -wy
+                }
+                collected.append(.mouseWheel(MouseWheelEvent(x: wx, y: wy)))
+
+            default:
+                break
             }
         }
 
         syncDrawableSize()
+        return collected
     }
 
     public func shutdown() {
@@ -157,6 +243,38 @@ public final class SDL3Shell: Shell {
         }
 
         isRunning = false
+    }
+
+    // MARK: - Private helpers
+
+    private func makeKeyEvent(from event: SDL_Event) -> KeyEvent {
+        KeyEvent(
+            scancode: UInt32(event.key.scancode.rawValue),
+            keycode: event.key.key,
+            modifiers: Self.convertModifiers(event.key.mod),
+            isRepeat: event.key.`repeat`)
+    }
+
+    private func makeMouseButtonEvent(from event: SDL_Event) -> MouseButtonEvent? {
+        guard let button = MouseButton(rawValue: event.button.button) else { return nil }
+        return MouseButtonEvent(
+            button: button,
+            x: event.button.x,
+            y: event.button.y,
+            clicks: event.button.clicks)
+    }
+
+    private static func convertModifiers(_ sdlMod: UInt16) -> KeyModifiers {
+        var m = KeyModifiers()
+        if sdlMod & UInt16(GUAVA_SDL_KMOD_LSHIFT) != 0 { m.insert(.lshift) }
+        if sdlMod & UInt16(GUAVA_SDL_KMOD_RSHIFT) != 0 { m.insert(.rshift) }
+        if sdlMod & UInt16(GUAVA_SDL_KMOD_LCTRL)  != 0 { m.insert(.lctrl) }
+        if sdlMod & UInt16(GUAVA_SDL_KMOD_RCTRL)  != 0 { m.insert(.rctrl) }
+        if sdlMod & UInt16(GUAVA_SDL_KMOD_LALT)   != 0 { m.insert(.lalt) }
+        if sdlMod & UInt16(GUAVA_SDL_KMOD_RALT)   != 0 { m.insert(.ralt) }
+        if sdlMod & UInt16(GUAVA_SDL_KMOD_LGUI)   != 0 { m.insert(.lgui) }
+        if sdlMod & UInt16(GUAVA_SDL_KMOD_RGUI)   != 0 { m.insert(.rgui) }
+        return m
     }
 
     private func syncDrawableSize() {

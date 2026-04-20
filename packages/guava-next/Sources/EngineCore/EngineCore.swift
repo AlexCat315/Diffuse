@@ -39,6 +39,7 @@ public final class EngineHost {
     private var assetPipeline: AssetPipeline
 
     public private(set) var lastTimings: PhaseTimings = .init()
+    public private(set) var currentInputEvents: [InputEvent] = []
 
     public init(runtime: any EngineRuntime, wgpuBackend: WGPUBackend = WGPUBackend()) {
         self.runtime = runtime
@@ -59,7 +60,8 @@ public final class EngineHost {
         }
     }
 
-    public func tick(deltaTime: Double) {
+    public func tick(deltaTime: Double, inputEvents: [InputEvent] = []) {
+        self.currentInputEvents = inputEvents
         var timings = PhaseTimings()
 
         var begin = CFAbsoluteTimeGetCurrent()
