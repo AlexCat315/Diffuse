@@ -201,4 +201,24 @@ struct TextTests {
             #expect(glyph.atlasInfo != nil)
         }
     }
+
+    @Test("Explicit newline forces line break")
+    func explicitNewline() throws {
+        let atlas = FontAtlas()
+        atlas.loadFont(path: testFontPath, size: 16)
+
+        let shaper = TextShaper()
+        shaper.setFont(ftFace: atlas.freetypeFace!, size: 16)
+
+        let text = "hello\nworld"
+        let shaped = shaper.shape(text: text)
+        let result = TextLayout.layout(
+            shapedGlyphs: shaped,
+            text: text,
+            atlas: atlas,
+            lineHeight: 20
+        )
+
+        #expect(result.lines.count == 2)
+    }
 }

@@ -65,20 +65,38 @@ public struct TextLayout {
         var lastBreakIndex: Int? = nil
         var penXAtLastBreak: Float = 0
 
-        for (i, glyph) in shapedGlyphs.enumerated() {
+        for (_, glyph) in shapedGlyphs.enumerated() {
+            let clusterByte: UInt8 = Int(glyph.cluster) < utf8.count
+                ? utf8[Int(glyph.cluster)] : 0
+
+            // Explicit newline → flush current line immediately, skip glyph.
+            let isNewline = clusterByte == UInt8(ascii: "\n") || clusterByte == UInt8(ascii: "\r")
+            if isNewline {
+                let line = buildLine(
+                    glyphs: currentLineGlyphs,
+                    baselineY: Float(lines.count) * lineHeight + lineHeight,
+                    maxWidth: maxWidth,
+                    alignment: alignment
+                )
+                lines.append(line)
+                currentLineGlyphs = []
+                penX = 0
+                lastBreakIndex = nil
+                penXAtLastBreak = 0
+                continue
+            }
+
             let info = atlas.rasterizeGlyph(glyphIndex: glyph.glyphID)
 
             // Is this a whitespace cluster? Check source text.
-            let isSpace = Int(glyph.cluster) < utf8.count &&
-                          (utf8[Int(glyph.cluster)] == UInt8(ascii: " ") ||
-                           utf8[Int(glyph.cluster)] == UInt8(ascii: "\t"))
+            let isSpace = clusterByte == UInt8(ascii: " ") || clusterByte == UInt8(ascii: "\t")
 
             if isSpace {
                 lastBreakIndex = currentLineGlyphs.count
                 penXAtLastBreak = penX
             }
 
-            let nextPenX = penX + glyph.xAdvance
+            var nextPenX = penX + glyph.xAdvance
 
             // Line break needed?
             if nextPenX > maxWidth && !currentLineGlyphs.isEmpty {
@@ -98,6 +116,7 @@ public struct TextLayout {
                     // Re-layout remaining glyphs
                     currentLineGlyphs = remaining
                     penX = nextPenX - penXAtLastBreak
+                    nextPenX = penX
                     lastBreakIndex = nil
                 } else {
                     // No break point; force break here
@@ -110,6 +129,7 @@ public struct TextLayout {
                     lines.append(line)
                     currentLineGlyphs = []
                     penX = 0
+                    nextPenX = glyph.xAdvance
                     lastBreakIndex = nil
                 }
             }
