@@ -158,6 +158,22 @@ public final class GPURenderPassEncoder {
                                              firstIndex, baseVertex, firstInstance)
     }
 
+    public func drawIndirect(buffer: GPUBuffer, offset: UInt64 = 0) {
+        wgpu_bridge_render_pass_draw_indirect(handle, buffer.handle, offset)
+    }
+
+    public func drawIndexedIndirect(buffer: GPUBuffer, offset: UInt64 = 0) {
+        wgpu_bridge_render_pass_draw_indexed_indirect(handle, buffer.handle, offset)
+    }
+
+    public func executeBundles(_ bundles: [GPURenderBundle]) {
+        guard !bundles.isEmpty else { return }
+        var handles: [UnsafeMutableRawPointer?] = bundles.map { $0.handle }
+        handles.withUnsafeMutableBufferPointer { buf in
+            wgpu_bridge_render_pass_execute_bundles(handle, buf.baseAddress, UInt32(bundles.count))
+        }
+    }
+
     public func end() {
         wgpu_bridge_render_pass_end(handle)
     }
