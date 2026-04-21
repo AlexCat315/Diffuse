@@ -32,6 +32,7 @@ public enum ShellError: Error, CustomStringConvertible {
 public protocol Shell: AnyObject {
     var renderSurface: NativeRenderSurface? { get }
     var drawableSize: (width: UInt32, height: UInt32) { get }
+    var logicalSize: (width: UInt32, height: UInt32) { get }
     var isRunning: Bool { get }
     var isFocused: Bool { get }
     var isMinimized: Bool { get }
@@ -42,6 +43,7 @@ public protocol Shell: AnyObject {
 }
 
 public extension Shell {
+    var logicalSize: (width: UInt32, height: UInt32) { drawableSize }
     var isRunning: Bool { true }
     var isFocused: Bool { true }
     var isMinimized: Bool { false }
@@ -76,6 +78,13 @@ public final class AppKitShell: Shell {
         guard let layer = metalLayer else { return (1, 1) }
         let size = layer.drawableSize
         return (UInt32(max(1, size.width)), UInt32(max(1, size.height)))
+    }
+
+    public var logicalSize: (width: UInt32, height: UInt32) {
+        guard let view = contentView else { return (1, 1) }
+        let size = view.bounds.size
+        return (UInt32(max(1, Int(size.width.rounded(.up)))),
+                UInt32(max(1, Int(size.height.rounded(.up)))))
     }
 
     public func initializeWindow(title: String) throws {
