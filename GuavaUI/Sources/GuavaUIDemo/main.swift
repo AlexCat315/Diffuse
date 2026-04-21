@@ -340,6 +340,7 @@ func uploadAtlas() throws {
             height: UInt32(atlas.atlasHeight)
         )
     }
+    atlas.markClean()
 }
 
 @MainActor
@@ -413,8 +414,13 @@ host.onFrame = { _ in
     graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
 
     // 2. Re-upload atlas in case new glyphs were rasterised this frame.
-    do { try uploadAtlas() }
-    catch { print("[demo] atlas reupload failed: \(error)") }
+    do {
+        if atlas?.isDirty == true {
+            try uploadAtlas()
+        }
+    } catch {
+        print("[demo] atlas reupload failed: \(error)")
+    }
 
     // 3. Walk node tree -> draw list.
     drawList.reset()
