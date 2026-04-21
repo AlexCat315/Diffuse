@@ -39,6 +39,7 @@ public protocol Shell: AnyObject {
     var isOccluded: Bool { get }
     func initializeWindow(title: String) throws
     @discardableResult func pollEvents() -> [InputEvent]
+    func setTextInputArea(_ area: TextInputArea?)
     func shutdown()
 }
 
@@ -48,6 +49,7 @@ public extension Shell {
     var isFocused: Bool { true }
     var isMinimized: Bool { false }
     var isOccluded: Bool { false }
+    func setTextInputArea(_ area: TextInputArea?) {}
 }
 
 @MainActor
