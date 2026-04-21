@@ -68,6 +68,15 @@ public final class SDL3Shell: Shell {
         return (1, 1)
     }
 
+    public var logicalSize: (width: UInt32, height: UInt32) {
+        guard let window else { return (1, 1) }
+
+        var width: Int32 = 1
+        var height: Int32 = 1
+        _ = SDL_GetWindowSize(window, &width, &height)
+        return (UInt32(max(1, width)), UInt32(max(1, height)))
+    }
+
     public func initializeWindow(title: String) throws {
         if window != nil {
             return
@@ -292,8 +301,8 @@ public final class SDL3Shell: Shell {
 #if os(macOS)
         guard let metalLayer, let window else { return }
 
-    var logicalWidth: Int32 = 1
-    var logicalHeight: Int32 = 1
+        var logicalWidth: Int32 = 1
+        var logicalHeight: Int32 = 1
         _ = SDL_GetWindowSize(window, &logicalWidth, &logicalHeight)
 
         let pixelSize = drawableSize

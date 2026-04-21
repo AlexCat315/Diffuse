@@ -223,9 +223,11 @@ public final class DrawListRenderer {
     ///   - list: Source of vertices, indices and batches.
     ///   - pass: Active render pass encoder.
     ///   - viewportPx: Drawable size in pixels (used for NDC mapping and scissor).
+    ///   - coordinateSpace: Layout coordinate space used by the draw list.
     public func render(list: DrawList,
                        pass: GPURenderPassEncoder,
-                       viewportPx: (width: UInt32, height: UInt32)) throws {
+                       viewportPx: (width: UInt32, height: UInt32),
+                       coordinateSpace: (width: Float, height: Float)? = nil) throws {
         guard let pipeline,
               let uniformBuffer,
               let dummyBindGroup else {
@@ -235,9 +237,13 @@ public final class DrawListRenderer {
             return
         }
 
+        let viewport = coordinateSpace ?? (Float(viewportPx.width), Float(viewportPx.height))
+        let scaleX = viewport.width > 0 ? Float(viewportPx.width) / viewport.width : 1
+        let scaleY = viewport.height > 0 ? Float(viewportPx.height) / viewport.height : 1
+
         // 1. Upload uniforms (viewport size).
-        var u: (Float, Float, Float, Float) = (Float(viewportPx.width),
-                                               Float(viewportPx.height),
+        var u: (Float, Float, Float, Float) = (viewport.width,
+                                               viewport.height,
                                                0, 0)
         withUnsafePointer(to: &u) { ptr in
             ptr.withMemoryRebound(to: UInt8.self, capacity: 16) { raw in
@@ -280,11 +286,16 @@ public final class DrawListRenderer {
 
             // Scissor — empty rect → skip the batch.
             if let s = batch.scissor {
-                let x = max(0, Int32(s.minX))
-                let y = max(0, Int32(s.minY))
-                let w = max(0, Int32(s.maxX) - x)
-                let h = max(0, Int32(s.maxY) - y)
+                let x = max(0, Int32(floor(s.minX * scaleX)))
+                let y = max(0, Int32(floor(s.minY * scaleY)))
+                let maxX = max(x, Int32(ceil(s.maxX * scaleX)))
+                let maxY = max(y, Int32(ceil(s.maxY * scaleY)))
+                let w = max(0, maxX - x)
+                let h = max(0, maxY - y)
                 if w == 0 || h == 0 { continue }
+                if UInt32(x) >= viewportPx.width || UInt32(y) >= viewportPx.height {
+                    continue
+                }
                 let clampedW = min(UInt32(w), viewportPx.width  - UInt32(x))
                 let clampedH = min(UInt32(h), viewportPx.height - UInt32(y))
                 pass.setScissorRect(x: UInt32(x), y: UInt32(y),

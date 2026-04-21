@@ -17,8 +17,14 @@ public final class SDL3PlatformHost: PlatformHost {
     public let focusChain: FocusChain
     private var shell: (any Shell)?
     private var _isRunning: Bool = false
+    public private(set) var drawableSize: (width: UInt32, height: UInt32) = (1, 1)
+    public private(set) var logicalSize: (width: UInt32, height: UInt32) = (1, 1)
 
     public var isRunning: Bool { _isRunning }
+    public var contentScaleFactor: Float {
+        let logicalWidth = max(logicalSize.width, 1)
+        return Float(drawableSize.width) / Float(logicalWidth)
+    }
 
     /// Called each frame with the native render surface. Set this to submit GPU work.
     public var onFrame: (@MainActor (NativeRenderSurface) -> Void)?
@@ -59,6 +65,7 @@ public final class SDL3PlatformHost: PlatformHost {
             return
         }
         shell = host
+        updateMetrics(from: host)
         _isRunning = true
         let _title = title
         Logger.runtime.info("running — \(_title)")
@@ -74,10 +81,10 @@ public final class SDL3PlatformHost: PlatformHost {
 
         // Fire onInit once after the window is fully realised.
         if let surface = host.renderSurface {
-            let (w, h) = host.drawableSize
-            onInit?(surface, w, h)
+            onInit?(surface, drawableSize.width, drawableSize.height)
         }
-        var lastSize = host.drawableSize
+        var lastDrawableSize = drawableSize
+        var lastLogicalSize = logicalSize
         var lastFrameTime = Date()
 
         while host.isRunning && _isRunning {
@@ -95,10 +102,14 @@ public final class SDL3PlatformHost: PlatformHost {
             // 3. Flush dirty nodes (layout + draw callbacks in later phases).
             tree.flush()
             // 4. Detect resize and notify.
-            let cur = host.drawableSize
-            if cur.0 != lastSize.0 || cur.1 != lastSize.1 {
-                onResize?(cur.0, cur.1)
-                lastSize = cur
+            let curDrawableSize = host.drawableSize
+            let curLogicalSize = host.logicalSize
+            if curDrawableSize != lastDrawableSize || curLogicalSize != lastLogicalSize {
+                drawableSize = curDrawableSize
+                logicalSize = curLogicalSize
+                onResize?(curDrawableSize.width, curDrawableSize.height)
+                lastDrawableSize = curDrawableSize
+                lastLogicalSize = curLogicalSize
             }
             // 5. Render frame if callback is set.
             if let surface = host.renderSurface {
@@ -119,5 +130,10 @@ public final class SDL3PlatformHost: PlatformHost {
 
     public func stop() {
         _isRunning = false
+    }
+
+    private func updateMetrics(from host: any Shell) {
+        drawableSize = host.drawableSize
+        logicalSize = host.logicalSize
     }
 }
