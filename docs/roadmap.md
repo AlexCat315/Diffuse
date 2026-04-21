@@ -172,9 +172,10 @@ cd GuavaUI && swift run GuavaUIDemo
 必须满足"窗口前瞻约束"（无 `.shared` 单例、`InputEvent` 携带 `WindowID`、
 `EventDispatcher` 绑定单棵 `NodeTree`），以避免后期重构。
 
-**轨道 B：GuavaUI Phase 6–7**
+**轨道 B：GuavaUI Phase 6 → 7 → 7.5**
 
 > Phase 6 详细设计见 `docs/guava-ui-phase6-design.md`。
+> Phase 7.5 详细设计见 `docs/guava-ui-phase7.5-design.md`。
 
 Phase 6（Compose API + 基础组件）：
 ```
@@ -196,6 +197,24 @@ GuavaUI/Sources/GuavaUICompose/
 ├── ContextMenu.swift
 ├── DockContainer.swift / Panel.swift
 └── ViewportHost.swift
+```
+
+Phase 7.5（Theme + DefaultStyles，必做，阻塞 Editor 接入）：
+```
+GuavaUI/Sources/GuavaUICompose/
+├── Theme/
+│   ├── Theme.swift
+│   ├── ColorScheme.swift / Typography.swift / SpacingScale.swift / RadiusScale.swift / ElevationScale.swift
+│   ├── DefaultDarkTheme.swift / DefaultLightTheme.swift
+│   └── ThemeEnvironment.swift   # CompositionLocal<Theme>
+├── Style/
+│   ├── ButtonStyle.swift / PrimaryButtonStyle.swift / SecondaryButtonStyle.swift / GhostButtonStyle.swift
+│   ├── TextFieldStyle.swift / DefaultTextFieldStyle.swift
+│   ├── PanelStyle.swift / DefaultPanelStyle.swift
+│   └── ListRowStyle.swift / TreeRowStyle.swift
+└── Foundation/
+    ├── SemanticColor.swift  # Color.surface / .onSurface / .accent / .border
+    └── SemanticFont.swift   # Font.title / .body / .caption / .mono
 ```
 
 **Editor Phase 1–2（接入 GuavaUI，核心面板）**
@@ -221,9 +240,11 @@ InGameUIRegistry.shared.provider = GuavaUIProvider(renderer: drawListRenderer)
 cd Editor && swift run GuavaEditor
 # 编辑器窗口出现三块面板，选中 Hierarchy 节点 → Inspector 刷新
 # MetalPlaceholderRenderer 从代码中消失
+# 调用点不再出现裸 Color(r:g:b:) 与 .system(size:) 字面量；
+# 一行 .theme(DefaultDarkTheme()) 即可换肤
 ```
 
-**M3 完成标志**：编辑器可以日常使用，UI 层完全由 GuavaUI 驱动。
+**M3 完成标志**：编辑器可以日常使用，UI 层完全由 GuavaUI 驱动，默认外观达到与 SwiftUI / Compose 同一档次。
 
 ---
 
@@ -380,7 +401,7 @@ cd Editor && swift run GuavaEditor
 | **M0** ✅ | Phase 0 | Phase 0 | Phase 0 | 三包构建通过 |
 | **M1** | Phase 1 ✅ | Phase 1–2 | — | 3D 帧可见；NodeTree/State 单测通过 |
 | **M2** | — | Phase 3–5 | — | GuavaUI 窗口出现文本 |
-| **M3** | — | Phase 6–7 | Phase 1–2 | 编辑器界面成形 |
+| **M3** | — | Phase 6 → 7 → 7.5 | Phase 1–2 | 编辑器界面成形（含 Theme + DefaultStyles） |
 | **M4** | Phase 2–3 | — | Phase 3–4 | 完整编辑工作流 |
 | **M5** | Phase 4–5 | — | Phase 5 | 游戏内 UI；GLTF 资产 |
 | **M6** | Phase 6 | — | Phase 6 | 跨平台；构建发布 |
