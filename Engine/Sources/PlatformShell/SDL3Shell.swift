@@ -124,9 +124,6 @@ public final class SDL3Shell: Shell {
 #endif
 
         syncDrawableSize()
-        // Always-on text input: TextField primitives rely on
-        // `SDL_EVENT_TEXT_INPUT` for IME-aware character entry.
-        SDL_StartTextInput(createdWindow)
         let sz = "\(drawableSize.width)x\(drawableSize.height)"
         Logger.platform.info("SDL3 window ready, drawable=\(sz)")
     }
@@ -258,6 +255,9 @@ public final class SDL3Shell: Shell {
         guard lastTextInputArea != area else { return }
 
         if let area {
+            if !SDL_TextInputActive(window) {
+                _ = SDL_StartTextInput(window)
+            }
             var rect = SDL_Rect(
                 x: max(0, Int32(area.x.rounded(.down))),
                 y: max(0, Int32(area.y.rounded(.down))),
@@ -268,6 +268,9 @@ public final class SDL3Shell: Shell {
             _ = SDL_SetTextInputArea(window, &rect, cursor)
         } else {
             _ = SDL_SetTextInputArea(window, nil, 0)
+            if SDL_TextInputActive(window) {
+                _ = SDL_StopTextInput(window)
+            }
         }
 
         lastTextInputArea = area
