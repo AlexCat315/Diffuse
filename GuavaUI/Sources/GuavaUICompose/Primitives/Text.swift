@@ -94,10 +94,16 @@ public struct Text: _PrimitiveView {
             let resolvedFont = env.resolvedFont(fontOverride)
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)
-            let result = snapshot.shape(in: env,
-                                        maxWidth: Float(node.frame.width),
-                                        font: resolvedFont,
-                                        lineHeight: resolvedLineHeight)
+            let result = Text.cachedLayout(
+                env: env,
+                attachments: { node.attachments[Text.drawCacheKey] },
+                store: { node.attachments[Text.drawCacheKey] = $0 },
+                text: snapshot.string,
+                font: resolvedFont,
+                lineHeight: resolvedLineHeight,
+                maxWidth: Float(node.frame.width),
+                alignment: snapshot.alignment
+            )
             let baseColor = snapshot.color ?? node.foregroundColor ?? env.defaultColor
             let drawColor = baseColor.multipliedAlpha(node.opacity)
             list.addText(result,
@@ -120,10 +126,16 @@ public struct Text: _PrimitiveView {
             let resolvedFont = env.resolvedFont(fontOverride)
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)
-            let result = snapshot.shape(in: env,
-                                        maxWidth: constraint,
-                                        font: resolvedFont,
-                                        lineHeight: resolvedLineHeight)
+            let result = Text.cachedLayout(
+                env: env,
+                attachments: { layout?.attachments[Text.measureCacheKey] },
+                store: { layout?.attachments[Text.measureCacheKey] = $0 },
+                text: snapshot.string,
+                font: resolvedFont,
+                lineHeight: resolvedLineHeight,
+                maxWidth: constraint,
+                alignment: snapshot.alignment
+            )
             return CGSize(width: CGFloat(result.totalWidth),
                           height: CGFloat(result.totalHeight))
         }
@@ -134,20 +146,64 @@ public struct Text: _PrimitiveView {
         layout.markDirty()
     }
 
-    private func shape(in env: TextEnvironment,
-                       maxWidth: Float,
-                       font: Font,
-                       lineHeight: Float) -> TextLayoutResult {
-        let glyphs = env.shape(text: string, font: font)
-        return TextLayout.layout(
+    // MARK: - Layout cache
+
+    static let drawCacheKey = "__text_draw_cache"
+    static let measureCacheKey = "__text_measure_cache"
+
+    /// Shape + layout cache. The closure-based `attachments` / `store`
+    /// accessors keep this helper agnostic to whether the entry lives on a
+    /// `Node` (draw path) or `LayoutNode` (measure path).
+    static func cachedLayout(
+        env: TextEnvironment,
+        attachments: () -> Any?,
+        store: (Any) -> Void,
+        text: String,
+        font: Font,
+        lineHeight: Float,
+        maxWidth: Float,
+        alignment: TextAlignment
+    ) -> TextLayoutResult {
+        let normalizedMaxWidth: Float = (maxWidth.isFinite && maxWidth > 0) ? maxWidth : .infinity
+        let key = TextLayoutCacheKey(
+            text: text,
+            font: font,
+            lineHeight: lineHeight,
+            alignment: alignment,
+            maxWidth: normalizedMaxWidth,
+            atlasID: ObjectIdentifier(env.atlas)
+        )
+        if let cached = attachments() as? TextLayoutCacheEntry, cached.key == key {
+            return cached.result
+        }
+        let glyphs = env.shape(text: text, font: font)
+        let result = TextLayout.layout(
             shapedGlyphs: glyphs,
-            text: string,
+            text: text,
             atlas: env.atlas,
-            maxWidth: maxWidth.isFinite && maxWidth > 0 ? maxWidth : .infinity,
+            maxWidth: normalizedMaxWidth,
             lineHeight: lineHeight,
             alignment: alignment
         )
+        store(TextLayoutCacheEntry(key: key, result: result))
+        return result
     }
+}
+
+/// Cache key for the shaped + laid-out form of a `Text`. Equality covers
+/// every input that can change the resulting `TextLayoutResult`.
+struct TextLayoutCacheKey: Hashable {
+    let text: String
+    let font: Font
+    let lineHeight: Float
+    let alignment: TextAlignment
+    let maxWidth: Float
+    let atlasID: ObjectIdentifier
+}
+
+struct TextLayoutCacheEntry {
+    let key: TextLayoutCacheKey
+    let result: TextLayoutResult
 }
 
 /// Thin one-pixel separator. Renders as a coloured rect; defaults to a flexible

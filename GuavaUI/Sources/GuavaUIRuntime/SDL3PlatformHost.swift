@@ -79,6 +79,9 @@ public final class SDL3PlatformHost: PlatformHost {
             focusChain: focusChain,
             windowID: .main
         )
+        dispatcher.cursorSink = { [weak host] cursor in
+            host?.setCursor(cursor)
+        }
 
         // Fire onInit once after the window is fully realised.
         if let surface = host.renderSurface {

@@ -102,6 +102,7 @@ struct SliderHost: _PrimitiveView {
     func _updateNode(_ node: Node) {
         node.attachments[SliderHost.pressedKey] = isPressed
         node.attachments[SliderHost.hoveredKey] = isHovered
+        node.cursor = isEnabled ? .pointer : .notAllowed
 
         // Resolve the active style and store the appearance for `draw` to
         // consume. Style lookup walks `compositionValues` so users can swap in
