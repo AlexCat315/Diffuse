@@ -27,7 +27,8 @@ public struct DestructiveButtonStyle: ButtonStyle {
                 .font(SemanticFontRef.bodyStrong)
                 .foregroundColor(SemanticColorRef.onAccent)
         }
-            .padding(horizontal: theme.spacing.md, vertical: theme.spacing.xs + 2)
+            .frame(height: 32)
+            .padding(horizontal: theme.spacing.md, vertical: 0)
             .background(bg)
             .cornerRadius(theme.radius.md)
             .border(borderColor, width: borderWidth)
