@@ -219,60 +219,6 @@ struct RootView: View {
     }
 }
 
-// MARK: - Text environment (font atlas + shaper bound to primary face)
-
-let provider = FontProvider(size: 18)
-provider.loadPrimaryFont(name: "Helvetica Neue")
-
-let atlas = FontAtlas(width: 1024, height: 1024)
-atlas.loadFont(path: "/System/Library/Fonts/Helvetica.ttc", size: 18)
-provider.registerAllFonts(in: atlas)
-
-let shaper = TextShaper()
-if let face = atlas.freetypeFace {
-    shaper.setFont(ftFace: face, size: 18)
-}
-let fontResolver = TextFontResolver(
-    primaryFontName: provider.primaryFont?.postScriptName ?? "Helvetica Neue",
-    atlas: atlas
-)
-
-let atlasTextureID: TextureID = 1
-let previewTextureID: TextureID = 2
-
-let previewTexturePixels: [UInt8] = {
-    let width = 112
-    let height = 112
-    var pixels = [UInt8](repeating: 0, count: width * height * 4)
-
-    for y in 0..<height {
-        for x in 0..<width {
-            let index = (y * width + x) * 4
-            let checker = ((x / 14) + (y / 14)).isMultiple(of: 2)
-            let r = UInt8(min(255, 36 + x * 2))
-            let g = UInt8(min(255, 74 + y))
-            let b = checker ? UInt8(214) : UInt8(112)
-
-            pixels[index + 0] = r
-            pixels[index + 1] = g
-            pixels[index + 2] = b
-            pixels[index + 3] = 255
-        }
-    }
-
-    return pixels
-}()
-
-TextEnvironmentHolder.current = TextEnvironment(
-    atlas: atlas,
-    shaper: shaper,
-    atlasTextureID: atlasTextureID,
-    defaultLineHeight: 22,
-    defaultColor: Color.white,
-    defaultFont: Font.system(size: 18),
-    fontResolver: fontResolver
-)
-
 // MARK: - Compose graph
 
 let tree = NodeTree()
@@ -283,7 +229,90 @@ FocusChainHolder.current = host.focusChain
 PointerCaptureHolder.current = host.pointerCapture
 ClipboardHolder.read  = { SDL3Clipboard.read() }
 ClipboardHolder.write = { SDL3Clipboard.write($0) }
-graph.install(root: RootView())
+
+// MARK: - Text environment (font atlas + shaper bound to primary face)
+
+let atlasTextureID: TextureID = 1
+let previewTextureID: TextureID = 2
+
+var atlas: FontAtlas?
+var shaper: TextShaper?
+var fontResolver: TextFontResolver?
+var previewTexturePixels: [UInt8] = []
+var previewTextureSize: (width: UInt32, height: UInt32) = (0, 0)
+var activeTextScale: Float = 0
+var didInstallRoot = false
+
+func makePreviewTexturePixels(scale: Float) -> (pixels: [UInt8], width: UInt32, height: UInt32) {
+    let logicalWidth: Float = 112
+    let logicalHeight: Float = 112
+    let physicalWidth = max(1, Int((logicalWidth * scale).rounded(.up)))
+    let physicalHeight = max(1, Int((logicalHeight * scale).rounded(.up)))
+    let checkerSize = max(1, Int((14 * scale).rounded(.up)))
+    var pixels = [UInt8](repeating: 0, count: physicalWidth * physicalHeight * 4)
+
+    for y in 0..<physicalHeight {
+        let logicalY = Float(y) / scale
+        for x in 0..<physicalWidth {
+            let logicalX = Float(x) / scale
+            let index = (y * physicalWidth + x) * 4
+            let checker = ((x / checkerSize) + (y / checkerSize)).isMultiple(of: 2)
+            let r = UInt8(min(255, 36 + Int(logicalX * 2)))
+            let g = UInt8(min(255, 74 + Int(logicalY)))
+            let b = checker ? UInt8(214) : UInt8(112)
+
+            pixels[index + 0] = r
+            pixels[index + 1] = g
+            pixels[index + 2] = b
+            pixels[index + 3] = 255
+        }
+    }
+
+    return (pixels, UInt32(physicalWidth), UInt32(physicalHeight))
+}
+
+@MainActor
+func configureTextEnvironment(scale requestedScale: Float) {
+    let scale = max(1, requestedScale)
+    guard atlas == nil || abs(scale - activeTextScale) >= 0.01 else { return }
+
+    activeTextScale = scale
+
+    let primaryProvider = FontProvider(size: 18, rasterScale: scale)
+    primaryProvider.loadPrimaryFont(name: "Helvetica Neue")
+
+    let atlasEdge = max(1024, Int((1024 * scale).rounded(.up)))
+    let newAtlas = FontAtlas(width: atlasEdge, height: atlasEdge)
+    newAtlas.loadFont(path: "/System/Library/Fonts/Helvetica.ttc", size: 18, rasterScale: scale)
+
+    let newShaper = TextShaper()
+    if let face = newAtlas.freetypeFace {
+        newShaper.setFont(ftFace: face, size: 18, rasterScale: scale)
+    }
+
+    let newResolver = TextFontResolver(
+        primaryFontName: primaryProvider.primaryFont?.postScriptName ?? "Helvetica Neue",
+        atlas: newAtlas,
+        rasterScale: scale
+    )
+
+    let preview = makePreviewTexturePixels(scale: scale)
+    previewTexturePixels = preview.pixels
+    previewTextureSize = (preview.width, preview.height)
+    atlas = newAtlas
+    shaper = newShaper
+    fontResolver = newResolver
+
+    TextEnvironmentHolder.current = TextEnvironment(
+        atlas: newAtlas,
+        shaper: newShaper,
+        atlasTextureID: atlasTextureID,
+        defaultLineHeight: 22,
+        defaultColor: Color.white,
+        defaultFont: Font.system(size: 18),
+        fontResolver: newResolver
+    )
+}
 
 // MARK: - GPU stack
 
@@ -302,6 +331,7 @@ var logicalH: UInt32 = 0
 
 @MainActor
 func uploadAtlas() throws {
+    guard let atlas else { return }
     try atlas.atlasData.withUnsafeBufferPointer { buf in
         try renderer.registerAlphaTexture(
             id: atlasTextureID,
@@ -314,12 +344,13 @@ func uploadAtlas() throws {
 
 @MainActor
 func uploadPreviewTexture() throws {
+    guard !previewTexturePixels.isEmpty else { return }
     try previewTexturePixels.withUnsafeBufferPointer { buf in
         try renderer.registerColorTexture(
             id: previewTextureID,
             pixels: buf.baseAddress!,
-            width: 112,
-            height: 112
+            width: previewTextureSize.width,
+            height: previewTextureSize.height
         )
     }
 }
@@ -328,6 +359,11 @@ host.onInit = { native, w, h in
     drawableW = w; drawableH = h
     logicalW = host.logicalSize.width; logicalH = host.logicalSize.height
     do {
+        configureTextEnvironment(scale: host.contentScaleFactor)
+        if !didInstallRoot {
+            graph.install(root: RootView())
+            didInstallRoot = true
+        }
         surface = try makeSurface(backend: backend, native: native)
         try surface?.configure(
             device: backend.rawDevice!,
@@ -351,6 +387,12 @@ host.onResize = { w, h in
         try surface.configure(
             device: device, format: .bgra8Unorm,
             width: w, height: h, presentMode: .fifo)
+        let previousScale = activeTextScale
+        configureTextEnvironment(scale: host.contentScaleFactor)
+        if abs(previousScale - activeTextScale) >= 0.01 {
+            try uploadAtlas()
+            try uploadPreviewTexture()
+        }
     } catch {
         print("[demo] resize failed: \(error)")
     }
@@ -358,6 +400,13 @@ host.onResize = { w, h in
 
 host.onFrame = { _ in
     guard configured, let surface, let root = tree.root else { return }
+
+    let previousScale = activeTextScale
+    configureTextEnvironment(scale: host.contentScaleFactor)
+    if abs(previousScale - activeTextScale) >= 0.01 {
+        do { try uploadPreviewTexture() }
+        catch { print("[demo] preview reupload failed: \(error)") }
+    }
 
     // 1. Layout against current viewport. Glyphs are rasterised lazily here as
     //    the measure func runs.

@@ -37,16 +37,19 @@ public struct Font: Hashable, Sendable {
 public final class TextFontResolver {
     private let primaryFontName: String
     private let atlas: FontAtlas
+    private let rasterScale: Float
     private let providerIDBlockSize: Int
     private var nextProviderIDBase: Int
     private var providers: [Font: FontProvider] = [:]
 
     public init(primaryFontName: String,
                 atlas: FontAtlas,
-                providerIDBlockSize: Int = 256) {
+                providerIDBlockSize: Int = 256,
+                rasterScale: Float = 1) {
         let blockSize = max(32, providerIDBlockSize)
         self.primaryFontName = primaryFontName
         self.atlas = atlas
+        self.rasterScale = max(1, rasterScale)
         self.providerIDBlockSize = blockSize
         self.nextProviderIDBase = max(256, blockSize)
     }
@@ -64,7 +67,9 @@ public final class TextFontResolver {
             return existing
         }
 
-        let provider = FontProvider(size: font.size, idBase: nextProviderIDBase)
+        let provider = FontProvider(size: font.size,
+                        rasterScale: rasterScale,
+                        idBase: nextProviderIDBase)
         nextProviderIDBase += providerIDBlockSize
         _ = provider.loadPrimaryFont(name: primaryFontName, weight: font.weight)
         provider.registerAllFonts(in: atlas)

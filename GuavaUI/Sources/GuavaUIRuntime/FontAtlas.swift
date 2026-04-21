@@ -26,6 +26,7 @@ public final class FontAtlas {
 
     /// Current font size in points.
     public private(set) var fontSize: Float = 0
+    public private(set) var rasterScale: Float = 1
 
     // MARK: - Types
 
@@ -33,20 +34,22 @@ public final class FontAtlas {
         let fontID: Int
         let glyphIndex: UInt32
         let size: Float
+        let rasterScale: Float
     }
 
     private struct RegisteredFace {
         let face: FT_Face
         let size: Float
+        let rasterScale: Float
     }
 
     /// Metrics and atlas location for a single rasterized glyph.
     public struct GlyphInfo {
         public let glyphIndex: UInt32
-        public let width: Int
-        public let height: Int
-        public let bearingX: Int
-        public let bearingY: Int
+        public let width: Float
+        public let height: Float
+        public let bearingX: Float
+        public let bearingY: Float
         public let advance: Float
         /// UV coordinates in the atlas (normalized 0..1).
         public let uvMinX: Float
@@ -85,7 +88,7 @@ public final class FontAtlas {
     /// - Parameters:
     ///   - path: Absolute path to a .ttf / .otf font file.
     ///   - size: Font size in points.
-    public func loadFont(path: String, size: Float) {
+    public func loadFont(path: String, size: Float, rasterScale: Float = 1) {
         if let face = ftFace {
             FT_Done_Face(face)
             ftFace = nil
@@ -96,8 +99,9 @@ public final class FontAtlas {
         precondition(err == 0, "FT_New_Face failed: \(err)")
         self.ftFace = face
         self.fontSize = size
+        self.rasterScale = max(1, rasterScale)
 
-        FT_Set_Char_Size(face, 0, FT_F26Dot6(size * 64), 72, 72)
+        FT_Set_Char_Size(face, 0, FT_F26Dot6(size * self.rasterScale * 64), 72, 72)
 
         cache.removeAll()
     }
@@ -110,14 +114,21 @@ public final class FontAtlas {
     /// Registers an external FreeType face for multi-font rasterization.
     ///
     /// The caller is responsible for keeping the face alive while the atlas uses it.
-    public func registerFace(_ face: FT_Face, fontID: Int, size: Float? = nil) {
-        registeredFaces[fontID] = RegisteredFace(face: face, size: size ?? fontSize)
+    public func registerFace(_ face: FT_Face,
+                             fontID: Int,
+                             size: Float? = nil,
+                             rasterScale: Float? = nil) {
+        registeredFaces[fontID] = RegisteredFace(
+            face: face,
+            size: size ?? fontSize,
+            rasterScale: rasterScale ?? self.rasterScale
+        )
     }
 
     private func resolveFace(fontID: Int) -> RegisteredFace? {
         if let registered = registeredFaces[fontID] { return registered }
         if fontID == 0, let ftFace {
-            return RegisteredFace(face: ftFace, size: fontSize)
+            return RegisteredFace(face: ftFace, size: fontSize, rasterScale: rasterScale)
         }
         return nil
     }
@@ -133,7 +144,13 @@ public final class FontAtlas {
     public func rasterizeGlyph(glyphIndex: UInt32, fontID: Int = 0) -> GlyphInfo? {
         guard let resolved = resolveFace(fontID: fontID) else { return nil }
 
-        let key = GlyphKey(fontID: fontID, glyphIndex: glyphIndex, size: resolved.size)
+        let scale = max(resolved.rasterScale, 1)
+        let key = GlyphKey(
+            fontID: fontID,
+            glyphIndex: glyphIndex,
+            size: resolved.size,
+            rasterScale: scale
+        )
         if let cached = cache[key] { return cached }
 
         let face = resolved.face
@@ -145,9 +162,11 @@ public final class FontAtlas {
         let bitmap = glyphSlot.pointee.bitmap
         let w = Int(bitmap.width)
         let h = Int(bitmap.rows)
-        let bearingX = Int(glyphSlot.pointee.bitmap_left)
-        let bearingY = Int(glyphSlot.pointee.bitmap_top)
-        let advance = Float(glyphSlot.pointee.advance.x) / 64.0
+        let logicalWidth = Float(w) / scale
+        let logicalHeight = Float(h) / scale
+        let bearingX = Float(glyphSlot.pointee.bitmap_left) / scale
+        let bearingY = Float(glyphSlot.pointee.bitmap_top) / scale
+        let advance = Float(glyphSlot.pointee.advance.x) / 64.0 / scale
 
         // Pack into atlas using shelf algorithm
         let (x, y) = packGlyph(width: w, height: h)
@@ -169,8 +188,8 @@ public final class FontAtlas {
 
         let info = GlyphInfo(
             glyphIndex: glyphIndex,
-            width: w,
-            height: h,
+            width: logicalWidth,
+            height: logicalHeight,
             bearingX: bearingX,
             bearingY: bearingY,
             advance: advance,
