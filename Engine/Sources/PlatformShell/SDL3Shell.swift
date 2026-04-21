@@ -14,6 +14,7 @@ public final class SDL3Shell: Shell {
     private var window: OpaquePointer?
     private var metalView: UnsafeMutableRawPointer?
     private var didInitializeSDL = false
+    private var lastTextInputArea: TextInputArea?
 
 #if os(macOS)
     private var metalLayer: CAMetalLayer?
@@ -200,6 +201,15 @@ public final class SDL3Shell: Shell {
                 collected.append(.keyUp(ke))
 
             // ── IME / text input ──
+            case UInt32(GUAVA_SDL_EVENT_TEXT_EDITING):
+                if let cstr = event.edit.text {
+                    collected.append(.textEditing(TextEditingEvent(
+                        text: String(cString: cstr),
+                        start: event.edit.start,
+                        length: event.edit.length
+                    )))
+                }
+
             case UInt32(GUAVA_SDL_EVENT_TEXT_INPUT):
                 if let cstr = event.text.text {
                     collected.append(.textInput(String(cString: cstr)))
@@ -243,6 +253,26 @@ public final class SDL3Shell: Shell {
         return collected
     }
 
+    public func setTextInputArea(_ area: TextInputArea?) {
+        guard let window else { return }
+        guard lastTextInputArea != area else { return }
+
+        if let area {
+            var rect = SDL_Rect(
+                x: max(0, Int32(area.x.rounded(.down))),
+                y: max(0, Int32(area.y.rounded(.down))),
+                w: max(1, Int32(area.width.rounded(.up))),
+                h: max(1, Int32(area.height.rounded(.up)))
+            )
+            let cursor = max(0, Int32(area.cursorX.rounded(.toNearestOrAwayFromZero)))
+            _ = SDL_SetTextInputArea(window, &rect, cursor)
+        } else {
+            _ = SDL_SetTextInputArea(window, nil, 0)
+        }
+
+        lastTextInputArea = area
+    }
+
     public func shutdown() {
 #if os(macOS)
         metalLayer = nil
@@ -263,6 +293,7 @@ public final class SDL3Shell: Shell {
         }
 
         isRunning = false
+        lastTextInputArea = nil
     }
 
     // MARK: - Private helpers

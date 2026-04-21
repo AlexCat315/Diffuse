@@ -19,6 +19,7 @@ public final class SDL3PlatformHost: PlatformHost {
     private var _isRunning: Bool = false
     public private(set) var drawableSize: (width: UInt32, height: UInt32) = (1, 1)
     public private(set) var logicalSize: (width: UInt32, height: UInt32) = (1, 1)
+    private var lastTextInputArea: TextInputArea?
 
     public var isRunning: Bool { _isRunning }
     public var contentScaleFactor: Float {
@@ -115,6 +116,7 @@ public final class SDL3PlatformHost: PlatformHost {
             if let surface = host.renderSurface {
                 onFrame?(surface)
             }
+            syncTextInputArea()
             // 6. Drain platform events through the dispatcher.
             for event in host.pollEvents() {
                 dispatcher.dispatch(event)
@@ -135,5 +137,15 @@ public final class SDL3PlatformHost: PlatformHost {
     private func updateMetrics(from host: any Shell) {
         drawableSize = host.drawableSize
         logicalSize = host.logicalSize
+    }
+
+    private func syncTextInputArea() {
+        guard let shell else { return }
+
+        let area = focusChain.focused?.attachments[TextInputAttachmentKey.area] as? TextInputArea
+        guard area != lastTextInputArea else { return }
+
+        shell.setTextInputArea(area)
+        lastTextInputArea = area
     }
 }

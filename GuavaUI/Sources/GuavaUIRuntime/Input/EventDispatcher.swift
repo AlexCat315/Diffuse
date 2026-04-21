@@ -53,6 +53,7 @@ public final class EventDispatcher {
         case .mouseWheel(let e):      dispatchWheel(e)
         case .keyDown(let e),
              .keyUp(let e):           dispatchKey(e)
+        case .textEditing(let e):     dispatchTextEditing(e)
         case .textInput(let s):       dispatchText(s)
         default:
             // Window lifecycle events are not handled here.
@@ -136,6 +137,12 @@ public final class EventDispatcher {
         deliver(path: path, kind: .text(text))
     }
 
+    private func dispatchTextEditing(_ event: TextEditingEvent) {
+        guard let focused = focusChain.focused else { return }
+        let path = pathFromRoot(to: focused)
+        deliver(path: path, kind: .editing(event))
+    }
+
     // MARK: - Delivery
 
     private enum EventKind {
@@ -143,6 +150,7 @@ public final class EventDispatcher {
         case motion(MouseMotionEvent)
         case wheel(MouseWheelEvent)
         case key(KeyEvent)
+        case editing(TextEditingEvent)
         case text(String)
     }
 
@@ -173,6 +181,7 @@ public final class EventDispatcher {
         case .motion(let e):  return handlers.motion?(e, phase)  ?? .ignored
         case .wheel(let e):   return handlers.wheel?(e, phase)   ?? .ignored
         case .key(let e):     return handlers.key?(e, phase)     ?? .ignored
+        case .editing(let e): return handlers.editing?(e, phase) ?? .ignored
         case .text(let s):    return handlers.text?(s, phase)    ?? .ignored
         }
     }
