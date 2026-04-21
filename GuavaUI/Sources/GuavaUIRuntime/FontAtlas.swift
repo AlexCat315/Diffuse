@@ -12,6 +12,7 @@ public final class FontAtlas {
     public private(set) var atlasData: [UInt8]
     public let atlasWidth: Int
     public let atlasHeight: Int
+    public private(set) var isDirty: Bool = true
 
     /// Current packing cursor (shelf packing algorithm).
     private var shelfX: Int = 0
@@ -104,6 +105,7 @@ public final class FontAtlas {
         FT_Set_Char_Size(face, 0, FT_F26Dot6(size * self.rasterScale * 64), 72, 72)
 
         cache.removeAll()
+        isDirty = true
     }
 
     /// The underlying FreeType face (for HarfBuzz integration).
@@ -200,6 +202,7 @@ public final class FontAtlas {
         )
 
         cache[key] = info
+        isDirty = true
         return info
     }
 
@@ -218,6 +221,11 @@ public final class FontAtlas {
         shelfX = 0
         shelfY = 0
         shelfRowHeight = 0
+        isDirty = true
+    }
+
+    public func markClean() {
+        isDirty = false
     }
 
     // MARK: - Shelf packing
