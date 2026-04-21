@@ -18,8 +18,13 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
     private func findTabItems(_ root: Node) -> [Node] {
         var out: [Node] = []
         func walk(_ n: Node) {
-            if n.isHitTestable, n.cursor == .pointer,
-               n.attachments[_DockTabCloseButtonHost.kCloseButtonMarker] == nil {
+            // The close-X subtree contains its own pointer-cursor node
+            // (the inner Button). Stop descending at the marker so it
+            // doesn't get counted as a tab item.
+            if n.attachments[_DockTabCloseButtonHost.kCloseButtonMarker] != nil {
+                return
+            }
+            if n.isHitTestable, n.cursor == .pointer {
                 out.append(n)
             }
             for c in n.children { walk(c) }

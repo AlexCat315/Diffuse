@@ -220,6 +220,8 @@ AI 默认不直接读取全量 topology，而先读取语义摘要。
 
 如果这些来源都不足，系统只能得到 **candidate semantics**，不能直接把候选语义当成真相。
 
+> **数据分层提醒**：上述来源中产生的高维浮点（几何指纹、CLIP embedding、谱特征）只在检索层流动，**不进入 LLM prompt**。LLM 实际可见的是符号化 region 视图，定义见 `ai-native-semantic-pipeline-design.md` §2.10。
+
 ### 6.2 作用
 
 `ModelSemanticSummary` 的职责不是替代 `ModelDocument`，而是降低 AI 默认阅读成本。
@@ -755,6 +757,21 @@ Guava 新架构不应推翻旧 Zig 的三项重要能力：
 
 - 让 RPC / MCP 成为 capability 的执行出口，而不是主认知层
 
+### Phase F — Scene From Image（可选）
+
+详细设计见 `ai-native-scene-from-image-design.md`。模块清单：
+
+- `ImageNormalizer`
+- `SceneParser`（VLM 后端）
+- `DepthNormalEstimator` / `InstanceSegmenter` / `GeometricCues`
+- `AssetMatcher`（CLIP + 形状双通道，复用 B.5 几何指纹）
+- `AssetSynthesizer`（image-to-3D 兜底）
+- `PoseEstimator` / `LayoutSolver` / `LightingEstimator`
+- `SceneDocumentDraft` Writer
+- 复用 B.5 的 `AmbiguityScorer` / `MinimalConfirmationUI` / Memory / Provenance
+
+依赖：B.5、C、D 必须先完成。
+
 ---
 
 ## 16. 验收标准
@@ -783,10 +800,11 @@ Guava 新架构不应推翻旧 Zig 的三项重要能力：
 
 1. `ModelDocument` 详细设计
 2. 低结构模型的语义生产流水线详细设计 → 已落地：`ai-native-semantic-pipeline-design.md`
-3. `MinimalConfirmationUI` 详细设计（UI 行为、键盘流、可访问性）
-4. `SequenceDocument` / `Shot` / `Clip` / `Binding` 详细设计
-5. `CapabilityGraph` 详细设计
-6. `Observation Bus` 详细设计
-7. `Context Memory Index` 详细设计
+3. 场景图到 SceneDocument 流水线详细设计 → 已落地：`ai-native-scene-from-image-design.md`
+4. `MinimalConfirmationUI` 详细设计（UI 行为、键盘流、可访问性）
+5. `SequenceDocument` / `Shot` / `Clip` / `Binding` 详细设计
+6. `CapabilityGraph` 详细设计
+7. `Observation Bus` 详细设计
+8. `Context Memory Index` 详细设计
 
 总纲负责定边界，子文档负责定字段、接口和实现顺序。

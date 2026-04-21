@@ -498,11 +498,12 @@ struct _DockLeafDragHandleHost: _PrimitiveView {
 }
 
 /// Small `×` glyph rendered inside an active (or any closable) tab. Click
-/// fires `controller.apply(.closeTab(id))`. Hover state is intentionally
-/// omitted — the underlying tab still owns press state for drag, and the
-/// close button is sized small enough that we want it to behave as a click
-/// target only. Right-click on the X bubbles up so the parent tab still
-/// surfaces the context menu.
+/// fires `controller.apply(.closeTab(id))`. Visual chrome (hover/press
+/// state-layer overlay, rounded corners, label tint by activation) is
+/// delegated to `_DockTabCloseButtonStyle`, so palette swaps animate the
+/// same way as every other built-in button. Right- and middle-clicks
+/// bubble through the underlying `ButtonHost` so the parent tab keeps
+/// owning context-menu surfacing.
 struct _DockTabCloseButton: View {
     let tab: DockTab
     let sourceLeafID: DockNodeID
@@ -517,10 +518,13 @@ struct _DockTabCloseButton: View {
     }
 }
 
+/// Transparent wrapper primitive whose only job is to carry the
+/// `kCloseButtonMarker` attachment on a node in the materialised tree.
+/// Tests walk the tree looking for this marker (a) to count tabs by
+/// excluding the close-X cursor target and (b) to assert that closable
+/// tabs actually render a close button. Hit-testing, hover, press, and
+/// click dispatch all live on the inner `Button` child.
 struct _DockTabCloseButtonHost: _PrimitiveView {
-    /// Sentinel attachment key. Tests that walk the tree counting tab
-    /// items by `cursor == .pointer` use this marker to skip close
-    /// buttons (which share the pointer cursor by design).
     static let kCloseButtonMarker = "DockTabBar.closeButton"
 
     let tab: DockTab
@@ -530,44 +534,34 @@ struct _DockTabCloseButtonHost: _PrimitiveView {
 
     func _makeNode() -> Node {
         let n = Node()
-        n.isHitTestable = true
-        n.cursor = .pointer
+        // Marker is a layout-only wrapper; hit-testing happens on the
+        // inner Button.
+        n.isHitTestable = false
         n.attachments[Self.kCloseButtonMarker] = true
         return n
     }
 
-    func _updateNode(_ node: Node) {
-        guard let registry = InteractionRegistryHolder.current else { return }
-        let snap = self
-        registry.setPointer(node) { event, phase, _ in
-            if event.button != .left { return .ignored }
-            if phase == .up {
-                snap.controller.apply(.closeTab(snap.tab.id))
-            }
-            return .handled
-        }
-    }
+    func _updateNode(_ node: Node) {}
 
     func _makeLayoutNode() -> LayoutNode? {
         let l = LayoutNode()
-        l.width = 14
-        l.height = 14
+        l.width = 16
+        l.height = 16
         return l
     }
 
     func _updateLayout(_ layout: LayoutNode) {
-        layout.width = 14
-        layout.height = 14
+        layout.width = 16
+        layout.height = 16
     }
 
     func _children(for node: Node) -> [any View] {
-        // Use the textual `×` rather than a custom-drawn primitive so the
-        // glyph picks up the same atlas/font path as the title and stays
-        // legible at any DPI.
+        let snap = self
         return [
-            Text("×")
-                .font(.bodyStrong)
-                .foregroundColor(isActive ? .onSurface : .onSurfaceMuted)
+            Button(action: { snap.controller.apply(.closeTab(snap.tab.id)) }) {
+                Text("×")
+            }
+            .buttonStyle(_DockTabCloseButtonStyle(isActive: isActive))
         ]
     }
 }
