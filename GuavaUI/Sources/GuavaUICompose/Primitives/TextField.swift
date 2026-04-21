@@ -89,18 +89,12 @@ public struct TextField: _PrimitiveView {
 
     public func _updateNode(_ node: Node) {
         // Theme-aware chrome: a `surfaceVariant` fill with the small radius
-        // makes a freshly-dropped `TextField` look modern out of the box. Call
-        // sites that want custom chrome can wrap the field in their own
-        // background / cornerRadius modifiers — the runtime is happy to draw
-        // either; the explicit modifier value is set on the node before
-        // `_updateNode` runs and is not overwritten here unless still default.
+        // makes a freshly-dropped `TextField` look modern out of the box. We
+        // re-resolve on every update so theme switches take effect — the old
+        // "only set if nil" guard cached the first theme's colour forever.
         let theme = node.theme
-        if node.backgroundColor == nil {
-            node.backgroundColor = theme.colors.surfaceVariant
-        }
-        if node.cornerRadius == 0 {
-            node.cornerRadius = theme.radius.sm
-        }
+        node.backgroundColor = theme.colors.surfaceVariant
+        node.cornerRadius = theme.radius.sm
         node.cursor = .ibeam
 
         // Reuse FieldState if this node is being recycled by reconcile;
@@ -340,13 +334,21 @@ public struct TextField: _PrimitiveView {
                 : (textColor ?? node.foregroundColor ?? env.defaultColor)
         let renderColor = renderBaseColor.multipliedAlpha(node.opacity)
 
+        // Inner horizontal padding so text doesn't kiss the chrome edge, and a
+        // vertical offset so glyphs are centred inside the field's chrome
+        // rather than glued to the top.
+        let inset: Float = theme.spacing.sm
+        let textOriginX = Float(origin.x) + inset
+        let frameHeight = Float(node.frame.height)
+        let textOriginY = Float(origin.y) + max(0, (frameHeight - resolvedLineHeight) / 2)
+
         // Selection highlight first (drawn under the glyphs).
         if isFocused, !renderState.isComposing, let range = selectionRange(state), !current.isEmpty {
             let xLo = cursorX(in: current, upTo: range.lowerBound, env: env, font: resolvedFont)
             let xHi = cursorX(in: current, upTo: range.upperBound, env: env, font: resolvedFont)
             list.addRect(
-                UIRect(x: Float(origin.x) + xLo,
-                       y: Float(origin.y),
+                UIRect(x: textOriginX + xLo,
+                       y: textOriginY,
                        width: max(1, xHi - xLo),
                        height: resolvedLineHeight),
                 color: resolvedSelectionColor.multipliedAlpha(node.opacity)
@@ -363,7 +365,7 @@ public struct TextField: _PrimitiveView {
             alignment: .leading
         )
         list.addText(result,
-                     origin: (Float(origin.x), Float(origin.y)),
+                     origin: (textOriginX, textOriginY),
                      color: renderColor,
                      textureID: env.atlasTextureID)
 
@@ -377,8 +379,8 @@ public struct TextField: _PrimitiveView {
                               env: env,
                               font: resolvedFont)
             list.addRect(
-                UIRect(x: Float(origin.x) + xLo,
-                       y: Float(origin.y) + resolvedLineHeight - 1,
+                UIRect(x: textOriginX + xLo,
+                       y: textOriginY + resolvedLineHeight - 1,
                        width: max(1, xHi - xLo),
                        height: 1),
                 color: resolvedCursorColor.multipliedAlpha(node.opacity * 0.8)
@@ -390,10 +392,10 @@ public struct TextField: _PrimitiveView {
                                    env: env,
                                    font: resolvedFont)
         let caretHeight = max(Float(node.frame.height), resolvedLineHeight)
-        let caretX = Float(origin.x) + cursorXValue
+        let caretX = textOriginX + cursorXValue
         node.attachments[TextInputAttachmentKey.area] = TextInputArea(
             x: caretX,
-            y: Float(origin.y),
+            y: textOriginY,
             width: max(1, resolvedLineHeight),
             height: caretHeight,
             cursorX: 0
@@ -402,8 +404,8 @@ public struct TextField: _PrimitiveView {
         // Cursor — suppressed while a non-empty selection is active.
         guard isFocused, renderState.isComposing || selectionRange(state) == nil else { return }
         let cursorRect = UIRect(
-            x: Float(origin.x) + cursorXValue,
-            y: Float(origin.y),
+            x: textOriginX + cursorXValue,
+            y: textOriginY,
             width: 1,
             height: resolvedLineHeight
         )
@@ -498,7 +500,10 @@ public struct TextField: _PrimitiveView {
         guard !current.isEmpty, let env = TextEnvironmentHolder.current else {
             return 0
         }
-        let localX = windowX - Float(state.lastDrawOrigin.x)
+        // Subtract the same horizontal inset render() applies so a click on
+        // the chrome's left padding lands at index 0 instead of negative.
+        let inset: Float = node.theme.spacing.sm
+        let localX = windowX - Float(state.lastDrawOrigin.x) - inset
         if localX <= 0 { return 0 }
         let glyphs = env.shape(text: current, font: resolvedFont(node: node, env: env))
         var pen: Float = 0
