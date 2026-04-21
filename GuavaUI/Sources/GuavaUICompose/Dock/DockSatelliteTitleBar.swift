@@ -36,6 +36,19 @@ struct _DockSatelliteTitleBar: _PrimitiveView {
         let snapshot = self
         guard let registry = InteractionRegistryHolder.current else { return }
 
+        registry.setKey(node) { event, _ in
+            if event.scancode == DOCK_KEY_SCANCODE_ESC {
+                let session = snapshot.controller.dragSession
+                if session.isActive {
+                    PointerCaptureHolder.current?.release()
+                    node.attachments[stateKey] = nil
+                    session.cancel()
+                    return .handled
+                }
+            }
+            return .ignored
+        }
+
         registry.setPointer(node) { event, phase, _ in
             switch phase {
             case .down:
@@ -158,3 +171,7 @@ let DOCK_SATELLITE_DRAG_THRESHOLD: Float = 6
 
 /// Visual height of the satellite title bar, in points.
 let DOCK_SATELLITE_TITLEBAR_HEIGHT: Float = 24
+
+/// SDL3 scancode for the Escape key (`SDL_SCANCODE_ESCAPE`). Used by dock
+/// drag handlers to recognise drag-cancel without having to import SDL.
+let DOCK_KEY_SCANCODE_ESC: UInt32 = 41

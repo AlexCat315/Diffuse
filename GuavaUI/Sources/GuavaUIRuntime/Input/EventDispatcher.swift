@@ -135,6 +135,15 @@ public final class EventDispatcher {
     // MARK: - Key
 
     private func dispatchKey(_ event: KeyEvent) {
+        // Pointer-capture intercept: while a node owns capture (typically a
+        // drag in progress), give its key handler the first opportunity to
+        // consume the event. Lets drags implement Esc-to-cancel without
+        // also needing keyboard focus.
+        if let captured = capture.target,
+           let keyHandler = interactions.handlers(for: captured).key,
+           keyHandler(event, .target) == .handled {
+            return
+        }
         guard let focused = focusChain.focused else { return }
         let path = pathFromRoot(to: focused)
         deliver(path: path, kind: .key(event))

@@ -84,6 +84,11 @@ public final class DockDragSession {
         case mainTreeTab
         /// The entire satellite window is being moved (used for redock).
         case satellite(leafID: DockNodeID)
+        /// An entire main-tree leaf (its tab strip handle) is being
+        /// dragged. Same drop semantics as `.mainTreeTab` but the
+        /// release op moves the whole leaf via `.moveLeaf` instead of
+        /// `.move`.
+        case mainTreeLeaf(leafID: DockNodeID)
     }
     public private(set) var origin: Origin = .mainTreeTab
 
@@ -198,6 +203,18 @@ public final class DockDragSession {
             if let hit = dropHit {
                 let target = makeDropTarget(from: hit)
                 controller.apply(.redock(satelliteID: leafID, to: target))
+            }
+        case .mainTreeLeaf(let leafID):
+            if let hit = dropHit {
+                let target = makeDropTarget(from: hit)
+                controller.apply(.moveLeaf(leafID: leafID, to: target))
+            } else if isOutsideAllHosts {
+                let dx = globalPointerX - originGlobalX
+                let dy = globalPointerY - originGlobalY
+                let distSq = dx * dx + dy * dy
+                let thresholdSq = Self.detachDistanceThreshold * Self.detachDistanceThreshold
+                guard distSq >= thresholdSq else { return }
+                controller.apply(.detach(leafID: leafID))
             }
         }
     }

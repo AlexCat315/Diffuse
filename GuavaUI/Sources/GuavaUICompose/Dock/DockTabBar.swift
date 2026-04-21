@@ -113,7 +113,10 @@ struct _DockTabBarHost: _PrimitiveView {
                             isActive: tab.id == activeTabID,
                             controller: controller)
         }
-        children.append(Spacer())
+        children.append(_DockLeafDragHandle(sourceLeafID: nodeID,
+                                            activeTabID: activeTabID,
+                                            tabs: tabs,
+                                            controller: controller))
         return children
     }
 }
@@ -172,7 +175,33 @@ struct _DockTabBarItemHost: _PrimitiveView {
         // primitive `_updateNode` runs before this node is attached to its
         // parent — the parent-chain walk would always return `nil` here.
 
+        registry.setKey(node) { event, _ in
+            // Esc cancels an in-progress drag (PointerCapture routes the
+            // event here even when the node isn't focused — see
+            // EventDispatcher.dispatchKey).
+            if event.scancode == DOCK_KEY_SCANCODE_ESC {
+                let session = snapshot.controller.dragSession
+                if session.isActive {
+                    PointerCaptureHolder.current?.release()
+                    node.attachments[stateKey] = nil
+                    session.cancel()
+                    return .handled
+                }
+            }
+            return .ignored
+        }
+
         registry.setPointer(node) { event, phase, _ in
+            // Right-click forwards to the controller's context-menu hook
+            // and is otherwise a complete no-op (no capture, no drag).
+            if event.button == .right {
+                if phase == .down {
+                    snapshot.controller.onTabContextMenu?(snapshot.tab.id,
+                                                          snapshot.sourceLeafID,
+                                                          event.x, event.y)
+                }
+                return .handled
+            }
             switch phase {
             case .down:
                 node.attachments[stateKey] = TabPressState(downX: event.x,
@@ -266,8 +295,23 @@ struct _DockTabBarItemHost: _PrimitiveView {
         let label = Text(tab.title)
             .font(.bodyStrong)
             .foregroundColor(isActive ? .onSurface : .onSurfaceMuted)
-            .padding(horizontal: appearance.tabHorizontalPadding,
-                     vertical: 8)
+
+        let row = Row(alignment: .center, spacing: 6) {
+            if let icon = tab.icon {
+                Image(textureID: icon.textureID,
+                      width: icon.width,
+                      height: icon.height)
+            }
+            label
+            if tab.isClosable {
+                _DockTabCloseButton(tab: tab,
+                                    sourceLeafID: sourceLeafID,
+                                    isActive: isActive,
+                                    controller: controller)
+            }
+        }
+        .padding(horizontal: appearance.tabHorizontalPadding,
+                 vertical: 6)
 
         let underline: any View
         if isActive {
@@ -279,7 +323,7 @@ struct _DockTabBarItemHost: _PrimitiveView {
                 .frame(height: appearance.tabActiveAccentBarHeight)
         }
 
-        return [label, underline]
+        return [row, underline]
     }
 }
 
@@ -302,5 +346,228 @@ struct _DockLeafContent: View {
         } else {
             Box(direction: .column, alignItems: .stretch) { EmptyView() }
         }
+    }
+}
+
+/// The flex-grow handle that fills the empty area to the right of the tabs.
+/// Click is a no-op (could later focus the leaf); drag moves the entire
+/// leaf via `DockOperation.moveLeaf`. Same drop semantics as a tab drag,
+/// but the release op carries the whole tabs subtree.
+struct _DockLeafDragHandle: View {
+    let sourceLeafID: DockNodeID
+    let activeTabID: DockTabID?
+    let tabs: [DockTab]
+    let controller: DockController
+
+    var body: some View {
+        _DockLeafDragHandleHost(sourceLeafID: sourceLeafID,
+                                activeTabID: activeTabID,
+                                tabs: tabs,
+                                controller: controller)
+    }
+}
+
+struct _DockLeafDragHandleHost: _PrimitiveView {
+    let sourceLeafID: DockNodeID
+    let activeTabID: DockTabID?
+    let tabs: [DockTab]
+    let controller: DockController
+
+    func _makeNode() -> Node {
+        let n = Node()
+        n.isHitTestable = true
+        n.cursor = .move
+        return n
+    }
+
+    func _updateNode(_ node: Node) {
+        let stateKey = "__dock_leaf_drag_state"
+        guard let registry = InteractionRegistryHolder.current else { return }
+
+        let snapshot = self
+        let activeTitle: String = {
+            if let activeTabID, let t = tabs.first(where: { $0.id == activeTabID }) {
+                return t.title
+            }
+            return tabs.first?.title ?? "Group"
+        }()
+
+        registry.setKey(node) { event, _ in
+            if event.scancode == DOCK_KEY_SCANCODE_ESC {
+                let session = snapshot.controller.dragSession
+                if session.isActive {
+                    PointerCaptureHolder.current?.release()
+                    node.attachments[stateKey] = nil
+                    session.cancel()
+                    return .handled
+                }
+            }
+            return .ignored
+        }
+
+        registry.setPointer(node) { event, phase, _ in
+            switch phase {
+            case .down:
+                node.attachments[stateKey] = TabPressState(downX: event.x,
+                                                           downY: event.y,
+                                                           didDrag: false)
+                PointerCaptureHolder.current?.acquire(node)
+                return .handled
+            case .up:
+                let state = (node.attachments[stateKey] as? TabPressState)
+                    ?? TabPressState(downX: 0, downY: 0, didDrag: false)
+                node.attachments[stateKey] = nil
+                PointerCaptureHolder.current?.release()
+                let session = snapshot.controller.dragSession
+                if state.didDrag, session.isActive {
+                    session.end(commit: true)
+                }
+                return .handled
+            }
+        }
+
+        registry.setMotion(node) { event, _ in
+            guard PointerCaptureHolder.current?.target === node else {
+                return .ignored
+            }
+            var state = (node.attachments[stateKey] as? TabPressState)
+                ?? TabPressState(downX: event.x, downY: event.y, didDrag: false)
+            let dx = event.x - state.downX
+            let dy = event.y - state.downY
+            let session = snapshot.controller.dragSession
+            let bridge = node.compositionValue(of: DockHostBridgeLocal)
+            if !state.didDrag {
+                if abs(dx) > DOCK_DRAG_THRESHOLD || abs(dy) > DOCK_DRAG_THRESHOLD {
+                    state.didDrag = true
+                    let ghost = DockDragSession.GhostInfo(title: activeTitle)
+                    if let bridge {
+                        let originX = bridge.originProvider()?.x ?? 0
+                        let originY = bridge.originProvider()?.y ?? 0
+                        session.start(tabID: nil,
+                                      sourceLeafID: snapshot.sourceLeafID,
+                                      ghost: ghost,
+                                      x: event.x, y: event.y,
+                                      globalX: originX + event.x,
+                                      globalY: originY + event.y,
+                                      origin: .mainTreeLeaf(leafID: snapshot.sourceLeafID))
+                    } else {
+                        session.start(tabID: nil,
+                                      sourceLeafID: snapshot.sourceLeafID,
+                                      ghost: ghost,
+                                      x: event.x, y: event.y,
+                                      origin: .mainTreeLeaf(leafID: snapshot.sourceLeafID))
+                    }
+                }
+            } else {
+                if let bridge {
+                    let originX = bridge.originProvider()?.x ?? 0
+                    let originY = bridge.originProvider()?.y ?? 0
+                    MainActor.assumeIsolated {
+                        session.updatePointerCrossWindow(
+                            currentWindowID: bridge.windowID,
+                            windowLocal: (event.x, event.y),
+                            global: (originX + event.x, originY + event.y),
+                            coordinator: bridge.coordinator
+                        )
+                    }
+                } else {
+                    session.updatePointer(x: event.x, y: event.y,
+                                          registry: snapshot.controller.hitRegistry)
+                }
+            }
+            node.attachments[stateKey] = state
+            return .handled
+        }
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let l = LayoutNode()
+        l.flexGrow = 1
+        l.flexDirection = .row
+        l.alignItems = .stretch
+        return l
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        layout.flexGrow = 1
+        layout.flexDirection = .row
+        layout.alignItems = .stretch
+    }
+
+    func _children(for node: Node) -> [any View] { [] }
+}
+
+/// Small `×` glyph rendered inside an active (or any closable) tab. Click
+/// fires `controller.apply(.closeTab(id))`. Hover state is intentionally
+/// omitted — the underlying tab still owns press state for drag, and the
+/// close button is sized small enough that we want it to behave as a click
+/// target only. Right-click on the X bubbles up so the parent tab still
+/// surfaces the context menu.
+struct _DockTabCloseButton: View {
+    let tab: DockTab
+    let sourceLeafID: DockNodeID
+    let isActive: Bool
+    let controller: DockController
+
+    var body: some View {
+        _DockTabCloseButtonHost(tab: tab,
+                                sourceLeafID: sourceLeafID,
+                                isActive: isActive,
+                                controller: controller)
+    }
+}
+
+struct _DockTabCloseButtonHost: _PrimitiveView {
+    /// Sentinel attachment key. Tests that walk the tree counting tab
+    /// items by `cursor == .pointer` use this marker to skip close
+    /// buttons (which share the pointer cursor by design).
+    static let kCloseButtonMarker = "DockTabBar.closeButton"
+
+    let tab: DockTab
+    let sourceLeafID: DockNodeID
+    let isActive: Bool
+    let controller: DockController
+
+    func _makeNode() -> Node {
+        let n = Node()
+        n.isHitTestable = true
+        n.cursor = .pointer
+        n.attachments[Self.kCloseButtonMarker] = true
+        return n
+    }
+
+    func _updateNode(_ node: Node) {
+        guard let registry = InteractionRegistryHolder.current else { return }
+        let snap = self
+        registry.setPointer(node) { event, phase, _ in
+            if event.button != .left { return .ignored }
+            if phase == .up {
+                snap.controller.apply(.closeTab(snap.tab.id))
+            }
+            return .handled
+        }
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let l = LayoutNode()
+        l.width = 14
+        l.height = 14
+        return l
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        layout.width = 14
+        layout.height = 14
+    }
+
+    func _children(for node: Node) -> [any View] {
+        // Use the textual `×` rather than a custom-drawn primitive so the
+        // glyph picks up the same atlas/font path as the title and stays
+        // legible at any DPI.
+        return [
+            Text("×")
+                .font(.bodyStrong)
+                .foregroundColor(isActive ? .onSurface : .onSurfaceMuted)
+        ]
     }
 }
