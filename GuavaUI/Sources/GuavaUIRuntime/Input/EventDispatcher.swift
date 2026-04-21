@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import EngineKernel
+import PlatformShell
 
 /// Routes window-local input events to nodes in the GuavaUI tree.
 ///
@@ -21,6 +22,14 @@ public final class EventDispatcher {
     public let capture: PointerCapture
     public let focusChain: FocusChain
     public let windowID: WindowID
+
+    /// Invoked whenever the resolved hover cursor changes. The dispatcher
+    /// computes the cursor by walking the hover path leaf → root and using
+    /// the deepest non-nil `Node.cursor`. `nil` resolves to `.arrow`.
+    /// Callers (typically the platform host) should forward this to
+    /// `Shell.setCursor(_:)`.
+    public var cursorSink: ((SystemCursor) -> Void)?
+    private var activeCursor: SystemCursor = .arrow
 
     /// Last known pointer position from `mouseMotion`. Used to hit-test wheel
     /// events (which carry no position on SDL3) so they reach the node under
@@ -219,6 +228,21 @@ public final class EventDispatcher {
         }
 
         hoveredPath = newPath
+        updateCursor(for: newPath)
+    }
+
+    private func updateCursor(for path: [Node]) {
+        var resolved: SystemCursor = .arrow
+        for node in path.reversed() {
+            if let c = node.cursor {
+                resolved = c
+                break
+            }
+        }
+        if resolved != activeCursor {
+            activeCursor = resolved
+            cursorSink?(resolved)
+        }
     }
 
     private func commonPrefixLength(_ lhs: [Node], _ rhs: [Node]) -> Int {

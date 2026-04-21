@@ -40,6 +40,23 @@ let demoLogEntries: [DemoLogEntry] = [
     DemoLogEntry(id: 6, level: "INFO", message: "Phase 7 foundation is ready for SplitView and DockContainer."),
 ]
 
+/// Longer log list — used by the scrollable Console panel to exercise
+/// `ScrollView` wheel routing and Text shape caching together.
+let scrollableLogEntries: [DemoLogEntry] = (0..<60).map { i in
+    let level: String
+    switch i % 4 {
+    case 0: level = "INFO"
+    case 1: level = "DEBUG"
+    case 2: level = "WARN"
+    default: level = "INFO"
+    }
+    return DemoLogEntry(
+        id: 100 + i,
+        level: level,
+        message: "log #\(i): frame \(i * 16) ms, alloc \(i * 32) bytes, draw calls \(8 + i % 7)."
+    )
+}
+
 func demoLogColor(_ level: String) -> Color {
     switch level {
     case "WARN":
@@ -76,6 +93,10 @@ struct RootView: View {
     @State var selectedLogID: Int? = 2
     @State var appearance: Appearance = .dark
     @State var volume: Double = 0.4
+    @State var brightness: Double = 0.65
+    @State var quality: Double = 3
+    @State var disabledText: String = "read-only"
+    @State var passwordText: String = ""
 
     var body: some View {
         SplitView(.horizontal, fraction: 0.22) {
@@ -144,6 +165,17 @@ struct RootView: View {
                                 .buttonStyle(.ghost)
                             }
 
+                            // Disabled-state showcase. Cursor on hover should
+                            // switch to `notAllowed` for every disabled control.
+                            Row(alignment: .center, spacing: 8) {
+                                Button("Disabled Primary", isEnabled: false) {}
+                                Button("Disabled Secondary", isEnabled: false) {}
+                                    .buttonStyle(.secondary)
+                                Button("Disabled Ghost", isEnabled: false) {}
+                                    .buttonStyle(.ghost)
+                                Spacer(minLength: 0)
+                            }
+
                             Row(alignment: .top, spacing: 16) {
                                 Image(textureID: previewTextureID, width: 112, height: 112)
                                     .cornerRadius(24)
@@ -178,23 +210,70 @@ struct RootView: View {
                             .background(.surfaceVariant)
                             .cornerRadius(8)
 
+                            // Slider variants — continuous, stepped, disabled.
+                            Column(alignment: .leading, spacing: 8) {
+                                Row(alignment: .center, spacing: 12) {
+                                    Text("Brightness")
+                                        .font(.body).foregroundColor(.onSurface)
+                                        .frame(width: 90)
+                                    Slider(value: $brightness, range: 0...1).flex()
+                                    Text(String(format: "%.2f", brightness))
+                                        .font(.caption).foregroundColor(.onSurfaceMuted)
+                                        .frame(width: 50)
+                                }
+                                Row(alignment: .center, spacing: 12) {
+                                    Text("Quality")
+                                        .font(.body).foregroundColor(.onSurface)
+                                        .frame(width: 90)
+                                    Slider(value: $quality, range: 1...5, step: 1).flex()
+                                    Text("Lv \(Int(quality))")
+                                        .font(.caption).foregroundColor(.onSurfaceMuted)
+                                        .frame(width: 50)
+                                }
+                                Row(alignment: .center, spacing: 12) {
+                                    Text("Locked")
+                                        .font(.body).foregroundColor(.onSurfaceMuted)
+                                        .frame(width: 90)
+                                    Slider(value: $brightness, range: 0...1, isEnabled: false).flex()
+                                    Text("—")
+                                        .font(.caption).foregroundColor(.onSurfaceMuted)
+                                        .frame(width: 50)
+                                }
+                            }
+                            .padding(16)
+                            .background(.surfaceVariant)
+                            .cornerRadius(8)
+
+                            // TextField variants — placeholder + disabled +
+                            // emphasis on cursor=.ibeam on hover.
+                            Row(alignment: .center, spacing: 12) {
+                                TextField("Search assets…", text: $disabledText, onSubmit: {})
+                                    .padding(8).frame(height: 32).flex()
+                                TextField("Tag", text: $passwordText, onSubmit: {})
+                                    .padding(8).frame(height: 32).frame(width: 160)
+                            }
+
                             Spacer()
                         }
                     }
                 } second: {
                     Panel("Console") {
-                        List(demoLogEntries,
-                             selection: $selectedLogID,
-                             rowHeight: 34,
-                             rowSpacing: 2) { entry, _ in
-                            Row(alignment: .center, spacing: 10) {
-                                Text(entry.level)
-                                    .font(.bodyStrong)
-                                    .foregroundColor(demoLogColor(entry.level))
-                                Text(entry.message)
-                                    .font(.body)
-                                    .foregroundColor(.onSurface)
+                        ScrollView(.vertical) {
+                            List(scrollableLogEntries,
+                                 selection: $selectedLogID,
+                                 rowHeight: 30,
+                                 rowSpacing: 1) { entry, _ in
+                                Row(alignment: .center, spacing: 10) {
+                                    Text(entry.level)
+                                        .font(.bodyStrong)
+                                        .foregroundColor(demoLogColor(entry.level))
+                                        .frame(width: 60)
+                                    Text(entry.message)
+                                        .font(.body)
+                                        .foregroundColor(.onSurface)
+                                }
                             }
+                            .frame(height: 30 * Float(scrollableLogEntries.count) + 8)
                         }
                         .flex()
                     }

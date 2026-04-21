@@ -1,4 +1,5 @@
 import Foundation
+import PlatformShell
 
 /// A retained-mode node in the GuavaUI scene tree.
 ///
@@ -64,6 +65,11 @@ public final class Node: @unchecked Sendable {
     /// Children render translated by `-contentOffset`. Used by ScrollView to
     /// scroll its content while keeping its own clip rect anchored.
     public var contentOffset: CGPoint = .zero
+
+    /// Desired system cursor when the pointer is hovering this node. Resolved
+    /// by `EventDispatcher` walking the hover path leaf → root and using the
+    /// deepest non-nil value. `nil` (the default) inherits from ancestors.
+    public var cursor: SystemCursor?
 
     // MARK: - Compose reconciliation (Phase 6.6)
 

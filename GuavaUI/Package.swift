@@ -92,7 +92,10 @@ let package = Package(
         // MARK: - Tests
         .testTarget(
             name: "GuavaUIRuntimeTests",
-            dependencies: ["GuavaUIRuntime"]
+            dependencies: [
+                "GuavaUIRuntime",
+                .product(name: "PlatformShell", package: "Engine"),
+            ]
         ),
         .testTarget(
             name: "GuavaUIComposeTests",
