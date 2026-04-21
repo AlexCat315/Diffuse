@@ -87,9 +87,8 @@ public struct Text: _PrimitiveView {
     public func _updateNode(_ node: Node) {
         // Bind the draw callback. Captures `string` etc by value.
         let snapshot = self
-        let env = TextEnvironmentHolder.current
         node.draw = { list, origin in
-            guard let env else { return }
+            guard let env = TextEnvironmentHolder.current else { return }
             let fontOverride = node.attachments[StyleAttachmentKey.font] as? Font
             let lineHeightOverride = node.attachments[StyleAttachmentKey.lineHeight] as? Float
             let resolvedFont = env.resolvedFont(fontOverride)

@@ -46,6 +46,7 @@ public struct ShapedGlyph {
 public final class TextShaper {
 
     private var hbFont: OpaquePointer?
+    private var rasterScale: Float = 1
 
     public init() {}
 
@@ -58,10 +59,11 @@ public final class TextShaper {
     /// - Parameters:
     ///   - ftFace: A loaded `FT_Face`.
     ///   - size: Font size in points (used to set FreeType char size if not already set).
-    public func setFont(ftFace: FT_Face, size: Float) {
+    public func setFont(ftFace: FT_Face, size: Float, rasterScale: Float = 1) {
         if let oldFont = hbFont {
             hb_font_destroy(oldFont)
         }
+        self.rasterScale = max(1, rasterScale)
         hbFont = hb_ft_font_create_referenced(ftFace)
     }
 
@@ -107,16 +109,17 @@ public final class TextShaper {
 
         var result: [ShapedGlyph] = []
         result.reserveCapacity(Int(glyphCount))
+        let scale = rasterScale
 
         for i in 0..<Int(glyphCount) {
             let info = infos[i]
             let pos = positions[i]
             result.append(ShapedGlyph(
                 glyphID: info.codepoint,
-                xOffset: Float(pos.x_offset) / 64.0,
-                yOffset: Float(pos.y_offset) / 64.0,
-                xAdvance: Float(pos.x_advance) / 64.0,
-                yAdvance: Float(pos.y_advance) / 64.0,
+                xOffset: Float(pos.x_offset) / 64.0 / scale,
+                yOffset: Float(pos.y_offset) / 64.0 / scale,
+                xAdvance: Float(pos.x_advance) / 64.0 / scale,
+                yAdvance: Float(pos.y_advance) / 64.0 / scale,
                 cluster: info.cluster,
                 fontID: 0
             ))

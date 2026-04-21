@@ -164,11 +164,11 @@ public final class DrawList {
         for line in layout.lines {
             for glyph in line.glyphs {
                 guard let info = glyph.atlasInfo, info.width > 0, info.height > 0 else { continue }
-                let dx = origin.x + glyph.x + Float(info.bearingX)
-                let dy = origin.y + glyph.y - Float(info.bearingY)
+                let dx = origin.x + glyph.x + info.bearingX
+                let dy = origin.y + glyph.y - info.bearingY
                 addGlyphQuad(
                     x: dx, y: dy,
-                    width: Float(info.width), height: Float(info.height),
+                    width: info.width, height: info.height,
                     uvMinX: info.uvMinX, uvMinY: info.uvMinY,
                     uvMaxX: info.uvMaxX, uvMaxY: info.uvMaxY,
                     color: color, textureID: textureID
