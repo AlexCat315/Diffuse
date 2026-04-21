@@ -1,4 +1,5 @@
 import Testing
+import CoreGraphics
 import EngineKernel
 import GuavaUIRuntime
 @testable import GuavaUICompose
@@ -135,6 +136,39 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         )
         dispatcher.dispatch(.textInput("ok"))
         #expect(rig.store.value == "ok")
+    } }
+
+    @Test("EventDispatcher routes textEditing and focused render publishes text input area")
+    func dispatcherRoutesTextEditing() { GlobalTestLock.locked {
+        let rig = makeRig()
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+        rig.graph.install(root:
+            TextField(text: makeBinding(rig.store))
+        )
+
+        let node = rig.tree.root!.children.first!
+        rig.focus.focus(node)
+
+        let dispatcher = EventDispatcher(
+            tree: rig.tree,
+            interactions: rig.registry,
+            capture: PointerCapture(),
+            focusChain: rig.focus
+        )
+        dispatcher.dispatch(.textEditing(TextEditingEvent(text: "ni", start: 2, length: 0)))
+        #expect(rig.store.value == "")
+
+        node.frame = CGRect(x: 0, y: 0, width: 180, height: 28)
+        let list = DrawList()
+        node.draw?(list, CGPoint(x: 24, y: 16))
+        let area = node.attachments[TextInputAttachmentKey.area] as? TextInputArea
+        #expect(area?.x == 24)
+        #expect(area?.y == 16)
+        #expect((area?.width ?? 0) >= 180)
+        #expect((area?.cursorX ?? -1) >= 0)
+
+        dispatcher.dispatch(.textInput("你"))
+        #expect(rig.store.value == "你")
     } }
 
     @Test("Backspace removes a full grapheme cluster (emoji)")

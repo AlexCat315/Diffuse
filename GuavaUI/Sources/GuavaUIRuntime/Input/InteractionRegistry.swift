@@ -38,12 +38,13 @@ public final class InteractionRegistry {
         public var motion:  ((MouseMotionEvent, EventPhase) -> EventResult)?
         public var wheel:   ((MouseWheelEvent,  EventPhase) -> EventResult)?
         public var key:     ((KeyEvent,         EventPhase) -> EventResult)?
+        public var editing: ((TextEditingEvent, EventPhase) -> EventResult)?
         public var text:    ((String,           EventPhase) -> EventResult)?
 
         public init() {}
 
         public var isEmpty: Bool {
-            pointer == nil && hover == nil && motion == nil && wheel == nil && key == nil && text == nil
+            pointer == nil && hover == nil && motion == nil && wheel == nil && key == nil && editing == nil && text == nil
         }
     }
 
@@ -84,6 +85,12 @@ public final class InteractionRegistry {
     public func setKey(_ node: Node,
                        _ handler: @escaping (KeyEvent, EventPhase) -> EventResult) {
         var h = handlers(for: node); h.key = handler
+        table[ObjectIdentifier(node)] = h
+    }
+
+    public func setEditing(_ node: Node,
+                           _ handler: @escaping (TextEditingEvent, EventPhase) -> EventResult) {
+        var h = handlers(for: node); h.editing = handler
         table[ObjectIdentifier(node)] = h
     }
 

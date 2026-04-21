@@ -55,6 +55,28 @@ public struct TextField: _PrimitiveView {
         /// True between pointer-down and pointer-up while a drag is active.
         /// Motion events extend the selection only when this is set.
         var isDragging: Bool = false
+        /// Active IME preedit string. It is rendered into the field but is not
+        /// committed into `text` until the platform sends `textInput`.
+        var compositionText: String = ""
+        var compositionStart: Int = 0
+        var compositionLength: Int = 0
+
+        func clearComposition() {
+            compositionText = ""
+            compositionStart = 0
+            compositionLength = 0
+        }
+
+        var isComposing: Bool { !compositionText.isEmpty }
+    }
+
+    private struct RenderState {
+        let displayText: String
+        let measurementText: String
+        let cursorIndex: Int
+        let compositionRange: Range<Int>?
+        let showsPlaceholder: Bool
+        let isComposing: Bool
     }
 
     public func _makeNode() -> Node {
@@ -92,6 +114,13 @@ public struct TextField: _PrimitiveView {
         let snapshot = self
 
         if let registry = InteractionRegistryHolder.current {
+            registry.setEditing(node) { event, _ in
+                state.compositionText = event.text
+                let compositionCount = event.text.count
+                state.compositionStart = clamp(Int(event.start), 0, compositionCount)
+                state.compositionLength = clamp(Int(event.length), 0, max(0, compositionCount - state.compositionStart))
+                return .handled
+            }
             registry.setText(node) { incoming, _ in
                 snapshot.insertReplacingSelection(incoming, state: state)
                 return .handled
@@ -173,6 +202,7 @@ public struct TextField: _PrimitiveView {
     /// the inserted text and clear any selection.
     private func insertReplacingSelection(_ incoming: String, state: FieldState) {
         guard !incoming.isEmpty else { return }
+        state.clearComposition()
         deleteSelection(state: state)
         var s = text.wrappedValue
         let cursor = clamp(state.cursorIndex, 0, s.count)
@@ -292,21 +322,24 @@ public struct TextField: _PrimitiveView {
         guard let env = TextEnvironmentHolder.current else { return }
         let theme = node.theme
         let isFocused = (FocusChainHolder.current?.focused === node)
+        if !isFocused, state.isComposing {
+            state.clearComposition()
+        }
         let current = text.wrappedValue
-        let displayText = current.isEmpty ? placeholder : current
         let resolvedFont = resolvedFont(node: node, env: env)
         let resolvedLineHeight = resolvedLineHeight(node: node, env: env)
         let resolvedPlaceholderColor = placeholderColor ?? theme.colors.onSurfaceMuted
         let resolvedCursorColor = cursorColor ?? theme.colors.onSurface
         let resolvedSelectionColor = selectionColor ?? theme.colors.selection
+        let renderState = makeRenderState(current: current, state: state, isFocused: isFocused)
         let renderBaseColor: Color =
-            current.isEmpty
+            renderState.showsPlaceholder
                 ? resolvedPlaceholderColor
                 : (textColor ?? node.foregroundColor ?? env.defaultColor)
         let renderColor = renderBaseColor.multipliedAlpha(node.opacity)
 
         // Selection highlight first (drawn under the glyphs).
-        if isFocused, let range = selectionRange(state), !current.isEmpty {
+        if isFocused, !renderState.isComposing, let range = selectionRange(state), !current.isEmpty {
             let xLo = cursorX(in: current, upTo: range.lowerBound, env: env, font: resolvedFont)
             let xHi = cursorX(in: current, upTo: range.upperBound, env: env, font: resolvedFont)
             list.addRect(
@@ -318,10 +351,10 @@ public struct TextField: _PrimitiveView {
             )
         }
 
-        let glyphs = env.shape(text: displayText, font: resolvedFont)
+        let glyphs = env.shape(text: renderState.displayText, font: resolvedFont)
         let result = TextLayout.layout(
             shapedGlyphs: glyphs,
-            text: displayText,
+            text: renderState.displayText,
             atlas: env.atlas,
             maxWidth: .infinity,
             lineHeight: resolvedLineHeight,
@@ -332,12 +365,38 @@ public struct TextField: _PrimitiveView {
                      color: renderColor,
                      textureID: env.atlasTextureID)
 
-        // Cursor — suppressed while a non-empty selection is active.
-        guard isFocused, selectionRange(state) == nil else { return }
-        let cursorXValue = cursorX(in: current,
-                                   upTo: clamp(state.cursorIndex, 0, current.count),
+        if isFocused, let compositionRange = renderState.compositionRange {
+            let xLo = cursorX(in: renderState.measurementText,
+                              upTo: compositionRange.lowerBound,
+                              env: env,
+                              font: resolvedFont)
+            let xHi = cursorX(in: renderState.measurementText,
+                              upTo: compositionRange.upperBound,
+                              env: env,
+                              font: resolvedFont)
+            list.addRect(
+                UIRect(x: Float(origin.x) + xLo,
+                       y: Float(origin.y) + resolvedLineHeight - 1,
+                       width: max(1, xHi - xLo),
+                       height: 1),
+                color: resolvedCursorColor.multipliedAlpha(node.opacity * 0.8)
+            )
+        }
+
+        let cursorXValue = cursorX(in: renderState.measurementText,
+                                   upTo: clamp(renderState.cursorIndex, 0, renderState.measurementText.count),
                                    env: env,
                                    font: resolvedFont)
+        node.attachments[TextInputAttachmentKey.area] = TextInputArea(
+            x: Float(origin.x),
+            y: Float(origin.y),
+            width: max(Float(node.frame.width), cursorXValue + 1),
+            height: max(Float(node.frame.height), resolvedLineHeight),
+            cursorX: cursorXValue
+        )
+
+        // Cursor — suppressed while a non-empty selection is active.
+        guard isFocused, renderState.isComposing || selectionRange(state) == nil else { return }
         let cursorRect = UIRect(
             x: Float(origin.x) + cursorXValue,
             y: Float(origin.y),
@@ -345,6 +404,52 @@ public struct TextField: _PrimitiveView {
             height: resolvedLineHeight
         )
         list.addRect(cursorRect, color: resolvedCursorColor.multipliedAlpha(node.opacity))
+    }
+
+    private func makeRenderState(current: String,
+                                 state: FieldState,
+                                 isFocused: Bool) -> RenderState {
+        guard isFocused, state.isComposing else {
+            if current.isEmpty {
+                return RenderState(
+                    displayText: placeholder,
+                    measurementText: "",
+                    cursorIndex: 0,
+                    compositionRange: nil,
+                    showsPlaceholder: true,
+                    isComposing: false
+                )
+            }
+            return RenderState(
+                displayText: current,
+                measurementText: current,
+                cursorIndex: clamp(state.cursorIndex, 0, current.count),
+                compositionRange: nil,
+                showsPlaceholder: false,
+                isComposing: false
+            )
+        }
+
+        let replaceRange = selectionRange(state) ?? (state.cursorIndex..<state.cursorIndex)
+        var preview = current
+        let lo = preview.index(preview.startIndex, offsetBy: replaceRange.lowerBound)
+        let hi = preview.index(preview.startIndex, offsetBy: replaceRange.upperBound)
+        preview.replaceSubrange(lo..<hi, with: state.compositionText)
+
+        let compositionStart = replaceRange.lowerBound
+        let compositionEnd = compositionStart + state.compositionText.count
+        let cursorOffset = state.compositionLength > 0
+            ? state.compositionStart + state.compositionLength
+            : state.compositionText.count
+
+        return RenderState(
+            displayText: preview,
+            measurementText: preview,
+            cursorIndex: compositionStart + clamp(cursorOffset, 0, state.compositionText.count),
+            compositionRange: compositionStart..<compositionEnd,
+            showsPlaceholder: false,
+            isComposing: true
+        )
     }
 
     /// Width of `text` shaped from index 0 up to `count` characters. Used to

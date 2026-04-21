@@ -242,6 +242,11 @@ var previewTexturePixels: [UInt8] = []
 var previewTextureSize: (width: UInt32, height: UInt32) = (0, 0)
 var activeTextScale: Float = 0
 var didInstallRoot = false
+var lastHUDSampleTime = ProcessInfo.processInfo.systemUptime
+var hudFrameAccum: Double = 0
+var hudFrameCount: Int = 0
+var hudFPS: Int = 0
+var hudFrameMS: Double = 0
 
 func makePreviewTexturePixels(scale: Float) -> (pixels: [UInt8], width: UInt32, height: UInt32) {
     let logicalWidth: Float = 112
@@ -356,6 +361,59 @@ func uploadPreviewTexture() throws {
     }
 }
 
+@MainActor
+func appendPerformanceHUD(to list: DrawList) {
+    guard let env = TextEnvironmentHolder.current else { return }
+
+    let now = ProcessInfo.processInfo.systemUptime
+    let delta = max(0, now - lastHUDSampleTime)
+    lastHUDSampleTime = now
+    hudFrameAccum += delta
+    hudFrameCount += 1
+
+    if hudFrameAccum >= 0.25 {
+        hudFPS = Int((Double(hudFrameCount) / hudFrameAccum).rounded())
+        hudFrameMS = (hudFrameAccum / Double(hudFrameCount)) * 1000
+        hudFrameAccum = 0
+        hudFrameCount = 0
+    }
+
+    let hudText = hudFPS > 0
+        ? String(format: "FPS %d  %.1f ms", hudFPS, hudFrameMS)
+        : "FPS --"
+    let font = env.resolvedFont(.system(size: 13, weight: .medium))
+    let layout = TextLayout.layout(
+        shapedGlyphs: env.shape(text: hudText, font: font),
+        text: hudText,
+        atlas: env.atlas,
+        maxWidth: .infinity,
+        lineHeight: env.resolvedLineHeight(font: font, override: nil),
+        alignment: .leading
+    )
+
+    let panelX: Float = 14
+    let panelY: Float = 14
+    let paddingX: Float = 10
+    let paddingY: Float = 8
+    let panelRect = UIRect(
+        x: panelX,
+        y: panelY,
+        width: layout.totalWidth + paddingX * 2,
+        height: env.resolvedLineHeight(font: font, override: nil) + paddingY * 2
+    )
+    list.addRoundedRect(
+        panelRect,
+        radius: 10,
+        color: Color(r: 0.08, g: 0.10, b: 0.13, a: 0.88)
+    )
+    list.addText(
+        layout,
+        origin: (panelX + paddingX, panelY + paddingY),
+        color: Color(r: 0.90, g: 0.93, b: 0.97, a: 1),
+        textureID: env.atlasTextureID
+    )
+}
+
 host.onInit = { native, w, h in
     drawableW = w; drawableH = h
     logicalW = host.logicalSize.width; logicalH = host.logicalSize.height
@@ -425,6 +483,7 @@ host.onFrame = { _ in
     // 3. Walk node tree -> draw list.
     drawList.reset()
     nodeRenderer.render(root: root, into: drawList)
+    appendPerformanceHUD(to: drawList)
 
     // 4. Submit to wgpu.
     let acquired: (texture: GPUTexture, view: GPUTextureView)?
