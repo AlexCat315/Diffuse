@@ -11,6 +11,7 @@ public final class ManagedFont {
     public let postScriptName: String
     /// Point size used when the FreeType face was configured.
     public let pointSize: Float
+    public let rasterScale: Float
     internal let ftFace: FT_Face
     internal let hbFont: OpaquePointer  // hb_font_t*
 
@@ -22,12 +23,13 @@ public final class ManagedFont {
     private let buffer: UnsafeMutablePointer<UInt8>
     private let bufferSize: Int
 
-    init(id: Int, postScriptName: String, pointSize: Float,
+    init(id: Int, postScriptName: String, pointSize: Float, rasterScale: Float,
          ftFace: FT_Face, hbFont: OpaquePointer,
          buffer: UnsafeMutablePointer<UInt8>, bufferSize: Int) {
         self.id = id
         self.postScriptName = postScriptName
         self.pointSize = pointSize
+        self.rasterScale = rasterScale
         self.ftFace = ftFace
         self.hbFont = hbFont
         self.buffer = buffer
@@ -60,15 +62,17 @@ public final class FontProvider {
     private var fonts: [String: ManagedFont] = [:]
     private var nextFontID: Int = 0
     private let size: Float
+    private let rasterScale: Float
     private var primaryPSName: String?
 
     /// Creates a FontProvider with the given font size.
-    public init(size: Float, idBase: Int = 0) {
+    public init(size: Float, rasterScale: Float = 1, idBase: Int = 0) {
         var lib: FT_Library?
         let err = FT_Init_FreeType(&lib)
         precondition(err == 0, "FT_Init_FreeType failed: \(err)")
         self.ftLibrary = lib!
         self.size = size
+        self.rasterScale = max(1, rasterScale)
         self.nextFontID = idBase
     }
 
@@ -89,7 +93,12 @@ public final class FontProvider {
     /// Registers all loaded fonts into the given atlas for multi-font rasterization.
     public func registerAllFonts(in atlas: FontAtlas) {
         for font in fonts.values {
-            atlas.registerFace(font.ftFace, fontID: font.id, size: font.pointSize)
+            atlas.registerFace(
+                font.ftFace,
+                fontID: font.id,
+                size: font.pointSize,
+                rasterScale: font.rasterScale
+            )
         }
     }
 
@@ -156,6 +165,7 @@ public final class FontProvider {
     public func shapeRun(_ run: FontRun) -> [ShapedGlyph] {
         guard let buf = hb_buffer_create() else { return [] }
         defer { hb_buffer_destroy(buf) }
+        let scale = max(run.font.rasterScale, 1)
 
         run.text.withCString(encodedAs: UTF8.self) { ptr in
             hb_buffer_add_utf8(buf, ptr, Int32(run.text.utf8.count), 0, Int32(run.text.utf8.count))
@@ -176,10 +186,10 @@ public final class FontProvider {
             let pos = positions[i]
             result.append(ShapedGlyph(
                 glyphID: info.codepoint,
-                xOffset: Float(pos.x_offset) / 64.0,
-                yOffset: Float(pos.y_offset) / 64.0,
-                xAdvance: Float(pos.x_advance) / 64.0,
-                yAdvance: Float(pos.y_advance) / 64.0,
+                xOffset: Float(pos.x_offset) / 64.0 / scale,
+                yOffset: Float(pos.y_offset) / 64.0 / scale,
+                xAdvance: Float(pos.x_advance) / 64.0 / scale,
+                yAdvance: Float(pos.y_advance) / 64.0 / scale,
                 cluster: info.cluster + UInt32(run.utf8Offset),
                 fontID: run.font.id
             ))
@@ -200,7 +210,8 @@ public final class FontProvider {
 
     private func configuredCTFont(named name: String,
                                   weight: FontWeight) -> CTFont {
-        let base = CTFontCreateWithName(name as CFString, CGFloat(size), nil)
+        let scaledSize = CGFloat(size * rasterScale)
+        let base = CTFontCreateWithName(name as CFString, scaledSize, nil)
         guard weight != .regular else { return base }
 
         let attrs: [CFString: Any] = [
@@ -210,7 +221,7 @@ public final class FontProvider {
             CTFontCopyFontDescriptor(base),
             attrs as CFDictionary
         )
-        return CTFontCreateWithFontDescriptor(descriptor, CGFloat(size), nil)
+        return CTFontCreateWithFontDescriptor(descriptor, scaledSize, nil)
     }
 
     private func loadFontFromCTFont(_ ctFont: CTFont, psName: String) -> ManagedFont? {
@@ -233,7 +244,7 @@ public final class FontProvider {
             return nil
         }
 
-        FT_Set_Char_Size(ftFace, 0, FT_F26Dot6(size * 64), 72, 72)
+        FT_Set_Char_Size(ftFace, 0, FT_F26Dot6(size * rasterScale * 64), 72, 72)
 
         guard let hbFont = hb_ft_font_create_referenced(ftFace) else {
             FT_Done_Face(ftFace)
@@ -245,7 +256,7 @@ public final class FontProvider {
         nextFontID += 1
 
         let managed = ManagedFont(
-            id: id, postScriptName: psName, pointSize: size,
+            id: id, postScriptName: psName, pointSize: size, rasterScale: rasterScale,
             ftFace: ftFace, hbFont: hbFont,
             buffer: buffer, bufferSize: data.count
         )

@@ -82,6 +82,27 @@ struct TextTests {
         #expect(!nonZero)
     }
 
+    @Test("HiDPI atlas keeps logical metrics while increasing bitmap resolution")
+    func hidpiAtlasMetrics() {
+        let base = FontAtlas(width: 512, height: 512)
+        base.loadFont(path: testFontPath, size: 24)
+
+        let hidpi = FontAtlas(width: 1024, height: 1024)
+        hidpi.loadFont(path: testFontPath, size: 24, rasterScale: 2)
+
+        let baseInfo = base.rasterizeCodepoint(0x41)
+        let hidpiInfo = hidpi.rasterizeCodepoint(0x41)
+        #expect(baseInfo != nil)
+        #expect(hidpiInfo != nil)
+
+        let basePhysicalWidth = (baseInfo!.uvMaxX - baseInfo!.uvMinX) * Float(base.atlasWidth)
+        let hidpiPhysicalWidth = (hidpiInfo!.uvMaxX - hidpiInfo!.uvMinX) * Float(hidpi.atlasWidth)
+
+        #expect(abs(baseInfo!.width - hidpiInfo!.width) < 2)
+        #expect(abs(baseInfo!.advance - hidpiInfo!.advance) < 2)
+        #expect(hidpiPhysicalWidth > basePhysicalWidth)
+    }
+
     // MARK: - HarfBuzz
 
     @Test("TextShaper shapes 'Hello' into 5 glyphs")
@@ -129,6 +150,26 @@ struct TextTests {
         // Total width should be sum of advances
         let total = glyphs.reduce(Float(0)) { $0 + $1.xAdvance }
         #expect(total > 0)
+    }
+
+    @Test("HiDPI shaping preserves logical advances")
+    func hidpiShapingKeepsLogicalAdvance() {
+        let baseAtlas = FontAtlas()
+        baseAtlas.loadFont(path: testFontPath, size: 16)
+
+        let baseShaper = TextShaper()
+        baseShaper.setFont(ftFace: baseAtlas.freetypeFace!, size: 16)
+
+        let hidpiAtlas = FontAtlas(width: 1024, height: 1024)
+        hidpiAtlas.loadFont(path: testFontPath, size: 16, rasterScale: 2)
+
+        let hidpiShaper = TextShaper()
+        hidpiShaper.setFont(ftFace: hidpiAtlas.freetypeFace!, size: 16, rasterScale: 2)
+
+        let baseAdvance = baseShaper.shape(text: "Hello").reduce(Float(0)) { $0 + $1.xAdvance }
+        let hidpiAdvance = hidpiShaper.shape(text: "Hello").reduce(Float(0)) { $0 + $1.xAdvance }
+
+        #expect(abs(baseAdvance - hidpiAdvance) < 2)
     }
 
     // MARK: - TextLayout
