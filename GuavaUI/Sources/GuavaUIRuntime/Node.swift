@@ -47,6 +47,26 @@ public final class Node: @unchecked Sendable {
     /// is not rounded yet (Phase 7).
     public var cornerRadius: Float = 0
 
+    /// Stroke colour painted as an inset border around the background fill.
+    /// Rendered by `NodeRenderer` as an outer rounded rect of the border
+    /// colour with the background rect inset by `borderWidth` painted on
+    /// top — gives a correct rounded-rect border without needing a real
+    /// stroke primitive on the GPU side.
+    public var borderColor: Color?
+
+    /// Width of the border in pixels. `0` (default) skips border rendering
+    /// even when `borderColor` is set.
+    public var borderWidth: Float = 0
+
+    /// Drop-shadow colour painted under the background fill. `nil` (default)
+    /// or zero-alpha skips shadow rendering.
+    public var shadowColor: Color?
+    public var shadowOffsetX: Float = 0
+    public var shadowOffsetY: Float = 0
+    /// Logical blur radius. The current renderer downgrades this to a stack
+    /// of expanded translucent rounded rects (cheap fake shadow).
+    public var shadowBlur: Float = 0
+
     /// Foreground tint. Used by Text and tinted Image. `nil` = renderer default.
     public var foregroundColor: Color?
 
@@ -61,6 +81,10 @@ public final class Node: @unchecked Sendable {
     /// Used by leaf primitives such as Text/Image to emit content-specific
     /// geometry without subclassing `Node`.
     public var draw: ((DrawList, CGPoint) -> Void)?
+
+    /// Optional draw hook invoked AFTER children render. Used for chrome that
+    /// must overlay scrolled content (e.g. ScrollView scrollbars).
+    public var overlayDraw: ((DrawList, CGPoint) -> Void)?
 
     /// Children render translated by `-contentOffset`. Used by ScrollView to
     /// scroll its content while keeping its own clip rect anchored.
