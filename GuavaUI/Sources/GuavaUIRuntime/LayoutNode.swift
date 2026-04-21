@@ -257,9 +257,16 @@ public final class LayoutNode: @unchecked Sendable {
     }
 
     /// Mark this node's measurement as stale (call after content changes).
+    /// Yoga only permits this on leaf nodes that own a measure callback;
+    /// callers should guard with `hasMeasureFunc` when applying generic
+    /// modifiers.
     public func markDirty() {
         YGNodeMarkDirty(ygNode)
     }
+
+    /// True iff this node has a custom measure callback installed via
+    /// `setMeasureFunc`. Use to gate `markDirty()` from generic modifiers.
+    public var hasMeasureFunc: Bool { measureClosure != nil }
 }
 
 /// Trampoline that bridges Yoga's C measure callback to the Swift closure

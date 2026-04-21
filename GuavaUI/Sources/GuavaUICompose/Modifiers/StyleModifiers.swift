@@ -60,7 +60,7 @@ public struct FontModifier: ViewModifier {
 
     public func apply(layout: LayoutNode) {
         layout.attachments[StyleAttachmentKey.font] = font
-        layout.markDirty()
+        if layout.hasMeasureFunc { layout.markDirty() }
     }
 }
 
@@ -76,7 +76,7 @@ public struct LineHeightModifier: ViewModifier {
 
     public func apply(layout: LayoutNode) {
         layout.attachments[StyleAttachmentKey.lineHeight] = lineHeight
-        layout.markDirty()
+        if layout.hasMeasureFunc { layout.markDirty() }
     }
 }
 

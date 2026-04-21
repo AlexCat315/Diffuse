@@ -21,6 +21,24 @@ extension ModifiedContent: _AnyModifiedContent {
     public func _materialiseInto(parent: Node,
                                  layoutParent: LayoutNode?,
                                  graph: ViewGraph) -> [Node] {
+        // Scope-applying modifiers (e.g. CompositionLocal providers) must
+        // expose their value to the content during materialisation, not after,
+        // so descendants picking up `.foregroundColor(.semantic(...))` resolve
+        // against the provided theme on first install — not against the
+        // default. Wrap the content in a synthetic, layout-transparent anchor
+        // and push the value onto it before recursing.
+        if let scopeApply = modifier as? _ScopeApplyingModifier {
+            let scopeAnchor = Node()
+            scopeAnchor.isHitTestable = false
+            scopeAnchor.viewTag = ViewGraph.slotTag(self)
+            parent.addChild(scopeAnchor)
+            scopeApply._applyScope(node: scopeAnchor)
+            _ = graph.materialise(content,
+                                  into: scopeAnchor,
+                                  layoutParent: layoutParent)
+            return [scopeAnchor]
+        }
+
         let nodes = graph.materialise(content, into: parent, layoutParent: layoutParent)
         for n in nodes {
             // Override the inner content's tag with the wrapper's tag so the
@@ -40,6 +58,17 @@ extension ModifiedContent: _AnyModifiedContent {
     public func _updateInPlace(node: Node,
                                layoutParent: LayoutNode?,
                                graph: ViewGraph) {
+        // Mirror the materialise-time wrapping: scope-applying modifiers own a
+        // synthetic anchor whose single child carries the wrapped content.
+        if let scopeApply = modifier as? _ScopeApplyingModifier {
+            scopeApply._applyScope(node: node)
+            node.viewTag = ViewGraph.slotTag(self)
+            graph.reconcileChildren(parent: node,
+                                    layoutParent: layoutParent,
+                                    newViews: [content])
+            return
+        }
+
         // Recurse into the wrapped content first so its primitive's
         // `_updateNode` runs and any deeper reconciliation happens.
         graph.updateInPlace(node: node, view: content, layoutParent: layoutParent)
