@@ -276,7 +276,7 @@ TextEnvironmentHolder.current = TextEnvironment(
 // MARK: - Compose graph
 
 let tree = NodeTree()
-let host = SDL3PlatformHost(title: "GuavaUI — Phase 6.5")
+let host = SDL3PlatformHost(title: "GuavaUI — Phase 7.5")
 let graph = ViewGraph(tree: tree, recomposer: host.recomposer)
 InteractionRegistryHolder.current = host.interactions
 FocusChainHolder.current = host.focusChain
@@ -297,6 +297,8 @@ var surface: GPUSurface?
 var configured = false
 var drawableW: UInt32 = 0
 var drawableH: UInt32 = 0
+var logicalW: UInt32 = 0
+var logicalH: UInt32 = 0
 
 @MainActor
 func uploadAtlas() throws {
@@ -324,6 +326,7 @@ func uploadPreviewTexture() throws {
 
 host.onInit = { native, w, h in
     drawableW = w; drawableH = h
+    logicalW = host.logicalSize.width; logicalH = host.logicalSize.height
     do {
         surface = try makeSurface(backend: backend, native: native)
         try surface?.configure(
@@ -342,6 +345,7 @@ host.onInit = { native, w, h in
 
 host.onResize = { w, h in
     drawableW = w; drawableH = h
+    logicalW = host.logicalSize.width; logicalH = host.logicalSize.height
     guard let surface, let device = backend.rawDevice else { return }
     do {
         try surface.configure(
@@ -357,7 +361,7 @@ host.onFrame = { _ in
 
     // 1. Layout against current viewport. Glyphs are rasterised lazily here as
     //    the measure func runs.
-    graph.computeLayout(width: Float(drawableW), height: Float(drawableH))
+    graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
 
     // 2. Re-upload atlas in case new glyphs were rasterised this frame.
     do { try uploadAtlas() }
@@ -386,7 +390,8 @@ host.onFrame = { _ in
         )
         try renderer.render(
             list: drawList, pass: pass,
-            viewportPx: (drawableW, drawableH))
+            viewportPx: (drawableW, drawableH),
+            coordinateSpace: (Float(logicalW), Float(logicalH)))
         pass.end()
         let buffer = try encoder.finish()
         backend.submit(buffer)
