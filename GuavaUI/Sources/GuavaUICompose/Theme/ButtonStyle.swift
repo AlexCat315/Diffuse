@@ -51,10 +51,11 @@ public extension ButtonStyleConfiguration {
 }
 
 /// Default transition for built-in `ButtonStyle` interaction changes.
-/// Tuned for snappy UI feedback — quick enough to feel direct, long enough
-/// for the eye to register the colour swap.
+/// 100ms ease-out — quick enough to feel direct, soft enough that hover
+/// doesn't pop. Press feedback rides the same curve so the colour swap
+/// never lags the pointer.
 public extension Animation {
-    static let buttonInteraction = Animation(duration: 0.12, curve: .easeInOut)
+    static let buttonInteraction = Animation(duration: 0.10, curve: .easeOut)
 }
 
 /// SwiftUI-shaped style protocol. Implementors describe a button's complete
