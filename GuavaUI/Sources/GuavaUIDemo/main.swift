@@ -192,7 +192,8 @@ struct RootView: View {
             }
             .padding(horizontal: 8, vertical: 0)
 
-            Spacer().frame(height: 16)
+            Box(direction: .column, alignItems: .stretch) { EmptyView() }
+                .frame(height: 16)
             Divider()
 
             Text("HIERARCHY")
@@ -303,18 +304,12 @@ struct RootView: View {
             }
 
             card("Text fields") {
-                Column(alignment: .leading, spacing: 10) {
+                Box(direction: .column, alignItems: .stretch, spacing: 10) {
                     TextField("Search…", text: $searchText, onSubmit: {})
-                        .padding(8)
-                        .frame(height: 34)
                     Row(alignment: .center, spacing: 10) {
                         TextField("Project name", text: $inputText, onSubmit: {})
-                            .padding(8)
-                            .frame(height: 34)
                             .flex()
                         TextField("Tag", text: $tagText, onSubmit: {})
-                            .padding(8)
-                            .frame(height: 34)
                             .frame(width: 140)
                     }
                     Text("echo: \(inputText)")
