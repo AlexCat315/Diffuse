@@ -18,7 +18,8 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
     private func findTabItems(_ root: Node) -> [Node] {
         var out: [Node] = []
         func walk(_ n: Node) {
-            if n.isHitTestable, n.cursor == .pointer {
+            if n.isHitTestable, n.cursor == .pointer,
+               n.attachments[_DockTabCloseButtonHost.kCloseButtonMarker] == nil {
                 out.append(n)
             }
             for c in n.children { walk(c) }
