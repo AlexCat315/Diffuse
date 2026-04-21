@@ -78,23 +78,33 @@ public final class SDL3PlatformHost: PlatformHost {
             onInit?(surface, w, h)
         }
         var lastSize = host.drawableSize
+        var lastFrameTime = Date()
 
         while host.isRunning && _isRunning {
-            // 1. Execute pending state-driven recomposes.
+            // Compute frame deltaTime in seconds for the animator.
+            let now = Date()
+            let deltaTime = now.timeIntervalSince(lastFrameTime)
+            lastFrameTime = now
+
+            // 1. Execute pending state-driven recomposes (may register new
+            //    animation controllers via modifier-apply paths).
             recomposer.commitAll()
-            // 2. Flush dirty nodes (layout + draw callbacks in later phases).
+            // 2. Advance any active animations and write interpolated values
+            //    onto nodes before the dirty flush picks them up.
+            AnimatorScheduler.current.tick(deltaTime: deltaTime)
+            // 3. Flush dirty nodes (layout + draw callbacks in later phases).
             tree.flush()
-            // 3. Detect resize and notify.
+            // 4. Detect resize and notify.
             let cur = host.drawableSize
             if cur.0 != lastSize.0 || cur.1 != lastSize.1 {
                 onResize?(cur.0, cur.1)
                 lastSize = cur
             }
-            // 4. Render frame if callback is set.
+            // 5. Render frame if callback is set.
             if let surface = host.renderSurface {
                 onFrame?(surface)
             }
-            // 5. Drain platform events through the dispatcher.
+            // 6. Drain platform events through the dispatcher.
             for event in host.pollEvents() {
                 dispatcher.dispatch(event)
                 onEvent?(event)

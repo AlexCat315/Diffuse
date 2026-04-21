@@ -25,6 +25,38 @@ public struct ButtonStyleConfiguration {
     public let theme: Theme
 }
 
+/// Equatable snapshot of the interaction-driven flags of a
+/// `ButtonStyleConfiguration`. Built-in styles use this as the keying value
+/// for `.animation(_:value:)` so hover / press / focus / enabled transitions
+/// auto-animate without the call site having to wrap state mutation in
+/// `withAnimation`.
+public struct _ButtonInteractionKey: Equatable, Sendable {
+    public let isPressed: Bool
+    public let isHovered: Bool
+    public let isFocused: Bool
+    public let isEnabled: Bool
+}
+
+public extension ButtonStyleConfiguration {
+    /// The interaction-state subset used by built-in styles to key implicit
+    /// transitions. Custom styles may use this same key, or define their own.
+    var interactionKey: _ButtonInteractionKey {
+        _ButtonInteractionKey(
+            isPressed: isPressed,
+            isHovered: isHovered,
+            isFocused: isFocused,
+            isEnabled: isEnabled
+        )
+    }
+}
+
+/// Default transition for built-in `ButtonStyle` interaction changes.
+/// Tuned for snappy UI feedback — quick enough to feel direct, long enough
+/// for the eye to register the colour swap.
+public extension Animation {
+    static let buttonInteraction = Animation(duration: 0.12, curve: .easeInOut)
+}
+
 /// SwiftUI-shaped style protocol. Implementors describe a button's complete
 /// visual tree given its configuration; the `Button` primitive itself only
 /// owns hit-testing and state.

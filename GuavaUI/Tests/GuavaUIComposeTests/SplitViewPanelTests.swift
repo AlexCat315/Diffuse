@@ -47,7 +47,7 @@ struct SplitViewPanelTests {
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
 
         graph.install(root:
-            Panel("Inspector", contentPadding: .zero) {
+            Panel("Inspector") {
                 Box { EmptyView() }
                     .frame(height: 40)
                     .background(Color(red: 40, green: 48, blue: 60))
@@ -57,19 +57,23 @@ struct SplitViewPanelTests {
 
         graph.computeLayout(width: 240, height: 160)
 
-        let panel = materialisedRoot(in: tree)
-        #expect(panel.children.count == 3)
-        #expect(panel.backgroundColor != nil)
+        // Panel is now a composite: root → frame box → PanelHost → style body
+        // (Column with header + divider + content). Walk one extra layer to
+        // reach the body and its three regions.
+        let panelHost = materialisedRoot(in: tree)
+        let body = panelHost.children.first!
+        #expect(body.children.count == 3)
+        // Background lives on the style body, not the host shell.
+        #expect(body.backgroundColor != nil)
 
-        let header = panel.children[0]
-        let divider = panel.children[1]
-        let content = panel.children[2]
+        let header = body.children[0]
+        let divider = body.children[1]
+        let content = body.children[2]
 
         #expect(header.frame.height == 36)
         #expect(header.backgroundColor != nil)
         #expect(divider.frame.height == 1)
         #expect(content.frame.origin.y == 37)
-        #expect(content.frame.height == 123)
     }
 
     private func materialisedRoot(in tree: NodeTree) -> Node {

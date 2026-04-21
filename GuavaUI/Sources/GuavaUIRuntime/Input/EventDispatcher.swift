@@ -26,6 +26,10 @@ public final class EventDispatcher {
     /// events (which carry no position on SDL3) so they reach the node under
     /// the cursor instead of only the root or focused node.
     private var lastCursor: CGPoint?
+    /// Root → leaf path currently considered hovered. Derived from motion
+    /// hit-testing and diffed against the next motion path to synthesize
+    /// enter / leave transitions.
+    private var hoveredPath: [Node] = []
 
     public init(tree: NodeTree,
                 interactions: InteractionRegistry,
@@ -85,12 +89,17 @@ public final class EventDispatcher {
         lastCursor = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         if let captured = capture.target {
             let path = pathFromRoot(to: captured)
+            updateHoverPath(to: path)
             deliver(path: path, kind: .motion(event))
             return
         }
         guard let root = tree.root else { return }
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
-        guard let hit = HitTester.hitTest(rootNode: root, point: point) else { return }
+        guard let hit = HitTester.hitTest(rootNode: root, point: point) else {
+            updateHoverPath(to: [])
+            return
+        }
+        updateHoverPath(to: hit.path)
         deliver(path: hit.path, kind: .motion(event))
     }
 
@@ -179,5 +188,35 @@ public final class EventDispatcher {
             cur = n.parent
         }
         return out.reversed()
+    }
+
+    private func updateHoverPath(to newPath: [Node]) {
+        let oldPath = hoveredPath
+        let common = commonPrefixLength(oldPath, newPath)
+
+        if common == oldPath.count && common == newPath.count {
+            return
+        }
+
+        if common < oldPath.count {
+            for node in oldPath[common...].reversed() {
+                interactions.handlers(for: node).hover?(.leave)
+            }
+        }
+        if common < newPath.count {
+            for node in newPath[common...] {
+                interactions.handlers(for: node).hover?(.enter)
+            }
+        }
+
+        hoveredPath = newPath
+    }
+
+    private func commonPrefixLength(_ lhs: [Node], _ rhs: [Node]) -> Int {
+        let count = min(lhs.count, rhs.count)
+        for index in 0..<count where lhs[index] !== rhs[index] {
+            return index
+        }
+        return count
     }
 }

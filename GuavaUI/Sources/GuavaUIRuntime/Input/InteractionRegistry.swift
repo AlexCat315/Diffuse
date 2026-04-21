@@ -20,6 +20,12 @@ public enum PointerPhase: Sendable {
     case up
 }
 
+/// Boundary transition derived from mouse-motion hit-test changes.
+public enum HoverPhase: Sendable {
+    case enter
+    case leave
+}
+
 /// Per-node handler closures registered by Compose-layer modifiers.
 ///
 /// `Node` itself stays free of handler state so Runtime types remain
@@ -28,6 +34,7 @@ public final class InteractionRegistry {
 
     public struct Handlers {
         public var pointer: ((MouseButtonEvent, PointerPhase, EventPhase) -> EventResult)?
+        public var hover:   ((HoverPhase) -> Void)?
         public var motion:  ((MouseMotionEvent, EventPhase) -> EventResult)?
         public var wheel:   ((MouseWheelEvent,  EventPhase) -> EventResult)?
         public var key:     ((KeyEvent,         EventPhase) -> EventResult)?
@@ -36,7 +43,7 @@ public final class InteractionRegistry {
         public init() {}
 
         public var isEmpty: Bool {
-            pointer == nil && motion == nil && wheel == nil && key == nil && text == nil
+            pointer == nil && hover == nil && motion == nil && wheel == nil && key == nil && text == nil
         }
     }
 
@@ -53,6 +60,12 @@ public final class InteractionRegistry {
     public func setPointer(_ node: Node,
                            _ handler: @escaping (MouseButtonEvent, PointerPhase, EventPhase) -> EventResult) {
         var h = handlers(for: node); h.pointer = handler
+        table[ObjectIdentifier(node)] = h
+    }
+
+    public func setHover(_ node: Node,
+                         _ handler: @escaping (HoverPhase) -> Void) {
+        var h = handlers(for: node); h.hover = handler
         table[ObjectIdentifier(node)] = h
     }
 

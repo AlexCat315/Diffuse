@@ -8,7 +8,7 @@ public struct SemanticBackgroundModifier: ViewModifier {
     public let ref: SemanticColorRef
     public init(_ ref: SemanticColorRef) { self.ref = ref }
     public func apply(node: Node) {
-        node.backgroundColor = ref.resolve(node.theme)
+        node.animatableSet(\.backgroundColor, to: ref.resolve(node.theme))
     }
 }
 
@@ -16,7 +16,7 @@ public struct SemanticForegroundColorModifier: ViewModifier {
     public let ref: SemanticColorRef
     public init(_ ref: SemanticColorRef) { self.ref = ref }
     public func apply(node: Node) {
-        node.foregroundColor = ref.resolve(node.theme)
+        node.animatableSet(\.foregroundColor, to: ref.resolve(node.theme))
     }
 }
 

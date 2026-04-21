@@ -1,57 +1,14 @@
 import GuavaUIRuntime
 
-struct _SelectableListRow<Content: View>: View {
-    let isSelected: Bool
-    let rowHeight: Float
-    let rowInsets: EdgeInsets
-    let action: () -> Void
-    let content: Content
-
-    init(isSelected: Bool,
-         rowHeight: Float,
-         rowInsets: EdgeInsets,
-         action: @escaping () -> Void,
-         @ViewBuilder content: () -> Content) {
-        self.isSelected = isSelected
-        self.rowHeight = rowHeight
-        self.rowInsets = rowInsets
-        self.action = action
-        self.content = content()
-    }
-
-    var body: some View {
-        if isSelected {
-            button
-                .background(Self.selectedFill)
-                .cornerRadius(8)
-        } else {
-            button
-        }
-    }
-
-    private var button: some View {
-        Button(action: action) {
-            Box(direction: .row, alignItems: .center, spacing: 8) {
-                content
-                Spacer(minLength: 0)
-            }
-            .padding(rowInsets)
-            .frame(height: rowHeight)
-        }
-    }
-
-    private static var selectedFill: Color {
-        Color(r: 0.22, g: 0.44, b: 0.78, a: 0.55)
-    }
-}
-
+/// Vertical, single-selection list. Visual chrome (selection fill, padding,
+/// hover preview) is delegated to the active `ListRowStyle` via
+/// `.listRowStyle(_:)`; defaults to `DefaultListRowStyle`.
 public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>: View {
     public let data: Data
     public let id: KeyPath<Data.Element, ID>
     public let selection: Binding<ID?>
     public let rowHeight: Float
     public let rowSpacing: Float
-    public let rowInsets: EdgeInsets
     public let onActivate: ((Data.Element) -> Void)?
     public let rowContent: (Data.Element, Bool) -> RowContent
 
@@ -60,7 +17,6 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
                 selection: Binding<ID?> = .constant(nil),
                 rowHeight: Float = 30,
                 rowSpacing: Float = 0,
-                rowInsets: EdgeInsets = EdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10),
                 onActivate: ((Data.Element) -> Void)? = nil,
                 @ViewBuilder rowContent: @escaping (Data.Element, Bool) -> RowContent) {
         self.data = data
@@ -68,7 +24,6 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
         self.selection = selection
         self.rowHeight = rowHeight
         self.rowSpacing = rowSpacing
-        self.rowInsets = rowInsets
         self.onActivate = onActivate
         self.rowContent = rowContent
     }
@@ -77,12 +32,13 @@ public struct List<Data: RandomAccessCollection, ID: Hashable, RowContent: View>
         ScrollView(.vertical) {
             Box(direction: .column, alignItems: .stretch, spacing: rowSpacing) {
                 for element in data {
-                    _SelectableListRow(isSelected: isSelected(element),
-                                       rowHeight: rowHeight,
-                                       rowInsets: rowInsets,
-                                       action: { activate(element) }) {
-                        rowContent(element, isSelected(element))
-                    }
+                    let selected = isSelected(element)
+                    _ListRowHost(
+                        isSelected: selected,
+                        rowHeight: rowHeight,
+                        onActivate: { activate(element) },
+                        content: AnyView(rowContent(element, selected))
+                    )
                 }
             }
         }
@@ -103,16 +59,68 @@ public extension List where Data.Element: Identifiable, ID == Data.Element.ID {
          selection: Binding<ID?> = .constant(nil),
          rowHeight: Float = 30,
          rowSpacing: Float = 0,
-         rowInsets: EdgeInsets = EdgeInsets(top: 6, leading: 10, bottom: 6, trailing: 10),
          onActivate: ((Data.Element) -> Void)? = nil,
          @ViewBuilder rowContent: @escaping (Data.Element, Bool) -> RowContent) {
-        self.init(data,
-                  id: \.id,
+        self.init(data, id: \.id,
                   selection: selection,
-                  rowHeight: rowHeight,
-                  rowSpacing: rowSpacing,
-                  rowInsets: rowInsets,
+                  rowHeight: rowHeight, rowSpacing: rowSpacing,
                   onActivate: onActivate,
                   rowContent: rowContent)
     }
+}
+
+// MARK: - _ListRowHost
+
+/// Primitive node behind each `List` row. Owns the tap handler and resolves
+/// the active `ListRowStyle` via CompositionLocals on every recompose.
+struct _ListRowHost: _PrimitiveView {
+    let isSelected: Bool
+    let rowHeight: Float
+    let onActivate: () -> Void
+    let content: AnyView
+
+    func _makeNode() -> Node {
+        let n = Node()
+        n.isHitTestable = true
+        return n
+    }
+
+    func _updateNode(_ node: Node) {
+        guard let registry = InteractionRegistryHolder.current else { return }
+        let captured = onActivate
+        registry.setPointer(node) { _, phase, _ in
+            switch phase {
+            case .down:
+                node.attachments[Self.pressedKey] = true
+                return .handled
+            case .up:
+                let was = (node.attachments[Self.pressedKey] as? Bool) ?? false
+                node.attachments[Self.pressedKey] = false
+                if was { captured(); return .handled }
+                return .ignored
+            }
+        }
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let l = LayoutNode()
+        l.flexDirection = .column
+        l.alignItems = .stretch
+        l.height = rowHeight
+        return l
+    }
+
+    func _children(for node: Node) -> [any View] {
+        let style = node.compositionValue(of: ListRowStyleEnvironment.key)
+        let cfg = ListRowStyleConfiguration(
+            content: content,
+            isSelected: isSelected,
+            isHovered: false,
+            isEnabled: true,
+            theme: node.theme
+        )
+        return [style.makeBody(cfg)]
+    }
+
+    static let pressedKey = "__list_row_pressed"
 }

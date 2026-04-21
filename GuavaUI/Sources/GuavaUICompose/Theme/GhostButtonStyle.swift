@@ -24,5 +24,6 @@ public struct GhostButtonStyle: ButtonStyle {
             .background(bg)
             .cornerRadius(theme.radius.md)
             .opacity(configuration.isEnabled ? 1 : 0.55)
+            .animation(.buttonInteraction, value: configuration.interactionKey)
     }
 }
