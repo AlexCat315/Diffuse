@@ -1,8 +1,8 @@
 import GuavaUIRuntime
 
-/// Background-less button. Only the label is drawn at rest; hover / pressed
-/// states fade in a subtle surface tint. Used for tertiary actions and
-/// toolbar items. Focus ring still appears on keyboard focus.
+/// Background-less button. At rest only the label is drawn; hover/press
+/// fade in a state-layer overlay. Used for tertiary actions and toolbar
+/// items. Focus ring still appears on keyboard focus.
 public struct GhostButtonStyle: ButtonStyle {
     public init() {}
 
@@ -11,8 +11,8 @@ public struct GhostButtonStyle: ButtonStyle {
         let clear = Color(r: 0, g: 0, b: 0, a: 0)
         let bg: Color = {
             if !configuration.isEnabled { return clear }
-            if configuration.isPressed  { return theme.colors.surfaceVariant.darker(0.05) }
-            if configuration.isHovered  { return theme.colors.surfaceVariant }
+            if configuration.isPressed  { return theme.colors.stateLayerPressed }
+            if configuration.isHovered  { return theme.colors.stateLayerHover }
             return clear
         }()
         let border: Color = configuration.isFocused ? theme.colors.focusRing : clear
@@ -20,8 +20,8 @@ public struct GhostButtonStyle: ButtonStyle {
 
         return AnyView(configuration.label)
             .font(SemanticFontRef.bodyStrong)
-            .foregroundColor(SemanticColorRef.accent)
-            .padding(horizontal: theme.spacing.md + 2, vertical: theme.spacing.sm + 2)
+            .foregroundColor(SemanticColorRef.onSurface)
+            .padding(horizontal: theme.spacing.md, vertical: theme.spacing.xs + 2)
             .background(bg)
             .cornerRadius(theme.radius.md)
             .border(border, width: borderWidth)
@@ -29,4 +29,5 @@ public struct GhostButtonStyle: ButtonStyle {
             .animation(.buttonInteraction, value: configuration.interactionKey)
     }
 }
+
 

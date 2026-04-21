@@ -1,8 +1,8 @@
 import GuavaUIRuntime
 
-/// Tonal / surface-variant button. Lower visual weight than primary; suitable
-/// for the second-priority action in a button group. 1px strong border gives
-/// it a tactile edge against the panel background.
+/// Tonal / surface-variant button. Lower visual weight than primary.
+/// Reads from the theme's state-layer ramp for hover/press so palette
+/// changes don't require recomputing `lighter`/`darker` mixes here.
 public struct SecondaryButtonStyle: ButtonStyle {
     public init() {}
 
@@ -10,20 +10,24 @@ public struct SecondaryButtonStyle: ButtonStyle {
         let theme = configuration.theme
         let bg: Color = {
             if !configuration.isEnabled { return theme.colors.surfaceSunken }
-            if configuration.isPressed  { return theme.colors.surfaceVariant.darker(0.06) }
-            if configuration.isHovered  { return theme.colors.surfaceVariant.lighter(0.05) }
-            return theme.colors.surfaceVariant
+            // Compose state layer over the resting surfaceVariant fill. The
+            // overlay is translucent so a slightly lighter / darker token
+            // reads as a real surface change without needing a separate
+            // pre-composited token per state.
+            let base = theme.colors.surfaceVariant
+            if configuration.isPressed { return base.composited(over: theme.colors.stateLayerPressed) }
+            if configuration.isHovered { return base.composited(over: theme.colors.stateLayerHover) }
+            return base
         }()
-        let border: Color = {
-            if configuration.isFocused { return theme.colors.focusRing }
-            return theme.colors.borderStrong
-        }()
+        let border: Color = configuration.isFocused
+            ? theme.colors.focusRing
+            : theme.colors.border
         let borderWidth: Float = configuration.isFocused ? 2 : 1
 
         return AnyView(configuration.label)
             .font(SemanticFontRef.bodyStrong)
             .foregroundColor(SemanticColorRef.onSurface)
-            .padding(horizontal: theme.spacing.lg, vertical: theme.spacing.sm + 2)
+            .padding(horizontal: theme.spacing.md, vertical: theme.spacing.xs + 2)
             .background(bg)
             .cornerRadius(theme.radius.md)
             .border(border, width: borderWidth)
@@ -31,4 +35,5 @@ public struct SecondaryButtonStyle: ButtonStyle {
             .animation(.buttonInteraction, value: configuration.interactionKey)
     }
 }
+
 

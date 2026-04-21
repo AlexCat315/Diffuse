@@ -257,14 +257,19 @@ cd Editor && swift run GuavaEditor
 
 #### 轨道 A：Engine Phase 2–3（多线程渲染 + ECS）
 
-Phase 2（多线程）：
+Phase 2（多线程）✅ 已完成：
 ```
-Engine/Sources/EngineCore/
+Engine/Sources/RenderBackend/
 ├── RenderPacket.swift
+Engine/Sources/EngineCore/
 ├── RingBuffer.swift
 ├── SimulationThread.swift
-└── RenderThread.swift
+├── RenderThread.swift
+├── LockedState.swift
+└── EngineCore.swift
 ```
+
+> 现状：`EditorApplication` 不再直接驱动 `WGPURenderer`；主线程只提交输入和窗口尺寸，Simulation 发布 `RenderPacket`，Render 线程消费最新可用快照。
 
 Phase 3（ECS + 物理）：
 ```

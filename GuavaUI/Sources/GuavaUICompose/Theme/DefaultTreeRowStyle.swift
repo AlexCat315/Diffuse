@@ -11,8 +11,8 @@ public struct DefaultTreeRowStyle: TreeRowStyle {
         let t = configuration.theme
         let clear = Color(r: 0, g: 0, b: 0, a: 0)
         let bg: Color = {
-            if configuration.isSelected { return t.colors.selection }
-            if configuration.isHovered  { return t.colors.selection.mixed(with: t.colors.surface, amount: 0.7) }
+            if configuration.isSelected { return t.colors.stateLayerSelected }
+            if configuration.isHovered  { return t.colors.stateLayerHover }
             return clear
         }()
 

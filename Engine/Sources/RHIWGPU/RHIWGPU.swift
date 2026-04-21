@@ -81,7 +81,7 @@ public enum WGPUBackendError: Error {
     case initFailed(String)
 }
 
-public final class WGPUBackend {
+public final class WGPUBackend: @unchecked Sendable {
     public private(set) var state: WGPUBackendState = .uninitialized
     public private(set) var config: WGPUDeviceConfig
     private var instance: UnsafeMutableRawPointer?
@@ -819,5 +819,3 @@ public final class WGPUBackend {
         }
     }
 }
-
-extension WGPUBackend: @unchecked Sendable {}

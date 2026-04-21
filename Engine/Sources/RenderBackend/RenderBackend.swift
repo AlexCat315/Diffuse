@@ -1,43 +1,18 @@
 import AssetPipeline
 import Foundation
 import Logging
-import PlatformShell
 import RHIWGPU
 import simd
 
-@MainActor
-public protocol Renderer {
-    func initialize()
-    func renderFrame(frameIndex: Int)
-    func queueRenderSettings(_ settings: RenderSettings)
-    func forceRenderSettings(_ settings: RenderSettings)
-    func currentFrameStats() -> RenderFrameStats
-    func currentViewportSurfaceState() -> ViewportSurfaceState
-}
-
-public extension Renderer {
-    func queueRenderSettings(_ settings: RenderSettings) {
-        _ = settings
-    }
-
-    func forceRenderSettings(_ settings: RenderSettings) {
-        _ = settings
-    }
-
-    func currentFrameStats() -> RenderFrameStats {
-        .init()
-    }
-
-    func currentViewportSurfaceState() -> ViewportSurfaceState {
-        .init()
-    }
-}
-
-@MainActor
-public struct MetalPlaceholderRenderer: Renderer {
+public final class MetalPlaceholderRenderer: RenderPacketConsumer, @unchecked Sendable {
     public init() {}
     public func initialize() { Logger.renderer.debug("initialize Metal placeholder") }
-    public func renderFrame(frameIndex: Int) { Logger.renderer.debug("render frame \(frameIndex)") }
+    public func render(packet: RenderPacket) {
+        Logger.renderer.debug("render frame \(packet.frameIndex)")
+    }
+
+    public func currentFrameStats() -> RenderFrameStats { .init() }
+    public func currentViewportSurfaceState() -> ViewportSurfaceState { .init() }
 }
 
 /// One mesh resident on the GPU.
@@ -59,15 +34,15 @@ private struct DynamicInstanceResources {
     let uniformBuffer: GPUBuffer
     let bindGroup: GPUBindGroup
     let stride: UInt64
+    let capacity: Int
 }
 
 ///  RHIWGPU renderer: scene of multiple instances drawn through one shared pipeline.
-@MainActor
-public final class WGPURenderer: Renderer {
+public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private let backend: WGPUBackend
-    private let shell: any Shell
+    private let renderSurface: RenderSurfaceDescriptor
     private var surface: GPUSurface?
-    private var configuredSize: (width: UInt32, height: UInt32) = (0, 0)
+    private var configuredSize: RenderDrawableSize = .init(width: 0, height: 0)
     private let format: GPUTextureFormat = .bgra8Unorm
     private let depthFormat: GPUTextureFormat = .depth32Float
 
@@ -78,29 +53,22 @@ public final class WGPURenderer: Renderer {
     private var meshes: [GPUMesh] = []
     private var instanceResources: [InstanceResources] = []
     private var dynamicInstanceResources: DynamicInstanceResources?
-    private var scene: RenderScene = RenderScene(
-        camera: RenderCamera(eye: SIMD3<Float>(0, 1.4, 3.0)))
 
     private let dynamicOffsetThreshold = 64
     private let dynamicUniformStride: UInt64 = 256
 
     private var activeRenderSettings: RenderSettings = .init()
-    private var pendingRenderSettings: RenderSettings?
     private var settingsGeneration: UInt64 = 0
     private var viewportSurfaceState: ViewportSurfaceState = .init()
 
     public private(set) var lastFrameStats: RenderFrameStats = .init()
 
-    public init(backend: WGPUBackend, shell: any Shell) {
+    public init(backend: WGPUBackend, renderSurface: RenderSurfaceDescriptor) {
         self.backend = backend
-        self.shell = shell
+        self.renderSurface = renderSurface
     }
 
     public func initialize() {
-        guard let renderSurface = shell.renderSurface else {
-            Logger.renderer.notice("no render surface; skipping surface creation")
-            return
-        }
         do {
             switch renderSurface {
                 case let .metalLayer(layerPointer):
@@ -115,30 +83,10 @@ public final class WGPURenderer: Renderer {
                 case let .waylandSurface(display, wlSurface):
                     surface = try backend.createSurfaceWayland(display: display, surface: wlSurface)
             }
-            try ensureConfigured()
-            try ensureMeshPipelineAndScene()
-            let _sz = String(describing: configuredSize)
-            let _hasPipeline = meshPipeline != nil
-            let _hasDepth = depthView != nil
-            let _meshCount = meshes.count
-            let _instCount = scene.instances.count
-            let _hasDyn = dynamicInstanceResources != nil
-            Logger.renderer.info(
-                "surface ready, size=\(_sz), pipeline=\(_hasPipeline), depth=\(_hasDepth), meshes=\(_meshCount), instances=\(_instCount), dynamic=\(_hasDyn)"
-            )
+            Logger.renderer.info("surface ready, waiting for first render packet")
         } catch {
             Logger.renderer.error("initialize failed: \(error)")
         }
-    }
-
-    public func queueRenderSettings(_ settings: RenderSettings) {
-        pendingRenderSettings = settings
-    }
-
-    public func forceRenderSettings(_ settings: RenderSettings) {
-        pendingRenderSettings = nil
-        activeRenderSettings = settings
-        settingsGeneration &+= 1
     }
 
     public func currentFrameStats() -> RenderFrameStats {
@@ -149,12 +97,13 @@ public final class WGPURenderer: Renderer {
         viewportSurfaceState
     }
 
-    public func renderFrame(frameIndex: Int) {
+    public func render(packet: RenderPacket) {
         guard let surface else { return }
         do {
-            applyPendingRenderSettingsIfNeeded(frameIndex: frameIndex)
-            try ensureConfigured()
-            try ensureMeshPipelineAndScene()
+            applyPacketRenderSettingsIfNeeded(packet.renderSettings, frameIndex: packet.frameIndex)
+            try ensureConfigured(size: packet.drawableSize)
+            try ensureMeshPipeline()
+            try ensureInstanceResources(instanceCount: packet.scene.instances.count)
             guard let acquired = try surface.getCurrentTextureView(),
                 let depthView,
                 let pipeline = meshPipeline
@@ -162,10 +111,8 @@ public final class WGPURenderer: Renderer {
                 return
             }
 
-            // Animate scene + upload per-instance MVPs.
-            updateSceneTransforms(frameIndex: frameIndex)
-            let viewProj = computeViewProj()
-            writeInstanceUniforms(viewProj: viewProj)
+            let viewProj = computeViewProj(scene: packet.scene, drawableSize: packet.drawableSize)
+            writeInstanceUniforms(scene: packet.scene, viewProj: viewProj)
 
             let framePlan = RenderFramePlanner.makePlan(settings: activeRenderSettings)
             var drawCallCount = 0
@@ -178,7 +125,8 @@ public final class WGPURenderer: Renderer {
                             encoder: encoder,
                             colorView: acquired.view,
                             depthView: depthView,
-                            pipeline: pipeline
+                            pipeline: pipeline,
+                            scene: packet.scene
                         )
 
                     case .depthPrepass,
@@ -187,12 +135,12 @@ public final class WGPURenderer: Renderer {
                          .bloom,
                          .fxaa,
                          .tonemap:
-                        emitPlannedPassLog(passKind, frameIndex: frameIndex)
+                        emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
 
                     case .viewportResolve:
-                        registerViewportSurface(texture: acquired.texture)
+                        registerViewportSurface(texture: acquired.texture, size: packet.drawableSize)
                         viewportResolved = true
-                        emitPlannedPassLog(passKind, frameIndex: frameIndex)
+                        emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
                 }
             }
 
@@ -205,32 +153,31 @@ public final class WGPURenderer: Renderer {
             surface.present()
 
             lastFrameStats = RenderFrameStats(
-                frameIndex: frameIndex,
+                frameIndex: packet.frameIndex,
                 passCount: framePlan.passes.count,
                 drawCallCount: drawCallCount,
                 activePasses: framePlan.passes,
                 settingsGeneration: settingsGeneration
             )
         } catch {
-            Logger.renderer.error("frame \(frameIndex) failed: \(error)")
+            Logger.renderer.error("frame \(packet.frameIndex) failed: \(error)")
         }
     }
 
-    private func applyPendingRenderSettingsIfNeeded(frameIndex: Int) {
-        guard let pending = pendingRenderSettings else { return }
-        pendingRenderSettings = nil
-        activeRenderSettings = pending
+    private func applyPacketRenderSettingsIfNeeded(_ settings: RenderSettings, frameIndex: Int) {
+        guard settings != activeRenderSettings else { return }
+        activeRenderSettings = settings
         settingsGeneration &+= 1
 
         if shouldEmitPlannerLog(frameIndex: frameIndex) {
             let gen = settingsGeneration
             Logger.renderer.debug(
-                "applied render settings generation=\(gen) stage=\(pending.stage.rawValue) fxaa=\(pending.enableFXAA) ssao=\(pending.enableSSAO) bloom=\(pending.enableBloom)"
+                "applied render settings generation=\(gen) stage=\(settings.stage.rawValue) fxaa=\(settings.enableFXAA) ssao=\(settings.enableSSAO) bloom=\(settings.enableBloom)"
             )
         }
     }
 
-    private func writeInstanceUniforms(viewProj: simd_float4x4) {
+    private func writeInstanceUniforms(scene: RenderScene, viewProj: simd_float4x4) {
         if let dyn = dynamicInstanceResources {
             for (i, instance) in scene.instances.enumerated() {
                 var mvp = viewProj * instance.transform
@@ -259,7 +206,8 @@ public final class WGPURenderer: Renderer {
         encoder: GPUCommandEncoder,
         colorView: GPUTextureView,
         depthView: GPUTextureView,
-        pipeline: GPURenderPipeline
+        pipeline: GPURenderPipeline,
+        scene: RenderScene
     ) throws -> Int {
         let pass = try encoder.beginRenderPass(
             colorView: colorView,
@@ -311,19 +259,19 @@ public final class WGPURenderer: Renderer {
         frameIndex == 0 || frameIndex % 120 == 0
     }
 
-    private func registerViewportSurface(texture: GPUTexture) {
+    private func registerViewportSurface(texture: GPUTexture, size: RenderDrawableSize) {
         let pointerValue = UInt64(UInt(bitPattern: Unmanaged.passUnretained(texture).toOpaque()))
         viewportSurfaceState = ViewportSurfaceState(
             surfaceID: pointerValue,
-            width: configuredSize.width,
-            height: configuredSize.height,
+            width: size.width,
+            height: size.height,
             zeroCopy: true
         )
     }
 
-    // MARK: - Pipeline + scene construction
+    // MARK: - Pipeline + mesh construction
 
-    private func ensureMeshPipelineAndScene() throws {
+    private func ensureMeshPipeline() throws {
         if meshPipeline != nil { return }
         guard backend.rawDevice != nil else { return }
 
@@ -357,96 +305,24 @@ public final class WGPURenderer: Renderer {
         meshes.append(cubeMesh)
         if let objMesh { meshes.append(objMesh) }
 
-        let cubeIndex = 0
-        let objIndex = meshes.count > 1 ? 1 : 0
-
-        // 2. Build scene: 1 fixture mesh in center + 4 cubes orbiting.
-        var instances: [RenderInstance] = []
-        instances.append(RenderInstance(meshIndex: objIndex, transform: matrix_identity_float4x4))
-        for k in 0..<4 {
-            let angle = Float(k) * (.pi / 2)
-            let r: Float = 2.5
-            let pos = SIMD3<Float>(cos(angle) * r, 0, sin(angle) * r)
-            let m = translation(pos) * uniformScale(0.4)
-            instances.append(RenderInstance(meshIndex: cubeIndex, transform: m))
-        }
-        scene = RenderScene(
-            camera: RenderCamera(eye: SIMD3<Float>(0, 2.0, 5.5), target: .zero),
-            instances: instances
-        )
-
-        let useDynamicOffsets = instances.count > dynamicOffsetThreshold
-
         let pipeline: GPURenderPipeline
-        let bindGroupLayout: GPUBindGroupLayout
-        if useDynamicOffsets {
-            bindGroupLayout = try backend.createBindGroupLayout(entries: [
-                GPUBindGroupLayoutEntry(
-                    binding: 0,
-                    visibility: .vertex,
-                    type: .uniformBuffer,
-                    hasDynamicOffset: true)
-            ])
-            let pipelineLayout = try backend.createPipelineLayout(bindGroupLayouts: [bindGroupLayout])
-            pipeline = try backend.createRenderPipeline(
-                desc: GPURenderPipelineDescriptor(
-                    shaderModule: module,
-                    pipelineLayout: pipelineLayout,
-                    colorFormat: format,
-                    cullMode: .back,
-                    vertexBuffers: [vbLayout],
-                    depthStencil: GPUDepthStencilPipelineState(
-                        format: depthFormat,
-                        depthWriteEnabled: true,
-                        depthCompare: .less
-                    )
-                ))
-        } else {
-            pipeline = try backend.createRenderPipeline(
-                desc: GPURenderPipelineDescriptor(
-                    shaderModule: module,
-                    colorFormat: format,
-                    cullMode: .back,
-                    vertexBuffers: [vbLayout],
-                    depthStencil: GPUDepthStencilPipelineState(
-                        format: depthFormat,
-                        depthWriteEnabled: true,
-                        depthCompare: .less
-                    )
-                ))
-            bindGroupLayout = try pipeline.getBindGroupLayout(group: 0)
-        }
-        meshPipeline = pipeline
-
-        // 3. Allocate per-instance uniform buffer + bind group.
-        instanceResources.removeAll(keepingCapacity: true)
-        dynamicInstanceResources = nil
-        if useDynamicOffsets {
-            let totalSize = UInt64(instances.count) * dynamicUniformStride
-            let ub = try backend.createBuffer(size: totalSize, usage: [.uniform, .copyDst])
-            let bg = try backend.createBindGroup(
-                layout: bindGroupLayout,
-                entries: [GPUBindGroupEntry(binding: 0, buffer: ub, offset: 0, size: 64)]
-            )
-            dynamicInstanceResources = DynamicInstanceResources(
-                uniformBuffer: ub,
-                bindGroup: bg,
-                stride: dynamicUniformStride
-            )
-        } else {
-            for _ in instances {
-                let ub = try backend.createBuffer(size: 64, usage: [.uniform, .copyDst])
-                let bg = try backend.createBindGroup(
-                    layout: bindGroupLayout,
-                    entries: [GPUBindGroupEntry(binding: 0, buffer: ub, offset: 0, size: 64)]
+        pipeline = try backend.createRenderPipeline(
+            desc: GPURenderPipelineDescriptor(
+                shaderModule: module,
+                colorFormat: format,
+                cullMode: .back,
+                vertexBuffers: [vbLayout],
+                depthStencil: GPUDepthStencilPipelineState(
+                    format: depthFormat,
+                    depthWriteEnabled: true,
+                    depthCompare: .less
                 )
-                instanceResources.append(InstanceResources(uniformBuffer: ub, bindGroup: bg))
-            }
-        }
+            ))
+        meshPipeline = pipeline
 
         let _meshNames = meshes.map(\.name)
         Logger.renderer.info(
-            "scene built: meshes=\(_meshNames) instances=\(instances.count) dynamic=\(useDynamicOffsets)"
+            "mesh table built: meshes=\(_meshNames)"
         )
     }
 
@@ -469,10 +345,55 @@ public final class WGPURenderer: Renderer {
             vertexBuffer: vb, indexBuffer: ib, indexCount: mesh.indexCount, name: mesh.name)
     }
 
-    private func ensureConfigured() throws {
+    private func ensureInstanceResources(instanceCount: Int) throws {
+        guard let pipeline = meshPipeline else { return }
+
+        let useDynamicOffsets = instanceCount > dynamicOffsetThreshold
+        let bindGroupLayout = try pipeline.getBindGroupLayout(group: 0)
+
+        if useDynamicOffsets {
+            if let dyn = dynamicInstanceResources, dyn.capacity >= instanceCount {
+                return
+            }
+            instanceResources.removeAll(keepingCapacity: false)
+
+            let totalSize = UInt64(max(instanceCount, 1)) * dynamicUniformStride
+            let uniformBuffer = try backend.createBuffer(size: totalSize, usage: [.uniform, .copyDst])
+            let bindGroup = try backend.createBindGroup(
+                layout: bindGroupLayout,
+                entries: [GPUBindGroupEntry(binding: 0, buffer: uniformBuffer, offset: 0, size: 64)]
+            )
+            dynamicInstanceResources = DynamicInstanceResources(
+                uniformBuffer: uniformBuffer,
+                bindGroup: bindGroup,
+                stride: dynamicUniformStride,
+                capacity: instanceCount
+            )
+            return
+        }
+
+        if dynamicInstanceResources == nil && instanceResources.count == instanceCount {
+            return
+        }
+
+        dynamicInstanceResources = nil
+        instanceResources.removeAll(keepingCapacity: false)
+        for _ in 0..<instanceCount {
+            let uniformBuffer = try backend.createBuffer(size: 64, usage: [.uniform, .copyDst])
+            let bindGroup = try backend.createBindGroup(
+                layout: bindGroupLayout,
+                entries: [GPUBindGroupEntry(binding: 0, buffer: uniformBuffer, offset: 0, size: 64)]
+            )
+            instanceResources.append(
+                InstanceResources(uniformBuffer: uniformBuffer, bindGroup: bindGroup))
+        }
+    }
+
+    private func ensureConfigured(size: RenderDrawableSize) throws {
         guard let surface, let device = backend.rawDevice else { return }
-        let size = shell.drawableSize
-        if size.width == configuredSize.width && size.height == configuredSize.height
+        let width = max(size.width, 1)
+        let height = max(size.height, 1)
+        if width == configuredSize.width && height == configuredSize.height
             && configuredSize.width > 0
         {
             return
@@ -480,17 +401,17 @@ public final class WGPURenderer: Renderer {
         try surface.configure(
             device: device,
             format: format,
-            width: size.width,
-            height: size.height,
+            width: width,
+            height: height,
             presentMode: .fifo
         )
-        configuredSize = size
+        configuredSize = .init(width: width, height: height)
 
         depthView = nil
         depthTexture = nil
         let depth = try backend.createTexture(
-            width: size.width,
-            height: size.height,
+            width: width,
+            height: height,
             format: depthFormat,
             usage: .renderAttachment
         )
@@ -498,29 +419,8 @@ public final class WGPURenderer: Renderer {
         depthTexture = depth
     }
 
-    // MARK: - Per-frame animation
-
-    private func updateSceneTransforms(frameIndex: Int) {
-        let t = Float(frameIndex) * 0.015
-        // Center fixture rotates around Y.
-        if !scene.instances.isEmpty {
-            scene.instances[0].transform = rotationY(t)
-        }
-        // Orbiting cubes rotate around the central axis and spin individually.
-        for k in 0..<4 {
-            let idx = 1 + k
-            guard idx < scene.instances.count else { break }
-            let baseAngle = Float(k) * (.pi / 2) + t * 0.5
-            let r: Float = 2.5
-            let pos = SIMD3<Float>(
-                cos(baseAngle) * r, sin(t * 0.4 + Float(k)) * 0.4, sin(baseAngle) * r)
-            let m = translation(pos) * rotationY(t * 1.5 + Float(k)) * uniformScale(0.4)
-            scene.instances[idx].transform = m
-        }
-    }
-
-    private func computeViewProj() -> simd_float4x4 {
-        let aspect = Float(max(configuredSize.width, 1)) / Float(max(configuredSize.height, 1))
+    private func computeViewProj(scene: RenderScene, drawableSize: RenderDrawableSize) -> simd_float4x4 {
+        let aspect = Float(max(drawableSize.width, 1)) / Float(max(drawableSize.height, 1))
         let cam = scene.camera
         let proj = perspective(
             fovYRadians: cam.fovYRadians, aspect: aspect, near: cam.near, far: cam.far)
@@ -590,30 +490,6 @@ private func lookAt(eye: SIMD3<Float>, target: SIMD3<Float>, up: SIMD3<Float>) -
         SIMD4<Float>(s.x, s.y, s.z, -simd_dot(s, eye)),
         SIMD4<Float>(u.x, u.y, u.z, -simd_dot(u, eye)),
         SIMD4<Float>(-f.x, -f.y, -f.z, simd_dot(f, eye)),
-        SIMD4<Float>(0, 0, 0, 1),
-    ])
-}
-
-private func translation(_ t: SIMD3<Float>) -> simd_float4x4 {
-    simd_float4x4(rows: [
-        SIMD4<Float>(1, 0, 0, t.x),
-        SIMD4<Float>(0, 1, 0, t.y),
-        SIMD4<Float>(0, 0, 1, t.z),
-        SIMD4<Float>(0, 0, 0, 1),
-    ])
-}
-
-private func uniformScale(_ s: Float) -> simd_float4x4 {
-    simd_float4x4(diagonal: SIMD4<Float>(s, s, s, 1))
-}
-
-private func rotationY(_ angle: Float) -> simd_float4x4 {
-    let c = cos(angle)
-    let s = sin(angle)
-    return simd_float4x4(rows: [
-        SIMD4<Float>(c, 0, s, 0),
-        SIMD4<Float>(0, 1, 0, 0),
-        SIMD4<Float>(-s, 0, c, 0),
         SIMD4<Float>(0, 0, 0, 1),
     ])
 }

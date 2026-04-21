@@ -47,7 +47,7 @@ struct ButtonStyleAnimationTests: GuavaUIComposeSerializedSuite {
         AnimatorScheduler.$current.withValue(scheduler) {
             let theme = Theme.defaultDark
             let resting = theme.colors.accent
-            let pressed = theme.colors.accent.darker(0.10)
+            let pressed = theme.colors.accentPressed
 
             let (tree, recomp, registry, graph) = install(
                 Button(action: {}) { Text("Hi") }
@@ -81,7 +81,7 @@ struct ButtonStyleAnimationTests: GuavaUIComposeSerializedSuite {
         AnimatorScheduler.$current.withValue(scheduler) {
             let theme = Theme.defaultDark
             let resting = theme.colors.error
-            let pressed = theme.colors.error.darker(0.10)
+            let pressed = theme.colors.error.composited(over: theme.colors.stateLayerPressed)
 
             let (tree, recomp, registry, graph) = install(
                 Button(action: {}) { Text("X") }

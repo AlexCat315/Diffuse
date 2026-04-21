@@ -9,7 +9,6 @@ import Foundation
 public final class EditorApplication {
     private let shell: any Shell
     private let engine: EngineHost
-    private let renderer: any Renderer
     private(set) var state: EditorState
     private(set) var panelRegistry: PanelRegistry
     private(set) var dockLayout: DockLayout
@@ -24,7 +23,6 @@ public final class EditorApplication {
         let backend = WGPUBackend(config: resolvedBackendConfig)
         let host = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: backend)
         self.engine = host
-        self.renderer = WGPURenderer(backend: host.wgpuBackend, shell: shell)
         self.state = EditorState()
         self.inputState = InputState()
 
@@ -40,8 +38,7 @@ public final class EditorApplication {
 
     public func bootstrap() throws {
         try shell.initializeWindow(title: "GuavaNext Editor")
-        engine.start()
-        renderer.initialize()
+        engine.start(renderSurface: shell.renderSurface.map(Self.describeRenderSurface))
         EditorReducer.reduce(state: &state, action: .setConnected(true))
     }
 
@@ -50,13 +47,15 @@ public final class EditorApplication {
         while shell.isRunning && (iterations.map { frame < $0 } ?? true) {
             let events = shell.pollEvents()
             dispatchEvents(events)
-            engine.tick(deltaTime: 1.0 / 60.0, inputEvents: events)
-
-            if state.shouldRender {
-                renderer.renderFrame(frameIndex: frame)
-            }
+            engine.tick(
+                deltaTime: 1.0 / 60.0,
+                inputEvents: events,
+                drawableSize: .init(width: shell.drawableSize.width, height: shell.drawableSize.height),
+                shouldRender: state.shouldRender
+            )
             frame += 1
         }
+        engine.shutdown()
         shell.shutdown()
     }
 
@@ -88,15 +87,15 @@ public final class EditorApplication {
     // MARK: - Render helpers
 
     public func queueViewportRenderSettings(_ settings: RenderSettings) {
-        renderer.queueRenderSettings(settings)
+        engine.queueRenderSettings(settings)
     }
 
     public func currentRenderStats() -> RenderFrameStats {
-        renderer.currentFrameStats()
+        engine.currentRenderStats()
     }
 
     public func currentViewportSurfaceState() -> ViewportSurfaceState {
-        renderer.currentViewportSurfaceState()
+        engine.currentViewportSurfaceState()
     }
 
     private static func locateWGPUDylib() -> String {
@@ -112,5 +111,18 @@ public final class EditorApplication {
             return c
         }
         return "libwgpu_native.dylib"
+    }
+
+    private static func describeRenderSurface(_ surface: NativeRenderSurface) -> RenderSurfaceDescriptor {
+        switch surface {
+        case let .metalLayer(layer):
+            return .metalLayer(layer)
+        case let .win32Window(hwnd, hinstance):
+            return .win32Window(hwnd: hwnd, hinstance: hinstance)
+        case let .xlibWindow(display, window):
+            return .xlibWindow(display: display, window: window)
+        case let .waylandSurface(display, surface):
+            return .waylandSurface(display: display, surface: surface)
+        }
     }
 }

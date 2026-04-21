@@ -57,14 +57,12 @@ let scrollableLogEntries: [DemoLogEntry] = (0..<60).map { i in
     )
 }
 
-func demoLogColor(_ level: String) -> Color {
+func demoLogColor(_ level: String) -> SemanticColorRef {
     switch level {
-    case "WARN":
-        return Color(r: 1.0, g: 0.78, b: 0.46)
-    case "DEBUG":
-        return Color(r: 0.62, g: 0.78, b: 1.0)
-    default:
-        return Color(r: 0.56, g: 0.86, b: 0.62)
+    case "WARN":  return .warning
+    case "DEBUG": return .info
+    case "ERROR": return .error
+    default:      return .success
     }
 }
 
@@ -86,232 +84,496 @@ func findDemoSceneNode(id: String,
 
 // MARK: - Root view (compose)
 
+/// Showcase app for the Phase 8.1 design system.
+///
+/// Layout: classic 3-pane IDE chrome — left navigation (`surfaceVariant`),
+/// centre workspace (`background` with `surface` cards), right inspector
+/// (`surfaceVariant`). Every colour is read through `SemanticColorRef` or
+/// `theme.colors.*`; no raw `Color(red:...)` literals appear in the UI.
 struct RootView: View {
-    @State var inputText: String = ""
+    @State var inputText: String = "guava"
     @State var clickCount: Int = 0
     @State var selectedSceneNodeID: String? = "camera"
-    @State var selectedLogID: Int? = 2
+    @State var selectedLogID: Int? = 102
     @State var appearance: Appearance = .dark
-    @State var volume: Double = 0.4
-    @State var brightness: Double = 0.65
+    @State var volume: Double = 0.62
+    @State var brightness: Double = 0.40
     @State var quality: Double = 3
-    @State var disabledText: String = "read-only"
-    @State var passwordText: String = ""
+    @State var searchText: String = ""
+    @State var tagText: String = ""
+    @State var section: NavSection = .components
+
+    enum NavSection: String, Hashable, CaseIterable, Identifiable {
+        case components, tokens, layouts, console
+        var id: String { rawValue }
+        var title: String {
+            switch self {
+            case .components: return "Components"
+            case .tokens:     return "Design Tokens"
+            case .layouts:    return "Layouts"
+            case .console:    return "Console"
+            }
+        }
+        var hint: String {
+            switch self {
+            case .components: return "Buttons · TextFields · Sliders"
+            case .tokens:     return "Surfaces · Accent · State layers"
+            case .layouts:    return "Tree · List · Split"
+            case .console:    return "Streaming log feed"
+            }
+        }
+    }
 
     var body: some View {
-        SplitView(.horizontal, fraction: 0.22) {
-            Panel("Hierarchy") {
-                Column(alignment: .leading, spacing: 0) {
-                    Tree(demoSceneTree,
-                         children: \.children,
-                         selection: $selectedSceneNodeID,
-                         rowHeight: 28,
-                         rowSpacing: 2) { node, _, _, _ in
-                        Text(node.title)
-                            .font(.body)
-                            .foregroundColor(.onSurface)
-                    }
-                    .flex()
-
-                    Divider()
-
-                    Row(alignment: .center, spacing: 8) {
-                        Button("Refresh \(clickCount)") { clickCount += 1 }
-                        Spacer(minLength: 0)
-                    }
-                    .padding(12)
-                }
-                .flex()
-            }
-        } second: {
-            SplitView(.horizontal, fraction: 0.74) {
-                SplitView(.vertical, fraction: 0.68) {
-                    Panel("Workspace") {
-                        Column(alignment: .leading, spacing: 12) {
-                            Text("GuavaUI — Phase 7.5")
-                                .font(.display)
-                                .foregroundColor(.onBackground)
-
-                            Text("Theme + Style 已落地。这段文字使用 .body + .onSurfaceVariant，外观切换无需重写。")
-                                .font(.body)
-                                .foregroundColor(.onSurfaceVariant)
-
-                            // Themed input — backgroundColor + cornerRadius
-                            // resolve from `node.theme` automatically.
-                            TextField(
-                                "Type here…",
-                                text: $inputText,
-                                onSubmit: { print("[demo] submit: \(inputText)") }
-                            )
-                            .padding(8)
-                            .frame(height: 36)
-
-                            Text("echo: \(inputText)")
-                                .font(.caption)
-                                .foregroundColor(.onSurfaceMuted)
-
-                            // Button style showcase.
-                            Row(alignment: .center, spacing: 8) {
-                                Button("Primary") { clickCount += 1 }
-                                Button("Secondary") { clickCount += 1 }
-                                    .buttonStyle(.secondary)
-                                Button("Ghost") { clickCount += 1 }
-                                    .buttonStyle(.ghost)
-                                Button("Delete", role: .destructive) { clickCount += 1 }
-                                Spacer(minLength: 0)
-                                Button(appearance == .dark ? "Light" : "Dark") {
-                                    appearance = (appearance == .dark) ? .light : .dark
-                                }
-                                .buttonStyle(.ghost)
-                            }
-
-                            // Disabled-state showcase. Cursor on hover should
-                            // switch to `notAllowed` for every disabled control.
-                            Row(alignment: .center, spacing: 8) {
-                                Button("Disabled Primary", isEnabled: false) {}
-                                Button("Disabled Secondary", isEnabled: false) {}
-                                    .buttonStyle(.secondary)
-                                Button("Disabled Ghost", isEnabled: false) {}
-                                    .buttonStyle(.ghost)
-                                Spacer(minLength: 0)
-                            }
-
-                            Row(alignment: .top, spacing: 16) {
-                                Image(textureID: previewTextureID, width: 112, height: 112)
-                                    .cornerRadius(24)
-
-                                Column(alignment: .leading, spacing: 6) {
-                                    Text("Style Preview")
-                                        .font(.title)
-                                        .foregroundColor(.onSurface)
-                                    Text("Image + cornerRadius + theme tokens, no hard-coded colors.")
-                                        .font(.caption)
-                                        .foregroundColor(.onSurfaceMuted)
-                                }
-                                .flex()
-                            }
-                            .padding(16)
-                            .background(.surfaceVariant)
-                            .cornerRadius(8)
-
-                            Row(alignment: .center, spacing: 12) {
-                                Text("Volume")
-                                    .font(.bodyStrong)
-                                    .foregroundColor(.onSurface)
-                                    .frame(width: 60)
-                                Slider(value: $volume, range: 0...1, step: 0.01)
-                                    .flex()
-                                Text("\(Int(volume * 100))")
-                                    .font(.body)
-                                    .foregroundColor(.onSurfaceVariant)
-                                    .frame(width: 36)
-                            }
-                            .padding(16)
-                            .background(.surfaceVariant)
-                            .cornerRadius(8)
-
-                            // Slider variants — continuous, stepped, disabled.
-                            Column(alignment: .leading, spacing: 8) {
-                                Row(alignment: .center, spacing: 12) {
-                                    Text("Brightness")
-                                        .font(.body).foregroundColor(.onSurface)
-                                        .frame(width: 90)
-                                    Slider(value: $brightness, range: 0...1).flex()
-                                    Text(String(format: "%.2f", brightness))
-                                        .font(.caption).foregroundColor(.onSurfaceMuted)
-                                        .frame(width: 50)
-                                }
-                                Row(alignment: .center, spacing: 12) {
-                                    Text("Quality")
-                                        .font(.body).foregroundColor(.onSurface)
-                                        .frame(width: 90)
-                                    Slider(value: $quality, range: 1...5, step: 1).flex()
-                                    Text("Lv \(Int(quality))")
-                                        .font(.caption).foregroundColor(.onSurfaceMuted)
-                                        .frame(width: 50)
-                                }
-                                Row(alignment: .center, spacing: 12) {
-                                    Text("Locked")
-                                        .font(.body).foregroundColor(.onSurfaceMuted)
-                                        .frame(width: 90)
-                                    Slider(value: $brightness, range: 0...1, isEnabled: false).flex()
-                                    Text("—")
-                                        .font(.caption).foregroundColor(.onSurfaceMuted)
-                                        .frame(width: 50)
-                                }
-                            }
-                            .padding(16)
-                            .background(.surfaceVariant)
-                            .cornerRadius(8)
-
-                            // TextField variants — placeholder + disabled +
-                            // emphasis on cursor=.ibeam on hover.
-                            Row(alignment: .center, spacing: 12) {
-                                TextField("Search assets…", text: $disabledText, onSubmit: {})
-                                    .padding(8).frame(height: 32).flex()
-                                TextField("Tag", text: $passwordText, onSubmit: {})
-                                    .padding(8).frame(height: 32).frame(width: 160)
-                            }
-
-                            Spacer()
-                        }
-                    }
-                } second: {
-                    Panel("Console") {
-                        ScrollView(.vertical) {
-                            List(scrollableLogEntries,
-                                 selection: $selectedLogID,
-                                 rowHeight: 30,
-                                 rowSpacing: 1) { entry, _ in
-                                Row(alignment: .center, spacing: 10) {
-                                    Text(entry.level)
-                                        .font(.bodyStrong)
-                                        .foregroundColor(demoLogColor(entry.level))
-                                        .frame(width: 60)
-                                    Text(entry.message)
-                                        .font(.body)
-                                        .foregroundColor(.onSurface)
-                                }
-                            }
-                            .frame(height: 30 * Float(scrollableLogEntries.count) + 8)
-                        }
-                        .flex()
-                    }
-                }
+        Column(alignment: .leading, spacing: 0) {
+            topBar
+            SplitView(.horizontal, fraction: 0.18) {
+                sidebar
             } second: {
-                Panel("Inspector") {
-                    Column(alignment: .leading, spacing: 6) {
-                        Text("selected: \(demoSceneTitle(id: selectedSceneNodeID))")
-                            .font(.bodyStrong)
-                            .foregroundColor(.onSurface)
-                        Text("type: EntityNode")
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
-                        Text("layout: yoga")
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
-                        Text("console focus: #\(selectedLogID ?? 0)")
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
-                        Spacer().frame(height: 12)
-                        Text("Phase 7.5 status")
-                            .font(.headline)
-                            .foregroundColor(.onSurface)
-                        Text("Theme + Style 协议已上线，所有原生组件读取语义槽位 — 切换 appearance 即可整体换肤。")
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
-                        Spacer()
-                    }
+                SplitView(.horizontal, fraction: 0.74) {
+                    workspace
+                } second: {
+                    inspector
                 }
             }
+            .flex()
+            statusBar
         }
         .flex()
         .background(.background)
         .appearance(appearance)
-        // Phase 8 / Step 9 — when `appearance` flips, every semantic colour
-        // resolved against the new theme is interpolated for 0.30 s instead
-        // of snapping. Yields a cross-fade across the entire window.
-        .animation(.easeInOut(duration: 0.30), value: appearance)
+        // Cross-fade the entire window when appearance flips.
+        .animation(.easeInOut(duration: 0.28), value: appearance)
+    }
+
+    // MARK: top bar
+
+    private var topBar: some View {
+        Row(alignment: .center, spacing: 12) {
+            Text("● ● ●")
+                .font(.body)
+                .foregroundColor(.onSurfaceMuted)
+            Text("GuavaUI Studio")
+                .font(.bodyStrong)
+                .foregroundColor(.onSurface)
+            Text("/")
+                .font(.body)
+                .foregroundColor(.onSurfaceMuted)
+            Text(section.title)
+                .font(.body)
+                .foregroundColor(.onSurfaceVariant)
+            Spacer(minLength: 0)
+            Button("Run") { clickCount += 1 }
+            Button("Inspect") { clickCount += 1 }
+                .buttonStyle(.secondary)
+            Button(appearance == .dark ? "☀︎ Light" : "☾ Dark") {
+                appearance = (appearance == .dark) ? .light : .dark
+            }
+            .buttonStyle(.ghost)
+        }
+        .padding(horizontal: 16, vertical: 10)
+        .background(.surface)
+    }
+
+    // MARK: sidebar
+
+    private var sidebar: some View {
+        Column(alignment: .leading, spacing: 0) {
+            Text("WORKSPACE")
+                .font(.label)
+                .foregroundColor(.onSurfaceMuted)
+                .padding(horizontal: 16, vertical: 12)
+
+            Column(alignment: .leading, spacing: 2) {
+                sidebarRow(.components)
+                sidebarRow(.tokens)
+                sidebarRow(.layouts)
+                sidebarRow(.console)
+            }
+            .padding(horizontal: 8, vertical: 0)
+
+            Spacer().frame(height: 16)
+            Divider()
+
+            Text("HIERARCHY")
+                .font(.label)
+                .foregroundColor(.onSurfaceMuted)
+                .padding(horizontal: 16, vertical: 12)
+
+            Tree(demoSceneTree,
+                 children: \.children,
+                 selection: $selectedSceneNodeID,
+                 rowHeight: 26,
+                 rowSpacing: 1) { node, _, _, _ in
+                Text(node.title)
+                    .font(.body)
+                    .foregroundColor(.onSurface)
+            }
+            .flex()
+        }
+        .background(.surfaceVariant)
+    }
+
+    private func sidebarRow(_ item: NavSection) -> some View {
+        let isActive = (section == item)
+        // Wrap the row in a Ghost-style Button so taps route through the
+        // existing pointer pipeline; no separate gesture modifier required.
+        return Button(action: { section = item }) {
+            Row(alignment: .center, spacing: 10) {
+                Box { EmptyView() }
+                    .frame(width: 3, height: 18)
+                    .background(isActive ? .accent : .surfaceVariant)
+                    .cornerRadius(2)
+                Column(alignment: .leading, spacing: 1) {
+                    Text(item.title)
+                        .font(.bodyStrong)
+                        .foregroundColor(isActive ? .accent : .onSurface)
+                    Text(item.hint)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                }
+                .flex()
+            }
+            .padding(horizontal: 10, vertical: 8)
+            .background(isActive ? .accentMuted : .surfaceVariant)
+            .cornerRadius(6)
+        }
+        .buttonStyle(.ghost)
+    }
+
+    // MARK: workspace
+
+    @ViewBuilder
+    private var workspace: some View {
+        ScrollView(.vertical) {
+            Column(alignment: .leading, spacing: 18) {
+                workspaceHeader
+                switch section {
+                case .components: componentsPage
+                case .tokens:     tokensPage
+                case .layouts:    layoutsPage
+                case .console:    consolePage
+                }
+                Spacer().frame(height: 24)
+            }
+            .padding(24)
+        }
+        .flex()
+    }
+
+    private var workspaceHeader: some View {
+        Column(alignment: .leading, spacing: 4) {
+            Text(section.title)
+                .font(.title)
+                .foregroundColor(.onBackground)
+            Text(section.hint)
+                .font(.body)
+                .foregroundColor(.onSurfaceVariant)
+        }
+    }
+
+    // MARK: components page
+
+    private var componentsPage: some View {
+        Column(alignment: .leading, spacing: 16) {
+            card("Buttons") {
+                Column(alignment: .leading, spacing: 12) {
+                    Row(alignment: .center, spacing: 10) {
+                        Button("Primary") { clickCount += 1 }
+                        Button("Secondary") { clickCount += 1 }
+                            .buttonStyle(.secondary)
+                        Button("Ghost") { clickCount += 1 }
+                            .buttonStyle(.ghost)
+                        Button("Delete", role: .destructive) { clickCount += 1 }
+                        Spacer(minLength: 0)
+                    }
+                    Row(alignment: .center, spacing: 10) {
+                        Button("Disabled", isEnabled: false) {}
+                        Button("Disabled", isEnabled: false) {}
+                            .buttonStyle(.secondary)
+                        Button("Disabled", isEnabled: false) {}
+                            .buttonStyle(.ghost)
+                        Button("Disabled", role: .destructive, isEnabled: false) {}
+                        Spacer(minLength: 0)
+                    }
+                    Text("Click count: \(clickCount)")
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                }
+            }
+
+            card("Text fields") {
+                Column(alignment: .leading, spacing: 10) {
+                    TextField("Search…", text: $searchText, onSubmit: {})
+                        .padding(8)
+                        .frame(height: 34)
+                    Row(alignment: .center, spacing: 10) {
+                        TextField("Project name", text: $inputText, onSubmit: {})
+                            .padding(8)
+                            .frame(height: 34)
+                            .flex()
+                        TextField("Tag", text: $tagText, onSubmit: {})
+                            .padding(8)
+                            .frame(height: 34)
+                            .frame(width: 140)
+                    }
+                    Text("echo: \(inputText)")
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                }
+            }
+
+            card("Sliders") {
+                Column(alignment: .leading, spacing: 10) {
+                    sliderRow("Volume",     value: $volume,     suffix: "\(Int(volume * 100))")
+                    sliderRow("Brightness", value: $brightness, suffix: String(format: "%.2f", brightness))
+                    Row(alignment: .center, spacing: 12) {
+                        Text("Quality")
+                            .font(.body)
+                            .foregroundColor(.onSurface)
+                            .frame(width: 90)
+                        Slider(value: $quality, range: 1...5, step: 1).flex()
+                        Text("Lv \(Int(quality))")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                            .frame(width: 50)
+                    }
+                }
+            }
+        }
+    }
+
+    private func sliderRow(_ label: String,
+                           value: Binding<Double>,
+                           suffix: String) -> some View {
+        Row(alignment: .center, spacing: 12) {
+            Text(label)
+                .font(.body)
+                .foregroundColor(.onSurface)
+                .frame(width: 90)
+            Slider(value: value, range: 0...1).flex()
+            Text(suffix)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+                .frame(width: 50)
+        }
+    }
+
+    // MARK: tokens page
+
+    private var tokensPage: some View {
+        Column(alignment: .leading, spacing: 16) {
+            card("Surface ramp") {
+                Column(alignment: .leading, spacing: 6) {
+                    surfaceSwatch("background",      ref: .background,      onRef: .onBackground)
+                    surfaceSwatch("surfaceSunken",   ref: .surfaceSunken,   onRef: .onSurfaceVariant)
+                    surfaceSwatch("surface",         ref: .surface,         onRef: .onSurface)
+                    surfaceSwatch("surfaceVariant",  ref: .surfaceVariant,  onRef: .onSurface)
+                    surfaceSwatch("surfaceRaised",   ref: .surfaceRaised,   onRef: .onSurface)
+                    surfaceSwatch("surfaceFloating", ref: .surfaceFloating, onRef: .onSurface)
+                    surfaceSwatch("surfaceOverlay",  ref: .surfaceOverlay,  onRef: .onSurface)
+                }
+            }
+            card("Accent ramp") {
+                Column(alignment: .leading, spacing: 6) {
+                    surfaceSwatch("accentMuted",   ref: .accentMuted,   onRef: .onSurface)
+                    surfaceSwatch("accent",        ref: .accent,        onRef: .onAccent)
+                    surfaceSwatch("accentHover",   ref: .accentHover,   onRef: .onAccent)
+                    surfaceSwatch("accentPressed", ref: .accentPressed, onRef: .onAccent)
+                }
+            }
+            card("Status") {
+                Row(alignment: .center, spacing: 8) {
+                    statusChip("success", ref: .success)
+                    statusChip("info",    ref: .info)
+                    statusChip("warning", ref: .warning)
+                    statusChip("error",   ref: .error)
+                    Spacer(minLength: 0)
+                }
+            }
+            card("Typography") {
+                Column(alignment: .leading, spacing: 6) {
+                    Text("Display 32 / Bold")     .font(.display)    .foregroundColor(.onSurface)
+                    Text("Title 22 / Semibold")   .font(.title)      .foregroundColor(.onSurface)
+                    Text("Headline 16 / Semibold").font(.headline)   .foregroundColor(.onSurface)
+                    Text("Body 13 / Regular")     .font(.body)       .foregroundColor(.onSurface)
+                    Text("BodyStrong 13 / Semi")  .font(.bodyStrong) .foregroundColor(.onSurface)
+                    Text("Caption 11 / Regular")  .font(.caption)    .foregroundColor(.onSurfaceVariant)
+                    Text("LABEL 10 / Medium")     .font(.label)      .foregroundColor(.onSurfaceMuted)
+                }
+            }
+        }
+    }
+
+    private func surfaceSwatch(_ name: String,
+                               ref: SemanticColorRef,
+                               onRef: SemanticColorRef) -> some View {
+        Row(alignment: .center, spacing: 10) {
+            Box { EmptyView() }
+                .frame(width: 56, height: 28)
+                .background(ref)
+                .cornerRadius(4)
+            Text(name)
+                .font(.bodyStrong)
+                .foregroundColor(onRef)
+                .frame(width: 160)
+            Text("token")
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+            Spacer(minLength: 0)
+        }
+    }
+
+    private func statusChip(_ name: String, ref: SemanticColorRef) -> some View {
+        Text(name.uppercased())
+            .font(.label)
+            .foregroundColor(.onAccent)
+            .padding(horizontal: 10, vertical: 4)
+            .background(ref)
+            .cornerRadius(9999)
+    }
+
+    // MARK: layouts page
+
+    private var layoutsPage: some View {
+        Column(alignment: .leading, spacing: 16) {
+            card("Image + chrome") {
+                Row(alignment: .top, spacing: 16) {
+                    Image(textureID: previewTextureID, width: 112, height: 112)
+                        .cornerRadius(16)
+                    Column(alignment: .leading, spacing: 6) {
+                        Text("Asset preview")
+                            .font(.headline)
+                            .foregroundColor(.onSurface)
+                        Text("Image + cornerRadius + theme tokens, no hard-coded colors. The thumbnail is rasterised at the active content scale every resize.")
+                            .font(.body)
+                            .foregroundColor(.onSurfaceVariant)
+                        Spacer().frame(height: 6)
+                        Row(alignment: .center, spacing: 8) {
+                            Button("Open") { clickCount += 1 }
+                                .buttonStyle(.secondary)
+                            Button("Reveal") { clickCount += 1 }
+                                .buttonStyle(.ghost)
+                        }
+                    }
+                    .flex()
+                }
+            }
+            card("Selected entity") {
+                Column(alignment: .leading, spacing: 4) {
+                    Text(demoSceneTitle(id: selectedSceneNodeID))
+                        .font(.title)
+                        .foregroundColor(.onSurface)
+                    Text("type: EntityNode · layout: yoga")
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                }
+            }
+        }
+    }
+
+    // MARK: console page
+
+    private var consolePage: some View {
+        card("Stream") {
+            ScrollView(.vertical) {
+                List(scrollableLogEntries,
+                     selection: $selectedLogID,
+                     rowHeight: 28,
+                     rowSpacing: 1) { entry, _ in
+                    Row(alignment: .center, spacing: 10) {
+                        Text(entry.level)
+                            .font(.bodyStrong)
+                            .foregroundColor(demoLogColor(entry.level))
+                            .frame(width: 56)
+                        Text(entry.message)
+                            .font(.body)
+                            .foregroundColor(.onSurface)
+                    }
+                }
+                .frame(height: 28 * Float(scrollableLogEntries.count) + 8)
+            }
+            .frame(height: 360)
+        }
+    }
+
+    // MARK: card primitive
+
+    private func card<Content: View>(_ title: String,
+                                     @ViewBuilder _ content: () -> Content) -> some View {
+        Column(alignment: .leading, spacing: 12) {
+            Text(title.uppercased())
+                .font(.label)
+                .foregroundColor(.onSurfaceMuted)
+            content()
+        }
+        .padding(16)
+        .background(.surface)
+        .cornerRadius(10)
+    }
+
+    // MARK: inspector
+
+    private var inspector: some View {
+        Column(alignment: .leading, spacing: 0) {
+            Text("INSPECTOR")
+                .font(.label)
+                .foregroundColor(.onSurfaceMuted)
+                .padding(horizontal: 16, vertical: 12)
+
+            Column(alignment: .leading, spacing: 12) {
+                inspectorRow("Selection", demoSceneTitle(id: selectedSceneNodeID))
+                inspectorRow("Section",   section.title)
+                inspectorRow("Theme",     appearance == .dark ? "Default Dark" : "Default Light")
+                inspectorRow("Clicks",    "\(clickCount)")
+                inspectorRow("Volume",    "\(Int(volume * 100))%")
+                Spacer().frame(height: 8)
+                Divider()
+                Spacer().frame(height: 8)
+                Text("Design system")
+                    .font(.headline)
+                    .foregroundColor(.onSurface)
+                Text("5-layer surface ramp · Indigo accent · state-layer overlays. See docs/guava-ui-design-system.md for the slot taxonomy.")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceVariant)
+                Spacer()
+            }
+            .padding(horizontal: 16, vertical: 0)
+            .flex()
+        }
+        .background(.surfaceVariant)
+    }
+
+    private func inspectorRow(_ key: String, _ value: String) -> some View {
+        Row(alignment: .center, spacing: 8) {
+            Text(key)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+                .frame(width: 80)
+            Text(value)
+                .font(.body)
+                .foregroundColor(.onSurface)
+                .flex()
+        }
+    }
+
+    // MARK: status bar
+
+    private var statusBar: some View {
+        Row(alignment: .center, spacing: 12) {
+            Text("● ready")
+                .font(.caption)
+                .foregroundColor(.success)
+            Text("focus: \(demoSceneTitle(id: selectedSceneNodeID))")
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+            Spacer(minLength: 0)
+            Text("GuavaUI · Phase 8.1")
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+        }
+        .padding(horizontal: 16, vertical: 6)
+        .background(.surfaceVariant)
     }
 }
 

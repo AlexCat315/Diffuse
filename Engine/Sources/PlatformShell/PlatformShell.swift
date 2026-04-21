@@ -7,7 +7,7 @@ import AppKit
 import QuartzCore
 #endif
 
-public enum NativeRenderSurface {
+public enum NativeRenderSurface: @unchecked Sendable {
     case metalLayer(UnsafeMutableRawPointer)
     case win32Window(hwnd: UnsafeMutableRawPointer, hinstance: UnsafeMutableRawPointer?)
     case xlibWindow(display: UnsafeMutableRawPointer, window: UInt64)
