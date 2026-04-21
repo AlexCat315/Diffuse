@@ -90,8 +90,8 @@ let package = Package(
             name: "RenderBackend",
             dependencies: [
                 "RHIWGPU",
-                "PlatformShell",
                 "AssetPipeline",
+                "SceneRuntime",
                 .product(name: "Logging", package: "swift-log"),
             ],
             resources: [.copy("Resources/FinalBaseMesh.obj")]
@@ -104,9 +104,18 @@ let package = Package(
                 "CEngineBridge",
                 "EngineKernel",
                 "RHIWGPU",
+                "RenderBackend",
                 "SceneRuntime",
                 "AssetPipeline",
                 "ScriptRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "EngineCoreTests",
+            dependencies: [
+                "EngineCore",
+                "RenderBackend",
+                "SceneRuntime",
             ]
         ),
     ]

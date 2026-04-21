@@ -163,12 +163,12 @@ cd Engine && bash scripts/fetch-wgpu.sh
 | EngineKernel | ✅ 完成 | 协议、InputEvent、InGameUIProviding |
 | RHIWGPU | ✅ 完成 | Buffer、Texture、Pipeline、BindGroup、CommandEncoder 等 |
 | PlatformShell | ✅ 完成 | SDL3 窗口创建、事件泵、多平台 surface |
-| RenderBackend | ⚠️ 占位 | 协议已定，仅有 Metal 占位渲染器，缺真实 wgpu 3D 场景渲染 |
+| RenderBackend | ✅ 完成 | 真实 wgpu 渲染路径、RenderPacket 消费、viewport surface 零拷贝状态导出已接通 |
 | AssetPipeline | ⚠️ 部分 | MeshAsset、BuiltinMesh、OBJLoader 已实现，GLTF/纹理缺失 |
 | SceneRuntime | ⚠️ 占位 | 仅 revision 计数，缺 ECS |
 | ScriptRuntime | ⚠️ 占位 | 仅空 tick，缺 VM |
-| EngineCore | ✅ 完成 | EngineHost 编排所有服务 |
-| CEngineBridge | ⚠️ Stub | 函数签名已有，实现为空 |
+| EngineCore | ✅ 完成 | EngineHost / SimulationThread / RenderThread / RingBuffer 三线程协作已接通 |
+| CEngineBridge | ⚠️ Staged Stub | 仍是示意实现，但已支持 Phase 2 的流水化阶段计数 |
 | CWGPUBridge | ✅ 完成 | wgpu-native 头文件桥接 |
 | CSDL3 | ✅ 完成 | SDL3 pkg-config 系统库 |
 
@@ -194,19 +194,17 @@ cd Engine && swift build        # 必须 0 error
 
 ---
 
-### Phase 1 — 真实 wgpu 3D 场景渲染
+### Phase 1 — 真实 wgpu 3D 场景渲染 ✅ 已完成
 
 **目标**：`RenderBackend` 实现真实 wgpu 渲染路径，替换 Metal 占位，能渲染带光照的 3D 场景到离屏纹理。
 
 | 任务 | 产出文件 |
 |------|---------|
-| 实现 `WGPURenderer`（使用 RHIWGPU） | `Engine/Sources/RenderBackend/WGPURenderer.swift` |
-| 实现 wgpu Surface present 完整链路 | `Engine/Sources/RenderBackend/WGPURenderer.swift` |
-| 实现 Scene3DPass（Phong 光照，顶点 + 片元 shader） | `Engine/Sources/RenderBackend/Passes/Scene3DPass.swift` |
-| OBJ 网格上传 GPU Buffer | `Engine/Sources/RenderBackend/MeshGPUBuffer.swift` |
-| Uniform buffer（MVP 矩阵） | `Engine/Sources/RenderBackend/UniformBuffer.swift` |
-| Depth buffer / depth stencil state | `Engine/Sources/RenderBackend/WGPURenderer.swift` |
-| 离屏纹理（viewport texture）创建 | `Engine/Sources/RenderBackend/ViewportTexture.swift` |
+| 实现 `WGPURenderer`（使用 RHIWGPU） | `Engine/Sources/RenderBackend/RenderBackend.swift` |
+| 实现 wgpu Surface present 完整链路 | `Engine/Sources/RenderBackend/RenderBackend.swift` |
+| 实现 Lambert 光照 shader、MVP uniform、深度缓冲 | `Engine/Sources/RenderBackend/RenderBackend.swift` |
+| OBJ / builtin cube 网格上传 GPU Buffer | `Engine/Sources/RenderBackend/RenderBackend.swift` |
+| viewport surface 状态导出 | `Engine/Sources/RenderBackend/ViewportSurface.swift` |
 
 **验收标准**：
 1. `swift run EditorApp` 打开 SDL3 窗口，窗口内可见带光照的 OBJ 网格（如 `FinalBaseMesh.obj`）。
@@ -215,17 +213,19 @@ cd Engine && swift build        # 必须 0 error
 
 ---
 
-### Phase 2 — 多线程渲染循环
+### Phase 2 — 多线程渲染循环 ✅ 已完成
 
-**目标**：Main / Simulation / Render 三线程分离，Render 从环形缓冲消费 RenderPacket，零锁等待。
+**目标**：Main / Simulation / Render 三线程分离，Render 从三缓冲环形缓冲消费最新 `RenderPacket`，Main 不等待 GPU。
 
 | 任务 | 产出文件 |
 |------|---------|
 | `RenderPacket` 结构体（场景快照） | `Engine/Sources/RenderBackend/RenderPacket.swift` |
-| 环形缓冲（lock-free，三缓冲） | `Engine/Sources/EngineCore/RingBuffer.swift` |
+| 三缓冲环形缓冲（latest-wins） | `Engine/Sources/EngineCore/RingBuffer.swift` |
 | Simulation DispatchQueue 独立线程 | `Engine/Sources/EngineCore/SimulationThread.swift` |
 | Render DispatchQueue 独立线程 | `Engine/Sources/EngineCore/RenderThread.swift` |
-| EngineHost 重构为三线程协作 | `Engine/Sources/EngineCore/EngineHost.swift` |
+| EngineHost 重构为三线程协作 | `Engine/Sources/EngineCore/EngineCore.swift` |
+| 线程安全状态包装 | `Engine/Sources/EngineCore/LockedState.swift` |
+| C ABI 阶段状态改为流水化计数 | `Engine/Sources/Bridge/CEngineBridge/engine_bridge.c` |
 
 **验收标准**：
 1. `swift test --filter RenderThreadTests` 通过。
