@@ -97,7 +97,9 @@ public final class ViewGraph {
         var out: [any View] = []
         for v in views {
             if v is EmptyView { continue }
-            if let s = v as? any _StructuralView {
+            if let any = v as? AnyView {
+                out.append(contentsOf: flattenSlots([any.storage]))
+            } else if let s = v as? any _StructuralView {
                 out.append(contentsOf: flattenSlots(s._expanded))
             } else {
                 out.append(v)
@@ -147,7 +149,7 @@ public final class ViewGraph {
             if let ln = myLayout { prim._updateLayout(ln) }
             reconcileChildren(parent: node,
                               layoutParent: myLayout ?? layoutParent,
-                              newViews: prim._children)
+                              newViews: prim._children(for: node))
             return
         }
 
@@ -201,6 +203,11 @@ public final class ViewGraph {
         // 1. Empty
         if view is EmptyView { return [] }
 
+        // 1b. AnyView — recurse straight into the erased storage.
+        if let any = view as? AnyView {
+            return materialise(any.storage, into: parent, layoutParent: layoutParent)
+        }
+
         // 2. Primitive (Text / Box / Row / ...)
         if let prim = view as? any _PrimitiveView {
             return materialisePrimitive(prim, into: parent, layoutParent: layoutParent)
@@ -240,7 +247,7 @@ public final class ViewGraph {
             childLayoutParent = ln
         }
 
-        for child in view._children {
+        for child in view._children(for: node) {
             _ = materialise(child, into: node, layoutParent: childLayoutParent)
         }
         return [node]

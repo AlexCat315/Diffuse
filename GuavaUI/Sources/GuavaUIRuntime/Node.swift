@@ -79,6 +79,33 @@ public final class Node: @unchecked Sendable {
     /// here so editing state is not reset every time the parent recomposes.
     public var attachments: [String: Any] = [:]
 
+    // MARK: - CompositionLocal storage (Phase 7.5)
+
+    /// Values pushed onto this node by `CompositionLocal` providers, keyed by
+    /// the provider's identity. Lookup walks the parent chain until a value
+    /// is found; absent providers fall back to `CompositionLocal.defaultValue`.
+    public var compositionValues: [ObjectIdentifier: Any] = [:]
+
+    /// Push a value for `local` onto this node. Replaces any prior value
+    /// stored here for the same key.
+    public func setCompositionValue<Value>(_ local: CompositionLocal<Value>,
+                                           _ value: Value) {
+        compositionValues[local.key] = value
+    }
+
+    /// Resolve `local` by walking up the parent chain. Returns the nearest
+    /// ancestor's stored value, or `local.defaultValue` if none exists.
+    public func compositionValue<Value>(of local: CompositionLocal<Value>) -> Value {
+        var cursor: Node? = self
+        while let node = cursor {
+            if let raw = node.compositionValues[local.key], let typed = raw as? Value {
+                return typed
+            }
+            cursor = node.parent
+        }
+        return local.defaultValue
+    }
+
     public init() {}
 
     // MARK: - Tree mutation
