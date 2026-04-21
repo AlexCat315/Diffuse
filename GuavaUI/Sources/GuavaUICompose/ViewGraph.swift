@@ -143,6 +143,11 @@ public final class ViewGraph {
     /// then recurse into its children. Caller has already verified that
     /// `node.viewTag == slotTag(view)`.
     func updateInPlace(node: Node, view: any View, layoutParent: LayoutNode?) {
+        if let any = view as? AnyView {
+            updateInPlace(node: node, view: any.storage, layoutParent: layoutParent)
+            return
+        }
+
         if let prim = view as? any _PrimitiveView {
             prim._updateNode(node)
             let myLayout = layoutOf[ObjectIdentifier(node)]
