@@ -387,12 +387,14 @@ public struct TextField: _PrimitiveView {
                                    upTo: clamp(renderState.cursorIndex, 0, renderState.measurementText.count),
                                    env: env,
                                    font: resolvedFont)
+        let caretHeight = max(Float(node.frame.height), resolvedLineHeight)
+        let caretX = Float(origin.x) + cursorXValue
         node.attachments[TextInputAttachmentKey.area] = TextInputArea(
-            x: Float(origin.x),
+            x: caretX,
             y: Float(origin.y),
-            width: max(Float(node.frame.width), cursorXValue + 1),
-            height: max(Float(node.frame.height), resolvedLineHeight),
-            cursorX: cursorXValue
+            width: max(1, resolvedLineHeight),
+            height: caretHeight,
+            cursorX: 0
         )
 
         // Cursor — suppressed while a non-empty selection is active.
