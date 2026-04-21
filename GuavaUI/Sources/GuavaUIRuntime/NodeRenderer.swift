@@ -30,10 +30,46 @@ public struct NodeRenderer {
             list.pushClip(UIRect(x: absX, y: absY, width: width, height: height))
         }
 
-        // 2. Background fill.
-        if let bg = node.backgroundColor, width > 0, height > 0 {
+        // 2. Drop shadow (painted before background so it sits behind).
+        if let shadowColor = node.shadowColor, shadowColor.a > 0,
+           width > 0, height > 0 {
+            let blur = max(0, node.shadowBlur)
+            let radius = max(node.cornerRadius, 0)
+            // Cheap fake-blur: emit `steps` concentric expanded rects with
+            // decreasing alpha. Cost is bounded (≤ 4 per node), and gives a
+            // soft enough edge for chrome at typical 8–12px blur.
+            let steps = blur > 0 ? 4 : 1
+            for i in 0..<steps {
+                let t = Float(i) / Float(steps)
+                let inset = -blur * (1 - t)
+                let alpha = shadowColor.a * (1 - t) / Float(steps) * 2
+                let rect = UIRect(
+                    x: absX + node.shadowOffsetX + inset,
+                    y: absY + node.shadowOffsetY + inset,
+                    width:  width  - 2 * inset,
+                    height: height - 2 * inset
+                )
+                let stepColor = Color(
+                    r: shadowColor.r,
+                    g: shadowColor.g,
+                    b: shadowColor.b,
+                    a: min(1, alpha) * node.opacity
+                )
+                let stepRadius = radius + max(0, -inset)
+                if stepRadius > 0 {
+                    list.addRoundedRect(rect, radius: stepRadius, color: stepColor)
+                } else {
+                    list.addRect(rect, color: stepColor)
+                }
+            }
+        }
+
+        // 3. Border (painted before background; background inset covers the
+        //    interior so only a `borderWidth`-wide ring shows through).
+        if let bc = node.borderColor, node.borderWidth > 0,
+           width > 0, height > 0 {
             let rect = UIRect(x: absX, y: absY, width: width, height: height)
-            let color = applyOpacity(bg, node.opacity)
+            let color = applyOpacity(bc, node.opacity)
             if node.cornerRadius > 0 {
                 list.addRoundedRect(rect, radius: node.cornerRadius, color: color)
             } else {
@@ -41,19 +77,43 @@ public struct NodeRenderer {
             }
         }
 
-        // 3. Custom content (Text/Image/etc).
+        // 4. Background fill (inset by border width so it does not overdraw
+        //    the border ring).
+        if let bg = node.backgroundColor, width > 0, height > 0 {
+            let inset = (node.borderColor != nil && node.borderWidth > 0) ? node.borderWidth : 0
+            let bgWidth  = max(0, width  - 2 * inset)
+            let bgHeight = max(0, height - 2 * inset)
+            if bgWidth > 0 && bgHeight > 0 {
+                let rect = UIRect(x: absX + inset, y: absY + inset,
+                                  width: bgWidth, height: bgHeight)
+                let color = applyOpacity(bg, node.opacity)
+                let bgRadius = max(0, node.cornerRadius - inset)
+                if bgRadius > 0 {
+                    list.addRoundedRect(rect, radius: bgRadius, color: color)
+                } else {
+                    list.addRect(rect, color: color)
+                }
+            }
+        }
+
+        // 5. Custom content (Text/Image/etc).
         if let draw = node.draw {
             draw(list, CGPoint(x: Double(absX), y: Double(absY)))
         }
 
-        // 4. Children — translated by -contentOffset for scrollable containers.
+        // 6. Children — translated by -contentOffset for scrollable containers.
         let childOriginX = absX - Float(node.contentOffset.x)
         let childOriginY = absY - Float(node.contentOffset.y)
         for child in node.children {
             renderNode(child, list: list, originX: childOriginX, originY: childOriginY)
         }
 
-        // 5. Pop clip.
+        // 7. Overlay (scrollbars, focus rings drawn above content).
+        if let overlay = node.overlayDraw {
+            overlay(list, CGPoint(x: Double(absX), y: Double(absY)))
+        }
+
+        // 8. Pop clip.
         if clipped {
             list.popClip()
         }

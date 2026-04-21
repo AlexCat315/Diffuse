@@ -50,6 +50,41 @@ public struct CornerRadiusModifier: ViewModifier {
     }
 }
 
+public struct BorderModifier: ViewModifier {
+    public let color: Color
+    public let width: Float
+    public init(_ color: Color, width: Float) {
+        self.color = color
+        self.width = max(0, width)
+    }
+
+    public func apply(node: Node) {
+        node.animatableSet(\.borderColor, to: color)
+        node.animatableSet(\.borderWidth, to: width)
+    }
+}
+
+public struct ShadowModifier: ViewModifier {
+    public let color: Color
+    public let offsetX: Float
+    public let offsetY: Float
+    public let blur: Float
+
+    public init(color: Color, offsetX: Float, offsetY: Float, blur: Float) {
+        self.color = color
+        self.offsetX = offsetX
+        self.offsetY = offsetY
+        self.blur = blur
+    }
+
+    public func apply(node: Node) {
+        node.animatableSet(\.shadowColor, to: color)
+        node.shadowOffsetX = offsetX
+        node.shadowOffsetY = offsetY
+        node.animatableSet(\.shadowBlur, to: blur)
+    }
+}
+
 public struct FontModifier: ViewModifier {
     public let font: Font
     public init(_ font: Font) { self.font = font }
@@ -99,6 +134,20 @@ public extension View {
 
     func cornerRadius(_ radius: Float) -> some View {
         modifier(CornerRadiusModifier(radius))
+    }
+
+    func border(_ color: Color, width: Float = 1) -> some View {
+        modifier(BorderModifier(color, width: width))
+    }
+
+    func shadow(color: Color,
+                offsetX: Float = 0,
+                offsetY: Float = 0,
+                blur: Float = 0) -> some View {
+        modifier(ShadowModifier(color: color,
+                                offsetX: offsetX,
+                                offsetY: offsetY,
+                                blur: blur))
     }
 
     func font(_ font: Font) -> some View {

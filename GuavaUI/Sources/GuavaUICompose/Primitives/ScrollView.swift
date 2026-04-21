@@ -32,31 +32,105 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     }
 
     public func _updateNode(_ node: Node) {
-        guard let registry = InteractionRegistryHolder.current else { return }
+        let theme = node.theme
         let axes = self.axes
         let step = self.wheelStep
-        registry.setWheel(node) { event, _ in
-            // Wheel up (positive Y) scrolls content up — i.e. offset.y decreases.
-            let dx: Float = (axes == .horizontal || axes == .both) ? -event.x * step : 0
-            let dy: Float = (axes == .vertical   || axes == .both) ? -event.y * step : 0
-            if dx == 0 && dy == 0 { return .ignored }
+        let trackThickness: Float = 8
+        let trackInset: Float = 2
 
-            var offset = node.contentOffset
-            offset.x += CGFloat(dx)
-            offset.y += CGFloat(dy)
+        if let registry = InteractionRegistryHolder.current {
+            registry.setWheel(node) { event, _ in
+                // Wheel up (positive Y) scrolls content up — i.e. offset.y decreases.
+                let dx: Float = (axes == .horizontal || axes == .both) ? -event.x * step : 0
+                let dy: Float = (axes == .vertical   || axes == .both) ? -event.y * step : 0
+                if dx == 0 && dy == 0 { return .ignored }
 
-            // Clamp to [0, max(0, contentSize - viewSize)] using the immediate
-            // child's frame as content size. With multiple children we'd union.
-            let viewSize = node.frame.size
-            if let child = node.children.first {
-                let contentSize = child.frame.size
-                offset.x = max(0, min(offset.x, max(0, contentSize.width  - viewSize.width)))
-                offset.y = max(0, min(offset.y, max(0, contentSize.height - viewSize.height)))
-            } else {
-                offset = .zero
+                var offset = node.contentOffset
+                offset.x += CGFloat(dx)
+                offset.y += CGFloat(dy)
+
+                // Clamp to [0, max(0, contentSize - viewSize)] using the immediate
+                // child's frame as content size. With multiple children we'd union.
+                let viewSize = node.frame.size
+                if let child = node.children.first {
+                    let contentSize = child.frame.size
+                    offset.x = max(0, min(offset.x, max(0, contentSize.width  - viewSize.width)))
+                    offset.y = max(0, min(offset.y, max(0, contentSize.height - viewSize.height)))
+                } else {
+                    offset = .zero
+                }
+                node.contentOffset = offset
+                return .handled
             }
-            node.contentOffset = offset
-            return .handled
+        }
+
+        // Scrollbar painter — runs after children render. We can't draw after
+        // children with the current `Node.draw` ordering (it runs before
+        // children), so we paint the bar onto the ScrollView's own background
+        // pass. To keep it visible above scrolled content, we add a sibling
+        // overlay node on first update.
+        let trackColor = theme.colors.surfaceVariant
+        let thumbColor = Color(
+            r: theme.colors.onSurfaceMuted.r,
+            g: theme.colors.onSurfaceMuted.g,
+            b: theme.colors.onSurfaceMuted.b,
+            a: 0xB0
+        )
+        node.overlayDraw = { [weak node] list, origin in
+            guard let node else { return }
+            let viewW = Float(node.frame.size.width)
+            let viewH = Float(node.frame.size.height)
+            guard let content = node.children.first else { return }
+            let contentW = Float(content.frame.size.width)
+            let contentH = Float(content.frame.size.height)
+            let offX = Float(node.contentOffset.x)
+            let offY = Float(node.contentOffset.y)
+
+            // Vertical bar.
+            if (axes == .vertical || axes == .both), contentH > viewH, viewH > 0 {
+                let trackX = Float(origin.x) + viewW - trackThickness - trackInset
+                let trackY = Float(origin.y) + trackInset
+                let trackH = viewH - 2 * trackInset
+                list.addRoundedRect(
+                    UIRect(x: trackX, y: trackY,
+                           width: trackThickness, height: trackH),
+                    radius: trackThickness / 2,
+                    color: trackColor
+                )
+                let thumbH = max(trackThickness * 2, trackH * (viewH / contentH))
+                let maxOff = contentH - viewH
+                let t = maxOff > 0 ? offY / maxOff : 0
+                let thumbY = trackY + (trackH - thumbH) * t
+                list.addRoundedRect(
+                    UIRect(x: trackX, y: thumbY,
+                           width: trackThickness, height: thumbH),
+                    radius: trackThickness / 2,
+                    color: thumbColor
+                )
+            }
+
+            // Horizontal bar.
+            if (axes == .horizontal || axes == .both), contentW > viewW, viewW > 0 {
+                let trackY = Float(origin.y) + viewH - trackThickness - trackInset
+                let trackX = Float(origin.x) + trackInset
+                let trackW = viewW - 2 * trackInset
+                list.addRoundedRect(
+                    UIRect(x: trackX, y: trackY,
+                           width: trackW, height: trackThickness),
+                    radius: trackThickness / 2,
+                    color: trackColor
+                )
+                let thumbW = max(trackThickness * 2, trackW * (viewW / contentW))
+                let maxOff = contentW - viewW
+                let t = maxOff > 0 ? offX / maxOff : 0
+                let thumbX = trackX + (trackW - thumbW) * t
+                list.addRoundedRect(
+                    UIRect(x: thumbX, y: trackY,
+                           width: thumbW, height: trackThickness),
+                    radius: trackThickness / 2,
+                    color: thumbColor
+                )
+            }
         }
     }
 
