@@ -70,12 +70,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         // pass. To keep it visible above scrolled content, we add a sibling
         // overlay node on first update.
         let trackColor = theme.colors.surfaceVariant
-        let thumbColor = Color(
-            r: theme.colors.onSurfaceMuted.r,
-            g: theme.colors.onSurfaceMuted.g,
-            b: theme.colors.onSurfaceMuted.b,
-            a: 0xB0
-        )
+        let thumbColor = theme.colors.onSurfaceMuted
         node.overlayDraw = { [weak node] list, origin in
             guard let node else { return }
             let viewW = Float(node.frame.size.width)

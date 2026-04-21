@@ -195,11 +195,13 @@ struct RootView: View {
             Box(direction: .column, alignItems: .stretch) { EmptyView() }
                 .frame(height: 16)
             Divider()
+            Box(direction: .column, alignItems: .stretch) { EmptyView() }
+                .frame(height: 12)
 
             Text("HIERARCHY")
                 .font(.label)
                 .foregroundColor(.onSurfaceMuted)
-                .padding(horizontal: 16, vertical: 12)
+                .padding(horizontal: 16, vertical: 8)
 
             Tree(demoSceneTree,
                  children: \.children,
@@ -540,11 +542,11 @@ struct RootView: View {
     }
 
     private func inspectorRow(_ key: String, _ value: String) -> some View {
-        Row(alignment: .center, spacing: 8) {
+        Row(alignment: .center, spacing: 12) {
             Text(key)
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
-                .frame(width: 80)
+                .frame(width: 96)
             Text(value)
                 .font(.body)
                 .foregroundColor(.onSurface)

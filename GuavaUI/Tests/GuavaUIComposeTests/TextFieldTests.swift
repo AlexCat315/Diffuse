@@ -163,7 +163,10 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         node.draw?(list, CGPoint(x: 24, y: 16))
         let area = node.attachments[TextInputAttachmentKey.area] as? TextInputArea
         #expect((area?.x ?? 0) >= 24)
-        #expect(area?.y == 16)
+        // Text is now centered vertically inside the field's chrome, so
+        // `area.y` sits between the field's top edge and its bottom.
+        #expect((area?.y ?? -1) >= 16)
+        #expect((area?.y ?? .greatestFiniteMagnitude) <= 16 + 28)
         #expect((area?.width ?? 0) > 0)
         #expect(area?.cursorX == 0)
 
