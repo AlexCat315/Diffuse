@@ -15,6 +15,8 @@ public final class SDL3Shell: Shell {
     private var metalView: UnsafeMutableRawPointer?
     private var didInitializeSDL = false
     private var lastTextInputArea: TextInputArea?
+    private var cursorCache: [SystemCursor: OpaquePointer] = [:]
+    private var activeCursor: SystemCursor = .arrow
 
 #if os(macOS)
     private var metalLayer: CAMetalLayer?
@@ -276,6 +278,40 @@ public final class SDL3Shell: Shell {
         lastTextInputArea = area
     }
 
+    public func setCursor(_ cursor: SystemCursor) {
+        guard window != nil else { return }
+        guard cursor != activeCursor else { return }
+
+        let handle = resolveCursor(cursor) ?? resolveCursor(.arrow)
+        guard let handle else { return }
+        _ = SDL_SetCursor(handle)
+        activeCursor = cursor
+    }
+
+    private func resolveCursor(_ cursor: SystemCursor) -> OpaquePointer? {
+        if let cached = cursorCache[cursor] { return cached }
+        let id: Int32
+        switch cursor {
+        case .arrow:            id = Int32(GUAVA_SDL_SYSTEM_CURSOR_DEFAULT)
+        case .pointer:          id = Int32(GUAVA_SDL_SYSTEM_CURSOR_POINTER)
+        case .ibeam:            id = Int32(GUAVA_SDL_SYSTEM_CURSOR_TEXT)
+        case .crosshair:        id = Int32(GUAVA_SDL_SYSTEM_CURSOR_CROSSHAIR)
+        case .wait:             id = Int32(GUAVA_SDL_SYSTEM_CURSOR_WAIT)
+        case .progress:         id = Int32(GUAVA_SDL_SYSTEM_CURSOR_PROGRESS)
+        case .notAllowed:       id = Int32(GUAVA_SDL_SYSTEM_CURSOR_NOT_ALLOWED)
+        case .move:             id = Int32(GUAVA_SDL_SYSTEM_CURSOR_MOVE)
+        case .resizeHorizontal: id = Int32(GUAVA_SDL_SYSTEM_CURSOR_EW_RESIZE)
+        case .resizeVertical:   id = Int32(GUAVA_SDL_SYSTEM_CURSOR_NS_RESIZE)
+        case .resizeNWSE:       id = Int32(GUAVA_SDL_SYSTEM_CURSOR_NWSE_RESIZE)
+        case .resizeNESW:       id = Int32(GUAVA_SDL_SYSTEM_CURSOR_NESW_RESIZE)
+        }
+        guard let created = SDL_CreateSystemCursor(SDL_SystemCursor(rawValue: UInt32(id))) else {
+            return nil
+        }
+        cursorCache[cursor] = created
+        return created
+    }
+
     public func shutdown() {
 #if os(macOS)
         metalLayer = nil
@@ -289,6 +325,12 @@ public final class SDL3Shell: Shell {
             SDL_DestroyWindow(window)
             self.window = nil
         }
+
+        for (_, ptr) in cursorCache {
+            SDL_DestroyCursor(ptr)
+        }
+        cursorCache.removeAll()
+        activeCursor = .arrow
 
         if didInitializeSDL {
             SDL_Quit()

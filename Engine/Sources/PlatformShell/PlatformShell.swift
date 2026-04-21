@@ -40,6 +40,9 @@ public protocol Shell: AnyObject {
     func initializeWindow(title: String) throws
     @discardableResult func pollEvents() -> [InputEvent]
     func setTextInputArea(_ area: TextInputArea?)
+    /// Switch the OS mouse cursor to a system style. Defaults to `.arrow`
+    /// when the request fails or the platform does not implement it.
+    func setCursor(_ cursor: SystemCursor)
     func shutdown()
 }
 
@@ -50,6 +53,7 @@ public extension Shell {
     var isMinimized: Bool { false }
     var isOccluded: Bool { false }
     func setTextInputArea(_ area: TextInputArea?) {}
+    func setCursor(_ cursor: SystemCursor) {}
 }
 
 @MainActor

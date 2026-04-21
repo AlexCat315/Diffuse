@@ -128,6 +128,12 @@ struct ButtonHost: _PrimitiveView {
         node.attachments[ButtonHost.pressedKey] = isPressed
         node.attachments[ButtonHost.hoveredKey] = isHovered
 
+        // Default cursor for buttons: `.pointer` when interactive,
+        // `.notAllowed` when disabled. Users can override via `.cursor(_:)`
+        // applied closer to the leaf — modifier wrappers run after this
+        // primitive and therefore win.
+        node.cursor = isEnabled ? .pointer : .notAllowed
+
         guard isEnabled, let registry = InteractionRegistryHolder.current else {
             InteractionRegistryHolder.current?.remove(node)
             return

@@ -100,6 +100,7 @@ public struct TextField: _PrimitiveView {
         if node.cornerRadius == 0 {
             node.cornerRadius = theme.radius.sm
         }
+        node.cursor = .ibeam
 
         // Reuse FieldState if this node is being recycled by reconcile;
         // otherwise create one and seed cursor at the end of the current text.
