@@ -18,9 +18,11 @@ public struct GhostButtonStyle: ButtonStyle {
         let border: Color = configuration.isFocused ? theme.colors.focusRing : clear
         let borderWidth: Float = configuration.isFocused ? 2 : 0
 
-        return AnyView(configuration.label)
-            .font(SemanticFontRef.bodyStrong)
-            .foregroundColor(SemanticColorRef.onSurface)
+        return Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            AnyView(configuration.label)
+                .font(SemanticFontRef.bodyStrong)
+                .foregroundColor(SemanticColorRef.onSurface)
+        }
             .padding(horizontal: theme.spacing.md, vertical: theme.spacing.xs + 2)
             .background(bg)
             .cornerRadius(theme.radius.md)
