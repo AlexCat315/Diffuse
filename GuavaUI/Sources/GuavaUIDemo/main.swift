@@ -75,6 +75,7 @@ struct RootView: View {
     @State var selectedSceneNodeID: String? = "camera"
     @State var selectedLogID: Int? = 2
     @State var appearance: Appearance = .dark
+    @State var volume: Double = 0.4
 
     var body: some View {
         SplitView(.horizontal, fraction: 0.22) {
@@ -156,6 +157,22 @@ struct RootView: View {
                                         .foregroundColor(.onSurfaceMuted)
                                 }
                                 .flex()
+                            }
+                            .padding(16)
+                            .background(.surfaceVariant)
+                            .cornerRadius(8)
+
+                            Row(alignment: .center, spacing: 12) {
+                                Text("Volume")
+                                    .font(.bodyStrong)
+                                    .foregroundColor(.onSurface)
+                                    .frame(width: 60)
+                                Slider(value: $volume, range: 0...1, step: 0.01)
+                                    .flex()
+                                Text("\(Int(volume * 100))")
+                                    .font(.body)
+                                    .foregroundColor(.onSurfaceVariant)
+                                    .frame(width: 36)
                             }
                             .padding(16)
                             .background(.surfaceVariant)
