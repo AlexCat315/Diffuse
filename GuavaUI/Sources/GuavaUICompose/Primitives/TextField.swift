@@ -21,17 +21,17 @@ public struct TextField: _PrimitiveView {
     public let placeholder: String
     public let onSubmit: (() -> Void)?
     public let textColor: Color?
-    public let placeholderColor: Color
-    public let cursorColor: Color
-    public let selectionColor: Color
+    public let placeholderColor: Color?
+    public let cursorColor: Color?
+    public let selectionColor: Color?
 
     public init(_ placeholder: String = "",
                 text: Binding<String>,
                 onSubmit: (() -> Void)? = nil,
                 textColor: Color? = nil,
-                placeholderColor: Color = Color(r: 0.55, g: 0.55, b: 0.6),
-                cursorColor: Color = Color.white,
-                selectionColor: Color = Color(r: 0.30, g: 0.55, b: 0.95, a: 0.45)) {
+                placeholderColor: Color? = nil,
+                cursorColor: Color? = nil,
+                selectionColor: Color? = nil) {
         self.text = text
         self.placeholder = placeholder
         self.onSubmit = onSubmit
@@ -65,6 +65,20 @@ public struct TextField: _PrimitiveView {
     }
 
     public func _updateNode(_ node: Node) {
+        // Theme-aware chrome: a `surfaceVariant` fill with the small radius
+        // makes a freshly-dropped `TextField` look modern out of the box. Call
+        // sites that want custom chrome can wrap the field in their own
+        // background / cornerRadius modifiers — the runtime is happy to draw
+        // either; the explicit modifier value is set on the node before
+        // `_updateNode` runs and is not overwritten here unless still default.
+        let theme = node.theme
+        if node.backgroundColor == nil {
+            node.backgroundColor = theme.colors.surfaceVariant
+        }
+        if node.cornerRadius == 0 {
+            node.cornerRadius = theme.radius.sm
+        }
+
         // Reuse FieldState if this node is being recycled by reconcile;
         // otherwise create one and seed cursor at the end of the current text.
         let state: FieldState
@@ -276,14 +290,18 @@ public struct TextField: _PrimitiveView {
     private func render(node: Node, state: FieldState, list: DrawList, origin: CGPoint) {
         state.lastDrawOrigin = origin
         guard let env = TextEnvironmentHolder.current else { return }
+        let theme = node.theme
         let isFocused = (FocusChainHolder.current?.focused === node)
         let current = text.wrappedValue
         let displayText = current.isEmpty ? placeholder : current
         let resolvedFont = resolvedFont(node: node, env: env)
         let resolvedLineHeight = resolvedLineHeight(node: node, env: env)
+        let resolvedPlaceholderColor = placeholderColor ?? theme.colors.onSurfaceMuted
+        let resolvedCursorColor = cursorColor ?? theme.colors.onSurface
+        let resolvedSelectionColor = selectionColor ?? theme.colors.selection
         let renderBaseColor: Color =
             current.isEmpty
-                ? placeholderColor
+                ? resolvedPlaceholderColor
                 : (textColor ?? node.foregroundColor ?? env.defaultColor)
         let renderColor = renderBaseColor.multipliedAlpha(node.opacity)
 
@@ -296,7 +314,7 @@ public struct TextField: _PrimitiveView {
                        y: Float(origin.y),
                        width: max(1, xHi - xLo),
                        height: resolvedLineHeight),
-                color: selectionColor.multipliedAlpha(node.opacity)
+                color: resolvedSelectionColor.multipliedAlpha(node.opacity)
             )
         }
 
@@ -326,7 +344,7 @@ public struct TextField: _PrimitiveView {
             width: 1,
             height: resolvedLineHeight
         )
-        list.addRect(cursorRect, color: cursorColor.multipliedAlpha(node.opacity))
+        list.addRect(cursorRect, color: resolvedCursorColor.multipliedAlpha(node.opacity))
     }
 
     /// Width of `text` shaped from index 0 up to `count` characters. Used to

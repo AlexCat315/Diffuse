@@ -10,7 +10,7 @@ public struct BackgroundModifier: ViewModifier {
     public init(_ color: Color) { self.color = color }
 
     public func apply(node: Node) {
-        node.backgroundColor = color
+        node.animatableSet(\.backgroundColor, to: color)
     }
 }
 
@@ -19,7 +19,7 @@ public struct ForegroundColorModifier: ViewModifier {
     public init(_ color: Color) { self.color = color }
 
     public func apply(node: Node) {
-        node.foregroundColor = color
+        node.animatableSet(\.foregroundColor, to: color)
     }
 }
 
@@ -30,7 +30,7 @@ public struct OpacityModifier: ViewModifier {
     }
 
     public func apply(node: Node) {
-        node.opacity = opacity
+        node.animatableSet(\.opacity, to: opacity)
     }
 }
 
@@ -46,7 +46,7 @@ public struct CornerRadiusModifier: ViewModifier {
     public init(_ radius: Float) { self.radius = max(0, radius) }
 
     public func apply(node: Node) {
-        node.cornerRadius = radius
+        node.animatableSet(\.cornerRadius, to: radius)
     }
 }
 

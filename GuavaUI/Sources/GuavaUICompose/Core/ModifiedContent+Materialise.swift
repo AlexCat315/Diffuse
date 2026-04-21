@@ -39,6 +39,19 @@ extension ModifiedContent: _AnyModifiedContent {
             return [scopeAnchor]
         }
 
+        if let around = modifier as? _AroundApplyingModifier {
+            let anchor = Node()
+            anchor.isHitTestable = false
+            anchor.viewTag = ViewGraph.slotTag(self)
+            parent.addChild(anchor)
+            around._aroundApply(node: anchor) {
+                _ = graph.materialise(content,
+                                      into: anchor,
+                                      layoutParent: layoutParent)
+            }
+            return [anchor]
+        }
+
         let nodes = graph.materialise(content, into: parent, layoutParent: layoutParent)
         for n in nodes {
             // Override the inner content's tag with the wrapper's tag so the
@@ -66,6 +79,16 @@ extension ModifiedContent: _AnyModifiedContent {
             graph.reconcileChildren(parent: node,
                                     layoutParent: layoutParent,
                                     newViews: [content])
+            return
+        }
+
+        if let around = modifier as? _AroundApplyingModifier {
+            node.viewTag = ViewGraph.slotTag(self)
+            around._aroundApply(node: node) {
+                graph.reconcileChildren(parent: node,
+                                        layoutParent: layoutParent,
+                                        newViews: [content])
+            }
             return
         }
 

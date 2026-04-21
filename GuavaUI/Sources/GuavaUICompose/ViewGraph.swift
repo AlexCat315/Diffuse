@@ -329,7 +329,15 @@ final class ViewScope {
             if let stateBox = child.value as? _StateErased {
                 stateBox._wire(invalidate: { [weak self, weak graph] in
                     guard let self, let graph else { return }
-                    graph.recomposer.invalidate(scopeID: scopeID) { [weak self] in
+                    // Capture the animation context at write time. The
+                    // recomposer stores the animation alongside the body and
+                    // re-establishes it before invoking the body in
+                    // `commitAll`.
+                    let capturedAnim = ActiveAnimationContext.current
+                    graph.recomposer.invalidate(
+                        scopeID: scopeID,
+                        animation: capturedAnim
+                    ) { [weak self] in
                         self?.recompose()
                     }
                 })

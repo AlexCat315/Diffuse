@@ -175,7 +175,8 @@ cd GuavaUI && swift run GuavaUIDemo
 **轨道 B：GuavaUI Phase 6 → 7 → 7.5**
 
 > Phase 6 详细设计见 `docs/guava-ui-phase6-design.md`。
-> Phase 7.5 详细设计见 `docs/guava-ui-phase7.5-design.md`。
+> Phase 7.5 详细设计见 `docs/guava-ui-phase7.5-design.md`，收尾总结见 `docs/guava-ui-phase7.5-summary.md`（**已完成，179/179 测试通过**）。
+> Phase 8 详细设计见 `docs/guava-ui-phase8-design.md`。
 
 Phase 6（Compose API + 基础组件）：
 ```

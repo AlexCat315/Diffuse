@@ -74,31 +74,27 @@ struct RootView: View {
     @State var clickCount: Int = 0
     @State var selectedSceneNodeID: String? = "camera"
     @State var selectedLogID: Int? = 2
+    @State var appearance: Appearance = .dark
 
     var body: some View {
         SplitView(.horizontal, fraction: 0.22) {
-            Panel("Hierarchy", contentPadding: .zero) {
+            Panel("Hierarchy") {
                 Column(alignment: .leading, spacing: 0) {
                     Tree(demoSceneTree,
                          children: \.children,
                          selection: $selectedSceneNodeID,
                          rowHeight: 28,
-                         rowSpacing: 2) { node, isSelected, _, _ in
-                        Text(node.title,
-                             color: isSelected
-                                ? Color.white
-                                : Color(r: 0.83, g: 0.85, b: 0.90))
+                         rowSpacing: 2) { node, _, _, _ in
+                        Text(node.title)
+                            .font(.body)
+                            .foregroundColor(.onSurface)
                     }
                     .flex()
 
-                    Divider(color: Color(r: 0.23, g: 0.26, b: 0.31))
+                    Divider()
 
                     Row(alignment: .center, spacing: 8) {
-                        Button(action: { clickCount += 1 }) {
-                            Text("Refresh Snapshot \(clickCount)", color: Color.white)
-                                .padding(8)
-                                .background(Color(r: 0.30, g: 0.55, b: 0.95))
-                        }
+                        Button("Refresh \(clickCount)") { clickCount += 1 }
                         Spacer(minLength: 0)
                     }
                     .padding(12)
@@ -110,67 +106,77 @@ struct RootView: View {
                 SplitView(.vertical, fraction: 0.68) {
                     Panel("Workspace") {
                         Column(alignment: .leading, spacing: 12) {
-                            Text("GuavaUI — Phase 7.1", color: Color.white)
-                                .font(.system(size: 28, weight: .bold))
-                                .lineHeight(32)
-                            Text("List / Tree 已接入，当前 demo 改用 SplitView + Panel 外壳。",
-                                 color: Color(r: 0.7, g: 0.85, b: 1.0))
-                                .lineHeight(20)
-                            Text("@State + Recomposer reconcile live",
-                                 color: Color(r: 0.94, g: 0.94, b: 0.98))
+                            Text("GuavaUI — Phase 7.5")
+                                .font(.display)
+                                .foregroundColor(.onBackground)
 
+                            Text("Theme + Style 已落地。这段文字使用 .body + .onSurfaceVariant，外观切换无需重写。")
+                                .font(.body)
+                                .foregroundColor(.onSurfaceVariant)
+
+                            // Themed input — backgroundColor + cornerRadius
+                            // resolve from `node.theme` automatically.
                             TextField(
                                 "Type here…",
                                 text: $inputText,
                                 onSubmit: { print("[demo] submit: \(inputText)") }
                             )
                             .padding(8)
-                            .background(Color(r: 0.20, g: 0.22, b: 0.28))
                             .frame(height: 36)
 
-                            Text("echo: \(inputText)",
-                                 color: Color(r: 0.85, g: 0.92, b: 1.0))
+                            Text("echo: \(inputText)")
+                                .font(.caption)
+                                .foregroundColor(.onSurfaceMuted)
+
+                            // Button style showcase.
+                            Row(alignment: .center, spacing: 8) {
+                                Button("Primary") { clickCount += 1 }
+                                Button("Secondary") { clickCount += 1 }
+                                    .buttonStyle(.secondary)
+                                Button("Ghost") { clickCount += 1 }
+                                    .buttonStyle(.ghost)
+                                Button("Delete", role: .destructive) { clickCount += 1 }
+                                Spacer(minLength: 0)
+                                Button(appearance == .dark ? "Light" : "Dark") {
+                                    appearance = (appearance == .dark) ? .light : .dark
+                                }
+                                .buttonStyle(.ghost)
+                            }
 
                             Row(alignment: .top, spacing: 16) {
                                 Image(textureID: previewTextureID, width: 112, height: 112)
                                     .cornerRadius(24)
-                                    .foregroundColor(Color(r: 1.0, g: 0.92, b: 0.84, a: 0.92))
-                                    .opacity(0.92)
 
                                 Column(alignment: .leading, spacing: 6) {
-                                    Text("Style Preview", color: Color.white)
-                                        .font(.system(size: 20, weight: .bold))
-                                        .lineHeight(24)
-                                    Text("Image + cornerRadius + foregroundColor + opacity",
-                                         color: Color(r: 0.72, g: 0.79, b: 0.9))
-                                        .lineHeight(18)
-                                    Text("font(size: 28, weight: .bold)",
-                                         color: Color(r: 0.95, g: 0.96, b: 0.98))
-                                        .font(.system(size: 28, weight: .bold))
-                                        .lineHeight(32)
-                                    Text("lineHeight(24) keeps multi-line rhythm stable.",
-                                         color: Color(r: 0.78, g: 0.84, b: 0.92))
-                                        .lineHeight(24)
+                                    Text("Style Preview")
+                                        .font(.title)
+                                        .foregroundColor(.onSurface)
+                                    Text("Image + cornerRadius + theme tokens, no hard-coded colors.")
+                                        .font(.caption)
+                                        .foregroundColor(.onSurfaceMuted)
                                 }
                                 .flex()
                             }
                             .padding(16)
-                            .background(Color(r: 0.14, g: 0.17, b: 0.22))
+                            .background(.surfaceVariant)
+                            .cornerRadius(8)
 
                             Spacer()
                         }
                     }
                 } second: {
-                    Panel("Console", contentPadding: .zero) {
-                        List(demoLogEntries, selection: $selectedLogID, rowHeight: 34, rowSpacing: 2) { entry, isSelected in
+                    Panel("Console") {
+                        List(demoLogEntries,
+                             selection: $selectedLogID,
+                             rowHeight: 34,
+                             rowSpacing: 2) { entry, _ in
                             Row(alignment: .center, spacing: 10) {
-                                Text(entry.level, color: demoLogColor(entry.level))
-                                    .font(.system(size: 12, weight: .bold))
-                                Text(entry.message,
-                                     color: isSelected
-                                        ? Color.white
-                                        : Color(r: 0.84, g: 0.88, b: 0.94))
-                                    .lineHeight(18)
+                                Text(entry.level)
+                                    .font(.bodyStrong)
+                                    .foregroundColor(demoLogColor(entry.level))
+                                Text(entry.message)
+                                    .font(.body)
+                                    .foregroundColor(.onSurface)
                             }
                         }
                         .flex()
@@ -179,26 +185,37 @@ struct RootView: View {
             } second: {
                 Panel("Inspector") {
                     Column(alignment: .leading, spacing: 6) {
-                        Text("selected: \(demoSceneTitle(id: selectedSceneNodeID))",
-                             color: Color(r: 0.92, g: 0.94, b: 0.98))
-                            .lineHeight(20)
-                        Text("type: EntityNode", color: Color(r: 0.7, g: 0.7, b: 0.75))
-                        Text("layout: yoga", color: Color(r: 0.7, g: 0.7, b: 0.75))
-                        Text("console focus: #\(selectedLogID ?? 0)",
-                             color: Color(r: 0.7, g: 0.7, b: 0.75))
+                        Text("selected: \(demoSceneTitle(id: selectedSceneNodeID))")
+                            .font(.bodyStrong)
+                            .foregroundColor(.onSurface)
+                        Text("type: EntityNode")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                        Text("layout: yoga")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                        Text("console focus: #\(selectedLogID ?? 0)")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
                         Spacer().frame(height: 12)
-                        Text("Phase 7 status", color: Color.white)
-                            .font(.system(size: 16, weight: .bold))
-                        Text("SplitView 当前是可嵌套二分外壳；Panel 提供标题栏和内容容器。",
-                             color: Color(r: 0.74, g: 0.79, b: 0.86))
-                            .lineHeight(18)
+                        Text("Phase 7.5 status")
+                            .font(.headline)
+                            .foregroundColor(.onSurface)
+                        Text("Theme + Style 协议已上线，所有原生组件读取语义槽位 — 切换 appearance 即可整体换肤。")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
                         Spacer()
                     }
                 }
             }
         }
         .flex()
-        .background(Color(r: 0.10, g: 0.11, b: 0.14))
+        .background(.background)
+        .appearance(appearance)
+        // Phase 8 / Step 9 — when `appearance` flips, every semantic colour
+        // resolved against the new theme is interpolated for 0.30 s instead
+        // of snapping. Yields a cross-fade across the entire window.
+        .animation(.easeInOut(duration: 0.30), value: appearance)
     }
 }
 

@@ -33,10 +33,10 @@ public struct Button<Label: View>: View {
     }
 
     public var body: some View {
-        ButtonHost(role: role,
-                   isEnabled: isEnabled,
-                   action: action,
-                   label: AnyView(label))
+        _StatefulButton(role: role,
+                        isEnabled: isEnabled,
+                        action: action,
+                        label: AnyView(label))
     }
 }
 
@@ -52,17 +52,66 @@ public extension Button where Label == Text {
     }
 }
 
-// MARK: - ButtonHost
+// MARK: - StatefulButton
 
-/// The actual primitive node behind `Button`. Owns hit-testing and the
-/// pressed-state flag; on every `_updateNode` it resolves the configured
-/// style + active theme from CompositionLocals and re-derives its child via
-/// `style.makeBody(configuration:)`.
-struct ButtonHost: _PrimitiveView {
+/// User-view wrapper around `ButtonHost` that owns `@State` for press / hover.
+/// Press transitions go through `Recomposer.invalidate` (because `@State`
+/// writes do), which is what lets `.animation(_:value:)` inside the active
+/// `ButtonStyle` body see a value change and animate the colour swap.
+struct _StatefulButton: View {
     let role: ButtonRole
     let isEnabled: Bool
     let action: () -> Void
     let label: AnyView
+
+    @State var isPressed: Bool = false
+    @State var isHovered: Bool = false
+
+    var body: some View {
+        ButtonHost(
+            role: role,
+            isEnabled: isEnabled,
+            isPressed: isEnabled ? isPressed : false,
+            isHovered: isEnabled ? isHovered : false,
+            label: label,
+            onHoverChange: { hovered in
+                if isHovered != hovered {
+                    isHovered = hovered
+                }
+            },
+            onDown: {
+                if !isPressed {
+                    isPressed = true
+                }
+            },
+            onUp: { [action] in
+                // Capture-then-clear so the pointer handler can both report
+                // whether the gesture completed (action fires only on a true
+                // down → up sequence) and update `isPressed` in one mutation.
+                let was = isPressed
+                isPressed = false
+                if was { action(); return true }
+                return false
+            }
+        )
+    }
+}
+
+// MARK: - ButtonHost
+
+/// The actual primitive node behind `Button`. Owns hit-testing; the
+/// `isPressed` flag is now passed in by `_StatefulButton` (driven by
+/// `@State`) so press transitions invalidate the owning scope and
+/// re-evaluate `_children(for:)` with the new configuration.
+struct ButtonHost: _PrimitiveView {
+    let role: ButtonRole
+    let isEnabled: Bool
+    let isPressed: Bool
+    let isHovered: Bool
+    let label: AnyView
+    let onHoverChange: (Bool) -> Void
+    let onDown: () -> Void
+    let onUp: () -> Bool
 
     func _makeNode() -> Node {
         let n = Node()
@@ -72,31 +121,35 @@ struct ButtonHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        // Mirror the latest `isPressed` onto attachments so external test
+        // helpers and inspectors that walked the tree under the old contract
+        // can still read it. Production read path is the `_children(for:)`
+        // configuration field.
+        node.attachments[ButtonHost.pressedKey] = isPressed
+        node.attachments[ButtonHost.hoveredKey] = isHovered
+
         guard isEnabled, let registry = InteractionRegistryHolder.current else {
-            // Disabled: clear any prior handler so taps no-op silently.
             InteractionRegistryHolder.current?.remove(node)
-            node.attachments[ButtonHost.pressedKey] = false
             return
         }
-        let captured = action
-        // Pressed flag lives on `node.attachments` so it survives same-shape
-        // recompose; flipping it triggers `markDirty()` which the Recomposer
-        // collapses into the next frame.
+        let hoverChange = onHoverChange
+        let down = onDown
+        let up = onUp
+        registry.setHover(node) { phase in
+            switch phase {
+            case .enter:
+                hoverChange(true)
+            case .leave:
+                hoverChange(false)
+            }
+        }
         registry.setPointer(node) { _, phase, _ in
             switch phase {
             case .down:
-                node.attachments[ButtonHost.pressedKey] = true
-                node.markDirty()
+                down()
                 return .handled
             case .up:
-                let wasPressed = (node.attachments[ButtonHost.pressedKey] as? Bool) ?? false
-                node.attachments[ButtonHost.pressedKey] = false
-                node.markDirty()
-                if wasPressed {
-                    captured()
-                    return .handled
-                }
-                return .ignored
+                return up() ? .handled : .ignored
             }
         }
     }
@@ -114,13 +167,12 @@ struct ButtonHost: _PrimitiveView {
     func _children(for node: Node) -> [any View] {
         let style = node.compositionValue(of: ButtonStyleEnvironment.key)
         let theme = node.theme
-        let isPressed = (node.attachments[ButtonHost.pressedKey] as? Bool) ?? false
         let isFocused = (FocusChainHolder.current?.focused === node)
         let config = ButtonStyleConfiguration(
             label:      label,
             role:       role,
             isPressed:  isPressed,
-            isHovered:  false,         // hover events are not yet plumbed.
+            isHovered:  isHovered,
             isFocused:  isFocused,
             isEnabled:  isEnabled,
             theme:      theme
@@ -129,5 +181,5 @@ struct ButtonHost: _PrimitiveView {
     }
 
     static let pressedKey = "__button_pressed"
+    static let hoveredKey = "__button_hovered"
 }
-import GuavaUIRuntime
