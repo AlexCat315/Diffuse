@@ -99,7 +99,13 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         graph.computeLayout(width: 240, height: 160)
 
         buttons = orderedPointerNodes(in: tree.root!, registry: registry)
-        let selectedRows = buttons.filter { $0.backgroundColor != nil }
+        // The selection fill now lives on the row style's body (one descendant
+        // below the host pointer node) — walk into the styled subtree to count
+        // selected backgrounds.
+        let selectedRows = buttons.filter { host in
+            host.children.contains { $0.backgroundColor != nil }
+                || host.children.flatMap(\.children).contains { $0.backgroundColor != nil }
+        }
         #expect(selectedRows.count == 1)
     } }
 

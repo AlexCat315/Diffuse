@@ -14,7 +14,16 @@ import Foundation
 /// instance — see blueprint §9.4 windowing strategy.
 public final class Recomposer: @unchecked Sendable {
 
-    private var pending: [(id: ObjectIdentifier, body: () -> Void)] = []
+    private struct PendingScope {
+        let id: ObjectIdentifier
+        let body: () -> Void
+        /// Animation captured at write time. Re-established by `commitAll`
+        /// before invoking `body` so modifier `apply` paths observe the same
+        /// animation that the user authored at the call site.
+        let animation: Animation?
+    }
+
+    private var pending: [PendingScope] = []
     private let lock = NSLock()
 
     public init() {}
@@ -25,11 +34,15 @@ public final class Recomposer: @unchecked Sendable {
     ///
     /// If `scopeID` is already queued for this frame the call is a no-op,
     /// so each scope recomposes at most once per frame regardless of how many
-    /// state writes occur.
-    public func invalidate(scopeID: ObjectIdentifier, body: @escaping () -> Void) {
+    /// state writes occur. `animation` defaults to `nil`; when non-nil,
+    /// `commitAll` installs it as the active animation context for the
+    /// duration of `body`.
+    public func invalidate(scopeID: ObjectIdentifier,
+                           animation: Animation? = nil,
+                           body: @escaping () -> Void) {
         lock.withLock {
             guard !pending.contains(where: { $0.id == scopeID }) else { return }
-            pending.append((id: scopeID, body: body))
+            pending.append(PendingScope(id: scopeID, body: body, animation: animation))
         }
     }
 
@@ -44,7 +57,11 @@ public final class Recomposer: @unchecked Sendable {
             pending = []
             return s
         }
-        for scope in scopes { scope.body() }
+        for scope in scopes {
+            ActiveAnimationContext.with(scope.animation) {
+                scope.body()
+            }
+        }
     }
 
     /// `true` when there are pending recomposes queued for the next `commitAll()`.

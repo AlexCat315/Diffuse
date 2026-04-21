@@ -152,15 +152,17 @@ public struct Text: _PrimitiveView {
 }
 
 /// Thin one-pixel separator. Renders as a coloured rect; defaults to a flexible
-/// horizontal line when placed in a Column.
+/// horizontal line when placed in a Column. When `color` is omitted, the
+/// divider resolves `theme.colors.divider` from the active theme so themed
+/// scopes paint a coherent rule colour without any plumbing at the call site.
 public struct Divider: _PrimitiveView {
-    public let color: Color
+    public let color: Color?
     public let thickness: Float
     public let axis: Axis
 
     public enum Axis { case horizontal, vertical }
 
-    public init(color: Color = Color(r: 0.7, g: 0.7, b: 0.7),
+    public init(color: Color? = nil,
                 thickness: Float = 1,
                 axis: Axis = .horizontal) {
         self.color = color
@@ -175,7 +177,7 @@ public struct Divider: _PrimitiveView {
     }
 
     public func _updateNode(_ node: Node) {
-        node.backgroundColor = color
+        node.backgroundColor = color ?? node.theme.colors.divider
     }
 
     public func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
