@@ -124,16 +124,37 @@ struct RootView: View {
         }
     }
 
+    // The dock controller drives the 3-pane chrome (sidebar / workspace /
+    // inspector). Tabs are addressed by a string key so the demo stays
+    // decoupled from the layout tree shape.
+    static func makeDefaultLayout() -> DockLayoutNode {
+        let sidebar   = DockTab(userKey: "sidebar",   title: "Navigator")
+        let workspace = DockTab(userKey: "workspace", title: "Workspace")
+        let inspector = DockTab(userKey: "inspector", title: "Inspector")
+        return .hsplit(fraction: 0.18,
+            first: .tabs([sidebar]),
+            second: .hsplit(fraction: 0.74,
+                first: .tabs([workspace]),
+                second: .tabs([inspector])))
+    }
+
+    let dockController: DockController = {
+        let controller = DockController(root: makeDefaultLayout())
+        if let snapshot = DemoLayoutPersistence.load() {
+            controller.load(snapshot)
+        }
+        return controller
+    }()
+
     var body: some View {
         Box(direction: .column, alignItems: .stretch) {
             topBar
-            SplitView(.horizontal, fraction: 0.18) {
-                sidebar
-            } second: {
-                SplitView(.horizontal, fraction: 0.74) {
-                    workspace
-                } second: {
-                    inspector
+            DockContainer(controller: dockController) { [self] key in
+                switch key {
+                case "sidebar":   return AnyView(sidebar)
+                case "workspace": return AnyView(workspace)
+                case "inspector": return AnyView(inspector)
+                default:          return AnyView(EmptyView())
                 }
             }
             .flex()
@@ -163,6 +184,21 @@ struct RootView: View {
                 .font(.body)
                 .foregroundColor(.onSurfaceVariant)
             Spacer(minLength: 0)
+            Button("Save") { [self] in
+                try? DemoLayoutPersistence.save(dockController.snapshot())
+            }
+            .buttonStyle(.ghost)
+            Button("Load") { [self] in
+                if let snapshot = DemoLayoutPersistence.load() {
+                    dockController.load(snapshot)
+                }
+            }
+            .buttonStyle(.ghost)
+            Button("Reset") { [self] in
+                DemoLayoutPersistence.delete()
+                dockController.replace(root: Self.makeDefaultLayout())
+            }
+            .buttonStyle(.ghost)
             Button("Run") { clickCount += 1 }
             Button("Inspect") { clickCount += 1 }
                 .buttonStyle(.secondary)

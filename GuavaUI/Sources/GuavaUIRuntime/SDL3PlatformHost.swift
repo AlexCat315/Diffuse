@@ -1,25 +1,100 @@
+import EngineKernel
 import Foundation
 import Logging
 import PlatformShell
-import EngineKernel
+
+@MainActor
+public final class PlatformWindowSession {
+    public let id: WindowID
+    public let tree: NodeTree
+    public let recomposer: Recomposer
+    public let inputContext: PlatformInputContext
+
+    fileprivate let dispatcher: EventDispatcher
+    fileprivate var didCallOnInit = false
+    fileprivate var lastTextInputArea: TextInputArea?
+
+    public private(set) var drawableSize: (width: UInt32, height: UInt32)
+    public private(set) var logicalSize: (width: UInt32, height: UInt32)
+
+    public var interactions: InteractionRegistry { inputContext.interactions }
+    public var pointerCapture: PointerCapture { inputContext.pointerCapture }
+    public var focusChain: FocusChain { inputContext.focusChain }
+
+    public var contentScaleFactor: Float {
+        let logicalWidth = max(logicalSize.width, 1)
+        return Float(drawableSize.width) / Float(logicalWidth)
+    }
+
+    public var onFrame: (@MainActor (NativeRenderSurface) -> Void)?
+    public var onInit: (@MainActor (NativeRenderSurface, _ widthPx: UInt32, _ heightPx: UInt32) -> Void)?
+    public var onResize: (@MainActor (UInt32, UInt32) -> Void)?
+    public var onEvent: (@MainActor (InputEvent) -> Void)?
+
+    fileprivate init(id: WindowID,
+                     tree: NodeTree,
+                     recomposer: Recomposer,
+                     inputContext: PlatformInputContext,
+                     drawableSize: (width: UInt32, height: UInt32),
+                     logicalSize: (width: UInt32, height: UInt32)) {
+        self.id = id
+        self.tree = tree
+        self.recomposer = recomposer
+        self.inputContext = inputContext
+        self.drawableSize = drawableSize
+        self.logicalSize = logicalSize
+        self.dispatcher = EventDispatcher(
+            tree: tree,
+            interactions: inputContext.interactions,
+            capture: inputContext.pointerCapture,
+            focusChain: inputContext.focusChain,
+            windowID: id
+        )
+    }
+
+    @discardableResult
+    public func withCurrent<R>(_ body: () throws -> R) rethrows -> R {
+        try inputContext.withCurrent(body)
+    }
+
+    fileprivate func updateMetrics(from handle: any WindowHandle) -> Bool {
+        let nextDrawable = handle.drawableSize
+        let nextLogical = handle.logicalSize
+        guard nextDrawable != drawableSize || nextLogical != logicalSize else {
+            return false
+        }
+        drawableSize = nextDrawable
+        logicalSize = nextLogical
+        return true
+    }
+}
 
 /// `PlatformHost` backed by SDL3 via Engine's `PlatformShell`.
 ///
-/// Opens a native window, polls SDL3 events, and drives `Recomposer` + `NodeTree`
-/// every frame. GPU draw submission (DrawList → wgpu) is added in Phase 5.
+/// The host keeps one runtime session per native window: each session owns its
+/// own `NodeTree`, `Recomposer`, input registry, focus chain and capture state.
+/// The main-window convenience properties remain for existing single-window
+/// demos and tests.
 @MainActor
 public final class SDL3PlatformHost: PlatformHost {
-
     private let title: String
-    public let recomposer: Recomposer
-    public let interactions: InteractionRegistry
-    public let pointerCapture: PointerCapture
-    public let focusChain: FocusChain
+    private let shellFactory: @MainActor () throws -> any Shell
+    private let mainInputContext: PlatformInputContext
+    private let mainRecomposer: Recomposer
+
     private var shell: (any Shell)?
+    private var sessions: [WindowID: PlatformWindowSession] = [:]
+    private var sessionOrder: [WindowID] = []
+    private var mainWindowID: WindowID?
     private var _isRunning: Bool = false
+
+    public var recomposer: Recomposer { mainRecomposer }
+    public var interactions: InteractionRegistry { mainInputContext.interactions }
+    public var pointerCapture: PointerCapture { mainInputContext.pointerCapture }
+    public var focusChain: FocusChain { mainInputContext.focusChain }
+
     public private(set) var drawableSize: (width: UInt32, height: UInt32) = (1, 1)
     public private(set) var logicalSize: (width: UInt32, height: UInt32) = (1, 1)
-    private var lastTextInputArea: TextInputArea?
 
     public var isRunning: Bool { _isRunning }
     public var contentScaleFactor: Float {
@@ -27,128 +102,254 @@ public final class SDL3PlatformHost: PlatformHost {
         return Float(drawableSize.width) / Float(logicalWidth)
     }
 
-    /// Called each frame with the native render surface. Set this to submit GPU work.
     public var onFrame: (@MainActor (NativeRenderSurface) -> Void)?
-
-    /// Called once after the window is created, with the initial render surface
-    /// and drawable size. Use this to build pipelines and upload static textures.
     public var onInit: (@MainActor (NativeRenderSurface, _ widthPx: UInt32, _ heightPx: UInt32) -> Void)?
-
-    /// Called when the window's drawable size changes. Use this to reconfigure
-    /// surface, depth buffer, etc.
     public var onResize: (@MainActor (UInt32, UInt32) -> Void)?
-
-    /// Optional inspector hook for unhandled platform events (debugging, custom
-    /// shortcuts). Called after `EventDispatcher` has run.
     public var onEvent: (@MainActor (InputEvent) -> Void)?
 
-    /// - Parameters:
-    ///   - title: Window title bar text.
-    ///   - recomposer: The recomposer to drain each frame. A fresh instance per
-    ///     host by default; pass an existing one only for cross-host coordination
-    ///     (currently no use case — see blueprint §9.4).
-    public init(title: String = "GuavaUI", recomposer: Recomposer = Recomposer()) {
+    public init(title: String = "GuavaUI",
+                recomposer: Recomposer = Recomposer(),
+                inputContext: PlatformInputContext = PlatformInputContext(),
+                shellFactory: @escaping @MainActor () throws -> any Shell = { try makeDefaultShell() }) {
         self.title = title
-        self.recomposer = recomposer
-        self.interactions = InteractionRegistry()
-        self.pointerCapture = PointerCapture()
-        self.focusChain = FocusChain()
+        self.mainRecomposer = recomposer
+        self.mainInputContext = inputContext
+        self.shellFactory = shellFactory
     }
 
-    /// Open the window and block until the user closes it or `stop()` is called.
+    /// Open an additional window and register a runtime session for it.
+    @discardableResult
+    public func openWindow(title: String,
+                           tree: NodeTree,
+                           recomposer: Recomposer = Recomposer(),
+                           inputContext: PlatformInputContext = PlatformInputContext(),
+                           options: WindowOptions = WindowOptions()) throws -> PlatformWindowSession {
+        let shell = try resolveShell()
+        let handle = try shell.createWindow(title: title, options: options)
+        let session = makeSession(handle: handle,
+                                  tree: tree,
+                                  recomposer: recomposer,
+                                  inputContext: inputContext,
+                                  isMain: mainWindowID == nil)
+        return session
+    }
+
+    public func session(for windowID: WindowID) -> PlatformWindowSession? {
+        sessions[windowID]
+    }
+
+    public var windowIDs: [WindowID] {
+        sessionOrder.filter { sessions[$0] != nil }
+    }
+
+    /// Desktop position of `windowID`'s upper-left corner, in window-manager
+    /// coordinates. Returns `nil` if the shell is not yet initialised or the
+    /// window has been closed.
+    public func windowPosition(_ windowID: WindowID) -> (x: Float, y: Float)? {
+        shell?.windowPosition(windowID)
+    }
+
+    /// Move `windowID` to a desktop position.
+    public func setWindowPosition(_ windowID: WindowID, x: Float, y: Float) {
+        shell?.setWindowPosition(windowID, x: x, y: y)
+    }
+
+    /// Destroy a window. The matching `PlatformWindowSession` is dropped on
+    /// the next iteration of the run loop via `pruneClosedSessions`.
+    public func closeWindow(_ windowID: WindowID) {
+        shell?.destroyWindow(windowID)
+    }
+
+    /// Open the main window and block until all registered windows close or
+    /// `stop()` is called.
     public func run(tree: NodeTree) {
-        let host: any Shell
         do {
-            host = try makeDefaultShell()
-            try host.initializeWindow(title: title)
+            _ = try ensureMainSession(tree: tree)
+            runLoop()
         } catch {
             Logger.runtime.error("window open failed: \(error)")
+        }
+    }
+
+    /// Enter the run loop after windows were created through `openWindow`.
+    public func run() {
+        guard !sessions.isEmpty else {
+            Logger.runtime.error("run() called without any registered windows")
             return
         }
-        shell = host
-        updateMetrics(from: host)
-        _isRunning = true
-        let _title = title
-        Logger.runtime.info("running — \(_title)")
-
-        // Build the per-tree dispatcher.
-        let dispatcher = EventDispatcher(
-            tree: tree,
-            interactions: interactions,
-            capture: pointerCapture,
-            focusChain: focusChain,
-            windowID: .main
-        )
-        dispatcher.cursorSink = { [weak host] cursor in
-            host?.setCursor(cursor)
-        }
-
-        // Fire onInit once after the window is fully realised.
-        if let surface = host.renderSurface {
-            onInit?(surface, drawableSize.width, drawableSize.height)
-        }
-        var lastDrawableSize = drawableSize
-        var lastLogicalSize = logicalSize
-        var lastFrameTime = Date()
-
-        while host.isRunning && _isRunning {
-            // Compute frame deltaTime in seconds for the animator.
-            let now = Date()
-            let deltaTime = now.timeIntervalSince(lastFrameTime)
-            lastFrameTime = now
-
-            // 1. Execute pending state-driven recomposes (may register new
-            //    animation controllers via modifier-apply paths).
-            recomposer.commitAll()
-            // 2. Advance any active animations and write interpolated values
-            //    onto nodes before the dirty flush picks them up.
-            AnimatorScheduler.current.tick(deltaTime: deltaTime)
-            // 3. Flush dirty nodes (layout + draw callbacks in later phases).
-            tree.flush()
-            // 4. Detect resize and notify.
-            let curDrawableSize = host.drawableSize
-            let curLogicalSize = host.logicalSize
-            if curDrawableSize != lastDrawableSize || curLogicalSize != lastLogicalSize {
-                drawableSize = curDrawableSize
-                logicalSize = curLogicalSize
-                onResize?(curDrawableSize.width, curDrawableSize.height)
-                lastDrawableSize = curDrawableSize
-                lastLogicalSize = curLogicalSize
-            }
-            // 5. Render frame if callback is set.
-            if let surface = host.renderSurface {
-                onFrame?(surface)
-            }
-            syncTextInputArea()
-            // 6. Drain platform events through the dispatcher.
-            for event in host.pollEvents() {
-                dispatcher.dispatch(event)
-                onEvent?(event)
-            }
-        }
-
-        _isRunning = false
-        host.shutdown()
-        shell = nil
-        Logger.runtime.info("stopped")
+        runLoop()
     }
 
     public func stop() {
         _isRunning = false
     }
 
-    private func updateMetrics(from host: any Shell) {
-        drawableSize = host.drawableSize
-        logicalSize = host.logicalSize
-    }
-
-    private func syncTextInputArea() {
+    private func runLoop() {
         guard let shell else { return }
 
-        let area = focusChain.focused?.attachments[TextInputAttachmentKey.area] as? TextInputArea
-        guard area != lastTextInputArea else { return }
+        _isRunning = true
+        Logger.runtime.info("running — \(title)")
+        var lastFrameTime = Date()
 
-        shell.setTextInputArea(area)
-        lastTextInputArea = area
+        while _isRunning && shell.isRunning && !sessions.isEmpty {
+            let now = Date()
+            let deltaTime = now.timeIntervalSince(lastFrameTime)
+            lastFrameTime = now
+
+            for id in sessionOrder {
+                guard let session = sessions[id] else { continue }
+                session.withCurrent {
+                    session.recomposer.commitAll()
+                }
+            }
+
+            AnimatorScheduler.current.tick(deltaTime: deltaTime)
+
+            for id in sessionOrder {
+                guard let session = sessions[id],
+                      let handle = shell.window(for: id)
+                else { continue }
+
+                session.withCurrent {
+                    session.tree.flush()
+                }
+
+                if session.updateMetrics(from: handle) {
+                    session.onResize?(session.drawableSize.width, session.drawableSize.height)
+                    if id == mainWindowID {
+                        drawableSize = session.drawableSize
+                        logicalSize = session.logicalSize
+                        onResize?(session.drawableSize.width, session.drawableSize.height)
+                    }
+                }
+
+                if !session.didCallOnInit, let surface = handle.renderSurface {
+                    session.didCallOnInit = true
+                    session.onInit?(surface, session.drawableSize.width, session.drawableSize.height)
+                    if id == mainWindowID {
+                        onInit?(surface, session.drawableSize.width, session.drawableSize.height)
+                    }
+                }
+
+                if let surface = handle.renderSurface {
+                    session.onFrame?(surface)
+                    if id == mainWindowID {
+                        onFrame?(surface)
+                    }
+                }
+
+                syncTextInputArea(for: session, shell: shell)
+            }
+
+            for routed in shell.pollWindowEvents() {
+                guard let session = sessions[routed.windowID] else { continue }
+                session.withCurrent {
+                    session.dispatcher.dispatch(routed.event)
+                    session.onEvent?(routed.event)
+                    if routed.windowID == mainWindowID {
+                        onEvent?(routed.event)
+                    }
+                }
+            }
+
+            pruneClosedSessions(using: shell)
+        }
+
+        _isRunning = false
+        shell.shutdown()
+        self.shell = nil
+        sessions.removeAll()
+        sessionOrder.removeAll()
+        mainWindowID = nil
+        drawableSize = (1, 1)
+        logicalSize = (1, 1)
+        Logger.runtime.info("stopped")
+    }
+
+    private func resolveShell() throws -> any Shell {
+        if let shell {
+            return shell
+        }
+        let created = try shellFactory()
+        shell = created
+        return created
+    }
+
+    private func ensureMainSession(tree: NodeTree) throws -> PlatformWindowSession {
+        if let mainWindowID, let session = sessions[mainWindowID] {
+            return session
+        }
+
+        let shell = try resolveShell()
+        try shell.initializeWindow(title: title)
+        guard let mainWindowID = shell.mainWindowID,
+              let handle = shell.window(for: mainWindowID) else {
+            throw ShellError.initializationFailed("main window was not registered after initializeWindow")
+        }
+
+        let session = makeSession(handle: handle,
+                                  tree: tree,
+                                  recomposer: mainRecomposer,
+                                  inputContext: mainInputContext,
+                                  isMain: true)
+        return session
+    }
+
+    private func makeSession(handle: any WindowHandle,
+                             tree: NodeTree,
+                             recomposer: Recomposer,
+                             inputContext: PlatformInputContext,
+                             isMain: Bool) -> PlatformWindowSession {
+        let session = PlatformWindowSession(
+            id: handle.id,
+            tree: tree,
+            recomposer: recomposer,
+            inputContext: inputContext,
+            drawableSize: handle.drawableSize,
+            logicalSize: handle.logicalSize
+        )
+        session.dispatcher.cursorSink = { [weak self] cursor in
+            self?.shell?.setCursor(windowID: handle.id, cursor)
+        }
+
+        sessions[handle.id] = session
+        sessionOrder.removeAll { $0 == handle.id }
+        sessionOrder.append(handle.id)
+
+        if isMain {
+            mainWindowID = handle.id
+            drawableSize = handle.drawableSize
+            logicalSize = handle.logicalSize
+        }
+
+        return session
+    }
+
+    private func pruneClosedSessions(using shell: any Shell) {
+        let liveIDs = Set(shell.windowIDs)
+        let staleIDs = sessions.keys.filter { !liveIDs.contains($0) }
+        for id in staleIDs {
+            sessions.removeValue(forKey: id)
+            sessionOrder.removeAll { $0 == id }
+            if mainWindowID == id {
+                mainWindowID = sessionOrder.first
+                if let replacement = mainWindowID.flatMap({ sessions[$0] }) {
+                    drawableSize = replacement.drawableSize
+                    logicalSize = replacement.logicalSize
+                } else {
+                    drawableSize = (1, 1)
+                    logicalSize = (1, 1)
+                }
+            }
+        }
+    }
+
+    private func syncTextInputArea(for session: PlatformWindowSession,
+                                   shell: any Shell) {
+        let area = session.focusChain.focused?.attachments[TextInputAttachmentKey.area] as? TextInputArea
+        guard area != session.lastTextInputArea else { return }
+
+        shell.setTextInputArea(windowID: session.id, area)
+        session.lastTextInputArea = area
     }
 }

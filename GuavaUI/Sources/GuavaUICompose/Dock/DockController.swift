@@ -1,0 +1,542 @@
+import Foundation
+
+/// A drop target description used by drag operations and `DockController.move`.
+///
+/// `tabSlot` inserts the moved tab into an existing tabs leaf at the given
+/// index; `splitEdge` splits the target leaf along the requested edge,
+/// placing the moved tab in the new sibling leaf; `replace` swaps the target
+/// leaf for a fresh tabs leaf containing the moved tab (used for
+/// `.center` drops on an `.empty` placeholder).
+public enum DockDropTarget: Sendable, Equatable {
+    case tabSlot(parent: DockNodeID, index: Int)
+    case splitEdge(target: DockNodeID, edge: DockEdge)
+    case replace(target: DockNodeID)
+}
+
+/// All mutating intents on a `DockController`. Operations are deterministic
+/// and serialisable so they can be replayed for undo / persistence.
+public enum DockOperation: Sendable {
+    /// Insert a brand-new tab into an existing tabs leaf at `index`. Out-of-
+    /// range indices are clamped.
+    case insertTab(DockTab, into: DockNodeID, at: Int)
+    /// Move an existing tab to a new drop target. Source leaf is collapsed
+    /// if it becomes empty as a result.
+    case move(tabID: DockTabID, to: DockDropTarget)
+    /// Remove a tab. Source leaf is collapsed if it becomes empty.
+    case closeTab(DockTabID)
+    /// Set the active tab of a tabs leaf. No-op if the tab is not in the leaf.
+    case setActive(node: DockNodeID, tab: DockTabID)
+    /// Resize a split node. Fraction is clamped to `[0.05, 0.95]`.
+    case resizeSplit(node: DockNodeID, fraction: Float)
+
+    /// Detach a tabs leaf from the main tree and store it as a satellite
+    /// keyed by the leaf's existing `DockNodeID`. Source split collapses
+    /// the same way as `move`. No-op if `leafID` is not a `.tabs` leaf,
+    /// is the root, or is already a satellite.
+    case detach(leafID: DockNodeID)
+
+    /// Re-insert a previously detached satellite back into the main tree at
+    /// `target`. The satellite leaf retains its tabs and `DockNodeID`. When
+    /// `target` references a `.tabs` leaf the satellite's tabs are appended
+    /// individually starting at the target index. Otherwise the satellite
+    /// leaf is grafted whole at the requested edge / replace slot.
+    case redock(satelliteID: DockNodeID, to: DockDropTarget)
+
+    /// Drop a satellite from the registry without re-inserting it (e.g. the
+    /// user closed the floating window).
+    case closeSatellite(DockNodeID)
+}
+
+/// Owner of a `DockLayoutNode` tree. Reference type; callers (the demo, the
+/// editor, …) hold one instance and feed it `DockOperation`s.
+///
+/// Mutations bump `version` and fire `onChange`. The companion
+/// `DockContainer` view subscribes to `onChange` to drive recompose, which
+/// keeps the controller free of any view-graph dependency.
+public final class DockController: @unchecked Sendable {
+
+    public private(set) var root: DockLayoutNode
+    public private(set) var version: UInt64 = 0
+
+    /// Detached leaves keyed by their original `DockNodeID`. Each entry is
+    /// a `.tabs` subtree that has been removed from `root` by `.detach` and
+    /// is awaiting either `.redock` or `.closeSatellite`.
+    public private(set) var satellites: [DockNodeID: DockLayoutNode] = [:]
+
+    /// Stable ordering for the satellites dictionary. Insertion order is
+    /// preserved across encode / decode so callers iterating for UI
+    /// (e.g. spawning floating windows) get a deterministic sequence.
+    public private(set) var satelliteOrder: [DockNodeID] = []
+
+    /// Token returned by `subscribe` and consumed by `unsubscribe`. Opaque.
+    public struct SubscriptionToken: Hashable, Sendable {
+        let raw: UInt64
+    }
+
+    private var subscribers: [SubscriptionToken: (DockController) -> Void] = [:]
+    private var nextSubscriberID: UInt64 = 0
+
+    /// Convenience setter that replaces every subscriber with a single handler.
+    /// Equivalent to `unsubscribe`-ing all current handlers and then `subscribe`-ing
+    /// the supplied closure (or no-op when `nil`).
+    public var onChange: ((DockController) -> Void)? {
+        get { nil }
+        set {
+            subscribers.removeAll()
+            if let handler = newValue {
+                _ = subscribe(handler)
+            }
+        }
+    }
+
+    public init(root: DockLayoutNode) {
+        self.root = root
+        let session = DockDragSession()
+        self.dragSession = session
+        session.attach(controller: self)
+    }
+
+    /// Per-leaf node registry. Populated by `_DockTabsLeaf` /
+    /// `_DockEmptyLeaf` as they materialise; used by drag hit-testing.
+    /// In multi-window setups the cluster-wide `DockHostCoordinator`
+    /// registers its own per-host registries; this field stays for
+    /// single-window callers and tests.
+    public let hitRegistry = DockHitRegistry()
+
+    /// Active drag interaction. Single instance per controller; reused
+    /// across drags by calling `start` / `end`.
+    public let dragSession: DockDragSession
+
+    /// Register a change handler. Returns a token that can later be passed to
+    /// `unsubscribe(_:)` to detach. Multiple subscribers coexist; each one
+    /// receives every mutation in registration order.
+    @discardableResult
+    public func subscribe(_ handler: @escaping (DockController) -> Void) -> SubscriptionToken {
+        nextSubscriberID &+= 1
+        let token = SubscriptionToken(raw: nextSubscriberID)
+        subscribers[token] = handler
+        return token
+    }
+
+    public func unsubscribe(_ token: SubscriptionToken) {
+        subscribers.removeValue(forKey: token)
+    }
+
+    // MARK: - Public mutation
+
+    public func apply(_ op: DockOperation) {
+        let next: DockLayoutNode
+        switch op {
+        case .insertTab(let tab, let parent, let index):
+            next = Self.insertTab(tab, into: parent, at: index, in: root)
+        case .move(let tabID, let target):
+            next = Self.move(tabID: tabID, to: target, in: root)
+        case .closeTab(let tabID):
+            next = Self.closeTab(tabID, in: root)
+        case .setActive(let node, let tab):
+            next = Self.setActive(node: node, tab: tab, in: root)
+        case .resizeSplit(let node, let fraction):
+            next = Self.resizeSplit(node: node, fraction: fraction, in: root)
+        case .detach(let leafID):
+            applyDetach(leafID: leafID)
+            return
+        case .redock(let satelliteID, let target):
+            applyRedock(satelliteID: satelliteID, to: target)
+            return
+        case .closeSatellite(let satelliteID):
+            applyCloseSatellite(satelliteID: satelliteID)
+            return
+        }
+        guard next != root else { return }
+        root = next
+        version &+= 1
+        notifyChange()
+    }
+
+    // MARK: - Satellite operations
+
+    private func applyDetach(leafID: DockNodeID) {
+        // Already detached — no-op.
+        guard satellites[leafID] == nil else { return }
+        // Resolve the leaf inside `root` and ensure it's a tabs leaf with
+        // at least one tab. Detaching empty placeholders or split nodes is
+        // refused (semantics unclear; would create a tab-less floating
+        // window).
+        guard let found = Self.findNode(leafID, in: root),
+              case .tabs(_, let tabs, _) = found, !tabs.isEmpty else {
+            return
+        }
+        guard let removed = Self.removeNode(leafID, from: root) else {
+            return
+        }
+        let stripped = removed.0
+        guard let stripped else {
+            // `removeNode` refuses to leave an empty root — treat the leaf
+            // as the only content; cannot detach the only leaf.
+            return
+        }
+        root = stripped
+        satellites[leafID] = found
+        satelliteOrder.append(leafID)
+        version &+= 1
+        notifyChange()
+    }
+
+    private func applyRedock(satelliteID: DockNodeID, to target: DockDropTarget) {
+        guard let satellite = satellites[satelliteID] else { return }
+        guard case .tabs(_, let tabs, let active) = satellite, !tabs.isEmpty else {
+            // Drop a malformed satellite silently; closeSatellite is the
+            // sanctioned cleanup path.
+            return
+        }
+        var nextRoot = root
+        switch target {
+        case .tabSlot(let parent, let index):
+            // Append tabs into the target leaf in order, preserving
+            // satellite order and pinning the formerly-active tab as
+            // active in the merged leaf.
+            for (offset, tab) in tabs.enumerated() {
+                nextRoot = Self.insertAtDropTarget(
+                    tab,
+                    target: .tabSlot(parent: parent, index: index + offset),
+                    in: nextRoot
+                )
+            }
+            if let active {
+                nextRoot = Self.setActive(node: parent, tab: active, in: nextRoot)
+            }
+        case .replace, .splitEdge:
+            // Graft the satellite subtree wholesale.
+            nextRoot = Self.insertSubtreeAtDropTarget(satellite, target: target, in: nextRoot)
+        }
+        // Drop the satellite from the registry first so subscribers see a
+        // consistent state when they react to the version bump.
+        satellites.removeValue(forKey: satelliteID)
+        satelliteOrder.removeAll { $0 == satelliteID }
+        if nextRoot != root { root = nextRoot }
+        version &+= 1
+        notifyChange()
+    }
+
+    private func applyCloseSatellite(satelliteID: DockNodeID) {
+        guard satellites.removeValue(forKey: satelliteID) != nil else { return }
+        satelliteOrder.removeAll { $0 == satelliteID }
+        version &+= 1
+        notifyChange()
+    }
+
+    /// Replace the entire tree (used by load-from-disk). Bumps `version`.
+    /// Optionally restores a satellite map captured by an earlier snapshot.
+    public func replace(root newRoot: DockLayoutNode,
+                        satellites newSatellites: [DockNodeID: DockLayoutNode] = [:],
+                        satelliteOrder newOrder: [DockNodeID] = []) {
+        let orderedSatellites = newOrder.isEmpty ? Array(newSatellites.keys) : newOrder
+        guard newRoot != root
+            || newSatellites != satellites
+            || orderedSatellites != satelliteOrder else { return }
+        root = newRoot
+        satellites = newSatellites
+        satelliteOrder = orderedSatellites.filter { newSatellites[$0] != nil }
+        version &+= 1
+        notifyChange()
+    }
+
+    private func notifyChange() {
+        // Snapshot to allow handlers to subscribe / unsubscribe during dispatch.
+        let snapshot = subscribers
+        for (_, handler) in snapshot {
+            handler(self)
+        }
+    }
+
+    // MARK: - Operation implementations
+
+    private static func insertTab(_ tab: DockTab,
+                                  into parent: DockNodeID,
+                                  at index: Int,
+                                  in tree: DockLayoutNode) -> DockLayoutNode {
+        return transform(tree) { node in
+            guard node.id == parent else { return nil }
+            switch node {
+            case .tabs(let id, var tabs, let active):
+                let i = max(0, min(tabs.count, index))
+                tabs.insert(tab, at: i)
+                return .tabs(id: id, tabs: tabs, activeTabID: active ?? tab.id)
+            case .empty(let id):
+                return .tabs(id: id, tabs: [tab], activeTabID: tab.id)
+            case .split:
+                return nil
+            }
+        }
+    }
+
+    private static func move(tabID: DockTabID,
+                             to target: DockDropTarget,
+                             in tree: DockLayoutNode) -> DockLayoutNode {
+        // 1. Locate and detach the tab from its source leaf.
+        guard let (detached, removed) = removeTab(tabID, from: tree) else {
+            return tree
+        }
+        let collapsed = collapseEmpty(detached)
+        // 2. Reinsert at the drop target.
+        return insertAtDropTarget(removed, target: target, in: collapsed)
+    }
+
+    private static func closeTab(_ tabID: DockTabID,
+                                 in tree: DockLayoutNode) -> DockLayoutNode {
+        guard let (detached, _) = removeTab(tabID, from: tree) else {
+            return tree
+        }
+        return collapseEmpty(detached)
+    }
+
+    private static func setActive(node: DockNodeID,
+                                  tab: DockTabID,
+                                  in tree: DockLayoutNode) -> DockLayoutNode {
+        return transform(tree) { n in
+            guard n.id == node else { return nil }
+            guard case .tabs(let id, let tabs, _) = n else { return nil }
+            guard tabs.contains(where: { $0.id == tab }) else { return nil }
+            return .tabs(id: id, tabs: tabs, activeTabID: tab)
+        }
+    }
+
+    private static func resizeSplit(node: DockNodeID,
+                                    fraction: Float,
+                                    in tree: DockLayoutNode) -> DockLayoutNode {
+        return transform(tree) { n in
+            guard n.id == node else { return nil }
+            guard case .split(let id, let axis, _, let f, let s) = n else { return nil }
+            return .split(id: id, axis: axis, fraction: clampFraction(fraction), first: f, second: s)
+        }
+    }
+
+    // MARK: - Tab removal / drop
+
+    /// Walk the tree, drop the tab if found, and return the new tree plus the
+    /// detached `DockTab`. Returns `nil` when the tab is not present.
+    private static func removeTab(_ tabID: DockTabID,
+                                  from tree: DockLayoutNode)
+    -> (DockLayoutNode, DockTab)? {
+        switch tree {
+        case .empty:
+            return nil
+        case .tabs(let id, var tabs, let active):
+            guard let idx = tabs.firstIndex(where: { $0.id == tabID }) else {
+                return nil
+            }
+            let removed = tabs.remove(at: idx)
+            let nextActive: DockTabID?
+            if tabs.isEmpty {
+                nextActive = nil
+            } else if active == tabID {
+                let neighbour = tabs[max(0, min(tabs.count - 1, idx))]
+                nextActive = neighbour.id
+            } else {
+                nextActive = active
+            }
+            return (.tabs(id: id, tabs: tabs, activeTabID: nextActive), removed)
+        case .split(let id, let axis, let frac, let first, let second):
+            if let (newFirst, removed) = removeTab(tabID, from: first) {
+                return (.split(id: id, axis: axis, fraction: frac, first: newFirst, second: second), removed)
+            }
+            if let (newSecond, removed) = removeTab(tabID, from: second) {
+                return (.split(id: id, axis: axis, fraction: frac, first: first, second: newSecond), removed)
+            }
+            return nil
+        }
+    }
+
+    /// Collapse `.tabs` leaves with zero tabs into `.empty`, then collapse
+    /// any `.split` whose child became `.empty` into the surviving sibling.
+    /// Preserves the IDs of surviving nodes.
+    private static func collapseEmpty(_ tree: DockLayoutNode) -> DockLayoutNode {
+        switch tree {
+        case .empty:
+            return tree
+        case .tabs(let id, let tabs, _):
+            if tabs.isEmpty { return .empty(id: id) }
+            return tree
+        case .split(let id, let axis, let frac, let first, let second):
+            let f = collapseEmpty(first)
+            let s = collapseEmpty(second)
+            // Both empty: collapse the split itself to a single empty leaf,
+            // reusing this split's ID so external references stay valid until
+            // the caller decides to clean up.
+            if case .empty = f, case .empty = s {
+                return .empty(id: id)
+            }
+            // One side empty: collapse to the other side.
+            if case .empty = f { return s }
+            if case .empty = s { return f }
+            return .split(id: id, axis: axis, fraction: frac, first: f, second: s)
+        }
+    }
+
+    private static func insertAtDropTarget(_ tab: DockTab,
+                                           target: DockDropTarget,
+                                           in tree: DockLayoutNode) -> DockLayoutNode {
+        switch target {
+        case .tabSlot(let parent, let index):
+            return transform(tree) { n in
+                guard n.id == parent else { return nil }
+                switch n {
+                case .tabs(let id, var tabs, _):
+                    let i = max(0, min(tabs.count, index))
+                    tabs.insert(tab, at: i)
+                    return .tabs(id: id, tabs: tabs, activeTabID: tab.id)
+                case .empty(let id):
+                    return .tabs(id: id, tabs: [tab], activeTabID: tab.id)
+                case .split:
+                    return nil
+                }
+            }
+        case .replace(let targetID):
+            return transform(tree) { n in
+                guard n.id == targetID else { return nil }
+                // Swap whatever is here for a fresh tabs leaf, reusing the ID.
+                return .tabs(id: n.id, tabs: [tab], activeTabID: tab.id)
+            }
+        case .splitEdge(let targetID, let edge):
+            if edge == .center {
+                return insertAtDropTarget(tab, target: .replace(target: targetID), in: tree)
+            }
+            return transform(tree) { n in
+                guard n.id == targetID else { return nil }
+                let newLeaf = DockLayoutNode.tabs([tab])
+                let axis: DockSplitAxis
+                let leafFirst: Bool
+                switch edge {
+                case .left:   axis = .horizontal; leafFirst = true
+                case .right:  axis = .horizontal; leafFirst = false
+                case .top:    axis = .vertical;   leafFirst = true
+                case .bottom: axis = .vertical;   leafFirst = false
+                case .center: fatalError("handled above")
+                }
+                return .split(
+                    id: DockNodeID(),
+                    axis: axis,
+                    fraction: 0.5,
+                    first: leafFirst ? newLeaf : n,
+                    second: leafFirst ? n : newLeaf
+                )
+            }
+        }
+    }
+
+    /// Locate a node by ID anywhere in the tree.
+    static func findNode(_ id: DockNodeID, in tree: DockLayoutNode) -> DockLayoutNode? {
+        if tree.id == id { return tree }
+        if case .split(_, _, _, let first, let second) = tree {
+            return findNode(id, in: first) ?? findNode(id, in: second)
+        }
+        return nil
+    }
+
+    /// Remove the node with `id` from the tree and return the resulting tree
+    /// alongside the removed subtree. The parent split is collapsed onto the
+    /// surviving sibling (so removing a leaf out of an `.hsplit` returns the
+    /// other leaf as the new root). Returns `(nil, removed)` if the removed
+    /// node WAS the root, since collapsing the root would leave nothing
+    /// meaningful for callers; they typically refuse the operation.
+    static func removeNode(_ id: DockNodeID,
+                           from tree: DockLayoutNode)
+    -> (DockLayoutNode?, DockLayoutNode)? {
+        if tree.id == id {
+            return (nil, tree)
+        }
+        switch tree {
+        case .empty, .tabs:
+            return nil
+        case .split(let nodeID, let axis, let frac, let first, let second):
+            if first.id == id {
+                return (second, first)
+            }
+            if second.id == id {
+                return (first, second)
+            }
+            if let (newFirst, removed) = removeNode(id, from: first) {
+                guard let newFirst else {
+                    // Should not happen \u2014 shallow `first.id == id` matches
+                    // earlier, deeper matches always rebuild a non-nil tree.
+                    return (second, removed)
+                }
+                return (.split(id: nodeID, axis: axis, fraction: frac, first: newFirst, second: second), removed)
+            }
+            if let (newSecond, removed) = removeNode(id, from: second) {
+                guard let newSecond else {
+                    return (first, removed)
+                }
+                return (.split(id: nodeID, axis: axis, fraction: frac, first: first, second: newSecond), removed)
+            }
+            return nil
+        }
+    }
+
+    /// Graft an entire subtree at a `.splitEdge` or `.replace` drop target.
+    /// `.tabSlot` is not handled here \u2014 callers must explode the satellite
+    /// into individual `insertAtDropTarget` calls so each tab is inserted at
+    /// the right index.
+    private static func insertSubtreeAtDropTarget(_ subtree: DockLayoutNode,
+                                                  target: DockDropTarget,
+                                                  in tree: DockLayoutNode) -> DockLayoutNode {
+        switch target {
+        case .tabSlot:
+            // Defensive fallback: splice the first tab if the satellite
+            // happens to be a tabs leaf. Higher-level callers should never
+            // hit this path.
+            if case .tabs(_, let tabs, _) = subtree, let first = tabs.first {
+                return insertAtDropTarget(first, target: target, in: tree)
+            }
+            return tree
+        case .replace(let targetID):
+            return transform(tree) { n in
+                guard n.id == targetID else { return nil }
+                return subtree
+            }
+        case .splitEdge(let targetID, let edge):
+            if edge == .center {
+                return insertSubtreeAtDropTarget(subtree, target: .replace(target: targetID), in: tree)
+            }
+            return transform(tree) { n in
+                guard n.id == targetID else { return nil }
+                let axis: DockSplitAxis
+                let leafFirst: Bool
+                switch edge {
+                case .left:   axis = .horizontal; leafFirst = true
+                case .right:  axis = .horizontal; leafFirst = false
+                case .top:    axis = .vertical;   leafFirst = true
+                case .bottom: axis = .vertical;   leafFirst = false
+                case .center: fatalError("handled above")
+                }
+                return .split(
+                    id: DockNodeID(),
+                    axis: axis,
+                    fraction: 0.5,
+                    first: leafFirst ? subtree : n,
+                    second: leafFirst ? n : subtree
+                )
+            }
+        }
+    }
+
+    /// Generic tree transformer: walk the tree, apply `mutate` to every node,
+    /// and rebuild any ancestor whose subtree changed. `mutate` returns `nil`
+    /// to leave a node alone.
+    private static func transform(_ tree: DockLayoutNode,
+                                  mutate: (DockLayoutNode) -> DockLayoutNode?)
+    -> DockLayoutNode {
+        if let replaced = mutate(tree) {
+            return replaced
+        }
+        switch tree {
+        case .empty, .tabs:
+            return tree
+        case .split(let id, let axis, let frac, let first, let second):
+            let f = transform(first, mutate: mutate)
+            let s = transform(second, mutate: mutate)
+            if f == first && s == second { return tree }
+            return .split(id: id, axis: axis, fraction: frac, first: f, second: s)
+        }
+    }
+}
