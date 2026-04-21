@@ -305,6 +305,50 @@ table memory_family {
 - 写入走 Transaction IR，可预演、可回滚
 - 写入完成后发 `model.semantic.changed` 事件到 Observation Bus
 
+### 2.10 符号化输出层（LLM 实际可见的视图）
+
+LLM 的输入是结构化 token 记录，不是 ndarray。本节定义 region 在符号层的呈现 schema。
+
+```text
+RegionSymbolicView {
+  id:              region id
+  kind:            structural | geometric_protrusion | geometric_cavity
+                  | symmetric_pair | connected_component | uv_island
+  bounds:          { center: vec3, size: vec3, unit: "m" }
+  axis_hint:       optional { axis, direction }
+  length:          optional { value, unit }
+  area:            optional { value, unit }
+  symmetric_with:  optional region id
+  parent_region:   optional region id
+  material_slot:   optional id
+  candidate_labels:
+    - { label, confidence, source }       // 至多 top-3
+  memory_hit:      optional {
+                     label, source, asset_uri, confidence,
+                     last_confirmed_by, last_confirmed_at
+                   }
+  editable_scope:  [material | transform | topology | bind_only]
+  provenance:      structural | geometric | inferred | confirmed
+}
+```
+
+设计要点：
+
+- 所有数值带单位字符串，避免 LLM 误判尺度
+- candidate_labels 限制条数，避免 prompt 膨胀
+- memory_hit 显式带 `last_confirmed_by` / `last_confirmed_at`，让 LLM 能区分"用户最近确认"与"很久前的旧标签"
+- 同一 ModelDocument 的 region 列表整体作为分页可读资源，不一次性塞 prompt
+
+数据流分层小结：
+
+| 层 | 表征 | 消费者 |
+|----|------|--------|
+| 检索层 | 高维 float、谱哈希、CLIP embedding | KNN / 向量库 |
+| 符号层 | RegionSymbolicView 等结构化记录 | LLM、CapabilityGraph、Intent IR |
+| 视觉层 | turntable 渲染、region overlay、对比图 | 多模态视觉模型（其输出再回到符号层） |
+
+向量不跨层、图像不跨层，向 LLM 流动的永远是符号。
+
 ---
 
 ## 3. 几何指纹细节
@@ -324,6 +368,18 @@ table memory_family {
 - 高度对称简单几何（球、立方体）指纹冲突率高 → 仅在有 parent_region 上下文时才接受 memory 命中
 - mesh 重新拓扑后描述符漂移 → 通过 `topology_sig` 的 bucket 化容忍小波动，跨 bucket 强制重确认
 - LOD 之间几何差异 → 指纹只在 LOD0 上计算，其他 LOD 通过 `lod_chain` 关系映射
+
+### 2.4.1 消费者声明
+
+`GeometryFingerprint` 中的 float 向量与 spectral_hash **不进入 LLM prompt**。它们的唯一消费者是 `SemanticMemoryStore` 的检索算子（KNN / 余弦距离 / 汉明距离）。
+
+LLM 实际看到的是符号化记录，定义见 §2.10。
+
+这一约束适用于本文档定义的所有高维浮点字段：
+
+- `GeometrySignals` 中的连续量（曲率、面积、长度等）以**单位 + 数值**形式出现在符号层，不以 raw vector 形式
+- 描述符 / 谱特征只在检索层流动，不出现在任何提示词模板里
+- 视觉后端的图像也不直接发给 LLM，发的是视觉模型产出的标签 + 置信度
 
 ### 3.3 不可用场景
 

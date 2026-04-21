@@ -31,8 +31,10 @@ struct DockTabCapabilityTests: GuavaUIComposeSerializedSuite {
     private func findTabItems(_ root: Node) -> [Node] {
         var out: [Node] = []
         func walk(_ n: Node) {
-            if n.isHitTestable, n.cursor == .pointer,
-               n.attachments[_DockTabCloseButtonHost.kCloseButtonMarker] == nil {
+            if n.attachments[_DockTabCloseButtonHost.kCloseButtonMarker] != nil {
+                return
+            }
+            if n.isHitTestable, n.cursor == .pointer {
                 out.append(n)
             }
             for c in n.children { walk(c) }
@@ -79,7 +81,18 @@ struct DockTabCapabilityTests: GuavaUIComposeSerializedSuite {
 
         let buttons = findCloseButtons(tree.root!)
         #expect(buttons.count == 2)
-        let firstClose = buttons[0]
+        // The marker node is a transparent wrapper; the actual pointer
+        // handler lives on the inner Button host. Walk down to find it.
+        func firstHittable(_ n: Node) -> Node? {
+            if n.isHitTestable { return n }
+            for c in n.children {
+                if let h = firstHittable(c) { return h }
+            }
+            return nil
+        }
+        guard let firstClose = firstHittable(buttons[0]) else {
+            Issue.record("close button has no hit-testable descendant"); return
+        }
 
         let handler = registry.handlers(for: firstClose).pointer!
         _ = handler(MouseButtonEvent(button: .left, x: 0, y: 0, clicks: 1), .down, .target)
