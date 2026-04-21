@@ -21,7 +21,9 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
             }
         )
 
-        let buttonNode = tree.root!.children.first!
+        // Button is now a composite View; the ButtonHost primitive node lives
+        // one level below the user-view anchor.
+        let buttonNode = tree.root!.children.first!.children.first!
         #expect(buttonNode.isHitTestable == true)
         #expect(buttonNode.isFocusable == true)
 
@@ -48,7 +50,7 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
             }
         )
 
-        let handlers = registry.handlers(for: tree.root!.children.first!)
+        let handlers = registry.handlers(for: tree.root!.children.first!.children.first!)
         let evt = MouseButtonEvent(button: .left, x: 0, y: 0, clicks: 1)
         let result = handlers.pointer!(evt, .up, .target)
         #expect(taps == 0)

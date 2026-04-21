@@ -20,6 +20,12 @@ public protocol _PrimitiveView: View where Body == Never {
     func _makeLayoutNode() -> LayoutNode?
     func _updateLayout(_ layout: LayoutNode)
     var _children: [any View] { get }
+
+    /// Optional node-aware children list. Called by the materialiser after the
+    /// produced node has been parented, so primitives may consult
+    /// `Node.compositionValue(of:)` / `Node.theme` to decide what children to
+    /// produce. Defaults to returning `_children` unchanged.
+    func _children(for node: Node) -> [any View]
 }
 
 public extension _PrimitiveView {
@@ -28,4 +34,6 @@ public extension _PrimitiveView {
 
     func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
     func _updateLayout(_ layout: LayoutNode) { /* default: no styling */ }
+
+    func _children(for node: Node) -> [any View] { _children }
 }
