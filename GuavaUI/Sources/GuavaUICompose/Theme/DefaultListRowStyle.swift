@@ -19,7 +19,7 @@ public struct DefaultListRowStyle: ListRowStyle {
                     Spacer(minLength: 0)
                 }
                 .padding(horizontal: t.spacing.md, vertical: t.spacing.sm)
-                .background(t.colors.selection)
+                .background(t.colors.stateLayerSelected)
                 .cornerRadius(t.radius.sm)
                 .opacity(configuration.isEnabled ? 1 : 0.55)
             )
@@ -31,7 +31,7 @@ public struct DefaultListRowStyle: ListRowStyle {
                     Spacer(minLength: 0)
                 }
                 .padding(horizontal: t.spacing.md, vertical: t.spacing.sm)
-                .background(t.colors.selection.mixed(with: t.colors.surface, amount: 0.7))
+                .background(t.colors.stateLayerHover)
                 .cornerRadius(t.radius.sm)
                 .opacity(configuration.isEnabled ? 1 : 0.55)
             )

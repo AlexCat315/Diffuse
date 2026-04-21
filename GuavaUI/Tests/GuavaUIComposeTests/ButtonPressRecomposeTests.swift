@@ -33,7 +33,7 @@ struct ButtonPressRecomposeTests: GuavaUIComposeSerializedSuite {
         AnimatorScheduler.$current.withValue(scheduler) {
             let theme = Theme.defaultDark
             let resting = theme.colors.accent
-            let pressedColor = theme.colors.accent.darker(0.10)
+            let pressedColor = theme.colors.accentPressed
 
             let tree = NodeTree()
             let recomp = Recomposer()
@@ -82,7 +82,7 @@ struct ButtonPressRecomposeTests: GuavaUIComposeSerializedSuite {
         AnimatorScheduler.$current.withValue(scheduler) {
             let theme = Theme.defaultDark
             let resting = theme.colors.accent
-            let hoveredColor = theme.colors.accent.lighter(0.06)
+            let hoveredColor = theme.colors.accentHover
 
             let tree = NodeTree()
             let recomp = Recomposer()
