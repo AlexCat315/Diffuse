@@ -83,6 +83,7 @@ public struct TextField: _PrimitiveView {
         let n = Node()
         n.isHitTestable = true
         n.isFocusable = true
+        n.clipsToBounds = true
         return n
     }
 
@@ -160,12 +161,12 @@ public struct TextField: _PrimitiveView {
 
     public func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
-        layout.height = 28
+        layout.height = 32
         return layout
     }
 
     public func _updateLayout(_ layout: LayoutNode) {
-        layout.height = 28
+        layout.height = 32
     }
 
     // MARK: - Selection helpers
