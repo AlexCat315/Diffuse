@@ -86,6 +86,7 @@ GuavaUIDemo 顶部的 `Save / Load / Reset` 按钮使用 `DemoLayoutPersistence`
 | `.activateTab(tabID, in:)` | 切换 leaf 的 active tab |
 | `.setSplitFraction(splitID, fraction:)` | 调整拆分比例 |
 | `.spawnSatellite(leafID, hint:)` / `.closeSatellite(leafID)` | 卫星窗口生命周期 |
+| `.moveLeaf(leafID, to:)` | 把整个 tabs leaf 搬到一个 `DockDropTarget`：`.tabSlot` 把所有 tab 折进目标 leaf，`.replace` / `.splitEdge` 整棵子树 graft；自动塌陷源 split |
 
 每次 apply 自动 `version &+= 1` 并通知订阅者。
 
@@ -105,6 +106,10 @@ GuavaUIDemo 顶部的 `Save / Load / Reset` 按钮使用 `DemoLayoutPersistence`
 - `DockLayoutSnapshotTests` — 持久化 round-trip
 - `DockDetachThresholdTests` — 80px detach 距离阈值
 - `DockSatelliteTitleBarTests` — 卫星窗口标题栏拖拽 redock
+- `DockMoveLeafTests` — `.moveLeaf` 操作的 tabSlot/replace/splitEdge 三种目标 + cycle/no-op 守卫
+- `DockEscCancelTests` — Esc 取消活跃 drag 的 PointerCapture 路由
+- `DockLeafDragTests` — leaf-handle 拖拽端到端流程
+- `DockTabCapabilityTests` — D9 能力位：`isClosable` 控制关闭按钮、`closeTab` 点击落地、右键转发到 `onTabContextMenu`、旧快照 Codable 兼容
 
 ## 卫星窗口标题栏
 
@@ -114,3 +119,25 @@ GuavaUIDemo 顶部的 `Save / Load / Reset` 按钮使用 `DemoLayoutPersistence`
 - 在标题栏按下并拖动超过 6px → 启动一个 `origin = .satellite(leafID)` 的 DockDragSession（`tabID == nil`，因为整个 leaf 一起搬）。
 - 释放时 `DockDragSession.end(commit:)` 走 `.satellite` 分支：命中已注册的主 host leaf 即触发 `.redock(satelliteID:to:)` 并销毁卫星窗口；未命中则就地保留。
 - 卫星窗口本身不在拖动期间移动；标题栏只承担「告诉 dock 这是一个 redock 拖拽源」的语义。
+
+## 拖拽体验（D8）
+
+- **Ghost 预览**：drag 期间，根容器 `overlayDraw` 在指针右下角绘制一块半透明深色矩形 + accent underline + 当前拖拽 tab/leaf 的标题文本（通过 `TextEnvironment.shape` + `TextLayout.layout` + `DrawList.addText`）。Ghost 跟随窗口本地坐标（已经过 HiDPI 转换），跨窗口拖拽时各窗口独立绘制各自的 ghost。
+- **Esc 取消**：`EventDispatcher.dispatchKey` 在分发到 focused 节点之前，先把 key 事件交给当前 `PointerCapture.target` 的 key handler。Tab item / leaf handle / satellite title bar 三处 drag 源都注册了 `setKey(node)` 监听 `DOCK_KEY_SCANCODE_ESC`（SDL3 scancode 41），命中即释放 capture、清状态、`session.cancel()`，且不递增 `controller.version`。
+- **整 leaf 拖拽**：tab strip 末端的 `Spacer()` 替换为 `_DockLeafDragHandle`（cursor `.move`，flexGrow=1）。在该区域按下并拖动 → `DockDragSession.start(tabID: nil, origin: .mainTreeLeaf(leafID))`，释放时走 `.moveLeaf(leafID:to:)`（命中其它 host leaf）或 `.detach(leafID)`（拖出所有 host 且超过 80px 阈值）。
+
+
+## DockTab 能力位（D9）
+
+`DockTab` 在原有 `id` / `userKey` / `title` 之外新增两个可选字段，允许调用方按 tab 单独配置 UI 行为：
+
+| 字段 | 默认 | 含义 |
+| ---- | ---- | ---- |
+| `isClosable: Bool` | `true` | `false` 时 tab strip 不渲染 `×` 关闭按钮，关闭只能由调用方显式触发（例如右键菜单调用 `controller.apply(.closeTab(id))`）|
+| `icon: DockTabIcon?` | `nil` | 可选小图标（`TextureID` + `width`/`height`），渲染在标题左侧；`Codable` 仅持久化 `assetKey` + 尺寸，运行时 `textureID` 由宿主在装载时重新解析 |
+
+关闭按钮以独立的 hit-testable 子节点 `_DockTabCloseButtonHost` 实现，cursor 同样是 `.pointer`，但带 sentinel attachment `_DockTabCloseButtonHost.kCloseButtonMarker`，测试 helper 据此把关闭按钮从「tab item 节点」集合中排除。点击只响应 `.left` 按键，松手即 `controller.apply(.closeTab(tab.id))`，不影响 active tab 切换或拖拽状态。
+
+右键（`MouseButton == .right`）在 tab item 的 pointer handler 中被截短：不获取 PointerCapture、不进入 drag 状态机，而是把 `(tabID, leafID, x, y)` 转发给 `controller.onTabContextMenu`。Dock 层不渲染弹出菜单 — popover/menu 基础设施目前不存在；调用方自行用 SDL 弹出原生菜单或在 GuavaUI 这一层后续补足时再绑定。
+
+`DockTab` 的 `Codable` 实现使用 `decodeIfPresent` 容忍缺失字段，旧持久化快照（仅含 `id` / `userKey` / `title`）解码时新字段自动落到默认值。

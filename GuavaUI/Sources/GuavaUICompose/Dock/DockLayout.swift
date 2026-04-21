@@ -1,4 +1,5 @@
 import Foundation
+import GuavaUIRuntime
 
 /// Stable identifier for a node inside a `DockLayoutNode` tree.
 ///
@@ -29,13 +30,84 @@ public struct DockTab: Hashable, Sendable, Codable {
     public let id: DockTabID
     public var userKey: String
     public var title: String
+    /// When `false`, the tab strip skips rendering the close button and
+    /// `controller.apply(.closeTab(id))` becomes a caller-side responsibility
+    /// (e.g. via the context menu callback). Defaults to `true`.
+    public var isClosable: Bool
+    /// Optional small bitmap rendered before the title in the tab strip.
+    /// `nil` means "no icon"; the strip lays out the label flush against the
+    /// horizontal padding instead.
+    public var icon: DockTabIcon?
 
     public init(id: DockTabID = DockTabID(),
                 userKey: String,
-                title: String) {
+                title: String,
+                isClosable: Bool = true,
+                icon: DockTabIcon? = nil) {
         self.id = id
         self.userKey = userKey
         self.title = title
+        self.isClosable = isClosable
+        self.icon = icon
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case id, userKey, title, isClosable, icon
+    }
+
+    /// Custom decoder so pre-D9 snapshots (which only carry `id` /
+    /// `userKey` / `title`) round-trip with the modern defaults instead
+    /// of raising `keyNotFound`.
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.id = try c.decode(DockTabID.self, forKey: .id)
+        self.userKey = try c.decode(String.self, forKey: .userKey)
+        self.title = try c.decode(String.self, forKey: .title)
+        self.isClosable = try c.decodeIfPresent(Bool.self, forKey: .isClosable) ?? true
+        self.icon = try c.decodeIfPresent(DockTabIcon.self, forKey: .icon)
+    }
+}
+
+/// Tiny value carrier for a tab icon: a renderer-registered texture plus
+/// the on-screen size to draw it at. Hosts call
+/// `DrawListRenderer.registerColorTexture(...)` once at startup and stash
+/// the resulting `TextureID` here. `Codable` is implemented by skipping
+/// the live texture id (which is process-local) and persisting only a
+/// caller-supplied `assetKey` string the host can resolve back on load.
+public struct DockTabIcon: Hashable, Sendable, Codable {
+    public var assetKey: String
+    public var textureID: TextureID
+    public var width: Float
+    public var height: Float
+
+    public init(assetKey: String,
+                textureID: TextureID,
+                width: Float = 14,
+                height: Float = 14) {
+        self.assetKey = assetKey
+        self.textureID = textureID
+        self.width = width
+        self.height = height
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case assetKey, width, height
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        self.assetKey = try c.decode(String.self, forKey: .assetKey)
+        self.width = try c.decodeIfPresent(Float.self, forKey: .width) ?? 14
+        self.height = try c.decodeIfPresent(Float.self, forKey: .height) ?? 14
+        // Texture id is process-local; the host must re-resolve on load.
+        self.textureID = .none
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(assetKey, forKey: .assetKey)
+        try c.encode(width, forKey: .width)
+        try c.encode(height, forKey: .height)
     }
 }
 

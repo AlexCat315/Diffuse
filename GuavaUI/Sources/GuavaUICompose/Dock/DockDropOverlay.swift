@@ -58,19 +58,49 @@ func installDragGhostOverlay(node: Node, controller: DockController) {
         let appearance = node.compositionValue(of: DockStyleEnvironment.key)
             .resolve(DockStyleConfiguration(theme: node.theme))
         let accent = appearance.tabActiveAccentBar
-        let bg = Color(r: 0, g: 0, b: 0, a: 0.55)
+        let bg = Color(r: 0, g: 0, b: 0, a: 0.72)
+        let textColor = appearance.tabActiveForeground
 
         // Coordinates from the session are window-absolute. The container
         // root paints in window-absolute coordinates as well (it's the
         // outermost node), so no translation is needed.
-        let w: Float = 140
-        let h: Float = 28
+        let env = TextEnvironmentHolder.current
+        let font = env?.defaultFont ?? Font(size: 13, weight: .regular)
+        let lineHeight = env?.defaultLineHeight ?? 18
+        let padX: Float = 10
+        let padY: Float = 4
+
+        // Measure the title; fall back to a fixed width if no text env.
+        var textWidth: Float = 100
+        var layout: TextLayoutResult?
+        if let env {
+            let glyphs = env.shape(text: ghost.title, font: font)
+            let result = TextLayout.layout(shapedGlyphs: glyphs,
+                                           text: ghost.title,
+                                           atlas: env.atlas,
+                                           maxWidth: .infinity,
+                                           lineHeight: lineHeight,
+                                           alignment: .leading)
+            textWidth = result.totalWidth
+            layout = result
+        }
+
+        let w = max(80, min(220, textWidth + padX * 2))
+        let h: Float = lineHeight + padY * 2
+        // Anchor under the cursor, slightly offset so the cursor stays
+        // visible at the top-left corner of the ghost.
         let x = session.pointerX + 12
         let y = session.pointerY + 12
 
         list.addRect(UIRect(x: x, y: y, width: w, height: h), color: bg)
-        // Accent bar at the bottom to suggest "this is a tab".
+        // Accent bar at the bottom acts as the "this is a tab" affordance.
         list.addRect(UIRect(x: x, y: y + h - 2, width: w, height: 2), color: accent)
-        _ = ghost  // Title rendering deferred — DrawList has no text helper at this layer.
+
+        if let env, let layout {
+            list.addText(layout,
+                         origin: (x: x + padX, y: y + padY),
+                         color: textColor,
+                         textureID: env.atlasTextureID)
+        }
     }
 }

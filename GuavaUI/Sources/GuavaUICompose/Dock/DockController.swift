@@ -45,6 +45,14 @@ public enum DockOperation: Sendable {
     /// Drop a satellite from the registry without re-inserting it (e.g. the
     /// user closed the floating window).
     case closeSatellite(DockNodeID)
+
+    /// Move an entire `.tabs` leaf within the main tree to a new drop
+    /// target. Source position collapses the same way as `.move` /
+    /// `.detach`. No-op if `leafID` is the root, is not a tabs leaf,
+    /// is already a satellite, or `target` references the same leaf or
+    /// any of its descendants. When `target` is a `.tabSlot` the leaf's
+    /// tabs are appended individually starting at the target index.
+    case moveLeaf(leafID: DockNodeID, to: DockDropTarget)
 }
 
 /// Owner of a `DockLayoutNode` tree. Reference type; callers (the demo, the
@@ -88,6 +96,13 @@ public final class DockController: @unchecked Sendable {
             }
         }
     }
+
+    /// Right-click on a tab forwards here with the tab id and the global
+    /// (window-local) pointer position the click happened at. Hosts wire
+    /// this up to whatever menu/popover system they own; the dock layer
+    /// has no opinion on how the menu is rendered. `nil` (default) makes
+    /// right-click a no-op.
+    public var onTabContextMenu: ((_ tabID: DockTabID, _ leafID: DockNodeID, _ x: Float, _ y: Float) -> Void)?
 
     public init(root: DockLayoutNode) {
         self.root = root
@@ -145,6 +160,9 @@ public final class DockController: @unchecked Sendable {
             return
         case .closeSatellite(let satelliteID):
             applyCloseSatellite(satelliteID: satelliteID)
+            return
+        case .moveLeaf(let leafID, let target):
+            applyMoveLeaf(leafID: leafID, to: target)
             return
         }
         guard next != root else { return }
@@ -221,6 +239,54 @@ public final class DockController: @unchecked Sendable {
     private func applyCloseSatellite(satelliteID: DockNodeID) {
         guard satellites.removeValue(forKey: satelliteID) != nil else { return }
         satelliteOrder.removeAll { $0 == satelliteID }
+        version &+= 1
+        notifyChange()
+    }
+
+    /// Move an entire `.tabs` leaf already inside the main tree to a new
+    /// drop target. Rejects no-ops (target is the same leaf), cycles
+    /// (target is inside the leaf being moved), root moves, satellites
+    /// (use `.redock` instead), and non-`.tabs` source nodes. Bumps
+    /// `version` only when the tree actually changes.
+    private func applyMoveLeaf(leafID: DockNodeID, to target: DockDropTarget) {
+        guard satellites[leafID] == nil else { return }
+        guard let found = Self.findNode(leafID, in: root) else { return }
+        guard case .tabs(_, let tabs, let active) = found, !tabs.isEmpty else { return }
+        guard root.id != leafID else { return }
+
+        let targetID: DockNodeID
+        switch target {
+        case .tabSlot(let parent, _): targetID = parent
+        case .replace(let t):         targetID = t
+        case .splitEdge(let t, _):    targetID = t
+        }
+        if targetID == leafID { return }
+        // Cycle: target inside the moved subtree (also catches "drop on
+        // own children" though leaves don't have layout children).
+        if Self.findNode(targetID, in: found) != nil { return }
+
+        guard let removed = Self.removeNode(leafID, from: root),
+              let stripped = removed.0 else {
+            return
+        }
+        var nextRoot = stripped
+        switch target {
+        case .tabSlot(let parent, let index):
+            for (offset, tab) in tabs.enumerated() {
+                nextRoot = Self.insertAtDropTarget(
+                    tab,
+                    target: .tabSlot(parent: parent, index: index + offset),
+                    in: nextRoot
+                )
+            }
+            if let active {
+                nextRoot = Self.setActive(node: parent, tab: active, in: nextRoot)
+            }
+        case .replace, .splitEdge:
+            nextRoot = Self.insertSubtreeAtDropTarget(found, target: target, in: nextRoot)
+        }
+        guard nextRoot != root else { return }
+        root = nextRoot
         version &+= 1
         notifyChange()
     }
