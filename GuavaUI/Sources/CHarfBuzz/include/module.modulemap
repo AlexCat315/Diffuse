@@ -1,0 +1,4 @@
+module CHarfBuzz [system] {
+    umbrella header "CHarfBuzz.h"
+    export *
+}

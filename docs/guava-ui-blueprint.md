@@ -43,6 +43,13 @@ GuavaUI 的产品形态分成两层：
 - 不追求首版做无障碍系统。
 - 不追求首版做完整导航和应用生命周期框架。
 
+但以下项目从 M3 起必须可用，不能留到以后：
+
+- 语义主题（ColorScheme / Typography / Spacing / Radius / Elevation tokens）。
+- 默认控件外观（Button / TextField / Panel / List row 不需要调用点手写背景就能呈现现代感）。
+
+详见 Phase 7.5（§11）与 `docs/guava-ui-phase7.5-design.md`。
+
 ## 2. 技术选型
 
 | 项目 | 选型 | 理由 |
@@ -381,7 +388,18 @@ Compose 层内部再分两个带宽。
 - ViewportHost
 - StatusBar
 
-### 8.3 不进 GuavaUI 的组件
+### 8.3 主题与默认样式层（Phase 7.5）
+
+这是 Compose 层上的一层语义装饰，不产生新节点类型，仅为现有组件提供 token 与 style：
+
+- `Theme`：`ColorScheme` / `Typography` / `SpacingScale` / `RadiusScale` / `ElevationScale` / `MotionScale` 六维 token。
+- `ColorScheme.semantic`：`surface` / `surfaceVariant` / `onSurface` / `accent` / `border` / `success` / `warning` / `error` 语义色。
+- 默认主题：`DefaultDarkTheme` 与 `DefaultLightTheme`，为编辑器场景调谐。
+- 默认 style：`PrimaryButtonStyle` / `SecondaryButtonStyle` / `GhostButtonStyle` / `DefaultTextFieldStyle` / `DefaultPanelStyle` / `DefaultListRowStyle`。
+- `Theme` 通过 `CompositionLocal<Theme>` 下发；子树以 `.theme(…)` modifier 重走一階作用域。
+- 控件默认读主题，不再要求调用点传入颜色与字体。
+
+### 8.4 不进 GuavaUI 的组件
 
 这些先留在应用层：
 
@@ -423,6 +441,29 @@ Compose 层内部再分两个带宽。
 - 平台特定代码集中在 Runtime/Platform。
 - Compose 层不出现平台条件编译。
 - 业务组件不直接依赖平台 API。
+
+### 9.4 窗口策略
+
+GuavaUI 的窗口模型分两期落地：
+
+| 阶段 | 实现 | 说明 |
+|------|------|------|
+| 当期（M3） | 单窗口实现 | `SDL3PlatformHost` 持有一个 `Shell`、一棵 `NodeTree`、一个 `Recomposer`、一个 `EventDispatcher`。 |
+| 远期（M4–M5） | 多窗口实现 | 引入 `WindowManager`，每个窗口拥有独立的 `Shell` / `NodeTree` / `Recomposer` / `EventDispatcher`；`InputEvent` 携带 `WindowID` 路由。 |
+
+**接口前瞻约束**（当期就必须满足，避免后期撕裂）：
+
+- `Recomposer` 不暴露 `.shared`，由 `PlatformHost` 持有
+- `NodeTree` 不是进程单例，作为参数显式传递
+- `InputEvent` 类型上携带 `windowID: WindowID`（默认 `0`）
+- `EventDispatcher` 通过构造函数绑定到一棵 `NodeTree`，不使用全局态
+- `Shell` 协议保持单窗口语义；将来由 `WindowManager` 拥有多个 `Shell`
+
+不在当期实现：
+
+- 第二个原生窗口的创建
+- 跨窗口事件路由 / 焦点跨窗策略
+- 跨窗口拖拽与 GPU 资源共享
 
 ## 10. 与引擎的关系
 
@@ -718,9 +759,82 @@ GuavaUI/Sources/GuavaUICompose/
 
 验收：
 ```bash
-# Editor 构建成功，核心面板（Hierarchy、Inspector、Viewport）
-# 全部运行在 GuavaUI 组件上，无 MetalPlaceholderRenderer 依赖
+# Editor 构建成功，核心面板在 GuavaUI 组件上跑，无 MetalPlaceholderRenderer 依赖
 cd Editor && swift build && swift run GuavaEditor
+```
+
+---
+
+### Phase 7.5 — Theme & DefaultStyles
+
+**目标：在不改变现有组件调用点的前提下，让默认外观达到 SwiftUI / MD3 同等现代感，同时去掉调用点里裸色值与碍码像素。**
+
+详见 `docs/guava-ui-phase7.5-design.md`。
+
+新增文件：
+
+```
+GuavaUI/Sources/GuavaUICompose/
+├── Theme/
+│   ├── Theme.swift
+│   ├── ColorScheme.swift
+│   ├── Typography.swift
+│   ├── SpacingScale.swift
+│   ├── RadiusScale.swift
+│   ├── ElevationScale.swift
+│   ├── MotionScale.swift
+│   ├── DefaultDarkTheme.swift
+│   ├── DefaultLightTheme.swift
+│   └── ThemeEnvironment.swift   # CompositionLocal<Theme>
+├── Style/
+│   ├── ButtonStyle.swift                # protocol + .buttonStyle(…)
+│   ├── PrimaryButtonStyle.swift
+│   ├── SecondaryButtonStyle.swift
+│   ├── GhostButtonStyle.swift
+│   ├── TextFieldStyle.swift / DefaultTextFieldStyle.swift
+│   ├── PanelStyle.swift / DefaultPanelStyle.swift
+│   └── ListRowStyle.swift / TreeRowStyle.swift / DividerStyle.swift
+└── Foundation/
+    ├── SemanticColor.swift   # Color.surface / .accent / …
+    └── SemanticFont.swift    # Font.title / .body / …
+```
+
+不变动的约束：
+
+- Runtime 零修改，Theme 全部住 Compose 层。
+- 不引入动画（`MotionScale` 仅提供时间与缓动 token，供 Phase 8 动画系统消费）。
+- 不产生新的组件类型，仅为现有组件增加 `style:` 入口与默认实现。
+
+API 预望形态：
+
+```swift
+WindowRoot {
+    SplitView(.horizontal) {
+        Panel("Hierarchy") {
+            Tree(sceneTree, children: \.children, selection: $selectedID) { node, _ in
+                Text(node.title)
+            }
+            Divider()
+            Button("Refresh") { reload() }
+                .buttonStyle(.primary)
+        }
+    } second: {
+        Panel("Inspector") {
+            PropertyGrid(model: inspectorModel)
+        }
+    }
+}
+.theme(.defaultDark)
+```
+
+验收：
+```bash
+cd GuavaUI && swift run GuavaUIDemo
+# Demo 代码不出现任何 Color(r:g:b:) / .system(size:) 字面量；
+# 顶层 .theme(.defaultDark) 换为 .defaultLight 后，全仓颜色、字号、圆角、padding 统一变化，无需修改调用点。
+
+cd GuavaUI && swift test --filter ThemeTests
+# 覆盖：Theme 增量覆盖、ButtonStyle 选择与默认、SemanticColor 从环境解析
 ```
 
 ## 12. 风险与约束

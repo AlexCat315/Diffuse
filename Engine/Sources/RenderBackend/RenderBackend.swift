@@ -1,5 +1,6 @@
 import AssetPipeline
 import Foundation
+import Logging
 import PlatformShell
 import RHIWGPU
 import simd
@@ -35,8 +36,8 @@ public extension Renderer {
 @MainActor
 public struct MetalPlaceholderRenderer: Renderer {
     public init() {}
-    public func initialize() { print("[RenderBackend] initialize Metal placeholder") }
-    public func renderFrame(frameIndex: Int) { print("[RenderBackend] render frame \(frameIndex)") }
+    public func initialize() { Logger.renderer.debug("initialize Metal placeholder") }
+    public func renderFrame(frameIndex: Int) { Logger.renderer.debug("render frame \(frameIndex)") }
 }
 
 /// One mesh resident on the GPU.
@@ -97,7 +98,7 @@ public final class WGPURenderer: Renderer {
 
     public func initialize() {
         guard let renderSurface = shell.renderSurface else {
-            print("[WGPURenderer] no render surface; skipping surface creation")
+            Logger.renderer.notice("no render surface; skipping surface creation")
             return
         }
         do {
@@ -116,11 +117,17 @@ public final class WGPURenderer: Renderer {
             }
             try ensureConfigured()
             try ensureMeshPipelineAndScene()
-            print(
-                "[WGPURenderer] surface ready, size=\(configuredSize), pipeline=\(meshPipeline != nil), depth=\(depthView != nil), meshes=\(meshes.count), instances=\(scene.instances.count), dynamic=\(dynamicInstanceResources != nil)"
+            let _sz = String(describing: configuredSize)
+            let _hasPipeline = meshPipeline != nil
+            let _hasDepth = depthView != nil
+            let _meshCount = meshes.count
+            let _instCount = scene.instances.count
+            let _hasDyn = dynamicInstanceResources != nil
+            Logger.renderer.info(
+                "surface ready, size=\(_sz), pipeline=\(_hasPipeline), depth=\(_hasDepth), meshes=\(_meshCount), instances=\(_instCount), dynamic=\(_hasDyn)"
             )
         } catch {
-            print("[WGPURenderer] initialize failed: \(error)")
+            Logger.renderer.error("initialize failed: \(error)")
         }
     }
 
@@ -205,7 +212,7 @@ public final class WGPURenderer: Renderer {
                 settingsGeneration: settingsGeneration
             )
         } catch {
-            print("[WGPURenderer] frame \(frameIndex) failed: \(error)")
+            Logger.renderer.error("frame \(frameIndex) failed: \(error)")
         }
     }
 
@@ -216,8 +223,9 @@ public final class WGPURenderer: Renderer {
         settingsGeneration &+= 1
 
         if shouldEmitPlannerLog(frameIndex: frameIndex) {
-            print(
-                "[WGPURenderer] applied render settings in-frame generation=\(settingsGeneration) stage=\(pending.stage.rawValue) fxaa=\(pending.enableFXAA) ssao=\(pending.enableSSAO) bloom=\(pending.enableBloom)"
+            let gen = settingsGeneration
+            Logger.renderer.debug(
+                "applied render settings generation=\(gen) stage=\(pending.stage.rawValue) fxaa=\(pending.enableFXAA) ssao=\(pending.enableSSAO) bloom=\(pending.enableBloom)"
             )
         }
     }
@@ -296,7 +304,7 @@ public final class WGPURenderer: Renderer {
 
     private func emitPlannedPassLog(_ passKind: RenderPassKind, frameIndex: Int) {
         guard shouldEmitPlannerLog(frameIndex: frameIndex) else { return }
-        print("[WGPURenderer][plan] executing placeholder pass=\(passKind.rawValue)")
+        Logger.renderer.debug("executing placeholder pass=\(passKind.rawValue)")
     }
 
     private func shouldEmitPlannerLog(frameIndex: Int) -> Bool {
@@ -343,7 +351,7 @@ public final class WGPURenderer: Renderer {
                 obj.normalizeToUnitBounds(targetSize: 2.0)
                 objMesh = try uploadMesh(obj)
             } catch {
-                print("[WGPURenderer] OBJ load failed (\(error)); skipping fixture mesh")
+                Logger.renderer.error("OBJ load failed (\(error)); skipping fixture mesh")
             }
         }
         meshes.append(cubeMesh)
@@ -436,8 +444,10 @@ public final class WGPURenderer: Renderer {
             }
         }
 
-        print(
-            "[WGPURenderer] scene built: meshes=\(meshes.map(\.name)) instances=\(instances.count) dynamic=\(useDynamicOffsets)")
+        let _meshNames = meshes.map(\.name)
+        Logger.renderer.info(
+            "scene built: meshes=\(_meshNames) instances=\(instances.count) dynamic=\(useDynamicOffsets)"
+        )
     }
 
     private func uploadMesh(_ mesh: MeshAsset) throws -> GPUMesh {

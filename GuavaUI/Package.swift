@@ -1,5 +1,11 @@
 // swift-tools-version: 6.0
 import PackageDescription
+import Foundation
+
+let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
+let yogaLibDir = "\(packageDir)/vendor/yoga/lib"
+let freetypeLibDir = "\(packageDir)/vendor/freetype/lib"
+let harfbuzzLibDir = "\(packageDir)/vendor/harfbuzz/lib"
 
 let package = Package(
     name: "GuavaUI",
@@ -13,17 +19,59 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../Engine"),
+        .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
     ],
     targets: [
+        // MARK: - Yoga C bridge (vendored static lib)
+        .target(
+            name: "CYoga",
+            path: "Sources/CYoga",
+            publicHeadersPath: "include",
+            linkerSettings: [
+                .unsafeFlags(["-L", yogaLibDir]),
+                .linkedLibrary("yoga"),
+                .linkedLibrary("c++"),   // Yoga is compiled as C++
+            ]
+        ),
+
+        // MARK: - FreeType C bridge (vendored static lib)
+        .target(
+            name: "CFreeType",
+            path: "Sources/CFreeType",
+            publicHeadersPath: "include",
+            linkerSettings: [
+                .unsafeFlags(["-L", freetypeLibDir]),
+                .linkedLibrary("freetype"),
+                .linkedLibrary("z"),
+            ]
+        ),
+
+        // MARK: - HarfBuzz C bridge (vendored static lib)
+        .target(
+            name: "CHarfBuzz",
+            dependencies: ["CFreeType"],
+            path: "Sources/CHarfBuzz",
+            publicHeadersPath: "include",
+            linkerSettings: [
+                .unsafeFlags(["-L", harfbuzzLibDir]),
+                .linkedLibrary("harfbuzz"),
+                .linkedLibrary("c++"),
+            ]
+        ),
+
         // MARK: - Runtime
         // 平台层、布局引擎、文字渲染、节点树、recompose 运行时。
         // 依赖 Engine 的渲染抽象（RHIWGPU、PlatformShell、EngineKernel）。
         .target(
             name: "GuavaUIRuntime",
             dependencies: [
+                "CYoga",
+                "CFreeType",
+                "CHarfBuzz",
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "PlatformShell", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "Logging", package: "swift-log"),
             ]
         ),
 
@@ -38,13 +86,21 @@ let package = Package(
         // MARK: - Demo
         .executableTarget(
             name: "GuavaUIDemo",
-            dependencies: ["GuavaUIRuntime"]
+            dependencies: ["GuavaUIRuntime", "GuavaUICompose"]
         ),
 
         // MARK: - Tests
         .testTarget(
             name: "GuavaUIRuntimeTests",
             dependencies: ["GuavaUIRuntime"]
+        ),
+        .testTarget(
+            name: "GuavaUIComposeTests",
+            dependencies: [
+                "GuavaUICompose",
+                "GuavaUIRuntime",
+                .product(name: "EngineKernel", package: "Engine"),
+            ]
         ),
     ]
 )
