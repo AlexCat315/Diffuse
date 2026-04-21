@@ -49,60 +49,80 @@ public final class InteractionRegistry {
     }
 
     private var table: [ObjectIdentifier: Handlers] = [:]
+    private let lock = NSLock()
 
     public init() {}
+
+    private func withLock<T>(_ body: () -> T) -> T {
+        lock.lock(); defer { lock.unlock() }
+        return body()
+    }
 
     // MARK: - Registration
 
     public func handlers(for node: Node) -> Handlers {
-        table[ObjectIdentifier(node)] ?? Handlers()
+        withLock { table[ObjectIdentifier(node)] ?? Handlers() }
     }
 
     public func setPointer(_ node: Node,
                            _ handler: @escaping (MouseButtonEvent, PointerPhase, EventPhase) -> EventResult) {
-        var h = handlers(for: node); h.pointer = handler
-        table[ObjectIdentifier(node)] = h
+        withLock {
+            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.pointer = handler
+            table[ObjectIdentifier(node)] = h
+        }
     }
 
     public func setHover(_ node: Node,
                          _ handler: @escaping (HoverPhase) -> Void) {
-        var h = handlers(for: node); h.hover = handler
-        table[ObjectIdentifier(node)] = h
+        withLock {
+            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.hover = handler
+            table[ObjectIdentifier(node)] = h
+        }
     }
 
     public func setMotion(_ node: Node,
                           _ handler: @escaping (MouseMotionEvent, EventPhase) -> EventResult) {
-        var h = handlers(for: node); h.motion = handler
-        table[ObjectIdentifier(node)] = h
+        withLock {
+            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.motion = handler
+            table[ObjectIdentifier(node)] = h
+        }
     }
 
     public func setWheel(_ node: Node,
                          _ handler: @escaping (MouseWheelEvent, EventPhase) -> EventResult) {
-        var h = handlers(for: node); h.wheel = handler
-        table[ObjectIdentifier(node)] = h
+        withLock {
+            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.wheel = handler
+            table[ObjectIdentifier(node)] = h
+        }
     }
 
     public func setKey(_ node: Node,
                        _ handler: @escaping (KeyEvent, EventPhase) -> EventResult) {
-        var h = handlers(for: node); h.key = handler
-        table[ObjectIdentifier(node)] = h
+        withLock {
+            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.key = handler
+            table[ObjectIdentifier(node)] = h
+        }
     }
 
     public func setEditing(_ node: Node,
                            _ handler: @escaping (TextEditingEvent, EventPhase) -> EventResult) {
-        var h = handlers(for: node); h.editing = handler
-        table[ObjectIdentifier(node)] = h
+        withLock {
+            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.editing = handler
+            table[ObjectIdentifier(node)] = h
+        }
     }
 
     public func setText(_ node: Node,
                         _ handler: @escaping (String, EventPhase) -> EventResult) {
-        var h = handlers(for: node); h.text = handler
-        table[ObjectIdentifier(node)] = h
+        withLock {
+            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.text = handler
+            table[ObjectIdentifier(node)] = h
+        }
     }
 
     public func remove(_ node: Node) {
-        table.removeValue(forKey: ObjectIdentifier(node))
+        withLock { _ = table.removeValue(forKey: ObjectIdentifier(node)) }
     }
 
-    public var count: Int { table.count }
+    public var count: Int { withLock { table.count } }
 }

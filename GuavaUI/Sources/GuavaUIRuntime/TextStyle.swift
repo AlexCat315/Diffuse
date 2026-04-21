@@ -34,13 +34,14 @@ public struct Font: Hashable, Sendable {
 /// Lazily creates sized/weighted `FontProvider`s that share a single atlas.
 /// Each provider gets its own font-ID range so glyph rasterization remains
 /// unambiguous even when multiple sizes are used in the same frame.
-public final class TextFontResolver {
+public final class TextFontResolver: @unchecked Sendable {
     private let primaryFontName: String
     private let atlas: FontAtlas
     private let rasterScale: Float
     private let providerIDBlockSize: Int
     private var nextProviderIDBase: Int
     private var providers: [Font: FontProvider] = [:]
+    private let lock = NSLock()
 
     public init(primaryFontName: String,
                 atlas: FontAtlas,
@@ -56,10 +57,13 @@ public final class TextFontResolver {
 
     public func shape(text: String, font: Font) -> [ShapedGlyph] {
         guard !primaryFontName.isEmpty else { return [] }
+        lock.lock()
         let provider = provider(for: font)
         let runs = provider.resolveRuns(text: text)
         provider.registerAllFonts(in: atlas)
-        return runs.flatMap(provider.shapeRun)
+        let glyphs = runs.flatMap(provider.shapeRun)
+        lock.unlock()
+        return glyphs
     }
 
     private func provider(for font: Font) -> FontProvider {

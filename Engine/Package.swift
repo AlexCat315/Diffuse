@@ -118,5 +118,11 @@ let package = Package(
                 "SceneRuntime",
             ]
         ),
+        .testTarget(
+            name: "SceneRuntimeTests",
+            dependencies: [
+                "SceneRuntime",
+            ]
+        ),
     ]
 )
