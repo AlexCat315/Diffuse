@@ -239,7 +239,7 @@ struct RootView: View {
             .background(isActive ? .accentMuted : .surfaceVariant)
             .cornerRadius(6)
         }
-        .buttonStyle(.ghost)
+        .buttonStyle(.plain)
     }
 
     // MARK: workspace
