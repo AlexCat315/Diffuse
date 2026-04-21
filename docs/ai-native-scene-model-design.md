@@ -63,6 +63,19 @@ Guava 中需要明确区分四层：
 - Runtime Projection 是当前时间点或当前模式下的求值结果
 - AI Interaction Layer 负责 capability、intent、transaction、observation、memory
 
+还需要明确一点：
+
+- `SceneDocument`、`ModelDocument` 这类 document **只解决结构可读和作用域可控**
+- document **不会凭空创造语义**
+- 如果源模型没有 part、命名、材质分区、骨骼或其他 metadata，系统不能一开始就真的知道“哪里是耳朵”
+- 因此 Guava 需要一条 **语义生产流水线**，而不是假设 document 自己就等于理解
+
+AI 真正的理解来自三部分共同成立：
+
+1. canonical document 提供稳定结构与作用域
+2. semantic pipeline 从导入结果中生产候选语义
+3. 视觉输入为审美判断和歧义消解提供反馈
+
 ---
 
 ## 3. 架构总览
@@ -191,6 +204,8 @@ AI 默认不直接读取全量 topology，而先读取语义摘要。
 4. 历史操作统计
 5. AI 推断（标记为 inferred，不能覆盖 authored truth）
 
+如果这些来源都不足，系统只能得到 **candidate semantics**，不能直接把候选语义当成真相。
+
 ### 6.2 作用
 
 `ModelSemanticSummary` 的职责不是替代 `ModelDocument`，而是降低 AI 默认阅读成本。
@@ -205,15 +220,188 @@ AI 在多数回合里需要的不是完整模型数据，而是：
 
 这类信息更接近“理解”，也更适合作为默认上下文。
 
+### 6.3 Document 与语义生产的边界
+
+`ModelDocument` 保存的是已经被系统明确下来的结构与语义。
+
+它不负责：
+
+- 从零猜出全部部件语义
+- 独立完成审美判断
+- 替代导入分析与用户确认
+
+因此需要补一条明确的语义生产链：
+
+`DCC / Asset` → `Importer` → `Candidate Region Builder` → `Semantic Analyzer` → `Minimal Confirmation` → `ModelDocument`
+
+这里的关键约束是：
+
+- `ModelDocument` 保存结果
+- `Candidate Region Builder` 和 `Semantic Analyzer` 生产候选
+- `Minimal Confirmation` 只在歧义点要求用户给最少信号
+- 用户不应被迫先做一套完整手工标注
+
+### 6.4 低结构模型的现实约束
+
+对于来自 Maya / Blender 但结构信息很弱的模型，常见情况包括：
+
+- 单一 mesh
+- 单一材质
+- 没有 node 命名
+- 没有 part 分组
+- 没有 rig / bones
+- 没有 custom metadata
+
+这类资产导入后，系统最多天然知道：
+
+- 几何体
+- 材质槽
+- bounds
+- topology
+
+这时 Guava 不应该假装“已经理解”，而应退回到 **候选区域 + 最小确认** 模式。
+
 ---
 
-## 7. 模型理解：MeshTopologySlice
+## 7. 低结构模型的语义生成工作流
+
+本节描述用户导入一个缺少 DCC 原始结构的模型后，系统如何逐步让 AI 获得可用理解。
+
+### 7.1 设计原则
+
+1. 默认自动推断，不要求用户先做完整标注
+2. 只在歧义处打断用户
+3. 用户每确认一次，系统都应记忆
+4. 先支持“改得动”，再追求“完全懂”
+
+### 7.2 工作流总览
+
+```mermaid
+flowchart LR
+    Import[Import Asset] --> Extract[Extract available structure]
+    Extract --> Region[Build candidate regions]
+    Region --> Analyze[Run semantic analyzer]
+    Analyze --> Proposal[AI generates edit proposal]
+    Proposal --> Confirm{Need confirmation?}
+    Confirm -- No --> Preview[Preview transaction]
+    Confirm -- Yes --> UI[Minimal confirmation UI]
+    UI --> Preview
+    Preview --> Apply[Apply or discard]
+    Apply --> Memory[Store semantic memory]
+```
+
+### 7.3 Phase A：导入后自动分析
+
+系统先自动做这些事情，不打断用户：
+
+1. 提取已有结构
+   - node / object 名
+   - submesh
+   - material slots
+   - skeleton / bones
+   - morph targets
+   - UV islands
+   - connected components
+2. 做几何分析
+   - 对称轴
+   - 主要凸起区域
+   - 细长区域
+   - 高曲率区域
+   - 开口 / 封闭体
+   - 主要轮廓
+   - 支撑面 / 接地面
+   - 候选碰撞壳
+3. 生成 `candidate regions`
+
+注意：这一步先不要强行把 region 命名成“耳朵”“眼睛”“尾巴”。先生成可定位、可高亮、可编辑的候选区域。
+
+### 7.4 Phase B：弱语义理解
+
+AI 在这一阶段拿到的是：
+
+- 哪些区域左右对称
+- 哪些区域细长突出
+- 哪些区域材质独立
+- 哪些区域属于单独 connected component
+- 哪些区域只支持 material edit，哪些可能支持 topology edit
+
+这时 AI 形成的是 **weak semantic understanding**，例如：
+
+- “顶部两个对称细长区域，可能是耳朵”
+- “前部两个小高亮区域，可能是眼睛”
+- “后部一个小球状区域，可能是尾巴”
+
+这不是最终真相，但足够进入提案阶段。
+
+### 7.5 Phase C：AI 提案
+
+用户不需要先进标注系统，只需要用自然语言表达目标：
+
+- “让它更可爱”
+- “耳朵短一点”
+- “材质别这么塑料”
+- “像玩偶一点”
+
+系统据此生成一个或多个提案，例如：
+
+- 方案 A：缩短顶部两个对称细长区域 12%
+- 方案 B：增大前部两个小圆区域 18%
+- 方案 C：降低 roughness，增加毛绒感
+
+### 7.6 Phase D：最小确认
+
+只有当系统判断存在歧义时，才要求用户做最小确认：
+
+- “我理解的耳朵是这两个高亮区域，对吗？”
+- “这次修改作用在当前实例，还是模型本体？”
+- “我将修改这两个 region，是否继续？”
+
+用户的交互应被压缩到最少：
+
+- 点一下
+- 说“对”
+- 说“不是，是这里”
+- 或切换作用域
+
+Guava 不应要求用户先做一整套手工语义标注。
+
+### 7.7 Phase E：预览与记忆
+
+确认后，系统执行 preview：
+
+- 在视口里高亮将被修改的区域
+- 显示修改前后对比
+- 允许撤回
+
+如果用户接受，系统把这次确认记住，例如：
+
+- `region_07 -> user_alias = ear_left`
+- `region_08 -> user_alias = ear_right`
+- `region_11 -> editable_scope = material_only`
+
+以后同一个 asset 再次出现，AI 就不需要从零猜一次。
+
+### 7.8 用户到底需不需要标注
+
+默认不需要完整标注。
+
+当源模型信息不足时，用户有时必须提供 **最小语义信号**，但这不应表现为传统 DCC 式标注工作，而应表现为：
+
+1. 点击确认
+2. 自然语言纠正
+3. 一次性命名
+
+这也是 Guava 与传统工具链的差异：不是“用户先服务 AI”，而是“AI 先工作，只在必要时请求最小帮助”。
+
+---
+
+## 8. 模型理解：MeshTopologySlice
 
 只有当 AI 需要直接做 mesh 编辑时，才读取 `MeshTopologySlice`。
 
 `MeshTopologySlice` 是局部、分页、上下文相关的拓扑切片，不是全模型三角面导出。
 
-### 7.1 建议内容
+### 8.1 建议内容
 
 - 当前 selection domain：vertex / edge / face
 - selected set
@@ -226,13 +414,13 @@ AI 在多数回合里需要的不是完整模型数据，而是：
 - local bounds
 - predicted edit impact
 
-### 7.2 目标
+### 8.2 目标
 
 - 让 AI 能理解局部编辑会影响什么
 - 避免把全量 triangle soup 暴露给模型
 - 让拓扑理解成为按需读取，而不是默认成本
 
-### 7.3 与旧 Zig mesh 编辑的关系
+### 8.3 与旧 Zig mesh 编辑的关系
 
 旧 Zig 里 `mesh` RPC 已经有：
 
@@ -244,7 +432,7 @@ AI 在多数回合里需要的不是完整模型数据，而是：
 
 ---
 
-## 8. Scene / Sequence / Model 的关系
+## 9. Scene / Sequence / Model 的关系
 
 `SceneDocument` 不直接内嵌模型细节，而是引用 `ModelDocument`。
 
@@ -262,7 +450,7 @@ AI 在多数回合里需要的不是完整模型数据，而是：
 3. 改场景实例 override
 4. 改某个 shot 局部 override
 
-### 8.1 为什么这很重要
+### 9.1 为什么这很重要
 
 没有这层区分，AI 就无法稳定回答：
 
@@ -276,13 +464,13 @@ AI 在多数回合里需要的不是完整模型数据，而是：
 
 ---
 
-## 9. Capability Graph
+## 10. Capability Graph
 
 `docs/api/ai-tools.md` 保留，但降级为执行层参考。
 
 AI 真正依赖的是 `CapabilityGraph`。
 
-### 9.1 每个 capability 至少包含
+### 10.1 每个 capability 至少包含
 
 - `verb`
 - `scope`
@@ -296,7 +484,7 @@ AI 真正依赖的是 `CapabilityGraph`。
 - `writes_documents`
 - `writes_runtime`
 
-### 9.2 示例
+### 10.2 示例
 
 - `adjustModelPartTransform`
 - `setMaterialOverride`
@@ -305,7 +493,7 @@ AI 真正依赖的是 `CapabilityGraph`。
 - `bakePhysicsCache`
 - `propagateAssetChangeToInstances`
 
-### 9.3 作用
+### 10.3 作用
 
 CapabilityGraph 让 AI 理解的不是“方法名”，而是：
 
@@ -319,11 +507,11 @@ CapabilityGraph 让 AI 理解的不是“方法名”，而是：
 
 ---
 
-## 10. Intent IR / Transaction IR
+## 11. Intent IR / Transaction IR
 
 AI 不应直接下发最终 RPC 序列。
 
-### 10.1 推荐流程
+### 11.1 推荐流程
 
 1. AI 生成 `Intent IR`
 2. 系统解析影响范围和前置条件
@@ -332,7 +520,7 @@ AI 不应直接下发最终 RPC 序列。
 5. 输出 diff、风险、确认要求
 6. apply / discard / revise
 
-### 10.2 `Transaction IR` 至少应表达
+### 11.2 `Transaction IR` 至少应表达
 
 - operation scope（asset / prefab / scene instance / shot override）
 - target object ids
@@ -342,7 +530,7 @@ AI 不应直接下发最终 RPC 序列。
 - rollback handle
 - provenance
 
-### 10.3 继承旧 Zig 的部分
+### 11.3 继承旧 Zig 的部分
 
 旧 Zig 已经有：
 
@@ -356,11 +544,11 @@ AI 不应直接下发最终 RPC 序列。
 
 ---
 
-## 11. Observation Bus 与 Context Memory Index
+## 12. Observation Bus 与 Context Memory Index
 
 AI 不应依赖每轮全量重拉。
 
-### 11.1 建议统一事件流
+### 12.1 建议统一事件流
 
 - `project.changed`
 - `scene.changed`
@@ -373,7 +561,7 @@ AI 不应依赖每轮全量重拉。
 - `asset.import.finished`
 - `diagnostics.changed`
 
-### 11.2 `Context Memory Index` 保存的内容
+### 12.2 `Context Memory Index` 保存的内容
 
 - overview
 - focused slice
@@ -382,7 +570,7 @@ AI 不应依赖每轮全量重拉。
 - user intent continuity
 - authored / runtime / baked / inferred provenance
 
-### 11.3 为什么 observation 与 memory 必须并存
+### 12.3 为什么 observation 与 memory 必须并存
 
 只做 event stream 不够，因为 AI 仍然会丢失长期上下文。
 
@@ -396,19 +584,34 @@ AI 不应依赖每轮全量重拉。
 
 ---
 
-## 12. PNG / 视觉输入的角色
+## 13. PNG / 视觉输入的角色
 
-PNG 仍然有价值，但不是主理解面。
+PNG、材质球快照、模型 turntable、场景局部截图都应保留，而且随着多模态模型增强，它们会越来越有价值。
 
-### 12.1 适合由 PNG 负责的内容
+但这些视觉输入仍然不是主理解面，而是 **固定的辅助手段**。
+
+### 13.1 适合由视觉输入负责的内容
 
 - 构图
 - 光影
 - 镜头语言
 - 审美反馈
 - 屏幕指代消解
+- 材质观感分析
+- 造型轮廓比较
+- 修改前后视觉对比
 
-### 12.2 不适合由 PNG 单独负责的内容
+### 13.2 建议提供的视觉辅助输入
+
+- 材质球预览图
+- 模型 turntable snapshot
+- 标准三视图或多视角缩略图
+- 当前场景 viewport snapshot
+- 选中对象高亮图
+- 修改前 / 修改后对比图
+- region overlay 预览图
+
+### 13.3 不适合由视觉输入单独负责的内容
 
 - 模型身份
 - part 结构
@@ -420,10 +623,30 @@ PNG 仍然有价值，但不是主理解面。
 
 - 视觉输入是辅助手段
 - 语义文档才是主理解面
+- 审美判断与语义控制应当协作，而不是互相替代
+
+### 13.4 兔子示例中的双层工作流
+
+用户说：
+
+> 这个兔子不好看，帮我改可爱一点
+
+系统应分成两层工作：
+
+1. **语义控制层**
+   - 找到 candidate regions
+   - 判断哪些区域可能对应耳朵、眼睛、尾巴
+   - 规划作用域、预演、回滚和写入位置
+2. **视觉反馈层**
+   - 读取材质快照、模型多视角快照、当前 viewport
+   - 判断“哪里不好看”
+   - 比较修改前后是否更接近“可爱”“玩偶感”“毛绒感”
+
+这意味着 Guava 的目标不是“拒绝视觉”，而是“不要把视觉当成唯一理解来源”。
 
 ---
 
-## 13. 旧 Zig 设计的继承关系
+## 14. 旧 Zig 设计的继承关系
 
 Guava 新架构不应推翻旧 Zig 的三项重要能力：
 
@@ -431,7 +654,7 @@ Guava 新架构不应推翻旧 Zig 的三项重要能力：
 2. staged transaction / preview world
 3. intent log / command timeline / command meta
 
-### 13.1 保留项
+### 14.1 保留项
 
 - `scene://hierarchy`
 - `entity://{id}`
@@ -441,14 +664,14 @@ Guava 新架构不应推翻旧 Zig 的三项重要能力：
 - `approval`
 - `intent_log`
 
-### 13.2 升级项
+### 14.2 升级项
 
 - 从 snapshot 升级到 canonical document
 - 从 `Sequence + Track` 升级到 `Sequence + Shot + Clip + Binding`
 - 从 `AiTool.description` 升级到 `CapabilityGraph`
 - 从资源句柄理解升级到 `ModelDocument + ModelSemanticSummary`
 
-### 13.3 旧代码给出的直接约束
+### 14.3 旧代码给出的直接约束
 
 旧 Zig 代码已经证明：
 
@@ -458,7 +681,7 @@ Guava 新架构不应推翻旧 Zig 的三项重要能力：
 
 ---
 
-## 14. 实施顺序
+## 15. 实施顺序
 
 ### Phase A — Canonical Documents
 
@@ -472,6 +695,14 @@ Guava 新架构不应推翻旧 Zig 的三项重要能力：
 - `SceneHierarchyView`
 - `InspectorView`
 - `ShotTimelineView`
+
+### Phase B.5 — Semantic Production Pipeline
+
+- `Importer`
+- `CandidateRegionBuilder`
+- `SemanticAnalyzer`
+- `SemanticMemoryStore`
+- `MinimalConfirmationUI`
 
 ### Phase C — AI Interaction Layer
 
@@ -490,9 +721,9 @@ Guava 新架构不应推翻旧 Zig 的三项重要能力：
 
 ---
 
-## 15. 验收标准
+## 16. 验收标准
 
-当下面这些问题无需 PNG 也能回答时，说明设计开始成立：
+当下面这些问题在 **没有 PNG 时仍能稳定回答**，并且在 **有视觉输入时能进一步优化审美判断**，说明设计开始成立：
 
 1. “这个场景里有哪些 hero asset，它们分别在哪些 shot 被使用？”
 2. “这个模型有哪些可单独编辑的 part？”
@@ -510,14 +741,16 @@ Guava 新架构不应推翻旧 Zig 的三项重要能力：
 
 ---
 
-## 16. 后续文档拆分建议
+## 17. 后续文档拆分建议
 
 这份文档应作为总纲，后续再拆成更细的设计文档：
 
 1. `ModelDocument` 详细设计
-2. `SequenceDocument` / `Shot` / `Clip` / `Binding` 详细设计
-3. `CapabilityGraph` 详细设计
-4. `Observation Bus` 详细设计
-5. `Context Memory Index` 详细设计
+2. 低结构模型的 `CandidateRegionBuilder` / `SemanticAnalyzer` 详细设计
+3. `MinimalConfirmationUI` 详细设计
+4. `SequenceDocument` / `Shot` / `Clip` / `Binding` 详细设计
+5. `CapabilityGraph` 详细设计
+6. `Observation Bus` 详细设计
+7. `Context Memory Index` 详细设计
 
 总纲负责定边界，子文档负责定字段、接口和实现顺序。
