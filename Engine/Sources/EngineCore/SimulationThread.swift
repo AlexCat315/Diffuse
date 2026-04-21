@@ -69,7 +69,7 @@ final class SimulationThread: @unchecked Sendable {
 
         begin = CFAbsoluteTimeGetCurrent()
         runtime.tickSimulation(deltaTime: request.deltaTime)
-        sceneRuntime.tick()
+        sceneRuntime.tick(deltaTime: request.deltaTime)
         scriptRuntime.tick(deltaTime: request.deltaTime)
         simulationTimeSeconds += request.deltaTime
         simulationSeconds = CFAbsoluteTimeGetCurrent() - begin

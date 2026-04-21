@@ -14,6 +14,8 @@ let package = Package(
     ],
     products: [
         .executable(name: "GuavaUIDemo", targets: ["GuavaUIDemo"]),
+        .executable(name: "GuavaUIDemoMultiWindow", targets: ["GuavaUIDemoMultiWindow"]),
+        .executable(name: "GuavaUIDemoDockMultiWindow", targets: ["GuavaUIDemoDockMultiWindow"]),
         .library(name: "GuavaUIRuntime", targets: ["GuavaUIRuntime"]),
         .library(name: "GuavaUICompose", targets: ["GuavaUICompose"]),
     ],
@@ -80,13 +82,28 @@ let package = Package(
         // 不依赖 Engine，只依赖 GuavaUIRuntime。
         .target(
             name: "GuavaUICompose",
-            dependencies: ["GuavaUIRuntime"]
+            dependencies: ["GuavaUIRuntime",
+                           .product(name: "EngineKernel", package: "Engine")]
         ),
 
         // MARK: - Demo
         .executableTarget(
             name: "GuavaUIDemo",
             dependencies: ["GuavaUIRuntime", "GuavaUICompose"]
+        ),
+        .executableTarget(
+            name: "GuavaUIDemoMultiWindow",
+            dependencies: ["GuavaUIRuntime", "GuavaUICompose"]
+        ),
+        .executableTarget(
+            name: "GuavaUIDemoDockMultiWindow",
+            dependencies: [
+                "GuavaUIRuntime",
+                "GuavaUICompose",
+                .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "PlatformShell", package: "Engine"),
+                .product(name: "RHIWGPU", package: "Engine"),
+            ]
         ),
 
         // MARK: - Tests

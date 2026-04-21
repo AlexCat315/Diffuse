@@ -132,3 +132,14 @@ public enum InputEvent: Sendable {
     case windowResized(width: Int32, height: Int32)
     case windowPixelSizeChanged(width: Int32, height: Int32)
 }
+
+/// Input event tagged with the native window it belongs to.
+public struct WindowInputEvent: Sendable {
+    public var windowID: WindowID
+    public var event: InputEvent
+
+    public init(windowID: WindowID, event: InputEvent) {
+        self.windowID = windowID
+        self.event = event
+    }
+}
