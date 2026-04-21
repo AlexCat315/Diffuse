@@ -31,9 +31,11 @@ public struct PrimaryButtonStyle: ButtonStyle {
             : Color(r: 0, g: 0, b: 0, a: 0)
         let borderWidth: Float = configuration.isFocused ? 2 : 0
 
-        return AnyView(configuration.label)
-            .font(SemanticFontRef.bodyStrong)
-            .foregroundColor(fg)
+        return Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            AnyView(configuration.label)
+                .font(SemanticFontRef.bodyStrong)
+                .foregroundColor(fg)
+        }
             .padding(horizontal: theme.spacing.md, vertical: theme.spacing.xs + 2)
             .background(bg)
             .cornerRadius(theme.radius.md)

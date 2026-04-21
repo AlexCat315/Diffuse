@@ -125,7 +125,7 @@ struct RootView: View {
     }
 
     var body: some View {
-        Column(alignment: .leading, spacing: 0) {
+        Box(direction: .column, alignItems: .stretch) {
             topBar
             SplitView(.horizontal, fraction: 0.18) {
                 sidebar
@@ -178,13 +178,13 @@ struct RootView: View {
     // MARK: sidebar
 
     private var sidebar: some View {
-        Column(alignment: .leading, spacing: 0) {
+        Box(direction: .column, alignItems: .stretch) {
             Text("WORKSPACE")
                 .font(.label)
                 .foregroundColor(.onSurfaceMuted)
                 .padding(horizontal: 16, vertical: 12)
 
-            Column(alignment: .leading, spacing: 2) {
+            Box(direction: .column, alignItems: .stretch, spacing: 2) {
                 sidebarRow(.components)
                 sidebarRow(.tokens)
                 sidebarRow(.layouts)
@@ -246,7 +246,7 @@ struct RootView: View {
     @ViewBuilder
     private var workspace: some View {
         ScrollView(.vertical) {
-            Column(alignment: .leading, spacing: 18) {
+            Box(direction: .column, alignItems: .stretch, spacing: 18) {
                 workspaceHeader
                 switch section {
                 case .components: componentsPage
@@ -275,7 +275,7 @@ struct RootView: View {
     // MARK: components page
 
     private var componentsPage: some View {
-        Column(alignment: .leading, spacing: 16) {
+        Box(direction: .column, alignItems: .stretch, spacing: 16) {
             card("Buttons") {
                 Column(alignment: .leading, spacing: 12) {
                     Row(alignment: .center, spacing: 10) {
@@ -362,7 +362,7 @@ struct RootView: View {
     // MARK: tokens page
 
     private var tokensPage: some View {
-        Column(alignment: .leading, spacing: 16) {
+        Box(direction: .column, alignItems: .stretch, spacing: 16) {
             card("Surface ramp") {
                 Column(alignment: .leading, spacing: 6) {
                     surfaceSwatch("background",      ref: .background,      onRef: .onBackground)
@@ -436,7 +436,7 @@ struct RootView: View {
     // MARK: layouts page
 
     private var layoutsPage: some View {
-        Column(alignment: .leading, spacing: 16) {
+        Box(direction: .column, alignItems: .stretch, spacing: 16) {
             card("Image + chrome") {
                 Row(alignment: .top, spacing: 16) {
                     Image(textureID: previewTextureID, width: 112, height: 112)
@@ -501,7 +501,7 @@ struct RootView: View {
 
     private func card<Content: View>(_ title: String,
                                      @ViewBuilder _ content: () -> Content) -> some View {
-        Column(alignment: .leading, spacing: 12) {
+        Box(direction: .column, alignItems: .stretch, spacing: 12) {
             Text(title.uppercased())
                 .font(.label)
                 .foregroundColor(.onSurfaceMuted)
@@ -515,13 +515,13 @@ struct RootView: View {
     // MARK: inspector
 
     private var inspector: some View {
-        Column(alignment: .leading, spacing: 0) {
+        Box(direction: .column, alignItems: .stretch) {
             Text("INSPECTOR")
                 .font(.label)
                 .foregroundColor(.onSurfaceMuted)
                 .padding(horizontal: 16, vertical: 12)
 
-            Column(alignment: .leading, spacing: 12) {
+            Box(direction: .column, alignItems: .stretch, spacing: 12) {
                 inspectorRow("Selection", demoSceneTitle(id: selectedSceneNodeID))
                 inspectorRow("Section",   section.title)
                 inspectorRow("Theme",     appearance == .dark ? "Default Dark" : "Default Light")

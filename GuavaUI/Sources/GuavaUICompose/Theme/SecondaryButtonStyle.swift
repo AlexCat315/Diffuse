@@ -24,9 +24,11 @@ public struct SecondaryButtonStyle: ButtonStyle {
             : theme.colors.border
         let borderWidth: Float = configuration.isFocused ? 2 : 1
 
-        return AnyView(configuration.label)
-            .font(SemanticFontRef.bodyStrong)
-            .foregroundColor(SemanticColorRef.onSurface)
+        return Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            AnyView(configuration.label)
+                .font(SemanticFontRef.bodyStrong)
+                .foregroundColor(SemanticColorRef.onSurface)
+        }
             .padding(horizontal: theme.spacing.md, vertical: theme.spacing.xs + 2)
             .background(bg)
             .cornerRadius(theme.radius.md)
