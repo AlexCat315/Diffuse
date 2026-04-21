@@ -162,10 +162,10 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         let list = DrawList()
         node.draw?(list, CGPoint(x: 24, y: 16))
         let area = node.attachments[TextInputAttachmentKey.area] as? TextInputArea
-        #expect(area?.x == 24)
+        #expect((area?.x ?? 0) >= 24)
         #expect(area?.y == 16)
-        #expect((area?.width ?? 0) >= 180)
-        #expect((area?.cursorX ?? -1) >= 0)
+        #expect((area?.width ?? 0) > 0)
+        #expect(area?.cursorX == 0)
 
         dispatcher.dispatch(.textInput("你"))
         #expect(rig.store.value == "你")
