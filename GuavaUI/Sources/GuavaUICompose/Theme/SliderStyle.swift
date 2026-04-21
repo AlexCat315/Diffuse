@@ -130,8 +130,8 @@ public struct DefaultSliderStyle: SliderStyle {
                                            : theme.colors.surfaceVariant
         let thumb: Color = {
             if !c.isEnabled { return thumbBase }
-            if c.isPressed  { return thumbBase.darker(0.10) }
-            if c.isHovered  { return thumbBase.lighter(0.06) }
+            if c.isPressed  { return theme.colors.accentPressed }
+            if c.isHovered  { return theme.colors.accentHover }
             return thumbBase
         }()
         return SliderAppearance(
