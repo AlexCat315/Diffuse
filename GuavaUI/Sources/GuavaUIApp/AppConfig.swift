@@ -6,7 +6,7 @@ import RHIWGPU
 public struct AppConfig: Sendable {
     /// 窗口标题。
     public var title: String
-    /// 主字体名称。会用于 `TextEnvironment.bootstrapped`。
+    /// 主字体名称。默认使用当前平台的系统 UI 字体。
     public var primaryFontName: String
     /// 默认字号。
     public var defaultFontSize: Float
@@ -18,7 +18,7 @@ public struct AppConfig: Sendable {
     public var backendConfig: WGPUDeviceConfig
 
     public init(title: String = "GuavaUI",
-                primaryFontName: String = "Helvetica Neue",
+                primaryFontName: String = SystemFontDefaults.primaryFontName,
                 defaultFontSize: Float = 13,
                 defaultLineHeight: Float = 16,
                 clearColor: GPUColor = GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1),

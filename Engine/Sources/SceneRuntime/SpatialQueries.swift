@@ -130,6 +130,46 @@ public struct SceneOverlapHit: Sendable, Equatable {
     }
 }
 
+public struct SceneSweepQuery: Sendable, Equatable {
+    public var bounds: SpatialAABB
+    public var translation: SIMD3<Float>
+    public var includeTriggers: Bool
+
+    public init(bounds: SpatialAABB,
+                translation: SIMD3<Float>,
+                includeTriggers: Bool = false) {
+        self.bounds = bounds
+        self.translation = translation
+        self.includeTriggers = includeTriggers
+    }
+}
+
+public struct SceneSweepHit: Sendable, Equatable {
+    public var entity: EntityID
+    public var fraction: Float
+    public var distance: Float
+    public var position: SIMD3<Float>
+    public var normal: SIMD3<Float>
+    public var bounds: SpatialAABB
+    public var isTrigger: Bool
+
+    public init(entity: EntityID,
+                fraction: Float,
+                distance: Float,
+                position: SIMD3<Float>,
+                normal: SIMD3<Float>,
+                bounds: SpatialAABB,
+                isTrigger: Bool) {
+        self.entity = entity
+        self.fraction = fraction
+        self.distance = distance
+        self.position = position
+        self.normal = normal
+        self.bounds = bounds
+        self.isTrigger = isTrigger
+    }
+}
+
 func buildSpatialIndexResource(in world: RuntimeWorld) -> SpatialIndexResource {
     let entries: [SpatialIndexEntry] = world.entities().compactMap { entity in
         guard let collider = world.component(Collider.self, for: entity),
@@ -206,6 +246,54 @@ func performSpatialOverlap(_ query: SceneOverlapQuery,
         .map { entry in
             SceneOverlapHit(entity: entry.entity, bounds: entry.bounds, isTrigger: entry.isTrigger)
         }
+}
+
+func performSpatialSweep(_ query: SceneSweepQuery,
+                         using index: SpatialIndexResource) -> SceneSweepHit? {
+    guard query.bounds.isValid else { return nil }
+
+    let travelDistance = simd_length(query.translation)
+    guard travelDistance > 0.000_001 else { return nil }
+
+    let direction = query.translation / travelDistance
+    let queryCenter = query.bounds.center
+    let queryHalfExtents = query.bounds.halfExtents
+
+    var resolvedHit: SceneSweepHit?
+    for entry in index.entries {
+        guard query.includeTriggers || !entry.isTrigger else { continue }
+
+        let expandedBounds = expandedAABB(entry.bounds, by: queryHalfExtents)
+        guard let interval = raycastBoxInterval(min: expandedBounds.min,
+                                               max: expandedBounds.max,
+                                               origin: queryCenter,
+                                               direction: direction,
+                                               maxDistance: travelDistance),
+              let hit = preciseSweep(shape: entry.shape,
+                                     worldTransform: entry.worldTransform,
+                                     queryBounds: query.bounds,
+                                     direction: direction,
+                                     maxDistance: travelDistance,
+                                     broadPhaseInterval: interval) else {
+            continue
+        }
+
+        if let existing = resolvedHit, existing.distance <= hit.distance {
+            continue
+        }
+
+        resolvedHit = SceneSweepHit(
+            entity: entry.entity,
+            fraction: hit.distance / travelDistance,
+            distance: hit.distance,
+            position: hit.position,
+            normal: hit.normal,
+            bounds: entry.bounds,
+            isTrigger: entry.isTrigger
+        )
+    }
+
+    return resolvedHit
 }
 
 private func colliderBounds(shape: ColliderShape,
@@ -534,11 +622,82 @@ private func pointAABBDistanceSquared(point: SIMD3<Float>, bounds: SpatialAABB) 
     return simd_length_squared(delta)
 }
 
-private func raycastBox(min: SIMD3<Float>,
-                        max: SIMD3<Float>,
-                        origin: SIMD3<Float>,
-                        direction: SIMD3<Float>,
-                        maxDistance: Float) -> (distance: Float, position: SIMD3<Float>, normal: SIMD3<Float>)? {
+private func expandedAABB(_ bounds: SpatialAABB, by halfExtents: SIMD3<Float>) -> SpatialAABB {
+    SpatialAABB(min: bounds.min - halfExtents, max: bounds.max + halfExtents)
+}
+
+private func translatedAABB(_ bounds: SpatialAABB, by translation: SIMD3<Float>) -> SpatialAABB {
+    SpatialAABB(min: bounds.min + translation, max: bounds.max + translation)
+}
+
+private func preciseSweep(shape: ColliderShape,
+                          worldTransform: WorldTransform,
+                          queryBounds: SpatialAABB,
+                          direction: SIMD3<Float>,
+                          maxDistance: Float,
+                          broadPhaseInterval: (entryDistance: Float, exitDistance: Float, normal: SIMD3<Float>)) -> (distance: Float, position: SIMD3<Float>, normal: SIMD3<Float>)? {
+    if preciseOverlap(shape: shape,
+                      worldTransform: worldTransform,
+                      queryBounds: queryBounds) {
+        return (0, queryBounds.center, broadPhaseInterval.normal)
+    }
+
+    let entryDistance = Swift.max(broadPhaseInterval.entryDistance, 0)
+    let exitDistance = Swift.min(broadPhaseInterval.exitDistance, maxDistance)
+    guard entryDistance <= exitDistance else { return nil }
+
+    let sampleCount = 64
+    var previousDistance = entryDistance
+    var previousOverlaps = preciseOverlap(shape: shape,
+                                          worldTransform: worldTransform,
+                                          queryBounds: translatedAABB(queryBounds, by: direction * entryDistance))
+
+    if previousOverlaps {
+        return (entryDistance, queryBounds.center + direction * entryDistance, broadPhaseInterval.normal)
+    }
+
+    for step in 1...sampleCount {
+        let alpha = Float(step) / Float(sampleCount)
+        let sampleDistance = simd_mix(entryDistance, exitDistance, alpha)
+        let sampleBounds = translatedAABB(queryBounds, by: direction * sampleDistance)
+        let overlaps = preciseOverlap(shape: shape,
+                                      worldTransform: worldTransform,
+                                      queryBounds: sampleBounds)
+        if !overlaps {
+            previousDistance = sampleDistance
+            previousOverlaps = false
+            continue
+        }
+
+        var lowerBound = previousOverlaps ? previousDistance : previousDistance
+        var upperBound = sampleDistance
+        if !previousOverlaps {
+            for _ in 0..<20 {
+                let midpoint = (lowerBound + upperBound) * 0.5
+                let midpointBounds = translatedAABB(queryBounds, by: direction * midpoint)
+                if preciseOverlap(shape: shape,
+                                  worldTransform: worldTransform,
+                                  queryBounds: midpointBounds) {
+                    upperBound = midpoint
+                } else {
+                    lowerBound = midpoint
+                }
+            }
+        }
+
+        return (upperBound,
+                queryBounds.center + direction * upperBound,
+                broadPhaseInterval.normal)
+    }
+
+    return nil
+}
+
+private func raycastBoxInterval(min: SIMD3<Float>,
+                                max: SIMD3<Float>,
+                                origin: SIMD3<Float>,
+                                direction: SIMD3<Float>,
+                                maxDistance: Float) -> (entryDistance: Float, exitDistance: Float, normal: SIMD3<Float>)? {
     var entryDistance: Float = 0
     var exitDistance = maxDistance
     var entryNormal = SIMD3<Float>.zero
@@ -575,9 +734,24 @@ private func raycastBox(min: SIMD3<Float>,
     }
 
     guard entryDistance <= maxDistance else { return nil }
-    let hitDistance = Swift.max(entryDistance, 0)
+    return (entryDistance, exitDistance, entryNormal)
+}
+
+private func raycastBox(min: SIMD3<Float>,
+                        max: SIMD3<Float>,
+                        origin: SIMD3<Float>,
+                        direction: SIMD3<Float>,
+                        maxDistance: Float) -> (distance: Float, position: SIMD3<Float>, normal: SIMD3<Float>)? {
+    guard let interval = raycastBoxInterval(min: min,
+                                            max: max,
+                                            origin: origin,
+                                            direction: direction,
+                                            maxDistance: maxDistance) else {
+        return nil
+    }
+    let hitDistance = Swift.max(interval.entryDistance, 0)
     let position = origin + direction * hitDistance
-    return (hitDistance, position, entryNormal)
+    return (hitDistance, position, interval.normal)
 }
 
 private func raycastSphere(center: SIMD3<Float>,
