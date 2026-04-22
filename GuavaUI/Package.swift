@@ -19,6 +19,7 @@ let package = Package(
         .library(name: "GuavaUIRuntime", targets: ["GuavaUIRuntime"]),
         .library(name: "GuavaUICompose", targets: ["GuavaUICompose"]),
         .library(name: "GuavaUIApp", targets: ["GuavaUIApp"]),
+        .library(name: "GuavaUIDevTools", targets: ["GuavaUIDevTools"]),
     ],
     dependencies: [
         .package(path: "../Engine"),
@@ -97,9 +98,24 @@ let package = Package(
             dependencies: [
                 "GuavaUIRuntime",
                 "GuavaUICompose",
+                "GuavaUIDevTools",
                 .product(name: "PlatformShell", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "Logging", package: "swift-log"),
+            ]
+        ),
+
+        // MARK: - DevTools
+        // 进程内 WebSocket 调试服务器。基于 Network.framework，无第三方依赖。
+        // 仅依赖 GuavaUIRuntime 的只读快照接口，opt-in。
+        .target(
+            name: "GuavaUIDevTools",
+            dependencies: [
+                "GuavaUIRuntime",
+                .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "RHIWGPU", package: "Engine"),
+                .product(name: "Logging", package: "swift-log"),
             ]
         ),
 
@@ -144,6 +160,13 @@ let package = Package(
             dependencies: [
                 "GuavaUIApp",
                 "GuavaUICompose",
+            ]
+        ),
+        .testTarget(
+            name: "GuavaUIDevToolsTests",
+            dependencies: [
+                "GuavaUIDevTools",
+                "GuavaUIRuntime",
             ]
         ),
     ]

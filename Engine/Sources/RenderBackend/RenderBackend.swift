@@ -513,19 +513,31 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
         let cube = BuiltinMesh.cube()
         let cubeMesh = try uploadMesh(cube)
+        let cubeBounds = cube.localBounds
+        var objAsset: MeshAsset?
         var objMesh: GPUMesh?
         if let url = Bundle.module.url(forResource: "FinalBaseMesh", withExtension: "obj") {
             do {
                 var obj = try OBJLoader.load(path: url.path)
                 obj.normalizeToUnitBounds(targetSize: 2.0)
                 objMesh = try uploadMesh(obj)
+                objAsset = obj
             } catch {
                 Logger.renderer.error("OBJ load failed (\(error)); skipping fixture mesh")
             }
         }
 
         meshes.append(cubeMesh)
-        if let objMesh { meshes.append(objMesh) }
+        MeshBoundsRegistry.shared.register(meshIndex: 0,
+                                           min: cubeBounds.min,
+                                           max: cubeBounds.max)
+        if let objMesh, let objAsset {
+            meshes.append(objMesh)
+            let b = objAsset.localBounds
+            MeshBoundsRegistry.shared.register(meshIndex: meshes.count - 1,
+                                               min: b.min,
+                                               max: b.max)
+        }
 
         let meshNames = meshes.map(\ .name)
         Logger.renderer.info("mesh table built: meshes=\(meshNames)")

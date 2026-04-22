@@ -1,4 +1,5 @@
 import Foundation
+import simd
 
 public struct AssetPipeline {
     public init() {}
@@ -31,6 +32,23 @@ public struct MeshAsset: Sendable {
     public var indexCount: UInt32 { UInt32(indices.count) }
     public var vertexBufferSize: Int { vertices.count * MemoryLayout<Float>.size }
     public var indexBufferSize: Int { indices.count * MemoryLayout<UInt32>.size }
+
+    /// Local-space axis-aligned bounding box of all vertex positions.
+    /// 空 mesh 退化为 (.zero, .zero)。
+    public var localBounds: (min: SIMD3<Float>, max: SIMD3<Float>) {
+        let stride = MeshAsset.vertexStride / MemoryLayout<Float>.size
+        var lo = SIMD3<Float>(repeating: .infinity)
+        var hi = SIMD3<Float>(repeating: -.infinity)
+        var i = 0
+        while i < vertices.count {
+            let v = SIMD3<Float>(vertices[i], vertices[i + 1], vertices[i + 2])
+            lo = simd_min(lo, v)
+            hi = simd_max(hi, v)
+            i += stride
+        }
+        if lo.x == .infinity { return (.zero, .zero) }
+        return (lo, hi)
+    }
 
     /// Recenter to origin and uniform-scale longest axis to `targetSize`.
     public mutating func normalizeToUnitBounds(targetSize: Float = 2.0) {
