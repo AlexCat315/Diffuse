@@ -90,12 +90,18 @@ struct _DockTabBarHost: _PrimitiveView {
     func _updateNode(_ node: Node) {
         let appearance = resolveDockAppearance(on: node)
         node.backgroundColor = appearance.tabBarBackground
+        // Drive the strip height from the resolved DockAppearance. The
+        // layout node is linked by ViewGraph.materialisePrimitive before
+        // _updateNode runs, so this writes through on the very first pass
+        // (and on every subsequent recompose).
+        node.layoutNode?.height = appearance.tabBarHeight
     }
 
     func _makeLayoutNode() -> LayoutNode? {
         let l = LayoutNode()
         l.flexDirection = .row
         l.alignItems = .stretch
+        // Fallback before _updateNode lands the appearance value.
         l.height = 32
         return l
     }
@@ -103,7 +109,6 @@ struct _DockTabBarHost: _PrimitiveView {
     func _updateLayout(_ layout: LayoutNode) {
         layout.flexDirection = .row
         layout.alignItems = .stretch
-        layout.height = 32
     }
 
     func _children(for node: Node) -> [any View] {
@@ -138,9 +143,17 @@ struct _DockTabBarItem: View {
     }
 }
 
-/// Pointer must travel this many pixels (in any direction) past the press
-/// point before a click upgrades to a drag.
-private let DOCK_DRAG_THRESHOLD: Float = 4
+/// Phase G — gesture intent ladder thresholds. Pointer travel below the
+/// reorder threshold keeps the press a click; between reorder and lift it
+/// is treated as a same-leaf reorder; past the lift threshold (or any
+/// motion outside the strip) the drag escalates to a full lift with the
+/// 5-direction edge indicator.
+private let DOCK_REORDER_THRESHOLD: Float = 4
+private let DOCK_LIFT_THRESHOLD: Float = 12
+/// Vertical-only travel that immediately upgrades to a lift even if the
+/// total displacement is still below `DOCK_LIFT_THRESHOLD`. A short
+/// downward jab is the canonical "tear off the strip" gesture.
+private let DOCK_LIFT_VERTICAL_THRESHOLD: Float = 8
 
 struct _DockTabBarItemHost: _PrimitiveView {
     let tab: DockTab
@@ -239,9 +252,17 @@ struct _DockTabBarItemHost: _PrimitiveView {
             let dy = event.y - state.downY
             let session = snapshot.controller.dragSession
             let bridge = node.compositionValue(of: DockHostBridgeLocal)
+            let absDX = abs(dx)
+            let absDY = abs(dy)
+            let liftReached = absDX >= DOCK_LIFT_THRESHOLD
+                || absDY >= DOCK_LIFT_VERTICAL_THRESHOLD
+            let reorderReached = absDX >= DOCK_REORDER_THRESHOLD
+                || absDY >= DOCK_REORDER_THRESHOLD
             if !state.didDrag {
-                if abs(dx) > DOCK_DRAG_THRESHOLD || abs(dy) > DOCK_DRAG_THRESHOLD {
+                if reorderReached {
                     state.didDrag = true
+                    let initialIntent: DockDragSession.DragIntent =
+                        liftReached ? .detachOrSplit : .reorderInStrip
                     if let bridge {
                         // Seed the cross-window drag with the global pointer
                         // derived from the host's window origin.
@@ -253,15 +274,20 @@ struct _DockTabBarItemHost: _PrimitiveView {
                                       x: event.x, y: event.y,
                                       globalX: originX + event.x,
                                       globalY: originY + event.y,
-                                      origin: .mainTreeTab)
+                                      origin: .mainTreeTab,
+                                      intent: initialIntent)
                     } else {
                         session.start(tabID: snapshot.tab.id,
                                       sourceLeafID: snapshot.sourceLeafID,
                                       ghost: DockDragSession.GhostInfo(title: snapshot.tab.title),
-                                      x: event.x, y: event.y)
+                                      x: event.x, y: event.y,
+                                      intent: initialIntent)
                     }
                 }
             } else {
+                if liftReached {
+                    session.escalateIntent(to: .detachOrSplit)
+                }
                 if let bridge {
                     let originX = bridge.originProvider()?.x ?? 0
                     let originY = bridge.originProvider()?.y ?? 0
@@ -296,7 +322,7 @@ struct _DockTabBarItemHost: _PrimitiveView {
             .font(.bodyStrong)
             .foregroundColor(isActive ? .onSurface : .onSurfaceMuted)
 
-        let row = Row(alignment: .center, spacing: 6) {
+        let row = Row(alignment: .center, spacing: appearance.tabHorizontalSpacing) {
             if let icon = tab.icon {
                 Image(textureID: icon.textureID,
                       width: icon.width,
@@ -311,7 +337,7 @@ struct _DockTabBarItemHost: _PrimitiveView {
             }
         }
         .padding(horizontal: appearance.tabHorizontalPadding,
-                 vertical: 6)
+                 vertical: appearance.tabVerticalPadding)
 
         let underline: any View
         if isActive {
@@ -437,7 +463,7 @@ struct _DockLeafDragHandleHost: _PrimitiveView {
             let session = snapshot.controller.dragSession
             let bridge = node.compositionValue(of: DockHostBridgeLocal)
             if !state.didDrag {
-                if abs(dx) > DOCK_DRAG_THRESHOLD || abs(dy) > DOCK_DRAG_THRESHOLD {
+                if abs(dx) >= DOCK_LIFT_THRESHOLD || abs(dy) >= DOCK_LIFT_THRESHOLD {
                     state.didDrag = true
                     let ghost = DockDragSession.GhostInfo(title: activeTitle)
                     if let bridge {
@@ -449,13 +475,15 @@ struct _DockLeafDragHandleHost: _PrimitiveView {
                                       x: event.x, y: event.y,
                                       globalX: originX + event.x,
                                       globalY: originY + event.y,
-                                      origin: .mainTreeLeaf(leafID: snapshot.sourceLeafID))
+                                      origin: .mainTreeLeaf(leafID: snapshot.sourceLeafID),
+                                      intent: .detachOrSplit)
                     } else {
                         session.start(tabID: nil,
                                       sourceLeafID: snapshot.sourceLeafID,
                                       ghost: ghost,
                                       x: event.x, y: event.y,
-                                      origin: .mainTreeLeaf(leafID: snapshot.sourceLeafID))
+                                      origin: .mainTreeLeaf(leafID: snapshot.sourceLeafID),
+                                      intent: .detachOrSplit)
                     }
                 }
             } else {
@@ -541,7 +569,11 @@ struct _DockTabCloseButtonHost: _PrimitiveView {
         return n
     }
 
-    func _updateNode(_ node: Node) {}
+    func _updateNode(_ node: Node) {
+        let size = resolveDockAppearance(on: node).closeButtonSize
+        node.layoutNode?.width = size
+        node.layoutNode?.height = size
+    }
 
     func _makeLayoutNode() -> LayoutNode? {
         let l = LayoutNode()
@@ -551,17 +583,19 @@ struct _DockTabCloseButtonHost: _PrimitiveView {
     }
 
     func _updateLayout(_ layout: LayoutNode) {
-        layout.width = 16
-        layout.height = 16
+        // Width/height come from _updateNode (theme-driven). The 16-pt
+        // values set in _makeLayoutNode are only fallbacks for tests that
+        // never invoke ViewGraph (and so never call _updateNode).
     }
 
     func _children(for node: Node) -> [any View] {
         let snap = self
+        let size = resolveDockAppearance(on: node).closeButtonSize
         return [
             Button(action: { snap.controller.apply(.closeTab(snap.tab.id)) }) {
                 Text("×")
             }
-            .buttonStyle(_DockTabCloseButtonStyle(isActive: isActive))
+            .buttonStyle(_DockTabCloseButtonStyle(isActive: isActive, size: size))
         ]
     }
 }

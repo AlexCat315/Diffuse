@@ -9,11 +9,17 @@ public struct DockAppearance: Sendable {
     public var tabBarBackground: Color
     public var tabBarHeight: Float
     public var tabHorizontalPadding: Float
+    /// Spacing between the icon, label, and close button inside one tab.
+    public var tabHorizontalSpacing: Float
+    /// Vertical padding inside one tab's content row.
+    public var tabVerticalPadding: Float
     public var tabActiveBackground: Color?
     public var tabActiveForeground: Color
     public var tabInactiveForeground: Color
     public var tabActiveAccentBar: Color
     public var tabActiveAccentBarHeight: Float
+    /// Side length of the close-X glyph button inside a closable tab.
+    public var closeButtonSize: Float
 
     // Split divider
     public var splitDividerThickness: Float
@@ -24,32 +30,44 @@ public struct DockAppearance: Sendable {
     public var leafBackground: Color
     public var emptyLeafBackground: Color
 
+    // Satellite (floating) window chrome
+    /// Visible height of the satellite window's drag/title bar.
+    public var satelliteTitleBarHeight: Float
+
     public init(tabBarBackground: Color,
                 tabBarHeight: Float,
                 tabHorizontalPadding: Float,
+                tabHorizontalSpacing: Float,
+                tabVerticalPadding: Float,
                 tabActiveBackground: Color?,
                 tabActiveForeground: Color,
                 tabInactiveForeground: Color,
                 tabActiveAccentBar: Color,
                 tabActiveAccentBarHeight: Float,
+                closeButtonSize: Float,
                 splitDividerThickness: Float,
                 splitDividerColor: Color,
                 splitDividerHitSlop: Float,
                 leafBackground: Color,
-                emptyLeafBackground: Color) {
+                emptyLeafBackground: Color,
+                satelliteTitleBarHeight: Float) {
         self.tabBarBackground = tabBarBackground
         self.tabBarHeight = tabBarHeight
         self.tabHorizontalPadding = tabHorizontalPadding
+        self.tabHorizontalSpacing = tabHorizontalSpacing
+        self.tabVerticalPadding = tabVerticalPadding
         self.tabActiveBackground = tabActiveBackground
         self.tabActiveForeground = tabActiveForeground
         self.tabInactiveForeground = tabInactiveForeground
         self.tabActiveAccentBar = tabActiveAccentBar
         self.tabActiveAccentBarHeight = tabActiveAccentBarHeight
+        self.closeButtonSize = closeButtonSize
         self.splitDividerThickness = splitDividerThickness
         self.splitDividerColor = splitDividerColor
         self.splitDividerHitSlop = splitDividerHitSlop
         self.leafBackground = leafBackground
         self.emptyLeafBackground = emptyLeafBackground
+        self.satelliteTitleBarHeight = satelliteTitleBarHeight
     }
 }
 

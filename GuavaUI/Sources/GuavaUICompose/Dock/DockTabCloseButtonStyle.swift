@@ -2,9 +2,10 @@ import GuavaUIRuntime
 
 /// Compact ghost-flavoured button style used exclusively for the close-X
 /// glyph rendered inside `DockTabBar`. Differs from `GhostButtonStyle` in
-/// that it forces a 16×16 frame, drops horizontal padding entirely, uses
-/// the small radius scale, and tints the label by tab activation state
-/// instead of always applying `.onSurface`.
+/// that it forces a square frame sized by `DockAppearance.closeButtonSize`,
+/// drops horizontal padding entirely, uses the small radius scale, and
+/// tints the label by tab activation state instead of always applying
+/// `.onSurface`.
 ///
 /// State-layer overlays come straight from the active theme so a hover or
 /// press tint follows whatever palette the host installed (matches the
@@ -13,6 +14,7 @@ import GuavaUIRuntime
 /// hook so palette swaps cross-fade like every other built-in button.
 struct _DockTabCloseButtonStyle: ButtonStyle {
     let isActive: Bool
+    let size: Float
 
     func makeBody(configuration: ButtonStyleConfiguration) -> some View {
         let theme = configuration.theme
@@ -30,7 +32,7 @@ struct _DockTabCloseButtonStyle: ButtonStyle {
                 .font(.bodyStrong)
                 .foregroundColor(labelColor)
         }
-        .frame(width: 16, height: 16)
+        .frame(width: size, height: size)
         .background(bg)
         .cornerRadius(theme.radius.sm)
         .opacity(configuration.isEnabled ? 1 : 0.55)

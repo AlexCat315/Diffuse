@@ -34,6 +34,11 @@ public struct DockTab: Hashable, Sendable, Codable {
     /// `controller.apply(.closeTab(id))` becomes a caller-side responsibility
     /// (e.g. via the context menu callback). Defaults to `true`.
     public var isClosable: Bool
+    /// When `true`, the tab is pinned to the front of the strip (Phase O).
+    /// Pinned tabs participate in a separate row that is never scrolled
+    /// by the overflow ScrollView and survive `closeOthers` (they are
+    /// excluded from the to-close set). Defaults to `false`.
+    public var isPinned: Bool
     /// Optional small bitmap rendered before the title in the tab strip.
     /// `nil` means "no icon"; the strip lays out the label flush against the
     /// horizontal padding instead.
@@ -43,16 +48,18 @@ public struct DockTab: Hashable, Sendable, Codable {
                 userKey: String,
                 title: String,
                 isClosable: Bool = true,
+                isPinned: Bool = false,
                 icon: DockTabIcon? = nil) {
         self.id = id
         self.userKey = userKey
         self.title = title
         self.isClosable = isClosable
+        self.isPinned = isPinned
         self.icon = icon
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, userKey, title, isClosable, icon
+        case id, userKey, title, isClosable, isPinned, icon
     }
 
     /// Custom decoder so pre-D9 snapshots (which only carry `id` /
@@ -64,6 +71,7 @@ public struct DockTab: Hashable, Sendable, Codable {
         self.userKey = try c.decode(String.self, forKey: .userKey)
         self.title = try c.decode(String.self, forKey: .title)
         self.isClosable = try c.decodeIfPresent(Bool.self, forKey: .isClosable) ?? true
+        self.isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
         self.icon = try c.decodeIfPresent(DockTabIcon.self, forKey: .icon)
     }
 }

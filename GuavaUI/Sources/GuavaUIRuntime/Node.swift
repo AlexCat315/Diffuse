@@ -24,6 +24,13 @@ public final class Node: @unchecked Sendable {
     /// Coordinates are local to the parent node.
     public var frame: CGRect = .zero
 
+    /// Weak link to this node's `LayoutNode`, set by `ViewGraph` during
+    /// materialisation. Lets `_PrimitiveView._updateNode` drive layout
+    /// dimensions from theme tokens (resolved on the node) without
+    /// needing the geometry to live on the View struct or be re-read
+    /// inside `_updateLayout`, which has no node handle.
+    public weak var layoutNode: LayoutNode?
+
     // MARK: - Interaction (Phase 6.1)
 
     /// When false, hit-testing skips this node (children are still visited
