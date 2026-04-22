@@ -16,25 +16,7 @@ public struct DefaultTreeRowStyle: TreeRowStyle {
             return clear
         }()
 
-        let chevron: String = {
-            guard configuration.hasChildren else { return "" }
-            return configuration.isExpanded ? "▾" : "▸"
-        }()
-
         return Row(alignment: .center, spacing: 0) {
-            // Indent gutter.
-            Box { EmptyView() }
-                .frame(width: Float(configuration.depth) * configuration.indentation)
-
-            // Disclosure slot — always reserved so siblings align even when a
-            // node has no children.
-            Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                Text(chevron)
-                    .foregroundColor(SemanticColorRef.onSurfaceMuted)
-            }
-            .frame(width: configuration.disclosureWidth)
-
-            // Row content.
             Row(alignment: .center, spacing: t.spacing.sm) {
                 configuration.content
                 Spacer(minLength: 0)

@@ -181,6 +181,10 @@ public struct SceneRuntime {
         performSpatialOverlap(query, using: spatialIndex)
     }
 
+    public func sweep(_ query: SceneSweepQuery) -> SceneSweepHit? {
+        performSpatialSweep(query, using: spatialIndex)
+    }
+
     public mutating func setPhysicsBackend(_ backend: any PhysicsBackend) {
         schedule.setPhysicsBackend(backend)
     }

@@ -37,8 +37,10 @@ struct HierarchyPanel: View {
                      children: \.children,
                      selection: selection,
                      expanded: $expanded,
-                     rowHeight: 42,
-                     rowSpacing: 2) { entity, _, _, _ in
+                     rowHeight: 36,
+                     rowSpacing: 1,
+                     indentation: 10,
+                     disclosureWidth: 14) { entity, _, _, _ in
                     Box(direction: .column, alignItems: .stretch, justifyContent: .center) {
                         Text(entity.name)
                             .font(.bodyStrong)
@@ -46,7 +48,7 @@ struct HierarchyPanel: View {
                             .font(.caption)
                             .foregroundColor(.onSurfaceMuted)
                     }
-                    .padding(horizontal: 8, vertical: 6)
+                    .padding(horizontal: 4, vertical: 2)
                 }
                 .flex()
             }

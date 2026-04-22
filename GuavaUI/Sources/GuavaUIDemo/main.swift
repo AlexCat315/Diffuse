@@ -687,7 +687,7 @@ func configureTextEnvironment(scale requestedScale: Float) {
     let atlasEdge = max(1024, Int((1024 * scale).rounded(.up)))
     let environment = TextEnvironment.bootstrapped(
         atlasTextureID: atlasTextureID,
-        primaryFontName: "Helvetica Neue",
+        primaryFontName: SystemFontDefaults.primaryFontName,
         defaultFont: Font.system(size: 18),
         defaultLineHeight: 22,
         defaultColor: .white,
