@@ -22,7 +22,6 @@ enum EditorRootViewFactory {
         let inspectorTab = DockTab(userKey: "inspector", title: "Inspector")
         let viewportTab = DockTab(userKey: "viewport",
                                   title: "Viewport",
-                                  isDraggable: false,
                                   isClosable: false)
         let consoleTab = DockTab(userKey: "console", title: "Console")
 
@@ -68,7 +67,49 @@ enum EditorRootViewFactory {
             first: topRow,
             second: consoleLeaf
         )
-        return DockController(root: root)
+        let controller = DockController(root: root)
+        let regionByKey: [String: PanelWorkspaceRegion] = [
+            "hierarchy": .leadingSidebar,
+            "viewport": .center,
+            "inspector": .trailingSidebar,
+            "console": .bottomPanel,
+        ]
+        controller.onAllowDrop = { [regionByKey] request in
+            guard case .splitEdge(let targetID, _) = request.target else {
+                return true
+            }
+            guard let targetRegion = regionOfLeaf(id: targetID,
+                                                  in: controller.root,
+                                                  regionByKey: regionByKey) else {
+                return true
+            }
+            return targetRegion == .center
+        }
+        return controller
+    }
+
+    private static func regionOfLeaf(id: DockNodeID,
+                                     in node: DockLayoutNode,
+                                     regionByKey: [String: PanelWorkspaceRegion]) -> PanelWorkspaceRegion? {
+        guard let found = findNode(id, in: node) else { return nil }
+        switch found {
+        case .empty:
+            return .center
+        case .tabs(_, let tabs, _):
+            guard let first = tabs.first else { return .center }
+            return regionByKey[first.userKey] ?? .center
+        case .split:
+            return nil
+        }
+    }
+
+    private static func findNode(_ id: DockNodeID,
+                                 in node: DockLayoutNode) -> DockLayoutNode? {
+        if node.id == id { return node }
+        guard case .split(_, _, _, let first, let second) = node else {
+            return nil
+        }
+        return findNode(id, in: first) ?? findNode(id, in: second)
     }
 
     static func makeRegistry(app: EditorApplication) -> PanelRegistry {

@@ -127,6 +127,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             flags |= Self.rigidBodyAllowSleepFlag
         }
 
+        let rotation = rotationQuaternion(from: descriptor.worldTransform.matrix)
+
         var boxHalfExtents = SIMD3<Float>.zero
         var sphereRadius: Float = 0
         var capsuleRadius: Float = 0
@@ -164,10 +166,10 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             position_x: descriptor.worldTransform.translation.x,
             position_y: descriptor.worldTransform.translation.y,
             position_z: descriptor.worldTransform.translation.z,
-            rotation_x: 0,
-            rotation_y: 0,
-            rotation_z: 0,
-            rotation_w: 1,
+            rotation_x: rotation.vector.x,
+            rotation_y: rotation.vector.y,
+            rotation_z: rotation.vector.z,
+            rotation_w: rotation.vector.w,
             linear_velocity_x: descriptor.rigidBody?.linearVelocity.x ?? 0,
             linear_velocity_y: descriptor.rigidBody?.linearVelocity.y ?? 0,
             linear_velocity_z: descriptor.rigidBody?.linearVelocity.z ?? 0,
@@ -219,15 +221,16 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     }
 
     private func makeBodyState(from descriptor: PhysicsBodyDescriptor) -> GuavaJoltBodyState {
-        GuavaJoltBodyState(
+        let rotation = rotationQuaternion(from: descriptor.worldTransform.matrix)
+        return GuavaJoltBodyState(
             entity_id: descriptor.entity.rawValue,
             position_x: descriptor.worldTransform.translation.x,
             position_y: descriptor.worldTransform.translation.y,
             position_z: descriptor.worldTransform.translation.z,
-            rotation_x: 0,
-            rotation_y: 0,
-            rotation_z: 0,
-            rotation_w: 1,
+            rotation_x: rotation.vector.x,
+            rotation_y: rotation.vector.y,
+            rotation_z: rotation.vector.z,
+            rotation_w: rotation.vector.w,
             linear_velocity_x: descriptor.rigidBody?.linearVelocity.x ?? 0,
             linear_velocity_y: descriptor.rigidBody?.linearVelocity.y ?? 0,
             linear_velocity_z: descriptor.rigidBody?.linearVelocity.z ?? 0,
@@ -272,8 +275,14 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             return nil
         }
 
-        var matrix = descriptor.worldTransform.matrix
-        matrix.columns.3 = SIMD4<Float>(state.position_x, state.position_y, state.position_z, 1)
+        let rotation = normalizedQuaternion(
+            SIMD4<Float>(state.rotation_x, state.rotation_y, state.rotation_z, state.rotation_w)
+        )
+        let matrix = transformMatrix(
+            translation: SIMD3<Float>(state.position_x, state.position_y, state.position_z),
+            rotation: rotation,
+            scale: matrixScale(of: descriptor.worldTransform.matrix)
+        )
         return PhysicsBodyWriteback(
             entity: descriptor.entity,
             worldTransform: WorldTransform(matrix: matrix),
@@ -289,5 +298,52 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
             ),
             isSleeping: state.is_sleeping != 0
         )
+    }
+
+    private func rotationQuaternion(from matrix: simd_float4x4) -> simd_quatf {
+        let x = normalizedBasis(SIMD3<Float>(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z),
+                                fallback: SIMD3<Float>(1, 0, 0))
+        let y = normalizedBasis(SIMD3<Float>(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z),
+                                fallback: SIMD3<Float>(0, 1, 0))
+        let z = normalizedBasis(SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z),
+                                fallback: SIMD3<Float>(0, 0, 1))
+        let rotationMatrix = simd_float3x3(columns: (x, y, z))
+        return simd_quatf(rotationMatrix)
+    }
+
+    private func matrixScale(of matrix: simd_float4x4) -> SIMD3<Float> {
+        SIMD3<Float>(
+            simd_length(SIMD3<Float>(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z)),
+            simd_length(SIMD3<Float>(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z)),
+            simd_length(SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z))
+        )
+    }
+
+    private func transformMatrix(translation: SIMD3<Float>,
+                                 rotation: simd_quatf,
+                                 scale: SIMD3<Float>) -> simd_float4x4 {
+        let basisX = rotation.act(SIMD3<Float>(1, 0, 0)) * scale.x
+        let basisY = rotation.act(SIMD3<Float>(0, 1, 0)) * scale.y
+        let basisZ = rotation.act(SIMD3<Float>(0, 0, 1)) * scale.z
+        return simd_float4x4(columns: (
+            SIMD4<Float>(basisX, 0),
+            SIMD4<Float>(basisY, 0),
+            SIMD4<Float>(basisZ, 0),
+            SIMD4<Float>(translation, 1)
+        ))
+    }
+
+    private func normalizedQuaternion(_ vector: SIMD4<Float>) -> simd_quatf {
+        let length = simd_length(vector)
+        guard length > 0.000_001 else {
+            return simd_quatf(vector: SIMD4<Float>(0, 0, 0, 1))
+        }
+        return simd_quatf(vector: vector / length)
+    }
+
+    private func normalizedBasis(_ basis: SIMD3<Float>, fallback: SIMD3<Float>) -> SIMD3<Float> {
+        let length = simd_length(basis)
+        guard length > 0.000_001 else { return fallback }
+        return basis / length
     }
 }

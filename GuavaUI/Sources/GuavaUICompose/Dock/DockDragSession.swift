@@ -338,13 +338,14 @@ public final class DockDragSession {
     public static func resolveDropHit(x: Float, y: Float,
                                       sourceLeafID: DockNodeID?,
                                       registry: DockHitRegistry) -> LeafHit? {
-        if let rootGuideHit = resolveRootGuideHit(x: x, y: y, registry: registry) {
-            return rootGuideHit
-        }
         let leafHit = resolveLeafDropHit(x: x,
                                          y: y,
                                          sourceLeafID: sourceLeafID,
                                          registry: registry)
+        if let rootGuideHit = resolveRootGuideHit(x: x, y: y, registry: registry),
+           leafHit == nil || leafHit?.edge == .center {
+            return rootGuideHit
+        }
         if let rootHit = resolveRootEdgeHit(x: x, y: y, registry: registry),
            leafHit == nil || leafHit?.edge == rootHit.edge {
             return rootHit
@@ -469,6 +470,30 @@ public final class DockDragSession {
                                       sourceLeafID: sourceLeafID,
                                       origin: origin,
                                       target: makeDropTarget(from: hit))
-        return controller.allowsDrop(request) ? hit : nil
+        if controller.allowsDrop(request) {
+            return hit
+        }
+        guard hit.edge != .center,
+              let fallbackHit = fallbackReplaceHit(from: hit, controller: controller) else {
+            return nil
+        }
+        let fallbackRequest = DockDropRequest(tabID: tabID,
+                                              sourceLeafID: sourceLeafID,
+                                              origin: origin,
+                                              target: makeDropTarget(from: fallbackHit))
+        return controller.allowsDrop(fallbackRequest) ? fallbackHit : nil
+    }
+
+    private static func fallbackReplaceHit(from hit: LeafHit,
+                                           controller: DockController) -> LeafHit? {
+        guard let targetNode = DockController.findNode(hit.leafID, in: controller.root) else {
+            return nil
+        }
+        switch targetNode {
+        case .tabs, .empty:
+            return LeafHit(leafID: hit.leafID, edge: .center, tabSlotIndex: nil)
+        case .split:
+            return nil
+        }
     }
 }
