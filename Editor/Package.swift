@@ -25,6 +25,7 @@ let package = Package(
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),
+                .product(name: "SceneRuntime", package: "Engine"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
             ]

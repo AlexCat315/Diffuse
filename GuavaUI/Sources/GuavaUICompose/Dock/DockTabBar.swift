@@ -283,6 +283,21 @@ struct _DockTabBarItemHost: _PrimitiveView {
                                       x: event.x, y: event.y,
                                       intent: initialIntent)
                     }
+                    if let bridge {
+                        let originX = bridge.originProvider()?.x ?? 0
+                        let originY = bridge.originProvider()?.y ?? 0
+                        MainActor.assumeIsolated {
+                            session.updatePointerCrossWindow(
+                                currentWindowID: bridge.windowID,
+                                windowLocal: (event.x, event.y),
+                                global: (originX + event.x, originY + event.y),
+                                coordinator: bridge.coordinator
+                            )
+                        }
+                    } else {
+                        session.updatePointer(x: event.x, y: event.y,
+                                              registry: snapshot.controller.hitRegistry)
+                    }
                 }
             } else {
                 if liftReached {
@@ -484,6 +499,21 @@ struct _DockLeafDragHandleHost: _PrimitiveView {
                                       x: event.x, y: event.y,
                                       origin: .mainTreeLeaf(leafID: snapshot.sourceLeafID),
                                       intent: .detachOrSplit)
+                    }
+                    if let bridge {
+                        let originX = bridge.originProvider()?.x ?? 0
+                        let originY = bridge.originProvider()?.y ?? 0
+                        MainActor.assumeIsolated {
+                            session.updatePointerCrossWindow(
+                                currentWindowID: bridge.windowID,
+                                windowLocal: (event.x, event.y),
+                                global: (originX + event.x, originY + event.y),
+                                coordinator: bridge.coordinator
+                            )
+                        }
+                    } else {
+                        session.updatePointer(x: event.x, y: event.y,
+                                              registry: snapshot.controller.hitRegistry)
                     }
                 }
             } else {

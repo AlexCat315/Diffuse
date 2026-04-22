@@ -140,6 +140,71 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         #expect(rhsTabs.contains { $0.id == a.id })
     } }
 
+    @Test("First lift motion resolves the preview target immediately")
+    func firstLiftMotionResolvesPreviewTarget() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let a = DockTab(userKey: "a", title: "A")
+        let b = DockTab(userKey: "b", title: "B")
+        let controller = DockController(root:
+            .hsplit(fraction: 0.5,
+                    first: .tabs([a]),
+                    second: .tabs([b]))
+        )
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+
+        let items = findTabItems(tree.root!)
+        let tabA = items.min(by: { $0.frame.origin.x < $1.frame.origin.x })!
+        let pointer = registry.handlers(for: tabA).pointer!
+        let motion = registry.handlers(for: tabA).motion!
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 30, y: 12, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 580, y: 200, deltaX: 550, deltaY: 188), .target)
+
+        #expect(controller.dragSession.isActive)
+        #expect(controller.dragSession.intent == .detachOrSplit)
+        #expect(controller.dragSession.hoverLeafID != nil)
+        #expect(controller.dragSession.dropHit?.edge == .right)
+    } }
+
+    @Test("Drag session subscription mirrors motion version into bound state")
+    func dragSessionSubscriptionMirrorsVersion() {
+        let tab = DockTab(userKey: "a", title: "A")
+        let controller = DockController(root: .tabs([tab]))
+        var observedVersion: UInt64 = 0
+        let binding = Binding<UInt64>(
+            get: { observedVersion },
+            set: { observedVersion = $0 }
+        )
+
+        let token = ControllerSubscription.acquire(session: controller.dragSession,
+                                                   tag: ObjectIdentifier(controller),
+                                                   bind: binding,
+                                                   extraTag: "test")
+        defer { controller.dragSession.unsubscribe(token) }
+
+        guard case .tabs(let leafID, _, _) = controller.root else {
+            Issue.record("expected tabs leaf at root")
+            return
+        }
+
+        controller.dragSession.start(tabID: tab.id,
+                                     sourceLeafID: leafID,
+                                     ghost: DockDragSession.GhostInfo(title: tab.title),
+                                     x: 12,
+                                     y: 8,
+                                     intent: .detachOrSplit)
+
+        #expect(observedVersion == controller.dragSession.version)
+    }
+
     @Test("Drop on the source leaf centre is a no-op (cancelled)")
     func dropOnSelfCentreIsNoOp() { GlobalTestLock.locked {
         let registry = InteractionRegistry()

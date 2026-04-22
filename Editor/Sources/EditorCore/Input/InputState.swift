@@ -1,6 +1,5 @@
 import EngineKernel
 
-@MainActor
 public final class InputState {
     public private(set) var pressedKeys: Set<UInt32> = []
     public private(set) var mouseX: Float = 0
