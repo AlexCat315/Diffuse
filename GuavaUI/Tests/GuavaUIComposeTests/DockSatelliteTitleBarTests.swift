@@ -100,4 +100,37 @@ struct DockSatelliteTitleBarTests: GuavaUIComposeSerializedSuite {
         #expect(controller.dragSession.tabID == nil,
                 "satellite drags don't carry a single source tab")
     } }
+
+    @Test("Right click on the title bar does not start a redock drag")
+    func rightClickDoesNotStartDrag() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let (controller, satID, _, satBridge, _) = makeCluster()
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockSatelliteView(controller: controller,
+                                              leafID: satID,
+                                              hostBridge: satBridge,
+                                              content: makeContent()))
+        graph.computeLayout(width: 300, height: 200)
+
+        let bar = findTitleBar(tree.root!)
+        #expect(bar != nil, "satellite must mount a title bar")
+        guard let bar else { return }
+
+        let pointer = registry.handlers(for: bar).pointer!
+        let motion  = registry.handlers(for: bar).motion!
+        _ = pointer(MouseButtonEvent(button: .right, x: 10, y: 10, clicks: 1),
+                    .down, .target)
+        _ = motion(MouseMotionEvent(x: 50, y: 14, deltaX: 40, deltaY: 4),
+                   .target)
+
+        #expect(controller.dragSession.isActive == false)
+        #expect(PointerCaptureHolder.current?.target !== bar)
+    } }
 }

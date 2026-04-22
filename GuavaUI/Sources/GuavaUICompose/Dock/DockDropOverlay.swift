@@ -81,7 +81,7 @@ func makeDockDropGuideTiles(in leafRect: UIRect) -> [DockDropGuideTile] {
 
 private func drawDropGuide(list: DrawList,
                            leafRect: UIRect,
-                           activeEdge: DockEdge,
+                           activeEdge: DockEdge?,
                            appearance: DockAppearance,
                            theme: Theme) {
     let tiles = makeDockDropGuideTiles(in: leafRect)
@@ -155,7 +155,7 @@ func installDropOverlay(node: Node, leafID: DockNodeID, controller: DockControll
     node.overlayDraw = { [weak controller] list, origin in
         guard let controller else { return }
         let session = controller.dragSession
-        guard session.isActive, let hit = session.dropHit, hit.leafID == leafID else { return }
+        guard session.isActive, session.hoverLeafID == leafID else { return }
         // Phase G — only the lift-tier intent draws the 5-direction edge
         // indicator. Reorder-tier drags are visualised by the ghost only.
         guard session.intent == .detachOrSplit else { return }
@@ -171,31 +171,32 @@ func installDropOverlay(node: Node, leafID: DockNodeID, controller: DockControll
         let w = Float(node.frame.width)
         let h = Float(node.frame.height)
 
-        let rect: UIRect
-        switch hit.edge {
-        case .left:
-            rect = UIRect(x: absX, y: absY, width: w * 0.5, height: h)
-        case .right:
-            rect = UIRect(x: absX + w * 0.5, y: absY, width: w * 0.5, height: h)
-        case .top:
-            rect = UIRect(x: absX, y: absY, width: w, height: h * 0.5)
-        case .bottom:
-            rect = UIRect(x: absX, y: absY + h * 0.5, width: w, height: h * 0.5)
-        case .center:
-            rect = UIRect(x: absX, y: absY, width: w, height: h)
-        }
+        if let hit = session.dropHit, hit.leafID == leafID {
+            let rect: UIRect
+            switch hit.edge {
+            case .left:
+                rect = UIRect(x: absX, y: absY, width: w * 0.5, height: h)
+            case .right:
+                rect = UIRect(x: absX + w * 0.5, y: absY, width: w * 0.5, height: h)
+            case .top:
+                rect = UIRect(x: absX, y: absY, width: w, height: h * 0.5)
+            case .bottom:
+                rect = UIRect(x: absX, y: absY + h * 0.5, width: w, height: h * 0.5)
+            case .center:
+                rect = UIRect(x: absX, y: absY, width: w, height: h)
+            }
 
-        list.addRect(rect, color: fill)
-        // Cheap 2-px stroke as four edge rects.
-        let t: Float = 2
-        list.addRect(UIRect(x: rect.x, y: rect.y, width: rect.width, height: t), color: stroke)
-        list.addRect(UIRect(x: rect.x, y: rect.y + rect.height - t, width: rect.width, height: t), color: stroke)
-        list.addRect(UIRect(x: rect.x, y: rect.y, width: t, height: rect.height), color: stroke)
-        list.addRect(UIRect(x: rect.x + rect.width - t, y: rect.y, width: t, height: rect.height), color: stroke)
+            list.addRect(rect, color: fill)
+            let t: Float = 2
+            list.addRect(UIRect(x: rect.x, y: rect.y, width: rect.width, height: t), color: stroke)
+            list.addRect(UIRect(x: rect.x, y: rect.y + rect.height - t, width: rect.width, height: t), color: stroke)
+            list.addRect(UIRect(x: rect.x, y: rect.y, width: t, height: rect.height), color: stroke)
+            list.addRect(UIRect(x: rect.x + rect.width - t, y: rect.y, width: t, height: rect.height), color: stroke)
+        }
 
         drawDropGuide(list: list,
                       leafRect: UIRect(x: absX, y: absY, width: w, height: h),
-                      activeEdge: hit.edge,
+                      activeEdge: session.dropHit?.leafID == leafID ? session.dropHit?.edge : nil,
                       appearance: appearance,
                       theme: node.theme)
     }

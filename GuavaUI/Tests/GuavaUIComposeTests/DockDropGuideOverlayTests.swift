@@ -35,6 +35,35 @@ struct DockDropGuideOverlayTests {
         #expect(list.vertices.count > 20)
     }
 
+    @Test("Source leaf centre keeps the guide visible even when center drop is a no-op")
+    func sourceLeafCentreStillShowsGuide() {
+        let targetLeafID = DockNodeID()
+        let controller = DockController(root: .tabs([DockTab(userKey: "a", title: "A")]))
+        let node = Node()
+        node.frame = CGRect(x: 0, y: 0, width: 220, height: 160)
+        let registry = DockHitRegistry()
+        registry.register(nodeID: targetLeafID, node: node)
+        installDropOverlay(node: node, leafID: targetLeafID, controller: controller)
+
+        controller.dragSession.start(tabID: DockTabID(),
+                                     sourceLeafID: targetLeafID,
+                                     ghost: DockDragSession.GhostInfo(title: "A"),
+                                     x: 8,
+                                     y: 8,
+                                     intent: .detachOrSplit)
+        controller.dragSession.updatePointer(x: 110, y: 80, registry: registry)
+
+        #expect(controller.dragSession.dropHit == nil)
+        #expect(controller.dragSession.hoverLeafID == targetLeafID)
+
+        let list = DrawList()
+        node.overlayDraw?(list, .zero)
+
+        #expect(list.vertices.contains {
+            $0.posX >= 70 && $0.posX <= 150 && $0.posY >= 40 && $0.posY <= 120
+        })
+    }
+
     @Test("Reorder-tier drag keeps the guide hidden")
     func reorderTierKeepsGuideHidden() {
         let controller = DockController(root: .tabs([DockTab(userKey: "a", title: "A")]))

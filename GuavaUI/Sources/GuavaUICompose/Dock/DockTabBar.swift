@@ -257,7 +257,6 @@ struct _DockTabBarItemHost: _PrimitiveView {
             let liftReached = absDX >= DOCK_LIFT_THRESHOLD
                 || absDY >= DOCK_LIFT_VERTICAL_THRESHOLD
             let reorderReached = absDX >= DOCK_REORDER_THRESHOLD
-                || absDY >= DOCK_REORDER_THRESHOLD
             if !state.didDrag {
                 if reorderReached {
                     state.didDrag = true
