@@ -63,18 +63,18 @@ final class SharedUIResources {
         let scale: Float
         let atlas: FontAtlas
         let shaper: TextShaper
-        let fontResolver: TextFontResolver
+        let environment: TextEnvironment
 
         init(textureID: TextureID,
              scale: Float,
              atlas: FontAtlas,
              shaper: TextShaper,
-             fontResolver: TextFontResolver) {
+             environment: TextEnvironment) {
             self.textureID = textureID
             self.scale = scale
             self.atlas = atlas
             self.shaper = shaper
-            self.fontResolver = fontResolver
+            self.environment = environment
         }
     }
 
@@ -95,30 +95,43 @@ final class SharedUIResources {
 
     func publishTextEnvironment(scale requestedScale: Float) {
         let entry = resolveTextEntry(scale: requestedScale)
-        TextEnvironmentHolder.current = TextEnvironment(
-            atlas: entry.atlas,
-            shaper: entry.shaper,
-            atlasTextureID: entry.textureID,
-            defaultLineHeight: 22,
-            defaultColor: .white,
-            defaultFont: Font.system(size: 18),
-            fontResolver: entry.fontResolver
-        )
+        TextEnvironmentHolder.current = entry.environment
     }
 
-    func uploadAtlasIfNeeded(scale requestedScale: Float, force: Bool) throws {
+    @discardableResult
+    func uploadAtlasIfNeeded(scale requestedScale: Float, force: Bool) throws -> Bool {
         let entry = resolveTextEntry(scale: requestedScale)
-        guard force || entry.atlas.isDirty else { return }
-        try entry.atlas.atlasData.withUnsafeBufferPointer { buffer in
+        guard force || entry.atlas.isDirty else { return false }
+
+        let payload: (region: FontAtlas.DirtyRegion, pixels: [UInt8])
+        if force, entry.atlas.dirtyUploadPayload() == nil {
+            payload = (
+                FontAtlas.DirtyRegion(x: 0, y: 0,
+                                      width: entry.atlas.atlasWidth,
+                                      height: entry.atlas.atlasHeight),
+                entry.atlas.atlasData
+            )
+        } else if let dirty = entry.atlas.dirtyUploadPayload() {
+            payload = dirty
+        } else {
+            return false
+        }
+
+        try payload.pixels.withUnsafeBufferPointer { buffer in
             guard let baseAddress = buffer.baseAddress else { return }
             try renderer.registerAlphaTexture(
                 id: entry.textureID,
                 pixels: baseAddress,
-                width: UInt32(entry.atlas.atlasWidth),
-                height: UInt32(entry.atlas.atlasHeight)
+                width: UInt32(payload.region.width),
+                height: UInt32(payload.region.height),
+                originX: UInt32(payload.region.x),
+                originY: UInt32(payload.region.y),
+                textureWidth: UInt32(entry.atlas.atlasWidth),
+                textureHeight: UInt32(entry.atlas.atlasHeight)
             )
         }
         entry.atlas.markClean()
+        return true
     }
 
     private func resolveTextEntry(scale requestedScale: Float) -> TextEntry {
@@ -126,29 +139,22 @@ final class SharedUIResources {
         let key = Int((scale * 100).rounded())
         if let existing = textEntries[key] { return existing }
 
-        let provider = FontProvider(size: 18, rasterScale: scale)
-        provider.loadPrimaryFont(name: "Helvetica Neue")
-
         let atlasEdge = max(1024, Int((1024 * scale).rounded(.up)))
-        let atlas = FontAtlas(width: atlasEdge, height: atlasEdge)
-        atlas.loadFont(path: "/System/Library/Fonts/Helvetica.ttc", size: 18, rasterScale: scale)
-
-        let shaper = TextShaper()
-        if let face = atlas.freetypeFace {
-            shaper.setFont(ftFace: face, size: 18, rasterScale: scale)
-        }
-
-        let resolver = TextFontResolver(
-            primaryFontName: provider.primaryFont?.postScriptName ?? "Helvetica Neue",
-            atlas: atlas,
-            rasterScale: scale
+        let environment = TextEnvironment.bootstrapped(
+            atlasTextureID: TextureID(nextTextureID),
+            primaryFontName: "Helvetica Neue",
+            defaultFont: Font.system(size: 18),
+            defaultLineHeight: 22,
+            defaultColor: .white,
+            rasterScale: scale,
+            atlasEdge: atlasEdge
         )
         let entry = TextEntry(
-            textureID: TextureID(nextTextureID),
+            textureID: environment.atlasTextureID,
             scale: scale,
-            atlas: atlas,
-            shaper: shaper,
-            fontResolver: resolver
+            atlas: environment.atlas,
+            shaper: environment.shaper,
+            environment: environment
         )
         nextTextureID += 1
         textEntries[key] = entry
@@ -172,7 +178,9 @@ final class DockWindowRenderer {
 
     private var surface: GPUSurface?
     private var didInstallRoot = false
+    private var didPresentBootClear = false
     private var isConfigured = false
+    private var renderedFrameCount = 0
 
     init(title: String,
          appearance: Appearance,
@@ -214,9 +222,26 @@ final class DockWindowRenderer {
         didInstallRoot = true
     }
 
+    private func presentBootClearFrame() throws {
+        guard let surface else { return }
+        guard let frame = try surface.getCurrentTextureView() else { return }
+        let encoder = try backend.createCommandEncoder()
+        let pass = try encoder.beginRenderPass(
+            colorView: frame.view,
+            loadOp: .clear,
+            storeOp: .store,
+            clearColor: clearColor(for: appearance)
+        )
+        pass.end()
+        let buffer = try encoder.finish()
+        backend.submit(buffer)
+        surface.present()
+        didPresentBootClear = true
+    }
+
     private func handleInit(native: NativeRenderSurface, width: UInt32, height: UInt32) {
         do {
-            prepareFirstFrame()
+            var timing = TimingTrace(label: "[timing] demo.boot.dock[\(title)]")
             surface = try makeSurface(backend: backend, native: native)
             try surface?.configure(
                 device: backend.rawDevice!,
@@ -225,8 +250,13 @@ final class DockWindowRenderer {
                 presentMode: .fifo
             )
             try sharedUI.configureRenderer(format: .bgra8Unorm)
-            try sharedUI.uploadAtlasIfNeeded(scale: session.contentScaleFactor, force: true)
+            timing.mark("surface")
+            if !didPresentBootClear {
+                try presentBootClearFrame()
+            }
+            timing.mark("clearPresent")
             isConfigured = true
+            print(timing.summary(extra: ["firstVisible=clearPresent"]))
         } catch {
             print("[dock-multiwin] init failed for \(title): \(error)")
         }
@@ -241,27 +271,45 @@ final class DockWindowRenderer {
                 width: width, height: height,
                 presentMode: .fifo
             )
-            sharedUI.publishTextEnvironment(scale: session.contentScaleFactor)
-            try sharedUI.uploadAtlasIfNeeded(scale: session.contentScaleFactor, force: true)
+            if didInstallRoot {
+                sharedUI.publishTextEnvironment(scale: session.contentScaleFactor)
+                try sharedUI.uploadAtlasIfNeeded(scale: session.contentScaleFactor, force: true)
+            }
         } catch {
             print("[dock-multiwin] resize failed for \(title): \(error)")
         }
     }
 
     private func handleFrame() {
-        guard isConfigured, let surface, let root = session.tree.root else { return }
+        guard isConfigured, let surface else { return }
         do {
+            renderedFrameCount += 1
+            var timing = TimingTrace(label: "[timing] demo.frame.dock[\(title)]")
+            var didHydrate = false
+            var didLayout = false
+            var didAtlasUpload = false
             try session.withCurrent {
+                if !didInstallRoot {
+                    prepareFirstFrame()
+                    didHydrate = true
+                    timing.mark("hydrate")
+                }
                 sharedUI.publishTextEnvironment(scale: session.contentScaleFactor)
-                graph.computeLayoutIfNeeded(
+                timing.mark("textEnvironment")
+                didLayout = graph.computeLayoutIfNeeded(
                     width: Float(session.logicalSize.width),
                     height: Float(session.logicalSize.height)
                 )
-                try sharedUI.uploadAtlasIfNeeded(scale: session.contentScaleFactor, force: false)
+                timing.mark("layout")
                 drawList.reset()
+                guard let root = session.tree.root else { return }
                 nodeRenderer.render(root: root, into: drawList)
+                timing.mark("sceneRender")
+                didAtlasUpload = try sharedUI.uploadAtlasIfNeeded(scale: session.contentScaleFactor, force: false)
+                timing.mark("atlasUpload")
             }
             guard let frame = try surface.getCurrentTextureView() else { return }
+            timing.mark("acquireSurface")
             let encoder = try backend.createCommandEncoder()
             let pass = try encoder.beginRenderPass(
                 colorView: frame.view,
@@ -277,6 +325,15 @@ final class DockWindowRenderer {
             let buffer = try encoder.finish()
             backend.submit(buffer)
             surface.present()
+            timing.mark("gpuSubmit")
+            if didHydrate || renderedFrameCount <= 5 || didAtlasUpload {
+                print(timing.summary(extra: [
+                    "frame=\(renderedFrameCount)",
+                    "hydrated=\(didHydrate)",
+                    "layoutUpdated=\(didLayout)",
+                    "atlasUploaded=\(didAtlasUpload)",
+                ]))
+            }
         } catch {
             print("[dock-multiwin] frame failed for \(title): \(error)")
         }
@@ -364,8 +421,8 @@ final class DockMultiWindowApp {
                 }
             )
         }
-        mainRenderer.prepareFirstFrame()
         mainRenderer.installCallbacks()
+        host.requestDisplay(windowID: mainSession.id)
 
         // Satellite spawn: open a new SDL window, build a graph rooted at
         // `DockSatelliteView(leafID:)`, and remember the renderer.
@@ -413,8 +470,8 @@ final class DockMultiWindowApp {
                     }
                 )
             }
-            renderer.prepareFirstFrame()
             renderer.installCallbacks()
+            host.requestDisplay(windowID: session.id)
             satelliteRenderers[leafID] = renderer
         } catch {
             print("[dock-multiwin] failed to spawn satellite for \(leafID): \(error)")

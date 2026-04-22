@@ -5,6 +5,7 @@ import CWGPUBridge
 public enum GPUTextureFormat: Sendable {
     case bgra8Unorm
     case rgba8Unorm
+    case r8Unorm
     case rgba16Float
     case depth24Plus
     case depth32Float
@@ -13,6 +14,7 @@ public enum GPUTextureFormat: Sendable {
         switch self {
         case .bgra8Unorm:   return WGPUBridge_TextureFormat_BGRA8Unorm
         case .rgba8Unorm:   return WGPUBridge_TextureFormat_RGBA8Unorm
+        case .r8Unorm:      return WGPUBridge_TextureFormat_R8Unorm
         case .rgba16Float:  return WGPUBridge_TextureFormat_RGBA16Float
         case .depth24Plus:  return WGPUBridge_TextureFormat_Depth24Plus
         case .depth32Float: return WGPUBridge_TextureFormat_Depth32Float

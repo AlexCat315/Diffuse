@@ -396,7 +396,8 @@ public struct TextField: _PrimitiveView {
         list.addText(renderCache.layout,
                      origin: (textOriginX, textOriginY),
                      color: renderColor,
-                     textureID: env.atlasTextureID)
+                     textureID: env.atlasTextureID,
+                     atlas: env.atlas)
 
         if isFocused, let compositionRange = renderState.compositionRange {
             let xLo = cachedCursorX(in: renderState.measurementText,
@@ -462,13 +463,11 @@ public struct TextField: _PrimitiveView {
            cached.key == key {
             return cached
         }
-        let glyphs = env.shape(text: displayText, font: font)
-        let layout = TextLayout.layout(
-            shapedGlyphs: glyphs,
+        let layout = env.cachedLayout(
             text: displayText,
-            atlas: env.atlas,
-            maxWidth: .infinity,
+            font: font,
             lineHeight: lineHeight,
+            maxWidth: .infinity,
             alignment: .leading
         )
         let entry = RenderCacheEntry(key: key, layout: layout)
@@ -488,13 +487,11 @@ public struct TextField: _PrimitiveView {
         }
         let endIdx = text.index(text.startIndex, offsetBy: bounded)
         let prefix = String(text[text.startIndex..<endIdx])
-        let glyphs = env.shape(text: prefix, font: font)
-        let layout = TextLayout.layout(
-            shapedGlyphs: glyphs,
+        let layout = env.cachedLayout(
             text: prefix,
-            atlas: env.atlas,
-            maxWidth: .infinity,
+            font: font,
             lineHeight: lineHeight,
+            maxWidth: .infinity,
             alignment: .leading
         )
         cache.cursorWidths[bounded] = layout.totalWidth

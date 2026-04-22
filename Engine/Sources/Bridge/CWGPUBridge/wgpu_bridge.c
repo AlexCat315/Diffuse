@@ -63,6 +63,7 @@ static WGPUTextureFormat to_wgpu_format(WGPUBridgeTextureFormat f) {
     switch (f) {
         case WGPUBridge_TextureFormat_BGRA8Unorm:   return WGPUTextureFormat_BGRA8Unorm;
         case WGPUBridge_TextureFormat_RGBA8Unorm:   return WGPUTextureFormat_RGBA8Unorm;
+        case WGPUBridge_TextureFormat_R8Unorm:      return WGPUTextureFormat_R8Unorm;
         case WGPUBridge_TextureFormat_RGBA16Float:  return WGPUTextureFormat_RGBA16Float;
         case WGPUBridge_TextureFormat_Depth24Plus:  return WGPUTextureFormat_Depth24Plus;
         case WGPUBridge_TextureFormat_Depth32Float: return WGPUTextureFormat_Depth32Float;
@@ -1086,6 +1087,9 @@ void wgpu_bridge_render_pass_set_scissor_rect(void* pass,
 
 void wgpu_bridge_write_texture(void* queue,
                                void* texture, uint32_t mip_level,
+                               uint32_t origin_x,
+                               uint32_t origin_y,
+                               uint32_t origin_z,
                                const void* data, size_t data_size,
                                uint32_t bytes_per_row, uint32_t rows_per_image,
                                uint32_t width, uint32_t height, uint32_t depth_or_layers) {
@@ -1095,6 +1099,9 @@ void wgpu_bridge_write_texture(void* queue,
     dst.texture = (WGPUTexture)texture;
     dst.mipLevel = mip_level;
     dst.aspect = WGPUTextureAspect_All;
+    dst.origin.x = origin_x;
+    dst.origin.y = origin_y;
+    dst.origin.z = origin_z;
 
     WGPUTexelCopyBufferLayout layout = WGPU_TEXEL_COPY_BUFFER_LAYOUT_INIT;
     layout.bytesPerRow = bytes_per_row;

@@ -58,6 +58,10 @@ public final class PlatformWindowSession {
         try inputContext.withCurrent(body)
     }
 
+    public func requestDisplay() {
+        needsDisplay = true
+    }
+
     fileprivate func updateMetrics(from handle: any WindowHandle) -> Bool {
         let nextDrawable = handle.drawableSize
         let nextLogical = handle.logicalSize
@@ -185,17 +189,25 @@ public final class SDL3PlatformHost: PlatformHost {
         _isRunning = false
     }
 
+    public func requestDisplay(windowID: WindowID? = nil) {
+        let resolvedWindowID = windowID ?? mainWindowID
+        guard let resolvedWindowID,
+              let session = sessions[resolvedWindowID] else { return }
+        session.requestDisplay()
+    }
+
     private func runLoop() {
         guard let shell else { return }
 
         _isRunning = true
         Logger.runtime.info("running — \(title)")
-        var lastFrameTime = Date()
+        var lastFrameTime = TimingTrace.now()
 
         while _isRunning && shell.isRunning && !sessions.isEmpty {
-            let now = Date()
-            let deltaTime = now.timeIntervalSince(lastFrameTime)
-            lastFrameTime = now
+            let frameStart = TimingTrace.now()
+            let deltaTime = frameStart - lastFrameTime
+            lastFrameTime = frameStart
+            var timing = TimingTrace(label: "[timing] host.frame")
 
             var handledEvents = false
             for routed in shell.pollWindowEvents() {
@@ -209,6 +221,7 @@ public final class SDL3PlatformHost: PlatformHost {
                     }
                 }
             }
+            timing.mark("events")
 
             var committedAny = false
             for id in sessionOrder {
@@ -221,12 +234,14 @@ public final class SDL3PlatformHost: PlatformHost {
                     committedAny = true
                 }
             }
+            timing.mark("commit")
 
-            let hadAnimations = AnimatorScheduler.current.hasActiveAnimations
             AnimatorScheduler.current.tick(deltaTime: deltaTime)
-            let animationsActive = hadAnimations || AnimatorScheduler.current.hasActiveAnimations
+            let animationsActive = AnimatorScheduler.current.hasActiveAnimations
+            timing.mark("animations")
 
             var renderedAnyFrame = false
+            var renderSummaries: [String] = []
 
             for id in sessionOrder {
                 guard let session = sessions[id],
@@ -252,11 +267,16 @@ public final class SDL3PlatformHost: PlatformHost {
                     }
                 }
 
-                let shouldRender = session.needsDisplay
-                    || animationsActive
-                    || (session.tree.root?.isDirty ?? false)
+                let hasRenderInvalidation = session.tree.hasRenderUpdates
+                let shouldRender = session.needsDisplay || hasRenderInvalidation
 
                 if shouldRender, let surface = handle.renderSurface {
+                    var reasons: [String] = []
+                    if session.needsDisplay { reasons.append("needsDisplay") }
+                    if hasRenderInvalidation { reasons.append("renderDirty") }
+
+                    session.needsDisplay = false
+                    let renderStart = TimingTrace.now()
                     session.onFrame?(surface)
                     if id == mainWindowID {
                         onFrame?(surface)
@@ -264,16 +284,31 @@ public final class SDL3PlatformHost: PlatformHost {
                     session.withCurrent {
                         session.tree.flush()
                     }
-                    session.needsDisplay = false
+                    let renderMilliseconds = (TimingTrace.now() - renderStart) * 1000
+                    let reasonText = reasons.isEmpty ? "unknown" : reasons.joined(separator: "+")
+                    let renderText = String(format: "%.2fms", renderMilliseconds)
+                    renderSummaries.append(
+                        "window=\(id) reason=\(reasonText) render=\(renderText)"
+                    )
                     renderedAnyFrame = true
                 }
 
                 syncTextInputArea(for: session, shell: shell)
             }
+            timing.mark("windows")
+
+            if renderedAnyFrame {
+                let deltaText = String(format: "%.2fms", deltaTime * 1000)
+                let extra = [
+                    "delta=\(deltaText)",
+                    "animationsActive=\(animationsActive)",
+                ] + renderSummaries
+                Logger.runtime.info("\(timing.summary(extra: extra))")
+            }
 
             pruneClosedSessions(using: shell)
 
-            if !handledEvents && !committedAny && !animationsActive && !renderedAnyFrame {
+            if !handledEvents && !committedAny && !renderedAnyFrame {
                 Thread.sleep(forTimeInterval: 0.001)
             }
         }

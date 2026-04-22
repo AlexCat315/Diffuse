@@ -118,7 +118,11 @@ struct DrawListTests {
         )
 
         let list = DrawList()
-        list.addText(result, origin: (x: 0, y: 0), color: .white, textureID: 7)
+        list.addText(result,
+                     origin: (x: 0, y: 0),
+                     color: .white,
+                     textureID: 7,
+                     atlas: atlas)
 
         // 2 visible glyphs → 8 vertices, 12 indices, 1 batch with textureID=7.
         #expect(list.vertices.count == 8)
@@ -147,7 +151,7 @@ struct DrawListTests {
             shapedGlyphs: shaped, text: "Hi", atlas: atlas, lineHeight: 20
         )
         guard let glyph = result.lines.first?.glyphs.first,
-              let info = glyph.atlasInfo else {
+              let info = atlas.rasterizeGlyph(glyphIndex: glyph.glyphID, fontID: glyph.fontID) else {
             Issue.record("expected first glyph to exist")
             return
         }
@@ -157,7 +161,11 @@ struct DrawListTests {
         let rawY = origin.y + glyph.y - info.bearingY
 
         let list = DrawList()
-        list.addText(result, origin: origin, color: .white, textureID: 7)
+        list.addText(result,
+                 origin: origin,
+                 color: .white,
+                 textureID: 7,
+                 atlas: atlas)
 
         #expect(list.vertices[0].posX == rawX.rounded())
         #expect(list.vertices[0].posY == rawY.rounded())

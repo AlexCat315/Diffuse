@@ -1,3 +1,4 @@
+import Foundation
 import CoreGraphics
 import GuavaUIRuntime
 
@@ -13,6 +14,8 @@ public struct TextEnvironment {
     public var defaultColor: Color
     public var defaultFont: Font
     public var fontResolver: TextFontResolver?
+    let shapeCache: SharedTextShapeCache
+    let layoutCache: SharedTextLayoutCache
 
     public init(atlas: FontAtlas,
                 shaper: TextShaper,
@@ -29,6 +32,40 @@ public struct TextEnvironment {
         let fallbackSize = atlas.fontSize > 0 ? atlas.fontSize : max(1, defaultLineHeight)
         self.defaultFont = defaultFont ?? Font.system(size: fallbackSize)
         self.fontResolver = fontResolver
+        self.shapeCache = SharedTextShapeCache()
+        self.layoutCache = SharedTextLayoutCache()
+    }
+
+    public static func bootstrapped(atlasTextureID: TextureID,
+                                    primaryFontName: String,
+                                    defaultFont: Font = .system(size: 18),
+                                    defaultLineHeight: Float = 22,
+                                    defaultColor: Color = .white,
+                                    rasterScale: Float = 1,
+                                    atlasEdge: Int? = nil) -> TextEnvironment {
+        let scale = max(1, rasterScale)
+        let resolvedAtlasEdge = atlasEdge ?? max(1024, Int((1024 * scale).rounded(.up)))
+        let atlas = FontAtlas(width: resolvedAtlasEdge, height: resolvedAtlasEdge)
+        let shaper = TextShaper()
+        let resolver = TextFontResolver(primaryFontName: primaryFontName,
+                                        atlas: atlas,
+                                        rasterScale: scale)
+
+        if let primaryFont = resolver.preparePrimaryFont(defaultFont) {
+            shaper.setFont(ftFace: primaryFont.rawFace,
+                           size: defaultFont.size,
+                           rasterScale: scale)
+        }
+
+        return TextEnvironment(
+            atlas: atlas,
+            shaper: shaper,
+            atlasTextureID: atlasTextureID,
+            defaultLineHeight: defaultLineHeight,
+            defaultColor: defaultColor,
+            defaultFont: defaultFont,
+            fontResolver: resolver
+        )
     }
 
     public func resolvedFont(_ override: Font?) -> Font {
@@ -45,13 +82,108 @@ public struct TextEnvironment {
 
     public func shape(text: String, font: Font?) -> [ShapedGlyph] {
         let resolved = resolvedFont(font)
-        if let fontResolver {
-            let glyphs = fontResolver.shape(text: text, font: resolved)
-            if !glyphs.isEmpty || text.isEmpty {
-                return glyphs
+        return shapeCache.value(text: text, font: resolved) {
+            if let fontResolver {
+                let glyphs = fontResolver.shape(text: text, font: resolved)
+                if !glyphs.isEmpty || text.isEmpty {
+                    return glyphs
+                }
             }
+            return shaper.shape(text: text)
         }
-        return shaper.shape(text: text)
+    }
+
+    public func cachedLayout(text: String,
+                             font: Font? = nil,
+                             lineHeight: Float? = nil,
+                             maxWidth: Float = .infinity,
+                             alignment: TextAlignment = .leading) -> TextLayoutResult {
+        let resolvedFont = resolvedFont(font)
+        let resolvedLineHeight = resolvedLineHeight(font: resolvedFont, override: lineHeight)
+        let normalizedMaxWidth: Float = (maxWidth.isFinite && maxWidth > 0) ? maxWidth : .infinity
+        let key = SharedTextLayoutCache.Key(
+            text: text,
+            font: resolvedFont,
+            lineHeight: resolvedLineHeight,
+            alignment: alignment,
+            maxWidth: normalizedMaxWidth
+        )
+        return layoutCache.value(for: key) {
+            let glyphs = shape(text: text, font: resolvedFont)
+            return TextLayout.layout(
+                shapedGlyphs: glyphs,
+                text: text,
+                atlas: atlas,
+                maxWidth: normalizedMaxWidth,
+                lineHeight: resolvedLineHeight,
+                alignment: alignment
+            )
+        }
+    }
+
+    public func prewarmGlyphs(text: String, fonts: [Font]) {
+        for font in Set(fonts) {
+            prewarmGlyphs(text: text, font: font)
+        }
+    }
+
+    public func prewarmGlyphs(text: String, font: Font? = nil) {
+        let glyphs = shape(text: text, font: font)
+        for glyph in glyphs {
+            _ = atlas.rasterizeGlyph(glyphIndex: glyph.glyphID, fontID: glyph.fontID)
+        }
+    }
+}
+
+final class SharedTextShapeCache {
+    struct Key: Hashable {
+        let text: String
+        let font: Font
+    }
+
+    private let lock = NSLock()
+    private var table: [Key: [ShapedGlyph]] = [:]
+
+    func value(text: String, font: Font, build: () -> [ShapedGlyph]) -> [ShapedGlyph] {
+        let key = Key(text: text, font: font)
+        if let cached = lock.withLock({ table[key] }) {
+            return cached
+        }
+        let result = build()
+        return lock.withLock {
+            if let cached = table[key] {
+                return cached
+            }
+            table[key] = result
+            return result
+        }
+    }
+}
+
+final class SharedTextLayoutCache {
+    struct Key: Hashable {
+        let text: String
+        let font: Font
+        let lineHeight: Float
+        let alignment: TextAlignment
+        let maxWidth: Float
+    }
+
+    private let lock = NSLock()
+    private var table: [Key: TextLayoutResult] = [:]
+
+    func value(for key: Key, build: () -> TextLayoutResult) -> TextLayoutResult {
+        if let cached = lock.withLock({ table[key] }) {
+            return cached
+        }
+        let result = build()
+        return lock.withLock {
+            if let cached = table[key] {
+                return cached
+            }
+            table[key] = result
+            return result
+        }
     }
 }
 
@@ -109,7 +241,8 @@ public struct Text: _PrimitiveView {
             list.addText(result,
                          origin: (Float(origin.x), Float(origin.y)),
                          color: drawColor,
-                         textureID: env.atlasTextureID)
+                         textureID: env.atlasTextureID,
+                         atlas: env.atlas)
         }
     }
 
@@ -190,13 +323,11 @@ public struct Text: _PrimitiveView {
         if let cached = attachments() as? TextLayoutCacheEntry, cached.key == key {
             return cached.result
         }
-        let glyphs = env.shape(text: text, font: font)
-        let result = TextLayout.layout(
-            shapedGlyphs: glyphs,
+        let result = env.cachedLayout(
             text: text,
-            atlas: env.atlas,
-            maxWidth: normalizedMaxWidth,
+            font: font,
             lineHeight: lineHeight,
+            maxWidth: normalizedMaxWidth,
             alignment: alignment
         )
         store(TextLayoutCacheEntry(key: key, result: result))

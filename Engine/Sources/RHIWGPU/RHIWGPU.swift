@@ -425,6 +425,9 @@ public final class WGPUBackend: @unchecked Sendable {
     public func writeTexture(_ texture: GPUTexture,
                              data: UnsafeRawPointer,
                              dataSize: Int,
+                            originX: UInt32 = 0,
+                            originY: UInt32 = 0,
+                            originZ: UInt32 = 0,
                              bytesPerRow: UInt32,
                              rowsPerImage: UInt32,
                              width: UInt32,
@@ -433,6 +436,7 @@ public final class WGPUBackend: @unchecked Sendable {
                              mipLevel: UInt32 = 0) {
         guard let queue else { return }
         wgpu_bridge_write_texture(queue, texture.handle, mipLevel,
+                                originX, originY, originZ,
                                   data, dataSize,
                                   bytesPerRow, rowsPerImage,
                                   width, height, depthOrLayers)
