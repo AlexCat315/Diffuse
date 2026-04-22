@@ -72,9 +72,14 @@ public struct TextLayout {
             // Explicit newline → flush current line immediately, skip glyph.
             let isNewline = clusterByte == UInt8(ascii: "\n") || clusterByte == UInt8(ascii: "\r")
             if isNewline {
+                let baselineY = centeredBaselineY(
+                    glyphs: currentLineGlyphs,
+                    lineTop: Float(lines.count) * lineHeight,
+                    lineHeight: lineHeight
+                )
                 let line = buildLine(
                     glyphs: currentLineGlyphs,
-                    baselineY: Float(lines.count) * lineHeight + lineHeight,
+                    baselineY: baselineY,
                     maxWidth: maxWidth,
                     alignment: alignment
                 )
@@ -104,10 +109,15 @@ public struct TextLayout {
                     // Break at last whitespace
                     let lineGlyphs = Array(currentLineGlyphs.prefix(breakIdx))
                     let remaining = Array(currentLineGlyphs.suffix(from: breakIdx))
+                    let baselineY = centeredBaselineY(
+                        glyphs: lineGlyphs,
+                        lineTop: Float(lines.count) * lineHeight,
+                        lineHeight: lineHeight
+                    )
 
                     let line = buildLine(
                         glyphs: lineGlyphs,
-                        baselineY: Float(lines.count) * lineHeight + lineHeight,
+                        baselineY: baselineY,
                         maxWidth: maxWidth,
                         alignment: alignment
                     )
@@ -120,9 +130,14 @@ public struct TextLayout {
                     lastBreakIndex = nil
                 } else {
                     // No break point; force break here
+                    let baselineY = centeredBaselineY(
+                        glyphs: currentLineGlyphs,
+                        lineTop: Float(lines.count) * lineHeight,
+                        lineHeight: lineHeight
+                    )
                     let line = buildLine(
                         glyphs: currentLineGlyphs,
-                        baselineY: Float(lines.count) * lineHeight + lineHeight,
+                        baselineY: baselineY,
                         maxWidth: maxWidth,
                         alignment: alignment
                     )
@@ -140,9 +155,14 @@ public struct TextLayout {
 
         // Flush remaining glyphs
         if !currentLineGlyphs.isEmpty {
+            let baselineY = centeredBaselineY(
+                glyphs: currentLineGlyphs,
+                lineTop: Float(lines.count) * lineHeight,
+                lineHeight: lineHeight
+            )
             let line = buildLine(
                 glyphs: currentLineGlyphs,
-                baselineY: Float(lines.count) * lineHeight + lineHeight,
+                baselineY: baselineY,
                 maxWidth: maxWidth,
                 alignment: alignment
             )
@@ -200,5 +220,30 @@ public struct TextLayout {
         }
 
         return TextLine(glyphs: positioned, baselineY: baselineY, width: lineWidth)
+    }
+
+    private static func centeredBaselineY(
+        glyphs: [(ShapedGlyph, FontAtlas.GlyphInfo?)],
+        lineTop: Float,
+        lineHeight: Float
+    ) -> Float {
+        var minTop: Float?
+        var maxBottom: Float?
+
+        for (shaped, info) in glyphs {
+            guard let info, info.height > 0 else { continue }
+            let top = shaped.yOffset - info.bearingY
+            let bottom = top + info.height
+            minTop = min(minTop ?? top, top)
+            maxBottom = max(maxBottom ?? bottom, bottom)
+        }
+
+        guard let minTop, let maxBottom else {
+            return lineTop + lineHeight
+        }
+
+        let contentHeight = maxBottom - minTop
+        let topInset = max(0, (lineHeight - contentHeight) * 0.5)
+        return lineTop + topInset - minTop
     }
 }

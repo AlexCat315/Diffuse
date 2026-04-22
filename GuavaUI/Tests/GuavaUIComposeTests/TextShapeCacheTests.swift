@@ -6,6 +6,16 @@ import GuavaUIRuntime
 @Suite("Text shape cache")
 struct TextShapeCacheTests {
 
+    struct TextHarness: View {
+        @State var text: String = "short"
+
+        var body: some View {
+            Row {
+                Text(text)
+            }
+        }
+    }
+
     @Test("Layout cache entry is written on first measure and reused on identical inputs")
     func cacheHit() {
         GlobalTestLock.locked {
@@ -49,6 +59,35 @@ struct TextShapeCacheTests {
             let layout = graph.layoutNode(for: textNode)!
             let firstKey = (layout.attachments[Text.measureCacheKey] as? TextLayoutCacheEntry)?.key
             #expect(firstKey?.text == "first")
+        }
+    }
+
+    @Test("Reused Text nodes refresh measurement when the string changes")
+    func reusedNodeRefreshesMeasurement() {
+        GlobalTestLock.locked {
+            TextEnvironmentHolder.current = TestTextEnvironmentFactory.make(size: 16, lineHeight: 20)
+            defer { TextEnvironmentHolder.current = nil }
+
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let harness = TextHarness()
+            graph.install(root: harness)
+            graph.computeLayout(width: 200, height: 200)
+
+            let textNode = tree.root?.children.first?.children.first?.children.first
+            #expect(textNode != nil)
+            guard let textNode else { return }
+            let beforeWidth = Float(textNode.frame.width)
+
+            harness.$text.wrappedValue = "a much longer label"
+            recomp.commitAll()
+            graph.computeLayout(width: 200, height: 200)
+
+            let afterWidth = Float(textNode.frame.width)
+            #expect(afterWidth > beforeWidth)
+            let key = (graph.layoutNode(for: textNode)?.attachments[Text.measureCacheKey] as? TextLayoutCacheEntry)?.key
+            #expect(key?.text == "a much longer label")
         }
     }
 }
