@@ -1,6 +1,152 @@
 import CoreGraphics
 import GuavaUIRuntime
 
+struct DockDropGuideTile {
+    let edge: DockEdge
+    let buttonRect: UIRect
+    let miniatureRect: UIRect
+    let highlightRect: UIRect
+}
+
+func makeDockDropGuideTiles(in leafRect: UIRect) -> [DockDropGuideTile] {
+    let minDimension = min(leafRect.width, leafRect.height)
+    guard minDimension >= 72 else { return [] }
+
+    let buttonSize = max(18, min(28, (minDimension - 24) / 3))
+    let gap = max(6, min(10, buttonSize * 0.3))
+    let centerX = leafRect.x + leafRect.width * 0.5
+    let centerY = leafRect.y + leafRect.height * 0.5
+    let buttonHalf = buttonSize * 0.5
+    let iconInset = max(4, buttonSize * 0.22)
+
+    func tile(edge: DockEdge, x: Float, y: Float) -> DockDropGuideTile {
+        let buttonRect = UIRect(x: x, y: y, width: buttonSize, height: buttonSize)
+        let miniatureRect = UIRect(x: x + iconInset,
+                                   y: y + iconInset,
+                                   width: buttonSize - iconInset * 2,
+                                   height: buttonSize - iconInset * 2)
+        let highlightRect: UIRect
+        switch edge {
+        case .left:
+            let width = miniatureRect.width * 0.36
+            highlightRect = UIRect(x: miniatureRect.x,
+                                   y: miniatureRect.y,
+                                   width: width,
+                                   height: miniatureRect.height)
+        case .right:
+            let width = miniatureRect.width * 0.36
+            highlightRect = UIRect(x: miniatureRect.x + miniatureRect.width - width,
+                                   y: miniatureRect.y,
+                                   width: width,
+                                   height: miniatureRect.height)
+        case .top:
+            let height = miniatureRect.height * 0.36
+            highlightRect = UIRect(x: miniatureRect.x,
+                                   y: miniatureRect.y,
+                                   width: miniatureRect.width,
+                                   height: height)
+        case .bottom:
+            let height = miniatureRect.height * 0.36
+            highlightRect = UIRect(x: miniatureRect.x,
+                                   y: miniatureRect.y + miniatureRect.height - height,
+                                   width: miniatureRect.width,
+                                   height: height)
+        case .center:
+            highlightRect = miniatureRect
+        }
+        return DockDropGuideTile(edge: edge,
+                                 buttonRect: buttonRect,
+                                 miniatureRect: miniatureRect,
+                                 highlightRect: highlightRect)
+    }
+
+    return [
+        tile(edge: .top,
+             x: centerX - buttonHalf,
+             y: centerY - buttonSize - gap),
+        tile(edge: .left,
+             x: centerX - buttonSize - gap,
+             y: centerY - buttonHalf),
+        tile(edge: .center,
+             x: centerX - buttonHalf,
+             y: centerY - buttonHalf),
+        tile(edge: .right,
+             x: centerX + gap,
+             y: centerY - buttonHalf),
+        tile(edge: .bottom,
+             x: centerX - buttonHalf,
+             y: centerY + gap)
+    ]
+}
+
+private func drawDropGuide(list: DrawList,
+                           leafRect: UIRect,
+                           activeEdge: DockEdge,
+                           appearance: DockAppearance,
+                           theme: Theme) {
+    let tiles = makeDockDropGuideTiles(in: leafRect)
+    guard !tiles.isEmpty else { return }
+
+    let buttonSpan = tiles.map(\ .buttonRect)
+    guard let minX = buttonSpan.map(\ .x).min(),
+          let minY = buttonSpan.map(\ .y).min(),
+          let maxX = buttonSpan.map({ $0.x + $0.width }).max(),
+          let maxY = buttonSpan.map({ $0.y + $0.height }).max() else {
+        return
+    }
+
+    let backdrop = UIRect(x: minX - 8,
+                          y: minY - 8,
+                          width: (maxX - minX) + 16,
+                          height: (maxY - minY) + 16)
+    let backdropColor = theme.colors.surfaceFloating
+        .composited(over: Color.black.multipliedAlpha(0.18))
+        .multipliedAlpha(0.94)
+    list.addRoundedRect(backdrop, radius: 14, color: backdropColor)
+
+    let inactiveFill = appearance.tabBarBackground
+        .composited(over: Color.black.multipliedAlpha(0.08))
+        .multipliedAlpha(0.98)
+    let inactiveMiniature = appearance.tabInactiveForeground.multipliedAlpha(0.16)
+    let activeFillOverlay = appearance.tabActiveAccentBar.multipliedAlpha(0.2)
+    let activeMiniature = appearance.tabActiveAccentBar.multipliedAlpha(0.92)
+    let activeStroke = appearance.tabActiveAccentBar.multipliedAlpha(0.85)
+    let inactiveStroke = appearance.tabInactiveForeground.multipliedAlpha(0.22)
+
+    for tile in tiles {
+        let isActive = tile.edge == activeEdge
+        let buttonColor = isActive
+            ? inactiveFill.composited(over: activeFillOverlay)
+            : inactiveFill
+        let strokeColor = isActive ? activeStroke : inactiveStroke
+        list.addRoundedRect(tile.buttonRect, radius: 8, color: buttonColor)
+        let topStroke = UIRect(x: tile.buttonRect.x,
+                               y: tile.buttonRect.y,
+                               width: tile.buttonRect.width,
+                               height: 1.5)
+        let bottomStroke = UIRect(x: tile.buttonRect.x,
+                                  y: tile.buttonRect.y + tile.buttonRect.height - 1.5,
+                                  width: tile.buttonRect.width,
+                                  height: 1.5)
+        let leftStroke = UIRect(x: tile.buttonRect.x,
+                                y: tile.buttonRect.y,
+                                width: 1.5,
+                                height: tile.buttonRect.height)
+        let rightStroke = UIRect(x: tile.buttonRect.x + tile.buttonRect.width - 1.5,
+                                 y: tile.buttonRect.y,
+                                 width: 1.5,
+                                 height: tile.buttonRect.height)
+        list.addRect(topStroke, color: strokeColor)
+        list.addRect(bottomStroke, color: strokeColor)
+        list.addRect(leftStroke, color: strokeColor)
+        list.addRect(rightStroke, color: strokeColor)
+        list.addRoundedRect(tile.miniatureRect, radius: 3, color: inactiveMiniature)
+        list.addRoundedRect(tile.highlightRect,
+                            radius: 2,
+                            color: isActive ? activeMiniature : activeMiniature.multipliedAlpha(0.45))
+    }
+}
+
 /// Wires `node.overlayDraw` so that, while the controller's drag session is
 /// active over this leaf, the leaf paints a 5-zone drop indicator on top of
 /// its content. The closure runs every frame from `NodeRenderer`, so it
@@ -46,6 +192,12 @@ func installDropOverlay(node: Node, leafID: DockNodeID, controller: DockControll
         list.addRect(UIRect(x: rect.x, y: rect.y + rect.height - t, width: rect.width, height: t), color: stroke)
         list.addRect(UIRect(x: rect.x, y: rect.y, width: t, height: rect.height), color: stroke)
         list.addRect(UIRect(x: rect.x + rect.width - t, y: rect.y, width: t, height: rect.height), color: stroke)
+
+        drawDropGuide(list: list,
+                      leafRect: UIRect(x: absX, y: absY, width: w, height: h),
+                      activeEdge: hit.edge,
+                      appearance: appearance,
+                      theme: node.theme)
     }
 }
 
