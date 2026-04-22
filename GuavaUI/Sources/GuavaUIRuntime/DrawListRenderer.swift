@@ -10,11 +10,17 @@ import RHIWGPU
 ///   4. each frame: `render(list:passEncoder:viewport:)`
 public final class DrawListRenderer {
 
+    private enum TextureSampling {
+        case alphaMask
+        case color
+    }
+
     private let backend: WGPUBackend
     private var pipeline: GPURenderPipeline?
     private var bindGroupLayout: GPUBindGroupLayout?
     private var pipelineLayout: GPUPipelineLayout?
-    private var sampler: GPUSampler?
+    private var alphaSampler: GPUSampler?
+    private var colorSampler: GPUSampler?
     private var uniformBuffer: GPUBuffer?
 
     /// Vertex / index streaming buffers grow as needed.
@@ -28,6 +34,7 @@ public final class DrawListRenderer {
         let texture: GPUTexture
         let view: GPUTextureView
         let bindGroup: GPUBindGroup
+        let sampling: TextureSampling
         let width: UInt32
         let height: UInt32
     }
@@ -83,8 +90,19 @@ public final class DrawListRenderer {
         self.pipeline = try backend.createRenderPipeline(desc: pipelineDesc)
         self.configuredFormat = format
 
-        if sampler == nil {
-            self.sampler = try backend.createSampler()
+        if alphaSampler == nil {
+            self.alphaSampler = try backend.createSampler(desc: GPUSamplerDescriptor(
+                magFilter: .nearest,
+                minFilter: .nearest,
+                mipmapFilter: .nearest
+            ))
+        }
+        if colorSampler == nil {
+            self.colorSampler = try backend.createSampler(desc: GPUSamplerDescriptor(
+                magFilter: .linear,
+                minFilter: .linear,
+                mipmapFilter: .nearest
+            ))
         }
         if uniformBuffer == nil {
             self.uniformBuffer = try backend.createBuffer(
@@ -110,20 +128,21 @@ public final class DrawListRenderer {
             }
             self.dummyTexture = tex
             self.dummyView = try tex.createView()
-            self.dummyBindGroup = try makeBindGroup(view: self.dummyView!)
+            self.dummyBindGroup = try makeBindGroup(view: self.dummyView!, sampling: .color)
         } else {
             // Re-create the dummy bind group against the new layout.
-            self.dummyBindGroup = try makeBindGroup(view: self.dummyView!)
+            self.dummyBindGroup = try makeBindGroup(view: self.dummyView!, sampling: .color)
         }
 
         // Re-create bind groups for any registered textures using the new layout.
         let oldTextures = textures
         textures.removeAll()
         for (id, slot) in oldTextures {
-            let bg = try makeBindGroup(view: slot.view)
+            let bg = try makeBindGroup(view: slot.view, sampling: slot.sampling)
             textures[id] = GPUTextureSlot(
                 texture: slot.texture, view: slot.view,
-                bindGroup: bg, width: slot.width, height: slot.height
+                bindGroup: bg, sampling: slot.sampling,
+                width: slot.width, height: slot.height
             )
         }
     }
@@ -167,10 +186,11 @@ public final class DrawListRenderer {
                                  width: width, height: height)
         }
         let view = try tex.createView()
-        let bg = try makeBindGroup(view: view)
+        let bg = try makeBindGroup(view: view, sampling: .alphaMask)
         textures[id] = GPUTextureSlot(
             texture: tex, view: view,
-            bindGroup: bg, width: width, height: height
+            bindGroup: bg, sampling: .alphaMask,
+            width: width, height: height
         )
     }
 
@@ -208,10 +228,11 @@ public final class DrawListRenderer {
                                  width: width, height: height)
         }
         let view = try tex.createView()
-        let bg = try makeBindGroup(view: view)
+        let bg = try makeBindGroup(view: view, sampling: .color)
         textures[id] = GPUTextureSlot(
             texture: tex, view: view,
-            bindGroup: bg, width: width, height: height
+            bindGroup: bg, sampling: .color,
+            width: width, height: height
         )
     }
 
@@ -335,9 +356,16 @@ public final class DrawListRenderer {
         self.indexCapacity = newCap
     }
 
-    private func makeBindGroup(view: GPUTextureView) throws -> GPUBindGroup {
-        guard let bindGroupLayout, let uniformBuffer, let sampler else {
+    private func makeBindGroup(view: GPUTextureView, sampling: TextureSampling) throws -> GPUBindGroup {
+        guard let bindGroupLayout,
+              let uniformBuffer,
+              let alphaSampler,
+              let colorSampler else {
             preconditionFailure("missing layout/uniform/sampler — call configure first")
+        }
+        let sampler = switch sampling {
+        case .alphaMask: alphaSampler
+        case .color: colorSampler
         }
         return try backend.createBindGroup(layout: bindGroupLayout, entries: [
             GPUBindGroupEntry(binding: 0, buffer: uniformBuffer, offset: 0, size: 16),

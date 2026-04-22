@@ -164,8 +164,8 @@ public final class DrawList {
         for line in layout.lines {
             for glyph in line.glyphs {
                 guard let info = glyph.atlasInfo, info.width > 0, info.height > 0 else { continue }
-                let dx = origin.x + glyph.x + info.bearingX
-                let dy = origin.y + glyph.y - info.bearingY
+                let dx = snappedTextPixel(origin.x + glyph.x + info.bearingX)
+                let dy = snappedTextPixel(origin.y + glyph.y - info.bearingY)
                 addGlyphQuad(
                     x: dx, y: dy,
                     width: info.width, height: info.height,
@@ -177,6 +177,10 @@ public final class DrawList {
         }
     }
     // MARK: - Internal
+
+    private func snappedTextPixel(_ value: Float) -> Float {
+        value.rounded()
+    }
 
     private func appendQuad(_ v0: UIVertex, _ v1: UIVertex, _ v2: UIVertex, _ v3: UIVertex, textureID: TextureID) {
         let baseVertex = UInt32(vertices.count)

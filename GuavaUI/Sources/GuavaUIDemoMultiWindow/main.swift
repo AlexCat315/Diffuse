@@ -315,7 +315,7 @@ final class DemoWindowRenderer {
         do {
             try session.withCurrent {
                 sharedUI.publishTextEnvironment(scale: session.contentScaleFactor)
-                graph.computeLayout(
+                graph.computeLayoutIfNeeded(
                     width: Float(session.logicalSize.width),
                     height: Float(session.logicalSize.height)
                 )

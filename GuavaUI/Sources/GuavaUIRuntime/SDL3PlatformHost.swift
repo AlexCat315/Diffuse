@@ -13,6 +13,7 @@ public final class PlatformWindowSession {
     fileprivate let dispatcher: EventDispatcher
     fileprivate var didCallOnInit = false
     fileprivate var lastTextInputArea: TextInputArea?
+    fileprivate var needsDisplay = true
 
     public private(set) var drawableSize: (width: UInt32, height: UInt32)
     public private(set) var logicalSize: (width: UInt32, height: UInt32)
@@ -196,25 +197,44 @@ public final class SDL3PlatformHost: PlatformHost {
             let deltaTime = now.timeIntervalSince(lastFrameTime)
             lastFrameTime = now
 
-            for id in sessionOrder {
-                guard let session = sessions[id] else { continue }
+            var handledEvents = false
+            for routed in shell.pollWindowEvents() {
+                guard let session = sessions[routed.windowID] else { continue }
+                handledEvents = true
                 session.withCurrent {
-                    session.recomposer.commitAll()
+                    session.dispatcher.dispatch(routed.event)
+                    session.onEvent?(routed.event)
+                    if routed.windowID == mainWindowID {
+                        onEvent?(routed.event)
+                    }
                 }
             }
 
+            var committedAny = false
+            for id in sessionOrder {
+                guard let session = sessions[id] else { continue }
+                let didCommit = session.withCurrent {
+                    session.recomposer.commitAll()
+                }
+                if didCommit {
+                    session.needsDisplay = true
+                    committedAny = true
+                }
+            }
+
+            let hadAnimations = AnimatorScheduler.current.hasActiveAnimations
             AnimatorScheduler.current.tick(deltaTime: deltaTime)
+            let animationsActive = hadAnimations || AnimatorScheduler.current.hasActiveAnimations
+
+            var renderedAnyFrame = false
 
             for id in sessionOrder {
                 guard let session = sessions[id],
                       let handle = shell.window(for: id)
                 else { continue }
 
-                session.withCurrent {
-                    session.tree.flush()
-                }
-
                 if session.updateMetrics(from: handle) {
+                    session.needsDisplay = true
                     session.onResize?(session.drawableSize.width, session.drawableSize.height)
                     if id == mainWindowID {
                         drawableSize = session.drawableSize
@@ -225,34 +245,37 @@ public final class SDL3PlatformHost: PlatformHost {
 
                 if !session.didCallOnInit, let surface = handle.renderSurface {
                     session.didCallOnInit = true
+                    session.needsDisplay = true
                     session.onInit?(surface, session.drawableSize.width, session.drawableSize.height)
                     if id == mainWindowID {
                         onInit?(surface, session.drawableSize.width, session.drawableSize.height)
                     }
                 }
 
-                if let surface = handle.renderSurface {
+                let shouldRender = session.needsDisplay
+                    || animationsActive
+                    || (session.tree.root?.isDirty ?? false)
+
+                if shouldRender, let surface = handle.renderSurface {
                     session.onFrame?(surface)
                     if id == mainWindowID {
                         onFrame?(surface)
                     }
+                    session.withCurrent {
+                        session.tree.flush()
+                    }
+                    session.needsDisplay = false
+                    renderedAnyFrame = true
                 }
 
                 syncTextInputArea(for: session, shell: shell)
             }
 
-            for routed in shell.pollWindowEvents() {
-                guard let session = sessions[routed.windowID] else { continue }
-                session.withCurrent {
-                    session.dispatcher.dispatch(routed.event)
-                    session.onEvent?(routed.event)
-                    if routed.windowID == mainWindowID {
-                        onEvent?(routed.event)
-                    }
-                }
-            }
-
             pruneClosedSessions(using: shell)
+
+            if !handledEvents && !committedAny && !animationsActive && !renderedAnyFrame {
+                Thread.sleep(forTimeInterval: 0.001)
+            }
         }
 
         _isRunning = false
