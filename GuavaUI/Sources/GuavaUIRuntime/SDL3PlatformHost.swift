@@ -23,8 +23,8 @@ public final class PlatformWindowSession {
     public var focusChain: FocusChain { inputContext.focusChain }
 
     public var contentScaleFactor: Float {
-        let logicalWidth = max(logicalSize.width, 1)
-        return Float(drawableSize.width) / Float(logicalWidth)
+        SDL3PlatformHost.quantizedContentScale(drawableSize: drawableSize,
+                                               logicalSize: logicalSize)
     }
 
     public var onFrame: (@MainActor (NativeRenderSurface) -> Bool)?
@@ -103,8 +103,8 @@ public final class SDL3PlatformHost: PlatformHost {
 
     public var isRunning: Bool { _isRunning }
     public var contentScaleFactor: Float {
-        let logicalWidth = max(logicalSize.width, 1)
-        return Float(drawableSize.width) / Float(logicalWidth)
+        Self.quantizedContentScale(drawableSize: drawableSize,
+                                   logicalSize: logicalSize)
     }
 
     public var onFrame: (@MainActor (NativeRenderSurface) -> Bool)?
@@ -420,5 +420,13 @@ public final class SDL3PlatformHost: PlatformHost {
 
         shell.setTextInputArea(windowID: session.id, area)
         session.lastTextInputArea = area
+    }
+
+    fileprivate static func quantizedContentScale(drawableSize: (width: UInt32, height: UInt32),
+                                                  logicalSize: (width: UInt32, height: UInt32)) -> Float {
+        let logicalWidth = max(logicalSize.width, 1)
+        let raw = Float(drawableSize.width) / Float(logicalWidth)
+        guard raw > 1 else { return 1 }
+        return max(1, raw.rounded())
     }
 }
