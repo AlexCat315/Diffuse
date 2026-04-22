@@ -143,21 +143,21 @@ struct DockDetachTests {
         #expect(controller.satellites.isEmpty)
     }
 
-    @Test("Redock with replace target swaps the destination leaf wholesale")
+    @Test("Redock with replace target merges satellite tabs into the destination leaf")
     func redockReplaceSwapsTarget() {
-        let (controller, tabA, _, leafAID, leafBID) = makeBasicTree()
+        let (controller, tabA, tabB, leafAID, leafBID) = makeBasicTree()
         controller.apply(.detach(leafID: leafAID))
 
         controller.apply(.redock(satelliteID: leafAID,
                                  to: .replace(target: leafBID)))
 
-        // Replacement keeps the satellite leaf's ID (since we graft the
-        // entire subtree). Note: the old leafBID is gone.
+        // Center redock onto an existing tabs leaf merges the satellite's
+        // tabs into that target leaf and makes the incoming active tab active.
         guard case .tabs(let id, let tabs, _) = controller.root else {
             Issue.record("expected tabs root"); return
         }
-        #expect(id == leafAID)
-        #expect(tabs == [tabA])
+        #expect(id == leafBID)
+        #expect(tabs.map(\.id) == [tabB.id, tabA.id])
         #expect(controller.satellites.isEmpty)
     }
 
