@@ -13,6 +13,26 @@ public enum DockDropTarget: Sendable, Equatable {
     case replace(target: DockNodeID)
 }
 
+/// Host-level drop policy request. Mirrors flexlayout-react's allow-drop
+/// callback: geometric hit-testing resolves a candidate target first, then
+/// the host can veto that target based on higher-level workspace semantics.
+public struct DockDropRequest: Sendable {
+    public let tabID: DockTabID?
+    public let sourceLeafID: DockNodeID?
+    public let origin: DockDragSession.Origin
+    public let target: DockDropTarget
+
+    public init(tabID: DockTabID?,
+                sourceLeafID: DockNodeID?,
+                origin: DockDragSession.Origin,
+                target: DockDropTarget) {
+        self.tabID = tabID
+        self.sourceLeafID = sourceLeafID
+        self.origin = origin
+        self.target = target
+    }
+}
+
 /// All mutating intents on a `DockController`. Operations are deterministic
 /// and serialisable so they can be replayed for undo / persistence.
 public enum DockOperation: Sendable {
@@ -89,6 +109,11 @@ public final class DockController: @unchecked Sendable {
     public private(set) var root: DockLayoutNode
     public private(set) var version: UInt64 = 0
 
+    /// When `true`, removing the last tab from a tabs leaf preserves that
+    /// leaf as an empty tabs container instead of collapsing it away. This
+    /// matches flexlayout-react with `tabSetEnableDeleteWhenEmpty = false`.
+    public var preserveEmptyTabSets: Bool = false
+
     /// Optional host-supplied canonicalisation pass applied to the main
     /// tree after every mutation. Hosts use this to keep a higher-level
     /// workspace shell stable (for example fixed left/center/right/bottom
@@ -132,6 +157,11 @@ public final class DockController: @unchecked Sendable {
     /// has no opinion on how the menu is rendered. `nil` (default) makes
     /// right-click a no-op.
     public var onTabContextMenu: ((_ tabID: DockTabID, _ leafID: DockNodeID, _ x: Float, _ y: Float) -> Void)?
+
+    /// Optional host veto for drag/drop proposals. `DockDragSession`
+    /// resolves a geometric target first, then asks this callback whether
+    /// the proposed target should remain visible / committable.
+    public var onAllowDrop: ((DockDropRequest) -> Bool)?
 
     /// One entry in the recent-closed-tab history, used by `.reopenLastClosed`
     /// and the default tab context menu's "Reopen Closed Tab" item.
@@ -197,7 +227,10 @@ public final class DockController: @unchecked Sendable {
         case .insertTab(let tab, let parent, let index):
             next = Self.insertTab(tab, into: parent, at: index, in: root)
         case .move(let tabID, let target):
-            next = Self.move(tabID: tabID, to: target, in: root)
+            next = Self.move(tabID: tabID,
+                             to: target,
+                             in: root,
+                             preserveEmptyTabSets: preserveEmptyTabSets)
         case .closeTab(let tabID):
             // Snapshot the leaf + index BEFORE removal so reopen can try
             // the original location.
@@ -208,7 +241,9 @@ public final class DockController: @unchecked Sendable {
                     originalIndex: loc.index
                 ))
             }
-            next = Self.closeTab(tabID, in: root)
+            next = Self.closeTab(tabID,
+                                 in: root,
+                                 preserveEmptyTabSets: preserveEmptyTabSets)
         case .setActive(let node, let tab):
             next = Self.setActive(node: node, tab: tab, in: root)
         case .resizeSplit(let node, let fraction):
@@ -334,6 +369,7 @@ public final class DockController: @unchecked Sendable {
         case .replace(let t):         targetID = t
         case .splitEdge(let t, _):    targetID = t
         }
+        let targetWasRoot = targetID == root.id
         if targetID == leafID { return }
         // Cycle: target inside the moved subtree (also catches "drop on
         // own children" though leaves don't have layout children).
@@ -350,14 +386,18 @@ public final class DockController: @unchecked Sendable {
                 nextRoot = Self.insertAtDropTarget(
                     tab,
                     target: .tabSlot(parent: parent, index: index + offset),
-                    in: nextRoot
+                    in: nextRoot,
+                    allowRootFallback: false
                 )
             }
             if let active {
                 nextRoot = Self.setActive(node: parent, tab: active, in: nextRoot)
             }
         case .replace, .splitEdge:
-            nextRoot = Self.insertSubtreeAtDropTarget(found, target: target, in: nextRoot)
+            nextRoot = Self.insertSubtreeAtDropTarget(found,
+                                                     target: target,
+                                                     in: nextRoot,
+                                                     allowRootFallback: targetWasRoot)
         }
         let normalized = normalizeRoot(nextRoot)
         guard normalized != root else { return }
@@ -394,7 +434,9 @@ public final class DockController: @unchecked Sendable {
         } else {
             var nextRoot = root
             for (tab, _) in victims {
-                nextRoot = Self.closeTab(tab.id, in: nextRoot)
+                nextRoot = Self.closeTab(tab.id,
+                                         in: nextRoot,
+                                         preserveEmptyTabSets: preserveEmptyTabSets)
             }
             let normalized = normalizeRoot(nextRoot)
             guard normalized != root else { return }
@@ -426,7 +468,9 @@ public final class DockController: @unchecked Sendable {
         } else {
             var nextRoot = root
             for (tab, _) in victims {
-                nextRoot = Self.closeTab(tab.id, in: nextRoot)
+                nextRoot = Self.closeTab(tab.id,
+                                         in: nextRoot,
+                                         preserveEmptyTabSets: preserveEmptyTabSets)
             }
             let normalized = normalizeRoot(nextRoot)
             guard normalized != root else { return }
@@ -543,6 +587,10 @@ public final class DockController: @unchecked Sendable {
         layoutNormalizer?(candidate) ?? candidate
     }
 
+    func allowsDrop(_ request: DockDropRequest) -> Bool {
+        onAllowDrop?(request) ?? true
+    }
+
     private func notifyChange() {
         // Snapshot to allow handlers to subscribe / unsubscribe during dispatch.
         let snapshot = subscribers
@@ -574,22 +622,30 @@ public final class DockController: @unchecked Sendable {
 
     private static func move(tabID: DockTabID,
                              to target: DockDropTarget,
-                             in tree: DockLayoutNode) -> DockLayoutNode {
+                             in tree: DockLayoutNode,
+                             preserveEmptyTabSets: Bool) -> DockLayoutNode {
+        let targetWasRoot = dropTargetID(target) == tree.id
         // 1. Locate and detach the tab from its source leaf.
         guard let (detached, removed) = removeTab(tabID, from: tree) else {
             return tree
         }
-        let collapsed = collapseEmpty(detached)
+        let collapsed = collapseEmpty(detached,
+                                      preserveEmptyTabSets: preserveEmptyTabSets)
         // 2. Reinsert at the drop target.
-        return insertAtDropTarget(removed, target: target, in: collapsed)
+        return insertAtDropTarget(removed,
+                                  target: target,
+                                  in: collapsed,
+                                  allowRootFallback: targetWasRoot)
     }
 
     private static func closeTab(_ tabID: DockTabID,
-                                 in tree: DockLayoutNode) -> DockLayoutNode {
+                                 in tree: DockLayoutNode,
+                                 preserveEmptyTabSets: Bool) -> DockLayoutNode {
         guard let (detached, _) = removeTab(tabID, from: tree) else {
             return tree
         }
-        return collapseEmpty(detached)
+        return collapseEmpty(detached,
+                             preserveEmptyTabSets: preserveEmptyTabSets)
     }
 
     private static func setActive(node: DockNodeID,
@@ -669,32 +725,42 @@ public final class DockController: @unchecked Sendable {
     /// Collapse `.tabs` leaves with zero tabs into `.empty`, then collapse
     /// any `.split` whose child became `.empty` into the surviving sibling.
     /// Preserves the IDs of surviving nodes.
-    private static func collapseEmpty(_ tree: DockLayoutNode) -> DockLayoutNode {
+    private static func collapseEmpty(_ tree: DockLayoutNode,
+                                      preserveEmptyTabSets: Bool) -> DockLayoutNode {
         switch tree {
         case .empty:
             return tree
         case .tabs(let id, let tabs, _):
-            if tabs.isEmpty { return .empty(id: id) }
+            if tabs.isEmpty {
+                return preserveEmptyTabSets
+                    ? .tabs(id: id, tabs: [], activeTabID: nil)
+                    : .empty(id: id)
+            }
             return tree
         case .split(let id, let axis, let frac, let first, let second):
-            let f = collapseEmpty(first)
-            let s = collapseEmpty(second)
+            let f = collapseEmpty(first, preserveEmptyTabSets: preserveEmptyTabSets)
+            let s = collapseEmpty(second, preserveEmptyTabSets: preserveEmptyTabSets)
             // Both empty: collapse the split itself to a single empty leaf,
             // reusing this split's ID so external references stay valid until
             // the caller decides to clean up.
-            if case .empty = f, case .empty = s {
+            if !preserveEmptyTabSets,
+               case .empty = f,
+               case .empty = s {
                 return .empty(id: id)
             }
             // One side empty: collapse to the other side.
-            if case .empty = f { return s }
-            if case .empty = s { return f }
+            if !preserveEmptyTabSets {
+                if case .empty = f { return s }
+                if case .empty = s { return f }
+            }
             return .split(id: id, axis: axis, fraction: frac, first: f, second: s)
         }
     }
 
     private static func insertAtDropTarget(_ tab: DockTab,
                                            target: DockDropTarget,
-                                           in tree: DockLayoutNode) -> DockLayoutNode {
+                                           in tree: DockLayoutNode,
+                                           allowRootFallback: Bool = false) -> DockLayoutNode {
         switch target {
         case .tabSlot(let parent, let index):
             return transform(tree) { n in
@@ -725,13 +791,19 @@ public final class DockController: @unchecked Sendable {
             }
         case .splitEdge(let targetID, let edge):
             if edge == .center {
-                return insertAtDropTarget(tab, target: .replace(target: targetID), in: tree)
+                return insertAtDropTarget(tab,
+                                          target: .replace(target: targetID),
+                                          in: tree,
+                                          allowRootFallback: allowRootFallback)
             }
-            let resolvedTargetID = promotedSplitTargetID(targetID: targetID,
-                                                         edge: edge,
-                                                         in: tree)
+            if allowRootFallback, findNode(targetID, in: tree) == nil {
+                return wrapWholeTreeAtEdge(tree,
+                                           inserted: .tabs([tab]),
+                                           targetID: targetID,
+                                           edge: edge)
+            }
             return transform(tree) { n in
-                guard n.id == resolvedTargetID else { return nil }
+                guard n.id == targetID else { return nil }
                 let newLeaf = DockLayoutNode.tabs([tab])
                 let axis: DockSplitAxis
                 let leafFirst: Bool
@@ -808,14 +880,18 @@ public final class DockController: @unchecked Sendable {
     /// the right index.
     private static func insertSubtreeAtDropTarget(_ subtree: DockLayoutNode,
                                                   target: DockDropTarget,
-                                                  in tree: DockLayoutNode) -> DockLayoutNode {
+                                                  in tree: DockLayoutNode,
+                                                  allowRootFallback: Bool = false) -> DockLayoutNode {
         switch target {
         case .tabSlot:
             // Defensive fallback: splice the first tab if the satellite
             // happens to be a tabs leaf. Higher-level callers should never
             // hit this path.
             if case .tabs(_, let tabs, _) = subtree, let first = tabs.first {
-                return insertAtDropTarget(first, target: target, in: tree)
+                return insertAtDropTarget(first,
+                                          target: target,
+                                          in: tree,
+                                          allowRootFallback: allowRootFallback)
             }
             return tree
         case .replace(let targetID):
@@ -838,13 +914,19 @@ public final class DockController: @unchecked Sendable {
             }
         case .splitEdge(let targetID, let edge):
             if edge == .center {
-                return insertSubtreeAtDropTarget(subtree, target: .replace(target: targetID), in: tree)
+                return insertSubtreeAtDropTarget(subtree,
+                                                 target: .replace(target: targetID),
+                                                 in: tree,
+                                                 allowRootFallback: allowRootFallback)
             }
-            let resolvedTargetID = promotedSplitTargetID(targetID: targetID,
-                                                         edge: edge,
-                                                         in: tree)
+            if allowRootFallback, findNode(targetID, in: tree) == nil {
+                return wrapWholeTreeAtEdge(tree,
+                                           inserted: subtree,
+                                           targetID: targetID,
+                                           edge: edge)
+            }
             return transform(tree) { n in
-                guard n.id == resolvedTargetID else { return nil }
+                guard n.id == targetID else { return nil }
                 let axis: DockSplitAxis
                 let leafFirst: Bool
                 switch edge {
@@ -865,39 +947,43 @@ public final class DockController: @unchecked Sendable {
         }
     }
 
-    private static func promotedSplitTargetID(targetID: DockNodeID,
-                                              edge: DockEdge,
-                                              in tree: DockLayoutNode) -> DockNodeID {
-        guard let parent = findImmediateParent(of: targetID, in: tree) else {
+    private static func dropTargetID(_ target: DockDropTarget) -> DockNodeID {
+        switch target {
+        case .tabSlot(let parent, _):
+            return parent
+        case .replace(let targetID), .splitEdge(let targetID, _):
             return targetID
         }
-        let edgeAxis: DockSplitAxis
-        switch edge {
-        case .left, .right:
-            edgeAxis = .horizontal
-        case .top, .bottom:
-            edgeAxis = .vertical
-        case .center:
-            return targetID
-        }
-        guard case .split(let id, let axis, _, _, _) = parent,
-              axis != edgeAxis else {
-            return targetID
-        }
-        return id
     }
 
-    private static func findImmediateParent(of id: DockNodeID,
-                                            in tree: DockLayoutNode) -> DockLayoutNode? {
-        guard case .split = tree else { return nil }
-        if case .split(_, _, _, let first, let second) = tree {
-            if first.id == id || second.id == id {
-                return tree
-            }
-            return findImmediateParent(of: id, in: first)
-                ?? findImmediateParent(of: id, in: second)
+    private static func wrapWholeTreeAtEdge(_ tree: DockLayoutNode,
+                                            inserted: DockLayoutNode,
+                                            targetID: DockNodeID,
+                                            edge: DockEdge) -> DockLayoutNode {
+        let axis: DockSplitAxis
+        let insertedFirst: Bool
+        switch edge {
+        case .left:
+            axis = .horizontal
+            insertedFirst = true
+        case .right:
+            axis = .horizontal
+            insertedFirst = false
+        case .top:
+            axis = .vertical
+            insertedFirst = true
+        case .bottom:
+            axis = .vertical
+            insertedFirst = false
+        case .center:
+            fatalError("center is not a split edge")
         }
-        return nil
+
+        return .split(id: targetID,
+                      axis: axis,
+                      fraction: 0.5,
+                      first: insertedFirst ? inserted : tree,
+                      second: insertedFirst ? tree : inserted)
     }
 
     /// Generic tree transformer: walk the tree, apply `mutate` to every node,

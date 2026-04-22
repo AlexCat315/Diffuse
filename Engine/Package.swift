@@ -59,6 +59,11 @@ let package = Package(
                 ])
             ]
         ),
+        .target(
+            name: "CJoltBridge",
+            path: "Sources/Bridge/CJoltBridge",
+            publicHeadersPath: "include"
+        ),
 
         // MARK: - Core Kernel (no deps, pure Swift protocols and types)
         .target(name: "EngineKernel"),
@@ -83,7 +88,12 @@ let package = Package(
         ),
 
         // MARK: - Engine Services
-        .target(name: "SceneRuntime"),
+        .target(
+            name: "SceneRuntime",
+            dependencies: [
+                "CJoltBridge",
+            ]
+        ),
         .target(name: "AssetPipeline"),
         .target(name: "ScriptRuntime"),
         .target(

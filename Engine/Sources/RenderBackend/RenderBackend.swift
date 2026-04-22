@@ -2,6 +2,7 @@ import AssetPipeline
 import Foundation
 import Logging
 import RHIWGPU
+import SceneRuntime
 import simd
 
 public final class MetalPlaceholderRenderer: RenderPacketConsumer, @unchecked Sendable {

@@ -97,21 +97,37 @@ public struct RuntimeScheduleReport: Sendable {
 }
 
 public struct RuntimeWorldSchedule {
+    private struct ExtractedRenderInstance {
+        var entity: EntityID
+        var instance: RenderInstance
+    }
+
     private struct PhysicsSyncCache {
         var bodies: [EntityID: PhysicsBodyDescriptor] = [:]
         var constraints: [EntityID: PhysicsConstraintDescriptor] = [:]
     }
 
     private var physicsBackend: any PhysicsBackend = NullPhysicsBackend()
+    private var explicitPhysicsBackend: (any PhysicsBackend)?
     private var physicsClock = PhysicsStepClockResource()
     private var physicsFrameState = PhysicsFrameStateResource()
     private var physicsSyncCache = PhysicsSyncCache()
+    private var resolvedPhysicsBackendKind: PhysicsBackendKind = .none
 
     public init() {}
 
     public mutating func setPhysicsBackend(_ backend: any PhysicsBackend) {
+        explicitPhysicsBackend = backend
         physicsBackend = backend
+        resolvedPhysicsBackendKind = .none
         physicsFrameState.backendIdentifier = backend.identifier
+    }
+
+    public mutating func clearPhysicsBackendOverride() {
+        explicitPhysicsBackend = nil
+        resolvedPhysicsBackendKind = .none
+        physicsBackend = NullPhysicsBackend()
+        physicsFrameState.backendIdentifier = physicsBackend.identifier
     }
 
     public var currentPhysicsBackendIdentifier: String {
@@ -145,6 +161,8 @@ public struct RuntimeWorldSchedule {
         var activeConstraints: [PhysicsConstraintDescriptor] = []
         var syncEvents: [PhysicsSyncEvent] = []
         var pendingWritebacks: [PhysicsBodyWriteback] = []
+
+        ensureConfiguredPhysicsBackend(kind: physicsSettings.backendKind)
 
         for phase in RuntimeSystemPhase.allCases {
             switch phase {
@@ -244,8 +262,11 @@ public struct RuntimeWorldSchedule {
                 world.setDerivedResource(physicsClock)
                 world.setDerivedResource(physicsFrameState)
             case .animationAndScripts,
-                 .spatialIndexUpdate,
-                 .renderExtract:
+                 .spatialIndexUpdate:
+                world.setDerivedResource(buildSpatialIndexResource(in: world))
+                break
+            case .renderExtract:
+                world.setDerivedResource(extractRenderScene(in: world))
                 break
             }
         }
@@ -344,5 +365,81 @@ public struct RuntimeWorldSchedule {
             merged[writeback.entity] = writeback
         }
         return Array(merged.values)
+    }
+
+    private mutating func ensureConfiguredPhysicsBackend(kind: PhysicsBackendKind) {
+        guard explicitPhysicsBackend == nil else { return }
+        guard resolvedPhysicsBackendKind != kind else { return }
+
+        physicsBackend.reset()
+        switch kind {
+        case .none:
+            physicsBackend = NullPhysicsBackend()
+        case .jolt:
+            physicsBackend = JoltPhysicsBackend()
+        }
+        resolvedPhysicsBackendKind = kind
+        physicsFrameState.backendIdentifier = physicsBackend.identifier
+    }
+
+    private func extractRenderScene(in world: RuntimeWorld) -> ExtractedRenderSceneResource {
+        let cameraSelection = selectRenderCamera(in: world)
+        let instances = collectRenderInstances(in: world)
+        return ExtractedRenderSceneResource(
+            scene: RenderScene(
+                camera: cameraSelection.camera,
+                instances: instances.map(\ .instance)
+            ),
+            activeCameraEntity: cameraSelection.entity,
+            instanceEntities: instances.map(\ .entity),
+            sourceRevision: world.revision
+        )
+    }
+
+    private func selectRenderCamera(in world: RuntimeWorld) -> (entity: EntityID?, camera: RenderCamera) {
+        var fallbackSelection: (entity: EntityID?, camera: RenderCamera)?
+
+        for entity in world.entities() {
+            guard let component = world.component(CameraComponent.self, for: entity) else {
+                continue
+            }
+
+            let camera = RenderCamera(
+                eye: world.worldTransform(for: entity)?.translation ?? .zero,
+                target: component.target,
+                up: component.up,
+                fovYRadians: component.fovYRadians,
+                near: component.near,
+                far: component.far
+            )
+
+            if fallbackSelection == nil {
+                fallbackSelection = (entity, camera)
+            }
+            if component.isActive {
+                return (entity, camera)
+            }
+        }
+
+        return fallbackSelection ?? (nil, .fallbackPerspective)
+    }
+
+    private func collectRenderInstances(in world: RuntimeWorld) -> [ExtractedRenderInstance] {
+        world.entities().compactMap { entity in
+            guard let renderMesh = world.component(RenderMeshComponent.self, for: entity),
+                  renderMesh.isVisible,
+                  let worldTransform = world.worldTransform(for: entity)
+            else {
+                return nil
+            }
+
+            return ExtractedRenderInstance(
+                entity: entity,
+                instance: RenderInstance(
+                    meshIndex: renderMesh.meshIndex,
+                    transform: worldTransform.matrix
+                )
+            )
+        }
     }
 }

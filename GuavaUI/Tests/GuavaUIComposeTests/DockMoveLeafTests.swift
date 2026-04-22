@@ -56,7 +56,7 @@ struct DockMoveLeafTests {
 
     // MARK: splitEdge — graft leaf subtree as a new split
 
-    @Test("moveLeaf with .splitEdge .right wraps the whole vertical strip in a new hsplit")
+    @Test("moveLeaf with .splitEdge .right wraps only the target leaf area in a new hsplit")
     func moveLeafSplitRight() {
         let a = DockTab(userKey: "a", title: "A")
         let b = DockTab(userKey: "b", title: "B")
@@ -74,19 +74,17 @@ struct DockMoveLeafTests {
         controller.apply(.moveLeaf(leafID: leafAID,
                                    to: .splitEdge(target: leafBID, edge: .right)))
 
-        // Source collapse leaves the inner vsplit as the new root; then
-        // the .right edge promotes from leafB to that whole vertical strip,
-        // so the strip [leafB over leafC] becomes the left half and leafA
-        // becomes the new right half.
-        guard case .split(_, .horizontal, _, let left, let right) = controller.root,
-              case .split(_, .vertical, _, let top, let bottom) = left,
-              case .tabs(let topID, _, _) = top,
-              case .tabs(let bottomID, _, _) = bottom,
-              case .tabs(let rightID, _, _) = right else {
-            Issue.record("expected the whole vertical strip to be wrapped by an hsplit")
+                // Source collapse leaves the inner vsplit as the new root; then the
+                // .right edge wraps leafB alone, keeping leafC as the lower sibling.
+                guard case .split(_, .vertical, _, let top, let bottom) = controller.root,
+                            case .split(_, .horizontal, _, let left, let right) = top,
+                            case .tabs(let leftID, _, _) = left,
+                            case .tabs(let rightID, _, _) = right,
+                            case .tabs(let bottomID, _, _) = bottom else {
+                        Issue.record("expected only the target leaf area to be wrapped by an hsplit")
             return
         }
-        #expect(topID == leafBID)
+                #expect(leftID == leafBID)
         #expect(bottomID == leafC.id)
         #expect(rightID == leafAID)
     }

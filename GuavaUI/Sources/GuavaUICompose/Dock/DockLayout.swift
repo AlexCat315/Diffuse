@@ -30,6 +30,10 @@ public struct DockTab: Hashable, Sendable, Codable {
     public let id: DockTabID
     public var userKey: String
     public var title: String
+    /// When `false`, the tab still activates on click but cannot start a
+    /// drag gesture. Mirrors flexlayout-react's per-tab `enableDrag` flag.
+    /// Defaults to `true`.
+    public var isDraggable: Bool
     /// When `false`, the tab strip skips rendering the close button and
     /// `controller.apply(.closeTab(id))` becomes a caller-side responsibility
     /// (e.g. via the context menu callback). Defaults to `true`.
@@ -47,19 +51,21 @@ public struct DockTab: Hashable, Sendable, Codable {
     public init(id: DockTabID = DockTabID(),
                 userKey: String,
                 title: String,
+                isDraggable: Bool = true,
                 isClosable: Bool = true,
                 isPinned: Bool = false,
                 icon: DockTabIcon? = nil) {
         self.id = id
         self.userKey = userKey
         self.title = title
+        self.isDraggable = isDraggable
         self.isClosable = isClosable
         self.isPinned = isPinned
         self.icon = icon
     }
 
     private enum CodingKeys: String, CodingKey {
-        case id, userKey, title, isClosable, isPinned, icon
+        case id, userKey, title, isDraggable, isClosable, isPinned, icon
     }
 
     /// Custom decoder so pre-D9 snapshots (which only carry `id` /
@@ -70,6 +76,7 @@ public struct DockTab: Hashable, Sendable, Codable {
         self.id = try c.decode(DockTabID.self, forKey: .id)
         self.userKey = try c.decode(String.self, forKey: .userKey)
         self.title = try c.decode(String.self, forKey: .title)
+        self.isDraggable = try c.decodeIfPresent(Bool.self, forKey: .isDraggable) ?? true
         self.isClosable = try c.decodeIfPresent(Bool.self, forKey: .isClosable) ?? true
         self.isPinned = try c.decodeIfPresent(Bool.self, forKey: .isPinned) ?? false
         self.icon = try c.decodeIfPresent(DockTabIcon.self, forKey: .icon)

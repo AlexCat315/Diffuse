@@ -173,9 +173,13 @@ public final class DockDragSession {
         self.pointerX = x
         self.pointerY = y
         self.hoverLeafID = registry.leafAt(x: x, y: y)?.id
-        self.dropHit = Self.resolveDropHit(x: x, y: y,
-                                           sourceLeafID: sourceLeafID,
-                                           registry: registry)
+        self.dropHit = Self.resolveAllowedDropHit(x: x,
+                                                  y: y,
+                                                  tabID: tabID,
+                                                  sourceLeafID: sourceLeafID,
+                                                  origin: origin,
+                                                  controller: controller,
+                                                  registry: registry)
         self.dropHostWindowID = nil
         self.isOutsideAllHosts = false
         bumpVersion()
@@ -199,8 +203,13 @@ public final class DockDragSession {
                                       globalY: global.y)?.leafID
         if let resolved = coordinator.resolveGlobalDropHit(globalX: global.x,
                                                            globalY: global.y,
-                                                           sourceLeafID: sourceLeafID) {
-            self.dropHit = resolved.hit
+                                                           sourceLeafID: sourceLeafID),
+           let filtered = Self.filterAllowedDropHit(resolved.hit,
+                                                    tabID: tabID,
+                                                    sourceLeafID: sourceLeafID,
+                                                    origin: origin,
+                                                    controller: controller) {
+            self.dropHit = filtered
             self.dropHostWindowID = resolved.host.windowID
             self.isOutsideAllHosts = false
         } else {
@@ -239,7 +248,7 @@ public final class DockDragSession {
         case .mainTreeTab:
             guard let tabID else { return }
             if let hit = dropHit {
-                let target = makeDropTarget(from: hit)
+                let target = Self.makeDropTarget(from: hit)
                 controller.apply(.move(tabID: tabID, to: target))
             } else if isOutsideAllHosts, let sourceLeafID {
                 let dx = globalPointerX - originGlobalX
@@ -251,12 +260,12 @@ public final class DockDragSession {
             }
         case .satellite(let leafID):
             if let hit = dropHit {
-                let target = makeDropTarget(from: hit)
+                let target = Self.makeDropTarget(from: hit)
                 controller.apply(.redock(satelliteID: leafID, to: target))
             }
         case .mainTreeLeaf(let leafID):
             if let hit = dropHit {
-                let target = makeDropTarget(from: hit)
+                let target = Self.makeDropTarget(from: hit)
                 controller.apply(.moveLeaf(leafID: leafID, to: target))
             } else if isOutsideAllHosts {
                 let dx = globalPointerX - originGlobalX
@@ -269,7 +278,7 @@ public final class DockDragSession {
         }
     }
 
-    private func makeDropTarget(from hit: LeafHit) -> DockDropTarget {
+    private static func makeDropTarget(from hit: LeafHit) -> DockDropTarget {
         if let idx = hit.tabSlotIndex {
             return .tabSlot(parent: hit.leafID, index: idx)
         }
@@ -329,6 +338,38 @@ public final class DockDragSession {
     public static func resolveDropHit(x: Float, y: Float,
                                       sourceLeafID: DockNodeID?,
                                       registry: DockHitRegistry) -> LeafHit? {
+        if let rootGuideHit = resolveRootGuideHit(x: x, y: y, registry: registry) {
+            return rootGuideHit
+        }
+        let leafHit = resolveLeafDropHit(x: x,
+                                         y: y,
+                                         sourceLeafID: sourceLeafID,
+                                         registry: registry)
+        if let rootHit = resolveRootEdgeHit(x: x, y: y, registry: registry),
+           leafHit == nil || leafHit?.edge == rootHit.edge {
+            return rootHit
+        }
+        return leafHit
+    }
+
+    private static func resolveRootGuideHit(x: Float, y: Float,
+                                            registry: DockHitRegistry) -> LeafHit? {
+        guard let root = registry.rootAt(x: x, y: y) else { return nil }
+        return makeWorkspaceDropGuideTiles(in: UIRect(x: root.frame.x,
+                                                      y: root.frame.y,
+                                                      width: root.frame.width,
+                                                      height: root.frame.height))
+            .first(where: { tile in
+                let rect = tile.buttonRect
+                return x >= rect.x && x < rect.x + rect.width
+                    && y >= rect.y && y < rect.y + rect.height
+            })
+            .map { LeafHit(leafID: root.id, edge: $0.edge, tabSlotIndex: nil) }
+    }
+
+    private static func resolveLeafDropHit(x: Float, y: Float,
+                                           sourceLeafID: DockNodeID?,
+                                           registry: DockHitRegistry) -> LeafHit? {
         guard let hit = registry.leafAt(x: x, y: y) else { return nil }
         let f = hit.frame
         let guideRect = UIRect(x: f.x, y: f.y, width: f.width, height: f.height)
@@ -372,5 +413,62 @@ public final class DockDragSession {
         }
 
         return LeafHit(leafID: hit.id, edge: edge, tabSlotIndex: nil)
+    }
+
+    private static func resolveRootEdgeHit(x: Float, y: Float,
+                                           registry: DockHitRegistry) -> LeafHit? {
+        guard let root = registry.rootAt(x: x, y: y) else { return nil }
+        let f = root.frame
+        let band = max(Float(20), min(Float(32), min(f.width, f.height) * 0.06))
+        let leftLimit = f.x + band
+        let rightLimit = f.x + f.width - band
+        let topLimit = f.y + band
+        let bottomLimit = f.y + f.height - band
+
+        let edge: DockEdge
+        if x < leftLimit {
+            edge = .left
+        } else if x >= rightLimit {
+            edge = .right
+        } else if y < topLimit {
+            edge = .top
+        } else if y >= bottomLimit {
+            edge = .bottom
+        } else {
+            return nil
+        }
+
+        return LeafHit(leafID: root.id, edge: edge, tabSlotIndex: nil)
+    }
+
+    public static func resolveAllowedDropHit(x: Float, y: Float,
+                                             tabID: DockTabID?,
+                                             sourceLeafID: DockNodeID?,
+                                             origin: Origin,
+                                             controller: DockController?,
+                                             registry: DockHitRegistry) -> LeafHit? {
+        let hit = resolveDropHit(x: x,
+                                 y: y,
+                                 sourceLeafID: sourceLeafID,
+                                 registry: registry)
+        return filterAllowedDropHit(hit,
+                                    tabID: tabID,
+                                    sourceLeafID: sourceLeafID,
+                                    origin: origin,
+                                    controller: controller)
+    }
+
+    private static func filterAllowedDropHit(_ hit: LeafHit?,
+                                             tabID: DockTabID?,
+                                             sourceLeafID: DockNodeID?,
+                                             origin: Origin,
+                                             controller: DockController?) -> LeafHit? {
+        guard let hit else { return nil }
+        guard let controller else { return hit }
+        let request = DockDropRequest(tabID: tabID,
+                                      sourceLeafID: sourceLeafID,
+                                      origin: origin,
+                                      target: makeDropTarget(from: hit))
+        return controller.allowsDrop(request) ? hit : nil
     }
 }

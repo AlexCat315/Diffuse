@@ -8,6 +8,51 @@ struct DockDropGuideTile {
     let highlightRect: UIRect
 }
 
+private func makeDropGuideTile(edge: DockEdge,
+                               x: Float,
+                               y: Float,
+                               buttonSize: Float,
+                               iconInset: Float) -> DockDropGuideTile {
+    let buttonRect = UIRect(x: x, y: y, width: buttonSize, height: buttonSize)
+    let miniatureRect = UIRect(x: x + iconInset,
+                               y: y + iconInset,
+                               width: buttonSize - iconInset * 2,
+                               height: buttonSize - iconInset * 2)
+    let highlightRect: UIRect
+    switch edge {
+    case .left:
+        let width = miniatureRect.width * 0.36
+        highlightRect = UIRect(x: miniatureRect.x,
+                               y: miniatureRect.y,
+                               width: width,
+                               height: miniatureRect.height)
+    case .right:
+        let width = miniatureRect.width * 0.36
+        highlightRect = UIRect(x: miniatureRect.x + miniatureRect.width - width,
+                               y: miniatureRect.y,
+                               width: width,
+                               height: miniatureRect.height)
+    case .top:
+        let height = miniatureRect.height * 0.36
+        highlightRect = UIRect(x: miniatureRect.x,
+                               y: miniatureRect.y,
+                               width: miniatureRect.width,
+                               height: height)
+    case .bottom:
+        let height = miniatureRect.height * 0.36
+        highlightRect = UIRect(x: miniatureRect.x,
+                               y: miniatureRect.y + miniatureRect.height - height,
+                               width: miniatureRect.width,
+                               height: height)
+    case .center:
+        highlightRect = miniatureRect
+    }
+    return DockDropGuideTile(edge: edge,
+                             buttonRect: buttonRect,
+                             miniatureRect: miniatureRect,
+                             highlightRect: highlightRect)
+}
+
 func makeDockDropGuideTiles(in leafRect: UIRect) -> [DockDropGuideTile] {
     let minDimension = min(leafRect.width, leafRect.height)
     guard minDimension >= 72 else { return [] }
@@ -19,77 +64,80 @@ func makeDockDropGuideTiles(in leafRect: UIRect) -> [DockDropGuideTile] {
     let buttonHalf = buttonSize * 0.5
     let iconInset = max(4, buttonSize * 0.22)
 
-    func tile(edge: DockEdge, x: Float, y: Float) -> DockDropGuideTile {
-        let buttonRect = UIRect(x: x, y: y, width: buttonSize, height: buttonSize)
-        let miniatureRect = UIRect(x: x + iconInset,
-                                   y: y + iconInset,
-                                   width: buttonSize - iconInset * 2,
-                                   height: buttonSize - iconInset * 2)
-        let highlightRect: UIRect
-        switch edge {
-        case .left:
-            let width = miniatureRect.width * 0.36
-            highlightRect = UIRect(x: miniatureRect.x,
-                                   y: miniatureRect.y,
-                                   width: width,
-                                   height: miniatureRect.height)
-        case .right:
-            let width = miniatureRect.width * 0.36
-            highlightRect = UIRect(x: miniatureRect.x + miniatureRect.width - width,
-                                   y: miniatureRect.y,
-                                   width: width,
-                                   height: miniatureRect.height)
-        case .top:
-            let height = miniatureRect.height * 0.36
-            highlightRect = UIRect(x: miniatureRect.x,
-                                   y: miniatureRect.y,
-                                   width: miniatureRect.width,
-                                   height: height)
-        case .bottom:
-            let height = miniatureRect.height * 0.36
-            highlightRect = UIRect(x: miniatureRect.x,
-                                   y: miniatureRect.y + miniatureRect.height - height,
-                                   width: miniatureRect.width,
-                                   height: height)
-        case .center:
-            highlightRect = miniatureRect
-        }
-        return DockDropGuideTile(edge: edge,
-                                 buttonRect: buttonRect,
-                                 miniatureRect: miniatureRect,
-                                 highlightRect: highlightRect)
-    }
-
     return [
-        tile(edge: .top,
-             x: centerX - buttonHalf,
-             y: centerY - buttonSize - gap),
-        tile(edge: .left,
-             x: centerX - buttonSize - gap,
-             y: centerY - buttonHalf),
-        tile(edge: .center,
-             x: centerX - buttonHalf,
-             y: centerY - buttonHalf),
-        tile(edge: .right,
-             x: centerX + gap,
-             y: centerY - buttonHalf),
-        tile(edge: .bottom,
-             x: centerX - buttonHalf,
-             y: centerY + gap)
+        makeDropGuideTile(edge: .top,
+                          x: centerX - buttonHalf,
+                          y: centerY - buttonSize - gap,
+                          buttonSize: buttonSize,
+                          iconInset: iconInset),
+        makeDropGuideTile(edge: .left,
+                          x: centerX - buttonSize - gap,
+                          y: centerY - buttonHalf,
+                          buttonSize: buttonSize,
+                          iconInset: iconInset),
+        makeDropGuideTile(edge: .center,
+                          x: centerX - buttonHalf,
+                          y: centerY - buttonHalf,
+                          buttonSize: buttonSize,
+                          iconInset: iconInset),
+        makeDropGuideTile(edge: .right,
+                          x: centerX + gap,
+                          y: centerY - buttonHalf,
+                          buttonSize: buttonSize,
+                          iconInset: iconInset),
+        makeDropGuideTile(edge: .bottom,
+                          x: centerX - buttonHalf,
+                          y: centerY + gap,
+                          buttonSize: buttonSize,
+                          iconInset: iconInset)
     ]
 }
 
-private func drawDropGuide(list: DrawList,
-                           leafRect: UIRect,
-                           activeEdge: DockEdge?,
-                           appearance: DockAppearance,
-                           theme: Theme) {
-    let tiles = makeDockDropGuideTiles(in: leafRect)
+func makeWorkspaceDropGuideTiles(in workspaceRect: UIRect) -> [DockDropGuideTile] {
+    let minDimension = min(workspaceRect.width, workspaceRect.height)
+    guard minDimension >= 120 else { return [] }
+
+    let buttonSize = max(24, min(40, (minDimension - 48) / 4))
+    let gap = max(12, min(20, buttonSize * 0.45))
+    let centerX = workspaceRect.x + workspaceRect.width * 0.5
+    let centerY = workspaceRect.y + workspaceRect.height * 0.5
+    let buttonHalf = buttonSize * 0.5
+    let iconInset = max(5, buttonSize * 0.2)
+
+    return [
+        makeDropGuideTile(edge: .top,
+                          x: centerX - buttonHalf,
+                          y: centerY - buttonSize - gap,
+                          buttonSize: buttonSize,
+                          iconInset: iconInset),
+        makeDropGuideTile(edge: .left,
+                          x: centerX - buttonSize - gap,
+                          y: centerY - buttonHalf,
+                          buttonSize: buttonSize,
+                          iconInset: iconInset),
+        makeDropGuideTile(edge: .right,
+                          x: centerX + gap,
+                          y: centerY - buttonHalf,
+                          buttonSize: buttonSize,
+                          iconInset: iconInset),
+        makeDropGuideTile(edge: .bottom,
+                          x: centerX - buttonHalf,
+                          y: centerY + gap,
+                          buttonSize: buttonSize,
+                          iconInset: iconInset)
+    ]
+}
+
+private func drawGuideTiles(list: DrawList,
+                            tiles: [DockDropGuideTile],
+                            activeEdge: DockEdge?,
+                            appearance: DockAppearance,
+                            theme: Theme) {
     guard !tiles.isEmpty else { return }
 
-    let buttonSpan = tiles.map(\ .buttonRect)
-    guard let minX = buttonSpan.map(\ .x).min(),
-          let minY = buttonSpan.map(\ .y).min(),
+    let buttonSpan = tiles.map(\.buttonRect)
+    guard let minX = buttonSpan.map(\.x).min(),
+          let minY = buttonSpan.map(\.y).min(),
           let maxX = buttonSpan.map({ $0.x + $0.width }).max(),
           let maxY = buttonSpan.map({ $0.y + $0.height }).max() else {
         return
@@ -147,6 +195,57 @@ private func drawDropGuide(list: DrawList,
     }
 }
 
+private func drawDropGuide(list: DrawList,
+                           leafRect: UIRect,
+                           activeEdge: DockEdge?,
+                           appearance: DockAppearance,
+                           theme: Theme) {
+    drawGuideTiles(list: list,
+                   tiles: makeDockDropGuideTiles(in: leafRect),
+                   activeEdge: activeEdge,
+                   appearance: appearance,
+                   theme: theme)
+}
+
+private func drawWorkspaceDropGuide(list: DrawList,
+                                    workspaceRect: UIRect,
+                                    activeEdge: DockEdge?,
+                                    appearance: DockAppearance,
+                                    theme: Theme) {
+    drawGuideTiles(list: list,
+                   tiles: makeWorkspaceDropGuideTiles(in: workspaceRect),
+                   activeEdge: activeEdge,
+                   appearance: appearance,
+                   theme: theme)
+}
+
+private func previewRect(for edge: DockEdge, in frame: UIRect) -> UIRect {
+    switch edge {
+    case .left:
+        return UIRect(x: frame.x, y: frame.y, width: frame.width * 0.5, height: frame.height)
+    case .right:
+        return UIRect(x: frame.x + frame.width * 0.5, y: frame.y, width: frame.width * 0.5, height: frame.height)
+    case .top:
+        return UIRect(x: frame.x, y: frame.y, width: frame.width, height: frame.height * 0.5)
+    case .bottom:
+        return UIRect(x: frame.x, y: frame.y + frame.height * 0.5, width: frame.width, height: frame.height * 0.5)
+    case .center:
+        return UIRect(x: frame.x, y: frame.y, width: frame.width, height: frame.height)
+    }
+}
+
+private func drawDropPreview(list: DrawList,
+                             rect: UIRect,
+                             fill: Color,
+                             stroke: Color) {
+    list.addRect(rect, color: fill)
+    let t: Float = 2
+    list.addRect(UIRect(x: rect.x, y: rect.y, width: rect.width, height: t), color: stroke)
+    list.addRect(UIRect(x: rect.x, y: rect.y + rect.height - t, width: rect.width, height: t), color: stroke)
+    list.addRect(UIRect(x: rect.x, y: rect.y, width: t, height: rect.height), color: stroke)
+    list.addRect(UIRect(x: rect.x + rect.width - t, y: rect.y, width: t, height: rect.height), color: stroke)
+}
+
 /// Wires `node.overlayDraw` so that, while the controller's drag session is
 /// active over this leaf, the leaf paints a 5-zone drop indicator on top of
 /// its content. The closure runs every frame from `NodeRenderer`, so it
@@ -159,6 +258,10 @@ func installDropOverlay(node: Node, leafID: DockNodeID, controller: DockControll
         // Phase G — only the lift-tier intent draws the 5-direction edge
         // indicator. Reorder-tier drags are visualised by the ghost only.
         guard session.intent == .detachOrSplit else { return }
+        let rootTargetID = node.compositionValue(of: DockRootDropTargetIDLocal) ?? controller.root.id
+        if let hit = session.dropHit, hit.leafID == rootTargetID, hit.leafID != leafID {
+            return
+        }
 
         let appearance = node.compositionValue(of: DockStyleEnvironment.key)
             .resolve(DockStyleConfiguration(theme: node.theme))
@@ -170,32 +273,17 @@ func installDropOverlay(node: Node, leafID: DockNodeID, controller: DockControll
         let absY = Float(origin.y)
         let w = Float(node.frame.width)
         let h = Float(node.frame.height)
+        let frame = UIRect(x: absX, y: absY, width: w, height: h)
 
         if let hit = session.dropHit, hit.leafID == leafID {
-            let rect: UIRect
-            switch hit.edge {
-            case .left:
-                rect = UIRect(x: absX, y: absY, width: w * 0.5, height: h)
-            case .right:
-                rect = UIRect(x: absX + w * 0.5, y: absY, width: w * 0.5, height: h)
-            case .top:
-                rect = UIRect(x: absX, y: absY, width: w, height: h * 0.5)
-            case .bottom:
-                rect = UIRect(x: absX, y: absY + h * 0.5, width: w, height: h * 0.5)
-            case .center:
-                rect = UIRect(x: absX, y: absY, width: w, height: h)
-            }
-
-            list.addRect(rect, color: fill)
-            let t: Float = 2
-            list.addRect(UIRect(x: rect.x, y: rect.y, width: rect.width, height: t), color: stroke)
-            list.addRect(UIRect(x: rect.x, y: rect.y + rect.height - t, width: rect.width, height: t), color: stroke)
-            list.addRect(UIRect(x: rect.x, y: rect.y, width: t, height: rect.height), color: stroke)
-            list.addRect(UIRect(x: rect.x + rect.width - t, y: rect.y, width: t, height: rect.height), color: stroke)
+            drawDropPreview(list: list,
+                            rect: previewRect(for: hit.edge, in: frame),
+                            fill: fill,
+                            stroke: stroke)
         }
 
         drawDropGuide(list: list,
-                      leafRect: UIRect(x: absX, y: absY, width: w, height: h),
+                      leafRect: frame,
                       activeEdge: session.dropHit?.leafID == leafID ? session.dropHit?.edge : nil,
                       appearance: appearance,
                       theme: node.theme)
@@ -205,15 +293,41 @@ func installDropOverlay(node: Node, leafID: DockNodeID, controller: DockControll
 /// Ghost preview rendered by the container root: a small label following the
 /// cursor while a drag is active. Uses the root node's `overlayDraw` slot so
 /// it paints above all leaf content.
-func installDragGhostOverlay(node: Node, controller: DockController) {
-    node.overlayDraw = { [weak controller] list, _ in
+func installDragGhostOverlay(node: Node,
+                             controller: DockController,
+                             rootNodeID: DockNodeID) {
+    node.overlayDraw = { [weak controller] list, origin in
         guard let controller else { return }
         let session = controller.dragSession
-        guard session.isActive, let ghost = session.ghost else { return }
-
         let appearance = node.compositionValue(of: DockStyleEnvironment.key)
             .resolve(DockStyleConfiguration(theme: node.theme))
         let accent = appearance.tabActiveAccentBar
+        let rootRect = UIRect(x: Float(origin.x),
+                              y: Float(origin.y),
+                              width: Float(node.frame.width),
+                              height: Float(node.frame.height))
+        if session.isActive, session.intent == .detachOrSplit {
+            drawWorkspaceDropGuide(list: list,
+                                   workspaceRect: rootRect,
+                                   activeEdge: session.dropHit?.leafID == rootNodeID ? session.dropHit?.edge : nil,
+                                   appearance: appearance,
+                                   theme: node.theme)
+        }
+        if session.isActive,
+           session.intent == .detachOrSplit,
+           let hit = session.dropHit,
+           hit.leafID == rootNodeID,
+           hit.leafID != session.hoverLeafID {
+            let fill = Color(r: accent.r, g: accent.g, b: accent.b, a: 0.25)
+            let stroke = Color(r: accent.r, g: accent.g, b: accent.b, a: 0.85)
+            drawDropPreview(list: list,
+                            rect: previewRect(for: hit.edge, in: rootRect),
+                            fill: fill,
+                            stroke: stroke)
+        }
+
+        guard session.isActive, let ghost = session.ghost else { return }
+
         let bg = Color(r: 0, g: 0, b: 0, a: 0.72)
         let textColor = appearance.tabActiveForeground
 
