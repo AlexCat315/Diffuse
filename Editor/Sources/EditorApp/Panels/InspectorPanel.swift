@@ -12,27 +12,51 @@ struct InspectorPanel: View {
             let sections = scene.inspectorSections(for: store.state.selectedEntityID)
 
             Box(direction: .column, alignItems: .stretch) {
-                Text("Inspector")
-                    .font(.headline)
                 if let entity {
-                    Text(entity.name)
-                        .font(.title)
-                    Text(entity.kind)
-                        .font(.label)
-                        .foregroundColor(.accent)
-                    Text("Entity ID: \(entity.id)")
-                        .font(.mono)
-                    PropertyGrid(propertySections(sections))
+                    InspectorSelectionSummary(entity: entity)
+
+                    Divider()
+
+                    PropertyGrid(propertySections(sections),
+                                 labelWidth: 104,
+                                 rowHeight: 28)
                         .flex()
                 } else {
-                    Text("No selection")
-                        .font(.bodyStrong)
-                    Text("Pick a node in Hierarchy to inspect SceneRuntime components.")
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
+                    Box(direction: .column, alignItems: .stretch, spacing: 4) {
+                        Text("No selection")
+                            .font(.bodyStrong)
+                        Text("Select an entity in Hierarchy to inspect SceneRuntime components.")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                    }
+                    .padding(10)
                 }
             }
-            .padding(8)
+        }
+    }
+
+    private struct InspectorSelectionSummary: View {
+        let entity: EditorSceneEntitySummary
+
+        var body: some View {
+            Row(alignment: .center, spacing: 8) {
+                Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                    Text(entity.name)
+                        .font(.headline)
+                        .foregroundColor(.onSurface)
+
+                    Text(entity.kind)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceVariant)
+                }
+
+                Spacer(minLength: 0)
+
+                Text("ID \(entity.id)")
+                    .font(.mono)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .padding(horizontal: 10, vertical: 9)
         }
     }
 

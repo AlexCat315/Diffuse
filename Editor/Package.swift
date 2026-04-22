@@ -39,6 +39,9 @@ let package = Package(
                 .product(name: "GuavaUIApp", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "RHIWGPU", package: "Engine"),
+            ],
+            resources: [
+                .process("Resources")
             ]
         ),
     ]

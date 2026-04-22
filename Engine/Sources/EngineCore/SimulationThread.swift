@@ -46,6 +46,7 @@ final class SimulationThread: @unchecked Sendable {
         self.ringBuffer = ringBuffer
         self.onFrameReady = onFrameReady
         self.onPacketPublished = onPacketPublished
+        sceneRuntime.setScriptDriver(scriptRuntime)
         seedDemoScene()
     }
 
@@ -71,7 +72,6 @@ final class SimulationThread: @unchecked Sendable {
         begin = CFAbsoluteTimeGetCurrent()
         runtime.tickSimulation(deltaTime: request.deltaTime)
         sceneRuntime.tick(deltaTime: request.deltaTime)
-        scriptRuntime.tick(deltaTime: request.deltaTime)
         simulationTimeSeconds += request.deltaTime
         simulationSeconds = CFAbsoluteTimeGetCurrent() - begin
 

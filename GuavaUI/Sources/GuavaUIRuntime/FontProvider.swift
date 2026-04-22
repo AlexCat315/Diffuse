@@ -64,6 +64,7 @@ public final class FontProvider {
     private let size: Float
     private let rasterScale: Float
     private var primaryPSName: String?
+    private var primaryCTFont: CTFont?
 
     /// Creates a FontProvider with the given font size.
     public init(size: Float, rasterScale: Float = 1, idBase: Int = 0) {
@@ -106,9 +107,11 @@ public final class FontProvider {
     @discardableResult
     public func loadPrimaryFont(name: String,
                                 weight: FontWeight = .regular) -> ManagedFont? {
-        let font = loadFontByName(name, weight: weight)
+        let ctFont = configuredCTFont(named: name, weight: weight)
+        let font = loadFont(ctFont)
         if let font {
             primaryPSName = font.postScriptName
+            primaryCTFont = ctFont
         }
         return font
     }
@@ -121,9 +124,7 @@ public final class FontProvider {
     /// Fallback fonts (e.g. PingFang SC for CJK, Apple Color Emoji for emoji)
     /// are loaded into FreeType automatically on first encounter.
     public func resolveRuns(text: String) -> [FontRun] {
-        guard !text.isEmpty, let primaryPSName else { return [] }
-
-        let ctPrimary = CTFontCreateWithName(primaryPSName as CFString, CGFloat(size), nil)
+        guard !text.isEmpty, let ctPrimary = primaryCTFont else { return [] }
         let attrs = [kCTFontAttributeName: ctPrimary] as CFDictionary
         let attrStr = CFAttributedStringCreate(kCFAllocatorDefault, text as CFString, attrs)!
         let line = CTLineCreateWithAttributedString(attrStr)
@@ -203,6 +204,10 @@ public final class FontProvider {
     private func loadFontByName(_ name: String,
                                 weight: FontWeight = .regular) -> ManagedFont? {
         let ctFont = configuredCTFont(named: name, weight: weight)
+        return loadFont(ctFont)
+    }
+
+    private func loadFont(_ ctFont: CTFont) -> ManagedFont? {
         let psName = CTFontCopyPostScriptName(ctFont) as String
         if let existing = fonts[psName] { return existing }
         return loadFontFromCTFont(ctFont, psName: psName)
@@ -211,7 +216,13 @@ public final class FontProvider {
     private func configuredCTFont(named name: String,
                                   weight: FontWeight) -> CTFont {
         let scaledSize = CGFloat(size * rasterScale)
-        let base = CTFontCreateWithName(name as CFString, scaledSize, nil)
+        let base: CTFont
+        if name == SystemFontDefaults.primaryFontName || name == ".AppleSystemUIFont" {
+            base = CTFontCreateUIFontForLanguage(.system, scaledSize, nil)
+                ?? CTFontCreateWithName("Helvetica Neue" as CFString, scaledSize, nil)
+        } else {
+            base = CTFontCreateWithName(name as CFString, scaledSize, nil)
+        }
         guard weight != .regular else { return base }
 
         let attrs: [CFString: Any] = [

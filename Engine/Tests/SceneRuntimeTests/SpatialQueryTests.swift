@@ -336,6 +336,105 @@ struct SpatialQueryTests {
 
         #expect(hit == nil)
     }
+
+    @Test("physics queries apply excludeEntity and layer filters")
+    func physicsQueriesApplyUnifiedFilters() {
+        var runtime = SceneRuntime()
+
+        let excluded = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(1, 0, 0)), for: excluded)
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: .zero),
+                     layerID: 1,
+                     layerMask: 0b0010),
+            for: excluded
+        )
+
+        let wrongLayerID = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(3, 0, 0)), for: wrongLayerID)
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: .zero),
+                     layerID: 2,
+                     layerMask: 0b0010),
+            for: wrongLayerID
+        )
+
+        let wrongLayerMask = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(5, 0, 0)), for: wrongLayerMask)
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: .zero),
+                     layerID: 1,
+                     layerMask: 0b0100),
+            for: wrongLayerMask
+        )
+
+        let filteredHit = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(7, 0, 0)), for: filteredHit)
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: .zero),
+                     layerID: 1,
+                     layerMask: 0b0010),
+            for: filteredHit
+        )
+
+        _ = runtime.tick()
+
+        let filter = PhysicsQueryFilter(
+            excludeEntity: excluded,
+            layerID: 1,
+            layerMask: 0b0010
+        )
+
+        let raycastHit = runtime.physicsRaycast(
+            PhysicsRaycastQuery(
+                origin: SIMD3<Float>(-5, 0, 0),
+                direction: SIMD3<Float>(1, 0, 0),
+                maxDistance: 20
+            ),
+            filter: filter
+        )
+        let overlapHits = runtime.physicsOverlapAABB(
+            PhysicsOverlapAABBQuery(
+                bounds: SpatialAABB(center: SIMD3<Float>(4, 0, 0), halfExtents: SIMD3<Float>(4, 1, 1))
+            ),
+            filter: filter
+        )
+        let sweepHit = runtime.physicsSweepAABB(
+            PhysicsSweepAABBQuery(
+                bounds: SpatialAABB(center: .zero, halfExtents: SIMD3<Float>(0.5, 0.5, 0.5)),
+                translation: SIMD3<Float>(10, 0, 0)
+            ),
+            filter: filter
+        )
+
+        #expect(raycastHit?.entity == filteredHit)
+        #expect(overlapHits.map(\ .entity) == [filteredHit])
+        #expect(sweepHit?.entity == filteredHit)
+    }
+
+    @Test("physics sweep reports the shape contact normal instead of the broad-phase axis")
+    func physicsSweepReportsPreciseContactNormal() {
+        var runtime = SceneRuntime()
+
+        let sphere = runtime.createEntity()
+        _ = runtime.setComponent(Collider(shape: .sphere(radius: 1, center: .zero)), for: sphere)
+
+        _ = runtime.tick()
+
+        let hit = runtime.physicsSweepAABB(
+            PhysicsSweepAABBQuery(
+                bounds: SpatialAABB(center: SIMD3<Float>(-5, 0.5, 0), halfExtents: SIMD3<Float>(0.05, 0.05, 0.05)),
+                translation: SIMD3<Float>(10, 0, 0)
+            )
+        )
+        let expectedDistance: Float = 4.056_971_5
+        let expectedNormal = SIMD3<Float>(-0.893_028_56, 0.45, 0)
+
+        #expect(hit?.entity == sphere)
+        #expect(abs((hit?.distance ?? 0) - expectedDistance) < 0.001)
+        #expect(abs((hit?.normal.x ?? 0) - expectedNormal.x) < 0.01)
+        #expect(abs((hit?.normal.y ?? 0) - expectedNormal.y) < 0.01)
+    }
 }
 
 private func rotatedBoxMatrix(angleRadians: Float) -> simd_float4x4 {

@@ -177,12 +177,33 @@ public struct SceneRuntime {
         performSpatialRaycast(query, using: spatialIndex)
     }
 
+    public func physicsRaycast(
+        _ query: PhysicsRaycastQuery,
+        filter: PhysicsQueryFilter = PhysicsQueryFilter()
+    ) -> PhysicsRaycastHit? {
+        performPhysicsRaycast(query, filter: filter, using: spatialIndex)
+    }
+
     public func overlap(_ query: SceneOverlapQuery) -> [SceneOverlapHit] {
         performSpatialOverlap(query, using: spatialIndex)
     }
 
+    public func physicsOverlapAABB(
+        _ query: PhysicsOverlapAABBQuery,
+        filter: PhysicsQueryFilter = PhysicsQueryFilter()
+    ) -> [PhysicsOverlapHit] {
+        performPhysicsOverlapAABB(query, filter: filter, using: spatialIndex)
+    }
+
     public func sweep(_ query: SceneSweepQuery) -> SceneSweepHit? {
         performSpatialSweep(query, using: spatialIndex)
+    }
+
+    public func physicsSweepAABB(
+        _ query: PhysicsSweepAABBQuery,
+        filter: PhysicsQueryFilter = PhysicsQueryFilter()
+    ) -> PhysicsSweepHit? {
+        performPhysicsSweepAABB(query, filter: filter, using: spatialIndex)
     }
 
     public mutating func setPhysicsBackend(_ backend: any PhysicsBackend) {
@@ -191,6 +212,14 @@ public struct SceneRuntime {
 
     public mutating func clearPhysicsBackendOverride() {
         schedule.clearPhysicsBackendOverride()
+    }
+
+    public mutating func setScriptDriver(_ driver: any RuntimeScriptDriver) {
+        schedule.setScriptDriver(driver)
+    }
+
+    public mutating func clearScriptDriver() {
+        schedule.clearScriptDriver()
     }
 
     public mutating func setResource<Resource: Sendable>(_ resource: Resource) {

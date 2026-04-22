@@ -194,6 +194,118 @@ public struct PhysicsFrameStateResource: Sendable, Equatable {
     }
 }
 
+public struct PhysicsQueryFilter: Sendable, Equatable {
+    public var excludeEntity: EntityID?
+    public var includeTriggers: Bool
+    public var layerID: UInt16?
+    public var layerMask: UInt16
+
+    public init(
+        excludeEntity: EntityID? = nil,
+        includeTriggers: Bool = false,
+        layerID: UInt16? = nil,
+        layerMask: UInt16 = .max
+    ) {
+        self.excludeEntity = excludeEntity
+        self.includeTriggers = includeTriggers
+        self.layerID = layerID
+        self.layerMask = layerMask
+    }
+}
+
+public struct PhysicsRaycastQuery: Sendable, Equatable {
+    public var origin: SIMD3<Float>
+    public var direction: SIMD3<Float>
+    public var maxDistance: Float
+
+    public init(origin: SIMD3<Float>,
+                direction: SIMD3<Float>,
+                maxDistance: Float = .greatestFiniteMagnitude) {
+        self.origin = origin
+        self.direction = direction
+        self.maxDistance = maxDistance
+    }
+}
+
+public struct PhysicsRaycastHit: Sendable, Equatable {
+    public var entity: EntityID
+    public var distance: Float
+    public var position: SIMD3<Float>
+    public var normal: SIMD3<Float>
+    public var bounds: SpatialAABB
+    public var isTrigger: Bool
+
+    public init(entity: EntityID,
+                distance: Float,
+                position: SIMD3<Float>,
+                normal: SIMD3<Float>,
+                bounds: SpatialAABB,
+                isTrigger: Bool) {
+        self.entity = entity
+        self.distance = distance
+        self.position = position
+        self.normal = normal
+        self.bounds = bounds
+        self.isTrigger = isTrigger
+    }
+}
+
+public struct PhysicsOverlapAABBQuery: Sendable, Equatable {
+    public var bounds: SpatialAABB
+
+    public init(bounds: SpatialAABB) {
+        self.bounds = bounds
+    }
+}
+
+public struct PhysicsOverlapHit: Sendable, Equatable {
+    public var entity: EntityID
+    public var bounds: SpatialAABB
+    public var isTrigger: Bool
+
+    public init(entity: EntityID, bounds: SpatialAABB, isTrigger: Bool) {
+        self.entity = entity
+        self.bounds = bounds
+        self.isTrigger = isTrigger
+    }
+}
+
+public struct PhysicsSweepAABBQuery: Sendable, Equatable {
+    public var bounds: SpatialAABB
+    public var translation: SIMD3<Float>
+
+    public init(bounds: SpatialAABB, translation: SIMD3<Float>) {
+        self.bounds = bounds
+        self.translation = translation
+    }
+}
+
+public struct PhysicsSweepHit: Sendable, Equatable {
+    public var entity: EntityID
+    public var fraction: Float
+    public var distance: Float
+    public var position: SIMD3<Float>
+    public var normal: SIMD3<Float>
+    public var bounds: SpatialAABB
+    public var isTrigger: Bool
+
+    public init(entity: EntityID,
+                fraction: Float,
+                distance: Float,
+                position: SIMD3<Float>,
+                normal: SIMD3<Float>,
+                bounds: SpatialAABB,
+                isTrigger: Bool) {
+        self.entity = entity
+        self.fraction = fraction
+        self.distance = distance
+        self.position = position
+        self.normal = normal
+        self.bounds = bounds
+        self.isTrigger = isTrigger
+    }
+}
+
 public struct PhysicsBodyDescriptor: Sendable, Equatable {
     public var entity: EntityID
     public var localTransform: LocalTransform

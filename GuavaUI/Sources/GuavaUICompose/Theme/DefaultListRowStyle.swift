@@ -1,26 +1,24 @@
 import GuavaUIRuntime
 
-/// List row default: padded row with a rounded selection fill. Hovered rows
-/// preview the selection tint at lower opacity so users see the affordance
-/// before clicking.
+/// List row default: tighter desktop density, a clearer selected fill, and a
+/// small-radius hover state so lists read as rows in a data tool rather than
+/// as a pile of pills.
 public struct DefaultListRowStyle: ListRowStyle {
     public init() {}
 
     public func makeBody(configuration: ListRowStyleConfiguration) -> some View {
         let t = configuration.theme
 
-        // Resting rows skip `.background` entirely so the row's host node
-        // remains "background-less" — handy for tests that count selected
-        // rows by walking for non-nil `backgroundColor`.
         if configuration.isSelected {
             return AnyView(
                 Row(alignment: .center, spacing: t.spacing.sm) {
                     configuration.content
                     Spacer(minLength: 0)
                 }
-                .padding(horizontal: t.spacing.md, vertical: t.spacing.sm)
-                .background(t.colors.stateLayerSelected)
-                .cornerRadius(t.radius.sm)
+                .padding(horizontal: t.spacing.md, vertical: t.spacing.xs + 1)
+                .background(t.colors.selection)
+                .cornerRadius(t.radius.none)
+                .border(t.colors.borderStrong, width: 1)
                 .opacity(configuration.isEnabled ? 1 : 0.55)
             )
         }
@@ -30,9 +28,9 @@ public struct DefaultListRowStyle: ListRowStyle {
                     configuration.content
                     Spacer(minLength: 0)
                 }
-                .padding(horizontal: t.spacing.md, vertical: t.spacing.sm)
+                .padding(horizontal: t.spacing.md, vertical: t.spacing.xs + 1)
                 .background(t.colors.stateLayerHover)
-                .cornerRadius(t.radius.sm)
+                .cornerRadius(t.radius.none)
                 .opacity(configuration.isEnabled ? 1 : 0.55)
             )
         }
@@ -41,7 +39,7 @@ public struct DefaultListRowStyle: ListRowStyle {
                 configuration.content
                 Spacer(minLength: 0)
             }
-            .padding(horizontal: t.spacing.md, vertical: t.spacing.sm)
+            .padding(horizontal: t.spacing.md, vertical: t.spacing.xs + 1)
             .opacity(configuration.isEnabled ? 1 : 0.55)
         )
     }

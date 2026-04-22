@@ -172,6 +172,18 @@ struct TextTests {
         #expect(abs(baseAdvance - hidpiAdvance) < 2)
     }
 
+    @Test("FontProvider keeps the macOS system primary font during fallback resolution")
+    func fontProviderKeepsSystemPrimaryFont() {
+        let provider = FontProvider(size: 13)
+        let primary = provider.loadPrimaryFont(name: SystemFontDefaults.primaryFontName)
+
+        #expect(primary != nil)
+
+        let runs = provider.resolveRuns(text: "Scene Hierarchy")
+        #expect(runs.isEmpty == false)
+        #expect(runs.allSatisfy { $0.font.postScriptName == primary?.postScriptName })
+    }
+
     // MARK: - TextLayout
 
     @Test("Single-line layout for short text")
