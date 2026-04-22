@@ -221,6 +221,28 @@ struct TextTests {
         }
     }
 
+    @Test("Multi-line baselines stay stable across different glyph shapes")
+    func multilineBaselinesStayStable() {
+        let atlas = FontAtlas()
+        atlas.loadFont(path: testFontPath, size: 16)
+
+        let shaper = TextShaper()
+        shaper.setFont(ftFace: atlas.freetypeFace!, size: 16)
+
+        let text = "HI\ngj"
+        let shaped = shaper.shape(text: text)
+        let result = TextLayout.layout(
+            shapedGlyphs: shaped,
+            text: text,
+            atlas: atlas,
+            lineHeight: 20
+        )
+
+        #expect(result.lines.count == 2)
+        let baselineStep = result.lines[1].baselineY - result.lines[0].baselineY
+        #expect(abs(baselineStep - 20) < 0.5)
+    }
+
     @Test("Layout reads metrics without rasterizing glyph bitmaps")
     func layoutDoesNotRasterize() {
         let atlas = FontAtlas()

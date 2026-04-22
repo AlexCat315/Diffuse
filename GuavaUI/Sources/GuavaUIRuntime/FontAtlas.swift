@@ -73,6 +73,12 @@ public final class FontAtlas {
         public let advance: Float
     }
 
+    public struct LineMetrics {
+        public let ascent: Float
+        public let descent: Float
+        public let lineHeight: Float
+    }
+
     public struct DirtyRegion {
         public let x: Int
         public let y: Int
@@ -211,6 +217,20 @@ public final class FontAtlas {
             rasterScale: scale
         )
         return rasterCache[key]
+    }
+
+    public func lineMetrics(fontID: Int = 0) -> LineMetrics? {
+        guard let resolved = resolveFace(fontID: fontID),
+              let size = resolved.face.pointee.size else { return nil }
+
+        let scale = max(resolved.rasterScale, 1)
+        let metrics = size.pointee.metrics
+        let ascent = Float(metrics.ascender) / 64.0 / scale
+        let descent = Float(-metrics.descender) / 64.0 / scale
+        let lineHeight = Float(metrics.height) / 64.0 / scale
+
+        guard ascent > 0 || descent > 0 || lineHeight > 0 else { return nil }
+        return LineMetrics(ascent: ascent, descent: descent, lineHeight: lineHeight)
     }
 
     public func dirtyUploadPayload() -> (region: DirtyRegion, pixels: [UInt8])? {
