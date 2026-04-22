@@ -31,6 +31,7 @@ struct ConsolePanel: View {
                 .cornerRadius(2)
             }
             .padding(10)
+            .frame(minHeight: 140)
         }
     }
 }
