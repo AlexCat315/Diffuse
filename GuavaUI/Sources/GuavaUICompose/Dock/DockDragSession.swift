@@ -92,6 +92,47 @@ public final class DockDragSession {
     }
     public private(set) var origin: Origin = .mainTreeTab
 
+    /// Phase G — gesture intent ladder. Lets overlays branch their
+    /// visualisation between "user is just nudging within the strip"
+    /// and "user is detaching / splitting".
+    ///
+    /// Levels are monotonic: once escalated to a higher rung the session
+    /// never falls back. The drop op fired on release is the same for
+    /// `.reorderInStrip` and `.detachOrSplit`; only the affordances
+    /// (drop overlay, ghost) differ.
+    public enum DragIntent: Sendable, Equatable, Comparable {
+        /// Pointer is captured but motion has not crossed the reorder
+        /// threshold yet. Treated as a still-pending click.
+        case pendingClick
+        /// Pointer crossed the reorder threshold. Same-leaf reorder
+        /// affordance only — no edge indicators yet.
+        case reorderInStrip
+        /// Pointer crossed the lift threshold (or moved sufficiently
+        /// vertically). Full 5-direction drop indicator, full ghost.
+        case detachOrSplit
+
+        private var rank: Int {
+            switch self {
+            case .pendingClick: return 0
+            case .reorderInStrip: return 1
+            case .detachOrSplit: return 2
+            }
+        }
+        public static func < (lhs: DragIntent, rhs: DragIntent) -> Bool {
+            lhs.rank < rhs.rank
+        }
+    }
+    /// Current intent. `.pendingClick` whenever the session is inactive.
+    public private(set) var intent: DragIntent = .pendingClick
+
+    /// Escalate the intent if `next > intent`. No-op for downgrades.
+    /// Bumps `version` only when the intent actually changes.
+    public func escalateIntent(to next: DragIntent) {
+        guard isActive, next > intent else { return }
+        intent = next
+        bumpVersion()
+    }
+
     init() {}
 
     func attach(controller: DockController) {
@@ -105,7 +146,8 @@ public final class DockDragSession {
                ghost: GhostInfo,
                x: Float, y: Float,
                globalX: Float = 0, globalY: Float = 0,
-               origin: Origin = .mainTreeTab) {
+               origin: Origin = .mainTreeTab,
+               intent: DragIntent = .detachOrSplit) {
         self.tabID = tabID
         self.sourceLeafID = sourceLeafID
         self.ghost = ghost
@@ -119,6 +161,7 @@ public final class DockDragSession {
         self.dropHostWindowID = nil
         self.isOutsideAllHosts = false
         self.origin = origin
+        self.intent = intent
         self.isActive = true
         bumpVersion()
     }
@@ -181,6 +224,7 @@ public final class DockDragSession {
             dropHostWindowID = nil
             isOutsideAllHosts = false
             origin = .mainTreeTab
+            intent = .pendingClick
             bumpVersion()
         }
         guard commit, let controller else { return }

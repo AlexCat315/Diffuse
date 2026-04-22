@@ -87,6 +87,10 @@ GuavaUIDemo 顶部的 `Save / Load / Reset` 按钮使用 `DemoLayoutPersistence`
 | `.setSplitFraction(splitID, fraction:)` | 调整拆分比例 |
 | `.spawnSatellite(leafID, hint:)` / `.closeSatellite(leafID)` | 卫星窗口生命周期 |
 | `.moveLeaf(leafID, to:)` | 把整个 tabs leaf 搬到一个 `DockDropTarget`：`.tabSlot` 把所有 tab 折进目标 leaf，`.replace` / `.splitEdge` 整棵子树 graft；自动塌陷源 split |
+| `.closeOthers(in:, keep:)` | 关闭 leaf 内除 `keep` 与 pinned tab 之外的所有 tab；victim 按从左到右顺序 push 进 `closedHistory` |
+| `.closeToTheRight(in:, of:)` | 关闭 leaf 内 pivot 之后的所有 tab；同样 push 进 `closedHistory` |
+| `.reopenLastClosed` | 弹出 `closedHistory` 末尾，按原 leaf + 原 index 复位；原 leaf 已塌陷则 fallback 到第一个 `.tabs` 叶子，再不行替换 `.empty` 根 |
+| `.setPinned(tabID:, isPinned:)` | 翻转 tab 的 `isPinned` 标记；`closeOthers` 永不波及 pinned tab |
 
 每次 apply 自动 `version &+= 1` 并通知订阅者。
 
@@ -110,6 +114,11 @@ GuavaUIDemo 顶部的 `Save / Load / Reset` 按钮使用 `DemoLayoutPersistence`
 - `DockEscCancelTests` — Esc 取消活跃 drag 的 PointerCapture 路由
 - `DockLeafDragTests` — leaf-handle 拖拽端到端流程
 - `DockTabCapabilityTests` — D9 能力位：`isClosable` 控制关闭按钮、`closeTab` 点击落地、右键转发到 `onTabContextMenu`、旧快照 Codable 兼容
+- `DockAppearanceWiringTests` — Phase T：自定义 `DockStyle` 注入后 tab strip / 关闭按钮 / 分割条 / 卫星标题栏几何全部跟随 token 变化
+- `DockGestureIntentTests` — Phase G：`pendingClick → reorderInStrip → detachOrSplit` 单调升级；`leaf-handle` 拖拽跳过 reorder 档直接到 lift
+- `DockCloseHistoryTests` — Phase R.A：`closeOthers` / `closeToTheRight` / `reopenLastClosed` 语义、history FIFO 截断、reopen fallback 链
+- `DockTabPinnedTests` — Phase O：`isPinned` 标记 + `setPinned` op + `closeOthers` 跳过 pinned tab + `decodeIfPresent` 旧快照兼容
+- `DockCommandMenuTests` — Phase R.C：`defaultTabMenu(for:leafID:)` 描述符项齐全、enable 旗标随状态翻转、Pin/Unpin 标题切换、各 action 真正派发对应 op
 
 ## 卫星窗口标题栏
 
@@ -141,3 +150,28 @@ GuavaUIDemo 顶部的 `Save / Load / Reset` 按钮使用 `DemoLayoutPersistence`
 右键（`MouseButton == .right`）在 tab item 的 pointer handler 中被截短：不获取 PointerCapture、不进入 drag 状态机，而是把 `(tabID, leafID, x, y)` 转发给 `controller.onTabContextMenu`。Dock 层不渲染弹出菜单 — popover/menu 基础设施目前不存在；调用方自行用 SDL 弹出原生菜单或在 GuavaUI 这一层后续补足时再绑定。
 
 `DockTab` 的 `Codable` 实现使用 `decodeIfPresent` 容忍缺失字段，旧持久化快照（仅含 `id` / `userKey` / `title`）解码时新字段自动落到默认值。
+
+## DockTab.isPinned（Phase O 模型层）
+
+`DockTab` 又新增第三个能力位 `isPinned: Bool`（默认 `false`）：
+
+- `controller.apply(.setPinned(tabID:, isPinned:))` 翻转标记；`Codable` 同样走 `decodeIfPresent`，旧快照解码后 `isPinned == false`。
+- 模型语义：`closeOthers(in:, keep:)` 永远把 pinned tab 排除出 victim 集合，`keep` 参数仅决定哪个非-pinned tab 保留。
+- 视图层（pinned tab 永远在前 + 与可滚动行分离 + 滚轮溢出 + `···` overflow 菜单）尚未落地，待 Popover/Menu 原语补齐后接通。
+
+## 手势分级（Phase G）
+
+`DockDragSession` 的 `intent: DragIntent` 表征当前拖拽强度，单调升级、永不下降：
+
+| 值 | 触发条件 | 视觉契约 |
+| -- | -------- | -------- |
+| `.pendingClick` | session 未激活；指针仍在 4 px 阈值内 | 不渲染 ghost、不画 drop overlay |
+| `.reorderInStrip` | tab item 拖动越过 `DOCK_REORDER_THRESHOLD = 4`（横向）但未达 lift | 同 leaf 重排：仅展示 ghost，不画 5 向 drop overlay |
+| `.detachOrSplit` | 越过 `DOCK_LIFT_THRESHOLD = 12` 或纵向 `DOCK_LIFT_VERTICAL_THRESHOLD = 8` | 完整 5 向 edge indicator + 完整 ghost；leaf-handle 拖拽永远直接进入此档 |
+
+`DockDragSession.escalateIntent(to:)` 是只升不降的入口；`DockDropOverlay.installDropOverlay` 只在 `intent == .detachOrSplit` 时才画 5 向 fill。
+
+## 关闭历史与上下文菜单描述符（Phase R.A / R.C 模型层）
+
+- `DockController.closedHistory: [ClosedTabRecord]` 是关闭操作的撤销栈（容量 `closedHistoryLimit`，默认 50，FIFO 截断）。`.closeTab` / `.closeOthers` / `.closeToTheRight` 在删除前按从左到右把 victim push 进栈；`.reopenLastClosed` 弹出末尾，按 `(sourceLeafID, originalIndex)` 复位，原 leaf 已塌陷则 fallback 到第一个 `.tabs` 叶子，再不行替换 `.empty` 根。
+- `DockController.defaultTabMenu(for:leafID:) -> MenuDescriptor` 输出右键菜单的纯数据描述：Close Tab / Close Others / Close to the Right / Pin Tab(或 Unpin Tab) / Detach into New Window / Reopen Closed Tab，以及对应的 enable 旗标。dock 层不绘制菜单 — 调用方可直接传给 SDL 原生菜单或后续 GuavaUI 内部 Popover/Menu 原语渲染。Pin 项标题随当前 `isPinned` 自动切换。
