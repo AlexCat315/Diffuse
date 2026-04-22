@@ -124,6 +124,42 @@ struct DockHostCoordinatorTests {
         _ = satNode
     }
 
+    @Test("Overlapping hosts resolve deterministically to the most recently registered host")
+    func overlappingHostsPreferLatestRegistration() {
+        let (_, coordinator, mainLeafID, satelliteLeafID) = makeFixture()
+
+        let (mainRegistry, mainNode) = makeRegistry(leafID: mainLeafID,
+                                                    x: 0, y: 0,
+                                                    w: 400, h: 300)
+        coordinator.registerMainHost(
+            windowID: WindowID(1),
+            hitRegistry: mainRegistry,
+            originProvider: { (x: Float(0), y: Float(0)) },
+            logicalSizeProvider: { (width: Float(400), height: Float(300)) }
+        )
+
+        let (satRegistry, satNode) = makeRegistry(leafID: satelliteLeafID,
+                                                  x: 0, y: 0,
+                                                  w: 400, h: 300)
+        coordinator.registerSatelliteHost(
+            leafID: satelliteLeafID,
+            windowID: WindowID(2),
+            hitRegistry: satRegistry,
+            originProvider: { (x: Float(0), y: Float(0)) },
+            logicalSizeProvider: { (width: Float(400), height: Float(300)) }
+        )
+
+        guard let resolved = coordinator.resolveGlobalDropHit(
+            globalX: 200, globalY: 150, sourceLeafID: nil) else {
+            Issue.record("expected a hit in the overlapping region")
+            return
+        }
+        #expect(resolved.host.windowID == WindowID(2))
+        #expect(resolved.hit.leafID == satelliteLeafID)
+        _ = mainNode
+        _ = satNode
+    }
+
     @Test("Drag session cross-window update commits a redock on release")
     func dragRedockCommit() {
         let (controller, coordinator, mainLeafID, satelliteLeafID) = makeFixture()

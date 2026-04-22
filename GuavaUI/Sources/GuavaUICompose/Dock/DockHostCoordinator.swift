@@ -158,6 +158,12 @@ public final class DockHostCoordinator {
         return id
     }
 
+    private func orderedHosts() -> [DockHostEntry] {
+        hosts.values.sorted { lhs, rhs in
+            lhs.id.raw > rhs.id.raw
+        }
+    }
+
     // MARK: - Cross-window hit resolution
 
     /// Resolve a desktop-global pointer to a leaf hit inside one of the
@@ -167,7 +173,7 @@ public final class DockHostCoordinator {
                                      globalY: Float,
                                      sourceLeafID: DockNodeID?)
     -> (host: DockHostEntry, hit: DockDragSession.LeafHit)? {
-        for entry in hosts.values {
+        for entry in orderedHosts() {
             guard let origin = entry.originProvider() else { continue }
             let size = entry.logicalSizeProvider()
             let localX = globalX - origin.x
@@ -185,6 +191,24 @@ public final class DockHostCoordinator {
             // for our purposes; reporting "no hit" is intentional so the
             // drag indicator hides while hovering chrome.
             return nil
+        }
+        return nil
+    }
+
+    public func resolveGlobalHoverLeaf(globalX: Float,
+                                       globalY: Float)
+    -> (host: DockHostEntry, leafID: DockNodeID)? {
+        for entry in orderedHosts() {
+            guard let origin = entry.originProvider() else { continue }
+            let size = entry.logicalSizeProvider()
+            let localX = globalX - origin.x
+            let localY = globalY - origin.y
+            guard localX >= 0, localY >= 0,
+                  localX < size.width, localY < size.height else { continue }
+            guard let hit = entry.hitRegistry.leafAt(x: localX, y: localY) else {
+                return nil
+            }
+            return (entry, hit.id)
         }
         return nil
     }

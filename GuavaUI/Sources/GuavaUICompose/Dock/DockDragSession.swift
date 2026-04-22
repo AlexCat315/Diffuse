@@ -46,6 +46,7 @@ public final class DockDragSession {
     public private(set) var pointerY: Float = 0
     public private(set) var globalPointerX: Float = 0
     public private(set) var globalPointerY: Float = 0
+    public private(set) var hoverLeafID: DockNodeID?
     public private(set) var dropHit: LeafHit?
     /// When the active `dropHit` belongs to a different window than the
     /// source leaf, this records the host that should perform the drop.
@@ -157,6 +158,7 @@ public final class DockDragSession {
         self.globalPointerY = globalY
         self.originGlobalX = globalX
         self.originGlobalY = globalY
+        self.hoverLeafID = nil
         self.dropHit = nil
         self.dropHostWindowID = nil
         self.isOutsideAllHosts = false
@@ -170,6 +172,7 @@ public final class DockDragSession {
         guard isActive else { return }
         self.pointerX = x
         self.pointerY = y
+        self.hoverLeafID = registry.leafAt(x: x, y: y)?.id
         self.dropHit = Self.resolveDropHit(x: x, y: y,
                                            sourceLeafID: sourceLeafID,
                                            registry: registry)
@@ -192,6 +195,8 @@ public final class DockDragSession {
         self.pointerY = windowLocal.y
         self.globalPointerX = global.x
         self.globalPointerY = global.y
+        self.hoverLeafID = coordinator.resolveGlobalHoverLeaf(globalX: global.x,
+                                      globalY: global.y)?.leafID
         if let resolved = coordinator.resolveGlobalDropHit(globalX: global.x,
                                                            globalY: global.y,
                                                            sourceLeafID: sourceLeafID) {
@@ -220,6 +225,7 @@ public final class DockDragSession {
             tabID = nil
             sourceLeafID = nil
             ghost = nil
+            hoverLeafID = nil
             dropHit = nil
             dropHostWindowID = nil
             isOutsideAllHosts = false
@@ -287,6 +293,7 @@ public final class DockDragSession {
         guard isActive else { return }
         self.globalPointerX = globalX
         self.globalPointerY = globalY
+        self.hoverLeafID = nil
         self.dropHit = nil
         self.dropHostWindowID = nil
         self.isOutsideAllHosts = isOutsideAllHosts
@@ -324,6 +331,18 @@ public final class DockDragSession {
                                       registry: DockHitRegistry) -> LeafHit? {
         guard let hit = registry.leafAt(x: x, y: y) else { return nil }
         let f = hit.frame
+        let guideRect = UIRect(x: f.x, y: f.y, width: f.width, height: f.height)
+        if let guideEdge = makeDockDropGuideTiles(in: guideRect)
+            .first(where: { tile in
+                let r = tile.buttonRect
+                return x >= r.x && x < r.x + r.width
+                    && y >= r.y && y < r.y + r.height
+            })?.edge {
+            if let src = sourceLeafID, src == hit.id, guideEdge == .center {
+                return nil
+            }
+            return LeafHit(leafID: hit.id, edge: guideEdge, tabSlotIndex: nil)
+        }
         // Edge bands: 25% of the smaller dimension on each side, capped at
         // 64 px so very large leaves don't have an absurdly wide drop band.
         let bandRaw = min(f.width, f.height) * 0.25

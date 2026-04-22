@@ -74,6 +74,29 @@ struct DockGestureIntentTests: GuavaUIComposeSerializedSuite {
         #expect(controller.dragSession.intent == .pendingClick)
     } }
 
+    @Test("Pure vertical wobble below the lift threshold stays a click")
+    func verticalWobbleStaysClick() { GlobalTestLock.locked {
+        wireEnv()
+        defer { PointerCaptureHolder.current = nil }
+        let registry = InteractionRegistryHolder.current!
+
+        let tab = DockTab(userKey: "k", title: "K")
+        let controller = DockController(root: .tabs([tab]))
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+        let tabNode = findTabItems(tree.root!)[0]
+        let pointer = registry.handlers(for: tabNode).pointer!
+        let motion  = registry.handlers(for: tabNode).motion!
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 10, y: 10, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 10, y: 15, deltaX: 0, deltaY: 5), .target)
+
+        #expect(controller.dragSession.isActive == false)
+        #expect(controller.dragSession.intent == .pendingClick)
+    } }
+
     // MARK: motion in the [4, 12) band ⇒ .reorderInStrip
 
     @Test("Motion in [4, 12) band starts the drag at .reorderInStrip")
