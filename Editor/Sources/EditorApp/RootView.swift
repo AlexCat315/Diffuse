@@ -24,6 +24,7 @@ enum EditorRootViewFactory {
                                   title: "Viewport",
                                   isClosable: false)
         let consoleTab = DockTab(userKey: "console", title: "Console")
+        let assetsTab = DockTab(userKey: "assets", title: "Assets")
 
         let hierarchyLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
@@ -40,10 +41,10 @@ enum EditorRootViewFactory {
             tabs: [viewportTab],
             activeTabID: viewportTab.id
         )
-        let consoleLeaf: DockLayoutNode = .tabs(
+        let bottomLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
-            tabs: [consoleTab],
-            activeTabID: consoleTab.id
+            tabs: [assetsTab, consoleTab],
+            activeTabID: assetsTab.id
         )
 
         let viewportAndInspector: DockLayoutNode = .split(
@@ -65,7 +66,7 @@ enum EditorRootViewFactory {
             axis: .vertical,
             fraction: 0.7,
             first: topRow,
-            second: consoleLeaf
+            second: bottomLeaf
         )
         let controller = DockController(root: root)
         let regionByKey: [String: PanelWorkspaceRegion] = [
@@ -73,6 +74,7 @@ enum EditorRootViewFactory {
             "viewport": .center,
             "inspector": .trailingSidebar,
             "console": .bottomPanel,
+            "assets": .bottomPanel,
         ]
         controller.onAllowDrop = { [regionByKey] request in
             guard case .splitEdge(let targetID, let edge) = request.target else {
@@ -146,6 +148,11 @@ enum EditorRootViewFactory {
                             title: "Console",
                             preferredRegion: .bottomPanel) {
                 ConsolePanel(store: app.store)
+            },
+            PanelDescriptor(id: "assets",
+                            title: "Assets",
+                            preferredRegion: .bottomPanel) {
+                AssetBrowserPanel(app: app)
             },
         ])
     }

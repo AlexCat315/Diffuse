@@ -4,19 +4,44 @@ import RenderBackend
 
 /// Displays a renderer-produced framebuffer inside GuavaUI layout and forwards
 /// viewport-local input to the owner.
+/// Screen-space rect of the viewport surface, in window/event coordinates.
+public struct ViewportScreenFrame: Equatable, Sendable {
+    public var x: Float
+    public var y: Float
+    public var width: Float
+    public var height: Float
+
+    public init(x: Float, y: Float, width: Float, height: Float) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+    }
+
+    public func contains(x px: Float, y py: Float) -> Bool {
+        px >= x && py >= y && px < x + width && py < y + height
+    }
+}
+
 public struct ViewportHost<Overlay: View>: _PrimitiveView {
     public let surface: ViewportSurfaceState
     public let onInputEvent: ((InputEvent) -> Void)?
     public let onDrawableSizeChange: ((RenderDrawableSize) -> Void)?
+    public let onScreenFrameChange: ((ViewportScreenFrame) -> Void)?
+    public let onDrawOverlay: ((DrawList, ViewportScreenFrame) -> Void)?
     public let overlay: Overlay
 
     public init(surface: ViewportSurfaceState,
                 onInputEvent: ((InputEvent) -> Void)? = nil,
                 onDrawableSizeChange: ((RenderDrawableSize) -> Void)? = nil,
+                onScreenFrameChange: ((ViewportScreenFrame) -> Void)? = nil,
+                onDrawOverlay: ((DrawList, ViewportScreenFrame) -> Void)? = nil,
                 @ViewBuilder overlay: () -> Overlay) {
         self.surface = surface
         self.onInputEvent = onInputEvent
         self.onDrawableSizeChange = onDrawableSizeChange
+        self.onScreenFrameChange = onScreenFrameChange
+        self.onDrawOverlay = onDrawOverlay
         self.overlay = overlay()
     }
 
@@ -77,6 +102,18 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
                 snap.onDrawableSizeChange?(drawableSize)
             }
 
+            let frame = node.frame
+            let screenFrame = ViewportScreenFrame(x: Float(origin.x),
+                                                  y: Float(origin.y),
+                                                  width: Float(frame.width),
+                                                  height: Float(frame.height))
+            let frameKey = "__viewport_host_screen_frame"
+            let previousFrame = node.attachments[frameKey] as? ViewportScreenFrame
+            if previousFrame != screenFrame {
+                node.attachments[frameKey] = screenFrame
+                snap.onScreenFrameChange?(screenFrame)
+            }
+
             guard let bridge = ViewportTextureBridgeHolder.current,
                   let textureID = bridge.textureID(surfaceID: snap.surface.surfaceID,
                                                   width: snap.surface.width,
@@ -85,12 +122,13 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
                 return
             }
 
-            let frame = node.frame
             let rect = UIRect(x: Float(origin.x),
                               y: Float(origin.y),
                               width: Float(frame.width),
                               height: Float(frame.height))
             list.addImageQuad(rect: rect, textureID: textureID, tint: .white)
+
+            snap.onDrawOverlay?(list, screenFrame)
         }
     }
 
@@ -110,10 +148,14 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
 public extension ViewportHost where Overlay == EmptyView {
     init(surface: ViewportSurfaceState,
          onInputEvent: ((InputEvent) -> Void)? = nil,
-         onDrawableSizeChange: ((RenderDrawableSize) -> Void)? = nil) {
+         onDrawableSizeChange: ((RenderDrawableSize) -> Void)? = nil,
+         onScreenFrameChange: ((ViewportScreenFrame) -> Void)? = nil,
+         onDrawOverlay: ((DrawList, ViewportScreenFrame) -> Void)? = nil) {
         self.init(surface: surface,
                   onInputEvent: onInputEvent,
-                  onDrawableSizeChange: onDrawableSizeChange) {
+                  onDrawableSizeChange: onDrawableSizeChange,
+                  onScreenFrameChange: onScreenFrameChange,
+                  onDrawOverlay: onDrawOverlay) {
             EmptyView()
         }
     }

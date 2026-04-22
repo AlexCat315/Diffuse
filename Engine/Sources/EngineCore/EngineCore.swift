@@ -2,6 +2,7 @@ import EngineKernel
 import Foundation
 import RenderBackend
 import RHIWGPU
+import SceneRuntime
 
 public enum TickPhase: CaseIterable, Sendable {
     case input
@@ -155,7 +156,8 @@ public final class EngineHost: @unchecked Sendable {
         deltaTime: Double,
         inputEvents: [InputEvent] = [],
         drawableSize: RenderDrawableSize = .init(),
-        shouldRender: Bool = true
+        shouldRender: Bool = true,
+        renderSceneOverride: RenderScene? = nil
     ) {
         let request = state.withLock { state -> SimulationFrameRequest? in
             guard state.started else { return nil }
@@ -168,7 +170,8 @@ public final class EngineHost: @unchecked Sendable {
                 inputEvents: inputEvents,
                 drawableSize: drawableSize,
                 shouldRender: shouldRender && renderThread != nil,
-                renderSettings: state.renderSettings
+                renderSettings: state.renderSettings,
+                renderSceneOverride: renderSceneOverride
             )
         }
         guard let request, let simulationThread else { return }
