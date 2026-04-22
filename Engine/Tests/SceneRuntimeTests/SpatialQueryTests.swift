@@ -241,6 +241,101 @@ struct SpatialQueryTests {
 
         #expect(hitsIncludingTriggers.map(\ .entity) == [sphere, box, trigger].sorted { $0.rawValue < $1.rawValue })
     }
+
+    @Test("sweep returns the nearest collider hit from the spatial cache")
+    func sweepReturnsNearestColliderHit() {
+        var runtime = SceneRuntime()
+
+        let nearBox = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(3, 0, 0)), for: nearBox)
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: .zero)),
+            for: nearBox
+        )
+
+        let farBox = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(6, 0, 0)), for: farBox)
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: .zero)),
+            for: farBox
+        )
+
+        _ = runtime.tick()
+
+        let hit = runtime.sweep(
+            SceneSweepQuery(
+                bounds: SpatialAABB(center: .zero, halfExtents: SIMD3<Float>(0.5, 0.5, 0.5)),
+                translation: SIMD3<Float>(10, 0, 0)
+            )
+        )
+
+        #expect(hit?.entity == nearBox)
+        #expect(abs((hit?.fraction ?? 0) - 0.2) < 0.000_1)
+        #expect(abs((hit?.distance ?? 0) - 2) < 0.000_1)
+        #expect(hit?.position == SIMD3<Float>(2, 0, 0))
+        #expect(hit?.normal == SIMD3<Float>(-1, 0, 0))
+    }
+
+    @Test("sweep skips triggers unless the query includes them")
+    func sweepSkipsTriggersUnlessIncluded() {
+        var runtime = SceneRuntime()
+
+        let trigger = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(2, 0, 0)), for: trigger)
+        _ = runtime.setComponent(
+            Collider(
+                shape: .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: .zero),
+                isTrigger: true
+            ),
+            for: trigger
+        )
+
+        let solid = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(4, 0, 0)), for: solid)
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: .zero)),
+            for: solid
+        )
+
+        _ = runtime.tick()
+
+        let defaultHit = runtime.sweep(
+            SceneSweepQuery(
+                bounds: SpatialAABB(center: .zero, halfExtents: SIMD3<Float>(0.5, 0.5, 0.5)),
+                translation: SIMD3<Float>(10, 0, 0)
+            )
+        )
+        let triggerHit = runtime.sweep(
+            SceneSweepQuery(
+                bounds: SpatialAABB(center: .zero, halfExtents: SIMD3<Float>(0.5, 0.5, 0.5)),
+                translation: SIMD3<Float>(10, 0, 0),
+                includeTriggers: true
+            )
+        )
+
+        #expect(defaultHit?.entity == solid)
+        #expect(triggerHit?.entity == trigger)
+        #expect(triggerHit?.isTrigger == true)
+    }
+
+    @Test("sweep uses a precise sphere narrow phase instead of the broad-phase AABB")
+    func sweepUsesPreciseSphereNarrowPhase() {
+        var runtime = SceneRuntime()
+
+        let sphere = runtime.createEntity()
+        _ = runtime.setComponent(Collider(shape: .sphere(radius: 1, center: .zero)), for: sphere)
+
+        _ = runtime.tick()
+
+        let hit = runtime.sweep(
+            SceneSweepQuery(
+                bounds: SpatialAABB(center: SIMD3<Float>(-5, 1, 1), halfExtents: SIMD3<Float>(0.05, 0.05, 0.05)),
+                translation: SIMD3<Float>(10, 0, 0)
+            )
+        )
+
+        #expect(hit == nil)
+    }
 }
 
 private func rotatedBoxMatrix(angleRadians: Float) -> simd_float4x4 {

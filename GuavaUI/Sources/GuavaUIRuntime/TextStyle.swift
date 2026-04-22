@@ -31,6 +31,27 @@ public struct Font: Hashable, Sendable {
     }
 }
 
+public enum SystemFontDefaults {
+    public static let primaryFontName: String = resolvePrimaryFontName()
+
+    private static func resolvePrimaryFontName() -> String {
+        guard let systemFont = CTFontCreateUIFontForLanguage(.system, 13, nil) else {
+            return "Helvetica Neue"
+        }
+        let familyName = CTFontCopyFamilyName(systemFont) as String
+        if !familyName.isEmpty {
+            return familyName
+        }
+
+        let postScriptName = CTFontCopyPostScriptName(systemFont) as String
+        if !postScriptName.isEmpty {
+            return postScriptName
+        }
+
+        return "Helvetica Neue"
+    }
+}
+
 /// Lazily creates sized/weighted `FontProvider`s that share a single atlas.
 /// Each provider gets its own font-ID range so glyph rasterization remains
 /// unambiguous even when multiple sizes are used in the same frame.
