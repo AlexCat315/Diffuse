@@ -27,7 +27,7 @@ public final class PlatformWindowSession {
         return Float(drawableSize.width) / Float(logicalWidth)
     }
 
-    public var onFrame: (@MainActor (NativeRenderSurface) -> Void)?
+    public var onFrame: (@MainActor (NativeRenderSurface) -> Bool)?
     public var onInit: (@MainActor (NativeRenderSurface, _ widthPx: UInt32, _ heightPx: UInt32) -> Void)?
     public var onResize: (@MainActor (UInt32, UInt32) -> Void)?
     public var onEvent: (@MainActor (InputEvent) -> Void)?
@@ -107,7 +107,7 @@ public final class SDL3PlatformHost: PlatformHost {
         return Float(drawableSize.width) / Float(logicalWidth)
     }
 
-    public var onFrame: (@MainActor (NativeRenderSurface) -> Void)?
+    public var onFrame: (@MainActor (NativeRenderSurface) -> Bool)?
     public var onInit: (@MainActor (NativeRenderSurface, _ widthPx: UInt32, _ heightPx: UInt32) -> Void)?
     public var onResize: (@MainActor (UInt32, UInt32) -> Void)?
     public var onEvent: (@MainActor (InputEvent) -> Void)?
@@ -277,20 +277,31 @@ public final class SDL3PlatformHost: PlatformHost {
 
                     session.needsDisplay = false
                     let renderStart = TimingTrace.now()
-                    session.onFrame?(surface)
-                    if id == mainWindowID {
-                        onFrame?(surface)
+                    let hasFrameHandler = session.onFrame != nil
+                        || (id == mainWindowID && onFrame != nil)
+                    var didRender = !hasFrameHandler
+                    if let callback = session.onFrame {
+                        didRender = callback(surface) || didRender
                     }
-                    session.withCurrent {
-                        session.tree.flush()
+                    if id == mainWindowID, let callback = onFrame {
+                        didRender = callback(surface) || didRender
+                    }
+                    if didRender {
+                        session.withCurrent {
+                            session.tree.flush()
+                        }
+                    } else {
+                        session.needsDisplay = true
                     }
                     let renderMilliseconds = (TimingTrace.now() - renderStart) * 1000
-                    let reasonText = reasons.isEmpty ? "unknown" : reasons.joined(separator: "+")
-                    let renderText = String(format: "%.2fms", renderMilliseconds)
-                    renderSummaries.append(
-                        "window=\(id) reason=\(reasonText) render=\(renderText)"
-                    )
-                    renderedAnyFrame = true
+                    if didRender {
+                        let reasonText = reasons.isEmpty ? "unknown" : reasons.joined(separator: "+")
+                        let renderText = String(format: "%.2fms", renderMilliseconds)
+                        renderSummaries.append(
+                            "window=\(id) reason=\(reasonText) render=\(renderText)"
+                        )
+                        renderedAnyFrame = true
+                    }
                 }
 
                 syncTextInputArea(for: session, shell: shell)

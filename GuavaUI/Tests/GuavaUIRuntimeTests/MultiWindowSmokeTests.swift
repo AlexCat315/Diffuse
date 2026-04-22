@@ -100,6 +100,7 @@ struct MultiWindowSmokeTests {
                 leaf.opacity = 0.5
                 session.requestDisplay()
             }
+            return true
         }
 
         host.run()
@@ -124,6 +125,7 @@ struct MultiWindowSmokeTests {
         var frameCount = 0
         session.onFrame = { _ in
             frameCount += 1
+            return true
         }
 
         AnimatorScheduler.$current.withValue(scheduler) {
@@ -131,6 +133,28 @@ struct MultiWindowSmokeTests {
         }
 
         #expect(frameCount == 1)
+    }
+
+    @MainActor
+    @Test("Failed frame callbacks keep the window pending for retry")
+    func failedFrameCallbacksRetry() throws {
+        let shell = MockShell(eventBatches: [[], [], []])
+        let host = SDL3PlatformHost(shellFactory: { shell })
+
+        let tree = NodeTree()
+        let session = try host.openWindow(title: "A", tree: tree)
+        tree.root = Node()
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+
+        var frameAttempts = 0
+        session.onFrame = { _ in
+            frameAttempts += 1
+            return frameAttempts >= 2
+        }
+
+        host.run()
+
+        #expect(frameAttempts == 2)
     }
 
     @MainActor
