@@ -232,7 +232,6 @@ final class PanelWorkspaceFlexLayoutCompatibilityTests: XCTestCase {
             hierarchy: DockTab(userKey: "hierarchy", title: "Hierarchy"),
             viewport: DockTab(userKey: "viewport",
                               title: "Viewport",
-                              isDraggable: false,
                               isClosable: false),
             inspector: DockTab(userKey: "inspector", title: "Inspector"),
             console: DockTab(userKey: "console", title: "Console")
