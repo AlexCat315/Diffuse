@@ -205,10 +205,13 @@ public final class DockDragSession {
                                                            globalY: global.y,
                                                            sourceLeafID: sourceLeafID),
            let filtered = Self.filterAllowedDropHit(resolved.hit,
+                                                    pointerX: windowLocal.x,
+                                                    pointerY: windowLocal.y,
                                                     tabID: tabID,
                                                     sourceLeafID: sourceLeafID,
                                                     origin: origin,
-                                                    controller: controller) {
+                                                    controller: controller,
+                                                    registry: resolved.host.hitRegistry) {
             self.dropHit = filtered
             self.dropHostWindowID = resolved.host.windowID
             self.isOutsideAllHosts = false
@@ -453,23 +456,39 @@ public final class DockDragSession {
                                  sourceLeafID: sourceLeafID,
                                  registry: registry)
         return filterAllowedDropHit(hit,
+                                    pointerX: x,
+                                    pointerY: y,
                                     tabID: tabID,
                                     sourceLeafID: sourceLeafID,
                                     origin: origin,
-                                    controller: controller)
+                                    controller: controller,
+                                    registry: registry)
     }
 
     private static func filterAllowedDropHit(_ hit: LeafHit?,
+                                             pointerX: Float,
+                                             pointerY: Float,
                                              tabID: DockTabID?,
                                              sourceLeafID: DockNodeID?,
                                              origin: Origin,
-                                             controller: DockController?) -> LeafHit? {
+                                             controller: DockController?,
+                                             registry: DockHitRegistry?) -> LeafHit? {
         guard let hit else { return nil }
         guard let controller else { return hit }
         let request = DockDropRequest(tabID: tabID,
                                       sourceLeafID: sourceLeafID,
                                       origin: origin,
                                       target: makeDropTarget(from: hit))
+        if let remappedHit = remapRootHitToLeafFallback(rootHit: hit,
+                                                        pointerX: pointerX,
+                                                        pointerY: pointerY,
+                                                        tabID: tabID,
+                                                        sourceLeafID: sourceLeafID,
+                                                        origin: origin,
+                                                        controller: controller,
+                                                        registry: registry) {
+            return remappedHit
+        }
         if controller.allowsDrop(request) {
             return hit
         }
@@ -477,6 +496,41 @@ public final class DockDragSession {
               let fallbackHit = fallbackReplaceHit(from: hit, controller: controller) else {
             return nil
         }
+        let fallbackRequest = DockDropRequest(tabID: tabID,
+                                              sourceLeafID: sourceLeafID,
+                                              origin: origin,
+                                              target: makeDropTarget(from: fallbackHit))
+        return controller.allowsDrop(fallbackRequest) ? fallbackHit : nil
+    }
+
+    private static func remapRootHitToLeafFallback(rootHit: LeafHit,
+                                                   pointerX: Float,
+                                                   pointerY: Float,
+                                                   tabID: DockTabID?,
+                                                   sourceLeafID: DockNodeID?,
+                                                   origin: Origin,
+                                                   controller: DockController,
+                                                   registry: DockHitRegistry?) -> LeafHit? {
+        guard rootHit.leafID == controller.root.id,
+              rootHit.edge != .center,
+              let registry,
+              let underlyingLeaf = registry.leafAt(x: pointerX, y: pointerY) else {
+            return nil
+        }
+
+        let underlyingEdgeHit = LeafHit(leafID: underlyingLeaf.id,
+                                        edge: rootHit.edge,
+                                        tabSlotIndex: nil)
+        let underlyingRequest = DockDropRequest(tabID: tabID,
+                                                sourceLeafID: sourceLeafID,
+                                                origin: origin,
+                                                target: makeDropTarget(from: underlyingEdgeHit))
+        guard controller.allowsDrop(underlyingRequest) == false,
+              let fallbackHit = fallbackReplaceHit(from: underlyingEdgeHit,
+                                                   controller: controller) else {
+            return nil
+        }
+
         let fallbackRequest = DockDropRequest(tabID: tabID,
                                               sourceLeafID: sourceLeafID,
                                               origin: origin,

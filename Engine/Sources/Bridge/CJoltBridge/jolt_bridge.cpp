@@ -11,6 +11,8 @@ namespace {
 constexpr uint32_t kRigidBodyAllowSleepFlag = 1u << 4;
 constexpr uint32_t kMotionDynamic = 1u;
 constexpr uint32_t kMotionKinematic = 2u;
+constexpr uint8_t kConstraintPointToPoint = 0u;
+constexpr uint8_t kConstraintSlider = 2u;
 constexpr uint8_t kConstraintDistance = 3u;
 
 struct BodyRecord {
@@ -78,6 +80,10 @@ static Vec3 scale_vec3(const Vec3& vector, float scalar) {
     return make_vec3(vector.x * scalar, vector.y * scalar, vector.z * scalar);
 }
 
+static float dot_vec3(const Vec3& lhs, const Vec3& rhs) {
+    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
+}
+
 static float length_vec3(const Vec3& vector) {
     return std::sqrt(length_squared(vector.x, vector.y, vector.z));
 }
@@ -98,6 +104,20 @@ static void set_body_position(GuavaJoltBodyState& state, const Vec3& position) {
     state.position_x = position.x;
     state.position_y = position.y;
     state.position_z = position.z;
+}
+
+static Vec3 body_linear_velocity(const BodyRecord& body) {
+    return make_vec3(
+        body.state.linear_velocity_x,
+        body.state.linear_velocity_y,
+        body.state.linear_velocity_z
+    );
+}
+
+static void set_body_linear_velocity(BodyRecord& body, const Vec3& velocity) {
+    body.state.linear_velocity_x = velocity.x;
+    body.state.linear_velocity_y = velocity.y;
+    body.state.linear_velocity_z = velocity.z;
 }
 
 static bool body_is_dynamic(const BodyRecord& body) {
@@ -129,6 +149,68 @@ static void damp_velocity_along_axis(BodyRecord& body, const Vec3& axis) {
     body.state.linear_velocity_x -= axis.x * along;
     body.state.linear_velocity_y -= axis.y * along;
     body.state.linear_velocity_z -= axis.z * along;
+}
+
+static bool apply_position_correction(BodyRecord& bodyA,
+                                      BodyRecord& bodyB,
+                                      const Vec3& correction) {
+    const float correctionMagnitudeSq = length_squared(correction.x, correction.y, correction.z);
+    if (correctionMagnitudeSq <= 0.000001f) {
+        return false;
+    }
+
+    const float inverseMassA = inverse_mass(bodyA);
+    const float inverseMassB = inverse_mass(bodyB);
+    const float inverseMassTotal = inverseMassA + inverseMassB;
+    if (inverseMassTotal <= 0.000001f) {
+        return false;
+    }
+
+    const float weightA = inverseMassA / inverseMassTotal;
+    const float weightB = inverseMassB / inverseMassTotal;
+    if (inverseMassA > 0.0f) {
+        set_body_position(bodyA.state,
+                          add_vec3(body_position(bodyA.state), scale_vec3(correction, weightA)));
+    }
+    if (inverseMassB > 0.0f) {
+        set_body_position(bodyB.state,
+                          sub_vec3(body_position(bodyB.state), scale_vec3(correction, weightB)));
+    }
+    return true;
+}
+
+static bool apply_velocity_correction(BodyRecord& bodyA,
+                                      BodyRecord& bodyB,
+                                      const Vec3& relativeVelocityToRemove) {
+    const float velocityMagnitudeSq = length_squared(
+        relativeVelocityToRemove.x,
+        relativeVelocityToRemove.y,
+        relativeVelocityToRemove.z
+    );
+    if (velocityMagnitudeSq <= 0.000001f) {
+        return false;
+    }
+
+    const float inverseMassA = inverse_mass(bodyA);
+    const float inverseMassB = inverse_mass(bodyB);
+    const float inverseMassTotal = inverseMassA + inverseMassB;
+    if (inverseMassTotal <= 0.000001f) {
+        return false;
+    }
+
+    const float weightA = inverseMassA / inverseMassTotal;
+    const float weightB = inverseMassB / inverseMassTotal;
+    if (inverseMassA > 0.0f) {
+        set_body_linear_velocity(bodyA,
+                                 add_vec3(body_linear_velocity(bodyA),
+                                          scale_vec3(relativeVelocityToRemove, weightA)));
+    }
+    if (inverseMassB > 0.0f) {
+        set_body_linear_velocity(bodyB,
+                                 sub_vec3(body_linear_velocity(bodyB),
+                                          scale_vec3(relativeVelocityToRemove, weightB)));
+    }
+    return true;
 }
 
 static Quat normalize_quat(Quat quat) {
@@ -276,29 +358,93 @@ static bool solve_distance_constraint(BodyRecord& bodyA,
         return false;
     }
 
-    const float error = distance - clampedDistance;
     const Vec3 axis = normalize_vec3(delta);
-    const float inverseMassA = inverse_mass(bodyA);
-    const float inverseMassB = inverse_mass(bodyB);
-    const float inverseMassTotal = inverseMassA + inverseMassB;
-    if (inverseMassTotal <= 0.000001f) {
+    const Vec3 correction = scale_vec3(axis, distance - clampedDistance);
+    const bool positionSolved = apply_position_correction(bodyA, bodyB, correction);
+
+    const float relativeAlongAxis = dot_vec3(sub_vec3(body_linear_velocity(bodyB), body_linear_velocity(bodyA)), axis);
+    const bool velocityShouldClamp = positionSolved
+        || (distance <= minLimit + 0.000001f && relativeAlongAxis < 0.0f)
+        || (distance >= maxLimit - 0.000001f && relativeAlongAxis > 0.0f);
+    const bool velocitySolved = velocityShouldClamp
+        ? apply_velocity_correction(bodyA, bodyB, scale_vec3(axis, relativeAlongAxis))
+        : false;
+
+    return positionSolved || velocitySolved;
+}
+
+static bool solve_point_to_point_constraint(BodyRecord& bodyA,
+                                            BodyRecord& bodyB,
+                                            const GuavaJoltConstraintDesc& constraint) {
+    if (constraint.is_enabled == 0 || constraint.constraint_type != kConstraintPointToPoint) {
         return false;
     }
 
-    const float weightA = inverseMassA / inverseMassTotal;
-    const float weightB = inverseMassB / inverseMassTotal;
-    const Vec3 correctionA = scale_vec3(axis, error * weightA);
-    const Vec3 correctionB = scale_vec3(axis, -error * weightB);
+    const Vec3 anchorA = add_vec3(body_position(bodyA.state), make_vec3(
+        constraint.pivot_a_x,
+        constraint.pivot_a_y,
+        constraint.pivot_a_z
+    ));
+    const Vec3 anchorB = add_vec3(body_position(bodyB.state), make_vec3(
+        constraint.pivot_b_x,
+        constraint.pivot_b_y,
+        constraint.pivot_b_z
+    ));
+    const bool positionSolved = apply_position_correction(bodyA, bodyB, sub_vec3(anchorB, anchorA));
+    const bool velocitySolved = apply_velocity_correction(bodyA,
+                                                          bodyB,
+                                                          sub_vec3(body_linear_velocity(bodyB), body_linear_velocity(bodyA)));
+    return positionSolved || velocitySolved;
+}
 
-    if (inverseMassA > 0.0f) {
-        set_body_position(bodyA.state, add_vec3(body_position(bodyA.state), correctionA));
-        damp_velocity_along_axis(bodyA, axis);
+static Vec3 resolve_slider_axis(const GuavaJoltConstraintDesc& constraint) {
+    const Vec3 axisA = normalize_vec3(make_vec3(constraint.axis_a_x, constraint.axis_a_y, constraint.axis_a_z));
+    const Vec3 axisB = normalize_vec3(make_vec3(constraint.axis_b_x, constraint.axis_b_y, constraint.axis_b_z));
+    const Vec3 combined = add_vec3(axisA, axisB);
+    return normalize_vec3(combined);
+}
+
+static bool solve_slider_constraint(BodyRecord& bodyA,
+                                    BodyRecord& bodyB,
+                                    const GuavaJoltConstraintDesc& constraint) {
+    if (constraint.is_enabled == 0 || constraint.constraint_type != kConstraintSlider) {
+        return false;
     }
-    if (inverseMassB > 0.0f) {
-        set_body_position(bodyB.state, add_vec3(body_position(bodyB.state), correctionB));
-        damp_velocity_along_axis(bodyB, axis);
-    }
-    return true;
+
+    const Vec3 sliderAxis = resolve_slider_axis(constraint);
+    const Vec3 anchorA = add_vec3(body_position(bodyA.state), make_vec3(
+        constraint.pivot_a_x,
+        constraint.pivot_a_y,
+        constraint.pivot_a_z
+    ));
+    const Vec3 anchorB = add_vec3(body_position(bodyB.state), make_vec3(
+        constraint.pivot_b_x,
+        constraint.pivot_b_y,
+        constraint.pivot_b_z
+    ));
+    const Vec3 delta = sub_vec3(anchorB, anchorA);
+    const float projection = dot_vec3(delta, sliderAxis);
+    const float minLimit = std::min(constraint.min_limit, constraint.max_limit);
+    const float maxLimit = std::max(constraint.min_limit, constraint.max_limit);
+    const float clampedProjection = std::max(minLimit, std::min(maxLimit, projection));
+    const float axisProjectionError = projection - clampedProjection;
+    const Vec3 parallel = scale_vec3(sliderAxis, projection);
+    const Vec3 perpendicular = sub_vec3(delta, parallel);
+    const Vec3 correction = add_vec3(perpendicular,
+                                     scale_vec3(sliderAxis, axisProjectionError));
+    const bool positionSolved = apply_position_correction(bodyA, bodyB, correction);
+
+    const Vec3 relativeVelocity = sub_vec3(body_linear_velocity(bodyB), body_linear_velocity(bodyA));
+    const float relativeAlongAxis = dot_vec3(relativeVelocity, sliderAxis);
+    const Vec3 relativePerpendicular = sub_vec3(relativeVelocity, scale_vec3(sliderAxis, relativeAlongAxis));
+    const bool perpendicularVelocitySolved = apply_velocity_correction(bodyA, bodyB, relativePerpendicular);
+    const bool axisVelocityShouldClamp = std::abs(axisProjectionError) > 0.000001f
+        || (projection <= minLimit + 0.000001f && relativeAlongAxis < 0.0f)
+        || (projection >= maxLimit - 0.000001f && relativeAlongAxis > 0.0f);
+    const bool axisVelocitySolved = axisVelocityShouldClamp
+        ? apply_velocity_correction(bodyA, bodyB, scale_vec3(sliderAxis, relativeAlongAxis))
+        : false;
+    return positionSolved || perpendicularVelocitySolved || axisVelocitySolved;
 }
 
 }  // namespace
@@ -321,7 +467,9 @@ static uint32_t solve_constraints(GuavaJoltContextImpl& context) {
         if (bodyA == context.bodies.end() || bodyB == context.bodies.end()) {
             continue;
         }
-        if (solve_distance_constraint(bodyA->second, bodyB->second, constraint)) {
+        if (solve_point_to_point_constraint(bodyA->second, bodyB->second, constraint)
+            || solve_distance_constraint(bodyA->second, bodyB->second, constraint)
+            || solve_slider_constraint(bodyA->second, bodyB->second, constraint)) {
             ++solvedCount;
         }
     }
