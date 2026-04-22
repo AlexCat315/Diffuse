@@ -56,6 +56,78 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         return CGRect(origin: origin, size: node.frame.size)
     }
 
+    private func editorLikeTabNodes(_ root: Node) -> (hierarchy: Node, viewport: Node, inspector: Node, console: Node) {
+        let items = findTabItems(root)
+        let console = items.max(by: { absoluteFrame(of: $0).origin.y < absoluteFrame(of: $1).origin.y })!
+        let topItems = items.filter { $0 !== console }
+            .sorted(by: { absoluteFrame(of: $0).origin.x < absoluteFrame(of: $1).origin.x })
+        return (hierarchy: topItems[0], viewport: topItems[1], inspector: topItems[2], console: console)
+    }
+
+    private func dropPoint(for edge: DockEdge,
+                           in frame: CGRect) -> (x: Float, y: Float) {
+        let band = min(Float(min(frame.width, frame.height)) * 0.25, 64)
+        switch edge {
+        case .left:
+            return (Float(frame.minX) + max(2, band - 2), Float(frame.midY))
+        case .right:
+            return (Float(frame.maxX) - max(2, band - 2), Float(frame.midY))
+        case .top:
+            return (Float(frame.midX), Float(frame.minY) + max(2, band - 2))
+        case .bottom:
+            return (Float(frame.midX), Float(frame.maxY) - max(2, band - 2))
+        case .center:
+            return (Float(frame.midX), Float(frame.midY))
+        }
+    }
+
+    private func leafFrame(containing tabNode: Node,
+                           controller: DockController) -> CGRect {
+        let tabFrame = absoluteFrame(of: tabNode)
+        let hit = controller.hitRegistry.leafAt(x: Float(tabFrame.midX),
+                                                y: Float(tabFrame.midY))
+        #expect(hit != nil)
+        guard let hit else { return tabFrame }
+        return CGRect(x: CGFloat(hit.frame.x),
+                      y: CGFloat(hit.frame.y),
+                      width: CGFloat(hit.frame.width),
+                      height: CGFloat(hit.frame.height))
+    }
+
+    private func installEditorRegionPolicy(on controller: DockController) {
+        let regionByKey = [
+            "hierarchy": "leading",
+            "viewport": "center",
+            "inspector": "trailing",
+            "console": "bottom",
+        ]
+        controller.onAllowDrop = { [regionByKey] request in
+            guard case .splitEdge(let targetID, let edge) = request.target else {
+                return true
+            }
+            guard let targetRegion = regionOfLeaf(id: targetID,
+                                                  in: controller.root,
+                                                  regionByKey: regionByKey) else {
+                return true
+            }
+            return allowsEditorSplitEdge(in: targetRegion, edge: edge)
+        }
+    }
+
+    private func allowsEditorSplitEdge(in region: String,
+                                       edge: DockEdge) -> Bool {
+        switch region {
+        case "center":
+            return true
+        case "leading", "trailing":
+            return edge == .top || edge == .bottom
+        case "bottom":
+            return edge == .left || edge == .right
+        default:
+            return true
+        }
+    }
+
     @Test("Pointer down + small motion does NOT start a drag (click threshold)")
     func clickThresholdGuardsDrag() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -223,43 +295,31 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         let controller = DockController(root: .vsplit(fraction: 0.7,
                                                       first: topRow,
                                                       second: consoleLeaf))
-        let regionByKey = [
-            "hierarchy": "leading",
-            "viewport": "center",
-            "inspector": "trailing",
-            "console": "bottom",
-        ]
-        controller.onAllowDrop = { [regionByKey] request in
-            guard case .splitEdge(let targetID, _) = request.target else {
-                return true
-            }
-            guard let targetRegion = regionOfLeaf(id: targetID,
-                                                  in: controller.root,
-                                                  regionByKey: regionByKey) else {
-                return true
-            }
-            return targetRegion == "center"
-        }
+        installEditorRegionPolicy(on: controller)
 
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root: DockContainer(controller: controller, content: makeContent()))
         graph.computeLayout(width: 600, height: 400)
 
-        let consoleNode = findTabItems(tree.root!).max(by: {
-            absoluteFrame(of: $0).origin.y < absoluteFrame(of: $1).origin.y
-        })!
+        let consoleNode = editorLikeTabNodes(tree.root!).console
         let pointer = registry.handlers(for: consoleNode).pointer!
         let motion = registry.handlers(for: consoleNode).motion!
+        let hierarchyPoint = dropPoint(for: .right,
+                           in: leafFrame(containing: editorLikeTabNodes(tree.root!).hierarchy,
+                                 controller: controller))
 
         _ = pointer(MouseButtonEvent(button: .left, x: 40, y: 300, clicks: 1), .down, .target)
         _ = motion(MouseMotionEvent(x: 60, y: 278, deltaX: 20, deltaY: -22), .target)
-        _ = motion(MouseMotionEvent(x: 92, y: 120, deltaX: 32, deltaY: -158), .target)
+        _ = motion(MouseMotionEvent(x: hierarchyPoint.x,
+                        y: hierarchyPoint.y,
+                        deltaX: hierarchyPoint.x - 60,
+                        deltaY: hierarchyPoint.y - 278), .target)
 
         #expect(controller.dragSession.dropHit?.leafID == hierarchyLeaf.id)
         #expect(controller.dragSession.dropHit?.edge == .center)
 
-        _ = pointer(MouseButtonEvent(button: .left, x: 92, y: 120, clicks: 1), .up, .target)
+        _ = pointer(MouseButtonEvent(button: .left, x: hierarchyPoint.x, y: hierarchyPoint.y, clicks: 1), .up, .target)
 
         guard case .split(_, .horizontal, _, let hierarchyNode, let remainder) = controller.root,
               case .tabs(_, let hierarchyTabs, let activeHierarchy) = hierarchyNode,
@@ -274,6 +334,444 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         #expect(activeHierarchy == console.id)
         #expect(viewportTabs.map(\.userKey) == ["viewport"])
         #expect(inspectorTabs.map(\.userKey) == ["inspector"])
+    } }
+
+    @Test("Dragging console to the inspector left edge merges it into the inspector region")
+    func editorLikeConsoleToInspectorLeftMergesIntoInspectorRegion() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let hierarchy = DockTab(userKey: "hierarchy", title: "Hierarchy")
+        let viewport = DockTab(userKey: "viewport", title: "Viewport", isClosable: false)
+        let inspector = DockTab(userKey: "inspector", title: "Inspector")
+        let console = DockTab(userKey: "console", title: "Console")
+
+        let controller = DockController(root: .vsplit(fraction: 0.7,
+                                                      first: .hsplit(fraction: 15.0 / 90.0,
+                                                                     first: .tabs([hierarchy]),
+                                                                     second: .hsplit(fraction: 55.0 / 75.0,
+                                                                                     first: .tabs([viewport]),
+                                                                                     second: .tabs([inspector]))),
+                                                      second: .tabs([console])))
+        installEditorRegionPolicy(on: controller)
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+
+        let nodes = editorLikeTabNodes(tree.root!)
+        let pointer = registry.handlers(for: nodes.console).pointer!
+        let motion = registry.handlers(for: nodes.console).motion!
+        let inspectorPoint = dropPoint(for: .left,
+                           in: leafFrame(containing: nodes.inspector,
+                                 controller: controller))
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 40, y: 300, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 60, y: 278, deltaX: 20, deltaY: -22), .target)
+        _ = motion(MouseMotionEvent(x: inspectorPoint.x,
+                        y: inspectorPoint.y,
+                        deltaX: inspectorPoint.x - 60,
+                        deltaY: inspectorPoint.y - 278), .target)
+
+        #expect(controller.dragSession.dropHit?.edge == .center)
+
+        _ = pointer(MouseButtonEvent(button: .left, x: inspectorPoint.x, y: inspectorPoint.y, clicks: 1), .up, .target)
+
+        guard case .split(_, .horizontal, _, let hierarchyNode, let remainder) = controller.root,
+              case .tabs(_, let hierarchyTabs, _) = hierarchyNode,
+              case .split(_, .horizontal, _, let viewportNode, let inspectorNode) = remainder,
+              case .tabs(_, let viewportTabs, _) = viewportNode,
+              case .tabs(_, let inspectorTabs, let activeInspector) = inspectorNode else {
+            Issue.record("expected console to merge into the inspector region")
+            return
+        }
+
+        #expect(hierarchyTabs.map(\.userKey) == ["hierarchy"])
+        #expect(viewportTabs.map(\.userKey) == ["viewport"])
+        #expect(inspectorTabs.map(\.userKey) == ["inspector", "console"])
+        #expect(activeInspector == console.id)
+    } }
+
+    @Test("Dragging console to the hierarchy left edge merges it into the hierarchy region")
+    func editorLikeConsoleToHierarchyLeftMergesIntoHierarchyRegion() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let hierarchy = DockTab(userKey: "hierarchy", title: "Hierarchy")
+        let viewport = DockTab(userKey: "viewport", title: "Viewport", isClosable: false)
+        let inspector = DockTab(userKey: "inspector", title: "Inspector")
+        let console = DockTab(userKey: "console", title: "Console")
+
+        let hierarchyLeaf = DockLayoutNode.tabs([hierarchy])
+        let controller = DockController(root: .vsplit(fraction: 0.7,
+                                                      first: .hsplit(fraction: 15.0 / 90.0,
+                                                                     first: hierarchyLeaf,
+                                                                     second: .hsplit(fraction: 55.0 / 75.0,
+                                                                                     first: .tabs([viewport]),
+                                                                                     second: .tabs([inspector]))),
+                                                      second: .tabs([console])))
+        installEditorRegionPolicy(on: controller)
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+
+        let nodes = editorLikeTabNodes(tree.root!)
+        let pointer = registry.handlers(for: nodes.console).pointer!
+        let motion = registry.handlers(for: nodes.console).motion!
+        let hierarchyPoint = dropPoint(for: .left,
+                                       in: leafFrame(containing: nodes.hierarchy,
+                                                     controller: controller))
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 40, y: 300, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 60, y: 278, deltaX: 20, deltaY: -22), .target)
+        _ = motion(MouseMotionEvent(x: hierarchyPoint.x,
+                                    y: hierarchyPoint.y,
+                                    deltaX: hierarchyPoint.x - 60,
+                                    deltaY: hierarchyPoint.y - 278), .target)
+
+        #expect(controller.dragSession.dropHit?.leafID == hierarchyLeaf.id)
+        #expect(controller.dragSession.dropHit?.edge == .center)
+
+        _ = pointer(MouseButtonEvent(button: .left, x: hierarchyPoint.x, y: hierarchyPoint.y, clicks: 1), .up, .target)
+
+        guard case .split(_, .horizontal, _, let hierarchyNode, let remainder) = controller.root,
+              case .tabs(_, let hierarchyTabs, let activeHierarchy) = hierarchyNode,
+              case .split(_, .horizontal, _, let viewportNode, let inspectorNode) = remainder,
+              case .tabs(_, let viewportTabs, _) = viewportNode,
+              case .tabs(_, let inspectorTabs, _) = inspectorNode else {
+            Issue.record("expected console to merge into the hierarchy region from the outer left edge")
+            return
+        }
+
+        #expect(hierarchyTabs.map(\.userKey) == ["hierarchy", "console"])
+        #expect(activeHierarchy == console.id)
+        #expect(viewportTabs.map(\.userKey) == ["viewport"])
+        #expect(inspectorTabs.map(\.userKey) == ["inspector"])
+    } }
+
+    @Test("Dragging console to the inspector right edge merges it into the inspector region")
+    func editorLikeConsoleToInspectorRightMergesIntoInspectorRegion() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let hierarchy = DockTab(userKey: "hierarchy", title: "Hierarchy")
+        let viewport = DockTab(userKey: "viewport", title: "Viewport", isClosable: false)
+        let inspector = DockTab(userKey: "inspector", title: "Inspector")
+        let console = DockTab(userKey: "console", title: "Console")
+
+        let inspectorLeaf = DockLayoutNode.tabs([inspector])
+        let controller = DockController(root: .vsplit(fraction: 0.7,
+                                                      first: .hsplit(fraction: 15.0 / 90.0,
+                                                                     first: .tabs([hierarchy]),
+                                                                     second: .hsplit(fraction: 55.0 / 75.0,
+                                                                                     first: .tabs([viewport]),
+                                                                                     second: inspectorLeaf)),
+                                                      second: .tabs([console])))
+        installEditorRegionPolicy(on: controller)
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+
+        let nodes = editorLikeTabNodes(tree.root!)
+        let pointer = registry.handlers(for: nodes.console).pointer!
+        let motion = registry.handlers(for: nodes.console).motion!
+        let inspectorPoint = dropPoint(for: .right,
+                                       in: leafFrame(containing: nodes.inspector,
+                                                     controller: controller))
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 40, y: 300, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 60, y: 278, deltaX: 20, deltaY: -22), .target)
+        _ = motion(MouseMotionEvent(x: inspectorPoint.x,
+                                    y: inspectorPoint.y,
+                                    deltaX: inspectorPoint.x - 60,
+                                    deltaY: inspectorPoint.y - 278), .target)
+
+        #expect(controller.dragSession.dropHit?.leafID == inspectorLeaf.id)
+        #expect(controller.dragSession.dropHit?.edge == .center)
+
+        _ = pointer(MouseButtonEvent(button: .left, x: inspectorPoint.x, y: inspectorPoint.y, clicks: 1), .up, .target)
+
+        guard case .split(_, .horizontal, _, let hierarchyNode, let remainder) = controller.root,
+              case .tabs(_, let hierarchyTabs, _) = hierarchyNode,
+              case .split(_, .horizontal, _, let viewportNode, let inspectorNode) = remainder,
+              case .tabs(_, let viewportTabs, _) = viewportNode,
+              case .tabs(_, let inspectorTabs, let activeInspector) = inspectorNode else {
+            Issue.record("expected console to merge into the inspector region from the outer right edge")
+            return
+        }
+
+        #expect(hierarchyTabs.map(\.userKey) == ["hierarchy"])
+        #expect(viewportTabs.map(\.userKey) == ["viewport"])
+        #expect(inspectorTabs.map(\.userKey) == ["inspector", "console"])
+        #expect(activeInspector == console.id)
+    } }
+
+    @Test("Dragging console to the inspector bottom edge splits the inspector region vertically")
+    func editorLikeConsoleToInspectorBottomSplitsInspectorRegion() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let hierarchy = DockTab(userKey: "hierarchy", title: "Hierarchy")
+        let viewport = DockTab(userKey: "viewport", title: "Viewport", isClosable: false)
+        let inspector = DockTab(userKey: "inspector", title: "Inspector")
+        let console = DockTab(userKey: "console", title: "Console")
+
+        let inspectorLeaf = DockLayoutNode.tabs([inspector])
+        let controller = DockController(root: .vsplit(fraction: 0.7,
+                                                      first: .hsplit(fraction: 15.0 / 90.0,
+                                                                     first: .tabs([hierarchy]),
+                                                                     second: .hsplit(fraction: 55.0 / 75.0,
+                                                                                     first: .tabs([viewport]),
+                                                                                     second: inspectorLeaf)),
+                                                      second: .tabs([console])))
+        installEditorRegionPolicy(on: controller)
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+
+        let nodes = editorLikeTabNodes(tree.root!)
+        let pointer = registry.handlers(for: nodes.console).pointer!
+        let motion = registry.handlers(for: nodes.console).motion!
+        let inspectorPoint = dropPoint(for: .bottom,
+                           in: leafFrame(containing: nodes.inspector,
+                                 controller: controller))
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 40, y: 300, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 60, y: 278, deltaX: 20, deltaY: -22), .target)
+        _ = motion(MouseMotionEvent(x: inspectorPoint.x,
+                        y: inspectorPoint.y,
+                        deltaX: inspectorPoint.x - 60,
+                        deltaY: inspectorPoint.y - 278), .target)
+
+        #expect(controller.dragSession.dropHit?.leafID == inspectorLeaf.id)
+        #expect(controller.dragSession.dropHit?.edge == .bottom)
+
+        _ = pointer(MouseButtonEvent(button: .left, x: inspectorPoint.x, y: inspectorPoint.y, clicks: 1), .up, .target)
+
+        guard case .split(_, .horizontal, _, let hierarchyNode, let remainder) = controller.root,
+              case .tabs(_, let hierarchyTabs, _) = hierarchyNode,
+              case .split(_, .horizontal, _, let viewportNode, let inspectorArea) = remainder,
+              case .tabs(_, let viewportTabs, _) = viewportNode,
+              case .split(_, .vertical, _, let inspectorNode, let consoleNode) = inspectorArea,
+              case .tabs(_, let inspectorTabs, _) = inspectorNode,
+              case .tabs(_, let consoleTabs, let activeConsole) = consoleNode else {
+            Issue.record("expected inspector region to split vertically")
+            return
+        }
+
+        #expect(hierarchyTabs.map(\.userKey) == ["hierarchy"])
+        #expect(viewportTabs.map(\.userKey) == ["viewport"])
+        #expect(inspectorTabs.map(\.userKey) == ["inspector"])
+        #expect(consoleTabs.map(\.userKey) == ["console"])
+        #expect(activeConsole == console.id)
+    } }
+
+    @Test("Dragging hierarchy to the bottom right edge splits the bottom region horizontally")
+    func editorLikeHierarchyToBottomRightSplitsBottomRegion() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let hierarchy = DockTab(userKey: "hierarchy", title: "Hierarchy")
+        let viewport = DockTab(userKey: "viewport", title: "Viewport", isClosable: false)
+        let inspector = DockTab(userKey: "inspector", title: "Inspector")
+        let console = DockTab(userKey: "console", title: "Console")
+
+        let consoleLeaf = DockLayoutNode.tabs([console])
+        let controller = DockController(root: .vsplit(fraction: 0.7,
+                                                      first: .hsplit(fraction: 15.0 / 90.0,
+                                                                     first: .tabs([hierarchy]),
+                                                                     second: .hsplit(fraction: 55.0 / 75.0,
+                                                                                     first: .tabs([viewport]),
+                                                                                     second: .tabs([inspector]))),
+                                                      second: consoleLeaf))
+        installEditorRegionPolicy(on: controller)
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+
+        let nodes = editorLikeTabNodes(tree.root!)
+        let pointer = registry.handlers(for: nodes.hierarchy).pointer!
+        let motion = registry.handlers(for: nodes.hierarchy).motion!
+        let bottomPoint = dropPoint(for: .right,
+                        in: leafFrame(containing: nodes.console,
+                              controller: controller))
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 40, y: 30, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 60, y: 52, deltaX: 20, deltaY: 22), .target)
+        _ = motion(MouseMotionEvent(x: bottomPoint.x,
+                        y: bottomPoint.y,
+                        deltaX: bottomPoint.x - 60,
+                        deltaY: bottomPoint.y - 52), .target)
+
+        #expect(controller.dragSession.dropHit?.leafID == consoleLeaf.id)
+        #expect(controller.dragSession.dropHit?.edge == .right)
+
+        _ = pointer(MouseButtonEvent(button: .left, x: bottomPoint.x, y: bottomPoint.y, clicks: 1), .up, .target)
+
+        guard case .split(_, .vertical, _, let top, let bottomArea) = controller.root,
+              case .split(_, .horizontal, _, let viewportNode, let inspectorNode) = top,
+              case .tabs(_, let viewportTabs, _) = viewportNode,
+              case .tabs(_, let inspectorTabs, _) = inspectorNode,
+              case .split(_, .horizontal, _, let consoleNode, let hierarchyNode) = bottomArea,
+              case .tabs(_, let consoleTabs, _) = consoleNode,
+              case .tabs(_, let hierarchyTabs, let activeHierarchy) = hierarchyNode else {
+            Issue.record("expected bottom region to split horizontally")
+            return
+        }
+
+        #expect(viewportTabs.map(\.userKey) == ["viewport"])
+        #expect(inspectorTabs.map(\.userKey) == ["inspector"])
+        #expect(consoleTabs.map(\.userKey) == ["console"])
+        #expect(hierarchyTabs.map(\.userKey) == ["hierarchy"])
+        #expect(activeHierarchy == hierarchy.id)
+    } }
+
+    @Test("Dragging hierarchy to the bottom top edge merges it into the bottom region")
+    func editorLikeHierarchyToBottomTopMergesIntoBottomRegion() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let hierarchy = DockTab(userKey: "hierarchy", title: "Hierarchy")
+        let viewport = DockTab(userKey: "viewport", title: "Viewport", isClosable: false)
+        let inspector = DockTab(userKey: "inspector", title: "Inspector")
+        let console = DockTab(userKey: "console", title: "Console")
+
+        let consoleLeaf = DockLayoutNode.tabs([console])
+        let controller = DockController(root: .vsplit(fraction: 0.7,
+                                                      first: .hsplit(fraction: 15.0 / 90.0,
+                                                                     first: .tabs([hierarchy]),
+                                                                     second: .hsplit(fraction: 55.0 / 75.0,
+                                                                                     first: .tabs([viewport]),
+                                                                                     second: .tabs([inspector]))),
+                                                      second: consoleLeaf))
+        installEditorRegionPolicy(on: controller)
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+
+        let nodes = editorLikeTabNodes(tree.root!)
+        let pointer = registry.handlers(for: nodes.hierarchy).pointer!
+        let motion = registry.handlers(for: nodes.hierarchy).motion!
+        let bottomPoint = dropPoint(for: .top,
+                        in: leafFrame(containing: nodes.console,
+                              controller: controller))
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 40, y: 30, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 60, y: 52, deltaX: 20, deltaY: 22), .target)
+        _ = motion(MouseMotionEvent(x: bottomPoint.x,
+                        y: bottomPoint.y,
+                        deltaX: bottomPoint.x - 60,
+                        deltaY: bottomPoint.y - 52), .target)
+
+        #expect(controller.dragSession.dropHit?.leafID == consoleLeaf.id)
+        #expect(controller.dragSession.dropHit?.edge == .center)
+
+        _ = pointer(MouseButtonEvent(button: .left, x: bottomPoint.x, y: bottomPoint.y, clicks: 1), .up, .target)
+
+        guard case .split(_, .vertical, _, let top, let bottomNode) = controller.root,
+              case .split(_, .horizontal, _, let viewportNode, let inspectorNode) = top,
+              case .tabs(_, let viewportTabs, _) = viewportNode,
+              case .tabs(_, let inspectorTabs, _) = inspectorNode,
+              case .tabs(_, let bottomTabs, let activeBottom) = bottomNode else {
+            Issue.record("expected hierarchy to merge into the bottom region")
+            return
+        }
+
+        #expect(viewportTabs.map(\.userKey) == ["viewport"])
+        #expect(inspectorTabs.map(\.userKey) == ["inspector"])
+        #expect(bottomTabs.map(\.userKey) == ["console", "hierarchy"])
+        #expect(activeBottom == hierarchy.id)
+    } }
+
+    @Test("Dragging hierarchy to the bottom bottom edge merges it into the bottom region")
+    func editorLikeHierarchyToBottomBottomMergesIntoBottomRegion() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let hierarchy = DockTab(userKey: "hierarchy", title: "Hierarchy")
+        let viewport = DockTab(userKey: "viewport", title: "Viewport", isClosable: false)
+        let inspector = DockTab(userKey: "inspector", title: "Inspector")
+        let console = DockTab(userKey: "console", title: "Console")
+
+        let consoleLeaf = DockLayoutNode.tabs([console])
+        let controller = DockController(root: .vsplit(fraction: 0.7,
+                                                      first: .hsplit(fraction: 15.0 / 90.0,
+                                                                     first: .tabs([hierarchy]),
+                                                                     second: .hsplit(fraction: 55.0 / 75.0,
+                                                                                     first: .tabs([viewport]),
+                                                                                     second: .tabs([inspector]))),
+                                                      second: consoleLeaf))
+        installEditorRegionPolicy(on: controller)
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+
+        let nodes = editorLikeTabNodes(tree.root!)
+        let pointer = registry.handlers(for: nodes.hierarchy).pointer!
+        let motion = registry.handlers(for: nodes.hierarchy).motion!
+        let bottomPoint = dropPoint(for: .bottom,
+                                    in: leafFrame(containing: nodes.console,
+                                                  controller: controller))
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 40, y: 30, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 60, y: 52, deltaX: 20, deltaY: 22), .target)
+        _ = motion(MouseMotionEvent(x: bottomPoint.x,
+                                    y: bottomPoint.y,
+                                    deltaX: bottomPoint.x - 60,
+                                    deltaY: bottomPoint.y - 52), .target)
+
+        #expect(controller.dragSession.dropHit?.leafID == consoleLeaf.id)
+        #expect(controller.dragSession.dropHit?.edge == .center)
+
+        _ = pointer(MouseButtonEvent(button: .left, x: bottomPoint.x, y: bottomPoint.y, clicks: 1), .up, .target)
+
+        guard case .split(_, .vertical, _, let top, let bottomNode) = controller.root,
+              case .split(_, .horizontal, _, let viewportNode, let inspectorNode) = top,
+              case .tabs(_, let viewportTabs, _) = viewportNode,
+              case .tabs(_, let inspectorTabs, _) = inspectorNode,
+              case .tabs(_, let bottomTabs, let activeBottom) = bottomNode else {
+            Issue.record("expected hierarchy to merge into the bottom region from the outer bottom edge")
+            return
+        }
+
+        #expect(viewportTabs.map(\.userKey) == ["viewport"])
+        #expect(inspectorTabs.map(\.userKey) == ["inspector"])
+        #expect(bottomTabs.map(\.userKey) == ["console", "hierarchy"])
+        #expect(activeBottom == hierarchy.id)
     } }
 
     private func regionOfLeaf(id: DockNodeID,

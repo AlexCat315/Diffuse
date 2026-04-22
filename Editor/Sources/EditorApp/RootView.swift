@@ -75,7 +75,7 @@ enum EditorRootViewFactory {
             "console": .bottomPanel,
         ]
         controller.onAllowDrop = { [regionByKey] request in
-            guard case .splitEdge(let targetID, _) = request.target else {
+            guard case .splitEdge(let targetID, let edge) = request.target else {
                 return true
             }
             guard let targetRegion = regionOfLeaf(id: targetID,
@@ -83,9 +83,21 @@ enum EditorRootViewFactory {
                                                   regionByKey: regionByKey) else {
                 return true
             }
-            return targetRegion == .center
+            return allowsSplitEdge(in: targetRegion, edge: edge)
         }
         return controller
+    }
+
+    private static func allowsSplitEdge(in region: PanelWorkspaceRegion,
+                                        edge: DockEdge) -> Bool {
+        switch region {
+        case .center:
+            return true
+        case .leadingSidebar, .trailingSidebar:
+            return edge == .top || edge == .bottom
+        case .bottomPanel:
+            return edge == .left || edge == .right
+        }
     }
 
     private static func regionOfLeaf(id: DockNodeID,
