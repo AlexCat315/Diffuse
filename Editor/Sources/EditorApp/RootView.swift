@@ -10,6 +10,7 @@ struct EditorRootView: View {
 
     var body: some View {
         PanelWorkspace(controller: controller, registry: registry)
+            .appearance(.dark)
     }
 }
 
@@ -57,13 +58,13 @@ enum EditorRootViewFactory {
     static func makeRegistry(app: EditorApplication) -> PanelRegistry {
         PanelRegistry([
             PanelDescriptor(id: "hierarchy", title: "Hierarchy") {
-                HierarchyPanel(store: app.store)
+                HierarchyPanel(store: app.store, scene: app.scene)
             },
             PanelDescriptor(id: "inspector", title: "Inspector") {
-                InspectorPanel(store: app.store)
+                InspectorPanel(store: app.store, scene: app.scene)
             },
             PanelDescriptor(id: "viewport", title: "Viewport", closable: false) {
-                ViewportPanel(app: app)
+                ViewportPanel(app: app, scene: app.scene)
             },
             PanelDescriptor(id: "console", title: "Console") {
                 ConsolePanel(store: app.store)

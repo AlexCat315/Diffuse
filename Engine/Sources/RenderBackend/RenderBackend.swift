@@ -40,13 +40,15 @@ private struct DynamicInstanceResources {
 ///  RHIWGPU renderer: scene of multiple instances drawn through one shared pipeline.
 public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private let backend: WGPUBackend
-    private let renderSurface: RenderSurfaceDescriptor
+    private let renderSurface: RenderSurfaceDescriptor?
     private var surface: GPUSurface?
     private var configuredSize: RenderDrawableSize = .init(width: 0, height: 0)
     private let format: GPUTextureFormat = .bgra8Unorm
     private let depthFormat: GPUTextureFormat = .depth32Float
 
     private var meshPipeline: GPURenderPipeline?
+    private var offscreenColorTexture: GPUTexture?
+    private var offscreenColorView: GPUTextureView?
     private var depthTexture: GPUTexture?
     private var depthView: GPUTextureView?
 
@@ -63,27 +65,31 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
     public private(set) var lastFrameStats: RenderFrameStats = .init()
 
-    public init(backend: WGPUBackend, renderSurface: RenderSurfaceDescriptor) {
+    public init(backend: WGPUBackend, renderSurface: RenderSurfaceDescriptor? = nil) {
         self.backend = backend
         self.renderSurface = renderSurface
     }
 
     public func initialize() {
         do {
-            switch renderSurface {
-                case let .metalLayer(layerPointer):
-                    surface = try backend.createSurfaceMetal(layer: layerPointer)
+            if let renderSurface {
+                switch renderSurface {
+                    case let .metalLayer(layerPointer):
+                        surface = try backend.createSurfaceMetal(layer: layerPointer)
 
-                case let .win32Window(hwnd, hinstance):
-                    surface = try backend.createSurfaceWin32(hwnd: hwnd, hinstance: hinstance)
+                    case let .win32Window(hwnd, hinstance):
+                        surface = try backend.createSurfaceWin32(hwnd: hwnd, hinstance: hinstance)
 
-                case let .xlibWindow(display, window):
-                    surface = try backend.createSurfaceXlib(display: display, window: window)
+                    case let .xlibWindow(display, window):
+                        surface = try backend.createSurfaceXlib(display: display, window: window)
 
-                case let .waylandSurface(display, wlSurface):
-                    surface = try backend.createSurfaceWayland(display: display, surface: wlSurface)
+                    case let .waylandSurface(display, wlSurface):
+                        surface = try backend.createSurfaceWayland(display: display, surface: wlSurface)
+                }
+                Logger.renderer.info("surface ready, waiting for first render packet")
+            } else {
+                Logger.renderer.info("offscreen viewport renderer ready, waiting for first render packet")
             }
-            Logger.renderer.info("surface ready, waiting for first render packet")
         } catch {
             Logger.renderer.error("initialize failed: \(error)")
         }
@@ -98,13 +104,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     }
 
     public func render(packet: RenderPacket) {
-        guard let surface else { return }
         do {
             applyPacketRenderSettingsIfNeeded(packet.renderSettings, frameIndex: packet.frameIndex)
             try ensureConfigured(size: packet.drawableSize)
             try ensureMeshPipeline()
             try ensureInstanceResources(instanceCount: packet.scene.instances.count)
-            guard let acquired = try surface.getCurrentTextureView(),
+            guard let colorTarget = try acquireColorTarget(),
                 let depthView,
                 let pipeline = meshPipeline
             else {
@@ -123,7 +128,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     case .basePass:
                         drawCallCount += try encodeBasePass(
                             encoder: encoder,
-                            colorView: acquired.view,
+                            colorView: colorTarget.view,
                             depthView: depthView,
                             pipeline: pipeline,
                             scene: packet.scene
@@ -138,7 +143,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
 
                     case .viewportResolve:
-                        registerViewportSurface(texture: acquired.texture, size: packet.drawableSize)
+                        registerViewportSurface(texture: colorTarget.texture, size: packet.drawableSize)
                         viewportResolved = true
                         emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
                 }
@@ -150,7 +155,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
             let cmd = try encoder.finish()
             backend.submit(cmd)
-            surface.present()
+            if colorTarget.presentAfterSubmit {
+                surface?.present()
+            }
 
             lastFrameStats = RenderFrameStats(
                 frameIndex: packet.frameIndex,
@@ -162,6 +169,34 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         } catch {
             Logger.renderer.error("frame \(packet.frameIndex) failed: \(error)")
         }
+    }
+
+    private struct FrameColorTarget {
+        let texture: GPUTexture
+        let view: GPUTextureView
+        let presentAfterSubmit: Bool
+    }
+
+    private func acquireColorTarget() throws -> FrameColorTarget? {
+        if let surface {
+            guard let acquired = try surface.getCurrentTextureView() else {
+                return nil
+            }
+            return FrameColorTarget(
+                texture: acquired.texture,
+                view: acquired.view,
+                presentAfterSubmit: true
+            )
+        }
+
+        guard let offscreenColorTexture, let offscreenColorView else {
+            return nil
+        }
+        return FrameColorTarget(
+            texture: offscreenColorTexture,
+            view: offscreenColorView,
+            presentAfterSubmit: false
+        )
     }
 
     private func applyPacketRenderSettingsIfNeeded(_ settings: RenderSettings, frameIndex: Int) {
@@ -390,7 +425,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     }
 
     private func ensureConfigured(size: RenderDrawableSize) throws {
-        guard let surface, let device = backend.rawDevice else { return }
+        guard backend.rawDevice != nil else { return }
         let width = max(size.width, 1)
         let height = max(size.height, 1)
         if width == configuredSize.width && height == configuredSize.height
@@ -398,13 +433,26 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         {
             return
         }
-        try surface.configure(
-            device: device,
-            format: format,
-            width: width,
-            height: height,
-            presentMode: .fifo
-        )
+        if let surface, let device = backend.rawDevice {
+            try surface.configure(
+                device: device,
+                format: format,
+                width: width,
+                height: height,
+                presentMode: .fifo
+            )
+            offscreenColorView = nil
+            offscreenColorTexture = nil
+        } else {
+            let color = try backend.createTexture(
+                width: width,
+                height: height,
+                format: format,
+                usage: [.renderAttachment, .textureBinding]
+            )
+            offscreenColorView = try color.createView()
+            offscreenColorTexture = color
+        }
         configuredSize = .init(width: width, height: height)
 
         depthView = nil

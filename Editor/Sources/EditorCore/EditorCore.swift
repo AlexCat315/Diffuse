@@ -2,6 +2,7 @@ import EngineCore
 import EngineKernel
 import RenderBackend
 import RHIWGPU
+import GuavaUIRuntime
 import Foundation
 
 /// 编辑器应用域：把 `EngineHost`、`EditorStore` 与 `InputState` 汇总成一个对象。
@@ -13,39 +14,78 @@ import Foundation
 ///
 /// 自身不持有窗口 / wgpu surface — UI 渲染由 GuavaUIApp 接管，引擎仅负责
 /// 仿真与（未来的）离屏渲染。
-@MainActor
 public final class EditorApplication {
     public let engine: EngineHost
     public let store: EditorStore
     public let inputState: InputState
+    public let scene: EditorSceneAdapter
 
-    public init(backendConfig: WGPUDeviceConfig? = nil) {
+    private let events: PlatformEventBridge
+    private var eventToken: PlatformEventBridge.SubscriptionToken?
+    private var pendingViewportEvents: [InputEvent] = []
+    private var viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
+
+    public init(backendConfig: WGPUDeviceConfig? = nil,
+                backend: WGPUBackend? = nil,
+                events: PlatformEventBridge = PlatformEventBridge()) {
         var resolvedBackendConfig = backendConfig ?? .init()
         if resolvedBackendConfig.libraryPath == nil {
             resolvedBackendConfig.libraryPath = Self.locateWGPUDylib()
         }
-        let backend = WGPUBackend(config: resolvedBackendConfig)
-        self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: backend)
-        self.store = EditorStore()
+        let resolvedBackend = backend ?? WGPUBackend(config: resolvedBackendConfig)
+        let store = EditorStore()
+        let scene = EditorSceneAdapter()
+
+        self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
+        self.store = store
         self.inputState = InputState()
+        self.scene = scene
+        self.events = events
+
+        scene.onRevisionChanged = { revision in
+            store.dispatch(.setSceneRevision(revision))
+        }
+        store.dispatch(.setSceneRevision(scene.revision))
+        if let selection = scene.defaultSelectionID {
+            store.dispatch(.setSelectedEntity(selection))
+        }
     }
 
     public func bootstrap() {
-        engine.start(renderSurface: nil)
+        eventToken = events.subscribe { [weak self] event in
+            self?.handlePlatformEvent(event)
+        }
+        engine.start(renderSurface: nil, enableViewportSurface: true)
         store.dispatch(.setConnected(true))
     }
 
     public func tick(deltaTime: Double) {
+        let inputEvents = pendingViewportEvents
+        pendingViewportEvents.removeAll(keepingCapacity: true)
+        inputState.process(inputEvents)
         engine.tick(
             deltaTime: deltaTime,
-            inputEvents: [],
-            drawableSize: .init(),
+            inputEvents: inputEvents,
+            drawableSize: viewportDrawableSize,
             shouldRender: store.state.shouldRender
         )
     }
 
     public func shutdown() {
+        if let eventToken {
+            events.unsubscribe(eventToken)
+            self.eventToken = nil
+        }
         engine.shutdown()
+    }
+
+    public func enqueueViewportInput(_ event: InputEvent) {
+        pendingViewportEvents.append(event)
+    }
+
+    public func setViewportDrawableSize(_ size: RenderDrawableSize) {
+        guard viewportDrawableSize != size else { return }
+        viewportDrawableSize = size
     }
 
     public func queueViewportRenderSettings(_ settings: RenderSettings) {
@@ -60,7 +100,27 @@ public final class EditorApplication {
         engine.currentViewportSurfaceState()
     }
 
-    private static func locateWGPUDylib() -> String {
+    private func handlePlatformEvent(_ event: InputEvent) {
+        switch event {
+        case .windowFocusGained:
+            store.dispatch(.setWindowFocused(true))
+        case .windowFocusLost:
+            store.dispatch(.setWindowFocused(false))
+        case .windowMinimized:
+            store.dispatch(.setWindowMinimized(true))
+        case .windowRestored:
+            store.dispatch(.setWindowMinimized(false))
+            store.dispatch(.setWindowOccluded(false))
+        case .windowOccluded:
+            store.dispatch(.setWindowOccluded(true))
+        case .windowExposed:
+            store.dispatch(.setWindowOccluded(false))
+        default:
+            break
+        }
+    }
+
+    public static func locateWGPUDylib() -> String {
         let fm = FileManager.default
         let cwd = fm.currentDirectoryPath
         let candidates = [

@@ -274,6 +274,39 @@ public final class DrawListRenderer {
         )
     }
 
+    /// Register a texture that was created by another subsystem but shares the
+    /// same `WGPUBackend` device. This is the bridge path used by viewport-like
+    /// embeds that want GuavaUI to sample an externally rendered image without
+    /// a CPU round-trip.
+    public func registerExternalColorTexture(id: TextureID,
+                                             texture: GPUTexture,
+                                             width: UInt32,
+                                             height: UInt32) throws {
+        precondition(id != .none, "TextureID 0 is reserved")
+        guard bindGroupLayout != nil else {
+            preconditionFailure("registerExternalColorTexture requires a prior configure(format:)")
+        }
+
+        if let existing = textures[id],
+           existing.sampling == .color,
+           existing.width == width,
+           existing.height == height,
+           existing.texture === texture {
+            return
+        }
+
+        let view = try texture.createView()
+        let bg = try makeBindGroup(view: view, sampling: .color)
+        textures[id] = GPUTextureSlot(
+            texture: texture,
+            view: view,
+            bindGroup: bg,
+            sampling: .color,
+            width: width,
+            height: height
+        )
+    }
+
     // MARK: - Frame submission
 
     /// Issue draw calls for `list` inside an already-begun render pass.

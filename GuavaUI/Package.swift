@@ -84,7 +84,8 @@ let package = Package(
         .target(
             name: "GuavaUICompose",
             dependencies: ["GuavaUIRuntime",
-                           .product(name: "EngineKernel", package: "Engine")]
+                           .product(name: "EngineKernel", package: "Engine"),
+                           .product(name: "RenderBackend", package: "Engine")]
         ),
 
         // MARK: - App
