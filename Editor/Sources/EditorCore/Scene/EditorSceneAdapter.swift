@@ -62,22 +62,6 @@ public enum EditorInspectorFieldValue {
     case bool(Binding<Bool>)
 }
 
-public struct EditorNameComponent: RuntimeComponent, Sendable, Equatable {
-    public var value: String
-
-    public init(value: String) {
-        self.value = value
-    }
-}
-
-public struct EditorKindComponent: RuntimeComponent, Sendable, Equatable {
-    public var value: String
-
-    public init(value: String) {
-        self.value = value
-    }
-}
-
 /// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`，
 /// 面板只读取这里导出的树与属性 schema，不再依赖 stub 列表。
 public final class EditorSceneAdapter: @unchecked Sendable {
@@ -88,7 +72,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     public var onRevisionChanged: ((UInt64) -> Void)?
 
     public init() {
-        seedScene()
+        scene.bootstrapEditorPreviewScene()
+        let defaults = scene.resource(SceneBootstrapDefaultsResource.self)
+        initialSelectionID = defaults?.defaultSelection?.rawValue
+        initialExpandedIDs = Set(defaults?.defaultExpanded.map(\ .rawValue) ?? [])
     }
 
     public var revision: UInt64 {
@@ -344,18 +331,18 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     private func nameBinding(for entity: EntityID) -> Binding<String> {
         Binding(
             get: { [self] in
-                scene.component(EditorNameComponent.self, for: entity)?.value ?? fallbackName(for: entity)
+                scene.component(SceneNameComponent.self, for: entity)?.value ?? fallbackName(for: entity)
             },
             set: { [self] next in
                 let trimmed = next.trimmingCharacters(in: .whitespacesAndNewlines)
                 let value = trimmed.isEmpty ? fallbackName(for: entity) : trimmed
-                guard scene.component(EditorNameComponent.self, for: entity)?.value != value else {
+                guard scene.component(SceneNameComponent.self, for: entity)?.value != value else {
                     return
                 }
-                if scene.hasComponent(EditorNameComponent.self, for: entity) {
-                    _ = scene.updateComponent(EditorNameComponent.self, for: entity) { $0.value = value }
+                if scene.hasComponent(SceneNameComponent.self, for: entity) {
+                    _ = scene.updateComponent(SceneNameComponent.self, for: entity) { $0.value = value }
                 } else {
-                    _ = scene.setComponent(EditorNameComponent(value: value), for: entity)
+                    _ = scene.setComponent(SceneNameComponent(value: value), for: entity)
                 }
                 publishRevision()
             }
@@ -412,11 +399,11 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     }
 
     private func displayName(for entity: EntityID) -> String {
-        scene.component(EditorNameComponent.self, for: entity)?.value ?? fallbackName(for: entity)
+        scene.component(SceneNameComponent.self, for: entity)?.value ?? fallbackName(for: entity)
     }
 
     private func displayKind(for entity: EntityID) -> String {
-        if let kind = scene.component(EditorKindComponent.self, for: entity)?.value {
+        if let kind = scene.component(SceneKindComponent.self, for: entity)?.value {
             return kind
         }
         if scene.hasComponent(Constraint.self, for: entity) {
@@ -456,101 +443,6 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     private func entity(from rawID: UInt64?) -> EntityID? {
         guard let rawID else { return nil }
         return EntityID(rawValue: rawID)
-    }
-
-    private func seedScene() {
-        let camera = makeEntity(
-            name: "Main Camera",
-            kind: "Camera",
-            translation: SIMD3<Float>(0, 2.4, 7.5)
-        )
-        let light = makeEntity(
-            name: "Key Light",
-            kind: "Directional Light",
-            translation: SIMD3<Float>(4, 6, 2)
-        )
-        let gameplay = makeEntity(
-            name: "Gameplay",
-            kind: "Group",
-            translation: .zero
-        )
-        let hero = makeEntity(
-            name: "Hero",
-            kind: "Static Mesh",
-            translation: SIMD3<Float>(0, 1, 0)
-        )
-        let socket = makeEntity(
-            name: "Sword Socket",
-            kind: "Locator",
-            translation: SIMD3<Float>(0.55, 1.2, 0.15)
-        )
-        let ground = makeEntity(
-            name: "Ground",
-            kind: "Static Mesh",
-            translation: SIMD3<Float>(0, -1, 0)
-        )
-        let constraint = makeEntity(
-            name: "Hero Follow",
-            kind: "Constraint",
-            translation: .zero
-        )
-
-        _ = scene.setComponent(
-            RigidBody(motionType: .dynamic, mass: 80, gravityScale: 1, allowSleep: true),
-            for: hero
-        )
-        _ = scene.setComponent(
-            Collider(
-                shape: .capsule(radius: 0.35, halfHeight: 0.9, center: SIMD3<Float>(0, 0.9, 0))
-            ),
-            for: hero
-        )
-        _ = scene.setComponent(
-            RigidBody(motionType: .static, mass: 0, gravityScale: 0, allowSleep: false),
-            for: ground
-        )
-        _ = scene.setComponent(
-            Collider(
-                shape: .box(
-                    halfExtents: SIMD3<Float>(8, 0.5, 8),
-                    center: SIMD3<Float>(0, -0.5, 0)
-                )
-            ),
-            for: ground
-        )
-        _ = scene.setComponent(
-            Constraint(
-                constraintType: .distance,
-                entityA: hero,
-                entityB: camera,
-                minLimit: 2.5,
-                maxLimit: 6.0,
-                isEnabled: true
-            ),
-            for: constraint
-        )
-
-        _ = scene.setParent(gameplay, for: hero)
-        _ = scene.setParent(hero, for: socket)
-        _ = scene.setParent(gameplay, for: ground)
-        _ = scene.setParent(gameplay, for: constraint)
-        scene.propagateTransforms()
-
-        initialExpandedIDs = [gameplay.rawValue, hero.rawValue]
-        initialSelectionID = hero.rawValue
-
-        _ = camera
-        _ = light
-    }
-
-    private func makeEntity(name: String,
-                            kind: String,
-                            translation: SIMD3<Float>) -> EntityID {
-        let entity = scene.createEntity()
-        _ = scene.setComponent(EditorNameComponent(value: name), for: entity)
-        _ = scene.setComponent(EditorKindComponent(value: kind), for: entity)
-        _ = scene.setLocalTransform(LocalTransform(translation: translation), for: entity)
-        return entity
     }
 }
 

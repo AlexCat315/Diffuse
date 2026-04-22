@@ -46,6 +46,7 @@ final class SimulationThread: @unchecked Sendable {
         self.ringBuffer = ringBuffer
         self.onFrameReady = onFrameReady
         self.onPacketPublished = onPacketPublished
+        seedDemoScene()
     }
 
     func submit(_ request: SimulationFrameRequest) {
@@ -84,7 +85,7 @@ final class SimulationThread: @unchecked Sendable {
                 frameIndex: request.frameIndex,
                 deltaTime: request.deltaTime,
                 drawableSize: request.drawableSize,
-                scene: buildRenderScene(frameIndex: request.frameIndex),
+                scene: sceneRuntime.renderScene,
                 sceneSnapshot: sceneRuntime.snapshot,
                 renderSettings: request.renderSettings,
                 simulationTimeSeconds: simulationTimeSeconds
@@ -105,50 +106,7 @@ final class SimulationThread: @unchecked Sendable {
         )
     }
 
-    private func buildRenderScene(frameIndex: Int) -> RenderScene {
-        let t = Float(frameIndex) * 0.015
-        var instances: [RenderInstance] = []
-
-        instances.append(RenderInstance(meshIndex: 1, transform: rotationY(t)))
-        for k in 0..<4 {
-            let angle = Float(k) * (.pi / 2) + t * 0.5
-            let radius: Float = 2.5
-            let position = SIMD3<Float>(
-                cos(angle) * radius,
-                sin(t * 0.4 + Float(k)) * 0.4,
-                sin(angle) * radius
-            )
-            let transform = translation(position) * rotationY(t * 1.5 + Float(k)) * uniformScale(0.4)
-            instances.append(RenderInstance(meshIndex: 0, transform: transform))
-        }
-
-        return RenderScene(
-            camera: RenderCamera(eye: SIMD3<Float>(0, 2.0, 5.5), target: .zero),
-            instances: instances
-        )
+    private func seedDemoScene() {
+        sceneRuntime.bootstrapEditorPreviewScene()
     }
-}
-
-private func translation(_ t: SIMD3<Float>) -> simd_float4x4 {
-    simd_float4x4(rows: [
-        SIMD4<Float>(1, 0, 0, t.x),
-        SIMD4<Float>(0, 1, 0, t.y),
-        SIMD4<Float>(0, 0, 1, t.z),
-        SIMD4<Float>(0, 0, 0, 1),
-    ])
-}
-
-private func uniformScale(_ s: Float) -> simd_float4x4 {
-    simd_float4x4(diagonal: SIMD4<Float>(s, s, s, 1))
-}
-
-private func rotationY(_ angle: Float) -> simd_float4x4 {
-    let c = cos(angle)
-    let s = sin(angle)
-    return simd_float4x4(rows: [
-        SIMD4<Float>(c, 0, s, 0),
-        SIMD4<Float>(0, 1, 0, 0),
-        SIMD4<Float>(-s, 0, c, 0),
-        SIMD4<Float>(0, 0, 0, 1),
-    ])
 }

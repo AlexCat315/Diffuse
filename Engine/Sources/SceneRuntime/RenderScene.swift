@@ -1,7 +1,7 @@
 import Foundation
 import simd
 
-/// Renderer-facing scene description for the R2 multi-object stage.
+/// Renderer-facing scene description extracted from `SceneRuntime`.
 /// One `RenderInstance` = one draw call. `meshIndex` references a mesh
 /// previously registered with the renderer's mesh table.
 public struct RenderInstance: Sendable {

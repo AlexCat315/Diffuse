@@ -92,6 +92,96 @@ final class PanelWorkspaceLayoutSemanticsTests: XCTestCase {
         XCTAssertEqual(fractions.bottom, 0.58, accuracy: 0.0001)
     }
 
+    func testAllowDropRejectsCrossRegionSplitForBottomPanel() {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        guard let viewportLeafID = leafID(containing: "viewport", in: controller.root) else {
+            XCTFail("missing viewport leaf")
+            return
+        }
+        let request = DockDropRequest(tabID: tabs.console.id,
+                                      sourceLeafID: leafID(containing: "console", in: controller.root),
+                                      origin: .mainTreeTab,
+                                      target: .splitEdge(target: viewportLeafID, edge: .top))
+        XCTAssertEqual(controller.onAllowDrop?(request), false)
+    }
+
+    func testAllowDropKeepsCenterRegionFlexible() {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        guard let viewportLeafID = leafID(containing: "viewport", in: controller.root) else {
+            XCTFail("missing viewport leaf")
+            return
+        }
+        let request = DockDropRequest(tabID: tabs.viewport.id,
+                                      sourceLeafID: viewportLeafID,
+                                      origin: .mainTreeTab,
+                                      target: .splitEdge(target: viewportLeafID, edge: .right))
+        XCTAssertEqual(controller.onAllowDrop?(request), true)
+    }
+
+    func testSemanticRegionLeafIDsStayStableAcrossCanonicalization() {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .tabs([tabs.viewport, tabs.console], active: tabs.viewport.id),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        let beforeHierarchy = leafID(containing: "hierarchy", in: controller.root)
+        let beforeViewport = leafID(containing: "viewport", in: controller.root)
+        let beforeInspector = leafID(containing: "inspector", in: controller.root)
+        let beforeConsole = leafID(containing: "console", in: controller.root)
+
+        guard let viewportLeafID = beforeViewport else {
+            XCTFail("missing viewport leaf")
+            return
+        }
+
+        controller.apply(.move(tabID: tabs.console.id,
+                               to: .splitEdge(target: viewportLeafID, edge: .top)))
+
+        XCTAssertEqual(leafID(containing: "hierarchy", in: controller.root), beforeHierarchy)
+        XCTAssertEqual(leafID(containing: "viewport", in: controller.root), beforeViewport)
+        XCTAssertEqual(leafID(containing: "inspector", in: controller.root), beforeInspector)
+        XCTAssertEqual(leafID(containing: "console", in: controller.root), beforeConsole)
+    }
+
     private func makeRegistry() -> PanelRegistry {
         PanelRegistry([
             PanelDescriptor(id: "hierarchy",

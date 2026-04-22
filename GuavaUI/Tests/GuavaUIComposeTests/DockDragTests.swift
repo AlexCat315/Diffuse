@@ -33,6 +33,18 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         return out
     }
 
+    private func findLeafHandles(_ root: Node) -> [Node] {
+        var out: [Node] = []
+        func walk(_ n: Node) {
+            if n.isHitTestable, n.cursor == .move {
+                out.append(n)
+            }
+            for c in n.children { walk(c) }
+        }
+        walk(root)
+        return out
+    }
+
     @Test("Pointer down + small motion does NOT start a drag (click threshold)")
     func clickThresholdGuardsDrag() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -231,6 +243,44 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         #expect(controller.dragSession.intent == .detachOrSplit)
     } }
 
+    @Test("A non-draggable tab still activates on click but never starts a drag")
+    func nonDraggableTabNeverStartsDrag() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let viewport = DockTab(userKey: "viewport",
+                               title: "Viewport",
+                               isDraggable: false,
+                               isClosable: false)
+        let console = DockTab(userKey: "console", title: "Console")
+        let leaf = DockLayoutNode.tabs([viewport, console], active: console.id)
+        let controller = DockController(root: leaf)
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+
+        let tabNode = findTabItems(tree.root!).min(by: { $0.frame.origin.x < $1.frame.origin.x })!
+        let pointer = registry.handlers(for: tabNode).pointer!
+        let motion = registry.handlers(for: tabNode).motion!
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 30, y: 12, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 140, y: 44, deltaX: 110, deltaY: 32), .target)
+
+        #expect(controller.dragSession.isActive == false)
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 140, y: 44, clicks: 1), .up, .target)
+
+        guard case .tabs(_, _, let active) = controller.root else {
+            Issue.record("expected tabs leaf at root")
+            return
+        }
+        #expect(active == viewport.id)
+    } }
+
     @Test("Drop on the source leaf centre is a no-op (cancelled)")
     func dropOnSelfCentreIsNoOp() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -301,6 +351,170 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         #expect(centerHit?.edge == .center)
     }
 
+    @Test("DragSession.resolveDropHit prefers the workspace bottom edge when the root is registered")
+    func resolveDropWorkspaceBottomEdge() {
+        let registry = DockHitRegistry()
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        let leaf = Node()
+        leaf.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        root.addChild(leaf)
+
+        let rootID = DockNodeID()
+        let leafID = DockNodeID()
+        registry.registerRoot(nodeID: rootID, node: root)
+        registry.register(nodeID: leafID, node: leaf)
+
+        let bottomHit = DockDragSession.resolveDropHit(x: 200,
+                                                       y: 390,
+                                                       sourceLeafID: nil,
+                                                       registry: registry)
+        #expect(bottomHit?.leafID == rootID)
+        #expect(bottomHit?.edge == .bottom)
+
+        let centerHit = DockDragSession.resolveDropHit(x: 200,
+                                                       y: 200,
+                                                       sourceLeafID: nil,
+                                                       registry: registry)
+        #expect(centerHit?.leafID == leafID)
+        #expect(centerHit?.edge == .center)
+    }
+
+    @Test("DragSession.resolveDropHit snaps to workspace guide hotspots before leaf hits")
+    func resolveDropWorkspaceGuideHotspots() {
+        let registry = DockHitRegistry()
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        let leaf = Node()
+        leaf.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        root.addChild(leaf)
+
+        let rootID = DockNodeID()
+        let leafID = DockNodeID()
+        registry.registerRoot(nodeID: rootID, node: root)
+        registry.register(nodeID: leafID, node: leaf)
+
+        let tiles = makeWorkspaceDropGuideTiles(in: UIRect(x: 0, y: 0, width: 400, height: 400))
+        #expect(tiles.count == 4)
+
+        for tile in tiles {
+            let px = tile.buttonRect.x + tile.buttonRect.width * 0.5
+            let py = tile.buttonRect.y + tile.buttonRect.height * 0.5
+            let hit = DockDragSession.resolveDropHit(x: px,
+                                                     y: py,
+                                                     sourceLeafID: nil,
+                                                     registry: registry)
+            #expect(hit?.leafID == rootID)
+            #expect(hit?.edge == tile.edge)
+        }
+    }
+
+    @Test("Dragging to the workspace bottom recreates a bottom split after the old bottom leaf collapsed")
+    func dragToWorkspaceBottomRecreatesBottomSplit() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let viewport = DockTab(userKey: "viewport", title: "Viewport")
+        let console = DockTab(userKey: "console", title: "Console")
+        let inspector = DockTab(userKey: "inspector", title: "Inspector")
+        let controller = DockController(root: .hsplit(fraction: 0.75,
+                                                      first: .tabs([viewport, console], active: console.id),
+                                                      second: .tabs([inspector])))
+        let previousRootID = controller.root.id
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+
+        let items = findTabItems(tree.root!).sorted(by: { $0.frame.origin.x < $1.frame.origin.x })
+        #expect(items.count == 3)
+        let consoleNode = items[1]
+        let pointer = registry.handlers(for: consoleNode).pointer!
+        let motion = registry.handlers(for: consoleNode).motion!
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 150, y: 12, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 170, y: 34, deltaX: 20, deltaY: 22), .target)
+        _ = motion(MouseMotionEvent(x: 300, y: 395, deltaX: 130, deltaY: 361), .target)
+
+        #expect(controller.dragSession.dropHit?.leafID == previousRootID)
+        #expect(controller.dragSession.dropHit?.edge == .bottom)
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 300, y: 395, clicks: 1), .up, .target)
+
+        guard case .split(_, .vertical, _, let top, let bottom) = controller.root,
+              case .split(let topID, .horizontal, _, let left, let right) = top,
+              case .tabs(_, let leftTabs, let activeLeft) = left,
+              case .tabs(_, let rightTabs, _) = right,
+              case .tabs(_, let bottomTabs, let activeBottom) = bottom else {
+            Issue.record("expected a recreated bottom split at the workspace root")
+            return
+        }
+
+        #expect(topID == previousRootID)
+        #expect(leftTabs.map(\.id) == [viewport.id])
+        #expect(activeLeft == viewport.id)
+        #expect(rightTabs.map(\.id) == [inspector.id])
+        #expect(bottomTabs.map(\.id) == [console.id])
+        #expect(activeBottom == console.id)
+    } }
+
+    @Test("Dragging a leaf handle to the workspace bottom recreates a bottom split")
+    func leafHandleToWorkspaceBottomRecreatesBottomSplit() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let viewport = DockTab(userKey: "viewport", title: "Viewport")
+        let inspector = DockTab(userKey: "inspector", title: "Inspector")
+        let controller = DockController(root: .hsplit(fraction: 0.75,
+                                                      first: .tabs([viewport]),
+                                                      second: .tabs([inspector])))
+        let previousRootID = controller.root.id
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+
+        let handles = findLeafHandles(tree.root!)
+        #expect(handles.count >= 1)
+        let handle = handles[0]
+        let pointer = registry.handlers(for: handle).pointer!
+        let motion = registry.handlers(for: handle).motion!
+        let bottomTile = makeWorkspaceDropGuideTiles(in: UIRect(x: 0, y: 0, width: 600, height: 400))
+            .first(where: { $0.edge == .bottom })
+        #expect(bottomTile != nil)
+        guard let bottomTile else { return }
+        let targetX = bottomTile.buttonRect.x + bottomTile.buttonRect.width * 0.5
+        let targetY = bottomTile.buttonRect.y + bottomTile.buttonRect.height * 0.5
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 10, y: 10, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 30, y: 10, deltaX: 20, deltaY: 0), .target)
+        _ = motion(MouseMotionEvent(x: targetX, y: targetY, deltaX: targetX - 30, deltaY: targetY - 10), .target)
+
+        #expect(controller.dragSession.dropHit?.leafID == previousRootID)
+        #expect(controller.dragSession.dropHit?.edge == .bottom)
+
+        _ = pointer(MouseButtonEvent(button: .left, x: targetX, y: targetY, clicks: 1), .up, .target)
+
+        guard case .split(let rootID, .vertical, _, let top, let bottom) = controller.root,
+              case .tabs(_, let topTabs, _) = top,
+              case .tabs(_, let bottomTabs, _) = bottom else {
+            Issue.record("expected a recreated bottom split after leaf-handle drop")
+            return
+        }
+
+        #expect(rootID == previousRootID)
+        #expect(topTabs.map(\.id) == [inspector.id])
+        #expect(bottomTabs.map(\.id) == [viewport.id])
+    } }
+
     @Test("DragSession.resolveDropHit snaps to guide-tile hotspots before edge bands")
     func resolveDropGuideHotspots() {
         let registry = DockHitRegistry()
@@ -337,5 +551,42 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         let py = centerTile.buttonRect.y + centerTile.buttonRect.height * 0.5
         let hit = DockDragSession.resolveDropHit(x: px, y: py, sourceLeafID: id, registry: registry)
         #expect(hit == nil)
+    }
+
+    @Test("DragSession.resolveAllowedDropHit respects controller onAllowDrop veto")
+    func resolveAllowedDropHitHonorsPolicy() {
+        let registry = DockHitRegistry()
+        let n = Node()
+        n.frame = CGRect(x: 0, y: 0, width: 220, height: 160)
+        let id = DockNodeID()
+        registry.register(nodeID: id, node: n)
+
+        let controller = DockController(root: .tabs([DockTab(userKey: "viewport", title: "Viewport")]))
+        controller.onAllowDrop = { request in
+            switch request.target {
+            case .splitEdge:
+                return false
+            case .tabSlot, .replace:
+                return true
+            }
+        }
+
+        let denied = DockDragSession.resolveAllowedDropHit(x: 10,
+                                                           y: 80,
+                                                           tabID: DockTabID(),
+                                                           sourceLeafID: DockNodeID(),
+                                                           origin: .mainTreeTab,
+                                                           controller: controller,
+                                                           registry: registry)
+        #expect(denied == nil)
+
+        let allowed = DockDragSession.resolveAllowedDropHit(x: 110,
+                                                            y: 80,
+                                                            tabID: DockTabID(),
+                                                            sourceLeafID: DockNodeID(),
+                                                            origin: .mainTreeTab,
+                                                            controller: controller,
+                                                            registry: registry)
+        #expect(allowed?.edge == .center)
     }
 }

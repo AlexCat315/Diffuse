@@ -10,8 +10,7 @@ struct EditorRootView: View {
 
     var body: some View {
         PanelWorkspace(controller: controller,
-                       registry: registry,
-                       semantics: .ide)
+                       registry: registry)
             .appearance(.dark)
     }
 }
@@ -21,7 +20,10 @@ enum EditorRootViewFactory {
     static func makeController() -> DockController {
         let hierarchyTab = DockTab(userKey: "hierarchy", title: "Hierarchy")
         let inspectorTab = DockTab(userKey: "inspector", title: "Inspector")
-        let viewportTab = DockTab(userKey: "viewport", title: "Viewport", isClosable: false)
+        let viewportTab = DockTab(userKey: "viewport",
+                                  title: "Viewport",
+                                  isDraggable: false,
+                                  isClosable: false)
         let consoleTab = DockTab(userKey: "console", title: "Console")
 
         let hierarchyLeaf: DockLayoutNode = .tabs(
@@ -45,26 +47,26 @@ enum EditorRootViewFactory {
             activeTabID: consoleTab.id
         )
 
-        let centerStack: DockLayoutNode = .split(
-            id: DockNodeID(),
-            axis: .vertical,
-            fraction: 0.72,
-            first: viewportLeaf,
-            second: consoleLeaf
-        )
-        let centerAndRight: DockLayoutNode = .split(
+        let viewportAndInspector: DockLayoutNode = .split(
             id: DockNodeID(),
             axis: .horizontal,
-            fraction: 0.78,
-            first: centerStack,
+            fraction: 55.0 / 75.0,
+            first: viewportLeaf,
             second: inspectorLeaf
+        )
+        let topRow: DockLayoutNode = .split(
+            id: DockNodeID(),
+            axis: .horizontal,
+            fraction: 15.0 / 90.0,
+            first: hierarchyLeaf,
+            second: viewportAndInspector
         )
         let root: DockLayoutNode = .split(
             id: DockNodeID(),
-            axis: .horizontal,
-            fraction: 0.22,
-            first: hierarchyLeaf,
-            second: centerAndRight
+            axis: .vertical,
+            fraction: 0.7,
+            first: topRow,
+            second: consoleLeaf
         )
         return DockController(root: root)
     }
