@@ -79,6 +79,28 @@ public struct TextField: _PrimitiveView {
         let isComposing: Bool
     }
 
+    private struct RenderCacheKey: Equatable {
+        let displayText: String
+        let measurementText: String
+        let font: Font
+        let lineHeight: Float
+        let atlasID: ObjectIdentifier
+    }
+
+    private final class RenderCacheEntry {
+        let key: RenderCacheKey
+        let layout: TextLayoutResult
+        var cursorWidths: [Int: Float]
+
+        init(key: RenderCacheKey,
+             layout: TextLayoutResult,
+             cursorWidths: [Int: Float] = [0: 0]) {
+            self.key = key
+            self.layout = layout
+            self.cursorWidths = cursorWidths
+        }
+    }
+
     public func _makeNode() -> Node {
         let n = Node()
         n.isHitTestable = true
@@ -333,6 +355,12 @@ public struct TextField: _PrimitiveView {
                 ? resolvedPlaceholderColor
                 : (textColor ?? node.foregroundColor ?? env.defaultColor)
         let renderColor = renderBaseColor.multipliedAlpha(node.opacity)
+        let renderCache = cachedRenderLayout(node: node,
+                                             env: env,
+                                             displayText: renderState.displayText,
+                                             measurementText: renderState.measurementText,
+                                             font: resolvedFont,
+                                             lineHeight: resolvedLineHeight)
 
         // Inner horizontal padding so text doesn't kiss the chrome edge, and a
         // vertical offset so glyphs are centred inside the field's chrome
@@ -344,8 +372,18 @@ public struct TextField: _PrimitiveView {
 
         // Selection highlight first (drawn under the glyphs).
         if isFocused, !renderState.isComposing, let range = selectionRange(state), !current.isEmpty {
-            let xLo = cursorX(in: current, upTo: range.lowerBound, env: env, font: resolvedFont)
-            let xHi = cursorX(in: current, upTo: range.upperBound, env: env, font: resolvedFont)
+            let xLo = cachedCursorX(in: renderState.measurementText,
+                                    upTo: range.lowerBound,
+                                    env: env,
+                                    font: resolvedFont,
+                                    lineHeight: resolvedLineHeight,
+                                    cache: renderCache)
+            let xHi = cachedCursorX(in: renderState.measurementText,
+                                    upTo: range.upperBound,
+                                    env: env,
+                                    font: resolvedFont,
+                                    lineHeight: resolvedLineHeight,
+                                    cache: renderCache)
             list.addRect(
                 UIRect(x: textOriginX + xLo,
                        y: textOriginY,
@@ -355,29 +393,24 @@ public struct TextField: _PrimitiveView {
             )
         }
 
-        let glyphs = env.shape(text: renderState.displayText, font: resolvedFont)
-        let result = TextLayout.layout(
-            shapedGlyphs: glyphs,
-            text: renderState.displayText,
-            atlas: env.atlas,
-            maxWidth: .infinity,
-            lineHeight: resolvedLineHeight,
-            alignment: .leading
-        )
-        list.addText(result,
+        list.addText(renderCache.layout,
                      origin: (textOriginX, textOriginY),
                      color: renderColor,
                      textureID: env.atlasTextureID)
 
         if isFocused, let compositionRange = renderState.compositionRange {
-            let xLo = cursorX(in: renderState.measurementText,
-                              upTo: compositionRange.lowerBound,
-                              env: env,
-                              font: resolvedFont)
-            let xHi = cursorX(in: renderState.measurementText,
-                              upTo: compositionRange.upperBound,
-                              env: env,
-                              font: resolvedFont)
+            let xLo = cachedCursorX(in: renderState.measurementText,
+                                    upTo: compositionRange.lowerBound,
+                                    env: env,
+                                    font: resolvedFont,
+                                    lineHeight: resolvedLineHeight,
+                                    cache: renderCache)
+            let xHi = cachedCursorX(in: renderState.measurementText,
+                                    upTo: compositionRange.upperBound,
+                                    env: env,
+                                    font: resolvedFont,
+                                    lineHeight: resolvedLineHeight,
+                                    cache: renderCache)
             list.addRect(
                 UIRect(x: textOriginX + xLo,
                        y: textOriginY + resolvedLineHeight - 1,
@@ -387,10 +420,12 @@ public struct TextField: _PrimitiveView {
             )
         }
 
-        let cursorXValue = cursorX(in: renderState.measurementText,
-                                   upTo: clamp(renderState.cursorIndex, 0, renderState.measurementText.count),
-                                   env: env,
-                                   font: resolvedFont)
+        let cursorXValue = cachedCursorX(in: renderState.measurementText,
+                         upTo: clamp(renderState.cursorIndex, 0, renderState.measurementText.count),
+                         env: env,
+                         font: resolvedFont,
+                         lineHeight: resolvedLineHeight,
+                         cache: renderCache)
         let caretHeight = max(Float(node.frame.height), resolvedLineHeight)
         let caretX = textOriginX + cursorXValue
         node.attachments[TextInputAttachmentKey.area] = TextInputArea(
@@ -410,6 +445,60 @@ public struct TextField: _PrimitiveView {
             height: resolvedLineHeight
         )
         list.addRect(cursorRect, color: resolvedCursorColor.multipliedAlpha(node.opacity))
+    }
+
+    private func cachedRenderLayout(node: Node,
+                                    env: TextEnvironment,
+                                    displayText: String,
+                                    measurementText: String,
+                                    font: Font,
+                                    lineHeight: Float) -> RenderCacheEntry {
+        let key = RenderCacheKey(displayText: displayText,
+                                 measurementText: measurementText,
+                                 font: font,
+                                 lineHeight: lineHeight,
+                                 atlasID: ObjectIdentifier(env.atlas))
+        if let cached = node.attachments["__textfield_render_cache"] as? RenderCacheEntry,
+           cached.key == key {
+            return cached
+        }
+        let glyphs = env.shape(text: displayText, font: font)
+        let layout = TextLayout.layout(
+            shapedGlyphs: glyphs,
+            text: displayText,
+            atlas: env.atlas,
+            maxWidth: .infinity,
+            lineHeight: lineHeight,
+            alignment: .leading
+        )
+        let entry = RenderCacheEntry(key: key, layout: layout)
+        node.attachments["__textfield_render_cache"] = entry
+        return entry
+    }
+
+    private func cachedCursorX(in text: String,
+                               upTo count: Int,
+                               env: TextEnvironment,
+                               font: Font,
+                               lineHeight: Float,
+                               cache: RenderCacheEntry) -> Float {
+        let bounded = clamp(count, 0, text.count)
+        if let cached = cache.cursorWidths[bounded] {
+            return cached
+        }
+        let endIdx = text.index(text.startIndex, offsetBy: bounded)
+        let prefix = String(text[text.startIndex..<endIdx])
+        let glyphs = env.shape(text: prefix, font: font)
+        let layout = TextLayout.layout(
+            shapedGlyphs: glyphs,
+            text: prefix,
+            atlas: env.atlas,
+            maxWidth: .infinity,
+            lineHeight: lineHeight,
+            alignment: .leading
+        )
+        cache.cursorWidths[bounded] = layout.totalWidth
+        return layout.totalWidth
     }
 
     private func makeRenderState(current: String,

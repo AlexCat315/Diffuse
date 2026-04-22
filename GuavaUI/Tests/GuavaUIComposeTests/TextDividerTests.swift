@@ -120,4 +120,33 @@ struct TextDividerTests {
             #expect(kids[1].frame.size.height > kids[0].frame.size.height)
         }
     }
+
+    @Test("Text glyphs are vertically centred within the line height")
+    func glyphsAreVerticallyCentred() {
+        GlobalTestLock.locked {
+            TextEnvironmentHolder.current = TestTextEnvironmentFactory.make(size: 16, lineHeight: 24)
+            defer { TextEnvironmentHolder.current = nil }
+
+            let tree = NodeTree()
+            let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+            graph.install(root: Text("Hello"))
+
+            graph.computeLayout(width: 200, height: 200)
+            let textNode = tree.root?.children.first
+            #expect(textNode != nil)
+            guard let textNode else { return }
+
+            let list = DrawList()
+            textNode.draw?(list, .zero)
+            let minY = list.vertices.map(\ .posY).min()
+            let maxY = list.vertices.map(\ .posY).max()
+            #expect(minY != nil)
+            #expect(maxY != nil)
+            guard let minY, let maxY else { return }
+
+            let topInset = minY
+            let bottomInset = Float(textNode.frame.height) - maxY
+            #expect(abs(topInset - bottomInset) <= 2.5)
+        }
+    }
 }

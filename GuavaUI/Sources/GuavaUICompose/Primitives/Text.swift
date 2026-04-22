@@ -115,7 +115,31 @@ public struct Text: _PrimitiveView {
 
     public func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
-        let snapshot = self
+        Text.installMeasureFunc(on: layout, snapshot: self)
+        layout.attachments[Text.measureInputsKey] = TextMeasureInputs(
+            text: string,
+            alignment: alignment
+        )
+        return layout
+    }
+
+    public func _updateLayout(_ layout: LayoutNode) {
+        Text.installMeasureFunc(on: layout, snapshot: self)
+        let next = TextMeasureInputs(text: string, alignment: alignment)
+        let previous = layout.attachments[Text.measureInputsKey] as? TextMeasureInputs
+        layout.attachments[Text.measureInputsKey] = next
+        if previous != nil, previous != next {
+            layout.markDirty()
+        }
+    }
+
+    // MARK: - Layout cache
+
+    static let drawCacheKey = "__text_draw_cache"
+    static let measureCacheKey = "__text_measure_cache"
+    static let measureInputsKey = "__text_measure_inputs"
+
+    static func installMeasureFunc(on layout: LayoutNode, snapshot: Text) {
         layout.setMeasureFunc { [weak layout] width, widthMode, _, _ in
             guard let env = TextEnvironmentHolder.current else {
                 return CGSize(width: 0, height: 0)
@@ -139,17 +163,7 @@ public struct Text: _PrimitiveView {
             return CGSize(width: CGFloat(result.totalWidth),
                           height: CGFloat(result.totalHeight))
         }
-        return layout
     }
-
-    public func _updateLayout(_ layout: LayoutNode) {
-        layout.markDirty()
-    }
-
-    // MARK: - Layout cache
-
-    static let drawCacheKey = "__text_draw_cache"
-    static let measureCacheKey = "__text_measure_cache"
 
     /// Shape + layout cache. The closure-based `attachments` / `store`
     /// accessors keep this helper agnostic to whether the entry lives on a
@@ -204,6 +218,11 @@ struct TextLayoutCacheKey: Hashable {
 struct TextLayoutCacheEntry {
     let key: TextLayoutCacheKey
     let result: TextLayoutResult
+}
+
+struct TextMeasureInputs: Equatable {
+    let text: String
+    let alignment: TextAlignment
 }
 
 /// Thin one-pixel separator. Renders as a coloured rect; defaults to a flexible
