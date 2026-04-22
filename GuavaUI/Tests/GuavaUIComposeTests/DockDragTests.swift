@@ -45,6 +45,17 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         return out
     }
 
+    private func absoluteFrame(of node: Node) -> CGRect {
+        var origin = node.frame.origin
+        var cursor = node.parent
+        while let current = cursor {
+            origin.x += current.frame.origin.x
+            origin.y += current.frame.origin.y
+            cursor = current.parent
+        }
+        return CGRect(origin: origin, size: node.frame.size)
+    }
+
     @Test("Pointer down + small motion does NOT start a drag (click threshold)")
     func clickThresholdGuardsDrag() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -185,6 +196,100 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         #expect(controller.dragSession.hoverLeafID != nil)
         #expect(controller.dragSession.dropHit?.edge == .right)
     } }
+
+    @Test("Dragging console to the hierarchy right edge merges it into the hierarchy region")
+    func editorLikeConsoleToHierarchyRightMergesIntoHierarchyRegion() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let hierarchy = DockTab(userKey: "hierarchy", title: "Hierarchy")
+        let viewport = DockTab(userKey: "viewport", title: "Viewport", isClosable: false)
+        let inspector = DockTab(userKey: "inspector", title: "Inspector")
+        let console = DockTab(userKey: "console", title: "Console")
+
+        let hierarchyLeaf = DockLayoutNode.tabs([hierarchy])
+        let viewportLeaf = DockLayoutNode.tabs([viewport])
+        let inspectorLeaf = DockLayoutNode.tabs([inspector])
+        let consoleLeaf = DockLayoutNode.tabs([console])
+        let topRight = DockLayoutNode.hsplit(fraction: 55.0 / 75.0,
+                                             first: viewportLeaf,
+                                             second: inspectorLeaf)
+        let topRow = DockLayoutNode.hsplit(fraction: 15.0 / 90.0,
+                                           first: hierarchyLeaf,
+                                           second: topRight)
+        let controller = DockController(root: .vsplit(fraction: 0.7,
+                                                      first: topRow,
+                                                      second: consoleLeaf))
+        let regionByKey = [
+            "hierarchy": "leading",
+            "viewport": "center",
+            "inspector": "trailing",
+            "console": "bottom",
+        ]
+        controller.onAllowDrop = { [regionByKey] request in
+            guard case .splitEdge(let targetID, _) = request.target else {
+                return true
+            }
+            guard let targetRegion = regionOfLeaf(id: targetID,
+                                                  in: controller.root,
+                                                  regionByKey: regionByKey) else {
+                return true
+            }
+            return targetRegion == "center"
+        }
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+
+        let consoleNode = findTabItems(tree.root!).max(by: {
+            absoluteFrame(of: $0).origin.y < absoluteFrame(of: $1).origin.y
+        })!
+        let pointer = registry.handlers(for: consoleNode).pointer!
+        let motion = registry.handlers(for: consoleNode).motion!
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 40, y: 300, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 60, y: 278, deltaX: 20, deltaY: -22), .target)
+        _ = motion(MouseMotionEvent(x: 92, y: 120, deltaX: 32, deltaY: -158), .target)
+
+        #expect(controller.dragSession.dropHit?.leafID == hierarchyLeaf.id)
+        #expect(controller.dragSession.dropHit?.edge == .center)
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 92, y: 120, clicks: 1), .up, .target)
+
+        guard case .split(_, .horizontal, _, let hierarchyNode, let remainder) = controller.root,
+              case .tabs(_, let hierarchyTabs, let activeHierarchy) = hierarchyNode,
+              case .split(_, .horizontal, _, let viewportNode, let inspectorNode) = remainder,
+              case .tabs(_, let viewportTabs, _) = viewportNode,
+              case .tabs(_, let inspectorTabs, _) = inspectorNode else {
+            Issue.record("expected the bottom tabset to collapse and console to merge into the hierarchy region")
+            return
+        }
+
+        #expect(hierarchyTabs.map(\.userKey) == ["hierarchy", "console"])
+        #expect(activeHierarchy == console.id)
+        #expect(viewportTabs.map(\.userKey) == ["viewport"])
+        #expect(inspectorTabs.map(\.userKey) == ["inspector"])
+    } }
+
+    private func regionOfLeaf(id: DockNodeID,
+                              in node: DockLayoutNode,
+                              regionByKey: [String: String]) -> String? {
+        guard let found = node.find(id) else { return nil }
+        switch found {
+        case .empty:
+            return "center"
+        case .tabs(_, let tabs, _):
+            guard let first = tabs.first else { return "center" }
+            return regionByKey[first.userKey] ?? "center"
+        case .split:
+            return nil
+        }
+    }
 
     @Test("Drag session subscription mirrors motion version into bound state")
     func dragSessionSubscriptionMirrorsVersion() {

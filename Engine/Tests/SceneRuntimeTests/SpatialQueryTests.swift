@@ -136,6 +136,67 @@ struct SpatialQueryTests {
         #expect(abs((hit?.normal.y ?? 0) - 0.6) < 0.000_1)
     }
 
+    @Test("overlap uses a precise sphere narrow phase instead of the broad-phase AABB")
+    func overlapUsesPreciseSphereNarrowPhase() {
+        var runtime = SceneRuntime()
+
+        let sphere = runtime.createEntity()
+        _ = runtime.setComponent(Collider(shape: .sphere(radius: 1, center: .zero)), for: sphere)
+
+        _ = runtime.tick()
+
+        let hits = runtime.overlap(
+            SceneOverlapQuery(
+                bounds: SpatialAABB(center: SIMD3<Float>(0.95, 0.95, 0), halfExtents: SIMD3<Float>(0.05, 0.05, 0.05))
+            )
+        )
+
+        #expect(hits.isEmpty)
+    }
+
+    @Test("overlap uses a precise rotated box narrow phase instead of the broad-phase AABB")
+    func overlapUsesPreciseRotatedBoxNarrowPhase() {
+        var runtime = SceneRuntime()
+
+        let box = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(matrix: rotatedBoxMatrix(angleRadians: .pi / 4)), for: box)
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(1, 0.2, 0.5), center: .zero)),
+            for: box
+        )
+
+        _ = runtime.tick()
+
+        let hits = runtime.overlap(
+            SceneOverlapQuery(
+                bounds: SpatialAABB(center: SIMD3<Float>(0.83, 0.83, 0), halfExtents: SIMD3<Float>(0.02, 0.02, 0.02))
+            )
+        )
+
+        #expect(hits.isEmpty)
+    }
+
+    @Test("overlap uses a precise capsule narrow phase instead of the broad-phase AABB")
+    func overlapUsesPreciseCapsuleNarrowPhase() {
+        var runtime = SceneRuntime()
+
+        let capsule = runtime.createEntity()
+        _ = runtime.setComponent(
+            Collider(shape: .capsule(radius: 0.5, halfHeight: 1, center: .zero)),
+            for: capsule
+        )
+
+        _ = runtime.tick()
+
+        let hits = runtime.overlap(
+            SceneOverlapQuery(
+                bounds: SpatialAABB(center: SIMD3<Float>(0.45, 1.45, 0), halfExtents: SIMD3<Float>(0.05, 0.05, 0.05))
+            )
+        )
+
+        #expect(hits.isEmpty)
+    }
+
     @Test("overlap returns every intersecting collider in stable order")
     func overlapReturnsIntersectingColliders() {
         var runtime = SceneRuntime()

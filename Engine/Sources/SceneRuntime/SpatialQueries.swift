@@ -196,7 +196,11 @@ func performSpatialOverlap(_ query: SceneOverlapQuery,
                            using index: SpatialIndexResource) -> [SceneOverlapHit] {
     index.entries
         .filter { entry in
-            (query.includeTriggers || !entry.isTrigger) && entry.bounds.intersects(query.bounds)
+            guard query.includeTriggers || !entry.isTrigger else { return false }
+            guard entry.bounds.intersects(query.bounds) else { return false }
+            return preciseOverlap(shape: entry.shape,
+                                  worldTransform: entry.worldTransform,
+                                  queryBounds: query.bounds)
         }
         .sorted { $0.entity.rawValue < $1.entity.rawValue }
         .map { entry in
@@ -333,6 +337,201 @@ private func preciseRaycast(shape: ColliderShape,
                                 inverseMatrix: inverseMatrix)
         }
     }
+}
+
+private func preciseOverlap(shape: ColliderShape,
+                            worldTransform: WorldTransform,
+                            queryBounds: SpatialAABB) -> Bool {
+    switch shape {
+    case let .box(halfExtents, center):
+        return orientedBoxIntersectsAABB(
+            makeWorldOrientedBox(center: center,
+                                 halfExtents: halfExtents,
+                                 matrix: worldTransform.matrix),
+            bounds: queryBounds
+        )
+    case let .sphere(radius, center):
+        let worldCenter = transformPoint(center, matrix: worldTransform.matrix)
+        let scaledRadius = radius * maxScaleComponent(of: worldTransform.matrix)
+        return sphereIntersectsAABB(center: worldCenter, radius: scaledRadius, bounds: queryBounds)
+    case let .capsule(radius, halfHeight, center):
+        let top = transformPoint(center + SIMD3<Float>(0, halfHeight, 0), matrix: worldTransform.matrix)
+        let bottom = transformPoint(center + SIMD3<Float>(0, -halfHeight, 0), matrix: worldTransform.matrix)
+        let scaledRadius = radius * maxScaleComponent(of: worldTransform.matrix)
+        return segmentAABBDistanceSquared(start: top, end: bottom, bounds: queryBounds) <= (scaledRadius * scaledRadius)
+    case let .mesh(_, center):
+        return orientedBoxIntersectsAABB(
+            makeWorldOrientedBox(center: center,
+                                 halfExtents: SIMD3<Float>(repeating: 0.5),
+                                 matrix: worldTransform.matrix),
+            bounds: queryBounds
+        )
+    }
+}
+
+private struct SpatialOrientedBox {
+    var center: SIMD3<Float>
+    var axes: [SIMD3<Float>]
+    var halfExtents: SIMD3<Float>
+}
+
+private func makeWorldOrientedBox(center: SIMD3<Float>,
+                                  halfExtents: SIMD3<Float>,
+                                  matrix: simd_float4x4) -> SpatialOrientedBox {
+    let basisX = SIMD3<Float>(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z)
+    let basisY = SIMD3<Float>(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z)
+    let basisZ = SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z)
+    let scale = SIMD3<Float>(simd_length(basisX), simd_length(basisY), simd_length(basisZ))
+    return SpatialOrientedBox(
+        center: transformPoint(center, matrix: matrix),
+        axes: [
+            normalizedAxis(basisX, fallback: SIMD3<Float>(1, 0, 0)),
+            normalizedAxis(basisY, fallback: SIMD3<Float>(0, 1, 0)),
+            normalizedAxis(basisZ, fallback: SIMD3<Float>(0, 0, 1)),
+        ],
+        halfExtents: SIMD3<Float>(
+            halfExtents.x * scale.x,
+            halfExtents.y * scale.y,
+            halfExtents.z * scale.z
+        )
+    )
+}
+
+private func orientedBoxIntersectsAABB(_ box: SpatialOrientedBox,
+                                       bounds: SpatialAABB) -> Bool {
+    let queryCenter = bounds.center
+    let queryHalfExtents = bounds.halfExtents
+    let translation = box.center - queryCenter
+    let queryExtents = [queryHalfExtents.x, queryHalfExtents.y, queryHalfExtents.z]
+    let boxExtents = [box.halfExtents.x, box.halfExtents.y, box.halfExtents.z]
+
+    var rotation = Array(repeating: Array(repeating: Float(0), count: 3), count: 3)
+    var absoluteRotation = Array(repeating: Array(repeating: Float(0), count: 3), count: 3)
+    for axis in 0..<3 {
+        for boxAxis in 0..<3 {
+            rotation[axis][boxAxis] = box.axes[boxAxis][axis]
+            absoluteRotation[axis][boxAxis] = abs(rotation[axis][boxAxis]) + 0.000_001
+        }
+    }
+
+    let translationComponents = [translation.x, translation.y, translation.z]
+    for axis in 0..<3 {
+        let radiusA = queryExtents[axis]
+        let radiusB = boxExtents[0] * absoluteRotation[axis][0] +
+            boxExtents[1] * absoluteRotation[axis][1] +
+            boxExtents[2] * absoluteRotation[axis][2]
+        if abs(translationComponents[axis]) > radiusA + radiusB {
+            return false
+        }
+    }
+
+    for axis in 0..<3 {
+        let radiusA = queryExtents[0] * absoluteRotation[0][axis] +
+            queryExtents[1] * absoluteRotation[1][axis] +
+            queryExtents[2] * absoluteRotation[2][axis]
+        let radiusB = boxExtents[axis]
+        let projection = abs(
+            translationComponents[0] * rotation[0][axis] +
+                translationComponents[1] * rotation[1][axis] +
+                translationComponents[2] * rotation[2][axis]
+        )
+        if projection > radiusA + radiusB {
+            return false
+        }
+    }
+
+    for queryAxis in 0..<3 {
+        for boxAxis in 0..<3 {
+            let radiusA = queryExtents[(queryAxis + 1) % 3] * absoluteRotation[(queryAxis + 2) % 3][boxAxis] +
+                queryExtents[(queryAxis + 2) % 3] * absoluteRotation[(queryAxis + 1) % 3][boxAxis]
+            let radiusB = boxExtents[(boxAxis + 1) % 3] * absoluteRotation[queryAxis][(boxAxis + 2) % 3] +
+                boxExtents[(boxAxis + 2) % 3] * absoluteRotation[queryAxis][(boxAxis + 1) % 3]
+            let projection = abs(
+                translationComponents[(queryAxis + 2) % 3] * rotation[(queryAxis + 1) % 3][boxAxis] -
+                    translationComponents[(queryAxis + 1) % 3] * rotation[(queryAxis + 2) % 3][boxAxis]
+            )
+            if projection > radiusA + radiusB {
+                return false
+            }
+        }
+    }
+
+    return true
+}
+
+private func sphereIntersectsAABB(center: SIMD3<Float>,
+                                  radius: Float,
+                                  bounds: SpatialAABB) -> Bool {
+    pointAABBDistanceSquared(point: center, bounds: bounds) <= (radius * radius)
+}
+
+private func segmentAABBDistanceSquared(start: SIMD3<Float>,
+                                        end: SIMD3<Float>,
+                                        bounds: SpatialAABB) -> Float {
+    if segmentIntersectsAABB(start: start, end: end, bounds: bounds) {
+        return 0
+    }
+
+    var lower: Float = 0
+    var upper: Float = 1
+    for _ in 0..<24 {
+        let left = (2 * lower + upper) / 3
+        let right = (lower + 2 * upper) / 3
+        let leftPoint = simd_mix(start, end, SIMD3<Float>(repeating: left))
+        let rightPoint = simd_mix(start, end, SIMD3<Float>(repeating: right))
+        if pointAABBDistanceSquared(point: leftPoint, bounds: bounds) < pointAABBDistanceSquared(point: rightPoint, bounds: bounds) {
+            upper = right
+        } else {
+            lower = left
+        }
+    }
+
+    let midpoint = simd_mix(start, end, SIMD3<Float>(repeating: (lower + upper) * 0.5))
+    return min(
+        pointAABBDistanceSquared(point: midpoint, bounds: bounds),
+        min(
+            pointAABBDistanceSquared(point: start, bounds: bounds),
+            pointAABBDistanceSquared(point: end, bounds: bounds)
+        )
+    )
+}
+
+private func segmentIntersectsAABB(start: SIMD3<Float>,
+                                   end: SIMD3<Float>,
+                                   bounds: SpatialAABB) -> Bool {
+    let delta = end - start
+    var entry: Float = 0
+    var exit: Float = 1
+
+    for axis in 0..<3 {
+        let startValue = start[axis]
+        let deltaValue = delta[axis]
+        let minValue = bounds.min[axis]
+        let maxValue = bounds.max[axis]
+
+        if abs(deltaValue) <= 0.000_001 {
+            guard startValue >= minValue && startValue <= maxValue else { return false }
+            continue
+        }
+
+        var t0 = (minValue - startValue) / deltaValue
+        var t1 = (maxValue - startValue) / deltaValue
+        if t0 > t1 {
+            swap(&t0, &t1)
+        }
+
+        entry = Swift.max(entry, t0)
+        exit = Swift.min(exit, t1)
+        guard entry <= exit else { return false }
+    }
+
+    return true
+}
+
+private func pointAABBDistanceSquared(point: SIMD3<Float>, bounds: SpatialAABB) -> Float {
+    let clamped = simd_min(simd_max(point, bounds.min), bounds.max)
+    let delta = point - clamped
+    return simd_length_squared(delta)
 }
 
 private func raycastBox(min: SIMD3<Float>,
@@ -490,4 +689,10 @@ private func smallestPositiveRayDistance(_ first: Float,
         return second
     }
     return nil
+}
+
+private func normalizedAxis(_ axis: SIMD3<Float>, fallback: SIMD3<Float>) -> SIMD3<Float> {
+    let length = simd_length(axis)
+    guard length > 0.000_001 else { return fallback }
+    return axis / length
 }
