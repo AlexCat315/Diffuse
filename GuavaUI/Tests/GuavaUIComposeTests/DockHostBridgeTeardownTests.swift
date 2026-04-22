@@ -19,7 +19,7 @@ struct DockHostBridgeTeardownTests {
             logicalSizeProvider: { (width: Float(100), height: Float(100)) }
         )
         let node = Node()
-        node.registerDockHostBridge(bridge, hitRegistry: controller.hitRegistry)
+        node.registerDockHostBridge(bridge)
 
         let id = node.dockHostID()
         #expect(id != nil)
@@ -42,9 +42,9 @@ struct DockHostBridgeTeardownTests {
             logicalSizeProvider: { (width: Float(50), height: Float(50)) }
         )
         let node = Node()
-        node.registerDockHostBridge(bridge, hitRegistry: controller.hitRegistry)
-        node.registerDockHostBridge(bridge, hitRegistry: controller.hitRegistry)
-        node.registerDockHostBridge(bridge, hitRegistry: controller.hitRegistry)
+        node.registerDockHostBridge(bridge)
+        node.registerDockHostBridge(bridge)
+        node.registerDockHostBridge(bridge)
         #expect(coordinator.hostCount_forTesting == 1)
     }
 }
