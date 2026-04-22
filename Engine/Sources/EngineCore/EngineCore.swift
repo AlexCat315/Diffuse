@@ -96,7 +96,8 @@ public final class EngineHost: @unchecked Sendable {
         state.withLock { $0.currentInputEvents }
     }
 
-    public func start(renderSurface: RenderSurfaceDescriptor? = nil) {
+    public func start(renderSurface: RenderSurfaceDescriptor? = nil,
+                      enableViewportSurface: Bool = false) {
         let shouldStart = state.withLock { state -> Bool in
             guard !state.started else { return false }
             state.started = true
@@ -116,11 +117,20 @@ public final class EngineHost: @unchecked Sendable {
         let ringBuffer = RingBuffer<RenderPacket>()
         self.ringBuffer = ringBuffer
 
-        let renderThread = renderSurface.map {
+        let consumer: (any RenderPacketConsumer)?
+        if let renderSurface {
+            consumer = WGPURenderer(backend: wgpuBackend, renderSurface: renderSurface)
+        } else if enableViewportSurface {
+            consumer = WGPURenderer(backend: wgpuBackend)
+        } else {
+            consumer = nil
+        }
+
+        let renderThread = consumer.map {
             RenderThread(
                 runtime: runtime,
                 ringBuffer: ringBuffer,
-                consumer: WGPURenderer(backend: wgpuBackend, renderSurface: $0),
+                consumer: $0,
                 onFrameRendered: { [weak self] report in
                     self?.handleRenderedFrame(report)
                 }

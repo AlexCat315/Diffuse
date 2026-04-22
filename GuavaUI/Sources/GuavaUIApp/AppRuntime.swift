@@ -25,9 +25,14 @@ public final class AppRuntime {
     /// `onTick` 会在每一帧 layout 之前调用，用于把外部子系统（例如游戏引擎
     /// `EngineHost`）按 UI 帧率推进。`deltaTime` 是上一帧到这一帧之间的秒数。
     public static func run<Root: View>(config: AppConfig = AppConfig(),
+                                       backend: WGPUBackend? = nil,
+                                       events: PlatformEventBridge = PlatformEventBridge(),
                                        onTick: ((_ deltaTime: Double) -> Void)? = nil,
                                        @ViewBuilder rootView: () -> Root) throws {
-        let runtime = AppRuntime(config: config, onTick: onTick)
+        let runtime = AppRuntime(config: config,
+                                 backend: backend,
+                                 events: events,
+                                 onTick: onTick)
         try runtime.start(rootView: rootView())
     }
 
@@ -35,12 +40,14 @@ public final class AppRuntime {
 
     private let config: AppConfig
     private let onTick: ((Double) -> Void)?
+    private let events: PlatformEventBridge
 
     private let tree = NodeTree()
     private let host: SDL3PlatformHost
     private let graph: ViewGraph
     private let backend: WGPUBackend
     private let renderer: DrawListRenderer
+    private let viewportTextures: ViewportTextureRegistry
     private let drawList = DrawList()
     private let nodeRenderer = NodeRenderer()
 
@@ -61,17 +68,29 @@ public final class AppRuntime {
     private var didInstallRoot = false
     private var lastFrameTime: Double = 0
 
-    private init(config: AppConfig, onTick: ((Double) -> Void)?) {
+    private init(config: AppConfig,
+                 backend: WGPUBackend?,
+                 events: PlatformEventBridge,
+                 onTick: ((Double) -> Void)?) {
         self.config = config
         self.onTick = onTick
-        self.backend = WGPUBackend(config: config.backendConfig)
-        self.renderer = DrawListRenderer(backend: backend)
+        self.events = events
+        let resolvedBackend = backend ?? WGPUBackend(config: config.backendConfig)
+        self.backend = resolvedBackend
+        self.renderer = DrawListRenderer(backend: resolvedBackend)
+        self.viewportTextures = ViewportTextureRegistry(renderer: renderer)
         self.host = SDL3PlatformHost(title: config.title)
         self.graph = ViewGraph(tree: tree, recomposer: host.recomposer)
     }
 
     private func start<Root: View>(rootView: Root) throws {
         try backend.initialize()
+
+        let previousViewportBridge = ViewportTextureBridgeHolder.current
+        ViewportTextureBridgeHolder.current = viewportTextures
+        defer {
+            ViewportTextureBridgeHolder.current = previousViewportBridge
+        }
 
         // 把进程级 holder 接到主窗口的 input context 上，使 Compose 层
         // primitives（Button、TextField、Dock）能直接读到 interaction / focus /
@@ -87,6 +106,9 @@ public final class AppRuntime {
         }
         host.onResize = { [weak self] w, h in
             try? self?.handleResize(widthPx: w, heightPx: h)
+        }
+        host.onEvent = { [weak self] event in
+            self?.events.publish(event)
         }
         host.onFrame = { [weak self] _ in
             self?.handleFrame() ?? false

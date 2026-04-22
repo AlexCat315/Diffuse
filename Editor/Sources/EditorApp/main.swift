@@ -1,11 +1,21 @@
 import Darwin
 import EditorCore
 import GuavaUIApp
+import GuavaUIRuntime
+import RHIWGPU
 
 @MainActor
 private func runEditor() throws {
     let launchOptions = try EditorAppLaunchOptions.load()
-    let app = EditorApplication(backendConfig: launchOptions.backendConfig)
+    var resolvedBackendConfig = launchOptions.backendConfig
+    if resolvedBackendConfig.libraryPath == nil {
+        resolvedBackendConfig.libraryPath = EditorApplication.locateWGPUDylib()
+    }
+    let backend = WGPUBackend(config: resolvedBackendConfig)
+    let events = PlatformEventBridge()
+    let app = EditorApplication(backendConfig: launchOptions.backendConfig,
+                                backend: backend,
+                                events: events)
     app.bootstrap()
     defer { app.shutdown() }
 
@@ -15,6 +25,8 @@ private func runEditor() throws {
     try AppRuntime.run(
         config: AppConfig(title: "GuavaNext Editor",
                           backendConfig: launchOptions.backendConfig),
+        backend: backend,
+        events: events,
         onTick: { dt in app.tick(deltaTime: dt) }
     ) {
         EditorRootView(app: app, controller: controller, registry: registry)

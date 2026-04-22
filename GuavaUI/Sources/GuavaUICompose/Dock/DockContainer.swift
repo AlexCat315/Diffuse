@@ -73,13 +73,19 @@ struct _StatefulDockContainer: View {
         let _ = version
 
         let bind = $version
+        let tag = ObjectIdentifier(controller)
         let token = ControllerSubscription.acquire(controller: controller,
-                                                   tag: ObjectIdentifier(controller),
+                                                   tag: tag,
                                                    bind: bind)
+        let dragToken = ControllerSubscription.acquire(session: controller.dragSession,
+                                                       tag: tag,
+                                                       bind: bind,
+                                                       extraTag: "drag-session")
         // Hold the token across recomposes via Node attachments? Not needed —
         // ControllerSubscription dedupes by tag so re-runs are idempotent and
         // we never accumulate handlers.
         _ = token
+        _ = dragToken
 
         return _DockContainerRoot(controller: controller, hostBridge: hostBridge) {
             _DockNodeView(node: controller.root,
@@ -143,6 +149,7 @@ struct _DockContainerRoot<Content: View>: _PrimitiveView {
 /// long-lived containers are the only stable case (D5 will tighten this).
 enum ControllerSubscription {
     nonisolated(unsafe) private static var tokens: [Key: DockController.SubscriptionToken] = [:]
+    nonisolated(unsafe) private static var dragTokens: [Key: UInt64] = [:]
 
     private struct Key: Hashable {
         let controllerID: ObjectIdentifier
@@ -166,6 +173,25 @@ enum ControllerSubscription {
             }
         }
         tokens[key] = token
+        return token
+    }
+
+    static func acquire(session: DockDragSession,
+                        tag: ObjectIdentifier,
+                        bind: Binding<UInt64>,
+                        extraTag: String = "") -> UInt64 {
+        let key = Key(controllerID: ObjectIdentifier(session),
+                      tag: tag,
+                      extraTag: extraTag)
+        if let existing = dragTokens[key] {
+            session.unsubscribe(existing)
+        }
+        let token = session.subscribe {
+            if bind.wrappedValue != session.version {
+                bind.wrappedValue = session.version
+            }
+        }
+        dragTokens[key] = token
         return token
     }
 }
