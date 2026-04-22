@@ -39,7 +39,7 @@ struct HierarchyPanel: View {
                      rowHeight: 28,
                      rowSpacing: 0,
                      indentation: 16,
-                     disclosureWidth: 18,
+                     disclosureWidth: 20,
                      showsIndentGuides: false,
                      disclosureContent: { isExpanded in
                          AnyView(HierarchyDisclosureIcon(isExpanded: isExpanded))
@@ -49,6 +49,7 @@ struct HierarchyPanel: View {
                 .padding(horizontal: 5, vertical: 4)
                 .flex()
             }
+            .frame(minWidth: 220)
         }
     }
 }
@@ -104,8 +105,8 @@ private struct HierarchyDisclosureIcon: View {
     var body: some View {
         if let path = HierarchyIconCatalog.disclosurePath(expanded: isExpanded) {
             Image(file: path,
-                  width: 18,
-                  height: 18,
+                  width: 20,
+                  height: 20,
                   tint: .white)
             .foregroundColor(.onSurfaceMuted)
         } else {

@@ -47,6 +47,7 @@ public final class AppRuntime {
     private let graph: ViewGraph
     private let backend: WGPUBackend
     private let renderer: DrawListRenderer
+    private let imageAssets: ImageAssetRegistry
     private let viewportTextures: ViewportTextureRegistry
     private let drawList = DrawList()
     private let nodeRenderer = NodeRenderer()
@@ -78,6 +79,7 @@ public final class AppRuntime {
         let resolvedBackend = backend ?? WGPUBackend(config: config.backendConfig)
         self.backend = resolvedBackend
         self.renderer = DrawListRenderer(backend: resolvedBackend)
+        self.imageAssets = ImageAssetRegistry(renderer: renderer)
         self.viewportTextures = ViewportTextureRegistry(renderer: renderer)
         self.host = SDL3PlatformHost(title: config.title)
         self.graph = ViewGraph(tree: tree, recomposer: host.recomposer)
@@ -87,9 +89,12 @@ public final class AppRuntime {
         try backend.initialize()
 
         let previousViewportBridge = ViewportTextureBridgeHolder.current
+        let previousImageAssets = ImageAssetRegistryHolder.current
         ViewportTextureBridgeHolder.current = viewportTextures
+        ImageAssetRegistryHolder.current = imageAssets
         defer {
             ViewportTextureBridgeHolder.current = previousViewportBridge
+            ImageAssetRegistryHolder.current = previousImageAssets
         }
 
         // 把进程级 holder 接到主窗口的 input context 上，使 Compose 层

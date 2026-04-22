@@ -121,6 +121,13 @@ public final class LayoutNode: @unchecked Sendable {
         }
     }
 
+    public var minWidth: Float? {
+        didSet {
+            if let w = minWidth { YGNodeStyleSetMinWidth(ygNode, w) }
+            else { YGNodeStyleSetMinWidth(ygNode, .nan) }
+        }
+    }
+
     public func setWidthPercent(_ value: Float) {
         YGNodeStyleSetWidthPercent(ygNode, value)
     }
@@ -129,6 +136,13 @@ public final class LayoutNode: @unchecked Sendable {
         didSet {
             if let h = height { YGNodeStyleSetHeight(ygNode, h) }
             else { YGNodeStyleSetHeightAuto(ygNode) }
+        }
+    }
+
+    public var minHeight: Float? {
+        didSet {
+            if let h = minHeight { YGNodeStyleSetMinHeight(ygNode, h) }
+            else { YGNodeStyleSetMinHeight(ygNode, .nan) }
         }
     }
 

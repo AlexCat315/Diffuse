@@ -32,6 +32,7 @@ struct InspectorPanel: View {
                     .padding(10)
                 }
             }
+            .frame(minWidth: 300)
         }
     }
 
