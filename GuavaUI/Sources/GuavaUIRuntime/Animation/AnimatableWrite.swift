@@ -12,6 +12,9 @@ import Foundation
 /// 2. Otherwise, snapshot the current value, build an `AnimationController`
 ///    whose `apply` closure writes through the same accessor, and register
 ///    it with `AnimatorScheduler.shared`.
+/// 3. Render invalidation is emitted by the `Node` property setter that the
+///    controller writes through; `animatableSet` does not need a second,
+///    parallel dirty-tracking path.
 ///
 /// Edge cases for `Optional<Value>` (e.g. `Color?`): if either endpoint is
 /// `nil` we cannot meaningfully interpolate, so we fall back to an instant

@@ -150,37 +150,59 @@ public final class DrawListRenderer {
     // MARK: - Texture registry
 
     /// Register or replace an alpha-only atlas texture under `id`. The source
-    /// data is single-channel; it is expanded to RGBA so the existing shader
-    /// (which samples `.r`) treats it as a coverage mask.
+    /// data is single-channel and uploaded directly as an `r8Unorm` texture.
     public func registerAlphaTexture(id: TextureID,
                                      pixels: UnsafePointer<UInt8>,
-                                     width: UInt32, height: UInt32) throws {
+                                     width: UInt32, height: UInt32,
+                                     originX: UInt32 = 0,
+                                     originY: UInt32 = 0,
+                                     textureWidth: UInt32? = nil,
+                                     textureHeight: UInt32? = nil) throws {
         precondition(id != .none, "TextureID 0 is reserved")
         guard bindGroupLayout != nil else {
             preconditionFailure("registerAlphaTexture requires a prior configure(format:)")
         }
+        let fullWidth = textureWidth ?? width
+        let fullHeight = textureHeight ?? height
         // wgpu requires bytesPerRow be a multiple of 256.
-        let alignedRowBytes: UInt32 = (((width * 4) + 255) / 256) * 256
+        let alignedRowBytes: UInt32 = ((width + 255) / 256) * 256
         var aligned = [UInt8](repeating: 0, count: Int(alignedRowBytes * height))
         for row in 0..<Int(height) {
+            let srcBase = row * Int(width)
+            let dstBase = row * Int(alignedRowBytes)
             for col in 0..<Int(width) {
-                let a = pixels[row * Int(width) + col]
-                let off = row * Int(alignedRowBytes) + col * 4
-                aligned[off + 0] = a
-                aligned[off + 1] = a
-                aligned[off + 2] = a
-                aligned[off + 3] = a
+                aligned[dstBase + col] = pixels[srcBase + col]
             }
         }
+
+        if let existing = textures[id],
+           existing.sampling == .alphaMask,
+           existing.width == fullWidth,
+           existing.height == fullHeight {
+            aligned.withUnsafeBytes { raw in
+                backend.writeTexture(existing.texture,
+                                     data: raw.baseAddress!,
+                                     dataSize: aligned.count,
+                                     originX: originX,
+                                     originY: originY,
+                                     bytesPerRow: alignedRowBytes,
+                                     rowsPerImage: height,
+                                     width: width, height: height)
+            }
+            return
+        }
+
         let tex = try backend.createTexture(
-            width: width, height: height,
-            format: .rgba8Unorm,
+            width: fullWidth, height: fullHeight,
+            format: .r8Unorm,
             usage: [.textureBinding, .copyDst]
         )
         aligned.withUnsafeBytes { raw in
             backend.writeTexture(tex,
                                  data: raw.baseAddress!,
                                  dataSize: aligned.count,
+                                 originX: originX,
+                                 originY: originY,
                                  bytesPerRow: alignedRowBytes,
                                  rowsPerImage: height,
                                  width: width, height: height)
@@ -190,7 +212,7 @@ public final class DrawListRenderer {
         textures[id] = GPUTextureSlot(
             texture: tex, view: view,
             bindGroup: bg, sampling: .alphaMask,
-            width: width, height: height
+            width: fullWidth, height: fullHeight
         )
     }
 
@@ -214,6 +236,22 @@ public final class DrawListRenderer {
                 aligned[dstRowBase + col] = pixels[srcRowBase + col]
             }
         }
+
+        if let existing = textures[id],
+           existing.sampling == .color,
+           existing.width == width,
+           existing.height == height {
+            aligned.withUnsafeBytes { raw in
+                backend.writeTexture(existing.texture,
+                                     data: raw.baseAddress!,
+                                     dataSize: aligned.count,
+                                     bytesPerRow: alignedRowBytes,
+                                     rowsPerImage: height,
+                                     width: width, height: height)
+            }
+            return
+        }
+
         let tex = try backend.createTexture(
             width: width, height: height,
             format: .rgba8Unorm,

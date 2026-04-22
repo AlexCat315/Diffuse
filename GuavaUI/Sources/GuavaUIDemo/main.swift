@@ -633,11 +633,21 @@ var previewTexturePixels: [UInt8] = []
 var previewTextureSize: (width: UInt32, height: UInt32) = (0, 0)
 var activeTextScale: Float = 0
 var didInstallRoot = false
+var didPresentBootClear = false
+var demoRenderedFrameCount = 0
 var lastHUDSampleTime = ProcessInfo.processInfo.systemUptime
 var hudFrameAccum: Double = 0
 var hudFrameCount: Int = 0
 var hudFPS: Int = 0
 var hudFrameMS: Double = 0
+
+let demoBootGlyphSeed = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:;!?+-*/_=()[]{}<>/%@#&'\"`~|\\…●☀︎☾"
+
+func shouldLogMainDemoFrameTiming(frameIndex: Int,
+                                  didAtlasUpload: Bool,
+                                  didPreviewUpload: Bool) -> Bool {
+    frameIndex <= 5 || didAtlasUpload || didPreviewUpload
+}
 
 func makePreviewTexturePixels(scale: Float) -> (pixels: [UInt8], width: UInt32, height: UInt32) {
     let logicalWidth: Float = 112
@@ -674,40 +684,43 @@ func configureTextEnvironment(scale requestedScale: Float) {
 
     activeTextScale = scale
 
-    let primaryProvider = FontProvider(size: 18, rasterScale: scale)
-    primaryProvider.loadPrimaryFont(name: "Helvetica Neue")
-
     let atlasEdge = max(1024, Int((1024 * scale).rounded(.up)))
-    let newAtlas = FontAtlas(width: atlasEdge, height: atlasEdge)
-    newAtlas.loadFont(path: "/System/Library/Fonts/Helvetica.ttc", size: 18, rasterScale: scale)
-
-    let newShaper = TextShaper()
-    if let face = newAtlas.freetypeFace {
-        newShaper.setFont(ftFace: face, size: 18, rasterScale: scale)
-    }
-
-    let newResolver = TextFontResolver(
-        primaryFontName: primaryProvider.primaryFont?.postScriptName ?? "Helvetica Neue",
-        atlas: newAtlas,
-        rasterScale: scale
+    let environment = TextEnvironment.bootstrapped(
+        atlasTextureID: atlasTextureID,
+        primaryFontName: "Helvetica Neue",
+        defaultFont: Font.system(size: 18),
+        defaultLineHeight: 22,
+        defaultColor: .white,
+        rasterScale: scale,
+        atlasEdge: atlasEdge
     )
 
     let preview = makePreviewTexturePixels(scale: scale)
     previewTexturePixels = preview.pixels
     previewTextureSize = (preview.width, preview.height)
-    atlas = newAtlas
-    shaper = newShaper
-    fontResolver = newResolver
+    atlas = environment.atlas
+    shaper = environment.shaper
+    fontResolver = environment.fontResolver
 
-    TextEnvironmentHolder.current = TextEnvironment(
-        atlas: newAtlas,
-        shaper: newShaper,
-        atlasTextureID: atlasTextureID,
-        defaultLineHeight: 22,
-        defaultColor: Color.white,
-        defaultFont: Font.system(size: 18),
-        fontResolver: newResolver
-    )
+    TextEnvironmentHolder.current = environment
+}
+
+@MainActor
+func prewarmDemoTextGlyphs() {
+    guard let env = TextEnvironmentHolder.current else { return }
+    let typography = Theme.defaultDark.typography
+    env.prewarmGlyphs(text: demoBootGlyphSeed, fonts: [
+        env.defaultFont,
+        typography.display.font,
+        typography.title.font,
+        typography.headline.font,
+        typography.body.font,
+        typography.bodyStrong.font,
+        typography.caption.font,
+        typography.label.font,
+        typography.mono.font,
+        Font.system(size: 13, weight: .medium)
+    ])
 }
 
 // MARK: - GPU stack
@@ -728,12 +741,17 @@ var logicalH: UInt32 = 0
 @MainActor
 func uploadAtlas() throws {
     guard let atlas else { return }
-    try atlas.atlasData.withUnsafeBufferPointer { buf in
+    guard let payload = atlas.dirtyUploadPayload() else { return }
+    try payload.pixels.withUnsafeBufferPointer { buf in
         try renderer.registerAlphaTexture(
             id: atlasTextureID,
             pixels: buf.baseAddress!,
-            width: UInt32(atlas.atlasWidth),
-            height: UInt32(atlas.atlasHeight)
+            width: UInt32(payload.region.width),
+            height: UInt32(payload.region.height),
+            originX: UInt32(payload.region.x),
+            originY: UInt32(payload.region.y),
+            textureWidth: UInt32(atlas.atlasWidth),
+            textureHeight: UInt32(atlas.atlasHeight)
         )
     }
     atlas.markClean()
@@ -750,6 +768,24 @@ func uploadPreviewTexture() throws {
             height: previewTextureSize.height
         )
     }
+}
+
+@MainActor
+func presentBootClearFrame() throws {
+    guard let surface else { return }
+    guard let frame = try surface.getCurrentTextureView() else { return }
+    let encoder = try backend.createCommandEncoder()
+    let pass = try encoder.beginRenderPass(
+        colorView: frame.view,
+        loadOp: .clear,
+        storeOp: .store,
+        clearColor: GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1)
+    )
+    pass.end()
+    let buffer = try encoder.finish()
+    backend.submit(buffer)
+    surface.present()
+    didPresentBootClear = true
 }
 
 @MainActor
@@ -773,12 +809,11 @@ func appendPerformanceHUD(to list: DrawList) {
         ? String(format: "FPS %d  %.1f ms", hudFPS, hudFrameMS)
         : "FPS --"
     let font = env.resolvedFont(.system(size: 13, weight: .medium))
-    let layout = TextLayout.layout(
-        shapedGlyphs: env.shape(text: hudText, font: font),
+    let layout = env.cachedLayout(
         text: hudText,
-        atlas: env.atlas,
+        font: font,
+        lineHeight: nil,
         maxWidth: .infinity,
-        lineHeight: env.resolvedLineHeight(font: font, override: nil),
         alignment: .leading
     )
 
@@ -801,7 +836,8 @@ func appendPerformanceHUD(to list: DrawList) {
         layout,
         origin: (panelX + paddingX, panelY + paddingY),
         color: Color(r: 0.90, g: 0.93, b: 0.97, a: 1),
-        textureID: env.atlasTextureID
+        textureID: env.atlasTextureID,
+        atlas: env.atlas
     )
 }
 
@@ -809,11 +845,7 @@ host.onInit = { native, w, h in
     drawableW = w; drawableH = h
     logicalW = host.logicalSize.width; logicalH = host.logicalSize.height
     do {
-        configureTextEnvironment(scale: host.contentScaleFactor)
-        if !didInstallRoot {
-            graph.install(root: RootView())
-            didInstallRoot = true
-        }
+        var timing = TimingTrace(label: "[timing] demo.boot.main")
         surface = try makeSurface(backend: backend, native: native)
         try surface?.configure(
             device: backend.rawDevice!,
@@ -821,9 +853,28 @@ host.onInit = { native, w, h in
             width: w, height: h,
             presentMode: .fifo)
         try renderer.configure(format: .bgra8Unorm)
+        timing.mark("surface")
+        if !didPresentBootClear {
+            try presentBootClearFrame()
+        }
+        timing.mark("clearPresent")
+        configureTextEnvironment(scale: host.contentScaleFactor)
+        timing.mark("textEnvironment")
+        prewarmDemoTextGlyphs()
+        timing.mark("glyphPrewarm")
+        if !didInstallRoot {
+            graph.install(root: RootView())
+            timing.mark("installRoot")
+            graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
+            timing.mark("firstLayout")
+            didInstallRoot = true
+        }
         try uploadAtlas()
+        timing.mark("atlasUpload")
         try uploadPreviewTexture()
+        timing.mark("previewUpload")
         configured = true
+        print(timing.summary(extra: ["firstVisible=clearPresent"]))
     } catch {
         print("[demo] init failed: \(error)")
     }
@@ -851,32 +902,45 @@ host.onResize = { w, h in
 host.onFrame = { _ in
     guard configured, let surface, let root = tree.root else { return }
 
+    demoRenderedFrameCount += 1
+    var timing = TimingTrace(label: "[timing] demo.frame.main")
+
     let previousScale = activeTextScale
     configureTextEnvironment(scale: host.contentScaleFactor)
+    timing.mark("textEnvironment")
+    var didPreviewUpload = false
     if abs(previousScale - activeTextScale) >= 0.01 {
-        do { try uploadPreviewTexture() }
+        do {
+            try uploadPreviewTexture()
+            didPreviewUpload = true
+        }
         catch { print("[demo] preview reupload failed: \(error)") }
     }
+    timing.mark("previewUpload")
 
     // 1. Layout against current viewport. Glyphs are rasterised lazily here as
     //    the measure func runs.
-    graph.computeLayoutIfNeeded(width: Float(logicalW), height: Float(logicalH))
+    let didLayout = graph.computeLayoutIfNeeded(width: Float(logicalW), height: Float(logicalH))
+    timing.mark("layout")
 
-    // 2. Re-upload atlas in case new glyphs were rasterised this frame.
+    // 2. Walk node tree -> draw list.
+    drawList.reset()
+    nodeRenderer.render(root: root, into: drawList)
+    appendPerformanceHUD(to: drawList)
+    timing.mark("sceneRender")
+
+    var didAtlasUpload = false
     do {
         if atlas?.isDirty == true {
             try uploadAtlas()
+            didAtlasUpload = true
         }
     } catch {
         print("[demo] atlas reupload failed: \(error)")
     }
+    timing.mark("atlasUpload")
 
-    // 3. Walk node tree -> draw list.
-    drawList.reset()
-    nodeRenderer.render(root: root, into: drawList)
-    appendPerformanceHUD(to: drawList)
-
-    // 4. Submit to wgpu.
+    // 3. Submit to wgpu.
     let acquired: (texture: GPUTexture, view: GPUTextureView)?
     do {
         acquired = try surface.getCurrentTextureView()
@@ -885,6 +949,7 @@ host.onFrame = { _ in
         return
     }
     guard let frame = acquired else { return }
+    timing.mark("acquireSurface")
 
     do {
         let encoder = try backend.createCommandEncoder()
@@ -901,6 +966,17 @@ host.onFrame = { _ in
         let buffer = try encoder.finish()
         backend.submit(buffer)
         surface.present()
+        timing.mark("gpuSubmit")
+        if shouldLogMainDemoFrameTiming(frameIndex: demoRenderedFrameCount,
+                                        didAtlasUpload: didAtlasUpload,
+                                        didPreviewUpload: didPreviewUpload) {
+            print(timing.summary(extra: [
+                "frame=\(demoRenderedFrameCount)",
+                "layoutUpdated=\(didLayout)",
+                "atlasUploaded=\(didAtlasUpload)",
+                "previewUploaded=\(didPreviewUpload)",
+            ]))
+        }
     } catch {
         print("[demo] frame submit failed: \(error)")
     }

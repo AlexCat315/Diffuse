@@ -221,10 +221,11 @@ struct TextTests {
         }
     }
 
-    @Test("Shaped glyphs have atlas info after layout")
-    func layoutPopulatesAtlas() {
+    @Test("Layout reads metrics without rasterizing glyph bitmaps")
+    func layoutDoesNotRasterize() {
         let atlas = FontAtlas()
         atlas.loadFont(path: testFontPath, size: 16)
+        atlas.markClean()
 
         let shaper = TextShaper()
         shaper.setFont(ftFace: atlas.freetypeFace!, size: 16)
@@ -237,9 +238,11 @@ struct TextTests {
             lineHeight: 20
         )
 
-        // Non-space glyphs should have atlas info
+        #expect(!atlas.isDirty)
+
+        // Layout should not eagerly attach atlas info anymore.
         for glyph in result.lines[0].glyphs {
-            #expect(glyph.atlasInfo != nil)
+            #expect(glyph.atlasInfo == nil)
         }
     }
 
