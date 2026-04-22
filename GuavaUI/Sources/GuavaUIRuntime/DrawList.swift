@@ -153,6 +153,27 @@ public final class DrawList {
         )
     }
 
+    /// Append a thin solid line between two screen-space points as a rotated
+    /// quad. Useful for overlay gizmos and debug visualization.
+    public func addLine(fromX x0: Float, fromY y0: Float,
+                        toX x1: Float, toY y1: Float,
+                        thickness: Float, color: Color) {
+        let dx = x1 - x0
+        let dy = y1 - y0
+        let length = (dx * dx + dy * dy).squareRoot()
+        guard length > 1e-3 else { return }
+        let invLen = 1 / length
+        let nx = -dy * invLen
+        let ny = dx * invLen
+        let half = max(thickness, 0.5) * 0.5
+        let packed = color.rgba8
+        let v0 = UIVertex(posX: x0 + nx * half, posY: y0 + ny * half, u: -1, v: 0, color: packed)
+        let v1 = UIVertex(posX: x1 + nx * half, posY: y1 + ny * half, u: -1, v: 0, color: packed)
+        let v2 = UIVertex(posX: x1 - nx * half, posY: y1 - ny * half, u: -1, v: 0, color: packed)
+        let v3 = UIVertex(posX: x0 - nx * half, posY: y0 - ny * half, u: -1, v: 0, color: packed)
+        appendQuad(v0, v1, v2, v3, textureID: .none)
+    }
+
     /// Append a fully laid-out text result. The atlas texture must be registered
     /// with the renderer under `textureID`.
     public func addText(

@@ -8,6 +8,10 @@ public enum EditorAction: Sendable {
     case setWindowFocused(Bool)
     case setWindowMinimized(Bool)
     case setWindowOccluded(Bool)
+    case setGizmoMode(EditorGizmoMode)
+    case beginAssetDrag(EditorAssetDragPayload)
+    case updateAssetDragCursor(x: Float, y: Float)
+    case endAssetDrag
 }
 
 public enum EditorReducer {
@@ -27,6 +31,17 @@ public enum EditorReducer {
             state.windowMinimized = value
         case let .setWindowOccluded(value):
             state.windowOccluded = value
+        case let .setGizmoMode(value):
+            state.gizmoMode = value
+        case let .beginAssetDrag(payload):
+            state.activeAssetDrag = payload
+        case let .updateAssetDragCursor(x, y):
+            if state.activeAssetDrag != nil {
+                state.activeAssetDrag?.cursorX = x
+                state.activeAssetDrag?.cursorY = y
+            }
+        case .endAssetDrag:
+            state.activeAssetDrag = nil
         }
     }
 }

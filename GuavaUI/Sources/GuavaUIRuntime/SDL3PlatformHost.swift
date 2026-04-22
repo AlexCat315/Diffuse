@@ -62,6 +62,17 @@ public final class PlatformWindowSession {
         needsDisplay = true
     }
 
+    /// Inject a synthesized `InputEvent` into this session as if it had been
+    /// polled from the native shell. Used by `GuavaUIDevTools` to forward
+    /// pointer / keyboard events from the mirror viewport.
+    public func injectEvent(_ event: InputEvent) {
+        withCurrent {
+            dispatcher.dispatch(event)
+            onEvent?(event)
+        }
+        needsDisplay = true
+    }
+
     fileprivate func updateMetrics(from handle: any WindowHandle) -> Bool {
         let nextDrawable = handle.drawableSize
         let nextLogical = handle.logicalSize
@@ -141,6 +152,14 @@ public final class SDL3PlatformHost: PlatformHost {
 
     public func session(for windowID: WindowID) -> PlatformWindowSession? {
         sessions[windowID]
+    }
+
+    /// Convenience accessor for the main-window session, if one has been
+    /// registered. Returns `nil` until `run()` / `run(tree:)` finishes
+    /// bootstrapping the first window.
+    public var mainSession: PlatformWindowSession? {
+        guard let id = mainWindowID else { return nil }
+        return sessions[id]
     }
 
     public var windowIDs: [WindowID] {

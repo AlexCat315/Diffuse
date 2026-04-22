@@ -1,4 +1,5 @@
 import GuavaUIRuntime
+import GuavaUIDevTools
 import RHIWGPU
 
 /// 启动一个 GuavaUI 应用窗口时所需的最小参数。所有字段都有默认值，
@@ -16,18 +17,23 @@ public struct AppConfig: Sendable {
     public var clearColor: GPUColor
     /// wgpu 后端配置。
     public var backendConfig: WGPUDeviceConfig
+    /// DevTools 配置。`nil` 关闭。默认从 `GUAVA_DEVTOOLS=1` env var 读取，
+    /// 这样 release 构建不会意外开启服务端。
+    public var devTools: DevToolsConfig?
 
     public init(title: String = "GuavaUI",
                 primaryFontName: String = SystemFontDefaults.primaryFontName,
                 defaultFontSize: Float = 13,
                 defaultLineHeight: Float = 16,
                 clearColor: GPUColor = GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1),
-                backendConfig: WGPUDeviceConfig = WGPUDeviceConfig()) {
+                backendConfig: WGPUDeviceConfig = WGPUDeviceConfig(),
+                devTools: DevToolsConfig? = nil) {
         self.title = title
         self.primaryFontName = primaryFontName
         self.defaultFontSize = defaultFontSize
         self.defaultLineHeight = defaultLineHeight
         self.clearColor = clearColor
         self.backendConfig = backendConfig
+        self.devTools = devTools ?? DevToolsConfig.fromEnvironment(appTitle: title)
     }
 }

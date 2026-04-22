@@ -1,6 +1,8 @@
 import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
+import GuavaUIDevTools
+import Logging
 import PlatformShell
 import RHIWGPU
 
@@ -69,6 +71,9 @@ public final class AppRuntime {
     private var didInstallRoot = false
     private var lastFrameTime: Double = 0
 
+    /// 进程内 DevTools 调试服务器。仅当 `config.devTools != nil` 时创建。
+    private var devTools: DevTools?
+
     private init(config: AppConfig,
                  backend: WGPUBackend?,
                  events: PlatformEventBridge,
@@ -87,6 +92,23 @@ public final class AppRuntime {
 
     private func start<Root: View>(rootView: Root) throws {
         try backend.initialize()
+
+        if let devConfig = config.devTools {
+            let dev = DevTools(config: devConfig, tree: tree)
+            // Install the log tap before any DevTools-related Logger fires
+            // so the first records also reach the client.
+            LogTapInstaller.bootstrapIfNeeded(sink: dev.logSink)
+            dev.attachFrameTap(backend: backend, renderer: renderer)
+            dev.inputDelivery = { [weak self] event in
+                self?.host.mainSession?.injectEvent(event)
+            }
+            do {
+                try dev.start()
+                self.devTools = dev
+            } catch {
+                Logger(label: "com.guava.ui.app").warning("DevTools server failed to start: \(error)")
+            }
+        }
 
         let previousViewportBridge = ViewportTextureBridgeHolder.current
         let previousImageAssets = ImageAssetRegistryHolder.current
@@ -177,16 +199,20 @@ public final class AppRuntime {
     private func handleFrame() -> Bool {
         guard configuredSurface, let surface, let root = tree.root else { return false }
 
-        let now = ProcessInfo.processInfo.systemUptime
+        let frameStart = ProcessInfo.processInfo.systemUptime
+        let now = frameStart
         let delta = max(0, now - lastFrameTime)
         lastFrameTime = now
         onTick?(delta)
 
         configureTextEnvironment(scale: host.contentScaleFactor)
+        let layoutStart = ProcessInfo.processInfo.systemUptime
         _ = graph.computeLayoutIfNeeded(width: Float(logicalW), height: Float(logicalH))
+        let layoutEnd = ProcessInfo.processInfo.systemUptime
 
         drawList.reset()
         nodeRenderer.render(root: root, into: drawList)
+        let drawEnd = ProcessInfo.processInfo.systemUptime
 
         do {
             if atlas?.isDirty == true {
@@ -225,10 +251,38 @@ public final class AppRuntime {
             let buffer = try encoder.finish()
             backend.submit(buffer)
             surface.present()
+            let presentEnd = ProcessInfo.processInfo.systemUptime
+
+            if let dev = devTools {
+                dev.notifyTreeChanged()
+                dev.mirrorCapture(
+                    drawList: drawList,
+                    widthPx: drawableW,
+                    heightPx: drawableH,
+                    logical: (Float(logicalW), Float(logicalH))
+                )
+                dev.timing.record(
+                    layoutMs: (layoutEnd - layoutStart) * 1000,
+                    drawMs: (drawEnd - layoutEnd) * 1000,
+                    presentMs: (presentEnd - drawEnd) * 1000,
+                    totalMs: (presentEnd - frameStart) * 1000,
+                    nodeCount: countNodes(root),
+                    batchCount: drawList.batches.count
+                )
+            }
             return true
         } catch {
             return false
         }
+    }
+
+    /// Recursive scene-graph node count used purely for the timing payload.
+    private func countNodes(_ node: Node) -> Int {
+        var n = 1
+        for child in node.children {
+            n += countNodes(child)
+        }
+        return n
     }
 
     // MARK: - Text environment

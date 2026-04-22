@@ -13,6 +13,25 @@ struct SimulationFrameRequest: Sendable {
     let drawableSize: RenderDrawableSize
     let shouldRender: Bool
     let renderSettings: RenderSettings
+    let renderSceneOverride: RenderScene?
+
+    init(
+        frameIndex: Int,
+        deltaTime: Double,
+        inputEvents: [InputEvent],
+        drawableSize: RenderDrawableSize,
+        shouldRender: Bool,
+        renderSettings: RenderSettings,
+        renderSceneOverride: RenderScene? = nil
+    ) {
+        self.frameIndex = frameIndex
+        self.deltaTime = deltaTime
+        self.inputEvents = inputEvents
+        self.drawableSize = drawableSize
+        self.shouldRender = shouldRender
+        self.renderSettings = renderSettings
+        self.renderSceneOverride = renderSceneOverride
+    }
 }
 
 struct SimulationFrameReport: Sendable {
@@ -81,11 +100,12 @@ final class SimulationThread: @unchecked Sendable {
         renderPrepareSeconds = CFAbsoluteTimeGetCurrent() - begin
 
         if request.shouldRender {
+            let scene = request.renderSceneOverride ?? sceneRuntime.renderScene
             let packet = RenderPacket(
                 frameIndex: request.frameIndex,
                 deltaTime: request.deltaTime,
                 drawableSize: request.drawableSize,
-                scene: sceneRuntime.renderScene,
+                scene: scene,
                 sceneSnapshot: sceneRuntime.snapshot,
                 renderSettings: request.renderSettings,
                 simulationTimeSeconds: simulationTimeSeconds
