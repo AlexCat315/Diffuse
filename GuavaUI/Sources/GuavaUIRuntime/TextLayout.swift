@@ -75,6 +75,7 @@ public struct TextLayout {
             if isNewline {
                 let baselineY = centeredBaselineY(
                     glyphs: currentLineGlyphs,
+                    atlas: atlas,
                     lineTop: Float(lines.count) * lineHeight,
                     lineHeight: lineHeight
                 )
@@ -112,6 +113,7 @@ public struct TextLayout {
                     let remaining = Array(currentLineGlyphs.suffix(from: breakIdx))
                     let baselineY = centeredBaselineY(
                         glyphs: lineGlyphs,
+                        atlas: atlas,
                         lineTop: Float(lines.count) * lineHeight,
                         lineHeight: lineHeight
                     )
@@ -133,6 +135,7 @@ public struct TextLayout {
                     // No break point; force break here
                     let baselineY = centeredBaselineY(
                         glyphs: currentLineGlyphs,
+                        atlas: atlas,
                         lineTop: Float(lines.count) * lineHeight,
                         lineHeight: lineHeight
                     )
@@ -158,6 +161,7 @@ public struct TextLayout {
         if !currentLineGlyphs.isEmpty {
             let baselineY = centeredBaselineY(
                 glyphs: currentLineGlyphs,
+                atlas: atlas,
                 lineTop: Float(lines.count) * lineHeight,
                 lineHeight: lineHeight
             )
@@ -227,26 +231,32 @@ public struct TextLayout {
 
     private static func centeredBaselineY(
         glyphs: [(ShapedGlyph, FontAtlas.GlyphMetrics?)],
+        atlas: FontAtlas,
         lineTop: Float,
         lineHeight: Float
     ) -> Float {
-        var minTop: Float?
-        var maxBottom: Float?
+        var maxAscent: Float = 0
+        var maxDescent: Float = 0
 
         for (shaped, info) in glyphs {
+            if let lineMetrics = atlas.lineMetrics(fontID: shaped.fontID) {
+                maxAscent = max(maxAscent, lineMetrics.ascent)
+                maxDescent = max(maxDescent, lineMetrics.descent)
+                continue
+            }
             guard let info, info.height > 0 else { continue }
             let top = shaped.yOffset - info.bearingY
             let bottom = top + info.height
-            minTop = min(minTop ?? top, top)
-            maxBottom = max(maxBottom ?? bottom, bottom)
+            maxAscent = max(maxAscent, -top)
+            maxDescent = max(maxDescent, bottom)
         }
 
-        guard let minTop, let maxBottom else {
+        guard maxAscent > 0 || maxDescent > 0 else {
             return lineTop + lineHeight
         }
 
-        let contentHeight = maxBottom - minTop
+        let contentHeight = maxAscent + maxDescent
         let topInset = max(0, (lineHeight - contentHeight) * 0.5)
-        return lineTop + topInset - minTop
+        return lineTop + topInset + maxAscent
     }
 }
