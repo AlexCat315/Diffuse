@@ -819,6 +819,6 @@ Guava 新架构不应推翻旧 Zig 的三项重要能力：
 9. `SequenceDocument` / `Shot` / `Clip` / `Binding` 详细设计 → 已落地：`ai-native-sequence-document-design.md`
 10. `CapabilityGraph` schema 详细设计（与目录文档配套） → 已落地：`ai-native-capability-graph-schema-design.md`
 11. `Observation Bus` 详细设计 → 已落地：`ai-native-observation-bus-design.md`
-12. `Context Memory Index` 详细设计
+12. `Context Memory Index` 详细设计 → 已落地：`ai-native-context-memory-index-design.md`
 
 总纲负责定边界，子文档负责定字段、接口和实现顺序。
