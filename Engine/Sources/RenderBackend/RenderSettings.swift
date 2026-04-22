@@ -13,6 +13,8 @@ public struct RenderSettings: Sendable, Equatable {
     public var stage: ReplacementStage
     public var enableFXAA: Bool
     public var enableSSAO: Bool
+    public var enableSSR: Bool
+    public var enableTAA: Bool
     public var enableBloom: Bool
     public var enableShadows: Bool
     public var enableOffscreenViewport: Bool
@@ -21,6 +23,8 @@ public struct RenderSettings: Sendable, Equatable {
         stage: ReplacementStage = .r1MeshCamera,
         enableFXAA: Bool = false,
         enableSSAO: Bool = false,
+        enableSSR: Bool = false,
+        enableTAA: Bool = false,
         enableBloom: Bool = false,
         enableShadows: Bool = false,
         enableOffscreenViewport: Bool = false
@@ -28,6 +32,8 @@ public struct RenderSettings: Sendable, Equatable {
         self.stage = stage
         self.enableFXAA = enableFXAA
         self.enableSSAO = enableSSAO
+        self.enableSSR = enableSSR
+        self.enableTAA = enableTAA
         self.enableBloom = enableBloom
         self.enableShadows = enableShadows
         self.enableOffscreenViewport = enableOffscreenViewport

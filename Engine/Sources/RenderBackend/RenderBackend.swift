@@ -38,6 +38,44 @@ private struct DynamicInstanceResources {
     let capacity: Int
 }
 
+private struct RenderTextureTarget {
+    let texture: GPUTexture
+    let view: GPUTextureView
+}
+
+private struct SkyboxUniforms {
+    var invViewProj: simd_float4x4
+    var skyTint: SIMD4<Float>
+    var horizonTint: SIMD4<Float>
+    var groundTint: SIMD4<Float>
+}
+
+private struct TonemapUniforms {
+    var params: SIMD4<Float>
+}
+
+private struct BloomUniforms {
+    var params: SIMD4<Float>
+}
+
+private struct TAAUniforms {
+    var params: SIMD4<Float>
+}
+
+private struct SSAOUniforms {
+    var projection: simd_float4x4
+    var invProjection: simd_float4x4
+    var resolutionRadius: SIMD4<Float>
+    var tuning: SIMD4<Float>
+}
+
+private struct SSRUniforms {
+    var projection: simd_float4x4
+    var invProjection: simd_float4x4
+    var resolutionIntensity: SIMD4<Float>
+    var tracing: SIMD4<Float>
+}
+
 ///  RHIWGPU renderer: scene of multiple instances drawn through one shared pipeline.
 public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private let backend: WGPUBackend
@@ -45,17 +83,40 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var surface: GPUSurface?
     private var configuredSize: RenderDrawableSize = .init(width: 0, height: 0)
     private let format: GPUTextureFormat = .bgra8Unorm
+    private let hdrFormat: GPUTextureFormat = .rgba16Float
     private let depthFormat: GPUTextureFormat = .depth32Float
 
-    private var meshPipeline: GPURenderPipeline?
+    private var meshPipelineLDR: GPURenderPipeline?
+    private var meshPipelineHDR: GPURenderPipeline?
+    private var skyboxPipeline: GPURenderPipeline?
+    private var tonemapPipeline: GPURenderPipeline?
+    private var bloomPipeline: GPURenderPipeline?
+    private var fxaaPipeline: GPURenderPipeline?
+    private var ssrPipeline: GPURenderPipeline?
+    private var taaPipeline: GPURenderPipeline?
+    private var ssaoPipeline: GPURenderPipeline?
     private var offscreenColorTexture: GPUTexture?
     private var offscreenColorView: GPUTextureView?
     private var depthTexture: GPUTexture?
     private var depthView: GPUTextureView?
+    private var sceneColorTarget: RenderTextureTarget?
+    private var postProcessTargetA: RenderTextureTarget?
+    private var postProcessTargetB: RenderTextureTarget?
+    private var ldrPostProcessTarget: RenderTextureTarget?
+    private var historyTarget: RenderTextureTarget?
 
     private var meshes: [GPUMesh] = []
     private var instanceResources: [InstanceResources] = []
     private var dynamicInstanceResources: DynamicInstanceResources?
+    private var linearSampler: GPUSampler?
+    private var nearestSampler: GPUSampler?
+    private var skyboxUniformBuffer: GPUBuffer?
+    private var tonemapUniformBuffer: GPUBuffer?
+    private var bloomUniformBuffer: GPUBuffer?
+    private var ssrUniformBuffer: GPUBuffer?
+    private var taaUniformBuffer: GPUBuffer?
+    private var ssaoUniformBuffer: GPUBuffer?
+    private var historyValid = false
 
     private let dynamicOffsetThreshold = 64
     private let dynamicUniformStride: UInt64 = 256
@@ -107,46 +168,183 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     public func render(packet: RenderPacket) {
         do {
             applyPacketRenderSettingsIfNeeded(packet.renderSettings, frameIndex: packet.frameIndex)
+            let framePlan = RenderFramePlanner.makePlan(settings: activeRenderSettings)
+            let usesHDRFrameGraph = framePlan.passes.contains(.tonemap)
             try ensureConfigured(size: packet.drawableSize)
-            try ensureMeshPipeline()
-            try ensureInstanceResources(instanceCount: packet.scene.instances.count)
             guard let colorTarget = try acquireColorTarget(),
-                let depthView,
-                let pipeline = meshPipeline
+                let depthView
             else {
                 return
             }
 
-            let viewProj = computeViewProj(scene: packet.scene, drawableSize: packet.drawableSize)
+            if usesHDRFrameGraph {
+                try ensureFrameGraphResources(size: packet.drawableSize)
+            }
+
+            let projection = computeProjection(scene: packet.scene, drawableSize: packet.drawableSize)
+            let view = computeView(scene: packet.scene)
+            let viewProj = projection * view
+            let meshPipeline = try ensureMeshPipeline(hdr: usesHDRFrameGraph)
+            try ensureInstanceResources(instanceCount: packet.scene.instances.count, pipeline: meshPipeline)
             writeInstanceUniforms(scene: packet.scene, viewProj: viewProj)
 
-            let framePlan = RenderFramePlanner.makePlan(settings: activeRenderSettings)
+            if framePlan.passes.contains(.skybox) {
+                try ensureSkyboxPipeline()
+            }
+            if framePlan.passes.contains(.tonemap) {
+                try ensureTonemapPipeline()
+            }
+            if framePlan.passes.contains(.bloom) {
+                try ensureBloomPipeline()
+            }
+            if framePlan.passes.contains(.fxaa) {
+                try ensureFXAAPipeline()
+            }
+            if framePlan.passes.contains(.ssr) {
+                try ensureSSRPipeline()
+            }
+            if framePlan.passes.contains(.taa) {
+                try ensureTAAPipeline()
+            }
+            if framePlan.passes.contains(.ssao) {
+                try ensureSSAOPipeline()
+            }
+            try ensureFullscreenResources()
+
             var drawCallCount = 0
             var viewportResolved = false
+            var skyboxEncoded = false
+            var hdrCurrent = sceneColorTarget
+            var bloomTarget = sceneColorTarget
             let encoder = try backend.createCommandEncoder()
+
             for passKind in framePlan.passes {
                 switch passKind {
+                    case .skybox:
+                        guard let target = sceneColorTarget,
+                              let skyboxPipeline
+                        else { break }
+                        try encodeSkyboxPass(
+                            encoder: encoder,
+                            colorView: target.view,
+                            depthView: depthView,
+                            pipeline: skyboxPipeline,
+                            viewProj: viewProj
+                        )
+                        skyboxEncoded = true
+
                     case .basePass:
                         drawCallCount += try encodeBasePass(
                             encoder: encoder,
-                            colorView: colorTarget.view,
+                            colorView: usesHDRFrameGraph ? sceneColorTarget?.view ?? colorTarget.view : colorTarget.view,
                             depthView: depthView,
-                            pipeline: pipeline,
-                            scene: packet.scene
+                            pipeline: meshPipeline,
+                            scene: packet.scene,
+                            colorLoadOp: skyboxEncoded ? .load : .clear,
+                            depthLoadOp: skyboxEncoded ? .load : .clear
+                        )
+
+                    case .ssao:
+                        guard let input = hdrCurrent,
+                              let output = nextPingPongTarget(after: input),
+                              let depthTexture,
+                              let ssaoPipeline
+                        else { break }
+                        try encodeSSAOPass(
+                            encoder: encoder,
+                            input: input,
+                            output: output,
+                            depthTexture: depthTexture,
+                            pipeline: ssaoPipeline,
+                            projection: projection
+                        )
+                        hdrCurrent = output
+
+                    case .ssr:
+                        guard let input = hdrCurrent,
+                              let output = nextPingPongTarget(after: input),
+                              let depthTexture,
+                              let ssrPipeline
+                        else { break }
+                        try encodeSSRPass(
+                            encoder: encoder,
+                            input: input,
+                            output: output,
+                            depthTexture: depthTexture,
+                            pipeline: ssrPipeline,
+                            projection: projection
+                        )
+                        hdrCurrent = output
+
+                    case .taa:
+                        guard let input = hdrCurrent,
+                              let output = nextPingPongTarget(after: input),
+                              let taaPipeline
+                        else { break }
+                        try encodeTAAPass(
+                            encoder: encoder,
+                            input: input,
+                            history: historyTarget ?? input,
+                            output: output,
+                            pipeline: taaPipeline
+                        )
+                        hdrCurrent = output
+
+                    case .bloom:
+                        guard let input = hdrCurrent,
+                              let output = nextPingPongTarget(after: input),
+                              let bloomPipeline
+                        else { break }
+                        try encodeBloomPass(
+                            encoder: encoder,
+                            input: input,
+                            output: output,
+                            pipeline: bloomPipeline
+                        )
+                        bloomTarget = output
+
+                    case .tonemap:
+                        guard let input = hdrCurrent,
+                              let tonemapPipeline
+                        else { break }
+                        try encodeTonemapPass(
+                            encoder: encoder,
+                            input: input,
+                            bloom: bloomTarget ?? input,
+                            outputView: activeRenderSettings.enableFXAA ? ldrPostProcessTarget?.view ?? colorTarget.view : colorTarget.view,
+                            pipeline: tonemapPipeline
+                        )
+                        if activeRenderSettings.enableTAA,
+                           let historyTarget {
+                            encoder.copyTextureToTexture(
+                                source: input.texture,
+                                destination: historyTarget.texture,
+                                width: packet.drawableSize.width,
+                                height: packet.drawableSize.height
+                            )
+                            historyValid = true
+                        } else {
+                            historyValid = false
+                        }
+
+                    case .fxaa:
+                        guard let fxaaPipeline,
+                              let input = ldrPostProcessTarget
+                        else { break }
+                        try encodeFXAAPass(
+                            encoder: encoder,
+                            input: input,
+                            output: colorTarget,
+                            pipeline: fxaaPipeline
                         )
 
                     case .depthPrepass,
-                         .shadowPass,
-                         .ssao,
-                         .bloom,
-                         .fxaa,
-                         .tonemap:
+                         .shadowPass:
                         emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
 
                     case .viewportResolve:
                         registerViewportSurface(texture: colorTarget.texture, size: packet.drawableSize)
                         viewportResolved = true
-                        emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
                 }
             }
 
@@ -204,11 +402,14 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         guard settings != activeRenderSettings else { return }
         activeRenderSettings = settings
         settingsGeneration &+= 1
+        if !settings.enableTAA {
+            historyValid = false
+        }
 
         if shouldEmitPlannerLog(frameIndex: frameIndex) {
             let gen = settingsGeneration
             Logger.renderer.debug(
-                "applied render settings generation=\(gen) stage=\(settings.stage.rawValue) fxaa=\(settings.enableFXAA) ssao=\(settings.enableSSAO) bloom=\(settings.enableBloom)"
+                "applied render settings generation=\(gen) stage=\(settings.stage.rawValue) fxaa=\(settings.enableFXAA) ssao=\(settings.enableSSAO) ssr=\(settings.enableSSR) taa=\(settings.enableTAA) bloom=\(settings.enableBloom)"
             )
         }
     }
@@ -307,25 +508,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
     // MARK: - Pipeline + mesh construction
 
-    private func ensureMeshPipeline() throws {
-        if meshPipeline != nil { return }
-        guard backend.rawDevice != nil else { return }
+    private func ensureMeshAssetsUploaded() throws {
+        guard backend.rawDevice != nil, meshes.isEmpty else { return }
 
-        let module = try backend.createShaderModule(wgsl: Self.wgsl, label: "mesh_lit")
-
-        let vbLayout = GPUVertexBufferLayout(
-            arrayStride: UInt64(MeshAsset.vertexStride),
-            attributes: [
-                GPUVertexAttribute(
-                    format: .float32x3, offset: UInt64(MeshAsset.positionOffset), shaderLocation: 0),
-                GPUVertexAttribute(
-                    format: .float32x3, offset: UInt64(MeshAsset.normalOffset), shaderLocation: 1),
-                GPUVertexAttribute(
-                    format: .float32x3, offset: UInt64(MeshAsset.colorOffset), shaderLocation: 2),
-            ]
-        )
-
-        // 1. Build mesh table.
         let cube = BuiltinMesh.cube()
         let cubeMesh = try uploadMesh(cube)
         var objMesh: GPUMesh?
@@ -338,28 +523,65 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 Logger.renderer.error("OBJ load failed (\(error)); skipping fixture mesh")
             }
         }
+
         meshes.append(cubeMesh)
         if let objMesh { meshes.append(objMesh) }
 
-        let pipeline: GPURenderPipeline
-        pipeline = try backend.createRenderPipeline(
+        let meshNames = meshes.map(\ .name)
+        Logger.renderer.info("mesh table built: meshes=\(meshNames)")
+    }
+
+    private func makeMeshVertexLayout() -> GPUVertexBufferLayout {
+        GPUVertexBufferLayout(
+            arrayStride: UInt64(MeshAsset.vertexStride),
+            attributes: [
+                GPUVertexAttribute(
+                    format: .float32x3, offset: UInt64(MeshAsset.positionOffset), shaderLocation: 0),
+                GPUVertexAttribute(
+                    format: .float32x3, offset: UInt64(MeshAsset.normalOffset), shaderLocation: 1),
+                GPUVertexAttribute(
+                    format: .float32x3, offset: UInt64(MeshAsset.colorOffset), shaderLocation: 2),
+            ]
+        )
+    }
+
+    private func ensureMeshPipeline(hdr: Bool) throws -> GPURenderPipeline {
+        try ensureMeshAssetsUploaded()
+        if hdr, let meshPipelineHDR {
+            return meshPipelineHDR
+        }
+        if !hdr, let meshPipelineLDR {
+            return meshPipelineLDR
+        }
+        guard backend.rawDevice != nil else {
+            throw WGPUBackendError.initFailed("device not ready")
+        }
+
+        let module = try backend.createShaderModule(
+            wgsl: try Self.loadShaderSource(named: "mesh"),
+            label: "mesh"
+        )
+
+        let pipeline = try backend.createRenderPipeline(
             desc: GPURenderPipelineDescriptor(
                 shaderModule: module,
-                colorFormat: format,
+                colorFormat: hdr ? hdrFormat : format,
                 cullMode: .back,
-                vertexBuffers: [vbLayout],
+                vertexBuffers: [makeMeshVertexLayout()],
                 depthStencil: GPUDepthStencilPipelineState(
                     format: depthFormat,
                     depthWriteEnabled: true,
                     depthCompare: .less
                 )
-            ))
-        meshPipeline = pipeline
-
-        let _meshNames = meshes.map(\.name)
-        Logger.renderer.info(
-            "mesh table built: meshes=\(_meshNames)"
+            )
         )
+
+        if hdr {
+            meshPipelineHDR = pipeline
+        } else {
+            meshPipelineLDR = pipeline
+        }
+        return pipeline
     }
 
     private func uploadMesh(_ mesh: MeshAsset) throws -> GPUMesh {
@@ -381,8 +603,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             vertexBuffer: vb, indexBuffer: ib, indexCount: mesh.indexCount, name: mesh.name)
     }
 
-    private func ensureInstanceResources(instanceCount: Int) throws {
-        guard let pipeline = meshPipeline else { return }
+    private func ensureInstanceResources(instanceCount: Int, pipeline: GPURenderPipeline) throws {
 
         let useDynamicOffsets = instanceCount > dynamicOffsetThreshold
         let bindGroupLayout = try pipeline.getBindGroupLayout(group: 0)
@@ -455,6 +676,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             offscreenColorTexture = color
         }
         configuredSize = .init(width: width, height: height)
+        sceneColorTarget = nil
+        postProcessTargetA = nil
+        postProcessTargetB = nil
+        ldrPostProcessTarget = nil
+        historyTarget = nil
+        historyValid = false
 
         depthView = nil
         depthTexture = nil
@@ -462,58 +689,458 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             width: width,
             height: height,
             format: depthFormat,
-            usage: .renderAttachment
+            usage: [.renderAttachment, .textureBinding]
         )
         depthView = try depth.createView()
         depthTexture = depth
     }
 
-    private func computeViewProj(scene: RenderScene, drawableSize: RenderDrawableSize) -> simd_float4x4 {
+    private func ensureFrameGraphResources(size: RenderDrawableSize) throws {
+        guard sceneColorTarget == nil || postProcessTargetA == nil || postProcessTargetB == nil || historyTarget == nil else {
+            return
+        }
+        sceneColorTarget = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
+        postProcessTargetA = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
+        postProcessTargetB = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
+        ldrPostProcessTarget = try makeRenderTarget(width: size.width, height: size.height, format: format)
+        historyTarget = try makeRenderTarget(width: size.width, height: size.height, format: hdrFormat)
+    }
+
+    private func ensureFullscreenResources() throws {
+        if linearSampler == nil {
+            linearSampler = try backend.createSampler(
+                desc: GPUSamplerDescriptor(
+                    addressModeU: .clampToEdge,
+                    addressModeV: .clampToEdge,
+                    magFilter: .linear,
+                    minFilter: .linear,
+                    mipmapFilter: .linear
+                )
+            )
+        }
+        if nearestSampler == nil {
+            nearestSampler = try backend.createSampler(
+                desc: GPUSamplerDescriptor(
+                    addressModeU: .clampToEdge,
+                    addressModeV: .clampToEdge,
+                    magFilter: .nearest,
+                    minFilter: .nearest,
+                    mipmapFilter: .nearest
+                )
+            )
+        }
+        if skyboxUniformBuffer == nil {
+            skyboxUniformBuffer = try backend.createBuffer(size: 256, usage: [.uniform, .copyDst])
+        }
+        if tonemapUniformBuffer == nil {
+            tonemapUniformBuffer = try backend.createBuffer(size: 256, usage: [.uniform, .copyDst])
+        }
+        if bloomUniformBuffer == nil {
+            bloomUniformBuffer = try backend.createBuffer(size: 256, usage: [.uniform, .copyDst])
+        }
+        if ssrUniformBuffer == nil {
+            ssrUniformBuffer = try backend.createBuffer(size: 512, usage: [.uniform, .copyDst])
+        }
+        if taaUniformBuffer == nil {
+            taaUniformBuffer = try backend.createBuffer(size: 256, usage: [.uniform, .copyDst])
+        }
+        if ssaoUniformBuffer == nil {
+            ssaoUniformBuffer = try backend.createBuffer(size: 512, usage: [.uniform, .copyDst])
+        }
+    }
+
+    private func ensureSkyboxPipeline() throws {
+        guard skyboxPipeline == nil else { return }
+        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "skybox"), label: "skybox")
+        skyboxPipeline = try backend.createRenderPipeline(
+            desc: GPURenderPipelineDescriptor(
+                shaderModule: module,
+                colorFormat: hdrFormat,
+                cullMode: .none,
+                depthStencil: GPUDepthStencilPipelineState(
+                    format: depthFormat,
+                    depthWriteEnabled: false,
+                    depthCompare: .lessEqual
+                )
+            )
+        )
+    }
+
+    private func ensureTonemapPipeline() throws {
+        guard tonemapPipeline == nil else { return }
+        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "tonemap"), label: "tonemap")
+        tonemapPipeline = try backend.createRenderPipeline(
+            desc: GPURenderPipelineDescriptor(
+                shaderModule: module,
+                colorFormat: format,
+                cullMode: .none
+            )
+        )
+    }
+
+    private func ensureBloomPipeline() throws {
+        guard bloomPipeline == nil else { return }
+        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "bloom"), label: "bloom")
+        bloomPipeline = try backend.createRenderPipeline(
+            desc: GPURenderPipelineDescriptor(
+                shaderModule: module,
+                colorFormat: hdrFormat,
+                cullMode: .none
+            )
+        )
+    }
+
+    private func ensureFXAAPipeline() throws {
+        guard fxaaPipeline == nil else { return }
+        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "fxaa"), label: "fxaa")
+        fxaaPipeline = try backend.createRenderPipeline(
+            desc: GPURenderPipelineDescriptor(
+                shaderModule: module,
+                colorFormat: format,
+                cullMode: .none
+            )
+        )
+    }
+
+    private func ensureSSRPipeline() throws {
+        guard ssrPipeline == nil else { return }
+        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "ssr"), label: "ssr")
+        ssrPipeline = try backend.createRenderPipeline(
+            desc: GPURenderPipelineDescriptor(
+                shaderModule: module,
+                colorFormat: hdrFormat,
+                cullMode: .none
+            )
+        )
+    }
+
+    private func ensureTAAPipeline() throws {
+        guard taaPipeline == nil else { return }
+        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "taa"), label: "taa")
+        taaPipeline = try backend.createRenderPipeline(
+            desc: GPURenderPipelineDescriptor(
+                shaderModule: module,
+                colorFormat: hdrFormat,
+                cullMode: .none
+            )
+        )
+    }
+
+    private func ensureSSAOPipeline() throws {
+        guard ssaoPipeline == nil else { return }
+        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "ssao"), label: "ssao")
+        ssaoPipeline = try backend.createRenderPipeline(
+            desc: GPURenderPipelineDescriptor(
+                shaderModule: module,
+                colorFormat: hdrFormat,
+                cullMode: .none
+            )
+        )
+    }
+
+    private func makeRenderTarget(width: UInt32, height: UInt32, format: GPUTextureFormat) throws -> RenderTextureTarget {
+        let texture = try backend.createTexture(
+            width: width,
+            height: height,
+            format: format,
+            usage: [.renderAttachment, .textureBinding, .copySrc, .copyDst]
+        )
+        let view = try texture.createView()
+        return RenderTextureTarget(texture: texture, view: view)
+    }
+
+    private func computeProjection(scene: RenderScene, drawableSize: RenderDrawableSize) -> simd_float4x4 {
         let aspect = Float(max(drawableSize.width, 1)) / Float(max(drawableSize.height, 1))
         let cam = scene.camera
-        let proj = perspective(
+        return perspective(
             fovYRadians: cam.fovYRadians, aspect: aspect, near: cam.near, far: cam.far)
-        let view = lookAt(eye: cam.eye, target: cam.target, up: cam.up)
-        return proj * view
+    }
+
+    private func computeView(scene: RenderScene) -> simd_float4x4 {
+        let cam = scene.camera
+        return lookAt(eye: cam.eye, target: cam.target, up: cam.up)
+    }
+
+    private func nextPingPongTarget(after current: RenderTextureTarget) -> RenderTextureTarget? {
+        guard let postProcessTargetA, let postProcessTargetB else { return nil }
+        return current.texture === postProcessTargetA.texture ? postProcessTargetB : postProcessTargetA
+    }
+
+    private func writeUniform<T>(_ value: inout T, buffer: GPUBuffer) {
+        withUnsafeBytes(of: &value) { raw in
+            if let base = raw.baseAddress {
+                backend.writeBuffer(buffer, data: base, size: raw.count)
+            }
+        }
+    }
+
+    private func makeBindGroup(pipeline: GPURenderPipeline, entries: [GPUBindGroupEntry]) throws -> GPUBindGroup {
+        let layout = try pipeline.getBindGroupLayout(group: 0)
+        return try backend.createBindGroup(layout: layout, entries: entries)
+    }
+
+    private func encodeSkyboxPass(
+        encoder: GPUCommandEncoder,
+        colorView: GPUTextureView,
+        depthView: GPUTextureView,
+        pipeline: GPURenderPipeline,
+        viewProj: simd_float4x4
+    ) throws {
+        guard let skyboxUniformBuffer else { return }
+        var uniforms = SkyboxUniforms(
+            invViewProj: simd_inverse(viewProj),
+            skyTint: SIMD4<Float>(0.10, 0.20, 0.42, 1.0),
+            horizonTint: SIMD4<Float>(0.95, 0.48, 0.18, 1.0),
+            groundTint: SIMD4<Float>(0.03, 0.04, 0.05, 1.0)
+        )
+        writeUniform(&uniforms, buffer: skyboxUniformBuffer)
+        let bindGroup = try makeBindGroup(
+            pipeline: pipeline,
+            entries: [GPUBindGroupEntry(binding: 0, buffer: skyboxUniformBuffer, offset: 0, size: UInt64(MemoryLayout<SkyboxUniforms>.stride))]
+        )
+
+        let pass = try encoder.beginRenderPass(
+            colorView: colorView,
+            loadOp: .clear,
+            storeOp: .store,
+            clearColor: GPUColor(r: 0.01, g: 0.01, b: 0.02, a: 1.0),
+            depthView: depthView,
+            depthLoadOp: .clear,
+            depthStoreOp: .store,
+            depthClearValue: 1.0
+        )
+        pass.setPipeline(pipeline)
+        pass.setBindGroup(bindGroup, index: 0)
+        pass.draw(vertexCount: 3)
+        pass.end()
+    }
+
+    private func encodeBasePass(
+        encoder: GPUCommandEncoder,
+        colorView: GPUTextureView,
+        depthView: GPUTextureView,
+        pipeline: GPURenderPipeline,
+        scene: RenderScene,
+        colorLoadOp: GPULoadOp,
+        depthLoadOp: GPULoadOp
+    ) throws -> Int {
+        let pass = try encoder.beginRenderPass(
+            colorView: colorView,
+            loadOp: colorLoadOp,
+            storeOp: .store,
+            clearColor: GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1.0),
+            depthView: depthView,
+            depthLoadOp: depthLoadOp,
+            depthStoreOp: .store,
+            depthClearValue: 1.0
+        )
+
+        pass.setPipeline(pipeline)
+        var drawCallCount = 0
+        if let dyn = dynamicInstanceResources {
+            for (i, instance) in scene.instances.enumerated() {
+                guard meshes.indices.contains(instance.meshIndex) else { continue }
+                let mesh = meshes[instance.meshIndex]
+                let drawOffset = UInt64(i) * dyn.stride
+                guard drawOffset <= UInt64(UInt32.max) else { continue }
+                pass.setBindGroup(dyn.bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
+                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                pass.drawIndexed(indexCount: mesh.indexCount)
+                drawCallCount += 1
+            }
+        } else {
+            for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
+                guard meshes.indices.contains(instance.meshIndex) else { continue }
+                let mesh = meshes[instance.meshIndex]
+                pass.setBindGroup(instanceResources[i].bindGroup, index: 0)
+                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                pass.drawIndexed(indexCount: mesh.indexCount)
+                drawCallCount += 1
+            }
+        }
+        pass.end()
+
+        return drawCallCount
+    }
+
+    private func encodeBloomPass(
+        encoder: GPUCommandEncoder,
+        input: RenderTextureTarget,
+        output: RenderTextureTarget,
+        pipeline: GPURenderPipeline
+    ) throws {
+        guard let linearSampler, let bloomUniformBuffer else { return }
+        var uniforms = BloomUniforms(
+            params: SIMD4<Float>(1.05, 0.75, 1.0 / Float(configuredSize.width), 1.0 / Float(configuredSize.height))
+        )
+        writeUniform(&uniforms, buffer: bloomUniformBuffer)
+        let bindGroup = try makeBindGroup(
+            pipeline: pipeline,
+            entries: [
+                GPUBindGroupEntry(binding: 0, sampler: linearSampler),
+                GPUBindGroupEntry(binding: 1, textureView: input.view),
+                GPUBindGroupEntry(binding: 2, buffer: bloomUniformBuffer, offset: 0, size: UInt64(MemoryLayout<BloomUniforms>.stride)),
+            ]
+        )
+        let pass = try encoder.beginRenderPass(colorView: output.view, loadOp: .clear, storeOp: .store, clearColor: .clear)
+        pass.setPipeline(pipeline)
+        pass.setBindGroup(bindGroup, index: 0)
+        pass.draw(vertexCount: 3)
+        pass.end()
+    }
+
+    private func encodeSSRPass(
+        encoder: GPUCommandEncoder,
+        input: RenderTextureTarget,
+        output: RenderTextureTarget,
+        depthTexture: GPUTexture,
+        pipeline: GPURenderPipeline,
+        projection: simd_float4x4
+    ) throws {
+        guard let linearSampler, let ssrUniformBuffer else { return }
+        var uniforms = SSRUniforms(
+            projection: projection,
+            invProjection: simd_inverse(projection),
+            resolutionIntensity: SIMD4<Float>(Float(configuredSize.width), Float(configuredSize.height), 0.22, 0),
+            tracing: SIMD4<Float>(14.0, 32.0, 0.18, 0.08)
+        )
+        writeUniform(&uniforms, buffer: ssrUniformBuffer)
+        let depthView = try depthTexture.createView()
+        let bindGroup = try makeBindGroup(
+            pipeline: pipeline,
+            entries: [
+                GPUBindGroupEntry(binding: 0, sampler: linearSampler),
+                GPUBindGroupEntry(binding: 1, textureView: input.view),
+                GPUBindGroupEntry(binding: 2, textureView: depthView),
+                GPUBindGroupEntry(binding: 3, buffer: ssrUniformBuffer, offset: 0, size: UInt64(MemoryLayout<SSRUniforms>.stride)),
+            ]
+        )
+        let pass = try encoder.beginRenderPass(colorView: output.view, loadOp: .clear, storeOp: .store, clearColor: .clear)
+        pass.setPipeline(pipeline)
+        pass.setBindGroup(bindGroup, index: 0)
+        pass.draw(vertexCount: 3)
+        pass.end()
+    }
+
+    private func encodeTAAPass(
+        encoder: GPUCommandEncoder,
+        input: RenderTextureTarget,
+        history: RenderTextureTarget,
+        output: RenderTextureTarget,
+        pipeline: GPURenderPipeline
+    ) throws {
+        guard let linearSampler, let taaUniformBuffer else { return }
+        var uniforms = TAAUniforms(
+            params: SIMD4<Float>(0.12, 1.0 / Float(configuredSize.width), 1.0 / Float(configuredSize.height), historyValid ? 1.0 : 0.0)
+        )
+        writeUniform(&uniforms, buffer: taaUniformBuffer)
+        let bindGroup = try makeBindGroup(
+            pipeline: pipeline,
+            entries: [
+                GPUBindGroupEntry(binding: 0, sampler: linearSampler),
+                GPUBindGroupEntry(binding: 1, textureView: input.view),
+                GPUBindGroupEntry(binding: 2, textureView: history.view),
+                GPUBindGroupEntry(binding: 3, buffer: taaUniformBuffer, offset: 0, size: UInt64(MemoryLayout<TAAUniforms>.stride)),
+            ]
+        )
+        let pass = try encoder.beginRenderPass(colorView: output.view, loadOp: .clear, storeOp: .store, clearColor: .clear)
+        pass.setPipeline(pipeline)
+        pass.setBindGroup(bindGroup, index: 0)
+        pass.draw(vertexCount: 3)
+        pass.end()
+    }
+
+    private func encodeSSAOPass(
+        encoder: GPUCommandEncoder,
+        input: RenderTextureTarget,
+        output: RenderTextureTarget,
+        depthTexture: GPUTexture,
+        pipeline: GPURenderPipeline,
+        projection: simd_float4x4
+    ) throws {
+        guard let linearSampler, let ssaoUniformBuffer else { return }
+        var uniforms = SSAOUniforms(
+            projection: projection,
+            invProjection: simd_inverse(projection),
+            resolutionRadius: SIMD4<Float>(Float(configuredSize.width), Float(configuredSize.height), 0.45, 0),
+            tuning: SIMD4<Float>(0.025, 0.7, 1.35, 0)
+        )
+        writeUniform(&uniforms, buffer: ssaoUniformBuffer)
+        let depthView = try depthTexture.createView()
+        let bindGroup = try makeBindGroup(
+            pipeline: pipeline,
+            entries: [
+                GPUBindGroupEntry(binding: 0, sampler: linearSampler),
+                GPUBindGroupEntry(binding: 1, textureView: input.view),
+                GPUBindGroupEntry(binding: 2, textureView: depthView),
+                GPUBindGroupEntry(binding: 3, buffer: ssaoUniformBuffer, offset: 0, size: UInt64(MemoryLayout<SSAOUniforms>.stride)),
+            ]
+        )
+        let pass = try encoder.beginRenderPass(colorView: output.view, loadOp: .clear, storeOp: .store, clearColor: .clear)
+        pass.setPipeline(pipeline)
+        pass.setBindGroup(bindGroup, index: 0)
+        pass.draw(vertexCount: 3)
+        pass.end()
+    }
+
+    private func encodeTonemapPass(
+        encoder: GPUCommandEncoder,
+        input: RenderTextureTarget,
+        bloom: RenderTextureTarget,
+        outputView: GPUTextureView,
+        pipeline: GPURenderPipeline
+    ) throws {
+        guard let linearSampler, let tonemapUniformBuffer else { return }
+        var uniforms = TonemapUniforms(
+            params: SIMD4<Float>(1.0, 0.85, activeRenderSettings.enableBloom ? 1.0 : 0.0, 1.0)
+        )
+        writeUniform(&uniforms, buffer: tonemapUniformBuffer)
+        let bindGroup = try makeBindGroup(
+            pipeline: pipeline,
+            entries: [
+                GPUBindGroupEntry(binding: 0, sampler: linearSampler),
+                GPUBindGroupEntry(binding: 1, textureView: input.view),
+                GPUBindGroupEntry(binding: 2, textureView: bloom.view),
+                GPUBindGroupEntry(binding: 3, buffer: tonemapUniformBuffer, offset: 0, size: UInt64(MemoryLayout<TonemapUniforms>.stride)),
+            ]
+        )
+        let pass = try encoder.beginRenderPass(colorView: outputView, loadOp: .clear, storeOp: .store, clearColor: .black)
+        pass.setPipeline(pipeline)
+        pass.setBindGroup(bindGroup, index: 0)
+        pass.draw(vertexCount: 3)
+        pass.end()
+    }
+
+    private func encodeFXAAPass(
+        encoder: GPUCommandEncoder,
+        input: RenderTextureTarget,
+        output: FrameColorTarget,
+        pipeline: GPURenderPipeline
+    ) throws {
+        guard let linearSampler else { return }
+        let bindGroup = try makeBindGroup(
+            pipeline: pipeline,
+            entries: [
+                GPUBindGroupEntry(binding: 0, sampler: linearSampler),
+                GPUBindGroupEntry(binding: 1, textureView: input.view),
+            ]
+        )
+        let pass = try encoder.beginRenderPass(colorView: output.view, loadOp: .clear, storeOp: .store, clearColor: .black)
+        pass.setPipeline(pipeline)
+        pass.setBindGroup(bindGroup, index: 0)
+        pass.draw(vertexCount: 3)
+        pass.end()
     }
 
     // MARK: - Shader
 
-    private static let wgsl: String = """
-        struct Uniforms {
-            mvp : mat4x4<f32>,
-        };
-        @group(0) @binding(0) var<uniform> u : Uniforms;
+    // MARK: - Shader
 
-        struct VsIn {
-            @location(0) pos    : vec3<f32>,
-            @location(1) normal : vec3<f32>,
-            @location(2) color  : vec3<f32>,
-        };
-        struct VsOut {
-            @builtin(position) pos : vec4<f32>,
-            @location(0) color    : vec3<f32>,
-            @location(1) normal   : vec3<f32>,
-        };
-
-        @vertex
-        fn vs_main(in : VsIn) -> VsOut {
-            var out : VsOut;
-            out.pos = u.mvp * vec4<f32>(in.pos, 1.0);
-            out.color = in.color;
-            out.normal = in.normal;
-            return out;
-        }
-
-        @fragment
-        fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
-            let lightDir = normalize(vec3<f32>(0.4, 0.8, 0.6));
-            let n = normalize(in.normal);
-            let lambert = max(dot(n, lightDir), 0.0);
-            let lit = in.color * (0.25 + lambert * 0.85);
-            return vec4<f32>(lit, 1.0);
-        }
-        """
+    private static func loadShaderSource(named name: String) throws -> String {
+        try ShaderCatalog().loadWGSLRenderModule(named: name)
+    }
 }
 
 // MARK: - Math helpers (right-handed, depth 0..1)

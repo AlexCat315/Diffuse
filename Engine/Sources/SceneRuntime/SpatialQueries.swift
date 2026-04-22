@@ -194,14 +194,46 @@ func buildSpatialIndexResource(in world: RuntimeWorld) -> SpatialIndexResource {
 
 func performSpatialRaycast(_ query: SceneRaycastQuery,
                            using index: SpatialIndexResource) -> SceneRaycastHit? {
+    performPhysicsRaycast(
+        PhysicsRaycastQuery(
+            origin: query.origin,
+            direction: query.direction,
+            maxDistance: query.maxDistance
+        ),
+        filter: PhysicsQueryFilter(includeTriggers: query.includeTriggers),
+        using: index
+    ).map(makeSceneRaycastHit)
+}
+
+func performSpatialOverlap(_ query: SceneOverlapQuery,
+                           using index: SpatialIndexResource) -> [SceneOverlapHit] {
+    performPhysicsOverlapAABB(
+        PhysicsOverlapAABBQuery(bounds: query.bounds),
+        filter: PhysicsQueryFilter(includeTriggers: query.includeTriggers),
+        using: index
+    ).map(makeSceneOverlapHit)
+}
+
+func performSpatialSweep(_ query: SceneSweepQuery,
+                         using index: SpatialIndexResource) -> SceneSweepHit? {
+    performPhysicsSweepAABB(
+        PhysicsSweepAABBQuery(bounds: query.bounds, translation: query.translation),
+        filter: PhysicsQueryFilter(includeTriggers: query.includeTriggers),
+        using: index
+    ).map(makeSceneSweepHit)
+}
+
+func performPhysicsRaycast(_ query: PhysicsRaycastQuery,
+                           filter: PhysicsQueryFilter,
+                           using index: SpatialIndexResource) -> PhysicsRaycastHit? {
     let directionLength = simd_length(query.direction)
     guard directionLength > 0.000_001 else { return nil }
     let direction = query.direction / directionLength
     let maxDistance = max(query.maxDistance, 0)
 
-    var resolvedHit: SceneRaycastHit?
+    var resolvedHit: PhysicsRaycastHit?
     for entry in index.entries {
-        guard query.includeTriggers || !entry.isTrigger else { continue }
+        guard matchesPhysicsQueryFilter(entry, filter: filter) else { continue }
         guard raycastBox(min: entry.bounds.min,
                          max: entry.bounds.max,
                          origin: query.origin,
@@ -209,8 +241,8 @@ func performSpatialRaycast(_ query: SceneRaycastQuery,
                          maxDistance: maxDistance) != nil,
               let result = preciseRaycast(shape: entry.shape,
                                           worldTransform: entry.worldTransform,
-                                   origin: query.origin,
-                                   direction: direction,
+                                          origin: query.origin,
+                                          direction: direction,
                                           maxDistance: maxDistance) else {
             continue
         }
@@ -219,7 +251,7 @@ func performSpatialRaycast(_ query: SceneRaycastQuery,
             continue
         }
 
-        resolvedHit = SceneRaycastHit(
+        resolvedHit = PhysicsRaycastHit(
             entity: entry.entity,
             distance: result.distance,
             position: result.position,
@@ -232,11 +264,12 @@ func performSpatialRaycast(_ query: SceneRaycastQuery,
     return resolvedHit
 }
 
-func performSpatialOverlap(_ query: SceneOverlapQuery,
-                           using index: SpatialIndexResource) -> [SceneOverlapHit] {
+func performPhysicsOverlapAABB(_ query: PhysicsOverlapAABBQuery,
+                               filter: PhysicsQueryFilter,
+                               using index: SpatialIndexResource) -> [PhysicsOverlapHit] {
     index.entries
         .filter { entry in
-            guard query.includeTriggers || !entry.isTrigger else { return false }
+            guard matchesPhysicsQueryFilter(entry, filter: filter) else { return false }
             guard entry.bounds.intersects(query.bounds) else { return false }
             return preciseOverlap(shape: entry.shape,
                                   worldTransform: entry.worldTransform,
@@ -244,12 +277,13 @@ func performSpatialOverlap(_ query: SceneOverlapQuery,
         }
         .sorted { $0.entity.rawValue < $1.entity.rawValue }
         .map { entry in
-            SceneOverlapHit(entity: entry.entity, bounds: entry.bounds, isTrigger: entry.isTrigger)
+            PhysicsOverlapHit(entity: entry.entity, bounds: entry.bounds, isTrigger: entry.isTrigger)
         }
 }
 
-func performSpatialSweep(_ query: SceneSweepQuery,
-                         using index: SpatialIndexResource) -> SceneSweepHit? {
+func performPhysicsSweepAABB(_ query: PhysicsSweepAABBQuery,
+                             filter: PhysicsQueryFilter,
+                             using index: SpatialIndexResource) -> PhysicsSweepHit? {
     guard query.bounds.isValid else { return nil }
 
     let travelDistance = simd_length(query.translation)
@@ -259,9 +293,9 @@ func performSpatialSweep(_ query: SceneSweepQuery,
     let queryCenter = query.bounds.center
     let queryHalfExtents = query.bounds.halfExtents
 
-    var resolvedHit: SceneSweepHit?
+    var resolvedHit: PhysicsSweepHit?
     for entry in index.entries {
-        guard query.includeTriggers || !entry.isTrigger else { continue }
+        guard matchesPhysicsQueryFilter(entry, filter: filter) else { continue }
 
         let expandedBounds = expandedAABB(entry.bounds, by: queryHalfExtents)
         guard let interval = raycastBoxInterval(min: expandedBounds.min,
@@ -282,7 +316,7 @@ func performSpatialSweep(_ query: SceneSweepQuery,
             continue
         }
 
-        resolvedHit = SceneSweepHit(
+        resolvedHit = PhysicsSweepHit(
             entity: entry.entity,
             fraction: hit.distance / travelDistance,
             distance: hit.distance,
@@ -294,6 +328,47 @@ func performSpatialSweep(_ query: SceneSweepQuery,
     }
 
     return resolvedHit
+}
+
+private func matchesPhysicsQueryFilter(_ entry: SpatialIndexEntry,
+                                       filter: PhysicsQueryFilter) -> Bool {
+    if let excluded = filter.excludeEntity, excluded == entry.entity {
+        return false
+    }
+    if !filter.includeTriggers && entry.isTrigger {
+        return false
+    }
+    if let requiredLayerID = filter.layerID, entry.layerID != requiredLayerID {
+        return false
+    }
+    return (entry.layerMask & filter.layerMask) != 0
+}
+
+private func makeSceneRaycastHit(_ hit: PhysicsRaycastHit) -> SceneRaycastHit {
+    SceneRaycastHit(
+        entity: hit.entity,
+        distance: hit.distance,
+        position: hit.position,
+        normal: hit.normal,
+        bounds: hit.bounds,
+        isTrigger: hit.isTrigger
+    )
+}
+
+private func makeSceneOverlapHit(_ hit: PhysicsOverlapHit) -> SceneOverlapHit {
+    SceneOverlapHit(entity: hit.entity, bounds: hit.bounds, isTrigger: hit.isTrigger)
+}
+
+private func makeSceneSweepHit(_ hit: PhysicsSweepHit) -> SceneSweepHit {
+    SceneSweepHit(
+        entity: hit.entity,
+        fraction: hit.fraction,
+        distance: hit.distance,
+        position: hit.position,
+        normal: hit.normal,
+        bounds: hit.bounds,
+        isTrigger: hit.isTrigger
+    )
 }
 
 private func colliderBounds(shape: ColliderShape,
@@ -463,6 +538,10 @@ private struct SpatialOrientedBox {
     var halfExtents: SIMD3<Float>
 }
 
+private struct SpatialOverlapResult {
+    var normal: SIMD3<Float>
+}
+
 private func makeWorldOrientedBox(center: SIMD3<Float>,
                                   halfExtents: SIMD3<Float>,
                                   matrix: simd_float4x4) -> SpatialOrientedBox {
@@ -487,11 +566,23 @@ private func makeWorldOrientedBox(center: SIMD3<Float>,
 
 private func orientedBoxIntersectsAABB(_ box: SpatialOrientedBox,
                                        bounds: SpatialAABB) -> Bool {
+    orientedBoxOverlapResult(box, bounds: bounds) != nil
+}
+
+private func orientedBoxOverlapResult(_ box: SpatialOrientedBox,
+                                      bounds: SpatialAABB) -> SpatialOverlapResult? {
     let queryCenter = bounds.center
     let queryHalfExtents = bounds.halfExtents
     let translation = box.center - queryCenter
     let queryExtents = [queryHalfExtents.x, queryHalfExtents.y, queryHalfExtents.z]
     let boxExtents = [box.halfExtents.x, box.halfExtents.y, box.halfExtents.z]
+    let queryAxes = [
+        SIMD3<Float>(1, 0, 0),
+        SIMD3<Float>(0, 1, 0),
+        SIMD3<Float>(0, 0, 1),
+    ]
+    var bestAxis = SIMD3<Float>(-1, 0, 0)
+    var bestPenetration = Float.greatestFiniteMagnitude
 
     var rotation = Array(repeating: Array(repeating: Float(0), count: 3), count: 3)
     var absoluteRotation = Array(repeating: Array(repeating: Float(0), count: 3), count: 3)
@@ -508,8 +599,13 @@ private func orientedBoxIntersectsAABB(_ box: SpatialOrientedBox,
         let radiusB = boxExtents[0] * absoluteRotation[axis][0] +
             boxExtents[1] * absoluteRotation[axis][1] +
             boxExtents[2] * absoluteRotation[axis][2]
-        if abs(translationComponents[axis]) > radiusA + radiusB {
-            return false
+        let overlap = radiusA + radiusB - abs(translationComponents[axis])
+        if overlap < 0 {
+            return nil
+        }
+        if overlap < bestPenetration {
+            bestPenetration = overlap
+            bestAxis = queryAxes[axis] * (translationComponents[axis] < 0 ? -1 : 1)
         }
     }
 
@@ -518,33 +614,43 @@ private func orientedBoxIntersectsAABB(_ box: SpatialOrientedBox,
             queryExtents[1] * absoluteRotation[1][axis] +
             queryExtents[2] * absoluteRotation[2][axis]
         let radiusB = boxExtents[axis]
-        let projection = abs(
-            translationComponents[0] * rotation[0][axis] +
-                translationComponents[1] * rotation[1][axis] +
-                translationComponents[2] * rotation[2][axis]
-        )
-        if projection > radiusA + radiusB {
-            return false
+        let signedProjection = translationComponents[0] * rotation[0][axis] +
+            translationComponents[1] * rotation[1][axis] +
+            translationComponents[2] * rotation[2][axis]
+        let overlap = radiusA + radiusB - abs(signedProjection)
+        if overlap < 0 {
+            return nil
+        }
+        if overlap < bestPenetration {
+            bestPenetration = overlap
+            bestAxis = box.axes[axis] * (signedProjection < 0 ? -1 : 1)
         }
     }
 
     for queryAxis in 0..<3 {
         for boxAxis in 0..<3 {
+            let axisVector = simd_cross(queryAxes[queryAxis], box.axes[boxAxis])
+            if simd_length_squared(axisVector) <= 0.000_001 {
+                continue
+            }
             let radiusA = queryExtents[(queryAxis + 1) % 3] * absoluteRotation[(queryAxis + 2) % 3][boxAxis] +
                 queryExtents[(queryAxis + 2) % 3] * absoluteRotation[(queryAxis + 1) % 3][boxAxis]
             let radiusB = boxExtents[(boxAxis + 1) % 3] * absoluteRotation[queryAxis][(boxAxis + 2) % 3] +
                 boxExtents[(boxAxis + 2) % 3] * absoluteRotation[queryAxis][(boxAxis + 1) % 3]
-            let projection = abs(
-                translationComponents[(queryAxis + 2) % 3] * rotation[(queryAxis + 1) % 3][boxAxis] -
-                    translationComponents[(queryAxis + 1) % 3] * rotation[(queryAxis + 2) % 3][boxAxis]
-            )
-            if projection > radiusA + radiusB {
-                return false
+            let signedProjection = translationComponents[(queryAxis + 2) % 3] * rotation[(queryAxis + 1) % 3][boxAxis] -
+                translationComponents[(queryAxis + 1) % 3] * rotation[(queryAxis + 2) % 3][boxAxis]
+            let overlap = radiusA + radiusB - abs(signedProjection)
+            if overlap < 0 {
+                return nil
+            }
+            if overlap < bestPenetration {
+                bestPenetration = overlap
+                bestAxis = normalizedAxis(axisVector, fallback: bestAxis) * (signedProjection < 0 ? -1 : 1)
             }
         }
     }
 
-    return true
+    return SpatialOverlapResult(normal: normalizedAxis(bestAxis, fallback: SIMD3<Float>(-1, 0, 0)))
 }
 
 private func sphereIntersectsAABB(center: SIMD3<Float>,
@@ -630,16 +736,57 @@ private func translatedAABB(_ bounds: SpatialAABB, by translation: SIMD3<Float>)
     SpatialAABB(min: bounds.min + translation, max: bounds.max + translation)
 }
 
+private func closestPointOnAABB(to point: SIMD3<Float>, bounds: SpatialAABB) -> SIMD3<Float> {
+    simd_min(simd_max(point, bounds.min), bounds.max)
+}
+
+private func closestSegmentPointToAABB(start: SIMD3<Float>,
+                                       end: SIMD3<Float>,
+                                       bounds: SpatialAABB) -> (segmentPoint: SIMD3<Float>, aabbPoint: SIMD3<Float>) {
+    var lower: Float = 0
+    var upper: Float = 1
+    for _ in 0..<24 {
+        let left = (2 * lower + upper) / 3
+        let right = (lower + 2 * upper) / 3
+        let leftPoint = simd_mix(start, end, SIMD3<Float>(repeating: left))
+        let rightPoint = simd_mix(start, end, SIMD3<Float>(repeating: right))
+        if pointAABBDistanceSquared(point: leftPoint, bounds: bounds) < pointAABBDistanceSquared(point: rightPoint, bounds: bounds) {
+            upper = right
+        } else {
+            lower = left
+        }
+    }
+
+    let segmentPoint = simd_mix(start, end, SIMD3<Float>(repeating: (lower + upper) * 0.5))
+    let aabbPoint = closestPointOnAABB(to: segmentPoint, bounds: bounds)
+    return (segmentPoint, aabbPoint)
+}
+
 private func preciseSweep(shape: ColliderShape,
                           worldTransform: WorldTransform,
                           queryBounds: SpatialAABB,
                           direction: SIMD3<Float>,
                           maxDistance: Float,
                           broadPhaseInterval: (entryDistance: Float, exitDistance: Float, normal: SIMD3<Float>)) -> (distance: Float, position: SIMD3<Float>, normal: SIMD3<Float>)? {
+    let fallbackNormal = alignedContactNormal(
+        broadPhaseInterval.normal,
+        direction: direction,
+        fallback: -normalizedAxis(direction, fallback: SIMD3<Float>(1, 0, 0))
+    )
     if preciseOverlap(shape: shape,
                       worldTransform: worldTransform,
                       queryBounds: queryBounds) {
-        return (0, queryBounds.center, broadPhaseInterval.normal)
+        return (
+            0,
+            queryBounds.center,
+            preciseSweepContactNormal(
+                shape: shape,
+                worldTransform: worldTransform,
+                queryBounds: queryBounds,
+                direction: direction,
+                fallbackNormal: fallbackNormal
+            )
+        )
     }
 
     let entryDistance = Swift.max(broadPhaseInterval.entryDistance, 0)
@@ -653,7 +800,18 @@ private func preciseSweep(shape: ColliderShape,
                                           queryBounds: translatedAABB(queryBounds, by: direction * entryDistance))
 
     if previousOverlaps {
-        return (entryDistance, queryBounds.center + direction * entryDistance, broadPhaseInterval.normal)
+        let hitBounds = translatedAABB(queryBounds, by: direction * entryDistance)
+        return (
+            entryDistance,
+            queryBounds.center + direction * entryDistance,
+            preciseSweepContactNormal(
+                shape: shape,
+                worldTransform: worldTransform,
+                queryBounds: hitBounds,
+                direction: direction,
+                fallbackNormal: fallbackNormal
+            )
+        )
     }
 
     for step in 1...sampleCount {
@@ -685,12 +843,78 @@ private func preciseSweep(shape: ColliderShape,
             }
         }
 
-        return (upperBound,
-                queryBounds.center + direction * upperBound,
-                broadPhaseInterval.normal)
+        let hitBounds = translatedAABB(queryBounds, by: direction * upperBound)
+        return (
+            upperBound,
+            queryBounds.center + direction * upperBound,
+            preciseSweepContactNormal(
+                shape: shape,
+                worldTransform: worldTransform,
+                queryBounds: hitBounds,
+                direction: direction,
+                fallbackNormal: fallbackNormal
+            )
+        )
     }
 
     return nil
+}
+
+private func preciseSweepContactNormal(shape: ColliderShape,
+                                       worldTransform: WorldTransform,
+                                       queryBounds: SpatialAABB,
+                                       direction: SIMD3<Float>,
+                                       fallbackNormal: SIMD3<Float>) -> SIMD3<Float> {
+    switch shape {
+    case let .box(halfExtents, center):
+        let box = makeWorldOrientedBox(center: center,
+                                       halfExtents: halfExtents,
+                                       matrix: worldTransform.matrix)
+        guard let result = orientedBoxOverlapResult(box, bounds: queryBounds) else {
+            return fallbackNormal
+        }
+        return alignedContactNormal(result.normal, direction: direction, fallback: fallbackNormal)
+    case let .sphere(radius, center):
+        let worldCenter = transformPoint(center, matrix: worldTransform.matrix)
+        let scaledRadius = radius * maxScaleComponent(of: worldTransform.matrix)
+        let closestPoint = closestPointOnAABB(to: worldCenter, bounds: queryBounds)
+        let offset = closestPoint - worldCenter
+        guard simd_length_squared(offset) <= (scaledRadius * scaledRadius) + 0.000_1 else {
+            return fallbackNormal
+        }
+        return alignedContactNormal(offset, direction: direction, fallback: fallbackNormal)
+    case let .capsule(radius, halfHeight, center):
+        let top = transformPoint(center + SIMD3<Float>(0, halfHeight, 0), matrix: worldTransform.matrix)
+        let bottom = transformPoint(center + SIMD3<Float>(0, -halfHeight, 0), matrix: worldTransform.matrix)
+        let scaledRadius = radius * maxScaleComponent(of: worldTransform.matrix)
+        let nearest = closestSegmentPointToAABB(start: top, end: bottom, bounds: queryBounds)
+        let offset = nearest.aabbPoint - nearest.segmentPoint
+        guard simd_length_squared(offset) <= (scaledRadius * scaledRadius) + 0.000_1 else {
+            return fallbackNormal
+        }
+        return alignedContactNormal(offset, direction: direction, fallback: fallbackNormal)
+    case let .mesh(_, center):
+        let box = makeWorldOrientedBox(center: center,
+                                       halfExtents: SIMD3<Float>(repeating: 0.5),
+                                       matrix: worldTransform.matrix)
+        guard let result = orientedBoxOverlapResult(box, bounds: queryBounds) else {
+            return fallbackNormal
+        }
+        return alignedContactNormal(result.normal, direction: direction, fallback: fallbackNormal)
+    }
+}
+
+private func alignedContactNormal(_ candidate: SIMD3<Float>,
+                                  direction: SIMD3<Float>,
+                                  fallback: SIMD3<Float>) -> SIMD3<Float> {
+    var resolved = candidate
+    if simd_length_squared(resolved) <= 0.000_001 {
+        resolved = fallback
+    }
+    if simd_dot(resolved, direction) > 0 {
+        resolved *= -1
+    }
+    return normalizedAxis(resolved, fallback: fallback)
 }
 
 private func raycastBoxInterval(min: SIMD3<Float>,

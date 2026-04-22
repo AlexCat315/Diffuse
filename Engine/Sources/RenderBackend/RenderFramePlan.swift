@@ -3,12 +3,15 @@ import Foundation
 public enum RenderPassKind: String, Sendable, CaseIterable {
     case depthPrepass
     case shadowPass
+    case skybox
     case basePass
-    case viewportResolve
     case ssao
+    case ssr
+    case taa
     case bloom
     case fxaa
     case tonemap
+    case viewportResolve
 }
 
 public struct RenderFramePlan: Sendable, Equatable {
@@ -41,7 +44,7 @@ enum RenderFramePlanner {
                 if settings.enableShadows {
                     passes.append(.shadowPass)
                 }
-                passes.append(.basePass)
+                passes.append(contentsOf: [.skybox, .basePass, .tonemap])
                 if settings.enableOffscreenViewport {
                     passes.append(.viewportResolve)
                 }
@@ -51,20 +54,26 @@ enum RenderFramePlanner {
                 if settings.enableShadows {
                     passes.append(.shadowPass)
                 }
-                passes.append(.basePass)
-                if settings.enableOffscreenViewport {
-                    passes.append(.viewportResolve)
-                }
+                passes.append(contentsOf: [.skybox, .basePass])
                 if settings.enableSSAO {
                     passes.append(.ssao)
+                }
+                if settings.enableSSR {
+                    passes.append(.ssr)
+                }
+                if settings.enableTAA {
+                    passes.append(.taa)
                 }
                 if settings.enableBloom {
                     passes.append(.bloom)
                 }
+                passes.append(.tonemap)
                 if settings.enableFXAA {
                     passes.append(.fxaa)
                 }
-                passes.append(.tonemap)
+                if settings.enableOffscreenViewport {
+                    passes.append(.viewportResolve)
+                }
         }
 
         return RenderFramePlan(passes: passes)
