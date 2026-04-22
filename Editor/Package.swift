@@ -16,15 +16,16 @@ let package = Package(
     ],
     targets: [
         // MARK: - Editor Domain
-        // 编辑器状态、面板、Dock 布局，使用 GuavaUI Compose 构建 UI。
+        // 编辑器状态、Store、引擎宿主。UI 通过 GuavaUICompose 构建，
+        // 窗口/wgpu 装配交给 EditorApp 那一层依赖的 GuavaUIApp。
         .target(
             name: "EditorCore",
             dependencies: [
                 .product(name: "EngineCore", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
-                .product(name: "PlatformShell", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),
+                .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
             ]
         ),
@@ -34,7 +35,8 @@ let package = Package(
             name: "EditorApp",
             dependencies: [
                 "EditorCore",
-                .product(name: "PlatformShell", package: "Engine"),
+                .product(name: "GuavaUIApp", package: "GuavaUI"),
+                .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "RHIWGPU", package: "Engine"),
             ]
         ),
