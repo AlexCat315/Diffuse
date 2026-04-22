@@ -18,6 +18,7 @@ let package = Package(
         .executable(name: "GuavaUIDemoDockMultiWindow", targets: ["GuavaUIDemoDockMultiWindow"]),
         .library(name: "GuavaUIRuntime", targets: ["GuavaUIRuntime"]),
         .library(name: "GuavaUICompose", targets: ["GuavaUICompose"]),
+        .library(name: "GuavaUIApp", targets: ["GuavaUIApp"]),
     ],
     dependencies: [
         .package(path: "../Engine"),
@@ -86,6 +87,21 @@ let package = Package(
                            .product(name: "EngineKernel", package: "Engine")]
         ),
 
+        // MARK: - App
+        // 高层应用宿主：把 Runtime（窗口、wgpu、文本）和 Compose 装配在一起，
+        // 对调用方暴露 `AppRuntime.run(...)` 一行启动入口。Editor / 第三方 App
+        // 应优先依赖这一层，而不是直接拼装 SDL3PlatformHost + WGPUBackend。
+        .target(
+            name: "GuavaUIApp",
+            dependencies: [
+                "GuavaUIRuntime",
+                "GuavaUICompose",
+                .product(name: "PlatformShell", package: "Engine"),
+                .product(name: "RHIWGPU", package: "Engine"),
+                .product(name: "EngineKernel", package: "Engine"),
+            ]
+        ),
+
         // MARK: - Demo
         .executableTarget(
             name: "GuavaUIDemo",
@@ -120,6 +136,13 @@ let package = Package(
                 "GuavaUICompose",
                 "GuavaUIRuntime",
                 .product(name: "EngineKernel", package: "Engine"),
+            ]
+        ),
+        .testTarget(
+            name: "GuavaUIAppTests",
+            dependencies: [
+                "GuavaUIApp",
+                "GuavaUICompose",
             ]
         ),
     ]
