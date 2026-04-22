@@ -241,14 +241,23 @@ public final class ViewGraph {
                                       layoutParent: LayoutNode?) -> [Node] {
         let node = view._makeNode()
         node.viewTag = ViewGraph.slotTag(view)
-        view._updateNode(node)
-        parent.addChild(node)
-
-        var childLayoutParent = layoutParent
-        if let ln = view._makeLayoutNode() {
-            view._updateLayout(ln)
+        // Build the layout node and wire both trees BEFORE `_updateNode`
+        // so that `compositionValue(of:)` walks a complete parent chain
+        // and `node.layoutNode` is non-nil. Primitives can therefore
+        // drive frame dimensions from theme tokens directly inside
+        // `_updateNode` without lazy-deferring to a closure.
+        let ln = view._makeLayoutNode()
+        if let ln {
+            node.layoutNode = ln
             layoutOf[ObjectIdentifier(node)] = ln
             layoutParent?.addChild(ln)
+        }
+        parent.addChild(node)
+        view._updateNode(node)
+
+        var childLayoutParent = layoutParent
+        if let ln {
+            view._updateLayout(ln)
             childLayoutParent = ln
         }
 

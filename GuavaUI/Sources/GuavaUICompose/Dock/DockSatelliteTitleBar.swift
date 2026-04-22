@@ -31,6 +31,7 @@ struct _DockSatelliteTitleBar: _PrimitiveView {
     func _updateNode(_ node: Node) {
         let appearance = resolveDockAppearance(on: node)
         node.backgroundColor = appearance.tabBarBackground
+        node.layoutNode?.height = appearance.satelliteTitleBarHeight
 
         let stateKey = "__dock_satellite_titlebar_state"
         let snapshot = self
@@ -132,20 +133,24 @@ struct _DockSatelliteTitleBar: _PrimitiveView {
         let l = LayoutNode()
         l.flexDirection = .row
         l.alignItems = .center
+        // Theme-driven height is written by _updateNode; this literal is
+        // a fallback for headless layout tests with no DockStyle.
         l.height = DOCK_SATELLITE_TITLEBAR_HEIGHT
         return l
     }
 
     func _updateLayout(_ layout: LayoutNode) {
-        layout.height = DOCK_SATELLITE_TITLEBAR_HEIGHT
+        // Height comes from _updateNode (DockAppearance.satelliteTitleBarHeight).
     }
 
     func _children(for node: Node) -> [any View] {
+        let appearance = resolveDockAppearance(on: node)
         return [
             Text(dragGhostTitle())
                 .font(.bodyStrong)
                 .foregroundColor(.onSurfaceMuted)
-                .padding(horizontal: 12, vertical: 6)
+                .padding(horizontal: appearance.tabHorizontalPadding,
+                         vertical: appearance.tabVerticalPadding)
         ]
     }
 

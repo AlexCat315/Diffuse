@@ -13,16 +13,20 @@ public struct DefaultDockStyle: DockStyle {
             tabBarBackground: t.colors.surfaceVariant,
             tabBarHeight: 32,
             tabHorizontalPadding: t.spacing.md,
+            tabHorizontalSpacing: 6,
+            tabVerticalPadding: 6,
             tabActiveBackground: t.colors.surface,
             tabActiveForeground: t.colors.onSurface,
             tabInactiveForeground: t.colors.onSurfaceMuted,
             tabActiveAccentBar: t.colors.accent,
             tabActiveAccentBarHeight: 2,
+            closeButtonSize: 16,
             splitDividerThickness: 1,
             splitDividerColor: t.colors.border,
             splitDividerHitSlop: 5,
             leafBackground: t.colors.surface,
-            emptyLeafBackground: t.colors.surfaceSunken
+            emptyLeafBackground: t.colors.surfaceSunken,
+            satelliteTitleBarHeight: 24
         )
     }
 }

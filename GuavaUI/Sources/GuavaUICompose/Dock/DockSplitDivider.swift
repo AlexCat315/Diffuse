@@ -42,9 +42,22 @@ struct _DockResizeHandle: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
+        // The handle node itself is a transparent hit-pad sized to the
+        // full hit area (`splitDividerThickness + 2 * splitDividerHitSlop`).
+        // The visible coloured line is painted by a single child node
+        // inserted via `_children(for:)` so the visual stays at the
+        // configured thickness while the grab area is wider.
         let appearance = resolveDockAppearance(on: node)
-        node.backgroundColor = appearance.splitDividerColor
+        node.backgroundColor = nil
         node.cursor = (axis == .horizontal) ? .resizeHorizontal : .resizeVertical
+
+        let total = appearance.splitDividerThickness + appearance.splitDividerHitSlop * 2
+        switch axis {
+        case .horizontal:
+            node.layoutNode?.width = total
+        case .vertical:
+            node.layoutNode?.height = total
+        }
 
         let snapshot = self
         guard let registry = InteractionRegistryHolder.current else { return }
@@ -73,10 +86,19 @@ struct _DockResizeHandle: _PrimitiveView {
 
     func _makeLayoutNode() -> LayoutNode? {
         let l = LayoutNode()
+        // The hit-pad layout-node also centres its single child via
+        // alignItems / justifyContent so the visible line sits in the
+        // middle of the slop zone.
         switch axis {
         case .horizontal:
+            l.flexDirection = .row
+            l.alignItems = .stretch
+            l.justifyContent = .center
             l.width = 1
         case .vertical:
+            l.flexDirection = .column
+            l.alignItems = .stretch
+            l.justifyContent = .center
             l.height = 1
         }
         return l
@@ -85,10 +107,20 @@ struct _DockResizeHandle: _PrimitiveView {
     func _updateLayout(_ layout: LayoutNode) {
         switch axis {
         case .horizontal:
-            layout.width = 1
+            layout.flexDirection = .row
+            layout.alignItems = .stretch
+            layout.justifyContent = .center
+            if (layout.width ?? 0) <= 0 { layout.width = 1 }
         case .vertical:
-            layout.height = 1
+            layout.flexDirection = .column
+            layout.alignItems = .stretch
+            layout.justifyContent = .center
+            if (layout.height ?? 0) <= 0 { layout.height = 1 }
         }
+    }
+
+    func _children(for node: Node) -> [any View] {
+        return [_DockResizeHandleVisual(axis: axis)]
     }
 
     private func applyDrag(windowX: Float, windowY: Float, node: Node) {
@@ -120,5 +152,54 @@ struct _DockResizeHandle: _PrimitiveView {
             cursor = n.parent
         }
         return (Float(x), Float(y))
+    }
+}
+
+/// The visible coloured line painted in the centre of the resize handle's
+/// hit-pad. Width/height equal `appearance.splitDividerThickness`; the
+/// surrounding hit slop stays transparent.
+struct _DockResizeHandleVisual: _PrimitiveView {
+    let axis: DockSplitAxis
+
+    func _makeNode() -> Node {
+        let n = Node()
+        n.isHitTestable = false
+        return n
+    }
+
+    func _updateNode(_ node: Node) {
+        let appearance = resolveDockAppearance(on: node)
+        node.backgroundColor = appearance.splitDividerColor
+        let thickness = max(1, appearance.splitDividerThickness)
+        switch axis {
+        case .horizontal:
+            node.layoutNode?.width = thickness
+        case .vertical:
+            node.layoutNode?.height = thickness
+        }
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let l = LayoutNode()
+        switch axis {
+        case .horizontal:
+            l.width = 1
+            l.alignSelf = .stretch
+        case .vertical:
+            l.height = 1
+            l.alignSelf = .stretch
+        }
+        return l
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        switch axis {
+        case .horizontal:
+            layout.alignSelf = .stretch
+            if (layout.width ?? 0) <= 0 { layout.width = 1 }
+        case .vertical:
+            layout.alignSelf = .stretch
+            if (layout.height ?? 0) <= 0 { layout.height = 1 }
+        }
     }
 }

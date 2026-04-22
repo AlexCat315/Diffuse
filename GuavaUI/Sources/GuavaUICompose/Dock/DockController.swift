@@ -53,6 +53,29 @@ public enum DockOperation: Sendable {
     /// any of its descendants. When `target` is a `.tabSlot` the leaf's
     /// tabs are appended individually starting at the target index.
     case moveLeaf(leafID: DockNodeID, to: DockDropTarget)
+
+    /// Close every tab in `leaf` other than `keep`. Only acts when `leaf`
+    /// is a `.tabs` leaf in the main tree (satellites included) and
+    /// `keep` is one of its tabs. Closed tabs are pushed onto the
+    /// `closedHistory` stack in left-to-right order so a chain of
+    /// `.reopenLastClosed` invocations restores them in reverse.
+    case closeOthers(in: DockNodeID, keep: DockTabID)
+
+    /// Close every tab to the right of `pivot` in `leaf`. Same constraints
+    /// as `.closeOthers`. Pivot tab itself is not closed.
+    case closeToTheRight(in: DockNodeID, of: DockTabID)
+
+    /// Pop the most-recently-closed tab off `closedHistory` and re-insert
+    /// it. Tries the original leaf at the original index first; if that
+    /// leaf no longer exists or no longer accepts tabs, appends to the
+    /// first `.tabs` leaf encountered in a depth-first walk of the main
+    /// tree. No-op if history is empty or no eligible leaf is found.
+    case reopenLastClosed
+
+    /// Set the `isPinned` flag on a tab. Pinned tabs are excluded from
+    /// `.closeOthers`. Tab strip rendering (Phase O) reserves a separate
+    /// pinned row for them. No-op when `tabID` is not present.
+    case setPinned(tabID: DockTabID, isPinned: Bool)
 }
 
 /// Owner of a `DockLayoutNode` tree. Reference type; callers (the demo, the
@@ -104,6 +127,29 @@ public final class DockController: @unchecked Sendable {
     /// right-click a no-op.
     public var onTabContextMenu: ((_ tabID: DockTabID, _ leafID: DockNodeID, _ x: Float, _ y: Float) -> Void)?
 
+    /// One entry in the recent-closed-tab history, used by `.reopenLastClosed`
+    /// and the default tab context menu's "Reopen Closed Tab" item.
+    public struct ClosedTabRecord: Sendable {
+        /// The tab as it was at close time (id, userKey, title, capability bits).
+        public let tab: DockTab
+        /// Leaf the tab lived in. Used as the preferred reopen target. May
+        /// no longer exist by the time `.reopenLastClosed` runs.
+        public let sourceLeafID: DockNodeID
+        /// Index inside `sourceLeafID` at close time. Reopen attempts to
+        /// honour this; clamped if the leaf is shorter now.
+        public let originalIndex: Int
+    }
+
+    /// Stack of recently-closed tabs. Newest entry is at the end. Cap is
+    /// `closedHistoryLimit` (FIFO eviction). Operations that close one or
+    /// more tabs (`.closeTab`, `.closeOthers`, `.closeToTheRight`) push
+    /// in left-to-right order so reopen restores in reverse.
+    public private(set) var closedHistory: [ClosedTabRecord] = []
+
+    /// Maximum number of entries kept in `closedHistory`. Older entries
+    /// are dropped from the head when a new close pushes over the cap.
+    public var closedHistoryLimit: Int = 50
+
     public init(root: DockLayoutNode) {
         self.root = root
         let session = DockDragSession()
@@ -147,6 +193,15 @@ public final class DockController: @unchecked Sendable {
         case .move(let tabID, let target):
             next = Self.move(tabID: tabID, to: target, in: root)
         case .closeTab(let tabID):
+            // Snapshot the leaf + index BEFORE removal so reopen can try
+            // the original location.
+            if let loc = Self.locateTab(tabID, in: root) {
+                pushClosedHistory(ClosedTabRecord(
+                    tab: loc.tab,
+                    sourceLeafID: loc.leafID,
+                    originalIndex: loc.index
+                ))
+            }
             next = Self.closeTab(tabID, in: root)
         case .setActive(let node, let tab):
             next = Self.setActive(node: node, tab: tab, in: root)
@@ -164,6 +219,17 @@ public final class DockController: @unchecked Sendable {
         case .moveLeaf(let leafID, let target):
             applyMoveLeaf(leafID: leafID, to: target)
             return
+        case .closeOthers(let leafID, let keep):
+            applyCloseOthers(in: leafID, keep: keep)
+            return
+        case .closeToTheRight(let leafID, let pivot):
+            applyCloseToTheRight(in: leafID, of: pivot)
+            return
+        case .reopenLastClosed:
+            applyReopenLastClosed()
+            return
+        case .setPinned(let tabID, let isPinned):
+            next = Self.setPinned(tabID: tabID, isPinned: isPinned, in: root)
         }
         guard next != root else { return }
         root = next
@@ -291,7 +357,162 @@ public final class DockController: @unchecked Sendable {
         notifyChange()
     }
 
-    /// Replace the entire tree (used by load-from-disk). Bumps `version`.
+    // MARK: - Close-others / close-right / reopen
+
+    private func applyCloseOthers(in leafID: DockNodeID, keep: DockTabID) {
+        let resolvedLeaf = Self.findNode(leafID, in: root) ?? satellites[leafID]
+        guard let leaf = resolvedLeaf,
+              case .tabs(_, let tabs, _) = leaf,
+              tabs.contains(where: { $0.id == keep }) else {
+            return
+        }
+        // Capture the to-close set with their indices BEFORE we mutate
+        // anything so reopen can preserve original positions. Pinned tabs
+        // (Phase O) survive `.closeOthers` regardless of `keep` — they
+        // are excluded from the victim set.
+        let victims = tabs.enumerated()
+            .filter { $0.element.id != keep && !$0.element.isPinned }
+            .map { ($0.element, $0.offset) }
+        guard !victims.isEmpty else { return }
+        for (tab, idx) in victims {
+            pushClosedHistory(ClosedTabRecord(tab: tab,
+                                              sourceLeafID: leafID,
+                                              originalIndex: idx))
+        }
+        if satellites[leafID] != nil {
+            applyCloseTabsInSatellite(leafID: leafID,
+                                       drop: Set(victims.map(\.0.id)))
+        } else {
+            var nextRoot = root
+            for (tab, _) in victims {
+                nextRoot = Self.closeTab(tab.id, in: nextRoot)
+            }
+            guard nextRoot != root else { return }
+            root = nextRoot
+            version &+= 1
+            notifyChange()
+        }
+    }
+
+    private func applyCloseToTheRight(in leafID: DockNodeID, of pivot: DockTabID) {
+        let resolvedLeaf = Self.findNode(leafID, in: root) ?? satellites[leafID]
+        guard let leaf = resolvedLeaf,
+              case .tabs(_, let tabs, _) = leaf,
+              let pivotIndex = tabs.firstIndex(where: { $0.id == pivot }) else {
+            return
+        }
+        let victims = tabs.enumerated()
+            .dropFirst(pivotIndex + 1)
+            .map { ($0.element, $0.offset) }
+        guard !victims.isEmpty else { return }
+        for (tab, idx) in victims {
+            pushClosedHistory(ClosedTabRecord(tab: tab,
+                                              sourceLeafID: leafID,
+                                              originalIndex: idx))
+        }
+        if satellites[leafID] != nil {
+            applyCloseTabsInSatellite(leafID: leafID,
+                                       drop: Set(victims.map(\.0.id)))
+        } else {
+            var nextRoot = root
+            for (tab, _) in victims {
+                nextRoot = Self.closeTab(tab.id, in: nextRoot)
+            }
+            guard nextRoot != root else { return }
+            root = nextRoot
+            version &+= 1
+            notifyChange()
+        }
+    }
+
+    /// Drop a set of tab IDs from a satellite leaf in place. The satellite
+    /// stays alive even if it becomes empty (consistent with `.closeTab`
+    /// on a satellite leaf today, which is also a no-op since `closeTab`
+    /// only walks the main tree). Hosts that want the floating window
+    /// closed when the last tab leaves should observe the satellite
+    /// state and dispatch `.closeSatellite` themselves.
+    private func applyCloseTabsInSatellite(leafID: DockNodeID,
+                                            drop: Set<DockTabID>) {
+        guard case .tabs(let id, let tabs, let active) = satellites[leafID] else { return }
+        let remaining = tabs.filter { !drop.contains($0.id) }
+        if remaining.count == tabs.count { return }
+        let nextActive: DockTabID? = {
+            if let active, remaining.contains(where: { $0.id == active }) { return active }
+            return remaining.first?.id
+        }()
+        satellites[leafID] = .tabs(id: id, tabs: remaining, activeTabID: nextActive)
+        version &+= 1
+        notifyChange()
+    }
+
+    private func applyReopenLastClosed() {
+        guard let record = closedHistory.popLast() else { return }
+        // Preferred target: original leaf at original index. Try main tree
+        // first, then satellites.
+        if Self.findNode(record.sourceLeafID, in: root) != nil {
+            apply(.insertTab(record.tab,
+                              into: record.sourceLeafID,
+                              at: record.originalIndex))
+            return
+        }
+        if let satLeaf = satellites[record.sourceLeafID],
+           case .tabs(let id, var tabs, let active) = satLeaf {
+            let i = max(0, min(tabs.count, record.originalIndex))
+            tabs.insert(record.tab, at: i)
+            satellites[record.sourceLeafID] = .tabs(id: id,
+                                                     tabs: tabs,
+                                                     activeTabID: active ?? record.tab.id)
+            version &+= 1
+            notifyChange()
+            return
+        }
+        // Fallback: append to the first `.tabs` leaf in the main tree.
+        if let fallbackID = Self.firstTabsLeafID(in: root) {
+            apply(.insertTab(record.tab, into: fallbackID, at: Int.max))
+            return
+        }
+        // Last resort: replace the empty root with a fresh tabs leaf.
+        if case .empty(let id) = root {
+            root = .tabs(id: id, tabs: [record.tab], activeTabID: record.tab.id)
+            version &+= 1
+            notifyChange()
+        }
+    }
+
+    private func pushClosedHistory(_ record: ClosedTabRecord) {
+        closedHistory.append(record)
+        if closedHistory.count > closedHistoryLimit {
+            closedHistory.removeFirst(closedHistory.count - closedHistoryLimit)
+        }
+    }
+
+    /// Locate `tabID` in the main tree, returning the leaf id, the tab,
+    /// and its index within that leaf.
+    private static func locateTab(_ tabID: DockTabID,
+                                  in tree: DockLayoutNode)
+    -> (leafID: DockNodeID, tab: DockTab, index: Int)? {
+        switch tree {
+        case .empty:
+            return nil
+        case .tabs(let id, let tabs, _):
+            if let idx = tabs.firstIndex(where: { $0.id == tabID }) {
+                return (id, tabs[idx], idx)
+            }
+            return nil
+        case .split(_, _, _, let first, let second):
+            return locateTab(tabID, in: first) ?? locateTab(tabID, in: second)
+        }
+    }
+
+    /// First `.tabs` leaf encountered in a depth-first walk of `tree`.
+    private static func firstTabsLeafID(in tree: DockLayoutNode) -> DockNodeID? {
+        switch tree {
+        case .empty: return nil
+        case .tabs(let id, _, _): return id
+        case .split(_, _, _, let first, let second):
+            return firstTabsLeafID(in: first) ?? firstTabsLeafID(in: second)
+        }
+    }
     /// Optionally restores a satellite map captured by an earlier snapshot.
     public func replace(root newRoot: DockLayoutNode,
                         satellites newSatellites: [DockNodeID: DockLayoutNode] = [:],
@@ -374,6 +595,23 @@ public final class DockController: @unchecked Sendable {
             guard n.id == node else { return nil }
             guard case .split(let id, let axis, _, let f, let s) = n else { return nil }
             return .split(id: id, axis: axis, fraction: clampFraction(fraction), first: f, second: s)
+        }
+    }
+
+    /// Toggle the `isPinned` flag of `tabID` wherever the tab lives.
+    /// Returns the original tree when the tab is missing or already in
+    /// the requested state. Tab order is preserved.
+    private static func setPinned(tabID: DockTabID,
+                                  isPinned: Bool,
+                                  in tree: DockLayoutNode) -> DockLayoutNode {
+        return transform(tree) { n in
+            guard case .tabs(let id, var tabs, let active) = n,
+                  let idx = tabs.firstIndex(where: { $0.id == tabID }),
+                  tabs[idx].isPinned != isPinned else {
+                return nil
+            }
+            tabs[idx].isPinned = isPinned
+            return .tabs(id: id, tabs: tabs, activeTabID: active)
         }
     }
 

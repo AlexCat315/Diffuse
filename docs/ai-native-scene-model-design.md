@@ -772,6 +772,16 @@ Guava 新架构不应推翻旧 Zig 的三项重要能力：
 
 依赖：B.5、C、D 必须先完成。
 
+### Phase G — Domain Workflows
+
+把 capability、document、流水线组合为端到端的领域工作流。
+
+- `ai-native-capability-catalog.md`：CapabilityGraph 实例集（共享）
+- `ai-native-game-workflow-design.md`：游戏开发工作流（关卡 / 玩法 / Playtest / 平衡 / Ship）
+- `ai-native-film-workflow-design.md`：影视创作工作流（分镜 / 镜头语言 / 表演 / 光照 / 渲染 / Dailies）
+
+依赖：Phase A–F 全部基础设施。两条工作流可在同一项目并存，引擎按 capability scope 与 release_phase 过滤。
+
 ---
 
 ## 16. 验收标准
@@ -801,10 +811,14 @@ Guava 新架构不应推翻旧 Zig 的三项重要能力：
 1. `ModelDocument` 详细设计
 2. 低结构模型的语义生产流水线详细设计 → 已落地：`ai-native-semantic-pipeline-design.md`
 3. 场景图到 SceneDocument 流水线详细设计 → 已落地：`ai-native-scene-from-image-design.md`
-4. `MinimalConfirmationUI` 详细设计（UI 行为、键盘流、可访问性）
-5. `SequenceDocument` / `Shot` / `Clip` / `Binding` 详细设计
-6. `CapabilityGraph` 详细设计
-7. `Observation Bus` 详细设计
-8. `Context Memory Index` 详细设计
+4. AI 能力目录（CapabilityGraph 实例集） → 已落地：`ai-native-capability-catalog.md`
+5. AI 原生游戏开发工作流 → 已落地：`ai-native-game-workflow-design.md`
+6. AI 原生影视创作工作流 → 已落地：`ai-native-film-workflow-design.md`
+7. AI 原生影视创作工作流 → 已落地：`ai-native-film-workflow-design.md`
+8. `MinimalConfirmationUI` 详细设计 → 已落地：`ai-native-minimal-confirmation-ui-design.md`
+9. `SequenceDocument` / `Shot` / `Clip` / `Binding` 详细设计 → 已落地：`ai-native-sequence-document-design.md`
+10. `CapabilityGraph` schema 详细设计（与目录文档配套） → 已落地：`ai-native-capability-graph-schema-design.md`
+11. `Observation Bus` 详细设计
+12. `Context Memory Index` 详细设计
 
 总纲负责定边界，子文档负责定字段、接口和实现顺序。

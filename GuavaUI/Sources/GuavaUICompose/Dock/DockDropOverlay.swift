@@ -10,6 +10,9 @@ func installDropOverlay(node: Node, leafID: DockNodeID, controller: DockControll
         guard let controller else { return }
         let session = controller.dragSession
         guard session.isActive, let hit = session.dropHit, hit.leafID == leafID else { return }
+        // Phase G — only the lift-tier intent draws the 5-direction edge
+        // indicator. Reorder-tier drags are visualised by the ghost only.
+        guard session.intent == .detachOrSplit else { return }
 
         let appearance = node.compositionValue(of: DockStyleEnvironment.key)
             .resolve(DockStyleConfiguration(theme: node.theme))
