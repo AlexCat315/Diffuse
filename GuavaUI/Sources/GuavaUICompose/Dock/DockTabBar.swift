@@ -36,7 +36,6 @@ struct _DockTabsLeafHost: _PrimitiveView {
     func _updateNode(_ node: Node) {
         let appearance = resolveDockAppearance(on: node)
         node.backgroundColor = appearance.leafBackground
-        controller.hitRegistry.register(nodeID: nodeID, node: node)
         installDropOverlay(node: node, leafID: nodeID, controller: controller)
     }
 
@@ -53,6 +52,8 @@ struct _DockTabsLeafHost: _PrimitiveView {
     }
 
     func _children(for node: Node) -> [any View] {
+        let registry = resolveDockHitRegistry(on: node, fallback: controller.hitRegistry)
+        registry.register(nodeID: nodeID, node: node)
         let strip = _DockTabBar(nodeID: nodeID,
                                 tabs: tabs,
                                 activeTabID: activeTabID,

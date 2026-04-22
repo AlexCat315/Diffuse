@@ -118,10 +118,10 @@ struct _DockContainerRoot<Content: View>: _PrimitiveView {
         // `DockHostBridgeLocal` see the latest value, even on recompose. The
         // bridge is optional — publishing nil is also valid.
         node.setCompositionValue(DockHostBridgeLocal, hostBridge)
+        node.setCompositionValue(DockHitRegistryLocal, hostBridge?.hitRegistry)
         if let bridge = hostBridge {
-            let registry = controller.hitRegistry
             MainActor.assumeIsolated {
-                node.registerDockHostBridge(bridge, hitRegistry: registry)
+                node.registerDockHostBridge(bridge)
             }
         }
     }
@@ -226,7 +226,6 @@ struct _DockEmptyLeafHost: _PrimitiveView {
     func _updateNode(_ node: Node) {
         let appearance = resolveDockAppearance(on: node)
         node.backgroundColor = appearance.emptyLeafBackground
-        controller.hitRegistry.register(nodeID: nodeID, node: node)
         installDropOverlay(node: node, leafID: nodeID, controller: controller)
     }
 
@@ -234,6 +233,12 @@ struct _DockEmptyLeafHost: _PrimitiveView {
         let l = LayoutNode()
         l.flexGrow = 1
         return l
+    }
+
+    func _children(for node: Node) -> [any View] {
+        let registry = resolveDockHitRegistry(on: node, fallback: controller.hitRegistry)
+        registry.register(nodeID: nodeID, node: node)
+        return []
     }
 }
 

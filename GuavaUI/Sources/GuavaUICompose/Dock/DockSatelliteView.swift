@@ -99,10 +99,10 @@ struct _DockSatelliteHost<Content: View>: _PrimitiveView {
     func _updateNode(_ node: Node) {
         installDragGhostOverlay(node: node, controller: controller)
         node.setCompositionValue(DockHostBridgeLocal, hostBridge)
+        node.setCompositionValue(DockHitRegistryLocal, hostBridge?.hitRegistry)
         if let bridge = hostBridge {
-            let registry = controller.hitRegistry
             MainActor.assumeIsolated {
-                node.registerDockHostBridge(bridge, hitRegistry: registry)
+                node.registerDockHostBridge(bridge)
             }
         }
     }
