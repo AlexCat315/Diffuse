@@ -1,90 +1,52 @@
 import EngineCore
 import EngineKernel
 import RenderBackend
-import PlatformShell
 import RHIWGPU
 import Foundation
 
+/// 编辑器应用域：把 `EngineHost`、`EditorStore` 与 `InputState` 汇总成一个对象。
+///
+/// 与 GuavaUIApp 配合使用：
+///   1. 启动时由调用方实例化 `EditorApplication`；
+///   2. 在 `AppRuntime.run` 的 `onTick` 回调里调用 `tick(deltaTime:)` 推进引擎；
+///   3. 退出主循环后调用 `shutdown()` 清理引擎资源。
+///
+/// 自身不持有窗口 / wgpu surface — UI 渲染由 GuavaUIApp 接管，引擎仅负责
+/// 仿真与（未来的）离屏渲染。
 @MainActor
 public final class EditorApplication {
-    private let shell: any Shell
-    private let engine: EngineHost
-    private(set) var state: EditorState
-    private(set) var panelRegistry: PanelRegistry
-    private(set) var dockLayout: DockLayout
+    public let engine: EngineHost
+    public let store: EditorStore
     public let inputState: InputState
 
-    public init(shell: any Shell, backendConfig: WGPUDeviceConfig? = nil) {
-        self.shell = shell
+    public init(backendConfig: WGPUDeviceConfig? = nil) {
         var resolvedBackendConfig = backendConfig ?? .init()
         if resolvedBackendConfig.libraryPath == nil {
             resolvedBackendConfig.libraryPath = Self.locateWGPUDylib()
         }
         let backend = WGPUBackend(config: resolvedBackendConfig)
-        let host = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: backend)
-        self.engine = host
-        self.state = EditorState()
+        self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: backend)
+        self.store = EditorStore()
         self.inputState = InputState()
-
-        let panels = [
-            BasicPanelModel(id: "hierarchy", title: "Scene Hierarchy"),
-            BasicPanelModel(id: "inspector", title: "Inspector"),
-            BasicPanelModel(id: "viewport", title: "Viewport"),
-            BasicPanelModel(id: "console", title: "Console"),
-        ]
-        self.panelRegistry = PanelRegistry(panels: panels)
-        self.dockLayout = .default(panelIDs: panels.map(\ .id))
     }
 
-    public func bootstrap() throws {
-        try shell.initializeWindow(title: "GuavaNext Editor")
-        engine.start(renderSurface: shell.renderSurface.map(Self.describeRenderSurface))
-        EditorReducer.reduce(state: &state, action: .setConnected(true))
+    public func bootstrap() {
+        engine.start(renderSurface: nil)
+        store.dispatch(.setConnected(true))
     }
 
-    public func runMainLoop(iterations: Int? = nil) {
-        var frame = 0
-        while shell.isRunning && (iterations.map { frame < $0 } ?? true) {
-            let events = shell.pollEvents()
-            dispatchEvents(events)
-            engine.tick(
-                deltaTime: 1.0 / 60.0,
-                inputEvents: events,
-                drawableSize: .init(width: shell.drawableSize.width, height: shell.drawableSize.height),
-                shouldRender: state.shouldRender
-            )
-            frame += 1
-        }
+    public func tick(deltaTime: Double) {
+        engine.tick(
+            deltaTime: deltaTime,
+            inputEvents: [],
+            drawableSize: .init(),
+            shouldRender: store.state.shouldRender
+        )
+    }
+
+    public func shutdown() {
         engine.shutdown()
-        shell.shutdown()
     }
-
-    // MARK: - Event dispatch
-
-    private func dispatchEvents(_ events: [InputEvent]) {
-        inputState.process(events)
-
-        for event in events {
-            switch event {
-            case .windowFocusGained:
-                EditorReducer.reduce(state: &state, action: .setWindowFocused(true))
-            case .windowFocusLost:
-                EditorReducer.reduce(state: &state, action: .setWindowFocused(false))
-            case .windowMinimized:
-                EditorReducer.reduce(state: &state, action: .setWindowMinimized(true))
-            case .windowRestored:
-                EditorReducer.reduce(state: &state, action: .setWindowMinimized(false))
-            case .windowOccluded:
-                EditorReducer.reduce(state: &state, action: .setWindowOccluded(true))
-            case .windowExposed:
-                EditorReducer.reduce(state: &state, action: .setWindowOccluded(false))
-            default:
-                break
-            }
-        }
-    }
-
-    // MARK: - Render helpers
 
     public func queueViewportRenderSettings(_ settings: RenderSettings) {
         engine.queueRenderSettings(settings)
@@ -111,18 +73,5 @@ public final class EditorApplication {
             return c
         }
         return "libwgpu_native.dylib"
-    }
-
-    private static func describeRenderSurface(_ surface: NativeRenderSurface) -> RenderSurfaceDescriptor {
-        switch surface {
-        case let .metalLayer(layer):
-            return .metalLayer(layer)
-        case let .win32Window(hwnd, hinstance):
-            return .win32Window(hwnd: hwnd, hinstance: hinstance)
-        case let .xlibWindow(display, window):
-            return .xlibWindow(display: display, window: window)
-        case let .waylandSurface(display, surface):
-            return .waylandSurface(display: display, surface: surface)
-        }
     }
 }
