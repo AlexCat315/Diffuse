@@ -771,9 +771,13 @@ func uploadPreviewTexture() throws {
 }
 
 @MainActor
-func presentBootClearFrame() throws {
-    guard let surface else { return }
-    guard let frame = try surface.getCurrentTextureView() else { return }
+@discardableResult
+func presentBootClearFrame() throws -> Bool {
+    guard let surface else { return false }
+    guard let frame = try surface.getCurrentTextureView() else {
+        host.requestDisplay()
+        return false
+    }
     let encoder = try backend.createCommandEncoder()
     let pass = try encoder.beginRenderPass(
         colorView: frame.view,
@@ -786,6 +790,7 @@ func presentBootClearFrame() throws {
     backend.submit(buffer)
     surface.present()
     didPresentBootClear = true
+    return true
 }
 
 @MainActor
@@ -855,7 +860,7 @@ host.onInit = { native, w, h in
         try renderer.configure(format: .bgra8Unorm)
         timing.mark("surface")
         if !didPresentBootClear {
-            try presentBootClearFrame()
+            _ = try presentBootClearFrame()
         }
         timing.mark("clearPresent")
         configureTextEnvironment(scale: host.contentScaleFactor)
@@ -874,7 +879,8 @@ host.onInit = { native, w, h in
         try uploadPreviewTexture()
         timing.mark("previewUpload")
         configured = true
-        print(timing.summary(extra: ["firstVisible=clearPresent"]))
+        let firstVisible = didPresentBootClear ? "clearPresent" : "deferred"
+        print(timing.summary(extra: ["firstVisible=\(firstVisible)"]))
     } catch {
         print("[demo] init failed: \(error)")
     }
@@ -900,10 +906,10 @@ host.onResize = { w, h in
 }
 
 host.onFrame = { _ in
-    guard configured, let surface, let root = tree.root else { return }
+    guard configured, let surface, let root = tree.root else { return false }
 
-    demoRenderedFrameCount += 1
     var timing = TimingTrace(label: "[timing] demo.frame.main")
+    let nextFrameIndex = demoRenderedFrameCount + 1
 
     let previousScale = activeTextScale
     configureTextEnvironment(scale: host.contentScaleFactor)
@@ -946,9 +952,20 @@ host.onFrame = { _ in
         acquired = try surface.getCurrentTextureView()
     } catch {
         print("[demo] surface acquire failed: \(error)")
-        return
+        return false
     }
-    guard let frame = acquired else { return }
+    guard let frame = acquired else {
+        if nextFrameIndex <= 5 || didAtlasUpload || didPreviewUpload {
+            print(timing.summary(extra: [
+                "frameAttempt=\(nextFrameIndex)",
+                "layoutUpdated=\(didLayout)",
+                "atlasUploaded=\(didAtlasUpload)",
+                "previewUploaded=\(didPreviewUpload)",
+                "retry=surfaceUnavailable",
+            ]))
+        }
+        return false
+    }
     timing.mark("acquireSurface")
 
     do {
@@ -966,6 +983,7 @@ host.onFrame = { _ in
         let buffer = try encoder.finish()
         backend.submit(buffer)
         surface.present()
+        demoRenderedFrameCount = nextFrameIndex
         timing.mark("gpuSubmit")
         if shouldLogMainDemoFrameTiming(frameIndex: demoRenderedFrameCount,
                                         didAtlasUpload: didAtlasUpload,
@@ -977,8 +995,10 @@ host.onFrame = { _ in
                 "previewUploaded=\(didPreviewUpload)",
             ]))
         }
+        return true
     } catch {
         print("[demo] frame submit failed: \(error)")
+        return false
     }
 }
 
