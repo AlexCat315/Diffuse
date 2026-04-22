@@ -5,7 +5,7 @@ public enum TextAlignment {
 
 /// A single line of laid-out text.
 public struct TextLine {
-    /// Shaped glyphs on this line with atlas info attached.
+    /// Shaped glyphs on this line with lazily-resolved atlas info.
     public let glyphs: [PositionedGlyph]
     /// Baseline Y position relative to the text block origin.
     public let baselineY: Float
@@ -16,10 +16,11 @@ public struct TextLine {
 /// A shaped glyph combined with its atlas UV and screen position.
 public struct PositionedGlyph {
     public let glyphID: UInt32
+    public let fontID: Int
     /// Position relative to the text block origin.
     public let x: Float
     public let y: Float
-    /// Atlas info (nil if the glyph wasn't rasterized, e.g. space).
+    /// Atlas info when the glyph was already rasterized before draw.
     public let atlasInfo: FontAtlas.GlyphInfo?
 }
 
@@ -60,7 +61,7 @@ public struct TextLayout {
         let utf8 = Array(text.utf8)
 
         var lines: [TextLine] = []
-        var currentLineGlyphs: [(ShapedGlyph, FontAtlas.GlyphInfo?)] = []
+        var currentLineGlyphs: [(ShapedGlyph, FontAtlas.GlyphMetrics?)] = []
         var penX: Float = 0
         var lastBreakIndex: Int? = nil
         var penXAtLastBreak: Float = 0
@@ -91,7 +92,7 @@ public struct TextLayout {
                 continue
             }
 
-            let info = atlas.rasterizeGlyph(glyphIndex: glyph.glyphID, fontID: glyph.fontID)
+            let metrics = atlas.glyphMetrics(glyphIndex: glyph.glyphID, fontID: glyph.fontID)
 
             // Is this a whitespace cluster? Check source text.
             let isSpace = clusterByte == UInt8(ascii: " ") || clusterByte == UInt8(ascii: "\t")
@@ -149,7 +150,7 @@ public struct TextLayout {
                 }
             }
 
-            currentLineGlyphs.append((glyph, info))
+            currentLineGlyphs.append((glyph, metrics))
             penX = nextPenX
         }
 
@@ -178,7 +179,7 @@ public struct TextLayout {
     // MARK: - Internal
 
     private static func buildLine(
-        glyphs: [(ShapedGlyph, FontAtlas.GlyphInfo?)],
+        glyphs: [(ShapedGlyph, FontAtlas.GlyphMetrics?)],
         baselineY: Float,
         maxWidth: Float,
         alignment: TextAlignment
@@ -189,12 +190,13 @@ public struct TextLayout {
         var penX: Float = 0
         var lineWidth: Float = 0
 
-        for (shaped, info) in glyphs {
+        for (shaped, _) in glyphs {
             positioned.append(PositionedGlyph(
                 glyphID: shaped.glyphID,
+                fontID: shaped.fontID,
                 x: penX + shaped.xOffset,
                 y: baselineY + shaped.yOffset,
-                atlasInfo: info
+                atlasInfo: nil
             ))
             penX += shaped.xAdvance
             lineWidth = penX
@@ -212,6 +214,7 @@ public struct TextLayout {
             positioned = positioned.map { g in
                 PositionedGlyph(
                     glyphID: g.glyphID,
+                    fontID: g.fontID,
                     x: g.x + offset,
                     y: g.y,
                     atlasInfo: g.atlasInfo
@@ -223,7 +226,7 @@ public struct TextLayout {
     }
 
     private static func centeredBaselineY(
-        glyphs: [(ShapedGlyph, FontAtlas.GlyphInfo?)],
+        glyphs: [(ShapedGlyph, FontAtlas.GlyphMetrics?)],
         lineTop: Float,
         lineHeight: Float
     ) -> Float {

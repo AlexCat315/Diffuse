@@ -66,6 +66,14 @@ public final class TextFontResolver: @unchecked Sendable {
         return glyphs
     }
 
+    public func preparePrimaryFont(_ font: Font) -> ManagedFont? {
+        guard !primaryFontName.isEmpty else { return nil }
+        lock.lock()
+        let primary = provider(for: font).primaryFont
+        lock.unlock()
+        return primary
+    }
+
     private func provider(for font: Font) -> FontProvider {
         if let existing = providers[font] {
             return existing

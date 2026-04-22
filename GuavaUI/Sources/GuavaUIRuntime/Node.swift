@@ -20,9 +20,20 @@ public final class Node: @unchecked Sendable {
     /// True after `markDirty()` and before the next `NodeTree.flush()`.
     public internal(set) var isDirty: Bool = false
 
+    /// True after a visual mutation and before the next successful render.
+    /// Propagates upward so the root can answer "does any subtree need
+    /// repaint?" in O(1) during the host run loop.
+    public internal(set) var renderDirty: Bool = false
+
     /// The rectangle assigned by the layout engine (Phase 3).
     /// Coordinates are local to the parent node.
-    public var frame: CGRect = .zero
+    public var frame: CGRect = .zero {
+        didSet {
+            if oldValue != frame {
+                markRenderDirty()
+            }
+        }
+    }
 
     /// Weak link to this node's `LayoutNode`, set by `ViewGraph` during
     /// materialisation. Lets `_PrimitiveView._updateNode` drive layout
@@ -42,44 +53,110 @@ public final class Node: @unchecked Sendable {
 
     /// When true, hit-testing rejects child hits that fall outside this node's frame.
     /// Also a hint to the renderer (Phase 6.3 `.clip()` modifier).
-    public var clipsToBounds: Bool = false
+    public var clipsToBounds: Bool = false {
+        didSet {
+            if oldValue != clipsToBounds {
+                markRenderDirty()
+            }
+        }
+    }
 
     // MARK: - Visual (Phase 6.3)
 
     /// Solid background fill. `nil` = transparent (no fill emitted).
-    public var backgroundColor: Color?
+    public var backgroundColor: Color? {
+        didSet {
+            if oldValue != backgroundColor {
+                markRenderDirty()
+            }
+        }
+    }
 
     /// Corner radius (in pixels) applied to the background fill. The clip
     /// rectangle from `clipsToBounds` remains axis-aligned — child content
     /// is not rounded yet (Phase 7).
-    public var cornerRadius: Float = 0
+    public var cornerRadius: Float = 0 {
+        didSet {
+            if oldValue != cornerRadius {
+                markRenderDirty()
+            }
+        }
+    }
 
     /// Stroke colour painted as an inset border around the background fill.
     /// Rendered by `NodeRenderer` as an outer rounded rect of the border
     /// colour with the background rect inset by `borderWidth` painted on
     /// top — gives a correct rounded-rect border without needing a real
     /// stroke primitive on the GPU side.
-    public var borderColor: Color?
+    public var borderColor: Color? {
+        didSet {
+            if oldValue != borderColor {
+                markRenderDirty()
+            }
+        }
+    }
 
     /// Width of the border in pixels. `0` (default) skips border rendering
     /// even when `borderColor` is set.
-    public var borderWidth: Float = 0
+    public var borderWidth: Float = 0 {
+        didSet {
+            if oldValue != borderWidth {
+                markRenderDirty()
+            }
+        }
+    }
 
     /// Drop-shadow colour painted under the background fill. `nil` (default)
     /// or zero-alpha skips shadow rendering.
-    public var shadowColor: Color?
-    public var shadowOffsetX: Float = 0
-    public var shadowOffsetY: Float = 0
+    public var shadowColor: Color? {
+        didSet {
+            if oldValue != shadowColor {
+                markRenderDirty()
+            }
+        }
+    }
+    public var shadowOffsetX: Float = 0 {
+        didSet {
+            if oldValue != shadowOffsetX {
+                markRenderDirty()
+            }
+        }
+    }
+    public var shadowOffsetY: Float = 0 {
+        didSet {
+            if oldValue != shadowOffsetY {
+                markRenderDirty()
+            }
+        }
+    }
     /// Logical blur radius. The current renderer downgrades this to a stack
     /// of expanded translucent rounded rects (cheap fake shadow).
-    public var shadowBlur: Float = 0
+    public var shadowBlur: Float = 0 {
+        didSet {
+            if oldValue != shadowBlur {
+                markRenderDirty()
+            }
+        }
+    }
 
     /// Foreground tint. Used by Text and tinted Image. `nil` = renderer default.
-    public var foregroundColor: Color?
+    public var foregroundColor: Color? {
+        didSet {
+            if oldValue != foregroundColor {
+                markRenderDirty()
+            }
+        }
+    }
 
     /// Alpha multiplier in 0..1 applied to this node's draws (and inherited
     /// transitively in later phases). Default 1.
-    public var opacity: Float = 1
+    public var opacity: Float = 1 {
+        didSet {
+            if oldValue != opacity {
+                markRenderDirty()
+            }
+        }
+    }
 
     /// Optional custom-draw hook invoked after the background fill but before
     /// recursing into children. The closure receives the active `DrawList` and
@@ -87,15 +164,29 @@ public final class Node: @unchecked Sendable {
     ///
     /// Used by leaf primitives such as Text/Image to emit content-specific
     /// geometry without subclassing `Node`.
-    public var draw: ((DrawList, CGPoint) -> Void)?
+    public var draw: ((DrawList, CGPoint) -> Void)? {
+        didSet {
+            markRenderDirty()
+        }
+    }
 
     /// Optional draw hook invoked AFTER children render. Used for chrome that
     /// must overlay scrolled content (e.g. ScrollView scrollbars).
-    public var overlayDraw: ((DrawList, CGPoint) -> Void)?
+    public var overlayDraw: ((DrawList, CGPoint) -> Void)? {
+        didSet {
+            markRenderDirty()
+        }
+    }
 
     /// Children render translated by `-contentOffset`. Used by ScrollView to
     /// scroll its content while keeping its own clip rect anchored.
-    public var contentOffset: CGPoint = .zero
+    public var contentOffset: CGPoint = .zero {
+        didSet {
+            if oldValue != contentOffset {
+                markRenderDirty()
+            }
+        }
+    }
 
     /// Desired system cursor when the pointer is hovering this node. Resolved
     /// by `EventDispatcher` walking the hover path leaf → root and using the
@@ -150,11 +241,16 @@ public final class Node: @unchecked Sendable {
     public func addChild(_ child: Node) {
         child.parent = self
         children.append(child)
+        markRenderDirty()
     }
 
     public func removeChild(_ child: Node) {
+        let previousCount = children.count
         children.removeAll { $0 === child }
         child.parent = nil
+        if children.count != previousCount {
+            markRenderDirty()
+        }
     }
 
     public func removeFromParent() {
@@ -168,7 +264,27 @@ public final class Node: @unchecked Sendable {
     /// Ancestors are flagged so the tree root knows a flush is needed
     /// without scanning every node on each frame.
     public func markDirty() {
-        isDirty = true
-        parent?.markDirty()
+        propagateDirty(layoutDirty: true, renderDirty: true)
+    }
+
+    public func markRenderDirty() {
+        propagateDirty(layoutDirty: false, renderDirty: true)
+    }
+
+    private func propagateDirty(layoutDirty: Bool, renderDirty: Bool) {
+        let needsLayoutPropagation = layoutDirty && !isDirty
+        let needsRenderPropagation = renderDirty && !self.renderDirty
+        let shouldPropagate = needsLayoutPropagation || needsRenderPropagation
+
+        if layoutDirty {
+            isDirty = true
+        }
+        if renderDirty {
+            self.renderDirty = true
+        }
+
+        if shouldPropagate {
+            parent?.propagateDirty(layoutDirty: layoutDirty, renderDirty: renderDirty)
+        }
     }
 }

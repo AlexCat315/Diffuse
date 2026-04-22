@@ -46,6 +46,30 @@ struct NodeTreeTests {
         #expect(leaf.isDirty)
         #expect(mid.isDirty)
         #expect(root.isDirty)
+        #expect(leaf.renderDirty)
+        #expect(mid.renderDirty)
+        #expect(root.renderDirty)
+    }
+
+    @Test("markRenderDirty propagates without setting layout dirty")
+    func markRenderDirtyPropagates() {
+        let root = Node()
+        let mid = Node()
+        let leaf = Node()
+        root.addChild(mid)
+        mid.addChild(leaf)
+        root.renderDirty = false
+        mid.renderDirty = false
+        leaf.renderDirty = false
+
+        leaf.markRenderDirty()
+
+        #expect(!leaf.isDirty)
+        #expect(!mid.isDirty)
+        #expect(!root.isDirty)
+        #expect(leaf.renderDirty)
+        #expect(mid.renderDirty)
+        #expect(root.renderDirty)
     }
 
     @Test("NodeTree.markDirty is equivalent to Node.markDirty")
@@ -78,6 +102,9 @@ struct NodeTreeTests {
         #expect(!root.isDirty)
         #expect(!child.isDirty)
         #expect(!grandchild.isDirty)
+        #expect(!root.renderDirty)
+        #expect(!child.renderDirty)
+        #expect(!grandchild.renderDirty)
     }
 
     @Test("flush on empty tree does not crash")

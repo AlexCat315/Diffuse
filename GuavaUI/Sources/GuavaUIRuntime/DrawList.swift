@@ -159,11 +159,16 @@ public final class DrawList {
         _ layout: TextLayoutResult,
         origin: (x: Float, y: Float),
         color: Color,
-        textureID: TextureID
+        textureID: TextureID,
+        atlas: FontAtlas? = nil
     ) {
         for line in layout.lines {
             for glyph in line.glyphs {
-                guard let info = glyph.atlasInfo, info.width > 0, info.height > 0 else { continue }
+                let info = glyph.atlasInfo ?? atlas?.rasterizeGlyph(
+                    glyphIndex: glyph.glyphID,
+                    fontID: glyph.fontID
+                )
+                guard let info, info.width > 0, info.height > 0 else { continue }
                 let dx = snappedTextPixel(origin.x + glyph.x + info.bearingX)
                 let dy = snappedTextPixel(origin.y + glyph.y - info.bearingY)
                 addGlyphQuad(

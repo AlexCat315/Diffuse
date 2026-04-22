@@ -256,7 +256,8 @@ func installDragGhostOverlay(node: Node, controller: DockController) {
             list.addText(layout,
                          origin: (x: x + padX, y: y + padY),
                          color: textColor,
-                         textureID: env.atlasTextureID)
+                         textureID: env.atlasTextureID,
+                         atlas: env.atlas)
         }
     }
 }

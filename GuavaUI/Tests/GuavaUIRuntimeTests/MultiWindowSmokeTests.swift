@@ -79,6 +79,61 @@ struct MultiWindowSmokeTests {
     }
 
     @MainActor
+    @Test("Render-dirty nodes trigger a frame without global animation forcing")
+    func renderDirtyTriggersFrame() throws {
+        let shell = MockShell(eventBatches: [[], [], []])
+        let host = SDL3PlatformHost(shellFactory: { shell })
+
+        let tree = NodeTree()
+        let session = try host.openWindow(title: "A", tree: tree)
+        let root = Node()
+        let leaf = Node()
+        root.addChild(leaf)
+        tree.root = root
+
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+
+        var frameCount = 0
+        session.onFrame = { _ in
+            frameCount += 1
+            if frameCount == 1 {
+                leaf.opacity = 0.5
+                session.requestDisplay()
+            }
+        }
+
+        host.run()
+
+        #expect(frameCount == 2)
+    }
+
+    @MainActor
+    @Test("Active animations alone do not force extra frames")
+    func activeAnimationsDoNotForceFrames() throws {
+        let shell = MockShell(eventBatches: [[], []])
+        let host = SDL3PlatformHost(shellFactory: { shell })
+
+        let tree = NodeTree()
+        let session = try host.openWindow(title: "A", tree: tree)
+        tree.root = Node()
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+
+        let scheduler = AnimatorScheduler()
+        scheduler.register(IdleAnimationController())
+
+        var frameCount = 0
+        session.onFrame = { _ in
+            frameCount += 1
+        }
+
+        AnimatorScheduler.$current.withValue(scheduler) {
+            host.run()
+        }
+
+        #expect(frameCount == 1)
+    }
+
+    @MainActor
     private func makeHitTree(interactions: InteractionRegistry,
                              onPointerDown: @escaping () -> Void) -> Node {
         let root = Node()
@@ -110,6 +165,19 @@ struct MultiWindowSmokeTests {
 
         root.addChild(leaf)
         return root
+    }
+}
+
+@MainActor
+private let mockSurface = NativeRenderSurface.metalLayer(UnsafeMutableRawPointer(bitPattern: 0x1)!)
+
+private final class IdleAnimationController: AnyAnimationController {
+    var isFinished: Bool = false
+
+    func tick(deltaTime: Double) {}
+
+    func finishImmediately() {
+        isFinished = true
     }
 }
 
