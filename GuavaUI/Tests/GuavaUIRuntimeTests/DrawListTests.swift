@@ -134,6 +134,35 @@ struct DrawListTests {
         #expect(list.vertices[0].v == hInfo.uvMinY)
     }
 
+    @Test("addText snaps glyph quads to whole pixels")
+    func addTextPixelSnap() {
+        let atlas = FontAtlas()
+        atlas.loadFont(path: "/System/Library/Fonts/Supplemental/Arial.ttf", size: 16)
+
+        let shaper = TextShaper()
+        shaper.setFont(ftFace: atlas.freetypeFace!, size: 16)
+
+        let shaped = shaper.shape(text: "Hi")
+        let result = TextLayout.layout(
+            shapedGlyphs: shaped, text: "Hi", atlas: atlas, lineHeight: 20
+        )
+        guard let glyph = result.lines.first?.glyphs.first,
+              let info = glyph.atlasInfo else {
+            Issue.record("expected first glyph to exist")
+            return
+        }
+
+        let origin: (x: Float, y: Float) = (0.35, 0.65)
+        let rawX = origin.x + glyph.x + info.bearingX
+        let rawY = origin.y + glyph.y - info.bearingY
+
+        let list = DrawList()
+        list.addText(result, origin: origin, color: .white, textureID: 7)
+
+        #expect(list.vertices[0].posX == rawX.rounded())
+        #expect(list.vertices[0].posY == rawY.rounded())
+    }
+
     @Test("reset clears all CPU buffers")
     func resetClears() {
         let list = DrawList()

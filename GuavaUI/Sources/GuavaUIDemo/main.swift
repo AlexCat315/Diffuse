@@ -860,7 +860,7 @@ host.onFrame = { _ in
 
     // 1. Layout against current viewport. Glyphs are rasterised lazily here as
     //    the measure func runs.
-    graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
+    graph.computeLayoutIfNeeded(width: Float(logicalW), height: Float(logicalH))
 
     // 2. Re-upload atlas in case new glyphs were rasterised this frame.
     do {

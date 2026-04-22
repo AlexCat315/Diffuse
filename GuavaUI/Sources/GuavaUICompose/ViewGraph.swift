@@ -42,6 +42,8 @@ public final class ViewGraph {
     /// Strong reference keeps the rebuild closure alive while the anchor lives.
     internal var scopes: [ObjectIdentifier: ViewScope] = [:]
 
+    private var lastLayoutSize: (width: Float, height: Float)?
+
     public init(tree: NodeTree, recomposer: Recomposer) {
         self.tree = tree
         self.recomposer = recomposer
@@ -65,9 +67,31 @@ public final class ViewGraph {
     ///
     /// Call once per frame after `recomposer.commitAll()` and before draw.
     public func computeLayout(width: Float, height: Float) {
+        lastLayoutSize = (width, height)
         layoutRoot.calculateLayout(availableWidth: width, availableHeight: height)
         guard let root = tree.root else { return }
         writeLayoutBack(node: root)
+    }
+
+    /// Run layout only when Yoga says some layout node is dirty or the root
+    /// viewport size changed since the last pass.
+    @discardableResult
+    public func computeLayoutIfNeeded(width: Float, height: Float) -> Bool {
+        guard layoutNeedsUpdate(width: width, height: height) else {
+            return false
+        }
+        computeLayout(width: width, height: height)
+        return true
+    }
+
+    public func layoutNeedsUpdate(width: Float, height: Float) -> Bool {
+        guard let lastLayoutSize else {
+            return true
+        }
+        if lastLayoutSize.width != width || lastLayoutSize.height != height {
+            return true
+        }
+        return layoutRoot.subtreeIsDirty
     }
 
     private func writeLayoutBack(node: Node) {

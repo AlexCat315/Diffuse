@@ -206,6 +206,14 @@ public final class LayoutNode: @unchecked Sendable {
         YGNodeCalculateLayout(ygNode, availableWidth, availableHeight, direction.ygValue)
     }
 
+    /// True when this node or any descendant still needs a Yoga layout pass.
+    public var subtreeIsDirty: Bool {
+        if YGNodeIsDirty(ygNode) {
+            return true
+        }
+        return children.contains { $0.subtreeIsDirty }
+    }
+
     // MARK: - Layout readback
 
     /// The computed rectangle. Valid only after `calculateLayout()` has been called.
