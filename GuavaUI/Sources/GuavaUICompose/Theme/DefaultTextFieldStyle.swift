@@ -1,27 +1,28 @@
 import GuavaUIRuntime
 
-/// Filled surface with a 1px border that thickens to the focus ring colour
-/// when focused. Error state swaps the border for the error slot.
+/// Recessed field chrome for dense desktop forms. The resting fill is a
+/// sunken surface so inspector rows and toolbar fields read as inputs rather
+/// than as generic cards.
 public struct DefaultTextFieldStyle: TextFieldStyle {
     public init() {}
 
     public func makeBody(configuration: TextFieldStyleConfiguration) -> some View {
         let theme = configuration.theme
         let bg: Color = configuration.isEnabled
-            ? theme.colors.surfaceVariant
+            ? theme.colors.surfaceSunken
             : theme.colors.surfaceSunken
 
         let border: Color = {
             if configuration.isError   { return theme.colors.error }
             if configuration.isFocused { return theme.colors.focusRing }
-            return theme.colors.borderStrong
+            return theme.colors.border
         }()
         let borderWidth: Float = configuration.isFocused ? 2 : 1
 
         return configuration.content
-            .padding(horizontal: theme.spacing.md, vertical: theme.spacing.sm + 2)
+            .padding(horizontal: theme.spacing.md, vertical: theme.spacing.sm)
             .background(bg)
-            .cornerRadius(theme.radius.md)
+            .cornerRadius(theme.radius.sm)
             .border(border, width: borderWidth)
             .opacity(configuration.isEnabled ? 1 : 0.55)
             .animation(.fast, value: _TextFieldInteractionKey(

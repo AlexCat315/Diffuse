@@ -110,12 +110,11 @@ public struct TextField: _PrimitiveView {
     }
 
     public func _updateNode(_ node: Node) {
-        // Theme-aware chrome: a `surfaceVariant` fill with the small radius
-        // makes a freshly-dropped `TextField` look modern out of the box. We
-        // re-resolve on every update so theme switches take effect — the old
-        // "only set if nil" guard cached the first theme's colour forever.
+        // Keep the primitive fallback aligned with the public default style so
+        // freshly-created fields still look like recessed editor inputs even
+        // before higher-level style modifiers wrap them.
         let theme = node.theme
-        node.backgroundColor = theme.colors.surfaceVariant
+        node.backgroundColor = theme.colors.surfaceSunken
         node.cornerRadius = theme.radius.sm
         node.cursor = .ibeam
 

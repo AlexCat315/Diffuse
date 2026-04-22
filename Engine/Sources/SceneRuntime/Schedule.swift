@@ -109,6 +109,7 @@ public struct RuntimeWorldSchedule {
 
     private var physicsBackend: any PhysicsBackend = NullPhysicsBackend()
     private var explicitPhysicsBackend: (any PhysicsBackend)?
+    private var scriptDriver: (any RuntimeScriptDriver)?
     private var physicsClock = PhysicsStepClockResource()
     private var physicsFrameState = PhysicsFrameStateResource()
     private var physicsSyncCache = PhysicsSyncCache()
@@ -128,6 +129,16 @@ public struct RuntimeWorldSchedule {
         resolvedPhysicsBackendKind = .none
         physicsBackend = NullPhysicsBackend()
         physicsFrameState.backendIdentifier = physicsBackend.identifier
+    }
+
+    public mutating func setScriptDriver(_ driver: any RuntimeScriptDriver) {
+        scriptDriver?.reset()
+        scriptDriver = driver
+    }
+
+    public mutating func clearScriptDriver() {
+        scriptDriver?.reset()
+        scriptDriver = nil
     }
 
     public var currentPhysicsBackendIdentifier: String {
@@ -261,8 +272,23 @@ public struct RuntimeWorldSchedule {
                 )
                 world.setDerivedResource(physicsClock)
                 world.setDerivedResource(physicsFrameState)
-            case .animationAndScripts,
-                 .spatialIndexUpdate:
+            case .animationAndScripts:
+                if let scriptDriver {
+                    withUnsafeMutablePointer(to: &world) { worldPointer in
+                        withUnsafeMutablePointer(to: &commands) { commandPointer in
+                            var scriptContext = RuntimeScriptPhaseContext(
+                                world: worldPointer,
+                                commands: commandPointer,
+                                deltaTimeSeconds: deltaTimeSeconds
+                            )
+                            scriptDriver.run(context: &scriptContext)
+                        }
+                    }
+                }
+                if world.hierarchyNeedsPropagation() {
+                    world.propagateTransforms()
+                }
+            case .spatialIndexUpdate:
                 world.setDerivedResource(buildSpatialIndexResource(in: world))
                 break
             case .renderExtract:

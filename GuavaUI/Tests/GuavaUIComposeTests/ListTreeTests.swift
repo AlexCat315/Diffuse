@@ -190,6 +190,36 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         #expect(graph.recomposer.hasPending == true)
     } }
 
+    @Test("Tree row hosts register hover handlers")
+    func treeRowsRegisterHoverHandlers() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let roots = [
+            TreeItem(id: "scene", title: "Scene", children: [
+                TreeItem(id: "camera", title: "Camera", children: [])
+            ]),
+            TreeItem(id: "console", title: "Console", children: [])
+        ]
+
+        let selectionProbe = Probe<String?>(nil)
+        let expandedProbe = Probe<Set<String>>([])
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: TreeHarness(selectionProbe: selectionProbe,
+                                        expandedProbe: expandedProbe,
+                                        roots: roots))
+        graph.computeLayout(width: 280, height: 220)
+
+        let buttons = orderedPointerNodes(in: tree.root!, registry: registry)
+        let disclosure = buttons.min { $0.frame.width < $1.frame.width }!
+        let rowHosts = buttons.filter { $0 !== disclosure }
+
+        #expect(rowHosts.count == 2)
+        #expect(rowHosts.allSatisfy { registry.handlers(for: $0).hover != nil })
+    } }
+
     private func orderedPointerNodes(in root: Node,
                                      registry: InteractionRegistry) -> [Node] {
         var out: [Node] = []

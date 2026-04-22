@@ -95,7 +95,12 @@ let package = Package(
             ]
         ),
         .target(name: "AssetPipeline"),
-        .target(name: "ScriptRuntime"),
+        .target(
+            name: "ScriptRuntime",
+            dependencies: [
+                "SceneRuntime",
+            ]
+        ),
         .target(
             name: "RenderBackend",
             dependencies: [
@@ -104,7 +109,10 @@ let package = Package(
                 "SceneRuntime",
                 .product(name: "Logging", package: "swift-log"),
             ],
-            resources: [.copy("Resources/FinalBaseMesh.obj")]
+            resources: [
+                .copy("Resources/FinalBaseMesh.obj"),
+                .copy("Resources/Shaders"),
+            ]
         ),
 
         // MARK: - Engine Host (orchestrates all services)
@@ -131,6 +139,13 @@ let package = Package(
         .testTarget(
             name: "SceneRuntimeTests",
             dependencies: [
+                "SceneRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "ScriptRuntimeTests",
+            dependencies: [
+                "ScriptRuntime",
                 "SceneRuntime",
             ]
         ),

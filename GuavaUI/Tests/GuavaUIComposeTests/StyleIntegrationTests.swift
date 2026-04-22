@@ -110,7 +110,7 @@ struct StyleIntegrationTests {
 
     // MARK: - TextField
 
-    @Test("TextField default chrome resolves to theme.colors.surfaceVariant")
+    @Test("TextField default chrome resolves to theme.colors.surfaceSunken")
     func textFieldUsesThemeChrome() {
         struct H: View {
             @State var s = ""
@@ -124,7 +124,7 @@ struct StyleIntegrationTests {
         graph.computeLayout(width: 200, height: 36)
 
         let nodes = allNodes(in: tree)
-        let hit = nodes.first { $0.backgroundColor == Theme.defaultDark.colors.surfaceVariant }
+        let hit = nodes.first { $0.backgroundColor == Theme.defaultDark.colors.surfaceSunken }
         #expect(hit != nil)
         #expect(hit?.cornerRadius == Theme.defaultDark.radius.sm)
     }
@@ -142,14 +142,14 @@ struct StyleIntegrationTests {
         let darkGraph = ViewGraph(tree: darkTree, recomposer: Recomposer())
         darkGraph.install(root: H(app: .dark))
         darkGraph.computeLayout(width: 200, height: 80)
-        let dHit = allNodes(in: darkTree).first { $0.backgroundColor == Theme.defaultDark.colors.surfaceVariant }
+        let dHit = allNodes(in: darkTree).first { $0.backgroundColor == Theme.defaultDark.colors.surfaceSunken }
         #expect(dHit != nil)
 
         let lightTree = NodeTree()
         let lightGraph = ViewGraph(tree: lightTree, recomposer: Recomposer())
         lightGraph.install(root: H(app: .light))
         lightGraph.computeLayout(width: 200, height: 80)
-        let lHit = allNodes(in: lightTree).first { $0.backgroundColor == Theme.defaultLight.colors.surfaceVariant }
+        let lHit = allNodes(in: lightTree).first { $0.backgroundColor == Theme.defaultLight.colors.surfaceSunken }
         #expect(lHit != nil)
     }
 

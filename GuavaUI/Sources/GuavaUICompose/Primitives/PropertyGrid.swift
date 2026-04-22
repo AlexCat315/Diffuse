@@ -37,8 +37,8 @@ public struct PropertyGrid: View {
     public let rowSpacing: Float
 
     public init(_ sections: [PropertyGridSection],
-                labelWidth: Float = 128,
-                rowHeight: Float = 30,
+            labelWidth: Float = 112,
+            rowHeight: Float = 28,
                 rowSpacing: Float = 1) {
         self.sections = sections
         self.labelWidth = labelWidth
@@ -48,10 +48,10 @@ public struct PropertyGrid: View {
 
     public var body: some View {
         ScrollView(.vertical) {
-            Column(spacing: 10) {
+            Column(spacing: 12) {
                 sectionViews()
             }
-            .padding(8)
+            .padding(10)
         }
     }
 
@@ -68,24 +68,42 @@ public struct PropertyGrid: View {
     }
 
     private func sectionView(_ section: PropertyGridSection) -> some View {
-        Column(spacing: rowSpacing) {
+        Column(alignment: .leading, spacing: 6) {
             Text(section.title)
-                .font(.label)
+                .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
-            rowViews(section.rows)
+
+            Column(spacing: rowSpacing) {
+                rowViews(section.rows)
+            }
+            .padding(1)
+            .background(.divider)
+            .cornerRadius(2)
+            .clipped()
         }
     }
 
     private func rowView(_ row: PropertyGridRow) -> some View {
-        Row(alignment: .center, spacing: 12) {
-            Text(row.label)
-                .font(.body)
-                .frame(width: labelWidth, height: rowHeight)
-            row.value
-                .frame(height: rowHeight)
-                .flex()
+        Row(alignment: .center, spacing: 1) {
+            Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
+                Text(row.label)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceVariant)
+            }
+            .frame(width: labelWidth, height: rowHeight)
+            .padding(horizontal: 8)
+            .background(.surfaceVariant)
+
+            Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
+                row.value
+                    .frame(height: rowHeight)
+                    .flex()
+            }
+            .frame(height: rowHeight)
+            .padding(horizontal: 8)
+            .background(.surface)
+            .flex()
         }
-        .padding(horizontal: 8)
-        .background(.surfaceVariant)
+        .background(.divider)
     }
 }
