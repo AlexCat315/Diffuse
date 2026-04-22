@@ -51,17 +51,22 @@ public final class Recomposer: @unchecked Sendable {
     /// Execute all pending recomposes in registration order, then clear the queue.
     ///
     /// Call once per frame, before flushing the `NodeTree`.
-    public func commitAll() {
+    @discardableResult
+    public func commitAll() -> Bool {
         let scopes = lock.withLock {
             let s = pending
             pending = []
             return s
+        }
+        guard !scopes.isEmpty else {
+            return false
         }
         for scope in scopes {
             ActiveAnimationContext.with(scope.animation) {
                 scope.body()
             }
         }
+        return true
     }
 
     /// `true` when there are pending recomposes queued for the next `commitAll()`.

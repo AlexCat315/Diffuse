@@ -12,7 +12,7 @@
 /// Bindings:
 ///   group 0, binding 0: uniform { viewport: vec2<f32> } — screen size in pixels
 ///   group 0, binding 1: 2D texture (alpha font atlas, or RGBA color image)
-///   group 0, binding 2: linear sampler
+///   group 0, binding 2: sampler chosen per texture kind
 enum UIShader {
     static let wgsl: String = """
     struct Uniforms {
