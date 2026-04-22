@@ -205,7 +205,7 @@ final class DockWindowRenderer {
             self?.handleResize(width: w, height: h)
         }
         session.onFrame = { [weak self] _ in
-            self?.handleFrame()
+            self?.handleFrame() ?? false
         }
     }
 
@@ -222,9 +222,13 @@ final class DockWindowRenderer {
         didInstallRoot = true
     }
 
-    private func presentBootClearFrame() throws {
-        guard let surface else { return }
-        guard let frame = try surface.getCurrentTextureView() else { return }
+    @discardableResult
+    private func presentBootClearFrame() throws -> Bool {
+        guard let surface else { return false }
+        guard let frame = try surface.getCurrentTextureView() else {
+            session.requestDisplay()
+            return false
+        }
         let encoder = try backend.createCommandEncoder()
         let pass = try encoder.beginRenderPass(
             colorView: frame.view,
@@ -237,6 +241,7 @@ final class DockWindowRenderer {
         backend.submit(buffer)
         surface.present()
         didPresentBootClear = true
+        return true
     }
 
     private func handleInit(native: NativeRenderSurface, width: UInt32, height: UInt32) {
@@ -252,11 +257,12 @@ final class DockWindowRenderer {
             try sharedUI.configureRenderer(format: .bgra8Unorm)
             timing.mark("surface")
             if !didPresentBootClear {
-                try presentBootClearFrame()
+                _ = try presentBootClearFrame()
             }
             timing.mark("clearPresent")
             isConfigured = true
-            print(timing.summary(extra: ["firstVisible=clearPresent"]))
+            let firstVisible = didPresentBootClear ? "clearPresent" : "deferred"
+            print(timing.summary(extra: ["firstVisible=\(firstVisible)"]))
         } catch {
             print("[dock-multiwin] init failed for \(title): \(error)")
         }
@@ -280,11 +286,11 @@ final class DockWindowRenderer {
         }
     }
 
-    private func handleFrame() {
-        guard isConfigured, let surface else { return }
+    private func handleFrame() -> Bool {
+        guard isConfigured, let surface else { return false }
         do {
-            renderedFrameCount += 1
             var timing = TimingTrace(label: "[timing] demo.frame.dock[\(title)]")
+            let nextFrameIndex = renderedFrameCount + 1
             var didHydrate = false
             var didLayout = false
             var didAtlasUpload = false
@@ -308,7 +314,18 @@ final class DockWindowRenderer {
                 didAtlasUpload = try sharedUI.uploadAtlasIfNeeded(scale: session.contentScaleFactor, force: false)
                 timing.mark("atlasUpload")
             }
-            guard let frame = try surface.getCurrentTextureView() else { return }
+            guard let frame = try surface.getCurrentTextureView() else {
+                if didHydrate || nextFrameIndex <= 5 || didAtlasUpload {
+                    print(timing.summary(extra: [
+                        "frameAttempt=\(nextFrameIndex)",
+                        "hydrated=\(didHydrate)",
+                        "layoutUpdated=\(didLayout)",
+                        "atlasUploaded=\(didAtlasUpload)",
+                        "retry=surfaceUnavailable",
+                    ]))
+                }
+                return false
+            }
             timing.mark("acquireSurface")
             let encoder = try backend.createCommandEncoder()
             let pass = try encoder.beginRenderPass(
@@ -325,6 +342,7 @@ final class DockWindowRenderer {
             let buffer = try encoder.finish()
             backend.submit(buffer)
             surface.present()
+            renderedFrameCount = nextFrameIndex
             timing.mark("gpuSubmit")
             if didHydrate || renderedFrameCount <= 5 || didAtlasUpload {
                 print(timing.summary(extra: [
@@ -334,8 +352,10 @@ final class DockWindowRenderer {
                     "atlasUploaded=\(didAtlasUpload)",
                 ]))
             }
+            return true
         } catch {
             print("[dock-multiwin] frame failed for \(title): \(error)")
+            return false
         }
     }
 }
