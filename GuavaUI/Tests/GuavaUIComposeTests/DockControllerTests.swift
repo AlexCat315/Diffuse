@@ -73,6 +73,27 @@ struct DockControllerTests {
 
     // MARK: move — splitEdge
 
+    @Test("Center drop merges into the target leaf instead of replacing it")
+    func moveReplaceMergesIntoLeaf() {
+        let tabA = DockTab(userKey: "a", title: "A")
+        let tabB = DockTab(userKey: "b", title: "B")
+        let leafA = DockLayoutNode.tabs([tabA])
+        let leafB = DockLayoutNode.tabs([tabB])
+        let leafBID = leafB.id
+        let controller = DockController(root: .hsplit(first: leafA, second: leafB))
+
+        controller.apply(.move(tabID: tabA.id,
+                               to: .replace(target: leafBID)))
+
+        guard case .tabs(let id, let tabs, let active) = controller.root else {
+            Issue.record("expected merged tabs leaf as root, got \(controller.root)")
+            return
+        }
+        #expect(id == leafBID)
+        #expect(tabs.map(\.id) == [tabB.id, tabA.id])
+        #expect(active == tabA.id)
+    }
+
     @Test("splitEdge wraps the target leaf in a new split")
     func moveSplitEdge() {
         let tabA = DockTab(userKey: "a", title: "A")
@@ -111,6 +132,43 @@ struct DockControllerTests {
         // The moved tab is present somewhere in the tree.
         #expect(controller.root.collectTabIDs().contains(tabB.id))
         #expect(controller.root.collectTabIDs().contains(tabA.id))
+    }
+
+    @Test("Bottom drop on a side-by-side strip splits the whole strip, not only the target leaf")
+    func moveBottomEdgePromotesAcrossHorizontalStrip() {
+        let hierarchy = DockTab(userKey: "hierarchy", title: "Hierarchy")
+        let viewport = DockTab(userKey: "viewport", title: "Viewport")
+        let console = DockTab(userKey: "console", title: "Console")
+        let inspector = DockTab(userKey: "inspector", title: "Inspector")
+
+        let leftLeaf = DockLayoutNode.tabs([hierarchy])
+        let viewportLeaf = DockLayoutNode.tabs([viewport, console])
+        let inspectorLeaf = DockLayoutNode.tabs([inspector])
+        let workspaceStrip = DockLayoutNode.hsplit(first: viewportLeaf, second: inspectorLeaf)
+        let controller = DockController(root: .hsplit(first: leftLeaf, second: workspaceStrip))
+
+        controller.apply(.move(tabID: console.id,
+                               to: .splitEdge(target: viewportLeaf.id, edge: .bottom)))
+
+        guard case .split(_, .horizontal, _, let left, let right) = controller.root,
+              case .tabs(let leftID, _, _) = left,
+              case .split(_, .vertical, _, let top, let bottom) = right,
+              case .split(let promotedID, .horizontal, _, let topLeft, let topRight) = top,
+              case .tabs(let viewportID, let viewportTabs, _) = topLeft,
+              case .tabs(let inspectorID, let inspectorTabs, _) = topRight,
+              case .tabs(_, let consoleTabs, let activeBottom) = bottom else {
+            Issue.record("expected the side-by-side strip to be wrapped by a vertical split")
+            return
+        }
+
+        #expect(leftID == leftLeaf.id)
+        #expect(promotedID == workspaceStrip.id)
+        #expect(viewportID == viewportLeaf.id)
+        #expect(inspectorID == inspectorLeaf.id)
+        #expect(viewportTabs.map(\.id) == [viewport.id])
+        #expect(inspectorTabs.map(\.id) == [inspector.id])
+        #expect(consoleTabs.map(\.id) == [console.id])
+        #expect(activeBottom == console.id)
     }
 
     // MARK: closeTab
