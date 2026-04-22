@@ -9,7 +9,9 @@ struct EditorRootView: View {
     let registry: PanelRegistry
 
     var body: some View {
-        PanelWorkspace(controller: controller, registry: registry)
+        PanelWorkspace(controller: controller,
+                       registry: registry,
+                       semantics: .ide)
             .appearance(.dark)
     }
 }
@@ -34,15 +36,27 @@ enum EditorRootViewFactory {
         )
         let viewportLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
-            tabs: [viewportTab, consoleTab],
+            tabs: [viewportTab],
             activeTabID: viewportTab.id
         )
+        let consoleLeaf: DockLayoutNode = .tabs(
+            id: DockNodeID(),
+            tabs: [consoleTab],
+            activeTabID: consoleTab.id
+        )
 
+        let centerStack: DockLayoutNode = .split(
+            id: DockNodeID(),
+            axis: .vertical,
+            fraction: 0.72,
+            first: viewportLeaf,
+            second: consoleLeaf
+        )
         let centerAndRight: DockLayoutNode = .split(
             id: DockNodeID(),
             axis: .horizontal,
             fraction: 0.78,
-            first: viewportLeaf,
+            first: centerStack,
             second: inspectorLeaf
         )
         let root: DockLayoutNode = .split(
@@ -57,16 +71,25 @@ enum EditorRootViewFactory {
 
     static func makeRegistry(app: EditorApplication) -> PanelRegistry {
         PanelRegistry([
-            PanelDescriptor(id: "hierarchy", title: "Hierarchy") {
+            PanelDescriptor(id: "hierarchy",
+                            title: "Hierarchy",
+                            preferredRegion: .leadingSidebar) {
                 HierarchyPanel(store: app.store, scene: app.scene)
             },
-            PanelDescriptor(id: "inspector", title: "Inspector") {
+            PanelDescriptor(id: "inspector",
+                            title: "Inspector",
+                            preferredRegion: .trailingSidebar) {
                 InspectorPanel(store: app.store, scene: app.scene)
             },
-            PanelDescriptor(id: "viewport", title: "Viewport", closable: false) {
+            PanelDescriptor(id: "viewport",
+                            title: "Viewport",
+                            closable: false,
+                            preferredRegion: .center) {
                 ViewportPanel(app: app, scene: app.scene)
             },
-            PanelDescriptor(id: "console", title: "Console") {
+            PanelDescriptor(id: "console",
+                            title: "Console",
+                            preferredRegion: .bottomPanel) {
                 ConsolePanel(store: app.store)
             },
         ])

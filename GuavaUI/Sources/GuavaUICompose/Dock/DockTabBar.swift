@@ -1,3 +1,4 @@
+import CoreGraphics
 import GuavaUIRuntime
 
 /// Renders one tabs leaf: a tab strip followed by the active tab's content.
@@ -156,6 +157,17 @@ private let DOCK_LIFT_THRESHOLD: Float = 12
 /// downward jab is the canonical "tear off the strip" gesture.
 private let DOCK_LIFT_VERTICAL_THRESHOLD: Float = 8
 
+private func absoluteFrame(of node: Node) -> CGRect {
+    var origin = node.frame.origin
+    var current = node.parent
+    while let node = current {
+        origin.x += node.frame.origin.x
+        origin.y += node.frame.origin.y
+        current = node.parent
+    }
+    return CGRect(origin: origin, size: node.frame.size)
+}
+
 struct _DockTabBarItemHost: _PrimitiveView {
     let tab: DockTab
     let sourceLeafID: DockNodeID
@@ -255,8 +267,12 @@ struct _DockTabBarItemHost: _PrimitiveView {
             let bridge = node.compositionValue(of: DockHostBridgeLocal)
             let absDX = abs(dx)
             let absDY = abs(dy)
+            let stripFrame = absoluteFrame(of: node)
+            let leftStripVertically = event.y < Float(stripFrame.minY)
+                || event.y >= Float(stripFrame.maxY)
             let liftReached = absDX >= DOCK_LIFT_THRESHOLD
                 || absDY >= DOCK_LIFT_VERTICAL_THRESHOLD
+                || leftStripVertically
             let reorderReached = absDX >= DOCK_REORDER_THRESHOLD
             if !state.didDrag {
                 if reorderReached {
@@ -477,8 +493,13 @@ struct _DockLeafDragHandleHost: _PrimitiveView {
             let dy = event.y - state.downY
             let session = snapshot.controller.dragSession
             let bridge = node.compositionValue(of: DockHostBridgeLocal)
+            let stripFrame = absoluteFrame(of: node)
+            let leftStripVertically = event.y < Float(stripFrame.minY)
+                || event.y >= Float(stripFrame.maxY)
             if !state.didDrag {
-                if abs(dx) >= DOCK_LIFT_THRESHOLD || abs(dy) >= DOCK_LIFT_THRESHOLD {
+                if abs(dx) >= DOCK_LIFT_THRESHOLD
+                    || abs(dy) >= DOCK_LIFT_THRESHOLD
+                    || leftStripVertically {
                     state.didDrag = true
                     let ghost = DockDragSession.GhostInfo(title: activeTitle)
                     if let bridge {

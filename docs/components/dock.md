@@ -81,12 +81,12 @@ GuavaUIDemo 顶部的 `Save / Load / Reset` 按钮使用 `DemoLayoutPersistence`
 | Operation | 含义 |
 | --------- | ---- |
 | `.insertTab(tab, into:, at:)` | 在指定 leaf 插入 tab |
-| `.move(tabID, to:)` | 移动 tab 到 `DockDropTarget`（leaf 中央 / leaf 边缘 / split fraction） |
+| `.move(tabID, to:)` | 移动 tab 到 `DockDropTarget`：中央 drop 并入目标 tabs leaf（空 placeholder 才替换），边缘 drop 生成 split |
 | `.removeTab(tabID)` | 删除 tab；空 leaf 自动 collapse |
 | `.activateTab(tabID, in:)` | 切换 leaf 的 active tab |
 | `.setSplitFraction(splitID, fraction:)` | 调整拆分比例 |
 | `.spawnSatellite(leafID, hint:)` / `.closeSatellite(leafID)` | 卫星窗口生命周期 |
-| `.moveLeaf(leafID, to:)` | 把整个 tabs leaf 搬到一个 `DockDropTarget`：`.tabSlot` 把所有 tab 折进目标 leaf，`.replace` / `.splitEdge` 整棵子树 graft；自动塌陷源 split |
+| `.moveLeaf(leafID, to:)` | 把整个 tabs leaf 搬到一个 `DockDropTarget`：`.tabSlot` 把所有 tab 折进目标 leaf，`.replace` 在目标是 tabs leaf 时并入该组、目标是 empty placeholder 时替换，`.splitEdge` 生成新 split；自动塌陷源 split |
 | `.closeOthers(in:, keep:)` | 关闭 leaf 内除 `keep` 与 pinned tab 之外的所有 tab；victim 按从左到右顺序 push 进 `closedHistory` |
 | `.closeToTheRight(in:, of:)` | 关闭 leaf 内 pivot 之后的所有 tab；同样 push 进 `closedHistory` |
 | `.reopenLastClosed` | 弹出 `closedHistory` 末尾，按原 leaf + 原 index 复位；原 leaf 已塌陷则 fallback 到第一个 `.tabs` 叶子，再不行替换 `.empty` 根 |

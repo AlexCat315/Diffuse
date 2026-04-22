@@ -9,13 +9,17 @@ public struct PanelWorkspace: View {
     public let controller: DockController
     public let registry: PanelRegistry
     public let hostBridge: DockHostBridge?
+    public let semantics: PanelWorkspaceLayoutSemantics?
 
     public init(controller: DockController,
                 registry: PanelRegistry,
-                hostBridge: DockHostBridge? = nil) {
+                hostBridge: DockHostBridge? = nil,
+                semantics: PanelWorkspaceLayoutSemantics? = nil) {
         self.controller = controller
         self.registry = registry
         self.hostBridge = hostBridge
+        self.semantics = semantics
+        semantics?.install(on: controller, registry: registry)
     }
 
     public var body: some View {

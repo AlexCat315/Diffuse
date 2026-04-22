@@ -205,6 +205,32 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         #expect(observedVersion == controller.dragSession.version)
     }
 
+    @Test("Leaving the source strip upgrades a reorder drag into full lift immediately")
+    func leavingStripUpgradesToFullLift() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = PointerCapture()
+        defer { PointerCaptureHolder.current = nil }
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let tab = DockTab(userKey: "a", title: "A")
+        let controller = DockController(root: .tabs([tab]))
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: makeContent()))
+        graph.computeLayout(width: 600, height: 400)
+
+        let tabNode = findTabItems(tree.root!)[0]
+        let pointer = registry.handlers(for: tabNode).pointer!
+        let motion = registry.handlers(for: tabNode).motion!
+
+        _ = pointer(MouseButtonEvent(button: .left, x: 30, y: 28, clicks: 1), .down, .target)
+        _ = motion(MouseMotionEvent(x: 35, y: 33, deltaX: 5, deltaY: 5), .target)
+
+        #expect(controller.dragSession.isActive)
+        #expect(controller.dragSession.intent == .detachOrSplit)
+    } }
+
     @Test("Drop on the source leaf centre is a no-op (cancelled)")
     func dropOnSelfCentreIsNoOp() { GlobalTestLock.locked {
         let registry = InteractionRegistry()

@@ -33,7 +33,7 @@ struct DockMoveLeafTests {
 
     // MARK: replace — graft leaf subtree at a sibling
 
-    @Test("moveLeaf with .replace target swaps the sibling and collapses the source")
+    @Test("moveLeaf with .replace target merges tabs into the sibling and collapses the source")
     func moveLeafReplace() {
         let a = DockTab(userKey: "a", title: "A")
         let b = DockTab(userKey: "b", title: "B")
@@ -46,17 +46,17 @@ struct DockMoveLeafTests {
         controller.apply(.moveLeaf(leafID: leafAID, to: .replace(target: leafBID)))
 
         // Source collapse leaves leafB as the surviving sibling, then the
-        // replace swaps that node with leafA. Net: root is leafA.
+        // center-drop replace merges leafA's tabs into leafB.
         guard case .tabs(let id, let tabs, _) = controller.root else {
             Issue.record("expected tabs leaf at root"); return
         }
-        #expect(id == leafAID)
-        #expect(tabs.map(\.id) == [a.id])
+        #expect(id == leafBID)
+        #expect(tabs.map(\.id) == [b.id, a.id])
     }
 
     // MARK: splitEdge — graft leaf subtree as a new split
 
-    @Test("moveLeaf with .splitEdge .right wraps the target in a new hsplit")
+    @Test("moveLeaf with .splitEdge .right wraps the whole vertical strip in a new hsplit")
     func moveLeafSplitRight() {
         let a = DockTab(userKey: "a", title: "A")
         let b = DockTab(userKey: "b", title: "B")
@@ -75,22 +75,20 @@ struct DockMoveLeafTests {
                                    to: .splitEdge(target: leafBID, edge: .right)))
 
         // Source collapse leaves the inner vsplit as the new root; then
-        // the .right edge wraps leafB in a horizontal split with leafA on
-        // the right.
-        guard case .split(_, .vertical, _, let first, let second) = controller.root else {
-            Issue.record("expected vsplit at root after collapse"); return
+        // the .right edge promotes from leafB to that whole vertical strip,
+        // so the strip [leafB over leafC] becomes the left half and leafA
+        // becomes the new right half.
+        guard case .split(_, .horizontal, _, let left, let right) = controller.root,
+              case .split(_, .vertical, _, let top, let bottom) = left,
+              case .tabs(let topID, _, _) = top,
+              case .tabs(let bottomID, _, _) = bottom,
+              case .tabs(let rightID, _, _) = right else {
+            Issue.record("expected the whole vertical strip to be wrapped by an hsplit")
+            return
         }
-        guard case .split(_, .horizontal, _, let l, let r) = first,
-              case .tabs(let lID, _, _) = l,
-              case .tabs(let rID, _, _) = r else {
-            Issue.record("expected hsplit on the first half"); return
-        }
-        #expect(lID == leafBID)
-        #expect(rID == leafAID)
-        guard case .tabs(let cID, _, _) = second else {
-            Issue.record("expected leafC on the second half"); return
-        }
-        #expect(cID == leafC.id)
+        #expect(topID == leafBID)
+        #expect(bottomID == leafC.id)
+        #expect(rightID == leafAID)
     }
 
     // MARK: guards
