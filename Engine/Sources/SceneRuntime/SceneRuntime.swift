@@ -23,6 +23,18 @@ public struct SceneRuntime {
         world.summary
     }
 
+    public var extractedRenderScene: ExtractedRenderSceneResource? {
+        world.resource(ExtractedRenderSceneResource.self)
+    }
+
+    public var renderScene: RenderScene {
+        extractedRenderScene?.scene ?? .empty
+    }
+
+    public var spatialIndex: SpatialIndexResource {
+        world.resource(SpatialIndexResource.self) ?? buildSpatialIndexResource(in: world)
+    }
+
     @discardableResult
     public mutating func tick(deltaTime: Double = 0) -> RuntimeScheduleReport {
         schedule.run(world: &world, commands: &commandBuffer, deltaTimeSeconds: deltaTime)
@@ -161,8 +173,20 @@ public struct SceneRuntime {
         world.resource(PhysicsFrameStateResource.self) ?? schedule.currentPhysicsFrameState
     }
 
+    public func raycast(_ query: SceneRaycastQuery) -> SceneRaycastHit? {
+        performSpatialRaycast(query, using: spatialIndex)
+    }
+
+    public func overlap(_ query: SceneOverlapQuery) -> [SceneOverlapHit] {
+        performSpatialOverlap(query, using: spatialIndex)
+    }
+
     public mutating func setPhysicsBackend(_ backend: any PhysicsBackend) {
         schedule.setPhysicsBackend(backend)
+    }
+
+    public mutating func clearPhysicsBackendOverride() {
+        schedule.clearPhysicsBackendOverride()
     }
 
     public mutating func setResource<Resource: Sendable>(_ resource: Resource) {

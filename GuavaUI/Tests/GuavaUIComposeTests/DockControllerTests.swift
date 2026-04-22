@@ -134,8 +134,8 @@ struct DockControllerTests {
         #expect(controller.root.collectTabIDs().contains(tabA.id))
     }
 
-    @Test("Bottom drop on a side-by-side strip splits the whole strip, not only the target leaf")
-    func moveBottomEdgePromotesAcrossHorizontalStrip() {
+    @Test("Bottom drop splits the target leaf area and leaves sibling tabsets alone")
+    func moveBottomEdgeWrapsOnlyTheTargetLeaf() {
         let hierarchy = DockTab(userKey: "hierarchy", title: "Hierarchy")
         let viewport = DockTab(userKey: "viewport", title: "Viewport")
         let console = DockTab(userKey: "console", title: "Console")
@@ -152,17 +152,17 @@ struct DockControllerTests {
 
         guard case .split(_, .horizontal, _, let left, let right) = controller.root,
               case .tabs(let leftID, _, _) = left,
-              case .split(_, .vertical, _, let top, let bottom) = right,
-              case .split(let promotedID, .horizontal, _, let topLeft, let topRight) = top,
-              case .tabs(let viewportID, let viewportTabs, _) = topLeft,
-              case .tabs(let inspectorID, let inspectorTabs, _) = topRight,
+                            case .split(let workspaceID, .horizontal, _, let center, let inspectorNode) = right,
+                            case .split(_, .vertical, _, let viewportNode, let bottom) = center,
+                            case .tabs(let viewportID, let viewportTabs, _) = viewportNode,
+                            case .tabs(let inspectorID, let inspectorTabs, _) = inspectorNode,
               case .tabs(_, let consoleTabs, let activeBottom) = bottom else {
-            Issue.record("expected the side-by-side strip to be wrapped by a vertical split")
+                        Issue.record("expected only the target leaf area to be wrapped by a vertical split")
             return
         }
 
         #expect(leftID == leftLeaf.id)
-        #expect(promotedID == workspaceStrip.id)
+                #expect(workspaceID == workspaceStrip.id)
         #expect(viewportID == viewportLeaf.id)
         #expect(inspectorID == inspectorLeaf.id)
         #expect(viewportTabs.map(\.id) == [viewport.id])

@@ -10,11 +10,16 @@ import GuavaUIRuntime
 /// recompose that replaces a leaf node leaves no stale entry behind.
 public final class DockHitRegistry {
     private var entries: [DockNodeID: WeakNodeBox] = [:]
+    private var rootEntry: (id: DockNodeID, node: WeakNodeBox)?
 
     public init() {}
 
     func register(nodeID: DockNodeID, node: Node) {
         entries[nodeID] = WeakNodeBox(node)
+    }
+
+    func registerRoot(nodeID: DockNodeID, node: Node) {
+        rootEntry = (nodeID, WeakNodeBox(node))
     }
 
     /// Walk the registered leaves, return the smallest one whose absolute
@@ -35,6 +40,17 @@ public final class DockHitRegistry {
         }
         if let h = hit { return (h.0, h.1, h.2) }
         return nil
+    }
+
+    public func rootAt(x: Float, y: Float) -> (id: DockNodeID, node: Node, frame: AbsoluteRect)? {
+        guard let rootEntry else { return nil }
+        guard let node = rootEntry.node.node else {
+            self.rootEntry = nil
+            return nil
+        }
+        let frame = absoluteRect(of: node)
+        guard frame.contains(x: x, y: y) else { return nil }
+        return (rootEntry.id, node, frame)
     }
 
     func absoluteRect(of node: Node) -> AbsoluteRect {

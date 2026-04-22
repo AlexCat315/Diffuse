@@ -45,6 +45,7 @@ public struct DockHostBridge: @unchecked Sendable {
 /// pointer updates to cross-window ones without per-call plumbing.
 public let DockHostBridgeLocal = CompositionLocal<DockHostBridge?>(defaultValue: nil)
 let DockHitRegistryLocal = CompositionLocal<DockHitRegistry?>(defaultValue: nil)
+let DockRootDropTargetIDLocal = CompositionLocal<DockNodeID?>(defaultValue: nil)
 
 /// Attachment slot used by `_DockContainerRoot` / `_DockSatelliteHost` to
 /// remember whether they already registered with the coordinator. The

@@ -256,6 +256,9 @@ struct _DockTabBarItemHost: _PrimitiveView {
         }
 
         registry.setMotion(node) { event, _ in
+            guard snapshot.tab.isDraggable else {
+                return .ignored
+            }
             guard PointerCaptureHolder.current?.target === node else {
                 return .ignored
             }

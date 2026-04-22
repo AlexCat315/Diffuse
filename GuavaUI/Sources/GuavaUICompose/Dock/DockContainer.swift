@@ -119,12 +119,17 @@ struct _DockContainerRoot<Content: View>: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        installDragGhostOverlay(node: node, controller: controller)
+        installDragGhostOverlay(node: node,
+                                controller: controller,
+                                rootNodeID: controller.root.id)
+        let registry = hostBridge?.hitRegistry ?? controller.hitRegistry
+        registry.registerRoot(nodeID: controller.root.id, node: node)
         // Always (re-)publish the bridge so descendants reading
         // `DockHostBridgeLocal` see the latest value, even on recompose. The
         // bridge is optional — publishing nil is also valid.
         node.setCompositionValue(DockHostBridgeLocal, hostBridge)
         node.setCompositionValue(DockHitRegistryLocal, hostBridge?.hitRegistry)
+        node.setCompositionValue(DockRootDropTargetIDLocal, controller.root.id)
         if let bridge = hostBridge {
             MainActor.assumeIsolated {
                 node.registerDockHostBridge(bridge)
