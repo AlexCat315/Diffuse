@@ -51,6 +51,7 @@ struct _DockSatelliteTitleBar: _PrimitiveView {
         }
 
         registry.setPointer(node) { event, phase, _ in
+            guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
                 node.attachments[stateKey] = TabPressState(downX: event.x,

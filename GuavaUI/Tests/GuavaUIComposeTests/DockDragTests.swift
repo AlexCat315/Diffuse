@@ -209,4 +209,42 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         let centerHit = DockDragSession.resolveDropHit(x: 200, y: 200, sourceLeafID: nil, registry: registry)
         #expect(centerHit?.edge == .center)
     }
+
+    @Test("DragSession.resolveDropHit snaps to guide-tile hotspots before edge bands")
+    func resolveDropGuideHotspots() {
+        let registry = DockHitRegistry()
+        let n = Node()
+        n.frame = CGRect(x: 0, y: 0, width: 220, height: 160)
+        let id = DockNodeID()
+        registry.register(nodeID: id, node: n)
+
+        let tiles = makeDockDropGuideTiles(in: UIRect(x: 0, y: 0, width: 220, height: 160))
+        #expect(tiles.count == 5)
+
+        for tile in tiles {
+            let px = tile.buttonRect.x + tile.buttonRect.width * 0.5
+            let py = tile.buttonRect.y + tile.buttonRect.height * 0.5
+            let hit = DockDragSession.resolveDropHit(x: px, y: py, sourceLeafID: nil, registry: registry)
+            #expect(hit?.edge == tile.edge)
+        }
+    }
+
+    @Test("Source leaf centre guide remains a no-op")
+    func sourceLeafCenterGuideNoop() {
+        let registry = DockHitRegistry()
+        let n = Node()
+        n.frame = CGRect(x: 0, y: 0, width: 220, height: 160)
+        let id = DockNodeID()
+        registry.register(nodeID: id, node: n)
+
+        let centerTile = makeDockDropGuideTiles(in: UIRect(x: 0, y: 0, width: 220, height: 160))
+            .first(where: { $0.edge == .center })
+        #expect(centerTile != nil)
+        guard let centerTile else { return }
+
+        let px = centerTile.buttonRect.x + centerTile.buttonRect.width * 0.5
+        let py = centerTile.buttonRect.y + centerTile.buttonRect.height * 0.5
+        let hit = DockDragSession.resolveDropHit(x: px, y: py, sourceLeafID: id, registry: registry)
+        #expect(hit == nil)
+    }
 }
