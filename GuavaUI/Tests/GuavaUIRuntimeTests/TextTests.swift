@@ -184,6 +184,19 @@ struct TextTests {
         #expect(runs.allSatisfy { $0.font.postScriptName == primary?.postScriptName })
     }
 
+    @Test("Bootstrapped system-font environment shapes CJK through fallback")
+    func bootstrappedSystemFontShapesCJK() {
+        let provider = FontProvider(size: 13)
+        let primary = provider.loadPrimaryFont(name: SystemFontDefaults.primaryFontName)
+        let runs = provider.resolveRuns(text: "你")
+        let glyphs = runs.flatMap(provider.shapeRun)
+
+        #expect(primary != nil)
+        #expect(runs.isEmpty == false)
+        #expect(glyphs.isEmpty == false)
+        #expect((glyphs.first?.xAdvance ?? 0) > 0)
+    }
+
     // MARK: - TextLayout
 
     @Test("Single-line layout for short text")

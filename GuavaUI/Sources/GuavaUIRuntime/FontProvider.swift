@@ -24,7 +24,7 @@ public final class ManagedFont {
     private let bufferSize: Int
 
     init(id: Int, postScriptName: String, pointSize: Float, rasterScale: Float,
-         ftFace: FT_Face, hbFont: OpaquePointer,
+            ftFace: FT_Face, hbFont: OpaquePointer,
          buffer: UnsafeMutablePointer<UInt8>, bufferSize: Int) {
         self.id = id
         self.postScriptName = postScriptName
@@ -238,12 +238,46 @@ public final class FontProvider {
     private func loadFontFromCTFont(_ ctFont: CTFont, psName: String) -> ManagedFont? {
         if let existing = fonts[psName] { return existing }
 
+        if let loaded = makeManagedFont(from: ctFont, cacheAliases: [psName]) {
+            return loaded
+        }
+
+        for candidateName in fallbackPostScriptCandidates(for: ctFont, requestedPSName: psName) {
+            if let existing = fonts[candidateName] {
+                fonts[psName] = existing
+                return existing
+            }
+
+            let candidateCTFont = CTFontCreateWithName(candidateName as CFString,
+                                                       CGFloat(size * rasterScale),
+                                                       nil)
+            if let loaded = makeManagedFont(from: candidateCTFont,
+                                            cacheAliases: [psName, candidateName]) {
+                return loaded
+            }
+        }
+
+        return nil
+    }
+
+    private func makeManagedFont(from ctFont: CTFont,
+                                 cacheAliases: [String]) -> ManagedFont? {
+        let actualPSName = CTFontCopyPostScriptName(ctFont) as String
+        if let existing = fonts[actualPSName] {
+            for alias in cacheAliases {
+                fonts[alias] = existing
+            }
+            return existing
+        }
+
         let descriptor = CTFontCopyFontDescriptor(ctFont)
         guard let urlRef = CTFontDescriptorCopyAttribute(descriptor, kCTFontURLAttribute),
               let url = urlRef as? URL else { return nil }
         guard let data = try? Data(contentsOf: url) else { return nil }
 
-        let faceIndex = findFaceIndex(in: data, targetPSName: psName)
+        let faceIndex = findFaceIndex(in: data, targetPSName: actualPSName)
+            ?? descriptorFaceIndex(at: url, targetPSName: actualPSName)
+            ?? 0
 
         let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
         data.copyBytes(to: buffer, count: data.count)
@@ -255,6 +289,7 @@ public final class FontProvider {
             return nil
         }
 
+        _ = FT_Select_Charmap(ftFace, FT_ENCODING_UNICODE)
         FT_Set_Char_Size(ftFace, 0, FT_F26Dot6(size * rasterScale * 64), 72, 72)
 
         guard let hbFont = hb_ft_font_create_referenced(ftFace) else {
@@ -267,23 +302,81 @@ public final class FontProvider {
         nextFontID += 1
 
         let managed = ManagedFont(
-            id: id, postScriptName: psName, pointSize: size, rasterScale: rasterScale,
+            id: id, postScriptName: actualPSName, pointSize: size, rasterScale: rasterScale,
             ftFace: ftFace, hbFont: hbFont,
             buffer: buffer, bufferSize: data.count
         )
-        fonts[psName] = managed
+        for alias in Set(cacheAliases + [actualPSName]) {
+            fonts[alias] = managed
+        }
         return managed
     }
 
-    /// Finds the face index within a TTC/OTC collection that matches the target PostScript name.
-    private func findFaceIndex(in data: Data, targetPSName: String) -> Int {
+    private func fallbackPostScriptCandidates(for ctFont: CTFont,
+                                              requestedPSName: String) -> [String] {
+        var candidates: [String] = []
+
+        appendCandidate(normalizedFallbackPostScriptName(requestedPSName), to: &candidates)
+
+        if let subfamily = CTFontCopyName(ctFont, kCTFontSubFamilyNameKey) as String? {
+            let normalizedFamily = normalizedFallbackFamilyName(CTFontCopyFamilyName(ctFont) as String)
+            let normalizedStyle = subfamily.replacingOccurrences(of: " ", with: "")
+            if !normalizedFamily.isEmpty {
+                let familyCandidate = normalizedStyle.isEmpty
+                    ? normalizedFamily
+                    : "\(normalizedFamily)-\(normalizedStyle)"
+                appendCandidate(familyCandidate, to: &candidates)
+            }
+        }
+
+        return candidates
+    }
+
+    private func normalizedFallbackPostScriptName(_ name: String) -> String {
+        var normalized = name
+        if normalized.hasPrefix(".") {
+            normalized.removeFirst()
+        }
+        normalized = normalized.replacingOccurrences(of: "PingFangUIText", with: "PingFang")
+        normalized = normalized.replacingOccurrences(of: "PingFangUI", with: "PingFang")
+        return normalized
+    }
+
+    private func normalizedFallbackFamilyName(_ familyName: String) -> String {
+        var normalized = familyName
+        if normalized.hasPrefix(".") {
+            normalized.removeFirst()
+        }
+        normalized = normalized.replacingOccurrences(of: "PingFang UI", with: "PingFang ")
+        normalized = normalized.replacingOccurrences(of: " UI ", with: " ")
+        normalized = normalized.replacingOccurrences(of: " UI", with: " ")
+        normalized = normalized.replacingOccurrences(of: " ", with: "")
+        return normalized
+    }
+
+    private func appendCandidate(_ candidate: String, to candidates: inout [String]) {
+        guard !candidate.isEmpty, !candidates.contains(candidate) else { return }
+        candidates.append(candidate)
+    }
+
+    private func descriptorFaceIndex(at url: URL,
+                                     targetPSName: String) -> Int? {
+        guard let descriptors = CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor] else {
+            return nil
+        }
+        return descriptors.firstIndex(where: {
+            (CTFontDescriptorCopyAttribute($0, kCTFontNameAttribute) as? String) == targetPSName
+        })
+    }
+
+    private func findFaceIndex(in data: Data, targetPSName: String) -> Int? {
         let probe = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
         data.copyBytes(to: probe, count: data.count)
         defer { probe.deallocate() }
 
         var face: FT_Face?
         let err = FT_New_Memory_Face(ftLibrary, probe, FT_Long(data.count), 0, &face)
-        guard err == 0, let f = face else { return 0 }
+        guard err == 0, let f = face else { return nil }
         let numFaces = Int(f.pointee.num_faces)
 
         if let namePtr = FT_Get_Postscript_Name(f), String(cString: namePtr) == targetPSName {
@@ -292,7 +385,7 @@ public final class FontProvider {
         }
         FT_Done_Face(f)
 
-        guard numFaces > 1 else { return 0 }
+        guard numFaces > 1 else { return nil }
 
         for i in 1..<numFaces {
             var fi: FT_Face?
@@ -305,6 +398,6 @@ public final class FontProvider {
             }
         }
 
-        return 0
+        return nil
     }
 }

@@ -18,6 +18,8 @@ let package = Package(
         .library(name: "RHIWGPU", targets: ["RHIWGPU"]),
         .library(name: "PlatformShell", targets: ["PlatformShell"]),
         .library(name: "RenderBackend", targets: ["RenderBackend"]),
+        .library(name: "ObservationBus", targets: ["ObservationBus"]),
+        .library(name: "CapabilityRuntime", targets: ["CapabilityRuntime"]),
         .library(name: "SceneRuntime", targets: ["SceneRuntime"]),
         .library(name: "AssetPipeline", targets: ["AssetPipeline"]),
         .library(name: "SequenceRuntime", targets: ["SequenceRuntime"]),
@@ -90,6 +92,13 @@ let package = Package(
         ),
 
         // MARK: - Engine Services
+        .target(name: "ObservationBus"),
+        .target(
+            name: "CapabilityRuntime",
+            dependencies: [
+                "ObservationBus",
+            ]
+        ),
         .target(
             name: "SceneRuntime",
             dependencies: [
@@ -102,6 +111,8 @@ let package = Package(
             name: "IntentRuntime",
             dependencies: [
                 "AssetPipeline",
+                "CapabilityRuntime",
+                "ObservationBus",
                 "SceneRuntime",
                 "SequenceRuntime",
             ]
@@ -148,6 +159,19 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "ObservationBusTests",
+            dependencies: [
+                "ObservationBus",
+            ]
+        ),
+        .testTarget(
+            name: "CapabilityRuntimeTests",
+            dependencies: [
+                "CapabilityRuntime",
+                "ObservationBus",
+            ]
+        ),
+        .testTarget(
             name: "SceneRuntimeTests",
             dependencies: [
                 "SceneRuntime",
@@ -177,6 +201,7 @@ let package = Package(
             dependencies: [
                 "IntentRuntime",
                 "AssetPipeline",
+                "ObservationBus",
                 "SceneRuntime",
                 "SequenceRuntime",
             ]
