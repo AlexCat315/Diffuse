@@ -1,18 +1,28 @@
 import Foundation
+import IntentRuntime
 
 public enum EditorAction: Sendable {
     case setConnected(Bool)
     case setSelectedEntity(UInt64?)
+    case setSelectedEntities(Set<UInt64>)
     case setPlaybackState(PlaybackState)
     case setSceneRevision(UInt64)
     case setWindowFocused(Bool)
     case setWindowMinimized(Bool)
     case setWindowOccluded(Bool)
     case setGizmoMode(EditorGizmoMode)
+    case setGizmoSpace(EditorGizmoSpace)
+    case setViewportShadingMode(EditorViewportShadingMode)
+    case setTranslateSnapEnabled(Bool)
+    case setRotateSnapEnabled(Bool)
+    case setScaleSnapEnabled(Bool)
     case beginAssetDrag(EditorAssetDragPayload)
     case updateAssetDragCursor(x: Float, y: Float)
     case endAssetDrag
     case setInspectorSectionCollapsed(id: String, isCollapsed: Bool)
+    case setPendingConfirmationRequest(ConfirmationRequestBatch?)
+    case setAIStatusMessage(String?)
+    case setAIWarnings([String])
 }
 
 public enum EditorReducer {
@@ -22,6 +32,15 @@ public enum EditorReducer {
             state.connected = value
         case let .setSelectedEntity(value):
             state.selectedEntityID = value
+            if let entityID = value {
+                state.selectedEntityIDs = [entityID]
+            } else {
+                state.selectedEntityIDs.removeAll(keepingCapacity: false)
+            }
+
+        case let .setSelectedEntities(entityIDs):
+            state.selectedEntityIDs = entityIDs
+            state.selectedEntityID = entityIDs.first
         case let .setPlaybackState(value):
             state.playbackState = value
         case let .setSceneRevision(value):
@@ -34,6 +53,21 @@ public enum EditorReducer {
             state.windowOccluded = value
         case let .setGizmoMode(value):
             state.gizmoMode = value
+
+        case let .setGizmoSpace(space):
+            state.gizmoSpace = space
+
+        case let .setViewportShadingMode(mode):
+            state.viewportShadingMode = mode
+
+        case let .setTranslateSnapEnabled(enabled):
+            state.translateSnapEnabled = enabled
+
+        case let .setRotateSnapEnabled(enabled):
+            state.rotateSnapEnabled = enabled
+
+        case let .setScaleSnapEnabled(enabled):
+            state.scaleSnapEnabled = enabled
         case let .beginAssetDrag(payload):
             state.activeAssetDrag = payload
         case let .updateAssetDragCursor(x, y):
@@ -49,6 +83,12 @@ public enum EditorReducer {
             } else {
                 state.inspectorCollapsedSectionIDs.remove(id)
             }
+        case let .setPendingConfirmationRequest(request):
+            state.pendingConfirmationRequest = request
+        case let .setAIStatusMessage(message):
+            state.aiStatusMessage = message
+        case let .setAIWarnings(warnings):
+            state.aiWarnings = warnings
         }
     }
 }

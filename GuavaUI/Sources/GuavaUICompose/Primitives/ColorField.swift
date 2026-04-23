@@ -18,13 +18,16 @@ public struct ColorField: View {
     public let color: Binding<Color>
     public let isEnabled: Bool
     public let showAlpha: Bool
+    public let showsInlineValues: Bool
 
     public init(color: Binding<Color>,
                 isEnabled: Bool = true,
-                showAlpha: Bool = true) {
+                showAlpha: Bool = true,
+                showsInlineValues: Bool = false) {
         self.color = color
         self.isEnabled = isEnabled
         self.showAlpha = showAlpha
+        self.showsInlineValues = showsInlineValues
     }
 
     public var body: some View {
@@ -44,7 +47,9 @@ private struct _StatefulColorField: View {
                 isEnabled: field.isEnabled,
                 label: {
             ColorSwatch(color: field.color.wrappedValue,
-                        isEnabled: field.isEnabled)
+                        isEnabled: field.isEnabled,
+                        showAlpha: field.showAlpha,
+                        showsInlineValues: field.showsInlineValues)
         }, content: {
             ColorPickerPanel(color: field.color, showAlpha: field.showAlpha)
                 .padding(10)
@@ -60,13 +65,53 @@ private struct _StatefulColorField: View {
 private struct ColorSwatch: View {
     let color: Color
     let isEnabled: Bool
+    let showAlpha: Bool
+    let showsInlineValues: Bool
 
     var body: some View {
-        Box(direction: .row, alignItems: .center, spacing: 0) {}
-            .frame(width: 52, height: 22)
-            .background(isEnabled ? color : color.multipliedAlpha(0.4))
-            .cornerRadius(3)
-            .border(Color(red: 58, green: 64, blue: 78), width: 1)
+        Row(alignment: .center, spacing: 8) {
+            Box(direction: .row, alignItems: .center, spacing: 0) {}
+                .frame(width: 52, height: 22)
+                .background(isEnabled ? color : color.multipliedAlpha(0.4))
+                .cornerRadius(3)
+                .border(Color(red: 58, green: 64, blue: 78), width: 1)
+
+            if showsInlineValues {
+                Text(hexString(from: color, showAlpha: showAlpha))
+                    .font(.mono)
+                    .foregroundColor(isEnabled ? .onSurfaceVariant : .onSurfaceMuted)
+                Text(rgbString(from: color, showAlpha: showAlpha))
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .flex()
+            }
+        }
+    }
+
+    private func hexString(from c: Color, showAlpha: Bool) -> String {
+        let r = clamp8(c.r)
+        let g = clamp8(c.g)
+        let b = clamp8(c.b)
+        if showAlpha {
+            let a = clamp8(c.a)
+            return String(format: "#%02X%02X%02X%02X", r, g, b, a)
+        }
+        return String(format: "#%02X%02X%02X", r, g, b)
+    }
+
+    private func rgbString(from c: Color, showAlpha: Bool) -> String {
+        let r = clamp8(c.r)
+        let g = clamp8(c.g)
+        let b = clamp8(c.b)
+        if showAlpha {
+            let a = clamp8(c.a)
+            return "\(r), \(g), \(b), \(a)"
+        }
+        return "\(r), \(g), \(b)"
+    }
+
+    private func clamp8(_ v: Float) -> Int {
+        Int((v * 255).rounded()).clamped(to: 0...255)
     }
 }
 

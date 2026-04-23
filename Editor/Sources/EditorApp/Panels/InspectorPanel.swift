@@ -97,10 +97,19 @@ struct InspectorPanel: View {
             return AnyView(Toggle(isOn: binding))
         case let .number(binding):
             return AnyView(NumberField(value: binding, size: .small))
+        case let .constrainedNumber(binding, min, max, step, showsStepper):
+            return AnyView(NumberField(value: binding,
+                                       size: .small,
+                                       minValue: min,
+                                       maxValue: max,
+                                       step: step,
+                                       showsStepper: showsStepper))
         case let .vector3(x, y, z):
             return AnyView(vector3Field(x: x, y: y, z: z))
         case let .color(binding):
-            return AnyView(ColorField(color: binding))
+            return AnyView(ColorField(color: binding,
+                                      showAlpha: false,
+                                      showsInlineValues: true))
         case let .lightType(binding):
             return AnyView(
                 EnumField(value: binding, width: 128) { type in
