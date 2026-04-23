@@ -46,10 +46,17 @@ public final class DevTools {
     /// `requestDisplay()` here so the first mirror frame can be produced.
     public var onMirrorStart: (@MainActor () -> Void)?
 
-    public init(config: DevToolsConfig, tree: NodeTree) {
+    public init(config: DevToolsConfig,
+                tree: NodeTree,
+                invalidationLog: InvalidationLog? = nil,
+                renderTree: RenderTree? = nil,
+                inputScene: InputScene? = nil) {
         self.config = config
         self.server = DevServer(config: config)
-        self.scene = SceneInspector(tree: tree)
+        self.scene = SceneInspector(tree: tree,
+                                    invalidationLog: invalidationLog,
+                                    renderTree: renderTree,
+                                    inputScene: inputScene)
 
         let scene = self.scene
         server.snapshotProvider = { @MainActor in scene.snapshot() }

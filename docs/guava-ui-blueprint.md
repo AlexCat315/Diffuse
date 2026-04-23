@@ -259,6 +259,53 @@ ViewportHost 有特殊输入路由：
 - 命中后可把事件直接转发给引擎。
 - 是否冒泡由 ViewportHost 策略决定。
 
+### 5.7 内核子系统拆分（Phase 1–5b 已落地）
+
+§5.1 的 Node 不再独自承担“身份 + 布局 + 视觉 + 命中 + 焦点 + 脏标记”。
+Runtime 内核按职责划分成五棵镜像树，由 `ViewGraph` 在 reconcile 期统一驱动：
+
+| 子系统 | 类型 | 职责 |
+|---|---|---|
+| Element / Reconciler | `ElementID`、`ViewGraph` | 视图描述 ↔ Node 的稳定身份与子树调和 |
+| Layout | `LayoutNode` (Yoga 桥) + `Node.frame` | 约束、measure、frame 计算 |
+| Render Tree | `RenderObject` + `RenderTree` | layer 分类、绘制属性、layer chain 缓存 |
+| Input Scene | `InputNode` + `InputScene` | hit-test 分类、focus 候选、cursor 缓存 |
+| Diagnostics | `InvalidationLog`、`SceneInspector` | 脏标记溯源、运行时观察 |
+
+四条公共契约：
+
+1. **镜像反向指针采用 `weak`**。`Node.renderObject` / `Node.inputNode` 都是
+   `weak`；测试和宿主必须自己持有 Node 强引用，否则镜像会静默失效。
+2. **镜像生命周期由 `ViewGraph` 统一驱动**。`install` → 镜像 install；
+   `reconcileChildren` 末尾 → 镜像 `reconcileChildren`；`tearDown` 在
+   `removeFromParent` 前调用；`updateInPlace` 在 `_updateNode` 之后调用
+   `refresh`。任何绕过 `ViewGraph` 直接改 Node 树的代码都必须重新调用
+   对应的 `refresh` / `reconcileChildren`。
+3. **镜像通过 `version: Int` 表达失效**。`RenderTree.version` 与
+   `InputScene.version` 在结构变化或分类变化后 `&+= 1`。下游缓存
+   （`LayerAwareNodeRenderer.cachedLayerList`、`FocusChain.cachedFocusables`）
+   按 version 失效，避免每帧重算。
+4. **dirty 沿镜像向上冒泡至最近的 layer / 命中边界**，而不是污染整棵
+   Node 树。`Node.markRenderDirty` 会先 `refreshLayerClassification`
+   （处理 opacity / clip / shadow 升降级），再
+   `invalidateLayerChain` 让最近一级 layer-root 失效。
+
+输入与渲染的热路径在 Phase 4b/5b 后改为镜像驱动：
+
+- `LayerAwareNodeRenderer.render(tree:into:)` 按 `RenderObject` 的 layer
+  分类组织 DrawList，未失效的 layer 子树直接 `DrawList.append(cached)`。
+- `EventDispatcher` 持 `weak var inputScene`，命中走
+  `HitTester.hitTest(scene:point:)`；`updateCursor` 优先读
+  `Node.inputNode?.cursor`。`PlatformWindowSession.attachInputScene(_:)`
+  由 `AppRuntime.handleInit` 在 `graph.install(root:)` 之后接线。
+- `FocusChain.inputScene` 接线后，`focusables(in:)` 按
+  `InputScene.version` 命中缓存；未接线时回落原 Node 遍历，便于
+  独立单元测试和最小宿主。
+
+DevTools 暴露 `RenderInventoryPayload` 与 `InputInventoryPayload`，
+分别报告 layer 节点、scissor 节点、focusable、hit-testable 数量，
+作为镜像健康度的可观测信号。
+
 ## 6. 渲染模型
 
 Runtime 的渲染分三层：

@@ -10,7 +10,7 @@ public struct DefaultDockStyle: DockStyle {
         let t = config.theme
         return DockAppearance(
             tabBarBackground: t.colors.surfaceSunken,
-            tabBarHeight: 28,
+            tabBarHeight: 32,
             tabHorizontalPadding: t.spacing.md,
             tabHorizontalSpacing: 6,
             tabVerticalPadding: 4,
@@ -19,13 +19,13 @@ public struct DefaultDockStyle: DockStyle {
             tabInactiveForeground: t.colors.onSurfaceVariant,
             tabActiveAccentBar: t.colors.accent,
             tabActiveAccentBarHeight: 1,
-            closeButtonSize: 14,
+            closeButtonSize: 16,
             splitDividerThickness: 1,
             splitDividerColor: t.colors.borderStrong,
             splitDividerHitSlop: 4,
             leafBackground: t.colors.surface,
             emptyLeafBackground: t.colors.surfaceSunken,
-            satelliteTitleBarHeight: 22
+            satelliteTitleBarHeight: 24
         )
     }
 }

@@ -74,6 +74,14 @@ public final class PlatformWindowSession {
         needsDisplay = true
     }
 
+    /// Phase 5b: attach the input mirror produced by `ViewGraph` so this
+    /// session's `EventDispatcher` (and its `FocusChain`) can hit-test /
+    /// enumerate focusables off the cached classification rather than
+    /// re-walking the live `Node` tree each event.
+    public func attachInputScene(_ scene: InputScene) {
+        dispatcher.inputScene = scene
+    }
+
     fileprivate func updateMetrics(from handle: any WindowHandle) -> Bool {
         let nextDrawable = handle.drawableSize
         let nextLogical = handle.logicalSize
