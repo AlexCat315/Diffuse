@@ -345,6 +345,13 @@ public struct TransactionExecutor {
                                                                    type: "Constraint")
                 }
 
+            case let .setLightType(entityID, type):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(LightComponent.self, for: entity, { $0.type = type }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "LightComponent")
+                }
+
             case let .setLightColor(entityID, color):
                 let entity = try requireEntity(entityID, in: scene)
                 guard scene.updateComponent(LightComponent.self, for: entity, { $0.color = color }) else {
@@ -610,6 +617,7 @@ public struct TransactionExecutor {
                  let .setRigidBodyAllowSleep(entityID, _),
                  let .setColliderTrigger(entityID, _),
                  let .setConstraintEnabled(entityID, _),
+                 let .setLightType(entityID, _),
                  let .setLightColor(entityID, _),
                  let .setLightIntensity(entityID, _),
                  let .setCameraPose(entityID, _, _, _):
