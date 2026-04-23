@@ -82,6 +82,15 @@ func findDemoSceneNode(id: String,
     return nil
 }
 
+enum DemoFrameMode: String {
+    case idle = "Idle"
+    case benchmark = "Benchmark"
+}
+
+enum DemoFrameModeHolder {
+    nonisolated(unsafe) static var current: DemoFrameMode = .idle
+}
+
 // MARK: - Root view (compose)
 
 /// Showcase app for the Phase 8.1 design system.
@@ -109,6 +118,7 @@ struct RootView: View {
     @State var checkC: Bool = false
     @State var numberValue: Float = 3.14
     @State var tabSelection: String = "tab1"
+    @State var frameMode: DemoFrameMode = DemoFrameModeHolder.current
 
     enum NavSection: String, Hashable, CaseIterable, Identifiable {
         case components, tokens, layouts, console
@@ -209,6 +219,11 @@ struct RootView: View {
             Button("Run") { clickCount += 1 }
             Button("Inspect") { clickCount += 1 }
                 .buttonStyle(.secondary)
+            Button("Mode: \(frameMode.rawValue)") {
+                frameMode = (frameMode == .idle) ? .benchmark : .idle
+                DemoFrameModeHolder.current = frameMode
+            }
+            .buttonStyle(.ghost)
             Button(appearance == .dark ? "☀︎ Light" : "☾ Dark") {
                 appearance = (appearance == .dark) ? .light : .dark
             }
@@ -795,6 +810,9 @@ struct RootView: View {
             Text("focus: \(demoSceneTitle(id: selectedSceneNodeID))")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
+            Text("mode: \(frameMode.rawValue)")
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
             Spacer(minLength: 0)
             Text("GuavaUI · Phase 8.1")
                 .font(.caption)
@@ -831,10 +849,10 @@ var didInstallRoot = false
 var didPresentBootClear = false
 var demoRenderedFrameCount = 0
 var lastHUDSampleTime = ProcessInfo.processInfo.systemUptime
-var hudFrameAccum: Double = 0
-var hudFrameCount: Int = 0
-var hudFPS: Int = 0
-var hudFrameMS: Double = 0
+var hudTickFrameCount: Int = 0
+var hudRenderFrameCount: Int = 0
+var hudTickFPS: Int = 0
+var hudRenderFPS: Int = 0
 
 let demoBootGlyphSeed = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:;!?+-*/_=()[]{}<>/%@#&'\"`~|\\…●☀︎☾"
 
@@ -994,20 +1012,15 @@ func appendPerformanceHUD(to list: DrawList) {
 
     let now = ProcessInfo.processInfo.systemUptime
     let delta = max(0, now - lastHUDSampleTime)
-    lastHUDSampleTime = now
-    hudFrameAccum += delta
-    hudFrameCount += 1
-
-    if hudFrameAccum >= 0.25 {
-        hudFPS = Int((Double(hudFrameCount) / hudFrameAccum).rounded())
-        hudFrameMS = (hudFrameAccum / Double(hudFrameCount)) * 1000
-        hudFrameAccum = 0
-        hudFrameCount = 0
+    if delta >= 0.25 {
+        hudTickFPS = Int((Double(hudTickFrameCount) / delta).rounded())
+        hudRenderFPS = Int((Double(hudRenderFrameCount) / delta).rounded())
+        hudTickFrameCount = 0
+        hudRenderFrameCount = 0
+        lastHUDSampleTime = now
     }
 
-    let hudText = hudFPS > 0
-        ? String(format: "FPS %d  %.1f ms", hudFPS, hudFrameMS)
-        : "FPS --"
+    let hudText = "Render FPS \(hudRenderFPS)  Tick FPS \(hudTickFPS)"
     let font = env.resolvedFont(.system(size: 13, weight: .medium))
     let layout = env.cachedLayout(
         text: hudText,
@@ -1102,6 +1115,7 @@ host.onResize = { w, h in
 
 host.onFrame = { _ in
     guard configured, let surface, let root = tree.root else { return false }
+    hudTickFrameCount += 1
 
     var timing = TimingTrace(label: "[timing] demo.frame.main")
     let nextFrameIndex = demoRenderedFrameCount + 1
@@ -1178,6 +1192,7 @@ host.onFrame = { _ in
         let buffer = try encoder.finish()
         backend.submit(buffer)
         surface.present()
+        hudRenderFrameCount += 1
         demoRenderedFrameCount = nextFrameIndex
         timing.mark("gpuSubmit")
         if shouldLogMainDemoFrameTiming(frameIndex: demoRenderedFrameCount,
@@ -1189,6 +1204,9 @@ host.onFrame = { _ in
                 "atlasUploaded=\(didAtlasUpload)",
                 "previewUploaded=\(didPreviewUpload)",
             ]))
+        }
+        if DemoFrameModeHolder.current == .benchmark {
+            host.requestDisplay()
         }
         return true
     } catch {
