@@ -279,10 +279,8 @@ public final class DevServer: @unchecked Sendable {
         case "mirror.start":
             let payload = decodePayload(MirrorStartPayload.self, from: env.payload)
                 ?? MirrorStartPayload(fps: nil, quality: nil)
-            log.info("recv mirror.start fps=\(payload.fps ?? -1) quality=\(payload.quality ?? -1) handlerWired=\(mirrorStartHandler != nil)")
-            print("[guava.devtools] dispatching mirror.start Task")
+            log.info("recv mirror.start fps=\(payload.fps ?? -1) quality=\(payload.quality ?? -1)")
             Task { @MainActor [weak self] in
-                print("[guava.devtools] mirror.start Task body running, handler=\((self?.mirrorStartHandler) == nil ? "nil" : "set")")
                 self?.mirrorStartHandler?(payload)
             }
             sendOK(for: env, on: conn)

@@ -36,6 +36,16 @@ public final class DevTools {
     /// Restores application state from a previously-captured checkpoint.
     public var stateRestoreHandler: (([String: String]) -> Void)?
 
+    /// `true` between `mirror.start` and `mirror.stop`. AppRuntime can poll
+    /// this to keep requesting redisplay so the mirror stays live even when
+    /// the host UI itself isn't dirty.
+    public var mirrorIsActive: Bool { frameTap?.isActive ?? false }
+
+    /// Invoked on the main actor immediately after `mirror.start` wires up
+    /// the FrameTap. Hosts using a demand-render loop (e.g. SDL3) must call
+    /// `requestDisplay()` here so the first mirror frame can be produced.
+    public var onMirrorStart: (@MainActor () -> Void)?
+
     public init(config: DevToolsConfig, tree: NodeTree) {
         self.config = config
         self.server = DevServer(config: config)
@@ -124,12 +134,12 @@ public final class DevTools {
 
     private func wireMirror() {
         server.mirrorStartHandler = { @MainActor [weak self] payload in
-            print("[guava.devtools] mirrorStartHandler entered, self=\(self == nil ? "nil" : "set"), frameTap=\((self?.frameTap) == nil ? "nil" : "set")")
             guard let self else { return }
             self.frameTap?.start(
                 fps: payload.fps ?? 15,
                 quality: payload.quality ?? 0.7
             )
+            self.onMirrorStart?()
         }
         server.mirrorStopHandler = { @MainActor [weak self] in
             self?.frameTap?.stop()
