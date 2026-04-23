@@ -1,5 +1,6 @@
 import Foundation
 import simd
+import EngineKernel
 
 public struct RuntimeWorldSummary: Sendable {
     public var entityCount: Int
@@ -69,6 +70,13 @@ public struct Children: RuntimeComponent, Sendable, Equatable {
 }
 
 public struct RuntimeWorld: @unchecked Sendable {
+    private struct HierarchyReadSnapshot {
+        var entities: [EntityID]
+        var localMatrices: [EntityID: simd_float4x4]
+        var parentByEntity: [EntityID: EntityID]
+        var childrenByEntity: [EntityID: [EntityID]]
+    }
+
     private struct EntitySlot {
         var generation: UInt32 = 0
         var isAlive = false
@@ -441,18 +449,84 @@ public struct RuntimeWorld: @unchecked Sendable {
     }
 
     public mutating func propagateTransforms() {
-        guard hierarchyNeedsPropagation() else { return }
+        _ = propagateTransforms(using: .shared)
+    }
 
-        var visited: Set<EntityID> = []
-        for entity in entities() where parent(of: entity) == nil {
-            propagateTransforms(from: entity, parentWorldMatrix: matrix_identity_float4x4, visited: &visited)
+    @discardableResult
+    public mutating func propagateTransforms(using jobSystem: JobSystem) -> JobDispatchReport {
+        guard hierarchyNeedsPropagation() else {
+            return JobDispatchReport(jobCount: 0, workerCount: jobSystem.workerCount, executedInParallel: false)
         }
-        for entity in entities() where !visited.contains(entity) {
-            propagateTransforms(from: entity, parentWorldMatrix: matrix_identity_float4x4, visited: &visited)
+
+        let snapshot = hierarchyReadSnapshot()
+        let entitySet = Set(snapshot.entities)
+        var worldMatrices: [EntityID: simd_float4x4] = [:]
+        worldMatrices.reserveCapacity(snapshot.entities.count)
+        var visited = Set<EntityID>()
+        var totalJobCount = 0
+        var executedInParallel = false
+
+        var roots: [EntityID] = []
+        roots.reserveCapacity(snapshot.entities.count)
+        for entity in snapshot.entities {
+            if let parent = snapshot.parentByEntity[entity], entitySet.contains(parent) {
+                continue
+            }
+            roots.append(entity)
+        }
+
+        var frontier = roots
+        while !frontier.isEmpty {
+            let currentFrontier = frontier
+            let parentWorldMatrices = worldMatrices
+            let computed = jobSystem.parallelCompactMap(items: currentFrontier, minimumChunkSize: 1) {
+                entity -> simd_float4x4? in
+                let localMatrix = snapshot.localMatrices[entity] ?? matrix_identity_float4x4
+                let parentMatrix: simd_float4x4
+                if let parent = snapshot.parentByEntity[entity], let cachedParent = parentWorldMatrices[parent] {
+                    parentMatrix = cachedParent
+                } else {
+                    parentMatrix = matrix_identity_float4x4
+                }
+                return parentMatrix * localMatrix
+            }
+
+            totalJobCount += computed.1.jobCount
+            executedInParallel = executedInParallel || computed.1.executedInParallel
+
+            var nextFrontier: [EntityID] = []
+            for (index, entity) in currentFrontier.enumerated() {
+                let worldMatrix = computed.0[index]
+                worldMatrices[entity] = worldMatrix
+                components.set(WorldTransform(matrix: worldMatrix), for: entity)
+                visited.insert(entity)
+                if let children = snapshot.childrenByEntity[entity] {
+                    for child in children where !visited.contains(child) {
+                        nextFrontier.append(child)
+                    }
+                }
+            }
+            frontier = nextFrontier
+        }
+
+        for entity in snapshot.entities where !visited.contains(entity) {
+            propagateTransforms(
+                from: entity,
+                parentWorldMatrix: matrix_identity_float4x4,
+                visited: &visited,
+                localMatrices: snapshot.localMatrices,
+                childrenByEntity: snapshot.childrenByEntity
+            )
         }
 
         dirtyHierarchyEntities.removeAll(keepingCapacity: true)
         revision &+= 1
+
+        return JobDispatchReport(
+            jobCount: totalJobCount,
+            workerCount: jobSystem.workerCount,
+            executedInParallel: executedInParallel
+        )
     }
 
     private mutating func attachChild(_ child: EntityID, to parent: EntityID) {
@@ -508,6 +582,61 @@ public struct RuntimeWorld: @unchecked Sendable {
         for child in children(of: entity) {
             propagateTransforms(from: child, parentWorldMatrix: worldMatrix, visited: &visited)
         }
+    }
+
+    private mutating func propagateTransforms(
+        from entity: EntityID,
+        parentWorldMatrix: simd_float4x4,
+        visited: inout Set<EntityID>,
+        localMatrices: [EntityID: simd_float4x4],
+        childrenByEntity: [EntityID: [EntityID]]
+    ) {
+        guard contains(entity), !visited.contains(entity) else { return }
+        visited.insert(entity)
+
+        let localMatrix = localMatrices[entity] ?? matrix_identity_float4x4
+        let worldMatrix = parentWorldMatrix * localMatrix
+        components.set(WorldTransform(matrix: worldMatrix), for: entity)
+
+        for child in childrenByEntity[entity] ?? [] {
+            propagateTransforms(
+                from: child,
+                parentWorldMatrix: worldMatrix,
+                visited: &visited,
+                localMatrices: localMatrices,
+                childrenByEntity: childrenByEntity
+            )
+        }
+    }
+
+    private func hierarchyReadSnapshot() -> HierarchyReadSnapshot {
+        let entities = entities()
+        let entitySet = Set(entities)
+
+        var localMatrices: [EntityID: simd_float4x4] = [:]
+        localMatrices.reserveCapacity(entities.count)
+        var parentByEntity: [EntityID: EntityID] = [:]
+        parentByEntity.reserveCapacity(entities.count)
+        var childrenByEntity: [EntityID: [EntityID]] = [:]
+        childrenByEntity.reserveCapacity(entities.count)
+
+        for entity in entities {
+            localMatrices[entity] = components.get(LocalTransform.self, for: entity)?.matrix ?? matrix_identity_float4x4
+            if let parent = components.get(Parent.self, for: entity)?.entity,
+               entitySet.contains(parent) {
+                parentByEntity[entity] = parent
+            }
+            if let children = components.get(Children.self, for: entity)?.entities {
+                childrenByEntity[entity] = children.filter { entitySet.contains($0) }
+            }
+        }
+
+        return HierarchyReadSnapshot(
+            entities: entities,
+            localMatrices: localMatrices,
+            parentByEntity: parentByEntity,
+            childrenByEntity: childrenByEntity
+        )
     }
 
     mutating func applyPhysicsWriteback(_ writeback: PhysicsBodyWriteback) -> Bool {
