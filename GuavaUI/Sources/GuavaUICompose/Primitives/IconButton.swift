@@ -25,6 +25,8 @@ public struct IconButton: View {
         /// File on disk, resolved at view-construction time through
         /// `ImageAssetRegistryHolder.current`.
         case file(path: String)
+        /// Bundle-packaged image resource resolved by the UI layer.
+        case resource(BundleImageResource)
     }
 
     public let source: Source
@@ -62,6 +64,20 @@ public struct IconButton: View {
         self.action = action
     }
 
+    public init(resource: BundleImageResource,
+                size: Float = 16,
+                role: ButtonRole = .normal,
+                isEnabled: Bool = true,
+                tint: Color = .white,
+                action: @escaping () -> Void) {
+        self.source = .resource(resource)
+        self.size = size
+        self.role = role
+        self.isEnabled = isEnabled
+        self.tint = tint
+        self.action = action
+    }
+
     public var body: some View {
         Button(role: role, isEnabled: isEnabled, action: action) {
             iconView
@@ -75,6 +91,8 @@ public struct IconButton: View {
             Image(textureID: id, width: size, height: size, tint: tint)
         case .file(let path):
             Image(file: path, width: size, height: size, tint: tint)
+        case .resource(let resource):
+            Image(resource: resource, width: size, height: size, tint: tint)
         }
     }
 }

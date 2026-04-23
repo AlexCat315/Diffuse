@@ -149,5 +149,11 @@ let package = Package(
                 "SceneRuntime",
             ]
         ),
+        .testTarget(
+            name: "AssetPipelineTests",
+            dependencies: [
+                "AssetPipeline",
+            ]
+        ),
     ]
 )
