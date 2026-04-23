@@ -62,6 +62,7 @@ public enum EditorInspectorFieldValue {
     case text(Binding<String>)
     case bool(Binding<Bool>)
     case number(Binding<Float>)
+    case constrainedNumber(Binding<Float>, min: Float?, max: Float?, step: Float?, showsStepper: Bool)
     case vector3(x: Binding<Float>, y: Binding<Float>, z: Binding<Float>)
     case color(Binding<Color>)
     case lightType(Binding<LightType>)
@@ -363,31 +364,109 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             return nil
         }
 
-        return EditorInspectorSection(
-            id: "light",
-            title: "Light",
-            fields: [
-                EditorInspectorField(
-                    id: "type",
-                    label: "Type",
-                    value: .lightType(lightTypeBinding(for: entity))
-                ),
-                EditorInspectorField(
-                    id: "color",
-                    label: "Color",
-                    value: .color(lightColorBinding(for: entity))
-                ),
+        var fields: [EditorInspectorField] = [
+            EditorInspectorField(
+                id: "type",
+                label: "Type",
+                value: .lightType(lightTypeBinding(for: entity))
+            ),
+            EditorInspectorField(
+                id: "color",
+                label: "Color",
+                value: .color(lightColorBinding(for: entity))
+            )
+        ]
+
+        switch light.type {
+        case .directional:
+            fields.append(
                 EditorInspectorField(
                     id: "intensity",
                     label: "Intensity",
                     value: .number(lightIntensityBinding(for: entity))
-                ),
+                )
+            )
+        case .point:
+            fields.append(
                 EditorInspectorField(
-                    id: "rgb",
-                    label: "RGB",
-                    value: .readOnly(format(light.color))
-                ),
-            ]
+                    id: "intensity",
+                    label: "Intensity",
+                    value: .constrainedNumber(lightIntensityBinding(for: entity),
+                                              min: 0,
+                                              max: nil,
+                                              step: 0.1,
+                                              showsStepper: true)
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "range",
+                    label: "Range",
+                    value: .constrainedNumber(lightRangeBinding(for: entity),
+                                              min: 0,
+                                              max: nil,
+                                              step: 0.1,
+                                              showsStepper: true)
+                )
+            )
+        case .spot:
+            fields.append(
+                EditorInspectorField(
+                    id: "intensity",
+                    label: "Intensity",
+                    value: .constrainedNumber(lightIntensityBinding(for: entity),
+                                              min: 0,
+                                              max: nil,
+                                              step: 0.1,
+                                              showsStepper: true)
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "range",
+                    label: "Range",
+                    value: .constrainedNumber(lightRangeBinding(for: entity),
+                                              min: 0,
+                                              max: nil,
+                                              step: 0.1,
+                                              showsStepper: true)
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "spot-inner-angle",
+                    label: "Inner Angle",
+                    value: .constrainedNumber(lightSpotInnerAngleBinding(for: entity),
+                                              min: 0,
+                                              max: 179,
+                                              step: 1,
+                                              showsStepper: true)
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "spot-outer-angle",
+                    label: "Outer Angle",
+                    value: .constrainedNumber(lightSpotOuterAngleBinding(for: entity),
+                                              min: 1,
+                                              max: 179,
+                                              step: 1,
+                                              showsStepper: true)
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "spot-cone-hint",
+                    label: "Cone",
+                    value: .readOnly("\(format(light.spotInnerAngleDegrees))° -> \(format(light.spotOuterAngleDegrees))°")
+                )
+            )
+        }
+
+        return EditorInspectorSection(
+            id: "light",
+            title: "Light",
+            fields: fields
         )
     }
 
@@ -515,6 +594,61 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                           summary: "Update light intensity",
                                           targetRawIDs: [entity.rawValue],
                                           mutations: [.setLightIntensity(entityID: entity.rawValue, intensity: clamped)])
+            }
+        )
+    }
+
+    private func lightRangeBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(LightComponent.self, for: entity)?.range ?? 10
+            },
+            set: { [self] next in
+                let clamped = max(0, next)
+                guard scene.component(LightComponent.self, for: entity)?.range != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_light_range",
+                                          summary: "Update light range",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLightRange(entityID: entity.rawValue, range: clamped)])
+            }
+        )
+    }
+
+    private func lightSpotInnerAngleBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(LightComponent.self, for: entity)?.spotInnerAngleDegrees ?? 20
+            },
+            set: { [self] next in
+                let currentOuter = scene.component(LightComponent.self, for: entity)?.spotOuterAngleDegrees ?? 30
+                let clamped = max(0, min(currentOuter, next))
+                guard scene.component(LightComponent.self, for: entity)?.spotInnerAngleDegrees != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_light_spot_inner_angle",
+                                          summary: "Update spotlight inner angle",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLightSpotInnerAngle(entityID: entity.rawValue, angleDegrees: clamped)])
+            }
+        )
+    }
+
+    private func lightSpotOuterAngleBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(LightComponent.self, for: entity)?.spotOuterAngleDegrees ?? 30
+            },
+            set: { [self] next in
+                let clamped = max(1, min(179, next))
+                guard scene.component(LightComponent.self, for: entity)?.spotOuterAngleDegrees != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_light_spot_outer_angle",
+                                          summary: "Update spotlight outer angle",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLightSpotOuterAngle(entityID: entity.rawValue, angleDegrees: clamped)])
             }
         )
     }

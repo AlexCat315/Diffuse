@@ -75,6 +75,9 @@ public enum SceneMutation: Sendable, Equatable {
     case setLightType(entityID: UInt64, type: LightType)
     case setLightColor(entityID: UInt64, color: SIMD3<Float>)
     case setLightIntensity(entityID: UInt64, intensity: Float)
+    case setLightRange(entityID: UInt64, range: Float)
+    case setLightSpotInnerAngle(entityID: UInt64, angleDegrees: Float)
+    case setLightSpotOuterAngle(entityID: UInt64, angleDegrees: Float)
     case setCameraPose(entityID: UInt64,
                        localTransform: LocalTransform,
                        target: SIMD3<Float>,

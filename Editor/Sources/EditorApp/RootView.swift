@@ -25,6 +25,8 @@ enum EditorRootViewFactory {
                                   isClosable: false)
         let consoleTab = DockTab(userKey: "console", title: "Console")
         let assetsTab = DockTab(userKey: "assets", title: "Assets")
+        let intentTab = DockTab(userKey: "intent-input", title: "AI Intent")
+        let confirmationTab = DockTab(userKey: "confirmation-host", title: "Confirm")
 
         let hierarchyLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
@@ -43,7 +45,7 @@ enum EditorRootViewFactory {
         )
         let bottomLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
-            tabs: [assetsTab, consoleTab],
+            tabs: [assetsTab, consoleTab, intentTab, confirmationTab],
             activeTabID: assetsTab.id
         )
 
@@ -75,6 +77,8 @@ enum EditorRootViewFactory {
             "inspector": .trailingSidebar,
             "console": .bottomPanel,
             "assets": .bottomPanel,
+            "intent-input": .bottomPanel,
+            "confirmation-host": .bottomPanel,
         ]
         controller.onAllowDrop = { [regionByKey] request in
             guard case .splitEdge(let targetID, let edge) = request.target else {
@@ -153,6 +157,16 @@ enum EditorRootViewFactory {
                             title: "Assets",
                             preferredRegion: .bottomPanel) {
                 AssetBrowserPanel(app: app)
+            },
+            PanelDescriptor(id: "intent-input",
+                            title: "AI Intent",
+                            preferredRegion: .bottomPanel) {
+                IntentInputPanel(app: app)
+            },
+            PanelDescriptor(id: "confirmation-host",
+                            title: "Confirm",
+                            preferredRegion: .bottomPanel) {
+                ConfirmationHostPanel(app: app)
             },
         ])
     }

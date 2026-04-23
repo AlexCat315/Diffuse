@@ -1,5 +1,6 @@
 import EditorCore
 import EngineKernel
+import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
 import RenderBackend
@@ -17,10 +18,13 @@ struct ViewportPanel: View {
             let entity = scene.entitySummary(id: store.state.selectedEntityID)
             let activeDrag = store.state.activeAssetDrag
             let gizmoMode = store.state.gizmoMode
+            let gizmoSpace = store.state.gizmoSpace
+            let shadingMode = store.state.viewportShadingMode
 
             // 推送 gizmo 控制器所需的快照（摄像机 / 视口矩形 / 实体世界坐标）。
             let _: Void = updateGizmoSnapshot(selectedID: store.state.selectedEntityID,
                                               gizmoMode: gizmoMode,
+                                              gizmoSpace: gizmoSpace,
                                               surface: surface)
 
             ViewportHost(surface: surface,
@@ -32,7 +36,10 @@ struct ViewportPanel: View {
                              EditorViewportDropTarget.frame = frame
                          },
                          onDrawOverlay: { list, frame in
-                             drawGizmoOverlay(list: list, frame: frame, mode: gizmoMode,
+                             drawGizmoOverlay(list: list,
+                                              frame: frame,
+                                              mode: gizmoMode,
+                                              shadingMode: shadingMode,
                                               selectedID: store.state.selectedEntityID)
                          }) {
                 Box(direction: .column, alignItems: .stretch) {
@@ -40,10 +47,34 @@ struct ViewportPanel: View {
                                     stats: stats,
                                     entity: entity,
                                     gizmoMode: gizmoMode,
+                                    gizmoSpace: gizmoSpace,
+                                    shadingMode: shadingMode,
+                                    translateSnapEnabled: store.state.translateSnapEnabled,
+                                    rotateSnapEnabled: store.state.rotateSnapEnabled,
+                                    scaleSnapEnabled: store.state.scaleSnapEnabled,
                                     onSelectGizmoMode: { mode in
                                         if store.state.gizmoMode != mode {
                                             store.dispatch(.setGizmoMode(mode))
                                         }
+                                    },
+                                    onSelectGizmoSpace: { space in
+                                        if store.state.gizmoSpace != space {
+                                            store.dispatch(.setGizmoSpace(space))
+                                        }
+                                    },
+                                    onSelectShadingMode: { mode in
+                                        if store.state.viewportShadingMode != mode {
+                                            store.dispatch(.setViewportShadingMode(mode))
+                                        }
+                                    },
+                                    onToggleTranslateSnap: { enabled in
+                                        store.dispatch(.setTranslateSnapEnabled(enabled))
+                                    },
+                                    onToggleRotateSnap: { enabled in
+                                        store.dispatch(.setRotateSnapEnabled(enabled))
+                                    },
+                                    onToggleScaleSnap: { enabled in
+                                        store.dispatch(.setScaleSnapEnabled(enabled))
                                     })
 
                     Box(direction: .column, alignItems: .center, justifyContent: .center) {
@@ -70,6 +101,8 @@ struct ViewportPanel: View {
         switch event {
         case let .mouseButtonDown(button) where button.button == .left:
             viewport.leftDownAt = (button.x, button.y)
+            viewport.marqueeStart = nil
+            viewport.marqueeCurrent = nil
             let mode = app.store.state.gizmoMode
             if (mode == .translate || mode == .rotate || mode == .scale),
                app.store.state.selectedEntityID != nil,
@@ -91,7 +124,30 @@ struct ViewportPanel: View {
                let newMatrix = EditorGizmoController.shared.updateDrag(
                    cursorX: motion.x, cursorY: motion.y)
             {
-                scene.setEntityLocalMatrix(drag.entityID, to: newMatrix)
+                let snapped = applyGizmoSnapping(newMatrix,
+                                                 mode: drag.mode,
+                                                 state: app.store.state)
+                scene.setEntityLocalMatrix(drag.entityID, to: snapped)
+                return
+            }
+            if viewport.leftDownAt != nil,
+               viewport.activeCameraDrag == nil,
+               app.store.state.gizmoMode == .none,
+               app.store.state.activeAssetDrag == nil,
+               let down = viewport.leftDownAt,
+               let frame = EditorViewportDropTarget.frame,
+               frame.contains(x: motion.x, y: motion.y)
+            {
+                let dx = motion.x - down.x
+                let dy = motion.y - down.y
+                if dx * dx + dy * dy >= 16 {
+                    viewport.marqueeStart = down
+                    viewport.marqueeCurrent = (motion.x, motion.y)
+                    return
+                }
+            }
+            if viewport.marqueeStart != nil {
+                viewport.marqueeCurrent = (motion.x, motion.y)
                 return
             }
             if let camDrag = viewport.activeCameraDrag,
@@ -111,11 +167,27 @@ struct ViewportPanel: View {
             if EditorGizmoController.shared.activeDrag != nil {
                 EditorGizmoController.shared.clearDrag()
                 viewport.leftDownAt = nil
+                viewport.marqueeStart = nil
+                viewport.marqueeCurrent = nil
                 return
             }
             if app.store.state.activeAssetDrag != nil {
                 _ = app.handleAssetDrop(at: button.x, cursorY: button.y)
                 viewport.leftDownAt = nil
+                viewport.marqueeStart = nil
+                viewport.marqueeCurrent = nil
+                return
+            }
+            if let start = viewport.marqueeStart,
+               let current = viewport.marqueeCurrent,
+               let frame = EditorViewportDropTarget.frame
+            {
+                let rect = normalizedRect(from: start, to: current)
+                let selected = scene.pickEntities(in: rect, frame: frame)
+                app.store.dispatch(.setSelectedEntities(selected))
+                viewport.leftDownAt = nil
+                viewport.marqueeStart = nil
+                viewport.marqueeCurrent = nil
                 return
             }
             // 没拖 gizmo / 没拖资产 → 视为单击拾取。
@@ -133,6 +205,8 @@ struct ViewportPanel: View {
                 }
             }
             viewport.leftDownAt = nil
+            viewport.marqueeStart = nil
+            viewport.marqueeCurrent = nil
         case let .mouseButtonUp(button) where button.button == .right || button.button == .middle:
             if viewport.activeCameraDrag != nil {
                 viewport.activeCameraDrag = nil
@@ -191,6 +265,7 @@ struct ViewportPanel: View {
 
     private func updateGizmoSnapshot(selectedID: UInt64?,
                                      gizmoMode: EditorGizmoMode,
+                                     gizmoSpace: EditorGizmoSpace,
                                      surface: ViewportSurfaceState) {
         guard let mode = controllerMode(for: gizmoMode),
               let id = selectedID,
@@ -211,7 +286,7 @@ struct ViewportPanel: View {
         EditorGizmoController.shared.updateSnapshot(
             EditorGizmoController.Snapshot(
                 mode: mode,
-                space: .local,
+                space: gizmoSpace == .local ? .local : .world,
                 camera: camera,
                 frame: frame,
                 drawableWidth: Float(surface.width),
@@ -238,7 +313,15 @@ struct ViewportPanel: View {
     private func drawGizmoOverlay(list: DrawList,
                                   frame: ViewportScreenFrame,
                                   mode: EditorGizmoMode,
+                                  shadingMode: EditorViewportShadingMode,
                                   selectedID: UInt64?) {
+        drawGridOverlay(list: list, frame: frame)
+        drawOriginAxesOverlay(list: list, frame: frame)
+        if shadingMode == .wireframe {
+            drawWireframeOverlay(list: list, frame: frame, selectedID: selectedID)
+        }
+        drawMarqueeOverlay(list: list)
+
         guard let snap = EditorGizmoController.shared.snapshot,
               selectedID != nil,
               let projector = ScreenProjector(snap),
@@ -387,6 +470,314 @@ struct ViewportPanel: View {
         }
     }
 
+    private func normalizedRect(from a: (x: Float, y: Float),
+                                to b: (x: Float, y: Float)) -> UIRect {
+        let x0 = min(a.x, b.x)
+        let y0 = min(a.y, b.y)
+        let x1 = max(a.x, b.x)
+        let y1 = max(a.y, b.y)
+        return UIRect(x: x0, y: y0, width: x1 - x0, height: y1 - y0)
+    }
+
+    private func drawMarqueeOverlay(list: DrawList) {
+        let viewport = EditorViewportInputController.shared
+        guard let start = viewport.marqueeStart,
+              let current = viewport.marqueeCurrent
+        else { return }
+        let rect = normalizedRect(from: start, to: current)
+        let fill = Color(r: 0.36, g: 0.57, b: 0.95, a: 0.16)
+        let stroke = Color(r: 0.62, g: 0.77, b: 1.0, a: 0.9)
+        list.addRect(rect, color: fill)
+        list.addLine(fromX: rect.x, fromY: rect.y,
+                     toX: rect.x + rect.width, toY: rect.y,
+                     thickness: 1.5, color: stroke)
+        list.addLine(fromX: rect.x + rect.width, fromY: rect.y,
+                     toX: rect.x + rect.width, toY: rect.y + rect.height,
+                     thickness: 1.5, color: stroke)
+        list.addLine(fromX: rect.x + rect.width, fromY: rect.y + rect.height,
+                     toX: rect.x, toY: rect.y + rect.height,
+                     thickness: 1.5, color: stroke)
+        list.addLine(fromX: rect.x, fromY: rect.y + rect.height,
+                     toX: rect.x, toY: rect.y,
+                     thickness: 1.5, color: stroke)
+    }
+
+    private func drawGridOverlay(list: DrawList, frame: ViewportScreenFrame) {
+        let lineColor = Color(r: 0.72, g: 0.74, b: 0.78, a: 0.14)
+        let majorColor = Color(r: 0.82, g: 0.85, b: 0.9, a: 0.22)
+        let halfExtent: Int = 20
+        for i in -halfExtent...halfExtent {
+            let x = Float(i)
+            let isMajor = i % 5 == 0
+            drawWorldLine(list: list,
+                          frame: frame,
+                          a: SIMD3<Float>(x, 0, Float(-halfExtent)),
+                          b: SIMD3<Float>(x, 0, Float(halfExtent)),
+                          color: isMajor ? majorColor : lineColor,
+                          thickness: isMajor ? 1.3 : 1.0)
+            let z = Float(i)
+            drawWorldLine(list: list,
+                          frame: frame,
+                          a: SIMD3<Float>(Float(-halfExtent), 0, z),
+                          b: SIMD3<Float>(Float(halfExtent), 0, z),
+                          color: isMajor ? majorColor : lineColor,
+                          thickness: isMajor ? 1.3 : 1.0)
+        }
+    }
+
+    private func drawOriginAxesOverlay(list: DrawList, frame: ViewportScreenFrame) {
+        drawWorldLine(list: list,
+                      frame: frame,
+                      a: SIMD3<Float>(-2, 0, 0),
+                      b: SIMD3<Float>(2, 0, 0),
+                      color: Color(r: 0.95, g: 0.3, b: 0.32, a: 0.9),
+                      thickness: 2)
+        drawWorldLine(list: list,
+                      frame: frame,
+                      a: SIMD3<Float>(0, -2, 0),
+                      b: SIMD3<Float>(0, 2, 0),
+                      color: Color(r: 0.37, g: 0.88, b: 0.44, a: 0.9),
+                      thickness: 2)
+        drawWorldLine(list: list,
+                      frame: frame,
+                      a: SIMD3<Float>(0, 0, -2),
+                      b: SIMD3<Float>(0, 0, 2),
+                      color: Color(r: 0.33, g: 0.57, b: 0.95, a: 0.9),
+                      thickness: 2)
+    }
+
+    private func drawWireframeOverlay(list: DrawList,
+                                      frame: ViewportScreenFrame,
+                                      selectedID: UInt64?) {
+        let selected = selectedID
+        for bound in scene.viewportWorldBounds() {
+            let color: Color = bound.entityID == selected
+                ? Color(r: 1.0, g: 0.86, b: 0.46, a: 0.95)
+                : Color(r: 0.86, g: 0.9, b: 0.95, a: 0.62)
+            drawWorldAABBEdges(list: list,
+                               frame: frame,
+                               min: bound.min,
+                               max: bound.max,
+                               color: color,
+                               thickness: bound.entityID == selected ? 2 : 1)
+        }
+    }
+
+    private func drawWorldAABBEdges(list: DrawList,
+                                    frame: ViewportScreenFrame,
+                                    min lo: SIMD3<Float>,
+                                    max hi: SIMD3<Float>,
+                                    color: Color,
+                                    thickness: Float) {
+        let corners: [SIMD3<Float>] = [
+            SIMD3<Float>(lo.x, lo.y, lo.z),
+            SIMD3<Float>(hi.x, lo.y, lo.z),
+            SIMD3<Float>(hi.x, hi.y, lo.z),
+            SIMD3<Float>(lo.x, hi.y, lo.z),
+            SIMD3<Float>(lo.x, lo.y, hi.z),
+            SIMD3<Float>(hi.x, lo.y, hi.z),
+            SIMD3<Float>(hi.x, hi.y, hi.z),
+            SIMD3<Float>(lo.x, hi.y, hi.z)
+        ]
+        let edges: [(Int, Int)] = [
+            (0, 1), (1, 2), (2, 3), (3, 0),
+            (4, 5), (5, 6), (6, 7), (7, 4),
+            (0, 4), (1, 5), (2, 6), (3, 7)
+        ]
+        for (a, b) in edges {
+            drawWorldLine(list: list,
+                          frame: frame,
+                          a: corners[a],
+                          b: corners[b],
+                          color: color,
+                          thickness: thickness)
+        }
+    }
+
+    private func drawWorldLine(list: DrawList,
+                               frame: ViewportScreenFrame,
+                               a: SIMD3<Float>,
+                               b: SIMD3<Float>,
+                               color: Color,
+                               thickness: Float) {
+        guard let pa = projectToViewport(a, frame: frame),
+              let pb = projectToViewport(b, frame: frame)
+        else { return }
+        list.addLine(fromX: pa.x, fromY: pa.y,
+                     toX: pb.x, toY: pb.y,
+                     thickness: thickness,
+                     color: color)
+    }
+
+    private func projectToViewport(_ world: SIMD3<Float>,
+                                   frame: ViewportScreenFrame) -> (x: Float, y: Float)? {
+        let camera = scene.currentRenderCamera()
+        let forwardRaw = camera.target - camera.eye
+        guard simd_length(forwardRaw) > 1e-5 else { return nil }
+        let forward = simd_normalize(forwardRaw)
+        let rightRaw = simd_cross(forward, camera.up)
+        guard simd_length(rightRaw) > 1e-5 else { return nil }
+        let right = simd_normalize(rightRaw)
+        let up = simd_normalize(simd_cross(right, forward))
+        let view = lookAt(eye: camera.eye, target: camera.target, up: up)
+        let proj = perspective(fovYRadians: camera.fovYRadians,
+                               aspect: frame.width / max(frame.height, 1),
+                               near: camera.near,
+                               far: camera.far)
+        let clip = proj * (view * SIMD4<Float>(world, 1))
+        guard clip.w > 1e-4 else { return nil }
+        let ndcX = clip.x / clip.w
+        let ndcY = clip.y / clip.w
+        let sx = frame.x + (ndcX * 0.5 + 0.5) * frame.width
+        let sy = frame.y + (1 - (ndcY * 0.5 + 0.5)) * frame.height
+        return (sx, sy)
+    }
+
+    private func applyGizmoSnapping(_ matrix: simd_float4x4,
+                                    mode: EditorGizmoController.Mode,
+                                    state: EditorState) -> simd_float4x4 {
+        var result = matrix
+        switch mode {
+        case .translate:
+            guard state.translateSnapEnabled else { return result }
+            let step: Float = 0.5
+            result.columns.3.x = quantize(result.columns.3.x, step: step)
+            result.columns.3.y = quantize(result.columns.3.y, step: step)
+            result.columns.3.z = quantize(result.columns.3.z, step: step)
+            return result
+        case .rotate:
+            guard state.rotateSnapEnabled else { return result }
+            let snapped = snapRotation(result, stepDegrees: 5)
+            return snapped
+        case .scale:
+            guard state.scaleSnapEnabled else { return result }
+            let snapped = snapScale(result, step: 0.05, minScale: 0.05)
+            return snapped
+        }
+    }
+
+    private func snapRotation(_ matrix: simd_float4x4,
+                              stepDegrees: Float) -> simd_float4x4 {
+        let decomp = decomposeTRS(matrix)
+        let euler = quaternionToEulerXYZ(decomp.rotation)
+        let step = stepDegrees * (.pi / 180)
+        let snappedEuler = SIMD3<Float>(
+            quantize(euler.x, step: step),
+            quantize(euler.y, step: step),
+            quantize(euler.z, step: step)
+        )
+        let snappedQ = eulerXYZToQuaternion(snappedEuler)
+        return composeTRS(translation: decomp.translation,
+                          rotation: snappedQ,
+                          scale: decomp.scale)
+    }
+
+    private func snapScale(_ matrix: simd_float4x4,
+                           step: Float,
+                           minScale: Float) -> simd_float4x4 {
+        let decomp = decomposeTRS(matrix)
+        let snapped = SIMD3<Float>(
+            max(minScale, quantize(decomp.scale.x, step: step)),
+            max(minScale, quantize(decomp.scale.y, step: step)),
+            max(minScale, quantize(decomp.scale.z, step: step))
+        )
+        return composeTRS(translation: decomp.translation,
+                          rotation: decomp.rotation,
+                          scale: snapped)
+    }
+
+    private func quantize(_ value: Float, step: Float) -> Float {
+        guard step > 1e-6 else { return value }
+        return (value / step).rounded() * step
+    }
+
+    private func decomposeTRS(_ matrix: simd_float4x4)
+        -> (translation: SIMD3<Float>, rotation: simd_quatf, scale: SIMD3<Float>) {
+        let t = SIMD3<Float>(matrix.columns.3.x, matrix.columns.3.y, matrix.columns.3.z)
+        let c0 = SIMD3<Float>(matrix.columns.0.x, matrix.columns.0.y, matrix.columns.0.z)
+        let c1 = SIMD3<Float>(matrix.columns.1.x, matrix.columns.1.y, matrix.columns.1.z)
+        let c2 = SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z)
+        let sx = max(simd_length(c0), 1e-8)
+        let sy = max(simd_length(c1), 1e-8)
+        let sz = max(simd_length(c2), 1e-8)
+        let r0 = c0 / sx
+        let r1 = c1 / sy
+        let r2 = c2 / sz
+        let rotM = simd_float3x3(columns: (r0, r1, r2))
+        return (t, simd_quatf(rotM), SIMD3<Float>(sx, sy, sz))
+    }
+
+    private func composeTRS(translation t: SIMD3<Float>,
+                            rotation r: simd_quatf,
+                            scale s: SIMD3<Float>) -> simd_float4x4 {
+        let rm = simd_float3x3(r)
+        var out = matrix_identity_float4x4
+        out.columns.0 = SIMD4<Float>(rm.columns.0 * s.x, 0)
+        out.columns.1 = SIMD4<Float>(rm.columns.1 * s.y, 0)
+        out.columns.2 = SIMD4<Float>(rm.columns.2 * s.z, 0)
+        out.columns.3 = SIMD4<Float>(t, 1)
+        return out
+    }
+
+    private func quaternionToEulerXYZ(_ q: simd_quatf) -> SIMD3<Float> {
+        let x = q.imag.x
+        let y = q.imag.y
+        let z = q.imag.z
+        let w = q.real
+
+        let sinrCosp = 2 * (w * x + y * z)
+        let cosrCosp = 1 - 2 * (x * x + y * y)
+        let roll = atan2f(sinrCosp, cosrCosp)
+
+        let sinp = 2 * (w * y - z * x)
+        let pitch: Float
+        if abs(sinp) >= 1 {
+            pitch = copysignf(.pi * 0.5, sinp)
+        } else {
+            pitch = asinf(sinp)
+        }
+
+        let sinyCosp = 2 * (w * z + x * y)
+        let cosyCosp = 1 - 2 * (y * y + z * z)
+        let yaw = atan2f(sinyCosp, cosyCosp)
+
+        return SIMD3<Float>(roll, pitch, yaw)
+    }
+
+    private func eulerXYZToQuaternion(_ euler: SIMD3<Float>) -> simd_quatf {
+        let qx = simd_quatf(angle: euler.x, axis: SIMD3<Float>(1, 0, 0))
+        let qy = simd_quatf(angle: euler.y, axis: SIMD3<Float>(0, 1, 0))
+        let qz = simd_quatf(angle: euler.z, axis: SIMD3<Float>(0, 0, 1))
+        return qz * qy * qx
+    }
+
+    private func lookAt(eye: SIMD3<Float>,
+                        target: SIMD3<Float>,
+                        up: SIMD3<Float>) -> simd_float4x4 {
+        let f = simd_normalize(target - eye)
+        let s = simd_normalize(simd_cross(f, up))
+        let u = simd_cross(s, f)
+        var m = matrix_identity_float4x4
+        m.columns.0 = SIMD4<Float>(s.x, u.x, -f.x, 0)
+        m.columns.1 = SIMD4<Float>(s.y, u.y, -f.y, 0)
+        m.columns.2 = SIMD4<Float>(s.z, u.z, -f.z, 0)
+        m.columns.3 = SIMD4<Float>(-simd_dot(s, eye), -simd_dot(u, eye), simd_dot(f, eye), 1)
+        return m
+    }
+
+    private func perspective(fovYRadians: Float,
+                             aspect: Float,
+                             near: Float,
+                             far: Float) -> simd_float4x4 {
+        let f = 1 / tanf(fovYRadians * 0.5)
+        var m = simd_float4x4()
+        m.columns.0 = SIMD4<Float>(f / aspect, 0, 0, 0)
+        m.columns.1 = SIMD4<Float>(0, f, 0, 0)
+        m.columns.2 = SIMD4<Float>(0, 0, far / (near - far), -1)
+        m.columns.3 = SIMD4<Float>(0, 0, (far * near) / (near - far), 0)
+        return m
+    }
+
     private func gizmoMode(for key: KeyEvent) -> EditorGizmoMode? {
         // 优先用 scancode（与键位物理位置绑定、与键盘布局无关），
         // 避免非 US 布局下 keycode 不匹配。SDL3 scancode：Q=20 W=26 E=8 R=21。
@@ -413,9 +804,21 @@ private struct ViewportInfoBar: View {
     let stats: RenderFrameStats
     let entity: EditorSceneEntitySummary?
     let gizmoMode: EditorGizmoMode
+    let gizmoSpace: EditorGizmoSpace
+    let shadingMode: EditorViewportShadingMode
+    let translateSnapEnabled: Bool
+    let rotateSnapEnabled: Bool
+    let scaleSnapEnabled: Bool
     let onSelectGizmoMode: (EditorGizmoMode) -> Void
+    let onSelectGizmoSpace: (EditorGizmoSpace) -> Void
+    let onSelectShadingMode: (EditorViewportShadingMode) -> Void
+    let onToggleTranslateSnap: (Bool) -> Void
+    let onToggleRotateSnap: (Bool) -> Void
+    let onToggleScaleSnap: (Bool) -> Void
 
     var body: some View {
+        let frameMs = Float(stats.cpuFrameTotalNS) / 1_000_000
+        let fps = frameMs > 0.001 ? 1_000 / frameMs : 0
         Box(direction: .column, alignItems: .stretch, spacing: 4) {
             Row(alignment: .center, spacing: 8) {
                 Text(surface.isValid
@@ -431,6 +834,10 @@ private struct ViewportInfoBar: View {
                         .font(.caption)
                         .foregroundColor(.onSurface)
                 }
+
+                Text(String(format: "FPS: %.1f  Frame: %.2fms", fps, frameMs))
+                    .font(.mono)
+                    .foregroundColor(.onSurfaceMuted)
             }
 
             Row(alignment: .center, spacing: 6) {
@@ -443,7 +850,33 @@ private struct ViewportInfoBar: View {
                 GizmoButton(label: "Scale", target: .scale,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
 
+                Spacer(minLength: 2)
+
+                ToggleChip(label: "Local", isActive: gizmoSpace == .local) {
+                    onSelectGizmoSpace(.local)
+                }
+                ToggleChip(label: "World", isActive: gizmoSpace == .world) {
+                    onSelectGizmoSpace(.world)
+                }
+
+                ToggleChip(label: "T Snap", isActive: translateSnapEnabled) {
+                    onToggleTranslateSnap(!translateSnapEnabled)
+                }
+                ToggleChip(label: "R Snap", isActive: rotateSnapEnabled) {
+                    onToggleRotateSnap(!rotateSnapEnabled)
+                }
+                ToggleChip(label: "S Snap", isActive: scaleSnapEnabled) {
+                    onToggleScaleSnap(!scaleSnapEnabled)
+                }
+
                 Spacer(minLength: 0)
+
+                ToggleChip(label: "Lit", isActive: shadingMode == .lit) {
+                    onSelectShadingMode(.lit)
+                }
+                ToggleChip(label: "Wire", isActive: shadingMode == .wireframe) {
+                    onSelectShadingMode(.wireframe)
+                }
 
                 Text("Passes: \(stats.passCount)  Draws: \(stats.drawCallCount)")
                     .font(.mono)
@@ -454,6 +887,22 @@ private struct ViewportInfoBar: View {
         .background(.surfaceOverlay)
         .cornerRadius(2)
         .border(Color(r: 1, g: 1, b: 1, a: 0.08), width: 1)
+    }
+}
+
+private struct ToggleChip: View {
+    let label: String
+    let isActive: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        if isActive {
+            Button(label) { onTap() }
+                .buttonStyle(.primary)
+        } else {
+            Button(label) { onTap() }
+                .buttonStyle(.secondary)
+        }
     }
 }
 

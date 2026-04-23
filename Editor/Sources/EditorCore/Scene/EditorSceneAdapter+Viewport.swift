@@ -55,6 +55,62 @@ extension EditorSceneAdapter {
         return bestEntity?.rawValue
     }
 
+    /// 返回与屏幕矩形相交的实体集合。用于视口框选。
+    public func pickEntities(in screenRect: UIRect,
+                             frame: ViewportScreenFrame) -> Set<UInt64> {
+        guard let extracted = scene.extractedRenderScene else { return [] }
+        let rectMinX = min(screenRect.x, screenRect.x + screenRect.width)
+        let rectMaxX = max(screenRect.x, screenRect.x + screenRect.width)
+        let rectMinY = min(screenRect.y, screenRect.y + screenRect.height)
+        let rectMaxY = max(screenRect.y, screenRect.y + screenRect.height)
+
+        var hits = Set<UInt64>()
+        for (idx, entity) in extracted.instanceEntities.enumerated() {
+            let inst = extracted.scene.instances[idx]
+            let local = MeshBoundsRegistry.shared.bounds(for: inst.meshIndex)
+                       ?? (min: SIMD3<Float>(-0.5, -0.5, -0.5),
+                           max: SIMD3<Float>(0.5, 0.5, 0.5))
+            let corners = worldAABBCorners(localMin: local.min,
+                                           localMax: local.max,
+                                           transformedBy: inst.transform)
+            var sx0: Float = .greatestFiniteMagnitude
+            var sy0: Float = .greatestFiniteMagnitude
+            var sx1: Float = -.greatestFiniteMagnitude
+            var sy1: Float = -.greatestFiniteMagnitude
+            var hasProjectedCorner = false
+            for corner in corners {
+                guard let s = projectToViewport(corner, in: frame) else { continue }
+                hasProjectedCorner = true
+                sx0 = min(sx0, s.x)
+                sy0 = min(sy0, s.y)
+                sx1 = max(sx1, s.x)
+                sy1 = max(sy1, s.y)
+            }
+            guard hasProjectedCorner else { continue }
+            let overlapX = sx1 >= rectMinX && sx0 <= rectMaxX
+            let overlapY = sy1 >= rectMinY && sy0 <= rectMaxY
+            if overlapX && overlapY {
+                hits.insert(entity.rawValue)
+            }
+        }
+        return hits
+    }
+
+    /// 返回渲染实例世界 AABB，供 wireframe overlay 绘制。
+    public func viewportWorldBounds() -> [(entityID: UInt64, min: SIMD3<Float>, max: SIMD3<Float>)] {
+        guard let extracted = scene.extractedRenderScene else { return [] }
+        return extracted.instanceEntities.enumerated().map { idx, entity in
+            let inst = extracted.scene.instances[idx]
+            let local = MeshBoundsRegistry.shared.bounds(for: inst.meshIndex)
+                       ?? (min: SIMD3<Float>(-0.5, -0.5, -0.5),
+                           max: SIMD3<Float>(0.5, 0.5, 0.5))
+            let aabb = worldAABB(forLocalMin: local.min,
+                                 localMax: local.max,
+                                 transformedBy: inst.transform)
+            return (entityID: entity.rawValue, min: aabb.min, max: aabb.max)
+        }
+    }
+
     private func worldAABB(forLocalMin lo: SIMD3<Float>,
                            localMax hi: SIMD3<Float>,
                            transformedBy m: simd_float4x4)
@@ -76,6 +132,25 @@ extension EditorSceneAdapter {
             }
         }
         return (wlo, whi)
+    }
+
+    private func worldAABBCorners(localMin lo: SIMD3<Float>,
+                                  localMax hi: SIMD3<Float>,
+                                  transformedBy m: simd_float4x4) -> [SIMD3<Float>] {
+        var points: [SIMD3<Float>] = []
+        points.reserveCapacity(8)
+        let xs: [Float] = [lo.x, hi.x]
+        let ys: [Float] = [lo.y, hi.y]
+        let zs: [Float] = [lo.z, hi.z]
+        for x in xs {
+            for y in ys {
+                for z in zs {
+                    let p = m * SIMD4<Float>(x, y, z, 1)
+                    points.append(SIMD3<Float>(p.x, p.y, p.z))
+                }
+            }
+        }
+        return points
     }
 
     private func rayAABBIntersect(origin: SIMD3<Float>,
@@ -125,6 +200,59 @@ extension EditorSceneAdapter {
         let upOffset = up * (ndcY * tanHalfFov)
         let dir = simd_normalize(forward + rightOffset + upOffset)
         return ViewportRay(origin: cam.eye, direction: dir)
+    }
+
+    private func projectToViewport(_ world: SIMD3<Float>,
+                                   in frame: ViewportScreenFrame) -> (x: Float, y: Float)? {
+        guard frame.width > 0, frame.height > 0 else { return nil }
+        let cam = currentRenderCamera()
+        let forwardRaw = cam.target - cam.eye
+        guard simd_length(forwardRaw) > 1e-5 else { return nil }
+        let forward = simd_normalize(forwardRaw)
+        let rightRaw = simd_cross(forward, cam.up)
+        guard simd_length(rightRaw) > 1e-5 else { return nil }
+        let right = simd_normalize(rightRaw)
+        let up = simd_normalize(simd_cross(right, forward))
+
+        let view = lookAt(eye: cam.eye, target: cam.target, up: up)
+        let proj = perspective(fovYRadians: cam.fovYRadians,
+                               aspect: frame.width / frame.height,
+                               near: cam.near,
+                               far: cam.far)
+        let clip = proj * (view * SIMD4<Float>(world, 1))
+        guard clip.w > 1e-4 else { return nil }
+        let ndcX = clip.x / clip.w
+        let ndcY = clip.y / clip.w
+        let x = frame.x + (ndcX * 0.5 + 0.5) * frame.width
+        let y = frame.y + (1 - (ndcY * 0.5 + 0.5)) * frame.height
+        return (x, y)
+    }
+
+    private func lookAt(eye: SIMD3<Float>,
+                        target: SIMD3<Float>,
+                        up: SIMD3<Float>) -> simd_float4x4 {
+        let f = simd_normalize(target - eye)
+        let s = simd_normalize(simd_cross(f, up))
+        let u = simd_cross(s, f)
+        var m = matrix_identity_float4x4
+        m.columns.0 = SIMD4<Float>(s.x, u.x, -f.x, 0)
+        m.columns.1 = SIMD4<Float>(s.y, u.y, -f.y, 0)
+        m.columns.2 = SIMD4<Float>(s.z, u.z, -f.z, 0)
+        m.columns.3 = SIMD4<Float>(-simd_dot(s, eye), -simd_dot(u, eye), simd_dot(f, eye), 1)
+        return m
+    }
+
+    private func perspective(fovYRadians: Float,
+                             aspect: Float,
+                             near: Float,
+                             far: Float) -> simd_float4x4 {
+        let f = 1 / tanf(fovYRadians * 0.5)
+        var m = simd_float4x4()
+        m.columns.0 = SIMD4<Float>(f / aspect, 0, 0, 0)
+        m.columns.1 = SIMD4<Float>(0, f, 0, 0)
+        m.columns.2 = SIMD4<Float>(0, 0, far / (near - far), -1)
+        m.columns.3 = SIMD4<Float>(0, 0, (far * near) / (near - far), 0)
+        return m
     }
 
     // MARK: - Selection helpers

@@ -368,6 +368,36 @@ public struct TransactionExecutor {
                                                                    type: "LightComponent")
                 }
 
+            case let .setLightRange(entityID, range):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(LightComponent.self, for: entity, {
+                    $0.range = max(0, range)
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "LightComponent")
+                }
+
+            case let .setLightSpotInnerAngle(entityID, angleDegrees):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(LightComponent.self, for: entity, {
+                    let inner = max(0, min(179, angleDegrees))
+                    $0.spotInnerAngleDegrees = min(inner, $0.spotOuterAngleDegrees)
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "LightComponent")
+                }
+
+            case let .setLightSpotOuterAngle(entityID, angleDegrees):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(LightComponent.self, for: entity, {
+                    let outer = max(1, min(179, angleDegrees))
+                    $0.spotOuterAngleDegrees = outer
+                    $0.spotInnerAngleDegrees = min($0.spotInnerAngleDegrees, outer)
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "LightComponent")
+                }
+
             case let .setCameraPose(entityID, localTransform, target, up):
                 let entity = try requireEntity(entityID, in: scene)
                 guard scene.setLocalTransform(localTransform, for: entity) else {
@@ -620,6 +650,9 @@ public struct TransactionExecutor {
                  let .setLightType(entityID, _),
                  let .setLightColor(entityID, _),
                  let .setLightIntensity(entityID, _),
+                 let .setLightRange(entityID, _),
+                 let .setLightSpotInnerAngle(entityID, _),
+                 let .setLightSpotOuterAngle(entityID, _),
                  let .setCameraPose(entityID, _, _, _):
                 ids.insert(entityID)
             }
