@@ -14,10 +14,14 @@ public final class EditorViewportInputController: @unchecked Sendable {
 
     /// 鼠标按下时记录起点，以便释放时判断是否算 "click" 触发拾取。
     public var leftDownAt: (x: Float, y: Float)?
+    public var marqueeStart: (x: Float, y: Float)?
+    public var marqueeCurrent: (x: Float, y: Float)?
 
     public func reset() {
         activeCameraDrag = nil
         lastCursor = nil
         leftDownAt = nil
+        marqueeStart = nil
+        marqueeCurrent = nil
     }
 }
