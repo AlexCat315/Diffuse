@@ -183,8 +183,13 @@ struct ViewportPanel: View {
                let frame = EditorViewportDropTarget.frame
             {
                 let rect = normalizedRect(from: start, to: current)
-                let selected = scene.pickEntities(in: rect, frame: frame)
-                app.store.dispatch(.setSelectedEntities(selected))
+                let picked = scene.pickEntities(in: rect, frame: frame)
+                let baseSelection = app.store.state.selectedEntityIDs
+                let modifiers = viewport.modifiers.isEmpty ? app.inputState.modifiers : viewport.modifiers
+                let merged = mergeMarqueeSelection(base: baseSelection,
+                                                   picked: picked,
+                                                   modifiers: modifiers)
+                app.store.dispatch(.setSelectedEntities(merged))
                 viewport.leftDownAt = nil
                 viewport.marqueeStart = nil
                 viewport.marqueeCurrent = nil
@@ -201,7 +206,11 @@ struct ViewportPanel: View {
                     let picked = scene.pickEntity(cursorX: button.x,
                                                   cursorY: button.y,
                                                   in: frame)
-                    app.store.dispatch(.setSelectedEntity(picked))
+                    let modifiers = viewport.modifiers.isEmpty ? app.inputState.modifiers : viewport.modifiers
+                    let merged = mergeSinglePickSelection(base: app.store.state.selectedEntityIDs,
+                                                          picked: picked,
+                                                          modifiers: modifiers)
+                    app.store.dispatch(.setSelectedEntities(merged))
                 }
             }
             viewport.leftDownAt = nil
@@ -222,6 +231,7 @@ struct ViewportPanel: View {
                 return
             }
         case let .keyDown(key):
+            viewport.modifiers = key.modifiers
             if let mode = gizmoMode(for: key) {
                 if app.store.state.gizmoMode != mode {
                     app.store.dispatch(.setGizmoMode(mode))
@@ -229,10 +239,34 @@ struct ViewportPanel: View {
                 return
             }
             if handleEditingShortcut(key) { return }
+        case let .keyUp(key):
+            viewport.modifiers = key.modifiers
         default:
             break
         }
         app.enqueueViewportInput(event)
+    }
+
+    private func mergeMarqueeSelection(base: Set<UInt64>,
+                                       picked: Set<UInt64>,
+                                       modifiers: KeyModifiers) -> Set<UInt64> {
+        let subtract = modifiers.contains(.gui) || modifiers.contains(.ctrl)
+        if subtract {
+            var next = base
+            next.subtract(picked)
+            return next
+        }
+        if modifiers.contains(.shift) {
+            return base.union(picked)
+        }
+        return picked
+    }
+
+    private func mergeSinglePickSelection(base: Set<UInt64>,
+                                          picked: UInt64?,
+                                          modifiers: KeyModifiers) -> Set<UInt64> {
+        let set = picked.map { Set([ $0 ]) } ?? []
+        return mergeMarqueeSelection(base: base, picked: set, modifiers: modifiers)
     }
 
     /// F = focus selection, Backspace/Delete = delete, Cmd/Ctrl+D = duplicate。
@@ -550,47 +584,16 @@ struct ViewportPanel: View {
                                       frame: ViewportScreenFrame,
                                       selectedID: UInt64?) {
         let selected = selectedID
-        for bound in scene.viewportWorldBounds() {
-            let color: Color = bound.entityID == selected
+        for line in scene.viewportWireframeLines() {
+            let color: Color = line.entityID == selected
                 ? Color(r: 1.0, g: 0.86, b: 0.46, a: 0.95)
                 : Color(r: 0.86, g: 0.9, b: 0.95, a: 0.62)
-            drawWorldAABBEdges(list: list,
-                               frame: frame,
-                               min: bound.min,
-                               max: bound.max,
-                               color: color,
-                               thickness: bound.entityID == selected ? 2 : 1)
-        }
-    }
-
-    private func drawWorldAABBEdges(list: DrawList,
-                                    frame: ViewportScreenFrame,
-                                    min lo: SIMD3<Float>,
-                                    max hi: SIMD3<Float>,
-                                    color: Color,
-                                    thickness: Float) {
-        let corners: [SIMD3<Float>] = [
-            SIMD3<Float>(lo.x, lo.y, lo.z),
-            SIMD3<Float>(hi.x, lo.y, lo.z),
-            SIMD3<Float>(hi.x, hi.y, lo.z),
-            SIMD3<Float>(lo.x, hi.y, lo.z),
-            SIMD3<Float>(lo.x, lo.y, hi.z),
-            SIMD3<Float>(hi.x, lo.y, hi.z),
-            SIMD3<Float>(hi.x, hi.y, hi.z),
-            SIMD3<Float>(lo.x, hi.y, hi.z)
-        ]
-        let edges: [(Int, Int)] = [
-            (0, 1), (1, 2), (2, 3), (3, 0),
-            (4, 5), (5, 6), (6, 7), (7, 4),
-            (0, 4), (1, 5), (2, 6), (3, 7)
-        ]
-        for (a, b) in edges {
             drawWorldLine(list: list,
                           frame: frame,
-                          a: corners[a],
-                          b: corners[b],
+                          a: line.a,
+                          b: line.b,
                           color: color,
-                          thickness: thickness)
+                          thickness: line.entityID == selected ? 2 : 1)
         }
     }
 
