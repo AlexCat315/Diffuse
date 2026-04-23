@@ -1,4 +1,5 @@
 import Foundation
+import EngineKernel
 import GuavaUIRuntime
 
 /// Materialises `View` trees into the underlying `NodeTree`, and recomposes
@@ -113,11 +114,34 @@ public final class ViewGraph {
         return layoutRoot.subtreeIsDirty
     }
 
-    private func writeLayoutBack(node: Node) {
+    private func writeLayoutBack(node: Node, parentOrigin: CGPoint = .zero) {
         if let ln = layoutOf[ObjectIdentifier(node)] {
             node.frame = ln.frame
         }
-        for child in node.children { writeLayoutBack(node: child) }
+        let absoluteOrigin = CGPoint(x: parentOrigin.x + node.frame.origin.x,
+                                     y: parentOrigin.y + node.frame.origin.y)
+        syncTextInputArea(for: node, absoluteOrigin: absoluteOrigin)
+        for child in node.children {
+            writeLayoutBack(node: child, parentOrigin: absoluteOrigin)
+        }
+    }
+
+    private func syncTextInputArea(for node: Node, absoluteOrigin: CGPoint) {
+        let previous = node.attachments[TextInputAttachmentKey.area] as? TextInputArea
+        let next: TextInputArea?
+        if let resolver = node.attachments[TextInputAttachmentKey.areaResolver] as? TextInputAreaResolver {
+            next = resolver(node, absoluteOrigin)
+        } else {
+            next = nil
+        }
+
+        guard previous != next else { return }
+        if let next {
+            node.attachments[TextInputAttachmentKey.area] = next
+        } else {
+            node.attachments.removeValue(forKey: TextInputAttachmentKey.area)
+        }
+        inputScene.refresh(node: node)
     }
 
     /// Layout node paired with `node`, if any.

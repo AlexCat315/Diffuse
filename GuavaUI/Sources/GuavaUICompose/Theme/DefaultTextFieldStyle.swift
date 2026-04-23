@@ -8,21 +8,24 @@ public struct DefaultTextFieldStyle: TextFieldStyle {
 
     public func makeBody(configuration: TextFieldStyleConfiguration) -> some View {
         let theme = configuration.theme
+        let inputs = theme.inputs
         let bg: Color = configuration.isEnabled
-            ? theme.colors.surfaceSunken
-            : theme.colors.surfaceSunken
+            ? inputs.background
+            : inputs.backgroundDisabled
 
         let border: Color = {
-            if configuration.isError   { return theme.colors.error }
-            if configuration.isFocused { return theme.colors.focusRing }
-            return theme.colors.border
+            if !configuration.isEnabled { return inputs.borderDisabled }
+            if configuration.isError    { return inputs.borderError }
+            if configuration.isFocused  { return inputs.borderFocused }
+            return inputs.borderColor
         }()
-        let borderWidth: Float = configuration.isFocused ? 2 : 1
+        let borderWidth: Float = configuration.isFocused
+            ? inputs.focusRingWidth
+            : inputs.borderWidth
 
         return configuration.content
-            .padding(horizontal: theme.spacing.md, vertical: theme.spacing.sm)
             .background(bg)
-            .cornerRadius(theme.radius.sm)
+            .cornerRadius(inputs.radius)
             .border(border, width: borderWidth)
             .opacity(configuration.isEnabled ? 1 : 0.55)
             .animation(.fast, value: _TextFieldInteractionKey(

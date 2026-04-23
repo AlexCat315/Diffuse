@@ -7,24 +7,52 @@ import GuavaUIRuntime
 /// those lines.
 ///
 /// v1 limitations:
-/// - Vertical mode handles explicit newlines, but does not soft-wrap long
-///   lines to the field width yet.
 /// - State (cursor index, selection anchor, scroll offset) lives in a
 ///   captured reference and is lost on recompose; an explicit `@State`
 ///   cursor is a Phase 6.6 task.
 /// - Reads from `TextEnvironment` for shaping; without one installed the
 ///   field still accepts input but renders no glyphs.
-public struct TextField: _PrimitiveView {
+public struct TextField: View {
 
     public enum Axis: Sendable {
         case horizontal
         case vertical
     }
 
+    /// Visual size variants matching Element Plus Input semantics.
+    /// Drives field height, horizontal padding, and font metrics.
+    public enum Size: Sendable {
+        case large
+        case regular
+        case small
+    }
+
     public let text: Binding<String>
     public let placeholder: String
     public let axis: Axis
+    public let size: Size
+    public let disabled: Bool
+    public let readOnly: Bool
+    public let clearable: Bool
+    public let maxLength: Int?
+    public let showWordLimit: Bool
+    /// Element-style `prefix` / `suffix`: short text painted *inside* the
+    /// field at the leading / trailing edge (icons are rendered as glyph text
+    /// — pass an emoji or single character). They share the input surface.
+    public let prefix: String?
+    public let suffix: String?
+    /// Element-style `prepend` / `append`: short text painted *outside* the
+    /// editable surface (against `surfaceVariant`) and joined to the field
+    /// with a divider — for unit labels, currency tags, or trailing buttons
+    /// rendered as static text. Single primitive owns the whole frame so
+    /// hit-testing stays unchanged.
+    public let prepend: String?
+    public let append: String?
     public let onSubmit: (() -> Void)?
+    public let onChange: ((String) -> Void)?
+    public let onFocus: (() -> Void)?
+    public let onBlur: (() -> Void)?
+    public let onClear: (() -> Void)?
     public let textColor: Color?
     public let placeholderColor: Color?
     public let cursorColor: Color?
@@ -32,67 +60,52 @@ public struct TextField: _PrimitiveView {
 
     public init(_ placeholder: String = "",
                 text: Binding<String>,
-        axis: Axis = .horizontal,
+                axis: Axis = .horizontal,
+                size: Size = .regular,
+                disabled: Bool = false,
+                readOnly: Bool = false,
+                clearable: Bool = false,
+                maxLength: Int? = nil,
+                showWordLimit: Bool = false,
+                prefix: String? = nil,
+                suffix: String? = nil,
+                prepend: String? = nil,
+                append: String? = nil,
                 onSubmit: (() -> Void)? = nil,
+                onChange: ((String) -> Void)? = nil,
+                onFocus: (() -> Void)? = nil,
+                onBlur: (() -> Void)? = nil,
+                onClear: (() -> Void)? = nil,
                 textColor: Color? = nil,
                 placeholderColor: Color? = nil,
                 cursorColor: Color? = nil,
                 selectionColor: Color? = nil) {
         self.text = text
         self.placeholder = placeholder
-    self.axis = axis
+        self.axis = axis
+        self.size = size
+        self.disabled = disabled
+        self.readOnly = readOnly
+        self.clearable = clearable
+        self.maxLength = maxLength
+        self.showWordLimit = showWordLimit
+        self.prefix = prefix
+        self.suffix = suffix
+        self.prepend = prepend
+        self.append = append
         self.onSubmit = onSubmit
+        self.onChange = onChange
+        self.onFocus = onFocus
+        self.onBlur = onBlur
+        self.onClear = onClear
         self.textColor = textColor
         self.placeholderColor = placeholderColor
         self.cursorColor = cursorColor
         self.selectionColor = selectionColor
     }
 
-    /// Per-instance editing state. Lives on the captured closures so it
-    /// persists across redraws without recompose.
-    final class FieldState {
-        /// Cursor index measured in `Character` units from the start of `text`.
-        var cursorIndex: Int = 0
-        /// Selection anchor in `Character` units; `nil` means no selection.
-        /// When non-nil, the live selection is `[min(anchor, cursor), max)`.
-        var selectionAnchor: Int? = nil
-        /// Absolute window-space origin captured during the last render pass;
-        /// used to translate pointer events into local coordinates.
-        var lastDrawOrigin: CGPoint = .zero
-        /// True between pointer-down and pointer-up while a drag is active.
-        /// Motion events extend the selection only when this is set.
-        var isDragging: Bool = false
-        /// Active IME preedit string. It is rendered into the field but is not
-        /// committed into `text` until the platform sends `textInput`.
-        var compositionText: String = ""
-        var compositionStart: Int = 0
-        var compositionLength: Int = 0
-        var lastCaretActivity: Double = TimingTrace.now()
-
-        func clearComposition() {
-            compositionText = ""
-            compositionStart = 0
-            compositionLength = 0
-        }
-
-        var isComposing: Bool { !compositionText.isEmpty }
-    }
-
-    private struct RenderState {
-        let displayText: String
-        let measurementText: String
-        let cursorIndex: Int
-        let compositionRange: Range<Int>?
-        let showsPlaceholder: Bool
-        let isComposing: Bool
-    }
-
-    private struct RenderCacheKey: Equatable {
-        let displayText: String
-        let measurementText: String
-        let font: Font
-        let lineHeight: Float
-        let atlasID: ObjectIdentifier
+    public var body: some View {
+        _StatefulTextField(textField: self)
     }
 
     private struct MeasureInputs: Equatable {
@@ -101,28 +114,35 @@ public struct TextField: _PrimitiveView {
         let axis: Axis
     }
 
-    private final class RenderCacheEntry {
-        let key: RenderCacheKey
-        let layout: TextLayoutResult
-
-        init(key: RenderCacheKey,
-             layout: TextLayoutResult) {
-            self.key = key
-            self.layout = layout
+    private static let minimumFieldHeightDefault: Float = 32
+    private static let multilineMaxVisibleLines: Float = 6
+    static let multilineWheelStep: Float = 30
+    static let scrollbarTrackThickness: Float = 6
+    static let scrollbarInset: Float = 3
+    private var minimumFieldHeight: Float {
+        switch size {
+        case .large:   return 40
+        case .regular: return 32
+        case .small:   return 24
         }
     }
-
-    private struct CaretLocation {
-        let x: Float
-        let topY: Float
+    /// Optional intrinsic font size override applied per `Size` so an
+    /// unstyled TextField still picks up a smaller body in the `.small`
+    /// variant. Returning `nil` keeps the active TextEnvironment default.
+    private var sizeFontSize: Float? {
+        switch size {
+        case .large:   return 14
+        case .regular: return 14
+        case .small:   return 12
+        }
     }
-
-    private static let minimumFieldHeight: Float = 32
     private static let caretBlinkHalfPeriod: Double = 0.5
     private static let caretBlinkSteadyDuration: Double = 0.5
     private static let measureInputsKey = "__textfield_measure_inputs"
+    static let surfaceMarkerKey = "__textfield_surface"
+    private var layoutEngine: LayoutEngine { LayoutEngine(textField: self) }
 
-    public func _makeNode() -> Node {
+    func _makeNode() -> Node {
         let n = Node()
         n.isHitTestable = true
         n.isFocusable = true
@@ -130,14 +150,34 @@ public struct TextField: _PrimitiveView {
         return n
     }
 
-    public func _updateNode(_ node: Node) {
-        // Keep the primitive fallback aligned with the public default style so
-        // freshly-created fields still look like recessed editor inputs even
-        // before higher-level style modifiers wrap them.
-        let theme = node.theme
-        node.backgroundColor = theme.colors.surfaceSunken
-        node.cornerRadius = theme.radius.sm
-        node.cursor = .ibeam
+    func _updateNode(_ node: Node) {
+        updateSurfaceNode(node,
+                          interactionState: _TextFieldInteractionState(),
+                          onFocusChange: { _ in },
+                          onEditingChange: { _ in })
+    }
+
+    func updateSurfaceNode(_ node: Node,
+                           interactionState: _TextFieldInteractionState,
+                           onFocusChange: @escaping (Bool) -> Void,
+                           onEditingChange: @escaping (Bool) -> Void) {
+        node.attachments[Self.surfaceMarkerKey] = true
+        node.backgroundColor = .clear
+        node.cornerRadius = 0
+        node.borderColor = .clear
+        node.borderWidth = 0
+        node.opacity = 1
+        node.cursor = disabled ? .arrow : .ibeam
+        node.isFocusable = !disabled
+        node.isHitTestable = !disabled
+        node.clipsToBounds = true
+        if let sizeFontSize {
+            // Seed a sensible default font for size variants when no
+            // explicit `.font(...)` modifier was applied.
+            if node.attachments[StyleAttachmentKey.font] == nil {
+                node.attachments[StyleAttachmentKey.font] = Font.system(size: sizeFontSize)
+            }
+        }
 
         // Reuse FieldState if this node is being recycled by reconcile;
         // otherwise create one and seed cursor at the end of the current text.
@@ -151,158 +191,108 @@ public struct TextField: _PrimitiveView {
         }
         let snapshot = self
 
-        if let registry = InteractionRegistryHolder.current {
-            registry.setEditing(node) { event, _ in
-                state.compositionText = event.text
-                let compositionCount = event.text.count
-                state.compositionStart = clamp(Int(event.start), 0, compositionCount)
-                state.compositionLength = clamp(Int(event.length), 0, max(0, compositionCount - state.compositionStart))
-                snapshot.recordCaretActivity(state)
-                return .handled
+        updateInteractionHandlers(for: node, state: state)
+        node.attachments[WheelRoutingAttachmentKey.priority] = interactionState.isFocused
+            ? WheelRoutingPriority.preferFocused
+            : nil
+        node.attachments[TextInputAttachmentKey.focusChangeHandler] = { [weak node] focused in
+            node?.attachments[WheelRoutingAttachmentKey.priority] = focused
+                ? WheelRoutingPriority.preferFocused
+                : nil
+            if !focused, state.isComposing {
+                state.clearComposition()
+                onEditingChange(false)
             }
-            registry.setText(node) { incoming, _ in
-                snapshot.insertReplacingSelection(incoming, state: state)
-                return .handled
+            onFocusChange(focused)
+            if focused {
+                snapshot.onFocus?()
+            } else {
+                snapshot.onBlur?()
             }
-            registry.setKey(node) { event, _ in
-                snapshot.handleKey(event, state: state) ? .handled : .ignored
-            }
-            registry.setPointer(node) { event, phase, _ in
-                switch phase {
-                case .down:
-                    snapshot.handlePointerDown(event: event, state: state, node: node)
-                    return .handled
-                case .up:
-                    state.isDragging = false
-                    PointerCaptureHolder.current?.release()
-                    return .handled
-                }
-            }
-            registry.setMotion(node) { event, _ in
-                guard state.isDragging else { return .ignored }
-                let target = snapshot.characterIndex(atWindowPoint: CGPoint(x: CGFloat(event.x),
-                                                                            y: CGFloat(event.y)),
-                                                     state: state,
-                                                     node: node)
-                if state.selectionAnchor == nil {
-                    state.selectionAnchor = state.cursorIndex
-                }
-                state.cursorIndex = target
-                return .handled
-            }
+        }
+        node.attachments[TextInputAttachmentKey.editingChangeHandler] = { isComposing in
+            onEditingChange(isComposing)
+        }
+        node.attachments[TextInputAttachmentKey.areaResolver] = { committedNode, absoluteOrigin in
+            snapshot.committedTextInputArea(node: committedNode,
+                                            state: state,
+                                            absoluteOrigin: absoluteOrigin,
+                                            isFocused: interactionState.isFocused)
         }
 
         node.draw = { list, origin in
-            snapshot.render(node: node, state: state, list: list, origin: origin)
+            snapshot.render(node: node,
+                            state: state,
+                            list: list,
+                            origin: origin,
+                            interactionState: interactionState)
+        }
+        node.overlayDraw = { [weak node] list, origin in
+            guard let node,
+                  let metrics = snapshot.layoutEngine.scrollbarMetrics(state: state,
+                                                                      node: node,
+                                                                      origin: origin)
+            else { return }
+            let colors = node.theme.colors
+            list.addRoundedRect(metrics.trackRect,
+                                radius: Self.scrollbarTrackThickness / 2,
+                                color: colors.surfaceVariant.multipliedAlpha(node.opacity))
+            list.addRoundedRect(metrics.thumbRect,
+                                radius: Self.scrollbarTrackThickness / 2,
+                                color: colors.onSurfaceMuted.multipliedAlpha(node.opacity))
         }
     }
 
-    public func _makeLayoutNode() -> LayoutNode? {
+    func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
         Self.installMeasureFunc(on: layout, snapshot: self)
         let inputs = MeasureInputs(text: text.wrappedValue,
                                    placeholder: placeholder,
                                    axis: axis)
         layout.attachments[Self.measureInputsKey] = inputs
-        if axis == .horizontal {
-            layout.height = Self.minimumFieldHeight
+        if axis == .vertical {
+            layout.height = nil
+            layout.minHeight = minimumFieldHeight
+        } else {
+            layout.minHeight = nil
+            layout.height = resolvedFieldHeight(layout: layout)
         }
         return layout
     }
 
-    public func _updateLayout(_ layout: LayoutNode) {
+    func _updateLayout(_ layout: LayoutNode) {
         Self.installMeasureFunc(on: layout, snapshot: self)
         let next = MeasureInputs(text: text.wrappedValue,
                                  placeholder: placeholder,
                                  axis: axis)
         let previous = layout.attachments[Self.measureInputsKey] as? MeasureInputs
         layout.attachments[Self.measureInputsKey] = next
-        if axis == .horizontal {
-            layout.height = Self.minimumFieldHeight
-        } else {
+        if axis == .vertical {
             layout.height = nil
+            layout.minHeight = minimumFieldHeight
+        } else {
+            layout.minHeight = nil
+            layout.height = resolvedFieldHeight(layout: layout)
+        }
+        if axis == .vertical {
             if previous != nil, previous != next {
                 layout.markDirty()
             }
         }
     }
 
-    // MARK: - Selection helpers
-
-    /// Returns the active selection range as a half-open `[low, high)` in
-    /// `Character` units, or nil when there is no selection.
-    private func selectionRange(_ state: FieldState) -> Range<Int>? {
-        guard let a = state.selectionAnchor, a != state.cursorIndex else { return nil }
-        return min(a, state.cursorIndex)..<max(a, state.cursorIndex)
-    }
-
-    private func substring(_ s: String, _ range: Range<Int>) -> String {
-        let lo = s.index(s.startIndex, offsetBy: range.lowerBound)
-        let hi = s.index(s.startIndex, offsetBy: range.upperBound)
-        return String(s[lo..<hi])
-    }
-
-    /// Delete the active selection (if any). Returns true when a selection
-    /// was deleted; the caller should then skip its own delete-one logic.
-    @discardableResult
-    private func deleteSelection(state: FieldState) -> Bool {
-        guard let range = selectionRange(state) else { return false }
-        var s = text.wrappedValue
-        let lo = s.index(s.startIndex, offsetBy: range.lowerBound)
-        let hi = s.index(s.startIndex, offsetBy: range.upperBound)
-        s.removeSubrange(lo..<hi)
-        text.wrappedValue = s
-        state.cursorIndex = range.lowerBound
-        state.selectionAnchor = nil
-        recordCaretActivity(state)
-        return true
-    }
-
-    /// Replace the active selection with `incoming`, or insert at the cursor
-    /// when no selection exists. Both paths leave the cursor at the end of
-    /// the inserted text and clear any selection.
-    private func insertReplacingSelection(_ incoming: String, state: FieldState) {
-        guard !incoming.isEmpty else { return }
-        state.clearComposition()
-        deleteSelection(state: state)
-        var s = text.wrappedValue
-        let cursor = clamp(state.cursorIndex, 0, s.count)
-        let at = s.index(s.startIndex, offsetBy: cursor)
-        s.insert(contentsOf: incoming, at: at)
-        text.wrappedValue = s
-        state.cursorIndex = cursor + incoming.count
-        state.selectionAnchor = nil
-        recordCaretActivity(state)
-    }
-
-    /// Move the cursor to `target`. When `extendSelection` is true an anchor
-    /// is established (if missing) so the move grows / shrinks a selection;
-    /// otherwise any existing selection is collapsed.
-    private func moveCursor(to target: Int, extendSelection: Bool, state: FieldState) {
-        let count = text.wrappedValue.count
-        let bounded = clamp(target, 0, count)
-        if extendSelection {
-            if state.selectionAnchor == nil {
-                state.selectionAnchor = state.cursorIndex
-            }
-        } else {
-            state.selectionAnchor = nil
-        }
-        state.cursorIndex = bounded
-        recordCaretActivity(state)
-    }
-
-    private func recordCaretActivity(_ state: FieldState) {
-        state.lastCaretActivity = TimingTrace.now()
-    }
-
     // MARK: - Editing
 
-    private func handleKey(_ event: KeyEvent, state: FieldState) -> Bool {
+    func handleKey(_ event: KeyEvent, state: FieldState, node: Node) -> Bool {
         let mods = event.modifiers
         let shift = !mods.isDisjoint(with: .shift)
         let cmdOrCtrl = !mods.isDisjoint(with: .gui) || !mods.isDisjoint(with: .ctrl)
         let count = text.wrappedValue.count
+        // In read-only mode the field still accepts caret motion, selection,
+        // and Cmd+A / Cmd+C so users can copy the value, but every mutation
+        // (typing, paste, cut, backspace, delete, newline insert) is silently
+        // dropped — matching Element Plus' readonly Input behaviour.
+        let blockMutations = readOnly
 
         // Cmd/Ctrl shortcuts take priority over plain bindings.
         if cmdOrCtrl {
@@ -318,11 +308,13 @@ public struct TextField: _PrimitiveView {
                 }
                 return true
             case 25: // V
+                guard !blockMutations else { return true }
                 if let s = ClipboardHolder.read?(), !s.isEmpty {
                     insertReplacingSelection(s, state: state)
                 }
                 return true
             case 27: // X
+                guard !blockMutations else { return true }
                 if let r = selectionRange(state) {
                     ClipboardHolder.write?(substring(text.wrappedValue, r))
                     deleteSelection(state: state)
@@ -335,6 +327,7 @@ public struct TextField: _PrimitiveView {
 
         switch event.scancode {
         case 42: // BACKSPACE
+            guard !blockMutations else { return true }
             if !deleteSelection(state: state) {
                 guard state.cursorIndex > 0 else { return true }
                 var s = text.wrappedValue
@@ -343,9 +336,11 @@ public struct TextField: _PrimitiveView {
                 text.wrappedValue = s
                 state.cursorIndex -= 1
                 recordCaretActivity(state)
+                onChange?(s)
             }
             return true
         case 76: // DELETE
+            guard !blockMutations else { return true }
             if !deleteSelection(state: state) {
                 guard state.cursorIndex < count else { return true }
                 var s = text.wrappedValue
@@ -353,6 +348,7 @@ public struct TextField: _PrimitiveView {
                 s.remove(at: removeAt)
                 text.wrappedValue = s
                 recordCaretActivity(state)
+                onChange?(s)
             }
             return true
         case 80: // LEFT
@@ -379,8 +375,14 @@ public struct TextField: _PrimitiveView {
         case 77: // END
             moveCursor(to: count, extendSelection: shift, state: state)
             return true
+        case 82: // UP
+            moveCursorVertically(lineDelta: -1, extendSelection: shift, state: state, node: node)
+            return true
+        case 81: // DOWN
+            moveCursorVertically(lineDelta: 1, extendSelection: shift, state: state, node: node)
+            return true
         case 40, 88: // RETURN, KP_ENTER
-            if axis == .vertical, !cmdOrCtrl {
+            if !cmdOrCtrl, !blockMutations, (axis == .vertical || shift) {
                 insertReplacingSelection("\n", state: state)
             } else {
                 onSubmit?()
@@ -393,85 +395,237 @@ public struct TextField: _PrimitiveView {
 
     // MARK: - Render
 
-    private func render(node: Node, state: FieldState, list: DrawList, origin: CGPoint) {
+    private func render(node: Node,
+                        state: FieldState,
+                        list: DrawList,
+                        origin: CGPoint,
+                        interactionState: _TextFieldInteractionState) {
         state.lastDrawOrigin = origin
         guard let env = TextEnvironmentHolder.current else { return }
+        let engine = layoutEngine
         let theme = node.theme
-        let isFocused = (FocusChainHolder.current?.focused === node)
-        if !isFocused, state.isComposing {
-            state.clearComposition()
-        }
+        let isFocused = interactionState.isFocused
         let current = text.wrappedValue
         let resolvedFont = resolvedFont(node: node, env: env)
         let resolvedLineHeight = resolvedLineHeight(node: node, env: env)
         let resolvedPlaceholderColor = placeholderColor ?? theme.colors.onSurfaceMuted
         let resolvedCursorColor = cursorColor ?? theme.colors.onSurface
         let resolvedSelectionColor = selectionColor ?? theme.colors.selection
-        let renderState = makeRenderState(current: current, state: state, isFocused: isFocused)
+        let renderState = engine.makeRenderState(current: current, state: state, isFocused: isFocused)
         let renderBaseColor: Color =
             renderState.showsPlaceholder
                 ? resolvedPlaceholderColor
                 : (textColor ?? node.foregroundColor ?? env.defaultColor)
         let renderColor = renderBaseColor.multipliedAlpha(node.opacity)
-        let renderCache = cachedRenderLayout(node: node,
-                                             env: env,
-                                             displayText: renderState.displayText,
-                                             measurementText: renderState.measurementText,
-                                             font: resolvedFont,
-                                             lineHeight: resolvedLineHeight)
 
         let insetX = horizontalInset(theme: theme)
-        let textOriginX = Float(origin.x) + insetX
+        let frameWidth = Float(node.frame.width)
         let frameHeight = Float(node.frame.height)
-        let textOriginY = Float(origin.y) + textOriginYOffset(frameHeight: frameHeight,
-                                                              lineHeight: resolvedLineHeight)
+        // Compose addon insets first so caret math, hit-testing, clear icon,
+        // counter, and the editable text region all reference the same
+        // leading / trailing reservations.
+        let addonLeading = leadingAddonWidth(env: env, font: resolvedFont,
+                                             lineHeight: resolvedLineHeight, theme: theme)
+        let addonTrailing = trailingAddonWidth(env: env, font: resolvedFont,
+                                               lineHeight: resolvedLineHeight, theme: theme)
+        let renderCache = engine.cachedRenderLayout(node: node,
+                                env: env,
+                                displayText: renderState.displayText,
+                                measurementText: renderState.measurementText,
+                                font: resolvedFont,
+                                lineHeight: resolvedLineHeight,
+                                availableTextWidth: max(0, frameWidth - insetX * 2 - addonLeading - addonTrailing))
+        // Reserve trailing-edge real estate for clear icon + counter so the
+        // text/caret never collide with the affordances. Both the visual draw
+        // and the hit-test rely on this same reservation.
+        let showClear = clearable && !disabled && !readOnly && !current.isEmpty && isFocused
+        let counterText: String?
+        if showWordLimit, let maxLength {
+            counterText = "\(current.count)/\(maxLength)"
+        } else {
+            counterText = nil
+        }
+        let counterLayout: TextLayoutResult?
+        if let counterText {
+            counterLayout = env.cachedLayout(text: counterText,
+                                             font: resolvedFont,
+                                             lineHeight: resolvedLineHeight,
+                                             maxWidth: .infinity,
+                                             alignment: .leading)
+        } else {
+            counterLayout = nil
+        }
+
+
+        let viewport = engine.updateViewport(node: node,
+                                             state: state,
+                                             origin: origin,
+                                             env: env,
+                                             renderState: renderState,
+                                             renderCache: renderCache,
+                                             font: resolvedFont,
+                                             lineHeight: resolvedLineHeight,
+                                             addonLeading: addonLeading,
+                                             addonTrailing: addonTrailing)
+        let textOriginX = viewport.textOriginX
+        let textOriginY = viewport.textOriginY
+
+        // Paint prepend / append slabs and inline prefix / suffix glyphs.
+        // Slabs draw under the text; inline glyphs are foreground tokens that
+        // share the muted on-surface colour so they read as decoration.
+        let inputs = theme.inputs
+        let slabColor = inputs.addonBackground.multipliedAlpha(node.opacity)
+        let dividerColor = inputs.dividerColor.multipliedAlpha(node.opacity)
+        let glyphColor = inputs.addonForeground.multipliedAlpha(node.opacity)
+        if let prepend, !prepend.isEmpty {
+            let layout = env.cachedLayout(text: prepend, font: resolvedFont,
+                                          lineHeight: resolvedLineHeight,
+                                          maxWidth: .infinity, alignment: .leading)
+            let slabWidth = layout.totalWidth + insetX * 2
+            let slabRect = UIRect(x: Float(origin.x),
+                                  y: Float(origin.y),
+                                  width: slabWidth, height: frameHeight)
+            list.addRect(slabRect, color: slabColor)
+            list.addRect(UIRect(x: Float(origin.x) + slabWidth,
+                                y: Float(origin.y),
+                                width: 1, height: frameHeight),
+                         color: dividerColor)
+            list.addText(layout,
+                         origin: (Float(origin.x) + insetX, textOriginY),
+                         color: glyphColor,
+                         textureID: env.atlasTextureID,
+                         atlas: env.atlas)
+        }
+        if let append, !append.isEmpty {
+            let layout = env.cachedLayout(text: append, font: resolvedFont,
+                                          lineHeight: resolvedLineHeight,
+                                          maxWidth: .infinity, alignment: .leading)
+            let slabWidth = layout.totalWidth + insetX * 2
+            let slabX = Float(origin.x) + frameWidth - slabWidth
+            list.addRect(UIRect(x: slabX, y: Float(origin.y),
+                                width: slabWidth, height: frameHeight),
+                         color: slabColor)
+            list.addRect(UIRect(x: slabX - 1, y: Float(origin.y),
+                                width: 1, height: frameHeight),
+                         color: dividerColor)
+            list.addText(layout,
+                         origin: (slabX + insetX, textOriginY),
+                         color: glyphColor,
+                         textureID: env.atlasTextureID,
+                         atlas: env.atlas)
+        }
+        if let prefix, !prefix.isEmpty {
+            let prependWidth: Float = {
+                guard let prepend, !prepend.isEmpty else { return 0 }
+                let layout = env.cachedLayout(text: prepend, font: resolvedFont,
+                                              lineHeight: resolvedLineHeight,
+                                              maxWidth: .infinity, alignment: .leading)
+                return layout.totalWidth + insetX * 2 + theme.spacing.sm
+            }()
+            let layout = env.cachedLayout(text: prefix, font: resolvedFont,
+                                          lineHeight: resolvedLineHeight,
+                                          maxWidth: .infinity, alignment: .leading)
+            list.addText(layout,
+                         origin: (Float(origin.x) + insetX + prependWidth, textOriginY),
+                         color: glyphColor,
+                         textureID: env.atlasTextureID,
+                         atlas: env.atlas)
+        }
+        if let suffix, !suffix.isEmpty {
+            let appendWidth: Float = {
+                guard let append, !append.isEmpty else { return 0 }
+                let layout = env.cachedLayout(text: append, font: resolvedFont,
+                                              lineHeight: resolvedLineHeight,
+                                              maxWidth: .infinity, alignment: .leading)
+                return layout.totalWidth + insetX * 2 + theme.spacing.sm
+            }()
+            let layout = env.cachedLayout(text: suffix, font: resolvedFont,
+                                          lineHeight: resolvedLineHeight,
+                                          maxWidth: .infinity, alignment: .leading)
+            // Suffix sits before the clear/counter affordances so the order
+            // visually matches Element: [text]   [suffix] [counter] [×] [|append].
+            let suffixRight = Float(origin.x) + frameWidth - insetX - appendWidth
+                - (counterLayout?.totalWidth ?? 0) - (counterLayout != nil ? theme.spacing.xs : 0)
+                - (showClear ? resolvedLineHeight + theme.spacing.xs : 0)
+            list.addText(layout,
+                         origin: (suffixRight - layout.totalWidth, textOriginY),
+                         color: glyphColor,
+                         textureID: env.atlasTextureID,
+                         atlas: env.atlas)
+        }
 
         // Selection highlight first (drawn under the glyphs).
         if isFocused, !renderState.isComposing, let range = selectionRange(state), !current.isEmpty {
-            drawSelection(range,
-                          in: current,
-                          env: env,
-                          font: resolvedFont,
-                          lineHeight: resolvedLineHeight,
-                          textOriginX: textOriginX,
-                          textOriginY: textOriginY,
-                          list: list,
-                          color: resolvedSelectionColor.multipliedAlpha(node.opacity))
+            engine.drawSelection(range,
+                                 in: current,
+                                 env: env,
+                                 font: resolvedFont,
+                                 lineHeight: resolvedLineHeight,
+                                 layout: renderCache.layout,
+                                 textOriginX: textOriginX,
+                                 textOriginY: textOriginY,
+                                 visibleTopY: state.scrollOffsetY,
+                                 visibleBottomY: state.scrollOffsetY + state.visibleTextHeight,
+                                 list: list,
+                                 color: resolvedSelectionColor.multipliedAlpha(node.opacity))
         }
 
-        list.addText(renderCache.layout,
+        list.addText(engine.visibleLayout(from: renderCache.layout,
+                                          scrollOffsetY: state.scrollOffsetY,
+                                          visibleHeight: state.visibleTextHeight,
+                                          lineHeight: resolvedLineHeight),
                      origin: (textOriginX, textOriginY),
                      color: renderColor,
                      textureID: env.atlasTextureID,
                      atlas: env.atlas)
 
-        if isFocused, let compositionRange = renderState.compositionRange {
-            drawUnderline(compositionRange,
-                          in: renderState.measurementText,
-                          env: env,
-                          font: resolvedFont,
-                          lineHeight: resolvedLineHeight,
-                          textOriginX: textOriginX,
-                          textOriginY: textOriginY,
-                          list: list,
-                          color: resolvedCursorColor.multipliedAlpha(node.opacity * 0.8))
+        // Draw counter and clear icon at the trailing edge.
+        // Push the clear/counter affordances inside the append slab so they
+        // visually sit inside the editable region rather than over the addon.
+        let trailingRightEdge = Float(origin.x) + frameWidth - insetX - addonTrailing
+        var trailingCursor = trailingRightEdge
+        if let counterLayout, let _ = counterText {
+            let counterX = trailingCursor - counterLayout.totalWidth
+            list.addText(counterLayout,
+                         origin: (counterX, textOriginY),
+                         color: resolvedPlaceholderColor.multipliedAlpha(node.opacity),
+                         textureID: env.atlasTextureID,
+                         atlas: env.atlas)
+            trailingCursor = counterX - theme.spacing.xs
+        }
+        if showClear {
+            let glyphSize = resolvedLineHeight
+            let clearX = trailingCursor - glyphSize
+            // Cache the hit boundary so pointer-down on the right edge can
+            // route to performClear before falling through to caret placement.
+            state.clearHitX = clearX
+            drawClearGlyph(at: clearX,
+                           y: textOriginY,
+                           size: glyphSize,
+                           list: list,
+                           color: resolvedPlaceholderColor.multipliedAlpha(node.opacity))
+        } else {
+            state.clearHitX = nil
         }
 
-        let caret = caretLocation(in: renderState.measurementText,
-                                  cursorIndex: clamp(renderState.cursorIndex, 0, renderState.measurementText.count),
-                                  env: env,
-                                  font: resolvedFont,
-                                  lineHeight: resolvedLineHeight)
-        let caretHeight = resolvedLineHeight
+        if isFocused, let compositionRange = renderState.compositionRange {
+            engine.drawUnderline(compositionRange,
+                                 in: renderState.measurementText,
+                                 env: env,
+                                 font: resolvedFont,
+                                 lineHeight: resolvedLineHeight,
+                                 layout: renderCache.layout,
+                                 textOriginX: textOriginX,
+                                 textOriginY: textOriginY,
+                                 visibleTopY: state.scrollOffsetY,
+                                 visibleBottomY: state.scrollOffsetY + state.visibleTextHeight,
+                                 list: list,
+                                 color: resolvedCursorColor.multipliedAlpha(node.opacity * 0.8))
+        }
+
+        let caret = viewport.rawCaret
         let caretX = textOriginX + caret.x
         let caretY = textOriginY + caret.topY
-        node.attachments[TextInputAttachmentKey.area] = TextInputArea(
-            x: caretX,
-            y: caretY,
-            width: max(1, resolvedLineHeight),
-            height: caretHeight,
-            cursorX: 0
-        )
 
         // Cursor — suppressed while a non-empty selection is active.
         guard isFocused, renderState.isComposing || selectionRange(state) == nil else { return }
@@ -483,6 +637,96 @@ public struct TextField: _PrimitiveView {
             height: resolvedLineHeight
         )
         list.addRect(cursorRect, color: resolvedCursorColor.multipliedAlpha(node.opacity))
+    }
+
+    func committedTextInputArea(node: Node,
+                                state: FieldState,
+                                absoluteOrigin: CGPoint,
+                                isFocused: Bool) -> TextInputArea? {
+        state.lastDrawOrigin = absoluteOrigin
+        guard let env = TextEnvironmentHolder.current else { return nil }
+
+        let current = text.wrappedValue
+        let resolvedFont = resolvedFont(node: node, env: env)
+        let resolvedLineHeight = resolvedLineHeight(node: node, env: env)
+        let insetX = horizontalInset(theme: node.theme)
+        let frameWidth = Float(node.frame.width)
+        let addonLeading = leadingAddonWidth(env: env,
+                                             font: resolvedFont,
+                                             lineHeight: resolvedLineHeight,
+                                             theme: node.theme)
+        let addonTrailing = trailingAddonWidth(env: env,
+                                               font: resolvedFont,
+                                               lineHeight: resolvedLineHeight,
+                                               theme: node.theme)
+        let renderState = layoutEngine.makeRenderState(current: current,
+                                                       state: state,
+                                                       isFocused: isFocused)
+        let renderCache = layoutEngine.cachedRenderLayout(node: node,
+                                                          env: env,
+                                                          displayText: renderState.displayText,
+                                                          measurementText: renderState.measurementText,
+                                                          font: resolvedFont,
+                                                          lineHeight: resolvedLineHeight,
+                                                          availableTextWidth: max(0,
+                                                                                  frameWidth
+                                                                                  - insetX * 2
+                                                                                  - addonLeading
+                                                                                  - addonTrailing))
+        let viewport = layoutEngine.updateViewport(node: node,
+                                                   state: state,
+                                                   origin: absoluteOrigin,
+                                                   env: env,
+                                                   renderState: renderState,
+                                                   renderCache: renderCache,
+                                                   font: resolvedFont,
+                                                   lineHeight: resolvedLineHeight,
+                                                   addonLeading: addonLeading,
+                                                   addonTrailing: addonTrailing)
+        let caret = viewport.rawCaret
+        return TextInputArea(
+            x: viewport.textOriginX + caret.x,
+            y: viewport.textOriginY + caret.topY,
+            width: max(1, resolvedLineHeight),
+            height: resolvedLineHeight,
+            cursorX: 0
+        )
+    }
+
+    func refreshScrollableMetrics(state: FieldState, node: Node) {
+        guard let env = TextEnvironmentHolder.current else { return }
+
+        let isFocused = (FocusChainHolder.current?.focused === node)
+        let current = text.wrappedValue
+        let resolvedFont = resolvedFont(node: node, env: env)
+        let resolvedLineHeight = resolvedLineHeight(node: node, env: env)
+        let insetX = horizontalInset(theme: node.theme)
+        let addonLeading = leadingAddonWidth(env: env,
+                                             font: resolvedFont,
+                                             lineHeight: resolvedLineHeight,
+                                             theme: node.theme)
+        let addonTrailing = trailingAddonWidth(env: env,
+                                               font: resolvedFont,
+                                               lineHeight: resolvedLineHeight,
+                                               theme: node.theme)
+        let renderState = layoutEngine.makeRenderState(current: current,
+                                                       state: state,
+                                                       isFocused: isFocused)
+        let renderCache = layoutEngine.cachedRenderLayout(node: node,
+                                                          env: env,
+                                                          displayText: renderState.displayText,
+                                                          measurementText: renderState.measurementText,
+                                                          font: resolvedFont,
+                                                          lineHeight: resolvedLineHeight,
+                                                          availableTextWidth: max(0,
+                                                                                  Float(node.frame.width)
+                                                                                  - insetX * 2
+                                                                                  - addonLeading
+                                                                                  - addonTrailing))
+        layoutEngine.refreshScrollMetrics(node: node,
+                                          state: state,
+                                          renderCache: renderCache,
+                                          lineHeight: resolvedLineHeight)
     }
 
     private func isCaretVisible(_ state: FieldState) -> Bool {
@@ -497,128 +741,82 @@ public struct TextField: _PrimitiveView {
         return phase < Self.caretBlinkHalfPeriod
     }
 
-    private func cachedRenderLayout(node: Node,
-                                    env: TextEnvironment,
-                                    displayText: String,
-                                    measurementText: String,
-                                    font: Font,
-                                    lineHeight: Float) -> RenderCacheEntry {
-        let key = RenderCacheKey(displayText: displayText,
-                                 measurementText: measurementText,
-                                 font: font,
-                                 lineHeight: lineHeight,
-                                 atlasID: ObjectIdentifier(env.atlas))
-        if let cached = node.attachments["__textfield_render_cache"] as? RenderCacheEntry,
-           cached.key == key {
-            return cached
-        }
-        let layout = env.cachedLayout(
-            text: displayText,
-            font: font,
-            lineHeight: lineHeight,
-            maxWidth: .infinity,
-            alignment: .leading
-        )
-        let entry = RenderCacheEntry(key: key, layout: layout)
-        node.attachments["__textfield_render_cache"] = entry
-        return entry
-    }
-
-    private func makeRenderState(current: String,
-                                 state: FieldState,
-                                 isFocused: Bool) -> RenderState {
-        guard isFocused, state.isComposing else {
-            if current.isEmpty {
-                return RenderState(
-                    displayText: placeholder,
-                    measurementText: "",
-                    cursorIndex: 0,
-                    compositionRange: nil,
-                    showsPlaceholder: true,
-                    isComposing: false
-                )
-            }
-            return RenderState(
-                displayText: current,
-                measurementText: current,
-                cursorIndex: clamp(state.cursorIndex, 0, current.count),
-                compositionRange: nil,
-                showsPlaceholder: false,
-                isComposing: false
-            )
-        }
-
-        let replaceRange = selectionRange(state) ?? (state.cursorIndex..<state.cursorIndex)
-        var preview = current
-        let lo = preview.index(preview.startIndex, offsetBy: replaceRange.lowerBound)
-        let hi = preview.index(preview.startIndex, offsetBy: replaceRange.upperBound)
-        preview.replaceSubrange(lo..<hi, with: state.compositionText)
-
-        let compositionStart = replaceRange.lowerBound
-        let compositionEnd = compositionStart + state.compositionText.count
-        let cursorOffset = state.compositionLength > 0
-            ? state.compositionStart + state.compositionLength
-            : state.compositionText.count
-
-        return RenderState(
-            displayText: preview,
-            measurementText: preview,
-            cursorIndex: compositionStart + clamp(cursorOffset, 0, state.compositionText.count),
-            compositionRange: compositionStart..<compositionEnd,
-            showsPlaceholder: false,
-            isComposing: true
-        )
-    }
-
     /// Snap the cursor to the character boundary nearest a window-space point.
     /// Convenience wrapper around `characterIndex(atWindowX:)` that also
     /// writes the result back to `state.cursorIndex`.
     private func positionCursor(atWindowPoint point: CGPoint,
                                 state: FieldState,
                                 node: Node) {
-        state.cursorIndex = characterIndex(atWindowPoint: point, state: state, node: node)
+        state.cursorIndex = layoutEngine.characterIndex(atWindowPoint: point, state: state, node: node)
     }
 
     /// Map a window-space point to a character index.
     /// Treats glyph index as character index — accurate for ASCII; ligatures,
     /// CJK, and emoji are still approximate.
-    private func characterIndex(atWindowPoint point: CGPoint,
-                                state: FieldState,
-                                node: Node) -> Int {
+    func characterIndex(atWindowPoint point: CGPoint,
+                        state: FieldState,
+                        node: Node) -> Int {
+        layoutEngine.characterIndex(atWindowPoint: point, state: state, node: node)
+    }
+
+    private func moveCursorVertically(lineDelta: Int,
+                                      extendSelection: Bool,
+                                      state: FieldState,
+                                      node: Node) {
+        guard lineDelta != 0 else { return }
+        let engine = layoutEngine
         guard let env = TextEnvironmentHolder.current else {
-            return 0
+            moveCursor(to: state.cursorIndex, extendSelection: extendSelection, state: state)
+            return
         }
+
         let current = text.wrappedValue
-        let lineRanges = self.lineRanges(in: current)
-        guard !lineRanges.isEmpty else {
-            return 0
-        }
-
         let resolvedFont = resolvedFont(node: node, env: env)
-        let lineHeight = resolvedLineHeight(node: node, env: env)
-        let localX = Float(point.x) - Float(state.lastDrawOrigin.x) - horizontalInset(theme: node.theme)
-        let localY = Float(point.y) - Float(state.lastDrawOrigin.y) - textOriginYOffset(frameHeight: Float(node.frame.height),
-                                                  lineHeight: lineHeight)
-
-        let lineIndex = clamp(Int((max(localY, 0) / max(lineHeight, 1)).rounded(.down)),
-                              0,
-                              max(0, lineRanges.count - 1))
-        let lineRange = lineRanges[lineIndex]
-        let lineText = substring(current, lineRange)
-        if localX <= 0 {
-            return lineRange.lowerBound
+        let resolvedLineHeight = resolvedLineHeight(node: node, env: env)
+        let layout = engine.interactiveLayout(in: current,
+                                              node: node,
+                                              env: env,
+                                              font: resolvedFont,
+                                              lineHeight: resolvedLineHeight)
+        let ranges = engine.lineRanges(in: current, layout: layout)
+        guard !ranges.isEmpty else {
+            moveCursor(to: 0, extendSelection: extendSelection, state: state)
+            return
+        }
+        let cursorIndex = clamp(state.cursorIndex, 0, current.count)
+        let currentLineIndex = engine.lineIndex(for: cursorIndex, lineRanges: ranges)
+        let targetLineIndex = clamp(currentLineIndex + lineDelta, 0, max(0, ranges.count - 1))
+        guard targetLineIndex != currentLineIndex else {
+            let currentCaret = engine.caretLocation(in: current,
+                                                    cursorIndex: cursorIndex,
+                                                    env: env,
+                                                    font: resolvedFont,
+                                                    lineHeight: resolvedLineHeight,
+                                                    layout: layout)
+            moveCursor(to: cursorIndex,
+                       extendSelection: extendSelection,
+                       state: state,
+                       preferredCaretX: state.preferredCaretX ?? currentCaret.x)
+            return
         }
 
-        let glyphs = env.shape(text: lineText, font: resolvedFont)
-        var pen: Float = 0
-        for (index, glyph) in glyphs.enumerated() {
-            let mid = pen + glyph.xAdvance * 0.5
-            if localX < mid {
-                return lineRange.lowerBound + index
-            }
-            pen += glyph.xAdvance
-        }
-        return lineRange.upperBound
+        let currentCaret = engine.caretLocation(in: current,
+                                                cursorIndex: cursorIndex,
+                                                env: env,
+                                                font: resolvedFont,
+                                                lineHeight: resolvedLineHeight,
+                                                layout: layout)
+        let desiredX = state.preferredCaretX ?? currentCaret.x
+        let targetRange = ranges[targetLineIndex]
+        let targetLineText = substring(current, targetRange)
+        let targetColumn = engine.characterIndex(inLineText: targetLineText,
+                                                 desiredX: desiredX,
+                                                 env: env,
+                                                 font: resolvedFont)
+        moveCursor(to: targetRange.lowerBound + targetColumn,
+                   extendSelection: extendSelection,
+                   state: state,
+                   preferredCaretX: desiredX)
     }
 
     // MARK: - Pointer / multi-click
@@ -626,9 +824,9 @@ public struct TextField: _PrimitiveView {
     /// Handle a pointer-down event: dispatch to single-click cursor placement,
     /// double-click word selection, or triple-click select-all based on
     /// `event.clicks` (set by SDL3 to 1 / 2 / 3 for the click cadence).
-    private func handlePointerDown(event: MouseButtonEvent,
-                                   state: FieldState,
-                                   node: Node) {
+    func handlePointerDown(event: MouseButtonEvent,
+                           state: FieldState,
+                           node: Node) {
         switch event.clicks {
         case 3...:
             // Triple click: select the entire field.
@@ -658,160 +856,87 @@ public struct TextField: _PrimitiveView {
         recordCaretActivity(state)
     }
 
-    private func horizontalInset(theme: Theme) -> Float {
+    func horizontalInset(theme: Theme) -> Float {
         max(4, theme.spacing.sm)
     }
 
-    private func textOriginYOffset(frameHeight: Float, lineHeight: Float) -> Float {
+    /// Width consumed by `prepend` slab + `prefix` glyph at the leading edge,
+    /// inclusive of inter-element spacing. Returns 0 when no slot is set so
+    /// callers can add this unconditionally.
+    func leadingAddonWidth(env: TextEnvironment,
+                           font: Font,
+                           lineHeight: Float,
+                           theme: Theme) -> Float {
+        var width: Float = 0
+        if let prepend, !prepend.isEmpty {
+            let layout = env.cachedLayout(text: prepend, font: font, lineHeight: lineHeight,
+                                          maxWidth: .infinity, alignment: .leading)
+            // Slab paddings (left + right) are theme.spacing.sm on each side.
+            width += layout.totalWidth + horizontalInset(theme: theme) * 2 + theme.spacing.sm
+        }
+        if let prefix, !prefix.isEmpty {
+            let layout = env.cachedLayout(text: prefix, font: font, lineHeight: lineHeight,
+                                          maxWidth: .infinity, alignment: .leading)
+            width += layout.totalWidth + theme.spacing.xs
+        }
+        return width
+    }
+
+    /// Width consumed by `suffix` glyph + `append` slab at the trailing edge.
+    /// Excludes the dynamic clearable / counter widths since those are sized
+    /// per-frame in `render`.
+    func trailingAddonWidth(env: TextEnvironment,
+                            font: Font,
+                            lineHeight: Float,
+                            theme: Theme) -> Float {
+        var width: Float = 0
+        if let suffix, !suffix.isEmpty {
+            let layout = env.cachedLayout(text: suffix, font: font, lineHeight: lineHeight,
+                                          maxWidth: .infinity, alignment: .leading)
+            width += layout.totalWidth + theme.spacing.xs
+        }
+        if let append, !append.isEmpty {
+            let layout = env.cachedLayout(text: append, font: font, lineHeight: lineHeight,
+                                          maxWidth: .infinity, alignment: .leading)
+            width += layout.totalWidth + horizontalInset(theme: theme) * 2 + theme.spacing.sm
+        }
+        return width
+    }
+
+    func textOriginYOffset(frameHeight: Float, lineHeight: Float) -> Float {
         if axis == .vertical {
             return Self.verticalInset(for: lineHeight)
         }
         return max(0, (frameHeight - lineHeight) / 2)
     }
 
-    private static func verticalInset(for lineHeight: Float) -> Float {
-        max(4, (minimumFieldHeight - lineHeight) * 0.5)
+    static func verticalInset(for lineHeight: Float) -> Float {
+        max(4, (minimumFieldHeightDefault - lineHeight) * 0.5)
     }
 
-    private func lineRanges(in text: String) -> [Range<Int>] {
-        var ranges: [Range<Int>] = []
-        var start = 0
-        for (index, character) in text.enumerated() {
-            if character == "\n" {
-                ranges.append(start..<index)
-                start = index + 1
-            }
-        }
-        ranges.append(start..<text.count)
-        return ranges.isEmpty ? [0..<0] : ranges
-    }
-
-    private func lineIndex(for cursorIndex: Int, lineRanges: [Range<Int>]) -> Int {
-        for (index, range) in lineRanges.enumerated() {
-            if cursorIndex <= range.upperBound {
-                return index
-            }
-        }
-        return max(0, lineRanges.count - 1)
-    }
-
-    private func rangeLength(_ range: Range<Int>) -> Int {
-        range.upperBound - range.lowerBound
-    }
-
-    private func linePrefixWidth(in text: String,
-                                 upTo count: Int,
-                                 env: TextEnvironment,
-                                 font: Font,
-                                 lineHeight: Float) -> Float {
-        let bounded = clamp(count, 0, text.count)
-        guard bounded > 0 else { return 0 }
-        let endIndex = text.index(text.startIndex, offsetBy: bounded)
-        let prefix = String(text[text.startIndex..<endIndex])
-        let layout = env.cachedLayout(
-            text: prefix,
-            font: font,
-            lineHeight: lineHeight,
-            maxWidth: .infinity,
-            alignment: .leading
-        )
-        return layout.lines.last?.width ?? 0
-    }
-
-    private func caretLocation(in text: String,
-                               cursorIndex: Int,
-                               env: TextEnvironment,
-                               font: Font,
-                               lineHeight: Float) -> CaretLocation {
-        let ranges = lineRanges(in: text)
-        let line = lineIndex(for: clamp(cursorIndex, 0, text.count), lineRanges: ranges)
-        let range = ranges[line]
-        let column = clamp(cursorIndex - range.lowerBound, 0, rangeLength(range))
-        let lineText = substring(text, range)
-        return CaretLocation(
-            x: linePrefixWidth(in: lineText,
-                               upTo: column,
-                               env: env,
-                               font: font,
-                               lineHeight: lineHeight),
-            topY: Float(line) * lineHeight
-        )
-    }
-
-    private func drawSelection(_ range: Range<Int>,
-                               in text: String,
-                               env: TextEnvironment,
-                               font: Font,
-                               lineHeight: Float,
-                               textOriginX: Float,
-                               textOriginY: Float,
-                               list: DrawList,
-                               color: Color) {
-        let ranges = lineRanges(in: text)
-        let startLine = lineIndex(for: range.lowerBound, lineRanges: ranges)
-        let endLine = lineIndex(for: range.upperBound, lineRanges: ranges)
-        for line in startLine...endLine {
-            let lineRange = ranges[line]
-            let lower = max(range.lowerBound, lineRange.lowerBound)
-            let upper = min(range.upperBound, lineRange.upperBound)
-            guard upper > lower else { continue }
-            let lineText = substring(text, lineRange)
-            let xLo = linePrefixWidth(in: lineText,
-                                      upTo: lower - lineRange.lowerBound,
-                                      env: env,
-                                      font: font,
-                                      lineHeight: lineHeight)
-            let xHi = linePrefixWidth(in: lineText,
-                                      upTo: upper - lineRange.lowerBound,
-                                      env: env,
-                                      font: font,
-                                      lineHeight: lineHeight)
-            list.addRect(
-                UIRect(x: textOriginX + xLo,
-                       y: textOriginY + Float(line) * lineHeight,
-                       width: max(1, xHi - xLo),
-                       height: lineHeight),
-                color: color
-            )
-        }
-    }
-
-    private func drawUnderline(_ range: Range<Int>,
-                               in text: String,
-                               env: TextEnvironment,
-                               font: Font,
-                               lineHeight: Float,
-                               textOriginX: Float,
-                               textOriginY: Float,
-                               list: DrawList,
-                               color: Color) {
-        let ranges = lineRanges(in: text)
-        let startLine = lineIndex(for: range.lowerBound, lineRanges: ranges)
-        let endLine = lineIndex(for: range.upperBound, lineRanges: ranges)
-        for line in startLine...endLine {
-            let lineRange = ranges[line]
-            let lower = max(range.lowerBound, lineRange.lowerBound)
-            let upper = min(range.upperBound, lineRange.upperBound)
-            guard upper > lower else { continue }
-            let lineText = substring(text, lineRange)
-            let xLo = linePrefixWidth(in: lineText,
-                                      upTo: lower - lineRange.lowerBound,
-                                      env: env,
-                                      font: font,
-                                      lineHeight: lineHeight)
-            let xHi = linePrefixWidth(in: lineText,
-                                      upTo: upper - lineRange.lowerBound,
-                                      env: env,
-                                      font: font,
-                                      lineHeight: lineHeight)
-            list.addRect(
-                UIRect(x: textOriginX + xLo,
-                       y: textOriginY + Float(line) * lineHeight + lineHeight - 1,
-                       width: max(1, xHi - xLo),
-                       height: 1),
-                color: color
-            )
-        }
+    /// Render a small "✕" affordance at `(x, y)` using the active text
+    /// environment so the glyph stays consistent with the input typography.
+    /// Falls back silently when no environment is available.
+    private func drawClearGlyph(at x: Float,
+                                y: Float,
+                                size: Float,
+                                list: DrawList,
+                                color: Color) {
+        guard let env = TextEnvironmentHolder.current else { return }
+        let glyphFont = Font.system(size: size * 0.75)
+        let layout = env.cachedLayout(text: "✕",
+                                      font: glyphFont,
+                                      lineHeight: size,
+                                      maxWidth: .infinity,
+                                      alignment: .leading)
+        // Centre the glyph horizontally inside its reserved square so the
+        // visual matches Element Plus' suffix-icon padding.
+        let glyphX = x + max(0, (size - layout.totalWidth) * 0.5)
+        list.addText(layout,
+                     origin: (glyphX, y),
+                     color: color,
+                     textureID: env.atlasTextureID,
+                     atlas: env.atlas)
     }
 
     private static func installMeasureFunc(on layout: LayoutNode, snapshot: TextField) {
@@ -822,7 +947,7 @@ public struct TextField: _PrimitiveView {
 
         layout.setMeasureFunc { [weak layout] width, widthMode, _, _ in
             guard let env = TextEnvironmentHolder.current else {
-                return CGSize(width: 0, height: CGFloat(minimumFieldHeight))
+                return CGSize(width: 0, height: CGFloat(snapshot.minimumFieldHeight))
             }
             let fontOverride = layout?.attachments[StyleAttachmentKey.font] as? Font
             let lineHeightOverride = layout?.attachments[StyleAttachmentKey.lineHeight] as? Float
@@ -832,13 +957,20 @@ public struct TextField: _PrimitiveView {
             let measureText = snapshot.text.wrappedValue.isEmpty
                 ? snapshot.placeholder
                 : snapshot.text.wrappedValue
+            let wrapWidth: Float
+            switch widthMode {
+            case .exactly, .atMost:
+                wrapWidth = max(1, width - 16)
+            case .undefined:
+                wrapWidth = .infinity
+            }
             let layoutResult: TextLayoutResult
             if measureText.isEmpty {
                 layoutResult = env.cachedLayout(
                     text: "",
                     font: resolvedFont,
                     lineHeight: resolvedLineHeight,
-                    maxWidth: .infinity,
+                    maxWidth: wrapWidth,
                     alignment: .leading
                 )
             } else {
@@ -848,7 +980,7 @@ public struct TextField: _PrimitiveView {
                     text: measureText,
                     font: resolvedFont,
                     lineHeight: resolvedLineHeight,
-                    maxWidth: .infinity,
+                    maxWidth: wrapWidth,
                     alignment: .leading
                 )
             }
@@ -866,17 +998,46 @@ public struct TextField: _PrimitiveView {
                 resolvedWidth = measuredWidth
             }
 
+            let maxHeight = max(snapshot.minimumFieldHeight,
+                                resolvedLineHeight * Self.multilineMaxVisibleLines + insetY * 2)
+
             return CGSize(width: CGFloat(resolvedWidth),
-                          height: CGFloat(max(minimumFieldHeight,
-                                              contentHeight + insetY * 2)))
+                          height: CGFloat(min(max(snapshot.minimumFieldHeight,
+                                                  contentHeight + insetY * 2),
+                                              maxHeight)))
         }
     }
 
-    private func resolvedFont(node: Node, env: TextEnvironment) -> Font {
+    private func resolvedFieldHeight(layout: LayoutNode?) -> Float {
+        guard axis != .vertical else {
+            return minimumFieldHeight
+        }
+        let measureText = text.wrappedValue.isEmpty ? placeholder : text.wrappedValue
+        let lineCount = max(1, layoutEngine.lineRanges(in: measureText).count)
+        guard axis == .vertical || lineCount > 1 else {
+            return minimumFieldHeight
+        }
+        guard let env = TextEnvironmentHolder.current else {
+            return minimumFieldHeight
+        }
+
+        let fontOverride = layout?.attachments[StyleAttachmentKey.font] as? Font
+        let lineHeightOverride = layout?.attachments[StyleAttachmentKey.lineHeight] as? Float
+        let resolvedFont = env.resolvedFont(fontOverride)
+        let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
+                                                        override: lineHeightOverride)
+        let insetY = Self.verticalInset(for: resolvedLineHeight)
+        let contentHeight = Float(lineCount) * resolvedLineHeight
+        let maxHeight = max(minimumFieldHeight,
+                            resolvedLineHeight * Self.multilineMaxVisibleLines + insetY * 2)
+        return min(max(minimumFieldHeight, contentHeight + insetY * 2), maxHeight)
+    }
+
+    func resolvedFont(node: Node, env: TextEnvironment) -> Font {
         env.resolvedFont(node.attachments[StyleAttachmentKey.font] as? Font)
     }
 
-    private func resolvedLineHeight(node: Node, env: TextEnvironment) -> Float {
+    func resolvedLineHeight(node: Node, env: TextEnvironment) -> Float {
         env.resolvedLineHeight(
             font: resolvedFont(node: node, env: env),
             override: node.attachments[StyleAttachmentKey.lineHeight] as? Float
@@ -907,6 +1068,6 @@ public struct TextField: _PrimitiveView {
 }
 
 @inline(__always)
-private func clamp<T: Comparable>(_ v: T, _ lo: T, _ hi: T) -> T {
+func clamp<T: Comparable>(_ v: T, _ lo: T, _ hi: T) -> T {
     min(max(v, lo), hi)
 }

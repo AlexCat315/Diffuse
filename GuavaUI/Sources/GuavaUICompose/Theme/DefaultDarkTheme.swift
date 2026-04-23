@@ -45,14 +45,16 @@ public enum DefaultDarkTheme {
             overlay:          Color(red: 0x00, green: 0x00, blue: 0x00, alpha: 0xB8)
         ),
         typography: Typography(
-            display:    TextStyleToken(font: .system(size: 30, weight: .bold),     lineHeight: 36),
-            title:      TextStyleToken(font: .system(size: 22, weight: .semibold), lineHeight: 28),
-            headline:   TextStyleToken(font: .system(size: 17, weight: .semibold), lineHeight: 22),
-            body:       TextStyleToken(font: .system(size: 14, weight: .regular),  lineHeight: 18),
-            bodyStrong: TextStyleToken(font: .system(size: 14, weight: .semibold), lineHeight: 18),
-            caption:    TextStyleToken(font: .system(size: 12, weight: .regular),  lineHeight: 15),
-            label:      TextStyleToken(font: .system(size: 12, weight: .semibold), lineHeight: 14),
-            mono:       TextStyleToken(font: .system(size: 13, weight: .regular),  lineHeight: 16)
+            // Element-style ramp: 12 / 13 / 14 / 16 / 18 / 20 px
+            // line-height ratio ~1.4 (Compact for chrome, Regular-ish for body)
+            display:    TextStyleToken(font: .system(size: 20, weight: .semibold), lineHeight: 28),
+            title:      TextStyleToken(font: .system(size: 18, weight: .semibold), lineHeight: 25),
+            headline:   TextStyleToken(font: .system(size: 16, weight: .semibold), lineHeight: 22),
+            body:       TextStyleToken(font: .system(size: 14, weight: .regular),  lineHeight: 20),
+            bodyStrong: TextStyleToken(font: .system(size: 14, weight: .semibold), lineHeight: 20),
+            caption:    TextStyleToken(font: .system(size: 12, weight: .regular),  lineHeight: 17),
+            label:      TextStyleToken(font: .system(size: 12, weight: .medium),   lineHeight: 17),
+            mono:       TextStyleToken(font: .system(size: 13, weight: .regular),  lineHeight: 18)
         ),
         spacing:   SpacingScale(xs: 4, sm: 6, md: 10, lg: 14, xl: 20, xxl: 28),
         radius:    RadiusScale(none: 0, sm: 3, md: 5, lg: 8, xl: 12, pill: 9999),

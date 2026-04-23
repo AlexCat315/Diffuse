@@ -1,6 +1,6 @@
 # TextField
 
-文本输入。默认单行；传 `axis: .vertical` 时支持显式多行输入。
+文本输入。默认单行；传 `axis: .vertical` 时支持显式多行输入。当前实现对包含显式换行的内容会自动增高，最多显示 6 行，超出后在字段内部滚动并显示滚动条。
 
 ## Anatomy
 
@@ -47,6 +47,7 @@
 - **键盘**：方向键 / Home / End / Shift 配合扩展选区，Cmd/Ctrl + A/C/V/X 标准编辑。
 - **IME**：`textEditing` 事件写入 `compositionText` + 下划线指示，`textInput` 提交并清空合成区。
 - **Enter**：单行模式触发 `onSubmit?()`；垂直轴模式插入换行。垂直轴若绑定了 `onSubmit`，使用 Cmd/Ctrl + Enter 提交。
+- **显式多行内容**：字段高度会随换行数自动增加，最多 6 行；超出后内容留在字段内部滚动，滚轮可滚动，右侧显示细滚动条。
 - **TextInputArea**（候选窗定位）：发布到 `node.attachments[TextInputAttachmentKey.area]`，y 位于文本基线行（不是 chrome 顶部）。
 - **State 持久化**：`FieldState`（光标 / 选区 / IME）挂在 `node.attachments`，跨 recompose 存活。
 
@@ -68,7 +69,7 @@
 
 ## Known limitations (v1)
 
-- 垂直轴模式目前只处理显式换行，不做软换行；超长单行内容仍会水平裁剪
+- 目前只处理显式换行，不做软换行；超长单行内容仍会水平裁剪
 - 没有 placeholder 上浮 / floating-label
 - 没有 disabled / readonly 显式状态
 - 没有 leading / trailing icon 槽位 —— 调用方需要外层 Row 自己拼

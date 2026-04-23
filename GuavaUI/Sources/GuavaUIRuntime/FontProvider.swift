@@ -125,34 +125,46 @@ public final class FontProvider {
     /// are loaded into FreeType automatically on first encounter.
     public func resolveRuns(text: String) -> [FontRun] {
         guard !text.isEmpty, let ctPrimary = primaryCTFont else { return [] }
-        let attrs = [kCTFontAttributeName: ctPrimary] as CFDictionary
-        let attrStr = CFAttributedStringCreate(kCFAllocatorDefault, text as CFString, attrs)!
-        let line = CTLineCreateWithAttributedString(attrStr)
-        let glyphRuns = CTLineGetGlyphRuns(line) as! [CTRun]
-
-        let nsStr = text as NSString
         var result: [FontRun] = []
 
-        for run in glyphRuns {
-            let runAttrs = CTRunGetAttributes(run) as NSDictionary
-            let runCTFont = runAttrs[kCTFontAttributeName as NSString] as! CTFont
-            let psName = CTFontCopyPostScriptName(runCTFont) as String
+        let nsText = text as NSString
+        var currentFont: ManagedFont?
+        var currentPSName: String?
+        var currentText = ""
+        var currentUTF8Offset = 0
+        var runningUTF8Offset = 0
 
-            let cfRange = CTRunGetStringRange(run)
-            let runText = nsStr.substring(with: NSRange(location: cfRange.location, length: cfRange.length))
-            let utf8Offset = nsStr.substring(to: cfRange.location).utf8.count
+        func flushCurrentRun() {
+            guard let currentFont, !currentText.isEmpty else { return }
+            result.append(FontRun(font: currentFont, text: currentText, utf8Offset: currentUTF8Offset))
+            currentText = ""
+        }
 
-            let managedFont: ManagedFont
-            if let existing = fonts[psName] {
-                managedFont = existing
-            } else if let loaded = loadFontFromCTFont(runCTFont, psName: psName) {
-                managedFont = loaded
-            } else {
-                continue
+        nsText.enumerateSubstrings(in: NSRange(location: 0, length: nsText.length),
+                                   options: .byComposedCharacterSequences) { substring, range, _, _ in
+            guard let substring else { return }
+
+            guard let managedFont = self.coveringManagedFont(for: substring,
+                                                             in: text,
+                                                             range: range,
+                                                             primary: ctPrimary) else {
+                runningUTF8Offset += substring.utf8.count
+                return
+            }
+            let psName = managedFont.postScriptName
+
+            if currentPSName != psName {
+                flushCurrentRun()
+                currentFont = managedFont
+                currentPSName = psName
+                currentUTF8Offset = runningUTF8Offset
             }
 
-            result.append(FontRun(font: managedFont, text: runText, utf8Offset: utf8Offset))
+            currentText += substring
+            runningUTF8Offset += substring.utf8.count
         }
+
+        flushCurrentRun()
 
         return result
     }
@@ -205,6 +217,40 @@ public final class FontProvider {
                                 weight: FontWeight = .regular) -> ManagedFont? {
         let ctFont = configuredCTFont(named: name, weight: weight)
         return loadFont(ctFont)
+    }
+
+    private func coveringManagedFont(for substring: String,
+                                     in fullText: String,
+                                     range: NSRange,
+                                     primary: CTFont) -> ManagedFont? {
+        let scaledSize = CGFloat(size * rasterScale)
+        let direct = CTFontCreateForString(primary,
+                                           fullText as CFString,
+                                           CFRange(location: range.location, length: range.length))
+
+        var candidates: [CTFont] = [direct, primary]
+        candidates.append(contentsOf: SystemFontDefaults.fontStack.map {
+            CTFontCreateWithName($0 as CFString, scaledSize, nil)
+        })
+
+        var seenPostScriptNames: Set<String> = []
+        for candidate in candidates {
+            let psName = CTFontCopyPostScriptName(candidate) as String
+            guard seenPostScriptNames.insert(psName).inserted else { continue }
+            guard let managedFont = loadFont(candidate) else { continue }
+            if managedFontCanRenderText(managedFont, text: substring) {
+                return managedFont
+            }
+        }
+
+        return nil
+    }
+
+    private func managedFontCanRenderText(_ font: ManagedFont, text: String) -> Bool {
+        guard !text.isEmpty else { return true }
+        return text.unicodeScalars.allSatisfy { scalar in
+            FT_Get_Char_Index(font.ftFace, FT_ULong(scalar.value)) != 0
+        }
     }
 
     private func loadFont(_ ctFont: CTFont) -> ManagedFont? {
@@ -275,9 +321,9 @@ public final class FontProvider {
               let url = urlRef as? URL else { return nil }
         guard let data = try? Data(contentsOf: url) else { return nil }
 
-        let faceIndex = findFaceIndex(in: data, targetPSName: actualPSName)
+        let resolvedFaceIndex = findFaceIndex(in: data, targetPSName: actualPSName)
             ?? descriptorFaceIndex(at: url, targetPSName: actualPSName)
-            ?? 0
+        let faceIndex = resolvedFaceIndex ?? 0
 
         let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
         data.copyBytes(to: buffer, count: data.count)
@@ -287,6 +333,20 @@ public final class FontProvider {
         guard err == 0, let ftFace = face else {
             buffer.deallocate()
             return nil
+        }
+
+        // Reserved system UI containers can open successfully at face 0 even
+        // when CoreText asked for a different PostScript face. Treat that as a
+        // miss so the caller can retry a normalized public alias instead of
+        // caching a TTC face that shapes every CJK glyph as .notdef.
+        if resolvedFaceIndex == nil,
+           let loadedNamePtr = FT_Get_Postscript_Name(ftFace) {
+            let loadedPSName = String(cString: loadedNamePtr)
+            if loadedPSName != actualPSName {
+                FT_Done_Face(ftFace)
+                buffer.deallocate()
+                return nil
+            }
         }
 
         _ = FT_Select_Charmap(ftFace, FT_ENCODING_UNICODE)

@@ -32,9 +32,28 @@ public struct Font: Hashable, Sendable {
 }
 
 public enum SystemFontDefaults {
+    /// Default GuavaUI font-family stack. The first installed family wins;
+    /// CJK glyphs are resolved through CoreText's cascade list at shape
+    /// time, so we only need a single primary face here.
+    public static let fontStack: [String] = [
+        "Inter",
+        "Helvetica Neue",
+        "Helvetica",
+        "PingFang SC",
+        "Hiragino Sans GB",
+        "Microsoft YaHei",
+        "微软雅黑",
+        "Arial"
+    ]
+
     public static let primaryFontName: String = resolvePrimaryFontName()
 
     private static func resolvePrimaryFontName() -> String {
+        for name in fontStack {
+            if isInstalled(family: name) {
+                return name
+            }
+        }
         guard let systemFont = CTFontCreateUIFontForLanguage(.system, 13, nil) else {
             return "Helvetica Neue"
         }
@@ -42,13 +61,20 @@ public enum SystemFontDefaults {
         if !familyName.isEmpty {
             return familyName
         }
-
         let postScriptName = CTFontCopyPostScriptName(systemFont) as String
         if !postScriptName.isEmpty {
             return postScriptName
         }
-
         return "Helvetica Neue"
+    }
+
+    /// Treat a name as installed only when CoreText resolves it to the same
+    /// family. `CTFontCreateWithName` happily returns Helvetica for any
+    /// unknown name, so we filter those silent fallbacks out here.
+    private static func isInstalled(family name: String) -> Bool {
+        let font = CTFontCreateWithName(name as CFString, 13, nil)
+        let resolved = CTFontCopyFamilyName(font) as String
+        return resolved.compare(name, options: .caseInsensitive) == .orderedSame
     }
 }
 
