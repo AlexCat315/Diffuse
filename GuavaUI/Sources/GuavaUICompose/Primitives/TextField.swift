@@ -120,7 +120,6 @@ public struct TextField: _PrimitiveView {
     private static let minimumFieldHeight: Float = 32
     private static let caretBlinkHalfPeriod: Double = 0.5
     private static let caretBlinkSteadyDuration: Double = 0.5
-    private static let measureCacheKey = "__textfield_measure_cache"
     private static let measureInputsKey = "__textfield_measure_inputs"
 
     public func _makeNode() -> Node {
@@ -845,8 +844,7 @@ public struct TextField: _PrimitiveView {
             } else {
                 layoutResult = Text.cachedLayout(
                     env: env,
-                    attachments: { layout?.attachments[measureCacheKey] },
-                    store: { layout?.attachments[measureCacheKey] = $0 },
+                    layout: layout,
                     text: measureText,
                     font: resolvedFont,
                     lineHeight: resolvedLineHeight,

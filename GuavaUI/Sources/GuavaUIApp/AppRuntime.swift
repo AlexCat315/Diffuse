@@ -52,7 +52,15 @@ public final class AppRuntime {
     private let imageAssets: ImageAssetRegistry
     private let viewportTextures: ViewportTextureRegistry
     private let drawList = DrawList()
+    /// Phase 4c: layer-aware renderer drives RenderTree-based composition with
+    /// per-layer DrawList caches. Falls back to the legacy `NodeRenderer`
+    /// path when GUAVAUI_LEGACY_RENDERER=1 is set in the environment, so we
+    /// can still bisect against the old painter while the new path stabilises.
+    private let layerRenderer = LayerAwareNodeRenderer()
     private let nodeRenderer = NodeRenderer()
+    private let useLegacyRenderer: Bool = {
+        ProcessInfo.processInfo.environment["GUAVAUI_LEGACY_RENDERER"] == "1"
+    }()
 
     /// 进程内的字体 atlas 纹理 id。固定为 1，调用方注册业务纹理时从 2 起。
     private let atlasTextureID: TextureID = 1
@@ -96,7 +104,10 @@ public final class AppRuntime {
         try backend.initialize()
 
         if let devConfig = config.devTools {
-            let dev = DevTools(config: devConfig, tree: tree)
+            let dev = DevTools(config: devConfig,
+                               tree: tree,
+                               renderTree: graph.renderTree,
+                               inputScene: graph.inputScene)
             // Install the log tap before any DevTools-related Logger fires
             // so the first records also reach the client.
             LogTapInstaller.bootstrapIfNeeded(sink: dev.logSink)
@@ -176,6 +187,10 @@ public final class AppRuntime {
         if !didInstallRoot {
             graph.install(root: rootView)
             graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
+            // Phase 5b: hand the input mirror to the session's dispatcher
+            // so subsequent events hit-test through `InputScene` rather
+            // than re-walking the live Node tree.
+            host.mainSession?.attachInputScene(graph.inputScene)
             didInstallRoot = true
         }
 
@@ -216,7 +231,11 @@ public final class AppRuntime {
         let layoutEnd = ProcessInfo.processInfo.systemUptime
 
         drawList.reset()
-        nodeRenderer.render(root: root, into: drawList)
+        if useLegacyRenderer {
+            nodeRenderer.render(root: root, into: drawList)
+        } else {
+            layerRenderer.render(tree: graph.renderTree, into: drawList)
+        }
         let drawEnd = ProcessInfo.processInfo.systemUptime
 
         do {

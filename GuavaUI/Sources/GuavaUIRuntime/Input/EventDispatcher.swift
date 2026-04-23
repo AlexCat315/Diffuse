@@ -23,6 +23,14 @@ public final class EventDispatcher {
     public let focusChain: FocusChain
     public let windowID: WindowID
 
+    /// Phase 5b: optional input mirror. When set, hit-test consults the
+    /// `InputScene` (cached classification + version-keyed focus chain) and
+    /// the cursor walk reads `InputNode.cursor`. When `nil`, dispatch falls
+    /// back to walking the live `Node` tree.
+    public weak var inputScene: InputScene? {
+        didSet { focusChain.inputScene = inputScene }
+    }
+
     /// Invoked whenever the resolved hover cursor changes. The dispatcher
     /// computes the cursor by walking the hover path leaf → root and using
     /// the deepest non-nil `Node.cursor`. `nil` resolves to `.arrow`.
@@ -73,9 +81,8 @@ public final class EventDispatcher {
     // MARK: - Pointer
 
     private func dispatchPointerDown(_ event: MouseButtonEvent) {
-        guard let root = tree.root else { return }
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
-        guard let hit = HitTester.hitTest(rootNode: root, point: point) else { return }
+        guard let hit = hitTest(point: point) else { return }
         deliver(path: hit.path, kind: .pointer(event, .down))
         // Auto-focus on click for focusable targets.
         if hit.node.isFocusable {
@@ -89,9 +96,8 @@ public final class EventDispatcher {
             deliver(path: path, kind: .pointer(event, .up))
             return
         }
-        guard let root = tree.root else { return }
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
-        guard let hit = HitTester.hitTest(rootNode: root, point: point) else { return }
+        guard let hit = hitTest(point: point) else { return }
         deliver(path: hit.path, kind: .pointer(event, .up))
     }
 
@@ -103,9 +109,8 @@ public final class EventDispatcher {
             deliver(path: path, kind: .motion(event))
             return
         }
-        guard let root = tree.root else { return }
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
-        guard let hit = HitTester.hitTest(rootNode: root, point: point) else {
+        guard let hit = hitTest(point: point) else {
             updateHoverPath(to: [])
             return
         }
@@ -118,8 +123,7 @@ public final class EventDispatcher {
         // region under the pointer wins. Fall back to the focused node, then
         // the root node.
         if let cursor = lastCursor,
-           let root = tree.root,
-           let hit = HitTester.hitTest(rootNode: root, point: cursor) {
+           let hit = hitTest(point: cursor) {
             deliver(path: hit.path, kind: .wheel(event))
             return
         }
@@ -130,6 +134,16 @@ public final class EventDispatcher {
         }
         guard let root = tree.root else { return }
         deliver(path: [root], kind: .wheel(event))
+    }
+
+    /// Hit-test entry point. Routes through the `InputScene` mirror when
+    /// wired (Phase 5b), otherwise walks the live `Node` tree.
+    private func hitTest(point: CGPoint) -> HitResult? {
+        if let scene = inputScene {
+            return HitTester.hitTest(scene: scene, point: point)
+        }
+        guard let root = tree.root else { return nil }
+        return HitTester.hitTest(rootNode: root, point: point)
     }
 
     // MARK: - Key
@@ -242,8 +256,12 @@ public final class EventDispatcher {
 
     private func updateCursor(for path: [Node]) {
         var resolved: SystemCursor = .arrow
+        // Prefer the cached InputNode.cursor when the mirror is wired so
+        // dispatch never reads back into the live Node graph for cursor
+        // resolution.
         for node in path.reversed() {
-            if let c = node.cursor {
+            let c = node.inputNode?.cursor ?? node.cursor
+            if let c {
                 resolved = c
                 break
             }

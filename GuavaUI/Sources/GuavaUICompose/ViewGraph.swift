@@ -30,10 +30,25 @@ public final class ViewGraph {
     public let tree: NodeTree
     public let recomposer: Recomposer
 
+    /// Phase 3: layout tree owning the `LayoutNode` root + the text measure
+    /// cache. Layout-side state migrating off `Node` lands here.
+    public let layoutTree: LayoutTree
+
+    /// Phase 4a: render-side mirror of the Node tree. Foundation for the
+    /// per-layer DrawList cache landing in Phase 4b. Maintained alongside
+    /// every install / reconcile / tearDown.
+    public let renderTree: RenderTree
+
+    /// Phase 5a: input-side mirror of the Node tree. Captures hit-test /
+    /// focus / cursor classification per node. Phase 5b will pivot
+    /// `EventDispatcher` to consume this mirror so dispatch no longer
+    /// re-walks the full Node graph each event.
+    public let inputScene: InputScene
+
     /// Root layout node mirroring `tree.root`. All layout nodes from primitive
     /// views become its descendants (skipping anchor nodes that have no layout
     /// representation).
-    public let layoutRoot: LayoutNode
+    public var layoutRoot: LayoutNode { layoutTree.root }
 
     /// `Node` → paired `LayoutNode`. Anchor nodes are absent from this map.
     internal var layoutOf: [ObjectIdentifier: LayoutNode] = [:]
@@ -47,7 +62,9 @@ public final class ViewGraph {
     public init(tree: NodeTree, recomposer: Recomposer) {
         self.tree = tree
         self.recomposer = recomposer
-        self.layoutRoot = LayoutNode()
+        self.layoutTree = LayoutTree()
+        self.renderTree = RenderTree()
+        self.inputScene = InputScene()
     }
 
     // MARK: - Install
@@ -58,6 +75,8 @@ public final class ViewGraph {
         tree.root = rootNode
         layoutOf[ObjectIdentifier(rootNode)] = layoutRoot
         _ = materialise(root, into: rootNode, layoutParent: layoutRoot)
+        renderTree.install(rootNode: rootNode)
+        inputScene.install(rootNode: rootNode)
     }
 
     // MARK: - Layout
@@ -109,14 +128,51 @@ public final class ViewGraph {
     // MARK: - Reconcile entry points
 
     /// Tag stored in `Node.viewTag` for reuse decisions during recompose.
-    /// Two views match iff their tags compare equal.
+    /// Two views match iff their tags compare equal. Strips `_IdentifiedView`
+    /// and `AnyView` wrappers so the tag describes the underlying view kind.
     static func slotTag(_ view: any View) -> String {
-        String(reflecting: type(of: view))
+        classify(view).tag
+    }
+
+    /// Stable identity attached to a slot via `.id(_:)`. `nil` for unkeyed
+    /// slots; the reconciler then matches by `(tag, sequential position)`.
+    static func slotKey(_ view: any View) -> AnyHashable? {
+        classify(view).key
+    }
+
+    /// Result of unwrapping `_IdentifiedView` / `AnyView` layers around a view.
+    struct SlotInfo {
+        let view: any View
+        let tag: String
+        let key: AnyHashable?
+    }
+
+    static func classify(_ view: any View) -> SlotInfo {
+        var current: any View = view
+        var key: AnyHashable? = nil
+        while true {
+            if let identified = current as? _AnyIdentifiedView {
+                // Outermost id wins — `Foo.id(a).id(b)` resolves to `b`.
+                if key == nil { key = identified._id }
+                current = identified._content
+                continue
+            }
+            if let any = current as? AnyView {
+                current = any.storage
+                continue
+            }
+            break
+        }
+        return SlotInfo(view: view,
+                        tag: String(reflecting: type(of: current)),
+                        key: key)
     }
 
     /// Flatten structural views (Tuple / Conditional / Optional / Array) and
     /// strip `EmptyView` so the result contains exactly one entry per Node
-    /// slot the parent will end up holding.
+    /// slot the parent will end up holding. `_IdentifiedView` and `AnyView`
+    /// wrappers are kept intact — the reconciler reads their identity at
+    /// match time via `classify`.
     static func flattenSlots(_ views: [any View]) -> [any View] {
         var out: [any View] = []
         for v in views {
@@ -126,6 +182,8 @@ public final class ViewGraph {
             } else if let s = v as? any _StructuralView {
                 out.append(contentsOf: flattenSlots(s._expanded))
             } else {
+                // _IdentifiedView is preserved as a slot so the reconciler
+                // can read `_id` during matching.
                 out.append(v)
             }
         }
@@ -133,40 +191,147 @@ public final class ViewGraph {
     }
 
     /// Reconcile `parent.children` against the slot list produced by `newViews`.
-    /// Reuses every leading child whose `viewTag` matches the new view at the
-    /// same index, then either tears down or appends as the lists diverge.
+    ///
+    /// Matching algorithm (Phase 2):
+    /// 1. For each new entry compute `(tag, key)` via `classify`.
+    /// 2. Old children with a `key` build a keyed lookup table; old children
+    ///    without one queue per `viewTag` in original order.
+    /// 3. Each new entry first tries the keyed table, then falls back to its
+    ///    type queue. Otherwise it materialises fresh.
+    /// 4. Old children that no other entry claimed are torn down.
+    /// 5. `parent.children` and the matching `LayoutNode` siblings are
+    ///    reordered to match the new sequence so reused nodes that moved
+    ///    keep their state but render in the new position.
     func reconcileChildren(parent: Node,
                            layoutParent: LayoutNode?,
                            newViews: [any View]) {
         let flat = ViewGraph.flattenSlots(newViews)
+        let entries = flat.map { ViewGraph.classify($0) }
         let oldChildren = parent.children
 
-        // 1. Reuse the longest matching prefix.
-        var prefix = 0
-        let prefixLimit = min(oldChildren.count, flat.count)
-        while prefix < prefixLimit
-              && oldChildren[prefix].viewTag == ViewGraph.slotTag(flat[prefix]) {
-            updateInPlace(node: oldChildren[prefix],
-                          view: flat[prefix],
-                          layoutParent: layoutParent)
-            prefix += 1
+        // Build matching tables.
+        var keyedOld: [KeyedSlot: Node] = [:]
+        var unkeyedQueues: [String: [Node]] = [:]
+        for child in oldChildren {
+            if let key = child.key, let tag = child.viewTag {
+                keyedOld[KeyedSlot(tag: tag, key: key)] = child
+            } else if let tag = child.viewTag {
+                unkeyedQueues[tag, default: []].append(child)
+            } else {
+                // No tag — leave unmatchable (will be torn down).
+            }
         }
 
-        // 2. Tear down trailing old children that no longer match.
-        for j in prefix..<oldChildren.count {
-            tearDown(node: oldChildren[j], parentLayout: layoutParent)
+        // Decide an action per new entry: reuse an existing node or create one.
+        enum Action {
+            case reuse(Node)
+            case create
+        }
+        var actions: [Action] = []
+        actions.reserveCapacity(entries.count)
+        var matchedOldIDs = Set<ObjectIdentifier>()
+
+        // First pass: keyed matches consume their slot.
+        for entry in entries {
+            if let key = entry.key,
+               let match = keyedOld[KeyedSlot(tag: entry.tag, key: key)] {
+                matchedOldIDs.insert(ObjectIdentifier(match))
+                actions.append(.reuse(match))
+            } else {
+                actions.append(.create) // tentative; second pass refines
+            }
         }
 
-        // 3. Append the trailing new views as fresh materialisations.
-        for j in prefix..<flat.count {
-            _ = materialise(flat[j], into: parent, layoutParent: layoutParent)
+        // Second pass: unkeyed entries pull from their per-tag queue.
+        for (index, entry) in entries.enumerated() {
+            guard case .create = actions[index], entry.key == nil else { continue }
+            guard var queue = unkeyedQueues[entry.tag], !queue.isEmpty else { continue }
+            var picked: Node? = nil
+            while !queue.isEmpty {
+                let candidate = queue.removeFirst()
+                if !matchedOldIDs.contains(ObjectIdentifier(candidate)) {
+                    matchedOldIDs.insert(ObjectIdentifier(candidate))
+                    picked = candidate
+                    break
+                }
+            }
+            unkeyedQueues[entry.tag] = queue
+            if let picked {
+                actions[index] = .reuse(picked)
+            }
         }
+
+        // Tear down old children no entry claimed.
+        for child in oldChildren where !matchedOldIDs.contains(ObjectIdentifier(child)) {
+            tearDown(node: child, parentLayout: layoutParent)
+        }
+
+        // Materialise fresh entries — these append to parent.children and to
+        // layoutParent. We capture the resolved Node per entry to drive the
+        // reorder step below.
+        var resolvedNodes: [Node?] = Array(repeating: nil, count: entries.count)
+        for (i, action) in actions.enumerated() {
+            switch action {
+            case .reuse(let node):
+                resolvedNodes[i] = node
+            case .create:
+                let made = materialise(entries[i].view,
+                                       into: parent,
+                                       layoutParent: layoutParent)
+                // Stamp the explicit key so the next reconcile can match it.
+                for n in made { n.key = entries[i].key }
+                resolvedNodes[i] = made.first
+            }
+        }
+
+        // Reorder parent.children so the final sequence matches `entries`.
+        // Some entries may have produced no node (EmptyView post-strip would
+        // have been filtered earlier; defensive otherwise) — skip those.
+        let orderedNodes = resolvedNodes.compactMap { $0 }
+        if orderedNodes.count == parent.children.count {
+            parent.reorderChildren(orderedNodes)
+        }
+
+        // Reorder layout siblings to match. Anchor nodes (user-view scopes,
+        // scope-applying modifiers) carry no LayoutNode and are simply absent
+        // from this subset; their relative order in `layoutParent.children`
+        // is unaffected because they were never there.
+        if let layoutParent {
+            let orderedLayouts = orderedNodes.compactMap {
+                layoutOf[ObjectIdentifier($0)]
+            }
+            if orderedLayouts.count == layoutParent.children.count {
+                layoutParent.reorderChildren(orderedLayouts)
+            }
+        }
+
+        // Finally, refresh reused nodes in place. Recursing here would have
+        // walked into stale children before reorder, so we run it after the
+        // sibling order has been settled.
+        for (i, action) in actions.enumerated() {
+            if case .reuse(let node) = action {
+                node.key = entries[i].key
+                updateInPlace(node: node,
+                              view: entries[i].view,
+                              layoutParent: layoutParent)
+            }
+        }
+
+        // Phase 4a: keep the RenderTree mirror in sync with the new child list.
+        renderTree.reconcileChildren(of: parent)
+        // Phase 5a: keep the InputScene mirror in sync as well.
+        inputScene.reconcileChildren(of: parent)
     }
 
     /// Refresh the properties of an already-materialised node from `view`,
     /// then recurse into its children. Caller has already verified that
     /// `node.viewTag == slotTag(view)`.
     func updateInPlace(node: Node, view: any View, layoutParent: LayoutNode?) {
+        if let identified = view as? _AnyIdentifiedView {
+            node.key = identified._id
+            updateInPlace(node: node, view: identified._content, layoutParent: layoutParent)
+            return
+        }
         if let any = view as? AnyView {
             updateInPlace(node: node, view: any.storage, layoutParent: layoutParent)
             return
@@ -174,6 +339,9 @@ public final class ViewGraph {
 
         if let prim = view as? any _PrimitiveView {
             prim._updateNode(node)
+            // Phase 5a: re-read input classification after primitive may
+            // have toggled isHitTestable / isFocusable / cursor.
+            inputScene.refresh(node: node)
             let myLayout = layoutOf[ObjectIdentifier(node)]
             if let ln = myLayout { prim._updateLayout(ln) }
             reconcileChildren(parent: node,
@@ -206,6 +374,11 @@ public final class ViewGraph {
                 layoutOf[ObjectIdentifier(node)] ?? parentLayout)
         }
         tearDownSubtreeBookkeeping(node, parentLayout: parentLayout)
+        // Phase 4a: drop RenderObject mirror BEFORE removing from parent so
+        // we still know the parent linkage.
+        renderTree.tearDown(node: node)
+        // Phase 5a: drop InputNode mirror as well.
+        inputScene.tearDown(node: node)
         node.removeFromParent()
     }
 
@@ -231,6 +404,17 @@ public final class ViewGraph {
                             layoutParent: LayoutNode? = nil) -> [Node] {
         // 1. Empty
         if view is EmptyView { return [] }
+
+        // 1a. Identified — unwrap, materialise inner, then stamp the key on
+        //     each produced top-level node so the next reconcile can reuse
+        //     by `(tag, key)`.
+        if let identified = view as? _AnyIdentifiedView {
+            let nodes = materialise(identified._content,
+                                    into: parent,
+                                    layoutParent: layoutParent)
+            for n in nodes { n.key = identified._id }
+            return nodes
+        }
 
         // 1b. AnyView — recurse straight into the erased storage.
         if let any = view as? AnyView {
@@ -427,6 +611,16 @@ final class ViewScope {
         func extract<V: View>(_ v: V) -> any View { v.body }
         return extract(view)
     }
+}
+
+// MARK: - Reconciler matching key
+
+/// Composite key used by the reconciler to look up an old child by its
+/// declared identity. `tag` is the inner view type's reflected name; `key`
+/// is the value supplied via `.id(_:)`.
+fileprivate struct KeyedSlot: Hashable {
+    let tag: String
+    let key: AnyHashable
 }
 
 // MARK: - State erasure shim

@@ -20,7 +20,7 @@ public struct DefaultPanelStyle: PanelStyle {
                 configuration.accessory
             }
             .padding(horizontal: t.spacing.md)
-            .frame(height: 30)
+            .frame(height: 36)
             .background(headerBg)
 
             Divider()

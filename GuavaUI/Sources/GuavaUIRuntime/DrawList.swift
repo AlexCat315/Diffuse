@@ -63,6 +63,29 @@ public final class DrawList {
 
     public var currentClip: UIRect? { clipStack.last }
 
+    // MARK: - Composite (Phase 4b)
+
+    /// Append every vertex/index/batch from `other` into this list, shifting
+    /// vertex indices and batch index-offsets so the merged buffer stays
+    /// internally consistent. The caller owns the responsibility for
+    /// `other`'s coordinate system: `other.vertices` are copied verbatim, so
+    /// they must already be in the same absolute space `self` expects.
+    public func append(_ other: DrawList) {
+        let baseVertex = UInt32(vertices.count)
+        let baseIndex = UInt32(indices.count)
+        vertices.append(contentsOf: other.vertices)
+        indices.reserveCapacity(indices.count + other.indices.count)
+        for i in other.indices { indices.append(i + baseVertex) }
+        for b in other.batches {
+            batches.append(DrawBatch(
+                indexOffset: b.indexOffset + baseIndex,
+                indexCount: b.indexCount,
+                textureID: b.textureID,
+                scissor: b.scissor
+            ))
+        }
+    }
+
     // MARK: - Primitives
 
     /// Append a solid-color rectangle.
