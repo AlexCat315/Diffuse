@@ -509,8 +509,14 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     // MARK: - Pipeline + mesh construction
 
     private func ensureMeshAssetsUploaded() throws {
-        guard backend.rawDevice != nil, meshes.isEmpty else { return }
+        guard backend.rawDevice != nil else { return }
+        if meshes.isEmpty {
+            try uploadBuiltinMeshes()
+        }
+        try syncImportedMeshes()
+    }
 
+    private func uploadBuiltinMeshes() throws {
         let cube = BuiltinMesh.cube()
         let cubeMesh = try uploadMesh(cube)
         let cubeBounds = cube.localBounds
@@ -534,9 +540,18 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         if let objMesh, let objAsset {
             meshes.append(objMesh)
             let b = objAsset.localBounds
-            MeshBoundsRegistry.shared.register(meshIndex: meshes.count - 1,
+            MeshBoundsRegistry.shared.register(meshIndex: 1,
                                                min: b.min,
                                                max: b.max)
+        } else {
+            let fallbackFixture = GPUMesh(vertexBuffer: cubeMesh.vertexBuffer,
+                                          indexBuffer: cubeMesh.indexBuffer,
+                                          indexCount: cubeMesh.indexCount,
+                                          name: "builtin.fixtureFallback")
+            meshes.append(fallbackFixture)
+            MeshBoundsRegistry.shared.register(meshIndex: 1,
+                                               min: cubeBounds.min,
+                                               max: cubeBounds.max)
         }
 
         let meshNames = meshes.map(\ .name)
@@ -613,6 +628,26 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         }
         return GPUMesh(
             vertexBuffer: vb, indexBuffer: ib, indexCount: mesh.indexCount, name: mesh.name)
+    }
+
+    private func syncImportedMeshes() throws {
+        for registered in AssetRegistry.shared.registeredMeshes() {
+            if registered.meshIndex < meshes.count {
+                continue
+            }
+            guard registered.meshIndex == meshes.count else {
+                Logger.renderer.warning(
+                    "skipping imported mesh out of sequence: meshIndex=\(registered.meshIndex) currentCount=\(meshes.count) id=\(registered.assetID)"
+                )
+                continue
+            }
+            let mesh = try uploadMesh(registered.mesh)
+            meshes.append(mesh)
+            let bounds = registered.mesh.localBounds
+            MeshBoundsRegistry.shared.register(meshIndex: registered.meshIndex,
+                                               min: bounds.min,
+                                               max: bounds.max)
+        }
     }
 
     private func ensureInstanceResources(instanceCount: Int, pipeline: GPURenderPipeline) throws {

@@ -103,17 +103,11 @@ private struct HierarchyDisclosureIcon: View {
     let isExpanded: Bool
 
     var body: some View {
-        if let path = HierarchyIconCatalog.disclosurePath(expanded: isExpanded) {
-            Image(file: path,
-                  width: 20,
-                  height: 20,
-                  tint: .white)
-            .foregroundColor(.onSurfaceMuted)
-        } else {
-            Text(isExpanded ? "▾" : "▸")
-                .font(.bodyStrong)
-                .foregroundColor(.onSurfaceMuted)
-        }
+        Image(resource: HierarchyIconCatalog.disclosureResource(expanded: isExpanded),
+              width: 20,
+              height: 20,
+              tint: .white)
+        .foregroundColor(.onSurfaceMuted)
     }
 }
 
@@ -121,48 +115,44 @@ private struct HierarchyEntityIcon: View {
     let kind: String
 
     var body: some View {
-        if let path = HierarchyIconCatalog.entityPath(for: kind) {
-            Image(file: path,
-                  width: 12,
-                  height: 12,
-                  tint: .white)
-        } else {
-            EmptyView()
-        }
+        Image(resource: HierarchyIconCatalog.entityResource(for: kind),
+              width: 40,
+              height: 40,
+              tint: .white)
     }
 }
 
 private enum HierarchyIconCatalog {
-    static func disclosurePath(expanded: Bool) -> String? {
-        resourcePath(named: expanded ? "triangle-down" : "triangle-right")
+    static func disclosureResource(expanded: Bool) -> BundleImageResource {
+        resource(named: expanded ? "triangle-down" : "triangle-right")
     }
 
-    static func entityPath(for kind: String) -> String? {
+    static func entityResource(for kind: String) -> BundleImageResource {
         let normalized = kind.lowercased()
         if normalized.contains("camera") {
-            return resourcePath(named: "camera")
+            return resource(named: "camera")
         }
         if normalized.contains("light") {
-            return resourcePath(named: "light-bulb")
+            return resource(named: "light-bulb")
         }
         if normalized.contains("mesh") {
-            return resourcePath(named: "cube")
+            return resource(named: "cube")
         }
         if normalized.contains("group") {
-            return resourcePath(named: "squares-2x2")
+            return resource(named: "squares-2x2")
         }
         if normalized.contains("socket") || normalized.contains("locator") {
-            return resourcePath(named: "crosshair")
+            return resource(named: "crosshair")
         }
         if normalized.contains("constraint") {
-            return resourcePath(named: "arrow-path")
+            return resource(named: "arrow-path")
         }
-        return resourcePath(named: "cube")
+        return resource(named: "cube")
     }
 
-    private static func resourcePath(named name: String) -> String? {
-        Bundle.module.path(forResource: name,
-                           ofType: "svg",
-                           inDirectory: "HierarchyIcons")
+    private static func resource(named name: String) -> BundleImageResource {
+        .svg(named: name,
+             in: .module,
+             subdirectory: "HierarchyIcons")
     }
 }

@@ -1,3 +1,4 @@
+import AssetPipeline
 import EngineCore
 import EngineKernel
 import RenderBackend
@@ -19,6 +20,7 @@ import simd
 /// 仿真与（未来的）离屏渲染。
 public final class EditorApplication {
     public let engine: EngineHost
+    public let projectDirectory: String
     public let store: EditorStore
     public let inputState: InputState
     public let scene: EditorSceneAdapter
@@ -28,18 +30,21 @@ public final class EditorApplication {
     private var pendingViewportEvents: [InputEvent] = []
     private var viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
 
-    public init(backendConfig: WGPUDeviceConfig? = nil,
+    public init(projectDirectory: String,
+                backendConfig: WGPUDeviceConfig? = nil,
                 backend: WGPUBackend? = nil,
-                events: PlatformEventBridge = PlatformEventBridge()) {
+                events: PlatformEventBridge = PlatformEventBridge()) throws {
         var resolvedBackendConfig = backendConfig ?? .init()
         if resolvedBackendConfig.libraryPath == nil {
             resolvedBackendConfig.libraryPath = Self.locateWGPUDylib()
         }
         let resolvedBackend = backend ?? WGPUBackend(config: resolvedBackendConfig)
+        _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
         let store = EditorStore()
         let scene = EditorSceneAdapter()
 
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
+        self.projectDirectory = projectDirectory
         self.store = store
         self.inputState = InputState()
         self.scene = scene

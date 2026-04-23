@@ -13,7 +13,8 @@ private func runEditor() throws {
     }
     let backend = WGPUBackend(config: resolvedBackendConfig)
     let events = PlatformEventBridge()
-    let app = EditorApplication(backendConfig: launchOptions.backendConfig,
+    let app = try EditorApplication(projectDirectory: launchOptions.projectDirectory,
+                                backendConfig: launchOptions.backendConfig,
                                 backend: backend,
                                 events: events)
     app.bootstrap()

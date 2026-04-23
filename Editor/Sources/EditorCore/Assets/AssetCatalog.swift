@@ -1,49 +1,28 @@
+import AssetPipeline
 import Foundation
 import GuavaUICompose
 import simd
 
-/// 编辑器内置的资产种类。每种映射到一组默认组件。
-public enum EditorAssetKind: String, Codable, Sendable, CaseIterable {
-    case cube
-    case sphere
-    case plane
-    case pointLight
-    case directionalLight
-    case camera
-    case empty
-
-    public var displayLabel: String {
-        switch self {
-        case .cube: return "Cube"
-        case .sphere: return "Sphere"
-        case .plane: return "Plane"
-        case .pointLight: return "Point Light"
-        case .directionalLight: return "Directional Light"
-        case .camera: return "Camera"
-        case .empty: return "Empty"
-        }
-    }
-
-    public var sceneKindLabel: String {
-        switch self {
-        case .cube, .sphere, .plane: return "Static Mesh"
-        case .pointLight: return "Point Light"
-        case .directionalLight: return "Directional Light"
-        case .camera: return "Camera"
-        case .empty: return "Empty"
-        }
-    }
-}
-
 public struct EditorAsset: Identifiable, Sendable, Equatable {
     public let id: String
     public let name: String
-    public let kind: EditorAssetKind
+    public let relativePath: String
+    public let absolutePath: String
+    public let kind: ImportableAssetKind
+    public let meshIndex: Int
 
-    public init(id: String, name: String, kind: EditorAssetKind) {
+    public init(id: String,
+                name: String,
+                relativePath: String,
+                absolutePath: String,
+                kind: ImportableAssetKind,
+                meshIndex: Int) {
         self.id = id
         self.name = name
+        self.relativePath = relativePath
+        self.absolutePath = absolutePath
         self.kind = kind
+        self.meshIndex = meshIndex
     }
 
     public func dragPayload() -> EditorAssetDragPayload {
@@ -54,18 +33,26 @@ public struct EditorAsset: Identifiable, Sendable, Equatable {
 }
 
 public enum EditorAssetCatalog {
-    public static let defaultEntries: [EditorAsset] = [
-        .init(id: "primitive.cube", name: "Cube", kind: .cube),
-        .init(id: "primitive.sphere", name: "Sphere", kind: .sphere),
-        .init(id: "primitive.plane", name: "Plane", kind: .plane),
-        .init(id: "light.point", name: "Point Light", kind: .pointLight),
-        .init(id: "light.directional", name: "Directional Light", kind: .directionalLight),
-        .init(id: "camera.perspective", name: "Camera", kind: .camera),
-        .init(id: "node.empty", name: "Empty", kind: .empty),
-    ]
+    @discardableResult
+    public static func loadProject(at rootPath: String) throws -> [EditorAsset] {
+        try AssetRegistry.shared.loadProject(at: rootPath).map(makeAsset)
+    }
+
+    public static func entries() -> [EditorAsset] {
+        AssetRegistry.shared.entriesSnapshot().map(makeAsset)
+    }
 
     public static func asset(for id: String) -> EditorAsset? {
-        defaultEntries.first { $0.id == id }
+        AssetRegistry.shared.entry(for: id).map(makeAsset)
+    }
+
+    private static func makeAsset(_ entry: AssetRegistryEntry) -> EditorAsset {
+        EditorAsset(id: entry.id,
+                    name: entry.name,
+                    relativePath: entry.relativePath,
+                    absolutePath: entry.absolutePath,
+                    kind: entry.kind,
+                    meshIndex: entry.meshIndex)
     }
 }
 

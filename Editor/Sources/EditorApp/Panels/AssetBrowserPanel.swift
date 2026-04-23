@@ -2,12 +2,14 @@ import EditorCore
 import GuavaUICompose
 import GuavaUIRuntime
 import EngineKernel
+import AssetPipeline
 
 struct AssetBrowserPanel: View {
     let app: EditorApplication
 
     var body: some View {
         StoreScope(app.store) { store in
+            let assets = EditorAssetCatalog.entries()
             Box(direction: .column, alignItems: .stretch) {
                 AssetBrowserHeader(dragLabel: store.state.activeAssetDrag?.displayName)
                     .padding(horizontal: 10, vertical: 7)
@@ -15,8 +17,12 @@ struct AssetBrowserPanel: View {
                 Divider()
 
                 Box(direction: .column, alignItems: .stretch, spacing: 2) {
-                    for asset in EditorAssetCatalog.defaultEntries {
-                        AssetBrowserRow(asset: asset, app: app)
+                    if assets.isEmpty {
+                        AssetBrowserEmptyState(projectDirectory: app.projectDirectory)
+                    } else {
+                        for asset in assets {
+                            AssetBrowserRow(asset: asset, app: app)
+                        }
                     }
                 }
                 .padding(horizontal: 6, vertical: 6)
@@ -43,11 +49,30 @@ private struct AssetBrowserHeader: View {
                     .font(.caption)
                     .foregroundColor(.warning)
             } else {
-                Text("\(EditorAssetCatalog.defaultEntries.count) items")
+                Text("\(EditorAssetCatalog.entries().count) items")
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
             }
         }
+    }
+}
+
+private struct AssetBrowserEmptyState: View {
+    let projectDirectory: String
+
+    var body: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 6) {
+            Text("No importable assets")
+                .font(.bodyStrong)
+                .foregroundColor(.onSurface)
+            Text(projectDirectory)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+            Text("Add .gltf or .obj files under the project directory and relaunch the editor.")
+                .font(.caption)
+                .foregroundColor(.onSurfaceVariant)
+        }
+        .padding(horizontal: 8, vertical: 8)
     }
 }
 
@@ -65,7 +90,7 @@ private struct AssetBrowserRow: View {
                         .font(.body)
                         .foregroundColor(.onSurface)
 
-                    Text(asset.kind.sceneKindLabel)
+                    Text(asset.relativePath)
                         .font(.caption)
                         .foregroundColor(.onSurfaceVariant)
                 }
@@ -80,18 +105,13 @@ private struct AssetBrowserRow: View {
 }
 
 private struct AssetGlyph: View {
-    let kind: EditorAssetKind
+    let kind: ImportableAssetKind
 
     var body: some View {
         let label: String
         switch kind {
-        case .cube: label = "□"
-        case .sphere: label = "○"
-        case .plane: label = "▭"
-        case .pointLight: label = "✸"
-        case .directionalLight: label = "☀"
-        case .camera: label = "◉"
-        case .empty: label = "·"
+        case .gltf: label = "GL"
+        case .obj: label = "OBJ"
         }
 
         return Text(label)

@@ -16,23 +16,7 @@ extension EditorSceneAdapter {
         let translation = matrix_identity_float4x4.withTranslation(position)
         _ = scene.setLocalTransform(LocalTransform(matrix: translation), for: entity)
 
-        switch asset.kind {
-        case .cube:
-            _ = scene.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
-        case .sphere:
-            _ = scene.setComponent(RenderMeshComponent(meshIndex: 1), for: entity)
-        case .plane:
-            _ = scene.setComponent(RenderMeshComponent(meshIndex: 0), for: entity)
-        case .pointLight, .directionalLight, .camera, .empty:
-            break
-        }
-
-        if asset.kind == .camera {
-            _ = scene.setComponent(
-                CameraComponent(target: position + SIMD3<Float>(0, 0, -1), isActive: false),
-                for: entity
-            )
-        }
+        _ = scene.setComponent(RenderMeshComponent(meshIndex: asset.meshIndex), for: entity)
 
         scene.propagateTransforms()
         publishRevisionAfterSpawn()

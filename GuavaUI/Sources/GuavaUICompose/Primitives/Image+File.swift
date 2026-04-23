@@ -13,15 +13,27 @@ public extension Image {
     /// crisp textures.
     ///
     /// If no registry is set or decoding fails, the primitive degrades to
-    /// `TextureID.none` (a tinted blank quad of the requested size). The
-    /// failure reason is logged through `Log.image` so hosts can debug
-    /// missing assets without a hard crash.
+    /// `TextureID.none` (a tinted blank quad of the requested size).
     init(file path: String,
          width: Float,
          height: Float,
          tint: Color = .white) {
         let resolved = Self.resolve(path: path, width: width, height: height)
         self.init(textureID: resolved, width: width, height: height, tint: tint)
+    }
+
+    /// Bundle-resource form of `init(file:width:height:tint:)`. This keeps
+    /// SwiftPM bundle layout details out of view code.
+    init(resource: BundleImageResource,
+         width: Float,
+         height: Float,
+         tint: Color = .white) {
+        guard let url = resource.url else {
+            assertionFailure("Bundle image resource not found: \(resource)")
+            self.init(textureID: .none, width: width, height: height, tint: tint)
+            return
+        }
+        self.init(url: url, width: width, height: height, tint: tint)
     }
 
     /// URL form of `init(file:width:height:tint:)`.
