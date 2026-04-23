@@ -1,6 +1,7 @@
 import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
+import IntentRuntime
 import RenderBackend
 import SceneRuntime
 import simd
@@ -151,13 +152,11 @@ extension EditorSceneAdapter {
     /// 直接销毁实体；选择状态由调用方负责清理。
     @discardableResult
     public func deleteEntity(_ rawID: UInt64) -> Bool {
-        guard let entity = makeEntityID(rawID) else { return false }
-        let ok = scene.destroyEntity(entity)
-        if ok {
-            scene.propagateTransforms()
-            notifyRevisionChanged()
-        }
-        return ok
+        guard makeEntityID(rawID) != nil else { return false }
+        return applySceneTransaction(intentVerb: "scene.delete_entity",
+                                     summary: "Delete entity",
+                                     targetRawIDs: [rawID],
+                                     mutations: [.deleteEntity(entityID: rawID)]) != nil
     }
 
     /// 浅复制：复制名字 / kind / 本地矩阵 / 渲染网格 / collider / rigid body / camera。
@@ -165,38 +164,11 @@ extension EditorSceneAdapter {
     @discardableResult
     public func duplicateEntity(_ rawID: UInt64) -> UInt64? {
         guard let src = makeEntityID(rawID), scene.contains(src) else { return nil }
-        let new = scene.createEntity()
-
-        if let name = scene.component(SceneNameComponent.self, for: src) {
-            _ = scene.setComponent(SceneNameComponent(value: name.value + " Copy"), for: new)
-        }
-        if let kind = scene.component(SceneKindComponent.self, for: src) {
-            _ = scene.setComponent(kind, for: new)
-        }
-        if let lt = scene.localTransform(for: src) {
-            _ = scene.setLocalTransform(lt, for: new)
-        }
-        if let parent = scene.parent(of: src) {
-            _ = scene.setParent(parent, for: new)
-        }
-        if let mesh = scene.component(RenderMeshComponent.self, for: src) {
-            _ = scene.setComponent(mesh, for: new)
-        }
-        if let body = scene.component(RigidBody.self, for: src) {
-            _ = scene.setComponent(body, for: new)
-        }
-        if let collider = scene.component(Collider.self, for: src) {
-            _ = scene.setComponent(collider, for: new)
-        }
-        if let cam = scene.component(CameraComponent.self, for: src) {
-            // 重复相机时不要再标记为 active，避免抢占视口。
-            var copy = cam
-            copy.isActive = false
-            _ = scene.setComponent(copy, for: new)
-        }
-        scene.propagateTransforms()
-        notifyRevisionChanged()
-        return new.rawValue
+        let result = applySceneTransaction(intentVerb: "scene.duplicate_entity",
+                                           summary: "Duplicate entity",
+                                           targetRawIDs: [rawID],
+                                           mutations: [.duplicateEntity(entityID: rawID)])
+        return result?.createdEntityIDs.first
     }
 
     // MARK: - Camera control
@@ -219,7 +191,6 @@ extension EditorSceneAdapter {
         // 极坐标：azimuth 绕 world up，elevation 与 horizontal 平面夹角。
         let upWorld = SIMD3<Float>(0, 1, 0)
         let elev = asinf(max(-1, min(1, offset.y / r)))
-        let horizLen = sqrtf(max(0, r * r - offset.y * offset.y))
         let azim = atan2f(offset.z, offset.x)
 
         let newAzim = azim + yaw
@@ -284,13 +255,13 @@ extension EditorSceneAdapter {
                               up: SIMD3<Float>? = nil) {
         var local = scene.localTransform(for: entity) ?? LocalTransform()
         local.matrix.columns.3 = SIMD4<Float>(eye.x, eye.y, eye.z, 1)
-        _ = scene.setLocalTransform(local, for: entity)
-        _ = scene.updateComponent(CameraComponent.self, for: entity) { cam in
-            cam.target = target
-            if let up { cam.up = up }
-        }
-        scene.propagateTransforms()
-        notifyRevisionChanged()
+        _ = applySceneTransaction(intentVerb: "scene.set_camera_pose",
+                                  summary: "Update camera pose",
+                                  targetRawIDs: [entity.rawValue],
+                                  mutations: [.setCameraPose(entityID: entity.rawValue,
+                                                             localTransform: local,
+                                                             target: target,
+                                                             up: up)])
     }
 
     private func makeEntityID(_ rawID: UInt64) -> EntityID? {

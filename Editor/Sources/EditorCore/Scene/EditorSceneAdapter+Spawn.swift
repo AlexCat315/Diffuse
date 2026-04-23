@@ -1,4 +1,5 @@
 import Foundation
+import IntentRuntime
 import SceneRuntime
 import simd
 
@@ -8,19 +9,16 @@ extension EditorSceneAdapter {
     @discardableResult
     public func spawnEntity(from asset: EditorAsset,
                             at position: SIMD3<Float> = SIMD3<Float>(0, 0, 0)) -> UInt64? {
-        let entity = scene.createEntity()
         let label = uniqueDisplayName(base: asset.name)
-        _ = scene.setComponent(SceneNameComponent(value: label), for: entity)
-        _ = scene.setComponent(SceneKindComponent(value: asset.kind.sceneKindLabel), for: entity)
-
-        let translation = matrix_identity_float4x4.withTranslation(position)
-        _ = scene.setLocalTransform(LocalTransform(matrix: translation), for: entity)
-
-        _ = scene.setComponent(RenderMeshComponent(meshIndex: asset.meshIndex), for: entity)
-
-        scene.propagateTransforms()
-        publishRevisionAfterSpawn()
-        return entity.rawValue
+        let result = applySceneTransaction(intentVerb: "scene.spawn_entity",
+                                           summary: "Spawn imported mesh entity",
+                                           mutations: [
+                                            .spawnImportedMeshEntity(label: label,
+                                                                     kindLabel: asset.kind.sceneKindLabel,
+                                                                     meshIndex: asset.meshIndex,
+                                                                     position: position)
+                                           ])
+        return result?.createdEntityIDs.first
     }
 
     private func uniqueDisplayName(base: String) -> String {
@@ -33,18 +31,5 @@ extension EditorSceneAdapter {
             suffix += 1
         }
         return "\(base) \(suffix)"
-    }
-
-    /// `publishRevision` 在适配器内部是 private；这里复用它的副作用通知。
-    fileprivate func publishRevisionAfterSpawn() {
-        notifyRevisionChanged()
-    }
-}
-
-private extension simd_float4x4 {
-    func withTranslation(_ t: SIMD3<Float>) -> simd_float4x4 {
-        var m = self
-        m.columns.3 = SIMD4<Float>(t.x, t.y, t.z, 1)
-        return m
     }
 }

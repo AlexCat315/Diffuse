@@ -109,6 +109,38 @@ struct MultiWindowSmokeTests {
     }
 
     @MainActor
+    @Test("Window input events request a redraw after the initial frame")
+    func inputEventsRequestRedraw() throws {
+        let shell = MockShell(eventBatches: [[], [], []])
+        let host = SDL3PlatformHost(shellFactory: { shell })
+
+        let tree = NodeTree()
+        let session = try host.openWindow(title: "A", tree: tree)
+        tree.root = makeHitTree(interactions: session.interactions) {}
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+
+        shell.eventBatches = [
+            [],
+            [WindowInputEvent(windowID: session.id,
+                              event: .mouseButtonDown(MouseButtonEvent(button: .left,
+                                                                       x: 12,
+                                                                       y: 12,
+                                                                       clicks: 1)))],
+            [],
+        ]
+
+        var frameCount = 0
+        session.onFrame = { _ in
+            frameCount += 1
+            return true
+        }
+
+        host.run()
+
+        #expect(frameCount == 2)
+    }
+
+    @MainActor
     @Test("Active animations alone do not force extra frames")
     func activeAnimationsDoNotForceFrames() throws {
         let shell = MockShell(eventBatches: [[], []])

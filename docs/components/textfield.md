@@ -1,6 +1,6 @@
 # TextField
 
-单行文本输入。承担"用户向系统提供短串文本"的语义。多行输入留给未来 `TextEditor`。
+文本输入。默认单行；传 `axis: .vertical` 时支持显式多行输入。
 
 ## Anatomy
 
@@ -46,7 +46,7 @@
 - **指针**：单击放置光标（按字符中线判定）；拖动延伸选区；双击选词；三击全选（命中 SDL3 的 `event.clicks`）。
 - **键盘**：方向键 / Home / End / Shift 配合扩展选区，Cmd/Ctrl + A/C/V/X 标准编辑。
 - **IME**：`textEditing` 事件写入 `compositionText` + 下划线指示，`textInput` 提交并清空合成区。
-- **Enter**：触发 `onSubmit?()`，但不插入换行（v1 单行）。
+- **Enter**：单行模式触发 `onSubmit?()`；垂直轴模式插入换行。垂直轴若绑定了 `onSubmit`，使用 Cmd/Ctrl + Enter 提交。
 - **TextInputArea**（候选窗定位）：发布到 `node.attachments[TextInputAttachmentKey.area]`，y 位于文本基线行（不是 chrome 顶部）。
 - **State 持久化**：`FieldState`（光标 / 选区 / IME）挂在 `node.attachments`，跨 recompose 存活。
 
@@ -55,6 +55,7 @@
 ✅ 应当：
 
 - `TextField("Search…", text: $text)` —— 默认 chrome 已经是 light/dark 主题安全的
+- 多行输入优先用 `TextField("Notes…", text: $text, axis: .vertical)`，不要自己拦截回车再手拼 `"\n"`
 - 想自定义 chrome 时：`TextField(...).frame(width:140)`（保留默认 chrome）或外层包 background + 自己写 padding（少见）
 - 用 `onSubmit:` 处理 Enter 提交，不要监听 key 事件
 
@@ -67,7 +68,7 @@
 
 ## Known limitations (v1)
 
-- 单行：Enter 触发 `onSubmit`，否则忽略
+- 垂直轴模式目前只处理显式换行，不做软换行；超长单行内容仍会水平裁剪
 - 没有 placeholder 上浮 / floating-label
 - 没有 disabled / readonly 显式状态
 - 没有 leading / trailing icon 槽位 —— 调用方需要外层 Row 自己拼

@@ -1,4 +1,5 @@
 import Foundation
+import IntentRuntime
 import RenderBackend
 import SceneRuntime
 import simd
@@ -49,9 +50,10 @@ extension EditorSceneAdapter {
         guard let entity = makeEntityID(rawID) else { return }
         var local = scene.localTransform(for: entity) ?? LocalTransform()
         local.matrix.columns.3 = SIMD4<Float>(value.x, value.y, value.z, 1)
-        _ = scene.setLocalTransform(local, for: entity)
-        scene.propagateTransforms()
-        notifyRevisionChanged()
+        _ = applySceneTransaction(intentVerb: "scene.set_local_transform",
+                                  summary: "Update entity translation",
+                                  targetRawIDs: [rawID],
+                                  mutations: [.setLocalTransform(entityID: rawID, transform: local)])
     }
 
     /// 选中实体当前的完整 LocalTransform 矩阵。
@@ -76,9 +78,10 @@ extension EditorSceneAdapter {
         guard let entity = makeEntityID(rawID) else { return }
         var local = scene.localTransform(for: entity) ?? LocalTransform()
         local.matrix = matrix
-        _ = scene.setLocalTransform(local, for: entity)
-        scene.propagateTransforms()
-        notifyRevisionChanged()
+        _ = applySceneTransaction(intentVerb: "scene.set_local_transform",
+                                  summary: "Update entity transform",
+                                  targetRawIDs: [rawID],
+                                  mutations: [.setLocalTransform(entityID: rawID, transform: local)])
     }
 
     private func makeEntityID(_ rawID: UInt64) -> EntityID? {

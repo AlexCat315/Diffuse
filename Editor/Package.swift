@@ -24,6 +24,7 @@ let package = Package(
                 .product(name: "AssetPipeline", package: "Engine"),
                 .product(name: "EngineCore", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "IntentRuntime", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "SceneRuntime", package: "Engine"),

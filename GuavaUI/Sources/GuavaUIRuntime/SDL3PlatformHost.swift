@@ -13,6 +13,7 @@ public final class PlatformWindowSession {
     fileprivate let dispatcher: EventDispatcher
     fileprivate var didCallOnInit = false
     fileprivate var lastTextInputArea: TextInputArea?
+    fileprivate var lastTextCursorAnimationTick: Double = 0
     fileprivate var needsDisplay = true
 
     public private(set) var drawableSize: (width: UInt32, height: UInt32)
@@ -93,6 +94,8 @@ public final class PlatformWindowSession {
 /// demos and tests.
 @MainActor
 public final class SDL3PlatformHost: PlatformHost {
+    private static let focusedTextRefreshInterval: Double = 0.25
+
     private let title: String
     private let shellFactory: @MainActor () throws -> any Shell
     private let mainInputContext: PlatformInputContext
@@ -239,6 +242,9 @@ public final class SDL3PlatformHost: PlatformHost {
                         onEvent?(routed.event)
                     }
                 }
+                // Focus, caret position, and IME anchor geometry are updated
+                // during draw, so input delivery must always request a frame.
+                session.needsDisplay = true
             }
             timing.mark("events")
 
@@ -324,6 +330,7 @@ public final class SDL3PlatformHost: PlatformHost {
                 }
 
                 syncTextInputArea(for: session, shell: shell)
+                scheduleFocusedTextRefresh(for: session)
             }
             timing.mark("windows")
 
@@ -439,6 +446,25 @@ public final class SDL3PlatformHost: PlatformHost {
 
         shell.setTextInputArea(windowID: session.id, area)
         session.lastTextInputArea = area
+    }
+
+    private func scheduleFocusedTextRefresh(for session: PlatformWindowSession) {
+        guard session.focusChain.focused?.attachments[TextInputAttachmentKey.area] as? TextInputArea != nil else {
+            session.lastTextCursorAnimationTick = 0
+            return
+        }
+
+        let now = TimingTrace.now()
+        if session.lastTextCursorAnimationTick == 0 {
+            session.lastTextCursorAnimationTick = now
+            return
+        }
+        guard now - session.lastTextCursorAnimationTick >= Self.focusedTextRefreshInterval else {
+            return
+        }
+
+        session.lastTextCursorAnimationTick = now
+        session.needsDisplay = true
     }
 
     fileprivate static func quantizedContentScale(drawableSize: (width: UInt32, height: UInt32),

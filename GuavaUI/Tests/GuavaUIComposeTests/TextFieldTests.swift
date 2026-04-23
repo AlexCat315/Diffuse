@@ -105,6 +105,40 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         #expect(submitted == true)
     } }
 
+    @Test("Vertical axis inserts newline on Return instead of submitting")
+    func multilineReturnInsertsNewline() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "abc"
+        var submitted = false
+        rig.graph.install(root:
+            TextField(text: makeBinding(rig.store), axis: .vertical, onSubmit: { submitted = true })
+        )
+
+        let node = rig.tree.root!.children.first!
+        let keyHandler = rig.registry.handlers(for: node).key!
+        let ret = KeyEvent(scancode: 40, keycode: 0, modifiers: [], isRepeat: false)
+        _ = keyHandler(ret, .target)
+        #expect(rig.store.value == "abc\n")
+        #expect(submitted == false)
+    } }
+
+    @Test("Vertical axis uses Cmd-Return for submit")
+    func multilineCmdReturnSubmits() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "abc"
+        var submitted = false
+        rig.graph.install(root:
+            TextField(text: makeBinding(rig.store), axis: .vertical, onSubmit: { submitted = true })
+        )
+
+        let node = rig.tree.root!.children.first!
+        let keyHandler = rig.registry.handlers(for: node).key!
+        let ret = KeyEvent(scancode: 40, keycode: 0, modifiers: [.lgui], isRepeat: false)
+        _ = keyHandler(ret, .target)
+        #expect(rig.store.value == "abc")
+        #expect(submitted == true)
+    } }
+
     @Test("Unhandled scancode returns .ignored so bubbling continues")
     func unhandledKeyBubbles() { GlobalTestLock.locked {
         let rig = makeRig()
@@ -207,6 +241,25 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         let evt = MouseButtonEvent(button: .left, x: 100, y: 5, clicks: 1)
         let result = pointer(evt, .down, .target)
         #expect(result == .handled)
+    } }
+
+    @Test("Vertical axis reports a taller measured height for multiple lines")
+    func multilineMeasuresTaller() { GlobalTestLock.locked {
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        let store = TextStore()
+        store.value = "line 1\nline 2\nline 3"
+        InteractionRegistryHolder.current = InteractionRegistry()
+        FocusChainHolder.current = FocusChain()
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        graph.install(root:
+            TextField(text: makeBinding(store), axis: .vertical)
+        )
+        graph.computeLayout(width: 200, height: 200)
+
+        let node = tree.root!.children.first!
+        #expect(Float(node.frame.height) > 32)
     } }
 
     // MARK: - Phase 6.4d — selection + modifiers + clipboard
