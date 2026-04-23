@@ -1,6 +1,6 @@
 import CWGPUBridge
 
-public struct GPURenderBundleEncoderDescriptor {
+public struct GPURenderBundleEncoderDescriptor: Sendable {
     public var colorFormats: [GPUTextureFormat]
     public var depthStencilFormat: GPUTextureFormat?
     public var sampleCount: UInt32
@@ -31,6 +31,8 @@ public final class GPURenderBundle {
         wgpu_bridge_release_render_bundle(handle)
     }
 }
+
+extension GPURenderBundle: @unchecked Sendable {}
 
 public final class GPURenderBundleEncoder {
     let handle: UnsafeMutableRawPointer
