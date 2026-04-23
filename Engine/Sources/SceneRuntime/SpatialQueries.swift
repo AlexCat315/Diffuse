@@ -1,3 +1,4 @@
+import EngineKernel
 import simd
 
 public struct SpatialAABB: Sendable, Equatable {
@@ -171,7 +172,15 @@ public struct SceneSweepHit: Sendable, Equatable {
 }
 
 func buildSpatialIndexResource(in world: RuntimeWorld) -> SpatialIndexResource {
-    let entries: [SpatialIndexEntry] = world.entities().compactMap { entity in
+    buildSpatialIndexResource(in: world, using: .shared).resource
+}
+
+func buildSpatialIndexResource(
+    in world: RuntimeWorld,
+    using jobSystem: JobSystem
+) -> (resource: SpatialIndexResource, report: JobDispatchReport) {
+    let entities = world.entities()
+    let result = jobSystem.parallelCompactMap(items: entities) { entity -> SpatialIndexEntry? in
         guard let collider = world.component(Collider.self, for: entity),
               let worldTransform = world.worldTransform(for: entity),
               let bounds = colliderBounds(shape: collider.shape, worldTransform: worldTransform) else {
@@ -189,7 +198,10 @@ func buildSpatialIndexResource(in world: RuntimeWorld) -> SpatialIndexResource {
         )
     }
 
-    return SpatialIndexResource(entries: entries, sourceRevision: world.revision)
+    return (
+        SpatialIndexResource(entries: result.0, sourceRevision: world.revision),
+        result.1
+    )
 }
 
 func performSpatialRaycast(_ query: SceneRaycastQuery,

@@ -1,3 +1,5 @@
+import EngineKernel
+
 public enum RuntimeSystemPhase: String, CaseIterable, Sendable {
     case commandApply
     case hierarchyPropagate
@@ -67,6 +69,9 @@ public struct RuntimeScheduleReport: Sendable {
     public var physicsConstraintCount: Int
     public var physicsContactCount: Int
     public var physicsBackendIdentifier: String
+    public var scheduledJobCount: Int
+    public var jobWorkerCount: Int
+    public var parallelPhases: [RuntimeSystemPhase]
     public var revision: UInt64
 
     public init(
@@ -80,6 +85,9 @@ public struct RuntimeScheduleReport: Sendable {
         physicsConstraintCount: Int = 0,
         physicsContactCount: Int = 0,
         physicsBackendIdentifier: String = "none",
+        scheduledJobCount: Int = 0,
+        jobWorkerCount: Int = 1,
+        parallelPhases: [RuntimeSystemPhase] = [],
         revision: UInt64 = 0
     ) {
         self.phases = phases
@@ -92,6 +100,9 @@ public struct RuntimeScheduleReport: Sendable {
         self.physicsConstraintCount = physicsConstraintCount
         self.physicsContactCount = physicsContactCount
         self.physicsBackendIdentifier = physicsBackendIdentifier
+        self.scheduledJobCount = scheduledJobCount
+        self.jobWorkerCount = jobWorkerCount
+        self.parallelPhases = parallelPhases
         self.revision = revision
     }
 }
@@ -114,6 +125,7 @@ public struct RuntimeWorldSchedule {
     private var physicsFrameState = PhysicsFrameStateResource()
     private var physicsSyncCache = PhysicsSyncCache()
     private var resolvedPhysicsBackendKind: PhysicsBackendKind = .none
+    private var jobSystem = JobSystem.shared
 
     public init() {}
 
@@ -139,6 +151,10 @@ public struct RuntimeWorldSchedule {
     public mutating func clearScriptDriver() {
         scriptDriver?.reset()
         scriptDriver = nil
+    }
+
+    public mutating func setJobSystem(_ jobSystem: JobSystem) {
+        self.jobSystem = jobSystem
     }
 
     public var currentPhysicsBackendIdentifier: String {
@@ -167,6 +183,8 @@ public struct RuntimeWorldSchedule {
         var physicsBodyCount = 0
         var physicsConstraintCount = 0
         var physicsContactCount = 0
+        var scheduledJobCount = 0
+        var parallelPhases = Set<RuntimeSystemPhase>()
 
         var activeBodies: [PhysicsBodyDescriptor] = []
         var activeConstraints: [PhysicsConstraintDescriptor] = []
@@ -205,8 +223,14 @@ public struct RuntimeWorldSchedule {
                     continue
                 }
 
-                activeBodies = collectPhysicsBodies(in: world)
-                activeConstraints = collectPhysicsConstraints(in: world)
+                let bodyCollection = collectPhysicsBodies(in: world)
+                activeBodies = bodyCollection.bodies
+                let constraintCollection = collectPhysicsConstraints(in: world)
+                activeConstraints = constraintCollection.constraints
+                scheduledJobCount += bodyCollection.report.jobCount + constraintCollection.report.jobCount
+                if bodyCollection.report.executedInParallel || constraintCollection.report.executedInParallel {
+                    parallelPhases.insert(.fixedPhysicsPrepare)
+                }
                 physicsBodyCount = activeBodies.count
                 physicsConstraintCount = activeConstraints.count
                 syncEvents = diffPhysicsSyncEvents(
@@ -289,10 +313,20 @@ public struct RuntimeWorldSchedule {
                     world.propagateTransforms()
                 }
             case .spatialIndexUpdate:
-                world.setDerivedResource(buildSpatialIndexResource(in: world))
+                let spatialIndexBuild = buildSpatialIndexResource(in: world, using: jobSystem)
+                world.setDerivedResource(spatialIndexBuild.resource)
+                scheduledJobCount += spatialIndexBuild.report.jobCount
+                if spatialIndexBuild.report.executedInParallel {
+                    parallelPhases.insert(.spatialIndexUpdate)
+                }
                 break
             case .renderExtract:
-                world.setDerivedResource(extractRenderScene(in: world))
+                let renderExtraction = extractRenderScene(in: world)
+                world.setDerivedResource(renderExtraction.resource)
+                scheduledJobCount += renderExtraction.report.jobCount
+                if renderExtraction.report.executedInParallel {
+                    parallelPhases.insert(.renderExtract)
+                }
                 break
             }
         }
@@ -310,6 +344,9 @@ public struct RuntimeWorldSchedule {
             physicsConstraintCount: physicsConstraintCount,
             physicsContactCount: physicsContactCount,
             physicsBackendIdentifier: physicsBackend.identifier,
+            scheduledJobCount: scheduledJobCount,
+            jobWorkerCount: jobSystem.workerCount,
+            parallelPhases: RuntimeSystemPhase.allCases.filter { parallelPhases.contains($0) },
             revision: world.revision
         )
     }
@@ -322,8 +359,11 @@ public struct RuntimeWorldSchedule {
         physicsSyncCache.constraints = Dictionary(uniqueKeysWithValues: constraints.map { ($0.entity, $0) })
     }
 
-    private func collectPhysicsBodies(in world: RuntimeWorld) -> [PhysicsBodyDescriptor] {
-        world.entities().compactMap { entity in
+    private func collectPhysicsBodies(
+        in world: RuntimeWorld
+    ) -> (bodies: [PhysicsBodyDescriptor], report: JobDispatchReport) {
+        let entities = world.entities()
+        let result = jobSystem.parallelCompactMap(items: entities) { entity -> PhysicsBodyDescriptor? in
             let rigidBody = world.component(RigidBody.self, for: entity)
             let collider = world.component(Collider.self, for: entity)
             guard rigidBody != nil || collider != nil,
@@ -340,10 +380,14 @@ public struct RuntimeWorldSchedule {
                 collider: collider
             )
         }
+        return (result.0, result.1)
     }
 
-    private func collectPhysicsConstraints(in world: RuntimeWorld) -> [PhysicsConstraintDescriptor] {
-        world.entities().compactMap { entity in
+    private func collectPhysicsConstraints(
+        in world: RuntimeWorld
+    ) -> (constraints: [PhysicsConstraintDescriptor], report: JobDispatchReport) {
+        let entities = world.entities()
+        let result = jobSystem.parallelCompactMap(items: entities) { entity -> PhysicsConstraintDescriptor? in
             guard let constraint = world.component(Constraint.self, for: entity),
                   let worldTransform = world.worldTransform(for: entity)
             else {
@@ -355,6 +399,7 @@ public struct RuntimeWorldSchedule {
                 constraint: constraint
             )
         }
+        return (result.0, result.1)
     }
 
     private func diffPhysicsSyncEvents(
@@ -408,17 +453,23 @@ public struct RuntimeWorldSchedule {
         physicsFrameState.backendIdentifier = physicsBackend.identifier
     }
 
-    private func extractRenderScene(in world: RuntimeWorld) -> ExtractedRenderSceneResource {
+    private func extractRenderScene(
+        in world: RuntimeWorld
+    ) -> (resource: ExtractedRenderSceneResource, report: JobDispatchReport) {
         let cameraSelection = selectRenderCamera(in: world)
-        let instances = collectRenderInstances(in: world)
-        return ExtractedRenderSceneResource(
-            scene: RenderScene(
-                camera: cameraSelection.camera,
-                instances: instances.map(\ .instance)
+        let instanceCollection = collectRenderInstances(in: world)
+        let instances = instanceCollection.instances
+        return (
+            ExtractedRenderSceneResource(
+                scene: RenderScene(
+                    camera: cameraSelection.camera,
+                    instances: instances.map(\ .instance)
+                ),
+                activeCameraEntity: cameraSelection.entity,
+                instanceEntities: instances.map(\ .entity),
+                sourceRevision: world.revision
             ),
-            activeCameraEntity: cameraSelection.entity,
-            instanceEntities: instances.map(\ .entity),
-            sourceRevision: world.revision
+            instanceCollection.report
         )
     }
 
@@ -450,8 +501,11 @@ public struct RuntimeWorldSchedule {
         return fallbackSelection ?? (nil, .fallbackPerspective)
     }
 
-    private func collectRenderInstances(in world: RuntimeWorld) -> [ExtractedRenderInstance] {
-        world.entities().compactMap { entity in
+    private func collectRenderInstances(
+        in world: RuntimeWorld
+    ) -> (instances: [ExtractedRenderInstance], report: JobDispatchReport) {
+        let entities = world.entities()
+        let result = jobSystem.parallelCompactMap(items: entities) { entity -> ExtractedRenderInstance? in
             guard let renderMesh = world.component(RenderMeshComponent.self, for: entity),
                   renderMesh.isVisible,
                   let worldTransform = world.worldTransform(for: entity)
@@ -467,5 +521,6 @@ public struct RuntimeWorldSchedule {
                 )
             )
         }
+        return (result.0, result.1)
     }
 }
