@@ -1660,6 +1660,18 @@ void wgpu_bridge_render_bundle_set_bind_group(void* enc, uint32_t i, void* bg) {
     if (enc && bg)
         wgpuRenderBundleEncoderSetBindGroup((WGPURenderBundleEncoder)enc, i, (WGPUBindGroup)bg, 0, NULL);
 }
+void wgpu_bridge_render_bundle_set_bind_group_dynamic(void* enc,
+                                                      uint32_t i,
+                                                      void* bg,
+                                                      uint32_t dynamic_offset_count,
+                                                      const uint32_t* dynamic_offsets) {
+    if (!(enc && bg)) return;
+    wgpuRenderBundleEncoderSetBindGroup((WGPURenderBundleEncoder)enc,
+                                        i,
+                                        (WGPUBindGroup)bg,
+                                        dynamic_offset_count,
+                                        dynamic_offsets);
+}
 void wgpu_bridge_render_bundle_draw(void* enc, uint32_t vc, uint32_t ic, uint32_t fv, uint32_t fi) {
     if (enc) wgpuRenderBundleEncoderDraw((WGPURenderBundleEncoder)enc, vc, ic, fv, fi);
 }

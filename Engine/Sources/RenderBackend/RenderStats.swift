@@ -12,6 +12,10 @@ public struct RenderFrameStats: Sendable {
     public var cpuEncodeNS: UInt64
     public var cpuSubmitNS: UInt64
     public var cpuFrameTotalNS: UInt64
+    public var cpuSkyboxEncodeNS: UInt64
+    public var cpuBaseEncodeNS: UInt64
+    public var cpuPostProcessEncodeNS: UInt64
+    public var passEncodeNS: [RenderPassKind: UInt64]
 
     public init(
         frameIndex: Int = -1,
@@ -24,7 +28,11 @@ public struct RenderFrameStats: Sendable {
         cpuPrepareNS: UInt64 = 0,
         cpuEncodeNS: UInt64 = 0,
         cpuSubmitNS: UInt64 = 0,
-        cpuFrameTotalNS: UInt64 = 0
+        cpuFrameTotalNS: UInt64 = 0,
+        cpuSkyboxEncodeNS: UInt64 = 0,
+        cpuBaseEncodeNS: UInt64 = 0,
+        cpuPostProcessEncodeNS: UInt64 = 0,
+        passEncodeNS: [RenderPassKind: UInt64] = [:]
     ) {
         self.frameIndex = frameIndex
         self.passCount = passCount
@@ -37,5 +45,9 @@ public struct RenderFrameStats: Sendable {
         self.cpuEncodeNS = cpuEncodeNS
         self.cpuSubmitNS = cpuSubmitNS
         self.cpuFrameTotalNS = cpuFrameTotalNS
+        self.cpuSkyboxEncodeNS = cpuSkyboxEncodeNS
+        self.cpuBaseEncodeNS = cpuBaseEncodeNS
+        self.cpuPostProcessEncodeNS = cpuPostProcessEncodeNS
+        self.passEncodeNS = passEncodeNS
     }
 }

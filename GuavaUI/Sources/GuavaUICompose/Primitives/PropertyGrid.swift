@@ -48,11 +48,13 @@ public struct PropertyGrid: View {
 
     public var body: some View {
         ScrollView(.vertical) {
-            Column(spacing: 12) {
+            Box(direction: .column, alignItems: .stretch, spacing: 12) {
                 sectionViews()
             }
             .padding(10)
+            .flex()
         }
+        .flex()
     }
 
     private func sectionViews() -> [AnyView] {
@@ -68,12 +70,12 @@ public struct PropertyGrid: View {
     }
 
     private func sectionView(_ section: PropertyGridSection) -> some View {
-        Column(alignment: .leading, spacing: 6) {
+        Box(direction: .column, alignItems: .stretch, spacing: 6) {
             Text(section.title)
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
-            Column(spacing: rowSpacing) {
+            Box(direction: .column, alignItems: .stretch, spacing: rowSpacing) {
                 rowViews(section.rows)
             }
             .padding(1)
@@ -81,6 +83,7 @@ public struct PropertyGrid: View {
             .cornerRadius(2)
             .clipped()
         }
+        .flex()
     }
 
     private func rowView(_ row: PropertyGridRow) -> some View {
@@ -90,8 +93,8 @@ public struct PropertyGrid: View {
                     .font(.caption)
                     .foregroundColor(.onSurfaceVariant)
             }
-            .frame(width: labelWidth, height: rowHeight)
             .padding(horizontal: 8)
+            .frame(width: labelWidth, height: rowHeight)
             .background(.surfaceVariant)
 
             Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
@@ -105,5 +108,6 @@ public struct PropertyGrid: View {
             .flex()
         }
         .background(.divider)
+        .flex()
     }
 }

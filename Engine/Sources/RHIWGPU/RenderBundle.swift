@@ -70,6 +70,24 @@ public final class GPURenderBundleEncoder {
         wgpu_bridge_render_bundle_set_bind_group(handle, index, bindGroup.handle)
     }
 
+    public func setBindGroup(_ bindGroup: GPUBindGroup,
+                             index: UInt32 = 0,
+                             dynamicOffsets: [UInt32]) {
+        if dynamicOffsets.isEmpty {
+            wgpu_bridge_render_bundle_set_bind_group(handle, index, bindGroup.handle)
+            return
+        }
+        dynamicOffsets.withUnsafeBufferPointer { offsets in
+            wgpu_bridge_render_bundle_set_bind_group_dynamic(
+                handle,
+                index,
+                bindGroup.handle,
+                UInt32(offsets.count),
+                offsets.baseAddress
+            )
+        }
+    }
+
     public func draw(vertexCount: UInt32,
                      instanceCount: UInt32 = 1,
                      firstVertex: UInt32 = 0,
