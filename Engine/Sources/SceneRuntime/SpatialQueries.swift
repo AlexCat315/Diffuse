@@ -229,10 +229,99 @@ struct SpatialBVHNode: Sendable, Equatable {
     }
 }
 
+struct SpatialBVHStorage: Sendable, Equatable {
+    private(set) var minX: [Float] = []
+    private(set) var minY: [Float] = []
+    private(set) var minZ: [Float] = []
+    private(set) var maxX: [Float] = []
+    private(set) var maxY: [Float] = []
+    private(set) var maxZ: [Float] = []
+    private(set) var leftChild: [Int] = []
+    private(set) var rightChild: [Int] = []
+    private(set) var start: [Int] = []
+    private(set) var count: [Int] = []
+
+    mutating func rebuild(from nodes: [SpatialBVHNode]) {
+        let nodeCount = nodes.count
+        minX.removeAll(keepingCapacity: true)
+        minY.removeAll(keepingCapacity: true)
+        minZ.removeAll(keepingCapacity: true)
+        maxX.removeAll(keepingCapacity: true)
+        maxY.removeAll(keepingCapacity: true)
+        maxZ.removeAll(keepingCapacity: true)
+        leftChild.removeAll(keepingCapacity: true)
+        rightChild.removeAll(keepingCapacity: true)
+        start.removeAll(keepingCapacity: true)
+        count.removeAll(keepingCapacity: true)
+
+        minX.reserveCapacity(nodeCount)
+        minY.reserveCapacity(nodeCount)
+        minZ.reserveCapacity(nodeCount)
+        maxX.reserveCapacity(nodeCount)
+        maxY.reserveCapacity(nodeCount)
+        maxZ.reserveCapacity(nodeCount)
+        leftChild.reserveCapacity(nodeCount)
+        rightChild.reserveCapacity(nodeCount)
+        start.reserveCapacity(nodeCount)
+        count.reserveCapacity(nodeCount)
+
+        for node in nodes {
+            minX.append(node.bounds.min.x)
+            minY.append(node.bounds.min.y)
+            minZ.append(node.bounds.min.z)
+            maxX.append(node.bounds.max.x)
+            maxY.append(node.bounds.max.y)
+            maxZ.append(node.bounds.max.z)
+            leftChild.append(node.leftChild)
+            rightChild.append(node.rightChild)
+            start.append(node.start)
+            count.append(node.count)
+        }
+    }
+
+    func isLeaf(_ nodeIndex: Int) -> Bool {
+        count[nodeIndex] > 0
+    }
+
+    func rangeStart(_ nodeIndex: Int) -> Int {
+        start[nodeIndex]
+    }
+
+    func rangeCount(_ nodeIndex: Int) -> Int {
+        count[nodeIndex]
+    }
+
+    func left(_ nodeIndex: Int) -> Int {
+        leftChild[nodeIndex]
+    }
+
+    func right(_ nodeIndex: Int) -> Int {
+        rightChild[nodeIndex]
+    }
+
+    func intersects(nodeIndex: Int, bounds: SpatialAABB) -> Bool {
+        minX[nodeIndex] <= bounds.max.x && maxX[nodeIndex] >= bounds.min.x &&
+        minY[nodeIndex] <= bounds.max.y && maxY[nodeIndex] >= bounds.min.y &&
+        minZ[nodeIndex] <= bounds.max.z && maxZ[nodeIndex] >= bounds.min.z
+    }
+
+    func raycastInterval(nodeIndex: Int,
+                         origin: SIMD3<Float>,
+                         direction: SIMD3<Float>,
+                         maxDistance: Float) -> (entryDistance: Float, exitDistance: Float, normal: SIMD3<Float>)? {
+        raycastBoxInterval(min: SIMD3<Float>(minX[nodeIndex], minY[nodeIndex], minZ[nodeIndex]),
+                           max: SIMD3<Float>(maxX[nodeIndex], maxY[nodeIndex], maxZ[nodeIndex]),
+                           origin: origin,
+                           direction: direction,
+                           maxDistance: maxDistance)
+    }
+}
+
 struct SpatialBVH: Sendable, Equatable {
     private static let traversalStackCapacity = 128
 
     private(set) var nodes: [SpatialBVHNode] = []
+    private(set) var soa = SpatialBVHStorage()
     private(set) var orderedEntryIndices: [Int] = []
     private(set) var parentNodeIndices: [Int] = []
     private(set) var leafNodeByEntryIndex: [Int] = []
@@ -247,6 +336,7 @@ struct SpatialBVH: Sendable, Equatable {
         orderedEntryIndices = Array(entries.indices)
         leafNodeByEntryIndex = Array(repeating: -1, count: entries.count)
         _ = buildNode(entries: entries, start: 0, count: entries.count, parent: -1)
+        soa.rebuild(from: nodes)
     }
 
     mutating func refit(entries: [SpatialIndexEntry], changedEntryIndices: [Int]) {
@@ -293,6 +383,8 @@ struct SpatialBVH: Sendable, Equatable {
                 frontier.append(parent)
             }
         }
+
+        soa.rebuild(from: nodes)
     }
 
     func forEachOverlapping(_ bounds: SpatialAABB,
@@ -336,22 +428,25 @@ struct SpatialBVH: Sendable, Equatable {
 
             while let nodeIndex = pop() {
                 statsRecorder?.recordNodeVisit()
-                let node = nodes[nodeIndex]
-                guard node.bounds.intersects(bounds) else { continue }
+                guard soa.intersects(nodeIndex: nodeIndex, bounds: bounds) else { continue }
 
-                if node.isLeaf {
+                if soa.isLeaf(nodeIndex) {
                     statsRecorder?.recordLeafTest()
-                    for offset in 0..<node.count {
-                        body(orderedEntryIndices[node.start + offset])
+                    let start = soa.rangeStart(nodeIndex)
+                    let count = soa.rangeCount(nodeIndex)
+                    for offset in 0..<count {
+                        body(orderedEntryIndices[start + offset])
                     }
                     continue
                 }
 
-                if node.leftChild >= 0 {
-                    push(node.leftChild)
+                let leftChild = soa.left(nodeIndex)
+                let rightChild = soa.right(nodeIndex)
+                if leftChild >= 0 {
+                    push(leftChild)
                 }
-                if node.rightChild >= 0 {
-                    push(node.rightChild)
+                if rightChild >= 0 {
+                    push(rightChild)
                 }
             }
         }
@@ -416,45 +511,46 @@ struct SpatialBVH: Sendable, Equatable {
                     statsRecorder?.recordNodeVisit()
                     let nodeIndex = next.nodeIndex
                     let nodeEntryDistance = next.distance
-                    let node = nodes[nodeIndex]
 
                     guard nodeEntryDistance <= maxDistance else { continue }
 
-                    if node.isLeaf {
+                    if soa.isLeaf(nodeIndex) {
                         statsRecorder?.recordLeafTest()
-                        for offset in 0..<node.count {
-                            body(orderedEntryIndices[node.start + offset], nodeEntryDistance)
+                        let start = soa.rangeStart(nodeIndex)
+                        let count = soa.rangeCount(nodeIndex)
+                        for offset in 0..<count {
+                            body(orderedEntryIndices[start + offset], nodeEntryDistance)
                         }
                         continue
                     }
 
-                    let leftHit = node.leftChild >= 0
-                        ? raycastBoxInterval(min: nodes[node.leftChild].bounds.min,
-                                             max: nodes[node.leftChild].bounds.max,
-                                             origin: origin,
-                                             direction: direction,
-                                             maxDistance: maxDistance)
+                    let leftChild = soa.left(nodeIndex)
+                    let rightChild = soa.right(nodeIndex)
+                    let leftHit = leftChild >= 0
+                        ? soa.raycastInterval(nodeIndex: leftChild,
+                                              origin: origin,
+                                              direction: direction,
+                                              maxDistance: maxDistance)
                         : nil
-                    let rightHit = node.rightChild >= 0
-                        ? raycastBoxInterval(min: nodes[node.rightChild].bounds.min,
-                                             max: nodes[node.rightChild].bounds.max,
-                                             origin: origin,
-                                             direction: direction,
-                                             maxDistance: maxDistance)
+                    let rightHit = rightChild >= 0
+                        ? soa.raycastInterval(nodeIndex: rightChild,
+                                              origin: origin,
+                                              direction: direction,
+                                              maxDistance: maxDistance)
                         : nil
 
                     if let leftHit, let rightHit {
                         if leftHit.entryDistance <= rightHit.entryDistance {
-                            push(nodeIndex: node.rightChild, distance: rightHit.entryDistance)
-                            push(nodeIndex: node.leftChild, distance: leftHit.entryDistance)
+                            push(nodeIndex: rightChild, distance: rightHit.entryDistance)
+                            push(nodeIndex: leftChild, distance: leftHit.entryDistance)
                         } else {
-                            push(nodeIndex: node.leftChild, distance: leftHit.entryDistance)
-                            push(nodeIndex: node.rightChild, distance: rightHit.entryDistance)
+                            push(nodeIndex: leftChild, distance: leftHit.entryDistance)
+                            push(nodeIndex: rightChild, distance: rightHit.entryDistance)
                         }
                     } else if let leftHit {
-                        push(nodeIndex: node.leftChild, distance: leftHit.entryDistance)
+                        push(nodeIndex: leftChild, distance: leftHit.entryDistance)
                     } else if let rightHit {
-                        push(nodeIndex: node.rightChild, distance: rightHit.entryDistance)
+                        push(nodeIndex: rightChild, distance: rightHit.entryDistance)
                     }
                 }
             }
