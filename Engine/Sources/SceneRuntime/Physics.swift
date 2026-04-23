@@ -252,9 +252,13 @@ public struct PhysicsRaycastHit: Sendable, Equatable {
 
 public struct PhysicsOverlapAABBQuery: Sendable, Equatable {
     public var bounds: SpatialAABB
+    /// Stop collecting hits after this many results. Default (.max) collects all.
+    /// When set, sort order is not guaranteed.
+    public var maxResults: Int
 
-    public init(bounds: SpatialAABB) {
+    public init(bounds: SpatialAABB, maxResults: Int = .max) {
         self.bounds = bounds
+        self.maxResults = max(maxResults, 0)
     }
 }
 
