@@ -44,15 +44,18 @@ public struct PropertyGrid: View {
     public let labelWidth: Float
     public let rowHeight: Float
     public let rowSpacing: Float
+    public let onSectionCollapseChanged: ((String, Bool) -> Void)?
 
     public init(_ sections: [PropertyGridSection],
             labelWidth: Float = 112,
             rowHeight: Float = 28,
-                rowSpacing: Float = 1) {
+                rowSpacing: Float = 1,
+                onSectionCollapseChanged: ((String, Bool) -> Void)? = nil) {
         self.sections = sections
         self.labelWidth = labelWidth
         self.rowHeight = rowHeight
         self.rowSpacing = rowSpacing
+        self.onSectionCollapseChanged = onSectionCollapseChanged
     }
 
     public var body: some View {
@@ -103,7 +106,9 @@ private struct _StatefulPropertyGrid: View {
                    isEnabled: section.isCollapsible,
                    action: {
                 let current = collapsed[section.id] ?? section.startsCollapsed
-                collapsed[section.id] = !current
+                let next = !current
+                collapsed[section.id] = next
+                grid.onSectionCollapseChanged?(section.id, next)
             }) {
                 Row(alignment: .center, spacing: 4) {
                     if section.isCollapsible {

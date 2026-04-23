@@ -10,6 +10,7 @@ struct InspectorPanel: View {
         StoreScope(store) { store in
             let entity = scene.entitySummary(id: store.state.selectedEntityID)
             let sections = scene.inspectorSections(for: store.state.selectedEntityID)
+            let collapsedIDs = store.state.inspectorCollapsedSectionIDs
 
             Box(direction: .column, alignItems: .stretch) {
                 if let entity {
@@ -17,9 +18,12 @@ struct InspectorPanel: View {
 
                     Divider()
 
-                    PropertyGrid(propertySections(sections),
+                    PropertyGrid(propertySections(sections, collapsedIDs: collapsedIDs),
                                  labelWidth: 100,
-                                 rowHeight: 26)
+                                 rowHeight: 26,
+                                 onSectionCollapseChanged: { id, isCollapsed in
+                        store.dispatch(.setInspectorSectionCollapsed(id: id, isCollapsed: isCollapsed))
+                    })
                         .flex()
                 } else {
                     Box(direction: .column, alignItems: .stretch, spacing: 4) {
@@ -61,8 +65,10 @@ struct InspectorPanel: View {
         }
     }
 
-    private func propertySections(_ sections: [EditorInspectorSection]) -> [PropertyGridSection] {
+    private func propertySections(_ sections: [EditorInspectorSection],
+                                  collapsedIDs: Set<String>) -> [PropertyGridSection] {
         sections.map { section in
+            let startsCollapsed = collapsedIDs.contains(section.id)
             PropertyGridSection(
                 id: section.id,
                 title: section.title,
@@ -71,7 +77,8 @@ struct InspectorPanel: View {
                         fieldView(field.value)
                     }
                 },
-                isCollapsible: true
+                isCollapsible: true,
+                startsCollapsed: startsCollapsed
             )
         }
     }
