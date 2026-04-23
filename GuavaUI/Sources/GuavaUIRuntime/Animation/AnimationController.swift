@@ -125,6 +125,8 @@ public final class AnimatorScheduler: @unchecked Sendable {
     /// want to assert lifecycle (registration, eviction).
     public var activeCount: Int { active.count }
 
+    public var hasActiveAnimations: Bool { !active.isEmpty }
+
     /// Register a controller for per-frame ticking. The scheduler retains a
     /// strong reference until the controller becomes finished, after which
     /// it is dropped on the next `tick`.

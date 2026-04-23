@@ -36,6 +36,20 @@ public struct Color: Equatable, Sendable {
         return Color(r: r, g: g, b: b, a: a * clamped)
     }
 
+    /// Source-over compositing with `overlay` painted on top of `self`.
+    /// Both colours are treated as straight-alpha RGBA. Used by state-layer
+    /// overlays so a translucent hover/press tint produces a real surface
+    /// colour (not a separate token per state).
+    public func composited(over overlay: Color) -> Color {
+        let oa = max(0, min(1, overlay.a))
+        let outA = oa + a * (1 - oa)
+        guard outA > 0 else { return Color(r: 0, g: 0, b: 0, a: 0) }
+        let outR = (overlay.r * oa + r * a * (1 - oa)) / outA
+        let outG = (overlay.g * oa + g * a * (1 - oa)) / outA
+        let outB = (overlay.b * oa + b * a * (1 - oa)) / outA
+        return Color(r: outR, g: outG, b: outB, a: outA)
+    }
+
     public static let clear = Color(r: 0, g: 0, b: 0, a: 0)
     public static let black = Color(r: 0, g: 0, b: 0)
     public static let white = Color(r: 1, g: 1, b: 1)

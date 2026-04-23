@@ -8,13 +8,13 @@ struct SemanticMotionTests {
     @Test(".fast resolves to theme.motion.fast.seconds")
     func fastFollowsTheme() {
         let a = Animation.semantic(.fast, in: .defaultDark)
-        #expect(abs(a.duration - 0.100) < 1e-6)
+        #expect(abs(a.duration - 0.080) < 1e-6)
     }
 
     @Test(".medium resolves to theme.motion.standard")
     func mediumFollowsTheme() {
         let a = Animation.semantic(.medium, in: .defaultDark)
-        #expect(abs(a.duration - 0.200) < 1e-6)
+        #expect(abs(a.duration - 0.180) < 1e-6)
     }
 
     @Test(".slow resolves to theme.motion.slow")

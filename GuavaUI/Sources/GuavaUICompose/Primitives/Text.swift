@@ -1,3 +1,4 @@
+import Foundation
 import CoreGraphics
 import GuavaUIRuntime
 
@@ -13,6 +14,8 @@ public struct TextEnvironment {
     public var defaultColor: Color
     public var defaultFont: Font
     public var fontResolver: TextFontResolver?
+    let shapeCache: SharedTextShapeCache
+    let layoutCache: SharedTextLayoutCache
 
     public init(atlas: FontAtlas,
                 shaper: TextShaper,
@@ -29,6 +32,40 @@ public struct TextEnvironment {
         let fallbackSize = atlas.fontSize > 0 ? atlas.fontSize : max(1, defaultLineHeight)
         self.defaultFont = defaultFont ?? Font.system(size: fallbackSize)
         self.fontResolver = fontResolver
+        self.shapeCache = SharedTextShapeCache()
+        self.layoutCache = SharedTextLayoutCache()
+    }
+
+    public static func bootstrapped(atlasTextureID: TextureID,
+                                    primaryFontName: String,
+                                    defaultFont: Font = .system(size: 18),
+                                    defaultLineHeight: Float = 22,
+                                    defaultColor: Color = .white,
+                                    rasterScale: Float = 1,
+                                    atlasEdge: Int? = nil) -> TextEnvironment {
+        let scale = max(1, rasterScale)
+        let resolvedAtlasEdge = atlasEdge ?? max(1024, Int((1024 * scale).rounded(.up)))
+        let atlas = FontAtlas(width: resolvedAtlasEdge, height: resolvedAtlasEdge)
+        let shaper = TextShaper()
+        let resolver = TextFontResolver(primaryFontName: primaryFontName,
+                                        atlas: atlas,
+                                        rasterScale: scale)
+
+        if let primaryFont = resolver.preparePrimaryFont(defaultFont) {
+            shaper.setFont(ftFace: primaryFont.rawFace,
+                           size: defaultFont.size,
+                           rasterScale: scale)
+        }
+
+        return TextEnvironment(
+            atlas: atlas,
+            shaper: shaper,
+            atlasTextureID: atlasTextureID,
+            defaultLineHeight: defaultLineHeight,
+            defaultColor: defaultColor,
+            defaultFont: defaultFont,
+            fontResolver: resolver
+        )
     }
 
     public func resolvedFont(_ override: Font?) -> Font {
@@ -45,13 +82,108 @@ public struct TextEnvironment {
 
     public func shape(text: String, font: Font?) -> [ShapedGlyph] {
         let resolved = resolvedFont(font)
-        if let fontResolver {
-            let glyphs = fontResolver.shape(text: text, font: resolved)
-            if !glyphs.isEmpty || text.isEmpty {
-                return glyphs
+        return shapeCache.value(text: text, font: resolved) {
+            if let fontResolver {
+                let glyphs = fontResolver.shape(text: text, font: resolved)
+                if !glyphs.isEmpty || text.isEmpty {
+                    return glyphs
+                }
             }
+            return shaper.shape(text: text)
         }
-        return shaper.shape(text: text)
+    }
+
+    public func cachedLayout(text: String,
+                             font: Font? = nil,
+                             lineHeight: Float? = nil,
+                             maxWidth: Float = .infinity,
+                             alignment: TextAlignment = .leading) -> TextLayoutResult {
+        let resolvedFont = resolvedFont(font)
+        let resolvedLineHeight = resolvedLineHeight(font: resolvedFont, override: lineHeight)
+        let normalizedMaxWidth: Float = (maxWidth.isFinite && maxWidth > 0) ? maxWidth : .infinity
+        let key = SharedTextLayoutCache.Key(
+            text: text,
+            font: resolvedFont,
+            lineHeight: resolvedLineHeight,
+            alignment: alignment,
+            maxWidth: normalizedMaxWidth
+        )
+        return layoutCache.value(for: key) {
+            let glyphs = shape(text: text, font: resolvedFont)
+            return TextLayout.layout(
+                shapedGlyphs: glyphs,
+                text: text,
+                atlas: atlas,
+                maxWidth: normalizedMaxWidth,
+                lineHeight: resolvedLineHeight,
+                alignment: alignment
+            )
+        }
+    }
+
+    public func prewarmGlyphs(text: String, fonts: [Font]) {
+        for font in Set(fonts) {
+            prewarmGlyphs(text: text, font: font)
+        }
+    }
+
+    public func prewarmGlyphs(text: String, font: Font? = nil) {
+        let glyphs = shape(text: text, font: font)
+        for glyph in glyphs {
+            _ = atlas.rasterizeGlyph(glyphIndex: glyph.glyphID, fontID: glyph.fontID)
+        }
+    }
+}
+
+final class SharedTextShapeCache {
+    struct Key: Hashable {
+        let text: String
+        let font: Font
+    }
+
+    private let lock = NSLock()
+    private var table: [Key: [ShapedGlyph]] = [:]
+
+    func value(text: String, font: Font, build: () -> [ShapedGlyph]) -> [ShapedGlyph] {
+        let key = Key(text: text, font: font)
+        if let cached = lock.withLock({ table[key] }) {
+            return cached
+        }
+        let result = build()
+        return lock.withLock {
+            if let cached = table[key] {
+                return cached
+            }
+            table[key] = result
+            return result
+        }
+    }
+}
+
+final class SharedTextLayoutCache {
+    struct Key: Hashable {
+        let text: String
+        let font: Font
+        let lineHeight: Float
+        let alignment: TextAlignment
+        let maxWidth: Float
+    }
+
+    private let lock = NSLock()
+    private var table: [Key: TextLayoutResult] = [:]
+
+    func value(for key: Key, build: () -> TextLayoutResult) -> TextLayoutResult {
+        if let cached = lock.withLock({ table[key] }) {
+            return cached
+        }
+        let result = build()
+        return lock.withLock {
+            if let cached = table[key] {
+                return cached
+            }
+            table[key] = result
+            return result
+        }
     }
 }
 
@@ -87,30 +219,55 @@ public struct Text: _PrimitiveView {
     public func _updateNode(_ node: Node) {
         // Bind the draw callback. Captures `string` etc by value.
         let snapshot = self
-        let env = TextEnvironmentHolder.current
         node.draw = { list, origin in
-            guard let env else { return }
+            guard let env = TextEnvironmentHolder.current else { return }
             let fontOverride = node.attachments[StyleAttachmentKey.font] as? Font
             let lineHeightOverride = node.attachments[StyleAttachmentKey.lineHeight] as? Float
             let resolvedFont = env.resolvedFont(fontOverride)
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)
-            let result = snapshot.shape(in: env,
-                                        maxWidth: Float(node.frame.width),
-                                        font: resolvedFont,
-                                        lineHeight: resolvedLineHeight)
+            let result = Text.cachedLayout(
+                env: env,
+                layout: node.layoutNode,
+                text: snapshot.string,
+                font: resolvedFont,
+                lineHeight: resolvedLineHeight,
+                maxWidth: Float(node.frame.width),
+                alignment: snapshot.alignment
+            )
             let baseColor = snapshot.color ?? node.foregroundColor ?? env.defaultColor
             let drawColor = baseColor.multipliedAlpha(node.opacity)
             list.addText(result,
                          origin: (Float(origin.x), Float(origin.y)),
                          color: drawColor,
-                         textureID: env.atlasTextureID)
+                         textureID: env.atlasTextureID,
+                         atlas: env.atlas)
         }
     }
 
     public func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
-        let snapshot = self
+        Text.installMeasureFunc(on: layout, snapshot: self)
+        layout.textInputs = TextMeasureInputs(
+            text: string,
+            alignment: alignment
+        )
+        return layout
+    }
+
+    public func _updateLayout(_ layout: LayoutNode) {
+        Text.installMeasureFunc(on: layout, snapshot: self)
+        let next = TextMeasureInputs(text: string, alignment: alignment)
+        let previous = layout.textInputs
+        layout.textInputs = next
+        if previous != nil, previous != next {
+            layout.markDirty()
+        }
+    }
+
+    // MARK: - Layout cache
+
+    static func installMeasureFunc(on layout: LayoutNode, snapshot: Text) {
         layout.setMeasureFunc { [weak layout] width, widthMode, _, _ in
             guard let env = TextEnvironmentHolder.current else {
                 return CGSize(width: 0, height: 0)
@@ -121,35 +278,62 @@ public struct Text: _PrimitiveView {
             let resolvedFont = env.resolvedFont(fontOverride)
             let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
                                                             override: lineHeightOverride)
-            let result = snapshot.shape(in: env,
-                                        maxWidth: constraint,
-                                        font: resolvedFont,
-                                        lineHeight: resolvedLineHeight)
+            let result = Text.cachedLayout(
+                env: env,
+                layout: layout,
+                text: snapshot.string,
+                font: resolvedFont,
+                lineHeight: resolvedLineHeight,
+                maxWidth: constraint,
+                alignment: snapshot.alignment
+            )
             return CGSize(width: CGFloat(result.totalWidth),
                           height: CGFloat(result.totalHeight))
         }
-        return layout
     }
 
-    public func _updateLayout(_ layout: LayoutNode) {
-        layout.markDirty()
-    }
-
-    private func shape(in env: TextEnvironment,
-                       maxWidth: Float,
-                       font: Font,
-                       lineHeight: Float) -> TextLayoutResult {
-        let glyphs = env.shape(text: string, font: font)
-        return TextLayout.layout(
-            shapedGlyphs: glyphs,
-            text: string,
-            atlas: env.atlas,
-            maxWidth: maxWidth.isFinite && maxWidth > 0 ? maxWidth : .infinity,
+    /// Shape + layout cache. Phase 6: per-`LayoutNode` cache lives directly
+    /// on `LayoutNode.textMeasure` (a typed stored property in Runtime).
+    /// Falls through to the process-wide cache on `TextEnvironment` when no
+    /// LayoutNode is supplied (unit tests without a host).
+    static func cachedLayout(
+        env: TextEnvironment,
+        layout: LayoutNode?,
+        text: String,
+        font: Font,
+        lineHeight: Float,
+        maxWidth: Float,
+        alignment: TextAlignment
+    ) -> TextLayoutResult {
+        let normalizedMaxWidth: Float = (maxWidth.isFinite && maxWidth > 0) ? maxWidth : .infinity
+        let key = TextLayoutCacheKey(
+            text: text,
+            font: font,
             lineHeight: lineHeight,
+            alignment: alignment,
+            maxWidth: normalizedMaxWidth,
+            atlasID: ObjectIdentifier(env.atlas)
+        )
+        if let layout, let cached = layout.textMeasure, cached.key == key {
+            return cached.result
+        }
+        let result = env.cachedLayout(
+            text: text,
+            font: font,
+            lineHeight: lineHeight,
+            maxWidth: normalizedMaxWidth,
             alignment: alignment
         )
+        if let layout {
+            layout.textMeasure = TextLayoutCacheEntry(key: key, result: result)
+        }
+        return result
     }
 }
+
+// Phase 6: TextLayoutCacheKey / TextLayoutCacheEntry / TextMeasureInputs
+// moved to GuavaUIRuntime (`Text/TextMeasureSlot.swift`) so the typed
+// measure slot can live on `LayoutNode` directly.
 
 /// Thin one-pixel separator. Renders as a coloured rect; defaults to a flexible
 /// horizontal line when placed in a Column. When `color` is omitted, the

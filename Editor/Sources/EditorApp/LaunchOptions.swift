@@ -3,6 +3,7 @@ import RHIWGPU
 
 struct EditorAppLaunchOptions {
     let backendConfig: WGPUDeviceConfig
+    let projectDirectory: String
 
     static func load(
         arguments: [String] = CommandLine.arguments,
@@ -23,6 +24,9 @@ struct EditorAppLaunchOptions {
         let validationEnabled = fileConfig?.wgpu?.validationEnabled ?? true
         let framesInFlight = fileConfig?.wgpu?.framesInFlight ?? 2
         let libraryPath = fileConfig?.wgpu?.libraryPath
+        let projectDirectory = commandLine.projectDirectory
+            ?? environment["GUAVA_PROJECT_DIR"]
+            ?? FileManager.default.currentDirectoryPath
 
         return EditorAppLaunchOptions(
             backendConfig: WGPUDeviceConfig(
@@ -30,7 +34,8 @@ struct EditorAppLaunchOptions {
                 framesInFlight: framesInFlight,
                 libraryPath: libraryPath,
                 preferredBackends: preferredBackends
-            )
+            ),
+            projectDirectory: projectDirectory
         )
     }
 
@@ -102,10 +107,12 @@ struct EditorAppLaunchOptions {
 private struct ParsedCommandLine {
     let backendList: String?
     let configPath: String?
+    let projectDirectory: String?
 
     init(arguments: [String]) throws {
         var backendList: String?
         var configPath: String?
+        var projectDirectory: String?
 
         var index = 1
         while index < arguments.count {
@@ -131,6 +138,16 @@ private struct ParsedCommandLine {
                 case let value where value.hasPrefix("--wgpu-config="):
                     configPath = String(value.dropFirst("--wgpu-config=".count))
 
+                case "--project-dir":
+                    index += 1
+                    guard index < arguments.count else {
+                        throw EditorAppLaunchError.missingValue(argument)
+                    }
+                    projectDirectory = arguments[index]
+
+                case let value where value.hasPrefix("--project-dir="):
+                    projectDirectory = String(value.dropFirst("--project-dir=".count))
+
                 default:
                     break
             }
@@ -139,6 +156,7 @@ private struct ParsedCommandLine {
 
         self.backendList = backendList
         self.configPath = configPath
+        self.projectDirectory = projectDirectory
     }
 }
 

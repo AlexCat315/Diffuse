@@ -1,4 +1,5 @@
 import Foundation
+import simd
 
 public struct AssetPipeline {
     public init() {}
@@ -31,6 +32,23 @@ public struct MeshAsset: Sendable {
     public var indexCount: UInt32 { UInt32(indices.count) }
     public var vertexBufferSize: Int { vertices.count * MemoryLayout<Float>.size }
     public var indexBufferSize: Int { indices.count * MemoryLayout<UInt32>.size }
+
+    /// Local-space axis-aligned bounding box of all vertex positions.
+    /// 空 mesh 退化为 (.zero, .zero)。
+    public var localBounds: (min: SIMD3<Float>, max: SIMD3<Float>) {
+        let stride = MeshAsset.vertexStride / MemoryLayout<Float>.size
+        var lo = SIMD3<Float>(repeating: .infinity)
+        var hi = SIMD3<Float>(repeating: -.infinity)
+        var i = 0
+        while i < vertices.count {
+            let v = SIMD3<Float>(vertices[i], vertices[i + 1], vertices[i + 2])
+            lo = simd_min(lo, v)
+            hi = simd_max(hi, v)
+            i += stride
+        }
+        if lo.x == .infinity { return (.zero, .zero) }
+        return (lo, hi)
+    }
 
     /// Recenter to origin and uniform-scale longest axis to `targetSize`.
     public mutating func normalizeToUnitBounds(targetSize: Float = 2.0) {
@@ -205,6 +223,47 @@ public enum OBJLoader {
             let i2 = Int(indices[i + 2]) * stride
 
             // Check if any of the three vertices already has a non-zero normal.
+            func hasNormal(_ base: Int) -> Bool {
+                vertices[base + 3] != 0 || vertices[base + 4] != 0 || vertices[base + 5] != 0
+            }
+            if hasNormal(i0) || hasNormal(i1) || hasNormal(i2) {
+                i += 3
+                continue
+            }
+
+            let p0x = vertices[i0], p0y = vertices[i0 + 1], p0z = vertices[i0 + 2]
+            let p1x = vertices[i1], p1y = vertices[i1 + 1], p1z = vertices[i1 + 2]
+            let p2x = vertices[i2], p2y = vertices[i2 + 1], p2z = vertices[i2 + 2]
+
+            let ax = p1x - p0x, ay = p1y - p0y, az = p1z - p0z
+            let bx = p2x - p0x, by = p2y - p0y, bz = p2z - p0z
+            var nx = ay * bz - az * by
+            var ny = az * bx - ax * bz
+            var nz = ax * by - ay * bx
+            let len = (nx * nx + ny * ny + nz * nz).squareRoot()
+            if len > 0 {
+                nx /= len; ny /= len; nz /= len
+            }
+
+            for slot in [i0, i1, i2] {
+                vertices[slot + 3] = nx
+                vertices[slot + 4] = ny
+                vertices[slot + 5] = nz
+            }
+            i += 3
+        }
+    }
+}
+
+enum MeshNormalTools {
+    static func fillMissingNormals(vertices: inout [Float], indices: [UInt32]) {
+        let stride = MeshAsset.vertexStride / MemoryLayout<Float>.size
+        var i = 0
+        while i + 2 < indices.count {
+            let i0 = Int(indices[i]) * stride
+            let i1 = Int(indices[i + 1]) * stride
+            let i2 = Int(indices[i + 2]) * stride
+
             func hasNormal(_ base: Int) -> Bool {
                 vertices[base + 3] != 0 || vertices[base + 4] != 0 || vertices[base + 5] != 0
             }

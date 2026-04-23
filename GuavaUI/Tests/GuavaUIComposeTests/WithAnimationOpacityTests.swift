@@ -49,6 +49,7 @@ struct WithAnimationOpacityTests {
             let graph = ViewGraph(tree: tree, recomposer: recomp)
             let h = OpacityHarness()
             graph.install(root: h)
+            tree.flush()
 
             let node = tree.root?.children.first?.children.first
             #expect(node?.opacity == 0)
@@ -59,9 +60,11 @@ struct WithAnimationOpacityTests {
             recomp.commitAll()
             #expect(node?.opacity == 0)
             #expect(scheduler.activeCount == 1)
+            #expect(node?.renderDirty == false)
 
             scheduler.tick(deltaTime: 0.5)
             #expect(node?.opacity == 0.5)
+            #expect(node?.renderDirty == true)
 
             scheduler.tick(deltaTime: 0.5)
             #expect(node?.opacity == 1.0)
