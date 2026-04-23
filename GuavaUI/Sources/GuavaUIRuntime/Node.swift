@@ -204,6 +204,7 @@ public final class Node: @unchecked Sendable {
         didSet {
             if oldValue != contentOffset {
                 markRenderDirty(reason: .styleSet(field: "contentOffset"))
+                inputNode?.scene?.invalidateHitCache()
             }
         }
     }
