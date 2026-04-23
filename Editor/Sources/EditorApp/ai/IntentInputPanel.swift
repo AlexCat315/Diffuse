@@ -59,6 +59,7 @@ struct IntentInputPanel: View {
                                         transformZ = translation.z
                                     }
                                 }
+                                .buttonStyle(SecondaryButtonStyle())
                                 Button("Set Transform", isEnabled: selection != nil) {
                                     app.submitSetTransformIntent(translation: SIMD3<Float>(transformX,
                                                                                             transformY,
@@ -96,6 +97,7 @@ private struct AIStatusSummary: View {
         Box(direction: .column, alignItems: .stretch, spacing: 6) {
             Text(status ?? "Ready")
                 .font(.bodyStrong)
+                .foregroundColor(status == nil ? .success : .onSurface)
             if warnings.isEmpty {
                 Text("No active warnings")
                     .font(.caption)
@@ -125,7 +127,7 @@ private struct AISection<Content: View>: View {
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 8) {
             Text(title)
-                .font(.caption)
+                .font(.mono)
                 .foregroundColor(.onSurfaceMuted)
             content
         }

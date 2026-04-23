@@ -111,6 +111,35 @@ extension EditorSceneAdapter {
         }
     }
 
+    /// 返回真实 mesh 边线（已变换到世界空间），用于 viewport wireframe overlay。
+    public func viewportWireframeLines(maxEdgesPerMesh: Int = 2_048)
+        -> [(entityID: UInt64, a: SIMD3<Float>, b: SIMD3<Float>)] {
+        guard let extracted = scene.extractedRenderScene else { return [] }
+        var lines: [(entityID: UInt64, a: SIMD3<Float>, b: SIMD3<Float>)] = []
+        lines.reserveCapacity(extracted.scene.instances.count * 256)
+
+        for (idx, entity) in extracted.instanceEntities.enumerated() {
+            let instance = extracted.scene.instances[idx]
+            guard let edges = MeshWireframeRegistry.shared.edges(for: instance.meshIndex),
+                  !edges.isEmpty
+            else {
+                continue
+            }
+            let stride = max(1, edges.count / max(maxEdgesPerMesh, 1))
+            var edgeIndex = 0
+            while edgeIndex < edges.count {
+                let edge = edges[edgeIndex]
+                let wa = instance.transform * SIMD4<Float>(edge.a, 1)
+                let wb = instance.transform * SIMD4<Float>(edge.b, 1)
+                lines.append((entityID: entity.rawValue,
+                              a: SIMD3<Float>(wa.x, wa.y, wa.z),
+                              b: SIMD3<Float>(wb.x, wb.y, wb.z)))
+                edgeIndex += stride
+            }
+        }
+        return lines
+    }
+
     private func worldAABB(forLocalMin lo: SIMD3<Float>,
                            localMax hi: SIMD3<Float>,
                            transformedBy m: simd_float4x4)

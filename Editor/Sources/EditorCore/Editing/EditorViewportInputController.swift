@@ -1,3 +1,4 @@
+import EngineKernel
 import Foundation
 
 /// 视口相机拖拽 / 选择状态的全局持有者。
@@ -16,6 +17,7 @@ public final class EditorViewportInputController: @unchecked Sendable {
     public var leftDownAt: (x: Float, y: Float)?
     public var marqueeStart: (x: Float, y: Float)?
     public var marqueeCurrent: (x: Float, y: Float)?
+    public var modifiers: KeyModifiers = []
 
     public func reset() {
         activeCameraDrag = nil
@@ -23,5 +25,6 @@ public final class EditorViewportInputController: @unchecked Sendable {
         leftDownAt = nil
         marqueeStart = nil
         marqueeCurrent = nil
+        modifiers = []
     }
 }
