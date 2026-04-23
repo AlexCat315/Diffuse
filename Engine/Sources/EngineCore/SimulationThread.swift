@@ -47,6 +47,7 @@ final class SimulationThread: @unchecked Sendable {
     private let runtime: any EngineRuntime
     private let ringBuffer: RingBuffer<RenderPacket>
     private let queue = DispatchQueue(label: "com.guava.engine.simulation", qos: .userInitiated)
+    private let onKernelPhase: @Sendable (EngineKernelPhase, EngineKernelPhaseContext) -> Void
     private let onFrameReady: @Sendable (SimulationFrameReport) -> Void
     private let onPacketPublished: @Sendable () -> Void
 
@@ -58,11 +59,13 @@ final class SimulationThread: @unchecked Sendable {
     init(
         runtime: any EngineRuntime,
         ringBuffer: RingBuffer<RenderPacket>,
+        onKernelPhase: @escaping @Sendable (EngineKernelPhase, EngineKernelPhaseContext) -> Void = { _, _ in },
         onFrameReady: @escaping @Sendable (SimulationFrameReport) -> Void,
         onPacketPublished: @escaping @Sendable () -> Void
     ) {
         self.runtime = runtime
         self.ringBuffer = ringBuffer
+        self.onKernelPhase = onKernelPhase
         self.onFrameReady = onFrameReady
         self.onPacketPublished = onPacketPublished
         sceneRuntime.setScriptDriver(scriptRuntime)
@@ -83,18 +86,30 @@ final class SimulationThread: @unchecked Sendable {
         var inputSeconds = 0.0
         var simulationSeconds = 0.0
         var renderPrepareSeconds = 0.0
+        let frameContext = EngineKernelPhaseContext(
+            frameIndex: UInt64(request.frameIndex),
+            deltaTime: request.deltaTime,
+            inputEvents: request.inputEvents
+        )
 
         var begin = CFAbsoluteTimeGetCurrent()
-        runtime.tickInput(deltaTime: request.deltaTime)
+        onKernelPhase(.input, frameContext)
+        runtime.tickInput(deltaTime: request.deltaTime, inputEvents: request.inputEvents)
         inputSeconds = CFAbsoluteTimeGetCurrent() - begin
 
         begin = CFAbsoluteTimeGetCurrent()
+        onKernelPhase(.simulation, frameContext)
         runtime.tickSimulation(deltaTime: request.deltaTime)
-        sceneRuntime.tick(deltaTime: request.deltaTime)
+        sceneRuntime.tick(
+            deltaTime: request.deltaTime,
+            frameIndex: UInt64(request.frameIndex),
+            inputEvents: request.inputEvents
+        )
         simulationTimeSeconds += request.deltaTime
         simulationSeconds = CFAbsoluteTimeGetCurrent() - begin
 
         begin = CFAbsoluteTimeGetCurrent()
+        onKernelPhase(.renderPrepare, frameContext)
         runtime.tickRenderPrepare(deltaTime: request.deltaTime)
         _ = assetPipeline.validatePath("Content")
         renderPrepareSeconds = CFAbsoluteTimeGetCurrent() - begin

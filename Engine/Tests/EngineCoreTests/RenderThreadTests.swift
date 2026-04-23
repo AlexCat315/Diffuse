@@ -1,4 +1,5 @@
 import Foundation
+import EngineKernel
 import RenderBackend
 import SceneRuntime
 import Testing
@@ -49,6 +50,41 @@ struct RenderThreadTests {
         thread.shutdown()
     }
 
+    @Test("RenderThread emits render submit kernel phase before rendering")
+    func renderThreadEmitsRenderSubmitPhase() {
+        let ring = RingBuffer<RenderPacket>()
+        let runtime = NoopRuntime()
+        let consumer = FastConsumer()
+        let phaseRecorder = PhaseRecorder()
+        let rendered = DispatchSemaphore(value: 0)
+
+        let thread = RenderThread(
+            runtime: runtime,
+            ringBuffer: ring,
+            onKernelPhase: { phase, context in
+                phaseRecorder.append(phase: phase, context: context)
+            },
+            consumer: consumer,
+            onFrameRendered: { _ in
+                rendered.signal()
+            }
+        )
+        thread.start()
+
+        ring.publish(Self.makePacket(frameIndex: 9))
+        thread.requestRender()
+
+        #expect(rendered.wait(timeout: .now() + 2) == .success)
+        let phases = phaseRecorder.snapshot()
+        #expect(phases.count == 1)
+        #expect(phases.first?.phase == .renderSubmit)
+        #expect(phases.first?.context.frameIndex == 9)
+        #expect(phases.first?.context.deltaTime == 1.0 / 60.0)
+        #expect(phases.first?.context.inputEvents.isEmpty == true)
+
+        thread.shutdown()
+    }
+
     private static func makePacket(frameIndex: Int) -> RenderPacket {
         RenderPacket(
             frameIndex: frameIndex,
@@ -67,7 +103,7 @@ struct RenderThreadTests {
 
 private struct NoopRuntime: EngineRuntime {
     func initialize() {}
-    func tickInput(deltaTime: Double) {}
+    func tickInput(deltaTime: Double, inputEvents: [InputEvent]) {}
     func tickSimulation(deltaTime: Double) {}
     func tickRenderPrepare(deltaTime: Double) {}
     func tickRenderSubmit(deltaTime: Double) {}
@@ -120,6 +156,20 @@ private final class TestConsumer: RenderPacketConsumer, @unchecked Sendable {
     }
 }
 
+private final class FastConsumer: RenderPacketConsumer, @unchecked Sendable {
+    func initialize() {}
+
+    func render(packet: RenderPacket) {}
+
+    func currentFrameStats() -> RenderFrameStats {
+        .init()
+    }
+
+    func currentViewportSurfaceState() -> ViewportSurfaceState {
+        .init()
+    }
+}
+
 private final class FrameRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var frames: [Int] = []
@@ -132,5 +182,25 @@ private final class FrameRecorder: @unchecked Sendable {
 
     func snapshot() -> [Int] {
         lock.withLock { frames }
+    }
+}
+
+private final class PhaseRecorder: @unchecked Sendable {
+    struct Entry: Sendable {
+        var phase: EngineKernelPhase
+        var context: EngineKernelPhaseContext
+    }
+
+    private let lock = NSLock()
+    private var entries: [Entry] = []
+
+    func append(phase: EngineKernelPhase, context: EngineKernelPhaseContext) {
+        lock.withLock {
+            entries.append(Entry(phase: phase, context: context))
+        }
+    }
+
+    func snapshot() -> [Entry] {
+        lock.withLock { entries }
     }
 }

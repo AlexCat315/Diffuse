@@ -1,4 +1,5 @@
 import Foundation
+import EngineKernel
 import RenderBackend
 import SceneRuntime
 import Testing
@@ -55,15 +56,123 @@ struct SimulationThreadTests {
 
         thread.shutdown()
     }
+
+    @Test("SimulationThread forwards input events into input phase and SceneRuntime tick")
+    func simulationThreadForwardsInputEvents() {
+        let ring = RingBuffer<RenderPacket>()
+        let runtime = RecordingRuntime()
+        let frameReady = DispatchSemaphore(value: 0)
+        let packetPublished = DispatchSemaphore(value: 0)
+        let phaseRecorder = PhaseRecorder()
+        let inputEvents: [InputEvent] = [
+            .windowFocusGained,
+            .mouseMotion(.init(x: 10, y: 20, deltaX: 1, deltaY: -2))
+        ]
+
+        let thread = SimulationThread(
+            runtime: runtime,
+            ringBuffer: ring,
+            onKernelPhase: { phase, context in
+                phaseRecorder.append(phase: phase, context: context)
+            },
+            onFrameReady: { _ in
+                frameReady.signal()
+            },
+            onPacketPublished: {
+                packetPublished.signal()
+            }
+        )
+
+        thread.submit(
+            SimulationFrameRequest(
+                frameIndex: 7,
+                deltaTime: 1.0 / 30.0,
+                inputEvents: inputEvents,
+                drawableSize: .init(width: 1280, height: 720),
+                shouldRender: true,
+                renderSettings: .init()
+            )
+        )
+
+        #expect(packetPublished.wait(timeout: .now() + 2) == .success)
+        #expect(frameReady.wait(timeout: .now() + 2) == .success)
+
+        let recordedInput = runtime.lastInputCall()
+        #expect(recordedInput?.deltaTime == 1.0 / 30.0)
+        #expect(recordedInput?.eventCount == inputEvents.count)
+
+        guard let packet = ring.consumeLatest() else {
+            Issue.record("expected a render packet from the simulation thread")
+            thread.shutdown()
+            return
+        }
+        #expect(packet.sceneSnapshot.revision > 0)
+
+        let phases = phaseRecorder.snapshot()
+        #expect(phases.map(\.phase) == [.input, .simulation, .renderPrepare])
+        #expect(phases.allSatisfy { $0.context.frameIndex == 7 })
+        #expect(phases[0].context.inputEvents.count == inputEvents.count)
+        #expect(phases[1].context.inputEvents.count == inputEvents.count)
+        #expect(phases[2].context.inputEvents.count == inputEvents.count)
+
+        thread.shutdown()
+    }
 }
 
 private struct IdleRuntime: EngineRuntime {
     func initialize() {}
-    func tickInput(deltaTime: Double) {}
+    func tickInput(deltaTime: Double, inputEvents: [InputEvent]) {}
     func tickSimulation(deltaTime: Double) {}
     func tickRenderPrepare(deltaTime: Double) {}
     func tickRenderSubmit(deltaTime: Double) {}
     func shutdown() {}
+}
+
+private final class RecordingRuntime: @unchecked Sendable, EngineRuntime {
+    private let lock = NSLock()
+    private var lastInputDeltaTime: Double?
+    private var lastInputEventCount = 0
+
+    func initialize() {}
+
+    func tickInput(deltaTime: Double, inputEvents: [InputEvent]) {
+        lock.withLock {
+            lastInputDeltaTime = deltaTime
+            lastInputEventCount = inputEvents.count
+        }
+    }
+
+    func tickSimulation(deltaTime: Double) {}
+    func tickRenderPrepare(deltaTime: Double) {}
+    func tickRenderSubmit(deltaTime: Double) {}
+    func shutdown() {}
+
+    func lastInputCall() -> (deltaTime: Double, eventCount: Int)? {
+        lock.withLock {
+            guard let lastInputDeltaTime else { return nil }
+            return (lastInputDeltaTime, lastInputEventCount)
+        }
+    }
+}
+
+private final class PhaseRecorder: @unchecked Sendable {
+    struct Entry: Sendable {
+        var phase: EngineKernelPhase
+        var context: EngineKernelPhaseContext
+    }
+
+    private let lock = NSLock()
+    private var entries: [Entry] = []
+
+    func append(phase: EngineKernelPhase, context: EngineKernelPhaseContext) {
+        lock.withLock {
+            entries.append(Entry(phase: phase, context: context))
+        }
+    }
+
+    func snapshot() -> [Entry] {
+        lock.withLock { entries }
+    }
 }
 
 private func translation(of matrix: simd_float4x4) -> SIMD3<Float> {
