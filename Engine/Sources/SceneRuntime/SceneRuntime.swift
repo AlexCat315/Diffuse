@@ -1,3 +1,5 @@
+import EngineKernel
+
 public struct SceneRuntimeSnapshot: Sendable, Equatable {
     public var entityCount: Int
     public var revision: UInt64
@@ -5,6 +7,22 @@ public struct SceneRuntimeSnapshot: Sendable, Equatable {
     public init(entityCount: Int = 0, revision: UInt64 = 0) {
         self.entityCount = entityCount
         self.revision = revision
+    }
+}
+
+public struct InputFrameResource: Sendable {
+    public var frameIndex: UInt64
+    public var deltaTimeSeconds: Double
+    public var events: [InputEvent]
+
+    public init(
+        frameIndex: UInt64 = 0,
+        deltaTimeSeconds: Double = 0,
+        events: [InputEvent] = []
+    ) {
+        self.frameIndex = frameIndex
+        self.deltaTimeSeconds = deltaTimeSeconds
+        self.events = events
     }
 }
 
@@ -36,8 +54,19 @@ public struct SceneRuntime {
     }
 
     @discardableResult
-    public mutating func tick(deltaTime: Double = 0) -> RuntimeScheduleReport {
-        schedule.run(world: &world, commands: &commandBuffer, deltaTimeSeconds: deltaTime)
+    public mutating func tick(
+        deltaTime: Double = 0,
+        frameIndex: UInt64 = 0,
+        inputEvents: [InputEvent] = []
+    ) -> RuntimeScheduleReport {
+        world.setDerivedResource(
+            InputFrameResource(
+                frameIndex: frameIndex,
+                deltaTimeSeconds: deltaTime,
+                events: inputEvents
+            )
+        )
+        return schedule.run(world: &world, commands: &commandBuffer, deltaTimeSeconds: deltaTime)
     }
 
     public func contains(_ entity: EntityID) -> Bool {

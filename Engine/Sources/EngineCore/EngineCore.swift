@@ -22,7 +22,7 @@ public struct PhaseTimings: Sendable {
 
 public protocol EngineRuntime: Sendable {
     func initialize()
-    func tickInput(deltaTime: Double)
+    func tickInput(deltaTime: Double, inputEvents: [InputEvent])
     func tickSimulation(deltaTime: Double)
     func tickRenderPrepare(deltaTime: Double)
     func tickRenderSubmit(deltaTime: Double)
@@ -131,6 +131,11 @@ public final class EngineHost: @unchecked Sendable {
             RenderThread(
                 runtime: runtime,
                 ringBuffer: ringBuffer,
+                onKernelPhase: { [weak self] phase, context in
+                    self?.kernel.withLock { kernel in
+                        _ = kernel.tick(phase: phase, context: context)
+                    }
+                },
                 consumer: $0,
                 onFrameRendered: { [weak self] report in
                     self?.handleRenderedFrame(report)
@@ -143,6 +148,11 @@ public final class EngineHost: @unchecked Sendable {
         self.simulationThread = SimulationThread(
             runtime: runtime,
             ringBuffer: ringBuffer,
+            onKernelPhase: { [weak self] phase, context in
+                self?.kernel.withLock { kernel in
+                    _ = kernel.tick(phase: phase, context: context)
+                }
+            },
             onFrameReady: { [weak self] report in
                 self?.handleSimulationFrame(report)
             },
@@ -228,9 +238,6 @@ public final class EngineHost: @unchecked Sendable {
     }
 
     private func handleRenderedFrame(_ report: RenderThreadReport) {
-        kernel.withLock { kernel in
-            _ = kernel.tick(deltaTime: report.deltaTime)
-        }
         timings.withLock { ledger in
             ledger.completeRender(report)
         }
@@ -242,16 +249,23 @@ public final class EngineHost: @unchecked Sendable {
 }
 
 public struct EngineKernelCoordinator: EngineKernel {
-    private var frameIndex: UInt64 = 0
+    private var lastFrameIndex: UInt64 = 0
 
     public init() {}
 
     public mutating func boot() {}
 
-    public mutating func tick(deltaTime: Double) -> EngineKernelFrameReport {
-        _ = deltaTime
-        frameIndex += 1
-        return EngineKernelFrameReport(frameIndex: frameIndex, phaseCount: EngineKernelPhase.allCases.count)
+    public mutating func tick(
+        phase: EngineKernelPhase,
+        context: EngineKernelPhaseContext
+    ) -> EngineKernelFrameReport {
+        lastFrameIndex = max(lastFrameIndex, context.frameIndex)
+        return EngineKernelFrameReport(
+            frameIndex: context.frameIndex,
+            phase: phase,
+            phaseCount: EngineKernelPhase.allCases.count,
+            inputEventCount: context.inputEvents.count
+        )
     }
 
     public mutating func shutdown() {}

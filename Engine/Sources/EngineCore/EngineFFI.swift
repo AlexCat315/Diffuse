@@ -1,4 +1,5 @@
 import CEngineBridge
+import EngineKernel
 
 public struct BridgedEngineRuntime: EngineRuntime {
     public init() {}
@@ -7,7 +8,8 @@ public struct BridgedEngineRuntime: EngineRuntime {
         engine_init()
     }
 
-    public func tickInput(deltaTime: Double) {
+    public func tickInput(deltaTime: Double, inputEvents: [InputEvent]) {
+        _ = inputEvents
         engine_tick_input(deltaTime)
     }
 
