@@ -104,8 +104,8 @@ private struct HierarchyDisclosureIcon: View {
 
     var body: some View {
         Image(resource: HierarchyIconCatalog.disclosureResource(expanded: isExpanded),
-              width: 20,
-              height: 20,
+              width: 16,
+              height: 16,
               tint: .white)
         .foregroundColor(.onSurfaceMuted)
     }
@@ -116,8 +116,8 @@ private struct HierarchyEntityIcon: View {
 
     var body: some View {
         Image(resource: HierarchyIconCatalog.entityResource(for: kind),
-              width: 40,
-              height: 40,
+              width: 18,
+              height: 18,
               tint: .white)
     }
 }

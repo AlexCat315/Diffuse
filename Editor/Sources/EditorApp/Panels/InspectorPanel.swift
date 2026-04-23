@@ -18,8 +18,8 @@ struct InspectorPanel: View {
                     Divider()
 
                     PropertyGrid(propertySections(sections),
-                                 labelWidth: 104,
-                                 rowHeight: 28)
+                                 labelWidth: 100,
+                                 rowHeight: 26)
                         .flex()
                 } else {
                     Box(direction: .column, alignItems: .stretch, spacing: 4) {
@@ -32,7 +32,7 @@ struct InspectorPanel: View {
                     .padding(10)
                 }
             }
-            .frame(minWidth: 300)
+            .frame(minWidth: 340)
         }
     }
 
