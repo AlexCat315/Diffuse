@@ -125,25 +125,27 @@ public final class EventDispatcher {
         let focusedPath = focusChain.focused.map(pathFromRoot)
         let preferredFocusedPath = preferredFocusedWheelPath(from: focusedPath)
 
-        // Nodes can opt into focused-wheel priority so an active inner editor
-        // keeps its own scroll context even while a parent scroll view is hovered.
+        // Wheel delivery is target-first rather than full capture/target/bubble.
+        // Nested scrollables need the deepest target to consume the gesture
+        // before an ancestor ScrollView moves, otherwise inner editors can
+        // never keep their own scroll context.
         if let preferredFocusedPath,
-           deliver(path: preferredFocusedPath, kind: .wheel(event)) == .handled {
+           deliverWheel(path: preferredFocusedPath, event: event) == .handled {
             return
         }
         if let hitPath,
            !sameWheelTarget(hitPath, preferredFocusedPath),
-           deliver(path: hitPath, kind: .wheel(event)) == .handled {
+           deliverWheel(path: hitPath, event: event) == .handled {
             return
         }
         if let focusedPath,
            !sameWheelTarget(focusedPath, preferredFocusedPath),
            !sameWheelTarget(focusedPath, hitPath),
-           deliver(path: focusedPath, kind: .wheel(event)) == .handled {
+           deliverWheel(path: focusedPath, event: event) == .handled {
             return
         }
         guard let root = tree.root else { return }
-        _ = deliver(path: [root], kind: .wheel(event))
+        _ = deliverWheel(path: [root], event: event)
     }
 
     /// Hit-test entry point. Routes through the `InputScene` mirror when
@@ -213,6 +215,23 @@ public final class EventDispatcher {
         // Bubble phase: target's parent → root.
         for node in path.dropLast().reversed() {
             if invoke(node: node, kind: kind, phase: .bubble) == .handled { return .handled }
+        }
+
+        return .ignored
+    }
+
+    private func deliverWheel(path: [Node], event: MouseWheelEvent) -> EventResult {
+        guard !path.isEmpty else { return .ignored }
+
+        if let target = path.last,
+           invoke(node: target, kind: .wheel(event), phase: .target) == .handled {
+            return .handled
+        }
+
+        for node in path.dropLast().reversed() {
+            if invoke(node: node, kind: .wheel(event), phase: .bubble) == .handled {
+                return .handled
+            }
         }
 
         return .ignored
