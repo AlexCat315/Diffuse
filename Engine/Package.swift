@@ -27,6 +27,7 @@ let package = Package(
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
         .executable(name: "SceneRuntimeBenchmarks", targets: ["SceneRuntimeBenchmarks"]),
+        .executable(name: "RenderBackendBenchmarks", targets: ["RenderBackendBenchmarks"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
@@ -158,6 +159,15 @@ let package = Package(
                 "SceneRuntime",
             ],
             path: "Benchmarks/SceneRuntimeBenchmarks"
+        ),
+        .executableTarget(
+            name: "RenderBackendBenchmarks",
+            dependencies: [
+                "RenderBackend",
+                "RHIWGPU",
+                "SceneRuntime",
+            ],
+            path: "Benchmarks/RenderBackendBenchmarks"
         ),
         .testTarget(
             name: "EngineCoreTests",

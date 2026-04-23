@@ -101,6 +101,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
     private var meshPipelineLDR: GPURenderPipeline?
     private var meshPipelineHDR: GPURenderPipeline?
+    private var meshBindGroupLayout: GPUBindGroupLayout?
+    private var meshPipelineLayout: GPUPipelineLayout?
     private var skyboxPipeline: GPURenderPipeline?
     private var tonemapPipeline: GPURenderPipeline?
     private var bloomPipeline: GPURenderPipeline?
@@ -431,8 +433,16 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             )
 
             if shouldEmitPlannerLog(frameIndex: packet.frameIndex) {
+                var seenPasses = Set<RenderPassKind>()
+                let orderedPassStats = framePlan.passes.compactMap { passKind -> String? in
+                    if seenPasses.contains(passKind) {
+                        return nil
+                    }
+                    seenPasses.insert(passKind)
+                    return "\(passKind.rawValue):\(passEncodeNS[passKind, default: 0])"
+                }.joined(separator: ",")
                 Logger.renderer.debug(
-                    "frame_cpu_timing frame=\(packet.frameIndex) prepare_ns=\(cpuPrepareNS) encode_ns=\(cpuEncodeNS) submit_ns=\(cpuSubmitNS) total_ns=\(cpuFrameTotalNS) bundle_record_ns=\(bundleRecordNS) bundles=\(renderBundleCount) bundle_jobs=\(renderBundleParallelJobs)"
+                    "frame_cpu_timing frame=\(packet.frameIndex) prepare_ns=\(cpuPrepareNS) encode_ns=\(cpuEncodeNS) submit_ns=\(cpuSubmitNS) total_ns=\(cpuFrameTotalNS) bundle_record_ns=\(bundleRecordNS) bundles=\(renderBundleCount) bundle_jobs=\(renderBundleParallelJobs) pass_encode_ns=[\(orderedPassStats)]"
                 )
             }
         } catch {
@@ -479,7 +489,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         if shouldEmitPlannerLog(frameIndex: frameIndex) {
             let gen = settingsGeneration
             Logger.renderer.debug(
-                "applied render settings generation=\(gen) stage=\(settings.stage.rawValue) fxaa=\(settings.enableFXAA) ssao=\(settings.enableSSAO) ssr=\(settings.enableSSR) taa=\(settings.enableTAA) bloom=\(settings.enableBloom)"
+                "applied render settings generation=\(gen) stage=\(settings.stage.rawValue) fxaa=\(settings.enableFXAA) ssao=\(settings.enableSSAO) ssr=\(settings.enableSSR) taa=\(settings.enableTAA) bloom=\(settings.enableBloom) bundles=\(settings.enableRenderBundles) grouped=\(settings.enableGroupedDrawByMesh) chunk=\(settings.renderBundleChunkSize)"
             )
         }
     }
@@ -684,9 +694,26 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             label: "mesh"
         )
 
+        if meshBindGroupLayout == nil {
+            meshBindGroupLayout = try backend.createBindGroupLayout(
+                entries: [
+                    GPUBindGroupLayoutEntry(
+                        binding: 0,
+                        visibility: .vertex,
+                        type: .uniformBuffer,
+                        hasDynamicOffset: true
+                    )
+                ]
+            )
+        }
+        if meshPipelineLayout == nil, let meshBindGroupLayout {
+            meshPipelineLayout = try backend.createPipelineLayout(bindGroupLayouts: [meshBindGroupLayout])
+        }
+
         let pipeline = try backend.createRenderPipeline(
             desc: GPURenderPipelineDescriptor(
                 shaderModule: module,
+                pipelineLayout: meshPipelineLayout,
                 colorFormat: hdr ? hdrFormat : format,
                 cullMode: .back,
                 vertexBuffers: [makeMeshVertexLayout()],
@@ -748,7 +775,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private func ensureInstanceResources(instanceCount: Int, pipeline: GPURenderPipeline) throws {
 
         let useDynamicOffsets = instanceCount > dynamicOffsetThreshold
-        let bindGroupLayout = try pipeline.getBindGroupLayout(group: 0)
+        let bindGroupLayout: GPUBindGroupLayout
+        if let meshBindGroupLayout {
+            bindGroupLayout = meshBindGroupLayout
+        } else {
+            bindGroupLayout = try pipeline.getBindGroupLayout(group: 0)
+        }
 
         if useDynamicOffsets {
             if let dyn = dynamicInstanceResources, dyn.capacity >= instanceCount {
@@ -1067,18 +1099,23 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         colorLoadOp: GPULoadOp,
         depthLoadOp: GPULoadOp
     ) throws -> BasePassEncodingReport {
-        let bundleReport = try encodeBasePassWithRenderBundles(
-            encoder: encoder,
-            colorView: colorView,
-            depthView: depthView,
-            pipeline: pipeline,
-            scene: scene,
-            colorFormat: colorFormat,
-            colorLoadOp: colorLoadOp,
-            depthLoadOp: depthLoadOp
-        )
-        if bundleReport.renderBundleCount > 0 {
-            return bundleReport
+        let drawOrder = makeBasePassDrawOrder(scene: scene)
+
+        if activeRenderSettings.enableRenderBundles {
+            let bundleReport = try encodeBasePassWithRenderBundles(
+                encoder: encoder,
+                colorView: colorView,
+                depthView: depthView,
+                pipeline: pipeline,
+                scene: scene,
+                drawOrder: drawOrder,
+                colorFormat: colorFormat,
+                colorLoadOp: colorLoadOp,
+                depthLoadOp: depthLoadOp
+            )
+            if bundleReport.renderBundleCount > 0 {
+                return bundleReport
+            }
         }
 
         let pass = try encoder.beginRenderPass(
@@ -1095,7 +1132,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         pass.setPipeline(pipeline)
         var drawCallCount = 0
         if let dyn = dynamicInstanceResources {
-            for (i, instance) in scene.instances.enumerated() {
+            for i in drawOrder {
+                let instance = scene.instances[i]
                 guard meshes.indices.contains(instance.meshIndex) else { continue }
                 let mesh = meshes[instance.meshIndex]
                 let drawOffset = UInt64(i) * dyn.stride
@@ -1107,10 +1145,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 drawCallCount += 1
             }
         } else {
-            for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
+            for i in drawOrder where i < instanceResources.count {
+                let instance = scene.instances[i]
                 guard meshes.indices.contains(instance.meshIndex) else { continue }
                 let mesh = meshes[instance.meshIndex]
-                pass.setBindGroup(instanceResources[i].bindGroup, index: 0)
+                pass.setBindGroup(instanceResources[i].bindGroup, index: 0, dynamicOffsets: [0])
                 pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
                 pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
                 pass.drawIndexed(indexCount: mesh.indexCount)
@@ -1133,6 +1172,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         depthView: GPUTextureView,
         pipeline: GPURenderPipeline,
         scene: RenderScene,
+        drawOrder: [Int],
         colorFormat: GPUTextureFormat,
         colorLoadOp: GPULoadOp,
         depthLoadOp: GPULoadOp
@@ -1147,8 +1187,13 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         }
 
         let instanceCount = scene.instances.count
-        let workerCount = max(1, ProcessInfo.processInfo.activeProcessorCount)
-        let chunkTarget = max(64, (instanceCount + (workerCount * 2) - 1) / (workerCount * 2))
+        let chunkTarget: Int
+        if activeRenderSettings.renderBundleChunkSize > 0 {
+            chunkTarget = max(1, activeRenderSettings.renderBundleChunkSize)
+        } else {
+            let workerCount = max(1, ProcessInfo.processInfo.activeProcessorCount)
+            chunkTarget = max(64, (instanceCount + (workerCount * 2) - 1) / (workerCount * 2))
+        }
 
         var ranges: [Range<Int>] = []
         ranges.reserveCapacity((instanceCount + chunkTarget - 1) / chunkTarget)
@@ -1227,16 +1272,17 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
                 var localDrawCount = 0
                 for i in finalRanges[rangeIndex] {
-                    let instance = localSceneInstances[i]
+                    let drawIndex = drawOrder[i]
+                    let instance = localSceneInstances[drawIndex]
                     guard localMeshes.indices.contains(instance.meshIndex) else { continue }
                     let mesh = localMeshes[instance.meshIndex]
                     if let dyn = localDynamicResources {
-                        let drawOffset = UInt64(i) * dyn.stride
+                        let drawOffset = UInt64(drawIndex) * dyn.stride
                         guard drawOffset <= UInt64(UInt32.max) else { continue }
                         bundleEncoder.setBindGroup(dyn.bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
                     } else {
-                        guard i < localInstanceResources.count else { continue }
-                        bundleEncoder.setBindGroup(localInstanceResources[i].bindGroup, index: 0)
+                        guard drawIndex < localInstanceResources.count else { continue }
+                        bundleEncoder.setBindGroup(localInstanceResources[drawIndex].bindGroup, index: 0, dynamicOffsets: [0])
                     }
                     bundleEncoder.setVertexBuffer(mesh.vertexBuffer, slot: 0)
                     bundleEncoder.setIndexBuffer(mesh.indexBuffer, format: .uint32)
@@ -1285,6 +1331,26 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             parallelJobCount: finalRanges.count,
             bundleRecordNS: DispatchTime.now().uptimeNanoseconds - bundleRecordStartNS
         )
+    }
+
+    private func makeBasePassDrawOrder(scene: RenderScene) -> [Int] {
+        let instances = scene.instances
+        guard activeRenderSettings.enableGroupedDrawByMesh else {
+            return Array(instances.indices)
+        }
+
+        var buckets: [Int: [Int]] = [:]
+        buckets.reserveCapacity(max(2, meshes.count))
+        for index in instances.indices {
+            buckets[instances[index].meshIndex, default: []].append(index)
+        }
+
+        var order: [Int] = []
+        order.reserveCapacity(instances.count)
+        for meshIndex in buckets.keys.sorted() {
+            order.append(contentsOf: buckets[meshIndex] ?? [])
+        }
+        return order
     }
 
     private func encodeBloomPass(

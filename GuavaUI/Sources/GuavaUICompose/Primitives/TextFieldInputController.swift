@@ -67,13 +67,14 @@ extension TextField {
             registry.setWheel(node) { event, _ in
                 textField.refreshScrollableMetrics(state: state, node: node)
                 guard state.maxScrollY > 0 else { return .ignored }
+                let previousOffset = state.scrollOffsetY
                 let nextOffset = clamp(state.scrollOffsetY - event.y * TextField.multilineWheelStep,
                                        0,
                                        state.maxScrollY)
-                guard nextOffset != state.scrollOffsetY else { return .handled }
                 state.scrollOffsetY = nextOffset
                 node.contentOffset = CGPoint(x: 0, y: CGFloat(nextOffset))
-                return .handled
+                return ScrollConsumePolicy.whenOffsetChanged
+                    .result(didScroll: nextOffset != previousOffset)
             }
         }
     }

@@ -87,6 +87,12 @@ enum DemoFrameMode: String {
     case benchmark = "Benchmark"
 }
 
+enum DemoRenderMode: String, CaseIterable {
+    case forward = "Forward"
+    case deferred = "Deferred"
+    case pathTracing = "Path Tracing"
+}
+
 enum DemoFrameModeHolder {
     nonisolated(unsafe) static var current: DemoFrameMode = .idle
 }
@@ -119,6 +125,9 @@ struct RootView: View {
     @State var numberValue: Float = 3.14
     @State var tabSelection: String = "tab1"
     @State var frameMode: DemoFrameMode = DemoFrameModeHolder.current
+    @State var showToolsMenu: Bool = false
+    @State var selectedQualityProfile: String = "High"
+    @State var renderMode: DemoRenderMode = .deferred
 
     enum NavSection: String, Hashable, CaseIterable, Identifiable {
         case components, tokens, layouts, console
@@ -133,7 +142,7 @@ struct RootView: View {
         }
         var hint: String {
             switch self {
-            case .components: return "Buttons · TextFields · Sliders · Toggles · NumberField · IconButton"
+            case .components: return "Buttons · TextFields · Sliders · Toggles · NumberField · Popover · Menu · Select"
             case .tokens:     return "Surfaces · Accent · State layers · Typography"
             case .layouts:    return "Tree · List · SplitView · TabView · Panel · PropertyGrid"
             case .console:    return "Streaming log feed"
@@ -480,6 +489,73 @@ struct RootView: View {
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
                     Spacer(minLength: 0)
+                }
+            }
+
+            card("Popover · Menu · Select · EnumField") {
+                Column(alignment: .leading, spacing: 10) {
+                    Row(alignment: .center, spacing: 12) {
+                        Popover(isPresented: $showToolsMenu, width: 220) {
+                            Row(alignment: .center, spacing: 8) {
+                                Text("Tools")
+                                    .font(.bodyStrong)
+                                    .foregroundColor(.onSurface)
+                                Text(showToolsMenu ? "▲" : "▼")
+                                    .font(.caption)
+                                    .foregroundColor(.onSurfaceMuted)
+                            }
+                            .padding(horizontal: 10, vertical: 8)
+                            .background(.surface)
+                            .cornerRadius(6)
+                            .border(Color(red: 58, green: 64, blue: 78), width: 1)
+                        } content: {
+                            Menu([
+                                .item(MenuItem(id: "duplicate", title: "Duplicate", shortcut: "⌘D") {
+                                    clickCount += 1
+                                }),
+                                .item(MenuItem(id: "rename", title: "Rename", shortcut: "Return") {
+                                    clickCount += 1
+                                }),
+                                .separator("tools-sep-1"),
+                                .item(MenuItem(id: "delete",
+                                               title: "Delete",
+                                               shortcut: "Delete",
+                                               role: .destructive) {
+                                    clickCount += 1
+                                }),
+                            ], width: 220, onItemActivated: {
+                                showToolsMenu = false
+                            })
+                        }
+                        Spacer(minLength: 0)
+                    }
+
+                    Row(alignment: .center, spacing: 12) {
+                        Text("Profile")
+                            .font(.body)
+                            .foregroundColor(.onSurface)
+                            .frame(width: 90)
+                        Select(selection: $selectedQualityProfile,
+                               options: [
+                                SelectOption(value: "Low", label: "Low"),
+                                SelectOption(value: "Medium", label: "Medium"),
+                                SelectOption(value: "High", label: "High"),
+                                SelectOption(value: "Ultra", label: "Ultra"),
+                               ],
+                               width: 180)
+                        Spacer(minLength: 0)
+                    }
+
+                    Row(alignment: .center, spacing: 12) {
+                        Text("Render")
+                            .font(.body)
+                            .foregroundColor(.onSurface)
+                            .frame(width: 90)
+                        EnumField(value: $renderMode,
+                                  width: 180,
+                                  label: { $0.rawValue })
+                        Spacer(minLength: 0)
+                    }
                 }
             }
         }
