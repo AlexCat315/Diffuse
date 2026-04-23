@@ -567,10 +567,13 @@ struct RootView: View {
     }
 
     private func statusChip(_ name: String, ref: SemanticColorRef) -> some View {
-        Text(name.uppercased())
-            .font(.label)
-            .foregroundColor(.onAccent)
-            .padding(horizontal: 10, vertical: 4)
+        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            Text(name.uppercased())
+                .font(.label)
+                .foregroundColor(.onAccent)
+                .padding(horizontal: 10)
+        }
+            .frame(height: 22)
             .background(ref)
             .cornerRadius(9999)
     }
