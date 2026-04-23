@@ -262,6 +262,25 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         #expect(Float(node.frame.height) > 32)
     } }
 
+    @Test("TextField renders CJK glyphs through font fallback")
+    func rendersCJKGlyphs() { GlobalTestLock.locked {
+        let rig = makeRig()
+        rig.store.value = "你"
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        rig.graph.install(root:
+            TextField(text: makeBinding(rig.store))
+        )
+
+        let node = rig.tree.root!.children.first!
+        node.frame = CGRect(x: 0, y: 0, width: 180, height: 28)
+
+        let list = DrawList()
+        node.draw?(list, CGPoint.zero)
+
+        #expect(list.indices.count >= 6)
+    } }
+
     // MARK: - Phase 6.4d — selection + modifiers + clipboard
 
     private func key(_ scancode: UInt32, shift: Bool = false, cmd: Bool = false) -> KeyEvent {
