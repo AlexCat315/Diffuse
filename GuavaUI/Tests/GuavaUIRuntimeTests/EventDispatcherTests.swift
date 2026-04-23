@@ -153,4 +153,41 @@ struct EventDispatcherTests {
         dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: 240, y: 240, deltaX: 1, deltaY: 1)))
         #expect(box.recorder.hover == ["mid:leave", "root:leave"])
     }
+
+    @Test("mouseWheel delivers to the deepest target before ancestors")
+    func wheelPrefersDeepestTarget() {
+        let tree = NodeTree()
+        let interactions = InteractionRegistry()
+        let capture = PointerCapture()
+        let focus = FocusChain()
+        let box = Box()
+
+        let root = makeNode(name: "root",
+                            frame: CGRect(x: 0, y: 0, width: 200, height: 200),
+                            interactions: interactions, box: box)
+        let mid = makeNode(name: "mid",
+                           frame: CGRect(x: 10, y: 10, width: 100, height: 100),
+                           interactions: interactions, box: box, handle: true)
+        let leaf = makeNode(name: "leaf",
+                            frame: CGRect(x: 5, y: 5, width: 30, height: 30),
+                            interactions: interactions, box: box, handle: true)
+        root.addChild(mid)
+        mid.addChild(leaf)
+        tree.root = root
+
+        let dispatcher = EventDispatcher(
+            tree: tree,
+            interactions: interactions,
+            capture: capture,
+            focusChain: focus
+        )
+
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: 20, y: 20, deltaX: 0, deltaY: 0)))
+        box.recorder = Recorder()
+        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -1)))
+
+        #expect(box.recorder.capture.isEmpty)
+        #expect(box.recorder.target == ["leaf"])
+        #expect(box.recorder.bubble.isEmpty)
+    }
 }
