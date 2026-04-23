@@ -72,18 +72,18 @@ private struct ConfirmationQuestionCard: View {
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 8) {
-            Text(question.promptShort)
-                .font(.bodyStrong)
+            Row(alignment: .center, spacing: 8) {
+                Text(question.promptShort)
+                    .font(.bodyStrong)
+                    .flex()
+                SeverityBadge(severity: question.severity, reversible: question.reversible)
+            }
 
             if let detail = question.promptDetail {
                 Text(detail)
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
             }
-
-            Text("severity: \(question.severity.rawValue) · reversible: \(question.reversible ? "yes" : "no")")
-                .font(.caption)
-                .foregroundColor(question.severity == .destructive ? .warning : .onSurfaceMuted)
 
             Row(alignment: .center, spacing: 8) {
                 for option in question.options {
@@ -98,5 +98,31 @@ private struct ConfirmationQuestionCard: View {
         .padding(10)
         .background(question.severity == .destructive ? .surfaceSunken : .surfaceOverlay)
         .cornerRadius(2)
+    }
+}
+
+private struct SeverityBadge: View {
+    let severity: ConfirmationSeverity
+    let reversible: Bool
+
+    init(severity: ConfirmationSeverity, reversible: Bool) {
+        self.severity = severity
+        self.reversible = reversible
+    }
+
+    var body: some View {
+        let (label, color): (String, SemanticColorRef) = {
+            switch severity {
+            case .destructive: return (reversible ? "destructive" : "destructive ·  perm", .error)
+            case .warn:        return ("warn", .warning)
+            default:           return ("info", .onSurfaceMuted)
+            }
+        }()
+        Text(label)
+            .font(.label)
+            .foregroundColor(color)
+            .padding(horizontal: 6, vertical: 2)
+            .background(.surfaceSunken)
+            .cornerRadius(2)
     }
 }

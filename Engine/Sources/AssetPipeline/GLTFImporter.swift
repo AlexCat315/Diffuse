@@ -41,17 +41,26 @@ public enum GLTFImporterError: Error, CustomStringConvertible {
 
 public enum GLTFImporter {
     public static func load(path: String) throws -> MeshAsset {
+        try loadWithTopology(path: path).mesh
+    }
+
+    public static func loadWithTopology(path: String) throws -> (mesh: MeshAsset, topologies: [MeshTopologySlice]) {
         let url = URL(fileURLWithPath: path)
         guard FileManager.default.fileExists(atPath: url.path) else {
             throw GLTFImporterError.fileNotFound(path)
         }
         let data = try Data(contentsOf: url)
-        return try parse(data: data,
-                         baseURL: url.deletingLastPathComponent(),
-                         name: url.lastPathComponent)
+        return try parseWithTopology(data: data,
+                                     baseURL: url.deletingLastPathComponent(),
+                                     name: url.lastPathComponent)
     }
 
     static func parse(data: Data, baseURL: URL, name: String) throws -> MeshAsset {
+        try parseWithTopology(data: data, baseURL: baseURL, name: name).mesh
+    }
+
+    static func parseWithTopology(data: Data, baseURL: URL, name: String)
+        throws -> (mesh: MeshAsset, topologies: [MeshTopologySlice]) {
         let document: GLTFDocument
         do {
             document = try JSONDecoder().decode(GLTFDocument.self, from: data)
@@ -69,7 +78,7 @@ public enum GLTFImporter {
         for nodeIndex in rootNodes {
             try builder.consumeNode(index: nodeIndex, parentTransform: matrix_identity_float4x4)
         }
-        return try builder.makeMesh(name: name)
+        return try builder.makeMeshWithTopology(name: name)
     }
 
     private static func rootNodeIndices(in document: GLTFDocument) throws -> [Int] {
@@ -132,6 +141,7 @@ private struct MeshBuilder {
     var vertices: [Float] = []
     var indices: [UInt32] = []
     var nextIndex: UInt32 = 0
+    var topologies: [MeshTopologySlice] = []
 
     mutating func consumeNode(index: Int, parentTransform: simd_float4x4) throws {
         guard let node = document.nodes?[safe: index] else {
@@ -164,6 +174,18 @@ private struct MeshBuilder {
             let normals = try primitive.attributes["NORMAL"].map(readFloat3Accessor)
             let primitiveIndices = try primitive.indices.map(readIndexAccessor)
                 ?? Array(0..<positions.count)
+
+            let topologyPositions = positions.map { local in
+                let p = transform * SIMD4<Float>(local.x, local.y, local.z, 1)
+                return SIMD3<Float>(p.x, p.y, p.z)
+            }
+            let topologyIndices = primitiveIndices.map(UInt32.init)
+            topologies.append(
+                MeshTopologySlice(positions: topologyPositions,
+                                  triangleIndices: topologyIndices,
+                                  indexRemap: nil)
+            )
+
             let basis = simd_float3x3(columns: (
                 SIMD3<Float>(transform.columns.0.x, transform.columns.0.y, transform.columns.0.z),
                 SIMD3<Float>(transform.columns.1.x, transform.columns.1.y, transform.columns.1.z),
@@ -251,12 +273,16 @@ private struct MeshBuilder {
     }
 
     func makeMesh(name: String) throws -> MeshAsset {
+        try makeMeshWithTopology(name: name).mesh
+    }
+
+    func makeMeshWithTopology(name: String) throws -> (mesh: MeshAsset, topologies: [MeshTopologySlice]) {
         guard !vertices.isEmpty else {
             throw GLTFImporterError.invalidAccessor("gltf produced no triangles")
         }
         var mesh = MeshAsset(name: name, vertices: vertices, indices: indices)
         MeshNormalTools.fillMissingNormals(vertices: &mesh.vertices, indices: mesh.indices)
-        return mesh
+        return (mesh, topologies)
     }
 
     private func accessor(at index: Int) throws -> GLTFAccessor {

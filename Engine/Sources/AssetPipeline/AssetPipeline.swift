@@ -78,6 +78,22 @@ public struct MeshAsset: Sendable {
     }
 }
 
+/// 子网格拓扑切片：可用于 wireframe、调试渲染或后续子网格重建。
+/// `indexRemap` 允许把局部 primitive 索引映射到共享顶点池。
+public struct MeshTopologySlice: Sendable {
+    public var positions: [SIMD3<Float>]
+    public var triangleIndices: [UInt32]
+    public var indexRemap: [UInt32]?
+
+    public init(positions: [SIMD3<Float>],
+                triangleIndices: [UInt32],
+                indexRemap: [UInt32]? = nil) {
+        self.positions = positions
+        self.triangleIndices = triangleIndices
+        self.indexRemap = indexRemap
+    }
+}
+
 // MARK: - Built-in Cube
 
 public enum BuiltinMesh {
