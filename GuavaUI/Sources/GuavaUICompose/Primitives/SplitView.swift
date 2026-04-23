@@ -10,7 +10,7 @@ public struct SplitView<First: View, Second: View>: View {
     public let fraction: Float
     public let spacing: Float
     public let dividerThickness: Float
-    public let dividerColor: Color
+    public let dividerColor: Color?
     public let first: First
     public let second: Second
 
@@ -18,7 +18,7 @@ public struct SplitView<First: View, Second: View>: View {
                 fraction: Float = 0.5,
                 spacing: Float = 0,
                 dividerThickness: Float = 1,
-                dividerColor: Color = Color(r: 0.23, g: 0.26, b: 0.31),
+                dividerColor: Color? = nil,
                 @ViewBuilder first: () -> First,
                 @ViewBuilder second: () -> Second) {
         self.axis = axis

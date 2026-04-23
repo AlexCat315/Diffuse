@@ -1,0 +1,181 @@
+{
+  "programs": [
+    {
+      "name": "terrain",
+      "vertex": "WGSL/terrain.wgsl",
+      "fragment": "WGSL/terrain.wgsl"
+    },
+    {
+      "name": "depth_prepass",
+      "vertex": "WGSL/depth_prepass.wgsl",
+      "fragment": "WGSL/depth_prepass.wgsl"
+    },
+    {
+      "name": "id_pass",
+      "vertex": "WGSL/id_pass.wgsl",
+      "fragment": "WGSL/id_pass.wgsl"
+    },
+    {
+      "name": "velocity",
+      "vertex": "WGSL/velocity.wgsl",
+      "fragment": "WGSL/velocity.wgsl"
+    },
+    {
+      "name": "mesh",
+      "vertex": "WGSL/mesh.wgsl",
+      "fragment": "WGSL/mesh.wgsl"
+    },
+    {
+      "name": "wireframe",
+      "vertex": "WGSL/wireframe.wgsl",
+      "fragment": "WGSL/wireframe.wgsl"
+    },
+    {
+      "name": "outline",
+      "vertex": "WGSL/outline.wgsl",
+      "fragment": "WGSL/outline.wgsl"
+    },
+    {
+      "name": "gizmo",
+      "vertex": "WGSL/gizmo.wgsl",
+      "fragment": "WGSL/gizmo.wgsl"
+    },
+    {
+      "name": "shadow_pass",
+      "vertex": "WGSL/shadow_pass.wgsl",
+      "fragment": "WGSL/shadow_pass.wgsl"
+    },
+    {
+      "name": "omni_shadow_pass",
+      "vertex": "WGSL/shadow_pass.wgsl",
+      "fragment": "WGSL/shadow_pass.wgsl"
+    },
+    {
+      "name": "tonemap",
+      "vertex": "WGSL/tonemap.wgsl",
+      "fragment": "WGSL/tonemap.wgsl"
+    },
+    {
+      "name": "bloom",
+      "vertex": "WGSL/bloom.wgsl",
+      "fragment": "WGSL/bloom.wgsl"
+    },
+    {
+      "name": "fxaa",
+      "vertex": "WGSL/fxaa.wgsl",
+      "fragment": "WGSL/fxaa.wgsl"
+    },
+    {
+      "name": "skybox",
+      "vertex": "WGSL/skybox.wgsl",
+      "fragment": "WGSL/skybox.wgsl"
+    },
+    {
+      "name": "ssao",
+      "vertex": "WGSL/ssao.wgsl",
+      "fragment": "WGSL/ssao.wgsl"
+    },
+    {
+      "name": "ssr",
+      "vertex": "WGSL/ssr.wgsl",
+      "fragment": "WGSL/ssr.wgsl"
+    },
+    {
+      "name": "ssr_blur",
+      "vertex": "WGSL/blur_9tap.wgsl",
+      "fragment": "WGSL/blur_9tap.wgsl"
+    },
+    {
+      "name": "taa",
+      "vertex": "WGSL/taa.wgsl",
+      "fragment": "WGSL/taa.wgsl"
+    },
+    {
+      "name": "dof_coc",
+      "vertex": "WGSL/dof_coc.wgsl",
+      "fragment": "WGSL/dof_coc.wgsl"
+    },
+    {
+      "name": "dof_blur",
+      "vertex": "WGSL/blur_9tap.wgsl",
+      "fragment": "WGSL/blur_9tap.wgsl"
+    },
+    {
+      "name": "dof_composite",
+      "vertex": "WGSL/dof_composite.wgsl",
+      "fragment": "WGSL/dof_composite.wgsl"
+    },
+    {
+      "name": "volumetric_fog",
+      "vertex": "WGSL/volumetric_fog.wgsl",
+      "fragment": "WGSL/volumetric_fog.wgsl"
+    },
+    {
+      "name": "rt_shadow_composite",
+      "vertex": "WGSL/mask_composite.wgsl",
+      "fragment": "WGSL/mask_composite.wgsl"
+    },
+    {
+      "name": "rt_shadow_denoise",
+      "vertex": "WGSL/blur_9tap.wgsl",
+      "fragment": "WGSL/blur_9tap.wgsl"
+    },
+    {
+      "name": "contact_shadow",
+      "vertex": "WGSL/contact_shadow.wgsl",
+      "fragment": "WGSL/contact_shadow.wgsl"
+    },
+    {
+      "name": "ssgi_composite",
+      "vertex": "WGSL/mask_composite.wgsl",
+      "fragment": "WGSL/mask_composite.wgsl"
+    },
+    {
+      "name": "ui",
+      "vertex": "WGSL/ui.wgsl",
+      "fragment": "WGSL/ui.wgsl"
+    },
+    {
+      "name": "fog_of_war",
+      "vertex": "WGSL/fog_of_war.wgsl",
+      "fragment": "WGSL/fog_of_war.wgsl"
+    }
+  ],
+  "compute_programs": [
+    {
+      "name": "ssao_compute",
+      "compute": "WGSL/ssao_compute.wgsl",
+      "threadcount_x": 8,
+      "threadcount_y": 8,
+      "threadcount_z": 1
+    },
+    {
+      "name": "brdf_lut",
+      "compute": "WGSL/brdf_lut.wgsl",
+      "threadcount_x": 8,
+      "threadcount_y": 8,
+      "threadcount_z": 1
+    },
+    {
+      "name": "irradiance_convolve",
+      "compute": "WGSL/irradiance_convolve.wgsl",
+      "threadcount_x": 8,
+      "threadcount_y": 8,
+      "threadcount_z": 1
+    },
+    {
+      "name": "ssgi_compute",
+      "compute": "WGSL/ssgi_compute.wgsl",
+      "threadcount_x": 8,
+      "threadcount_y": 8,
+      "threadcount_z": 1
+    },
+    {
+      "name": "cluster_lights",
+      "compute": "WGSL/cluster_lights.wgsl",
+      "threadcount_x": 64,
+      "threadcount_y": 1,
+      "threadcount_z": 1
+    }
+  ]
+}

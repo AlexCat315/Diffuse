@@ -81,7 +81,7 @@ public enum WGPUBackendError: Error {
     case initFailed(String)
 }
 
-public final class WGPUBackend {
+public final class WGPUBackend: @unchecked Sendable {
     public private(set) var state: WGPUBackendState = .uninitialized
     public private(set) var config: WGPUDeviceConfig
     private var instance: UnsafeMutableRawPointer?
@@ -425,6 +425,9 @@ public final class WGPUBackend {
     public func writeTexture(_ texture: GPUTexture,
                              data: UnsafeRawPointer,
                              dataSize: Int,
+                            originX: UInt32 = 0,
+                            originY: UInt32 = 0,
+                            originZ: UInt32 = 0,
                              bytesPerRow: UInt32,
                              rowsPerImage: UInt32,
                              width: UInt32,
@@ -433,6 +436,7 @@ public final class WGPUBackend {
                              mipLevel: UInt32 = 0) {
         guard let queue else { return }
         wgpu_bridge_write_texture(queue, texture.handle, mipLevel,
+                                originX, originY, originZ,
                                   data, dataSize,
                                   bytesPerRow, rowsPerImage,
                                   width, height, depthOrLayers)
@@ -819,5 +823,3 @@ public final class WGPUBackend {
         }
     }
 }
-
-extension WGPUBackend: @unchecked Sendable {}

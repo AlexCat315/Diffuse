@@ -20,6 +20,22 @@ public final class LayoutNode: @unchecked Sendable {
     /// of Yoga's native style surface.
     public var attachments: [String: Any] = [:]
 
+    // MARK: - Phase 6: typed text measure slot
+    //
+    // The text-measure cache used to live in two places: an NSMapTable on
+    // `LayoutTree` plus a stringly-keyed entry in `attachments`. With the
+    // small types lifted into Runtime (`TextMeasureSlot.swift`), the cache
+    // becomes a single stored property here and `LayoutTree` no longer
+    // needs the side table at all.
+
+    /// Cached shape+layout result. Written by the measure callback, read
+    /// by the draw callback. `nil` until the first measure runs.
+    public var textMeasure: TextLayoutCacheEntry?
+
+    /// Last-seen text measure inputs. `_updateLayout` compares the previous
+    /// value against the next to decide whether to mark the node dirty.
+    public var textInputs: TextMeasureInputs?
+
     // MARK: - Init / deinit
 
     public init() {
@@ -40,6 +56,33 @@ public final class LayoutNode: @unchecked Sendable {
     public func removeChild(_ child: LayoutNode) {
         YGNodeRemoveChild(ygNode, child.ygNode)
         children.removeAll { $0 === child }
+    }
+
+    /// Reassign this node's children to `ordered` (which must be exactly the
+    /// same set as the current children). Used by the keyed reconciler after
+    /// reordering the matching `Node` tree, so Yoga sees siblings in the same
+    /// final sequence.
+    public func reorderChildren(_ ordered: [LayoutNode]) {
+        precondition(ordered.count == children.count,
+                     "LayoutNode.reorderChildren: count mismatch")
+        let currentIDs = Set(children.map { ObjectIdentifier($0) })
+        let nextIDs = Set(ordered.map { ObjectIdentifier($0) })
+        precondition(currentIDs == nextIDs,
+                     "LayoutNode.reorderChildren: membership mismatch")
+        if children.elementsEqual(ordered, by: { $0 === $1 }) {
+            return
+        }
+        // Yoga's removeChild + insertChild keeps the YGNode wired to this
+        // parent across the reorder; we rebuild the sequence under the same
+        // YGNode. Children's heap allocations stay alive via `self.children`
+        // throughout.
+        for c in children {
+            YGNodeRemoveChild(ygNode, c.ygNode)
+        }
+        for (index, c) in ordered.enumerated() {
+            YGNodeInsertChild(ygNode, c.ygNode, index)
+        }
+        children = ordered
     }
 
     // MARK: - Style setters (container)
@@ -121,6 +164,13 @@ public final class LayoutNode: @unchecked Sendable {
         }
     }
 
+    public var minWidth: Float? {
+        didSet {
+            if let w = minWidth { YGNodeStyleSetMinWidth(ygNode, w) }
+            else { YGNodeStyleSetMinWidth(ygNode, .nan) }
+        }
+    }
+
     public func setWidthPercent(_ value: Float) {
         YGNodeStyleSetWidthPercent(ygNode, value)
     }
@@ -129,6 +179,13 @@ public final class LayoutNode: @unchecked Sendable {
         didSet {
             if let h = height { YGNodeStyleSetHeight(ygNode, h) }
             else { YGNodeStyleSetHeightAuto(ygNode) }
+        }
+    }
+
+    public var minHeight: Float? {
+        didSet {
+            if let h = minHeight { YGNodeStyleSetMinHeight(ygNode, h) }
+            else { YGNodeStyleSetMinHeight(ygNode, .nan) }
         }
     }
 
@@ -204,6 +261,14 @@ public final class LayoutNode: @unchecked Sendable {
         direction: Direction = .ltr
     ) {
         YGNodeCalculateLayout(ygNode, availableWidth, availableHeight, direction.ygValue)
+    }
+
+    /// True when this node or any descendant still needs a Yoga layout pass.
+    public var subtreeIsDirty: Bool {
+        if YGNodeIsDirty(ygNode) {
+            return true
+        }
+        return children.contains { $0.subtreeIsDirty }
     }
 
     // MARK: - Layout readback

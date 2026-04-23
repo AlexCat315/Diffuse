@@ -82,6 +82,27 @@ struct TextTests {
         #expect(!nonZero)
     }
 
+    @Test("HiDPI atlas keeps logical metrics while increasing bitmap resolution")
+    func hidpiAtlasMetrics() {
+        let base = FontAtlas(width: 512, height: 512)
+        base.loadFont(path: testFontPath, size: 24)
+
+        let hidpi = FontAtlas(width: 1024, height: 1024)
+        hidpi.loadFont(path: testFontPath, size: 24, rasterScale: 2)
+
+        let baseInfo = base.rasterizeCodepoint(0x41)
+        let hidpiInfo = hidpi.rasterizeCodepoint(0x41)
+        #expect(baseInfo != nil)
+        #expect(hidpiInfo != nil)
+
+        let basePhysicalWidth = (baseInfo!.uvMaxX - baseInfo!.uvMinX) * Float(base.atlasWidth)
+        let hidpiPhysicalWidth = (hidpiInfo!.uvMaxX - hidpiInfo!.uvMinX) * Float(hidpi.atlasWidth)
+
+        #expect(abs(baseInfo!.width - hidpiInfo!.width) < 2)
+        #expect(abs(baseInfo!.advance - hidpiInfo!.advance) < 2)
+        #expect(hidpiPhysicalWidth > basePhysicalWidth)
+    }
+
     // MARK: - HarfBuzz
 
     @Test("TextShaper shapes 'Hello' into 5 glyphs")
@@ -129,6 +150,66 @@ struct TextTests {
         // Total width should be sum of advances
         let total = glyphs.reduce(Float(0)) { $0 + $1.xAdvance }
         #expect(total > 0)
+    }
+
+    @Test("HiDPI shaping preserves logical advances")
+    func hidpiShapingKeepsLogicalAdvance() {
+        let baseAtlas = FontAtlas()
+        baseAtlas.loadFont(path: testFontPath, size: 16)
+
+        let baseShaper = TextShaper()
+        baseShaper.setFont(ftFace: baseAtlas.freetypeFace!, size: 16)
+
+        let hidpiAtlas = FontAtlas(width: 1024, height: 1024)
+        hidpiAtlas.loadFont(path: testFontPath, size: 16, rasterScale: 2)
+
+        let hidpiShaper = TextShaper()
+        hidpiShaper.setFont(ftFace: hidpiAtlas.freetypeFace!, size: 16, rasterScale: 2)
+
+        let baseAdvance = baseShaper.shape(text: "Hello").reduce(Float(0)) { $0 + $1.xAdvance }
+        let hidpiAdvance = hidpiShaper.shape(text: "Hello").reduce(Float(0)) { $0 + $1.xAdvance }
+
+        #expect(abs(baseAdvance - hidpiAdvance) < 2)
+    }
+
+    @Test("FontProvider keeps the macOS system primary font during fallback resolution")
+    func fontProviderKeepsSystemPrimaryFont() {
+        let provider = FontProvider(size: 13)
+        let primary = provider.loadPrimaryFont(name: SystemFontDefaults.primaryFontName)
+
+        #expect(primary != nil)
+
+        let runs = provider.resolveRuns(text: "Scene Hierarchy")
+        #expect(runs.isEmpty == false)
+        #expect(runs.allSatisfy { $0.font.postScriptName == primary?.postScriptName })
+    }
+
+    @Test("Bootstrapped system-font environment shapes CJK through fallback")
+    func bootstrappedSystemFontShapesCJK() {
+        let provider = FontProvider(size: 13)
+        let primary = provider.loadPrimaryFont(name: SystemFontDefaults.primaryFontName)
+        let runs = provider.resolveRuns(text: "你")
+        let glyphs = runs.flatMap(provider.shapeRun)
+
+        #expect(primary != nil)
+        #expect(runs.isEmpty == false)
+        #expect(glyphs.isEmpty == false)
+        #expect((glyphs.first?.xAdvance ?? 0) > 0)
+    }
+
+    @Test("FontProvider shapes CJK through fallback for demo-sized HiDPI text")
+    func fontProviderShapesCJKForDemoSizedHiDPIText() {
+        let provider = FontProvider(size: 14, rasterScale: 2)
+        let primary = provider.loadPrimaryFont(name: SystemFontDefaults.primaryFontName)
+        let runs = provider.resolveRuns(text: "你")
+        let glyphs = runs.flatMap(provider.shapeRun)
+
+        #expect(primary != nil)
+        #expect(runs.isEmpty == false)
+        #expect(runs.first?.font.postScriptName != primary?.postScriptName)
+        #expect(glyphs.isEmpty == false)
+        #expect(glyphs.first?.glyphID != 0)
+        #expect((glyphs.first?.xAdvance ?? 0) > 0)
     }
 
     // MARK: - TextLayout
@@ -180,10 +261,33 @@ struct TextTests {
         }
     }
 
-    @Test("Shaped glyphs have atlas info after layout")
-    func layoutPopulatesAtlas() {
+    @Test("Multi-line baselines stay stable across different glyph shapes")
+    func multilineBaselinesStayStable() {
         let atlas = FontAtlas()
         atlas.loadFont(path: testFontPath, size: 16)
+
+        let shaper = TextShaper()
+        shaper.setFont(ftFace: atlas.freetypeFace!, size: 16)
+
+        let text = "HI\ngj"
+        let shaped = shaper.shape(text: text)
+        let result = TextLayout.layout(
+            shapedGlyphs: shaped,
+            text: text,
+            atlas: atlas,
+            lineHeight: 20
+        )
+
+        #expect(result.lines.count == 2)
+        let baselineStep = result.lines[1].baselineY - result.lines[0].baselineY
+        #expect(abs(baselineStep - 20) < 0.5)
+    }
+
+    @Test("Layout reads metrics without rasterizing glyph bitmaps")
+    func layoutDoesNotRasterize() {
+        let atlas = FontAtlas()
+        atlas.loadFont(path: testFontPath, size: 16)
+        atlas.markClean()
 
         let shaper = TextShaper()
         shaper.setFont(ftFace: atlas.freetypeFace!, size: 16)
@@ -196,9 +300,11 @@ struct TextTests {
             lineHeight: 20
         )
 
-        // Non-space glyphs should have atlas info
+        #expect(!atlas.isDirty)
+
+        // Layout should not eagerly attach atlas info anymore.
         for glyph in result.lines[0].glyphs {
-            #expect(glyph.atlasInfo != nil)
+            #expect(glyph.atlasInfo == nil)
         }
     }
 

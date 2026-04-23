@@ -56,7 +56,11 @@ public struct Box<Content: View>: _PrimitiveView {
         self.content = content()
     }
 
-    public func _makeNode() -> Node { Node() }
+    public func _makeNode() -> Node {
+        let n = Node()
+        n.isHitTestable = false
+        return n
+    }
     public func _updateNode(_ node: Node) { /* visual props live on modifiers */ }
 
     public func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
@@ -86,7 +90,11 @@ public struct Row<Content: View>: _PrimitiveView {
         self.content = content()
     }
 
-    public func _makeNode() -> Node { Node() }
+    public func _makeNode() -> Node {
+        let n = Node()
+        n.isHitTestable = false
+        return n
+    }
     public func _updateNode(_ node: Node) {}
 
     public func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
@@ -113,7 +121,11 @@ public struct Column<Content: View>: _PrimitiveView {
         self.content = content()
     }
 
-    public func _makeNode() -> Node { Node() }
+    public func _makeNode() -> Node {
+        let n = Node()
+        n.isHitTestable = false
+        return n
+    }
     public func _updateNode(_ node: Node) {}
 
     public func _makeLayoutNode() -> LayoutNode? { LayoutNode() }

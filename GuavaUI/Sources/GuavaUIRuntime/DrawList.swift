@@ -63,6 +63,29 @@ public final class DrawList {
 
     public var currentClip: UIRect? { clipStack.last }
 
+    // MARK: - Composite (Phase 4b)
+
+    /// Append every vertex/index/batch from `other` into this list, shifting
+    /// vertex indices and batch index-offsets so the merged buffer stays
+    /// internally consistent. The caller owns the responsibility for
+    /// `other`'s coordinate system: `other.vertices` are copied verbatim, so
+    /// they must already be in the same absolute space `self` expects.
+    public func append(_ other: DrawList) {
+        let baseVertex = UInt32(vertices.count)
+        let baseIndex = UInt32(indices.count)
+        vertices.append(contentsOf: other.vertices)
+        indices.reserveCapacity(indices.count + other.indices.count)
+        for i in other.indices { indices.append(i + baseVertex) }
+        for b in other.batches {
+            batches.append(DrawBatch(
+                indexOffset: b.indexOffset + baseIndex,
+                indexCount: b.indexCount,
+                textureID: b.textureID,
+                scissor: b.scissor
+            ))
+        }
+    }
+
     // MARK: - Primitives
 
     /// Append a solid-color rectangle.
@@ -153,22 +176,48 @@ public final class DrawList {
         )
     }
 
+    /// Append a thin solid line between two screen-space points as a rotated
+    /// quad. Useful for overlay gizmos and debug visualization.
+    public func addLine(fromX x0: Float, fromY y0: Float,
+                        toX x1: Float, toY y1: Float,
+                        thickness: Float, color: Color) {
+        let dx = x1 - x0
+        let dy = y1 - y0
+        let length = (dx * dx + dy * dy).squareRoot()
+        guard length > 1e-3 else { return }
+        let invLen = 1 / length
+        let nx = -dy * invLen
+        let ny = dx * invLen
+        let half = max(thickness, 0.5) * 0.5
+        let packed = color.rgba8
+        let v0 = UIVertex(posX: x0 + nx * half, posY: y0 + ny * half, u: -1, v: 0, color: packed)
+        let v1 = UIVertex(posX: x1 + nx * half, posY: y1 + ny * half, u: -1, v: 0, color: packed)
+        let v2 = UIVertex(posX: x1 - nx * half, posY: y1 - ny * half, u: -1, v: 0, color: packed)
+        let v3 = UIVertex(posX: x0 - nx * half, posY: y0 - ny * half, u: -1, v: 0, color: packed)
+        appendQuad(v0, v1, v2, v3, textureID: .none)
+    }
+
     /// Append a fully laid-out text result. The atlas texture must be registered
     /// with the renderer under `textureID`.
     public func addText(
         _ layout: TextLayoutResult,
         origin: (x: Float, y: Float),
         color: Color,
-        textureID: TextureID
+        textureID: TextureID,
+        atlas: FontAtlas? = nil
     ) {
         for line in layout.lines {
             for glyph in line.glyphs {
-                guard let info = glyph.atlasInfo, info.width > 0, info.height > 0 else { continue }
-                let dx = origin.x + glyph.x + Float(info.bearingX)
-                let dy = origin.y + glyph.y - Float(info.bearingY)
+                let info = glyph.atlasInfo ?? atlas?.rasterizeGlyph(
+                    glyphIndex: glyph.glyphID,
+                    fontID: glyph.fontID
+                )
+                guard let info, info.width > 0, info.height > 0 else { continue }
+                let dx = snappedTextPixel(origin.x + glyph.x + info.bearingX)
+                let dy = snappedTextPixel(origin.y + glyph.y - info.bearingY)
                 addGlyphQuad(
                     x: dx, y: dy,
-                    width: Float(info.width), height: Float(info.height),
+                    width: info.width, height: info.height,
                     uvMinX: info.uvMinX, uvMinY: info.uvMinY,
                     uvMaxX: info.uvMaxX, uvMaxY: info.uvMaxY,
                     color: color, textureID: textureID
@@ -177,6 +226,10 @@ public final class DrawList {
         }
     }
     // MARK: - Internal
+
+    private func snappedTextPixel(_ value: Float) -> Float {
+        value.rounded()
+    }
 
     private func appendQuad(_ v0: UIVertex, _ v1: UIVertex, _ v2: UIVertex, _ v3: UIVertex, textureID: TextureID) {
         let baseVertex = UInt32(vertices.count)

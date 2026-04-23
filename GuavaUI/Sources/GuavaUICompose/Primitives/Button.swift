@@ -128,6 +128,12 @@ struct ButtonHost: _PrimitiveView {
         node.attachments[ButtonHost.pressedKey] = isPressed
         node.attachments[ButtonHost.hoveredKey] = isHovered
 
+        // Default cursor for buttons: `.pointer` when interactive,
+        // `.notAllowed` when disabled. Users can override via `.cursor(_:)`
+        // applied closer to the leaf — modifier wrappers run after this
+        // primitive and therefore win.
+        node.cursor = isEnabled ? .pointer : .notAllowed
+
         guard isEnabled, let registry = InteractionRegistryHolder.current else {
             InteractionRegistryHolder.current?.remove(node)
             return
@@ -143,7 +149,12 @@ struct ButtonHost: _PrimitiveView {
                 hoverChange(false)
             }
         }
-        registry.setPointer(node) { _, phase, _ in
+        registry.setPointer(node) { event, phase, _ in
+            // Buttons handle the primary mouse button only. Right- and
+            // middle-clicks bubble so parents (e.g. a DockTab wrapping
+            // the close button) can surface their own context-menu /
+            // middle-click semantics.
+            if event.button != .left { return .ignored }
             switch phase {
             case .down:
                 down()

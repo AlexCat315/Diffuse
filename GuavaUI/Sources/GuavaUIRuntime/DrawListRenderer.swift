@@ -10,11 +10,17 @@ import RHIWGPU
 ///   4. each frame: `render(list:passEncoder:viewport:)`
 public final class DrawListRenderer {
 
+    private enum TextureSampling {
+        case alphaMask
+        case color
+    }
+
     private let backend: WGPUBackend
     private var pipeline: GPURenderPipeline?
     private var bindGroupLayout: GPUBindGroupLayout?
     private var pipelineLayout: GPUPipelineLayout?
-    private var sampler: GPUSampler?
+    private var alphaSampler: GPUSampler?
+    private var colorSampler: GPUSampler?
     private var uniformBuffer: GPUBuffer?
 
     /// Vertex / index streaming buffers grow as needed.
@@ -28,6 +34,7 @@ public final class DrawListRenderer {
         let texture: GPUTexture
         let view: GPUTextureView
         let bindGroup: GPUBindGroup
+        let sampling: TextureSampling
         let width: UInt32
         let height: UInt32
     }
@@ -83,8 +90,19 @@ public final class DrawListRenderer {
         self.pipeline = try backend.createRenderPipeline(desc: pipelineDesc)
         self.configuredFormat = format
 
-        if sampler == nil {
-            self.sampler = try backend.createSampler()
+        if alphaSampler == nil {
+            self.alphaSampler = try backend.createSampler(desc: GPUSamplerDescriptor(
+                magFilter: .nearest,
+                minFilter: .nearest,
+                mipmapFilter: .nearest
+            ))
+        }
+        if colorSampler == nil {
+            self.colorSampler = try backend.createSampler(desc: GPUSamplerDescriptor(
+                magFilter: .linear,
+                minFilter: .linear,
+                mipmapFilter: .nearest
+            ))
         }
         if uniformBuffer == nil {
             self.uniformBuffer = try backend.createBuffer(
@@ -110,20 +128,21 @@ public final class DrawListRenderer {
             }
             self.dummyTexture = tex
             self.dummyView = try tex.createView()
-            self.dummyBindGroup = try makeBindGroup(view: self.dummyView!)
+            self.dummyBindGroup = try makeBindGroup(view: self.dummyView!, sampling: .color)
         } else {
             // Re-create the dummy bind group against the new layout.
-            self.dummyBindGroup = try makeBindGroup(view: self.dummyView!)
+            self.dummyBindGroup = try makeBindGroup(view: self.dummyView!, sampling: .color)
         }
 
         // Re-create bind groups for any registered textures using the new layout.
         let oldTextures = textures
         textures.removeAll()
         for (id, slot) in oldTextures {
-            let bg = try makeBindGroup(view: slot.view)
+            let bg = try makeBindGroup(view: slot.view, sampling: slot.sampling)
             textures[id] = GPUTextureSlot(
                 texture: slot.texture, view: slot.view,
-                bindGroup: bg, width: slot.width, height: slot.height
+                bindGroup: bg, sampling: slot.sampling,
+                width: slot.width, height: slot.height
             )
         }
     }
@@ -131,46 +150,69 @@ public final class DrawListRenderer {
     // MARK: - Texture registry
 
     /// Register or replace an alpha-only atlas texture under `id`. The source
-    /// data is single-channel; it is expanded to RGBA so the existing shader
-    /// (which samples `.r`) treats it as a coverage mask.
+    /// data is single-channel and uploaded directly as an `r8Unorm` texture.
     public func registerAlphaTexture(id: TextureID,
                                      pixels: UnsafePointer<UInt8>,
-                                     width: UInt32, height: UInt32) throws {
+                                     width: UInt32, height: UInt32,
+                                     originX: UInt32 = 0,
+                                     originY: UInt32 = 0,
+                                     textureWidth: UInt32? = nil,
+                                     textureHeight: UInt32? = nil) throws {
         precondition(id != .none, "TextureID 0 is reserved")
         guard bindGroupLayout != nil else {
             preconditionFailure("registerAlphaTexture requires a prior configure(format:)")
         }
+        let fullWidth = textureWidth ?? width
+        let fullHeight = textureHeight ?? height
         // wgpu requires bytesPerRow be a multiple of 256.
-        let alignedRowBytes: UInt32 = (((width * 4) + 255) / 256) * 256
+        let alignedRowBytes: UInt32 = ((width + 255) / 256) * 256
         var aligned = [UInt8](repeating: 0, count: Int(alignedRowBytes * height))
         for row in 0..<Int(height) {
+            let srcBase = row * Int(width)
+            let dstBase = row * Int(alignedRowBytes)
             for col in 0..<Int(width) {
-                let a = pixels[row * Int(width) + col]
-                let off = row * Int(alignedRowBytes) + col * 4
-                aligned[off + 0] = a
-                aligned[off + 1] = a
-                aligned[off + 2] = a
-                aligned[off + 3] = a
+                aligned[dstBase + col] = pixels[srcBase + col]
             }
         }
+
+        if let existing = textures[id],
+           existing.sampling == .alphaMask,
+           existing.width == fullWidth,
+           existing.height == fullHeight {
+            aligned.withUnsafeBytes { raw in
+                backend.writeTexture(existing.texture,
+                                     data: raw.baseAddress!,
+                                     dataSize: aligned.count,
+                                     originX: originX,
+                                     originY: originY,
+                                     bytesPerRow: alignedRowBytes,
+                                     rowsPerImage: height,
+                                     width: width, height: height)
+            }
+            return
+        }
+
         let tex = try backend.createTexture(
-            width: width, height: height,
-            format: .rgba8Unorm,
+            width: fullWidth, height: fullHeight,
+            format: .r8Unorm,
             usage: [.textureBinding, .copyDst]
         )
         aligned.withUnsafeBytes { raw in
             backend.writeTexture(tex,
                                  data: raw.baseAddress!,
                                  dataSize: aligned.count,
+                                 originX: originX,
+                                 originY: originY,
                                  bytesPerRow: alignedRowBytes,
                                  rowsPerImage: height,
                                  width: width, height: height)
         }
         let view = try tex.createView()
-        let bg = try makeBindGroup(view: view)
+        let bg = try makeBindGroup(view: view, sampling: .alphaMask)
         textures[id] = GPUTextureSlot(
             texture: tex, view: view,
-            bindGroup: bg, width: width, height: height
+            bindGroup: bg, sampling: .alphaMask,
+            width: fullWidth, height: fullHeight
         )
     }
 
@@ -194,6 +236,22 @@ public final class DrawListRenderer {
                 aligned[dstRowBase + col] = pixels[srcRowBase + col]
             }
         }
+
+        if let existing = textures[id],
+           existing.sampling == .color,
+           existing.width == width,
+           existing.height == height {
+            aligned.withUnsafeBytes { raw in
+                backend.writeTexture(existing.texture,
+                                     data: raw.baseAddress!,
+                                     dataSize: aligned.count,
+                                     bytesPerRow: alignedRowBytes,
+                                     rowsPerImage: height,
+                                     width: width, height: height)
+            }
+            return
+        }
+
         let tex = try backend.createTexture(
             width: width, height: height,
             format: .rgba8Unorm,
@@ -208,10 +266,44 @@ public final class DrawListRenderer {
                                  width: width, height: height)
         }
         let view = try tex.createView()
-        let bg = try makeBindGroup(view: view)
+        let bg = try makeBindGroup(view: view, sampling: .color)
         textures[id] = GPUTextureSlot(
             texture: tex, view: view,
-            bindGroup: bg, width: width, height: height
+            bindGroup: bg, sampling: .color,
+            width: width, height: height
+        )
+    }
+
+    /// Register a texture that was created by another subsystem but shares the
+    /// same `WGPUBackend` device. This is the bridge path used by viewport-like
+    /// embeds that want GuavaUI to sample an externally rendered image without
+    /// a CPU round-trip.
+    public func registerExternalColorTexture(id: TextureID,
+                                             texture: GPUTexture,
+                                             width: UInt32,
+                                             height: UInt32) throws {
+        precondition(id != .none, "TextureID 0 is reserved")
+        guard bindGroupLayout != nil else {
+            preconditionFailure("registerExternalColorTexture requires a prior configure(format:)")
+        }
+
+        if let existing = textures[id],
+           existing.sampling == .color,
+           existing.width == width,
+           existing.height == height,
+           existing.texture === texture {
+            return
+        }
+
+        let view = try texture.createView()
+        let bg = try makeBindGroup(view: view, sampling: .color)
+        textures[id] = GPUTextureSlot(
+            texture: texture,
+            view: view,
+            bindGroup: bg,
+            sampling: .color,
+            width: width,
+            height: height
         )
     }
 
@@ -223,9 +315,11 @@ public final class DrawListRenderer {
     ///   - list: Source of vertices, indices and batches.
     ///   - pass: Active render pass encoder.
     ///   - viewportPx: Drawable size in pixels (used for NDC mapping and scissor).
+    ///   - coordinateSpace: Layout coordinate space used by the draw list.
     public func render(list: DrawList,
                        pass: GPURenderPassEncoder,
-                       viewportPx: (width: UInt32, height: UInt32)) throws {
+                       viewportPx: (width: UInt32, height: UInt32),
+                       coordinateSpace: (width: Float, height: Float)? = nil) throws {
         guard let pipeline,
               let uniformBuffer,
               let dummyBindGroup else {
@@ -235,9 +329,13 @@ public final class DrawListRenderer {
             return
         }
 
+        let viewport = coordinateSpace ?? (Float(viewportPx.width), Float(viewportPx.height))
+        let scaleX = viewport.width > 0 ? Float(viewportPx.width) / viewport.width : 1
+        let scaleY = viewport.height > 0 ? Float(viewportPx.height) / viewport.height : 1
+
         // 1. Upload uniforms (viewport size).
-        var u: (Float, Float, Float, Float) = (Float(viewportPx.width),
-                                               Float(viewportPx.height),
+        var u: (Float, Float, Float, Float) = (viewport.width,
+                                               viewport.height,
                                                0, 0)
         withUnsafePointer(to: &u) { ptr in
             ptr.withMemoryRebound(to: UInt8.self, capacity: 16) { raw in
@@ -280,11 +378,16 @@ public final class DrawListRenderer {
 
             // Scissor — empty rect → skip the batch.
             if let s = batch.scissor {
-                let x = max(0, Int32(s.minX))
-                let y = max(0, Int32(s.minY))
-                let w = max(0, Int32(s.maxX) - x)
-                let h = max(0, Int32(s.maxY) - y)
+                let x = max(0, Int32(floor(s.minX * scaleX)))
+                let y = max(0, Int32(floor(s.minY * scaleY)))
+                let maxX = max(x, Int32(ceil(s.maxX * scaleX)))
+                let maxY = max(y, Int32(ceil(s.maxY * scaleY)))
+                let w = max(0, maxX - x)
+                let h = max(0, maxY - y)
                 if w == 0 || h == 0 { continue }
+                if UInt32(x) >= viewportPx.width || UInt32(y) >= viewportPx.height {
+                    continue
+                }
                 let clampedW = min(UInt32(w), viewportPx.width  - UInt32(x))
                 let clampedH = min(UInt32(h), viewportPx.height - UInt32(y))
                 pass.setScissorRect(x: UInt32(x), y: UInt32(y),
@@ -324,9 +427,16 @@ public final class DrawListRenderer {
         self.indexCapacity = newCap
     }
 
-    private func makeBindGroup(view: GPUTextureView) throws -> GPUBindGroup {
-        guard let bindGroupLayout, let uniformBuffer, let sampler else {
+    private func makeBindGroup(view: GPUTextureView, sampling: TextureSampling) throws -> GPUBindGroup {
+        guard let bindGroupLayout,
+              let uniformBuffer,
+              let alphaSampler,
+              let colorSampler else {
             preconditionFailure("missing layout/uniform/sampler — call configure first")
+        }
+        let sampler = switch sampling {
+        case .alphaMask: alphaSampler
+        case .color: colorSampler
         }
         return try backend.createBindGroup(layout: bindGroupLayout, entries: [
             GPUBindGroupEntry(binding: 0, buffer: uniformBuffer, offset: 0, size: 16),

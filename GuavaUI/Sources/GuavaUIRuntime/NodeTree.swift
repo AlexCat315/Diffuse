@@ -5,7 +5,7 @@
 /// let tree = NodeTree()
 /// tree.root = Node()
 /// tree.markDirty(someChild)
-/// tree.flush()   // resets all dirty flags; invokes layout + draw in later phases
+/// tree.flush()   // resets layout + render invalidation flags after a frame
 /// ```
 public final class NodeTree: @unchecked Sendable {
 
@@ -14,6 +14,10 @@ public final class NodeTree: @unchecked Sendable {
 
     public init() {}
 
+    public var hasRenderUpdates: Bool {
+        root?.renderDirty ?? false
+    }
+
     // MARK: - Dirty management
 
     /// Convenience wrapper around `Node.markDirty()`.
@@ -21,13 +25,19 @@ public final class NodeTree: @unchecked Sendable {
         node.markDirty()
     }
 
+    public func markRenderDirty(_ node: Node) {
+        node.markRenderDirty()
+    }
+
     // MARK: - Flush
 
-    /// Depth-first traversal that resets dirty flags on every reachable node.
+    /// Depth-first traversal that resets layout and render invalidation flags
+    /// on every reachable node.
     ///
-    /// Phase 1: dirty-flag reset only.
-    /// Phase 3+: will also invoke layout callbacks on dirty nodes.
-    /// Phase 5+: will also invoke draw callbacks.
+    /// Layout (`LayoutTree`/Yoga) and draw (`LayerAwareNodeRenderer`) are
+    /// driven directly by `ViewGraph` and `EngineHost.tick`; this method
+    /// only clears the per-`Node` dirty flags after each frame so the next
+    /// recompose can detect new mutations.
     public func flush() {
         guard let root else { return }
         traverse(root)
@@ -35,6 +45,7 @@ public final class NodeTree: @unchecked Sendable {
 
     private func traverse(_ node: Node) {
         node.isDirty = false
+        node.renderDirty = false
         for child in node.children {
             traverse(child)
         }

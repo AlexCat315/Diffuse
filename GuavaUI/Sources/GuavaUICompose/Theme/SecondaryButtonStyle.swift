@@ -1,7 +1,8 @@
 import GuavaUIRuntime
 
-/// Tonal / surface-variant button. Lower visual weight than primary; suitable
-/// for the second-priority action in a button group.
+/// Tonal / surface-variant button. Lower visual weight than primary.
+/// Reads from the theme's state-layer ramp for hover/press so palette
+/// changes don't require recomputing `lighter`/`darker` mixes here.
 public struct SecondaryButtonStyle: ButtonStyle {
     public init() {}
 
@@ -9,18 +10,33 @@ public struct SecondaryButtonStyle: ButtonStyle {
         let theme = configuration.theme
         let bg: Color = {
             if !configuration.isEnabled { return theme.colors.surfaceSunken }
-            if configuration.isPressed  { return theme.colors.surfaceVariant.darker(0.05) }
-            if configuration.isHovered  { return theme.colors.surfaceVariant.lighter(0.05) }
-            return theme.colors.surfaceVariant
+            // Compose state layer over the resting surfaceVariant fill. The
+            // overlay is translucent so a slightly lighter / darker token
+            // reads as a real surface change without needing a separate
+            // pre-composited token per state.
+            let base = theme.colors.surfaceVariant
+            if configuration.isPressed { return base.composited(over: theme.colors.stateLayerPressed) }
+            if configuration.isHovered { return base.composited(over: theme.colors.stateLayerHover) }
+            return base
         }()
+        let border: Color = configuration.isFocused
+            ? theme.colors.focusRing
+            : theme.colors.border
+        let borderWidth: Float = configuration.isFocused ? 2 : 1
 
-        return AnyView(configuration.label)
-            .font(SemanticFontRef.bodyStrong)
-            .foregroundColor(SemanticColorRef.onSurface)
-            .padding(horizontal: theme.spacing.lg, vertical: theme.spacing.sm)
+        return Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            AnyView(configuration.label)
+                .font(SemanticFontRef.bodyStrong)
+                .foregroundColor(SemanticColorRef.onSurface)
+        }
+            .frame(height: 32)
+            .padding(horizontal: theme.spacing.md, vertical: 0)
             .background(bg)
             .cornerRadius(theme.radius.md)
+            .border(border, width: borderWidth)
             .opacity(configuration.isEnabled ? 1 : 0.55)
             .animation(.buttonInteraction, value: configuration.interactionKey)
     }
 }
+
+

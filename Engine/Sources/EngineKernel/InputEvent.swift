@@ -35,6 +35,34 @@ public struct KeyEvent: Sendable {
     }
 }
 
+public struct TextEditingEvent: Sendable, Equatable {
+    public var text: String
+    public var start: Int32
+    public var length: Int32
+
+    public init(text: String, start: Int32, length: Int32) {
+        self.text = text
+        self.start = start
+        self.length = length
+    }
+}
+
+public struct TextInputArea: Sendable, Equatable {
+    public var x: Float
+    public var y: Float
+    public var width: Float
+    public var height: Float
+    public var cursorX: Float
+
+    public init(x: Float, y: Float, width: Float, height: Float, cursorX: Float) {
+        self.x = x
+        self.y = y
+        self.width = width
+        self.height = height
+        self.cursorX = cursorX
+    }
+}
+
 // MARK: - Mouse
 
 public enum MouseButton: UInt8, Sendable, Hashable {
@@ -87,6 +115,9 @@ public enum InputEvent: Sendable {
     /// accents or pasted text).
     case textInput(String)
 
+    /// Active IME preedit text and its selection range within the composition.
+    case textEditing(TextEditingEvent)
+
     case mouseMotion(MouseMotionEvent)
     case mouseButtonDown(MouseButtonEvent)
     case mouseButtonUp(MouseButtonEvent)
@@ -100,4 +131,15 @@ public enum InputEvent: Sendable {
     case windowExposed
     case windowResized(width: Int32, height: Int32)
     case windowPixelSizeChanged(width: Int32, height: Int32)
+}
+
+/// Input event tagged with the native window it belongs to.
+public struct WindowInputEvent: Sendable {
+    public var windowID: WindowID
+    public var event: InputEvent
+
+    public init(windowID: WindowID, event: InputEvent) {
+        self.windowID = windowID
+        self.event = event
+    }
 }

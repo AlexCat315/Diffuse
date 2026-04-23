@@ -1,6 +1,7 @@
 import Foundation
 import CoreGraphics
 import EngineKernel
+import PlatformShell
 
 /// Routes window-local input events to nodes in the GuavaUI tree.
 ///
@@ -21,6 +22,22 @@ public final class EventDispatcher {
     public let capture: PointerCapture
     public let focusChain: FocusChain
     public let windowID: WindowID
+
+    /// Phase 5b: optional input mirror. When set, hit-test consults the
+    /// `InputScene` (cached classification + version-keyed focus chain) and
+    /// the cursor walk reads `InputNode.cursor`. When `nil`, dispatch falls
+    /// back to walking the live `Node` tree.
+    public weak var inputScene: InputScene? {
+        didSet { focusChain.inputScene = inputScene }
+    }
+
+    /// Invoked whenever the resolved hover cursor changes. The dispatcher
+    /// computes the cursor by walking the hover path leaf → root and using
+    /// the deepest non-nil `Node.cursor`. `nil` resolves to `.arrow`.
+    /// Callers (typically the platform host) should forward this to
+    /// `Shell.setCursor(_:)`.
+    public var cursorSink: ((SystemCursor) -> Void)?
+    private var activeCursor: SystemCursor = .arrow
 
     /// Last known pointer position from `mouseMotion`. Used to hit-test wheel
     /// events (which carry no position on SDL3) so they reach the node under
@@ -53,6 +70,7 @@ public final class EventDispatcher {
         case .mouseWheel(let e):      dispatchWheel(e)
         case .keyDown(let e),
              .keyUp(let e):           dispatchKey(e)
+        case .textEditing(let e):     dispatchTextEditing(e)
         case .textInput(let s):       dispatchText(s)
         default:
             // Window lifecycle events are not handled here.
@@ -63,10 +81,9 @@ public final class EventDispatcher {
     // MARK: - Pointer
 
     private func dispatchPointerDown(_ event: MouseButtonEvent) {
-        guard let root = tree.root else { return }
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
-        guard let hit = HitTester.hitTest(rootNode: root, point: point) else { return }
-        deliver(path: hit.path, kind: .pointer(event, .down))
+        guard let hit = hitTest(point: point) else { return }
+        _ = deliver(path: hit.path, kind: .pointer(event, .down))
         // Auto-focus on click for focusable targets.
         if hit.node.isFocusable {
             focusChain.focus(hit.node)
@@ -76,13 +93,12 @@ public final class EventDispatcher {
     private func dispatchPointerUp(_ event: MouseButtonEvent) {
         if let captured = capture.target {
             let path = pathFromRoot(to: captured)
-            deliver(path: path, kind: .pointer(event, .up))
+            _ = deliver(path: path, kind: .pointer(event, .up))
             return
         }
-        guard let root = tree.root else { return }
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
-        guard let hit = HitTester.hitTest(rootNode: root, point: point) else { return }
-        deliver(path: hit.path, kind: .pointer(event, .up))
+        guard let hit = hitTest(point: point) else { return }
+        _ = deliver(path: hit.path, kind: .pointer(event, .up))
     }
 
     private func dispatchMotion(_ event: MouseMotionEvent) {
@@ -90,50 +106,85 @@ public final class EventDispatcher {
         if let captured = capture.target {
             let path = pathFromRoot(to: captured)
             updateHoverPath(to: path)
-            deliver(path: path, kind: .motion(event))
+            _ = deliver(path: path, kind: .motion(event))
             return
         }
-        guard let root = tree.root else { return }
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
-        guard let hit = HitTester.hitTest(rootNode: root, point: point) else {
+        guard let hit = hitTest(point: point) else {
             updateHoverPath(to: [])
             return
         }
         updateHoverPath(to: hit.path)
-        deliver(path: hit.path, kind: .motion(event))
+        _ = deliver(path: hit.path, kind: .motion(event))
     }
 
     private func dispatchWheel(_ event: MouseWheelEvent) {
-        // Prefer hit-testing under the last known cursor so the scrollable
-        // region under the pointer wins. Fall back to the focused node, then
-        // the root node.
-        if let cursor = lastCursor,
-           let root = tree.root,
-           let hit = HitTester.hitTest(rootNode: root, point: cursor) {
-            deliver(path: hit.path, kind: .wheel(event))
+        let hitPath = lastCursor.flatMap { cursor in
+            hitTest(point: cursor)?.path
+        }
+        let focusedPath = focusChain.focused.map(pathFromRoot)
+        let preferredFocusedPath = preferredFocusedWheelPath(from: focusedPath)
+
+        // Wheel delivery is target-first rather than full capture/target/bubble.
+        // Nested scrollables need the deepest target to consume the gesture
+        // before an ancestor ScrollView moves, otherwise inner editors can
+        // never keep their own scroll context.
+        if let preferredFocusedPath,
+           deliverWheel(path: preferredFocusedPath, event: event) == .handled {
             return
         }
-        if let focused = focusChain.focused {
-            let path = pathFromRoot(to: focused)
-            deliver(path: path, kind: .wheel(event))
+        if let hitPath,
+           !sameWheelTarget(hitPath, preferredFocusedPath),
+           deliverWheel(path: hitPath, event: event) == .handled {
+            return
+        }
+        if let focusedPath,
+           !sameWheelTarget(focusedPath, preferredFocusedPath),
+           !sameWheelTarget(focusedPath, hitPath),
+           deliverWheel(path: focusedPath, event: event) == .handled {
             return
         }
         guard let root = tree.root else { return }
-        deliver(path: [root], kind: .wheel(event))
+        _ = deliverWheel(path: [root], event: event)
+    }
+
+    /// Hit-test entry point. Routes through the `InputScene` mirror when
+    /// wired (Phase 5b), otherwise walks the live `Node` tree.
+    private func hitTest(point: CGPoint) -> HitResult? {
+        if let scene = inputScene {
+            return HitTester.hitTest(scene: scene, point: point)
+        }
+        guard let root = tree.root else { return nil }
+        return HitTester.hitTest(rootNode: root, point: point)
     }
 
     // MARK: - Key
 
     private func dispatchKey(_ event: KeyEvent) {
+        // Pointer-capture intercept: while a node owns capture (typically a
+        // drag in progress), give its key handler the first opportunity to
+        // consume the event. Lets drags implement Esc-to-cancel without
+        // also needing keyboard focus.
+        if let captured = capture.target,
+           let keyHandler = interactions.handlers(for: captured).key,
+           keyHandler(event, .target) == .handled {
+            return
+        }
         guard let focused = focusChain.focused else { return }
         let path = pathFromRoot(to: focused)
-        deliver(path: path, kind: .key(event))
+        _ = deliver(path: path, kind: .key(event))
     }
 
     private func dispatchText(_ text: String) {
         guard let focused = focusChain.focused else { return }
         let path = pathFromRoot(to: focused)
-        deliver(path: path, kind: .text(text))
+        _ = deliver(path: path, kind: .text(text))
+    }
+
+    private func dispatchTextEditing(_ event: TextEditingEvent) {
+        guard let focused = focusChain.focused else { return }
+        let path = pathFromRoot(to: focused)
+        _ = deliver(path: path, kind: .editing(event))
     }
 
     // MARK: - Delivery
@@ -143,27 +194,63 @@ public final class EventDispatcher {
         case motion(MouseMotionEvent)
         case wheel(MouseWheelEvent)
         case key(KeyEvent)
+        case editing(TextEditingEvent)
         case text(String)
     }
 
-    private func deliver(path: [Node], kind: EventKind) {
-        guard !path.isEmpty else { return }
+    private func deliver(path: [Node], kind: EventKind) -> EventResult {
+        guard !path.isEmpty else { return .ignored }
 
         // Capture phase: root → target (exclusive of target).
         for node in path.dropLast() {
-            if invoke(node: node, kind: kind, phase: .capture) == .handled { return }
+            if invoke(node: node, kind: kind, phase: .capture) == .handled { return .handled }
         }
 
         // Target phase.
         if let target = path.last,
            invoke(node: target, kind: kind, phase: .target) == .handled {
-            return
+            return .handled
         }
 
         // Bubble phase: target's parent → root.
         for node in path.dropLast().reversed() {
-            if invoke(node: node, kind: kind, phase: .bubble) == .handled { return }
+            if invoke(node: node, kind: kind, phase: .bubble) == .handled { return .handled }
         }
+
+        return .ignored
+    }
+
+    private func deliverWheel(path: [Node], event: MouseWheelEvent) -> EventResult {
+        guard !path.isEmpty else { return .ignored }
+
+        if let target = path.last,
+           invoke(node: target, kind: .wheel(event), phase: .target) == .handled {
+            return .handled
+        }
+
+        for node in path.dropLast().reversed() {
+            if invoke(node: node, kind: .wheel(event), phase: .bubble) == .handled {
+                return .handled
+            }
+        }
+
+        return .ignored
+    }
+
+    private func preferredFocusedWheelPath(from focusedPath: [Node]?) -> [Node]? {
+        guard let focusedPath,
+              let focused = focusedPath.last,
+              let priority = focused.attachments[WheelRoutingAttachmentKey.priority]
+                as? WheelRoutingPriority,
+              priority == .preferFocused else {
+            return nil
+        }
+        return focusedPath
+    }
+
+    private func sameWheelTarget(_ lhs: [Node]?, _ rhs: [Node]?) -> Bool {
+        guard let lhs = lhs?.last, let rhs = rhs?.last else { return false }
+        return lhs === rhs
     }
 
     private func invoke(node: Node, kind: EventKind, phase: EventPhase) -> EventResult {
@@ -173,6 +260,7 @@ public final class EventDispatcher {
         case .motion(let e):  return handlers.motion?(e, phase)  ?? .ignored
         case .wheel(let e):   return handlers.wheel?(e, phase)   ?? .ignored
         case .key(let e):     return handlers.key?(e, phase)     ?? .ignored
+        case .editing(let e): return handlers.editing?(e, phase) ?? .ignored
         case .text(let s):    return handlers.text?(s, phase)    ?? .ignored
         }
     }
@@ -210,6 +298,25 @@ public final class EventDispatcher {
         }
 
         hoveredPath = newPath
+        updateCursor(for: newPath)
+    }
+
+    private func updateCursor(for path: [Node]) {
+        var resolved: SystemCursor = .arrow
+        // Prefer the cached InputNode.cursor when the mirror is wired so
+        // dispatch never reads back into the live Node graph for cursor
+        // resolution.
+        for node in path.reversed() {
+            let c = node.inputNode?.cursor ?? node.cursor
+            if let c {
+                resolved = c
+                break
+            }
+        }
+        if resolved != activeCursor {
+            activeCursor = resolved
+            cursorSink?(resolved)
+        }
     }
 
     private func commonPrefixLength(_ lhs: [Node], _ rhs: [Node]) -> Int {

@@ -1,63 +1,72 @@
 import GuavaUIRuntime
 
-/// Default dark theme bundled with GuavaUI. Tuned against macOS Sonoma /
-/// VS Code Dark+ / Material 3 dark surfaces so unmodified `swift run
-/// GuavaUIDemo` already lands in the expected visual neighborhood.
+/// Default dark theme bundled with GuavaUI.
 ///
-/// Concrete numbers may be tweaked during Phase 7.5 implementation; the slot
-/// taxonomy and the typography / spacing / radius / motion token values are
-/// the load-bearing contracts and must not change without updating
-/// `docs/guava-ui-phase7.5-design.md`.
+/// The baseline now targets dense tool chrome rather than a marketing-style
+/// dashboard: neutral graphite surfaces, a restrained blue accent, tighter
+/// typography, and smaller radii so list / dock / inspector UIs read as one
+/// ordered desktop workspace.
 public enum DefaultDarkTheme {
     public static let value: Theme = Theme(
         colors: ColorScheme(
-            background:       Color(red: 0x14, green: 0x16, blue: 0x1B),
-            surface:          Color(red: 0x1C, green: 0x1F, blue: 0x26),
-            surfaceVariant:   Color(red: 0x24, green: 0x28, blue: 0x30),
-            surfaceSunken:    Color(red: 0x10, green: 0x12, blue: 0x16),
+            background:       Color(red: 0x13, green: 0x15, blue: 0x1A),
+            surface:          Color(red: 0x1B, green: 0x1E, blue: 0x24),
+            surfaceVariant:   Color(red: 0x23, green: 0x27, blue: 0x2F),
+            surfaceSunken:    Color(red: 0x16, green: 0x18, blue: 0x1E),
+            surfaceRaised:    Color(red: 0x2A, green: 0x2F, blue: 0x38),
+            surfaceFloating:  Color(red: 0x31, green: 0x37, blue: 0x42),
+            surfaceOverlay:   Color(red: 0x39, green: 0x40, blue: 0x4C),
 
-            onBackground:     Color(red: 0xEC, green: 0xEE, blue: 0xF2),
-            onSurface:        Color(red: 0xE6, green: 0xE9, blue: 0xEF),
-            onSurfaceVariant: Color(red: 0xAE, green: 0xB4, blue: 0xC0),
-            onSurfaceMuted:   Color(red: 0x6E, green: 0x76, blue: 0x84),
+            onBackground:     Color(red: 0xF4, green: 0xF6, blue: 0xF9),
+            onSurface:        Color(red: 0xE7, green: 0xEB, blue: 0xF2),
+            onSurfaceVariant: Color(red: 0xBE, green: 0xC6, blue: 0xD3),
+            onSurfaceMuted:   Color(red: 0x87, green: 0x91, blue: 0xA0),
 
-            accent:           Color(red: 0x4C, green: 0x8B, blue: 0xF5),
+            accent:           Color(red: 0x4A, green: 0x8C, blue: 0xF7),
+            accentHover:      Color(red: 0x6B, green: 0xA5, blue: 0xFF),
+            accentPressed:    Color(red: 0x36, green: 0x77, blue: 0xE6),
             onAccent:         Color(red: 0xFF, green: 0xFF, blue: 0xFF),
-            accentMuted:      Color(red: 0x4C, green: 0x8B, blue: 0xF5, alpha: 0x33),
+            accentMuted:      Color(red: 0x4A, green: 0x8C, blue: 0xF7, alpha: 0x30),
 
-            success:          Color(red: 0x4A, green: 0xC2, blue: 0x6B),
-            warning:          Color(red: 0xE5, green: 0xA5, blue: 0x3F),
-            error:            Color(red: 0xE5, green: 0x55, blue: 0x4D),
-            info:             Color(red: 0x5E, green: 0xA8, blue: 0xE6),
+            stateLayerHover:    Color(red: 0xFF, green: 0xFF, blue: 0xFF, alpha: 0x12),
+            stateLayerPressed:  Color(red: 0xFF, green: 0xFF, blue: 0xFF, alpha: 0x1E),
+            stateLayerSelected: Color(red: 0x4A, green: 0x8C, blue: 0xF7, alpha: 0x26),
 
-            border:           Color(red: 0x2E, green: 0x33, blue: 0x3D),
-            borderStrong:     Color(red: 0x40, green: 0x46, blue: 0x52),
-            divider:          Color(red: 0x24, green: 0x28, blue: 0x30),
-            focusRing:        Color(red: 0x4C, green: 0x8B, blue: 0xF5, alpha: 0x99),
-            selection:        Color(red: 0x2E, green: 0x4F, blue: 0x8A),
-            overlay:          Color(red: 0x00, green: 0x00, blue: 0x00, alpha: 0x99)
+            success:          Color(red: 0x48, green: 0xC7, blue: 0x8E),
+            warning:          Color(red: 0xE0, green: 0xA9, blue: 0x4A),
+            error:            Color(red: 0xE2, green: 0x6D, blue: 0x5A),
+            info:             Color(red: 0x65, green: 0xAF, blue: 0xFF),
+
+            border:           Color(red: 0x31, green: 0x36, blue: 0x40),
+            borderStrong:     Color(red: 0x42, green: 0x48, blue: 0x54),
+            divider:          Color(red: 0x2A, green: 0x2F, blue: 0x38),
+            focusRing:        Color(red: 0x4A, green: 0x8C, blue: 0xF7, alpha: 0xAA),
+            selection:        Color(red: 0x4A, green: 0x8C, blue: 0xF7, alpha: 0x3D),
+            overlay:          Color(red: 0x00, green: 0x00, blue: 0x00, alpha: 0xB8)
         ),
         typography: Typography(
-            display:    TextStyleToken(font: .system(size: 32, weight: .bold),     lineHeight: 38),
-            title:      TextStyleToken(font: .system(size: 24, weight: .bold),     lineHeight: 30),
-            headline:   TextStyleToken(font: .system(size: 18, weight: .semibold), lineHeight: 24),
+            // Element-style ramp: 12 / 13 / 14 / 16 / 18 / 20 px
+            // line-height ratio ~1.4 (Compact for chrome, Regular-ish for body)
+            display:    TextStyleToken(font: .system(size: 20, weight: .semibold), lineHeight: 28),
+            title:      TextStyleToken(font: .system(size: 18, weight: .semibold), lineHeight: 25),
+            headline:   TextStyleToken(font: .system(size: 16, weight: .semibold), lineHeight: 22),
             body:       TextStyleToken(font: .system(size: 14, weight: .regular),  lineHeight: 20),
             bodyStrong: TextStyleToken(font: .system(size: 14, weight: .semibold), lineHeight: 20),
-            caption:    TextStyleToken(font: .system(size: 12, weight: .regular),  lineHeight: 16),
-            label:      TextStyleToken(font: .system(size: 11, weight: .medium),   lineHeight: 14),
+            caption:    TextStyleToken(font: .system(size: 12, weight: .regular),  lineHeight: 17),
+            label:      TextStyleToken(font: .system(size: 12, weight: .medium),   lineHeight: 17),
             mono:       TextStyleToken(font: .system(size: 13, weight: .regular),  lineHeight: 18)
         ),
-        spacing:   SpacingScale(xs: 4, sm: 8, md: 12, lg: 16, xl: 24, xxl: 32),
-        radius:    RadiusScale(none: 0, sm: 4, md: 8, lg: 12, xl: 16, pill: 9999),
+        spacing:   SpacingScale(xs: 4, sm: 6, md: 10, lg: 14, xl: 20, xxl: 28),
+        radius:    RadiusScale(none: 0, sm: 3, md: 5, lg: 8, xl: 12, pill: 9999),
         elevation: ElevationScale(
             none:   .none,
-            low:    Shadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x40), offsetX: 0, offsetY: 1, blur: 2),
-            medium: Shadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x55), offsetX: 0, offsetY: 4, blur: 12),
-            high:   Shadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x66), offsetX: 0, offsetY: 8, blur: 24)
+            low:    Shadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x50), offsetX: 0, offsetY: 1, blur: 2),
+            medium: Shadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x72), offsetX: 0, offsetY: 4, blur: 12),
+            high:   Shadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x96), offsetX: 0, offsetY: 12, blur: 32)
         ),
         motion: MotionScale(
-            fast:           .milliseconds(100),
-            standard:       .milliseconds(200),
+            fast:           .milliseconds(80),
+            standard:       .milliseconds(180),
             slow:           .milliseconds(320),
             emphasized:     .emphasized,
             standardEasing: .standard
@@ -70,3 +79,4 @@ public extension Theme {
     /// for identity within a frame.
     static let defaultDark: Theme = DefaultDarkTheme.value
 }
+

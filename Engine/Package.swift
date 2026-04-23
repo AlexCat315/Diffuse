@@ -18,8 +18,12 @@ let package = Package(
         .library(name: "RHIWGPU", targets: ["RHIWGPU"]),
         .library(name: "PlatformShell", targets: ["PlatformShell"]),
         .library(name: "RenderBackend", targets: ["RenderBackend"]),
+        .library(name: "ObservationBus", targets: ["ObservationBus"]),
+        .library(name: "CapabilityRuntime", targets: ["CapabilityRuntime"]),
         .library(name: "SceneRuntime", targets: ["SceneRuntime"]),
         .library(name: "AssetPipeline", targets: ["AssetPipeline"]),
+        .library(name: "SequenceRuntime", targets: ["SequenceRuntime"]),
+        .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
     ],
@@ -59,6 +63,11 @@ let package = Package(
                 ])
             ]
         ),
+        .target(
+            name: "CJoltBridge",
+            path: "Sources/Bridge/CJoltBridge",
+            publicHeadersPath: "include"
+        ),
 
         // MARK: - Core Kernel (no deps, pure Swift protocols and types)
         .target(name: "EngineKernel"),
@@ -83,18 +92,50 @@ let package = Package(
         ),
 
         // MARK: - Engine Services
-        .target(name: "SceneRuntime"),
+        .target(name: "ObservationBus"),
+        .target(
+            name: "CapabilityRuntime",
+            dependencies: [
+                "ObservationBus",
+            ]
+        ),
+        .target(
+            name: "SceneRuntime",
+            dependencies: [
+                "EngineKernel",
+                "CJoltBridge",
+            ]
+        ),
         .target(name: "AssetPipeline"),
-        .target(name: "ScriptRuntime"),
+        .target(name: "SequenceRuntime"),
+        .target(
+            name: "IntentRuntime",
+            dependencies: [
+                "AssetPipeline",
+                "CapabilityRuntime",
+                "ObservationBus",
+                "SceneRuntime",
+                "SequenceRuntime",
+            ]
+        ),
+        .target(
+            name: "ScriptRuntime",
+            dependencies: [
+                "SceneRuntime",
+            ]
+        ),
         .target(
             name: "RenderBackend",
             dependencies: [
                 "RHIWGPU",
-                "PlatformShell",
                 "AssetPipeline",
+                "SceneRuntime",
                 .product(name: "Logging", package: "swift-log"),
             ],
-            resources: [.copy("Resources/FinalBaseMesh.obj")]
+            resources: [
+                .copy("Resources/FinalBaseMesh.obj"),
+                .copy("Resources/Shaders"),
+            ]
         ),
 
         // MARK: - Engine Host (orchestrates all services)
@@ -104,9 +145,68 @@ let package = Package(
                 "CEngineBridge",
                 "EngineKernel",
                 "RHIWGPU",
+                "RenderBackend",
                 "SceneRuntime",
                 "AssetPipeline",
                 "ScriptRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "EngineCoreTests",
+            dependencies: [
+                "EngineCore",
+                "EngineKernel",
+                "RenderBackend",
+                "SceneRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "ObservationBusTests",
+            dependencies: [
+                "ObservationBus",
+            ]
+        ),
+        .testTarget(
+            name: "CapabilityRuntimeTests",
+            dependencies: [
+                "CapabilityRuntime",
+                "ObservationBus",
+            ]
+        ),
+        .testTarget(
+            name: "SceneRuntimeTests",
+            dependencies: [
+                "EngineKernel",
+                "SceneRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "ScriptRuntimeTests",
+            dependencies: [
+                "ScriptRuntime",
+                "SceneRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "AssetPipelineTests",
+            dependencies: [
+                "AssetPipeline",
+            ]
+        ),
+        .testTarget(
+            name: "SequenceRuntimeTests",
+            dependencies: [
+                "SequenceRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "IntentRuntimeTests",
+            dependencies: [
+                "IntentRuntime",
+                "AssetPipeline",
+                "ObservationBus",
+                "SceneRuntime",
+                "SequenceRuntime",
             ]
         ),
     ]
