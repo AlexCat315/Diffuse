@@ -25,6 +25,7 @@ private func runEditor() throws {
 
     try AppRuntime.run(
         config: AppConfig(title: "GuavaNext Editor",
+                          primaryFontName: "PingFang SC",
                           backendConfig: launchOptions.backendConfig),
         backend: backend,
         events: events,

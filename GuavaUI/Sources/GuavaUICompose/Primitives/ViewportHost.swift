@@ -116,6 +116,7 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
 
             guard let bridge = ViewportTextureBridgeHolder.current,
                   let textureID = bridge.textureID(surfaceID: snap.surface.surfaceID,
+                                                  handle: snap.surface.handle,
                                                   width: snap.surface.width,
                                                   height: snap.surface.height)
             else {

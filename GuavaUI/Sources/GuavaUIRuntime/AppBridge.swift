@@ -30,7 +30,12 @@ public final class PlatformEventBridge: @unchecked Sendable {
 }
 
 public protocol ViewportTextureBridge: AnyObject {
-    func textureID(surfaceID: UInt64, width: UInt32, height: UInt32) -> TextureID?
+    /// Resolve a published viewport surface to a `TextureID` the renderer
+    /// can sample. `surfaceID` is a monotonic identifier (used for cache
+    /// invalidation); `handle` is an opaque pointer to the producer's
+    /// underlying texture object that the producer keeps alive while the
+    /// surfaceID is current.
+    func textureID(surfaceID: UInt64, handle: UInt64, width: UInt32, height: UInt32) -> TextureID?
 }
 
 public enum ViewportTextureBridgeHolder {

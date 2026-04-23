@@ -338,6 +338,7 @@ public final class AppRuntime {
         )
         atlas = env.atlas
         TextEnvironmentHolder.current = env
+        ContentScaleHolder.current = scale
     }
 
     private func uploadAtlasIfNeeded(force: Bool = false) throws {

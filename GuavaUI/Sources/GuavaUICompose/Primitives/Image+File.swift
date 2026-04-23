@@ -50,11 +50,16 @@ public extension Image {
         }
         let url = URL(fileURLWithPath: path)
         // Vector formats need an explicit raster size; bitmap formats
-        // pass `nil` so the natural resolution is preserved.
+        // pass `nil` so the natural resolution is preserved. SVG/PDF are
+        // rasterized at physical-pixel resolution (logical * contentScale)
+        // so they remain crisp on HiDPI displays.
         let ext = url.pathExtension.lowercased()
         let size: (Int, Int)?
         if ext == "svg" || ext == "pdf" {
-            size = (max(1, Int(width.rounded())), max(1, Int(height.rounded())))
+            let scale = max(1, ContentScaleHolder.current)
+            let pxW = max(1, Int((width * scale).rounded()))
+            let pxH = max(1, Int((height * scale).rounded()))
+            size = (pxW, pxH)
         } else {
             size = nil
         }
