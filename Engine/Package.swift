@@ -26,6 +26,7 @@ let package = Package(
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
+        .executable(name: "SceneRuntimeBenchmarks", targets: ["SceneRuntimeBenchmarks"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
@@ -150,6 +151,13 @@ let package = Package(
                 "AssetPipeline",
                 "ScriptRuntime",
             ]
+        ),
+        .executableTarget(
+            name: "SceneRuntimeBenchmarks",
+            dependencies: [
+                "SceneRuntime",
+            ],
+            path: "Benchmarks/SceneRuntimeBenchmarks"
         ),
         .testTarget(
             name: "EngineCoreTests",
