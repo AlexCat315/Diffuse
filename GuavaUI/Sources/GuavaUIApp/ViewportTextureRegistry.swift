@@ -17,11 +17,11 @@ public final class ViewportTextureRegistry: ViewportTextureBridge, @unchecked Se
         self.viewportTextureID = viewportTextureID
     }
 
-    public func textureID(surfaceID: UInt64, width: UInt32, height: UInt32) -> TextureID? {
-        guard surfaceID != 0, width > 0, height > 0 else { return nil }
+    public func textureID(surfaceID: UInt64, handle: UInt64, width: UInt32, height: UInt32) -> TextureID? {
+        guard surfaceID != 0, handle != 0, width > 0, height > 0 else { return nil }
 
         if surfaceID != lastSurfaceID || width != lastWidth || height != lastHeight {
-            guard let raw = UnsafeMutableRawPointer(bitPattern: UInt(surfaceID)) else {
+            guard let raw = UnsafeMutableRawPointer(bitPattern: UInt(handle)) else {
                 return nil
             }
             let texture = Unmanaged<GPUTexture>.fromOpaque(raw).takeUnretainedValue()

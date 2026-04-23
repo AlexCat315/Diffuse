@@ -99,6 +99,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var offscreenColorView: GPUTextureView?
     private var depthTexture: GPUTexture?
     private var depthView: GPUTextureView?
+    private var publishedTextureRetainer: Unmanaged<GPUTexture>?
+    private var publishedSurfaceID: UInt64 = 0
+    private var publishedSurfaceHandle: UInt64 = 0
+    private var nextSurfaceID: UInt64 = 0
     private var sceneColorTarget: RenderTextureTarget?
     private var postProcessTargetA: RenderTextureTarget?
     private var postProcessTargetB: RenderTextureTarget?
@@ -497,9 +501,34 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     }
 
     private func registerViewportSurface(texture: GPUTexture, size: RenderDrawableSize) {
-        let pointerValue = UInt64(UInt(bitPattern: Unmanaged.passUnretained(texture).toOpaque()))
+        // Reuse the previously-published handle/ID when the texture object
+        // is unchanged so editors keep their cached BindGroup. When the
+        // texture is replaced (resize, etc.), retain the new one and
+        // release the previous Unmanaged so the heap slot cannot be
+        // recycled by another GPUTexture (e.g. depth) before consumers
+        // resolve the published handle.
+        if let publishedTextureRetainer,
+           publishedTextureRetainer.takeUnretainedValue() === texture {
+            viewportSurfaceState = ViewportSurfaceState(
+                surfaceID: publishedSurfaceID,
+                handle: publishedSurfaceHandle,
+                width: size.width,
+                height: size.height,
+                zeroCopy: true
+            )
+            return
+        }
+
+        publishedTextureRetainer?.release()
+        let retained = Unmanaged.passRetained(texture)
+        publishedTextureRetainer = retained
+        nextSurfaceID &+= 1
+        publishedSurfaceID = nextSurfaceID
+        publishedSurfaceHandle = UInt64(UInt(bitPattern: retained.toOpaque()))
+
         viewportSurfaceState = ViewportSurfaceState(
-            surfaceID: pointerValue,
+            surfaceID: publishedSurfaceID,
+            handle: publishedSurfaceHandle,
             width: size.width,
             height: size.height,
             zeroCopy: true

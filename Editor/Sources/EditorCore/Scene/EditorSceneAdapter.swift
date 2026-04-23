@@ -215,7 +215,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "local-rotation",
-                    label: "Rotation (XYZ°)",
+                    label: "Rotation",
                     value: .text(localRotationBinding(for: entity))
                 )
             )
