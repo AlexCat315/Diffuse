@@ -38,7 +38,11 @@ struct DockTabContentView: View {
                         Text("Click count: \(counter)")
                             .font(.headline)
                             .foregroundColor(.onSurface)
-                        TextField("Notes for tab \(key)", text: $note, onSubmit: {})
+                        TextField("Notes for tab \(key)",
+                                  text: $note,
+                                  axis: .vertical,
+                                  onSubmit: {})
+                            .frame(minHeight: 96)
                     }
                     .padding(16)
                     .background(.surface)

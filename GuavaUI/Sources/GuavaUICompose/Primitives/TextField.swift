@@ -2,14 +2,13 @@ import CoreGraphics
 import EngineKernel
 import GuavaUIRuntime
 
-/// Single-line text input. Routes IME / printable text through the
-/// `textInput` handler, and routes editing keys (backspace, delete, arrows,
-/// home/end, shift-extension, Cmd/Ctrl-A/C/V/X) through the `key` handler.
-/// Auto-focuses on click.
+/// Text input field. The default horizontal axis is single-line; the
+/// vertical axis accepts explicit newline insertion and grows in height to fit
+/// those lines.
 ///
 /// v1 limitations:
-/// - Single line only (Enter fires `onSubmit` but is otherwise ignored).
-/// - Selection is keyboard-driven; mouse drag is Phase 6.4e.
+/// - Vertical mode handles explicit newlines, but does not soft-wrap long
+///   lines to the field width yet.
 /// - State (cursor index, selection anchor, scroll offset) lives in a
 ///   captured reference and is lost on recompose; an explicit `@State`
 ///   cursor is a Phase 6.6 task.
@@ -17,8 +16,14 @@ import GuavaUIRuntime
 ///   field still accepts input but renders no glyphs.
 public struct TextField: _PrimitiveView {
 
+    public enum Axis: Sendable {
+        case horizontal
+        case vertical
+    }
+
     public let text: Binding<String>
     public let placeholder: String
+    public let axis: Axis
     public let onSubmit: (() -> Void)?
     public let textColor: Color?
     public let placeholderColor: Color?
@@ -27,6 +32,7 @@ public struct TextField: _PrimitiveView {
 
     public init(_ placeholder: String = "",
                 text: Binding<String>,
+        axis: Axis = .horizontal,
                 onSubmit: (() -> Void)? = nil,
                 textColor: Color? = nil,
                 placeholderColor: Color? = nil,
@@ -34,6 +40,7 @@ public struct TextField: _PrimitiveView {
                 selectionColor: Color? = nil) {
         self.text = text
         self.placeholder = placeholder
+    self.axis = axis
         self.onSubmit = onSubmit
         self.textColor = textColor
         self.placeholderColor = placeholderColor
@@ -60,6 +67,7 @@ public struct TextField: _PrimitiveView {
         var compositionText: String = ""
         var compositionStart: Int = 0
         var compositionLength: Int = 0
+        var lastCaretActivity: Double = TimingTrace.now()
 
         func clearComposition() {
             compositionText = ""
@@ -87,19 +95,33 @@ public struct TextField: _PrimitiveView {
         let atlasID: ObjectIdentifier
     }
 
+    private struct MeasureInputs: Equatable {
+        let text: String
+        let placeholder: String
+        let axis: Axis
+    }
+
     private final class RenderCacheEntry {
         let key: RenderCacheKey
         let layout: TextLayoutResult
-        var cursorWidths: [Int: Float]
 
         init(key: RenderCacheKey,
-             layout: TextLayoutResult,
-             cursorWidths: [Int: Float] = [0: 0]) {
+             layout: TextLayoutResult) {
             self.key = key
             self.layout = layout
-            self.cursorWidths = cursorWidths
         }
     }
+
+    private struct CaretLocation {
+        let x: Float
+        let topY: Float
+    }
+
+    private static let minimumFieldHeight: Float = 32
+    private static let caretBlinkHalfPeriod: Double = 0.5
+    private static let caretBlinkSteadyDuration: Double = 0.5
+    private static let measureCacheKey = "__textfield_measure_cache"
+    private static let measureInputsKey = "__textfield_measure_inputs"
 
     public func _makeNode() -> Node {
         let n = Node()
@@ -136,6 +158,7 @@ public struct TextField: _PrimitiveView {
                 let compositionCount = event.text.count
                 state.compositionStart = clamp(Int(event.start), 0, compositionCount)
                 state.compositionLength = clamp(Int(event.length), 0, max(0, compositionCount - state.compositionStart))
+                snapshot.recordCaretActivity(state)
                 return .handled
             }
             registry.setText(node) { incoming, _ in
@@ -158,9 +181,10 @@ public struct TextField: _PrimitiveView {
             }
             registry.setMotion(node) { event, _ in
                 guard state.isDragging else { return .ignored }
-                let target = snapshot.characterIndex(atWindowX: event.x,
-                                                    state: state,
-                                                    node: node)
+                let target = snapshot.characterIndex(atWindowPoint: CGPoint(x: CGFloat(event.x),
+                                                                            y: CGFloat(event.y)),
+                                                     state: state,
+                                                     node: node)
                 if state.selectionAnchor == nil {
                     state.selectionAnchor = state.cursorIndex
                 }
@@ -176,12 +200,32 @@ public struct TextField: _PrimitiveView {
 
     public func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
-        layout.height = 32
+        Self.installMeasureFunc(on: layout, snapshot: self)
+        let inputs = MeasureInputs(text: text.wrappedValue,
+                                   placeholder: placeholder,
+                                   axis: axis)
+        layout.attachments[Self.measureInputsKey] = inputs
+        if axis == .horizontal {
+            layout.height = Self.minimumFieldHeight
+        }
         return layout
     }
 
     public func _updateLayout(_ layout: LayoutNode) {
-        layout.height = 32
+        Self.installMeasureFunc(on: layout, snapshot: self)
+        let next = MeasureInputs(text: text.wrappedValue,
+                                 placeholder: placeholder,
+                                 axis: axis)
+        let previous = layout.attachments[Self.measureInputsKey] as? MeasureInputs
+        layout.attachments[Self.measureInputsKey] = next
+        if axis == .horizontal {
+            layout.height = Self.minimumFieldHeight
+        } else {
+            layout.height = nil
+            if previous != nil, previous != next {
+                layout.markDirty()
+            }
+        }
     }
 
     // MARK: - Selection helpers
@@ -211,6 +255,7 @@ public struct TextField: _PrimitiveView {
         text.wrappedValue = s
         state.cursorIndex = range.lowerBound
         state.selectionAnchor = nil
+        recordCaretActivity(state)
         return true
     }
 
@@ -228,6 +273,7 @@ public struct TextField: _PrimitiveView {
         text.wrappedValue = s
         state.cursorIndex = cursor + incoming.count
         state.selectionAnchor = nil
+        recordCaretActivity(state)
     }
 
     /// Move the cursor to `target`. When `extendSelection` is true an anchor
@@ -244,6 +290,11 @@ public struct TextField: _PrimitiveView {
             state.selectionAnchor = nil
         }
         state.cursorIndex = bounded
+        recordCaretActivity(state)
+    }
+
+    private func recordCaretActivity(_ state: FieldState) {
+        state.lastCaretActivity = TimingTrace.now()
     }
 
     // MARK: - Editing
@@ -260,6 +311,7 @@ public struct TextField: _PrimitiveView {
             case 4:  // A
                 state.selectionAnchor = 0
                 state.cursorIndex = count
+                recordCaretActivity(state)
                 return true
             case 6:  // C
                 if let r = selectionRange(state) {
@@ -291,6 +343,7 @@ public struct TextField: _PrimitiveView {
                 s.remove(at: removeAt)
                 text.wrappedValue = s
                 state.cursorIndex -= 1
+                recordCaretActivity(state)
             }
             return true
         case 76: // DELETE
@@ -300,12 +353,14 @@ public struct TextField: _PrimitiveView {
                 let removeAt = s.index(s.startIndex, offsetBy: state.cursorIndex)
                 s.remove(at: removeAt)
                 text.wrappedValue = s
+                recordCaretActivity(state)
             }
             return true
         case 80: // LEFT
             if !shift, let r = selectionRange(state) {
                 state.selectionAnchor = nil
                 state.cursorIndex = r.lowerBound
+                recordCaretActivity(state)
             } else {
                 moveCursor(to: state.cursorIndex - 1, extendSelection: shift, state: state)
             }
@@ -314,6 +369,7 @@ public struct TextField: _PrimitiveView {
             if !shift, let r = selectionRange(state) {
                 state.selectionAnchor = nil
                 state.cursorIndex = r.upperBound
+                recordCaretActivity(state)
             } else {
                 moveCursor(to: state.cursorIndex + 1, extendSelection: shift, state: state)
             }
@@ -325,7 +381,11 @@ public struct TextField: _PrimitiveView {
             moveCursor(to: count, extendSelection: shift, state: state)
             return true
         case 40, 88: // RETURN, KP_ENTER
-            onSubmit?()
+            if axis == .vertical, !cmdOrCtrl {
+                insertReplacingSelection("\n", state: state)
+            } else {
+                onSubmit?()
+            }
             return true
         default:
             return false
@@ -361,35 +421,23 @@ public struct TextField: _PrimitiveView {
                                              font: resolvedFont,
                                              lineHeight: resolvedLineHeight)
 
-        // Inner horizontal padding so text doesn't kiss the chrome edge, and a
-        // vertical offset so glyphs are centred inside the field's chrome
-        // rather than glued to the top.
-        let inset: Float = theme.spacing.sm
-        let textOriginX = Float(origin.x) + inset
+        let insetX = horizontalInset(theme: theme)
+        let textOriginX = Float(origin.x) + insetX
         let frameHeight = Float(node.frame.height)
-        let textOriginY = Float(origin.y) + max(0, (frameHeight - resolvedLineHeight) / 2)
+        let textOriginY = Float(origin.y) + textOriginYOffset(frameHeight: frameHeight,
+                                                              lineHeight: resolvedLineHeight)
 
         // Selection highlight first (drawn under the glyphs).
         if isFocused, !renderState.isComposing, let range = selectionRange(state), !current.isEmpty {
-            let xLo = cachedCursorX(in: renderState.measurementText,
-                                    upTo: range.lowerBound,
-                                    env: env,
-                                    font: resolvedFont,
-                                    lineHeight: resolvedLineHeight,
-                                    cache: renderCache)
-            let xHi = cachedCursorX(in: renderState.measurementText,
-                                    upTo: range.upperBound,
-                                    env: env,
-                                    font: resolvedFont,
-                                    lineHeight: resolvedLineHeight,
-                                    cache: renderCache)
-            list.addRect(
-                UIRect(x: textOriginX + xLo,
-                       y: textOriginY,
-                       width: max(1, xHi - xLo),
-                       height: resolvedLineHeight),
-                color: resolvedSelectionColor.multipliedAlpha(node.opacity)
-            )
+            drawSelection(range,
+                          in: current,
+                          env: env,
+                          font: resolvedFont,
+                          lineHeight: resolvedLineHeight,
+                          textOriginX: textOriginX,
+                          textOriginY: textOriginY,
+                          list: list,
+                          color: resolvedSelectionColor.multipliedAlpha(node.opacity))
         }
 
         list.addText(renderCache.layout,
@@ -399,38 +447,28 @@ public struct TextField: _PrimitiveView {
                      atlas: env.atlas)
 
         if isFocused, let compositionRange = renderState.compositionRange {
-            let xLo = cachedCursorX(in: renderState.measurementText,
-                                    upTo: compositionRange.lowerBound,
-                                    env: env,
-                                    font: resolvedFont,
-                                    lineHeight: resolvedLineHeight,
-                                    cache: renderCache)
-            let xHi = cachedCursorX(in: renderState.measurementText,
-                                    upTo: compositionRange.upperBound,
-                                    env: env,
-                                    font: resolvedFont,
-                                    lineHeight: resolvedLineHeight,
-                                    cache: renderCache)
-            list.addRect(
-                UIRect(x: textOriginX + xLo,
-                       y: textOriginY + resolvedLineHeight - 1,
-                       width: max(1, xHi - xLo),
-                       height: 1),
-                color: resolvedCursorColor.multipliedAlpha(node.opacity * 0.8)
-            )
+            drawUnderline(compositionRange,
+                          in: renderState.measurementText,
+                          env: env,
+                          font: resolvedFont,
+                          lineHeight: resolvedLineHeight,
+                          textOriginX: textOriginX,
+                          textOriginY: textOriginY,
+                          list: list,
+                          color: resolvedCursorColor.multipliedAlpha(node.opacity * 0.8))
         }
 
-        let cursorXValue = cachedCursorX(in: renderState.measurementText,
-                         upTo: clamp(renderState.cursorIndex, 0, renderState.measurementText.count),
-                         env: env,
-                         font: resolvedFont,
-                         lineHeight: resolvedLineHeight,
-                         cache: renderCache)
-        let caretHeight = max(Float(node.frame.height), resolvedLineHeight)
-        let caretX = textOriginX + cursorXValue
+        let caret = caretLocation(in: renderState.measurementText,
+                                  cursorIndex: clamp(renderState.cursorIndex, 0, renderState.measurementText.count),
+                                  env: env,
+                                  font: resolvedFont,
+                                  lineHeight: resolvedLineHeight)
+        let caretHeight = resolvedLineHeight
+        let caretX = textOriginX + caret.x
+        let caretY = textOriginY + caret.topY
         node.attachments[TextInputAttachmentKey.area] = TextInputArea(
             x: caretX,
-            y: textOriginY,
+            y: caretY,
             width: max(1, resolvedLineHeight),
             height: caretHeight,
             cursorX: 0
@@ -438,13 +476,26 @@ public struct TextField: _PrimitiveView {
 
         // Cursor — suppressed while a non-empty selection is active.
         guard isFocused, renderState.isComposing || selectionRange(state) == nil else { return }
+        guard isCaretVisible(state) else { return }
         let cursorRect = UIRect(
-            x: textOriginX + cursorXValue,
-            y: textOriginY,
+            x: caretX,
+            y: caretY,
             width: 1,
             height: resolvedLineHeight
         )
         list.addRect(cursorRect, color: resolvedCursorColor.multipliedAlpha(node.opacity))
+    }
+
+    private func isCaretVisible(_ state: FieldState) -> Bool {
+        let elapsed = TimingTrace.now() - state.lastCaretActivity
+        if elapsed <= Self.caretBlinkSteadyDuration {
+            return true
+        }
+
+        let phaseLength = Self.caretBlinkHalfPeriod * 2
+        let phase = (elapsed - Self.caretBlinkSteadyDuration)
+            .truncatingRemainder(dividingBy: phaseLength)
+        return phase < Self.caretBlinkHalfPeriod
     }
 
     private func cachedRenderLayout(node: Node,
@@ -472,29 +523,6 @@ public struct TextField: _PrimitiveView {
         let entry = RenderCacheEntry(key: key, layout: layout)
         node.attachments["__textfield_render_cache"] = entry
         return entry
-    }
-
-    private func cachedCursorX(in text: String,
-                               upTo count: Int,
-                               env: TextEnvironment,
-                               font: Font,
-                               lineHeight: Float,
-                               cache: RenderCacheEntry) -> Float {
-        let bounded = clamp(count, 0, text.count)
-        if let cached = cache.cursorWidths[bounded] {
-            return cached
-        }
-        let endIdx = text.index(text.startIndex, offsetBy: bounded)
-        let prefix = String(text[text.startIndex..<endIdx])
-        let layout = env.cachedLayout(
-            text: prefix,
-            font: font,
-            lineHeight: lineHeight,
-            maxWidth: .infinity,
-            alignment: .leading
-        )
-        cache.cursorWidths[bounded] = layout.totalWidth
-        return layout.totalWidth
     }
 
     private func makeRenderState(current: String,
@@ -543,61 +571,55 @@ public struct TextField: _PrimitiveView {
         )
     }
 
-    /// Width of `text` shaped from index 0 up to `count` characters. Used to
-    /// place the cursor and selection edges. Re-shapes each frame; v1
-    /// simplicity over caching.
-    private func cursorX(in text: String,
-                         upTo count: Int,
-                         env: TextEnvironment,
-                         font: Font) -> Float {
-        guard count > 0 else { return 0 }
-        let endIdx = text.index(text.startIndex, offsetBy: count)
-        let prefix = String(text[text.startIndex..<endIdx])
-        let glyphs = env.shape(text: prefix, font: font)
-        let layout = TextLayout.layout(
-            shapedGlyphs: glyphs,
-            text: prefix,
-            atlas: env.atlas,
-            maxWidth: .infinity,
-            lineHeight: env.resolvedLineHeight(font: font, override: nil),
-            alignment: .leading
-        )
-        return layout.totalWidth
-    }
-
-    /// Snap the cursor to the character boundary nearest a window-space x.
+    /// Snap the cursor to the character boundary nearest a window-space point.
     /// Convenience wrapper around `characterIndex(atWindowX:)` that also
     /// writes the result back to `state.cursorIndex`.
-    private func positionCursor(atWindowX windowX: Float,
+    private func positionCursor(atWindowPoint point: CGPoint,
                                 state: FieldState,
                                 node: Node) {
-        state.cursorIndex = characterIndex(atWindowX: windowX, state: state, node: node)
+        state.cursorIndex = characterIndex(atWindowPoint: point, state: state, node: node)
     }
 
-    /// Map a window-space x coordinate to a character index.
-    /// Walks shaped glyph advances and picks the side of the midline. Treats
-    /// glyph index as character index — accurate for ASCII; ligatures, CJK,
-    /// and emoji are still approximate.
-    private func characterIndex(atWindowX windowX: Float,
+    /// Map a window-space point to a character index.
+    /// Treats glyph index as character index — accurate for ASCII; ligatures,
+    /// CJK, and emoji are still approximate.
+    private func characterIndex(atWindowPoint point: CGPoint,
                                 state: FieldState,
                                 node: Node) -> Int {
-        let current = text.wrappedValue
-        guard !current.isEmpty, let env = TextEnvironmentHolder.current else {
+        guard let env = TextEnvironmentHolder.current else {
             return 0
         }
-        // Subtract the same horizontal inset render() applies so a click on
-        // the chrome's left padding lands at index 0 instead of negative.
-        let inset: Float = node.theme.spacing.sm
-        let localX = windowX - Float(state.lastDrawOrigin.x) - inset
-        if localX <= 0 { return 0 }
-        let glyphs = env.shape(text: current, font: resolvedFont(node: node, env: env))
-        var pen: Float = 0
-        for (i, g) in glyphs.enumerated() {
-            let mid = pen + g.xAdvance * 0.5
-            if localX < mid { return i }
-            pen += g.xAdvance
+        let current = text.wrappedValue
+        let lineRanges = self.lineRanges(in: current)
+        guard !lineRanges.isEmpty else {
+            return 0
         }
-        return min(glyphs.count, current.count)
+
+        let resolvedFont = resolvedFont(node: node, env: env)
+        let lineHeight = resolvedLineHeight(node: node, env: env)
+        let localX = Float(point.x) - Float(state.lastDrawOrigin.x) - horizontalInset(theme: node.theme)
+        let localY = Float(point.y) - Float(state.lastDrawOrigin.y) - textOriginYOffset(frameHeight: Float(node.frame.height),
+                                                  lineHeight: lineHeight)
+
+        let lineIndex = clamp(Int((max(localY, 0) / max(lineHeight, 1)).rounded(.down)),
+                              0,
+                              max(0, lineRanges.count - 1))
+        let lineRange = lineRanges[lineIndex]
+        let lineText = substring(current, lineRange)
+        if localX <= 0 {
+            return lineRange.lowerBound
+        }
+
+        let glyphs = env.shape(text: lineText, font: resolvedFont)
+        var pen: Float = 0
+        for (index, glyph) in glyphs.enumerated() {
+            let mid = pen + glyph.xAdvance * 0.5
+            if localX < mid {
+                return lineRange.lowerBound + index
+            }
+            pen += glyph.xAdvance
+        }
+        return lineRange.upperBound
     }
 
     // MARK: - Pointer / multi-click
@@ -610,13 +632,16 @@ public struct TextField: _PrimitiveView {
                                    node: Node) {
         switch event.clicks {
         case 3...:
-            // Triple click: select the entire (single-line) field.
+            // Triple click: select the entire field.
             state.selectionAnchor = 0
             state.cursorIndex = text.wrappedValue.count
             state.isDragging = false
         case 2:
             // Double click: select the word under the cursor.
-            let target = characterIndex(atWindowX: event.x, state: state, node: node)
+            let target = characterIndex(atWindowPoint: CGPoint(x: CGFloat(event.x),
+                                                               y: CGFloat(event.y)),
+                                        state: state,
+                                        node: node)
             let (lo, hi) = wordBounds(in: text.wrappedValue, around: target)
             state.selectionAnchor = lo
             state.cursorIndex = hi
@@ -624,9 +649,228 @@ public struct TextField: _PrimitiveView {
         default:
             // Single click: place the cursor and start a drag selection.
             state.selectionAnchor = nil
-            positionCursor(atWindowX: event.x, state: state, node: node)
+            positionCursor(atWindowPoint: CGPoint(x: CGFloat(event.x),
+                                                  y: CGFloat(event.y)),
+                           state: state,
+                           node: node)
             state.isDragging = true
             PointerCaptureHolder.current?.acquire(node)
+        }
+        recordCaretActivity(state)
+    }
+
+    private func horizontalInset(theme: Theme) -> Float {
+        max(4, theme.spacing.sm)
+    }
+
+    private func textOriginYOffset(frameHeight: Float, lineHeight: Float) -> Float {
+        if axis == .vertical {
+            return Self.verticalInset(for: lineHeight)
+        }
+        return max(0, (frameHeight - lineHeight) / 2)
+    }
+
+    private static func verticalInset(for lineHeight: Float) -> Float {
+        max(4, (minimumFieldHeight - lineHeight) * 0.5)
+    }
+
+    private func lineRanges(in text: String) -> [Range<Int>] {
+        var ranges: [Range<Int>] = []
+        var start = 0
+        for (index, character) in text.enumerated() {
+            if character == "\n" {
+                ranges.append(start..<index)
+                start = index + 1
+            }
+        }
+        ranges.append(start..<text.count)
+        return ranges.isEmpty ? [0..<0] : ranges
+    }
+
+    private func lineIndex(for cursorIndex: Int, lineRanges: [Range<Int>]) -> Int {
+        for (index, range) in lineRanges.enumerated() {
+            if cursorIndex <= range.upperBound {
+                return index
+            }
+        }
+        return max(0, lineRanges.count - 1)
+    }
+
+    private func rangeLength(_ range: Range<Int>) -> Int {
+        range.upperBound - range.lowerBound
+    }
+
+    private func linePrefixWidth(in text: String,
+                                 upTo count: Int,
+                                 env: TextEnvironment,
+                                 font: Font,
+                                 lineHeight: Float) -> Float {
+        let bounded = clamp(count, 0, text.count)
+        guard bounded > 0 else { return 0 }
+        let endIndex = text.index(text.startIndex, offsetBy: bounded)
+        let prefix = String(text[text.startIndex..<endIndex])
+        let layout = env.cachedLayout(
+            text: prefix,
+            font: font,
+            lineHeight: lineHeight,
+            maxWidth: .infinity,
+            alignment: .leading
+        )
+        return layout.lines.last?.width ?? 0
+    }
+
+    private func caretLocation(in text: String,
+                               cursorIndex: Int,
+                               env: TextEnvironment,
+                               font: Font,
+                               lineHeight: Float) -> CaretLocation {
+        let ranges = lineRanges(in: text)
+        let line = lineIndex(for: clamp(cursorIndex, 0, text.count), lineRanges: ranges)
+        let range = ranges[line]
+        let column = clamp(cursorIndex - range.lowerBound, 0, rangeLength(range))
+        let lineText = substring(text, range)
+        return CaretLocation(
+            x: linePrefixWidth(in: lineText,
+                               upTo: column,
+                               env: env,
+                               font: font,
+                               lineHeight: lineHeight),
+            topY: Float(line) * lineHeight
+        )
+    }
+
+    private func drawSelection(_ range: Range<Int>,
+                               in text: String,
+                               env: TextEnvironment,
+                               font: Font,
+                               lineHeight: Float,
+                               textOriginX: Float,
+                               textOriginY: Float,
+                               list: DrawList,
+                               color: Color) {
+        let ranges = lineRanges(in: text)
+        let startLine = lineIndex(for: range.lowerBound, lineRanges: ranges)
+        let endLine = lineIndex(for: range.upperBound, lineRanges: ranges)
+        for line in startLine...endLine {
+            let lineRange = ranges[line]
+            let lower = max(range.lowerBound, lineRange.lowerBound)
+            let upper = min(range.upperBound, lineRange.upperBound)
+            guard upper > lower else { continue }
+            let lineText = substring(text, lineRange)
+            let xLo = linePrefixWidth(in: lineText,
+                                      upTo: lower - lineRange.lowerBound,
+                                      env: env,
+                                      font: font,
+                                      lineHeight: lineHeight)
+            let xHi = linePrefixWidth(in: lineText,
+                                      upTo: upper - lineRange.lowerBound,
+                                      env: env,
+                                      font: font,
+                                      lineHeight: lineHeight)
+            list.addRect(
+                UIRect(x: textOriginX + xLo,
+                       y: textOriginY + Float(line) * lineHeight,
+                       width: max(1, xHi - xLo),
+                       height: lineHeight),
+                color: color
+            )
+        }
+    }
+
+    private func drawUnderline(_ range: Range<Int>,
+                               in text: String,
+                               env: TextEnvironment,
+                               font: Font,
+                               lineHeight: Float,
+                               textOriginX: Float,
+                               textOriginY: Float,
+                               list: DrawList,
+                               color: Color) {
+        let ranges = lineRanges(in: text)
+        let startLine = lineIndex(for: range.lowerBound, lineRanges: ranges)
+        let endLine = lineIndex(for: range.upperBound, lineRanges: ranges)
+        for line in startLine...endLine {
+            let lineRange = ranges[line]
+            let lower = max(range.lowerBound, lineRange.lowerBound)
+            let upper = min(range.upperBound, lineRange.upperBound)
+            guard upper > lower else { continue }
+            let lineText = substring(text, lineRange)
+            let xLo = linePrefixWidth(in: lineText,
+                                      upTo: lower - lineRange.lowerBound,
+                                      env: env,
+                                      font: font,
+                                      lineHeight: lineHeight)
+            let xHi = linePrefixWidth(in: lineText,
+                                      upTo: upper - lineRange.lowerBound,
+                                      env: env,
+                                      font: font,
+                                      lineHeight: lineHeight)
+            list.addRect(
+                UIRect(x: textOriginX + xLo,
+                       y: textOriginY + Float(line) * lineHeight + lineHeight - 1,
+                       width: max(1, xHi - xLo),
+                       height: 1),
+                color: color
+            )
+        }
+    }
+
+    private static func installMeasureFunc(on layout: LayoutNode, snapshot: TextField) {
+        guard snapshot.axis == .vertical else {
+            layout.setMeasureFunc(nil)
+            return
+        }
+
+        layout.setMeasureFunc { [weak layout] width, widthMode, _, _ in
+            guard let env = TextEnvironmentHolder.current else {
+                return CGSize(width: 0, height: CGFloat(minimumFieldHeight))
+            }
+            let fontOverride = layout?.attachments[StyleAttachmentKey.font] as? Font
+            let lineHeightOverride = layout?.attachments[StyleAttachmentKey.lineHeight] as? Float
+            let resolvedFont = env.resolvedFont(fontOverride)
+            let resolvedLineHeight = env.resolvedLineHeight(font: resolvedFont,
+                                                            override: lineHeightOverride)
+            let measureText = snapshot.text.wrappedValue.isEmpty
+                ? snapshot.placeholder
+                : snapshot.text.wrappedValue
+            let layoutResult: TextLayoutResult
+            if measureText.isEmpty {
+                layoutResult = env.cachedLayout(
+                    text: "",
+                    font: resolvedFont,
+                    lineHeight: resolvedLineHeight,
+                    maxWidth: .infinity,
+                    alignment: .leading
+                )
+            } else {
+                layoutResult = Text.cachedLayout(
+                    env: env,
+                    attachments: { layout?.attachments[measureCacheKey] },
+                    store: { layout?.attachments[measureCacheKey] = $0 },
+                    text: measureText,
+                    font: resolvedFont,
+                    lineHeight: resolvedLineHeight,
+                    maxWidth: .infinity,
+                    alignment: .leading
+                )
+            }
+
+            let insetY = verticalInset(for: resolvedLineHeight)
+            let contentHeight = max(resolvedLineHeight, layoutResult.totalHeight)
+            let measuredWidth = layoutResult.totalWidth + 16
+            let resolvedWidth: Float
+            switch widthMode {
+            case .exactly:
+                resolvedWidth = width
+            case .atMost:
+                resolvedWidth = min(measuredWidth, width)
+            case .undefined:
+                resolvedWidth = measuredWidth
+            }
+
+            return CGSize(width: CGFloat(resolvedWidth),
+                          height: CGFloat(max(minimumFieldHeight,
+                                              contentHeight + insetY * 2)))
         }
     }
 

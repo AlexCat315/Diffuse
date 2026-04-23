@@ -20,6 +20,8 @@ let package = Package(
         .library(name: "RenderBackend", targets: ["RenderBackend"]),
         .library(name: "SceneRuntime", targets: ["SceneRuntime"]),
         .library(name: "AssetPipeline", targets: ["AssetPipeline"]),
+        .library(name: "SequenceRuntime", targets: ["SequenceRuntime"]),
+        .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
     ],
@@ -95,6 +97,15 @@ let package = Package(
             ]
         ),
         .target(name: "AssetPipeline"),
+        .target(name: "SequenceRuntime"),
+        .target(
+            name: "IntentRuntime",
+            dependencies: [
+                "AssetPipeline",
+                "SceneRuntime",
+                "SequenceRuntime",
+            ]
+        ),
         .target(
             name: "ScriptRuntime",
             dependencies: [
@@ -153,6 +164,21 @@ let package = Package(
             name: "AssetPipelineTests",
             dependencies: [
                 "AssetPipeline",
+            ]
+        ),
+        .testTarget(
+            name: "SequenceRuntimeTests",
+            dependencies: [
+                "SequenceRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "IntentRuntimeTests",
+            dependencies: [
+                "IntentRuntime",
+                "AssetPipeline",
+                "SceneRuntime",
+                "SequenceRuntime",
             ]
         ),
     ]
