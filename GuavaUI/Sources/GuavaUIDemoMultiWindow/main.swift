@@ -39,7 +39,11 @@ struct CounterWindowView: View {
 
                     card("Focus") {
                         Column(alignment: .leading, spacing: 10) {
-                            TextField("Type here to move focus into this window", text: $notes, onSubmit: {})
+                            TextField("Type here to move focus into this window",
+                                      text: $notes,
+                                      axis: .vertical,
+                                      onSubmit: {})
+                                .frame(minHeight: 96)
                             Text(notes.isEmpty ? "Focus target: idle" : "Focus target: \(notes)")
                                 .font(.caption)
                                 .foregroundColor(.onSurfaceMuted)

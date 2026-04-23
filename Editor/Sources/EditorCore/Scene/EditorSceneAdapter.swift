@@ -1,5 +1,6 @@
 import Foundation
 import GuavaUIRuntime
+import IntentRuntime
 import SceneRuntime
 import simd
 
@@ -66,6 +67,7 @@ public enum EditorInspectorFieldValue {
 /// 面板只读取这里导出的树与属性 schema，不再依赖 stub 列表。
 public final class EditorSceneAdapter: @unchecked Sendable {
     var scene = SceneRuntime()
+    let transactionExecutor = TransactionExecutor()
     private var initialSelectionID: UInt64?
     private var initialExpandedIDs: Set<UInt64> = []
 
@@ -354,12 +356,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 guard scene.component(SceneNameComponent.self, for: entity)?.value != value else {
                     return
                 }
-                if scene.hasComponent(SceneNameComponent.self, for: entity) {
-                    _ = scene.updateComponent(SceneNameComponent.self, for: entity) { $0.value = value }
-                } else {
-                    _ = scene.setComponent(SceneNameComponent(value: value), for: entity)
-                }
-                publishRevision()
+                _ = applySceneTransaction(intentVerb: "scene.set_name",
+                                          summary: "Rename entity",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setSceneName(entityID: entity.rawValue, value: value)])
             }
         )
     }
@@ -373,8 +373,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 guard scene.component(RigidBody.self, for: entity)?.allowSleep != next else {
                     return
                 }
-                _ = scene.updateComponent(RigidBody.self, for: entity) { $0.allowSleep = next }
-                publishRevision()
+                _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_allow_sleep",
+                                          summary: "Update rigid body sleep flag",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRigidBodyAllowSleep(entityID: entity.rawValue, value: next)])
             }
         )
     }
@@ -388,8 +390,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 guard scene.component(Collider.self, for: entity)?.isTrigger != next else {
                     return
                 }
-                _ = scene.updateComponent(Collider.self, for: entity) { $0.isTrigger = next }
-                publishRevision()
+                _ = applySceneTransaction(intentVerb: "scene.set_collider_trigger",
+                                          summary: "Update collider trigger flag",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setColliderTrigger(entityID: entity.rawValue, value: next)])
             }
         )
     }
@@ -403,8 +407,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 guard scene.component(Constraint.self, for: entity)?.isEnabled != next else {
                     return
                 }
-                _ = scene.updateComponent(Constraint.self, for: entity) { $0.isEnabled = next }
-                publishRevision()
+                _ = applySceneTransaction(intentVerb: "scene.set_constraint_enabled",
+                                          summary: "Update constraint enabled flag",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setConstraintEnabled(entityID: entity.rawValue, value: next)])
             }
         )
     }
@@ -476,9 +482,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 guard let v = parseVec3(next) else { return }
                 var local = scene.localTransform(for: entity) ?? LocalTransform()
                 local.matrix.columns.3 = SIMD4<Float>(v, 1)
-                _ = scene.setLocalTransform(local, for: entity)
-                scene.propagateTransforms()
-                publishRevision()
+                _ = applySceneTransaction(intentVerb: "scene.set_local_transform",
+                                          summary: "Update entity translation",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLocalTransform(entityID: entity.rawValue, transform: local)])
             }
         )
     }
@@ -498,9 +505,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                                local.matrix.columns.3.y,
                                                local.matrix.columns.3.z)
                 local.matrix = composeMatrix(translation: translation, rotation: rot, scale: v)
-                _ = scene.setLocalTransform(local, for: entity)
-                scene.propagateTransforms()
-                publishRevision()
+                _ = applySceneTransaction(intentVerb: "scene.set_local_transform",
+                                          summary: "Update entity scale",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLocalTransform(entityID: entity.rawValue, transform: local)])
             }
         )
     }
@@ -524,11 +532,37 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 let radians = degrees * (.pi / 180.0)
                 let rot = matrixFromEulerXYZ(radians)
                 local.matrix = composeMatrix(translation: translation, rotation: rot, scale: scale)
-                _ = scene.setLocalTransform(local, for: entity)
-                scene.propagateTransforms()
-                publishRevision()
+                _ = applySceneTransaction(intentVerb: "scene.set_local_transform",
+                                          summary: "Update entity rotation",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLocalTransform(entityID: entity.rawValue, transform: local)])
             }
         )
+    }
+
+    @discardableResult
+    func applySceneTransaction(intentVerb: String,
+                               summary: String,
+                               targetRawIDs: [UInt64] = [],
+                               mutations: [SceneMutation]) -> TransactionApplyResult? {
+        let intent = IntentIR(verb: intentVerb,
+                              summary: summary,
+                              targetObjectIDs: targetRawIDs.map { "scene:\($0)" },
+                              source: .human)
+        let transaction = TransactionIR(intent: intent,
+                                        summary: summary,
+                                        operations: mutations.map(TransactionOperation.scene),
+                                        baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+                                        provenance: .authored)
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+        guard let result = try? transactionExecutor.apply(transaction, to: &context),
+              let updatedScene = context.sceneRuntime
+        else {
+            return nil
+        }
+        scene = updatedScene
+        notifyRevisionChanged()
+        return result
     }
 
     /// 解析 "x, y, z" 或 "x y z" 格式（空格 / 逗号都可），返回 SIMD3。
