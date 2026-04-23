@@ -1,4 +1,5 @@
 import Foundation
+import EngineKernel
 import RenderBackend
 
 struct RenderThreadReport: Sendable {
@@ -32,6 +33,7 @@ final class RenderThread: @unchecked Sendable {
 
     private let runtime: any EngineRuntime
     private let ringBuffer: RingBuffer<RenderPacket>
+    private let onKernelPhase: @Sendable (EngineKernelPhase, EngineKernelPhaseContext) -> Void
     private let consumer: any RenderPacketConsumer
     private let queue = DispatchQueue(label: "com.guava.engine.render", qos: .userInitiated)
     private let state = LockedState(State())
@@ -40,11 +42,13 @@ final class RenderThread: @unchecked Sendable {
     init(
         runtime: any EngineRuntime,
         ringBuffer: RingBuffer<RenderPacket>,
+        onKernelPhase: @escaping @Sendable (EngineKernelPhase, EngineKernelPhaseContext) -> Void = { _, _ in },
         consumer: any RenderPacketConsumer,
         onFrameRendered: @escaping @Sendable (RenderThreadReport) -> Void
     ) {
         self.runtime = runtime
         self.ringBuffer = ringBuffer
+        self.onKernelPhase = onKernelPhase
         self.consumer = consumer
         self.onFrameRendered = onFrameRendered
     }
@@ -102,6 +106,10 @@ final class RenderThread: @unchecked Sendable {
             }
 
             let begin = CFAbsoluteTimeGetCurrent()
+            onKernelPhase(
+                .renderSubmit,
+                EngineKernelPhaseContext(frameIndex: UInt64(packet.frameIndex), deltaTime: packet.deltaTime)
+            )
             runtime.tickRenderSubmit(deltaTime: packet.deltaTime)
             consumer.render(packet: packet)
             let renderSubmitSeconds = CFAbsoluteTimeGetCurrent() - begin

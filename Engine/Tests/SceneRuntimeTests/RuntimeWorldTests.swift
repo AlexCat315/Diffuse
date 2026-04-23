@@ -1,4 +1,5 @@
 import SceneRuntime
+import EngineKernel
 import Testing
 import simd
 
@@ -288,5 +289,27 @@ struct RuntimeWorldTests {
 
         let lastPrepare = backend.prepareContexts.last
         #expect(lastPrepare?.syncEvents.contains(.bodyRemove(entity)) == true)
+    }
+
+    @Test("SceneRuntime stores current frame input as a derived resource")
+    func sceneRuntimeStoresInputFrameResource() {
+        var runtime = SceneRuntime()
+        let inputEvents: [InputEvent] = [
+            .keyDown(.init(scancode: 4, keycode: 65, modifiers: .shift, isRepeat: false)),
+            .windowResized(width: 1920, height: 1080)
+        ]
+
+        _ = runtime.tick(deltaTime: 0.25, frameIndex: 12, inputEvents: inputEvents)
+
+        let resource = runtime.resource(InputFrameResource.self)
+        #expect(resource?.frameIndex == 12)
+        #expect(resource?.deltaTimeSeconds == 0.25)
+        #expect(resource?.events.count == inputEvents.count)
+        if case let .keyDown(event)? = resource?.events.first {
+            #expect(event.keycode == 65)
+            #expect(event.modifiers == .shift)
+        } else {
+            Issue.record("expected the first input event to be keyDown")
+        }
     }
 }

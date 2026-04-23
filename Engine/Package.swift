@@ -102,6 +102,7 @@ let package = Package(
         .target(
             name: "SceneRuntime",
             dependencies: [
+                "EngineKernel",
                 "CJoltBridge",
             ]
         ),
@@ -154,6 +155,7 @@ let package = Package(
             name: "EngineCoreTests",
             dependencies: [
                 "EngineCore",
+                "EngineKernel",
                 "RenderBackend",
                 "SceneRuntime",
             ]
@@ -174,6 +176,7 @@ let package = Package(
         .testTarget(
             name: "SceneRuntimeTests",
             dependencies: [
+                "EngineKernel",
                 "SceneRuntime",
             ]
         ),
