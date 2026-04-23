@@ -83,7 +83,7 @@ public final class EventDispatcher {
     private func dispatchPointerDown(_ event: MouseButtonEvent) {
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         guard let hit = hitTest(point: point) else { return }
-        deliver(path: hit.path, kind: .pointer(event, .down))
+        _ = deliver(path: hit.path, kind: .pointer(event, .down))
         // Auto-focus on click for focusable targets.
         if hit.node.isFocusable {
             focusChain.focus(hit.node)
@@ -93,12 +93,12 @@ public final class EventDispatcher {
     private func dispatchPointerUp(_ event: MouseButtonEvent) {
         if let captured = capture.target {
             let path = pathFromRoot(to: captured)
-            deliver(path: path, kind: .pointer(event, .up))
+            _ = deliver(path: path, kind: .pointer(event, .up))
             return
         }
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         guard let hit = hitTest(point: point) else { return }
-        deliver(path: hit.path, kind: .pointer(event, .up))
+        _ = deliver(path: hit.path, kind: .pointer(event, .up))
     }
 
     private func dispatchMotion(_ event: MouseMotionEvent) {
@@ -106,7 +106,7 @@ public final class EventDispatcher {
         if let captured = capture.target {
             let path = pathFromRoot(to: captured)
             updateHoverPath(to: path)
-            deliver(path: path, kind: .motion(event))
+            _ = deliver(path: path, kind: .motion(event))
             return
         }
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
@@ -115,25 +115,35 @@ public final class EventDispatcher {
             return
         }
         updateHoverPath(to: hit.path)
-        deliver(path: hit.path, kind: .motion(event))
+        _ = deliver(path: hit.path, kind: .motion(event))
     }
 
     private func dispatchWheel(_ event: MouseWheelEvent) {
-        // Prefer hit-testing under the last known cursor so the scrollable
-        // region under the pointer wins. Fall back to the focused node, then
-        // the root node.
-        if let cursor = lastCursor,
-           let hit = hitTest(point: cursor) {
-            deliver(path: hit.path, kind: .wheel(event))
+        let hitPath = lastCursor.flatMap { cursor in
+            hitTest(point: cursor)?.path
+        }
+        let focusedPath = focusChain.focused.map(pathFromRoot)
+        let preferredFocusedPath = preferredFocusedWheelPath(from: focusedPath)
+
+        // Nodes can opt into focused-wheel priority so an active inner editor
+        // keeps its own scroll context even while a parent scroll view is hovered.
+        if let preferredFocusedPath,
+           deliver(path: preferredFocusedPath, kind: .wheel(event)) == .handled {
             return
         }
-        if let focused = focusChain.focused {
-            let path = pathFromRoot(to: focused)
-            deliver(path: path, kind: .wheel(event))
+        if let hitPath,
+           !sameWheelTarget(hitPath, preferredFocusedPath),
+           deliver(path: hitPath, kind: .wheel(event)) == .handled {
+            return
+        }
+        if let focusedPath,
+           !sameWheelTarget(focusedPath, preferredFocusedPath),
+           !sameWheelTarget(focusedPath, hitPath),
+           deliver(path: focusedPath, kind: .wheel(event)) == .handled {
             return
         }
         guard let root = tree.root else { return }
-        deliver(path: [root], kind: .wheel(event))
+        _ = deliver(path: [root], kind: .wheel(event))
     }
 
     /// Hit-test entry point. Routes through the `InputScene` mirror when
@@ -160,19 +170,19 @@ public final class EventDispatcher {
         }
         guard let focused = focusChain.focused else { return }
         let path = pathFromRoot(to: focused)
-        deliver(path: path, kind: .key(event))
+        _ = deliver(path: path, kind: .key(event))
     }
 
     private func dispatchText(_ text: String) {
         guard let focused = focusChain.focused else { return }
         let path = pathFromRoot(to: focused)
-        deliver(path: path, kind: .text(text))
+        _ = deliver(path: path, kind: .text(text))
     }
 
     private func dispatchTextEditing(_ event: TextEditingEvent) {
         guard let focused = focusChain.focused else { return }
         let path = pathFromRoot(to: focused)
-        deliver(path: path, kind: .editing(event))
+        _ = deliver(path: path, kind: .editing(event))
     }
 
     // MARK: - Delivery
@@ -186,24 +196,42 @@ public final class EventDispatcher {
         case text(String)
     }
 
-    private func deliver(path: [Node], kind: EventKind) {
-        guard !path.isEmpty else { return }
+    private func deliver(path: [Node], kind: EventKind) -> EventResult {
+        guard !path.isEmpty else { return .ignored }
 
         // Capture phase: root → target (exclusive of target).
         for node in path.dropLast() {
-            if invoke(node: node, kind: kind, phase: .capture) == .handled { return }
+            if invoke(node: node, kind: kind, phase: .capture) == .handled { return .handled }
         }
 
         // Target phase.
         if let target = path.last,
            invoke(node: target, kind: kind, phase: .target) == .handled {
-            return
+            return .handled
         }
 
         // Bubble phase: target's parent → root.
         for node in path.dropLast().reversed() {
-            if invoke(node: node, kind: kind, phase: .bubble) == .handled { return }
+            if invoke(node: node, kind: kind, phase: .bubble) == .handled { return .handled }
         }
+
+        return .ignored
+    }
+
+    private func preferredFocusedWheelPath(from focusedPath: [Node]?) -> [Node]? {
+        guard let focusedPath,
+              let focused = focusedPath.last,
+              let priority = focused.attachments[WheelRoutingAttachmentKey.priority]
+                as? WheelRoutingPriority,
+              priority == .preferFocused else {
+            return nil
+        }
+        return focusedPath
+    }
+
+    private func sameWheelTarget(_ lhs: [Node]?, _ rhs: [Node]?) -> Bool {
+        guard let lhs = lhs?.last, let rhs = rhs?.last else { return false }
+        return lhs === rhs
     }
 
     private func invoke(node: Node, kind: EventKind, phase: EventPhase) -> EventResult {

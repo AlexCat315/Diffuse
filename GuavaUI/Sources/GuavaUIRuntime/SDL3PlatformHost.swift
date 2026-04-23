@@ -449,7 +449,7 @@ public final class SDL3PlatformHost: PlatformHost {
 
     private func syncTextInputArea(for session: PlatformWindowSession,
                                    shell: any Shell) {
-        let area = session.focusChain.focused?.attachments[TextInputAttachmentKey.area] as? TextInputArea
+        let area = session.focusChain.focused?.inputNode?.textInputArea
         guard area != session.lastTextInputArea else { return }
 
         shell.setTextInputArea(windowID: session.id, area)
@@ -457,7 +457,7 @@ public final class SDL3PlatformHost: PlatformHost {
     }
 
     private func scheduleFocusedTextRefresh(for session: PlatformWindowSession) {
-        guard session.focusChain.focused?.attachments[TextInputAttachmentKey.area] as? TextInputArea != nil else {
+        guard session.focusChain.focused?.inputNode?.textInputArea != nil else {
             session.lastTextCursorAnimationTick = 0
             return
         }

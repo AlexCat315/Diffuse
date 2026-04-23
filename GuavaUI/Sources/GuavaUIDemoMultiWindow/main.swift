@@ -43,8 +43,10 @@ struct CounterWindowView: View {
                                       text: $notes,
                                       axis: .vertical,
                                       onSubmit: {})
-                                .frame(minHeight: 96)
-                            Text(notes.isEmpty ? "Focus target: idle" : "Focus target: \(notes)")
+                                .frame(height: 96)
+                                Text(notes.isEmpty
+                                    ? "Focus target: idle"
+                                    : "Focus target: editing (\(notes.count) chars)")
                                 .font(.caption)
                                 .foregroundColor(.onSurfaceMuted)
                         }

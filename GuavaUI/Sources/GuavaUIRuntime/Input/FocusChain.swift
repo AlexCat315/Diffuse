@@ -24,7 +24,11 @@ public final class FocusChain {
     public init() {}
 
     public func focus(_ node: Node?) {
+        guard focused !== node else { return }
+        let previous = focused
         focused = node
+        notifyFocusChange(for: previous, isFocused: false)
+        notifyFocusChange(for: node, isFocused: true)
     }
 
     /// Move focus to the next focusable node in tree order, wrapping around.
@@ -32,35 +36,41 @@ public final class FocusChain {
     @discardableResult
     public func focusNext(in root: Node) -> Node? {
         let chain = focusables(in: root)
-        guard !chain.isEmpty else { focused = nil; return nil }
+        guard !chain.isEmpty else {
+            focus(nil)
+            return nil
+        }
 
         guard let cur = focused,
               let i = chain.firstIndex(where: { $0 === cur }) else {
-            focused = chain.first
+            focus(chain.first)
             return chain.first
         }
         let next = chain[(i + 1) % chain.count]
-        focused = next
+        focus(next)
         return next
     }
 
     @discardableResult
     public func focusPrevious(in root: Node) -> Node? {
         let chain = focusables(in: root)
-        guard !chain.isEmpty else { focused = nil; return nil }
+        guard !chain.isEmpty else {
+            focus(nil)
+            return nil
+        }
 
         guard let cur = focused,
               let i = chain.firstIndex(where: { $0 === cur }) else {
-            focused = chain.last
+            focus(chain.last)
             return chain.last
         }
         let prev = chain[(i - 1 + chain.count) % chain.count]
-        focused = prev
+        focus(prev)
         return prev
     }
 
     public func clear() {
-        focused = nil
+        focus(nil)
     }
 
     // MARK: - Internal
@@ -83,5 +93,11 @@ public final class FocusChain {
     private func collect(node: Node, into out: inout [Node]) {
         if node.isFocusable { out.append(node) }
         for c in node.children { collect(node: c, into: &out) }
+    }
+
+    private func notifyFocusChange(for node: Node?, isFocused: Bool) {
+        guard let handler = node?.attachments[TextInputAttachmentKey.focusChangeHandler]
+                as? TextInputFocusChangeHandler else { return }
+        handler(isFocused)
     }
 }
