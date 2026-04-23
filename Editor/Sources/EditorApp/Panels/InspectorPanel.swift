@@ -70,7 +70,8 @@ struct InspectorPanel: View {
                     PropertyGridRow(id: field.id, label: field.label) {
                         fieldView(field.value)
                     }
-                }
+                },
+                isCollapsible: true
             )
         }
     }
@@ -91,6 +92,8 @@ struct InspectorPanel: View {
             return AnyView(NumberField(value: binding, size: .small))
         case let .vector3(x, y, z):
             return AnyView(vector3Field(x: x, y: y, z: z))
+        case let .color(binding):
+            return AnyView(ColorField(color: binding))
         }
     }
 

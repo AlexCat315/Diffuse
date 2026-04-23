@@ -191,6 +191,7 @@ public enum CapabilityInvocationPlannerError: Error, CustomStringConvertible {
     case missingIntent
     case approvalForbidden(String)
     case blockedPreconditions([PreconditionFailure])
+    case unsupportedProvenance(verbID: String, provenance: TransactionProvenance)
 
     public var description: String {
         switch self {
@@ -200,6 +201,8 @@ public enum CapabilityInvocationPlannerError: Error, CustomStringConvertible {
             return "transaction \(transactionID) is forbidden by approval policy"
         case let .blockedPreconditions(failures):
             return failures.map(\ .message).joined(separator: "; ")
+        case let .unsupportedProvenance(verbID, provenance):
+            return "capability \(verbID) does not allow transaction provenance \(provenance.rawValue)"
         }
     }
 }
@@ -228,6 +231,10 @@ public struct CapabilityInvocationPlanner {
                                                                                         phase: context.releasePhase,
                                                                                         includeExperimental: context.includeExperimental,
                                                                                         isHotfix: context.isHotfix))
+        guard resolution.spec.provenanceInputAllowed.contains(CapabilityInputProvenance(rawValue: transaction.provenance.rawValue) ?? .authored) else {
+            throw CapabilityInvocationPlannerError.unsupportedProvenance(verbID: resolution.spec.verbID,
+                                                                        provenance: transaction.provenance)
+        }
         let preconditionReport = checker.evaluate(resolution.spec.preconditions,
                                                   facts: context.facts,
                                                   currentRole: context.role)

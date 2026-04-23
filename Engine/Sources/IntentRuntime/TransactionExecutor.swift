@@ -305,6 +305,9 @@ public struct TransactionExecutor {
                     copy.isActive = false
                     _ = scene.setComponent(copy, for: entity)
                 }
+                if let light = scene.component(LightComponent.self, for: source) {
+                    _ = scene.setComponent(light, for: entity)
+                }
                 createdEntityIDs.append(entity.rawValue)
 
             case let .setLocalTransform(entityID, transform):
@@ -340,6 +343,22 @@ public struct TransactionExecutor {
                 guard scene.updateComponent(Constraint.self, for: entity, { $0.isEnabled = value }) else {
                     throw TransactionExecutorError.missingComponent(entityID: entityID,
                                                                    type: "Constraint")
+                }
+
+            case let .setLightColor(entityID, color):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(LightComponent.self, for: entity, { $0.color = color }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "LightComponent")
+                }
+
+            case let .setLightIntensity(entityID, intensity):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(LightComponent.self, for: entity, {
+                    $0.intensity = max(0, intensity)
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "LightComponent")
                 }
 
             case let .setCameraPose(entityID, localTransform, target, up):
@@ -591,6 +610,8 @@ public struct TransactionExecutor {
                  let .setRigidBodyAllowSleep(entityID, _),
                  let .setColliderTrigger(entityID, _),
                  let .setConstraintEnabled(entityID, _),
+                 let .setLightColor(entityID, _),
+                 let .setLightIntensity(entityID, _),
                  let .setCameraPose(entityID, _, _, _):
                 ids.insert(entityID)
             }

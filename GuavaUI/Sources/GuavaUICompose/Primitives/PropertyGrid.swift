@@ -18,17 +18,26 @@ public struct PropertyGridSection: Identifiable {
     public let id: String
     public let title: String
     public let rows: [PropertyGridRow]
+    /// When `true`, the header renders a collapse chevron and rows can be
+    /// hidden by clicking it. `false` disables the affordance entirely.
+    public let isCollapsible: Bool
+    /// Initial collapse state. Only relevant when `isCollapsible` is `true`.
+    public let startsCollapsed: Bool
 
     public init(id: String,
                 title: String,
-                rows: [PropertyGridRow]) {
+                rows: [PropertyGridRow],
+                isCollapsible: Bool = false,
+                startsCollapsed: Bool = false) {
         self.id = id
         self.title = title
         self.rows = rows
+        self.isCollapsible = isCollapsible
+        self.startsCollapsed = startsCollapsed
     }
 }
 
-/// Two-column inspector grid with lightweight section headers.
+/// Two-column inspector grid with collapsible section headers.
 /// The call site owns the value controls; the primitive only handles layout.
 public struct PropertyGrid: View {
     public let sections: [PropertyGridSection]
@@ -47,6 +56,19 @@ public struct PropertyGrid: View {
     }
 
     public var body: some View {
+        _StatefulPropertyGrid(grid: self)
+    }
+}
+
+// MARK: - Stateful wrapper (tracks per-section collapse state)
+
+private struct _StatefulPropertyGrid: View {
+    let grid: PropertyGrid
+
+    // Keyed by section id; true = collapsed
+    @State var collapsed: [String: Bool] = [:]
+
+    var body: some View {
         ScrollView(.vertical) {
             Box(direction: .column, alignItems: .stretch, spacing: 12) {
                 sectionViews()
@@ -58,8 +80,12 @@ public struct PropertyGrid: View {
     }
 
     private func sectionViews() -> [AnyView] {
-        sections.map { section in
-            AnyView(sectionView(section))
+        grid.sections.map { section in
+            let isCollapsed = collapsed[section.id] ?? section.startsCollapsed
+            return AnyView(
+                sectionView(section, isCollapsed: isCollapsed)
+                    .id(section.id)
+            )
         }
     }
 
@@ -69,19 +95,41 @@ public struct PropertyGrid: View {
         }
     }
 
-    private func sectionView(_ section: PropertyGridSection) -> some View {
+    private func sectionView(_ section: PropertyGridSection,
+                              isCollapsed: Bool) -> some View {
         Box(direction: .column, alignItems: .stretch, spacing: 6) {
-            Text(section.title)
-                .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
-
-            Box(direction: .column, alignItems: .stretch, spacing: rowSpacing) {
-                rowViews(section.rows)
+            // Header
+            Button(role: .normal,
+                   isEnabled: section.isCollapsible,
+                   action: {
+                let current = collapsed[section.id] ?? section.startsCollapsed
+                collapsed[section.id] = !current
+            }) {
+                Row(alignment: .center, spacing: 4) {
+                    if section.isCollapsible {
+                        Text(isCollapsed ? "▶" : "▼")
+                            .font(.label)
+                            .foregroundColor(.onSurfaceMuted)
+                    }
+                    Text(section.title)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                        .flex()
+                }
+                .padding(horizontal: section.isCollapsible ? 2 : 0, vertical: 2)
             }
-            .padding(1)
-            .background(.divider)
-            .cornerRadius(2)
-            .clipped()
+            .buttonStyle(.ghost)
+
+            // Rows (hidden when collapsed)
+            if !isCollapsed {
+                Box(direction: .column, alignItems: .stretch, spacing: grid.rowSpacing) {
+                    rowViews(section.rows)
+                }
+                .padding(1)
+                .background(.divider)
+                .cornerRadius(2)
+                .clipped()
+            }
         }
         .flex()
     }
@@ -94,15 +142,15 @@ public struct PropertyGrid: View {
                     .foregroundColor(.onSurfaceVariant)
             }
             .padding(horizontal: 8)
-            .frame(width: labelWidth, height: rowHeight)
+            .frame(width: grid.labelWidth, height: grid.rowHeight)
             .background(.surfaceVariant)
 
             Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
                 row.value
-                    .frame(height: rowHeight)
+                    .frame(height: grid.rowHeight)
                     .flex()
             }
-            .frame(height: rowHeight)
+            .frame(height: grid.rowHeight)
             .padding(horizontal: 8)
             .background(.surface)
             .flex()
