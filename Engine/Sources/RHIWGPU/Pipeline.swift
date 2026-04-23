@@ -72,3 +72,5 @@ public final class GPURenderPipeline {
         return GPUBindGroupLayout(handle: ptr)
     }
 }
+
+extension GPURenderPipeline: @unchecked Sendable {}
