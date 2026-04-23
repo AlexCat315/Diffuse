@@ -71,20 +71,22 @@ public struct SpatialIndexEntry: Sendable, Equatable {
 public struct SpatialBVHBuildConfig: Sendable, Equatable {
     public var leafSize: Int
     public var sahSampleCount: Int
+    public var rebuildThreshold: Float
 
-    public init(leafSize: Int = 8, sahSampleCount: Int = 16) {
+    public init(leafSize: Int = 8, sahSampleCount: Int = 16, rebuildThreshold: Float = 0.35) {
         self.leafSize = max(1, leafSize)
         self.sahSampleCount = max(1, sahSampleCount)
+        self.rebuildThreshold = min(max(rebuildThreshold, 0), 1)
     }
 
     public static func adaptive(forEntryCount entryCount: Int) -> SpatialBVHBuildConfig {
         switch entryCount {
         case 0..<256:
-            return SpatialBVHBuildConfig(leafSize: 6, sahSampleCount: 12)
+            return SpatialBVHBuildConfig(leafSize: 6, sahSampleCount: 12, rebuildThreshold: 0.45)
         case 256..<4_096:
-            return SpatialBVHBuildConfig(leafSize: 8, sahSampleCount: 16)
+            return SpatialBVHBuildConfig(leafSize: 8, sahSampleCount: 16, rebuildThreshold: 0.35)
         default:
-            return SpatialBVHBuildConfig(leafSize: 12, sahSampleCount: 24)
+            return SpatialBVHBuildConfig(leafSize: 12, sahSampleCount: 24, rebuildThreshold: 0.25)
         }
     }
 }
@@ -158,6 +160,7 @@ final class SpatialQueryStatsRecorder {
 public struct SpatialIndexResource: Sendable, Equatable {
     public var entries: [SpatialIndexEntry]
     public var sourceRevision: UInt64
+    public var buildConfig: SpatialBVHBuildConfig
     var bvh: SpatialBVH
 
     public init(entries: [SpatialIndexEntry] = [],
@@ -165,7 +168,52 @@ public struct SpatialIndexResource: Sendable, Equatable {
                 buildConfig: SpatialBVHBuildConfig = SpatialBVHBuildConfig()) {
         self.entries = entries
         self.sourceRevision = sourceRevision
+        self.buildConfig = buildConfig
         bvh = SpatialBVH(entries: entries, buildConfig: buildConfig)
+    }
+
+    func updated(entries newEntries: [SpatialIndexEntry],
+                 sourceRevision: UInt64) -> SpatialIndexResource {
+        guard newEntries.count == entries.count,
+              !newEntries.isEmpty else {
+            return SpatialIndexResource(entries: newEntries,
+                                        sourceRevision: sourceRevision,
+                                        buildConfig: buildConfig)
+        }
+
+        var changedEntryIndices: [Int] = []
+        changedEntryIndices.reserveCapacity(max(8, newEntries.count / 20))
+
+        for index in newEntries.indices {
+            if entries[index].entity != newEntries[index].entity {
+                return SpatialIndexResource(entries: newEntries,
+                                            sourceRevision: sourceRevision,
+                                            buildConfig: buildConfig)
+            }
+            if entries[index].bounds != newEntries[index].bounds {
+                changedEntryIndices.append(index)
+            }
+        }
+
+        if changedEntryIndices.isEmpty {
+            var next = self
+            next.entries = newEntries
+            next.sourceRevision = sourceRevision
+            return next
+        }
+
+        let changedRatio = Float(changedEntryIndices.count) / Float(newEntries.count)
+        if changedRatio >= buildConfig.rebuildThreshold {
+            return SpatialIndexResource(entries: newEntries,
+                                        sourceRevision: sourceRevision,
+                                        buildConfig: buildConfig)
+        }
+
+        var next = self
+        next.entries = newEntries
+        next.sourceRevision = sourceRevision
+        next.bvh.refit(entries: newEntries, changedEntryIndices: changedEntryIndices)
+        return next
     }
 }
 
@@ -186,6 +234,8 @@ struct SpatialBVH: Sendable, Equatable {
 
     private(set) var nodes: [SpatialBVHNode] = []
     private(set) var orderedEntryIndices: [Int] = []
+    private(set) var parentNodeIndices: [Int] = []
+    private(set) var leafNodeByEntryIndex: [Int] = []
     private let leafSize: Int
     private let sahSampleCount: Int
 
@@ -195,7 +245,54 @@ struct SpatialBVH: Sendable, Equatable {
         guard !entries.isEmpty else { return }
 
         orderedEntryIndices = Array(entries.indices)
-        _ = buildNode(entries: entries, start: 0, count: entries.count)
+        leafNodeByEntryIndex = Array(repeating: -1, count: entries.count)
+        _ = buildNode(entries: entries, start: 0, count: entries.count, parent: -1)
+    }
+
+    mutating func refit(entries: [SpatialIndexEntry], changedEntryIndices: [Int]) {
+        guard !nodes.isEmpty, !changedEntryIndices.isEmpty else { return }
+
+        var dirtyLeafNodes = Set<Int>()
+        for entryIndex in changedEntryIndices {
+            guard entryIndex >= 0, entryIndex < leafNodeByEntryIndex.count else { continue }
+            let leafNode = leafNodeByEntryIndex[entryIndex]
+            guard leafNode >= 0 else { continue }
+            dirtyLeafNodes.insert(leafNode)
+        }
+        guard !dirtyLeafNodes.isEmpty else { return }
+
+        for leafNode in dirtyLeafNodes {
+            var merged: SpatialAABB?
+            let node = nodes[leafNode]
+            for offset in 0..<node.count {
+                let entryIndex = orderedEntryIndices[node.start + offset]
+                let bounds = entries[entryIndex].bounds
+                merged = merged.map { $0.merged(with: bounds) } ?? bounds
+            }
+            if let merged {
+                nodes[leafNode].bounds = merged
+            }
+        }
+
+        var frontier = Array(dirtyLeafNodes)
+        var queued = dirtyLeafNodes
+
+        while let nodeIndex = frontier.popLast() {
+            let parent = parentNodeIndices[nodeIndex]
+            guard parent >= 0 else { continue }
+            guard nodes[parent].leftChild >= 0, nodes[parent].rightChild >= 0 else { continue }
+
+            let leftBounds = nodes[nodes[parent].leftChild].bounds
+            let rightBounds = nodes[nodes[parent].rightChild].bounds
+            let merged = leftBounds.merged(with: rightBounds)
+            if merged != nodes[parent].bounds {
+                nodes[parent].bounds = merged
+            }
+
+            if queued.insert(parent).inserted {
+                frontier.append(parent)
+            }
+        }
     }
 
     func forEachOverlapping(_ bounds: SpatialAABB,
@@ -364,7 +461,10 @@ struct SpatialBVH: Sendable, Equatable {
         }
     }
 
-    private mutating func buildNode(entries: [SpatialIndexEntry], start: Int, count: Int) -> Int {
+    private mutating func buildNode(entries: [SpatialIndexEntry],
+                                    start: Int,
+                                    count: Int,
+                                    parent: Int) -> Int {
         let bounds = combinedBounds(entries: entries, start: start, count: count)
         let nodeIndex = nodes.count
         nodes.append(
@@ -374,8 +474,13 @@ struct SpatialBVH: Sendable, Equatable {
                            start: start,
                            count: count)
         )
+        parentNodeIndices.append(parent)
 
         guard count > leafSize else {
+            for offset in 0..<count {
+                let entryIndex = orderedEntryIndices[start + offset]
+                leafNodeByEntryIndex[entryIndex] = nodeIndex
+            }
             return nodeIndex
         }
 
@@ -420,8 +525,14 @@ struct SpatialBVH: Sendable, Equatable {
 
         let leftCount = splitIndex - start
         let rightCount = count - leftCount
-        let leftChild = buildNode(entries: entries, start: start, count: leftCount)
-        let rightChild = buildNode(entries: entries, start: splitIndex, count: rightCount)
+        let leftChild = buildNode(entries: entries,
+                      start: start,
+                      count: leftCount,
+                      parent: nodeIndex)
+        let rightChild = buildNode(entries: entries,
+                       start: splitIndex,
+                       count: rightCount,
+                       parent: nodeIndex)
 
         nodes[nodeIndex] = SpatialBVHNode(bounds: bounds,
                                           leftChild: leftChild,
@@ -580,6 +691,7 @@ func buildSpatialIndexResource(
     using jobSystem: JobSystem
 ) -> (resource: SpatialIndexResource, report: JobDispatchReport) {
     let buildSettings = world.resource(SpatialIndexBuildSettings.self) ?? SpatialIndexBuildSettings()
+    let previousIndex = world.resource(SpatialIndexResource.self)
     let entities = world.entities()
     let result = jobSystem.parallelCompactMap(items: entities) { entity -> SpatialIndexEntry? in
         guard let collider = world.component(Collider.self, for: entity),
@@ -601,10 +713,17 @@ func buildSpatialIndexResource(
 
     let buildConfig = buildSettings.resolvedConfig(entryCount: result.0.count)
 
+    let resource: SpatialIndexResource
+    if let previousIndex, previousIndex.buildConfig == buildConfig {
+        resource = previousIndex.updated(entries: result.0, sourceRevision: world.revision)
+    } else {
+        resource = SpatialIndexResource(entries: result.0,
+                                       sourceRevision: world.revision,
+                                       buildConfig: buildConfig)
+    }
+
     return (
-        SpatialIndexResource(entries: result.0,
-                             sourceRevision: world.revision,
-                             buildConfig: buildConfig),
+        resource,
         result.1
     )
 }
