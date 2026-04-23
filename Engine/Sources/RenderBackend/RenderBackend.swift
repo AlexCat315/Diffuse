@@ -42,6 +42,8 @@ private struct DynamicInstanceResources {
     let capacity: Int
 }
 
+extension DynamicInstanceResources: @unchecked Sendable {}
+
 private struct RenderTextureTarget {
     let texture: GPUTexture
     let view: GPUTextureView
@@ -233,6 +235,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             var renderBundleCount = 0
             var renderBundleParallelJobs = 0
             var bundleRecordNS: UInt64 = 0
+            var passEncodeNS: [RenderPassKind: UInt64] = [:]
+            var cpuSkyboxEncodeNS: UInt64 = 0
+            var cpuBaseEncodeNS: UInt64 = 0
+            var cpuPostProcessEncodeNS: UInt64 = 0
             var viewportResolved = false
             var skyboxEncoded = false
             var hdrCurrent = sceneColorTarget
@@ -240,6 +246,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             let encoder = try backend.createCommandEncoder()
 
             for passKind in framePlan.passes {
+                let passStartNS = DispatchTime.now().uptimeNanoseconds
                 switch passKind {
                     case .skybox:
                         guard let target = sceneColorTarget,
@@ -372,6 +379,19 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         registerViewportSurface(texture: colorTarget.texture, size: packet.drawableSize)
                         viewportResolved = true
                 }
+
+                let passElapsedNS = DispatchTime.now().uptimeNanoseconds - passStartNS
+                passEncodeNS[passKind, default: 0] &+= passElapsedNS
+                switch passKind {
+                case .skybox:
+                    cpuSkyboxEncodeNS &+= passElapsedNS
+                case .basePass:
+                    cpuBaseEncodeNS &+= passElapsedNS
+                case .ssao, .ssr, .taa, .bloom, .tonemap, .fxaa:
+                    cpuPostProcessEncodeNS &+= passElapsedNS
+                case .depthPrepass, .shadowPass, .viewportResolve:
+                    break
+                }
             }
 
             let encodeDoneNS = DispatchTime.now().uptimeNanoseconds
@@ -403,7 +423,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 cpuPrepareNS: cpuPrepareNS,
                 cpuEncodeNS: cpuEncodeNS,
                 cpuSubmitNS: cpuSubmitNS,
-                cpuFrameTotalNS: cpuFrameTotalNS
+                cpuFrameTotalNS: cpuFrameTotalNS,
+                cpuSkyboxEncodeNS: cpuSkyboxEncodeNS,
+                cpuBaseEncodeNS: cpuBaseEncodeNS,
+                cpuPostProcessEncodeNS: cpuPostProcessEncodeNS,
+                passEncodeNS: passEncodeNS
             )
 
             if shouldEmitPlannerLog(frameIndex: packet.frameIndex) {
@@ -1043,20 +1067,18 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         colorLoadOp: GPULoadOp,
         depthLoadOp: GPULoadOp
     ) throws -> BasePassEncodingReport {
-        if dynamicInstanceResources == nil {
-            let bundleReport = try encodeBasePassWithRenderBundles(
-                encoder: encoder,
-                colorView: colorView,
-                depthView: depthView,
-                pipeline: pipeline,
-                scene: scene,
-                colorFormat: colorFormat,
-                colorLoadOp: colorLoadOp,
-                depthLoadOp: depthLoadOp
-            )
-            if bundleReport.renderBundleCount > 0 {
-                return bundleReport
-            }
+        let bundleReport = try encodeBasePassWithRenderBundles(
+            encoder: encoder,
+            colorView: colorView,
+            depthView: depthView,
+            pipeline: pipeline,
+            scene: scene,
+            colorFormat: colorFormat,
+            colorLoadOp: colorLoadOp,
+            depthLoadOp: depthLoadOp
+        )
+        if bundleReport.renderBundleCount > 0 {
+            return bundleReport
         }
 
         let pass = try encoder.beginRenderPass(
@@ -1188,6 +1210,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         let bundleRecordStartNS = DispatchTime.now().uptimeNanoseconds
         let state = BundleRecordState(count: finalRanges.count)
         let localInstanceResources = instanceResources
+        let localDynamicResources = dynamicInstanceResources
         let localMeshes = meshes
         let localSceneInstances = scene.instances
         let localPipeline = pipeline
@@ -1203,11 +1226,18 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 bundleEncoder.setPipeline(localPipeline)
 
                 var localDrawCount = 0
-                for i in finalRanges[rangeIndex] where i < localInstanceResources.count {
+                for i in finalRanges[rangeIndex] {
                     let instance = localSceneInstances[i]
                     guard localMeshes.indices.contains(instance.meshIndex) else { continue }
                     let mesh = localMeshes[instance.meshIndex]
-                    bundleEncoder.setBindGroup(localInstanceResources[i].bindGroup, index: 0)
+                    if let dyn = localDynamicResources {
+                        let drawOffset = UInt64(i) * dyn.stride
+                        guard drawOffset <= UInt64(UInt32.max) else { continue }
+                        bundleEncoder.setBindGroup(dyn.bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
+                    } else {
+                        guard i < localInstanceResources.count else { continue }
+                        bundleEncoder.setBindGroup(localInstanceResources[i].bindGroup, index: 0)
+                    }
                     bundleEncoder.setVertexBuffer(mesh.vertexBuffer, slot: 0)
                     bundleEncoder.setIndexBuffer(mesh.indexBuffer, format: .uint32)
                     bundleEncoder.drawIndexed(indexCount: mesh.indexCount)
