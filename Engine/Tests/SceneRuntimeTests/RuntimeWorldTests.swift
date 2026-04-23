@@ -312,4 +312,41 @@ struct RuntimeWorldTests {
             Issue.record("expected the first input event to be keyDown")
         }
     }
+
+    @Test("SceneRuntime reports parallel job-backed phases when a multi-worker job system is installed")
+    func sceneRuntimeReportsParallelJobBackedPhases() {
+        var runtime = SceneRuntime()
+        runtime.setJobSystem(JobSystem(workerCount: 4, minimumChunkSize: 1, label: "test.jobs.runtime"))
+        runtime.setPhysicsBackend(RecordingPhysicsBackend())
+        runtime.setPhysicsSettings(
+            PhysicsSettingsResource(
+                simulationMode: .play,
+                backendKind: .none,
+                fixedTimeStepSeconds: 1.0 / 60.0,
+                maxSubstepsPerFrame: 1
+            )
+        )
+
+        let camera = runtime.createEntity()
+        _ = runtime.setComponent(CameraComponent(isActive: true), for: camera)
+
+        for meshIndex in 0..<4 {
+            let entity = runtime.createEntity()
+            _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(Float(meshIndex), 0, 0)), for: entity)
+            _ = runtime.setComponent(RenderMeshComponent(meshIndex: meshIndex % 2), for: entity)
+            _ = runtime.setComponent(
+                Collider(shape: .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: .zero)),
+                for: entity
+            )
+            _ = runtime.setComponent(RigidBody(), for: entity)
+        }
+
+        let report = runtime.tick(deltaTime: 1.0 / 60.0)
+
+        #expect(report.jobWorkerCount == 4)
+        #expect(report.scheduledJobCount >= 4)
+        #expect(report.parallelPhases.contains(.fixedPhysicsPrepare))
+        #expect(report.parallelPhases.contains(.spatialIndexUpdate))
+        #expect(report.parallelPhases.contains(.renderExtract))
+    }
 }

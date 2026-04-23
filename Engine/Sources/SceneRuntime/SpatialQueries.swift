@@ -1,3 +1,4 @@
+import EngineKernel
 import simd
 
 public struct SpatialAABB: Sendable, Equatable {
@@ -25,10 +26,19 @@ public struct SpatialAABB: Sendable, Equatable {
         min.x <= max.x && min.y <= max.y && min.z <= max.z
     }
 
+    public var surfaceArea: Float {
+        let extents = max - min
+        return 2 * (extents.x * extents.y + extents.y * extents.z + extents.z * extents.x)
+    }
+
     public func intersects(_ other: SpatialAABB) -> Bool {
         min.x <= other.max.x && max.x >= other.min.x &&
         min.y <= other.max.y && max.y >= other.min.y &&
         min.z <= other.max.z && max.z >= other.min.z
+    }
+
+    public func merged(with other: SpatialAABB) -> SpatialAABB {
+        SpatialAABB(min: simd_min(min, other.min), max: simd_max(max, other.max))
     }
 }
 
@@ -58,13 +68,877 @@ public struct SpatialIndexEntry: Sendable, Equatable {
     }
 }
 
+public struct SpatialBVHBuildConfig: Sendable, Equatable {
+    public var leafSize: Int
+    public var sahSampleCount: Int
+    public var rebuildThreshold: Float
+
+    public init(leafSize: Int = 8, sahSampleCount: Int = 16, rebuildThreshold: Float = 0.35) {
+        self.leafSize = max(1, leafSize)
+        self.sahSampleCount = max(1, sahSampleCount)
+        self.rebuildThreshold = min(max(rebuildThreshold, 0), 1)
+    }
+
+    public static func adaptive(forEntryCount entryCount: Int) -> SpatialBVHBuildConfig {
+        switch entryCount {
+        case 0..<256:
+            return SpatialBVHBuildConfig(leafSize: 6, sahSampleCount: 12, rebuildThreshold: 0.45)
+        case 256..<4_096:
+            return SpatialBVHBuildConfig(leafSize: 8, sahSampleCount: 16, rebuildThreshold: 0.35)
+        default:
+            return SpatialBVHBuildConfig(leafSize: 12, sahSampleCount: 24, rebuildThreshold: 0.25)
+        }
+    }
+}
+
+public struct SpatialIndexBuildSettings: Sendable, Equatable {
+    public enum Mode: Sendable, Equatable {
+        case adaptive
+        case custom(SpatialBVHBuildConfig)
+    }
+
+    public var mode: Mode
+
+    public init(mode: Mode = .adaptive) {
+        self.mode = mode
+    }
+
+    public func resolvedConfig(entryCount: Int) -> SpatialBVHBuildConfig {
+        switch mode {
+        case .adaptive:
+            return .adaptive(forEntryCount: entryCount)
+        case let .custom(config):
+            return config
+        }
+    }
+}
+
+public struct SpatialQueryStats: Sendable, Equatable {
+    public var nodeVisits: Int
+    public var leafTests: Int
+    public var narrowPhaseTests: Int
+
+    public init(nodeVisits: Int = 0,
+                leafTests: Int = 0,
+                narrowPhaseTests: Int = 0) {
+        self.nodeVisits = nodeVisits
+        self.leafTests = leafTests
+        self.narrowPhaseTests = narrowPhaseTests
+    }
+}
+
+public final class SpatialQueryScratch: @unchecked Sendable {
+    fileprivate var sceneOverlapHitsBuffer: [SceneOverlapHit] = []
+    fileprivate var physicsOverlapHitsBuffer: [PhysicsOverlapHit] = []
+    fileprivate var overflowNodeStack: [Int] = []
+    fileprivate var overflowDistanceStack: [Float] = []
+
+    public init() {}
+
+    fileprivate func resetTraversalOverflow() {
+        overflowNodeStack.removeAll(keepingCapacity: true)
+        overflowDistanceStack.removeAll(keepingCapacity: true)
+    }
+}
+
+final class SpatialQueryStatsRecorder {
+    var stats = SpatialQueryStats()
+
+    func recordNodeVisit() {
+        stats.nodeVisits += 1
+    }
+
+    func recordLeafTest() {
+        stats.leafTests += 1
+    }
+
+    func recordNarrowPhaseTest() {
+        stats.narrowPhaseTests += 1
+    }
+}
+
 public struct SpatialIndexResource: Sendable, Equatable {
     public var entries: [SpatialIndexEntry]
     public var sourceRevision: UInt64
+    public var buildConfig: SpatialBVHBuildConfig
+    var bvh: SpatialBVH
 
-    public init(entries: [SpatialIndexEntry] = [], sourceRevision: UInt64 = 0) {
+    public init(entries: [SpatialIndexEntry] = [],
+                sourceRevision: UInt64 = 0,
+                buildConfig: SpatialBVHBuildConfig = SpatialBVHBuildConfig()) {
         self.entries = entries
         self.sourceRevision = sourceRevision
+        self.buildConfig = buildConfig
+        bvh = SpatialBVH(entries: entries, buildConfig: buildConfig)
+    }
+
+    func updated(entries newEntries: [SpatialIndexEntry],
+                 sourceRevision: UInt64) -> SpatialIndexResource {
+        guard newEntries.count == entries.count,
+              !newEntries.isEmpty else {
+            return SpatialIndexResource(entries: newEntries,
+                                        sourceRevision: sourceRevision,
+                                        buildConfig: buildConfig)
+        }
+
+        var changedEntryIndices: [Int] = []
+        changedEntryIndices.reserveCapacity(max(8, newEntries.count / 20))
+
+        for index in newEntries.indices {
+            if entries[index].entity != newEntries[index].entity {
+                return SpatialIndexResource(entries: newEntries,
+                                            sourceRevision: sourceRevision,
+                                            buildConfig: buildConfig)
+            }
+            if entries[index].bounds != newEntries[index].bounds {
+                changedEntryIndices.append(index)
+            }
+        }
+
+        if changedEntryIndices.isEmpty {
+            var next = self
+            next.entries = newEntries
+            next.sourceRevision = sourceRevision
+            return next
+        }
+
+        let changedRatio = Float(changedEntryIndices.count) / Float(newEntries.count)
+        var next = self
+        next.entries = newEntries
+        next.sourceRevision = sourceRevision
+
+        if changedRatio >= buildConfig.rebuildThreshold {
+            let rebuilt = next.bvh.rebuildDirtySubtrees(entries: newEntries,
+                                                        changedEntryIndices: changedEntryIndices,
+                                                        triggerRatio: buildConfig.rebuildThreshold)
+            if rebuilt {
+                return next
+            }
+            return SpatialIndexResource(entries: newEntries,
+                                        sourceRevision: sourceRevision,
+                                        buildConfig: buildConfig)
+        }
+
+        next.bvh.refit(entries: newEntries, changedEntryIndices: changedEntryIndices)
+        return next
+    }
+}
+
+struct SpatialBVHNode: Sendable, Equatable {
+    var bounds: SpatialAABB
+    var leftChild: Int
+    var rightChild: Int
+    var start: Int
+    var count: Int
+
+    var isLeaf: Bool {
+        count > 0
+    }
+}
+
+struct SpatialBVHStorage: Sendable, Equatable {
+    private(set) var minX: [Float] = []
+    private(set) var minY: [Float] = []
+    private(set) var minZ: [Float] = []
+    private(set) var maxX: [Float] = []
+    private(set) var maxY: [Float] = []
+    private(set) var maxZ: [Float] = []
+    private(set) var leftChild: [Int] = []
+    private(set) var rightChild: [Int] = []
+    private(set) var start: [Int] = []
+    private(set) var count: [Int] = []
+
+    mutating func rebuild(from nodes: [SpatialBVHNode]) {
+        let nodeCount = nodes.count
+        minX.removeAll(keepingCapacity: true)
+        minY.removeAll(keepingCapacity: true)
+        minZ.removeAll(keepingCapacity: true)
+        maxX.removeAll(keepingCapacity: true)
+        maxY.removeAll(keepingCapacity: true)
+        maxZ.removeAll(keepingCapacity: true)
+        leftChild.removeAll(keepingCapacity: true)
+        rightChild.removeAll(keepingCapacity: true)
+        start.removeAll(keepingCapacity: true)
+        count.removeAll(keepingCapacity: true)
+
+        minX.reserveCapacity(nodeCount)
+        minY.reserveCapacity(nodeCount)
+        minZ.reserveCapacity(nodeCount)
+        maxX.reserveCapacity(nodeCount)
+        maxY.reserveCapacity(nodeCount)
+        maxZ.reserveCapacity(nodeCount)
+        leftChild.reserveCapacity(nodeCount)
+        rightChild.reserveCapacity(nodeCount)
+        start.reserveCapacity(nodeCount)
+        count.reserveCapacity(nodeCount)
+
+        for node in nodes {
+            minX.append(node.bounds.min.x)
+            minY.append(node.bounds.min.y)
+            minZ.append(node.bounds.min.z)
+            maxX.append(node.bounds.max.x)
+            maxY.append(node.bounds.max.y)
+            maxZ.append(node.bounds.max.z)
+            leftChild.append(node.leftChild)
+            rightChild.append(node.rightChild)
+            start.append(node.start)
+            count.append(node.count)
+        }
+    }
+
+    func isLeaf(_ nodeIndex: Int) -> Bool {
+        count[nodeIndex] > 0
+    }
+
+    func rangeStart(_ nodeIndex: Int) -> Int {
+        start[nodeIndex]
+    }
+
+    func rangeCount(_ nodeIndex: Int) -> Int {
+        count[nodeIndex]
+    }
+
+    func left(_ nodeIndex: Int) -> Int {
+        leftChild[nodeIndex]
+    }
+
+    func right(_ nodeIndex: Int) -> Int {
+        rightChild[nodeIndex]
+    }
+
+    func intersects(nodeIndex: Int, bounds: SpatialAABB) -> Bool {
+        minX[nodeIndex] <= bounds.max.x && maxX[nodeIndex] >= bounds.min.x &&
+        minY[nodeIndex] <= bounds.max.y && maxY[nodeIndex] >= bounds.min.y &&
+        minZ[nodeIndex] <= bounds.max.z && maxZ[nodeIndex] >= bounds.min.z
+    }
+
+    func raycastInterval(nodeIndex: Int,
+                         origin: SIMD3<Float>,
+                         direction: SIMD3<Float>,
+                         maxDistance: Float) -> (entryDistance: Float, exitDistance: Float, normal: SIMD3<Float>)? {
+        raycastBoxInterval(min: SIMD3<Float>(minX[nodeIndex], minY[nodeIndex], minZ[nodeIndex]),
+                           max: SIMD3<Float>(maxX[nodeIndex], maxY[nodeIndex], maxZ[nodeIndex]),
+                           origin: origin,
+                           direction: direction,
+                           maxDistance: maxDistance)
+    }
+}
+
+struct SpatialBVH: Sendable, Equatable {
+    private static let traversalStackCapacity = 128
+
+    private(set) var nodes: [SpatialBVHNode] = []
+    private(set) var soa = SpatialBVHStorage()
+    private(set) var orderedEntryIndices: [Int] = []
+    private(set) var parentNodeIndices: [Int] = []
+    private(set) var leafNodeByEntryIndex: [Int] = []
+    private let leafSize: Int
+    private let sahSampleCount: Int
+
+    init(entries: [SpatialIndexEntry], buildConfig: SpatialBVHBuildConfig) {
+        self.leafSize = max(1, buildConfig.leafSize)
+        self.sahSampleCount = max(1, buildConfig.sahSampleCount)
+        guard !entries.isEmpty else { return }
+
+        orderedEntryIndices = Array(entries.indices)
+        leafNodeByEntryIndex = Array(repeating: -1, count: entries.count)
+        _ = buildNode(entries: entries, start: 0, count: entries.count, parent: -1)
+        soa.rebuild(from: nodes)
+    }
+
+    mutating func refit(entries: [SpatialIndexEntry], changedEntryIndices: [Int]) {
+        guard !nodes.isEmpty, !changedEntryIndices.isEmpty else { return }
+
+        var dirtyLeafNodes = Set<Int>()
+        for entryIndex in changedEntryIndices {
+            guard entryIndex >= 0, entryIndex < leafNodeByEntryIndex.count else { continue }
+            let leafNode = leafNodeByEntryIndex[entryIndex]
+            guard leafNode >= 0 else { continue }
+            dirtyLeafNodes.insert(leafNode)
+        }
+        guard !dirtyLeafNodes.isEmpty else { return }
+
+        for leafNode in dirtyLeafNodes {
+            var merged: SpatialAABB?
+            let node = nodes[leafNode]
+            for offset in 0..<node.count {
+                let entryIndex = orderedEntryIndices[node.start + offset]
+                let bounds = entries[entryIndex].bounds
+                merged = merged.map { $0.merged(with: bounds) } ?? bounds
+            }
+            if let merged {
+                nodes[leafNode].bounds = merged
+            }
+        }
+
+        var frontier = Array(dirtyLeafNodes)
+        var queued = dirtyLeafNodes
+
+        while let nodeIndex = frontier.popLast() {
+            let parent = parentNodeIndices[nodeIndex]
+            guard parent >= 0 else { continue }
+            guard nodes[parent].leftChild >= 0, nodes[parent].rightChild >= 0 else { continue }
+
+            let leftBounds = nodes[nodes[parent].leftChild].bounds
+            let rightBounds = nodes[nodes[parent].rightChild].bounds
+            let merged = leftBounds.merged(with: rightBounds)
+            if merged != nodes[parent].bounds {
+                nodes[parent].bounds = merged
+            }
+
+            if queued.insert(parent).inserted {
+                frontier.append(parent)
+            }
+        }
+
+        soa.rebuild(from: nodes)
+    }
+
+    mutating func rebuildDirtySubtrees(entries: [SpatialIndexEntry],
+                                       changedEntryIndices: [Int],
+                                       triggerRatio: Float) -> Bool {
+        guard !nodes.isEmpty, !changedEntryIndices.isEmpty else { return true }
+        let boundedTrigger = min(max(triggerRatio, 0), 1)
+
+        var dirtyLeafNodes = Set<Int>()
+        for entryIndex in changedEntryIndices {
+            guard entryIndex >= 0, entryIndex < leafNodeByEntryIndex.count else { continue }
+            let leafNode = leafNodeByEntryIndex[entryIndex]
+            guard leafNode >= 0 else { continue }
+            dirtyLeafNodes.insert(leafNode)
+        }
+        guard !dirtyLeafNodes.isEmpty else { return true }
+
+        var subtreeItemCounts = Array(repeating: 0, count: nodes.count)
+        _ = computeSubtreeItemCounts(nodeIndex: 0, into: &subtreeItemCounts)
+
+        var dirtyCountByNode = Array(repeating: 0, count: nodes.count)
+        for leafNode in dirtyLeafNodes {
+            var cursor = leafNode
+            while cursor >= 0 {
+                dirtyCountByNode[cursor] += 1
+                cursor = parentNodeIndices[cursor]
+            }
+        }
+
+        var rebuildRoots: [Int] = []
+        for nodeIndex in 0..<nodes.count {
+            let dirtyCount = dirtyCountByNode[nodeIndex]
+            guard dirtyCount > 0 else { continue }
+
+            let subtreeItems = max(subtreeItemCounts[nodeIndex], 1)
+            let ratio = Float(dirtyCount) / Float(subtreeItems)
+            guard ratio >= boundedTrigger else { continue }
+
+            let parent = parentNodeIndices[nodeIndex]
+            if parent >= 0 {
+                let parentItems = max(subtreeItemCounts[parent], 1)
+                let parentRatio = Float(dirtyCountByNode[parent]) / Float(parentItems)
+                if parentRatio >= boundedTrigger {
+                    continue
+                }
+            }
+            rebuildRoots.append(nodeIndex)
+        }
+
+        if rebuildRoots.isEmpty {
+            refit(entries: entries, changedEntryIndices: changedEntryIndices)
+            return true
+        }
+
+        for root in rebuildRoots {
+            guard rebuildSubtree(rootNode: root, entries: entries) else {
+                return false
+            }
+        }
+
+        var frontier = rebuildRoots
+        var queued = Set(rebuildRoots)
+        while let nodeIndex = frontier.popLast() {
+            let parent = parentNodeIndices[nodeIndex]
+            guard parent >= 0 else { continue }
+            guard nodes[parent].leftChild >= 0, nodes[parent].rightChild >= 0 else { continue }
+
+            let leftBounds = nodes[nodes[parent].leftChild].bounds
+            let rightBounds = nodes[nodes[parent].rightChild].bounds
+            nodes[parent].bounds = leftBounds.merged(with: rightBounds)
+
+            if queued.insert(parent).inserted {
+                frontier.append(parent)
+            }
+        }
+
+        soa.rebuild(from: nodes)
+        return true
+    }
+
+    func forEachOverlapping(_ bounds: SpatialAABB,
+                            scratch: SpatialQueryScratch? = nil,
+                            statsRecorder: SpatialQueryStatsRecorder? = nil,
+                            _ body: (Int) -> Void) {
+        guard !nodes.isEmpty else { return }
+
+        scratch?.resetTraversalOverflow()
+        var localOverflowNodeStack: [Int] = []
+
+        withUnsafeTemporaryAllocation(of: Int.self, capacity: Self.traversalStackCapacity) { stack in
+            var stackSize = 1
+            stack[0] = 0
+
+            func push(_ nodeIndex: Int) {
+                if stackSize < stack.count {
+                    stack[stackSize] = nodeIndex
+                    stackSize += 1
+                    return
+                }
+
+                if let scratch {
+                    scratch.overflowNodeStack.append(nodeIndex)
+                } else {
+                    localOverflowNodeStack.append(nodeIndex)
+                }
+            }
+
+            func pop() -> Int? {
+                if stackSize > 0 {
+                    stackSize -= 1
+                    return stack[stackSize]
+                }
+
+                if let scratch {
+                    return scratch.overflowNodeStack.popLast()
+                }
+                return localOverflowNodeStack.popLast()
+            }
+
+            while let nodeIndex = pop() {
+                statsRecorder?.recordNodeVisit()
+                guard soa.intersects(nodeIndex: nodeIndex, bounds: bounds) else { continue }
+
+                if soa.isLeaf(nodeIndex) {
+                    statsRecorder?.recordLeafTest()
+                    let start = soa.rangeStart(nodeIndex)
+                    let count = soa.rangeCount(nodeIndex)
+                    for offset in 0..<count {
+                        body(orderedEntryIndices[start + offset])
+                    }
+                    continue
+                }
+
+                let leftChild = soa.left(nodeIndex)
+                let rightChild = soa.right(nodeIndex)
+                if leftChild >= 0 {
+                    push(leftChild)
+                }
+                if rightChild >= 0 {
+                    push(rightChild)
+                }
+            }
+        }
+    }
+
+    func forEachRayCandidate(origin: SIMD3<Float>,
+                             direction: SIMD3<Float>,
+                             maxDistance: Float,
+                             scratch: SpatialQueryScratch? = nil,
+                             statsRecorder: SpatialQueryStatsRecorder? = nil,
+                             _ body: (Int, Float) -> Void) {
+        guard !nodes.isEmpty else { return }
+
+        scratch?.resetTraversalOverflow()
+        var localOverflowNodeStack: [Int] = []
+        var localOverflowDistanceStack: [Float] = []
+
+        withUnsafeTemporaryAllocation(of: Int.self, capacity: Self.traversalStackCapacity) { nodeStack in
+            withUnsafeTemporaryAllocation(of: Float.self, capacity: Self.traversalStackCapacity) { distanceStack in
+                var stackSize = 1
+                nodeStack[0] = 0
+                distanceStack[0] = 0
+
+                func push(nodeIndex: Int, distance: Float) {
+                    if stackSize < nodeStack.count {
+                        nodeStack[stackSize] = nodeIndex
+                        distanceStack[stackSize] = distance
+                        stackSize += 1
+                        return
+                    }
+
+                    if let scratch {
+                        scratch.overflowNodeStack.append(nodeIndex)
+                        scratch.overflowDistanceStack.append(distance)
+                    } else {
+                        localOverflowNodeStack.append(nodeIndex)
+                        localOverflowDistanceStack.append(distance)
+                    }
+                }
+
+                func pop() -> (nodeIndex: Int, distance: Float)? {
+                    if stackSize > 0 {
+                        stackSize -= 1
+                        return (nodeStack[stackSize], distanceStack[stackSize])
+                    }
+
+                    if let scratch,
+                       let nodeIndex = scratch.overflowNodeStack.popLast(),
+                       let distance = scratch.overflowDistanceStack.popLast() {
+                        return (nodeIndex, distance)
+                    }
+
+                    if let nodeIndex = localOverflowNodeStack.popLast(),
+                       let distance = localOverflowDistanceStack.popLast() {
+                        return (nodeIndex, distance)
+                    }
+
+                    return nil
+                }
+
+                while let next = pop() {
+                    statsRecorder?.recordNodeVisit()
+                    let nodeIndex = next.nodeIndex
+                    let nodeEntryDistance = next.distance
+
+                    guard nodeEntryDistance <= maxDistance else { continue }
+
+                    if soa.isLeaf(nodeIndex) {
+                        statsRecorder?.recordLeafTest()
+                        let start = soa.rangeStart(nodeIndex)
+                        let count = soa.rangeCount(nodeIndex)
+                        for offset in 0..<count {
+                            body(orderedEntryIndices[start + offset], nodeEntryDistance)
+                        }
+                        continue
+                    }
+
+                    let leftChild = soa.left(nodeIndex)
+                    let rightChild = soa.right(nodeIndex)
+                    let leftHit = leftChild >= 0
+                        ? soa.raycastInterval(nodeIndex: leftChild,
+                                              origin: origin,
+                                              direction: direction,
+                                              maxDistance: maxDistance)
+                        : nil
+                    let rightHit = rightChild >= 0
+                        ? soa.raycastInterval(nodeIndex: rightChild,
+                                              origin: origin,
+                                              direction: direction,
+                                              maxDistance: maxDistance)
+                        : nil
+
+                    if let leftHit, let rightHit {
+                        if leftHit.entryDistance <= rightHit.entryDistance {
+                            push(nodeIndex: rightChild, distance: rightHit.entryDistance)
+                            push(nodeIndex: leftChild, distance: leftHit.entryDistance)
+                        } else {
+                            push(nodeIndex: leftChild, distance: leftHit.entryDistance)
+                            push(nodeIndex: rightChild, distance: rightHit.entryDistance)
+                        }
+                    } else if let leftHit {
+                        push(nodeIndex: leftChild, distance: leftHit.entryDistance)
+                    } else if let rightHit {
+                        push(nodeIndex: rightChild, distance: rightHit.entryDistance)
+                    }
+                }
+            }
+        }
+    }
+
+    private mutating func buildNode(entries: [SpatialIndexEntry],
+                                    start: Int,
+                                    count: Int,
+                                    parent: Int) -> Int {
+        let bounds = combinedBounds(entries: entries, start: start, count: count)
+        let nodeIndex = nodes.count
+        nodes.append(
+            SpatialBVHNode(bounds: bounds,
+                           leftChild: -1,
+                           rightChild: -1,
+                           start: start,
+                           count: count)
+        )
+        parentNodeIndices.append(parent)
+
+        guard count > leafSize else {
+            for offset in 0..<count {
+                let entryIndex = orderedEntryIndices[start + offset]
+                leafNodeByEntryIndex[entryIndex] = nodeIndex
+            }
+            return nodeIndex
+        }
+
+        let axis = splitAxis(entries: entries, start: start, count: count)
+        let lowerBound = start
+        let upperBound = start + count
+        orderedEntryIndices[lowerBound..<upperBound].sort { lhs, rhs in
+            entries[lhs].bounds.center[axis] < entries[rhs].bounds.center[axis]
+        }
+
+        let leafCost = Float(count)
+        let parentArea = max(bounds.surfaceArea, 0.000_001)
+        let splitSamples = min(sahSampleCount, count - 1)
+        var bestSplit: Int?
+        var bestCost = Float.greatestFiniteMagnitude
+
+        if splitSamples > 0 {
+            for sample in 1...splitSamples {
+                let split = start + (sample * count) / (splitSamples + 1)
+                if split <= start || split >= start + count {
+                    continue
+                }
+
+                let leftBounds = combinedBounds(entries: entries, range: start..<split)
+                let rightBounds = combinedBounds(entries: entries, range: split..<(start + count))
+                let leftCount = split - start
+                let rightCount = count - leftCount
+                let sahCost = 1 +
+                    (leftBounds.surfaceArea / parentArea) * Float(leftCount) +
+                    (rightBounds.surfaceArea / parentArea) * Float(rightCount)
+
+                if sahCost < bestCost {
+                    bestCost = sahCost
+                    bestSplit = split
+                }
+            }
+        }
+
+        guard let splitIndex = bestSplit, bestCost < leafCost else {
+            return nodeIndex
+        }
+
+        let leftCount = splitIndex - start
+        let rightCount = count - leftCount
+        let leftChild = buildNode(entries: entries,
+                      start: start,
+                      count: leftCount,
+                      parent: nodeIndex)
+        let rightChild = buildNode(entries: entries,
+                       start: splitIndex,
+                       count: rightCount,
+                       parent: nodeIndex)
+
+        nodes[nodeIndex] = SpatialBVHNode(bounds: bounds,
+                                          leftChild: leftChild,
+                                          rightChild: rightChild,
+                                          start: start,
+                                          count: 0)
+        return nodeIndex
+    }
+
+    private mutating func rebuildSubtree(rootNode: Int,
+                                         entries: [SpatialIndexEntry]) -> Bool {
+        let rangeStart = nodes[rootNode].start
+        let rangeCount = subtreeItemCount(nodeIndex: rootNode)
+        guard rangeCount > 0 else {
+            nodes[rootNode].leftChild = -1
+            nodes[rootNode].rightChild = -1
+            nodes[rootNode].count = 0
+            return true
+        }
+
+        var reusableNodes = collectSubtreeNodes(rootNode: rootNode)
+        reusableNodes.removeAll { $0 == rootNode }
+        var reuseCursor = 0
+
+        let rebuilt = rebuildSubtreeInPlace(nodeIndex: rootNode,
+                                            start: rangeStart,
+                                            count: rangeCount,
+                                            parent: parentNodeIndices[rootNode],
+                                            entries: entries,
+                                            reusableNodes: &reusableNodes,
+                                            reuseCursor: &reuseCursor)
+        return rebuilt
+    }
+
+    private mutating func rebuildSubtreeInPlace(nodeIndex: Int,
+                                                start: Int,
+                                                count: Int,
+                                                parent: Int,
+                                                entries: [SpatialIndexEntry],
+                                                reusableNodes: inout [Int],
+                                                reuseCursor: inout Int) -> Bool {
+        let bounds = combinedBounds(entries: entries, range: start..<(start + count))
+        nodes[nodeIndex].bounds = bounds
+        nodes[nodeIndex].start = start
+        parentNodeIndices[nodeIndex] = parent
+
+        guard count > leafSize else {
+            nodes[nodeIndex].leftChild = -1
+            nodes[nodeIndex].rightChild = -1
+            nodes[nodeIndex].count = count
+            for offset in 0..<count {
+                let entryIndex = orderedEntryIndices[start + offset]
+                leafNodeByEntryIndex[entryIndex] = nodeIndex
+            }
+            return true
+        }
+
+        let axis = splitAxis(entries: entries, start: start, count: count)
+        orderedEntryIndices[start..<(start + count)].sort { lhs, rhs in
+            entries[lhs].bounds.center[axis] < entries[rhs].bounds.center[axis]
+        }
+
+        let leafCost = Float(count)
+        let parentArea = max(bounds.surfaceArea, 0.000_001)
+        let splitSamples = min(sahSampleCount, count - 1)
+        var bestSplit: Int?
+        var bestCost = Float.greatestFiniteMagnitude
+
+        if splitSamples > 0 {
+            for sample in 1...splitSamples {
+                let split = start + (sample * count) / (splitSamples + 1)
+                if split <= start || split >= start + count {
+                    continue
+                }
+
+                let leftBounds = combinedBounds(entries: entries, range: start..<split)
+                let rightBounds = combinedBounds(entries: entries, range: split..<(start + count))
+                let leftCount = split - start
+                let rightCount = count - leftCount
+                let sahCost = 1 +
+                    (leftBounds.surfaceArea / parentArea) * Float(leftCount) +
+                    (rightBounds.surfaceArea / parentArea) * Float(rightCount)
+
+                if sahCost < bestCost {
+                    bestCost = sahCost
+                    bestSplit = split
+                }
+            }
+        }
+
+        guard let splitIndex = bestSplit, bestCost < leafCost else {
+            nodes[nodeIndex].leftChild = -1
+            nodes[nodeIndex].rightChild = -1
+            nodes[nodeIndex].count = count
+            for offset in 0..<count {
+                let entryIndex = orderedEntryIndices[start + offset]
+                leafNodeByEntryIndex[entryIndex] = nodeIndex
+            }
+            return true
+        }
+
+        let leftCount = splitIndex - start
+        let rightCount = count - leftCount
+
+        guard let leftNode = nextReusableNode(&reusableNodes, &reuseCursor),
+              let rightNode = nextReusableNode(&reusableNodes, &reuseCursor) else {
+            return false
+        }
+
+        nodes[nodeIndex].leftChild = leftNode
+        nodes[nodeIndex].rightChild = rightNode
+        nodes[nodeIndex].count = 0
+
+        guard rebuildSubtreeInPlace(nodeIndex: leftNode,
+                                    start: start,
+                                    count: leftCount,
+                                    parent: nodeIndex,
+                                    entries: entries,
+                                    reusableNodes: &reusableNodes,
+                                    reuseCursor: &reuseCursor) else {
+            return false
+        }
+        guard rebuildSubtreeInPlace(nodeIndex: rightNode,
+                                    start: splitIndex,
+                                    count: rightCount,
+                                    parent: nodeIndex,
+                                    entries: entries,
+                                    reusableNodes: &reusableNodes,
+                                    reuseCursor: &reuseCursor) else {
+            return false
+        }
+
+        return true
+    }
+
+    private func nextReusableNode(_ reusableNodes: inout [Int], _ cursor: inout Int) -> Int? {
+        guard cursor < reusableNodes.count else { return nil }
+        let node = reusableNodes[cursor]
+        cursor += 1
+        return node
+    }
+
+    private func collectSubtreeNodes(rootNode: Int) -> [Int] {
+        var collected: [Int] = []
+        var stack: [Int] = [rootNode]
+        while let nodeIndex = stack.popLast() {
+            collected.append(nodeIndex)
+            let left = nodes[nodeIndex].leftChild
+            let right = nodes[nodeIndex].rightChild
+            if left >= 0 { stack.append(left) }
+            if right >= 0 { stack.append(right) }
+        }
+        return collected
+    }
+
+    private func subtreeItemCount(nodeIndex: Int) -> Int {
+        let node = nodes[nodeIndex]
+        if node.isLeaf {
+            return node.count
+        }
+        var total = 0
+        if node.leftChild >= 0 {
+            total += subtreeItemCount(nodeIndex: node.leftChild)
+        }
+        if node.rightChild >= 0 {
+            total += subtreeItemCount(nodeIndex: node.rightChild)
+        }
+        return total
+    }
+
+    @discardableResult
+    private func computeSubtreeItemCounts(nodeIndex: Int,
+                                          into counts: inout [Int]) -> Int {
+        let node = nodes[nodeIndex]
+        if node.isLeaf {
+            counts[nodeIndex] = node.count
+            return node.count
+        }
+
+        var total = 0
+        if node.leftChild >= 0 {
+            total += computeSubtreeItemCounts(nodeIndex: node.leftChild, into: &counts)
+        }
+        if node.rightChild >= 0 {
+            total += computeSubtreeItemCounts(nodeIndex: node.rightChild, into: &counts)
+        }
+        counts[nodeIndex] = total
+        return total
+    }
+
+    private func combinedBounds(entries: [SpatialIndexEntry], start: Int, count: Int) -> SpatialAABB {
+        combinedBounds(entries: entries, range: start..<(start + count))
+    }
+
+    private func combinedBounds(entries: [SpatialIndexEntry], range: Range<Int>) -> SpatialAABB {
+        let first = entries[orderedEntryIndices[range.lowerBound]].bounds
+        guard range.count > 1 else { return first }
+
+        var merged = first
+        for index in range.dropFirst() {
+            merged = merged.merged(with: entries[orderedEntryIndices[index]].bounds)
+        }
+        return merged
+    }
+
+    private func splitAxis(entries: [SpatialIndexEntry], start: Int, count: Int) -> Int {
+        var minCenter = entries[orderedEntryIndices[start]].bounds.center
+        var maxCenter = minCenter
+
+        if count > 1 {
+            for offset in 1..<count {
+                let center = entries[orderedEntryIndices[start + offset]].bounds.center
+                minCenter = simd_min(minCenter, center)
+                maxCenter = simd_max(maxCenter, center)
+            }
+        }
+
+        let extents = maxCenter - minCenter
+        if extents.y > extents.x && extents.y >= extents.z {
+            return 1
+        }
+        if extents.z > extents.x && extents.z > extents.y {
+            return 2
+        }
+        return 0
     }
 }
 
@@ -171,7 +1045,17 @@ public struct SceneSweepHit: Sendable, Equatable {
 }
 
 func buildSpatialIndexResource(in world: RuntimeWorld) -> SpatialIndexResource {
-    let entries: [SpatialIndexEntry] = world.entities().compactMap { entity in
+    buildSpatialIndexResource(in: world, using: .shared).resource
+}
+
+func buildSpatialIndexResource(
+    in world: RuntimeWorld,
+    using jobSystem: JobSystem
+) -> (resource: SpatialIndexResource, report: JobDispatchReport) {
+    let buildSettings = world.resource(SpatialIndexBuildSettings.self) ?? SpatialIndexBuildSettings()
+    let previousIndex = world.resource(SpatialIndexResource.self)
+    let entities = world.entities()
+    let result = jobSystem.parallelCompactMap(items: entities) { entity -> SpatialIndexEntry? in
         guard let collider = world.component(Collider.self, for: entity),
               let worldTransform = world.worldTransform(for: entity),
               let bounds = colliderBounds(shape: collider.shape, worldTransform: worldTransform) else {
@@ -189,7 +1073,21 @@ func buildSpatialIndexResource(in world: RuntimeWorld) -> SpatialIndexResource {
         )
     }
 
-    return SpatialIndexResource(entries: entries, sourceRevision: world.revision)
+    let buildConfig = buildSettings.resolvedConfig(entryCount: result.0.count)
+
+    let resource: SpatialIndexResource
+    if let previousIndex, previousIndex.buildConfig == buildConfig {
+        resource = previousIndex.updated(entries: result.0, sourceRevision: world.revision)
+    } else {
+        resource = SpatialIndexResource(entries: result.0,
+                                       sourceRevision: world.revision,
+                                       buildConfig: buildConfig)
+    }
+
+    return (
+        resource,
+        result.1
+    )
 }
 
 func performSpatialRaycast(_ query: SceneRaycastQuery,
@@ -206,12 +1104,27 @@ func performSpatialRaycast(_ query: SceneRaycastQuery,
 }
 
 func performSpatialOverlap(_ query: SceneOverlapQuery,
-                           using index: SpatialIndexResource) -> [SceneOverlapHit] {
-    performPhysicsOverlapAABB(
+                           using index: SpatialIndexResource,
+                           scratch: SpatialQueryScratch? = nil,
+                           statsRecorder: SpatialQueryStatsRecorder? = nil) -> [SceneOverlapHit] {
+    let physicsHits = performPhysicsOverlapAABB(
         PhysicsOverlapAABBQuery(bounds: query.bounds),
         filter: PhysicsQueryFilter(includeTriggers: query.includeTriggers),
-        using: index
-    ).map(makeSceneOverlapHit)
+        using: index,
+        scratch: scratch,
+        statsRecorder: statsRecorder
+    )
+
+    if let scratch {
+        scratch.sceneOverlapHitsBuffer.removeAll(keepingCapacity: true)
+        scratch.sceneOverlapHitsBuffer.reserveCapacity(physicsHits.count)
+        for hit in physicsHits {
+            scratch.sceneOverlapHitsBuffer.append(makeSceneOverlapHit(hit))
+        }
+        return scratch.sceneOverlapHitsBuffer
+    }
+
+    return physicsHits.map(makeSceneOverlapHit)
 }
 
 func performSpatialSweep(_ query: SceneSweepQuery,
@@ -225,30 +1138,43 @@ func performSpatialSweep(_ query: SceneSweepQuery,
 
 func performPhysicsRaycast(_ query: PhysicsRaycastQuery,
                            filter: PhysicsQueryFilter,
-                           using index: SpatialIndexResource) -> PhysicsRaycastHit? {
+                           using index: SpatialIndexResource,
+                           scratch: SpatialQueryScratch? = nil,
+                           statsRecorder: SpatialQueryStatsRecorder? = nil) -> PhysicsRaycastHit? {
     let directionLength = simd_length(query.direction)
     guard directionLength > 0.000_001 else { return nil }
     let direction = query.direction / directionLength
     let maxDistance = max(query.maxDistance, 0)
 
     var resolvedHit: PhysicsRaycastHit?
-    for entry in index.entries {
-        guard matchesPhysicsQueryFilter(entry, filter: filter) else { continue }
+    var bestDistance = maxDistance
+    index.bvh.forEachRayCandidate(origin: query.origin,
+                                  direction: direction,
+                                  maxDistance: maxDistance,
+                                  scratch: scratch,
+                                  statsRecorder: statsRecorder) { entryIndex, entryDistance in
+        guard entryDistance <= bestDistance else { return }
+
+        let entry = index.entries[entryIndex]
+        guard matchesPhysicsQueryFilter(entry, filter: filter) else { return }
         guard raycastBox(min: entry.bounds.min,
                          max: entry.bounds.max,
                          origin: query.origin,
                          direction: direction,
-                         maxDistance: maxDistance) != nil,
-              let result = preciseRaycast(shape: entry.shape,
+                         maxDistance: bestDistance) != nil else {
+            return
+        }
+        statsRecorder?.recordNarrowPhaseTest()
+        guard let result = preciseRaycast(shape: entry.shape,
                                           worldTransform: entry.worldTransform,
                                           origin: query.origin,
                                           direction: direction,
-                                          maxDistance: maxDistance) else {
-            continue
+                                          maxDistance: bestDistance) else {
+            return
         }
 
         if let existing = resolvedHit, existing.distance <= result.distance {
-            continue
+            return
         }
 
         resolvedHit = PhysicsRaycastHit(
@@ -259,6 +1185,7 @@ func performPhysicsRaycast(_ query: PhysicsRaycastQuery,
             bounds: entry.bounds,
             isTrigger: entry.isTrigger
         )
+        bestDistance = result.distance
     }
 
     return resolvedHit
@@ -266,24 +1193,59 @@ func performPhysicsRaycast(_ query: PhysicsRaycastQuery,
 
 func performPhysicsOverlapAABB(_ query: PhysicsOverlapAABBQuery,
                                filter: PhysicsQueryFilter,
-                               using index: SpatialIndexResource) -> [PhysicsOverlapHit] {
-    index.entries
-        .filter { entry in
-            guard matchesPhysicsQueryFilter(entry, filter: filter) else { return false }
-            guard entry.bounds.intersects(query.bounds) else { return false }
-            return preciseOverlap(shape: entry.shape,
-                                  worldTransform: entry.worldTransform,
-                                  queryBounds: query.bounds)
+                               using index: SpatialIndexResource,
+                               scratch: SpatialQueryScratch? = nil,
+                               statsRecorder: SpatialQueryStatsRecorder? = nil) -> [PhysicsOverlapHit] {
+    if let scratch {
+        scratch.physicsOverlapHitsBuffer.removeAll(keepingCapacity: true)
+        index.bvh.forEachOverlapping(query.bounds,
+                                     scratch: scratch,
+                                     statsRecorder: statsRecorder) { candidateIndex in
+            let entry = index.entries[candidateIndex]
+            guard matchesPhysicsQueryFilter(entry, filter: filter) else { return }
+            guard entry.bounds.intersects(query.bounds) else { return }
+            statsRecorder?.recordNarrowPhaseTest()
+            guard preciseOverlap(shape: entry.shape,
+                                 worldTransform: entry.worldTransform,
+                                 queryBounds: query.bounds) else {
+                return
+            }
+            scratch.physicsOverlapHitsBuffer.append(
+                PhysicsOverlapHit(entity: entry.entity,
+                                  bounds: entry.bounds,
+                                  isTrigger: entry.isTrigger)
+            )
         }
-        .sorted { $0.entity.rawValue < $1.entity.rawValue }
-        .map { entry in
-            PhysicsOverlapHit(entity: entry.entity, bounds: entry.bounds, isTrigger: entry.isTrigger)
+        scratch.physicsOverlapHitsBuffer.sort { $0.entity.rawValue < $1.entity.rawValue }
+        return scratch.physicsOverlapHitsBuffer
+    }
+
+    var hits: [PhysicsOverlapHit] = []
+    index.bvh.forEachOverlapping(query.bounds,
+                                 scratch: nil,
+                                 statsRecorder: statsRecorder) { candidateIndex in
+        let entry = index.entries[candidateIndex]
+        guard matchesPhysicsQueryFilter(entry, filter: filter) else { return }
+        guard entry.bounds.intersects(query.bounds) else { return }
+        statsRecorder?.recordNarrowPhaseTest()
+        guard preciseOverlap(shape: entry.shape,
+                             worldTransform: entry.worldTransform,
+                             queryBounds: query.bounds) else {
+            return
         }
+        hits.append(PhysicsOverlapHit(entity: entry.entity,
+                                      bounds: entry.bounds,
+                                      isTrigger: entry.isTrigger))
+    }
+    hits.sort { $0.entity.rawValue < $1.entity.rawValue }
+    return hits
 }
 
 func performPhysicsSweepAABB(_ query: PhysicsSweepAABBQuery,
                              filter: PhysicsQueryFilter,
-                             using index: SpatialIndexResource) -> PhysicsSweepHit? {
+                             using index: SpatialIndexResource,
+                             scratch: SpatialQueryScratch? = nil,
+                             statsRecorder: SpatialQueryStatsRecorder? = nil) -> PhysicsSweepHit? {
     guard query.bounds.isValid else { return nil }
 
     let travelDistance = simd_length(query.translation)
@@ -292,28 +1254,35 @@ func performPhysicsSweepAABB(_ query: PhysicsSweepAABBQuery,
     let direction = query.translation / travelDistance
     let queryCenter = query.bounds.center
     let queryHalfExtents = query.bounds.halfExtents
+    let sweptBounds = query.bounds.merged(with: translatedAABB(query.bounds, by: query.translation))
 
     var resolvedHit: PhysicsSweepHit?
-    for entry in index.entries {
-        guard matchesPhysicsQueryFilter(entry, filter: filter) else { continue }
+    index.bvh.forEachOverlapping(sweptBounds,
+                                 scratch: scratch,
+                                 statsRecorder: statsRecorder) { entryIndex in
+        let entry = index.entries[entryIndex]
+        guard matchesPhysicsQueryFilter(entry, filter: filter) else { return }
 
         let expandedBounds = expandedAABB(entry.bounds, by: queryHalfExtents)
         guard let interval = raycastBoxInterval(min: expandedBounds.min,
                                                max: expandedBounds.max,
                                                origin: queryCenter,
                                                direction: direction,
-                                               maxDistance: travelDistance),
-              let hit = preciseSweep(shape: entry.shape,
+                                               maxDistance: travelDistance) else {
+            return
+        }
+        statsRecorder?.recordNarrowPhaseTest()
+        guard let hit = preciseSweep(shape: entry.shape,
                                      worldTransform: entry.worldTransform,
                                      queryBounds: query.bounds,
                                      direction: direction,
                                      maxDistance: travelDistance,
                                      broadPhaseInterval: interval) else {
-            continue
+            return
         }
 
         if let existing = resolvedHit, existing.distance <= hit.distance {
-            continue
+            return
         }
 
         resolvedHit = PhysicsSweepHit(
