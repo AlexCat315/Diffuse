@@ -7,6 +7,36 @@ import GuavaUIRuntime
 @Suite("Phase 6.4 Button & ScrollView", .serialized)
 struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
 
+    final class TextStore {
+        var value: String = ""
+    }
+
+    private func makeBinding(_ store: TextStore) -> Binding<String> {
+        Binding(get: { store.value }, set: { store.value = $0 })
+    }
+
+    private func firstNode(in root: Node?, where predicate: (Node) -> Bool) -> Node? {
+        guard let root else { return nil }
+        if predicate(root) { return root }
+        for child in root.children {
+            if let match = firstNode(in: child, where: predicate) {
+                return match
+            }
+        }
+        return nil
+    }
+
+    private func absoluteOrigin(of node: Node) -> CGPoint {
+        var origin = node.frame.origin
+        var current = node.parent
+        while let parent = current {
+            origin.x += parent.frame.origin.x
+            origin.y += parent.frame.origin.y
+            current = parent.parent
+        }
+        return origin
+    }
+
     @Test("Button registers a pointer handler that fires on down+up")
     func buttonFiresOnTap() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -126,5 +156,106 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
             _ = wheel(MouseWheelEvent(x: 0, y: 1), .target)
         }
         #expect(sv.contentOffset.y == 0)
+    } }
+
+    @Test("Wheel over a scrollable TextField does not bubble into the parent ScrollView")
+    func nestedTextFieldConsumesWheelBeforeParentScrollView() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let focus = FocusChain()
+        InteractionRegistryHolder.current = registry
+        FocusChainHolder.current = focus
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        let store = TextStore()
+        store.value = Array(repeating: "line", count: 12).joined(separator: "\n")
+
+        graph.install(root:
+            ScrollView(.vertical) {
+                Column {
+                    Text("header").frame(height: 240)
+                    TextField(text: makeBinding(store)).frame(width: 180)
+                    Text("footer").frame(height: 240)
+                }
+            }
+            .frame(width: 220, height: 180)
+        )
+        graph.computeLayout(width: 220, height: 240)
+
+        let scrollView = tree.root!.children.first!
+        let field = firstNode(in: tree.root, where: { $0.attachments[TextField.surfaceMarkerKey] != nil })!
+        let fieldState = field.attachments["__textfield_state"] as? TextField.FieldState
+        #expect((fieldState?.maxScrollY ?? 0) > 0)
+        #expect(scrollView.contentOffset.y == 0)
+        fieldState?.maxScrollY = 0
+        fieldState?.visibleTextHeight = 0
+        fieldState?.contentHeight = 0
+
+        let dispatcher = EventDispatcher(
+            tree: tree,
+            interactions: registry,
+            capture: PointerCapture(),
+            focusChain: focus
+        )
+        let origin = absoluteOrigin(of: field)
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(origin.x + 12),
+                                                          y: Float(origin.y + 12),
+                                                          deltaX: 0,
+                                                          deltaY: 0)))
+        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -1)))
+
+        #expect(field.contentOffset.y > 0)
+        #expect(scrollView.contentOffset.y == 0)
+    } }
+
+    @Test("Focused TextField wheel priority outranks hovered parent ScrollView")
+    func focusedTextFieldWheelPriorityBeatsHoveredParent() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let focus = FocusChain()
+        InteractionRegistryHolder.current = registry
+        FocusChainHolder.current = focus
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        let store = TextStore()
+        store.value = Array(repeating: "line", count: 12).joined(separator: "\n")
+
+        graph.install(root:
+            ScrollView(.vertical) {
+                Column {
+                    Text("header").frame(height: 240)
+                    TextField(text: makeBinding(store)).frame(width: 180)
+                    Text("footer").frame(height: 240)
+                }
+            }
+            .frame(width: 220, height: 180)
+        )
+        graph.computeLayout(width: 220, height: 240)
+
+        let scrollView = tree.root!.children.first!
+        let field = firstNode(in: tree.root, where: { $0.attachments[TextField.surfaceMarkerKey] != nil })!
+        let fieldState = field.attachments["__textfield_state"] as? TextField.FieldState
+        #expect((fieldState?.maxScrollY ?? 0) > 0)
+
+        focus.focus(field)
+        #expect(field.attachments[WheelRoutingAttachmentKey.priority] as? WheelRoutingPriority
+                    == .preferFocused)
+
+        let dispatcher = EventDispatcher(
+            tree: tree,
+            interactions: registry,
+            capture: PointerCapture(),
+            focusChain: focus
+        )
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: 12,
+                                                          y: 12,
+                                                          deltaX: 0,
+                                                          deltaY: 0)))
+        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -1)))
+
+        #expect(field.contentOffset.y > 0)
+        #expect(scrollView.contentOffset.y == 0)
     } }
 }

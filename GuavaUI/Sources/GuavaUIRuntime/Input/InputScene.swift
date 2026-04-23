@@ -1,5 +1,6 @@
 import Foundation
 import CoreGraphics
+import EngineKernel
 import PlatformShell
 
 /// Phase 5a foundation. An `InputNode` is the per-`Node` retained record on
@@ -30,6 +31,7 @@ public final class InputNode {
     public internal(set) var isFocusable: Bool = false
     public internal(set) var clipsToBounds: Bool = false
     public internal(set) var cursor: SystemCursor?
+    public internal(set) var textInputArea: TextInputArea?
 
     /// True when at least one event handler is registered for the paired
     /// Node in `InteractionRegistry`. Phase 5b uses this to cull walks into
@@ -52,6 +54,7 @@ public final class InputNode {
             isFocusable = false
             clipsToBounds = false
             cursor = nil
+            textInputArea = nil
             hasAnyHandler = false
             return
         }
@@ -59,6 +62,7 @@ public final class InputNode {
         isFocusable = node.isFocusable
         clipsToBounds = node.clipsToBounds
         cursor = node.cursor
+        textInputArea = node.attachments[TextInputAttachmentKey.area] as? TextInputArea
         // hasAnyHandler is filled in by `InputScene.refreshHandlers(for:)`
         // when the registry is wired in Phase 5b. For now leave the cached
         // value alone so this method is safe to call without a registry.

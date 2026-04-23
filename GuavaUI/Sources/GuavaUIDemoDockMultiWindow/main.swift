@@ -42,7 +42,7 @@ struct DockTabContentView: View {
                                   text: $note,
                                   axis: .vertical,
                                   onSubmit: {})
-                            .frame(minHeight: 96)
+                            .frame(height: 96)
                     }
                     .padding(16)
                     .background(.surface)

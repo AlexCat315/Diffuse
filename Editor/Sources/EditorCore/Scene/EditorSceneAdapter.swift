@@ -61,6 +61,8 @@ public enum EditorInspectorFieldValue {
     case readOnly(String)
     case text(Binding<String>)
     case bool(Binding<Bool>)
+    case number(Binding<Float>)
+    case vector3(x: Binding<Float>, y: Binding<Float>, z: Binding<Float>)
 }
 
 /// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`，
@@ -209,21 +211,27 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 EditorInspectorField(
                     id: "local-position",
                     label: "Local Position",
-                    value: .text(localPositionBinding(for: entity))
+                    value: .vector3(x: localPositionBinding(for: entity, axis: \.x),
+                                    y: localPositionBinding(for: entity, axis: \.y),
+                                    z: localPositionBinding(for: entity, axis: \.z))
                 )
             )
             fields.append(
                 EditorInspectorField(
                     id: "local-rotation",
                     label: "Rotation",
-                    value: .text(localRotationBinding(for: entity))
+                    value: .vector3(x: localRotationBinding(for: entity, axis: \.x),
+                                    y: localRotationBinding(for: entity, axis: \.y),
+                                    z: localRotationBinding(for: entity, axis: \.z))
                 )
             )
             fields.append(
                 EditorInspectorField(
                     id: "local-scale",
                     label: "Scale",
-                    value: .text(localScaleBinding(for: entity))
+                    value: .vector3(x: localScaleBinding(for: entity, axis: \.x),
+                                    y: localScaleBinding(for: entity, axis: \.y),
+                                    z: localScaleBinding(for: entity, axis: \.z))
                 )
             )
         }
@@ -472,16 +480,19 @@ public final class EditorSceneAdapter: @unchecked Sendable {
 
     // MARK: - Transform bindings
 
-    private func localPositionBinding(for entity: EntityID) -> Binding<String> {
+    private func localPositionBinding(for entity: EntityID,
+                                      axis: WritableKeyPath<SIMD3<Float>, Float>) -> Binding<Float> {
         Binding(
             get: { [self] in
                 let t = scene.localTransform(for: entity)?.translation ?? .zero
-                return format(t)
+                return t[keyPath: axis]
             },
             set: { [self] next in
-                guard let v = parseVec3(next) else { return }
                 var local = scene.localTransform(for: entity) ?? LocalTransform()
-                local.matrix.columns.3 = SIMD4<Float>(v, 1)
+                var translation = local.translation
+                guard translation[keyPath: axis] != next else { return }
+                translation[keyPath: axis] = next
+                local.matrix.columns.3 = SIMD4<Float>(translation, 1)
                 _ = applySceneTransaction(intentVerb: "scene.set_local_transform",
                                           summary: "Update entity translation",
                                           targetRawIDs: [entity.rawValue],
@@ -490,21 +501,24 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
-    private func localScaleBinding(for entity: EntityID) -> Binding<String> {
+    private func localScaleBinding(for entity: EntityID,
+                                   axis: WritableKeyPath<SIMD3<Float>, Float>) -> Binding<Float> {
         Binding(
             get: { [self] in
                 let m = scene.localTransform(for: entity)?.matrix ?? matrix_identity_float4x4
                 let (_, scale) = decomposeRotationScale(m)
-                return format(scale)
+                return scale[keyPath: axis]
             },
             set: { [self] next in
-                guard let v = parseVec3(next) else { return }
                 var local = scene.localTransform(for: entity) ?? LocalTransform()
                 let (rot, _) = decomposeRotationScale(local.matrix)
                 let translation = SIMD3<Float>(local.matrix.columns.3.x,
                                                local.matrix.columns.3.y,
                                                local.matrix.columns.3.z)
-                local.matrix = composeMatrix(translation: translation, rotation: rot, scale: v)
+                var scale = decomposeRotationScale(local.matrix).1
+                guard scale[keyPath: axis] != next else { return }
+                scale[keyPath: axis] = next
+                local.matrix = composeMatrix(translation: translation, rotation: rot, scale: scale)
                 _ = applySceneTransaction(intentVerb: "scene.set_local_transform",
                                           summary: "Update entity scale",
                                           targetRawIDs: [entity.rawValue],
@@ -513,22 +527,26 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
-    private func localRotationBinding(for entity: EntityID) -> Binding<String> {
+    private func localRotationBinding(for entity: EntityID,
+                                      axis: WritableKeyPath<SIMD3<Float>, Float>) -> Binding<Float> {
         Binding(
             get: { [self] in
                 let m = scene.localTransform(for: entity)?.matrix ?? matrix_identity_float4x4
                 let (rot, _) = decomposeRotationScale(m)
                 let euler = eulerXYZFromMatrix(rot)
                 let deg = euler * (180.0 / .pi)
-                return format(deg)
+                return deg[keyPath: axis]
             },
             set: { [self] next in
-                guard let degrees = parseVec3(next) else { return }
                 var local = scene.localTransform(for: entity) ?? LocalTransform()
                 let (_, scale) = decomposeRotationScale(local.matrix)
                 let translation = SIMD3<Float>(local.matrix.columns.3.x,
                                                local.matrix.columns.3.y,
                                                local.matrix.columns.3.z)
+                let currentDegrees = eulerXYZFromMatrix(decomposeRotationScale(local.matrix).0) * (180.0 / .pi)
+                guard currentDegrees[keyPath: axis] != next else { return }
+                var degrees = currentDegrees
+                degrees[keyPath: axis] = next
                 let radians = degrees * (.pi / 180.0)
                 let rot = matrixFromEulerXYZ(radians)
                 local.matrix = composeMatrix(translation: translation, rotation: rot, scale: scale)
@@ -565,18 +583,6 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         return result
     }
 
-    /// 解析 "x, y, z" 或 "x y z" 格式（空格 / 逗号都可），返回 SIMD3。
-    private func parseVec3(_ text: String) -> SIMD3<Float>? {
-        let parts = text
-            .replacingOccurrences(of: ",", with: " ")
-            .split(separator: " ", omittingEmptySubsequences: true)
-        guard parts.count == 3,
-              let x = Float(parts[0]),
-              let y = Float(parts[1]),
-              let z = Float(parts[2])
-        else { return nil }
-        return SIMD3<Float>(x, y, z)
-    }
 }
 
 private extension EntityID {

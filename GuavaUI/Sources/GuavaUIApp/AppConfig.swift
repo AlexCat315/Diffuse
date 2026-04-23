@@ -23,8 +23,8 @@ public struct AppConfig: Sendable {
 
     public init(title: String = "GuavaUI",
                 primaryFontName: String = SystemFontDefaults.primaryFontName,
-                defaultFontSize: Float = 13,
-                defaultLineHeight: Float = 16,
+                defaultFontSize: Float = 14,
+                defaultLineHeight: Float = 20,
                 clearColor: GPUColor = GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1),
                 backendConfig: WGPUDeviceConfig = WGPUDeviceConfig(),
                 devTools: DevToolsConfig? = nil) {

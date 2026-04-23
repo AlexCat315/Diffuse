@@ -86,12 +86,33 @@ struct InspectorPanel: View {
         case let .text(binding):
             return AnyView(TextField(text: binding))
         case let .bool(binding):
-            return AnyView(
-                Button(binding.wrappedValue ? "On" : "Off") {
-                    binding.wrappedValue.toggle()
-                }
-                .buttonStyle(.secondary)
-            )
+            return AnyView(Toggle(isOn: binding))
+        case let .number(binding):
+            return AnyView(NumberField(value: binding, size: .small))
+        case let .vector3(x, y, z):
+            return AnyView(vector3Field(x: x, y: y, z: z))
         }
+    }
+
+    private func vector3Field(x: Binding<Float>,
+                              y: Binding<Float>,
+                              z: Binding<Float>) -> some View {
+        Row(alignment: .center, spacing: 4) {
+            axisField("X", value: x)
+            axisField("Y", value: y)
+            axisField("Z", value: z)
+        }
+    }
+
+    private func axisField(_ label: String,
+                           value: Binding<Float>) -> some View {
+        Row(alignment: .center, spacing: 4) {
+            Text(label)
+                .font(.label)
+                .foregroundColor(.onSurfaceMuted)
+            NumberField(value: value, size: .small)
+                .flex()
+        }
+        .flex()
     }
 }

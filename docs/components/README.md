@@ -17,7 +17,10 @@
 | 组件 | 状态 | 文件 |
 | ---- | ---- | ---- |
 | Button | ✅ | [button.md](button.md) |
+| Toggle | ✅ | [toggle.md](toggle.md) |
+| Checkbox | ✅ | [checkbox.md](checkbox.md) |
 | TextField | ✅ | [textfield.md](textfield.md) |
+| NumberField | ✅ | [numberfield.md](numberfield.md) |
 | Slider | ✅ | [slider.md](slider.md) |
 | List / ListRow | ✅ | [list.md](list.md) |
 | Tree / TreeRow | ✅ | [tree.md](tree.md) |

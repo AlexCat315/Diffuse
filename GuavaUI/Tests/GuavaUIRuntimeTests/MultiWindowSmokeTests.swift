@@ -190,6 +190,36 @@ struct MultiWindowSmokeTests {
     }
 
     @MainActor
+    @Test("Focused text input area is read from the input mirror")
+    func focusedTextInputAreaUsesInputMirror() throws {
+        let shell = MockShell(eventBatches: [[], []])
+        let host = SDL3PlatformHost(shellFactory: { shell })
+
+        let tree = NodeTree()
+        let session = try host.openWindow(title: "A", tree: tree)
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+
+        let root = Node()
+        let field = Node()
+        field.isFocusable = true
+        let area = TextInputArea(x: 18, y: 24, width: 12, height: 20, cursorX: 0)
+        field.attachments[TextInputAttachmentKey.area] = area
+        root.addChild(field)
+        tree.root = root
+
+        let scene = InputScene()
+        scene.install(rootNode: root)
+        field.attachments.removeValue(forKey: TextInputAttachmentKey.area)
+        session.attachInputScene(scene)
+        session.focusChain.focus(field)
+        session.onFrame = { _ in true }
+
+        host.run()
+
+        #expect(shell.textInputAreas[session.id] == area)
+    }
+
+    @MainActor
     private func makeHitTree(interactions: InteractionRegistry,
                              onPointerDown: @escaping () -> Void) -> Node {
         let root = Node()

@@ -197,6 +197,21 @@ struct TextTests {
         #expect((glyphs.first?.xAdvance ?? 0) > 0)
     }
 
+    @Test("FontProvider shapes CJK through fallback for demo-sized HiDPI text")
+    func fontProviderShapesCJKForDemoSizedHiDPIText() {
+        let provider = FontProvider(size: 14, rasterScale: 2)
+        let primary = provider.loadPrimaryFont(name: SystemFontDefaults.primaryFontName)
+        let runs = provider.resolveRuns(text: "你")
+        let glyphs = runs.flatMap(provider.shapeRun)
+
+        #expect(primary != nil)
+        #expect(runs.isEmpty == false)
+        #expect(runs.first?.font.postScriptName != primary?.postScriptName)
+        #expect(glyphs.isEmpty == false)
+        #expect(glyphs.first?.glyphID != 0)
+        #expect((glyphs.first?.xAdvance ?? 0) > 0)
+    }
+
     // MARK: - TextLayout
 
     @Test("Single-line layout for short text")
