@@ -693,12 +693,38 @@ public struct CapabilityRegistry: Sendable {
 
     public static func loadDefaultConfig(bundle: Bundle? = nil) throws -> CapabilityRegistryConfig {
         let resourceBundle = bundle ?? .module
-        let nestedURL = resourceBundle.url(forResource: "default",
-                                           withExtension: "json",
-                                           subdirectory: "CapabilityRegistry")
-        let flatURL = resourceBundle.url(forResource: "default", withExtension: "json")
-        guard let url = nestedURL ?? flatURL else {
-            throw CapabilityRegistryError.missingDefaultResource("CapabilityRegistry/default.json")
+        return try loadSplitDefaultConfig(bundle: resourceBundle)
+    }
+
+    private static func loadSplitDefaultConfig(bundle: Bundle) throws -> CapabilityRegistryConfig {
+        let versions: CapabilityVersionTable = try decodeSplitResource("versions", ext: "json", bundle: bundle)
+        let scopes: [String: CapabilityScopeSpec] = try decodeSplitResource("scopes", ext: "json", bundle: bundle)
+        let targetKinds: [String: CapabilityTargetKindSpec] = try decodeSplitResource("target_kinds", ext: "json", bundle: bundle)
+        let argumentTypes: [String: CapabilityArgumentTypeSpec] = try decodeSplitResource("argument_types", ext: "json", bundle: bundle)
+        let effectKinds: [String: CapabilityEffectKindSpec] = try decodeSplitResource("effect_kinds", ext: "json", bundle: bundle)
+        let policies: [String: CapabilityPolicySpec] = try decodeSplitResource("policies", ext: "json", bundle: bundle)
+
+        let sceneCapabilities: [CapabilitySpec] = try decodeSplitResource("capabilities.scene", ext: "json", bundle: bundle)
+        let assetCapabilities: [CapabilitySpec] = try decodeSplitResource("capabilities.asset", ext: "json", bundle: bundle)
+        let sequenceCapabilities: [CapabilitySpec] = try decodeSplitResource("capabilities.sequence", ext: "json", bundle: bundle)
+        let miscCapabilities: [CapabilitySpec] = (try? decodeSplitResource("capabilities.misc", ext: "json", bundle: bundle)) ?? []
+
+        return CapabilityRegistryConfig(
+            capabilities: sceneCapabilities + assetCapabilities + sequenceCapabilities + miscCapabilities,
+            scopes: scopes,
+            targetKinds: targetKinds,
+            argumentTypes: argumentTypes,
+            effectKinds: effectKinds,
+            policies: policies,
+            versions: versions
+        )
+    }
+
+    private static func decodeSplitResource<T: Decodable>(_ name: String,
+                                                           ext: String,
+                                                           bundle: Bundle) throws -> T {
+        guard let url = resolveSplitResourceURL(name: name, ext: ext, bundle: bundle) else {
+            throw CapabilityRegistryError.missingDefaultResource("CapabilityRegistry/default/\(name).\(ext)")
         }
         let data: Data
         do {
@@ -706,12 +732,22 @@ public struct CapabilityRegistry: Sendable {
         } catch {
             throw CapabilityRegistryError.invalidResourceData(url.path)
         }
-
         do {
-            return try JSONDecoder().decode(CapabilityRegistryConfig.self, from: data)
+            return try JSONDecoder().decode(T.self, from: data)
         } catch {
             throw CapabilityRegistryError.invalidResourceData(url.path)
         }
+    }
+
+    private static func resolveSplitResourceURL(name: String,
+                                                ext: String,
+                                                bundle: Bundle) -> URL? {
+        let nested = bundle.url(forResource: name,
+                                withExtension: ext,
+                                subdirectory: "CapabilityRegistry/default")
+        let prefixedFlat = bundle.url(forResource: "default/\(name)", withExtension: ext)
+        let flat = bundle.url(forResource: name, withExtension: ext)
+        return nested ?? prefixedFlat ?? flat
     }
 
     public func capability(for verbID: String) -> CapabilitySpec? {

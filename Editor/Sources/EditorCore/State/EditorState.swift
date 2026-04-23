@@ -43,6 +43,7 @@ public struct EditorState: Codable, Sendable {
     public var windowOccluded: Bool
     public var gizmoMode: EditorGizmoMode
     public var activeAssetDrag: EditorAssetDragPayload?
+    public var inspectorCollapsedSectionIDs: Set<String>
 
     public init(
         connected: Bool = false,
@@ -53,7 +54,8 @@ public struct EditorState: Codable, Sendable {
         windowMinimized: Bool = false,
         windowOccluded: Bool = false,
         gizmoMode: EditorGizmoMode = .translate,
-        activeAssetDrag: EditorAssetDragPayload? = nil
+        activeAssetDrag: EditorAssetDragPayload? = nil,
+        inspectorCollapsedSectionIDs: Set<String> = []
     ) {
         self.connected = connected
         self.selectedEntityID = selectedEntityID
@@ -64,6 +66,7 @@ public struct EditorState: Codable, Sendable {
         self.windowOccluded = windowOccluded
         self.gizmoMode = gizmoMode
         self.activeAssetDrag = activeAssetDrag
+        self.inspectorCollapsedSectionIDs = inspectorCollapsedSectionIDs
     }
 
     public var shouldRender: Bool {

@@ -12,6 +12,7 @@ public enum EditorAction: Sendable {
     case beginAssetDrag(EditorAssetDragPayload)
     case updateAssetDragCursor(x: Float, y: Float)
     case endAssetDrag
+    case setInspectorSectionCollapsed(id: String, isCollapsed: Bool)
 }
 
 public enum EditorReducer {
@@ -42,6 +43,12 @@ public enum EditorReducer {
             }
         case .endAssetDrag:
             state.activeAssetDrag = nil
+        case let .setInspectorSectionCollapsed(id, isCollapsed):
+            if isCollapsed {
+                state.inspectorCollapsedSectionIDs.insert(id)
+            } else {
+                state.inspectorCollapsedSectionIDs.remove(id)
+            }
         }
     }
 }
