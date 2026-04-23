@@ -17,10 +17,13 @@ public struct ScrollView<Content: View>: _PrimitiveView {
 
     /// Pixels scrolled per wheel notch. SDL3 reports wheel deltas in lines.
     public var wheelStep: Float = 30
+    public let consumePolicy: ScrollConsumePolicy
 
     public init(_ axes: Axis = .vertical,
+                consumePolicy: ScrollConsumePolicy = .whenOffsetChanged,
                 @ViewBuilder content: () -> Content) {
         self.axes = axes
+        self.consumePolicy = consumePolicy
         self.content = content()
     }
 
@@ -35,6 +38,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let theme = node.theme
         let axes = self.axes
         let step = self.wheelStep
+        let consumePolicy = self.consumePolicy
         let trackThickness: Float = 8
         let trackInset: Float = 2
 
@@ -45,22 +49,23 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 let dy: Float = (axes == .vertical   || axes == .both) ? -event.y * step : 0
                 if dx == 0 && dy == 0 { return .ignored }
 
-                var offset = node.contentOffset
-                offset.x += CGFloat(dx)
-                offset.y += CGFloat(dy)
+                let previousOffset = node.contentOffset
+                var nextOffset = previousOffset
+                nextOffset.x += CGFloat(dx)
+                nextOffset.y += CGFloat(dy)
 
                 // Clamp to [0, max(0, contentSize - viewSize)] using the immediate
                 // child's frame as content size. With multiple children we'd union.
                 let viewSize = node.frame.size
                 if let child = node.children.first {
                     let contentSize = child.frame.size
-                    offset.x = max(0, min(offset.x, max(0, contentSize.width  - viewSize.width)))
-                    offset.y = max(0, min(offset.y, max(0, contentSize.height - viewSize.height)))
+                    nextOffset.x = max(0, min(nextOffset.x, max(0, contentSize.width  - viewSize.width)))
+                    nextOffset.y = max(0, min(nextOffset.y, max(0, contentSize.height - viewSize.height)))
                 } else {
-                    offset = .zero
+                    nextOffset = .zero
                 }
-                node.contentOffset = offset
-                return .handled
+                node.contentOffset = nextOffset
+                return consumePolicy.result(didScroll: nextOffset != previousOffset)
             }
         }
 
