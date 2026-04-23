@@ -537,6 +537,71 @@ struct SpatialBVH: Sendable, Equatable {
         }
     }
 
+    /// Like `forEachOverlapping` but the body returns `false` to stop traversal early.
+    /// When stopped early the overflow scratch is left dirty; it is reset on the next query.
+    func forEachOverlappingWhile(_ bounds: SpatialAABB,
+                                 scratch: SpatialQueryScratch? = nil,
+                                 statsRecorder: SpatialQueryStatsRecorder? = nil,
+                                 _ body: (Int) -> Bool) {
+        guard !nodes.isEmpty else { return }
+
+        scratch?.resetTraversalOverflow()
+        var localOverflowNodeStack: [Int] = []
+        var stopped = false
+
+        withUnsafeTemporaryAllocation(of: Int.self, capacity: Self.traversalStackCapacity) { stack in
+            var stackSize = 1
+            stack[0] = 0
+
+            func push(_ nodeIndex: Int) {
+                if stackSize < stack.count {
+                    stack[stackSize] = nodeIndex
+                    stackSize += 1
+                    return
+                }
+                if let scratch {
+                    scratch.overflowNodeStack.append(nodeIndex)
+                } else {
+                    localOverflowNodeStack.append(nodeIndex)
+                }
+            }
+
+            func pop() -> Int? {
+                if stackSize > 0 {
+                    stackSize -= 1
+                    return stack[stackSize]
+                }
+                if let scratch {
+                    return scratch.overflowNodeStack.popLast()
+                }
+                return localOverflowNodeStack.popLast()
+            }
+
+            while !stopped, let nodeIndex = pop() {
+                statsRecorder?.recordNodeVisit()
+                guard soa.intersects(nodeIndex: nodeIndex, bounds: bounds) else { continue }
+
+                if soa.isLeaf(nodeIndex) {
+                    statsRecorder?.recordLeafTest()
+                    let start = soa.rangeStart(nodeIndex)
+                    let count = soa.rangeCount(nodeIndex)
+                    for offset in 0..<count {
+                        if !body(orderedEntryIndices[start + offset]) {
+                            stopped = true
+                            break
+                        }
+                    }
+                    continue
+                }
+
+                let leftChild = soa.left(nodeIndex)
+                let rightChild = soa.right(nodeIndex)
+                if leftChild >= 0 { push(leftChild) }
+                if rightChild >= 0 { push(rightChild) }
+            }
+        }
+    }
+
     func forEachRayCandidate(origin: SIMD3<Float>,
                              direction: SIMD3<Float>,
                              maxDistance: Float,
@@ -1213,48 +1278,61 @@ func performPhysicsOverlapAABB(_ query: PhysicsOverlapAABBQuery,
                                using index: SpatialIndexResource,
                                scratch: SpatialQueryScratch? = nil,
                                statsRecorder: SpatialQueryStatsRecorder? = nil) -> [PhysicsOverlapHit] {
+    let maxResults = query.maxResults
+    // Use forEachOverlappingWhile so the traversal can stop the moment we reach maxResults.
+    // Filter checks are ordered cheapest-first (trigger flag → layer masks → per-entry AABB →
+    // narrow phase) to minimise work before the expensive preciseOverlap call.
     if let scratch {
         scratch.physicsOverlapHitsBuffer.removeAll(keepingCapacity: true)
-        index.bvh.forEachOverlapping(query.bounds,
-                                     scratch: scratch,
-                                     statsRecorder: statsRecorder) { candidateIndex in
+        var hitCount = 0
+        index.bvh.forEachOverlappingWhile(query.bounds,
+                                          scratch: scratch,
+                                          statsRecorder: statsRecorder) { candidateIndex in
             let entry = index.entries[candidateIndex]
-            guard matchesPhysicsQueryFilter(entry, filter: filter) else { return }
-            guard entry.bounds.intersects(query.bounds) else { return }
+            // Layer/trigger filter: cheapest tests first, before any AABB or narrow work.
+            guard matchesPhysicsQueryFilter(entry, filter: filter) else { return true }
+            // Per-entry AABB coarse cull (leaf node AABB is a union; individual entries may miss).
+            guard entry.bounds.intersects(query.bounds) else { return true }
             statsRecorder?.recordNarrowPhaseTest()
             guard preciseOverlap(shape: entry.shape,
                                  worldTransform: entry.worldTransform,
-                                 queryBounds: query.bounds) else {
-                return
-            }
+                                 queryBounds: query.bounds) else { return true }
             scratch.physicsOverlapHitsBuffer.append(
                 PhysicsOverlapHit(entity: entry.entity,
                                   bounds: entry.bounds,
                                   isTrigger: entry.isTrigger)
             )
+            hitCount += 1
+            return hitCount < maxResults
         }
-        scratch.physicsOverlapHitsBuffer.sort { $0.entity.rawValue < $1.entity.rawValue }
+        // Sort for determinism only when collecting all results.
+        if maxResults == .max {
+            scratch.physicsOverlapHitsBuffer.sort { $0.entity.rawValue < $1.entity.rawValue }
+        }
         return scratch.physicsOverlapHitsBuffer
     }
 
     var hits: [PhysicsOverlapHit] = []
-    index.bvh.forEachOverlapping(query.bounds,
-                                 scratch: nil,
-                                 statsRecorder: statsRecorder) { candidateIndex in
+    var hitCount = 0
+    index.bvh.forEachOverlappingWhile(query.bounds,
+                                      scratch: nil,
+                                      statsRecorder: statsRecorder) { candidateIndex in
         let entry = index.entries[candidateIndex]
-        guard matchesPhysicsQueryFilter(entry, filter: filter) else { return }
-        guard entry.bounds.intersects(query.bounds) else { return }
+        guard matchesPhysicsQueryFilter(entry, filter: filter) else { return true }
+        guard entry.bounds.intersects(query.bounds) else { return true }
         statsRecorder?.recordNarrowPhaseTest()
         guard preciseOverlap(shape: entry.shape,
                              worldTransform: entry.worldTransform,
-                             queryBounds: query.bounds) else {
-            return
-        }
+                             queryBounds: query.bounds) else { return true }
         hits.append(PhysicsOverlapHit(entity: entry.entity,
                                       bounds: entry.bounds,
                                       isTrigger: entry.isTrigger))
+        hitCount += 1
+        return hitCount < maxResults
     }
-    hits.sort { $0.entity.rawValue < $1.entity.rawValue }
+    if maxResults == .max {
+        hits.sort { $0.entity.rawValue < $1.entity.rawValue }
+    }
     return hits
 }
 
