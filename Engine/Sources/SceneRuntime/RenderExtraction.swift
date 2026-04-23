@@ -33,12 +33,21 @@ public struct CameraComponent: RuntimeComponent, Sendable, Equatable {
     }
 }
 
+public enum LightType: String, RuntimeComponent, CaseIterable, Sendable, Equatable {
+    case directional
+    case point
+    case spot
+}
+
 public struct LightComponent: RuntimeComponent, Sendable, Equatable {
+    public var type: LightType
     public var color: SIMD3<Float>
     public var intensity: Float
 
-    public init(color: SIMD3<Float> = SIMD3<Float>(1, 1, 1),
+    public init(type: LightType = .directional,
+                color: SIMD3<Float> = SIMD3<Float>(1, 1, 1),
                 intensity: Float = 1.0) {
+        self.type = type
         self.color = color
         self.intensity = intensity
     }

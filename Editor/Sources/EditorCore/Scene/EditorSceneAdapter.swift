@@ -64,6 +64,7 @@ public enum EditorInspectorFieldValue {
     case number(Binding<Float>)
     case vector3(x: Binding<Float>, y: Binding<Float>, z: Binding<Float>)
     case color(Binding<Color>)
+    case lightType(Binding<LightType>)
 }
 
 /// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`，
@@ -367,6 +368,11 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             title: "Light",
             fields: [
                 EditorInspectorField(
+                    id: "type",
+                    label: "Type",
+                    value: .lightType(lightTypeBinding(for: entity))
+                ),
+                EditorInspectorField(
                     id: "color",
                     label: "Color",
                     value: .color(lightColorBinding(for: entity))
@@ -382,6 +388,23 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                     value: .readOnly(format(light.color))
                 ),
             ]
+        )
+    }
+
+    private func lightTypeBinding(for entity: EntityID) -> Binding<LightType> {
+        Binding(
+            get: { [self] in
+                scene.component(LightComponent.self, for: entity)?.type ?? .directional
+            },
+            set: { [self] next in
+                guard scene.component(LightComponent.self, for: entity)?.type != next else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_light_type",
+                                          summary: "Update light type",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLightType(entityID: entity.rawValue, type: next)])
+            }
         )
     }
 

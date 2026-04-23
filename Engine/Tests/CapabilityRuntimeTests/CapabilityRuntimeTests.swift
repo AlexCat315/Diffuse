@@ -1,4 +1,5 @@
 import CapabilityRuntime
+import Foundation
 import ObservationBus
 import Testing
 
@@ -41,6 +42,23 @@ struct CapabilityRuntimeTests {
             }
             if capability.previewSupport.mode == .none {
                 #expect(capability.confirmationPolicy.level == .auto)
+            }
+        }
+    }
+
+    @Test("default registry loading fails predictably when a required split file is missing")
+    func defaultRegistryLoadingFailsWhenRequiredSplitFileIsMissing() throws {
+        let bundle = try makeSplitRegistryBundle(removing: "effect_kinds.json")
+
+        do {
+            _ = try CapabilityRegistry.loadDefaultConfig(bundle: bundle)
+            Issue.record("Expected loadDefaultConfig to fail when effect_kinds.json is missing")
+        } catch let error as CapabilityRegistryError {
+            switch error {
+            case let .missingDefaultResource(path):
+                #expect(path == "CapabilityRegistry/default/effect_kinds.json")
+            default:
+                Issue.record("Expected missingDefaultResource, got \(error)")
             }
         }
     }
@@ -281,5 +299,28 @@ struct CapabilityRuntimeTests {
         #expect(throws: CapabilityRegistryError.self) {
             _ = try CapabilityRegistry(config: config)
         }
+    }
+
+    private func makeSplitRegistryBundle(removing fileName: String) throws -> Bundle {
+        let sourceRoot = URL(fileURLWithPath: "/Users/alex/dev/pass/guava/Engine/Sources/CapabilityRuntime/Resources/CapabilityRegistry/default",
+                             isDirectory: true)
+        let bundleRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString)
+            .appendingPathExtension("bundle")
+        let resourceRoot = bundleRoot
+            .appendingPathComponent("CapabilityRegistry", isDirectory: true)
+            .appendingPathComponent("default", isDirectory: true)
+
+        try FileManager.default.createDirectory(at: resourceRoot, withIntermediateDirectories: true)
+        for item in try FileManager.default.contentsOfDirectory(atPath: sourceRoot.path) {
+            if item == fileName {
+                continue
+            }
+            try FileManager.default.copyItem(at: sourceRoot.appendingPathComponent(item),
+                                             to: resourceRoot.appendingPathComponent(item))
+        }
+
+        let bundle = try #require(Bundle(path: bundleRoot.path))
+        return bundle
     }
 }

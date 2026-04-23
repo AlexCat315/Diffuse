@@ -69,7 +69,7 @@ struct InspectorPanel: View {
                                   collapsedIDs: Set<String>) -> [PropertyGridSection] {
         sections.map { section in
             let startsCollapsed = collapsedIDs.contains(section.id)
-            PropertyGridSection(
+            return PropertyGridSection(
                 id: section.id,
                 title: section.title,
                 rows: section.fields.map { field in
@@ -101,6 +101,16 @@ struct InspectorPanel: View {
             return AnyView(vector3Field(x: x, y: y, z: z))
         case let .color(binding):
             return AnyView(ColorField(color: binding))
+        case let .lightType(binding):
+            return AnyView(
+                EnumField(value: binding, width: 128) { type in
+                    switch type {
+                    case .directional: return "Directional"
+                    case .point: return "Point"
+                    case .spot: return "Spot"
+                    }
+                }
+            )
         }
     }
 

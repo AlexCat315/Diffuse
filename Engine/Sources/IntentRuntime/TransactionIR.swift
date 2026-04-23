@@ -72,6 +72,7 @@ public enum SceneMutation: Sendable, Equatable {
     case setRigidBodyAllowSleep(entityID: UInt64, value: Bool)
     case setColliderTrigger(entityID: UInt64, value: Bool)
     case setConstraintEnabled(entityID: UInt64, value: Bool)
+    case setLightType(entityID: UInt64, type: LightType)
     case setLightColor(entityID: UInt64, color: SIMD3<Float>)
     case setLightIntensity(entityID: UInt64, intensity: Float)
     case setCameraPose(entityID: UInt64,
