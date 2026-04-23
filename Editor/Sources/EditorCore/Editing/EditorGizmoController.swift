@@ -20,6 +20,14 @@ public final class EditorGizmoController: @unchecked Sendable {
         case scale
     }
 
+    /// Gizmo 轴向空间：
+    /// - `.local`：三轴随物体旋转（Maya/Blender/Unity 默认）。
+    /// - `.world`：三轴始终对齐世界轴。
+    public enum GizmoSpace: Sendable {
+        case local
+        case world
+    }
+
     public enum Axis: Int, Sendable, CaseIterable {
         case x
         case y
@@ -85,36 +93,92 @@ public final class EditorGizmoController: @unchecked Sendable {
 
     public struct Snapshot {
         public var mode: Mode
+        public var space: GizmoSpace
         public var camera: RenderCamera
         public var frame: ViewportScreenFrame
         public var drawableWidth: Float
         public var drawableHeight: Float
         public var entityID: UInt64
         public var entityWorldPosition: SIMD3<Float>
+        public var entityWorldMatrix: simd_float4x4
         public var entityLocalMatrix: simd_float4x4
         public var parentWorldMatrix: simd_float4x4
         public var axisLength: Float
 
         public init(mode: Mode,
+                    space: GizmoSpace = .local,
                     camera: RenderCamera,
                     frame: ViewportScreenFrame,
                     drawableWidth: Float,
                     drawableHeight: Float,
                     entityID: UInt64,
                     entityWorldPosition: SIMD3<Float>,
+                    entityWorldMatrix: simd_float4x4,
                     entityLocalMatrix: simd_float4x4,
                     parentWorldMatrix: simd_float4x4,
                     axisLength: Float) {
             self.mode = mode
+            self.space = space
             self.camera = camera
             self.frame = frame
             self.drawableWidth = drawableWidth
             self.drawableHeight = drawableHeight
             self.entityID = entityID
             self.entityWorldPosition = entityWorldPosition
+            self.entityWorldMatrix = entityWorldMatrix
             self.entityLocalMatrix = entityLocalMatrix
             self.parentWorldMatrix = parentWorldMatrix
             self.axisLength = axisLength
+        }
+
+        /// 当前 gizmo 轴在世界空间里的单位向量。`.local` 下从实体世界矩阵取列并归一化，
+        /// `.world` 下返回原始世界轴。
+        public func axisWorld(_ axis: Axis) -> SIMD3<Float> {
+            switch space {
+            case .world:
+                return axis.worldDirection
+            case .local:
+                let column: SIMD4<Float>
+                switch axis {
+                case .x: column = entityWorldMatrix.columns.0
+                case .y: column = entityWorldMatrix.columns.1
+                case .z: column = entityWorldMatrix.columns.2
+                }
+                let v = SIMD3<Float>(column.x, column.y, column.z)
+                let len = simd_length(v)
+                return len > 1e-5 ? v / len : axis.worldDirection
+            }
+        }
+
+        /// 为“以 axis 为法线”的平面（用于旋转环）提供两个世界空间正交基向量。
+        public func planeBasis(forRotateAxis axis: Axis) -> (SIMD3<Float>, SIMD3<Float>) {
+            let n = axisWorld(axis)
+            let other: Axis = axis == .x ? .y : .x
+            var u = axisWorld(other)
+            u = u - n * simd_dot(u, n)
+            if simd_length(u) < 1e-5 {
+                let fallback: SIMD3<Float> = abs(n.y) < 0.9 ? SIMD3<Float>(0, 1, 0) : SIMD3<Float>(1, 0, 0)
+                u = fallback - n * simd_dot(fallback, n)
+            }
+            u = simd_normalize(u)
+            let v = simd_normalize(simd_cross(n, u))
+            return (u, v)
+        }
+
+        /// 平面手柄的两轴 + 法线。
+        public func planeAxes(_ plane: Plane) -> (basisU: SIMD3<Float>, basisV: SIMD3<Float>, normal: SIMD3<Float>) {
+            switch plane {
+            case .xy: return (axisWorld(.x), axisWorld(.y), axisWorld(.z))
+            case .yz: return (axisWorld(.y), axisWorld(.z), axisWorld(.x))
+            case .zx: return (axisWorld(.z), axisWorld(.x), axisWorld(.y))
+            }
+        }
+
+        /// 摄像机 forward 向量（从 eye 指向 target，已归一化）。
+        public var cameraForward: SIMD3<Float> {
+            let raw = camera.target - camera.eye
+            let len = simd_length(raw)
+            return len > 1e-5 ? raw / len : SIMD3<Float>(0, 0, -1)
         }
     }
 
@@ -128,12 +192,20 @@ public final class EditorGizmoController: @unchecked Sendable {
         public var startEntityWorldMatrix: simd_float4x4
         public var parentWorldMatrix: simd_float4x4
         public var parentInverseMatrix: simd_float4x4
-        // translate / scale: 起始的轴向参数（射线-轴最近点参数 t）
-        public var startAxisParam: Float
-        // rotate: 起始角度（在 axis 旋转平面里的极角，弧度）
-        public var startAngle: Float
-        // planeTranslate: 起始时光标在平面上的世界命中点
+        // 拖拽时使用的“有效轴世界向量”（考虑 gizmoSpace）。
+        public var axisWorld: SIMD3<Float>
+        // 所有拖拽数学都基于“射线-平面相交”：
+        // - translate axis: plane = 含 axis 并尽量面向摄像机（axis × (forward × axis)）。
+        // - translate plane: plane normal = 平面手柄法线。
+        // - rotate: plane normal = handle axis。
+        // - scale axis: 同 translate axis。
+        public var planeOrigin: SIMD3<Float>
+        public var planeNormal: SIMD3<Float>
         public var startPlaneHit: SIMD3<Float>
+        // rotate: 起始径向向量（在 plane 上，已归一化）
+        public var startRadial: SIMD3<Float>
+        // 拖拽时的 gizmo 远近 reference 长度（用于 scale 升压）
+        public var referenceLength: Float
     }
 
     private let lock = NSLock()
@@ -164,14 +236,16 @@ public final class EditorGizmoController: @unchecked Sendable {
         _activeDrag = nil
     }
 
-    /// 统一构造 ActiveDrag，把 parent / world 矩阵和起始世界矩阵一次性算好，
+    /// 统一构造 ActiveDrag，把 parent / world 矩阵、起始世界矩阵、平面参数一次性算好，
     /// 便于后续 update 把世界变换换算回本地空间。
     private func makeDrag(snap: Snapshot,
                           axis: Axis,
                           plane: Plane?,
-                          startAxisParam: Float,
-                          startAngle: Float,
-                          startPlaneHit: SIMD3<Float>) -> ActiveDrag {
+                          axisWorld: SIMD3<Float>,
+                          planeOrigin: SIMD3<Float>,
+                          planeNormal: SIMD3<Float>,
+                          startPlaneHit: SIMD3<Float>,
+                          startRadial: SIMD3<Float>) -> ActiveDrag {
         let parentWorld = snap.parentWorldMatrix
         let parentInverse = simd_inverse(parentWorld)
         let startWorldMatrix = parentWorld * snap.entityLocalMatrix
@@ -185,9 +259,12 @@ public final class EditorGizmoController: @unchecked Sendable {
             startEntityWorldMatrix: startWorldMatrix,
             parentWorldMatrix: parentWorld,
             parentInverseMatrix: parentInverse,
-            startAxisParam: startAxisParam,
-            startAngle: startAngle,
-            startPlaneHit: startPlaneHit
+            axisWorld: axisWorld,
+            planeOrigin: planeOrigin,
+            planeNormal: planeNormal,
+            startPlaneHit: startPlaneHit,
+            startRadial: startRadial,
+            referenceLength: max(snap.axisLength, 0.001)
         )
     }
 
@@ -267,7 +344,8 @@ public final class EditorGizmoController: @unchecked Sendable {
         var bestAxis: Axis?
         var bestDistance: Float = .infinity
         for axis in Axis.allCases {
-            let tip = snap.entityWorldPosition + axis.worldDirection * snap.axisLength
+            let axisDir = snap.axisWorld(axis)
+            let tip = snap.entityWorldPosition + axisDir * snap.axisLength
             guard let tipScreen = projector.project(tip) else { continue }
             let distance = pointToSegmentDistance(
                 px: cursorX, py: cursorY,
@@ -281,21 +359,27 @@ public final class EditorGizmoController: @unchecked Sendable {
         }
 
         guard let axis = bestAxis, bestDistance <= screenTolerance else { return nil }
-
         guard let ray = projector.cursorRay(x: cursorX, y: cursorY) else { return nil }
-        guard let startParam = closestPointOnAxis(
+
+        let axisWorld = snap.axisWorld(axis)
+        let planeNormal = axisDragPlaneNormal(axisWorld: axisWorld,
+                                              cameraForward: snap.cameraForward,
+                                              cameraUp: projector.cameraUp)
+        guard let startHit = rayPlaneIntersect(
             rayOrigin: ray.origin,
             rayDir: ray.direction,
-            axisOrigin: snap.entityWorldPosition,
-            axisDir: axis.worldDirection
+            planeOrigin: snap.entityWorldPosition,
+            planeNormal: planeNormal
         ) else { return nil }
 
         let drag = makeDrag(snap: snap,
                             axis: axis,
                             plane: nil,
-                            startAxisParam: startParam,
-                            startAngle: 0,
-                            startPlaneHit: .zero)
+                            axisWorld: axisWorld,
+                            planeOrigin: snap.entityWorldPosition,
+                            planeNormal: planeNormal,
+                            startPlaneHit: startHit,
+                            startRadial: .zero)
         lock.lock(); _activeDrag = drag; lock.unlock()
         return drag
     }
@@ -303,15 +387,16 @@ public final class EditorGizmoController: @unchecked Sendable {
     private func updateTranslateMatrix(snap: Snapshot,
                                        drag: ActiveDrag,
                                        ray: (origin: SIMD3<Float>, direction: SIMD3<Float>)) -> simd_float4x4? {
-        guard let currentParam = closestPointOnAxis(
+        guard let curHit = rayPlaneIntersect(
             rayOrigin: ray.origin,
             rayDir: ray.direction,
-            axisOrigin: drag.startEntityWorldPosition,
-            axisDir: drag.axis.worldDirection
+            planeOrigin: drag.planeOrigin,
+            planeNormal: drag.planeNormal
         ) else { return nil }
-
-        let delta = currentParam - drag.startAxisParam
-        let newWorldPos = drag.startEntityWorldPosition + drag.axis.worldDirection * delta
+        // 在拖拽平面上的偏移投影到轴向，得到沏平移。
+        let deltaWorld = curHit - drag.startPlaneHit
+        let along = simd_dot(deltaWorld, drag.axisWorld)
+        let newWorldPos = drag.startEntityWorldPosition + drag.axisWorld * along
         var worldMatrix = drag.startEntityWorldMatrix
         worldMatrix.columns.3 = SIMD4<Float>(newWorldPos, 1)
         return drag.parentInverseMatrix * worldMatrix
@@ -320,21 +405,34 @@ public final class EditorGizmoController: @unchecked Sendable {
     private func updateScaleMatrix(snap: Snapshot,
                                    drag: ActiveDrag,
                                    ray: (origin: SIMD3<Float>, direction: SIMD3<Float>)) -> simd_float4x4? {
-        guard let currentParam = closestPointOnAxis(
+        guard let curHit = rayPlaneIntersect(
             rayOrigin: ray.origin,
             rayDir: ray.direction,
-            axisOrigin: drag.startEntityWorldPosition,
-            axisDir: drag.axis.worldDirection
+            planeOrigin: drag.planeOrigin,
+            planeNormal: drag.planeNormal
         ) else { return nil }
-
-        // 以 axisLength 为参考长度：把光标沿轴的位移映射到缩放因子。
-        let referenceLength = max(snap.axisLength, 0.001)
-        let delta = currentParam - drag.startAxisParam
-        let factor = max(0.01, 1 + delta / referenceLength)
-
-        // 世界轴上的非均匀缩放矩阵： S = I + (factor - 1) * a * aᵀ
-        let s = scaleAlongAxisMatrix(factor: factor, axis: drag.axis.worldDirection)
-        let worldMatrix = s * drag.startEntityWorldMatrix
+        let along = simd_dot(curHit - drag.startPlaneHit, drag.axisWorld)
+        let factor = max(0.05, 1 + along / drag.referenceLength)
+        // 以 startEntityWorldPosition 为中心、沿世界轴做非均匀缩放：
+        // 只缩放世界矩阵的三个基底列，保持平移不变，避免以世界原点为中心缩放。
+        let s = scaleAlongAxisMatrix(factor: factor, axis: drag.axisWorld)
+        let s3 = simd_float3x3(
+            SIMD3<Float>(s.columns.0.x, s.columns.0.y, s.columns.0.z),
+            SIMD3<Float>(s.columns.1.x, s.columns.1.y, s.columns.1.z),
+            SIMD3<Float>(s.columns.2.x, s.columns.2.y, s.columns.2.z)
+        )
+        let m = drag.startEntityWorldMatrix
+        let c0 = SIMD3<Float>(m.columns.0.x, m.columns.0.y, m.columns.0.z)
+        let c1 = SIMD3<Float>(m.columns.1.x, m.columns.1.y, m.columns.1.z)
+        let c2 = SIMD3<Float>(m.columns.2.x, m.columns.2.y, m.columns.2.z)
+        let n0 = s3 * c0
+        let n1 = s3 * c1
+        let n2 = s3 * c2
+        var worldMatrix = m
+        worldMatrix.columns.0 = SIMD4<Float>(n0, 0)
+        worldMatrix.columns.1 = SIMD4<Float>(n1, 0)
+        worldMatrix.columns.2 = SIMD4<Float>(n2, 0)
+        // worldMatrix.columns.3 保留原始平移。
         return drag.parentInverseMatrix * worldMatrix
     }
 
@@ -343,15 +441,15 @@ public final class EditorGizmoController: @unchecked Sendable {
     /// 平面手柄在世界空间的几何范围：以原点为起点沿 (basisU, basisV) 方向
     /// 各取 `axisLength * 0.15 .. axisLength * 0.45` 形成一个矩形。
     private func planeQuadCorners(snap: Snapshot, plane: Plane) -> [SIMD3<Float>] {
-        let (u, v) = plane.basis
+        let axes = snap.planeAxes(plane)
         let lo = snap.axisLength * 0.15
         let hi = snap.axisLength * 0.45
         let o = snap.entityWorldPosition
         return [
-            o + u * lo + v * lo,
-            o + u * hi + v * lo,
-            o + u * hi + v * hi,
-            o + u * lo + v * hi
+            o + axes.basisU * lo + axes.basisV * lo,
+            o + axes.basisU * hi + axes.basisV * lo,
+            o + axes.basisU * hi + axes.basisV * hi,
+            o + axes.basisU * lo + axes.basisV * hi
         ]
     }
 
@@ -373,19 +471,22 @@ public final class EditorGizmoController: @unchecked Sendable {
 
             // 命中：用 ray-plane 求交得到起始世界点。
             guard let ray = projector.cursorRay(x: cursorX, y: cursorY) else { return nil }
+            let axes = snap.planeAxes(plane)
             guard let hit = rayPlaneIntersect(
                 rayOrigin: ray.origin,
                 rayDir: ray.direction,
                 planeOrigin: snap.entityWorldPosition,
-                planeNormal: plane.normal
+                planeNormal: axes.normal
             ) else { return nil }
 
             let drag = makeDrag(snap: snap,
                                 axis: .x,
                                 plane: plane,
-                                startAxisParam: 0,
-                                startAngle: 0,
-                                startPlaneHit: hit)
+                                axisWorld: .zero,
+                                planeOrigin: snap.entityWorldPosition,
+                                planeNormal: axes.normal,
+                                startPlaneHit: hit,
+                                startRadial: .zero)
             lock.lock(); _activeDrag = drag; lock.unlock()
             return drag
         }
@@ -395,12 +496,12 @@ public final class EditorGizmoController: @unchecked Sendable {
     private func updatePlaneTranslateMatrix(snap: Snapshot,
                                             drag: ActiveDrag,
                                             ray: (origin: SIMD3<Float>, direction: SIMD3<Float>)) -> simd_float4x4? {
-        guard let plane = drag.plane else { return nil }
+        guard drag.plane != nil else { return nil }
         guard let hit = rayPlaneIntersect(
             rayOrigin: ray.origin,
             rayDir: ray.direction,
-            planeOrigin: drag.startEntityWorldPosition,
-            planeNormal: plane.normal
+            planeOrigin: drag.planeOrigin,
+            planeNormal: drag.planeNormal
         ) else { return nil }
 
         let deltaWorld = hit - drag.startPlaneHit
@@ -417,17 +518,15 @@ public final class EditorGizmoController: @unchecked Sendable {
                                  cursorX: Float, cursorY: Float,
                                  screenTolerance: Float) -> ActiveDrag? {
         // 在三个旋转圆里挑命中的：每个圆采样 N 个点，先在屏幕上找最近点距离。
-        struct Candidate { var axis: Axis; var screenDistance: Float; var hitWorld: SIMD3<Float> }
+        struct Candidate { var axis: Axis; var screenDistance: Float }
         var best: Candidate?
 
         let radius = snap.axisLength
         let segments = 64
 
         for axis in Axis.allCases {
-            let (basisU, basisV) = axis.planeBasis
-            // 屏幕最近点 + 命中世界点（用相邻段做线性插值的近似已够）
+            let (basisU, basisV) = snap.planeBasis(forRotateAxis: axis)
             var prevScreen: (x: Float, y: Float)?
-            var prevWorld: SIMD3<Float> = .zero
             for i in 0...segments {
                 let t = Float(i) / Float(segments) * 2 * .pi
                 let world = snap.entityWorldPosition
@@ -442,13 +541,10 @@ public final class EditorGizmoController: @unchecked Sendable {
                         bx: screen.x, by: screen.y
                     )
                     if d < (best?.screenDistance ?? .infinity) {
-                        // 用线段中点近似命中世界点
-                        let midWorld = (prevWorld + world) * 0.5
-                        best = Candidate(axis: axis, screenDistance: d, hitWorld: midWorld)
+                        best = Candidate(axis: axis, screenDistance: d)
                     }
                 }
                 prevScreen = screen
-                prevWorld = world
             }
         }
 
@@ -456,24 +552,27 @@ public final class EditorGizmoController: @unchecked Sendable {
             return nil
         }
 
-        // 用真实 ray-平面 求交得到更准的起始角度。
+        // 用真实 ray-平面求交得到更准的起始径向。
         guard let ray = projector.cursorRay(x: cursorX, y: cursorY) else { return nil }
         let axis = candidate.axis
-        let normal = axis.worldDirection
-        let hitWorld = rayPlaneIntersect(rayOrigin: ray.origin,
-                                         rayDir: ray.direction,
-                                         planeOrigin: snap.entityWorldPosition,
-                                         planeNormal: normal) ?? candidate.hitWorld
-        let (basisU, basisV) = axis.planeBasis
-        let v = hitWorld - snap.entityWorldPosition
-        let startAngle = atan2f(simd_dot(v, basisV), simd_dot(v, basisU))
+        let axisWorld = snap.axisWorld(axis)
+        let planeOrigin = snap.entityWorldPosition
+        guard let hitWorld = rayPlaneIntersect(rayOrigin: ray.origin,
+                                               rayDir: ray.direction,
+                                               planeOrigin: planeOrigin,
+                                               planeNormal: axisWorld) else { return nil }
+        let radial = hitWorld - planeOrigin
+        guard simd_length(radial) > 1e-4 else { return nil }
+        let startRadial = simd_normalize(radial)
 
         let drag = makeDrag(snap: snap,
                             axis: axis,
                             plane: nil,
-                            startAxisParam: 0,
-                            startAngle: startAngle,
-                            startPlaneHit: .zero)
+                            axisWorld: axisWorld,
+                            planeOrigin: planeOrigin,
+                            planeNormal: axisWorld,
+                            startPlaneHit: hitWorld,
+                            startRadial: startRadial)
         lock.lock(); _activeDrag = drag; lock.unlock()
         return drag
     }
@@ -481,23 +580,33 @@ public final class EditorGizmoController: @unchecked Sendable {
     private func updateRotateMatrix(snap: Snapshot,
                                     drag: ActiveDrag,
                                     ray: (origin: SIMD3<Float>, direction: SIMD3<Float>)) -> simd_float4x4? {
-        let normal = drag.axis.worldDirection
         guard let hitWorld = rayPlaneIntersect(
             rayOrigin: ray.origin,
             rayDir: ray.direction,
-            planeOrigin: drag.startEntityWorldPosition,
-            planeNormal: normal
+            planeOrigin: drag.planeOrigin,
+            planeNormal: drag.planeNormal
         ) else { return nil }
 
-        let (basisU, basisV) = drag.axis.planeBasis
-        let v = hitWorld - drag.startEntityWorldPosition
-        let currentAngle = atan2f(simd_dot(v, basisV), simd_dot(v, basisU))
-        let deltaAngle = currentAngle - drag.startAngle
-
-        // 世界轴旋转所以 R 左乘到世界矩阵上，
-        // 再用父逆转换回本地空间。
-        let rotMatrix4 = rotation4x4(angle: deltaAngle, axis: normal)
-        let worldMatrix = rotMatrix4 * drag.startEntityWorldMatrix
+        let curRaw = hitWorld - drag.planeOrigin
+        guard simd_length(curRaw) > 1e-4 else { return nil }
+        let curRadial = simd_normalize(curRaw)
+        let deltaAngle = signedAngleBetween(from: drag.startRadial,
+                                            to: curRadial,
+                                            axis: drag.axisWorld)
+        // 以实体 startEntityWorldPosition 为轴心，只旋转世界矩阵的三个基底列，
+        // 保持平移列不变，避免以世界原点为中心的轨道式旋转。
+        let r3 = rotationMatrix(angle: deltaAngle, axis: drag.axisWorld)
+        let m = drag.startEntityWorldMatrix
+        let c0 = SIMD3<Float>(m.columns.0.x, m.columns.0.y, m.columns.0.z)
+        let c1 = SIMD3<Float>(m.columns.1.x, m.columns.1.y, m.columns.1.z)
+        let c2 = SIMD3<Float>(m.columns.2.x, m.columns.2.y, m.columns.2.z)
+        let n0 = r3 * c0
+        let n1 = r3 * c1
+        let n2 = r3 * c2
+        var worldMatrix = m
+        worldMatrix.columns.0 = SIMD4<Float>(n0, 0)
+        worldMatrix.columns.1 = SIMD4<Float>(n1, 0)
+        worldMatrix.columns.2 = SIMD4<Float>(n2, 0)
         return drag.parentInverseMatrix * worldMatrix
     }
 }
@@ -611,20 +720,31 @@ private func pointToSegmentDistance(px: Float, py: Float,
     return (ex * ex + ey * ey).squareRoot()
 }
 
-private func closestPointOnAxis(rayOrigin: SIMD3<Float>,
-                                rayDir: SIMD3<Float>,
-                                axisOrigin: SIMD3<Float>,
-                                axisDir: SIMD3<Float>) -> Float? {
-    let w0 = axisOrigin - rayOrigin
-    let a = simd_dot(axisDir, axisDir)
-    let b = simd_dot(axisDir, rayDir)
-    let c = simd_dot(rayDir, rayDir)
-    let d = simd_dot(axisDir, w0)
-    let e = simd_dot(rayDir, w0)
-    let denom = a * c - b * b
-    if abs(denom) < 1e-5 { return nil }
-    let t = (b * e - c * d) / denom
-    return t
+/// 为一根世界轴选拖拽平面法线：平面含 axis、尽量面向摄像机，避免视线与轴近平行时的数值不稳。
+private func axisDragPlaneNormal(axisWorld: SIMD3<Float>,
+                                 cameraForward: SIMD3<Float>,
+                                 cameraUp: SIMD3<Float>) -> SIMD3<Float> {
+    let viewCrossAxis = simd_cross(cameraForward, axisWorld)
+    var normal = simd_cross(axisWorld, viewCrossAxis)
+    if simd_length(normal) < 1e-4 {
+        normal = simd_cross(axisWorld, cameraUp)
+    }
+    if simd_length(normal) < 1e-4 {
+        normal = simd_cross(axisWorld, SIMD3<Float>(1, 0, 0))
+    }
+    let len = simd_length(normal)
+    return len > 1e-5 ? normal / len : cameraForward
+}
+
+/// 从 `from` 到 `to` 绕 `axis` 的有符号夹角，范围 [-π, π]。避免极角 atan2 的 ±π 跳变。
+private func signedAngleBetween(from: SIMD3<Float>,
+                                to: SIMD3<Float>,
+                                axis: SIMD3<Float>) -> Float {
+    let n = simd_length(axis) > 1e-5 ? simd_normalize(axis) : SIMD3<Float>(0, 1, 0)
+    let cross = simd_cross(from, to)
+    let sinAngle = simd_dot(n, cross)
+    let cosAngle = max(-1, min(1, simd_dot(from, to)))
+    return atan2f(sinAngle, cosAngle)
 }
 
 private func rayPlaneIntersect(rayOrigin: SIMD3<Float>,

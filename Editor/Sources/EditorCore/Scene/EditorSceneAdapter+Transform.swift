@@ -23,28 +23,16 @@ extension EditorSceneAdapter {
     }
 
     /// 选中实体的世界坐标。用于 gizmo 在视口中定位。
-    /// 优先返回最近一次 render extract 时的实例 transform，与渲染输出严格一致；
-    /// 没有渲染实例时回退到当前 worldTransform 的平移分量。
+    /// 直接读 SceneRuntime 的 live worldTransform —— 与每次 setLocalTransform 后
+    /// 立刻 propagateTransforms 的写路径保持同帧一致，避免拖拽时 gizmo 比鼠标晚一帧。
     public func entityWorldPosition(_ rawID: UInt64) -> SIMD3<Float>? {
         guard let entity = makeEntityID(rawID) else { return nil }
-        if let extracted = scene.extractedRenderScene,
-           let idx = extracted.instanceEntities.firstIndex(of: entity)
-        {
-            let m = extracted.scene.instances[idx].transform
-            return SIMD3<Float>(m.columns.3.x, m.columns.3.y, m.columns.3.z)
-        }
-        guard let world = scene.worldTransform(for: entity) else { return nil }
-        return world.translation
+        return scene.worldTransform(for: entity)?.translation
     }
 
-    /// 选中实体当前的世界矩阵（与 `entityWorldPosition` 同源，优先使用渲染快照）。
+    /// 选中实体当前的世界矩阵（与 `entityWorldPosition` 同源，使用 live worldTransform）。
     public func entityWorldMatrix(_ rawID: UInt64) -> simd_float4x4? {
         guard let entity = makeEntityID(rawID) else { return nil }
-        if let extracted = scene.extractedRenderScene,
-           let idx = extracted.instanceEntities.firstIndex(of: entity)
-        {
-            return extracted.scene.instances[idx].transform
-        }
         return scene.worldTransform(for: entity)?.matrix
     }
 

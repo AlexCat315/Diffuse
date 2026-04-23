@@ -73,6 +73,8 @@ public final class AppRuntime {
 
     /// 进程内 DevTools 调试服务器。仅当 `config.devTools != nil` 时创建。
     private var devTools: DevTools?
+    private var devToolsTickedOnce = false
+    private var devToolsFrameCounter: UInt64 = 0
 
     private init(config: AppConfig,
                  backend: WGPUBackend?,
@@ -101,6 +103,9 @@ public final class AppRuntime {
             dev.attachFrameTap(backend: backend, renderer: renderer)
             dev.inputDelivery = { [weak self] event in
                 self?.host.mainSession?.injectEvent(event)
+            }
+            dev.onMirrorStart = { [weak self] in
+                self?.host.requestDisplay()
             }
             do {
                 try dev.start()
@@ -254,6 +259,11 @@ public final class AppRuntime {
             let presentEnd = ProcessInfo.processInfo.systemUptime
 
             if let dev = devTools {
+                devToolsTickedOnce = true
+                if devToolsFrameCounter % 60 == 0 {
+                    print("[guava.devtools] AppRuntime.handleFrame frame#\(devToolsFrameCounter) drawable=\(drawableW)x\(drawableH) logical=\(logicalW)x\(logicalH) batches=\(drawList.batches.count) mirrorActive=\(dev.mirrorIsActive)")
+                }
+                devToolsFrameCounter &+= 1
                 dev.notifyTreeChanged()
                 dev.mirrorCapture(
                     drawList: drawList,
@@ -269,6 +279,11 @@ public final class AppRuntime {
                     nodeCount: countNodes(root),
                     batchCount: drawList.batches.count
                 )
+                // Mirror needs a steady frame stream even when the UI is
+                // idle. Force the next frame so FrameTap keeps producing.
+                if dev.mirrorIsActive {
+                    host.requestDisplay()
+                }
             }
             return true
         } catch {

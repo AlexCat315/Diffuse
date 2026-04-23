@@ -176,8 +176,14 @@ public final class FrameTap {
             capturesSinceStart &+= 1
             consecutiveErrors = 0
             if capturesSinceStart == 1 {
-                print("[guava.devtools.frameTap] first frame seq=\(seq) px=\(widthPx)x\(heightPx) jpeg=\(jpeg.count)B")
-                log.info("mirror first frame seq=\(seq) px=\(widthPx)x\(heightPx) jpeg=\(jpeg.count)B")
+                // Dump the first frame to disk so the user can verify the
+                // JPEG itself is well-formed independently of the webview.
+                let url = URL(fileURLWithPath: "/tmp/guava-mirror-first.jpg")
+                try? jpeg.write(to: url)
+                print("[guava.devtools.frameTap] first frame seq=\(seq) px=\(widthPx)x\(heightPx) jpeg=\(jpeg.count)B (dumped to \(url.path))")
+            }
+            if capturesSinceStart % 30 == 0 {
+                print("[guava.devtools.frameTap] frame seq=\(seq) total=\(capturesSinceStart) jpeg=\(jpeg.count)B")
             }
             sink.deliver?(MirrorFramePayload(
                 seq: seq,

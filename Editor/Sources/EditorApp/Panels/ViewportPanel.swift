@@ -148,7 +148,7 @@ struct ViewportPanel: View {
                 return
             }
         case let .keyDown(key):
-            if let mode = gizmoMode(for: key.keycode) {
+            if let mode = gizmoMode(for: key) {
                 if app.store.state.gizmoMode != mode {
                     app.store.dispatch(.setGizmoMode(mode))
                 }
@@ -195,6 +195,7 @@ struct ViewportPanel: View {
         guard let mode = controllerMode(for: gizmoMode),
               let id = selectedID,
               let world = scene.entityWorldPosition(id),
+              let worldMatrix = scene.entityWorldMatrix(id),
               let local = scene.entityLocalMatrix(id),
               let frame = EditorViewportDropTarget.frame,
               frame.width > 0, frame.height > 0
@@ -204,17 +205,20 @@ struct ViewportPanel: View {
         }
         let camera = scene.currentRenderCamera()
         let dist = simd_length(world - camera.eye)
-        let axisLength = max(0.4, dist * 0.18)
+        // 距离自适应，与旧引擎 gizmo_pass.scaleForSelection 保持一致。
+        let axisLength = max(0.7, min(3.4, dist * 0.2))
         let parentWorld = scene.entityParentWorldMatrix(id)
         EditorGizmoController.shared.updateSnapshot(
             EditorGizmoController.Snapshot(
                 mode: mode,
+                space: .local,
                 camera: camera,
                 frame: frame,
                 drawableWidth: Float(surface.width),
                 drawableHeight: Float(surface.height),
                 entityID: id,
                 entityWorldPosition: world,
+                entityWorldMatrix: worldMatrix,
                 entityLocalMatrix: local,
                 parentWorldMatrix: parentWorld,
                 axisLength: axisLength
@@ -275,7 +279,7 @@ struct ViewportPanel: View {
                                  activeAxis: EditorGizmoController.Axis?,
                                  tipShape: AxisTipShape) {
         for axis in EditorGizmoController.Axis.allCases {
-            let tipWorld = snap.entityWorldPosition + axis.worldDirection * snap.axisLength
+            let tipWorld = snap.entityWorldPosition + snap.axisWorld(axis) * snap.axisLength
             guard let tip = projector.project(tipWorld) else { continue }
             let baseColor = axis.color
             let isActive = activeAxis == axis
@@ -303,7 +307,7 @@ struct ViewportPanel: View {
         let radius = snap.axisLength
         let segments = 64
         for axis in EditorGizmoController.Axis.allCases {
-            let (basisU, basisV) = axis.planeBasis
+            let (basisU, basisV) = snap.planeBasis(forRotateAxis: axis)
             let baseColor = axis.color
             let isActive = activeAxis == axis
             let color = Color(r: baseColor.x, g: baseColor.y, b: baseColor.z,
@@ -333,7 +337,9 @@ struct ViewportPanel: View {
         let lo = snap.axisLength * 0.15
         let hi = snap.axisLength * 0.45
         for plane in EditorGizmoController.Plane.allCases {
-            let (u, v) = plane.basis
+            let axes = snap.planeAxes(plane)
+            let u = axes.basisU
+            let v = axes.basisV
             let o = snap.entityWorldPosition
             let cornersWorld: [SIMD3<Float>] = [
                 o + u * lo + v * lo,
@@ -381,12 +387,22 @@ struct ViewportPanel: View {
         }
     }
 
-    private func gizmoMode(for keycode: UInt32) -> EditorGizmoMode? {
-        switch keycode {
-        case 0x71 /* q */: return EditorGizmoMode.none
-        case 0x77 /* w */: return .translate
-        case 0x65 /* e */: return .rotate
-        case 0x72 /* r */: return .scale
+    private func gizmoMode(for key: KeyEvent) -> EditorGizmoMode? {
+        // 优先用 scancode（与键位物理位置绑定、与键盘布局无关），
+        // 避免非 US 布局下 keycode 不匹配。SDL3 scancode：Q=20 W=26 E=8 R=21。
+        switch key.scancode {
+        case 20: return EditorGizmoMode.none   // Q
+        case 26: return .translate              // W
+        case 8:  return .rotate                 // E
+        case 21: return .scale                  // R
+        default: break
+        }
+        // Fallback：同时看 keycode。
+        switch key.keycode {
+        case 0x71: return EditorGizmoMode.none
+        case 0x77: return .translate
+        case 0x65: return .rotate
+        case 0x72: return .scale
         default: return nil
         }
     }
