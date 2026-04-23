@@ -251,6 +251,10 @@ public struct SceneRuntime {
         schedule.clearScriptDriver()
     }
 
+    public mutating func setJobSystem(_ jobSystem: JobSystem) {
+        schedule.setJobSystem(jobSystem)
+    }
+
     public mutating func setResource<Resource: Sendable>(_ resource: Resource) {
         world.setResource(resource)
     }
