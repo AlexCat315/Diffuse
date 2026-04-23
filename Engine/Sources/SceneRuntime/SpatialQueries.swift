@@ -203,15 +203,22 @@ public struct SpatialIndexResource: Sendable, Equatable {
         }
 
         let changedRatio = Float(changedEntryIndices.count) / Float(newEntries.count)
+        var next = self
+        next.entries = newEntries
+        next.sourceRevision = sourceRevision
+
         if changedRatio >= buildConfig.rebuildThreshold {
+            let rebuilt = next.bvh.rebuildDirtySubtrees(entries: newEntries,
+                                                        changedEntryIndices: changedEntryIndices,
+                                                        triggerRatio: buildConfig.rebuildThreshold)
+            if rebuilt {
+                return next
+            }
             return SpatialIndexResource(entries: newEntries,
                                         sourceRevision: sourceRevision,
                                         buildConfig: buildConfig)
         }
 
-        var next = self
-        next.entries = newEntries
-        next.sourceRevision = sourceRevision
         next.bvh.refit(entries: newEntries, changedEntryIndices: changedEntryIndices)
         return next
     }
@@ -385,6 +392,84 @@ struct SpatialBVH: Sendable, Equatable {
         }
 
         soa.rebuild(from: nodes)
+    }
+
+    mutating func rebuildDirtySubtrees(entries: [SpatialIndexEntry],
+                                       changedEntryIndices: [Int],
+                                       triggerRatio: Float) -> Bool {
+        guard !nodes.isEmpty, !changedEntryIndices.isEmpty else { return true }
+        let boundedTrigger = min(max(triggerRatio, 0), 1)
+
+        var dirtyLeafNodes = Set<Int>()
+        for entryIndex in changedEntryIndices {
+            guard entryIndex >= 0, entryIndex < leafNodeByEntryIndex.count else { continue }
+            let leafNode = leafNodeByEntryIndex[entryIndex]
+            guard leafNode >= 0 else { continue }
+            dirtyLeafNodes.insert(leafNode)
+        }
+        guard !dirtyLeafNodes.isEmpty else { return true }
+
+        var subtreeItemCounts = Array(repeating: 0, count: nodes.count)
+        _ = computeSubtreeItemCounts(nodeIndex: 0, into: &subtreeItemCounts)
+
+        var dirtyCountByNode = Array(repeating: 0, count: nodes.count)
+        for leafNode in dirtyLeafNodes {
+            var cursor = leafNode
+            while cursor >= 0 {
+                dirtyCountByNode[cursor] += 1
+                cursor = parentNodeIndices[cursor]
+            }
+        }
+
+        var rebuildRoots: [Int] = []
+        for nodeIndex in 0..<nodes.count {
+            let dirtyCount = dirtyCountByNode[nodeIndex]
+            guard dirtyCount > 0 else { continue }
+
+            let subtreeItems = max(subtreeItemCounts[nodeIndex], 1)
+            let ratio = Float(dirtyCount) / Float(subtreeItems)
+            guard ratio >= boundedTrigger else { continue }
+
+            let parent = parentNodeIndices[nodeIndex]
+            if parent >= 0 {
+                let parentItems = max(subtreeItemCounts[parent], 1)
+                let parentRatio = Float(dirtyCountByNode[parent]) / Float(parentItems)
+                if parentRatio >= boundedTrigger {
+                    continue
+                }
+            }
+            rebuildRoots.append(nodeIndex)
+        }
+
+        if rebuildRoots.isEmpty {
+            refit(entries: entries, changedEntryIndices: changedEntryIndices)
+            return true
+        }
+
+        for root in rebuildRoots {
+            guard rebuildSubtree(rootNode: root, entries: entries) else {
+                return false
+            }
+        }
+
+        var frontier = rebuildRoots
+        var queued = Set(rebuildRoots)
+        while let nodeIndex = frontier.popLast() {
+            let parent = parentNodeIndices[nodeIndex]
+            guard parent >= 0 else { continue }
+            guard nodes[parent].leftChild >= 0, nodes[parent].rightChild >= 0 else { continue }
+
+            let leftBounds = nodes[nodes[parent].leftChild].bounds
+            let rightBounds = nodes[nodes[parent].rightChild].bounds
+            nodes[parent].bounds = leftBounds.merged(with: rightBounds)
+
+            if queued.insert(parent).inserted {
+                frontier.append(parent)
+            }
+        }
+
+        soa.rebuild(from: nodes)
+        return true
     }
 
     func forEachOverlapping(_ bounds: SpatialAABB,
@@ -636,6 +721,187 @@ struct SpatialBVH: Sendable, Equatable {
                                           start: start,
                                           count: 0)
         return nodeIndex
+    }
+
+    private mutating func rebuildSubtree(rootNode: Int,
+                                         entries: [SpatialIndexEntry]) -> Bool {
+        let rangeStart = nodes[rootNode].start
+        let rangeCount = subtreeItemCount(nodeIndex: rootNode)
+        guard rangeCount > 0 else {
+            nodes[rootNode].leftChild = -1
+            nodes[rootNode].rightChild = -1
+            nodes[rootNode].count = 0
+            return true
+        }
+
+        var reusableNodes = collectSubtreeNodes(rootNode: rootNode)
+        reusableNodes.removeAll { $0 == rootNode }
+        var reuseCursor = 0
+
+        let rebuilt = rebuildSubtreeInPlace(nodeIndex: rootNode,
+                                            start: rangeStart,
+                                            count: rangeCount,
+                                            parent: parentNodeIndices[rootNode],
+                                            entries: entries,
+                                            reusableNodes: &reusableNodes,
+                                            reuseCursor: &reuseCursor)
+        return rebuilt
+    }
+
+    private mutating func rebuildSubtreeInPlace(nodeIndex: Int,
+                                                start: Int,
+                                                count: Int,
+                                                parent: Int,
+                                                entries: [SpatialIndexEntry],
+                                                reusableNodes: inout [Int],
+                                                reuseCursor: inout Int) -> Bool {
+        let bounds = combinedBounds(entries: entries, range: start..<(start + count))
+        nodes[nodeIndex].bounds = bounds
+        nodes[nodeIndex].start = start
+        parentNodeIndices[nodeIndex] = parent
+
+        guard count > leafSize else {
+            nodes[nodeIndex].leftChild = -1
+            nodes[nodeIndex].rightChild = -1
+            nodes[nodeIndex].count = count
+            for offset in 0..<count {
+                let entryIndex = orderedEntryIndices[start + offset]
+                leafNodeByEntryIndex[entryIndex] = nodeIndex
+            }
+            return true
+        }
+
+        let axis = splitAxis(entries: entries, start: start, count: count)
+        orderedEntryIndices[start..<(start + count)].sort { lhs, rhs in
+            entries[lhs].bounds.center[axis] < entries[rhs].bounds.center[axis]
+        }
+
+        let leafCost = Float(count)
+        let parentArea = max(bounds.surfaceArea, 0.000_001)
+        let splitSamples = min(sahSampleCount, count - 1)
+        var bestSplit: Int?
+        var bestCost = Float.greatestFiniteMagnitude
+
+        if splitSamples > 0 {
+            for sample in 1...splitSamples {
+                let split = start + (sample * count) / (splitSamples + 1)
+                if split <= start || split >= start + count {
+                    continue
+                }
+
+                let leftBounds = combinedBounds(entries: entries, range: start..<split)
+                let rightBounds = combinedBounds(entries: entries, range: split..<(start + count))
+                let leftCount = split - start
+                let rightCount = count - leftCount
+                let sahCost = 1 +
+                    (leftBounds.surfaceArea / parentArea) * Float(leftCount) +
+                    (rightBounds.surfaceArea / parentArea) * Float(rightCount)
+
+                if sahCost < bestCost {
+                    bestCost = sahCost
+                    bestSplit = split
+                }
+            }
+        }
+
+        guard let splitIndex = bestSplit, bestCost < leafCost else {
+            nodes[nodeIndex].leftChild = -1
+            nodes[nodeIndex].rightChild = -1
+            nodes[nodeIndex].count = count
+            for offset in 0..<count {
+                let entryIndex = orderedEntryIndices[start + offset]
+                leafNodeByEntryIndex[entryIndex] = nodeIndex
+            }
+            return true
+        }
+
+        let leftCount = splitIndex - start
+        let rightCount = count - leftCount
+
+        guard let leftNode = nextReusableNode(&reusableNodes, &reuseCursor),
+              let rightNode = nextReusableNode(&reusableNodes, &reuseCursor) else {
+            return false
+        }
+
+        nodes[nodeIndex].leftChild = leftNode
+        nodes[nodeIndex].rightChild = rightNode
+        nodes[nodeIndex].count = 0
+
+        guard rebuildSubtreeInPlace(nodeIndex: leftNode,
+                                    start: start,
+                                    count: leftCount,
+                                    parent: nodeIndex,
+                                    entries: entries,
+                                    reusableNodes: &reusableNodes,
+                                    reuseCursor: &reuseCursor) else {
+            return false
+        }
+        guard rebuildSubtreeInPlace(nodeIndex: rightNode,
+                                    start: splitIndex,
+                                    count: rightCount,
+                                    parent: nodeIndex,
+                                    entries: entries,
+                                    reusableNodes: &reusableNodes,
+                                    reuseCursor: &reuseCursor) else {
+            return false
+        }
+
+        return true
+    }
+
+    private func nextReusableNode(_ reusableNodes: inout [Int], _ cursor: inout Int) -> Int? {
+        guard cursor < reusableNodes.count else { return nil }
+        let node = reusableNodes[cursor]
+        cursor += 1
+        return node
+    }
+
+    private func collectSubtreeNodes(rootNode: Int) -> [Int] {
+        var collected: [Int] = []
+        var stack: [Int] = [rootNode]
+        while let nodeIndex = stack.popLast() {
+            collected.append(nodeIndex)
+            let left = nodes[nodeIndex].leftChild
+            let right = nodes[nodeIndex].rightChild
+            if left >= 0 { stack.append(left) }
+            if right >= 0 { stack.append(right) }
+        }
+        return collected
+    }
+
+    private func subtreeItemCount(nodeIndex: Int) -> Int {
+        let node = nodes[nodeIndex]
+        if node.isLeaf {
+            return node.count
+        }
+        var total = 0
+        if node.leftChild >= 0 {
+            total += subtreeItemCount(nodeIndex: node.leftChild)
+        }
+        if node.rightChild >= 0 {
+            total += subtreeItemCount(nodeIndex: node.rightChild)
+        }
+        return total
+    }
+
+    @discardableResult
+    private func computeSubtreeItemCounts(nodeIndex: Int,
+                                          into counts: inout [Int]) -> Int {
+        let node = nodes[nodeIndex]
+        if node.isLeaf {
+            counts[nodeIndex] = node.count
+            return node.count
+        }
+
+        var total = 0
+        if node.leftChild >= 0 {
+            total += computeSubtreeItemCounts(nodeIndex: node.leftChild, into: &counts)
+        }
+        if node.rightChild >= 0 {
+            total += computeSubtreeItemCounts(nodeIndex: node.rightChild, into: &counts)
+        }
+        counts[nodeIndex] = total
+        return total
     }
 
     private func combinedBounds(entries: [SpatialIndexEntry], start: Int, count: Int) -> SpatialAABB {
