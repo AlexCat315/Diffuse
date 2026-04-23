@@ -16,12 +16,13 @@
 4. 插值协议：`Interpolatable` + 基础类型实现（`Float` / `Double` / `Color` / `LayoutFrame` / `Insets`）
 5. 运行时调度：`AnimationController` / `AnimatorScheduler`
 6. 帧驱动接入：`PlatformShell.onFrame(deltaTime:)` 调用 scheduler tick
-7. 可动画属性：`opacity` / `backgroundColor` / `foregroundColor` / `cornerRadius` / `frame` / `padding`
+7. 可动画属性：`opacity` / `backgroundColor` / `foregroundColor` / `cornerRadius`
 8. Style 内置过渡：`PrimaryButtonStyle` 等内建 style 自动 cross-fade hover / press
 9. Demo 验证：Phase 7.5 demo 中 `.appearance` 切换通过 `withAnimation` 实现整树渐变换肤
 
 **不纳入 Phase 8**（推迟）：
 
+- 可动画属性 `frame` / `padding` → Phase 8.x，依赖 Yoga 重排集成（layout 阶段需在每帧消费插值后的尺寸/边距）
 - Spring 物理动画 → Phase 8.5
 - 关键帧 / 时间线序列 → Phase 9
 - Transaction（SwiftUI 用作动画 + 其他元数据通道）→ 视需要再加

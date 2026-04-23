@@ -7,48 +7,27 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef enum engine_runtime_phase_t {
-    ENGINE_RUNTIME_PHASE_OFFLINE = 0,
-    ENGINE_RUNTIME_PHASE_READY = 1,
-    ENGINE_RUNTIME_PHASE_INPUT_DONE = 2,
-    ENGINE_RUNTIME_PHASE_SIM_DONE = 3,
-    ENGINE_RUNTIME_PHASE_RENDER_PREPARE_DONE = 4,
-} engine_runtime_phase_t;
-
 typedef struct engine_runtime_state_t {
     bool initialized;
-    uint64_t frame_index;
+    uint64_t input_frame_count;
+    uint64_t sim_frame_count;
+    uint64_t prepared_frame_count;
+    uint64_t submitted_frame_count;
     double total_simulated_seconds;
     double last_delta_time;
     engine_render_replacement_stage_t render_stage;
-    engine_runtime_phase_t phase;
 } engine_runtime_state_t;
 
 static engine_runtime_state_t g_engine = {
     .initialized = false,
-    .frame_index = 0,
+    .input_frame_count = 0,
+    .sim_frame_count = 0,
+    .prepared_frame_count = 0,
+    .submitted_frame_count = 0,
     .total_simulated_seconds = 0.0,
     .last_delta_time = 0.0,
     .render_stage = ENGINE_RENDER_STAGE_R0_RAINBOW_TRIANGLE,
-    .phase = ENGINE_RUNTIME_PHASE_OFFLINE,
 };
-
-static const char *engine_phase_name(engine_runtime_phase_t phase) {
-    switch (phase) {
-        case ENGINE_RUNTIME_PHASE_OFFLINE:
-            return "offline";
-        case ENGINE_RUNTIME_PHASE_READY:
-            return "ready";
-        case ENGINE_RUNTIME_PHASE_INPUT_DONE:
-            return "input_done";
-        case ENGINE_RUNTIME_PHASE_SIM_DONE:
-            return "sim_done";
-        case ENGINE_RUNTIME_PHASE_RENDER_PREPARE_DONE:
-            return "render_prepare_done";
-    }
-
-    return "unknown";
-}
 
 static const char *engine_render_stage_name(engine_render_replacement_stage_t stage) {
     switch (stage) {
@@ -121,78 +100,94 @@ static bool ensure_initialized(const char *fn_name) {
     return false;
 }
 
-static bool expect_phase(engine_runtime_phase_t expected, const char *fn_name) {
-    if (g_engine.phase == expected) {
-        return true;
-    }
-
-    fprintf(
-        stderr,
-        "[CEngineBridge] %s ignored: expected phase=%s actual=%s\n",
-        fn_name,
-        engine_phase_name(expected),
-        engine_phase_name(g_engine.phase));
-    return false;
+static bool can_tick_input(void) {
+    return g_engine.input_frame_count == g_engine.sim_frame_count;
 }
 
-static bool should_emit_stage_log(void) {
-    return g_engine.frame_index == 0 || ((g_engine.frame_index + 1) % 120u) == 0;
+static bool can_tick_sim(void) {
+    return g_engine.input_frame_count > g_engine.sim_frame_count;
+}
+
+static bool can_tick_render_prepare(void) {
+    return g_engine.sim_frame_count > g_engine.prepared_frame_count;
+}
+
+static bool can_tick_render_submit(void) {
+    return g_engine.prepared_frame_count > g_engine.submitted_frame_count;
+}
+
+static bool should_emit_stage_log(uint64_t frame_count) {
+    return frame_count == 0 || ((frame_count + 1) % 120u) == 0;
 }
 
 static void render_prepare_for_stage(double delta_time) {
     (void)delta_time;
+    uint64_t frame_index = g_engine.prepared_frame_count;
 
-    if (!should_emit_stage_log()) {
+    if (!should_emit_stage_log(frame_index)) {
         return;
     }
 
     switch (g_engine.render_stage) {
         case ENGINE_RENDER_STAGE_R0_RAINBOW_TRIANGLE:
-            printf("[CEngineBridge][R0] prepare: static rainbow triangle resources\n");
+            printf("[CEngineBridge][R0] prepare frame=%llu: static rainbow triangle resources\n",
+                   (unsigned long long)frame_index);
             return;
         case ENGINE_RENDER_STAGE_R1_MESH_CAMERA:
-            printf("[CEngineBridge][R1] prepare: mesh upload + view/proj uniforms\n");
+            printf("[CEngineBridge][R1] prepare frame=%llu: mesh upload + view/proj uniforms\n",
+                   (unsigned long long)frame_index);
             return;
         case ENGINE_RENDER_STAGE_R2_MULTI_OBJECT_DEPTH:
-            printf("[CEngineBridge][R2] prepare: scene extraction + depth prepass inputs\n");
+            printf("[CEngineBridge][R2] prepare frame=%llu: scene extraction + depth prepass inputs\n",
+                   (unsigned long long)frame_index);
             return;
         case ENGINE_RENDER_STAGE_R3_VIEWPORT_INTEROP:
-            printf("[CEngineBridge][R3] prepare: offscreen viewport texture export\n");
+            printf("[CEngineBridge][R3] prepare frame=%llu: offscreen viewport texture export\n",
+                   (unsigned long long)frame_index);
             return;
         case ENGINE_RENDER_STAGE_R4_LIGHTING_PBR_SHADOW:
-            printf("[CEngineBridge][R4] prepare: shadow cascade + PBR base uniforms\n");
+            printf("[CEngineBridge][R4] prepare frame=%llu: shadow cascade + PBR base uniforms\n",
+                   (unsigned long long)frame_index);
             return;
         case ENGINE_RENDER_STAGE_R5_POST_PROCESS:
-            printf("[CEngineBridge][R5] prepare: post-process graph config (FXAA/SSAO/Bloom)\n");
+            printf("[CEngineBridge][R5] prepare frame=%llu: post-process graph config (FXAA/SSAO/Bloom)\n",
+                   (unsigned long long)frame_index);
             return;
     }
 }
 
 static void render_submit_for_stage(double delta_time) {
     (void)delta_time;
+    uint64_t frame_index = g_engine.submitted_frame_count;
 
-    if (!should_emit_stage_log()) {
+    if (!should_emit_stage_log(frame_index)) {
         return;
     }
 
     switch (g_engine.render_stage) {
         case ENGINE_RENDER_STAGE_R0_RAINBOW_TRIANGLE:
-            printf("[CEngineBridge][R0] submit: single pass present\n");
+            printf("[CEngineBridge][R0] submit frame=%llu: single pass present\n",
+                   (unsigned long long)frame_index);
             return;
         case ENGINE_RENDER_STAGE_R1_MESH_CAMERA:
-            printf("[CEngineBridge][R1] submit: one mesh draw with camera matrices\n");
+            printf("[CEngineBridge][R1] submit frame=%llu: one mesh draw with camera matrices\n",
+                   (unsigned long long)frame_index);
             return;
         case ENGINE_RENDER_STAGE_R2_MULTI_OBJECT_DEPTH:
-            printf("[CEngineBridge][R2] submit: depth + base pass for multiple objects\n");
+            printf("[CEngineBridge][R2] submit frame=%llu: depth + base pass for multiple objects\n",
+                   (unsigned long long)frame_index);
             return;
         case ENGINE_RENDER_STAGE_R3_VIEWPORT_INTEROP:
-            printf("[CEngineBridge][R3] submit: viewport texture ready for editor sampling\n");
+            printf("[CEngineBridge][R3] submit frame=%llu: viewport texture ready for editor sampling\n",
+                   (unsigned long long)frame_index);
             return;
         case ENGINE_RENDER_STAGE_R4_LIGHTING_PBR_SHADOW:
-            printf("[CEngineBridge][R4] submit: shadow pass + PBR base pass\n");
+            printf("[CEngineBridge][R4] submit frame=%llu: shadow pass + PBR base pass\n",
+                   (unsigned long long)frame_index);
             return;
         case ENGINE_RENDER_STAGE_R5_POST_PROCESS:
-            printf("[CEngineBridge][R5] submit: post-process chain + final compose\n");
+            printf("[CEngineBridge][R5] submit frame=%llu: post-process chain + final compose\n",
+                   (unsigned long long)frame_index);
             return;
     }
 }
@@ -204,11 +199,13 @@ void engine_init(void) {
     }
 
     g_engine.initialized = true;
-    g_engine.frame_index = 0;
+    g_engine.input_frame_count = 0;
+    g_engine.sim_frame_count = 0;
+    g_engine.prepared_frame_count = 0;
+    g_engine.submitted_frame_count = 0;
     g_engine.total_simulated_seconds = 0.0;
     g_engine.last_delta_time = 0.0;
     g_engine.render_stage = parse_render_stage(getenv("GUAVA_ENGINE_RENDER_STAGE"));
-    g_engine.phase = ENGINE_RUNTIME_PHASE_READY;
 
     printf(
         "[CEngineBridge] init: staged runtime enabled, render stage=%s\n",
@@ -216,47 +213,70 @@ void engine_init(void) {
 }
 
 void engine_tick_input(double delta_time) {
-    if (!ensure_initialized("engine_tick_input")
-        || !expect_phase(ENGINE_RUNTIME_PHASE_READY, "engine_tick_input")) {
+    if (!ensure_initialized("engine_tick_input")) {
+        return;
+    }
+    if (!can_tick_input()) {
+        fprintf(stderr,
+                "[CEngineBridge] engine_tick_input ignored: input=%llu sim=%llu\n",
+                (unsigned long long)g_engine.input_frame_count,
+                (unsigned long long)g_engine.sim_frame_count);
         return;
     }
 
     g_engine.last_delta_time = sanitize_delta_time(delta_time);
-    g_engine.phase = ENGINE_RUNTIME_PHASE_INPUT_DONE;
+    g_engine.input_frame_count += 1;
 }
 
 void engine_tick_sim(double delta_time) {
-    if (!ensure_initialized("engine_tick_sim")
-        || !expect_phase(ENGINE_RUNTIME_PHASE_INPUT_DONE, "engine_tick_sim")) {
+    if (!ensure_initialized("engine_tick_sim")) {
+        return;
+    }
+    if (!can_tick_sim()) {
+        fprintf(stderr,
+                "[CEngineBridge] engine_tick_sim ignored: input=%llu sim=%llu\n",
+                (unsigned long long)g_engine.input_frame_count,
+                (unsigned long long)g_engine.sim_frame_count);
         return;
     }
 
     g_engine.last_delta_time = sanitize_delta_time(delta_time);
     g_engine.total_simulated_seconds += g_engine.last_delta_time;
-    g_engine.phase = ENGINE_RUNTIME_PHASE_SIM_DONE;
+    g_engine.sim_frame_count += 1;
 }
 
 void engine_tick_render_prepare(double delta_time) {
-    if (!ensure_initialized("engine_tick_render_prepare")
-        || !expect_phase(ENGINE_RUNTIME_PHASE_SIM_DONE, "engine_tick_render_prepare")) {
+    if (!ensure_initialized("engine_tick_render_prepare")) {
+        return;
+    }
+    if (!can_tick_render_prepare()) {
+        fprintf(stderr,
+                "[CEngineBridge] engine_tick_render_prepare ignored: sim=%llu prepared=%llu\n",
+                (unsigned long long)g_engine.sim_frame_count,
+                (unsigned long long)g_engine.prepared_frame_count);
         return;
     }
 
     g_engine.last_delta_time = sanitize_delta_time(delta_time);
     render_prepare_for_stage(g_engine.last_delta_time);
-    g_engine.phase = ENGINE_RUNTIME_PHASE_RENDER_PREPARE_DONE;
+    g_engine.prepared_frame_count += 1;
 }
 
 void engine_tick_render_submit(double delta_time) {
-    if (!ensure_initialized("engine_tick_render_submit")
-        || !expect_phase(ENGINE_RUNTIME_PHASE_RENDER_PREPARE_DONE, "engine_tick_render_submit")) {
+    if (!ensure_initialized("engine_tick_render_submit")) {
+        return;
+    }
+    if (!can_tick_render_submit()) {
+        fprintf(stderr,
+                "[CEngineBridge] engine_tick_render_submit ignored: prepared=%llu submitted=%llu\n",
+                (unsigned long long)g_engine.prepared_frame_count,
+                (unsigned long long)g_engine.submitted_frame_count);
         return;
     }
 
     g_engine.last_delta_time = sanitize_delta_time(delta_time);
     render_submit_for_stage(g_engine.last_delta_time);
-    g_engine.frame_index += 1;
-    g_engine.phase = ENGINE_RUNTIME_PHASE_READY;
+    g_engine.submitted_frame_count += 1;
 }
 
 void engine_shutdown(void) {
@@ -266,17 +286,22 @@ void engine_shutdown(void) {
     }
 
     printf(
-        "[CEngineBridge] shutdown: frames=%llu simulated=%.3fs stage=%s\n",
-        (unsigned long long)g_engine.frame_index,
+        "[CEngineBridge] shutdown: input=%llu sim=%llu prepared=%llu submitted=%llu simulated=%.3fs stage=%s\n",
+        (unsigned long long)g_engine.input_frame_count,
+        (unsigned long long)g_engine.sim_frame_count,
+        (unsigned long long)g_engine.prepared_frame_count,
+        (unsigned long long)g_engine.submitted_frame_count,
         g_engine.total_simulated_seconds,
         engine_render_stage_name(g_engine.render_stage));
 
     g_engine = (engine_runtime_state_t){
         .initialized = false,
-        .frame_index = 0,
+        .input_frame_count = 0,
+        .sim_frame_count = 0,
+        .prepared_frame_count = 0,
+        .submitted_frame_count = 0,
         .total_simulated_seconds = 0.0,
         .last_delta_time = 0.0,
         .render_stage = ENGINE_RENDER_STAGE_R0_RAINBOW_TRIANGLE,
-        .phase = ENGINE_RUNTIME_PHASE_OFFLINE,
     };
 }

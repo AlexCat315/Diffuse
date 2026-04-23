@@ -5,6 +5,7 @@ import GuavaUIRuntime
 /// `TreeRowStyle` via `.treeRowStyle(_:)`; defaults to `DefaultTreeRowStyle`.
 public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View>: View {
     public typealias Element = Roots.Element
+    public typealias DisclosureContent = (Bool) -> AnyView
 
     public let roots: [Element]
     public let id: KeyPath<Element, ID>
@@ -15,10 +16,13 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
     public let rowSpacing: Float
     public let indentation: Float
     public let disclosureWidth: Float
+    public let showsIndentGuides: Bool
+    public let disclosureContent: DisclosureContent?
     public let onSelect: ((Element) -> Void)?
     public let rowContent: (Element, Bool, Bool, Int) -> RowContent
 
     @State private var localExpanded: Set<ID> = []
+    @State private var hoveredID: ID? = nil
 
     public init(_ roots: Roots,
                 id: KeyPath<Element, ID>,
@@ -29,6 +33,8 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                 rowSpacing: Float = 0,
                 indentation: Float = 14,
                 disclosureWidth: Float = 18,
+                showsIndentGuides: Bool = true,
+                disclosureContent: DisclosureContent? = nil,
                 onSelect: ((Element) -> Void)? = nil,
                 @ViewBuilder rowContent: @escaping (Element, Bool, Bool, Int) -> RowContent) {
         self.roots = Array(roots)
@@ -40,6 +46,8 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         self.rowSpacing = rowSpacing
         self.indentation = indentation
         self.disclosureWidth = disclosureWidth
+        self.showsIndentGuides = showsIndentGuides
+        self.disclosureContent = disclosureContent
         self.onSelect = onSelect
         self.rowContent = rowContent
     }
@@ -54,11 +62,23 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                         hasChildren: entry.hasChildren,
                         isExpanded: entry.isExpanded,
                         isSelected: isSel,
+                        isHovered: hoveredID == entry.id,
                         rowHeight: rowHeight,
                         indentation: indentation,
                         disclosureWidth: disclosureWidth,
+                        showsIndentGuides: showsIndentGuides,
+                        disclosureContent: disclosureContent,
                         onToggle: { toggle(entry.id) },
                         onSelect: { select(entry.element) },
+                        onHoverChange: { hovered in
+                            if hovered {
+                                if hoveredID != entry.id {
+                                    hoveredID = entry.id
+                                }
+                            } else if hoveredID == entry.id {
+                                hoveredID = nil
+                            }
+                        },
                         content: AnyView(rowContent(entry.element, isSel, entry.isExpanded, entry.depth))
                     )
                 }
@@ -135,6 +155,8 @@ public extension Tree {
          rowSpacing: Float = 0,
          indentation: Float = 14,
          disclosureWidth: Float = 18,
+         showsIndentGuides: Bool = true,
+         disclosureContent: DisclosureContent? = nil,
          onSelect: ((Element) -> Void)? = nil,
          @ViewBuilder rowContent: @escaping (Element, Bool, Bool, Int) -> RowContent) {
         self.init(roots, id: id,
@@ -142,6 +164,8 @@ public extension Tree {
                   selection: selection, expanded: expanded,
                   rowHeight: rowHeight, rowSpacing: rowSpacing,
                   indentation: indentation, disclosureWidth: disclosureWidth,
+                  showsIndentGuides: showsIndentGuides,
+                  disclosureContent: disclosureContent,
                   onSelect: onSelect, rowContent: rowContent)
     }
 }
@@ -155,6 +179,8 @@ public extension Tree where Element: Identifiable, ID == Element.ID {
          rowSpacing: Float = 0,
          indentation: Float = 14,
          disclosureWidth: Float = 18,
+         showsIndentGuides: Bool = true,
+         disclosureContent: DisclosureContent? = nil,
          onSelect: ((Element) -> Void)? = nil,
          @ViewBuilder rowContent: @escaping (Element, Bool, Bool, Int) -> RowContent) {
         self.init(roots, id: \.id,
@@ -162,6 +188,8 @@ public extension Tree where Element: Identifiable, ID == Element.ID {
                   selection: selection, expanded: expanded,
                   rowHeight: rowHeight, rowSpacing: rowSpacing,
                   indentation: indentation, disclosureWidth: disclosureWidth,
+                  showsIndentGuides: showsIndentGuides,
+                  disclosureContent: disclosureContent,
                   onSelect: onSelect, rowContent: rowContent)
     }
 }
@@ -178,18 +206,29 @@ struct _TreeRowComposite: View {
     let hasChildren: Bool
     let isExpanded: Bool
     let isSelected: Bool
+    let isHovered: Bool
     let rowHeight: Float
     let indentation: Float
     let disclosureWidth: Float
+    let showsIndentGuides: Bool
+    let disclosureContent: Tree<[Int], Int, EmptyView>.DisclosureContent?
     let onToggle: () -> Void
     let onSelect: () -> Void
+    let onHoverChange: (Bool) -> Void
     let content: AnyView
 
     var body: some View {
         Row(alignment: .center, spacing: 0) {
-            // Indent gutter — pure spacer.
-            Box { EmptyView() }
-                .frame(width: Float(depth) * indentation, height: rowHeight)
+            if showsIndentGuides {
+                for level in 0..<depth {
+                    _TreeGuideCell(width: indentation,
+                                   rowHeight: rowHeight,
+                                   isActiveDepth: level == depth - 1)
+                }
+            } else if depth > 0 {
+                Box { EmptyView() }
+                    .frame(width: Float(depth) * indentation, height: rowHeight)
+            }
 
             // Disclosure: a Button (so it gets its own pointer node) with
             // plain style so it adds no chrome of its own. Empty glyph when
@@ -197,8 +236,15 @@ struct _TreeRowComposite: View {
             // align.
             if hasChildren {
                 Button(action: onToggle) {
-                    Text(isExpanded ? "▾" : "▸")
-                        .frame(width: disclosureWidth, height: rowHeight)
+                    if let disclosureContent {
+                        disclosureContent(isExpanded)
+                            .frame(width: disclosureWidth, height: rowHeight)
+                    } else {
+                        Text(isExpanded ? "▾" : "▸")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.onSurfaceVariant)
+                            .frame(width: disclosureWidth, height: rowHeight)
+                    }
                 }
                 .buttonStyle(.plain)
                 .frame(width: disclosureWidth, height: rowHeight)
@@ -215,12 +261,30 @@ struct _TreeRowComposite: View {
                 hasChildren: hasChildren,
                 isExpanded: isExpanded,
                 isSelected: isSelected,
+                isHovered: isHovered,
                 rowHeight: rowHeight,
                 onSelect: onSelect,
+                onHoverChange: onHoverChange,
                 content: content
             )
             .flex()
         }
+    }
+}
+
+private struct _TreeGuideCell: View {
+    let width: Float
+    let rowHeight: Float
+    let isActiveDepth: Bool
+
+    var body: some View {
+        Box(direction: .row, alignItems: .stretch, justifyContent: .center) {
+            Box { EmptyView() }
+                .frame(width: 1)
+                .background(.divider)
+                .opacity(isActiveDepth ? 0.22 : 0.1)
+        }
+        .frame(width: width, height: rowHeight)
     }
 }
 
@@ -231,8 +295,10 @@ struct _TreeRowHost: _PrimitiveView {
     let hasChildren: Bool
     let isExpanded: Bool
     let isSelected: Bool
+    let isHovered: Bool
     let rowHeight: Float
     let onSelect: () -> Void
+    let onHoverChange: (Bool) -> Void
     let content: AnyView
 
     func _makeNode() -> Node {
@@ -244,6 +310,17 @@ struct _TreeRowHost: _PrimitiveView {
     func _updateNode(_ node: Node) {
         guard let registry = InteractionRegistryHolder.current else { return }
         let captured = onSelect
+        let hoverChange = onHoverChange
+        node.cursor = .pointer
+        node.attachments[Self.hoveredKey] = isHovered
+        registry.setHover(node) { phase in
+            switch phase {
+            case .enter:
+                hoverChange(true)
+            case .leave:
+                hoverChange(false)
+            }
+        }
         registry.setPointer(node) { _, phase, _ in
             switch phase {
             case .down:
@@ -280,7 +357,7 @@ struct _TreeRowHost: _PrimitiveView {
             hasChildren: hasChildren,
             isExpanded: isExpanded,
             isSelected: isSelected,
-            isHovered: false,
+            isHovered: isHovered,
             isEnabled: true,
             theme: node.theme
         )
@@ -288,4 +365,5 @@ struct _TreeRowHost: _PrimitiveView {
     }
 
     static let pressedKey = "__tree_row_pressed"
+    static let hoveredKey = "__tree_row_hovered"
 }

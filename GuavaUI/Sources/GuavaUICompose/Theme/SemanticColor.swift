@@ -18,6 +18,9 @@ public extension SemanticColorRef {
     static let surface          = SemanticColorRef { $0.colors.surface }
     static let surfaceVariant   = SemanticColorRef { $0.colors.surfaceVariant }
     static let surfaceSunken    = SemanticColorRef { $0.colors.surfaceSunken }
+    static let surfaceRaised    = SemanticColorRef { $0.colors.surfaceRaised }
+    static let surfaceFloating  = SemanticColorRef { $0.colors.surfaceFloating }
+    static let surfaceOverlay   = SemanticColorRef { $0.colors.surfaceOverlay }
 
     static let onBackground     = SemanticColorRef { $0.colors.onBackground }
     static let onSurface        = SemanticColorRef { $0.colors.onSurface }
@@ -25,8 +28,14 @@ public extension SemanticColorRef {
     static let onSurfaceMuted   = SemanticColorRef { $0.colors.onSurfaceMuted }
 
     static let accent           = SemanticColorRef { $0.colors.accent }
+    static let accentHover      = SemanticColorRef { $0.colors.accentHover }
+    static let accentPressed    = SemanticColorRef { $0.colors.accentPressed }
     static let onAccent         = SemanticColorRef { $0.colors.onAccent }
     static let accentMuted      = SemanticColorRef { $0.colors.accentMuted }
+
+    static let stateLayerHover    = SemanticColorRef { $0.colors.stateLayerHover }
+    static let stateLayerPressed  = SemanticColorRef { $0.colors.stateLayerPressed }
+    static let stateLayerSelected = SemanticColorRef { $0.colors.stateLayerSelected }
 
     static let success          = SemanticColorRef { $0.colors.success }
     static let warning          = SemanticColorRef { $0.colors.warning }

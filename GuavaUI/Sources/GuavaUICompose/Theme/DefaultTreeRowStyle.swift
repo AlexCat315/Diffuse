@@ -1,9 +1,7 @@
 import GuavaUIRuntime
 
-/// Tree row default: depth-indented row with a chevron disclosure slot and
-/// the same selection / hover treatment as `DefaultListRowStyle`. The
-/// disclosure glyph is rendered as a `Text` chevron; Step 8 will swap it for
-/// `Image(systemName:)` once that asset pipeline lands.
+/// Tree row default: same density and hierarchy cues as the list style, with
+/// enough selection contrast to read as an outline tree in an editor shell.
 public struct DefaultTreeRowStyle: TreeRowStyle {
     public init() {}
 
@@ -12,38 +10,23 @@ public struct DefaultTreeRowStyle: TreeRowStyle {
         let clear = Color(r: 0, g: 0, b: 0, a: 0)
         let bg: Color = {
             if configuration.isSelected { return t.colors.selection }
-            if configuration.isHovered  { return t.colors.selection.mixed(with: t.colors.surface, amount: 0.7) }
+            if configuration.isHovered  { return t.colors.stateLayerHover }
             return clear
         }()
-
-        let chevron: String = {
-            guard configuration.hasChildren else { return "" }
-            return configuration.isExpanded ? "▾" : "▸"
-        }()
+        let border: Color = configuration.isSelected ? t.colors.borderStrong : clear
+        let borderWidth: Float = configuration.isSelected ? 1 : 0
 
         return Row(alignment: .center, spacing: 0) {
-            // Indent gutter.
-            Box { EmptyView() }
-                .frame(width: Float(configuration.depth) * configuration.indentation)
-
-            // Disclosure slot — always reserved so siblings align even when a
-            // node has no children.
-            Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                Text(chevron)
-                    .foregroundColor(SemanticColorRef.onSurfaceMuted)
-            }
-            .frame(width: configuration.disclosureWidth)
-
-            // Row content.
             Row(alignment: .center, spacing: t.spacing.sm) {
                 configuration.content
                 Spacer(minLength: 0)
             }
             .flex()
-            .padding(horizontal: t.spacing.sm, vertical: t.spacing.sm)
+            .padding(horizontal: t.spacing.sm + 1, vertical: t.spacing.xs + 1)
         }
         .background(bg)
-        .cornerRadius(t.radius.sm)
+        .cornerRadius(t.radius.none)
+        .border(border, width: borderWidth)
         .opacity(configuration.isEnabled ? 1 : 0.55)
     }
 }

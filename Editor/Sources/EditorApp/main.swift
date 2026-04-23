@@ -1,15 +1,42 @@
 import Darwin
 import EditorCore
-import PlatformShell
+import GuavaUIApp
+import GuavaUIRuntime
 import RHIWGPU
 
+@MainActor
+private func runEditor() throws {
+    let launchOptions = try EditorAppLaunchOptions.load()
+    var resolvedBackendConfig = launchOptions.backendConfig
+    if resolvedBackendConfig.libraryPath == nil {
+        resolvedBackendConfig.libraryPath = EditorApplication.locateWGPUDylib()
+    }
+    let backend = WGPUBackend(config: resolvedBackendConfig)
+    let events = PlatformEventBridge()
+    let app = try EditorApplication(projectDirectory: launchOptions.projectDirectory,
+                                backendConfig: launchOptions.backendConfig,
+                                backend: backend,
+                                events: events)
+    app.bootstrap()
+    defer { app.shutdown() }
+
+    let controller = EditorRootViewFactory.makeController()
+    let registry = EditorRootViewFactory.makeRegistry(app: app)
+
+    try AppRuntime.run(
+        config: AppConfig(title: "GuavaNext Editor",
+                          backendConfig: launchOptions.backendConfig),
+        backend: backend,
+        events: events,
+        onTick: { dt in app.tick(deltaTime: dt) }
+    ) {
+        EditorRootView(app: app, controller: controller, registry: registry)
+    }
+}
+
 do {
-	let launchOptions = try EditorAppLaunchOptions.load()
-	let shell = try makeDefaultShell()
-	let app = EditorApplication(shell: shell, backendConfig: launchOptions.backendConfig)
-	try app.bootstrap()
-	app.runMainLoop()
+    try runEditor()
 } catch {
-	fputs("[EditorApp] startup failed: \(error)\n", stderr)
-	exit(1)
+    fputs("[EditorApp] startup failed: \(error)\n", stderr)
+    exit(1)
 }

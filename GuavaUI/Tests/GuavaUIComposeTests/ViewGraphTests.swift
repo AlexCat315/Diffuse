@@ -84,6 +84,17 @@ struct ViewGraphTests {
 @Suite("State + Recomposer wiring")
 struct StateWiringTests {
 
+    struct LayoutHarness: View {
+        @State var width: Float = 40
+
+        var body: some View {
+            Box(direction: .column, alignItems: .stretch) {
+                EmptyView()
+            }
+            .frame(width: width, height: 10)
+        }
+    }
+
     /// Counter view used to verify state writes trigger recompose.
     struct Counter: View {
         @State var n: Int = 0
@@ -134,6 +145,25 @@ struct StateWiringTests {
 
         let anchor = tree.root?.children.first
         #expect(anchor?.children.first?.frame.origin.x == 5)
+    }
+
+    @Test("computeLayoutIfNeeded skips stable frames and reruns after layout changes")
+    func computeLayoutIfNeededGate() {
+        let tree = NodeTree()
+        let recomp = Recomposer()
+        let graph = ViewGraph(tree: tree, recomposer: recomp)
+        let harness = LayoutHarness()
+        graph.install(root: harness)
+
+        #expect(graph.computeLayoutIfNeeded(width: 200, height: 200))
+        #expect(!graph.computeLayoutIfNeeded(width: 200, height: 200))
+
+        harness.$width.wrappedValue = 80
+        recomp.commitAll()
+
+        #expect(graph.layoutNeedsUpdate(width: 200, height: 200))
+        #expect(graph.computeLayoutIfNeeded(width: 200, height: 200))
+        #expect(!graph.computeLayoutIfNeeded(width: 200, height: 200))
     }
 }
 
