@@ -68,7 +68,7 @@ public struct Children: RuntimeComponent, Sendable, Equatable {
     }
 }
 
-public struct RuntimeWorld {
+public struct RuntimeWorld: @unchecked Sendable {
     private struct EntitySlot {
         var generation: UInt32 = 0
         var isAlive = false
