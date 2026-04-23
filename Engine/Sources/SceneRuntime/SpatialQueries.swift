@@ -1055,9 +1055,26 @@ func buildSpatialIndexResource(
     let buildSettings = world.resource(SpatialIndexBuildSettings.self) ?? SpatialIndexBuildSettings()
     let previousIndex = world.resource(SpatialIndexResource.self)
     let entities = world.entities()
+    var mutableColliders: [EntityID: Collider] = [:]
+    var mutableWorldTransforms: [EntityID: WorldTransform] = [:]
+    mutableColliders.reserveCapacity(entities.count)
+    mutableWorldTransforms.reserveCapacity(entities.count)
+
+    for entity in entities {
+        if let collider = world.component(Collider.self, for: entity) {
+            mutableColliders[entity] = collider
+        }
+        if let worldTransform = world.worldTransform(for: entity) {
+            mutableWorldTransforms[entity] = worldTransform
+        }
+    }
+
+    let colliders = mutableColliders
+    let worldTransforms = mutableWorldTransforms
+
     let result = jobSystem.parallelCompactMap(items: entities) { entity -> SpatialIndexEntry? in
-        guard let collider = world.component(Collider.self, for: entity),
-              let worldTransform = world.worldTransform(for: entity),
+        guard let collider = colliders[entity],
+              let worldTransform = worldTransforms[entity],
               let bounds = colliderBounds(shape: collider.shape, worldTransform: worldTransform) else {
             return nil
         }
