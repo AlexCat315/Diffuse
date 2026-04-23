@@ -30,17 +30,16 @@ struct TextShapeCacheTests {
 
             let textNode = tree.root?.children.first
             #expect(textNode != nil)
+            let layoutNode = graph.layoutNode(for: textNode!)!
 
-            // After measure runs, the layout-side cache must hold a result.
-            let layoutCache = graph.layoutNode(for: textNode!)?.attachments[Text.measureCacheKey]
-            #expect(layoutCache is TextLayoutCacheEntry)
+            // After measure runs, the typed slot on LayoutNode must hold a result.
+            let firstEntry = layoutNode.textMeasure
+            #expect(firstEntry != nil)
 
-            let firstEntry = layoutCache as? TextLayoutCacheEntry
             // Second layout pass with identical width must reuse the same
-            // entry (object identity preserved because the cache key matches).
+            // entry (key matches because nothing changed).
             graph.computeLayout(width: 200, height: 200)
-            let secondCache = graph.layoutNode(for: textNode!)?.attachments[Text.measureCacheKey]
-            let secondEntry = secondCache as? TextLayoutCacheEntry
+            let secondEntry = layoutNode.textMeasure
             #expect(firstEntry?.key == secondEntry?.key)
         }
     }
@@ -57,7 +56,7 @@ struct TextShapeCacheTests {
             graph.computeLayout(width: 200, height: 200)
             let textNode = tree.root!.children.first!
             let layout = graph.layoutNode(for: textNode)!
-            let firstKey = (layout.attachments[Text.measureCacheKey] as? TextLayoutCacheEntry)?.key
+            let firstKey = layout.textMeasure?.key
             #expect(firstKey?.text == "first")
         }
     }
@@ -86,7 +85,7 @@ struct TextShapeCacheTests {
 
             let afterWidth = Float(textNode.frame.width)
             #expect(afterWidth > beforeWidth)
-            let key = (graph.layoutNode(for: textNode)?.attachments[Text.measureCacheKey] as? TextLayoutCacheEntry)?.key
+            let key = graph.layoutNode(for: textNode)!.textMeasure?.key
             #expect(key?.text == "a much longer label")
         }
     }

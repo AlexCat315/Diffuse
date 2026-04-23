@@ -7,6 +7,14 @@ import PlatformShell
 /// Dirty flags propagate upward so the root always knows when a flush is needed.
 public final class Node: @unchecked Sendable {
 
+    // MARK: - Identity
+
+    /// Stable runtime identifier minted at construction. Phase 1: surfaced
+    /// through `SceneInspector` so DevTools can correlate nodes across
+    /// snapshots and invalidation events. Future phases key state, layout,
+    /// render and input data off this id rather than `ObjectIdentifier`.
+    public let id: ElementID
+
     // MARK: - Tree links
 
     /// Ordered children. Use `addChild` / `removeChild` to mutate.
@@ -30,7 +38,7 @@ public final class Node: @unchecked Sendable {
     public var frame: CGRect = .zero {
         didSet {
             if oldValue != frame {
-                markRenderDirty()
+                markRenderDirty(reason: .layoutChange)
             }
         }
     }
@@ -41,6 +49,18 @@ public final class Node: @unchecked Sendable {
     /// needing the geometry to live on the View struct or be re-read
     /// inside `_updateLayout`, which has no node handle.
     public weak var layoutNode: LayoutNode?
+
+    /// Phase 4a back-pointer to the paired `RenderObject`. The `RenderTree`
+    /// owns the strong reference; this is just a hop so style mutations on
+    /// the node can refresh the render-side layer classification when
+    /// Phase 4b's cache lands.
+    public weak var renderObject: RenderObject?
+
+    /// Phase 5a back-pointer to the paired `InputNode`. The `InputScene`
+    /// owns the strong reference. Set by `InputNode.init`. Phase 5b will
+    /// drive hit-test / focus traversal off this mirror so dispatch can
+    /// avoid re-walking the full Node graph each event.
+    public weak var inputNode: InputNode?
 
     // MARK: - Interaction (Phase 6.1)
 
@@ -56,7 +76,7 @@ public final class Node: @unchecked Sendable {
     public var clipsToBounds: Bool = false {
         didSet {
             if oldValue != clipsToBounds {
-                markRenderDirty()
+                markRenderDirty(reason: .styleSet(field: "clipsToBounds"))
             }
         }
     }
@@ -67,7 +87,7 @@ public final class Node: @unchecked Sendable {
     public var backgroundColor: Color? {
         didSet {
             if oldValue != backgroundColor {
-                markRenderDirty()
+                markRenderDirty(reason: .styleSet(field: "backgroundColor"))
             }
         }
     }
@@ -78,7 +98,7 @@ public final class Node: @unchecked Sendable {
     public var cornerRadius: Float = 0 {
         didSet {
             if oldValue != cornerRadius {
-                markRenderDirty()
+                markRenderDirty(reason: .styleSet(field: "cornerRadius"))
             }
         }
     }
@@ -91,7 +111,7 @@ public final class Node: @unchecked Sendable {
     public var borderColor: Color? {
         didSet {
             if oldValue != borderColor {
-                markRenderDirty()
+                markRenderDirty(reason: .styleSet(field: "borderColor"))
             }
         }
     }
@@ -101,7 +121,7 @@ public final class Node: @unchecked Sendable {
     public var borderWidth: Float = 0 {
         didSet {
             if oldValue != borderWidth {
-                markRenderDirty()
+                markRenderDirty(reason: .styleSet(field: "borderWidth"))
             }
         }
     }
@@ -111,21 +131,21 @@ public final class Node: @unchecked Sendable {
     public var shadowColor: Color? {
         didSet {
             if oldValue != shadowColor {
-                markRenderDirty()
+                markRenderDirty(reason: .styleSet(field: "shadowColor"))
             }
         }
     }
     public var shadowOffsetX: Float = 0 {
         didSet {
             if oldValue != shadowOffsetX {
-                markRenderDirty()
+                markRenderDirty(reason: .styleSet(field: "shadowOffsetX"))
             }
         }
     }
     public var shadowOffsetY: Float = 0 {
         didSet {
             if oldValue != shadowOffsetY {
-                markRenderDirty()
+                markRenderDirty(reason: .styleSet(field: "shadowOffsetY"))
             }
         }
     }
@@ -134,7 +154,7 @@ public final class Node: @unchecked Sendable {
     public var shadowBlur: Float = 0 {
         didSet {
             if oldValue != shadowBlur {
-                markRenderDirty()
+                markRenderDirty(reason: .styleSet(field: "shadowBlur"))
             }
         }
     }
@@ -143,7 +163,7 @@ public final class Node: @unchecked Sendable {
     public var foregroundColor: Color? {
         didSet {
             if oldValue != foregroundColor {
-                markRenderDirty()
+                markRenderDirty(reason: .styleSet(field: "foregroundColor"))
             }
         }
     }
@@ -153,7 +173,7 @@ public final class Node: @unchecked Sendable {
     public var opacity: Float = 1 {
         didSet {
             if oldValue != opacity {
-                markRenderDirty()
+                markRenderDirty(reason: .styleSet(field: "opacity"))
             }
         }
     }
@@ -166,7 +186,7 @@ public final class Node: @unchecked Sendable {
     /// geometry without subclassing `Node`.
     public var draw: ((DrawList, CGPoint) -> Void)? {
         didSet {
-            markRenderDirty()
+            markRenderDirty(reason: .styleSet(field: "draw"))
         }
     }
 
@@ -174,7 +194,7 @@ public final class Node: @unchecked Sendable {
     /// must overlay scrolled content (e.g. ScrollView scrollbars).
     public var overlayDraw: ((DrawList, CGPoint) -> Void)? {
         didSet {
-            markRenderDirty()
+            markRenderDirty(reason: .styleSet(field: "overlayDraw"))
         }
     }
 
@@ -183,7 +203,7 @@ public final class Node: @unchecked Sendable {
     public var contentOffset: CGPoint = .zero {
         didSet {
             if oldValue != contentOffset {
-                markRenderDirty()
+                markRenderDirty(reason: .styleSet(field: "contentOffset"))
             }
         }
     }
@@ -200,6 +220,13 @@ public final class Node: @unchecked Sendable {
     /// whether a recompose can reuse this node in place (preserving any
     /// state in `attachments`) or must rebuild.
     public var viewTag: String?
+
+    /// Optional explicit identity supplied via the `.id(_:)` modifier.
+    /// Phase 2 reconciler matches `(viewTag, key)` first, then falls back to
+    /// sequential `viewTag` matching. Survives reorder so primitives keyed
+    /// by `.id` keep their attachments and child scopes when their position
+    /// among siblings changes.
+    public var key: AnyHashable?
 
     /// Side table for primitive-owned persistent state that must survive a
     /// recompose. Keyed by an arbitrary string chosen by the primitive.
@@ -234,14 +261,16 @@ public final class Node: @unchecked Sendable {
         return local.defaultValue
     }
 
-    public init() {}
+    public init() {
+        self.id = IdentityAllocator.shared.allocate()
+    }
 
     // MARK: - Tree mutation
 
     public func addChild(_ child: Node) {
         child.parent = self
         children.append(child)
-        markRenderDirty()
+        markRenderDirty(reason: .structuralChange)
     }
 
     public func removeChild(_ child: Node) {
@@ -249,12 +278,32 @@ public final class Node: @unchecked Sendable {
         children.removeAll { $0 === child }
         child.parent = nil
         if children.count != previousCount {
-            markRenderDirty()
+            markRenderDirty(reason: .structuralChange)
         }
     }
 
     public func removeFromParent() {
         parent?.removeChild(self)
+    }
+
+    /// Reassign this node's children to `ordered` without invoking teardown
+    /// on any of them. `ordered` must be exactly the same set as the current
+    /// children (any subset/superset is a programmer error and triggers a
+    /// `precondition` failure). Used by the keyed reconciler to apply a new
+    /// sibling order after `addChild` / `tearDown` have already settled
+    /// membership.
+    public func reorderChildren(_ ordered: [Node]) {
+        precondition(ordered.count == children.count,
+                     "reorderChildren: count mismatch (\(ordered.count) vs \(children.count))")
+        let currentIDs = Set(children.map { ObjectIdentifier($0) })
+        let nextIDs = Set(ordered.map { ObjectIdentifier($0) })
+        precondition(currentIDs == nextIDs,
+                     "reorderChildren: membership mismatch")
+        if children.elementsEqual(ordered, by: { $0 === $1 }) {
+            return
+        }
+        children = ordered
+        markRenderDirty(reason: .structuralChange)
     }
 
     // MARK: - Dirty propagation
@@ -263,12 +312,29 @@ public final class Node: @unchecked Sendable {
     ///
     /// Ancestors are flagged so the tree root knows a flush is needed
     /// without scanning every node on each frame.
-    public func markDirty() {
+    public func markDirty(reason: InvalidationSource = .unknown) {
+        InvalidationLogHolder.current?.record(
+            DirtyReason(target: id, source: reason, phase: .layout)
+        )
+        InvalidationLogHolder.current?.record(
+            DirtyReason(target: id, source: reason, phase: .render)
+        )
         propagateDirty(layoutDirty: true, renderDirty: true)
+        // Phase 4b: a layout dirty implies the layer's geometry may move, so
+        // also invalidate the enclosing layer cache so it re-records.
+        renderObject?.invalidateLayerChain()
     }
 
-    public func markRenderDirty() {
+    public func markRenderDirty(reason: InvalidationSource = .unknown) {
+        InvalidationLogHolder.current?.record(
+            DirtyReason(target: id, source: reason, phase: .render)
+        )
         propagateDirty(layoutDirty: false, renderDirty: true)
+        // Phase 4b: a style mutation may have promoted/demoted this node to a
+        // layer root (clipsToBounds, opacity, shadowColor changes); refresh
+        // before invalidating so the cache state lands on the right object.
+        renderObject?.refreshLayerClassification()
+        renderObject?.invalidateLayerChain()
     }
 
     private func propagateDirty(layoutDirty: Bool, renderDirty: Bool) {

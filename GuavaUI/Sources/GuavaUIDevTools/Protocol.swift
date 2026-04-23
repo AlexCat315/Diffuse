@@ -109,10 +109,49 @@ public struct NodeSummary: Codable {
     public var frame: NodeFrame
     public var flags: NodeFlags
     public var children: [NodeSummary]
+    /// Stable runtime ElementID, encoded as decimal string. Optional so
+    /// older clients keep working.
+    public var elementID: String?
 }
 
 public struct TreeSnapshotPayload: Codable {
     public var root: NodeSummary?
+    /// Optional invalidation tail captured at snapshot time. Present when the
+    /// host wires the runtime invalidation log into the inspector.
+    public var invalidations: [InvalidationRecord]?
+    /// Phase 4a: render-side mirror inventory. Counts every RenderObject
+    /// and lists the ElementIDs that begin a layer (composition group).
+    public var renderInventory: RenderInventoryPayload?
+    /// Phase 5a: input-side mirror inventory. Counts every InputNode and
+    /// surfaces the focusable / hit-testable populations so DevTools can
+    /// audit interaction coverage without poking back at the live tree.
+    public var inputInventory: InputInventoryPayload?
+}
+
+/// One recorded invalidation event, JSON-friendly mirror of the runtime
+/// `DirtyReason`.
+public struct InvalidationRecord: Codable {
+    public var target: String        // ElementID as decimal string
+    public var source: String        // human-readable source label
+    public var phase: String         // "layout" | "render" | "input" | "structure"
+    public var timestamp: Double
+}
+
+/// Snapshot summary of the render-side mirror. `layerRoots` lists every
+/// `RenderObject` that begins a composition group (clip, opacity<1, shadow,
+/// or the root). Phase 4b will tie cache hit/miss counts to these IDs.
+public struct RenderInventoryPayload: Codable {
+    public var objectCount: Int
+    public var layerRoots: [String]   // ElementID decimal strings, pre-order
+}
+
+/// Snapshot summary of the input-side mirror. Lists the ElementIDs of every
+/// focusable node (in tree order — matches FocusChain traversal) and every
+/// hit-testable node. Phase 5b will extend this with hover / capture info.
+public struct InputInventoryPayload: Codable {
+    public var nodeCount: Int
+    public var focusables: [String]      // ElementID decimal strings
+    public var hitTestables: [String]    // ElementID decimal strings
 }
 
 // MARK: - Selection

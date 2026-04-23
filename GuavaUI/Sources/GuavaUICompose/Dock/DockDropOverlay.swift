@@ -258,7 +258,10 @@ func installDropOverlay(node: Node, leafID: DockNodeID, controller: DockControll
         // Phase G — only the lift-tier intent draws the 5-direction edge
         // indicator. Reorder-tier drags are visualised by the ghost only.
         guard session.intent == .detachOrSplit else { return }
-        guard leafID != session.sourceLeafID else { return }
+        // Note: when the source leaf IS the target leaf, we still draw the
+        // guide tiles so the user can see edge drop targets even though
+        // the centre drop is a no-op. The active-edge highlight will only
+        // light up for genuine cross-leaf hits via the dropHit check below.
         let rootTargetID = node.compositionValue(of: DockRootDropTargetIDLocal) ?? controller.root.id
         if let hit = session.dropHit, hit.leafID == rootTargetID, hit.leafID != leafID {
             return

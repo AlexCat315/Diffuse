@@ -228,8 +228,7 @@ public struct Text: _PrimitiveView {
                                                             override: lineHeightOverride)
             let result = Text.cachedLayout(
                 env: env,
-                attachments: { node.attachments[Text.drawCacheKey] },
-                store: { node.attachments[Text.drawCacheKey] = $0 },
+                layout: node.layoutNode,
                 text: snapshot.string,
                 font: resolvedFont,
                 lineHeight: resolvedLineHeight,
@@ -249,7 +248,7 @@ public struct Text: _PrimitiveView {
     public func _makeLayoutNode() -> LayoutNode? {
         let layout = LayoutNode()
         Text.installMeasureFunc(on: layout, snapshot: self)
-        layout.attachments[Text.measureInputsKey] = TextMeasureInputs(
+        layout.textInputs = TextMeasureInputs(
             text: string,
             alignment: alignment
         )
@@ -259,18 +258,14 @@ public struct Text: _PrimitiveView {
     public func _updateLayout(_ layout: LayoutNode) {
         Text.installMeasureFunc(on: layout, snapshot: self)
         let next = TextMeasureInputs(text: string, alignment: alignment)
-        let previous = layout.attachments[Text.measureInputsKey] as? TextMeasureInputs
-        layout.attachments[Text.measureInputsKey] = next
+        let previous = layout.textInputs
+        layout.textInputs = next
         if previous != nil, previous != next {
             layout.markDirty()
         }
     }
 
     // MARK: - Layout cache
-
-    static let drawCacheKey = "__text_draw_cache"
-    static let measureCacheKey = "__text_measure_cache"
-    static let measureInputsKey = "__text_measure_inputs"
 
     static func installMeasureFunc(on layout: LayoutNode, snapshot: Text) {
         layout.setMeasureFunc { [weak layout] width, widthMode, _, _ in
@@ -285,8 +280,7 @@ public struct Text: _PrimitiveView {
                                                             override: lineHeightOverride)
             let result = Text.cachedLayout(
                 env: env,
-                attachments: { layout?.attachments[Text.measureCacheKey] },
-                store: { layout?.attachments[Text.measureCacheKey] = $0 },
+                layout: layout,
                 text: snapshot.string,
                 font: resolvedFont,
                 lineHeight: resolvedLineHeight,
@@ -298,13 +292,13 @@ public struct Text: _PrimitiveView {
         }
     }
 
-    /// Shape + layout cache. The closure-based `attachments` / `store`
-    /// accessors keep this helper agnostic to whether the entry lives on a
-    /// `Node` (draw path) or `LayoutNode` (measure path).
+    /// Shape + layout cache. Phase 6: per-`LayoutNode` cache lives directly
+    /// on `LayoutNode.textMeasure` (a typed stored property in Runtime).
+    /// Falls through to the process-wide cache on `TextEnvironment` when no
+    /// LayoutNode is supplied (unit tests without a host).
     static func cachedLayout(
         env: TextEnvironment,
-        attachments: () -> Any?,
-        store: (Any) -> Void,
+        layout: LayoutNode?,
         text: String,
         font: Font,
         lineHeight: Float,
@@ -320,7 +314,7 @@ public struct Text: _PrimitiveView {
             maxWidth: normalizedMaxWidth,
             atlasID: ObjectIdentifier(env.atlas)
         )
-        if let cached = attachments() as? TextLayoutCacheEntry, cached.key == key {
+        if let layout, let cached = layout.textMeasure, cached.key == key {
             return cached.result
         }
         let result = env.cachedLayout(
@@ -330,31 +324,16 @@ public struct Text: _PrimitiveView {
             maxWidth: normalizedMaxWidth,
             alignment: alignment
         )
-        store(TextLayoutCacheEntry(key: key, result: result))
+        if let layout {
+            layout.textMeasure = TextLayoutCacheEntry(key: key, result: result)
+        }
         return result
     }
 }
 
-/// Cache key for the shaped + laid-out form of a `Text`. Equality covers
-/// every input that can change the resulting `TextLayoutResult`.
-struct TextLayoutCacheKey: Hashable {
-    let text: String
-    let font: Font
-    let lineHeight: Float
-    let alignment: TextAlignment
-    let maxWidth: Float
-    let atlasID: ObjectIdentifier
-}
-
-struct TextLayoutCacheEntry {
-    let key: TextLayoutCacheKey
-    let result: TextLayoutResult
-}
-
-struct TextMeasureInputs: Equatable {
-    let text: String
-    let alignment: TextAlignment
-}
+// Phase 6: TextLayoutCacheKey / TextLayoutCacheEntry / TextMeasureInputs
+// moved to GuavaUIRuntime (`Text/TextMeasureSlot.swift`) so the typed
+// measure slot can live on `LayoutNode` directly.
 
 /// Thin one-pixel separator. Renders as a coloured rect; defaults to a flexible
 /// horizontal line when placed in a Column. When `color` is omitted, the

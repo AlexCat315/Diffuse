@@ -27,13 +27,19 @@ public final class PlatformInputContext {
     public let interactions: InteractionRegistry
     public let focusChain: FocusChain
     public let pointerCapture: PointerCapture
+    /// Per-window invalidation log. Installed as the current log inside
+    /// `withCurrent { ... }` so every `Node.markDirty` / `markRenderDirty`
+    /// performed under that scope is attributed to this window.
+    public let invalidationLog: InvalidationLog
 
     public init(interactions: InteractionRegistry = InteractionRegistry(),
                 focusChain: FocusChain = FocusChain(),
-                pointerCapture: PointerCapture = PointerCapture()) {
+                pointerCapture: PointerCapture = PointerCapture(),
+                invalidationLog: InvalidationLog = InvalidationLog()) {
         self.interactions = interactions
         self.focusChain = focusChain
         self.pointerCapture = pointerCapture
+        self.invalidationLog = invalidationLog
     }
 
     @discardableResult
@@ -41,14 +47,17 @@ public final class PlatformInputContext {
         let previousInteractions = InteractionRegistryHolder.current
         let previousFocus = FocusChainHolder.current
         let previousCapture = PointerCaptureHolder.current
+        let previousLog = InvalidationLogHolder.current
 
         InteractionRegistryHolder.current = interactions
         FocusChainHolder.current = focusChain
         PointerCaptureHolder.current = pointerCapture
+        InvalidationLogHolder.current = invalidationLog
         defer {
             InteractionRegistryHolder.current = previousInteractions
             FocusChainHolder.current = previousFocus
             PointerCaptureHolder.current = previousCapture
+            InvalidationLogHolder.current = previousLog
         }
 
         return try body()

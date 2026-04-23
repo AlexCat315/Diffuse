@@ -34,9 +34,10 @@ public final class NodeTree: @unchecked Sendable {
     /// Depth-first traversal that resets layout and render invalidation flags
     /// on every reachable node.
     ///
-    /// Phase 1: dirty-flag reset only.
-    /// Phase 3+: will also invoke layout callbacks on dirty nodes.
-    /// Phase 5+: will also invoke draw callbacks.
+    /// Layout (`LayoutTree`/Yoga) and draw (`LayerAwareNodeRenderer`) are
+    /// driven directly by `ViewGraph` and `EngineHost.tick`; this method
+    /// only clears the per-`Node` dirty flags after each frame so the next
+    /// recompose can detect new mutations.
     public func flush() {
         guard let root else { return }
         traverse(root)

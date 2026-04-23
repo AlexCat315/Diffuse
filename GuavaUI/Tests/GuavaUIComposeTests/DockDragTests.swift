@@ -1033,7 +1033,8 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         graph.install(root: DockContainer(controller: controller, content: makeContent()))
         graph.computeLayout(width: 600, height: 400)
 
-        let items = findTabItems(tree.root!).sorted(by: { $0.frame.origin.x < $1.frame.origin.x })
+        let items = findTabItems(tree.root!)
+            .sorted(by: { absoluteFrame(of: $0).origin.x < absoluteFrame(of: $1).origin.x })
         #expect(items.count == 3)
         let consoleNode = items[1]
         let pointer = registry.handlers(for: consoleNode).pointer!
