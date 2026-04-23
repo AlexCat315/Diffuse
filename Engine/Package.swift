@@ -99,6 +99,9 @@ let package = Package(
             name: "CapabilityRuntime",
             dependencies: [
                 "ObservationBus",
+            ],
+            resources: [
+                .process("Resources"),
             ]
         ),
         .target(

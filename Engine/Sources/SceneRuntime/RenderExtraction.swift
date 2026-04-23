@@ -33,6 +33,17 @@ public struct CameraComponent: RuntimeComponent, Sendable, Equatable {
     }
 }
 
+public struct LightComponent: RuntimeComponent, Sendable, Equatable {
+    public var color: SIMD3<Float>
+    public var intensity: Float
+
+    public init(color: SIMD3<Float> = SIMD3<Float>(1, 1, 1),
+                intensity: Float = 1.0) {
+        self.color = color
+        self.intensity = intensity
+    }
+}
+
 public struct ExtractedRenderSceneResource: Sendable {
     public var scene: RenderScene
     public var activeCameraEntity: EntityID?
