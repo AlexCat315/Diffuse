@@ -13,6 +13,38 @@ struct CapabilityRuntimeTests {
         #expect(config.targetKinds["scene_instance_id"] != nil)
     }
 
+    @Test("default registry schema references are internally consistent")
+    func defaultRegistrySchemaReferencesAreConsistent() throws {
+        let config = try CapabilityRegistry.loadDefaultConfig()
+
+        #expect(!config.argumentTypes.isEmpty)
+        #expect(!config.effectKinds.isEmpty)
+        #expect(!config.policies.isEmpty)
+
+        for capability in config.capabilities {
+            #expect(config.scopes[capability.scope.rawValue] != nil)
+            #expect(config.targetKinds[capability.targetKind] != nil)
+
+            for policyID in capability.policyRefs {
+                #expect(config.policies[policyID] != nil)
+            }
+            for argument in capability.arguments {
+                #expect(config.argumentTypes[argument.typeID] != nil)
+            }
+            for effect in capability.effects {
+                #expect(config.effectKinds[effect.id] != nil)
+                #expect(effect.targetKind == capability.targetKind)
+            }
+
+            if capability.status == .deprecated {
+                #expect(capability.supersededBy != nil)
+            }
+            if capability.previewSupport.mode == .none {
+                #expect(capability.confirmationPolicy.level == .auto)
+            }
+        }
+    }
+
     @Test("default prompt capability list excludes experimental verbs by default")
     func defaultPromptCapabilityListExcludesExperimentalVerbs() throws {
         let registry = try CapabilityRegistry.default()

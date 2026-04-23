@@ -1,0 +1,38 @@
+{
+  "scene_instance_id": {
+    "target_kind_id": "scene_instance_id",
+    "resolves_to": "SceneDocument",
+    "identity_stability": "stable",
+    "validators": []
+  },
+  "scene_graph_id": {
+    "target_kind_id": "scene_graph_id",
+    "resolves_to": "SceneDocument",
+    "identity_stability": "stable",
+    "validators": []
+  },
+  "sequence_id": {
+    "target_kind_id": "sequence_id",
+    "resolves_to": "SequenceDocument",
+    "identity_stability": "stable",
+    "validators": []
+  },
+  "shot_id": {
+    "target_kind_id": "shot_id",
+    "resolves_to": "SequenceDocument",
+    "identity_stability": "stable",
+    "validators": []
+  },
+  "project_root": {
+    "target_kind_id": "project_root",
+    "resolves_to": "ProjectDocument",
+    "identity_stability": "session_scoped",
+    "validators": []
+  },
+  "asset_uri": {
+    "target_kind_id": "asset_uri",
+    "resolves_to": "AssetGraph",
+    "identity_stability": "stable",
+    "validators": []
+  }
+}
