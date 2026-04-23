@@ -50,7 +50,7 @@ public enum PredicateValue: Sendable, Equatable, Codable {
     case null
 }
 
-public indirect enum PredicateAst: Sendable, Equatable {
+public indirect enum PredicateAst: Sendable, Equatable, Codable {
     case literal(PredicateValue)
     case fieldRef(String)
     case compare(PredicateComparisonOperator, lhs: PredicateAst, rhs: PredicateAst)
@@ -62,9 +62,114 @@ public indirect enum PredicateAst: Sendable, Equatable {
     case exists(String)
     case revisionEq(field: String, expected: String)
     case roleAtLeast(CapabilityRole)
+
+    enum CodingKeys: String, CodingKey {
+        case op
+        case value
+        case lhs
+        case rhs
+        case nodes
+        case options
+        case pattern
+        case field
+        case expected
+        case role
+    }
+
+    enum Op: String, Codable {
+        case literal
+        case fieldRef = "field_ref"
+        case compare
+        case not
+        case and
+        case or
+        case inSet = "in_set"
+        case matchesRegexSafelist = "matches_regex_safelist"
+        case exists
+        case revisionEq = "revision_eq"
+        case roleAtLeast = "role_at_least"
+    }
+
+    public init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let op = try container.decode(Op.self, forKey: .op)
+        switch op {
+        case .literal:
+            self = .literal(try container.decode(PredicateValue.self, forKey: .value))
+        case .fieldRef:
+            self = .fieldRef(try container.decode(String.self, forKey: .field))
+        case .compare:
+            self = .compare(try container.decode(PredicateComparisonOperator.self, forKey: .value),
+                            lhs: try container.decode(PredicateAst.self, forKey: .lhs),
+                            rhs: try container.decode(PredicateAst.self, forKey: .rhs))
+        case .not:
+            self = .not(try container.decode(PredicateAst.self, forKey: .value))
+        case .and:
+            self = .and(try container.decode([PredicateAst].self, forKey: .nodes))
+        case .or:
+            self = .or(try container.decode([PredicateAst].self, forKey: .nodes))
+        case .inSet:
+            self = .inSet(value: try container.decode(PredicateAst.self, forKey: .value),
+                          options: try container.decode([PredicateValue].self, forKey: .options))
+        case .matchesRegexSafelist:
+            self = .matchesRegexSafelist(value: try container.decode(PredicateAst.self, forKey: .value),
+                                         pattern: try container.decode(RegexSafelistPattern.self, forKey: .pattern))
+        case .exists:
+            self = .exists(try container.decode(String.self, forKey: .field))
+        case .revisionEq:
+            self = .revisionEq(field: try container.decode(String.self, forKey: .field),
+                               expected: try container.decode(String.self, forKey: .expected))
+        case .roleAtLeast:
+            self = .roleAtLeast(try container.decode(CapabilityRole.self, forKey: .role))
+        }
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        switch self {
+        case let .literal(value):
+            try container.encode(Op.literal, forKey: .op)
+            try container.encode(value, forKey: .value)
+        case let .fieldRef(path):
+            try container.encode(Op.fieldRef, forKey: .op)
+            try container.encode(path, forKey: .field)
+        case let .compare(op, lhs, rhs):
+            try container.encode(Op.compare, forKey: .op)
+            try container.encode(op, forKey: .value)
+            try container.encode(lhs, forKey: .lhs)
+            try container.encode(rhs, forKey: .rhs)
+        case let .not(inner):
+            try container.encode(Op.not, forKey: .op)
+            try container.encode(inner, forKey: .value)
+        case let .and(nodes):
+            try container.encode(Op.and, forKey: .op)
+            try container.encode(nodes, forKey: .nodes)
+        case let .or(nodes):
+            try container.encode(Op.or, forKey: .op)
+            try container.encode(nodes, forKey: .nodes)
+        case let .inSet(value, options):
+            try container.encode(Op.inSet, forKey: .op)
+            try container.encode(value, forKey: .value)
+            try container.encode(options, forKey: .options)
+        case let .matchesRegexSafelist(value, pattern):
+            try container.encode(Op.matchesRegexSafelist, forKey: .op)
+            try container.encode(value, forKey: .value)
+            try container.encode(pattern, forKey: .pattern)
+        case let .exists(field):
+            try container.encode(Op.exists, forKey: .op)
+            try container.encode(field, forKey: .field)
+        case let .revisionEq(field, expected):
+            try container.encode(Op.revisionEq, forKey: .op)
+            try container.encode(field, forKey: .field)
+            try container.encode(expected, forKey: .expected)
+        case let .roleAtLeast(role):
+            try container.encode(Op.roleAtLeast, forKey: .op)
+            try container.encode(role, forKey: .role)
+        }
+    }
 }
 
-public struct Precondition: Sendable, Equatable {
+public struct Precondition: Sendable, Equatable, Codable {
     public var id: String
     public var kind: PreconditionKind
     public var expr: PredicateAst

@@ -63,6 +63,7 @@ public enum EditorInspectorFieldValue {
     case bool(Binding<Bool>)
     case number(Binding<Float>)
     case vector3(x: Binding<Float>, y: Binding<Float>, z: Binding<Float>)
+    case color(Binding<Color>)
 }
 
 /// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`，
@@ -136,6 +137,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
         if let constraintSection = constraintSection(for: entity) {
             sections.append(constraintSection)
+        }
+        if let lightSection = lightSection(for: entity) {
+            sections.append(lightSection)
         }
 
         return sections
@@ -353,6 +357,34 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func lightSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard let light = scene.component(LightComponent.self, for: entity) else {
+            return nil
+        }
+
+        return EditorInspectorSection(
+            id: "light",
+            title: "Light",
+            fields: [
+                EditorInspectorField(
+                    id: "color",
+                    label: "Color",
+                    value: .color(lightColorBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "intensity",
+                    label: "Intensity",
+                    value: .number(lightIntensityBinding(for: entity))
+                ),
+                EditorInspectorField(
+                    id: "rgb",
+                    label: "RGB",
+                    value: .readOnly(format(light.color))
+                ),
+            ]
+        )
+    }
+
     private func nameBinding(for entity: EntityID) -> Binding<String> {
         Binding(
             get: { [self] in
@@ -419,6 +451,47 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                           summary: "Update constraint enabled flag",
                                           targetRawIDs: [entity.rawValue],
                                           mutations: [.setConstraintEnabled(entityID: entity.rawValue, value: next)])
+            }
+        )
+    }
+
+    private func lightColorBinding(for entity: EntityID) -> Binding<Color> {
+        Binding(
+            get: { [self] in
+                let linear = scene.component(LightComponent.self, for: entity)?.color ?? SIMD3<Float>(1, 1, 1)
+                return Color(r: linear.x, g: linear.y, b: linear.z, a: 1)
+            },
+            set: { [self] next in
+                let nextColor = SIMD3<Float>(
+                    max(0, min(1, next.r)),
+                    max(0, min(1, next.g)),
+                    max(0, min(1, next.b))
+                )
+                guard scene.component(LightComponent.self, for: entity)?.color != nextColor else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_light_color",
+                                          summary: "Update light color",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLightColor(entityID: entity.rawValue, color: nextColor)])
+            }
+        )
+    }
+
+    private func lightIntensityBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(LightComponent.self, for: entity)?.intensity ?? 1
+            },
+            set: { [self] next in
+                let clamped = max(0, next)
+                guard scene.component(LightComponent.self, for: entity)?.intensity != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_light_intensity",
+                                          summary: "Update light intensity",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLightIntensity(entityID: entity.rawValue, intensity: clamped)])
             }
         )
     }

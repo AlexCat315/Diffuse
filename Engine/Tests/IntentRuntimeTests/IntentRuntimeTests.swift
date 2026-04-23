@@ -496,6 +496,49 @@ struct IntentRuntimeTests {
         }
     }
 
+    @Test("capability invocation rejects unsupported provenance before staging")
+    func capabilityInvocationRejectsUnsupportedProvenance() throws {
+        let capability = CapabilitySpec(verbID: "scene.authored_only",
+                                        summary: "Only authored inputs are allowed",
+                                        category: "scene",
+                                        scope: .sceneInstance,
+                                        targetKind: "scene_instance_id",
+                                        reversible: true,
+                                        previewSupport: CapabilityPreviewSupport(mode: .ghostWorld),
+                                        confirmationPolicy: CapabilityConfirmationPolicy(level: .auto),
+                                        readAfterWrite: [.sceneChanged],
+                                        sideBandEmits: [.transactionApplied, .sceneChanged],
+                                        requiredRole: .editor,
+                                        status: .stable,
+                                        provenanceInputAllowed: [.authored])
+        let registry = try CapabilityRegistry(config: CapabilityRegistryConfig(
+            capabilities: [capability],
+            scopes: ["scene_instance": CapabilityScopeSpec(scopeID: "scene_instance")],
+            targetKinds: ["scene_instance_id": CapabilityTargetKindSpec(targetKindID: "scene_instance_id")]
+        ))
+        let coordinator = IntentRuntimeCoordinator(registry: registry)
+        let transaction = TransactionIR(intent: IntentIR(verb: "scene.authored_only",
+                                                         summary: "Try inferred mutation",
+                                                         source: .ai),
+                                        summary: "Try inferred mutation",
+                                        operations: [
+                                            .scene(.spawnImportedMeshEntity(label: "Draft",
+                                                                           kindLabel: "Static Mesh",
+                                                                           meshIndex: 1,
+                                                                           position: .zero))
+                                        ],
+                                        provenance: .inferred)
+        var context = TransactionExecutionContext(sceneRuntime: SceneRuntime())
+
+        #expect(throws: CapabilityInvocationPlannerError.self) {
+            try coordinator.submit(transaction,
+                                   capabilityContext: CapabilityInvocationContext(role: .editor,
+                                                                                  releasePhase: .beta),
+                                   executionContext: &context)
+        }
+        #expect(context.sceneRuntime?.snapshot.entityCount == 0)
+    }
+
     private func entityID(from rawID: UInt64) -> EntityID {
         EntityID(index: UInt32(rawID & 0xFFFF_FFFF),
                  generation: UInt32(rawID >> 32))
