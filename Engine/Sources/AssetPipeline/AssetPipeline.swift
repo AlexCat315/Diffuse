@@ -254,3 +254,44 @@ public enum OBJLoader {
         }
     }
 }
+
+enum MeshNormalTools {
+    static func fillMissingNormals(vertices: inout [Float], indices: [UInt32]) {
+        let stride = MeshAsset.vertexStride / MemoryLayout<Float>.size
+        var i = 0
+        while i + 2 < indices.count {
+            let i0 = Int(indices[i]) * stride
+            let i1 = Int(indices[i + 1]) * stride
+            let i2 = Int(indices[i + 2]) * stride
+
+            func hasNormal(_ base: Int) -> Bool {
+                vertices[base + 3] != 0 || vertices[base + 4] != 0 || vertices[base + 5] != 0
+            }
+            if hasNormal(i0) || hasNormal(i1) || hasNormal(i2) {
+                i += 3
+                continue
+            }
+
+            let p0x = vertices[i0], p0y = vertices[i0 + 1], p0z = vertices[i0 + 2]
+            let p1x = vertices[i1], p1y = vertices[i1 + 1], p1z = vertices[i1 + 2]
+            let p2x = vertices[i2], p2y = vertices[i2 + 1], p2z = vertices[i2 + 2]
+
+            let ax = p1x - p0x, ay = p1y - p0y, az = p1z - p0z
+            let bx = p2x - p0x, by = p2y - p0y, bz = p2z - p0z
+            var nx = ay * bz - az * by
+            var ny = az * bx - ax * bz
+            var nz = ax * by - ay * bx
+            let len = (nx * nx + ny * ny + nz * nz).squareRoot()
+            if len > 0 {
+                nx /= len; ny /= len; nz /= len
+            }
+
+            for slot in [i0, i1, i2] {
+                vertices[slot + 3] = nx
+                vertices[slot + 4] = ny
+                vertices[slot + 5] = nz
+            }
+            i += 3
+        }
+    }
+}

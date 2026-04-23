@@ -21,6 +21,7 @@ let package = Package(
         .target(
             name: "EditorCore",
             dependencies: [
+                .product(name: "AssetPipeline", package: "Engine"),
                 .product(name: "EngineCore", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
