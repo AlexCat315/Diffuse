@@ -32,6 +32,9 @@ private func runEditor() throws {
     ) {
         EditorRootView(app: app, controller: controller, registry: registry)
     }
+
+    // Save layout state on shutdown
+    EditorRootViewFactory.saveDockLayout(controller)
 }
 
 do {

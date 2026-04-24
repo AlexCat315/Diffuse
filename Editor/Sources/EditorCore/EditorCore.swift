@@ -34,6 +34,7 @@ public final class EditorApplication {
     private var eventToken: PlatformEventBridge.SubscriptionToken?
     private var pendingViewportEvents: [InputEvent] = []
     private var viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
+    private var lastViewportSurfaceState = ViewportSurfaceState()
 
     public init(projectDirectory: String,
                 backendConfig: WGPUDeviceConfig? = nil,
@@ -99,6 +100,12 @@ public final class EditorApplication {
             shouldRender: store.state.shouldRender,
             renderSceneOverride: scene.currentRenderScene()
         )
+
+        let surface = engine.currentViewportSurfaceState()
+        if surface != lastViewportSurfaceState {
+            lastViewportSurfaceState = surface
+            store.dispatch(.viewportSurfaceUpdated)
+        }
     }
 
     public func shutdown() {

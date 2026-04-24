@@ -1,6 +1,7 @@
 import EditorCore
 import GuavaUIApp
 import GuavaUICompose
+import Foundation
 
 /// 编辑器根视图。装配 `DockController` + `PanelRegistry` + 一个三列 `PanelWorkspace`。
 struct EditorRootView: View {
@@ -18,6 +19,14 @@ struct EditorRootView: View {
 @MainActor
 enum EditorRootViewFactory {
     static func makeController() -> DockController {
+        // Try to restore saved layout, otherwise create default
+        if let saved = loadSavedLayout() {
+            return saved
+        }
+        return makeDefaultController()
+    }
+
+    static func makeDefaultController() -> DockController {
         let hierarchyTab = DockTab(userKey: "hierarchy", title: "Hierarchy")
         let inspectorTab = DockTab(userKey: "inspector", title: "Inspector")
         let viewportTab = DockTab(userKey: "viewport",
@@ -169,5 +178,92 @@ enum EditorRootViewFactory {
                 ConfirmationHostPanel(app: app)
             },
         ])
+    }
+
+    private static let layoutPersistenceKey = "editor_dock_layout"
+
+    static func saveDockLayout(_ controller: DockController) {
+        // Ensure viewport is not detached; if it is, redock it to center before saving
+        if let centerLeaf = findCenterLeaf(controller.root) {
+            ensureViewportDocked(in: controller, to: centerLeaf.id)
+        }
+
+        // Create a snapshot of the current layout state
+        let snapshot = DockLayoutSnapshot(
+            root: controller.root,
+            satellites: controller.satellites,
+            satelliteOrder: controller.satelliteOrder
+        )
+
+        // Encode and save to disk
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        do {
+            let data = try encoder.encode(snapshot)
+            if let layoutDir = getLayoutPersistenceDirectory() {
+                let layoutPath = layoutDir.appendingPathComponent(layoutPersistenceKey + ".json")
+                try data.write(to: layoutPath)
+            }
+        } catch {
+            fputs("[EditorRootViewFactory] failed to save dock layout: \(error)\n", stderr)
+        }
+    }
+
+    private static func loadSavedLayout() -> DockController? {
+        guard let layoutDir = getLayoutPersistenceDirectory() else { return nil }
+        let layoutPath = layoutDir.appendingPathComponent(layoutPersistenceKey + ".json")
+        
+        guard FileManager.default.fileExists(atPath: layoutPath.path) else { return nil }
+
+        do {
+            let data = try Data(contentsOf: layoutPath)
+            let decoder = JSONDecoder()
+            let snapshot = try decoder.decode(DockLayoutSnapshot.self, from: data)
+            let controller = DockController(root: snapshot.root)
+            controller.load(snapshot)
+            return controller
+        } catch {
+            fputs("[EditorRootViewFactory] failed to load dock layout: \(error)\n", stderr)
+            return nil
+        }
+    }
+
+    private static func getLayoutPersistenceDirectory() -> URL? {
+        guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory,
+                                                         in: .userDomainMask).first else {
+            return nil
+        }
+        let guavaDir = appSupport.appendingPathComponent("Guava")
+        try? FileManager.default.createDirectory(at: guavaDir, withIntermediateDirectories: true)
+        return guavaDir
+    }
+
+    /// If viewport tab is in satellites, redock it to the center leaf
+    private static func ensureViewportDocked(in controller: DockController, to leafID: DockNodeID) {
+        let viewportKey = "viewport"
+        
+        // Check if viewport is in satellites
+        for (satelliteID, satellite) in controller.satellites {
+            if case .tabs(_, let tabs, _) = satellite,
+               tabs.contains(where: { $0.userKey == viewportKey }) {
+                // Found viewport in a satellite, redock it
+                let viewportTab = tabs.first { $0.userKey == viewportKey }!
+                controller.apply(.insertTab(viewportTab, into: leafID, at: 0))
+                controller.apply(.closeSatellite(satelliteID))
+                return
+            }
+        }
+    }
+
+    private static func findCenterLeaf(_ node: DockLayoutNode) -> DockLayoutNode? {
+        switch node {
+        case .empty:
+            return node
+        case .tabs:
+            return node
+        case .split(_, _, _, let first, let second):
+            if let found = findCenterLeaf(first) { return found }
+            return findCenterLeaf(second)
+        }
     }
 }

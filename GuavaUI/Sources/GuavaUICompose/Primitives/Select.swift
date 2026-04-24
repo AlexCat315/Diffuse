@@ -101,6 +101,9 @@ public struct Menu: View {
         .cornerRadius(8)
         .background(.surfaceFloating)
         .cornerRadius(8)
+        // Elevation shadow for the floating menu surface.
+        .shadow(color: Color(r: 0, g: 0, b: 0, a: 0.55),
+                offsetX: 0, offsetY: 4, blur: 14)
         .ifLet(width) { view, width in
             view.frame(width: width)
         }
