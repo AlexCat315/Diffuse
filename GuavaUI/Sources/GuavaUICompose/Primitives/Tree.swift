@@ -50,7 +50,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
     @State private var hoveredID: ID? = nil
     @State private var activeModifiers: KeyModifiers = []
     @State private var rangeAnchorID: ID? = nil
-    @State private var dragState: _TreeDragState? = nil
+    @State private var dragState: _TreeDragState<_TreeRowToken<ID>>? = nil
     @State private var dragCursorPos: CGPoint = .zero
     @State private var dragRegistry = _TreeRowDragRegistry<AnyHashable>()
 
@@ -102,8 +102,9 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
 
     public var body: some View {
         let entries = visibleEntries
-        let indexedEntries = Array(entries.enumerated())
-        let entriesByToken = Dictionary(uniqueKeysWithValues: indexedEntries.map { ($0.offset, $0.element) })
+        let rowTokens = makeRowTokens(for: entries)
+        let rows = Array(zip(rowTokens, entries))
+        let entriesByToken = Dictionary(uniqueKeysWithValues: rows.map { ($0.0, $0.1) })
         let guideRows = entries.map {
             _TreeGuideRowSnapshot(depth: $0.depth,
                                   ancestorHasNextSiblings: $0.ancestorHasNextSiblings,
@@ -121,7 +122,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                                   indentation: indentation,
                                   showsIndentGuides: showsIndentGuides) {
                 Box(direction: .column, alignItems: .stretch, spacing: rowSpacing) {
-                    for (token, entry) in indexedEntries {
+                    for (token, entry) in rows {
                         let isSel = selectedIDs.contains(entry.id)
                         _TreeRowComposite(
                             depth: entry.depth,
@@ -130,7 +131,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                             isSearchHit: entry.isSearchHit,
                             isSelected: isSel,
                             isHovered: hoveredID == entry.id,
-                            dropPosition: dragState?.targetToken == token ? dragState?.position : nil,
+                            dropPosition: dragState?.targetID == token ? dragState?.position : nil,
                             dragID: AnyHashable(token),
                             rowHeight: rowHeight,
                             indentation: indentation,
@@ -178,7 +179,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                             onDragCancel: cancelDrag,
                             dragRegistry: dragRegistry,
                             isDragEnabled: onDrop != nil,
-                            isDragSource: activeDrag?.sourceToken == token,
+                            isDragSource: activeDrag?.sourceID == token,
                             onHoverChange: { hovered in
                                 if hovered {
                                     if hoveredID != entry.id {
@@ -190,11 +191,24 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                             },
                             content: AnyView(rowContent(entry.element, isSel, entry.isExpanded, entry.depth))
                         )
+                        .id(token)
                     }
                 }
             }
         }
         } // _TreeGhostContainer
+    }
+
+    private func makeRowTokens(for entries: [VisibleEntry]) -> [_TreeRowToken<ID>] {
+        var counts: [ID: Int] = [:]
+        var tokens: [_TreeRowToken<ID>] = []
+        tokens.reserveCapacity(entries.count)
+        for entry in entries {
+            let occurrence = counts[entry.id, default: 0]
+            counts[entry.id] = occurrence + 1
+            tokens.append(_TreeRowToken(id: entry.id, occurrence: occurrence))
+        }
+        return tokens
     }
 
     private var expandedIDs: Set<ID> {
@@ -426,43 +440,43 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
         select(firstChild, modifiers: activeModifiers)
     }
 
-    private func beginDrag(from sourceToken: Int) {
+    private func beginDrag(from sourceToken: _TreeRowToken<ID>) {
         guard onDrop != nil else { return }
-        dragState = _TreeDragState(sourceToken: sourceToken,
-                                   targetToken: nil,
+        dragState = _TreeDragState(sourceID: sourceToken,
+                                   targetID: nil,
                                    position: nil)
     }
 
-    private func updateDrag(from sourceToken: Int,
+    private func updateDrag(from sourceToken: _TreeRowToken<ID>,
                             pointerX: Float,
                             pointerY: Float,
-                            entriesByToken: [Int: VisibleEntry]) {
+                            entriesByToken: [_TreeRowToken<ID>: VisibleEntry]) {
         guard onDrop != nil else { return }
         dragCursorPos = CGPoint(x: CGFloat(pointerX), y: CGFloat(pointerY))
         guard let hit = dragRegistry.hit(atX: pointerX, y: pointerY),
-              let targetToken = hit.id.base as? Int,
+              let targetToken = hit.id.base as? _TreeRowToken<ID>,
               let sourceEntry = entriesByToken[sourceToken],
               let targetEntry = entriesByToken[targetToken],
               sourceToken != targetToken else {
-            dragState = _TreeDragState(sourceToken: sourceToken, targetToken: nil, position: nil)
+            dragState = _TreeDragState(sourceID: sourceToken, targetID: nil, position: nil)
             return
         }
         let position = dropPosition(for: pointerY, frame: hit.frame)
         if canDrop?(sourceEntry.element, targetEntry.element, position) == false {
-            dragState = _TreeDragState(sourceToken: sourceToken, targetToken: nil, position: nil)
+            dragState = _TreeDragState(sourceID: sourceToken, targetID: nil, position: nil)
             return
         }
-        dragState = _TreeDragState(sourceToken: sourceToken,
-                                   targetToken: targetToken,
+        dragState = _TreeDragState(sourceID: sourceToken,
+                                   targetID: targetToken,
                                    position: position)
     }
 
-    private func commitDrag(entriesByToken: [Int: VisibleEntry]) {
+    private func commitDrag(entriesByToken: [_TreeRowToken<ID>: VisibleEntry]) {
         defer { dragState = nil }
         guard let state = dragState,
-              let targetToken = state.targetToken,
+              let targetToken = state.targetID,
               let position = state.position,
-              let sourceEntry = entriesByToken[state.sourceToken],
+              let sourceEntry = entriesByToken[state.sourceID],
               let targetEntry = entriesByToken[targetToken] else {
             return
         }
@@ -591,10 +605,15 @@ public extension Tree where Element: Identifiable, ID == Element.ID {
     }
 }
 
-private struct _TreeDragState {
-    let sourceToken: Int
-    let targetToken: Int?
+private struct _TreeDragState<ID: Hashable> {
+    let sourceID: ID
+    let targetID: ID?
     let position: TreeDropPosition?
+}
+
+private struct _TreeRowToken<ID: Hashable>: Hashable {
+    let id: ID
+    let occurrence: Int
 }
 
 private final class _TreeRowDragRegistry<ID: Hashable>: @unchecked Sendable {
