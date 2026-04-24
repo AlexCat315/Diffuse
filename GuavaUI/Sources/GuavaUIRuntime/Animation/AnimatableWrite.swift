@@ -76,7 +76,7 @@ public extension Node {
               let to = target,
               from != to
         else {
-            replaceAnimationController(for: propertyKey, with: nil)
+                        replaceAnimationController(for: propertyKey, with: nil)
             apply(target)
             return
         }
@@ -128,7 +128,7 @@ public extension Node {
               let to = target,
               from != to
         else {
-            replaceAnimationController(for: propertyKey, with: nil)
+                        replaceAnimationController(for: propertyKey, with: nil)
             self[keyPath: keyPath] = target
             return
         }
