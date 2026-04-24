@@ -7,6 +7,29 @@ public enum PlaybackState: String, Codable, Sendable {
     case paused
 }
 
+public enum EditorWorkspaceMode: String, Codable, Sendable {
+    case level
+    case modeling
+    case animation
+}
+
+public enum EditorLayoutPreset: String, Codable, Sendable {
+    case levelDefault
+    case modelingDefault
+    case animationDefault
+
+    public static func `default`(for mode: EditorWorkspaceMode) -> EditorLayoutPreset {
+        switch mode {
+        case .level:
+            return .levelDefault
+        case .modeling:
+            return .modelingDefault
+        case .animation:
+            return .animationDefault
+        }
+    }
+}
+
 public enum EditorGizmoMode: String, Codable, Sendable {
     case none
     case translate
@@ -54,6 +77,8 @@ public struct EditorState: Codable, Sendable {
     public var selectedEntityID: UInt64?
     public var selectedEntityIDs: Set<UInt64>
     public var playbackState: PlaybackState
+    public var workspaceMode: EditorWorkspaceMode
+    public var activeLayoutPreset: EditorLayoutPreset
     public var sceneRevision: UInt64
     public var windowFocused: Bool
     public var windowMinimized: Bool
@@ -76,6 +101,8 @@ public struct EditorState: Codable, Sendable {
         selectedEntityID: UInt64? = nil,
         selectedEntityIDs: Set<UInt64> = [],
         playbackState: PlaybackState = .stopped,
+        workspaceMode: EditorWorkspaceMode = .level,
+        activeLayoutPreset: EditorLayoutPreset = .levelDefault,
         sceneRevision: UInt64 = 0,
         windowFocused: Bool = true,
         windowMinimized: Bool = false,
@@ -97,6 +124,8 @@ public struct EditorState: Codable, Sendable {
         self.selectedEntityID = selectedEntityID
         self.selectedEntityIDs = selectedEntityIDs
         self.playbackState = playbackState
+        self.workspaceMode = workspaceMode
+        self.activeLayoutPreset = activeLayoutPreset
         self.sceneRevision = sceneRevision
         self.windowFocused = windowFocused
         self.windowMinimized = windowMinimized
