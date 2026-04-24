@@ -52,6 +52,7 @@ struct ViewportPanel: View {
                                     translateSnapEnabled: store.state.translateSnapEnabled,
                                     rotateSnapEnabled: store.state.rotateSnapEnabled,
                                     scaleSnapEnabled: store.state.scaleSnapEnabled,
+                                    cmdSelectBehavior: store.state.cmdSelectBehavior,
                                     onSelectGizmoMode: { mode in
                                         if store.state.gizmoMode != mode {
                                             store.dispatch(.setGizmoMode(mode))
@@ -75,6 +76,9 @@ struct ViewportPanel: View {
                                     },
                                     onToggleScaleSnap: { enabled in
                                         store.dispatch(.setScaleSnapEnabled(enabled))
+                                    },
+                                    onSetCommandSelectBehavior: { behavior in
+                                        store.dispatch(.setCommandSelectBehavior(behavior))
                                     })
 
                     Box(direction: .column, alignItems: .center, justifyContent: .center) {
@@ -186,9 +190,11 @@ struct ViewportPanel: View {
                 let picked = scene.pickEntities(in: rect, frame: frame)
                 let baseSelection = app.store.state.selectedEntityIDs
                 let modifiers = viewport.modifiers.isEmpty ? app.inputState.modifiers : viewport.modifiers
+                let cmdBehavior = app.store.state.cmdSelectBehavior
                 let merged = mergeMarqueeSelection(base: baseSelection,
                                                    picked: picked,
-                                                   modifiers: modifiers)
+                                                   modifiers: modifiers,
+                                                   cmdBehavior: cmdBehavior)
                 app.store.dispatch(.setSelectedEntities(merged))
                 viewport.leftDownAt = nil
                 viewport.marqueeStart = nil
@@ -207,9 +213,11 @@ struct ViewportPanel: View {
                                                   cursorY: button.y,
                                                   in: frame)
                     let modifiers = viewport.modifiers.isEmpty ? app.inputState.modifiers : viewport.modifiers
+                    let cmdBehavior = app.store.state.cmdSelectBehavior
                     let merged = mergeSinglePickSelection(base: app.store.state.selectedEntityIDs,
                                                           picked: picked,
-                                                          modifiers: modifiers)
+                                                          modifiers: modifiers,
+                                                          cmdBehavior: cmdBehavior)
                     app.store.dispatch(.setSelectedEntities(merged))
                 }
             }
@@ -249,24 +257,41 @@ struct ViewportPanel: View {
 
     private func mergeMarqueeSelection(base: Set<UInt64>,
                                        picked: Set<UInt64>,
-                                       modifiers: KeyModifiers) -> Set<UInt64> {
-        let subtract = modifiers.contains(.gui) || modifiers.contains(.ctrl)
-        if subtract {
-            var next = base
-            next.subtract(picked)
-            return next
+                                       modifiers: KeyModifiers,
+                                       cmdBehavior: SelectionCommandBehavior) -> Set<UInt64> {
+        // Cmd/Ctrl with subtract behavior: remove selected items
+        if modifiers.contains(.gui) || modifiers.contains(.ctrl) {
+            if cmdBehavior == .subtract {
+                var next = base
+                next.subtract(picked)
+                return next
+            } else {
+                // toggle: remove if already selected, else add
+                var next = base
+                for item in picked {
+                    if next.contains(item) {
+                        next.remove(item)
+                    } else {
+                        next.insert(item)
+                    }
+                }
+                return next
+            }
         }
+        // Shift: additive selection
         if modifiers.contains(.shift) {
             return base.union(picked)
         }
+        // No modifiers: replace selection
         return picked
     }
 
     private func mergeSinglePickSelection(base: Set<UInt64>,
                                           picked: UInt64?,
-                                          modifiers: KeyModifiers) -> Set<UInt64> {
+                                          modifiers: KeyModifiers,
+                                          cmdBehavior: SelectionCommandBehavior) -> Set<UInt64> {
         let set = picked.map { Set([ $0 ]) } ?? []
-        return mergeMarqueeSelection(base: base, picked: set, modifiers: modifiers)
+        return mergeMarqueeSelection(base: base, picked: set, modifiers: modifiers, cmdBehavior: cmdBehavior)
     }
 
     /// F = focus selection, Backspace/Delete = delete, Cmd/Ctrl+D = duplicate。
@@ -812,12 +837,14 @@ private struct ViewportInfoBar: View {
     let translateSnapEnabled: Bool
     let rotateSnapEnabled: Bool
     let scaleSnapEnabled: Bool
+    let cmdSelectBehavior: SelectionCommandBehavior
     let onSelectGizmoMode: (EditorGizmoMode) -> Void
     let onSelectGizmoSpace: (EditorGizmoSpace) -> Void
     let onSelectShadingMode: (EditorViewportShadingMode) -> Void
     let onToggleTranslateSnap: (Bool) -> Void
     let onToggleRotateSnap: (Bool) -> Void
     let onToggleScaleSnap: (Bool) -> Void
+    let onSetCommandSelectBehavior: (SelectionCommandBehavior) -> Void
 
     var body: some View {
         let frameMs = Float(stats.cpuFrameTotalNS) / 1_000_000
@@ -870,6 +897,15 @@ private struct ViewportInfoBar: View {
                 }
                 ToggleChip(label: "S Snap", isActive: scaleSnapEnabled) {
                     onToggleScaleSnap(!scaleSnapEnabled)
+                }
+
+                Spacer(minLength: 0)
+
+                ToggleChip(label: "Cmd-Sub", isActive: cmdSelectBehavior == .subtract) {
+                    onSetCommandSelectBehavior(.subtract)
+                }
+                ToggleChip(label: "Cmd-Tog", isActive: cmdSelectBehavior == .toggle) {
+                    onSetCommandSelectBehavior(.toggle)
                 }
 
                 Spacer(minLength: 0)
