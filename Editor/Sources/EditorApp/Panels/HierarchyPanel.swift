@@ -24,6 +24,7 @@ struct HierarchyPanel: View {
 
     var body: some View {
         StoreScope(store) { store in
+            let hierarchyRoots = scene.roots
             let selection = Binding<UInt64?>(
                 get: { store.state.selectedEntityID },
                 set: { next in
@@ -59,7 +60,7 @@ struct HierarchyPanel: View {
 
                 Divider()
 
-                Tree(scene.roots,
+             Tree(hierarchyRoots,
                      children: \.children,
                      selection: selection,
                      multiSelection: multiSelection,
@@ -96,6 +97,18 @@ struct HierarchyPanel: View {
                      searchFilterPolicy: .filterAndAutoExpand,
                      onKeyCommand: { event, selectedIDs in
                          handleBatchKey(event: event, selectedIDs: selectedIDs)
+                     },
+                     canDrop: { source, target, position in
+                         canDrop(entityID: source.id,
+                                 on: target.id,
+                                 position: position,
+                                 in: hierarchyRoots)
+                     },
+                     onDrop: { source, target, position in
+                         handleHierarchyDrop(entityID: source.id,
+                                             on: target.id,
+                                             position: position,
+                                             roots: hierarchyRoots)
                      }) { entity, isSelected, _, _ in
                     HierarchyEntityRow(entity: entity,
                                        isSelected: isSelected,
@@ -161,6 +174,92 @@ struct HierarchyPanel: View {
             return false
         }
     }
+
+    private func handleHierarchyDrop(entityID: UInt64,
+                                     on targetID: UInt64,
+                                     position: TreeDropPosition,
+                                     roots: [EditorSceneNode]) {
+        guard let destination = hierarchyDropDestination(for: targetID,
+                                                         position: position,
+                                                         roots: roots) else {
+            return
+        }
+        guard scene.moveEntity(entityID, to: destination.parentID, at: destination.index) != nil else {
+            return
+        }
+        if position == .inside {
+            expanded.insert(targetID)
+        }
+    }
+
+    private func canDrop(entityID sourceID: UInt64,
+                         on targetID: UInt64,
+                         position: TreeDropPosition,
+                         in roots: [EditorSceneNode]) -> Bool {
+        guard sourceID != targetID,
+              let destination = hierarchyDropDestination(for: targetID,
+                                                         position: position,
+                                                         roots: roots),
+              let source = locateNode(sourceID, in: roots) else {
+            return false
+        }
+        guard let parentID = destination.parentID else {
+            return true
+        }
+        return !subtreeContains(parentID, in: source.node)
+    }
+
+    private func hierarchyDropDestination(for targetID: UInt64,
+                                          position: TreeDropPosition,
+                                          roots: [EditorSceneNode]) -> HierarchyDropDestination? {
+        guard let target = locateNode(targetID, in: roots) else { return nil }
+        switch position {
+        case .before:
+            return HierarchyDropDestination(parentID: target.parentID,
+                                            index: target.index)
+        case .inside:
+            return HierarchyDropDestination(parentID: target.node.id,
+                                            index: target.node.children.count)
+        case .after:
+            return HierarchyDropDestination(parentID: target.parentID,
+                                            index: target.index + 1)
+        }
+    }
+
+    private func locateNode(_ id: UInt64,
+                            in nodes: [EditorSceneNode],
+                            parentID: UInt64? = nil) -> HierarchyNodeLocation? {
+        for (index, node) in nodes.enumerated() {
+            if node.id == id {
+                return HierarchyNodeLocation(node: node,
+                                             parentID: parentID,
+                                             index: index)
+            }
+            if let child = locateNode(id, in: node.children, parentID: node.id) {
+                return child
+            }
+        }
+        return nil
+    }
+
+    private func subtreeContains(_ id: UInt64,
+                                 in node: EditorSceneNode) -> Bool {
+        if node.id == id {
+            return true
+        }
+        return node.children.contains { subtreeContains(id, in: $0) }
+    }
+}
+
+private struct HierarchyNodeLocation {
+    let node: EditorSceneNode
+    let parentID: UInt64?
+    let index: Int
+}
+
+private struct HierarchyDropDestination {
+    let parentID: UInt64?
+    let index: Int
 }
 
 private struct HierarchyTreeRowStyle: TreeRowStyle {

@@ -1,4 +1,5 @@
 import Testing
+import CoreGraphics
 import EngineKernel
 import GuavaUIRuntime
 @testable import GuavaUICompose
@@ -23,6 +24,14 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         init(_ value: Value) {
             self.value = value
         }
+    }
+
+    struct DropEvent: Equatable {
+        let sourceID: String
+        let targetID: String
+        let sourceTitle: String
+        let targetTitle: String
+        let position: TreeDropPosition
     }
 
     struct ListHarness: View {
@@ -93,6 +102,26 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
                                          })) { item, isSelected, _, depth in
                 Text("\(depth): \(item.title)",
                      color: isSelected ? Color.white : Color.black)
+            }
+        }
+    }
+
+    struct DragTreeHarness: View {
+        let dropProbe: Probe<DropEvent?>
+        let roots: [TreeItem]
+
+        var body: some View {
+            Tree(roots,
+                 children: \.children,
+                 canDrop: { _, _, _ in true },
+                 onDrop: { source, target, position in
+                     dropProbe.value = DropEvent(sourceID: source.id,
+                                                 targetID: target.id,
+                                                 sourceTitle: source.title,
+                                                 targetTitle: target.title,
+                                                 position: position)
+                 }) { item, _, _, depth in
+                Text("\(depth): \(item.title)")
             }
         }
     }
@@ -276,6 +305,70 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         #expect(rowHosts.allSatisfy { registry.handlers(for: $0).hover != nil })
     } }
 
+    @Test("Tree drag dispatches inside-drop callback")
+    func treeDragDispatchesInsideDrop() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = capture
+        defer { PointerCaptureHolder.current = nil }
+
+        let roots = [
+            TreeItem(id: "a", title: "A", children: []),
+            TreeItem(id: "b", title: "B", children: [])
+        ]
+        let dropProbe = Probe<DropEvent?>(nil)
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DragTreeHarness(dropProbe: dropProbe,
+                                            roots: roots))
+        graph.computeLayout(width: 280, height: 160)
+
+        let rows = orderedPointerNodes(in: tree.root!, registry: registry)
+        #expect(rows.count == 2)
+
+        drag(rows[1], to: rows[0], registry: registry)
+
+        #expect(dropProbe.value == DropEvent(sourceID: "b",
+                                             targetID: "a",
+                                             sourceTitle: "B",
+                                             targetTitle: "A",
+                                             position: .inside))
+    } }
+
+    @Test("Tree drag resolves duplicate IDs by row token")
+    func treeDragWithDuplicateIDsIsDeterministic() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = capture
+        defer { PointerCaptureHolder.current = nil }
+
+        let roots = [
+            TreeItem(id: "dup", title: "First", children: []),
+            TreeItem(id: "dup", title: "Second", children: [])
+        ]
+        let dropProbe = Probe<DropEvent?>(nil)
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DragTreeHarness(dropProbe: dropProbe,
+                                            roots: roots))
+        graph.computeLayout(width: 280, height: 160)
+
+        let rows = orderedPointerNodes(in: tree.root!, registry: registry)
+        #expect(rows.count == 2)
+
+        drag(rows[1], to: rows[0], registry: registry)
+
+        #expect(dropProbe.value == DropEvent(sourceID: "dup",
+                                             targetID: "dup",
+                                             sourceTitle: "Second",
+                                             targetTitle: "First",
+                                             position: .inside))
+    } }
+
     @Test("Tree guide lines use pixel-aligned 1pt strokes")
     func treeGuideLinesArePixelAligned() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -399,6 +492,43 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
                                    clicks: 1)
         _ = pointer(evt, .down, .target)
         _ = pointer(evt, .up, .target)
+    }
+
+    private func drag(_ source: Node,
+                      to target: Node,
+                      registry: InteractionRegistry) {
+        let pointer = registry.handlers(for: source).pointer!
+        let motion = registry.handlers(for: source).motion!
+        let sourceFrame = absoluteFrame(of: source)
+        let targetFrame = absoluteFrame(of: target)
+        let down = MouseButtonEvent(button: .left,
+                                    x: Float(sourceFrame.midX.rounded()),
+                                    y: Float(sourceFrame.midY.rounded()),
+                                    clicks: 1)
+        _ = pointer(down, .down, .target)
+
+        let move = MouseMotionEvent(x: Float(targetFrame.midX.rounded()),
+                                    y: Float(targetFrame.midY.rounded()),
+                                    deltaX: Float((targetFrame.midX - sourceFrame.midX).rounded()),
+                                    deltaY: Float((targetFrame.midY - sourceFrame.midY).rounded()))
+        _ = motion(move, .target)
+
+        let up = MouseButtonEvent(button: .left,
+                                  x: Float(targetFrame.midX.rounded()),
+                                  y: Float(targetFrame.midY.rounded()),
+                                  clicks: 1)
+        _ = pointer(up, .up, .target)
+    }
+
+    private func absoluteFrame(of node: Node) -> CGRect {
+        var origin = node.frame.origin
+        var parent = node.parent
+        while let current = parent {
+            origin.x += current.frame.origin.x - current.contentOffset.x
+            origin.y += current.frame.origin.y - current.contentOffset.y
+            parent = current.parent
+        }
+        return CGRect(origin: origin, size: node.frame.size)
     }
 
     private func collectGuideNodes(from node: Node,

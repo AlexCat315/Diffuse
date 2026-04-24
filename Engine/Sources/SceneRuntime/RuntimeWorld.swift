@@ -201,6 +201,7 @@ public struct RuntimeWorld: @unchecked Sendable {
     private var freeIndices: [Int] = []
     private var components = ComponentStores()
     private var resources = ResourceStorage()
+    private var rootEntities: [EntityID] = []
     private var dirtyHierarchyEntities: Set<EntityID> = []
 
     public private(set) var entityCount = 0
@@ -230,6 +231,10 @@ public struct RuntimeWorld: @unchecked Sendable {
         return result
     }
 
+    public func roots() -> [EntityID] {
+        rootEntities.filter { contains($0) }
+    }
+
     @discardableResult
     public mutating func createEntity() -> EntityID {
         let id: EntityID
@@ -244,6 +249,7 @@ public struct RuntimeWorld: @unchecked Sendable {
             id = EntityID(index: UInt32(index), generation: slot.generation)
         }
         entityCount += 1
+        rootEntities.append(id)
         revision &+= 1
         return id
     }
@@ -254,12 +260,22 @@ public struct RuntimeWorld: @unchecked Sendable {
 
         let previousParent = parent(of: entity)
         let previousChildren = children(of: entity)
+        let previousRootIndex = rootEntities.firstIndex(of: entity)
         if let previousParent {
             detachChild(entity, from: previousParent)
             markHierarchyDirty(previousParent)
+        } else {
+            detachRoot(entity)
         }
+        var rootInsertIndex = previousRootIndex
         for child in previousChildren {
             clearParent(for: child)
+            if let insertIndex = rootInsertIndex {
+                attachRoot(child, at: insertIndex)
+                rootInsertIndex = insertIndex + 1
+            } else {
+                attachRoot(child)
+            }
             markHierarchyDirty(child)
         }
 
@@ -429,6 +445,9 @@ public struct RuntimeWorld: @unchecked Sendable {
         if let previousParent {
             detachChild(child, from: previousParent)
             markHierarchyDirty(previousParent)
+        } else {
+            // child was a root; detach it so it doesn't appear twice after reparenting.
+            detachRoot(child)
         }
 
         if let parent {
@@ -437,9 +456,51 @@ public struct RuntimeWorld: @unchecked Sendable {
             markHierarchyDirty(parent)
         } else {
             clearParent(for: child)
+            // child becomes a root again; append to the ordered root list.
+            attachRoot(child)
         }
 
         markHierarchyDirty(child)
+        revision &+= 1
+        return true
+    }
+
+    @discardableResult
+    public mutating func moveEntity(_ entity: EntityID,
+                                    to parent: EntityID?,
+                                    at index: Int) -> Bool {
+        guard contains(entity) else { return false }
+        if let parent {
+            guard contains(parent), parent != entity, !isDescendant(parent, of: entity) else {
+                return false
+            }
+        }
+
+        let previousParent = self.parent(of: entity)
+        if previousParent == parent {
+            if let parent {
+                return reorderChild(entity, in: parent, to: index)
+            }
+            return reorderRoot(entity, to: index)
+        }
+
+        if let previousParent {
+            detachChild(entity, from: previousParent)
+            markHierarchyDirty(previousParent)
+        } else {
+            detachRoot(entity)
+        }
+
+        if let parent {
+            insertChild(entity, into: parent, at: index)
+            components.set(Parent(entity: parent), for: entity)
+            markHierarchyDirty(parent)
+        } else {
+            clearParent(for: entity)
+            attachRoot(entity, at: index)
+        }
+
+        markHierarchyDirty(entity)
         revision &+= 1
         return true
     }
@@ -537,6 +598,14 @@ public struct RuntimeWorld: @unchecked Sendable {
         }
     }
 
+    private mutating func insertChild(_ child: EntityID, into parent: EntityID, at index: Int) {
+        var current = components.get(Children.self, for: parent)?.entities.filter(contains) ?? []
+        current.removeAll { $0 == child }
+        let insertIndex = max(0, min(index, current.count))
+        current.insert(child, at: insertIndex)
+        components.set(Children(entities: current), for: parent)
+    }
+
     private mutating func detachChild(_ child: EntityID, from parent: EntityID) {
         var current = components.get(Children.self, for: parent)?.entities ?? []
         current.removeAll { $0 == child || !contains($0) }
@@ -549,6 +618,60 @@ public struct RuntimeWorld: @unchecked Sendable {
 
     private mutating func clearParent(for child: EntityID) {
         _ = components.remove(Parent.self, for: child)
+    }
+
+    @discardableResult
+    private mutating func reorderChild(_ child: EntityID, in parent: EntityID, to index: Int) -> Bool {
+        var current = components.get(Children.self, for: parent)?.entities.filter(contains) ?? []
+        guard let existingIndex = current.firstIndex(of: child) else { return false }
+        let clampedIndex = max(0, min(index, current.count - 1))
+        var destinationIndex = clampedIndex
+        if existingIndex < clampedIndex {
+            destinationIndex -= 1
+        }
+        guard existingIndex != destinationIndex else { return true }
+        current.remove(at: existingIndex)
+        current.insert(child, at: min(destinationIndex, current.count))
+        components.set(Children(entities: current), for: parent)
+        markHierarchyDirty(parent)
+        markHierarchyDirty(child)
+        revision &+= 1
+        return true
+    }
+
+    @discardableResult
+    private mutating func reorderRoot(_ entity: EntityID, to index: Int) -> Bool {
+        var currentRoots = rootEntities.filter { contains($0) }
+        guard let existingIndex = currentRoots.firstIndex(of: entity) else { return false }
+        let clampedIndex = max(0, min(index, currentRoots.count - 1))
+        var destinationIndex = clampedIndex
+        if existingIndex < clampedIndex {
+            destinationIndex -= 1
+        }
+        guard existingIndex != destinationIndex else { return true }
+        currentRoots.remove(at: existingIndex)
+        currentRoots.insert(entity, at: min(destinationIndex, currentRoots.count))
+        rootEntities = currentRoots
+        markHierarchyDirty(entity)
+        revision &+= 1
+        return true
+    }
+
+    private mutating func attachRoot(_ entity: EntityID, at index: Int? = nil) {
+        var currentRoots = rootEntities.filter { contains($0) }
+        currentRoots.removeAll { $0 == entity }
+        if let index {
+            let insertIndex = max(0, min(index, currentRoots.count))
+            currentRoots.insert(entity, at: insertIndex)
+        } else {
+            currentRoots.append(entity)
+        }
+        rootEntities = currentRoots
+    }
+
+    private mutating func detachRoot(_ entity: EntityID) {
+        let currentRoots = rootEntities.filter { contains($0) && $0 != entity }
+        rootEntities = currentRoots
     }
 
     private mutating func markHierarchyDirty(_ entity: EntityID) {
