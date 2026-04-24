@@ -232,7 +232,7 @@ public struct RuntimeWorld: @unchecked Sendable {
     }
 
     public func roots() -> [EntityID] {
-        rootEntities.filter { contains($0) }
+        normalizedRoots()
     }
 
     @discardableResult
@@ -641,7 +641,7 @@ public struct RuntimeWorld: @unchecked Sendable {
 
     @discardableResult
     private mutating func reorderRoot(_ entity: EntityID, to index: Int) -> Bool {
-        var currentRoots = rootEntities.filter { contains($0) }
+        var currentRoots = normalizedRoots()
         guard let existingIndex = currentRoots.firstIndex(of: entity) else { return false }
         let clampedIndex = max(0, min(index, currentRoots.count - 1))
         var destinationIndex = clampedIndex
@@ -658,7 +658,7 @@ public struct RuntimeWorld: @unchecked Sendable {
     }
 
     private mutating func attachRoot(_ entity: EntityID, at index: Int? = nil) {
-        var currentRoots = rootEntities.filter { contains($0) }
+        var currentRoots = normalizedRoots()
         currentRoots.removeAll { $0 == entity }
         if let index {
             let insertIndex = max(0, min(index, currentRoots.count))
@@ -670,8 +670,21 @@ public struct RuntimeWorld: @unchecked Sendable {
     }
 
     private mutating func detachRoot(_ entity: EntityID) {
-        let currentRoots = rootEntities.filter { contains($0) && $0 != entity }
+        let currentRoots = normalizedRoots().filter { $0 != entity }
         rootEntities = currentRoots
+    }
+
+    private func normalizedRoots() -> [EntityID] {
+        var seen: Set<EntityID> = []
+        var normalized: [EntityID] = []
+        normalized.reserveCapacity(rootEntities.count)
+        for entity in rootEntities where contains(entity) {
+            guard parent(of: entity) == nil else { continue }
+            guard !seen.contains(entity) else { continue }
+            seen.insert(entity)
+            normalized.append(entity)
+        }
+        return normalized
     }
 
     private mutating func markHierarchyDirty(_ entity: EntityID) {

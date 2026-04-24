@@ -832,7 +832,9 @@ private struct _TreeGuideOverlayHost<Content: View>: _PrimitiveView {
                 for level in 0..<row.depth {
                     let cellX = baseX + Float(level) * indentation
                     let strokeX = (cellX + centerLead).rounded(.down)
-                    let rightEdge = (cellX + indentation).rounded()
+                    // Draw horizontal branches to the next guide-column center
+                    // so joins remain continuous under rounding.
+                    let nextColumnStrokeX = (cellX + indentation + centerLead).rounded(.down)
 
                     if level == row.depth - 1 {
                         let continuesDownward = row.hasNextSibling || (row.hasChildren && row.isExpanded)
@@ -844,11 +846,13 @@ private struct _TreeGuideOverlayHost<Content: View>: _PrimitiveView {
                                             width: 1,
                                             height: max(1, verticalBottom - rowTop)),
                                   color: branchColor)
+                        // Add one pixel of overlap so horizontal/vertical joins
+                        // stay visually continuous after integer rounding.
                         list.addRect(UIRect(x: strokeX,
                                             y: strokeY,
-                                      width: max(1, rightEdge - strokeX),
+                                            width: max(1, nextColumnStrokeX - strokeX + 1),
                                             height: 1),
-                                  color: branchColor)
+                                     color: branchColor)
                         continue
                     }
 
@@ -890,6 +894,7 @@ private struct _TreeTrailingSlotHost: View {
         }
         .padding(horizontal: 4, vertical: 0)
         .frame(width: width, height: rowHeight)
+        .clipped()
     }
 }
 
@@ -943,11 +948,16 @@ private struct _TreeRowHost: _PrimitiveView {
         // so drops over indented areas still resolve a valid target row.
         let extraLeft = CGFloat(depth) * CGFloat(indentation) + CGFloat(disclosureWidth)
         dragRegistry.register(node: node, id: dragID, extraLeft: extraLeft)
-        // Only reassign overlayDraw when dropPosition changes to avoid spurious
-        // markRenderDirty on every mouse-move event for every visible row.
-        let prevPos = node.attachments[Self.dropPositionKey] as? TreeDropPosition
-        if prevPos != dropPosition {
-            node.attachments[Self.dropPositionKey] = dropPosition
+        // Only reassign overlayDraw when the effective overlay state changes.
+        // Node reuse can keep the same dropPosition while depth/indent changes,
+        // so geometry must be part of the cache key.
+        let nextOverlayState = _TreeRowOverlayState(dropPosition: dropPosition,
+                                                    depth: depth,
+                                                    indentation: indentation,
+                                                    disclosureWidth: disclosureWidth)
+        let prevOverlayState = node.attachments[Self.dropPositionKey] as? _TreeRowOverlayState
+        if prevOverlayState != nextOverlayState {
+            node.attachments[Self.dropPositionKey] = nextOverlayState
             node.overlayDraw = { [weak node] list, origin in
                 guard let node, let dropPosition else { return }
                 // Expand frame to the full row width (indent + disclosure + body)
@@ -1086,6 +1096,13 @@ private struct _TreeRowPressState {
     let downX: Float
     let downY: Float
     var didDrag: Bool
+}
+
+private struct _TreeRowOverlayState: Equatable {
+    let dropPosition: TreeDropPosition?
+    let depth: Int
+    let indentation: Float
+    let disclosureWidth: Float
 }
 
 // MARK: - Drag ghost overlay
