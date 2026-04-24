@@ -25,6 +25,9 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         let state = LayoutState(leadingFraction: leadingFraction,
                                 mainFraction: mainFraction,
                                 bottomFraction: bottomFraction)
+        // Preserve the controller's current split ratios when the semantics
+        // layer is re-installed (e.g. parent view re-init).
+        state.captureFractionsIfCanonical(from: controller.root, registry: registry)
         controller.onAllowDrop = { [registry, weak controller] request in
             guard let controller else { return true }
             return Self.allowsDrop(request,

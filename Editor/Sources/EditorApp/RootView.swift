@@ -69,16 +69,13 @@ struct EditorRootView: View {
 
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 EditorMainToolbar(playbackState: store.state.playbackState,
+                                  app: app,
                                   workspaceMode: store.state.workspaceMode,
                                   activeLayoutPreset: store.state.activeLayoutPreset,
                                   onSetPlaybackState: setPlaybackState,
                                   onSetWorkspaceMode: setWorkspaceMode,
                                   onSetLayoutPreset: setLayoutPreset,
-                                  onResetLayout: resetLayout,
-                                  onOpenSettings: {
-                                      EditorRootViewFactory.activateTab("settings",
-                                                                        in: controller)
-                                  })
+                                  onResetLayout: resetLayout)
                 Divider()
 
                 PanelWorkspace(controller: controller,
@@ -327,13 +324,14 @@ private enum EditorMenuEntry {
 
 private struct EditorMainToolbar: View {
     let playbackState: PlaybackState
+    let app: EditorApplication
     let workspaceMode: EditorWorkspaceMode
     let activeLayoutPreset: EditorLayoutPreset
     let onSetPlaybackState: (PlaybackState) -> Void
     let onSetWorkspaceMode: (EditorWorkspaceMode) -> Void
     let onSetLayoutPreset: (EditorLayoutPreset) -> Void
     let onResetLayout: () -> Void
-    let onOpenSettings: () -> Void
+    @State private var isSettingsPopoverPresented: Bool = false
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
@@ -384,7 +382,47 @@ private struct EditorMainToolbar: View {
 
             Spacer(minLength: 0)
 
-            ToolbarIconButton(icon: .settings, tooltip: "Settings", onClick: onOpenSettings)
+            Popover(isPresented: $isSettingsPopoverPresented,
+                    width: 320) {
+                ToolbarIconChrome(icon: EditorToolbarIcon.settings.resource,
+                                  isActive: isSettingsPopoverPresented)
+            } content: {
+                Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                    Row(alignment: .center, spacing: 6) {
+                        Text(L("Settings"))
+                            .font(.caption)
+                            .foregroundColor(.onSurface)
+
+                        Spacer(minLength: 0)
+
+                        Button(tooltip: "Close", action: {
+                            isSettingsPopoverPresented = false
+                        }) {
+                            Box(direction: .row,
+                                alignItems: .center,
+                                justifyContent: .center) {
+                                Text("×")
+                                    .font(.bodyStrong)
+                                    .foregroundColor(.onSurfaceVariant)
+                            }
+                            .frame(width: 24, height: 24)
+                            .background(.surfaceSunken)
+                            .cornerRadius(4)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                    .padding(horizontal: 10, vertical: 8)
+                    .background(.surfaceVariant)
+
+                    SettingsPanel(app: app)
+                        .frame(minWidth: 300,
+                               minHeight: 220,
+                               maxWidth: 360,
+                               maxHeight: 420)
+                }
+                .background(.surface)
+                .cornerRadius(6)
+            }
             ToolbarIconButton(icon: .package, tooltip: "Platforms") {}
         }
         .padding(horizontal: 8, vertical: 6)
@@ -835,6 +873,39 @@ enum EditorRootViewFactory {
         }
     }
 
+    static func openSettingsSatellite(in controller: DockController) {
+        let settingsKey = "settings"
+
+        // Settings is already detached; keep the existing satellite.
+        if findTabInSatellites(settingsKey, in: controller.satellites) != nil {
+            return
+        }
+
+        if let location = findTabLocation(settingsKey, in: controller.root) {
+            if location.tabCount > 1 {
+                controller.apply(.move(tabID: location.tabID,
+                                       to: .splitEdge(target: location.leafID,
+                                                      edge: .right)))
+            }
+            if let detached = findTab(settingsKey, in: controller.root) {
+                controller.apply(.detach(leafID: detached.leafID))
+            }
+            return
+        }
+
+        activateTab(settingsKey, in: controller)
+        if let inserted = findTabLocation(settingsKey, in: controller.root) {
+            if inserted.tabCount > 1 {
+                controller.apply(.move(tabID: inserted.tabID,
+                                       to: .splitEdge(target: inserted.leafID,
+                                                      edge: .right)))
+            }
+            if let detached = findTab(settingsKey, in: controller.root) {
+                controller.apply(.detach(leafID: detached.leafID))
+            }
+        }
+    }
+
     private static func allowsSplitEdge(in region: PanelWorkspaceRegion,
                                         edge: DockEdge) -> Bool {
         switch region {
@@ -882,6 +953,31 @@ enum EditorRootViewFactory {
         case .split(_, _, _, let first, let second):
             return findTab(userKey, in: first) ?? findTab(userKey, in: second)
         }
+    }
+
+    private static func findTabLocation(_ userKey: String,
+                                        in node: DockLayoutNode) -> (leafID: DockNodeID, tabID: DockTabID, tabCount: Int)? {
+        switch node {
+        case .empty:
+            return nil
+        case .tabs(let id, let tabs, _):
+            guard let tab = tabs.first(where: { $0.userKey == userKey }) else { return nil }
+            return (leafID: id, tabID: tab.id, tabCount: tabs.count)
+        case .split(_, _, _, let first, let second):
+            return findTabLocation(userKey, in: first) ?? findTabLocation(userKey, in: second)
+        }
+    }
+
+    private static func findTabInSatellites(_ userKey: String,
+                                            in satellites: [DockNodeID: DockLayoutNode]) -> (leafID: DockNodeID, tabID: DockTabID)? {
+        for (leafID, node) in satellites {
+            guard case .tabs(_, let tabs, _) = node,
+                  let tab = tabs.first(where: { $0.userKey == userKey }) else {
+                continue
+            }
+            return (leafID: leafID, tabID: tab.id)
+        }
+        return nil
     }
 
     private static func findBottomLeaf(in node: DockLayoutNode) -> DockNodeID? {
