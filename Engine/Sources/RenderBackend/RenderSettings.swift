@@ -16,6 +16,9 @@ public struct RenderSettings: Sendable, Equatable {
     public var enableSSR: Bool
     public var enableTAA: Bool
     public var enableBloom: Bool
+    public var enableRenderBundles: Bool
+    public var enableGroupedDrawByMesh: Bool
+    public var renderBundleChunkSize: Int
     public var enableShadows: Bool
     public var enableOffscreenViewport: Bool
 
@@ -26,6 +29,9 @@ public struct RenderSettings: Sendable, Equatable {
         enableSSR: Bool = false,
         enableTAA: Bool = false,
         enableBloom: Bool = false,
+        enableRenderBundles: Bool = false,
+        enableGroupedDrawByMesh: Bool = false,
+        renderBundleChunkSize: Int = 0,
         enableShadows: Bool = false,
         enableOffscreenViewport: Bool = false
     ) {
@@ -35,6 +41,9 @@ public struct RenderSettings: Sendable, Equatable {
         self.enableSSR = enableSSR
         self.enableTAA = enableTAA
         self.enableBloom = enableBloom
+        self.enableRenderBundles = enableRenderBundles
+        self.enableGroupedDrawByMesh = enableGroupedDrawByMesh
+        self.renderBundleChunkSize = max(renderBundleChunkSize, 0)
         self.enableShadows = enableShadows
         self.enableOffscreenViewport = enableOffscreenViewport
     }

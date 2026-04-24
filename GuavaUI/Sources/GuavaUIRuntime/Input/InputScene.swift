@@ -12,6 +12,7 @@ import PlatformShell
 public final class InputNode {
 
     public weak var node: Node?
+    public weak var scene: InputScene?
     public weak var parent: InputNode?
     public internal(set) var children: [InputNode] = []
 
@@ -144,6 +145,7 @@ public final class InputScene {
     public func install(rootNode: Node) {
         byNode.removeAll(keepingCapacity: true)
         let obj = InputNode(node: rootNode)
+        obj.scene = self
         byNode[ObjectIdentifier(rootNode)] = obj
         root = obj
         rebuildSubtree(parent: obj)
@@ -167,11 +169,13 @@ public final class InputScene {
             seen.insert(key)
             if let kept = existing[key] {
                 kept.parent = parentInput
+                kept.scene = self
                 kept.refreshFromNode()
                 rebuilt.append(kept)
             } else {
                 let made = InputNode(node: childNode)
                 made.parent = parentInput
+                made.scene = self
                 byNode[key] = made
                 rebuilt.append(made)
                 rebuildSubtree(parent: made)
@@ -224,6 +228,7 @@ public final class InputScene {
         for child in parentNode.children {
             let obj = InputNode(node: child)
             obj.parent = parent
+            obj.scene = self
             byNode[ObjectIdentifier(child)] = obj
             built.append(obj)
             rebuildSubtree(parent: obj)

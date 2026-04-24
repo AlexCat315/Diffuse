@@ -1,4 +1,6 @@
+import Foundation
 import GuavaUIRuntime
+import EngineKernel
 
 // NOTE: This file used to host a primitive `Button` that wrapped a label and
 // emitted no visual state. Phase 7.5 promotes `Button` to a stateful composite
@@ -19,15 +21,18 @@ import GuavaUIRuntime
 public struct Button<Label: View>: View {
     public let role: ButtonRole
     public let isEnabled: Bool
+    public let tooltip: String?
     public let action: () -> Void
     public let label: Label
 
     public init(role: ButtonRole = .normal,
                 isEnabled: Bool = true,
+                tooltip: String? = nil,
                 action: @escaping () -> Void,
                 @ViewBuilder label: () -> Label) {
         self.role = role
         self.isEnabled = isEnabled
+        self.tooltip = tooltip
         self.action = action
         self.label = label()
     }
@@ -35,6 +40,7 @@ public struct Button<Label: View>: View {
     public var body: some View {
         _StatefulButton(role: role,
                         isEnabled: isEnabled,
+                        tooltip: tooltip,
                         action: action,
                         label: AnyView(label))
     }
@@ -45,8 +51,9 @@ public extension Button where Label == Text {
     init(_ title: String,
          role: ButtonRole = .normal,
          isEnabled: Bool = true,
+         tooltip: String? = nil,
          action: @escaping () -> Void) {
-        self.init(role: role, isEnabled: isEnabled, action: action) {
+        self.init(role: role, isEnabled: isEnabled, tooltip: tooltip, action: action) {
             Text(title)
         }
     }
@@ -61,16 +68,23 @@ public extension Button where Label == Text {
 struct _StatefulButton: View {
     let role: ButtonRole
     let isEnabled: Bool
+    let tooltip: String?
     let action: () -> Void
     let label: AnyView
 
     @State var isPressed: Bool = false
     @State var isHovered: Bool = false
 
+    // SDL scancodes used across compose controls.
+    private static let returnScancode: UInt32 = 40
+    private static let spaceScancode: UInt32 = 44
+    private static let keypadEnterScancode: UInt32 = 88
+
     var body: some View {
         ButtonHost(
             role: role,
             isEnabled: isEnabled,
+            tooltip: tooltip,
             isPressed: isEnabled ? isPressed : false,
             isHovered: isEnabled ? isHovered : false,
             label: label,
@@ -92,6 +106,18 @@ struct _StatefulButton: View {
                 isPressed = false
                 if was { action(); return true }
                 return false
+            },
+            onKey: { [action] scancode, isRepeat in
+                guard !isRepeat else { return EventResult.ignored }
+                switch scancode {
+                case Self.returnScancode,
+                    Self.spaceScancode,
+                    Self.keypadEnterScancode:
+                    action()
+                    return EventResult.handled
+                default:
+                    return EventResult.ignored
+                }
             }
         )
     }
@@ -106,12 +132,14 @@ struct _StatefulButton: View {
 struct ButtonHost: _PrimitiveView {
     let role: ButtonRole
     let isEnabled: Bool
+    let tooltip: String?
     let isPressed: Bool
     let isHovered: Bool
     let label: AnyView
     let onHoverChange: (Bool) -> Void
     let onDown: () -> Void
     let onUp: () -> Bool
+    let onKey: (UInt32, Bool) -> EventResult
 
     func _makeNode() -> Node {
         let n = Node()
@@ -127,6 +155,76 @@ struct ButtonHost: _PrimitiveView {
         // configuration field.
         node.attachments[ButtonHost.pressedKey] = isPressed
         node.attachments[ButtonHost.hoveredKey] = isHovered
+        node.attachments[ButtonHost.tooltipKey] = tooltip
+
+        let resolvedTooltip = tooltip?.trimmingCharacters(in: .whitespacesAndNewlines)
+        if isEnabled, let resolvedTooltip, !resolvedTooltip.isEmpty {
+            node.overlayDraw = { [weak node] list, origin in
+                guard let node else { return }
+                let isFocused = (FocusChainHolder.current?.focused === node)
+                guard isHovered || isFocused else { return }
+                guard let env = TextEnvironmentHolder.current else { return }
+
+                let theme = node.theme
+                let tooltipFont = theme.typography.caption.font
+                let lineHeight = theme.typography.caption.lineHeight
+                let layout = env.cachedLayout(text: resolvedTooltip,
+                                              font: tooltipFont,
+                                              lineHeight: lineHeight,
+                                              maxWidth: .infinity,
+                                              alignment: .leading)
+
+                let padX = max(6, theme.spacing.sm)
+                let padY = max(3, theme.spacing.xs)
+                let offset = max(4, theme.spacing.xs)
+                let width = layout.totalWidth + padX * 2
+                let height = lineHeight + padY * 2
+                let centerX = Float(origin.x) + Float(node.frame.width) * 0.5
+                var x = centerX - width * 0.5
+                var y = Float(origin.y) - height - offset
+
+                if let clip = list.currentClip {
+                    let minX = clip.x + 2
+                    let maxX = clip.x + clip.width - width - 2
+                    if maxX >= minX {
+                        x = min(max(x, minX), maxX)
+                    }
+                    let topY = clip.y + 2
+                    if y < topY {
+                        y = Float(origin.y) + Float(node.frame.height) + offset
+                    }
+                }
+
+                let bg = theme.colors.surfaceFloating
+                    .composited(over: Color.black.multipliedAlpha(0.22))
+                    .multipliedAlpha(node.opacity)
+                let border = theme.colors.border.multipliedAlpha(node.opacity)
+                let textColor = theme.colors.onSurface.multipliedAlpha(node.opacity)
+                let bubble = UIRect(x: x, y: y, width: width, height: height)
+                list.addRoundedRect(bubble, radius: max(4, theme.radius.sm), color: bg)
+                list.addRect(UIRect(x: bubble.x, y: bubble.y, width: bubble.width, height: 1),
+                             color: border)
+                list.addRect(UIRect(x: bubble.x,
+                                    y: bubble.y + bubble.height - 1,
+                                    width: bubble.width,
+                                    height: 1),
+                             color: border)
+                list.addRect(UIRect(x: bubble.x, y: bubble.y, width: 1, height: bubble.height),
+                             color: border)
+                list.addRect(UIRect(x: bubble.x + bubble.width - 1,
+                                    y: bubble.y,
+                                    width: 1,
+                                    height: bubble.height),
+                             color: border)
+                list.addText(layout,
+                             origin: (x: x + padX, y: y + padY),
+                             color: textColor,
+                             textureID: env.atlasTextureID,
+                             atlas: env.atlas)
+            }
+        } else {
+            node.overlayDraw = nil
+        }
 
         // Default cursor for buttons: `.pointer` when interactive,
         // `.notAllowed` when disabled. Users can override via `.cursor(_:)`
@@ -141,6 +239,7 @@ struct ButtonHost: _PrimitiveView {
         let hoverChange = onHoverChange
         let down = onDown
         let up = onUp
+        let key = onKey
         registry.setHover(node) { phase in
             switch phase {
             case .enter:
@@ -162,6 +261,9 @@ struct ButtonHost: _PrimitiveView {
             case .up:
                 return up() ? .handled : .ignored
             }
+        }
+        registry.setKey(node) { event, _ in
+            key(event.scancode, event.isRepeat)
         }
     }
 
@@ -193,4 +295,5 @@ struct ButtonHost: _PrimitiveView {
 
     static let pressedKey = "__button_pressed"
     static let hoveredKey = "__button_hovered"
+    static let tooltipKey = "__button_tooltip"
 }

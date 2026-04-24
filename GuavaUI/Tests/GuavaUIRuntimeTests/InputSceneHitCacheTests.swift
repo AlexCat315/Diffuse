@@ -106,4 +106,25 @@ struct InputSceneHitCacheTests {
         #expect(t.scene.hitCacheMisses == 2)
         #expect(t.scene.hitCacheHits == 0)
     }
+
+    @Test("contentOffset change invalidates hit cache")
+    func contentOffsetInvalidatesCache() {
+        let t = Tree()
+        let p = CGPoint(x: 20, y: 20)
+
+        _ = HitTester.hitTest(scene: t.scene, point: p)
+        #expect(t.scene.hitCacheMisses == 1)
+        #expect(t.scene.hitCacheHits == 0)
+
+        // Prime cache for this point.
+        _ = HitTester.hitTest(scene: t.scene, point: p)
+        #expect(t.scene.hitCacheHits == 1)
+
+        // Simulate scrolling: geometry changes without structural reconcile.
+        t.a.contentOffset = CGPoint(x: 0, y: 12)
+
+        _ = HitTester.hitTest(scene: t.scene, point: p)
+        #expect(t.scene.hitCacheMisses == 2)
+        #expect(t.scene.hitCacheHits == 1)
+    }
 }

@@ -89,9 +89,29 @@ public struct MouseButtonEvent: Sendable {
     public var x: Float
     public var y: Float
     public var clicks: UInt8
+    public var modifiers: KeyModifiers
 
-    public init(button: MouseButton, x: Float, y: Float, clicks: UInt8) {
-        self.button = button; self.x = x; self.y = y; self.clicks = clicks
+    public init(button: MouseButton,
+                x: Float,
+                y: Float,
+                clicks: UInt8,
+                modifiers: KeyModifiers = []) {
+        self.button = button
+        self.x = x
+        self.y = y
+        self.clicks = clicks
+        self.modifiers = modifiers
+    }
+
+    public init(button: MouseButton,
+                x: Float,
+                y: Float,
+                clicks: UInt8) {
+        self.init(button: button,
+                  x: x,
+                  y: y,
+                  clicks: clicks,
+                  modifiers: [])
     }
 }
 

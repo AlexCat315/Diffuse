@@ -16,9 +16,15 @@ Box(direction: .row,
     alignItems: .stretch,        // Yoga.Align 全集
     justifyContent: .flexStart,  // Yoga.Justify 全集
     spacing: 0) { … }
+
+Box(direction: .row,
+    alignment: .topLeading,
+    spacing: 0) { … }
 ```
 
 最贴近 Yoga 原语，需要细粒度控制时用。
+
+`alignment:` 是常见 9 宫格对齐的便捷写法。它会按 `direction` 映射到 `alignItems + justifyContent`；反向主轴（`rowReverse` / `columnReverse`）也会保持 `leading` / `trailing` / `top` / `bottom` 的视觉语义不变。
 
 ## Row
 
@@ -26,7 +32,7 @@ Box(direction: .row,
 Row(alignment: .center, spacing: 0) { … }
 ```
 
-`HorizontalAlignment.{leading | center | trailing}` —— Row 跨轴是 **垂直方向**，alignment 控制子节点垂直对齐。`.center` 是默认。
+`VerticalAlignment.{top | center | bottom}` —— Row 跨轴是 **垂直方向**，alignment 控制子节点垂直对齐。`.center` 是默认。
 
 ## Column
 

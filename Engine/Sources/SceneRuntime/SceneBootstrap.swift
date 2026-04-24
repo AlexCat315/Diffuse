@@ -40,10 +40,14 @@ public extension SceneRuntime {
             for: camera
         )
 
-        _ = makePreviewEntity(
+        let keyLight = makePreviewEntity(
             name: "Key Light",
             kind: "Directional Light",
             matrix: previewTranslationMatrix(SIMD3<Float>(4, 6, 2))
+        )
+        _ = setComponent(
+            LightComponent(color: SIMD3<Float>(1.0, 0.95, 0.86), intensity: 3.0),
+            for: keyLight
         )
 
         let gameplay = makePreviewEntity(

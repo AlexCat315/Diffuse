@@ -11,10 +11,14 @@ public struct ScriptHandle: Hashable, Sendable, Equatable {
 public struct ScriptBinding: Sendable, Equatable {
     public var script: ScriptHandle
     public var isEnabled: Bool
+    public var parametersJSON: String
 
-    public init(_ script: ScriptHandle, isEnabled: Bool = true) {
+    public init(_ script: ScriptHandle,
+                isEnabled: Bool = true,
+                parametersJSON: String = "{}") {
         self.script = script
         self.isEnabled = isEnabled
+        self.parametersJSON = parametersJSON
     }
 }
 

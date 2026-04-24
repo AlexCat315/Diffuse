@@ -1,0 +1,44 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:guava}/Editor",
+            "name": "Debug EditorApp (Editor)",
+            "target": "EditorApp",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug EditorApp (Editor)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:guava}/Editor",
+            "name": "Release EditorApp (Editor)",
+            "target": "EditorApp",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release EditorApp (Editor)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:guava}/GuavaUI",
+            "name": "Debug GuavaUIDemo (GuavaUI)",
+            "target": "GuavaUIDemo",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug GuavaUIDemo (GuavaUI)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:guava}/GuavaUI",
+            "name": "Release GuavaUIDemo (GuavaUI)",
+            "target": "GuavaUIDemo",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release GuavaUIDemo (GuavaUI)"
+        }
+    ]
+}

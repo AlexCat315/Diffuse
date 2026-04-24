@@ -1,5 +1,6 @@
 import Foundation
 import simd
+import EngineKernel
 
 public struct RuntimeWorldSummary: Sendable {
     public var entityCount: Int
@@ -69,6 +70,13 @@ public struct Children: RuntimeComponent, Sendable, Equatable {
 }
 
 public struct RuntimeWorld: @unchecked Sendable {
+    private struct HierarchyReadSnapshot {
+        var entities: [EntityID]
+        var localMatrices: [EntityID: simd_float4x4]
+        var parentByEntity: [EntityID: EntityID]
+        var childrenByEntity: [EntityID: [EntityID]]
+    }
+
     private struct EntitySlot {
         var generation: UInt32 = 0
         var isAlive = false
@@ -193,6 +201,7 @@ public struct RuntimeWorld: @unchecked Sendable {
     private var freeIndices: [Int] = []
     private var components = ComponentStores()
     private var resources = ResourceStorage()
+    private var rootEntities: [EntityID] = []
     private var dirtyHierarchyEntities: Set<EntityID> = []
 
     public private(set) var entityCount = 0
@@ -222,6 +231,10 @@ public struct RuntimeWorld: @unchecked Sendable {
         return result
     }
 
+    public func roots() -> [EntityID] {
+        normalizedRoots()
+    }
+
     @discardableResult
     public mutating func createEntity() -> EntityID {
         let id: EntityID
@@ -236,6 +249,7 @@ public struct RuntimeWorld: @unchecked Sendable {
             id = EntityID(index: UInt32(index), generation: slot.generation)
         }
         entityCount += 1
+        rootEntities.append(id)
         revision &+= 1
         return id
     }
@@ -246,12 +260,22 @@ public struct RuntimeWorld: @unchecked Sendable {
 
         let previousParent = parent(of: entity)
         let previousChildren = children(of: entity)
+        let previousRootIndex = rootEntities.firstIndex(of: entity)
         if let previousParent {
             detachChild(entity, from: previousParent)
             markHierarchyDirty(previousParent)
+        } else {
+            detachRoot(entity)
         }
+        var rootInsertIndex = previousRootIndex
         for child in previousChildren {
             clearParent(for: child)
+            if let insertIndex = rootInsertIndex {
+                attachRoot(child, at: insertIndex)
+                rootInsertIndex = insertIndex + 1
+            } else {
+                attachRoot(child)
+            }
             markHierarchyDirty(child)
         }
 
@@ -421,6 +445,9 @@ public struct RuntimeWorld: @unchecked Sendable {
         if let previousParent {
             detachChild(child, from: previousParent)
             markHierarchyDirty(previousParent)
+        } else {
+            // child was a root; detach it so it doesn't appear twice after reparenting.
+            detachRoot(child)
         }
 
         if let parent {
@@ -429,9 +456,51 @@ public struct RuntimeWorld: @unchecked Sendable {
             markHierarchyDirty(parent)
         } else {
             clearParent(for: child)
+            // child becomes a root again; append to the ordered root list.
+            attachRoot(child)
         }
 
         markHierarchyDirty(child)
+        revision &+= 1
+        return true
+    }
+
+    @discardableResult
+    public mutating func moveEntity(_ entity: EntityID,
+                                    to parent: EntityID?,
+                                    at index: Int) -> Bool {
+        guard contains(entity) else { return false }
+        if let parent {
+            guard contains(parent), parent != entity, !isDescendant(parent, of: entity) else {
+                return false
+            }
+        }
+
+        let previousParent = self.parent(of: entity)
+        if previousParent == parent {
+            if let parent {
+                return reorderChild(entity, in: parent, to: index)
+            }
+            return reorderRoot(entity, to: index)
+        }
+
+        if let previousParent {
+            detachChild(entity, from: previousParent)
+            markHierarchyDirty(previousParent)
+        } else {
+            detachRoot(entity)
+        }
+
+        if let parent {
+            insertChild(entity, into: parent, at: index)
+            components.set(Parent(entity: parent), for: entity)
+            markHierarchyDirty(parent)
+        } else {
+            clearParent(for: entity)
+            attachRoot(entity, at: index)
+        }
+
+        markHierarchyDirty(entity)
         revision &+= 1
         return true
     }
@@ -441,18 +510,84 @@ public struct RuntimeWorld: @unchecked Sendable {
     }
 
     public mutating func propagateTransforms() {
-        guard hierarchyNeedsPropagation() else { return }
+        _ = propagateTransforms(using: .shared)
+    }
 
-        var visited: Set<EntityID> = []
-        for entity in entities() where parent(of: entity) == nil {
-            propagateTransforms(from: entity, parentWorldMatrix: matrix_identity_float4x4, visited: &visited)
+    @discardableResult
+    public mutating func propagateTransforms(using jobSystem: JobSystem) -> JobDispatchReport {
+        guard hierarchyNeedsPropagation() else {
+            return JobDispatchReport(jobCount: 0, workerCount: jobSystem.workerCount, executedInParallel: false)
         }
-        for entity in entities() where !visited.contains(entity) {
-            propagateTransforms(from: entity, parentWorldMatrix: matrix_identity_float4x4, visited: &visited)
+
+        let snapshot = hierarchyReadSnapshot()
+        let entitySet = Set(snapshot.entities)
+        var worldMatrices: [EntityID: simd_float4x4] = [:]
+        worldMatrices.reserveCapacity(snapshot.entities.count)
+        var visited = Set<EntityID>()
+        var totalJobCount = 0
+        var executedInParallel = false
+
+        var roots: [EntityID] = []
+        roots.reserveCapacity(snapshot.entities.count)
+        for entity in snapshot.entities {
+            if let parent = snapshot.parentByEntity[entity], entitySet.contains(parent) {
+                continue
+            }
+            roots.append(entity)
+        }
+
+        var frontier = roots
+        while !frontier.isEmpty {
+            let currentFrontier = frontier
+            let parentWorldMatrices = worldMatrices
+            let computed = jobSystem.parallelCompactMap(items: currentFrontier, minimumChunkSize: 1) {
+                entity -> simd_float4x4? in
+                let localMatrix = snapshot.localMatrices[entity] ?? matrix_identity_float4x4
+                let parentMatrix: simd_float4x4
+                if let parent = snapshot.parentByEntity[entity], let cachedParent = parentWorldMatrices[parent] {
+                    parentMatrix = cachedParent
+                } else {
+                    parentMatrix = matrix_identity_float4x4
+                }
+                return parentMatrix * localMatrix
+            }
+
+            totalJobCount += computed.1.jobCount
+            executedInParallel = executedInParallel || computed.1.executedInParallel
+
+            var nextFrontier: [EntityID] = []
+            for (index, entity) in currentFrontier.enumerated() {
+                let worldMatrix = computed.0[index]
+                worldMatrices[entity] = worldMatrix
+                components.set(WorldTransform(matrix: worldMatrix), for: entity)
+                visited.insert(entity)
+                if let children = snapshot.childrenByEntity[entity] {
+                    for child in children where !visited.contains(child) {
+                        nextFrontier.append(child)
+                    }
+                }
+            }
+            frontier = nextFrontier
+        }
+
+        for entity in snapshot.entities where !visited.contains(entity) {
+            propagateTransforms(
+                from: entity,
+                parentWorldMatrix: matrix_identity_float4x4,
+                visited: &visited,
+                localMatrices: snapshot.localMatrices,
+                childrenByEntity: snapshot.childrenByEntity
+            )
         }
 
         dirtyHierarchyEntities.removeAll(keepingCapacity: true)
         revision &+= 1
+
+        return JobDispatchReport(
+            jobCount: totalJobCount,
+            workerCount: jobSystem.workerCount,
+            executedInParallel: executedInParallel
+        )
     }
 
     private mutating func attachChild(_ child: EntityID, to parent: EntityID) {
@@ -461,6 +596,14 @@ public struct RuntimeWorld: @unchecked Sendable {
             current.append(child)
             components.set(Children(entities: current), for: parent)
         }
+    }
+
+    private mutating func insertChild(_ child: EntityID, into parent: EntityID, at index: Int) {
+        var current = components.get(Children.self, for: parent)?.entities.filter(contains) ?? []
+        current.removeAll { $0 == child }
+        let insertIndex = max(0, min(index, current.count))
+        current.insert(child, at: insertIndex)
+        components.set(Children(entities: current), for: parent)
     }
 
     private mutating func detachChild(_ child: EntityID, from parent: EntityID) {
@@ -475,6 +618,73 @@ public struct RuntimeWorld: @unchecked Sendable {
 
     private mutating func clearParent(for child: EntityID) {
         _ = components.remove(Parent.self, for: child)
+    }
+
+    @discardableResult
+    private mutating func reorderChild(_ child: EntityID, in parent: EntityID, to index: Int) -> Bool {
+        var current = components.get(Children.self, for: parent)?.entities.filter(contains) ?? []
+        guard let existingIndex = current.firstIndex(of: child) else { return false }
+        let clampedIndex = max(0, min(index, current.count - 1))
+        var destinationIndex = clampedIndex
+        if existingIndex < clampedIndex {
+            destinationIndex -= 1
+        }
+        guard existingIndex != destinationIndex else { return true }
+        current.remove(at: existingIndex)
+        current.insert(child, at: min(destinationIndex, current.count))
+        components.set(Children(entities: current), for: parent)
+        markHierarchyDirty(parent)
+        markHierarchyDirty(child)
+        revision &+= 1
+        return true
+    }
+
+    @discardableResult
+    private mutating func reorderRoot(_ entity: EntityID, to index: Int) -> Bool {
+        var currentRoots = normalizedRoots()
+        guard let existingIndex = currentRoots.firstIndex(of: entity) else { return false }
+        let clampedIndex = max(0, min(index, currentRoots.count - 1))
+        var destinationIndex = clampedIndex
+        if existingIndex < clampedIndex {
+            destinationIndex -= 1
+        }
+        guard existingIndex != destinationIndex else { return true }
+        currentRoots.remove(at: existingIndex)
+        currentRoots.insert(entity, at: min(destinationIndex, currentRoots.count))
+        rootEntities = currentRoots
+        markHierarchyDirty(entity)
+        revision &+= 1
+        return true
+    }
+
+    private mutating func attachRoot(_ entity: EntityID, at index: Int? = nil) {
+        var currentRoots = normalizedRoots()
+        currentRoots.removeAll { $0 == entity }
+        if let index {
+            let insertIndex = max(0, min(index, currentRoots.count))
+            currentRoots.insert(entity, at: insertIndex)
+        } else {
+            currentRoots.append(entity)
+        }
+        rootEntities = currentRoots
+    }
+
+    private mutating func detachRoot(_ entity: EntityID) {
+        let currentRoots = normalizedRoots().filter { $0 != entity }
+        rootEntities = currentRoots
+    }
+
+    private func normalizedRoots() -> [EntityID] {
+        var seen: Set<EntityID> = []
+        var normalized: [EntityID] = []
+        normalized.reserveCapacity(rootEntities.count)
+        for entity in rootEntities where contains(entity) {
+            guard parent(of: entity) == nil else { continue }
+            guard !seen.contains(entity) else { continue }
+            seen.insert(entity)
+            normalized.append(entity)
+        }
+        return normalized
     }
 
     private mutating func markHierarchyDirty(_ entity: EntityID) {
@@ -508,6 +718,61 @@ public struct RuntimeWorld: @unchecked Sendable {
         for child in children(of: entity) {
             propagateTransforms(from: child, parentWorldMatrix: worldMatrix, visited: &visited)
         }
+    }
+
+    private mutating func propagateTransforms(
+        from entity: EntityID,
+        parentWorldMatrix: simd_float4x4,
+        visited: inout Set<EntityID>,
+        localMatrices: [EntityID: simd_float4x4],
+        childrenByEntity: [EntityID: [EntityID]]
+    ) {
+        guard contains(entity), !visited.contains(entity) else { return }
+        visited.insert(entity)
+
+        let localMatrix = localMatrices[entity] ?? matrix_identity_float4x4
+        let worldMatrix = parentWorldMatrix * localMatrix
+        components.set(WorldTransform(matrix: worldMatrix), for: entity)
+
+        for child in childrenByEntity[entity] ?? [] {
+            propagateTransforms(
+                from: child,
+                parentWorldMatrix: worldMatrix,
+                visited: &visited,
+                localMatrices: localMatrices,
+                childrenByEntity: childrenByEntity
+            )
+        }
+    }
+
+    private func hierarchyReadSnapshot() -> HierarchyReadSnapshot {
+        let entities = entities()
+        let entitySet = Set(entities)
+
+        var localMatrices: [EntityID: simd_float4x4] = [:]
+        localMatrices.reserveCapacity(entities.count)
+        var parentByEntity: [EntityID: EntityID] = [:]
+        parentByEntity.reserveCapacity(entities.count)
+        var childrenByEntity: [EntityID: [EntityID]] = [:]
+        childrenByEntity.reserveCapacity(entities.count)
+
+        for entity in entities {
+            localMatrices[entity] = components.get(LocalTransform.self, for: entity)?.matrix ?? matrix_identity_float4x4
+            if let parent = components.get(Parent.self, for: entity)?.entity,
+               entitySet.contains(parent) {
+                parentByEntity[entity] = parent
+            }
+            if let children = components.get(Children.self, for: entity)?.entities {
+                childrenByEntity[entity] = children.filter { entitySet.contains($0) }
+            }
+        }
+
+        return HierarchyReadSnapshot(
+            entities: entities,
+            localMatrices: localMatrices,
+            parentByEntity: parentByEntity,
+            childrenByEntity: childrenByEntity
+        )
     }
 
     mutating func applyPhysicsWriteback(_ writeback: PhysicsBodyWriteback) -> Bool {

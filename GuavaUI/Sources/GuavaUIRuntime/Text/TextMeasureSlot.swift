@@ -19,10 +19,12 @@ import Foundation
 public struct TextMeasureInputs: Equatable {
     public let text: String
     public let alignment: TextAlignment
+    public let lineLimit: Int?
 
-    public init(text: String, alignment: TextAlignment) {
+    public init(text: String, alignment: TextAlignment, lineLimit: Int? = nil) {
         self.text = text
         self.alignment = alignment
+        self.lineLimit = lineLimit
     }
 }
 

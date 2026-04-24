@@ -191,6 +191,7 @@ public enum CapabilityInvocationPlannerError: Error, CustomStringConvertible {
     case missingIntent
     case approvalForbidden(String)
     case blockedPreconditions([PreconditionFailure])
+    case unsupportedProvenance(verbID: String, provenance: TransactionProvenance)
 
     public var description: String {
         switch self {
@@ -200,6 +201,8 @@ public enum CapabilityInvocationPlannerError: Error, CustomStringConvertible {
             return "transaction \(transactionID) is forbidden by approval policy"
         case let .blockedPreconditions(failures):
             return failures.map(\ .message).joined(separator: "; ")
+        case let .unsupportedProvenance(verbID, provenance):
+            return "capability \(verbID) does not allow transaction provenance \(provenance.rawValue)"
         }
     }
 }
@@ -207,11 +210,14 @@ public enum CapabilityInvocationPlannerError: Error, CustomStringConvertible {
 public struct CapabilityInvocationPlanner {
     public var registry: CapabilityRegistry
     public var checker: PreconditionChecker
+    public var ambiguityScorer: AmbiguityScorer
 
     public init(registry: CapabilityRegistry,
-                checker: PreconditionChecker = PreconditionChecker()) {
+                checker: PreconditionChecker = PreconditionChecker(),
+                ambiguityScorer: AmbiguityScorer = AmbiguityScorer()) {
         self.registry = registry
         self.checker = checker
+        self.ambiguityScorer = ambiguityScorer
     }
 
     public func plan(_ transaction: TransactionIR,
@@ -228,6 +234,10 @@ public struct CapabilityInvocationPlanner {
                                                                                         phase: context.releasePhase,
                                                                                         includeExperimental: context.includeExperimental,
                                                                                         isHotfix: context.isHotfix))
+        guard resolution.spec.provenanceInputAllowed.contains(CapabilityInputProvenance(rawValue: transaction.provenance.rawValue) ?? .authored) else {
+            throw CapabilityInvocationPlannerError.unsupportedProvenance(verbID: resolution.spec.verbID,
+                                                                        provenance: transaction.provenance)
+        }
         let preconditionReport = checker.evaluate(resolution.spec.preconditions,
                                                   facts: context.facts,
                                                   currentRole: context.role)
@@ -235,119 +245,17 @@ public struct CapabilityInvocationPlanner {
             throw CapabilityInvocationPlannerError.blockedPreconditions(preconditionReport.blockingFailures)
         }
 
-        let confirmationLevel = effectiveConfirmationLevel(capability: resolution.spec.confirmationPolicy.level,
-                                                           approvalPolicy: transaction.approvalPolicy)
         let warnings = resolution.warnings + preconditionReport.warnings.map(\ .message)
-        let confirmationRequest = makeConfirmationRequest(for: resolution.spec,
-                                                          transaction: transaction,
-                                                          level: confirmationLevel,
-                                                          warnings: warnings)
+        let ambiguity = ambiguityScorer.assess(capability: resolution.spec,
+                                               transaction: transaction,
+                                               approvalPolicy: transaction.approvalPolicy,
+                                               warnings: warnings)
         return CapabilityInvocationPlan(capability: resolution.spec,
                                         transaction: transaction,
                                         preconditionReport: preconditionReport,
-                                        confirmationLevel: confirmationLevel,
-                                        confirmationRequest: confirmationRequest,
+                                        confirmationLevel: ambiguity.confirmationLevel,
+                                        confirmationRequest: ambiguity.confirmationRequest,
                                         readAfterWrite: resolution.spec.readAfterWrite,
                                         warnings: warnings)
-    }
-
-    private func effectiveConfirmationLevel(capability: CapabilityConfirmationLevel,
-                                            approvalPolicy: TransactionApprovalPolicy) -> CapabilityConfirmationLevel {
-        let policyLevel: CapabilityConfirmationLevel
-        switch approvalPolicy {
-        case .automatic:
-            policyLevel = .auto
-        case .requiresApproval:
-            policyLevel = .required
-        case .forbidden:
-            policyLevel = .destructiveRequired
-        }
-        return confirmationRank(capability) >= confirmationRank(policyLevel) ? capability : policyLevel
-    }
-
-    private func confirmationRank(_ level: CapabilityConfirmationLevel) -> Int {
-        switch level {
-        case .auto:
-            return 0
-        case .warn:
-            return 1
-        case .required:
-            return 2
-        case .destructiveRequired:
-            return 3
-        }
-    }
-
-    private func makeConfirmationRequest(for capability: CapabilitySpec,
-                                         transaction: TransactionIR,
-                                         level: CapabilityConfirmationLevel,
-                                         warnings: [String]) -> ConfirmationRequestBatch? {
-        guard level != .auto else { return nil }
-        let question = ConfirmationQuestion(id: "confirm:\(transaction.id)",
-                                            kind: level == .destructiveRequired ? .approveDestructive : .chooseOne,
-                                            promptShort: transaction.summary,
-                                            promptDetail: confirmationPromptDetail(capability: capability,
-                                                                                  transaction: transaction,
-                                                                                  warnings: warnings),
-                                            options: confirmationOptions(for: level),
-                                            defaultOptionID: level == .warn ? "confirm" : nil,
-                                            severity: confirmationSeverity(for: level),
-                                            reversible: capability.reversible,
-                                            ambiguityScore: level == .warn ? 0.4 : 0.8,
-                                            sourceProposalIDs: [transaction.id])
-        return ConfirmationRequestBatch(batchID: "cfm:\(transaction.id)",
-                                        origin: "intent_runtime",
-                                        correlationID: transaction.id,
-                                        questions: [question],
-                                        requiredRole: capability.requiredRole)
-    }
-
-    private func confirmationPromptDetail(capability: CapabilitySpec,
-                                          transaction: TransactionIR,
-                                          warnings: [String]) -> String {
-        var lines = [
-            "verb=\(capability.verbID)",
-            "summary=\(transaction.summary)",
-        ]
-        if !warnings.isEmpty {
-            lines.append("warnings=\(warnings.joined(separator: "; "))")
-        }
-        return lines.joined(separator: "\n")
-    }
-
-    private func confirmationOptions(for level: CapabilityConfirmationLevel) -> [ConfirmationOption] {
-        switch level {
-        case .auto:
-            return []
-        case .warn:
-            return [
-                ConfirmationOption(id: "confirm",
-                                   labelShort: "Apply",
-                                   labelDetail: "Proceed with this transaction"),
-                ConfirmationOption(id: "skip",
-                                   labelShort: "Skip",
-                                   labelDetail: "Leave the staged transaction unapplied"),
-            ]
-        case .required, .destructiveRequired:
-            return [
-                ConfirmationOption(id: "confirm",
-                                   labelShort: "Confirm",
-                                   labelDetail: "Approve this staged transaction"),
-                ConfirmationOption(id: "skip",
-                                   labelShort: "Skip",
-                                   labelDetail: "Discard this staged transaction"),
-            ]
-        }
-    }
-
-    private func confirmationSeverity(for level: CapabilityConfirmationLevel) -> ConfirmationSeverity {
-        switch level {
-        case .auto:
-            return .info
-        case .warn, .required:
-            return .warn
-        case .destructiveRequired:
-            return .destructive
-        }
     }
 }
