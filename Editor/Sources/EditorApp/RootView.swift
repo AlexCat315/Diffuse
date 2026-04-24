@@ -278,12 +278,7 @@ private struct ToolbarTextButton: View {
     let title: String
 
     var body: some View {
-        Text(title)
-            .font(.caption)
-            .foregroundColor(.onSurface)
-            .padding(horizontal: 8, vertical: 6)
-            .background(.surfaceSunken)
-            .cornerRadius(4)
+        ToolbarButtonChrome(title: title)
     }
 }
 
@@ -293,12 +288,8 @@ private struct ToolbarActionButton: View {
 
     var body: some View {
         Button(action: onClick) {
-            Text(title)
-                .font(.caption)
-                .foregroundColor(.onSurface)
-                .padding(horizontal: 8, vertical: 6)
-                .background(.surfaceSunken)
-                .cornerRadius(4)
+            ToolbarButtonChrome(title: title,
+                                minWidth: title.count > 8 ? 92 : 68)
         }
         .buttonStyle(.plain)
     }
@@ -311,14 +302,32 @@ private struct ToolbarStateButton: View {
 
     var body: some View {
         Button(action: onClick) {
-            Text(title)
-                .font(.caption)
-                .foregroundColor(isActive ? .onAccent : .onSurface)
-                .padding(horizontal: 10, vertical: 6)
-                .background(isActive ? .accent : .surfaceSunken)
-                .cornerRadius(4)
+            ToolbarButtonChrome(title: title,
+                                foreground: isActive ? .onAccent : .onSurface,
+                                background: isActive ? .accent : .surfaceSunken,
+                                minWidth: title.count > 7 ? 88 : 68)
         }
         .buttonStyle(.plain)
+    }
+}
+
+private struct ToolbarButtonChrome: View {
+    let title: String
+    var foreground: SemanticColorRef = .onSurface
+    var background: SemanticColorRef = .surfaceSunken
+    var minWidth: Float = 68
+
+    var body: some View {
+        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            Text(title, lineLimit: 1)
+                .font(.caption)
+                .foregroundColor(foreground)
+        }
+        .frame(height: 34, minWidth: minWidth)
+        .padding(horizontal: 8, vertical: 0)
+        .background(background)
+        .cornerRadius(4)
+        .clipped()
     }
 }
 

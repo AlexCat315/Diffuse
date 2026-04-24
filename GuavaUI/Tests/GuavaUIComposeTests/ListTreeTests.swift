@@ -313,14 +313,13 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         graph.recomposer.commitAll()
         graph.computeLayout(width: 280, height: 220)
 
-        var verticalOrHorizontalStrokes: [Node] = []
-        collectStrokeNodes(from: tree.root!, into: &verticalOrHorizontalStrokes)
+        var guideNodes: [Node] = []
+        collectGuideNodes(from: tree.root!, into: &guideNodes)
 
-        #expect(!verticalOrHorizontalStrokes.isEmpty)
-        #expect(verticalOrHorizontalStrokes.allSatisfy { node in
-            let w = node.frame.width
-            let h = node.frame.height
-            return (w == 1 && h >= 1) || (h == 1 && w >= 1)
+        let strokeRects = guideNodes.flatMap(renderedGuideStrokeRects)
+        #expect(!strokeRects.isEmpty)
+        #expect(strokeRects.allSatisfy { rect in
+            (rect.width == 1 && rect.height >= 1) || (rect.height == 1 && rect.width >= 1)
         })
     } }
 
@@ -361,10 +360,11 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         graph.recomposer.commitAll()
         graph.computeLayout(width: 280, height: 220)
 
-        var strokes: [Node] = []
-        collectStrokeNodes(from: tree.root!, into: &strokes)
+        var guideNodes: [Node] = []
+        collectGuideNodes(from: tree.root!, into: &guideNodes)
 
-        #expect(strokes.contains { $0.frame.width == 1 && $0.frame.height == 30 })
+        let strokeRects = guideNodes.flatMap(renderedGuideStrokeRects)
+        #expect(strokeRects.contains { $0.width == 1 && $0.height == 30 })
     } }
 
     private func orderedPointerNodes(in root: Node,
@@ -401,15 +401,29 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         _ = pointer(evt, .up, .target)
     }
 
-    private func collectStrokeNodes(from node: Node,
-                                    into out: inout [Node]) {
-        let w = node.frame.width
-        let h = node.frame.height
-        if (w == 1 && h >= 1) || (h == 1 && w >= 1) {
+    private func collectGuideNodes(from node: Node,
+                                   into out: inout [Node]) {
+        if node.attachments["__tree_guide"] as? Bool == true {
             out.append(node)
         }
         for child in node.children {
-            collectStrokeNodes(from: child, into: &out)
+            collectGuideNodes(from: child, into: &out)
         }
+    }
+
+    private func renderedGuideStrokeRects(_ node: Node) -> [UIRect] {
+        let list = DrawList()
+        node.draw?(list, node.frame.origin)
+        var rects: [UIRect] = []
+        for start in stride(from: 0, to: list.vertices.count, by: 4) {
+            guard start + 3 < list.vertices.count else { continue }
+            let vertices = list.vertices[start..<(start + 4)]
+            let minX = vertices.map(\.posX).min() ?? 0
+            let maxX = vertices.map(\.posX).max() ?? 0
+            let minY = vertices.map(\.posY).min() ?? 0
+            let maxY = vertices.map(\.posY).max() ?? 0
+            rects.append(UIRect(x: minX, y: minY, width: maxX - minX, height: maxY - minY))
+        }
+        return rects
     }
 }
