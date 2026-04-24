@@ -41,7 +41,7 @@ struct IntentInputPanel: View {
                         Box(direction: .column, alignItems: .stretch, spacing: 8) {
                             TextField(text: $spawnLabel)
                             Vector3Fields(x: $spawnX, y: $spawnY, z: $spawnZ)
-                            Button("Spawn Entity") {
+                            Button(L("Spawn Entity")) {
                                 app.submitSpawnEntityIntent(label: spawnLabel,
                                                             position: SIMD3<Float>(spawnX, spawnY, spawnZ))
                             }
@@ -52,7 +52,7 @@ struct IntentInputPanel: View {
                         Box(direction: .column, alignItems: .stretch, spacing: 8) {
                             Vector3Fields(x: $transformX, y: $transformY, z: $transformZ)
                             Row(alignment: .center, spacing: 8) {
-                                Button("Use Selection", isEnabled: selection != nil) {
+                                Button(L("Use Selection"), isEnabled: selection != nil) {
                                     if let translation = app.currentSelectedEntityTranslation() {
                                         transformX = translation.x
                                         transformY = translation.y
@@ -60,7 +60,7 @@ struct IntentInputPanel: View {
                                     }
                                 }
                                 .buttonStyle(SecondaryButtonStyle())
-                                Button("Set Transform", isEnabled: selection != nil) {
+                                Button(L("Set Transform"), isEnabled: selection != nil) {
                                     app.submitSetTransformIntent(translation: SIMD3<Float>(transformX,
                                                                                             transformY,
                                                                                             transformZ))
@@ -71,10 +71,10 @@ struct IntentInputPanel: View {
 
                     AISection(title: "scene.delete_entity") {
                         Box(direction: .column, alignItems: .stretch, spacing: 8) {
-                            Text("Delete the current selection through IntentRuntime confirmation flow.")
+                            Text(L("Delete the current selection through IntentRuntime confirmation flow."))
                                 .font(.caption)
                                 .foregroundColor(.onSurfaceMuted)
-                            Button("Delete Selection",
+                            Button(L("Delete Selection"),
                                    role: .destructive,
                                    isEnabled: selection != nil) {
                                 app.submitDeleteSelectedEntityIntent()
@@ -95,11 +95,11 @@ private struct AIStatusSummary: View {
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 6) {
-            Text(status ?? "Ready")
+            Text(status ?? L("Ready"))
                 .font(.bodyStrong)
                 .foregroundColor(status == nil ? .success : .onSurface)
             if warnings.isEmpty {
-                Text("No active warnings")
+                Text(L("No active warnings"))
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
             } else {

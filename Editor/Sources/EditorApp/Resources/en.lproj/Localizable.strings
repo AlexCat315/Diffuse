@@ -1,0 +1,55 @@
+/* EditorApp — English (Base) */
+
+/* Asset Browser */
+"Assets" = "Assets";
+"No importable assets" = "No importable assets";
+"Add .gltf or .obj files under the project directory and relaunch the editor." = "Add .gltf or .obj files under the project directory and relaunch the editor.";
+
+/* Inspector */
+"No selection" = "No selection";
+"Select an entity in Hierarchy to inspect SceneRuntime components." = "Select an entity in Hierarchy to inspect SceneRuntime components.";
+
+/* Hierarchy */
+"Search" = "Search";
+
+/* Viewport toolbar */
+"Pick" = "Pick";
+"Move" = "Move";
+"Rotate" = "Rotate";
+"Local" = "Local";
+"World" = "World";
+"T Snap" = "T Snap";
+"R Snap" = "R Snap";
+"S Snap" = "S Snap";
+"Cmd-Sub" = "Cmd-Sub";
+"Cmd-Tog" = "Cmd-Tog";
+"Lit" = "Lit";
+"Wire" = "Wire";
+
+/* Viewport overlays */
+"Viewport idle" = "Viewport idle";
+"Waiting for the first render packet from the engine." = "Waiting for the first render packet from the engine.";
+"Drop to add" = "Drop to add";
+
+/* Menu bar */
+"Guava Make" = "Guava Make";
+"Settings" = "Settings";
+"Platforms" = "Platforms";
+"Preset" = "Preset";
+
+/* Status bar */
+"Connected" = "Connected";
+"Offline" = "Offline";
+"Ready" = "Ready";
+
+/* AI — Confirmation panel */
+"No pending confirmation" = "No pending confirmation";
+"Warn, required, and destructive AI actions will appear here before they mutate the scene." = "Warn, required, and destructive AI actions will appear here before they mutate the scene.";
+
+/* AI — Intent input panel */
+"Spawn Entity" = "Spawn Entity";
+"Use Selection" = "Use Selection";
+"Set Transform" = "Set Transform";
+"Delete the current selection through IntentRuntime confirmation flow." = "Delete the current selection through IntentRuntime confirmation flow.";
+"Delete Selection" = "Delete Selection";
+"No active warnings" = "No active warnings";

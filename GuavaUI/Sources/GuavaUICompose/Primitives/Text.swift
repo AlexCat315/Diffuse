@@ -213,6 +213,13 @@ public struct Text: _PrimitiveView {
         self.lineLimit = lineLimit
     }
 
+    public init(_ key: LocalizedStringKey,
+                alignment: TextAlignment = .leading,
+                color: Color? = nil,
+                lineLimit: Int? = nil) {
+        self.init(key.resolved, alignment: alignment, color: color, lineLimit: lineLimit)
+    }
+
     public func lineLimit(_ limit: Int?) -> Text {
         Text(string, alignment: alignment, color: color, lineLimit: limit)
     }

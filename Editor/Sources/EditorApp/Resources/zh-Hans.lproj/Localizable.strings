@@ -1,0 +1,55 @@
+/* EditorApp — Chinese (Simplified) */
+
+/* Asset Browser */
+"Assets" = "资源";
+"No importable assets" = "没有可导入资源";
+"Add .gltf or .obj files under the project directory and relaunch the editor." = "请在项目目录下添加 .gltf 或 .obj 文件，然后重新启动编辑器。";
+
+/* Inspector */
+"No selection" = "未选择对象";
+"Select an entity in Hierarchy to inspect SceneRuntime components." = "请在层级面板中选择一个实体以查看 SceneRuntime 组件。";
+
+/* Hierarchy */
+"Search" = "搜索";
+
+/* Viewport toolbar */
+"Pick" = "选择";
+"Move" = "移动";
+"Rotate" = "旋转";
+"Local" = "局部";
+"World" = "世界";
+"T Snap" = "平移吸附";
+"R Snap" = "旋转吸附";
+"S Snap" = "缩放吸附";
+"Cmd-Sub" = "Cmd 减选";
+"Cmd-Tog" = "Cmd 切换";
+"Lit" = "光照";
+"Wire" = "线框";
+
+/* Viewport overlays */
+"Viewport idle" = "视口空闲";
+"Waiting for the first render packet from the engine." = "等待引擎首个渲染包。";
+"Drop to add" = "拖放以添加";
+
+/* Menu bar */
+"Guava Make" = "Guava 制作";
+"Settings" = "设置";
+"Platforms" = "平台";
+"Preset" = "预设";
+
+/* Status bar */
+"Connected" = "已连接";
+"Offline" = "离线";
+"Ready" = "就绪";
+
+/* AI — Confirmation panel */
+"No pending confirmation" = "没有待确认项";
+"Warn, required, and destructive AI actions will appear here before they mutate the scene." = "警告、必需和破坏性 AI 操作会在修改场景前显示在这里。";
+
+/* AI — Intent input panel */
+"Spawn Entity" = "创建实体";
+"Use Selection" = "使用当前选择";
+"Set Transform" = "设置变换";
+"Delete the current selection through IntentRuntime confirmation flow." = "通过 IntentRuntime 确认流程删除当前选择。";
+"Delete Selection" = "删除选择";
+"No active warnings" = "无活动警告";

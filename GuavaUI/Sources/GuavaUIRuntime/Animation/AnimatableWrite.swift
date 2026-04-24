@@ -11,7 +11,7 @@ import Foundation
 ///    and return.
 /// 2. Otherwise, snapshot the current value, build an `AnimationController`
 ///    whose `apply` closure writes through the same accessor, and register
-///    it with `AnimatorScheduler.shared`.
+///    it with `AnimatorScheduler.current`.
 /// 3. Render invalidation is emitted by the `Node` property setter that the
 ///    controller writes through; `animatableSet` does not need a second,
 ///    parallel dirty-tracking path.
