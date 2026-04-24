@@ -30,8 +30,10 @@ public extension Node {
         _ keyPath: ReferenceWritableKeyPath<Node, Value>,
         to target: Value
     ) {
+        let propertyKey = AnyHashable(keyPath)
         let current = self[keyPath: keyPath]
         guard let anim = ActiveAnimationContext.current, current != target else {
+            replaceAnimationController(for: propertyKey, with: nil)
             self[keyPath: keyPath] = target
             return
         }
@@ -41,6 +43,7 @@ public extension Node {
             animation: anim,
             apply: { [weak self] v in self?[keyPath: keyPath] = v }
         )
+        replaceAnimationController(for: propertyKey, with: controller)
         AnimatorScheduler.current.register(controller)
     }
 
@@ -51,12 +54,14 @@ public extension Node {
         _ keyPath: ReferenceWritableKeyPath<Node, Value?>,
         to target: Value?
     ) {
+        let propertyKey = AnyHashable(keyPath)
         let current = self[keyPath: keyPath]
         guard let anim = ActiveAnimationContext.current,
               let from = current,
               let to = target,
               from != to
         else {
+            replaceAnimationController(for: propertyKey, with: nil)
             self[keyPath: keyPath] = target
             return
         }
@@ -66,6 +71,7 @@ public extension Node {
             animation: anim,
             apply: { [weak self] v in self?[keyPath: keyPath] = v }
         )
+        replaceAnimationController(for: propertyKey, with: controller)
         AnimatorScheduler.current.register(controller)
     }
 }
