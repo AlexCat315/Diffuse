@@ -64,11 +64,11 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
     }
 
     struct LayoutPercentWidthHarness: View {
-        @State var widthPercent: Float = 20
+        @State var widthRatio: Float = 20
         var body: some View {
             Box {
                 _DebugNode(label: "leaf")
-                    .frame(width: .percent(widthPercent),
+                    .frame(width: .percent(widthRatio),
                            height: .points(20))
             }
             .frame(width: 200, height: 60)
@@ -93,12 +93,12 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
     }
 
     struct LayoutPercentHeightHarness: View {
-        @State var heightPercent: Float = 20
+        @State var heightRatio: Float = 20
         var body: some View {
             Box {
                 _DebugNode(label: "leaf")
                     .frame(width: .points(40),
-                           height: .percent(heightPercent))
+                           height: .percent(heightRatio))
             }
             .frame(width: 200, height: 100)
         }
@@ -122,13 +122,13 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
     }
 
     struct LayoutPercentWithClampHarness: View {
-        @State var widthPercent: Float = 20
-        @State var heightPercent: Float = 20
+        @State var widthRatio: Float = 20
+        @State var heightRatio: Float = 20
         var body: some View {
             Box {
                 _DebugNode(label: "leaf")
-                    .frame(width: .percent(widthPercent),
-                           height: .percent(heightPercent),
+                    .frame(width: .percent(widthRatio),
+                           height: .percent(heightRatio),
                            minWidth: 70,
                            minHeight: 30,
                            maxWidth: 90,
@@ -162,9 +162,23 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
         var body: some View {
             Box {
                 _DebugNode(label: "leaf")
-                    .frame(width: usePercent ? nil : width,
-                           height: 20,
-                           widthPercent: usePercent ? 30 : nil)
+                    .frame(width: usePercent ? .percent(30) : .points(width),
+                           height: .points(20))
+            }
+            .frame(width: 200, height: 100)
+        }
+    }
+
+    struct LayoutPercentToAutoWithClampHarness: View {
+        @State var widthRatio: Float = 20
+        @State var useAuto = false
+        var body: some View {
+            Box {
+                _DebugNode(label: "leaf")
+                    .frame(width: useAuto ? .auto : .percent(widthRatio),
+                           height: .points(20),
+                           minWidth: 70,
+                           maxWidth: 80)
             }
             .frame(width: 200, height: 100)
         }
@@ -457,7 +471,7 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
         }
     } }
 
-    @Test("Layout frame width updates over ticks when widthPercent animates")
+    @Test("Layout frame width updates over ticks when width is .percent")
     func layoutPercentWidthE2E() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
@@ -472,7 +486,7 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
             #expect(leaf?.frame.width == 40)
 
             withAnimation(Animation(duration: 1.0, curve: .linear)) {
-                h.$widthPercent.wrappedValue = 60
+                h.$widthRatio.wrappedValue = 60
             }
             recomp.commitAll()
 
@@ -512,7 +526,7 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
         }
     } }
 
-    @Test("Layout frame height updates over ticks when heightPercent animates")
+    @Test("Layout frame height updates over ticks when height is .percent")
     func layoutPercentHeightE2E() { GlobalTestLock.locked {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
@@ -527,7 +541,7 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
             #expect(leaf?.frame.height == 20)
 
             withAnimation(Animation(duration: 1.0, curve: .linear)) {
-                h.$heightPercent.wrappedValue = 60
+                h.$heightRatio.wrappedValue = 60
             }
             recomp.commitAll()
 
@@ -584,8 +598,8 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
             #expect(leaf?.frame.height == 30)
 
             withAnimation(Animation(duration: 1.0, curve: .linear)) {
-                h.$widthPercent.wrappedValue = 60
-                h.$heightPercent.wrappedValue = 80
+                h.$widthRatio.wrappedValue = 60
+                h.$heightRatio.wrappedValue = 80
             }
             recomp.commitAll()
 
@@ -659,6 +673,41 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
 
             scheduler.tick(deltaTime: 0)
             #expect(scheduler.activeCount == 0)
+        }
+    } }
+
+    @Test("Percent to auto with min/max clamps snaps and clears animation")
+    func layoutPercentToAutoWithClampSnapsAndClears() { GlobalTestLock.locked {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = LayoutPercentToAutoWithClampHarness()
+            graph.install(root: h)
+
+            graph.computeLayout(width: 300, height: 160)
+            let leaf = leaves(tree.root!).first(where: { $0.isHitTestable })
+            #expect(leaf?.frame.width == 70)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$widthRatio.wrappedValue = 60
+            }
+            recomp.commitAll()
+            #expect(scheduler.activeCount == 1)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$useAuto.wrappedValue = true
+            }
+            recomp.commitAll()
+            graph.computeLayout(width: 300, height: 160)
+
+            #expect(leaf?.frame.width == 80)
+
+            scheduler.tick(deltaTime: 0)
+            #expect(scheduler.activeCount == 0)
+            graph.computeLayout(width: 300, height: 160)
+            #expect(leaf?.frame.width == 80)
         }
     } }
 }
