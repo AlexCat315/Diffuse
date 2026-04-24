@@ -16,10 +16,18 @@ struct EditorRootView: View {
                 Divider()
 
                 EditorMainToolbar(playbackState: store.state.playbackState,
+                                  workspaceMode: store.state.workspaceMode,
                                   onSetPlaybackState: { next in
                     if store.state.playbackState != next {
                         store.dispatch(.setPlaybackState(next))
                     }
+                },
+                                  onSetWorkspaceMode: { next in
+                    guard store.state.workspaceMode != next else { return }
+                    let previous = store.state.workspaceMode
+                    EditorRootViewFactory.saveDockLayout(controller, for: previous)
+                    store.dispatch(.setWorkspaceMode(next))
+                    EditorRootViewFactory.loadLayoutPreset(into: controller, for: next)
                 })
                 Divider()
 
@@ -78,7 +86,9 @@ private struct EditorMenuItem: View {
 
 private struct EditorMainToolbar: View {
     let playbackState: PlaybackState
+    let workspaceMode: EditorWorkspaceMode
     let onSetPlaybackState: (PlaybackState) -> Void
+    let onSetWorkspaceMode: (EditorWorkspaceMode) -> Void
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
@@ -99,6 +109,19 @@ private struct EditorMainToolbar: View {
             ToolbarStateButton(title: "Stop",
                                isActive: playbackState == .stopped,
                                onClick: { onSetPlaybackState(.stopped) })
+
+            Divider()
+                .frame(width: 1, height: 20)
+
+            ToolbarStateButton(title: "Level",
+                               isActive: workspaceMode == .level,
+                               onClick: { onSetWorkspaceMode(.level) })
+            ToolbarStateButton(title: "Modeling",
+                               isActive: workspaceMode == .modeling,
+                               onClick: { onSetWorkspaceMode(.modeling) })
+            ToolbarStateButton(title: "Animation",
+                               isActive: workspaceMode == .animation,
+                               onClick: { onSetWorkspaceMode(.animation) })
 
             Spacer(minLength: 0)
 
@@ -186,17 +209,23 @@ private struct EditorStatusBar: View {
     }
 }
 
-@MainActor
 enum EditorRootViewFactory {
-    static func makeController() -> DockController {
+    static func makeController(for mode: EditorWorkspaceMode) -> DockController {
         // Try to restore saved layout, otherwise create default
-        if let saved = loadSavedLayout() {
+        if let saved = loadSavedLayout(for: mode) {
             return saved
         }
-        return makeDefaultController()
+        if mode == .level, let legacy = loadLegacySavedLayout() {
+            return legacy
+        }
+        return makeDefaultController(for: mode)
     }
 
-    static func makeDefaultController() -> DockController {
+    static func makeController() -> DockController {
+        makeController(for: .level)
+    }
+
+    static func makeDefaultController(for mode: EditorWorkspaceMode) -> DockController {
         let hierarchyTab = DockTab(userKey: "hierarchy", title: "Hierarchy")
         let inspectorTab = DockTab(userKey: "inspector", title: "Inspector")
         let viewportTab = DockTab(userKey: "viewport",
@@ -225,27 +254,33 @@ enum EditorRootViewFactory {
         let bottomLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
             tabs: [assetsTab, consoleTab, intentTab, confirmationTab],
-            activeTabID: assetsTab.id
+            activeTabID: defaultBottomTabID(for: mode,
+                                            assetsTab: assetsTab,
+                                            consoleTab: consoleTab,
+                                            intentTab: intentTab,
+                                            confirmationTab: confirmationTab)
         )
+
+        let fractions = defaultFractions(for: mode)
 
         let viewportAndInspector: DockLayoutNode = .split(
             id: DockNodeID(),
             axis: .horizontal,
-            fraction: 55.0 / 75.0,
+            fraction: fractions.viewportAndInspector,
             first: viewportLeaf,
             second: inspectorLeaf
         )
         let topRow: DockLayoutNode = .split(
             id: DockNodeID(),
             axis: .horizontal,
-            fraction: 15.0 / 90.0,
+            fraction: fractions.hierarchyAndMain,
             first: hierarchyLeaf,
             second: viewportAndInspector
         )
         let root: DockLayoutNode = .split(
             id: DockNodeID(),
             axis: .vertical,
-            fraction: 0.7,
+            fraction: fractions.topAndBottom,
             first: topRow,
             second: bottomLeaf
         )
@@ -271,6 +306,16 @@ enum EditorRootViewFactory {
             return allowsSplitEdge(in: targetRegion, edge: edge)
         }
         return controller
+    }
+
+    static func loadLayoutPreset(into controller: DockController,
+                                 for mode: EditorWorkspaceMode) {
+        if let saved = loadSavedLayout(for: mode) {
+            controller.load(saved.snapshot())
+            return
+        }
+        let fallback = makeDefaultController(for: mode)
+        controller.load(fallback.snapshot())
     }
 
     private static func allowsSplitEdge(in region: PanelWorkspaceRegion,
@@ -352,7 +397,49 @@ enum EditorRootViewFactory {
 
     private static let layoutPersistenceKey = "editor_dock_layout"
 
-    static func saveDockLayout(_ controller: DockController) {
+    private struct LayoutFractions {
+        let hierarchyAndMain: Float
+        let viewportAndInspector: Float
+        let topAndBottom: Float
+    }
+
+    private static func defaultFractions(for mode: EditorWorkspaceMode) -> LayoutFractions {
+        switch mode {
+        case .level:
+            return LayoutFractions(hierarchyAndMain: 15.0 / 90.0,
+                                   viewportAndInspector: 55.0 / 75.0,
+                                   topAndBottom: 0.70)
+        case .modeling:
+            return LayoutFractions(hierarchyAndMain: 18.0 / 90.0,
+                                   viewportAndInspector: 52.0 / 72.0,
+                                   topAndBottom: 0.66)
+        case .animation:
+            return LayoutFractions(hierarchyAndMain: 16.0 / 90.0,
+                                   viewportAndInspector: 50.0 / 74.0,
+                                   topAndBottom: 0.62)
+        }
+    }
+
+    private static func defaultBottomTabID(for mode: EditorWorkspaceMode,
+                                           assetsTab: DockTab,
+                                           consoleTab: DockTab,
+                                           intentTab: DockTab,
+                                           confirmationTab: DockTab) -> DockTabID {
+        switch mode {
+        case .level:
+            return assetsTab.id
+        case .modeling:
+            return consoleTab.id
+        case .animation:
+            return intentTab.id
+        }
+    }
+
+    private static func layoutPersistenceKey(for mode: EditorWorkspaceMode) -> String {
+        "\(layoutPersistenceKey)_\(mode.rawValue)"
+    }
+
+    static func saveDockLayout(_ controller: DockController, for mode: EditorWorkspaceMode) {
         // Ensure viewport is not detached; if it is, redock it to center before saving
         if let centerLeaf = findCenterLeaf(controller.root) {
             ensureViewportDocked(in: controller, to: centerLeaf.id)
@@ -371,7 +458,7 @@ enum EditorRootViewFactory {
         do {
             let data = try encoder.encode(snapshot)
             if let layoutDir = getLayoutPersistenceDirectory() {
-                let layoutPath = layoutDir.appendingPathComponent(layoutPersistenceKey + ".json")
+                let layoutPath = layoutDir.appendingPathComponent(layoutPersistenceKey(for: mode) + ".json")
                 try data.write(to: layoutPath)
             }
         } catch {
@@ -379,9 +466,13 @@ enum EditorRootViewFactory {
         }
     }
 
-    private static func loadSavedLayout() -> DockController? {
+    static func saveDockLayout(_ controller: DockController) {
+        saveDockLayout(controller, for: .level)
+    }
+
+    private static func loadSavedLayout(for mode: EditorWorkspaceMode) -> DockController? {
         guard let layoutDir = getLayoutPersistenceDirectory() else { return nil }
-        let layoutPath = layoutDir.appendingPathComponent(layoutPersistenceKey + ".json")
+        let layoutPath = layoutDir.appendingPathComponent(layoutPersistenceKey(for: mode) + ".json")
         
         guard FileManager.default.fileExists(atPath: layoutPath.path) else { return nil }
 
@@ -394,6 +485,24 @@ enum EditorRootViewFactory {
             return controller
         } catch {
             fputs("[EditorRootViewFactory] failed to load dock layout: \(error)\n", stderr)
+            return nil
+        }
+    }
+
+    private static func loadLegacySavedLayout() -> DockController? {
+        guard let layoutDir = getLayoutPersistenceDirectory() else { return nil }
+        let layoutPath = layoutDir.appendingPathComponent(layoutPersistenceKey + ".json")
+        guard FileManager.default.fileExists(atPath: layoutPath.path) else { return nil }
+
+        do {
+            let data = try Data(contentsOf: layoutPath)
+            let decoder = JSONDecoder()
+            let snapshot = try decoder.decode(DockLayoutSnapshot.self, from: data)
+            let controller = DockController(root: snapshot.root)
+            controller.load(snapshot)
+            return controller
+        } catch {
+            fputs("[EditorRootViewFactory] failed to load legacy dock layout: \(error)\n", stderr)
             return nil
         }
     }
