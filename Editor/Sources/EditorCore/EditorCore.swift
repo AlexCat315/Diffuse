@@ -141,6 +141,12 @@ public final class EditorApplication {
     public func handleAssetDrop(at cursorX: Float, cursorY: Float) -> Bool {
         guard let payload = store.state.activeAssetDrag else { return false }
         defer { store.dispatch(.endAssetDrag) }
+        let dropPayload = AssetDropPayload(id: payload.assetID,
+                                           name: payload.displayName,
+                                           kind: payload.kindLabel)
+        if AssetDropRegistryHolder.current?.drop(dropPayload, atX: cursorX, y: cursorY) == true {
+            return true
+        }
         guard let frame = EditorViewportDropTarget.frame,
               frame.contains(x: cursorX, y: cursorY)
         else {

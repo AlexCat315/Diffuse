@@ -190,7 +190,7 @@ public struct Popover<Label: View, Content: View>: View {
     }
 
     public var body: some View {
-        Box(direction: .column, alignItems: .flexStart, spacing: 6) {
+        Box(direction: .column, alignItems: .flexStart, spacing: 0) {
             Button(role: .normal,
                    isEnabled: isEnabled,
                    action: {
@@ -201,15 +201,72 @@ public struct Popover<Label: View, Content: View>: View {
             .buttonStyle(.plain)
 
             if isPresented.wrappedValue {
-                Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                    content
+                _PopoverOverlayHost(width: width) {
+                    Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                        content
+                    }
+                    .padding(EdgeInsets(top: 2, leading: 0, bottom: 0, trailing: 0))
                 }
-                .ifLet(width) { view, width in
-                    view.frame(width: width)
-                }
-                .padding(EdgeInsets(top: 2, leading: 0, bottom: 0, trailing: 0))
             }
         }
+        .modifier(_PopoverFrontmostModifier(isPresented: isPresented.wrappedValue))
+    }
+}
+
+private struct _PopoverFrontmostModifier: ViewModifier {
+    let isPresented: Bool
+
+    func apply(node: Node) {
+        guard isPresented else { return }
+        var current: Node? = node
+        while let child = current, let parent = child.parent {
+            guard let index = parent.children.firstIndex(where: { $0 === child }) else {
+                current = parent
+                continue
+            }
+            if index != parent.children.count - 1 {
+                var reordered = parent.children
+                reordered.remove(at: index)
+                reordered.append(child)
+                parent.reorderChildren(reordered)
+            }
+            current = parent
+        }
+    }
+}
+
+private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
+    let width: Float?
+    let content: Content
+
+    init(width: Float?, @ViewBuilder content: () -> Content) {
+        self.width = width
+        self.content = content()
+    }
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = false
+        return node
+    }
+
+    func _updateNode(_ node: Node) {}
+
+    func _makeLayoutNode() -> LayoutNode? {
+        LayoutNode()
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        layout.positionType = .absolute
+        layout.setPosition(0, edge: .left)
+        layout.setPositionPercent(100, edge: .top)
+        if let width {
+            layout.width = width
+        }
+    }
+
+    var _children: [any View] {
+        [content]
     }
 }
 
