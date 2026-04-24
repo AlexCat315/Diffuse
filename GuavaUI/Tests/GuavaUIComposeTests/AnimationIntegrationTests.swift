@@ -117,6 +117,53 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    struct LayoutPercentWithClampHarness: View {
+        @State var widthPercent: Float = 20
+        @State var heightPercent: Float = 20
+        var body: some View {
+            Box {
+                _DebugNode(label: "leaf")
+                    .frame(widthPercent: widthPercent,
+                           heightPercent: heightPercent,
+                           minWidth: 70,
+                           minHeight: 30,
+                           maxWidth: 90,
+                           maxHeight: 40)
+            }
+            .frame(width: 200, height: 100)
+        }
+    }
+
+    struct LayoutPercentToAutoWithMinHarness: View {
+        @State var useAuto = false
+        var body: some View {
+            Box {
+                if useAuto {
+                    _DebugNode(label: "leaf")
+                        .frame(height: 20, minWidth: 70)
+                } else {
+                    _DebugNode(label: "leaf")
+                        .frame(height: 20, widthPercent: 20, minWidth: 70)
+                }
+            }
+            .frame(width: 200, height: 100)
+        }
+    }
+
+    struct LayoutPointsToPercentSwitchHarness: View {
+        @State var width: Float = 40
+        @State var usePercent = false
+        var body: some View {
+            Box {
+                _DebugNode(label: "leaf")
+                    .frame(width: usePercent ? nil : width,
+                           height: 20,
+                           widthPercent: usePercent ? 30 : nil)
+            }
+            .frame(width: 200, height: 100)
+        }
+    }
+
     private func leaves(_ root: Node) -> [Node] {
         var out: [Node] = []
         func walk(_ n: Node) {
@@ -512,6 +559,100 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
             // In this container, auto height resolves to the leaf's
             // intrinsic height (0 for _DebugNode), not parent stretch.
             #expect(leaf?.frame.height == 0)
+        }
+    } }
+
+    @Test("Percent dimensions respect min/max clamps during layout animation")
+    func layoutPercentWithClampE2E() { GlobalTestLock.locked {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = LayoutPercentWithClampHarness()
+            graph.install(root: h)
+
+            graph.computeLayout(width: 300, height: 160)
+            let leaf = leaves(tree.root!).first(where: { $0.isHitTestable })
+            #expect(leaf?.frame.width == 70)
+            #expect(leaf?.frame.height == 30)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$widthPercent.wrappedValue = 60
+                h.$heightPercent.wrappedValue = 80
+            }
+            recomp.commitAll()
+
+            scheduler.tick(deltaTime: 1.0)
+            graph.computeLayout(width: 300, height: 160)
+            #expect(leaf?.frame.width == 90)
+            #expect(leaf?.frame.height == 40)
+        }
+    } }
+
+    @Test("Percent to auto keeps min constraint and clears active animation")
+    func layoutPercentToAutoKeepsMinWidth() { GlobalTestLock.locked {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = LayoutPercentToAutoWithMinHarness()
+            graph.install(root: h)
+
+            graph.computeLayout(width: 300, height: 160)
+            let leaf = leaves(tree.root!).first(where: { $0.isHitTestable })
+            #expect(leaf?.frame.width == 70)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$useAuto.wrappedValue = true
+            }
+            recomp.commitAll()
+            graph.computeLayout(width: 300, height: 160)
+
+            #expect(scheduler.activeCount == 0)
+            // In this container, auto width resolves to stretch behavior.
+            #expect(leaf?.frame.width == 200)
+        }
+    } }
+
+    @Test("Points to percent mode switch cancels in-flight width animation")
+    func layoutPointsToPercentSwitchCancelsController() { GlobalTestLock.locked {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = LayoutPointsToPercentSwitchHarness()
+            graph.install(root: h)
+
+            graph.computeLayout(width: 300, height: 160)
+            let leaf = leaves(tree.root!).first(where: { $0.isHitTestable })
+            #expect(leaf?.frame.width == 40)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$width.wrappedValue = 120
+            }
+            recomp.commitAll()
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            graph.computeLayout(width: 300, height: 160)
+            #expect(leaf?.frame.width == 80)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$usePercent.wrappedValue = true
+            }
+            recomp.commitAll()
+            graph.computeLayout(width: 300, height: 160)
+
+            // points -> percent is a mode switch: layout snaps immediately.
+            // The canceled controller is swept from the scheduler on next tick.
+            #expect(scheduler.activeCount == 1)
+            #expect(leaf?.frame.width == 60)
+
+            scheduler.tick(deltaTime: 0)
+            #expect(scheduler.activeCount == 0)
         }
     } }
 }
