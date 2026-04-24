@@ -55,6 +55,24 @@ struct AnimationValueModifierTests {
         }
     }
 
+    struct ImplicitMaxHeightFrameHarness: View {
+        @State var maxHeight: Float? = 40
+        var body: some View {
+            _DebugNode(label: "x")
+                .frame(maxHeight: maxHeight)
+                .animation(Animation(duration: 1.0, curve: .linear), value: maxHeight)
+        }
+    }
+
+    struct ImplicitPercentHeightFrameHarness: View {
+        @State var heightPercent: Float = 20
+        var body: some View {
+            _DebugNode(label: "x")
+                .frame(heightPercent: heightPercent)
+                .animation(Animation(duration: 1.0, curve: .linear), value: heightPercent)
+        }
+    }
+
     /// The animation modifier wraps content via a synthetic anchor — find the
     /// inner _DebugNode by descending past the anchor.
     private func findLeaf(_ tree: NodeTree) -> Node? {
@@ -197,6 +215,53 @@ struct AnimationValueModifierTests {
             graph.install(root: h)
 
             h.$widthPercent.wrappedValue = 60
+            recomp.commitAll()
+
+            #expect(scheduler.activeCount == 1)
+            scheduler.tick(deltaTime: 1.0)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame(maxHeight:) animates implicitly on value change")
+    func implicitMaxHeightFrameAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = ImplicitMaxHeightFrameHarness()
+            graph.install(root: h)
+
+            let leaf = findLeaf(tree)
+            let layout = leaf?.layoutNode
+
+            h.$maxHeight.wrappedValue = 100
+            recomp.commitAll()
+
+            #expect(layout?.maxHeight == 40)
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.maxHeight == 70)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.maxHeight == 100)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame(heightPercent:) animates implicitly on value change")
+    func implicitPercentHeightFrameAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = ImplicitPercentHeightFrameHarness()
+            graph.install(root: h)
+
+            h.$heightPercent.wrappedValue = 60
             recomp.commitAll()
 
             #expect(scheduler.activeCount == 1)

@@ -50,10 +50,24 @@ struct WithAnimationPropertiesTests {
         }
     }
 
+    struct MaxHeightFrameHarness: View {
+        @State var maxHeight: Float? = 40
+        var body: some View {
+            _DebugNode(label: "x").frame(maxHeight: maxHeight)
+        }
+    }
+
     struct PercentFrameHarness: View {
         @State var widthPercent: Float = 20
         var body: some View {
             _DebugNode(label: "x").frame(widthPercent: widthPercent)
+        }
+    }
+
+    struct PercentHeightFrameHarness: View {
+        @State var heightPercent: Float = 20
+        var body: some View {
+            _DebugNode(label: "x").frame(heightPercent: heightPercent)
         }
     }
 
@@ -64,6 +78,17 @@ struct WithAnimationPropertiesTests {
                 _DebugNode(label: "x").frame(widthPercent: 50)
             } else {
                 _DebugNode(label: "x").frame(width: 40)
+            }
+        }
+    }
+
+    struct HeightModeSwitchHarness: View {
+        @State var usePercent = false
+        var body: some View {
+            if usePercent {
+                _DebugNode(label: "x").frame(heightPercent: 50)
+            } else {
+                _DebugNode(label: "x").frame(height: 40)
             }
         }
     }
@@ -254,6 +279,35 @@ struct WithAnimationPropertiesTests {
         }
     }
 
+    @Test("frame(maxHeight:) animates through the scheduler")
+    func frameMaxHeightAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = MaxHeightFrameHarness()
+            graph.install(root: h)
+
+            let node = tree.root?.children.first?.children.first
+            let layout = node?.layoutNode
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$maxHeight.wrappedValue = 100
+            }
+            recomp.commitAll()
+            #expect(layout?.maxHeight == 40)
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.maxHeight == 70)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.maxHeight == 100)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
     @Test("frame(widthPercent:) animates through the scheduler")
     func frameWidthPercentAnimates() {
         let scheduler = AnimatorScheduler()
@@ -282,6 +336,30 @@ struct WithAnimationPropertiesTests {
         }
     }
 
+    @Test("frame(heightPercent:) animates through the scheduler")
+    func frameHeightPercentAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = PercentHeightFrameHarness()
+            graph.install(root: h)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$heightPercent.wrappedValue = 60
+            }
+            recomp.commitAll()
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
     @Test("frame width mode switch snaps and does not keep controller")
     func frameWidthModeSwitchSnaps() {
         let scheduler = AnimatorScheduler()
@@ -298,6 +376,25 @@ struct WithAnimationPropertiesTests {
             recomp.commitAll()
 
             // points -> percent mode change is non-interpolable and should snap.
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame height mode switch snaps and does not keep controller")
+    func frameHeightModeSwitchSnaps() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = HeightModeSwitchHarness()
+            graph.install(root: h)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$usePercent.wrappedValue = true
+            }
+            recomp.commitAll()
+
             #expect(scheduler.activeCount == 0)
         }
     }
