@@ -71,6 +71,8 @@ public final class AppRuntime {
     private var configuredSurface = false
     private var msaaColorTexture: GPUTexture?
     private var msaaColorView: GPUTextureView?
+    private var msaaColorWidth: UInt32 = 0
+    private var msaaColorHeight: UInt32 = 0
 
     private var drawableW: UInt32 = 0
     private var drawableH: UInt32 = 0
@@ -384,13 +386,15 @@ public final class AppRuntime {
         guard config.msaaSampleCount > 1 else {
             msaaColorTexture = nil
             msaaColorView = nil
+            msaaColorWidth = 0
+            msaaColorHeight = 0
             return
         }
 
         if msaaColorTexture != nil,
            msaaColorView != nil,
-           drawableW == widthPx,
-           drawableH == heightPx {
+           msaaColorWidth == widthPx,
+           msaaColorHeight == heightPx {
             return
         }
 
@@ -405,5 +409,7 @@ public final class AppRuntime {
         )
         msaaColorTexture = texture
         msaaColorView = try texture.createView()
+        msaaColorWidth = widthPx
+        msaaColorHeight = heightPx
     }
 }
