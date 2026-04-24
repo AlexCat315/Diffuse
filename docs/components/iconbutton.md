@@ -15,6 +15,7 @@
 | icon.size | 16 | 图标绘制尺寸（逻辑点） |
 | icon.source | texture / file / resource | 三种资源入口 |
 | icon.tint | `nil` | `nil` 表示跟随 ButtonStyle 的语义前景色 |
+| tooltip | `nil` | 悬停或键盘聚焦时显示的浮动提示文案 |
 | role | `.normal` | 仅语义，不自动切换 destructive 视觉样式 |
 
 ## Variants
@@ -39,6 +40,7 @@
 - **键盘**：Space / Return / KP Enter（非重复键）触发 action。
 - **命中区**：由 ButtonStyle 的 chrome 尺寸决定，不仅是 icon 的像素区域。
 - **禁用**：`isEnabled: false` 时不注册交互处理，cursor 为 `notAllowed`。
+- **提示浮层**：当 `tooltip` 非空时，hover 或 focus 会在按钮上方绘制提示气泡；上方空间不足时自动改为下方。
 
 ## Authoring rules
 

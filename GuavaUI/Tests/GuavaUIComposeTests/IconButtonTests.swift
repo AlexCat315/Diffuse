@@ -113,6 +113,31 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
         #expect(button.tint == custom)
     }
 
+    @Test("IconButton tooltip value is preserved")
+    func tooltipValueIsPreserved() {
+        let button = IconButton(textureID: 1, tooltip: "Close") {}
+        #expect(button.tooltip == "Close")
+    }
+
+    @Test("IconButton tooltip installs host overlay draw")
+    func tooltipInstallsOverlayDraw() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            IconButton(textureID: 7, tooltip: "Pin") {}
+        )
+        graph.computeLayout(width: 60, height: 40)
+
+        guard let host = findButtonHost(tree.root!) else {
+            Issue.record("no ButtonHost found in tree"); return
+        }
+        #expect((host.attachments[ButtonHost.tooltipKey] as? String) == "Pin")
+        #expect(host.overlayDraw != nil)
+    } }
+
     @Test("IconButton renders across style and theme combinations")
     func rendersAcrossStyleThemeCombos() { GlobalTestLock.locked {
         let cases: [(Theme, AnyView)] = [
