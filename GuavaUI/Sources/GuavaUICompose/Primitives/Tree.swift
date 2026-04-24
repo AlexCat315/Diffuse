@@ -1140,7 +1140,7 @@ private struct _TreeRowHost: _PrimitiveView {
         node.cursor = .pointer
         node.attachments[Self.hoveredKey] = isHovered
         // Dim source row during drag for visual lift feedback.
-        node.opacity = isDragSource ? 0.38 : 1.0
+        node.animatableSet(\.opacity, to: isDragSource ? 0.38 : 1.0)
         // Extend hit zone leftward to cover the indent gutter + disclosure slot
         // so drops over indented areas still resolve a valid target row.
         let extraLeft = CGFloat(depth) * CGFloat(indentation) + CGFloat(disclosureWidth)

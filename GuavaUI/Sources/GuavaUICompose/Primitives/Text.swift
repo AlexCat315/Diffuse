@@ -385,7 +385,7 @@ public struct Divider: _PrimitiveView {
     }
 
     public func _updateNode(_ node: Node) {
-        node.backgroundColor = color ?? node.theme.colors.divider
+        node.animatableSet(\.backgroundColor, to: color ?? node.theme.colors.divider)
     }
 
     public func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
