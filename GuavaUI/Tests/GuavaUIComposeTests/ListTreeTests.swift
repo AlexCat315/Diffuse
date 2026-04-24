@@ -220,6 +220,54 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         #expect(rowHosts.allSatisfy { registry.handlers(for: $0).hover != nil })
     } }
 
+    @Test("Tree guide lines use pixel-aligned 1pt strokes")
+    func treeGuideLinesArePixelAligned() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let roots = [
+            TreeItem(id: "scene", title: "Scene", children: [
+                TreeItem(id: "group", title: "Group", children: [
+                    TreeItem(id: "leaf", title: "Leaf", children: [])
+                ])
+            ])
+        ]
+
+        let selectionProbe = Probe<String?>(nil)
+        let expandedProbe = Probe<Set<String>>(["scene", "group"])
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: TreeHarness(selectionProbe: selectionProbe,
+                                        expandedProbe: expandedProbe,
+                                        roots: roots))
+        graph.computeLayout(width: 280, height: 220)
+
+        // Expand root then child so guide segments are materialized.
+        var buttons = orderedPointerNodes(in: tree.root!, registry: registry)
+        let rootDisclosure = buttons.min { $0.frame.width < $1.frame.width }!
+        tap(rootDisclosure, registry: registry)
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 280, height: 220)
+
+        buttons = orderedPointerNodes(in: tree.root!, registry: registry)
+        let disclosureButtons = buttons.filter { $0.frame.width == rootDisclosure.frame.width }
+        #expect(disclosureButtons.count >= 2)
+        tap(disclosureButtons[1], registry: registry)
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 280, height: 220)
+
+        var verticalOrHorizontalStrokes: [Node] = []
+        collectStrokeNodes(from: tree.root!, into: &verticalOrHorizontalStrokes)
+
+        #expect(!verticalOrHorizontalStrokes.isEmpty)
+        #expect(verticalOrHorizontalStrokes.allSatisfy { node in
+            let w = node.frame.width
+            let h = node.frame.height
+            return (w == 1 && h >= 1) || (h == 1 && w >= 1)
+        })
+    } }
+
     private func orderedPointerNodes(in root: Node,
                                      registry: InteractionRegistry) -> [Node] {
         var out: [Node] = []
@@ -252,5 +300,17 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
                                    clicks: 1)
         _ = pointer(evt, .down, .target)
         _ = pointer(evt, .up, .target)
+    }
+
+    private func collectStrokeNodes(from node: Node,
+                                    into out: inout [Node]) {
+        let w = node.frame.width
+        let h = node.frame.height
+        if (w == 1 && h >= 1) || (h == 1 && w >= 1) {
+            out.append(node)
+        }
+        for child in node.children {
+            collectStrokeNodes(from: child, into: &out)
+        }
     }
 }

@@ -1,4 +1,5 @@
 import EditorCore
+import EngineKernel
 import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
@@ -6,12 +7,19 @@ import GuavaUIRuntime
 struct HierarchyPanel: View {
     let store: EditorStore
     let scene: EditorSceneAdapter
+
     @State private var expanded: Set<UInt64>
+    @State private var searchQuery: String
+    @State private var hiddenEntityIDs: Set<UInt64>
+    @State private var lockedEntityIDs: Set<UInt64>
 
     init(store: EditorStore, scene: EditorSceneAdapter) {
         self.store = store
         self.scene = scene
         _expanded = State(wrappedValue: scene.defaultExpandedEntityIDs)
+        _searchQuery = State(wrappedValue: "")
+        _hiddenEntityIDs = State(wrappedValue: [])
+        _lockedEntityIDs = State(wrappedValue: [])
     }
 
     var body: some View {
@@ -24,32 +32,132 @@ struct HierarchyPanel: View {
                     }
                 }
             )
+            let multiSelection = Binding<Set<UInt64>>(
+                get: { store.state.selectedEntityIDs },
+                set: { next in
+                    if store.state.selectedEntityIDs != next {
+                        store.dispatch(.setSelectedEntities(next))
+                    }
+                }
+            )
 
             Box(direction: .column, alignItems: .stretch) {
                 HierarchyPanelHeader(entityCount: scene.entityCount,
                                      isConnected: store.state.connected)
                     .padding(horizontal: 10, vertical: 7)
 
+                Box(direction: .row, alignItems: .center, spacing: 6) {
+                    Text("Search")
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+
+                    TextField(text: $searchQuery)
+                        .font(.caption)
+                        .flex()
+                }
+                .padding(horizontal: 10, vertical: 6)
+
                 Divider()
 
                 Tree(scene.roots,
                      children: \.children,
                      selection: selection,
+                     multiSelection: multiSelection,
                      expanded: $expanded,
                      rowHeight: 28,
                      rowSpacing: 0,
                      indentation: 16,
-                     disclosureWidth: 20,
-                     showsIndentGuides: false,
+                     disclosureWidth: 18,
+                     showsIndentGuides: true,
                      disclosureContent: { isExpanded in
                          AnyView(HierarchyDisclosureIcon(isExpanded: isExpanded))
+                     },
+                     trailingSlotWidth: 72,
+                     trailingContent: { entity, isSelected, _, _, isHovered, _ in
+                         AnyView(
+                            HierarchyRowTrailingSlots(
+                                isVisible: !hiddenEntityIDs.contains(entity.id),
+                                isLocked: lockedEntityIDs.contains(entity.id),
+                                showsControls: isHovered || isSelected,
+                                isSelected: isSelected,
+                                onToggleVisibility: {
+                                    toggleVisibility(entityID: entity.id,
+                                                     selectedIDs: store.state.selectedEntityIDs)
+                                },
+                                onToggleLock: {
+                                    toggleLock(entityID: entity.id,
+                                               selectedIDs: store.state.selectedEntityIDs)
+                                }
+                            )
+                         )
+                     },
+                     searchQuery: searchQuery,
+                     searchText: { node in node.name },
+                     searchFilterPolicy: .filterAndAutoExpand,
+                     onKeyCommand: { event, selectedIDs in
+                         handleBatchKey(event: event, selectedIDs: selectedIDs)
                      }) { entity, isSelected, _, _ in
-                    HierarchyEntityRow(entity: entity, isSelected: isSelected)
+                    HierarchyEntityRow(entity: entity,
+                                       isSelected: isSelected,
+                                       searchQuery: searchQuery)
                 }
                 .padding(horizontal: 5, vertical: 4)
                 .flex()
             }
             .frame(minWidth: 220)
+        }
+    }
+
+    private func applyToSelectionOrEntity(_ id: UInt64,
+                                          selectedIDs: Set<UInt64>,
+                                          action: (Set<UInt64>) -> Void) {
+        let targets = selectedIDs.contains(id) && !selectedIDs.isEmpty ? selectedIDs : [id]
+        action(targets)
+    }
+
+    private func toggleVisibility(entityID: UInt64, selectedIDs: Set<UInt64>) {
+        applyToSelectionOrEntity(entityID, selectedIDs: selectedIDs) { targets in
+            let allHidden = targets.allSatisfy { hiddenEntityIDs.contains($0) }
+            if allHidden {
+                hiddenEntityIDs.subtract(targets)
+            } else {
+                hiddenEntityIDs.formUnion(targets)
+            }
+        }
+    }
+
+    private func toggleLock(entityID: UInt64, selectedIDs: Set<UInt64>) {
+        applyToSelectionOrEntity(entityID, selectedIDs: selectedIDs) { targets in
+            let allLocked = targets.allSatisfy { lockedEntityIDs.contains($0) }
+            if allLocked {
+                lockedEntityIDs.subtract(targets)
+            } else {
+                lockedEntityIDs.formUnion(targets)
+            }
+        }
+    }
+
+    private func handleBatchKey(event: KeyEvent, selectedIDs: Set<UInt64>) -> Bool {
+        guard !selectedIDs.isEmpty else { return false }
+        switch event.scancode {
+        case 25: // SDL_SCANCODE_V
+            let allHidden = selectedIDs.allSatisfy { hiddenEntityIDs.contains($0) }
+            if allHidden {
+                hiddenEntityIDs.subtract(selectedIDs)
+            } else {
+                hiddenEntityIDs.formUnion(selectedIDs)
+            }
+            return true
+        case 15: // SDL_SCANCODE_L
+            let allLocked = selectedIDs.allSatisfy { lockedEntityIDs.contains($0) }
+            if allLocked {
+                lockedEntityIDs.subtract(selectedIDs)
+            } else {
+                lockedEntityIDs.formUnion(selectedIDs)
+            }
+            return true
+        default:
+            return false
         }
     }
 }
@@ -74,7 +182,7 @@ private struct HierarchyPanelHeader: View {
 
                 Text(isConnected ? "Live" : "Offline")
                     .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
+                    .foregroundColor(isConnected ? .success : .warning)
             }
         }
     }
@@ -83,19 +191,90 @@ private struct HierarchyPanelHeader: View {
 private struct HierarchyEntityRow: View {
     let entity: EditorSceneNode
     let isSelected: Bool
+    let searchQuery: String
 
     var body: some View {
         Row(alignment: .center, spacing: 7) {
             HierarchyEntityIcon(kind: entity.kind)
                 .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
 
-            Text(entity.name)
-                .font(entity.children.isEmpty
-                      ? .body
-                      : .bodyStrong)
-                .foregroundColor(.onSurface)
+            highlightedName()
+                .padding(horizontal: 2, vertical: 1)
         }
-        .padding(horizontal: 2, vertical: 1)
+    }
+
+    private func highlightedName() -> AnyView {
+        let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
+        if query.isEmpty || query.count < 2 {
+            return AnyView(
+                Text(entity.name)
+                    .font(entity.children.isEmpty ? .body : .bodyStrong)
+                    .foregroundColor(.onSurface)
+            )
+        }
+        guard let range = entity.name.range(of: query, options: .caseInsensitive), !range.isEmpty else {
+            return AnyView(
+                Text(entity.name)
+                    .font(entity.children.isEmpty ? .body : .bodyStrong)
+                    .foregroundColor(.onSurface)
+            )
+        }
+
+        let prefix = String(entity.name[..<range.lowerBound])
+        let match = String(entity.name[range])
+        let suffix = String(entity.name[range.upperBound...])
+
+        return AnyView(
+            Row(alignment: .center, spacing: 0) {
+                if !prefix.isEmpty {
+                    Text(prefix)
+                        .font(entity.children.isEmpty ? .body : .bodyStrong)
+                        .foregroundColor(.onSurface)
+                }
+                Text(match)
+                    .font(.bodyStrong)
+                    .foregroundColor(.accent)
+                if !suffix.isEmpty {
+                    Text(suffix)
+                        .font(entity.children.isEmpty ? .body : .bodyStrong)
+                        .foregroundColor(.onSurface)
+                }
+            }
+        )
+    }
+}
+
+private struct HierarchyRowTrailingSlots: View {
+    let isVisible: Bool
+    let isLocked: Bool
+    let showsControls: Bool
+    let isSelected: Bool
+    let onToggleVisibility: () -> Void
+    let onToggleLock: () -> Void
+
+    var body: some View {
+        Row(alignment: .center, spacing: 10) {
+            Button(action: onToggleVisibility) {
+                Image(resource: HierarchyIconCatalog.visibilityResource(isVisible: isVisible),
+                      width: 13,
+                      height: 13,
+                      tint: .white)
+                    .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
+                    .frame(width: 16, height: 16)
+            }
+            .buttonStyle(.plain)
+
+            Button(action: onToggleLock) {
+                Image(resource: HierarchyIconCatalog.lockResource(isLocked: isLocked),
+                      width: 13,
+                      height: 13,
+                      tint: .white)
+                    .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
+                    .frame(width: 16, height: 16)
+            }
+            .buttonStyle(.plain)
+        }
+        .opacity(showsControls ? 1 : 0)
     }
 }
 
@@ -104,10 +283,10 @@ private struct HierarchyDisclosureIcon: View {
 
     var body: some View {
         Image(resource: HierarchyIconCatalog.disclosureResource(expanded: isExpanded),
-              width: 16,
-              height: 16,
+              width: 12,
+              height: 12,
               tint: .white)
-        .foregroundColor(.onSurfaceMuted)
+            .foregroundColor(.onSurfaceVariant)
     }
 }
 
@@ -123,6 +302,14 @@ private struct HierarchyEntityIcon: View {
 }
 
 private enum HierarchyIconCatalog {
+    static func visibilityResource(isVisible: Bool) -> BundleImageResource {
+        resource(named: isVisible ? "eye" : "eye-slash")
+    }
+
+    static func lockResource(isLocked: Bool) -> BundleImageResource {
+        resource(named: isLocked ? "lock-closed" : "lock-open")
+    }
+
     static func disclosureResource(expanded: Bool) -> BundleImageResource {
         resource(named: expanded ? "triangle-down" : "triangle-right")
     }

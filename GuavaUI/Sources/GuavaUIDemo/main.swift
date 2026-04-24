@@ -1022,6 +1022,7 @@ try backend.initialize()
 let renderer = DrawListRenderer(backend: backend)
 let drawList = DrawList()
 let nodeRenderer = NodeRenderer()
+let demoMSAASampleCount: UInt32 = 4
 
 var surface: GPUSurface?
 var configured = false
@@ -1029,6 +1030,36 @@ var drawableW: UInt32 = 0
 var drawableH: UInt32 = 0
 var logicalW: UInt32 = 0
 var logicalH: UInt32 = 0
+var msaaColorTexture: GPUTexture?
+var msaaColorView: GPUTextureView?
+
+@MainActor
+func ensureDemoMSAATarget(width: UInt32, height: UInt32) throws {
+    guard demoMSAASampleCount > 1 else {
+        msaaColorTexture = nil
+        msaaColorView = nil
+        return
+    }
+
+    if msaaColorTexture != nil,
+       msaaColorView != nil,
+       drawableW == width,
+       drawableH == height {
+        return
+    }
+
+    let texture = try backend.createTexture(
+        width: width,
+        height: height,
+        format: .bgra8Unorm,
+        usage: [.renderAttachment],
+        mipLevels: 1,
+        depthOrLayers: 1,
+        sampleCount: demoMSAASampleCount
+    )
+    msaaColorTexture = texture
+    msaaColorView = try texture.createView()
+}
 
 @MainActor
 func uploadAtlas() throws {
@@ -1144,7 +1175,9 @@ host.onInit = { native, w, h in
             format: .bgra8Unorm,
             width: w, height: h,
             presentMode: .fifo)
-        try renderer.configure(format: .bgra8Unorm)
+        try renderer.configure(format: .bgra8Unorm,
+                               sampleCount: demoMSAASampleCount)
+        try ensureDemoMSAATarget(width: w, height: h)
         timing.mark("surface")
         if !didPresentBootClear {
             _ = try presentBootClearFrame()
@@ -1181,6 +1214,7 @@ host.onResize = { w, h in
         try surface.configure(
             device: device, format: .bgra8Unorm,
             width: w, height: h, presentMode: .fifo)
+        try ensureDemoMSAATarget(width: w, height: h)
         let previousScale = activeTextScale
         configureTextEnvironment(scale: host.contentScaleFactor)
         if abs(previousScale - activeTextScale) >= 0.01 {
@@ -1258,8 +1292,11 @@ host.onFrame = { _ in
 
     do {
         let encoder = try backend.createCommandEncoder()
+        let passColorView = msaaColorView ?? frame.view
+        let passResolveView = msaaColorView == nil ? nil : frame.view
         let pass = try encoder.beginRenderPass(
-            colorView: frame.view,
+            colorView: passColorView,
+            resolveTargetView: passResolveView,
             loadOp: .clear, storeOp: .store,
             clearColor: GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1)
         )

@@ -652,7 +652,7 @@ int wgpu_bridge_create_texture(void* device,
     td.size.depthOrArrayLayers = desc->depth_or_layers > 0 ? desc->depth_or_layers : 1;
     td.format = to_wgpu_format(desc->format);
     td.mipLevelCount = desc->mip_level_count > 0 ? desc->mip_level_count : 1;
-    td.sampleCount = 1;
+    td.sampleCount = desc->sample_count > 0 ? desc->sample_count : 1;
 
     WGPUTexture tex = wgpuDeviceCreateTexture((WGPUDevice)device, &td);
     if (tex == NULL) { set_error("wgpuDeviceCreateTexture returned null"); return 0; }
@@ -765,6 +765,7 @@ int wgpu_bridge_create_render_pipeline(
     uint32_t vertex_buffer_count,
     const WGPUBridgeBlendState* blend,
     const WGPUBridgeDepthStencilPipelineState* depth_stencil,
+    uint32_t sample_count,
     void* pipeline_layout,
     void** out_pipeline)
 {
@@ -828,7 +829,7 @@ int wgpu_bridge_create_render_pipeline(
     desc.primitive.topology = to_wgpu_topology(topology);
     desc.primitive.frontFace = to_wgpu_front_face(front_face);
     desc.primitive.cullMode = to_wgpu_cull_mode(cull_mode);
-    desc.multisample.count = 1;
+    desc.multisample.count = sample_count > 0 ? sample_count : 1;
     desc.multisample.mask = 0xFFFFFFFF;
     desc.fragment = &frag;
     desc.layout = (WGPUPipelineLayout)pipeline_layout;
@@ -921,6 +922,7 @@ int wgpu_bridge_create_command_encoder(void* device, void** out_encoder) {
 
 int wgpu_bridge_begin_render_pass(void* encoder,
                                   void* color_view,
+                                  void* resolve_target_view,
                                   WGPUBridgeLoadOp load_op,
                                   WGPUBridgeStoreOp store_op,
                                   WGPUBridgeColor clear_color,
@@ -935,6 +937,9 @@ int wgpu_bridge_begin_render_pass(void* encoder,
     size_t color_count = 0;
     if (color_view != NULL) {
         ca.view = (WGPUTextureView)color_view;
+        ca.resolveTarget = resolve_target_view != NULL
+            ? (WGPUTextureView)resolve_target_view
+            : NULL;
         ca.depthSlice = WGPU_DEPTH_SLICE_UNDEFINED;
         ca.loadOp = to_wgpu_load_op(load_op);
         ca.storeOp = to_wgpu_store_op(store_op);
@@ -1392,6 +1397,7 @@ int wgpu_bridge_create_render_pipeline_mrt(
     const WGPUBridgeVertexBufferLayout* vertex_buffers,
     uint32_t vertex_buffer_count,
     const WGPUBridgeDepthStencilPipelineState* depth_stencil,
+    uint32_t sample_count,
     void** out_pipeline)
 {
     if (device == NULL || shader_module == NULL || out_pipeline == NULL || color_format_count == 0) {
@@ -1455,7 +1461,7 @@ int wgpu_bridge_create_render_pipeline_mrt(
     desc.primitive.topology = to_wgpu_topology(topology);
     desc.primitive.frontFace = to_wgpu_front_face(front_face);
     desc.primitive.cullMode = to_wgpu_cull_mode(cull_mode);
-    desc.multisample.count = 1;
+    desc.multisample.count = sample_count > 0 ? sample_count : 1;
     desc.multisample.mask = 0xFFFFFFFF;
     desc.fragment = &frag;
     desc.layout = NULL;

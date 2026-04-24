@@ -7,6 +7,7 @@ public struct TreeRowStyleConfiguration {
     public let disclosureWidth: Float
     public let hasChildren: Bool
     public let isExpanded: Bool
+    public let isSearchHit: Bool
     public let isSelected: Bool
     public let isHovered: Bool
     public let isEnabled: Bool
