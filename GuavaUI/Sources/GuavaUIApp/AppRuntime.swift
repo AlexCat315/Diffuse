@@ -31,11 +31,13 @@ public final class AppRuntime {
                                        backend: WGPUBackend? = nil,
                                        events: PlatformEventBridge = PlatformEventBridge(),
                                        onTick: ((_ deltaTime: Double) -> Void)? = nil,
+                                       onDisplayReady: ((AppDisplayHandle) -> Void)? = nil,
                                        @ViewBuilder rootView: () -> Root) throws {
         let runtime = AppRuntime(config: config,
                                  backend: backend,
                                  events: events,
-                                 onTick: onTick)
+                                 onTick: onTick,
+                                 onDisplayReady: onDisplayReady)
         try runtime.start(rootView: rootView())
     }
 
@@ -43,6 +45,7 @@ public final class AppRuntime {
 
     private let config: AppConfig
     private let onTick: ((Double) -> Void)?
+    private let onDisplayReady: ((AppDisplayHandle) -> Void)?
     private let events: PlatformEventBridge
 
     private let tree = NodeTree()
@@ -93,9 +96,11 @@ public final class AppRuntime {
     private init(config: AppConfig,
                  backend: WGPUBackend?,
                  events: PlatformEventBridge,
-                 onTick: ((Double) -> Void)?) {
+                 onTick: ((Double) -> Void)?,
+                 onDisplayReady: ((AppDisplayHandle) -> Void)?) {
         self.config = config
         self.onTick = onTick
+        self.onDisplayReady = onDisplayReady
         self.events = events
         let resolvedBackend = backend ?? WGPUBackend(config: config.backendConfig)
         self.backend = resolvedBackend
@@ -167,6 +172,11 @@ public final class AppRuntime {
             self?.handleFrame() ?? false
         }
 
+        let displayHandle = AppDisplayHandle()
+        host.externalDisplayRequestDrain = {
+            displayHandle.drainDisplayRequest()
+        }
+        onDisplayReady?(displayHandle)
         host.run(tree: tree)
     }
 

@@ -33,6 +33,20 @@ public extension SemanticMotionRef {
         Animation(duration: theme.motion.slow.seconds,
                   curve: theme.motion.emphasized.asAnimationCurve)
     }
+
+    /// Spring-tuned fast interaction motion. Duration tracks
+    /// `theme.motion.fast`; damping is biased toward snappy settle.
+    static let snappy = SemanticMotionRef { theme in
+        Animation.spring(response: theme.motion.fast.seconds,
+                         dampingFraction: 0.90)
+    }
+
+    /// Spring-tuned medium interaction motion. Duration tracks
+    /// `theme.motion.standard`; damping allows a more playful settle.
+    static let bouncy = SemanticMotionRef { theme in
+        Animation.spring(response: theme.motion.standard.seconds,
+                         dampingFraction: 0.68)
+    }
 }
 
 public extension Animation {
