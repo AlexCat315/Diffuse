@@ -69,7 +69,7 @@ struct ButtonStyleAnimationTests: GuavaUIComposeSerializedSuite {
             let mid = findFilled(tree.root!)?.backgroundColor?.r ?? -1
             #expect(mid >= pressed.r && mid <= resting.r)
 
-            scheduler.tick(deltaTime: 0.10)
+            scheduler.tick(deltaTime: 0.03)
             #expect(findFilled(tree.root!)?.backgroundColor == pressed)
             #expect(scheduler.activeCount == 0)
         }
@@ -97,7 +97,35 @@ struct ButtonStyleAnimationTests: GuavaUIComposeSerializedSuite {
             recomp.commitAll()
 
             #expect(scheduler.activeCount >= 1)
-            scheduler.tick(deltaTime: 0.12)
+            scheduler.tick(deltaTime: 0.09)
+            #expect(findFilled(tree.root!)?.backgroundColor == pressed)
+        }
+    } }
+
+    @Test("Button press animation follows theme.motion.fast")
+    func pressAnimationUsesThemeFastDuration() { GlobalTestLock.locked {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            var theme = Theme.defaultDark
+            theme.motion.fast = .milliseconds(50)
+
+            let resting = theme.colors.accent
+            let pressed = theme.colors.accentPressed
+
+            let (tree, recomp, registry, graph) = install(
+                Button(action: {}) { Text("Hi") }
+                    .theme(theme)
+            )
+            _ = graph
+
+            #expect(findFilled(tree.root!)?.backgroundColor == resting)
+
+            let host = findHitTestable(tree.root!)!
+            let evt = MouseButtonEvent(button: .left, x: 0, y: 0, clicks: 1)
+            _ = registry.handlers(for: host).pointer!(evt, .down, .target)
+            recomp.commitAll()
+
+            scheduler.tick(deltaTime: 0.06)
             #expect(findFilled(tree.root!)?.backgroundColor == pressed)
         }
     } }

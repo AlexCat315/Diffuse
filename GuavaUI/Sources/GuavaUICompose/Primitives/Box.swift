@@ -16,6 +16,71 @@ public enum Alignment: Sendable {
 }
 
 extension HorizontalAlignment {
+    func yogaJustify(for direction: FlexDirection) -> Justify {
+        switch (direction, self) {
+        case (.row, .leading), (.rowReverse, .trailing):
+            return .flexStart
+        case (.row, .trailing), (.rowReverse, .leading):
+            return .flexEnd
+        case (.row, .center), (.rowReverse, .center):
+            return .center
+        default:
+            preconditionFailure("HorizontalAlignment only maps to row directions")
+        }
+    }
+}
+
+extension VerticalAlignment {
+    func yogaJustify(for direction: FlexDirection) -> Justify {
+        switch (direction, self) {
+        case (.column, .top), (.columnReverse, .bottom):
+            return .flexStart
+        case (.column, .bottom), (.columnReverse, .top):
+            return .flexEnd
+        case (.column, .center), (.columnReverse, .center):
+            return .center
+        default:
+            preconditionFailure("VerticalAlignment only maps to column directions")
+        }
+    }
+}
+
+extension Alignment {
+    var components: (horizontal: HorizontalAlignment, vertical: VerticalAlignment) {
+        switch self {
+        case .topLeading:
+            return (.leading, .top)
+        case .top:
+            return (.center, .top)
+        case .topTrailing:
+            return (.trailing, .top)
+        case .leading:
+            return (.leading, .center)
+        case .center:
+            return (.center, .center)
+        case .trailing:
+            return (.trailing, .center)
+        case .bottomLeading:
+            return (.leading, .bottom)
+        case .bottom:
+            return (.center, .bottom)
+        case .bottomTrailing:
+            return (.trailing, .bottom)
+        }
+    }
+
+    func yogaValues(for direction: FlexDirection) -> (alignItems: Align, justifyContent: Justify) {
+        let parts = components
+        switch direction {
+        case .row, .rowReverse:
+            return (parts.vertical.yogaAlign, parts.horizontal.yogaJustify(for: direction))
+        case .column, .columnReverse:
+            return (parts.horizontal.yogaAlign, parts.vertical.yogaJustify(for: direction))
+        }
+    }
+}
+
+extension HorizontalAlignment {
     var yogaAlign: Align {
         switch self {
         case .leading:  return .flexStart
@@ -54,6 +119,18 @@ public struct Box<Content: View>: _PrimitiveView {
         self.justifyContent = justifyContent
         self.spacing = spacing
         self.content = content()
+    }
+
+    public init(direction: FlexDirection = .column,
+                alignment: Alignment,
+                spacing: Float = 0,
+                @ViewBuilder content: () -> Content) {
+        let yogaValues = alignment.yogaValues(for: direction)
+        self.init(direction: direction,
+                  alignItems: yogaValues.alignItems,
+                  justifyContent: yogaValues.justifyContent,
+                  spacing: spacing,
+                  content: content)
     }
 
     public func _makeNode() -> Node {

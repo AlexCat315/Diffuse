@@ -51,6 +51,7 @@ public final class AppRuntime {
     private let backend: WGPUBackend
     private let renderer: DrawListRenderer
     private let imageAssets: ImageAssetRegistry
+    private let assetDropRegistry = AssetDropRegistry()
     private let viewportTextures: ViewportTextureRegistry
     private let drawList = DrawList()
     /// Phase 4c: layer-aware renderer drives RenderTree-based composition with
@@ -132,11 +133,14 @@ public final class AppRuntime {
 
         let previousViewportBridge = ViewportTextureBridgeHolder.current
         let previousImageAssets = ImageAssetRegistryHolder.current
+        let previousAssetDropRegistry = AssetDropRegistryHolder.current
         ViewportTextureBridgeHolder.current = viewportTextures
         ImageAssetRegistryHolder.current = imageAssets
+        AssetDropRegistryHolder.current = assetDropRegistry
         defer {
             ViewportTextureBridgeHolder.current = previousViewportBridge
             ImageAssetRegistryHolder.current = previousImageAssets
+            AssetDropRegistryHolder.current = previousAssetDropRegistry
         }
 
         // 把进程级 holder 接到主窗口的 input context 上，使 Compose 层

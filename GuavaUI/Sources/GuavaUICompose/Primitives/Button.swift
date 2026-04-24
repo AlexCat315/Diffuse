@@ -1,4 +1,5 @@
 import GuavaUIRuntime
+import EngineKernel
 
 // NOTE: This file used to host a primitive `Button` that wrapped a label and
 // emitted no visual state. Phase 7.5 promotes `Button` to a stateful composite
@@ -67,6 +68,11 @@ struct _StatefulButton: View {
     @State var isPressed: Bool = false
     @State var isHovered: Bool = false
 
+    // SDL scancodes used across compose controls.
+    private static let returnScancode: UInt32 = 40
+    private static let spaceScancode: UInt32 = 44
+    private static let keypadEnterScancode: UInt32 = 88
+
     var body: some View {
         ButtonHost(
             role: role,
@@ -92,6 +98,18 @@ struct _StatefulButton: View {
                 isPressed = false
                 if was { action(); return true }
                 return false
+            },
+            onKey: { [action] scancode, isRepeat in
+                guard !isRepeat else { return EventResult.ignored }
+                switch scancode {
+                case Self.returnScancode,
+                    Self.spaceScancode,
+                    Self.keypadEnterScancode:
+                    action()
+                    return EventResult.handled
+                default:
+                    return EventResult.ignored
+                }
             }
         )
     }
@@ -112,6 +130,7 @@ struct ButtonHost: _PrimitiveView {
     let onHoverChange: (Bool) -> Void
     let onDown: () -> Void
     let onUp: () -> Bool
+    let onKey: (UInt32, Bool) -> EventResult
 
     func _makeNode() -> Node {
         let n = Node()
@@ -141,6 +160,7 @@ struct ButtonHost: _PrimitiveView {
         let hoverChange = onHoverChange
         let down = onDown
         let up = onUp
+        let key = onKey
         registry.setHover(node) { phase in
             switch phase {
             case .enter:
@@ -162,6 +182,9 @@ struct ButtonHost: _PrimitiveView {
             case .up:
                 return up() ? .handled : .ignored
             }
+        }
+        registry.setKey(node) { event, _ in
+            key(event.scancode, event.isRepeat)
         }
     }
 

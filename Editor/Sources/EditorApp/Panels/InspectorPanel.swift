@@ -19,8 +19,8 @@ struct InspectorPanel: View {
                     Divider()
 
                     PropertyGrid(propertySections(sections, collapsedIDs: collapsedIDs),
-                                 labelWidth: 100,
-                                 rowHeight: 26,
+                                 labelWidth: 96,
+                                 rowHeight: 24,
                                  onSectionCollapseChanged: { id, isCollapsed in
                         store.dispatch(.setInspectorSectionCollapsed(id: id, isCollapsed: isCollapsed))
                     })
@@ -94,7 +94,7 @@ struct InspectorPanel: View {
         case let .text(binding):
             return AnyView(TextField(text: binding))
         case let .bool(binding):
-            return AnyView(Toggle(isOn: binding))
+            return AnyView(Checkbox(isOn: binding))
         case let .number(binding):
             return AnyView(NumberField(value: binding, size: .small))
         case let .constrainedNumber(binding, min, max, step, showsStepper):
@@ -105,7 +105,7 @@ struct InspectorPanel: View {
                                        step: step,
                                        showsStepper: showsStepper))
         case let .vector3(x, y, z):
-            return AnyView(vector3Field(x: x, y: y, z: z))
+            return AnyView(Vec3Field(x: x, y: y, z: z))
         case let .color(binding):
             return AnyView(ColorField(color: binding,
                                       showAlpha: false,
@@ -123,25 +123,4 @@ struct InspectorPanel: View {
         }
     }
 
-    private func vector3Field(x: Binding<Float>,
-                              y: Binding<Float>,
-                              z: Binding<Float>) -> some View {
-        Row(alignment: .center, spacing: 4) {
-            axisField("X", value: x)
-            axisField("Y", value: y)
-            axisField("Z", value: z)
-        }
-    }
-
-    private func axisField(_ label: String,
-                           value: Binding<Float>) -> some View {
-        Row(alignment: .center, spacing: 4) {
-            Text(label)
-                .font(.label)
-                .foregroundColor(.onSurfaceMuted)
-            NumberField(value: value, size: .small)
-                .flex()
-        }
-        .flex()
-    }
 }

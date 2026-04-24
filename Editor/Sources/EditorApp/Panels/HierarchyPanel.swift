@@ -258,7 +258,8 @@ private struct HierarchyRowTrailingSlots: View {
                 Image(resource: HierarchyIconCatalog.visibilityResource(isVisible: isVisible),
                       width: 13,
                       height: 13,
-                      tint: .white)
+                                            tint: .white,
+                                            contentMode: .fit)
                     .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
                     .frame(width: 16, height: 16)
             }
@@ -268,7 +269,8 @@ private struct HierarchyRowTrailingSlots: View {
                 Image(resource: HierarchyIconCatalog.lockResource(isLocked: isLocked),
                       width: 13,
                       height: 13,
-                      tint: .white)
+                                            tint: .white,
+                                            contentMode: .fit)
                     .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
                     .frame(width: 16, height: 16)
             }
@@ -285,7 +287,8 @@ private struct HierarchyDisclosureIcon: View {
         Image(resource: HierarchyIconCatalog.disclosureResource(expanded: isExpanded),
               width: 12,
               height: 12,
-              tint: .white)
+                            tint: .white,
+                            contentMode: .fit)
             .foregroundColor(.onSurfaceVariant)
     }
 }
@@ -297,7 +300,8 @@ private struct HierarchyEntityIcon: View {
         Image(resource: HierarchyIconCatalog.entityResource(for: kind),
               width: 18,
               height: 18,
-              tint: .white)
+              tint: .white,
+              contentMode: .fit)
     }
 }
 

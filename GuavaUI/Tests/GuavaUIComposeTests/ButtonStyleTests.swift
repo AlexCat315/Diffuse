@@ -7,6 +7,14 @@ import GuavaUIRuntime
 @Suite("Phase 7.5 ButtonStyle", .serialized)
 struct ButtonStyleTests: GuavaUIComposeSerializedSuite {
 
+    private func findButtonHost(_ root: Node) -> Node? {
+        if root.attachments[ButtonHost.pressedKey] != nil { return root }
+        for c in root.children {
+            if let n = findButtonHost(c) { return n }
+        }
+        return nil
+    }
+
     // Find the inner-most node with a non-clear background — that's the
     // styled body's filled rect produced by the active style.
     private func findFilled(_ root: Node) -> Node? {
@@ -63,6 +71,21 @@ struct ButtonStyleTests: GuavaUIComposeSerializedSuite {
         #expect(filled?.backgroundColor == Theme.defaultDark.colors.error)
     } }
 
+    @Test("role:.destructive does not implicitly change style")
+    func destructiveRoleDoesNotAutoMapStyle() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            Button("Delete", role: .destructive) { }
+        )
+
+        let filled = findFilled(tree.root!)
+        #expect(filled?.backgroundColor == Theme.defaultDark.colors.accent)
+    } }
+
     @Test("isEnabled = false renders disabled appearance")
     func disabledButton() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -103,4 +126,61 @@ struct ButtonStyleTests: GuavaUIComposeSerializedSuite {
         let mid = red.mixed(with: Color(r: 0, g: 1, b: 0), amount: 0.5)
         #expect(mid.r == 0.5 && mid.g == 0.5)
     }
+
+    @Test("Keyboard Return activates Button action")
+    func returnKeyActivatesButton() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        var fired = 0
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: Button("Go") { fired += 1 })
+
+        guard let host = findButtonHost(tree.root!) else {
+            Issue.record("no ButtonHost found in tree"); return
+        }
+        let key = registry.handlers(for: host).key
+        #expect(key != nil)
+
+        let event = KeyEvent(scancode: 40, keycode: 0, modifiers: [], isRepeat: false)
+        #expect(key?(event, .target) == .handled)
+        #expect(fired == 1)
+    } }
+
+    @Test("Keyboard repeat does not re-trigger Button action")
+    func repeatKeyIgnored() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        var fired = 0
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: Button("Go") { fired += 1 })
+
+        guard let host = findButtonHost(tree.root!) else {
+            Issue.record("no ButtonHost found in tree"); return
+        }
+        let key = registry.handlers(for: host).key
+        #expect(key != nil)
+
+        let event = KeyEvent(scancode: 40, keycode: 0, modifiers: [], isRepeat: true)
+        #expect(key?(event, .target) == .ignored)
+        #expect(fired == 0)
+    } }
+
+    @Test("Disabled Button does not register key handler")
+    func disabledButtonHasNoKeyHandler() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: Button("Go", isEnabled: false) { })
+
+        guard let host = findButtonHost(tree.root!) else {
+            Issue.record("no ButtonHost found in tree"); return
+        }
+        #expect(registry.handlers(for: host).key == nil)
+    } }
 }
