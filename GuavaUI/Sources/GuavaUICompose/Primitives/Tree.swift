@@ -504,7 +504,7 @@ struct _TreeRowComposite: View {
                     } else {
                         _TreeGuideCell(width: indentation,
                                        rowHeight: rowHeight,
-                                       style: ancestorHasNextSiblings[level] ? .vertical : .none)
+                                       style: .none)
                     }
                 }
             } else if depth > 0 {
