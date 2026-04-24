@@ -1,5 +1,10 @@
 import GuavaUIRuntime
 
+private struct _TreeRowVisualKey: Equatable, Sendable {
+    let background: Color
+    let alpha: Float
+}
+
 /// Tree row default: same density and hierarchy cues as the list style, with
 /// enough selection contrast to read as an outline tree in an editor shell.
 public struct DefaultTreeRowStyle: TreeRowStyle {
@@ -14,6 +19,8 @@ public struct DefaultTreeRowStyle: TreeRowStyle {
             if configuration.isHovered  { return t.colors.stateLayerHover }
             return clear
         }()
+        let alpha: Float = configuration.isEnabled ? 1 : 0.55
+        let visualKey = _TreeRowVisualKey(background: bg, alpha: alpha)
 
         return Row(alignment: .center, spacing: 0) {
             Row(alignment: .center, spacing: t.spacing.sm) {
@@ -25,6 +32,7 @@ public struct DefaultTreeRowStyle: TreeRowStyle {
         }
         .background(bg)
         .cornerRadius(t.radius.sm)
-        .opacity(configuration.isEnabled ? 1 : 0.55)
+        .opacity(alpha)
+        .animation(.semantic(.fast, in: t), value: visualKey)
     }
 }
