@@ -43,6 +43,18 @@ struct ViewportPanel: View {
                                               selectedID: store.state.selectedEntityID)
                          }) {
                 Box(direction: .column, alignItems: .stretch) {
+                    Box(direction: .column, alignItems: .center, justifyContent: .center) {
+                        if !surface.isValid {
+                            ViewportIdleCard()
+                        } else if let activeDrag {
+                            DropTargetCard(label: activeDrag.displayName,
+                                           kindLabel: activeDrag.kindLabel)
+                        } else {
+                            EmptyView()
+                        }
+                    }
+                    .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
+
                     ViewportInfoBar(surface: surface,
                                     stats: stats,
                                     entity: entity,
@@ -80,20 +92,9 @@ struct ViewportPanel: View {
                                     onSetCommandSelectBehavior: { behavior in
                                         store.dispatch(.setCommandSelectBehavior(behavior))
                                     })
-
-                    Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                        if !surface.isValid {
-                            ViewportIdleCard()
-                        } else if let activeDrag {
-                            DropTargetCard(label: activeDrag.displayName,
-                                           kindLabel: activeDrag.kindLabel)
-                        } else {
-                            EmptyView()
-                        }
-                    }
-                    .flex()
+                        .absolutePosition(left: 10, top: 10, right: 10)
                 }
-                .padding(10)
+                .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
             }
             .flex()
             .background(.surfaceSunken)
@@ -863,7 +864,7 @@ private struct ViewportInfoBar: View {
                         .foregroundColor(.onSurface)
                 }
 
-                Text(String(format: "FPS: %.1f  Frame: %.2fms", fps, frameMs))
+                Text(String(format: "FPS %.0f  %.2fms", fps, frameMs))
                     .font(.mono)
                     .foregroundColor(.onSurfaceMuted)
             }
@@ -915,7 +916,7 @@ private struct ViewportInfoBar: View {
                     onSelectShadingMode(.wireframe)
                 }
 
-                Text("Passes: \(stats.passCount)  Draws: \(stats.drawCallCount)")
+                Text("P \(stats.passCount)  D \(stats.drawCallCount)")
                     .font(.mono)
                     .foregroundColor(.onSurfaceMuted)
             }
@@ -933,13 +934,19 @@ private struct ToggleChip: View {
     let onTap: () -> Void
 
     var body: some View {
-        if isActive {
-            Button(label) { onTap() }
-                .buttonStyle(.primary)
-        } else {
-            Button(label) { onTap() }
-                .buttonStyle(.secondary)
+        Button(action: onTap) {
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                Text(label, lineLimit: 1)
+                    .font(.caption)
+                    .foregroundColor(isActive ? .onAccent : .onSurface)
+            }
+            .frame(height: 28, minWidth: 58)
+            .padding(horizontal: 8, vertical: 0)
+            .background(isActive ? .accent : .surfaceSunken)
+            .cornerRadius(4)
+            .clipped()
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -980,19 +987,20 @@ private struct ViewportIconToggle: View {
     let onTap: () -> Void
 
     var body: some View {
-        if isActive {
-            IconButton(resource: icon.resource,
-                       size: 15,
-                       tooltip: tooltip,
-                       action: onTap)
-                .buttonStyle(.primary)
-        } else {
-            IconButton(resource: icon.resource,
-                       size: 15,
-                       tooltip: tooltip,
-                       action: onTap)
-                .buttonStyle(.secondary)
+        Button(tooltip: tooltip, action: onTap) {
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                Image(resource: icon.resource,
+                      width: 15,
+                      height: 15,
+                      tint: .white,
+                      contentMode: .fit)
+                    .foregroundColor(isActive ? .onAccent : .onSurfaceVariant)
+            }
+            .frame(width: 28, height: 28)
+            .background(isActive ? .accent : .surfaceSunken)
+            .cornerRadius(4)
         }
+        .buttonStyle(.plain)
     }
 }
 
