@@ -115,6 +115,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var depthTexture: GPUTexture?
     private var depthView: GPUTextureView?
     private var publishedTextureRetainer: Unmanaged<GPUTexture>?
+    private var stalePublishedTextureRetainers: [Unmanaged<GPUTexture>] = []
+    private let publishedTextureRetainerHistoryLimit = 32
     private var publishedSurfaceID: UInt64 = 0
     private var publishedSurfaceHandle: UInt64 = 0
     private var nextSurfaceID: UInt64 = 0
@@ -149,6 +151,15 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     public init(backend: WGPUBackend, renderSurface: RenderSurfaceDescriptor? = nil) {
         self.backend = backend
         self.renderSurface = renderSurface
+    }
+
+    deinit {
+        publishedTextureRetainer?.release()
+        publishedTextureRetainer = nil
+        for retained in stalePublishedTextureRetainers {
+            retained.release()
+        }
+        stalePublishedTextureRetainers.removeAll(keepingCapacity: false)
     }
 
     public func initialize() {
@@ -579,10 +590,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private func registerViewportSurface(texture: GPUTexture, size: RenderDrawableSize) {
         // Reuse the previously-published handle/ID when the texture object
         // is unchanged so editors keep their cached BindGroup. When the
-        // texture is replaced (resize, etc.), retain the new one and
-        // release the previous Unmanaged so the heap slot cannot be
-        // recycled by another GPUTexture (e.g. depth) before consumers
-        // resolve the published handle.
+        // texture is replaced (resize, etc.), retain the new one and keep
+        // a bounded history of prior retainers. UI can momentarily render
+        // with an older surface snapshot; immediate release would turn that
+        // snapshot handle into a dangling pointer.
         if let publishedTextureRetainer,
            publishedTextureRetainer.takeUnretainedValue() === texture {
             viewportSurfaceState = ViewportSurfaceState(
@@ -595,7 +606,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             return
         }
 
-        publishedTextureRetainer?.release()
+        if let previous = publishedTextureRetainer {
+            stalePublishedTextureRetainers.append(previous)
+            if stalePublishedTextureRetainers.count > publishedTextureRetainerHistoryLimit {
+                stalePublishedTextureRetainers.removeFirst().release()
+            }
+        }
         let retained = Unmanaged.passRetained(texture)
         publishedTextureRetainer = retained
         nextSurfaceID &+= 1

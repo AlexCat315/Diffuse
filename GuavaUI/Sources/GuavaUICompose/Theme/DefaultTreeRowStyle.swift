@@ -10,11 +10,10 @@ public struct DefaultTreeRowStyle: TreeRowStyle {
         let clear = Color(r: 0, g: 0, b: 0, a: 0)
         let bg: Color = {
             if configuration.isSelected { return t.colors.selection }
+            if configuration.isSearchHit { return t.colors.stateLayerSelected }
             if configuration.isHovered  { return t.colors.stateLayerHover }
             return clear
         }()
-        let border: Color = configuration.isSelected ? t.colors.borderStrong : clear
-        let borderWidth: Float = configuration.isSelected ? 1 : 0
 
         return Row(alignment: .center, spacing: 0) {
             Row(alignment: .center, spacing: t.spacing.sm) {
@@ -25,8 +24,7 @@ public struct DefaultTreeRowStyle: TreeRowStyle {
             .padding(horizontal: t.spacing.sm + 1, vertical: t.spacing.xs + 1)
         }
         .background(bg)
-        .cornerRadius(t.radius.none)
-        .border(border, width: borderWidth)
+        .cornerRadius(t.radius.sm)
         .opacity(configuration.isEnabled ? 1 : 0.55)
     }
 }

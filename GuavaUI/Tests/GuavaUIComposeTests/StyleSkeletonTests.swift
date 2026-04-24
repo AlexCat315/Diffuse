@@ -71,6 +71,7 @@ struct StyleSkeletonTests {
             content: AnyView(EmptyView()),
             depth: 3, indentation: 14, disclosureWidth: 18,
             hasChildren: true, isExpanded: true,
+            isSearchHit: false,
             isSelected: false, isHovered: false, isEnabled: true,
             theme: .defaultDark)
         _ = any.makeBody(cfg)
