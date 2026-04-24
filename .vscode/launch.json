@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:guava}/Editor",
+            "name": "Debug EditorApp (Editor)",
+            "target": "EditorApp",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug EditorApp (Editor)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:guava}/Editor",
+            "name": "Release EditorApp (Editor)",
+            "target": "EditorApp",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release EditorApp (Editor)"
+        }
+    ]
+}
