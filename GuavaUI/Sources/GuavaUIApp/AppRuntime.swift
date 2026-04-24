@@ -168,6 +168,9 @@ public final class AppRuntime {
         host.onEvent = { [weak self] event in
             self?.events.publish(event)
         }
+        host.onBeforeCommit = { [weak self] deltaTime in
+            self?.handleFramePreparation(deltaTime: deltaTime)
+        }
         host.onFrame = { [weak self] _ in
             self?.handleFrame() ?? false
         }
@@ -247,10 +250,6 @@ public final class AppRuntime {
         guard configuredSurface, let surface, let root = tree.root else { return false }
 
         let frameStart = ProcessInfo.processInfo.systemUptime
-        let now = frameStart
-        let delta = max(0, now - lastFrameTime)
-        lastFrameTime = now
-        onTick?(delta)
 
         configureTextEnvironment(scale: host.contentScaleFactor)
         let layoutStart = ProcessInfo.processInfo.systemUptime
@@ -338,6 +337,12 @@ public final class AppRuntime {
         } catch {
             return false
         }
+    }
+
+    private func handleFramePreparation(deltaTime: Double) {
+        let delta = max(0, deltaTime)
+        lastFrameTime = ProcessInfo.processInfo.systemUptime
+        onTick?(delta)
     }
 
     /// Recursive scene-graph node count used purely for the timing payload.
