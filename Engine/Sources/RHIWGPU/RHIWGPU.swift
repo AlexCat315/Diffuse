@@ -319,6 +319,7 @@ public final class WGPUBackend: @unchecked Sendable {
                                 desc.frontFace.bridgeValue,
                                 desc.cullMode.bridgeValue,
                                 layouts, count, &bs, &ds,
+                                desc.sampleCount,
                                 desc.pipelineLayout?.handle, &pipelinePtr)
                         } else {
                             return wgpu_bridge_create_render_pipeline(
@@ -329,6 +330,7 @@ public final class WGPUBackend: @unchecked Sendable {
                                 desc.frontFace.bridgeValue,
                                 desc.cullMode.bridgeValue,
                                 layouts, count, &bs, nil,
+                                desc.sampleCount,
                                 desc.pipelineLayout?.handle, &pipelinePtr)
                         }
                     } else {
@@ -341,6 +343,7 @@ public final class WGPUBackend: @unchecked Sendable {
                                 desc.frontFace.bridgeValue,
                                 desc.cullMode.bridgeValue,
                                 layouts, count, nil, &ds,
+                                desc.sampleCount,
                                 desc.pipelineLayout?.handle, &pipelinePtr)
                         } else {
                             return wgpu_bridge_create_render_pipeline(
@@ -351,6 +354,7 @@ public final class WGPUBackend: @unchecked Sendable {
                                 desc.frontFace.bridgeValue,
                                 desc.cullMode.bridgeValue,
                                 layouts, count, nil, nil,
+                                desc.sampleCount,
                                 desc.pipelineLayout?.handle, &pipelinePtr)
                         }
                     }
@@ -446,7 +450,8 @@ public final class WGPUBackend: @unchecked Sendable {
                               format: GPUTextureFormat = .bgra8Unorm,
                               usage: GPUTextureUsage = .renderAttachment,
                               mipLevels: UInt32 = 1,
-                              depthOrLayers: UInt32 = 1) throws -> GPUTexture {
+                              depthOrLayers: UInt32 = 1,
+                              sampleCount: UInt32 = 1) throws -> GPUTexture {
         guard let device else {
             throw WGPUBackendError.initFailed("device not ready")
         }
@@ -455,6 +460,7 @@ public final class WGPUBackend: @unchecked Sendable {
             height: height,
             depth_or_layers: depthOrLayers,
             mip_level_count: mipLevels,
+            sample_count: max(1, sampleCount),
             format: format.bridgeValue,
             usage_flags: usage.rawValue
         )
@@ -645,7 +651,8 @@ public final class WGPUBackend: @unchecked Sendable {
         frontFace: GPUFrontFace = .ccw,
         cullMode: GPUCullMode = .none,
         vertexBuffers: [GPUVertexBufferLayout] = [],
-        depthStencil: GPUDepthStencilPipelineState? = nil
+        depthStencil: GPUDepthStencilPipelineState? = nil,
+        sampleCount: UInt32 = 1
     ) throws -> GPURenderPipeline {
         guard let device else {
             throw WGPUBackendError.initFailed("device not ready")
@@ -694,7 +701,9 @@ public final class WGPUBackend: @unchecked Sendable {
                                         topology.bridgeValue, frontFace.bridgeValue,
                                         cullMode.bridgeValue,
                                         vbBuf.baseAddress, UInt32(vbBuf.count),
-                                        &dsv, &pipelinePtr)
+                                        &dsv,
+                                        max(1, sampleCount),
+                                        &pipelinePtr)
                                 }
                             } else {
                                 return wgpu_bridge_create_render_pipeline_mrt(
@@ -705,7 +714,9 @@ public final class WGPUBackend: @unchecked Sendable {
                                     topology.bridgeValue, frontFace.bridgeValue,
                                     cullMode.bridgeValue,
                                     vbBuf.baseAddress, UInt32(vbBuf.count),
-                                    &dsv, &pipelinePtr)
+                                    &dsv,
+                                    max(1, sampleCount),
+                                    &pipelinePtr)
                             }
                         } else {
                             if var bl = bridgeBlends {
@@ -718,7 +729,9 @@ public final class WGPUBackend: @unchecked Sendable {
                                         topology.bridgeValue, frontFace.bridgeValue,
                                         cullMode.bridgeValue,
                                         vbBuf.baseAddress, UInt32(vbBuf.count),
-                                        nil, &pipelinePtr)
+                                        nil,
+                                        max(1, sampleCount),
+                                        &pipelinePtr)
                                 }
                             } else {
                                 return wgpu_bridge_create_render_pipeline_mrt(
@@ -729,7 +742,9 @@ public final class WGPUBackend: @unchecked Sendable {
                                     topology.bridgeValue, frontFace.bridgeValue,
                                     cullMode.bridgeValue,
                                     vbBuf.baseAddress, UInt32(vbBuf.count),
-                                    nil, &pipelinePtr)
+                                    nil,
+                                    max(1, sampleCount),
+                                    &pipelinePtr)
                             }
                         }
                     }

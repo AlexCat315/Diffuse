@@ -270,6 +270,27 @@ public final class DrawList {
     /// Emit a rounded rectangle as a centre quad, four edge quads, and four
     /// triangle fans for the corners. Avoids needing an SDF in the shader.
     private func emitRoundedRectGeometry(rect: UIRect, radius r: Float, color packed: UInt32) {
+        // Single-sample rasterization can make hard rounded edges look jagged.
+        // Paint a very small low-alpha fringe first so the final edge has a
+        // smoother coverage transition without requiring MSAA.
+        let fringe1 = scaledAlpha(packed, factor: 0.22)
+        if alphaByte(fringe1) > 0 {
+            let expanded1 = UIRect(x: rect.minX - 1, y: rect.minY - 1,
+                                   width: rect.width + 2, height: rect.height + 2)
+            emitRoundedRectCore(rect: expanded1, radius: r + 1, color: fringe1)
+        }
+
+        let fringe2 = scaledAlpha(packed, factor: 0.08)
+        if alphaByte(fringe2) > 0 {
+            let expanded2 = UIRect(x: rect.minX - 2, y: rect.minY - 2,
+                                   width: rect.width + 4, height: rect.height + 4)
+            emitRoundedRectCore(rect: expanded2, radius: r + 2, color: fringe2)
+        }
+
+        emitRoundedRectCore(rect: rect, radius: r, color: packed)
+    }
+
+    private func emitRoundedRectCore(rect: UIRect, radius r: Float, color packed: UInt32) {
         let x0 = rect.minX, y0 = rect.minY, x1 = rect.maxX, y1 = rect.maxY
         // Centre rectangle (full vertical span, horizontally inset by r).
         emitSolidQuadRaw(x: x0 + r, y: y0, width: rect.width - 2 * r, height: rect.height, color: packed)
@@ -397,7 +418,7 @@ public final class DrawList {
 
     private func emitCornerFan(centerX: Float, centerY: Float, radius r: Float,
                                startAngle: Float, color packed: UInt32) {
-        let segmentCount = 8
+        let segmentCount = cornerSegmentCount(for: r)
         let baseVertex = UInt32(vertices.count)
         let baseIndex = UInt32(indices.count)
         // Centre vertex.
@@ -428,7 +449,7 @@ public final class DrawList {
                                        textureID: TextureID,
                                        uvMin: (x: Float, y: Float),
                                        uvMax: (x: Float, y: Float)) {
-        let segmentCount = 8
+        let segmentCount = cornerSegmentCount(for: r)
         let baseVertex = UInt32(vertices.count)
         let baseIndex = UInt32(indices.count)
 
@@ -475,6 +496,27 @@ public final class DrawList {
         let u = uvMin.x + (uvMax.x - uvMin.x) * uScale + 10
         let v = uvMin.y + (uvMax.y - uvMin.y) * vScale
         return UIVertex(posX: x, posY: y, u: u, v: v, color: packedTint)
+    }
+
+    private func cornerSegmentCount(for radius: Float) -> Int {
+        // Keep arc chord length around ~0.8 px to avoid visible faceting
+        // while capping vertex growth for large radii.
+        let clampedRadius = max(0, radius)
+        guard clampedRadius > 0 else { return 10 }
+        let quarterArc = (.pi / 2) * clampedRadius
+        let estimated = Int(ceil(quarterArc / 0.8))
+        return max(10, min(48, estimated))
+    }
+
+    private func alphaByte(_ packed: UInt32) -> UInt32 {
+        (packed >> 24) & 0xFF
+    }
+
+    private func scaledAlpha(_ packed: UInt32, factor: Float) -> UInt32 {
+        let base = Float(alphaByte(packed)) / 255
+        let scaled = max(0, min(1, base * factor))
+        let scaledByte = UInt32(max(0, min(255, Int((scaled * 255).rounded()))))
+        return (packed & 0x00FF_FFFF) | (scaledByte << 24)
     }
 }
 

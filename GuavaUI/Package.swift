@@ -87,6 +87,16 @@ let package = Package(
                            .product(name: "RenderBackend", package: "Engine")]
         ),
 
+        // MARK: - Bundled fonts
+        // Google Sans Code variable font shipped with GuavaUI.
+        .target(
+            name: "GuavaUIBundledFonts",
+            path: "Sources/Font",
+            resources: [
+                .copy("Inter.ttc"),
+            ]
+        ),
+
         // MARK: - App
         // 高层应用宿主：把 Runtime（窗口、wgpu、文本）和 Compose 装配在一起，
         // 对调用方暴露 `AppRuntime.run(...)` 一行启动入口。Editor / 第三方 App
@@ -97,6 +107,7 @@ let package = Package(
                 "GuavaUIRuntime",
                 "GuavaUICompose",
                 "GuavaUIDevTools",
+                "GuavaUIBundledFonts",
                 .product(name: "PlatformShell", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),

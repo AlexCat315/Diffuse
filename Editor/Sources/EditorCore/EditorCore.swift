@@ -1,6 +1,9 @@
 import AssetPipeline
+import CapabilityRuntime
 import EngineCore
 import EngineKernel
+import IntentRuntime
+import ObservationBus
 import RenderBackend
 import RHIWGPU
 import SceneRuntime
@@ -25,10 +28,13 @@ public final class EditorApplication {
     public let inputState: InputState
     public let scene: EditorSceneAdapter
 
+    private let observationBus: ObservationBus
+    private let intentCoordinator: IntentRuntimeCoordinator
     private let events: PlatformEventBridge
     private var eventToken: PlatformEventBridge.SubscriptionToken?
     private var pendingViewportEvents: [InputEvent] = []
     private var viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
+    private var lastViewportSurfaceState = ViewportSurfaceState()
 
     public init(projectDirectory: String,
                 backendConfig: WGPUDeviceConfig? = nil,
@@ -42,12 +48,21 @@ public final class EditorApplication {
         _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
         let store = EditorStore()
         let scene = EditorSceneAdapter()
+        let observationDirectory = URL(fileURLWithPath: projectDirectory, isDirectory: true)
+            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent("observation", isDirectory: true)
+        try FileManager.default.createDirectory(at: observationDirectory,
+                                                withIntermediateDirectories: true)
+        let observationBus = try ObservationBus(coldLogDirectory: observationDirectory.path)
+        let intentCoordinator = try IntentRuntimeCoordinator.default()
 
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.projectDirectory = projectDirectory
         self.store = store
         self.inputState = InputState()
         self.scene = scene
+        self.observationBus = observationBus
+        self.intentCoordinator = intentCoordinator
         self.events = events
 
         scene.onRevisionChanged = { revision in
@@ -85,6 +100,12 @@ public final class EditorApplication {
             shouldRender: store.state.shouldRender,
             renderSceneOverride: scene.currentRenderScene()
         )
+
+        let surface = engine.currentViewportSurfaceState()
+        if surface != lastViewportSurfaceState {
+            lastViewportSurfaceState = surface
+            store.dispatch(.viewportSurfaceUpdated)
+        }
     }
 
     public func shutdown() {
@@ -120,6 +141,12 @@ public final class EditorApplication {
     public func handleAssetDrop(at cursorX: Float, cursorY: Float) -> Bool {
         guard let payload = store.state.activeAssetDrag else { return false }
         defer { store.dispatch(.endAssetDrag) }
+        let dropPayload = AssetDropPayload(id: payload.assetID,
+                                           name: payload.displayName,
+                                           kind: payload.kindLabel)
+        if AssetDropRegistryHolder.current?.drop(dropPayload, atX: cursorX, y: cursorY) == true {
+            return true
+        }
         guard let frame = EditorViewportDropTarget.frame,
               frame.contains(x: cursorX, y: cursorY)
         else {
@@ -180,6 +207,107 @@ public final class EditorApplication {
         engine.currentViewportSurfaceState()
     }
 
+    public func currentSelectedEntityTranslation() -> SIMD3<Float>? {
+        guard let entity = entityID(from: store.state.selectedEntityID) else {
+            return nil
+        }
+        return scene.scene.localTransform(for: entity)?.translation
+    }
+
+    public func submitSpawnEntityIntent(label: String,
+                                        position: SIMD3<Float>) {
+        let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
+        let resolvedLabel = trimmed.isEmpty ? "AI Entity" : trimmed
+        let transaction = TransactionIR(intent: IntentIR(verb: "scene.spawn_entity",
+                                                         summary: "Spawn scene entity",
+                                                         source: .human),
+                                        summary: "Spawn scene entity",
+                                        operations: [
+                                            .scene(.spawnImportedMeshEntity(label: resolvedLabel,
+                                                                           kindLabel: "Static Mesh",
+                                                                           meshIndex: defaultSpawnMeshIndex(),
+                                                                           position: position))
+                                        ],
+                                        baseRevisions: TransactionBaseRevisions(sceneRevision: scene.revision),
+                                        provenance: .authored)
+        submitIntentTransaction(transaction)
+    }
+
+    public func submitDeleteSelectedEntityIntent() {
+        guard let selected = store.state.selectedEntityID,
+              let entity = scene.entitySummary(id: selected)
+        else {
+            store.dispatch(.setAIStatusMessage("Select an entity before deleting it."))
+            return
+        }
+        let transaction = TransactionIR(intent: IntentIR(verb: "scene.delete_entity",
+                                                         summary: "Delete selected entity",
+                                                         targetObjectIDs: ["scene:\(selected)"],
+                                                         source: .human),
+                                        summary: "Delete \(entity.name)",
+                                        operations: [.scene(.deleteEntity(entityID: selected))],
+                                        baseRevisions: TransactionBaseRevisions(sceneRevision: scene.revision),
+                                        provenance: .authored)
+        submitIntentTransaction(transaction)
+    }
+
+    public func submitSetTransformIntent(translation: SIMD3<Float>) {
+        guard let selected = store.state.selectedEntityID,
+              let entity = entityID(from: selected)
+        else {
+            store.dispatch(.setAIStatusMessage("Select an entity before setting its transform."))
+            return
+        }
+        var transform = scene.scene.localTransform(for: entity) ?? LocalTransform()
+        transform.matrix.columns.3 = SIMD4<Float>(translation, 1)
+        let transaction = TransactionIR(intent: IntentIR(verb: "scene.set_transform",
+                                                         summary: "Set selected transform",
+                                                         targetObjectIDs: ["scene:\(selected)"],
+                                                         source: .human),
+                                        summary: "Set selected transform",
+                                        operations: [.scene(.setLocalTransform(entityID: selected,
+                                                                               transform: transform))],
+                                        baseRevisions: TransactionBaseRevisions(sceneRevision: scene.revision),
+                                        provenance: .authored)
+        submitIntentTransaction(transaction)
+    }
+
+    public func resolvePendingConfirmation(pickedOptionID: String) {
+        guard let request = store.state.pendingConfirmationRequest,
+              let question = request.questions.first
+        else {
+            store.dispatch(.setAIStatusMessage("No confirmation request is pending."))
+            return
+        }
+
+        let outcome: ConfirmationAnswerOutcome = pickedOptionID == "skip" ? .skipped : .accepted
+        let resolution = ConfirmationResolution(batchID: request.batchID,
+                                                correlationID: request.correlationID,
+                                                answers: [
+                                                    ConfirmationAnswer(questionID: question.id,
+                                                                       outcome: outcome,
+                                                                       pickedOptionID: pickedOptionID)
+                                                ],
+                                                userID: "local-editor",
+                                                partial: false)
+        var context = makeExecutionContext()
+        do {
+            let result = try intentCoordinator.resolveConfirmation(resolution,
+                                                                   executionContext: &context)
+            applyInvocationResult(result, executionContext: &context)
+        } catch {
+            store.dispatch(.setAIStatusMessage(String(describing: error)))
+        }
+    }
+
+    public func acceptPendingConfirmation() {
+        resolvePendingConfirmation(pickedOptionID: "confirm")
+    }
+
+    public func skipPendingConfirmation() {
+        resolvePendingConfirmation(pickedOptionID: "skip")
+    }
+
     private func handlePlatformEvent(_ event: InputEvent) {
         switch event {
         case .windowFocusGained:
@@ -213,5 +341,84 @@ public final class EditorApplication {
             return c
         }
         return "libwgpu_native.dylib"
+    }
+
+    private func submitIntentTransaction(_ transaction: TransactionIR) {
+        if store.state.pendingConfirmationRequest != nil {
+            store.dispatch(.setAIStatusMessage("Resolve the pending confirmation before submitting another AI action."))
+            return
+        }
+
+        var context = makeExecutionContext()
+        do {
+            let result = try intentCoordinator.submit(transaction,
+                                                      capabilityContext: CapabilityInvocationContext(role: .editor,
+                                                                                                     releasePhase: .beta),
+                                                      executionContext: &context)
+            applyInvocationResult(result, executionContext: &context)
+        } catch {
+            store.dispatch(.setPendingConfirmationRequest(nil))
+            store.dispatch(.setAIWarnings([]))
+            store.dispatch(.setAIStatusMessage(String(describing: error)))
+        }
+    }
+
+    private func applyInvocationResult(_ result: CapabilityInvocationResult,
+                                       executionContext: inout TransactionExecutionContext) {
+        if let updatedScene = executionContext.sceneRuntime {
+            scene.scene = updatedScene
+            scene.notifyRevisionChanged()
+        }
+
+        switch result.disposition {
+        case .applied:
+            store.dispatch(.setPendingConfirmationRequest(nil))
+            store.dispatch(.setAIWarnings(result.warnings))
+            updateSelection(after: result.applyResult)
+            store.dispatch(.setAIStatusMessage("Applied \(result.transactionID)"))
+        case .confirmationRequested:
+            store.dispatch(.setPendingConfirmationRequest(result.confirmationRequest))
+            store.dispatch(.setAIWarnings(result.warnings))
+            store.dispatch(.setAIStatusMessage("Confirmation required for \(result.transactionID)"))
+        case .discarded:
+            store.dispatch(.setPendingConfirmationRequest(nil))
+            store.dispatch(.setAIWarnings(result.warnings))
+            store.dispatch(.setAIStatusMessage("Discarded \(result.transactionID)"))
+        }
+    }
+
+    private func makeExecutionContext() -> TransactionExecutionContext {
+        TransactionExecutionContext(sceneRuntime: scene.scene,
+                                    observationBus: observationBus,
+                                    eventOrigin: EventOrigin(process: .editor,
+                                                             host: "local-editor",
+                                                             user: "local-user"))
+    }
+
+    private func updateSelection(after applyResult: TransactionApplyResult?) {
+        if let created = applyResult?.createdEntityIDs.first {
+            store.dispatch(.setSelectedEntity(created))
+            return
+        }
+        guard let applyResult else { return }
+        if let selected = store.state.selectedEntityID,
+           applyResult.deletedEntityIDs.contains(selected) {
+            store.dispatch(.setSelectedEntity(nil))
+        }
+    }
+
+    private func defaultSpawnMeshIndex() -> Int {
+        guard let entity = entityID(from: store.state.selectedEntityID),
+              let mesh = scene.scene.component(RenderMeshComponent.self, for: entity)
+        else {
+            return 0
+        }
+        return mesh.meshIndex
+    }
+
+    private func entityID(from rawID: UInt64?) -> EntityID? {
+        guard let rawID else { return nil }
+        return EntityID(index: UInt32(rawID & 0xFFFF_FFFF),
+                        generation: UInt32(rawID >> 32))
     }
 }

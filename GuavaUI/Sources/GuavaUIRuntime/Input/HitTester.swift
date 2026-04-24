@@ -47,8 +47,12 @@ public struct HitTester {
         defer { if path.last === node { /* keep on success */ } }
 
         // Traverse children top-down (last child = top of z-order).
+        // Children render translated by `-node.contentOffset`, so hit-test
+        // must apply the inverse translation when descending.
+        let childPoint = CGPoint(x: local.x + node.contentOffset.x,
+                                 y: local.y + node.contentOffset.y)
         for child in node.children.reversed() {
-            if let hit = walk(node: child, pointInParent: local, path: &path) {
+            if let hit = walk(node: child, pointInParent: childPoint, path: &path) {
                 return hit
             }
         }
@@ -104,9 +108,12 @@ public struct HitTester {
 
         path.append(node)
 
-        // Children top-down (last drawn = top of z-order).
+        // Children top-down (last drawn = top of z-order). Keep parity with
+        // render traversal by applying contentOffset while descending.
+        let childPoint = CGPoint(x: local.x + node.contentOffset.x,
+                                 y: local.y + node.contentOffset.y)
         for child in input.children.reversed() {
-            if let hit = walk(input: child, pointInParent: local, path: &path) {
+            if let hit = walk(input: child, pointInParent: childPoint, path: &path) {
                 return hit
             }
         }

@@ -86,4 +86,20 @@ struct HitTesterTests {
         #expect(result?.node === leaf)
         #expect(result?.localPoint == CGPoint(x: 20, y: 30))
     }
+
+    @Test("contentOffset shifts child hit regions")
+    func contentOffsetAffectsHitTest() {
+        let root = makeNode(frame: CGRect(x: 0, y: 0, width: 200, height: 200))
+        let child = makeNode(frame: CGRect(x: 0, y: 30, width: 120, height: 30))
+        root.addChild(child)
+
+        // Before scrolling, y=5 is above the child.
+        #expect(HitTester.hitTest(rootNode: root, point: CGPoint(x: 10, y: 5))?.node !== child)
+
+        // Scroll content down by 30 logical px: child visually moves to y=0.
+        root.contentOffset = CGPoint(x: 0, y: 30)
+
+        #expect(HitTester.hitTest(rootNode: root, point: CGPoint(x: 10, y: 5))?.node === child)
+        #expect(HitTester.hitTest(rootNode: root, point: CGPoint(x: 10, y: 35))?.node !== child)
+    }
 }

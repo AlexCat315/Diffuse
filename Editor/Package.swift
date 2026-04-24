@@ -22,12 +22,15 @@ let package = Package(
             name: "EditorCore",
             dependencies: [
                 .product(name: "AssetPipeline", package: "Engine"),
+                .product(name: "CapabilityRuntime", package: "Engine"),
                 .product(name: "EngineCore", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "IntentRuntime", package: "Engine"),
+                .product(name: "ObservationBus", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "SceneRuntime", package: "Engine"),
+                .product(name: "ScriptRuntime", package: "Engine"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
             ]

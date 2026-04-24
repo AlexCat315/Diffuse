@@ -17,10 +17,14 @@
 | 组件 | 状态 | 文件 |
 | ---- | ---- | ---- |
 | Button | ✅ | [button.md](button.md) |
+| IconButton | ✅ | [iconbutton.md](iconbutton.md) |
 | Toggle | ✅ | [toggle.md](toggle.md) |
 | Checkbox | ✅ | [checkbox.md](checkbox.md) |
 | TextField | ✅ | [textfield.md](textfield.md) |
 | NumberField | ✅ | [numberfield.md](numberfield.md) |
+| Vec3Field | ✅ | [vec3field.md](vec3field.md) |
+| AssetRefField / AssetDropTarget | ✅ | [assetref.md](assetref.md) |
+| JsonField | ✅ | [jsonfield.md](jsonfield.md) |
 | Slider | ✅ | [slider.md](slider.md) |
 | List / ListRow | ✅ | [list.md](list.md) |
 | Tree / TreeRow | ✅ | [tree.md](tree.md) |

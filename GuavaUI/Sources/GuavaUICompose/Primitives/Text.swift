@@ -201,13 +201,20 @@ public struct Text: _PrimitiveView {
     public let string: String
     public let alignment: TextAlignment
     public let color: Color?
+    public let lineLimit: Int?
 
     public init(_ string: String,
                 alignment: TextAlignment = .leading,
-                color: Color? = nil) {
+                color: Color? = nil,
+                lineLimit: Int? = nil) {
         self.string = string
         self.alignment = alignment
         self.color = color
+        self.lineLimit = lineLimit
+    }
+
+    public func lineLimit(_ limit: Int?) -> Text {
+        Text(string, alignment: alignment, color: color, lineLimit: limit)
     }
 
     public func _makeNode() -> Node {
@@ -232,7 +239,7 @@ public struct Text: _PrimitiveView {
                 text: snapshot.string,
                 font: resolvedFont,
                 lineHeight: resolvedLineHeight,
-                maxWidth: Float(node.frame.width),
+                maxWidth: snapshot.resolvedMaxWidth(Float(node.frame.width)),
                 alignment: snapshot.alignment
             )
             let baseColor = snapshot.color ?? node.foregroundColor ?? env.defaultColor
@@ -250,14 +257,17 @@ public struct Text: _PrimitiveView {
         Text.installMeasureFunc(on: layout, snapshot: self)
         layout.textInputs = TextMeasureInputs(
             text: string,
-            alignment: alignment
+            alignment: alignment,
+            lineLimit: lineLimit
         )
         return layout
     }
 
     public func _updateLayout(_ layout: LayoutNode) {
         Text.installMeasureFunc(on: layout, snapshot: self)
-        let next = TextMeasureInputs(text: string, alignment: alignment)
+        let next = TextMeasureInputs(text: string,
+                                     alignment: alignment,
+                                     lineLimit: lineLimit)
         let previous = layout.textInputs
         layout.textInputs = next
         if previous != nil, previous != next {
@@ -284,7 +294,7 @@ public struct Text: _PrimitiveView {
                 text: snapshot.string,
                 font: resolvedFont,
                 lineHeight: resolvedLineHeight,
-                maxWidth: constraint,
+                maxWidth: snapshot.resolvedMaxWidth(constraint),
                 alignment: snapshot.alignment
             )
             return CGSize(width: CGFloat(result.totalWidth),
@@ -328,6 +338,13 @@ public struct Text: _PrimitiveView {
             layout.textMeasure = TextLayoutCacheEntry(key: key, result: result)
         }
         return result
+    }
+
+    private func resolvedMaxWidth(_ maxWidth: Float) -> Float {
+        guard let lineLimit, lineLimit == 1 else {
+            return maxWidth
+        }
+        return .infinity
     }
 }
 

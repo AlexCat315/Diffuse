@@ -82,6 +82,21 @@ func findDemoSceneNode(id: String,
     return nil
 }
 
+enum DemoFrameMode: String {
+    case idle = "Idle"
+    case benchmark = "Benchmark"
+}
+
+enum DemoRenderMode: String, CaseIterable {
+    case forward = "Forward"
+    case deferred = "Deferred"
+    case pathTracing = "Path Tracing"
+}
+
+enum DemoFrameModeHolder {
+    nonisolated(unsafe) static var current: DemoFrameMode = .idle
+}
+
 // MARK: - Root view (compose)
 
 /// Showcase app for the Phase 8.1 design system.
@@ -102,6 +117,17 @@ struct RootView: View {
     @State var searchText: String = ""
     @State var tagText: String = ""
     @State var section: NavSection = .components
+    @State var toggleA: Bool = true
+    @State var toggleB: Bool = false
+    @State var checkA: Bool = true
+    @State var checkB: Bool = false
+    @State var checkC: Bool = false
+    @State var numberValue: Float = 3.14
+    @State var tabSelection: String = "tab1"
+    @State var frameMode: DemoFrameMode = DemoFrameModeHolder.current
+    @State var showToolsMenu: Bool = false
+    @State var selectedQualityProfile: String = "High"
+    @State var renderMode: DemoRenderMode = .deferred
 
     enum NavSection: String, Hashable, CaseIterable, Identifiable {
         case components, tokens, layouts, console
@@ -116,9 +142,9 @@ struct RootView: View {
         }
         var hint: String {
             switch self {
-            case .components: return "Buttons · TextFields · Sliders"
-            case .tokens:     return "Surfaces · Accent · State layers"
-            case .layouts:    return "Tree · List · Split"
+            case .components: return "Buttons · TextFields · Sliders · Toggles · NumberField · Popover · Menu · Select"
+            case .tokens:     return "Surfaces · Accent · State layers · Typography"
+            case .layouts:    return "Tree · List · SplitView · TabView · Panel · PropertyGrid"
             case .console:    return "Streaming log feed"
             }
         }
@@ -202,6 +228,11 @@ struct RootView: View {
             Button("Run") { clickCount += 1 }
             Button("Inspect") { clickCount += 1 }
                 .buttonStyle(.secondary)
+            Button("Mode: \(frameMode.rawValue)") {
+                frameMode = (frameMode == .idle) ? .benchmark : .idle
+                DemoFrameModeHolder.current = frameMode
+            }
+            .buttonStyle(.ghost)
             Button(appearance == .dark ? "☀︎ Light" : "☾ Dark") {
                 appearance = (appearance == .dark) ? .light : .dark
             }
@@ -373,6 +404,160 @@ struct RootView: View {
                     }
                 }
             }
+
+            card("Toggle & Checkbox") {
+                Column(alignment: .leading, spacing: 10) {
+                    Row(alignment: .center, spacing: 16) {
+                        Toggle(isOn: $toggleA)
+                        Text(toggleA ? "Enabled" : "Disabled")
+                            .font(.body)
+                            .foregroundColor(.onSurface)
+                        Toggle(isOn: $toggleB)
+                        Text(toggleB ? "On" : "Off")
+                            .font(.body)
+                            .foregroundColor(.onSurface)
+                        Toggle(isOn: .constant(false), isEnabled: false)
+                        Text("Locked")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                        Spacer(minLength: 0)
+                    }
+                    Row(alignment: .center, spacing: 16) {
+                        Checkbox(isOn: $checkA)
+                        Text("Option A")
+                            .font(.body)
+                            .foregroundColor(.onSurface)
+                        Checkbox(isOn: $checkB)
+                        Text("Option B")
+                            .font(.body)
+                            .foregroundColor(.onSurface)
+                        Checkbox(isOn: $checkC)
+                        Text("Option C")
+                            .font(.body)
+                            .foregroundColor(.onSurface)
+                        Checkbox(isOn: .constant(true), isEnabled: false)
+                        Text("Locked")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+
+            card("NumberField") {
+                Column(alignment: .leading, spacing: 10) {
+                    Row(alignment: .center, spacing: 12) {
+                        Text("Value")
+                            .font(.body)
+                            .foregroundColor(.onSurface)
+                            .frame(width: 90)
+                        NumberField(value: $numberValue, decimals: 2)
+                            .frame(width: 120)
+                        Text(String(format: "= %.4f", numberValue))
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                        Spacer(minLength: 0)
+                    }
+                    Row(alignment: .center, spacing: 12) {
+                        Text("Integer")
+                            .font(.body)
+                            .foregroundColor(.onSurface)
+                            .frame(width: 90)
+                        NumberField(value: .constant(42), decimals: 0, isEnabled: false)
+                            .frame(width: 120)
+                        Text("(disabled)")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
+
+            card("IconButton") {
+                Row(alignment: .center, spacing: 12) {
+                    IconButton(textureID: previewTextureID, size: 16, action: { clickCount += 1 })
+                    IconButton(textureID: previewTextureID, size: 16, action: { clickCount += 1 })
+                        .buttonStyle(.secondary)
+                    IconButton(textureID: previewTextureID, size: 16, action: { clickCount += 1 })
+                        .buttonStyle(.ghost)
+                    IconButton(textureID: previewTextureID, size: 16, role: .destructive, action: { clickCount += 1 })
+                    IconButton(textureID: previewTextureID, size: 20, action: { clickCount += 1 })
+                        .buttonStyle(.ghost)
+                    IconButton(textureID: previewTextureID, size: 16, isEnabled: false, action: {})
+                        .buttonStyle(.ghost)
+                    Text("count: \(clickCount)")
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                    Spacer(minLength: 0)
+                }
+            }
+
+            card("Popover · Menu · Select · EnumField") {
+                Column(alignment: .leading, spacing: 10) {
+                    Row(alignment: .center, spacing: 12) {
+                        Popover(isPresented: $showToolsMenu, width: 220) {
+                            Row(alignment: .center, spacing: 8) {
+                                Text("Tools")
+                                    .font(.bodyStrong)
+                                    .foregroundColor(.onSurface)
+                                Text(showToolsMenu ? "▲" : "▼")
+                                    .font(.caption)
+                                    .foregroundColor(.onSurfaceMuted)
+                            }
+                            .padding(horizontal: 10, vertical: 8)
+                            .background(.surface)
+                            .cornerRadius(6)
+                            .border(Color(red: 58, green: 64, blue: 78), width: 1)
+                        } content: {
+                            Menu([
+                                .item(MenuItem(id: "duplicate", title: "Duplicate", shortcut: "⌘D") {
+                                    clickCount += 1
+                                }),
+                                .item(MenuItem(id: "rename", title: "Rename", shortcut: "Return") {
+                                    clickCount += 1
+                                }),
+                                .separator("tools-sep-1"),
+                                .item(MenuItem(id: "delete",
+                                               title: "Delete",
+                                               shortcut: "Delete",
+                                               role: .destructive) {
+                                    clickCount += 1
+                                }),
+                            ], width: 220, onItemActivated: {
+                                showToolsMenu = false
+                            })
+                        }
+                        Spacer(minLength: 0)
+                    }
+
+                    Row(alignment: .center, spacing: 12) {
+                        Text("Profile")
+                            .font(.body)
+                            .foregroundColor(.onSurface)
+                            .frame(width: 90)
+                        Select(selection: $selectedQualityProfile,
+                               options: [
+                                SelectOption(value: "Low", label: "Low"),
+                                SelectOption(value: "Medium", label: "Medium"),
+                                SelectOption(value: "High", label: "High"),
+                                SelectOption(value: "Ultra", label: "Ultra"),
+                               ],
+                               width: 180)
+                        Spacer(minLength: 0)
+                    }
+
+                    Row(alignment: .center, spacing: 12) {
+                        Text("Render")
+                            .font(.body)
+                            .foregroundColor(.onSurface)
+                            .frame(width: 90)
+                        EnumField(value: $renderMode,
+                                  width: 180,
+                                  label: { $0.rawValue })
+                        Spacer(minLength: 0)
+                    }
+                }
+            }
         }
     }
 
@@ -458,10 +643,13 @@ struct RootView: View {
     }
 
     private func statusChip(_ name: String, ref: SemanticColorRef) -> some View {
-        Text(name.uppercased())
-            .font(.label)
-            .foregroundColor(.onAccent)
-            .padding(horizontal: 10, vertical: 4)
+        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            Text(name.uppercased())
+                .font(.label)
+                .foregroundColor(.onAccent)
+                .padding(horizontal: 10)
+        }
+            .frame(height: 22)
             .background(ref)
             .cornerRadius(9999)
     }
@@ -492,6 +680,107 @@ struct RootView: View {
                     .flex()
                 }
             }
+
+            card("TabView") {
+                TabView(selection: $tabSelection, tabs: [
+                    TabItem("General", id: "tab1") {
+                        Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                            Text("General settings and preferences for the project.")
+                                .font(.body)
+                                .foregroundColor(.onSurfaceVariant)
+                                .padding(horizontal: 4, vertical: 12)
+                        }
+                    },
+                    TabItem("Rendering", id: "tab2") {
+                        Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                            Text("Rendering pipeline and output quality controls.")
+                                .font(.body)
+                                .foregroundColor(.onSurfaceVariant)
+                                .padding(horizontal: 4, vertical: 12)
+                        }
+                    },
+                    TabItem("Audio", id: "tab3") {
+                        Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                            Text("Spatial audio and mixer configuration.")
+                                .font(.body)
+                                .foregroundColor(.onSurfaceVariant)
+                                .padding(horizontal: 4, vertical: 12)
+                        }
+                    },
+                ])
+            }
+
+            card("SplitView") {
+                SplitView(.horizontal, fraction: 0.38) {
+                    Column(alignment: .leading, spacing: 6) {
+                        Text("Left pane")
+                            .font(.bodyStrong)
+                            .foregroundColor(.onSurface)
+                        Text("Drag the divider to resize.")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                    }
+                    .padding(10)
+                    .background(.surfaceVariant)
+                } second: {
+                    Column(alignment: .leading, spacing: 6) {
+                        Text("Right pane")
+                            .font(.bodyStrong)
+                            .foregroundColor(.onSurface)
+                        Text("SplitView splits space between two children.")
+                            .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                    }
+                    .padding(10)
+                }
+                .frame(height: 80)
+            }
+
+            card("Panel") {
+                Column(alignment: .leading, spacing: 10) {
+                    Panel("Active Panel", isActive: true) {
+                        Button("Action") { clickCount += 1 }
+                            .buttonStyle(.ghost)
+                    } content: {
+                        Text("Panel with isActive=true and an accessory button in the header bar.")
+                            .font(.body)
+                            .foregroundColor(.onSurfaceVariant)
+                            .padding(10)
+                    }
+                    Panel("Inactive Panel") {
+                        Text("Standard panel without active state.")
+                            .font(.body)
+                            .foregroundColor(.onSurfaceVariant)
+                            .padding(10)
+                    }
+                }
+            }
+
+            card("PropertyGrid") {
+                PropertyGrid([
+                    PropertyGridSection(id: "transform", title: "Transform", rows: [
+                        PropertyGridRow(id: "px", label: "Position X") {
+                            NumberField(value: .constant(0.0), decimals: 2)
+                        },
+                        PropertyGridRow(id: "py", label: "Position Y") {
+                            NumberField(value: .constant(1.5), decimals: 2)
+                        },
+                        PropertyGridRow(id: "pz", label: "Position Z") {
+                            NumberField(value: .constant(-3.0), decimals: 2)
+                        },
+                    ]),
+                    PropertyGridSection(id: "visibility", title: "Visibility", rows: [
+                        PropertyGridRow(id: "visible", label: "Visible") {
+                            Toggle(isOn: $toggleA)
+                        },
+                        PropertyGridRow(id: "cast-shadow", label: "Cast Shadow") {
+                            Checkbox(isOn: $checkA)
+                        },
+                    ]),
+                ])
+                .frame(height: 220)
+            }
+
             card("Selected entity") {
                 Column(alignment: .leading, spacing: 4) {
                     Text(demoSceneTitle(id: selectedSceneNodeID))
@@ -600,6 +889,9 @@ struct RootView: View {
             Text("focus: \(demoSceneTitle(id: selectedSceneNodeID))")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
+            Text("mode: \(frameMode.rawValue)")
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
             Spacer(minLength: 0)
             Text("GuavaUI · Phase 8.1")
                 .font(.caption)
@@ -636,10 +928,10 @@ var didInstallRoot = false
 var didPresentBootClear = false
 var demoRenderedFrameCount = 0
 var lastHUDSampleTime = ProcessInfo.processInfo.systemUptime
-var hudFrameAccum: Double = 0
-var hudFrameCount: Int = 0
-var hudFPS: Int = 0
-var hudFrameMS: Double = 0
+var hudTickFrameCount: Int = 0
+var hudRenderFrameCount: Int = 0
+var hudTickFPS: Int = 0
+var hudRenderFPS: Int = 0
 
 let demoBootGlyphSeed = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:;!?+-*/_=()[]{}<>/%@#&'\"`~|\\…●☀︎☾"
 
@@ -730,6 +1022,7 @@ try backend.initialize()
 let renderer = DrawListRenderer(backend: backend)
 let drawList = DrawList()
 let nodeRenderer = NodeRenderer()
+let demoMSAASampleCount: UInt32 = 4
 
 var surface: GPUSurface?
 var configured = false
@@ -737,6 +1030,36 @@ var drawableW: UInt32 = 0
 var drawableH: UInt32 = 0
 var logicalW: UInt32 = 0
 var logicalH: UInt32 = 0
+var msaaColorTexture: GPUTexture?
+var msaaColorView: GPUTextureView?
+
+@MainActor
+func ensureDemoMSAATarget(width: UInt32, height: UInt32) throws {
+    guard demoMSAASampleCount > 1 else {
+        msaaColorTexture = nil
+        msaaColorView = nil
+        return
+    }
+
+    if msaaColorTexture != nil,
+       msaaColorView != nil,
+       drawableW == width,
+       drawableH == height {
+        return
+    }
+
+    let texture = try backend.createTexture(
+        width: width,
+        height: height,
+        format: .bgra8Unorm,
+        usage: [.renderAttachment],
+        mipLevels: 1,
+        depthOrLayers: 1,
+        sampleCount: demoMSAASampleCount
+    )
+    msaaColorTexture = texture
+    msaaColorView = try texture.createView()
+}
 
 @MainActor
 func uploadAtlas() throws {
@@ -799,20 +1122,15 @@ func appendPerformanceHUD(to list: DrawList) {
 
     let now = ProcessInfo.processInfo.systemUptime
     let delta = max(0, now - lastHUDSampleTime)
-    lastHUDSampleTime = now
-    hudFrameAccum += delta
-    hudFrameCount += 1
-
-    if hudFrameAccum >= 0.25 {
-        hudFPS = Int((Double(hudFrameCount) / hudFrameAccum).rounded())
-        hudFrameMS = (hudFrameAccum / Double(hudFrameCount)) * 1000
-        hudFrameAccum = 0
-        hudFrameCount = 0
+    if delta >= 0.25 {
+        hudTickFPS = Int((Double(hudTickFrameCount) / delta).rounded())
+        hudRenderFPS = Int((Double(hudRenderFrameCount) / delta).rounded())
+        hudTickFrameCount = 0
+        hudRenderFrameCount = 0
+        lastHUDSampleTime = now
     }
 
-    let hudText = hudFPS > 0
-        ? String(format: "FPS %d  %.1f ms", hudFPS, hudFrameMS)
-        : "FPS --"
+    let hudText = "Render FPS \(hudRenderFPS)  Tick FPS \(hudTickFPS)"
     let font = env.resolvedFont(.system(size: 13, weight: .medium))
     let layout = env.cachedLayout(
         text: hudText,
@@ -857,7 +1175,9 @@ host.onInit = { native, w, h in
             format: .bgra8Unorm,
             width: w, height: h,
             presentMode: .fifo)
-        try renderer.configure(format: .bgra8Unorm)
+        try renderer.configure(format: .bgra8Unorm,
+                               sampleCount: demoMSAASampleCount)
+        try ensureDemoMSAATarget(width: w, height: h)
         timing.mark("surface")
         if !didPresentBootClear {
             _ = try presentBootClearFrame()
@@ -894,6 +1214,7 @@ host.onResize = { w, h in
         try surface.configure(
             device: device, format: .bgra8Unorm,
             width: w, height: h, presentMode: .fifo)
+        try ensureDemoMSAATarget(width: w, height: h)
         let previousScale = activeTextScale
         configureTextEnvironment(scale: host.contentScaleFactor)
         if abs(previousScale - activeTextScale) >= 0.01 {
@@ -907,6 +1228,7 @@ host.onResize = { w, h in
 
 host.onFrame = { _ in
     guard configured, let surface, let root = tree.root else { return false }
+    hudTickFrameCount += 1
 
     var timing = TimingTrace(label: "[timing] demo.frame.main")
     let nextFrameIndex = demoRenderedFrameCount + 1
@@ -970,8 +1292,11 @@ host.onFrame = { _ in
 
     do {
         let encoder = try backend.createCommandEncoder()
+        let passColorView = msaaColorView ?? frame.view
+        let passResolveView = msaaColorView == nil ? nil : frame.view
         let pass = try encoder.beginRenderPass(
-            colorView: frame.view,
+            colorView: passColorView,
+            resolveTargetView: passResolveView,
             loadOp: .clear, storeOp: .store,
             clearColor: GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1)
         )
@@ -983,6 +1308,7 @@ host.onFrame = { _ in
         let buffer = try encoder.finish()
         backend.submit(buffer)
         surface.present()
+        hudRenderFrameCount += 1
         demoRenderedFrameCount = nextFrameIndex
         timing.mark("gpuSubmit")
         if shouldLogMainDemoFrameTiming(frameIndex: demoRenderedFrameCount,
@@ -994,6 +1320,9 @@ host.onFrame = { _ in
                 "atlasUploaded=\(didAtlasUpload)",
                 "previewUploaded=\(didPreviewUpload)",
             ]))
+        }
+        if DemoFrameModeHolder.current == .benchmark {
+            host.requestDisplay()
         }
         return true
     } catch {

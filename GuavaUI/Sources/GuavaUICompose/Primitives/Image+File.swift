@@ -1,5 +1,34 @@
 import Foundation
 import GuavaUIRuntime
+import Logging
+
+public enum ImageLoadFailureReason: Sendable {
+    case missingRegistry
+    case decodeFailed
+    case resourceNotFound
+}
+
+public struct ImageLoadDiagnostic: Sendable {
+    public let path: String
+    public let reason: ImageLoadFailureReason
+    public let details: String
+
+    public init(path: String, reason: ImageLoadFailureReason, details: String) {
+        self.path = path
+        self.reason = reason
+        self.details = details
+    }
+}
+
+public enum ImageLoadDiagnostics {
+    nonisolated(unsafe) public static var onEvent: ((ImageLoadDiagnostic) -> Void)?
+
+    static func emit(path: String, reason: ImageLoadFailureReason, details: String) {
+        let event = ImageLoadDiagnostic(path: path, reason: reason, details: details)
+        Logger(label: "com.guava.ui.compose").warning("image load fallback [\(reason)]: \(path) — \(details)")
+        onEvent?(event)
+    }
+}
 
 public extension Image {
 
@@ -17,9 +46,15 @@ public extension Image {
     init(file path: String,
          width: Float,
          height: Float,
-         tint: Color = .white) {
+         tint: Color = .white,
+         contentMode: ContentMode = .stretch) {
         let resolved = Self.resolve(path: path, width: width, height: height)
-        self.init(textureID: resolved, width: width, height: height, tint: tint)
+        self.init(textureID: resolved.textureID,
+                  width: width,
+                  height: height,
+                  tint: tint,
+                  sourcePixelSize: resolved.sourcePixelSize,
+                  contentMode: contentMode)
     }
 
     /// Bundle-resource form of `init(file:width:height:tint:)`. This keeps
@@ -27,27 +62,47 @@ public extension Image {
     init(resource: BundleImageResource,
          width: Float,
          height: Float,
-         tint: Color = .white) {
+         tint: Color = .white,
+         contentMode: ContentMode = .stretch) {
         guard let url = resource.url else {
             assertionFailure("Bundle image resource not found: \(resource)")
-            self.init(textureID: .none, width: width, height: height, tint: tint)
+            ImageLoadDiagnostics.emit(path: String(describing: resource),
+                                      reason: .resourceNotFound,
+                                      details: "bundle resource URL is nil")
+            self.init(textureID: .none,
+                      width: width,
+                      height: height,
+                      tint: tint,
+                      sourcePixelSize: nil,
+                      contentMode: contentMode)
             return
         }
-        self.init(url: url, width: width, height: height, tint: tint)
+        self.init(url: url,
+                  width: width,
+                  height: height,
+                  tint: tint,
+                  contentMode: contentMode)
     }
 
     /// URL form of `init(file:width:height:tint:)`.
     init(url: URL,
          width: Float,
          height: Float,
-         tint: Color = .white) {
-        self.init(file: url.path, width: width, height: height, tint: tint)
+         tint: Color = .white,
+         contentMode: ContentMode = .stretch) {
+        self.init(file: url.path,
+                  width: width,
+                  height: height,
+                  tint: tint,
+                  contentMode: contentMode)
     }
 
-    private static func resolve(path: String, width: Float, height: Float) -> TextureID {
-        guard let registry = ImageAssetRegistryHolder.current else {
-            return .none
-        }
+    private struct ResolvedTexture {
+        let textureID: TextureID
+        let sourcePixelSize: (width: Float, height: Float)?
+    }
+
+    private static func resolve(path: String, width: Float, height: Float) -> ResolvedTexture {
         let url = URL(fileURLWithPath: path)
         // Vector formats need an explicit raster size; bitmap formats
         // pass `nil` so the natural resolution is preserved. SVG/PDF are
@@ -63,10 +118,34 @@ public extension Image {
         } else {
             size = nil
         }
+
+        guard let registry = ImageAssetRegistryHolder.current else {
+            do {
+                let decoded = try ImageDecoder.decode(url: url, targetSize: size)
+                ImageLoadDiagnostics.emit(path: path,
+                                          reason: .missingRegistry,
+                                          details: "using TextureID.none; decoded metadata \(decoded.width)x\(decoded.height)")
+                return ResolvedTexture(textureID: .none,
+                                       sourcePixelSize: (Float(decoded.width), Float(decoded.height)))
+            } catch {
+                ImageLoadDiagnostics.emit(path: path,
+                                          reason: .missingRegistry,
+                                          details: "using TextureID.none; decode failed without registry: \(error)")
+                return ResolvedTexture(textureID: .none, sourcePixelSize: nil)
+            }
+        }
+
         do {
-            return try registry.texture(url: url, size: size).textureID
+            let asset = try registry.texture(url: url, size: size)
+            return ResolvedTexture(
+                textureID: asset.textureID,
+                sourcePixelSize: (Float(asset.width), Float(asset.height))
+            )
         } catch {
-            return .none
+            ImageLoadDiagnostics.emit(path: path,
+                                      reason: .decodeFailed,
+                                      details: "using TextureID.none; registry decode/upload failed: \(error)")
+            return ResolvedTexture(textureID: .none, sourcePixelSize: nil)
         }
     }
 }

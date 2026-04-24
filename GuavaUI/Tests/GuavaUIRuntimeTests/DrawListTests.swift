@@ -1,3 +1,4 @@
+import Foundation
 import Testing
 @testable import GuavaUIRuntime
 
@@ -88,20 +89,21 @@ struct DrawListTests {
         #expect(clip == UIRect(x: 50, y: 50, width: 50, height: 50))
     }
 
-    @Test("Rounded rect emits centre quad + edges + corner fans")
+    @Test("Rounded rect emits anti-aliased centre quads, edges, and corner fans")
     func roundedRectGeometry() {
         let list = DrawList()
         list.addRoundedRect(UIRect(x: 0, y: 0, width: 100, height: 60), radius: 10, color: .white)
 
-        // 1 centre quad (4v, 6i) + 2 edge quads (8v, 12i) + 4 corner fans (10v + 24i each).
-        // Centre + edges = 12 vertices, 18 indices.
-        // Each corner fan: 1 centre + 9 arc = 10 vertices, 8 triangles = 24 indices.
-        // Total: 12 + 40 = 52 vertices, 18 + 96 = 114 indices.
-        #expect(list.vertices.count == 52)
-        #expect(list.indices.count == 114)
+        let expected = roundedRectGeometryCounts(radii: [11, 12, 10])
+        #expect(list.vertices.count == expected.vertices)
+        #expect(list.indices.count == expected.indices)
         // All in one batch (same textureID/scissor).
         #expect(list.batches.count == 1)
-        #expect(list.batches[0].indexCount == 114)
+        #expect(list.batches[0].indexCount == UInt32(expected.indices))
+
+        #expect(list.vertices.contains { $0.color == Color.white.rgba8 })
+        #expect(list.vertices.contains { $0.color == Color.white.multipliedAlpha(0.22).rgba8 })
+        #expect(list.vertices.contains { $0.color == Color.white.multipliedAlpha(0.08).rgba8 })
     }
 
     @Test("addText produces glyph quads with atlas UVs")
@@ -180,5 +182,19 @@ struct DrawListTests {
         #expect(list.indices.isEmpty)
         #expect(list.batches.isEmpty)
         #expect(list.currentClip == nil)
+    }
+
+    private func roundedRectGeometryCounts(radii: [Float]) -> (vertices: Int, indices: Int) {
+        radii.reduce(into: (vertices: 0, indices: 0)) { result, radius in
+            let segments = cornerSegmentCount(radius: radius)
+            result.vertices += 12 + 4 * (segments + 2)
+            result.indices += 18 + 4 * segments * 3
+        }
+    }
+
+    private func cornerSegmentCount(radius: Float) -> Int {
+        let quarterArc = (.pi / 2) * max(0, radius)
+        let estimated = Int(ceil(quarterArc / 0.8))
+        return max(10, min(48, estimated))
     }
 }

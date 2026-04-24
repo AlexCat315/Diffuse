@@ -26,6 +26,7 @@ public struct GPURenderPipelineDescriptor: @unchecked Sendable {
     public var vertexBuffers: [GPUVertexBufferLayout]
     public var blend: GPUBlendState?
     public var depthStencil: GPUDepthStencilPipelineState?
+    public var sampleCount: UInt32
 
     public init(shaderModule: GPUShaderModule,
                 pipelineLayout: GPUPipelineLayout? = nil,
@@ -37,7 +38,8 @@ public struct GPURenderPipelineDescriptor: @unchecked Sendable {
                 cullMode: GPUCullMode = .none,
                 vertexBuffers: [GPUVertexBufferLayout] = [],
                 blend: GPUBlendState? = nil,
-                depthStencil: GPUDepthStencilPipelineState? = nil) {
+                depthStencil: GPUDepthStencilPipelineState? = nil,
+                sampleCount: UInt32 = 1) {
         self.shaderModule = shaderModule
         self.pipelineLayout = pipelineLayout
         self.vertexEntryPoint = vertexEntryPoint
@@ -49,6 +51,7 @@ public struct GPURenderPipelineDescriptor: @unchecked Sendable {
         self.vertexBuffers = vertexBuffers
         self.blend = blend
         self.depthStencil = depthStencil
+        self.sampleCount = max(1, sampleCount)
     }
 }
 
@@ -72,3 +75,5 @@ public final class GPURenderPipeline {
         return GPUBindGroupLayout(handle: ptr)
     }
 }
+
+extension GPURenderPipeline: @unchecked Sendable {}

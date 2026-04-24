@@ -1,6 +1,6 @@
 import CWGPUBridge
 
-public struct GPURenderBundleEncoderDescriptor {
+public struct GPURenderBundleEncoderDescriptor: Sendable {
     public var colorFormats: [GPUTextureFormat]
     public var depthStencilFormat: GPUTextureFormat?
     public var sampleCount: UInt32
@@ -31,6 +31,8 @@ public final class GPURenderBundle {
         wgpu_bridge_release_render_bundle(handle)
     }
 }
+
+extension GPURenderBundle: @unchecked Sendable {}
 
 public final class GPURenderBundleEncoder {
     let handle: UnsafeMutableRawPointer
@@ -66,6 +68,24 @@ public final class GPURenderBundleEncoder {
 
     public func setBindGroup(_ bindGroup: GPUBindGroup, index: UInt32 = 0) {
         wgpu_bridge_render_bundle_set_bind_group(handle, index, bindGroup.handle)
+    }
+
+    public func setBindGroup(_ bindGroup: GPUBindGroup,
+                             index: UInt32 = 0,
+                             dynamicOffsets: [UInt32]) {
+        if dynamicOffsets.isEmpty {
+            wgpu_bridge_render_bundle_set_bind_group(handle, index, bindGroup.handle)
+            return
+        }
+        dynamicOffsets.withUnsafeBufferPointer { offsets in
+            wgpu_bridge_render_bundle_set_bind_group_dynamic(
+                handle,
+                index,
+                bindGroup.handle,
+                UInt32(offsets.count),
+                offsets.baseAddress
+            )
+        }
     }
 
     public func draw(vertexCount: UInt32,

@@ -1,0 +1,110 @@
+[
+  {
+    "verb_id": "sequence.replace_document",
+    "summary": "Replace the active sequence document",
+    "category": "sequence",
+    "scope": "sequence",
+    "target_kind": "sequence_id",
+    "arguments": [],
+    "preconditions": [],
+    "effects": [],
+    "reversible": true,
+    "preview_support": {
+      "mode": "ghost_world"
+    },
+    "confirmation_policy": {
+      "level": "auto"
+    },
+    "read_after_write": [
+      "sequence.changed"
+    ],
+    "writes_documents": [
+      "SequenceDocument"
+    ],
+    "writes_runtime": false,
+    "side_band_emits": [
+      "transaction.applied",
+      "sequence.changed"
+    ],
+    "failure_modes": [],
+    "release_phase_gate": {
+      "prealpha": "allow",
+      "alpha": "allow",
+      "beta": "allow",
+      "rc": "allow",
+      "ship": "allow",
+      "hotfixException": false
+    },
+    "required_role": "editor",
+    "version": "0.1.0",
+    "status": "stable",
+    "deprecates": [],
+    "evidence_kinds": [
+      "shot"
+    ],
+    "audit_required": false,
+    "provenance_input_allowed": [
+      "authored",
+      "inferred",
+      "proposal"
+    ],
+    "provenance_output": "authored",
+    "policies": [
+      "default-scene-policy"
+    ]
+  },
+  {
+    "verb_id": "sequence.add_shot",
+    "summary": "Add a shot to the current sequence",
+    "category": "sequence",
+    "scope": "shot",
+    "target_kind": "shot_id",
+    "arguments": [],
+    "preconditions": [],
+    "effects": [],
+    "reversible": true,
+    "preview_support": {
+      "mode": "ghost_world"
+    },
+    "confirmation_policy": {
+      "level": "auto"
+    },
+    "read_after_write": [
+      "sequence.changed"
+    ],
+    "writes_documents": [
+      "SequenceDocument"
+    ],
+    "writes_runtime": false,
+    "side_band_emits": [
+      "transaction.applied",
+      "sequence.changed"
+    ],
+    "failure_modes": [],
+    "release_phase_gate": {
+      "prealpha": "allow",
+      "alpha": "allow",
+      "beta": "allow",
+      "rc": "allow",
+      "ship": "allow",
+      "hotfixException": false
+    },
+    "required_role": "editor",
+    "version": "0.1.0",
+    "status": "stable",
+    "deprecates": [],
+    "evidence_kinds": [
+      "shot"
+    ],
+    "audit_required": false,
+    "provenance_input_allowed": [
+      "authored",
+      "inferred",
+      "proposal"
+    ],
+    "provenance_output": "authored",
+    "policies": [
+      "default-scene-policy"
+    ]
+  }
+]

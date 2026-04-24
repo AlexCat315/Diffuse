@@ -1,17 +1,35 @@
 import Foundation
+import IntentRuntime
 
 public enum EditorAction: Sendable {
     case setConnected(Bool)
     case setSelectedEntity(UInt64?)
+    case setPrimarySelectedEntity(UInt64?)
+    case setSelectedEntities(Set<UInt64>)
     case setPlaybackState(PlaybackState)
+    case setWorkspaceMode(EditorWorkspaceMode)
+    case setActiveLayoutPreset(EditorLayoutPreset)
     case setSceneRevision(UInt64)
     case setWindowFocused(Bool)
     case setWindowMinimized(Bool)
     case setWindowOccluded(Bool)
     case setGizmoMode(EditorGizmoMode)
+    case setGizmoSpace(EditorGizmoSpace)
+    case setViewportShadingMode(EditorViewportShadingMode)
+    case setTranslateSnapEnabled(Bool)
+    case setRotateSnapEnabled(Bool)
+    case setScaleSnapEnabled(Bool)
+    case setCommandSelectBehavior(SelectionCommandBehavior)
     case beginAssetDrag(EditorAssetDragPayload)
     case updateAssetDragCursor(x: Float, y: Float)
     case endAssetDrag
+    case setInspectorSectionCollapsed(id: String, isCollapsed: Bool)
+    case setPendingConfirmationRequest(ConfirmationRequestBatch?)
+    case setAIStatusMessage(String?)
+    case setAIWarnings([String])
+    /// Bump store version when viewport surface snapshot changes so
+    /// ViewportPanel can pull the newest `currentViewportSurfaceState()`.
+    case viewportSurfaceUpdated
 }
 
 public enum EditorReducer {
@@ -21,8 +39,39 @@ public enum EditorReducer {
             state.connected = value
         case let .setSelectedEntity(value):
             state.selectedEntityID = value
+            if let entityID = value {
+                state.selectedEntityIDs = [entityID]
+            } else {
+                state.selectedEntityIDs.removeAll(keepingCapacity: false)
+            }
+
+        case let .setPrimarySelectedEntity(value):
+            state.selectedEntityID = value
+            if let entityID = value {
+                if !state.selectedEntityIDs.contains(entityID) {
+                    state.selectedEntityIDs = [entityID]
+                }
+            } else {
+                state.selectedEntityIDs.removeAll(keepingCapacity: false)
+            }
+
+        case let .setSelectedEntities(entityIDs):
+            state.selectedEntityIDs = entityIDs
+            if let current = state.selectedEntityID,
+               entityIDs.contains(current) {
+                state.selectedEntityID = current
+            } else {
+                state.selectedEntityID = entityIDs.sorted().first
+            }
         case let .setPlaybackState(value):
             state.playbackState = value
+        case let .setWorkspaceMode(mode):
+            state.workspaceMode = mode
+            state.activeLayoutPreset = .default(for: mode)
+        case let .setActiveLayoutPreset(preset):
+            if preset.mode == state.workspaceMode {
+                state.activeLayoutPreset = preset
+            }
         case let .setSceneRevision(value):
             state.sceneRevision = value
         case let .setWindowFocused(value):
@@ -33,6 +82,23 @@ public enum EditorReducer {
             state.windowOccluded = value
         case let .setGizmoMode(value):
             state.gizmoMode = value
+
+        case let .setGizmoSpace(space):
+            state.gizmoSpace = space
+
+        case let .setViewportShadingMode(mode):
+            state.viewportShadingMode = mode
+
+        case let .setTranslateSnapEnabled(enabled):
+            state.translateSnapEnabled = enabled
+
+        case let .setRotateSnapEnabled(enabled):
+            state.rotateSnapEnabled = enabled
+
+        case let .setScaleSnapEnabled(enabled):
+            state.scaleSnapEnabled = enabled
+        case let .setCommandSelectBehavior(behavior):
+            state.cmdSelectBehavior = behavior
         case let .beginAssetDrag(payload):
             state.activeAssetDrag = payload
         case let .updateAssetDragCursor(x, y):
@@ -42,6 +108,22 @@ public enum EditorReducer {
             }
         case .endAssetDrag:
             state.activeAssetDrag = nil
+        case let .setInspectorSectionCollapsed(id, isCollapsed):
+            if isCollapsed {
+                state.inspectorCollapsedSectionIDs.insert(id)
+            } else {
+                state.inspectorCollapsedSectionIDs.remove(id)
+            }
+        case let .setPendingConfirmationRequest(request):
+            state.pendingConfirmationRequest = request
+        case let .setAIStatusMessage(message):
+            state.aiStatusMessage = message
+        case let .setAIWarnings(warnings):
+            state.aiWarnings = warnings
+        case .viewportSurfaceUpdated:
+            // Intentionally no-op: EditorStore.dispatch still bumps `version`,
+            // which retriggers StoreScope and refreshes viewport surface snapshot.
+            break
         }
     }
 }
