@@ -285,6 +285,13 @@ modifier apply 阶段（如 BackgroundColorModifier）
 | 节点被销毁（recompose tag 不匹配） | Node 的 animations 表随节点一起释放；scheduler 下一 tick 摘除 isFinished 项时不会读到悬空（弱引用 + tick 内部检查） |
 | `withAnimation(nil) { … }` | 闭包内写入直接同步生效，跳过控制器路径 |
 
+### 6.1 Phase 8.x（layout 动画）补充
+
+- `frame` 的 points / percent / auto **同模式**变更会插值（points→points、percent→percent）。
+- `frame` 的 **模式切换**（points↔percent、any→auto）是 snap，不做插值。
+- 模式切换时旧 controller 逻辑上立即取消；scheduler 队列在下一次 `tick` 清理 finished 项。
+- `auto` 的最终几何值由当前 Yoga 容器语义决定，可能表现为 stretch 或 intrinsic。
+
 ---
 
 ## 7. Theme.motion token 规约
