@@ -73,7 +73,9 @@ struct InspectorPanel: View {
                 id: section.id,
                 title: section.title,
                 rows: section.fields.map { field in
-                    PropertyGridRow(id: field.id, label: field.label) {
+                    PropertyGridRow(id: field.id,
+                                    label: field.label,
+                                    rowHeight: field.value.preferredRowHeight(defaultHeight: 24)) {
                         fieldView(field.value)
                     }
                 },
@@ -110,6 +112,8 @@ struct InspectorPanel: View {
             return AnyView(ColorField(color: binding,
                                       showAlpha: false,
                                       showsInlineValues: true))
+        case let .json(binding, minHeight):
+            return AnyView(JsonField(text: binding, minHeight: minHeight))
         case let .lightType(binding):
             return AnyView(
                 EnumField(value: binding, width: 128) { type in
@@ -123,4 +127,15 @@ struct InspectorPanel: View {
         }
     }
 
+}
+
+private extension EditorInspectorFieldValue {
+    func preferredRowHeight(defaultHeight: Float) -> Float? {
+        switch self {
+        case let .json(_, minHeight):
+            return max(defaultHeight, minHeight + 28)
+        default:
+            return nil
+        }
+    }
 }

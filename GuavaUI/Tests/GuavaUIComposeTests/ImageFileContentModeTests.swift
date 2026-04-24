@@ -33,7 +33,7 @@ struct ImageFileContentModeTests: GuavaUIComposeSerializedSuite {
         let list = DrawList()
         image?.draw?(list, .zero)
 
-        #expect(list.batches.first?.textureID == .none)
+        #expect(list.batches.first?.textureID == TextureID.none)
         #expect(list.vertices.count == 4)
         let xs = list.vertices.map(\.posX)
         let ys = list.vertices.map(\.posY)
@@ -66,7 +66,7 @@ struct ImageFileContentModeTests: GuavaUIComposeSerializedSuite {
         let list = DrawList()
         image?.draw?(list, .zero)
 
-        #expect(list.batches.first?.textureID == .none)
+        #expect(list.batches.first?.textureID == TextureID.none)
         #expect(list.vertices.count == 4)
         let xs = list.vertices.map(\.posX)
         let ys = list.vertices.map(\.posY)
