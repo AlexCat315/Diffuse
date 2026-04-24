@@ -5,6 +5,8 @@ private enum FrameAnimationPropertyKey {
     static let height = "__layout.frame.height"
     static let minWidth = "__layout.frame.minWidth"
     static let minHeight = "__layout.frame.minHeight"
+    static let maxWidth = "__layout.frame.maxWidth"
+    static let maxHeight = "__layout.frame.maxHeight"
 }
 
 public struct FrameModifier: ViewModifier {
@@ -12,15 +14,21 @@ public struct FrameModifier: ViewModifier {
     public let height: Float?
     public let minWidth: Float?
     public let minHeight: Float?
+    public let maxWidth: Float?
+    public let maxHeight: Float?
 
     public init(width: Float? = nil,
                 height: Float? = nil,
                 minWidth: Float? = nil,
-                minHeight: Float? = nil) {
+                minHeight: Float? = nil,
+                maxWidth: Float? = nil,
+                maxHeight: Float? = nil) {
         self.width = width
         self.height = height
         self.minWidth = minWidth
         self.minHeight = minHeight
+        self.maxWidth = maxWidth
+        self.maxHeight = maxHeight
     }
 
     public func apply(node: Node) {
@@ -37,6 +45,12 @@ public struct FrameModifier: ViewModifier {
         node.animatableSet(propertyKey: FrameAnimationPropertyKey.minHeight,
                            current: layout.minHeight,
                            to: minHeight) { layout.minHeight = $0 }
+        node.animatableSet(propertyKey: FrameAnimationPropertyKey.maxWidth,
+                   current: layout.maxWidth,
+                   to: maxWidth) { layout.maxWidth = $0 }
+        node.animatableSet(propertyKey: FrameAnimationPropertyKey.maxHeight,
+                   current: layout.maxHeight,
+                   to: maxHeight) { layout.maxHeight = $0 }
     }
 
     public func apply(layout: LayoutNode) {
@@ -49,11 +63,15 @@ public extension View {
     func frame(width: Float? = nil,
                height: Float? = nil,
                minWidth: Float? = nil,
-               minHeight: Float? = nil) -> some View {
+               minHeight: Float? = nil,
+               maxWidth: Float? = nil,
+               maxHeight: Float? = nil) -> some View {
         modifier(FrameModifier(width: width,
                                height: height,
                                minWidth: minWidth,
-                               minHeight: minHeight))
+                               minHeight: minHeight,
+                               maxWidth: maxWidth,
+                               maxHeight: maxHeight))
     }
 }
 

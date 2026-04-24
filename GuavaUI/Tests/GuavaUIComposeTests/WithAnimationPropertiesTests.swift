@@ -43,6 +43,13 @@ struct WithAnimationPropertiesTests {
         }
     }
 
+    struct MaxFrameHarness: View {
+        @State var maxWidth: Float? = 120
+        var body: some View {
+            _DebugNode(label: "x").frame(maxWidth: maxWidth)
+        }
+    }
+
     @Test("backgroundColor animates through the scheduler")
     func backgroundAnimates() {
         let scheduler = AnimatorScheduler()
@@ -196,6 +203,35 @@ struct WithAnimationPropertiesTests {
 
             scheduler.tick(deltaTime: 0.5)
             #expect((layout?.attachments["__layout.padding.insets"] as? EdgeInsets) == .init(all: 10))
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame(maxWidth:) animates through the scheduler")
+    func frameMaxWidthAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = MaxFrameHarness()
+            graph.install(root: h)
+
+            let node = tree.root?.children.first?.children.first
+            let layout = node?.layoutNode
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$maxWidth.wrappedValue = 200
+            }
+            recomp.commitAll()
+            #expect(layout?.maxWidth == 120)
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.maxWidth == 160)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.maxWidth == 200)
             #expect(scheduler.activeCount == 0)
         }
     }
