@@ -291,6 +291,17 @@ modifier apply 阶段（如 BackgroundColorModifier）
 - `frame` 的 **模式切换**（points↔percent、any→auto）是 snap，不做插值。
 - 模式切换时旧 controller 逻辑上立即取消；scheduler 队列在下一次 `tick` 清理 finished 项。
 - `auto` 的最终几何值由当前 Yoga 容器语义决定，可能表现为 stretch 或 intrinsic。
+- 统一推荐 typed API 写法：
+
+```swift
+_DebugNode(label: "leaf")
+    .frame(width: .percent(60),
+           height: .auto,
+           minWidth: 70,
+           maxWidth: 90)
+```
+
+- `frame(widthPercent:/heightPercent:)` 旧参数保留为兼容层，后续版本会逐步淘汰；新增代码应使用 `frame(width: FrameDimension?, height: FrameDimension?, ...)` 或 `framePercent(width:height:...)`。
 
 ---
 

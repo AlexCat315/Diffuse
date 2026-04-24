@@ -153,6 +153,7 @@ public struct FrameModifier: ViewModifier {
 }
 
 public extension View {
+    @_disfavoredOverload
     func frame(width: FrameDimension? = nil,
                height: FrameDimension? = nil,
                minWidth: Float? = nil,
@@ -187,14 +188,14 @@ public extension View {
             resolvedHeightPercent = nil
         }
 
-        return frame(width: resolvedWidth,
-                     height: resolvedHeight,
-                     widthPercent: resolvedWidthPercent,
-                     heightPercent: resolvedHeightPercent,
-                     minWidth: minWidth,
-                     minHeight: minHeight,
-                     maxWidth: maxWidth,
-                     maxHeight: maxHeight)
+        return modifier(FrameModifier(width: resolvedWidth,
+                          height: resolvedHeight,
+                          widthPercent: resolvedWidthPercent,
+                          heightPercent: resolvedHeightPercent,
+                          minWidth: minWidth,
+                          minHeight: minHeight,
+                          maxWidth: maxWidth,
+                          maxHeight: maxHeight))
     }
 
     func framePercent(width: Float? = nil,
@@ -213,20 +214,54 @@ public extension View {
 
     func frame(width: Float? = nil,
                height: Float? = nil,
-               widthPercent: Float? = nil,
-               heightPercent: Float? = nil,
                minWidth: Float? = nil,
                minHeight: Float? = nil,
                maxWidth: Float? = nil,
                maxHeight: Float? = nil) -> some View {
         modifier(FrameModifier(width: width,
                                height: height,
-                               widthPercent: widthPercent,
-                               heightPercent: heightPercent,
-                               minWidth: minWidth,
-                               minHeight: minHeight,
-                               maxWidth: maxWidth,
-                               maxHeight: maxHeight))
-    }
+                       minWidth: minWidth,
+                       minHeight: minHeight,
+                       maxWidth: maxWidth,
+                       maxHeight: maxHeight))
+        }
+
+            @available(*, deprecated, message: "Use frame(width: FrameDimension?, height: FrameDimension?, ...) or framePercent(width:height:...).")
+            func frame(width: Float? = nil,
+                 height: Float? = nil,
+                 widthPercent: Float,
+                 heightPercent: Float? = nil,
+                 minWidth: Float? = nil,
+                 minHeight: Float? = nil,
+                 maxWidth: Float? = nil,
+                 maxHeight: Float? = nil) -> some View {
+             modifier(FrameModifier(width: width,
+                           height: height,
+                           widthPercent: widthPercent,
+                           heightPercent: heightPercent,
+                           minWidth: minWidth,
+                           minHeight: minHeight,
+                           maxWidth: maxWidth,
+                           maxHeight: maxHeight))
+            }
+
+            @available(*, deprecated, message: "Use frame(width: FrameDimension?, height: FrameDimension?, ...) or framePercent(width:height:...).")
+            func frame(width: Float? = nil,
+                 height: Float? = nil,
+                 widthPercent: Float? = nil,
+                 heightPercent: Float,
+                 minWidth: Float? = nil,
+                 minHeight: Float? = nil,
+                 maxWidth: Float? = nil,
+                 maxHeight: Float? = nil) -> some View {
+             modifier(FrameModifier(width: width,
+                           height: height,
+                           widthPercent: widthPercent,
+                           heightPercent: heightPercent,
+                           minWidth: minWidth,
+                           minHeight: minHeight,
+                           maxWidth: maxWidth,
+                           maxHeight: maxHeight))
+            }
 }
 
