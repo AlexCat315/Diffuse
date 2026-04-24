@@ -255,6 +255,7 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                 rangeAnchorID = targetID
             }
             multiSelection.wrappedValue = next
+            selection.wrappedValue = next.isEmpty ? nil : targetID
         } else {
             selection.wrappedValue = targetID
             rangeAnchorID = targetID
@@ -501,6 +502,11 @@ struct _TreeRowComposite: View {
                         _TreeGuideCell(width: indentation,
                                        rowHeight: rowHeight,
                                        style: .branch(hasNextSibling: hasNextSibling))
+                    } else if level < ancestorHasNextSiblings.count,
+                              ancestorHasNextSiblings[level] {
+                        _TreeGuideCell(width: indentation,
+                                       rowHeight: rowHeight,
+                                       style: .vertical)
                     } else {
                         _TreeGuideCell(width: indentation,
                                        rowHeight: rowHeight,
