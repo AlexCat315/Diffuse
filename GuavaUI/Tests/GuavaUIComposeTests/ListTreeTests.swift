@@ -70,6 +70,33 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    struct MultiTreeHarness: View {
+        let selectionProbe: Probe<String?>
+        let multiSelectionProbe: Probe<Set<String>>
+        let roots: [TreeItem]
+
+        @State var selection: String? = nil
+        @State var multiSelection: Set<String> = []
+
+        var body: some View {
+            Tree(roots,
+                 children: \.children,
+                 selection: Binding(get: { selection },
+                                    set: { next in
+                                        selection = next
+                                        selectionProbe.value = next
+                                    }),
+                 multiSelection: Binding(get: { multiSelection },
+                                         set: { next in
+                                             multiSelection = next
+                                             multiSelectionProbe.value = next
+                                         })) { item, isSelected, _, depth in
+                Text("\(depth): \(item.title)",
+                     color: isSelected ? Color.white : Color.black)
+            }
+        }
+    }
+
     @Test("List tap updates binding and selected background")
     func listSelection() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -190,6 +217,35 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         #expect(graph.recomposer.hasPending == true)
     } }
 
+    @Test("Tree multi-selection click also updates the primary selection binding")
+    func treeMultiSelectionUpdatesPrimarySelection() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let roots = [
+            TreeItem(id: "camera", title: "Camera", children: []),
+            TreeItem(id: "light", title: "Light", children: []),
+            TreeItem(id: "mesh", title: "Mesh", children: [])
+        ]
+
+        let selectionProbe = Probe<String?>(nil)
+        let multiSelectionProbe = Probe<Set<String>>([])
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: MultiTreeHarness(selectionProbe: selectionProbe,
+                                             multiSelectionProbe: multiSelectionProbe,
+                                             roots: roots))
+        graph.computeLayout(width: 280, height: 220)
+
+        let rows = orderedPointerNodes(in: tree.root!, registry: registry)
+        #expect(rows.count == 3)
+        tap(rows[1], registry: registry)
+
+        #expect(selectionProbe.value == "light")
+        #expect(multiSelectionProbe.value == ["light"])
+    } }
+
     @Test("Tree row hosts register hover handlers")
     func treeRowsRegisterHoverHandlers() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -266,6 +322,49 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
             let h = node.frame.height
             return (w == 1 && h >= 1) || (h == 1 && w >= 1)
         })
+    } }
+
+    @Test("Tree guide lines keep ancestor continuation stems")
+    func treeGuideLinesIncludeAncestorContinuations() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let roots = [
+            TreeItem(id: "scene", title: "Scene", children: [
+                TreeItem(id: "group", title: "Group", children: [
+                    TreeItem(id: "leaf", title: "Leaf", children: [])
+                ])
+            ]),
+            TreeItem(id: "console", title: "Console", children: [])
+        ]
+
+        let selectionProbe = Probe<String?>(nil)
+        let expandedProbe = Probe<Set<String>>([])
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: TreeHarness(selectionProbe: selectionProbe,
+                                        expandedProbe: expandedProbe,
+                                        roots: roots))
+        graph.computeLayout(width: 280, height: 220)
+
+        var buttons = orderedPointerNodes(in: tree.root!, registry: registry)
+        let rootDisclosure = buttons.min { $0.frame.width < $1.frame.width }!
+        tap(rootDisclosure, registry: registry)
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 280, height: 220)
+
+        buttons = orderedPointerNodes(in: tree.root!, registry: registry)
+        let disclosureButtons = buttons.filter { $0.frame.width == rootDisclosure.frame.width }
+        #expect(disclosureButtons.count >= 2)
+        tap(disclosureButtons[1], registry: registry)
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 280, height: 220)
+
+        var strokes: [Node] = []
+        collectStrokeNodes(from: tree.root!, into: &strokes)
+
+        #expect(strokes.contains { $0.frame.width == 1 && $0.frame.height == 30 })
     } }
 
     private func orderedPointerNodes(in root: Node,
