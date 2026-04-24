@@ -12,55 +12,102 @@ struct EditorRootView: View {
 
     var body: some View {
         StoreScope(app.store) { store in
+            let setPlaybackState: (PlaybackState) -> Void = { next in
+                if store.state.playbackState != next {
+                    store.dispatch(.setPlaybackState(next))
+                }
+            }
+
+            let setWorkspaceMode: (EditorWorkspaceMode) -> Void = { next in
+                guard store.state.workspaceMode != next else { return }
+                let previous = store.state.workspaceMode
+                let previousPreset = store.state.activeLayoutPreset
+                EditorRootViewFactory.saveDockLayout(controller,
+                                                     for: previous,
+                                                     preset: previousPreset)
+                store.dispatch(.setWorkspaceMode(next))
+                let nextPreset = store.state.activeLayoutPreset
+                EditorRootViewFactory.loadLayoutPreset(into: controller,
+                                                      for: next,
+                                                      preset: nextPreset)
+                EditorRootViewFactory.saveShellState(mode: next,
+                                                     preset: nextPreset)
+            }
+
+            let setLayoutPreset: (EditorLayoutPreset) -> Void = { nextPreset in
+                guard nextPreset != store.state.activeLayoutPreset else { return }
+                let mode = store.state.workspaceMode
+                let previousPreset = store.state.activeLayoutPreset
+                EditorRootViewFactory.saveDockLayout(controller,
+                                                     for: mode,
+                                                     preset: previousPreset)
+                store.dispatch(.setActiveLayoutPreset(nextPreset))
+                EditorRootViewFactory.loadLayoutPreset(into: controller,
+                                                      for: mode,
+                                                      preset: nextPreset)
+                EditorRootViewFactory.saveShellState(mode: mode,
+                                                     preset: nextPreset)
+            }
+
+            let resetLayout: () -> Void = {
+                let mode = store.state.workspaceMode
+                let defaultPreset = EditorLayoutPreset.default(for: mode)
+                store.dispatch(.setActiveLayoutPreset(defaultPreset))
+                EditorRootViewFactory.resetLayout(into: controller, for: mode)
+                EditorRootViewFactory.saveShellState(mode: mode,
+                                                     preset: defaultPreset)
+            }
+
+            let dispatchMenuCommand: (EditorMenuCommand) -> Void = { command in
+                switch command {
+                case .newScene:
+                    store.dispatch(.setAIStatusMessage("New Scene command is not wired yet."))
+                case .openScene:
+                    store.dispatch(.setAIStatusMessage("Open Scene command is not wired yet."))
+                case .saveScene:
+                    store.dispatch(.setAIStatusMessage("Save Scene command is not wired yet."))
+                case .importAssets:
+                    store.dispatch(.setAIStatusMessage("Import Assets command is not wired yet."))
+                case .undo:
+                    store.dispatch(.setAIStatusMessage("Undo command is not wired yet."))
+                case .redo:
+                    store.dispatch(.setAIStatusMessage("Redo command is not wired yet."))
+                case .setWorkspaceMode(let mode):
+                    setWorkspaceMode(mode)
+                case .setLayoutPreset(let preset):
+                    setLayoutPreset(preset)
+                case .resetLayout:
+                    resetLayout()
+                case .setPlaybackState(let state):
+                    setPlaybackState(state)
+                case .openSettings:
+                    store.dispatch(.setAIStatusMessage("Settings panel is not wired yet."))
+                case .toggleTheme:
+                    store.dispatch(.setAIStatusMessage("Theme switching is not wired yet."))
+                case .buildProject:
+                    store.dispatch(.setAIStatusMessage("Build command is not wired yet."))
+                case .buildAndRun:
+                    store.dispatch(.setAIStatusMessage("Build and Run command is not wired yet."))
+                case .openDocumentation:
+                    store.dispatch(.setAIStatusMessage("Documentation link is not wired yet."))
+                case .about:
+                    store.dispatch(.setAIStatusMessage("Guava Editor (GuavaUI shell prototype)."))
+                }
+            }
+
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                EditorMenuBar()
+                EditorMenuBar(workspaceMode: store.state.workspaceMode,
+                              activeLayoutPreset: store.state.activeLayoutPreset,
+                              onCommand: dispatchMenuCommand)
                 Divider()
 
                 EditorMainToolbar(playbackState: store.state.playbackState,
                                   workspaceMode: store.state.workspaceMode,
                                   activeLayoutPreset: store.state.activeLayoutPreset,
-                                  onSetPlaybackState: { next in
-                    if store.state.playbackState != next {
-                        store.dispatch(.setPlaybackState(next))
-                    }
-                },
-                                  onSetWorkspaceMode: { next in
-                    guard store.state.workspaceMode != next else { return }
-                    let previous = store.state.workspaceMode
-                    let previousPreset = store.state.activeLayoutPreset
-                    EditorRootViewFactory.saveDockLayout(controller,
-                                                         for: previous,
-                                                         preset: previousPreset)
-                    store.dispatch(.setWorkspaceMode(next))
-                    let nextPreset = store.state.activeLayoutPreset
-                    EditorRootViewFactory.loadLayoutPreset(into: controller,
-                                                          for: next,
-                                                          preset: nextPreset)
-                    EditorRootViewFactory.saveShellState(mode: next,
-                                                         preset: nextPreset)
-                },
-                                  onSetLayoutPreset: { nextPreset in
-                    guard nextPreset != store.state.activeLayoutPreset else { return }
-                    let mode = store.state.workspaceMode
-                    let previousPreset = store.state.activeLayoutPreset
-                    EditorRootViewFactory.saveDockLayout(controller,
-                                                         for: mode,
-                                                         preset: previousPreset)
-                    store.dispatch(.setActiveLayoutPreset(nextPreset))
-                    EditorRootViewFactory.loadLayoutPreset(into: controller,
-                                                          for: mode,
-                                                          preset: nextPreset)
-                    EditorRootViewFactory.saveShellState(mode: mode,
-                                                         preset: nextPreset)
-                },
-                                  onResetLayout: {
-                    let mode = store.state.workspaceMode
-                    let defaultPreset = EditorLayoutPreset.default(for: mode)
-                    store.dispatch(.setActiveLayoutPreset(defaultPreset))
-                    EditorRootViewFactory.resetLayout(into: controller, for: mode)
-                    EditorRootViewFactory.saveShellState(mode: mode,
-                                                         preset: defaultPreset)
-                })
+                                  onSetPlaybackState: setPlaybackState,
+                                  onSetWorkspaceMode: setWorkspaceMode,
+                                  onSetLayoutPreset: setLayoutPreset,
+                                  onResetLayout: resetLayout)
                 Divider()
 
                 PanelWorkspace(controller: controller,
@@ -81,6 +128,10 @@ struct EditorRootView: View {
 }
 
 private struct EditorMenuBar: View {
+    let workspaceMode: EditorWorkspaceMode
+    let activeLayoutPreset: EditorLayoutPreset
+    let onCommand: (EditorMenuCommand) -> Void
+
     var body: some View {
         Row(alignment: .center, spacing: 2) {
             Text("Guava Make")
@@ -88,12 +139,30 @@ private struct EditorMenuBar: View {
                 .foregroundColor(.onSurface)
                 .padding(horizontal: 10, vertical: 6)
 
-            EditorMenuItem(title: "File")
-            EditorMenuItem(title: "Edit")
-            EditorMenuItem(title: "Window")
-            EditorMenuItem(title: "Tools")
-            EditorMenuItem(title: "Build")
-            EditorMenuItem(title: "Help")
+            EditorMenuItem(title: "File",
+                           menuWidth: 220,
+                           entries: fileEntries,
+                           onCommand: onCommand)
+            EditorMenuItem(title: "Edit",
+                           menuWidth: 200,
+                           entries: editEntries,
+                           onCommand: onCommand)
+            EditorMenuItem(title: "Window",
+                           menuWidth: 240,
+                           entries: windowEntries,
+                           onCommand: onCommand)
+            EditorMenuItem(title: "Tools",
+                           menuWidth: 200,
+                           entries: toolsEntries,
+                           onCommand: onCommand)
+            EditorMenuItem(title: "Build",
+                           menuWidth: 200,
+                           entries: buildEntries,
+                           onCommand: onCommand)
+            EditorMenuItem(title: "Help",
+                           menuWidth: 220,
+                           entries: helpEntries,
+                           onCommand: onCommand)
 
             Spacer(minLength: 0)
 
@@ -105,17 +174,178 @@ private struct EditorMenuBar: View {
         .padding(horizontal: 8, vertical: 2)
         .background(.surface)
     }
+
+    private var fileEntries: [EditorMenuEntry] {
+        [
+            .item("new-scene", "New Scene", "⌘N", .newScene),
+            .item("open-scene", "Open Scene...", "⌘O", .openScene),
+            .item("save-scene", "Save Scene", "⌘S", .saveScene),
+            .separator("file-sep-1"),
+            .item("import-assets", "Import Assets...", nil, .importAssets),
+        ]
+    }
+
+    private var editEntries: [EditorMenuEntry] {
+        [
+            .item("undo", "Undo", "⌘Z", .undo),
+            .item("redo", "Redo", "⇧⌘Z", .redo),
+            .separator("edit-sep-1"),
+            .item("settings", "Settings", "⌘,", .openSettings),
+        ]
+    }
+
+    private var windowEntries: [EditorMenuEntry] {
+        [
+            .item("workspace-level", workspaceTitle(for: .level), nil, .setWorkspaceMode(.level)),
+            .item("workspace-modeling", workspaceTitle(for: .modeling), nil, .setWorkspaceMode(.modeling)),
+            .item("workspace-animation", workspaceTitle(for: .animation), nil, .setWorkspaceMode(.animation)),
+            .separator("window-sep-1"),
+            .item("preset-level-default", presetTitle(.levelDefault), nil, .setLayoutPreset(.levelDefault)),
+            .item("preset-level-cine", presetTitle(.levelCinematics), nil, .setLayoutPreset(.levelCinematics)),
+            .item("preset-modeling-default", presetTitle(.modelingDefault), nil, .setLayoutPreset(.modelingDefault)),
+            .item("preset-modeling-sculpt", presetTitle(.modelingSculpt), nil, .setLayoutPreset(.modelingSculpt)),
+            .item("preset-animation-default", presetTitle(.animationDefault), nil, .setLayoutPreset(.animationDefault)),
+            .item("preset-animation-seq", presetTitle(.animationSequencer), nil, .setLayoutPreset(.animationSequencer)),
+            .separator("window-sep-2"),
+            .item("reset-layout", "Reset Layout", nil, .resetLayout),
+        ]
+    }
+
+    private var toolsEntries: [EditorMenuEntry] {
+        [
+            .item("play", playbackTitle(for: .playing), nil, .setPlaybackState(.playing)),
+            .item("pause", playbackTitle(for: .paused), nil, .setPlaybackState(.paused)),
+            .item("stop", playbackTitle(for: .stopped), nil, .setPlaybackState(.stopped)),
+            .separator("tools-sep-1"),
+            .item("toggle-theme", "Toggle Theme", nil, .toggleTheme),
+        ]
+    }
+
+    private var buildEntries: [EditorMenuEntry] {
+        [
+            .item("build-project", "Build Editor", nil, .buildProject),
+            .item("build-run", "Build and Run", nil, .buildAndRun),
+        ]
+    }
+
+    private var helpEntries: [EditorMenuEntry] {
+        [
+            .item("open-docs", "Documentation", nil, .openDocumentation),
+            .separator("help-sep-1"),
+            .item("about", "About Guava", nil, .about),
+        ]
+    }
+
+    private func workspaceTitle(for mode: EditorWorkspaceMode) -> String {
+        let marker = workspaceMode == mode ? "✓" : "  "
+        switch mode {
+        case .level:
+            return "\(marker) Workspace: Level"
+        case .modeling:
+            return "\(marker) Workspace: Modeling"
+        case .animation:
+            return "\(marker) Workspace: Animation"
+        }
+    }
+
+    private func presetTitle(_ preset: EditorLayoutPreset) -> String {
+        let marker = activeLayoutPreset == preset ? "✓" : "  "
+        return "\(marker) \(preset.title)"
+    }
+
+    private func playbackTitle(for state: PlaybackState) -> String {
+        switch state {
+        case .playing:
+            return "Play"
+        case .paused:
+            return "Pause"
+        case .stopped:
+            return "Stop"
+        }
+    }
 }
 
 private struct EditorMenuItem: View {
     let title: String
+    let menuWidth: Float
+    let entries: [EditorMenuEntry]
+    let onCommand: (EditorMenuCommand) -> Void
+    @State private var isPresented: Bool = false
+
+    init(title: String,
+         menuWidth: Float,
+         entries: [EditorMenuEntry],
+         onCommand: @escaping (EditorMenuCommand) -> Void) {
+        self.title = title
+        self.menuWidth = menuWidth
+        self.entries = entries
+        self.onCommand = onCommand
+        _isPresented = State(wrappedValue: false)
+    }
 
     var body: some View {
-        Text(title)
-            .font(.caption)
-            .foregroundColor(.onSurfaceVariant)
+        Popover(isPresented: $isPresented,
+                width: menuWidth) {
+            Row(alignment: .center, spacing: 4) {
+                Text(title)
+                    .font(.caption)
+                    .foregroundColor(isPresented ? .onSurface : .onSurfaceVariant)
+                Text("▾")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
             .padding(horizontal: 8, vertical: 6)
+            .background(isPresented ? .surfaceSunken : .surface)
+            .cornerRadius(4)
+        } content: {
+            Menu(menuEntries,
+                 width: menuWidth,
+                 maxVisibleRows: 10,
+                 onItemActivated: {
+                isPresented = false
+            })
+        }
     }
+
+    private var menuEntries: [MenuEntry] {
+        entries.map { entry in
+            switch entry {
+            case .separator(let id):
+                return .separator(id)
+            case .item(let id, let label, let shortcut, let command):
+                return .item(MenuItem(id: id,
+                                      title: label,
+                                      shortcut: shortcut,
+                                      action: {
+                    onCommand(command)
+                }))
+            }
+        }
+    }
+}
+
+private enum EditorMenuCommand {
+    case newScene
+    case openScene
+    case saveScene
+    case importAssets
+    case undo
+    case redo
+    case setWorkspaceMode(EditorWorkspaceMode)
+    case setLayoutPreset(EditorLayoutPreset)
+    case resetLayout
+    case setPlaybackState(PlaybackState)
+    case openSettings
+    case toggleTheme
+    case buildProject
+    case buildAndRun
+    case openDocumentation
+    case about
+}
+
+private enum EditorMenuEntry {
+    case item(String, String, String?, EditorMenuCommand)
+    case separator(String)
 }
 
 private struct EditorMainToolbar: View {
