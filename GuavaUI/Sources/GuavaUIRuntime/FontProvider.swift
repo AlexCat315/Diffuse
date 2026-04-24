@@ -263,7 +263,7 @@ public final class FontProvider {
                                   weight: FontWeight) -> CTFont {
         let scaledSize = CGFloat(size * rasterScale)
         let base: CTFont
-        if name == SystemFontDefaults.primaryFontName || name == ".AppleSystemUIFont" {
+        if name == ".AppleSystemUIFont" {
             base = CTFontCreateUIFontForLanguage(.system, scaledSize, nil)
                 ?? CTFontCreateWithName("Helvetica Neue" as CFString, scaledSize, nil)
         } else {
