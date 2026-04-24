@@ -98,6 +98,29 @@ struct TextDividerTests {
         }
     }
 
+    @Test("Single-line Text does not wrap under narrow constraints")
+    func singleLineTextDoesNotWrap() {
+        GlobalTestLock.locked {
+            TextEnvironmentHolder.current = TestTextEnvironmentFactory.make(size: 16, lineHeight: 20)
+            defer { TextEnvironmentHolder.current = nil }
+
+            let wrappingTree = NodeTree()
+            let wrappingGraph = ViewGraph(tree: wrappingTree, recomposer: Recomposer())
+            wrappingGraph.install(root: Text("Main Camera"))
+            wrappingGraph.computeLayout(width: 48, height: 120)
+
+            let singleLineTree = NodeTree()
+            let singleLineGraph = ViewGraph(tree: singleLineTree, recomposer: Recomposer())
+            singleLineGraph.install(root: Text("Main Camera", lineLimit: 1))
+            singleLineGraph.computeLayout(width: 48, height: 120)
+
+            let wrappingHeight = wrappingTree.root?.children.first?.frame.height ?? 0
+            let singleLineHeight = singleLineTree.root?.children.first?.frame.height ?? 0
+            #expect(wrappingHeight > 20)
+            #expect(singleLineHeight == 20)
+        }
+    }
+
     @Test("Font modifier changes measured text size")
     func fontChangesMeasurement() {
         GlobalTestLock.locked {

@@ -181,11 +181,10 @@ private struct HierarchyTreeRowStyle: TreeRowStyle {
         return Row(alignment: .center, spacing: 0) {
             configuration.content
                 .flex(1, shrink: 1, basis: 0)
-
-            Spacer(minLength: 0)
         }
         .padding(horizontal: 7, vertical: 0)
         .frame(height: 28)
+        .clipped()
         .background(bg)
         .cornerRadius(configuration.isSelected || configuration.isHovered || configuration.isSearchHit ? 4 : 0)
         .opacity(configuration.isEnabled ? 1 : 0.55)
@@ -232,22 +231,24 @@ private struct HierarchyEntityRow: View {
             highlightedName()
                 .padding(horizontal: 2, vertical: 1)
                 .flex(1, shrink: 1, basis: 0)
+                .clipped()
         }
         .frame(height: 28)
+        .clipped()
     }
 
     private func highlightedName() -> AnyView {
         let query = searchQuery.trimmingCharacters(in: .whitespacesAndNewlines)
         if query.isEmpty || query.count < 2 {
             return AnyView(
-                Text(entity.name)
+                Text(entity.name, lineLimit: 1)
                     .font(entity.children.isEmpty ? .body : .bodyStrong)
                     .foregroundColor(.onSurface)
             )
         }
         guard let range = entity.name.range(of: query, options: .caseInsensitive), !range.isEmpty else {
             return AnyView(
-                Text(entity.name)
+                Text(entity.name, lineLimit: 1)
                     .font(entity.children.isEmpty ? .body : .bodyStrong)
                     .foregroundColor(.onSurface)
             )
@@ -260,19 +261,20 @@ private struct HierarchyEntityRow: View {
         return AnyView(
             Row(alignment: .center, spacing: 0) {
                 if !prefix.isEmpty {
-                    Text(prefix)
+                    Text(prefix, lineLimit: 1)
                         .font(entity.children.isEmpty ? .body : .bodyStrong)
                         .foregroundColor(.onSurface)
                 }
-                Text(match)
+                Text(match, lineLimit: 1)
                     .font(.bodyStrong)
                     .foregroundColor(.accent)
                 if !suffix.isEmpty {
-                    Text(suffix)
+                    Text(suffix, lineLimit: 1)
                         .font(entity.children.isEmpty ? .body : .bodyStrong)
                         .foregroundColor(.onSurface)
                 }
             }
+            .clipped()
         )
     }
 }

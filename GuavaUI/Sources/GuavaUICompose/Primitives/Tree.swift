@@ -569,6 +569,8 @@ struct _TreeRowComposite: View {
                                       content: trailingContent)
             }
         }
+        .frame(height: rowHeight)
+        .clipped()
     }
 }
 
