@@ -133,6 +133,8 @@ public final class SDL3PlatformHost: PlatformHost {
     public var onInit: (@MainActor (NativeRenderSurface, _ widthPx: UInt32, _ heightPx: UInt32) -> Void)?
     public var onResize: (@MainActor (UInt32, UInt32) -> Void)?
     public var onEvent: (@MainActor (InputEvent) -> Void)?
+    public var onBeforeCommit: (@MainActor (_ deltaTime: Double) -> Void)?
+    public var externalDisplayRequestDrain: (() -> Bool)?
 
     public init(title: String = "GuavaUI",
                 recomposer: Recomposer = Recomposer(),
@@ -254,7 +256,21 @@ public final class SDL3PlatformHost: PlatformHost {
                 // during draw, so input delivery must always request a frame.
                 session.needsDisplay = true
             }
+            let externalDisplayRequested = externalDisplayRequestDrain?() == true
+            if externalDisplayRequested,
+               let mainWindowID,
+               let session = sessions[mainWindowID] {
+                session.needsDisplay = true
+            }
             timing.mark("events")
+
+            let shouldRunFramePreparation = sessions.values.contains { session in
+                session.needsDisplay || session.tree.hasRenderUpdates || session.recomposer.hasPending
+            }
+            if shouldRunFramePreparation {
+                onBeforeCommit?(deltaTime)
+            }
+            timing.mark("prepare")
 
             var committedAny = false
             for id in sessionOrder {

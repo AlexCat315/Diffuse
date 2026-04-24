@@ -3,6 +3,7 @@ import PackageDescription
 
 let package = Package(
     name: "GuavaEditor",
+    defaultLocalization: "en",
     platforms: [
         .macOS(.v14)
     ],
@@ -33,6 +34,9 @@ let package = Package(
                 .product(name: "ScriptRuntime", package: "Engine"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
+            ],
+            resources: [
+                .process("Resources")
             ]
         ),
 

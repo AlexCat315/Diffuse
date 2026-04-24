@@ -1,0 +1,61 @@
+/* EditorCore — English (Base) */
+
+/* Inspector section titles */
+"General" = "General";
+"Hierarchy" = "Hierarchy";
+"Transform" = "Transform";
+"Rigid Body" = "Rigid Body";
+"Collider" = "Collider";
+"Constraint" = "Constraint";
+"Light" = "Light";
+"Scripts" = "Scripts";
+
+/* Entity properties */
+"Name" = "Name";
+"Kind" = "Kind";
+"Entity ID" = "Entity ID";
+"Parent" = "Parent";
+"Children" = "Children";
+"Root" = "Root";
+
+/* Transform fields */
+"Local Position" = "Local Position";
+"Rotation" = "Rotation";
+"Scale" = "Scale";
+"World Position" = "World Position";
+
+/* Rigid Body fields */
+"Motion" = "Motion";
+"Mass" = "Mass";
+"Gravity" = "Gravity";
+"Allow Sleep" = "Allow Sleep";
+"Sleeping" = "Sleeping";
+"Yes" = "Yes";
+"No" = "No";
+
+/* Collider fields */
+"Shape" = "Shape";
+"Trigger" = "Trigger";
+"Layer" = "Layer";
+
+/* Constraint fields */
+"Type" = "Type";
+"Entity A" = "Entity A";
+"Entity B" = "Entity B";
+"Limits" = "Limits";
+"Enabled" = "Enabled";
+
+/* Light fields */
+"Color" = "Color";
+"Intensity" = "Intensity";
+"Range" = "Range";
+"Inner Angle" = "Inner Angle";
+"Outer Angle" = "Outer Angle";
+"Cone" = "Cone";
+
+/* Script fields */
+"Script %d" = "Script %d";
+"Handle" = "Handle";
+"Parameters" = "Parameters";
+"Bindings" = "Bindings";
+"No scripts" = "No scripts";

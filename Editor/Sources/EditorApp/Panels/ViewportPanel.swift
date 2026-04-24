@@ -43,6 +43,18 @@ struct ViewportPanel: View {
                                               selectedID: store.state.selectedEntityID)
                          }) {
                 Box(direction: .column, alignItems: .stretch) {
+                    Box(direction: .column, alignItems: .center, justifyContent: .center) {
+                        if !surface.isValid {
+                            ViewportIdleCard()
+                        } else if let activeDrag {
+                            DropTargetCard(label: activeDrag.displayName,
+                                           kindLabel: activeDrag.kindLabel)
+                        } else {
+                            EmptyView()
+                        }
+                    }
+                    .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
+
                     ViewportInfoBar(surface: surface,
                                     stats: stats,
                                     entity: entity,
@@ -80,20 +92,9 @@ struct ViewportPanel: View {
                                     onSetCommandSelectBehavior: { behavior in
                                         store.dispatch(.setCommandSelectBehavior(behavior))
                                     })
-
-                    Box(direction: .column, alignItems: .center, justifyContent: .center) {
-                        if !surface.isValid {
-                            ViewportIdleCard()
-                        } else if let activeDrag {
-                            DropTargetCard(label: activeDrag.displayName,
-                                           kindLabel: activeDrag.kindLabel)
-                        } else {
-                            EmptyView()
-                        }
-                    }
-                    .flex()
+                        .absolutePosition(left: 10, top: 10, right: 10)
                 }
-                .padding(10)
+                .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
             }
             .flex()
             .background(.surfaceSunken)
@@ -374,8 +375,6 @@ struct ViewportPanel: View {
                                   mode: EditorGizmoMode,
                                   shadingMode: EditorViewportShadingMode,
                                   selectedID: UInt64?) {
-        drawGridOverlay(list: list, frame: frame)
-        drawOriginAxesOverlay(list: list, frame: frame)
         if shadingMode == .wireframe {
             drawWireframeOverlay(list: list, frame: frame, selectedID: selectedID)
         }
@@ -865,59 +864,59 @@ private struct ViewportInfoBar: View {
                         .foregroundColor(.onSurface)
                 }
 
-                Text(String(format: "FPS: %.1f  Frame: %.2fms", fps, frameMs))
+                Text(String(format: "FPS %.0f  %.2fms", fps, frameMs))
                     .font(.mono)
                     .foregroundColor(.onSurfaceMuted)
             }
 
             Row(alignment: .center, spacing: 6) {
-                GizmoButton(label: "Pick", target: .none,
+                GizmoButton(icon: .cursor, tooltip: L("Pick"), target: .none,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
-                GizmoButton(label: "Move", target: .translate,
+                GizmoButton(icon: .translate, tooltip: L("Move"), target: .translate,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
-                GizmoButton(label: "Rotate", target: .rotate,
+                GizmoButton(icon: .rotate, tooltip: L("Rotate"), target: .rotate,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
-                GizmoButton(label: "Scale", target: .scale,
+                GizmoButton(icon: .scale, tooltip: L("Scale"), target: .scale,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
 
                 Spacer(minLength: 2)
 
-                ToggleChip(label: "Local", isActive: gizmoSpace == .local) {
+                ToggleChip(label: L("Local"), isActive: gizmoSpace == .local) {
                     onSelectGizmoSpace(.local)
                 }
-                ToggleChip(label: "World", isActive: gizmoSpace == .world) {
+                ToggleChip(label: L("World"), isActive: gizmoSpace == .world) {
                     onSelectGizmoSpace(.world)
                 }
 
-                ToggleChip(label: "T Snap", isActive: translateSnapEnabled) {
+                ToggleChip(label: L("T Snap"), isActive: translateSnapEnabled) {
                     onToggleTranslateSnap(!translateSnapEnabled)
                 }
-                ToggleChip(label: "R Snap", isActive: rotateSnapEnabled) {
+                ToggleChip(label: L("R Snap"), isActive: rotateSnapEnabled) {
                     onToggleRotateSnap(!rotateSnapEnabled)
                 }
-                ToggleChip(label: "S Snap", isActive: scaleSnapEnabled) {
+                ToggleChip(label: L("S Snap"), isActive: scaleSnapEnabled) {
                     onToggleScaleSnap(!scaleSnapEnabled)
                 }
 
                 Spacer(minLength: 0)
 
-                ToggleChip(label: "Cmd-Sub", isActive: cmdSelectBehavior == .subtract) {
+                ToggleChip(label: L("Cmd-Sub"), isActive: cmdSelectBehavior == .subtract) {
                     onSetCommandSelectBehavior(.subtract)
                 }
-                ToggleChip(label: "Cmd-Tog", isActive: cmdSelectBehavior == .toggle) {
+                ToggleChip(label: L("Cmd-Tog"), isActive: cmdSelectBehavior == .toggle) {
                     onSetCommandSelectBehavior(.toggle)
                 }
 
                 Spacer(minLength: 0)
 
-                ToggleChip(label: "Lit", isActive: shadingMode == .lit) {
+                ViewportIconToggle(icon: .lit, tooltip: L("Lit"), isActive: shadingMode == .lit) {
                     onSelectShadingMode(.lit)
                 }
-                ToggleChip(label: "Wire", isActive: shadingMode == .wireframe) {
+                ViewportIconToggle(icon: .wireframe, tooltip: L("Wire"), isActive: shadingMode == .wireframe) {
                     onSelectShadingMode(.wireframe)
                 }
 
-                Text("Passes: \(stats.passCount)  Draws: \(stats.drawCallCount)")
+                Text("P \(stats.passCount)  D \(stats.drawCallCount)")
                     .font(.mono)
                     .foregroundColor(.onSurfaceMuted)
             }
@@ -935,42 +934,85 @@ private struct ToggleChip: View {
     let onTap: () -> Void
 
     var body: some View {
-        if isActive {
-            Button(label) { onTap() }
-                .buttonStyle(.primary)
-        } else {
-            Button(label) { onTap() }
-                .buttonStyle(.secondary)
+        Button(action: onTap) {
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                Text(label, lineLimit: 1)
+                    .font(.caption)
+                    .foregroundColor(isActive ? .onAccent : .onSurface)
+            }
+            .frame(height: 28, minWidth: 58)
+            .padding(horizontal: 8, vertical: 0)
+            .background(isActive ? .accent : .surfaceSunken)
+            .cornerRadius(4)
+            .clipped()
         }
+        .buttonStyle(.plain)
     }
 }
 
 private struct GizmoButton: View {
-    let label: String
+    let icon: ViewportToolbarIcon
+    let tooltip: String
     let target: EditorGizmoMode
     let current: EditorGizmoMode
     let onSelect: (EditorGizmoMode) -> Void
 
     var body: some View {
         let isActive = current == target
-        if isActive {
-            Button(label) { onSelect(target) }
-                .buttonStyle(.primary)
-        } else {
-            Button(label) { onSelect(target) }
-                .buttonStyle(.secondary)
+        ViewportIconToggle(icon: icon, tooltip: tooltip, isActive: isActive) {
+            onSelect(target)
         }
+    }
+}
+
+private enum ViewportToolbarIcon: String {
+    case cursor = "cursor-arrow-rays"
+    case translate = "direction-arrows"
+    case rotate = "toolbar-arrow-path"
+    case scale = "arrows-pointing-out"
+    case lit = "toolbar-eye"
+    case wireframe = "grid-pattern"
+
+    var resource: BundleImageResource {
+        .svg(named: rawValue,
+             in: .module,
+             subdirectory: "ToolbarIcons")
+    }
+}
+
+private struct ViewportIconToggle: View {
+    let icon: ViewportToolbarIcon
+    let tooltip: String
+    let isActive: Bool
+    let onTap: () -> Void
+
+    var body: some View {
+        Button(tooltip: tooltip, action: onTap) {
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                Image(resource: icon.resource,
+                      width: 15,
+                      height: 15,
+                      tint: .white,
+                      contentMode: .fit,
+                      renderingMode: .alphaMask)
+                    .foregroundColor(isActive ? .onAccent : .onSurfaceVariant)
+            }
+            .frame(width: 28, height: 28)
+            .background(isActive ? .accent : .surfaceSunken)
+            .cornerRadius(4)
+        }
+        .buttonStyle(.plain)
     }
 }
 
 private struct ViewportIdleCard: View {
     var body: some View {
         Box(direction: .column, alignItems: .center, spacing: 4) {
-            Text("Viewport idle")
+            Text(L("Viewport idle"))
                 .font(.headline)
                 .foregroundColor(.onSurface)
 
-            Text("Waiting for the first render packet from the engine.")
+            Text(L("Waiting for the first render packet from the engine."))
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
         }
@@ -987,7 +1029,7 @@ private struct DropTargetCard: View {
 
     var body: some View {
         Box(direction: .column, alignItems: .center, spacing: 4) {
-            Text("Drop to add")
+            Text(L("Drop to add"))
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
 

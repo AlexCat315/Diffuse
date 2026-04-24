@@ -36,6 +36,6 @@ struct _DockTabCloseButtonStyle: ButtonStyle {
         .background(bg)
         .cornerRadius(theme.radius.sm)
         .opacity(configuration.isEnabled ? 1 : 0.55)
-        .animation(.semantic(.fast, in: theme), value: configuration.interactionKey)
+        .animation(.semantic(.snappy, in: theme), value: configuration.interactionKey)
     }
 }

@@ -38,7 +38,7 @@ private struct AssetBrowserHeader: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
-            Text("Assets")
+            Text(L("Assets"))
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
 
@@ -62,13 +62,13 @@ private struct AssetBrowserEmptyState: View {
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch, spacing: 6) {
-            Text("No importable assets")
+            Text(L("No importable assets"))
                 .font(.bodyStrong)
                 .foregroundColor(.onSurface)
             Text(projectDirectory)
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
-            Text("Add .gltf or .obj files under the project directory and relaunch the editor.")
+            Text(L("Add .gltf or .obj files under the project directory and relaunch the editor."))
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
         }

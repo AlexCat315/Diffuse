@@ -35,6 +35,7 @@ public final class EditorApplication {
     private var pendingViewportEvents: [InputEvent] = []
     private var viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
     private var lastViewportSurfaceState = ViewportSurfaceState()
+    private var openSettingsWindowHandler: (() -> Void)?
 
     public init(projectDirectory: String,
                 backendConfig: WGPUDeviceConfig? = nil,
@@ -123,6 +124,20 @@ public final class EditorApplication {
     public func setViewportDrawableSize(_ size: RenderDrawableSize) {
         guard viewportDrawableSize != size else { return }
         viewportDrawableSize = size
+    }
+
+    public func setViewportRenderCompletionHandler(_ handler: (@Sendable (ViewportSurfaceState) -> Void)?) {
+        engine.setRenderCompletionHandler { completion in
+            handler?(completion.viewportSurfaceState)
+        }
+    }
+
+    public func setOpenSettingsWindowHandler(_ handler: (() -> Void)?) {
+        openSettingsWindowHandler = handler
+    }
+
+    public func openSettingsWindow() {
+        openSettingsWindowHandler?()
     }
 
     /// 把资产生成到场景中，并把新实体设为当前选中。

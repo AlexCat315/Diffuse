@@ -75,10 +75,11 @@ private struct _StatefulPropertyGrid: View {
     @State var collapsed: [String: Bool] = [:]
 
     var body: some View {
-        ScrollView(.vertical) {
+        ScrollView(.both) {
             Box(direction: .column, alignItems: .stretch, spacing: 12) {
                 sectionViews()
             }
+            .frame(minWidth: grid.labelWidth + 220)
             .padding(8)
         }
         .flex()
@@ -145,6 +146,7 @@ private struct _StatefulPropertyGrid: View {
         return Row(alignment: .center, spacing: 1) {
             Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
                 Text(row.label)
+                    .lineLimit(1)
                     .font(.caption)
                     .foregroundColor(.onSurfaceVariant)
             }

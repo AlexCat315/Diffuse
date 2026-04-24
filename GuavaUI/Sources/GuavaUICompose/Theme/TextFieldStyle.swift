@@ -16,6 +16,26 @@ public struct TextFieldStyleConfiguration {
     public let theme: Theme
 }
 
+/// Equatable interaction snapshot used by built-in text field styles to key
+/// implicit transitions.
+public struct _TextFieldInteractionKey: Equatable, Sendable {
+    public let isFocused: Bool
+    public let isEditing: Bool
+    public let isError: Bool
+    public let isEnabled: Bool
+}
+
+public extension TextFieldStyleConfiguration {
+    var interactionKey: _TextFieldInteractionKey {
+        _TextFieldInteractionKey(
+            isFocused: isFocused,
+            isEditing: isEditing,
+            isError: isError,
+            isEnabled: isEnabled
+        )
+    }
+}
+
 public protocol TextFieldStyle {
     associatedtype Body: View
     @ViewBuilder
