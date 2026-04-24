@@ -103,6 +103,7 @@ struct HierarchyPanel: View {
                 }
                 .padding(horizontal: 5, vertical: 4)
                 .flex()
+                .treeRowStyle(HierarchyTreeRowStyle())
             }
             .frame(minWidth: 220)
         }
@@ -162,6 +163,35 @@ struct HierarchyPanel: View {
     }
 }
 
+private struct HierarchyTreeRowStyle: TreeRowStyle {
+    func makeBody(configuration: TreeRowStyleConfiguration) -> some View {
+        let bg: Color = {
+            if configuration.isSelected {
+                return Color(red: 47, green: 68, blue: 112)
+            }
+            if configuration.isSearchHit {
+                return Color(r: 73.0 / 255.0, g: 89.0 / 255.0, b: 42.0 / 255.0, a: 0.72)
+            }
+            if configuration.isHovered {
+                return Color(r: 42.0 / 255.0, g: 47.0 / 255.0, b: 56.0 / 255.0, a: 0.82)
+            }
+            return Color(r: 0, g: 0, b: 0, a: 0)
+        }()
+
+        return Row(alignment: .center, spacing: 0) {
+            configuration.content
+                .flex(1, shrink: 1, basis: 0)
+
+            Spacer(minLength: 0)
+        }
+        .padding(horizontal: 7, vertical: 0)
+        .frame(height: 28)
+        .background(bg)
+        .cornerRadius(configuration.isSelected || configuration.isHovered || configuration.isSearchHit ? 4 : 0)
+        .opacity(configuration.isEnabled ? 1 : 0.55)
+    }
+}
+
 private struct HierarchyPanelHeader: View {
     let entityCount: Int
     let isConnected: Bool
@@ -197,10 +227,13 @@ private struct HierarchyEntityRow: View {
         Row(alignment: .center, spacing: 7) {
             HierarchyEntityIcon(kind: entity.kind)
                 .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
+                .frame(width: 18, height: 18)
 
             highlightedName()
                 .padding(horizontal: 2, vertical: 1)
+                .flex(1, shrink: 1, basis: 0)
         }
+        .frame(height: 28)
     }
 
     private func highlightedName() -> AnyView {
