@@ -83,62 +83,73 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
     }
 
     public var body: some View {
+        let entries = visibleEntries
+        let guideRows = entries.map {
+            _TreeGuideRowSnapshot(depth: $0.depth,
+                                  ancestorHasNextSiblings: $0.ancestorHasNextSiblings,
+                                  hasNextSibling: $0.hasNextSibling,
+                                  hasChildren: $0.hasChildren,
+                                  isExpanded: $0.isExpanded)
+        }
         ScrollView(.vertical) {
-            Box(direction: .column, alignItems: .stretch, spacing: rowSpacing) {
-                for entry in visibleEntries {
-                    let isSel = selectedIDs.contains(entry.id)
-                    _TreeRowComposite(
-                        depth: entry.depth,
-                        ancestorHasNextSiblings: entry.ancestorHasNextSiblings,
-                        hasNextSibling: entry.hasNextSibling,
-                        hasChildren: entry.hasChildren,
-                        isExpanded: entry.isExpanded,
-                        isSearchHit: entry.isSearchHit,
-                        isSelected: isSel,
-                        isHovered: hoveredID == entry.id,
-                        rowHeight: rowHeight,
-                        indentation: indentation,
-                        disclosureWidth: disclosureWidth,
-                        showsIndentGuides: showsIndentGuides,
-                        disclosureContent: disclosureContent,
-                        trailingSlotWidth: trailingContent == nil ? nil : trailingSlotWidth,
-                        trailingContent: trailingContent.map {
-                            $0(entry.element,
-                               isSel,
-                               entry.isExpanded,
-                               entry.isSearchHit,
-                               hoveredID == entry.id,
-                               entry.depth)
-                        },
-                        onToggle: { toggle(entry.id) },
-                        onSelect: { select(entry.element, modifiers: activeModifiers) },
-                        onMoveSelection: { delta in
-                            moveSelection(from: entry.id, delta: delta)
-                        },
-                        onCollapseOrParent: {
-                            collapseOrSelectParent(entry)
-                        },
-                        onExpandOrChild: {
-                            expandOrSelectFirstChild(entry)
-                        },
-                        onKeyEvent: { event in
-                            activeModifiers = event.modifiers
-                            if onKeyCommand?(event, selectedIDs) == true {
-                                return true
-                            }
-                            return false
-                        },
-                        onHoverChange: { hovered in
-                            if hovered {
-                                if hoveredID != entry.id {
-                                    hoveredID = entry.id
+            _TreeGuideOverlayHost(rows: guideRows,
+                                  rowHeight: rowHeight,
+                                  rowSpacing: rowSpacing,
+                                  indentation: indentation,
+                                  showsIndentGuides: showsIndentGuides) {
+                Box(direction: .column, alignItems: .stretch, spacing: rowSpacing) {
+                    for entry in entries {
+                        let isSel = selectedIDs.contains(entry.id)
+                        _TreeRowComposite(
+                            depth: entry.depth,
+                            hasChildren: entry.hasChildren,
+                            isExpanded: entry.isExpanded,
+                            isSearchHit: entry.isSearchHit,
+                            isSelected: isSel,
+                            isHovered: hoveredID == entry.id,
+                            rowHeight: rowHeight,
+                            indentation: indentation,
+                            disclosureWidth: disclosureWidth,
+                            disclosureContent: disclosureContent,
+                            trailingSlotWidth: trailingContent == nil ? nil : trailingSlotWidth,
+                            trailingContent: trailingContent.map {
+                                $0(entry.element,
+                                   isSel,
+                                   entry.isExpanded,
+                                   entry.isSearchHit,
+                                   hoveredID == entry.id,
+                                   entry.depth)
+                            },
+                            onToggle: { toggle(entry.id) },
+                            onSelect: { select(entry.element, modifiers: activeModifiers) },
+                            onMoveSelection: { delta in
+                                moveSelection(from: entry.id, delta: delta)
+                            },
+                            onCollapseOrParent: {
+                                collapseOrSelectParent(entry)
+                            },
+                            onExpandOrChild: {
+                                expandOrSelectFirstChild(entry)
+                            },
+                            onKeyEvent: { event in
+                                activeModifiers = event.modifiers
+                                if onKeyCommand?(event, selectedIDs) == true {
+                                    return true
                                 }
-                            } else if hoveredID == entry.id {
-                                hoveredID = nil
-                            }
-                        },
-                        content: AnyView(rowContent(entry.element, isSel, entry.isExpanded, entry.depth))
-                    )
+                                return false
+                            },
+                            onHoverChange: { hovered in
+                                if hovered {
+                                    if hoveredID != entry.id {
+                                        hoveredID = entry.id
+                                    }
+                                } else if hoveredID == entry.id {
+                                    hoveredID = nil
+                                }
+                            },
+                            content: AnyView(rowContent(entry.element, isSel, entry.isExpanded, entry.depth))
+                        )
+                    }
                 }
             }
         }
@@ -213,7 +224,12 @@ public struct Tree<Roots: RandomAccessCollection, ID: Hashable, RowContent: View
                                     isExpanded: isExpanded))
             if isExpanded && !childNodes.isEmpty {
                 var childGuide = ancestorHasNextSiblings
-                childGuide.append(hasNextSibling)
+                // Guide columns map to depth>=1 path siblings. Root-level
+                // sibling state has no dedicated guide column and would shift
+                // descendant columns by one, creating depth-2+ breaks.
+                if depth > 0 {
+                    childGuide.append(hasNextSibling)
+                }
                 appendVisible(nodes: childNodes,
                               depth: depth + 1,
                               ancestorHasNextSiblings: childGuide,
@@ -471,8 +487,6 @@ public extension Tree where Element: Identifiable, ID == Element.ID {
 /// `TreeRowStyle`.
 struct _TreeRowComposite: View {
     let depth: Int
-    let ancestorHasNextSiblings: [Bool]
-    let hasNextSibling: Bool
     let hasChildren: Bool
     let isExpanded: Bool
     let isSearchHit: Bool
@@ -481,7 +495,6 @@ struct _TreeRowComposite: View {
     let rowHeight: Float
     let indentation: Float
     let disclosureWidth: Float
-    let showsIndentGuides: Bool
     let disclosureContent: Tree<[Int], Int, EmptyView>.DisclosureContent?
     let trailingSlotWidth: Float?
     let trailingContent: AnyView?
@@ -496,24 +509,7 @@ struct _TreeRowComposite: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 0) {
-            if showsIndentGuides {
-                for level in 0..<depth {
-                    if level == depth - 1 {
-                        _TreeGuideCell(width: indentation,
-                                       rowHeight: rowHeight,
-                                       style: .branch(hasNextSibling: hasNextSibling))
-                    } else if level < ancestorHasNextSiblings.count,
-                              ancestorHasNextSiblings[level] {
-                        _TreeGuideCell(width: indentation,
-                                       rowHeight: rowHeight,
-                                       style: .vertical)
-                    } else {
-                        _TreeGuideCell(width: indentation,
-                                       rowHeight: rowHeight,
-                                       style: .none)
-                    }
-                }
-            } else if depth > 0 {
+            if depth > 0 {
                 Box { EmptyView() }
                     .frame(width: Float(depth) * indentation, height: rowHeight)
             }
@@ -570,7 +566,132 @@ struct _TreeRowComposite: View {
             }
         }
         .frame(height: rowHeight)
-        .clipped()
+    }
+}
+
+private struct _TreeGuideRowSnapshot {
+    let depth: Int
+    let ancestorHasNextSiblings: [Bool]
+    let hasNextSibling: Bool
+    let hasChildren: Bool
+    let isExpanded: Bool
+}
+
+private struct _TreeGuideOverlayHost<Content: View>: _PrimitiveView {
+    let rows: [_TreeGuideRowSnapshot]
+    let rowHeight: Float
+    let rowSpacing: Float
+    let indentation: Float
+    let showsIndentGuides: Bool
+    let content: Content
+
+    init(rows: [_TreeGuideRowSnapshot],
+         rowHeight: Float,
+         rowSpacing: Float,
+         indentation: Float,
+         showsIndentGuides: Bool,
+         @ViewBuilder content: () -> Content) {
+        self.rows = rows
+        self.rowHeight = rowHeight
+        self.rowSpacing = rowSpacing
+        self.indentation = indentation
+        self.showsIndentGuides = showsIndentGuides
+        self.content = content()
+    }
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = false
+        return node
+    }
+
+    func _updateNode(_ node: Node) {
+        node.attachments["__tree_guide"] = true
+        let rows = rows
+        let rowHeight = rowHeight
+        let rowSpacing = rowSpacing
+        let indentation = indentation
+        let showsIndentGuides = showsIndentGuides
+
+        node.draw = { [weak node] list, origin in
+            guard let node,
+                  showsIndentGuides,
+                  rowHeight > 0,
+                  indentation > 0,
+                  !rows.isEmpty else {
+                return
+            }
+
+            let baseX = Float(origin.x)
+            let baseY = Float(origin.y)
+            let rowStride = rowHeight + rowSpacing
+            let centerLead: Float = {
+                let whole = max(2, indentation.rounded(.down))
+                return ((whole - 1) * 0.5).rounded(.down)
+            }()
+            let centerYLead: Float = {
+                let whole = max(2, rowHeight.rounded(.down))
+                return max(0, ((whole - 1) * 0.5).rounded(.down))
+            }()
+            let continuationExtension = max(0, rowSpacing.rounded(.up))
+            let baseColor = (node.foregroundColor ?? node.theme.colors.onSurfaceVariant)
+                .multipliedAlpha(node.opacity * 0.6)
+
+            for (index, row) in rows.enumerated() {
+                guard row.depth > 0 else { continue }
+
+                let rowOriginY = baseY + Float(index) * rowStride
+                let rowTop = rowOriginY.rounded(.down)
+                let rowBottom = max(rowTop + 1, (rowOriginY + rowHeight).rounded(.up))
+                let strokeY = (rowOriginY + centerYLead).rounded(.down)
+
+                for level in 0..<row.depth {
+                    let cellX = baseX + Float(level) * indentation
+                    let strokeX = (cellX + centerLead).rounded(.down)
+                    let rightEdge = (cellX + indentation).rounded()
+
+                    if level == row.depth - 1 {
+                        let continuesDownward = row.hasNextSibling || (row.hasChildren && row.isExpanded)
+                        let verticalBottom = continuesDownward
+                            ? rowBottom + continuationExtension
+                            : strokeY + 1
+                        list.addRect(UIRect(x: strokeX,
+                                            y: rowTop,
+                                            width: 1,
+                                            height: max(1, verticalBottom - rowTop)),
+                                     color: baseColor)
+                        list.addRect(UIRect(x: strokeX,
+                                            y: strokeY,
+                                            width: max(1, rightEdge - strokeX),
+                                            height: 1),
+                                     color: baseColor)
+                        continue
+                    }
+
+                    let shouldDrawVertical = level < row.ancestorHasNextSiblings.count
+                        && row.ancestorHasNextSiblings[level]
+                    if shouldDrawVertical {
+                        let verticalBottom = rowBottom + continuationExtension
+                        list.addRect(UIRect(x: strokeX,
+                                            y: rowTop,
+                                            width: 1,
+                                            height: max(1, verticalBottom - rowTop)),
+                                     color: baseColor.multipliedAlpha(0.86))
+                    }
+                }
+            }
+        }
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        layout.flexDirection = .column
+        layout.alignItems = .stretch
+        return layout
+    }
+
+    var _children: [any View] {
+        [content]
     }
 }
 
@@ -586,102 +707,6 @@ private struct _TreeTrailingSlotHost: View {
         .padding(horizontal: 4, vertical: 0)
         .frame(width: width, height: rowHeight)
     }
-}
-
-private struct _TreeGuideCell: View {
-    enum Style {
-        case none
-        case vertical
-        case branch(hasNextSibling: Bool)
-    }
-
-    let width: Float
-    let rowHeight: Float
-    let style: Style
-
-    private var centerLead: Float {
-        let whole = max(2, width.rounded(.down))
-        return ((whole - 1) * 0.5).rounded(.down)
-    }
-
-    private var trailingWidth: Float {
-        max(0, width - centerLead - 1)
-    }
-
-    private var centerYLead: Float {
-        let whole = max(2, rowHeight.rounded(.down))
-        return max(0, ((whole - 1) * 0.5).rounded(.down))
-    }
-
-    private var bottomHeight: Float {
-        max(0, rowHeight - centerYLead - 1)
-    }
-
-    var body: some View {
-        _TreeGuidePrimitive(width: width,
-                            rowHeight: rowHeight,
-                            centerLead: centerLead,
-                            centerYLead: centerYLead,
-                            bottomHeight: bottomHeight,
-                            style: style)
-    }
-}
-
-private struct _TreeGuidePrimitive: _PrimitiveView {
-    let width: Float
-    let rowHeight: Float
-    let centerLead: Float
-    let centerYLead: Float
-    let bottomHeight: Float
-    let style: _TreeGuideCell.Style
-
-    func _makeNode() -> Node {
-        let node = Node()
-        node.isHitTestable = false
-        return node
-    }
-
-    func _updateNode(_ node: Node) {
-        node.attachments[Self.guideKey] = true
-        let style = style
-        let width = width
-        let rowHeight = rowHeight
-        let centerLead = centerLead
-        let centerYLead = centerYLead
-        let bottomHeight = bottomHeight
-        node.draw = { [weak node] list, origin in
-            guard let node else { return }
-            let color = (node.foregroundColor ?? node.theme.colors.onSurfaceVariant)
-                .multipliedAlpha(node.opacity * 0.6)
-            let x = Float(origin.x)
-            let y = Float(origin.y)
-            let strokeX = x + centerLead
-            let strokeY = y + centerYLead
-
-            switch style {
-            case .none:
-                return
-            case .vertical:
-                list.addRect(UIRect(x: strokeX, y: y, width: 1, height: rowHeight),
-                             color: color.multipliedAlpha(0.86))
-            case .branch(let hasNextSibling):
-                let verticalHeight = centerYLead + 1 + (hasNextSibling ? bottomHeight : 0)
-                list.addRect(UIRect(x: strokeX, y: y, width: 1, height: verticalHeight),
-                             color: color)
-                list.addRect(UIRect(x: strokeX, y: strokeY, width: max(1, width - centerLead), height: 1),
-                             color: color)
-            }
-        }
-    }
-
-    func _makeLayoutNode() -> LayoutNode? {
-        let layout = LayoutNode()
-        layout.width = width
-        layout.height = rowHeight
-        return layout
-    }
-
-    static let guideKey = "__tree_guide"
 }
 
 struct _TreeRowHost: _PrimitiveView {
