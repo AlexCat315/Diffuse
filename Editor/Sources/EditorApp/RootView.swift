@@ -10,9 +10,179 @@ struct EditorRootView: View {
     let registry: PanelRegistry
 
     var body: some View {
-        PanelWorkspace(controller: controller,
-                       registry: registry)
+        StoreScope(app.store) { store in
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                EditorMenuBar()
+                Divider()
+
+                EditorMainToolbar(playbackState: store.state.playbackState,
+                                  onSetPlaybackState: { next in
+                    if store.state.playbackState != next {
+                        store.dispatch(.setPlaybackState(next))
+                    }
+                })
+                Divider()
+
+                PanelWorkspace(controller: controller,
+                               registry: registry)
+                    .flex()
+
+                Divider()
+                EditorStatusBar(isConnected: store.state.connected,
+                                sceneRevision: store.state.sceneRevision,
+                                selectedCount: store.state.selectedEntityIDs.count,
+                                aiStatusMessage: store.state.aiStatusMessage)
+            }
             .appearance(.dark)
+        }
+    }
+}
+
+private struct EditorMenuBar: View {
+    var body: some View {
+        Row(alignment: .center, spacing: 2) {
+            Text("Guava Make")
+                .font(.bodyStrong)
+                .foregroundColor(.onSurface)
+                .padding(horizontal: 10, vertical: 6)
+
+            EditorMenuItem(title: "File")
+            EditorMenuItem(title: "Edit")
+            EditorMenuItem(title: "Window")
+            EditorMenuItem(title: "Tools")
+            EditorMenuItem(title: "Build")
+            EditorMenuItem(title: "Help")
+
+            Spacer(minLength: 0)
+
+            Text("Settings")
+                .font(.caption)
+                .foregroundColor(.onSurfaceVariant)
+                .padding(horizontal: 10, vertical: 6)
+        }
+        .padding(horizontal: 8, vertical: 2)
+        .background(.surface)
+    }
+}
+
+private struct EditorMenuItem: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.caption)
+            .foregroundColor(.onSurfaceVariant)
+            .padding(horizontal: 8, vertical: 6)
+    }
+}
+
+private struct EditorMainToolbar: View {
+    let playbackState: PlaybackState
+    let onSetPlaybackState: (PlaybackState) -> Void
+
+    var body: some View {
+        Row(alignment: .center, spacing: 8) {
+            ToolbarTextButton(title: "New")
+            ToolbarTextButton(title: "Open")
+            ToolbarTextButton(title: "Save")
+            ToolbarTextButton(title: "Import")
+
+            Divider()
+                .frame(width: 1, height: 20)
+
+            ToolbarStateButton(title: "Play",
+                               isActive: playbackState == .playing,
+                               onClick: { onSetPlaybackState(.playing) })
+            ToolbarStateButton(title: "Pause",
+                               isActive: playbackState == .paused,
+                               onClick: { onSetPlaybackState(.paused) })
+            ToolbarStateButton(title: "Stop",
+                               isActive: playbackState == .stopped,
+                               onClick: { onSetPlaybackState(.stopped) })
+
+            Spacer(minLength: 0)
+
+            Text("Platforms")
+                .font(.caption)
+                .foregroundColor(.onSurfaceVariant)
+                .padding(horizontal: 8, vertical: 6)
+                .background(.surfaceSunken)
+                .cornerRadius(4)
+        }
+        .padding(horizontal: 8, vertical: 6)
+        .background(.surfaceVariant)
+    }
+}
+
+private struct ToolbarTextButton: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.caption)
+            .foregroundColor(.onSurface)
+            .padding(horizontal: 8, vertical: 6)
+            .background(.surfaceSunken)
+            .cornerRadius(4)
+    }
+}
+
+private struct ToolbarStateButton: View {
+    let title: String
+    let isActive: Bool
+    let onClick: () -> Void
+
+    var body: some View {
+        Button(action: onClick) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(isActive ? .onAccent : .onSurface)
+                .padding(horizontal: 10, vertical: 6)
+                .background(isActive ? .accent : .surfaceSunken)
+                .cornerRadius(4)
+        }
+    }
+}
+
+private struct EditorStatusBar: View {
+    let isConnected: Bool
+    let sceneRevision: UInt64
+    let selectedCount: Int
+    let aiStatusMessage: String?
+
+    var body: some View {
+        Row(alignment: .center, spacing: 8) {
+            Box { EmptyView() }
+                .frame(width: 6, height: 6)
+                .background(isConnected ? .success : .warning)
+                .cornerRadius(3)
+
+            Text(isConnected ? "Connected" : "Offline")
+                .font(.caption)
+                .foregroundColor(.onSurfaceVariant)
+
+            Divider()
+                .frame(width: 1, height: 14)
+
+            Text("Revision \(sceneRevision)")
+                .font(.caption)
+                .foregroundColor(.onSurfaceVariant)
+
+            Divider()
+                .frame(width: 1, height: 14)
+
+            Text("Selection \(selectedCount)")
+                .font(.caption)
+                .foregroundColor(.onSurfaceVariant)
+
+            Spacer(minLength: 0)
+
+            Text(aiStatusMessage ?? "Ready")
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+        }
+        .padding(horizontal: 10, vertical: 5)
+        .background(.surfaceVariant)
     }
 }
 
