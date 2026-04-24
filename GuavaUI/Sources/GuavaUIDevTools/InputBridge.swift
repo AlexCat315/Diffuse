@@ -66,14 +66,16 @@ public enum InputBridge {
                 button: mouseButton(payload.button ?? 0),
                 x: payload.x ?? 0,
                 y: payload.y ?? 0,
-                clicks: UInt8(min(255, max(1, payload.clickCount ?? 1)))
+                clicks: UInt8(min(255, max(1, payload.clickCount ?? 1))),
+                modifiers: keyModifiers(payload.modifiers ?? 0)
             ))
         case "pointerUp":
             return .mouseButtonUp(MouseButtonEvent(
                 button: mouseButton(payload.button ?? 0),
                 x: payload.x ?? 0,
                 y: payload.y ?? 0,
-                clicks: UInt8(min(255, max(1, payload.clickCount ?? 1)))
+                clicks: UInt8(min(255, max(1, payload.clickCount ?? 1))),
+                modifiers: keyModifiers(payload.modifiers ?? 0)
             ))
         case "wheel":
             return .mouseWheel(MouseWheelEvent(
@@ -98,5 +100,14 @@ public enum InputBridge {
         case 4: return .x2
         default: return .left
         }
+    }
+
+    private static func keyModifiers(_ raw: Int) -> KeyModifiers {
+        var mods: KeyModifiers = []
+        if raw & 1 != 0 { mods.insert(.shift) }
+        if raw & 2 != 0 { mods.insert(.ctrl) }
+        if raw & 4 != 0 { mods.insert(.alt) }
+        if raw & 8 != 0 { mods.insert(.gui) }
+        return mods
     }
 }

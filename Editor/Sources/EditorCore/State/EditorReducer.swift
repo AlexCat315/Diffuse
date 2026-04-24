@@ -57,7 +57,12 @@ public enum EditorReducer {
 
         case let .setSelectedEntities(entityIDs):
             state.selectedEntityIDs = entityIDs
-            state.selectedEntityID = entityIDs.first
+            if let current = state.selectedEntityID,
+               entityIDs.contains(current) {
+                state.selectedEntityID = current
+            } else {
+                state.selectedEntityID = entityIDs.sorted().first
+            }
         case let .setPlaybackState(value):
             state.playbackState = value
         case let .setWorkspaceMode(mode):

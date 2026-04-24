@@ -8,7 +8,7 @@ struct HierarchyPanel: View {
     let store: EditorStore
     let scene: EditorSceneAdapter
 
-    @State private var expanded: Set<UInt64>
+    @State private var expandedKeys: Set<TreeNodeKey<UInt64>>
     @State private var searchQuery: String
     @State private var hiddenEntityIDs: Set<UInt64>
     @State private var lockedEntityIDs: Set<UInt64>
@@ -16,7 +16,10 @@ struct HierarchyPanel: View {
     init(store: EditorStore, scene: EditorSceneAdapter) {
         self.store = store
         self.scene = scene
-        _expanded = State(wrappedValue: scene.defaultExpandedEntityIDs)
+        _expandedKeys = State(
+            wrappedValue: Self.defaultExpandedKeys(defaultIDs: scene.defaultExpandedEntityIDs,
+                                                   roots: scene.roots)
+        )
         _searchQuery = State(wrappedValue: "")
         _hiddenEntityIDs = State(wrappedValue: [])
         _lockedEntityIDs = State(wrappedValue: [])
@@ -25,19 +28,27 @@ struct HierarchyPanel: View {
     var body: some View {
         StoreScope(store) { store in
             let hierarchyRoots = scene.roots
-            let selection = Binding<UInt64?>(
-                get: { store.state.selectedEntityID },
+            let keysByID = Self.keyIndex(in: hierarchyRoots)
+            let selectionKey = Binding<TreeNodeKey<UInt64>?>(
+                get: {
+                    guard let selected = store.state.selectedEntityID else { return nil }
+                    return keysByID[selected]?.first
+                },
                 set: { next in
-                    if store.state.selectedEntityID != next {
-                        store.dispatch(.setPrimarySelectedEntity(next))
+                    let nextID = next?.id
+                    if store.state.selectedEntityID != nextID {
+                        store.dispatch(.setPrimarySelectedEntity(nextID))
                     }
                 }
             )
-            let multiSelection = Binding<Set<UInt64>>(
-                get: { store.state.selectedEntityIDs },
+            let multiSelectionKeys = Binding<Set<TreeNodeKey<UInt64>>>(
+                get: {
+                    Set(store.state.selectedEntityIDs.compactMap { keysByID[$0]?.first })
+                },
                 set: { next in
-                    if store.state.selectedEntityIDs != next {
-                        store.dispatch(.setSelectedEntities(next))
+                    let nextIDs = Set(next.map(\ .id))
+                    if store.state.selectedEntityIDs != nextIDs {
+                        store.dispatch(.setSelectedEntities(nextIDs))
                     }
                 }
             )
@@ -62,9 +73,9 @@ struct HierarchyPanel: View {
 
              Tree(hierarchyRoots,
                      children: \.children,
-                     selection: selection,
-                     multiSelection: multiSelection,
-                     expanded: $expanded,
+                     selectionKey: selectionKey,
+                     multiSelectionKeys: multiSelectionKeys,
+                     expandedKeys: $expandedKeys,
                      rowHeight: 28,
                      rowSpacing: 0,
                      indentation: 16,
@@ -188,7 +199,10 @@ struct HierarchyPanel: View {
             return
         }
         if position == .inside {
-            expanded.insert(targetID)
+            let keysByID = Self.keyIndex(in: roots)
+            if let targetKey = keysByID[targetID]?.first {
+                expandedKeys.insert(targetKey)
+            }
         }
     }
 
@@ -248,6 +262,27 @@ struct HierarchyPanel: View {
             return true
         }
         return node.children.contains { subtreeContains(id, in: $0) }
+    }
+
+    private static func keyIndex(in roots: [EditorSceneNode]) -> [UInt64: [TreeNodeKey<UInt64>]] {
+        var result: [UInt64: [TreeNodeKey<UInt64>]] = [:]
+
+        func walk(nodes: [EditorSceneNode], pathPrefix: [Int]) {
+            for (index, node) in nodes.enumerated() {
+                let path = pathPrefix + [index]
+                result[node.id, default: []].append(TreeNodeKey(id: node.id, path: path))
+                walk(nodes: node.children, pathPrefix: path)
+            }
+        }
+
+        walk(nodes: roots, pathPrefix: [])
+        return result
+    }
+
+    private static func defaultExpandedKeys(defaultIDs: Set<UInt64>,
+                                            roots: [EditorSceneNode]) -> Set<TreeNodeKey<UInt64>> {
+        let keysByID = keyIndex(in: roots)
+        return Set(defaultIDs.compactMap { keysByID[$0]?.first })
     }
 }
 
