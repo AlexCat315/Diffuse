@@ -1,6 +1,7 @@
 import EditorCore
 import GuavaUIApp
 import GuavaUICompose
+import GuavaUIRuntime
 import Foundation
 
 /// 编辑器根视图。装配 `DockController` + `PanelRegistry` + 一个三列 `PanelWorkspace`。
@@ -185,36 +186,88 @@ private struct LayoutPresetSelector: View {
     let workspaceMode: EditorWorkspaceMode
     let activePreset: EditorLayoutPreset
     let onSelectPreset: (EditorLayoutPreset) -> Void
+    @State private var isPresented: Bool = false
+
+    init(workspaceMode: EditorWorkspaceMode,
+         activePreset: EditorLayoutPreset,
+         onSelectPreset: @escaping (EditorLayoutPreset) -> Void) {
+        self.workspaceMode = workspaceMode
+        self.activePreset = activePreset
+        self.onSelectPreset = onSelectPreset
+        _isPresented = State(wrappedValue: false)
+    }
 
     var body: some View {
+        Popover(isPresented: $isPresented,
+                width: 132) {
+            Row(alignment: .center, spacing: 6) {
+                Text("Preset")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceVariant)
+
+                Text(shortLabel(for: activePreset))
+                    .font(.caption)
+                    .foregroundColor(.onSurface)
+
+                Text("▼")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .padding(horizontal: 8, vertical: 6)
+            .background(.surfaceSunken)
+            .cornerRadius(4)
+        } content: {
+            Menu(menuEntries,
+                 width: 132,
+                 maxVisibleRows: 6,
+                 onItemActivated: {
+                isPresented = false
+            })
+        }
+    }
+
+    private var menuEntries: [MenuEntry] {
         switch workspaceMode {
         case .level:
-            Row(alignment: .center, spacing: 4) {
-                ToolbarStateButton(title: "Default",
-                                   isActive: activePreset == .levelDefault,
-                                   onClick: { onSelectPreset(.levelDefault) })
-                ToolbarStateButton(title: "Cinematics",
-                                   isActive: activePreset == .levelCinematics,
-                                   onClick: { onSelectPreset(.levelCinematics) })
-            }
+            return [
+                .item(MenuItem(id: "level-default",
+                               title: "Default",
+                               action: { onSelectPreset(.levelDefault) })),
+                .item(MenuItem(id: "level-cine",
+                               title: "Cine",
+                               action: { onSelectPreset(.levelCinematics) })),
+            ]
         case .modeling:
-            Row(alignment: .center, spacing: 4) {
-                ToolbarStateButton(title: "Default",
-                                   isActive: activePreset == .modelingDefault,
-                                   onClick: { onSelectPreset(.modelingDefault) })
-                ToolbarStateButton(title: "Sculpt",
-                                   isActive: activePreset == .modelingSculpt,
-                                   onClick: { onSelectPreset(.modelingSculpt) })
-            }
+            return [
+                .item(MenuItem(id: "modeling-default",
+                               title: "Default",
+                               action: { onSelectPreset(.modelingDefault) })),
+                .item(MenuItem(id: "modeling-sculpt",
+                               title: "Sculpt",
+                               action: { onSelectPreset(.modelingSculpt) })),
+            ]
         case .animation:
-            Row(alignment: .center, spacing: 4) {
-                ToolbarStateButton(title: "Default",
-                                   isActive: activePreset == .animationDefault,
-                                   onClick: { onSelectPreset(.animationDefault) })
-                ToolbarStateButton(title: "Sequencer",
-                                   isActive: activePreset == .animationSequencer,
-                                   onClick: { onSelectPreset(.animationSequencer) })
-            }
+            return [
+                .item(MenuItem(id: "animation-default",
+                               title: "Default",
+                               action: { onSelectPreset(.animationDefault) })),
+                .item(MenuItem(id: "animation-seq",
+                               title: "Seq",
+                               action: { onSelectPreset(.animationSequencer) })),
+            ]
+        }
+    }
+
+    private func shortLabel(for preset: EditorLayoutPreset) -> String {
+        switch preset {
+        case .levelDefault, .modelingDefault, .animationDefault:
+            return "Default"
+        case .levelCinematics:
+            return "Cine"
+        case .modelingSculpt:
+            return "Sculpt"
+        case .animationSequencer:
+            return "Seq"
         }
     }
 }
