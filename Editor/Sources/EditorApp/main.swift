@@ -20,7 +20,7 @@ private func runEditor() throws {
     app.bootstrap()
     defer { app.shutdown() }
 
-    let controller = EditorRootViewFactory.makeController()
+    let controller = EditorRootViewFactory.makeController(for: app.store.state.workspaceMode)
     let registry = EditorRootViewFactory.makeRegistry(app: app)
 
     try AppRuntime.run(
@@ -34,7 +34,7 @@ private func runEditor() throws {
     }
 
     // Save layout state on shutdown
-    EditorRootViewFactory.saveDockLayout(controller)
+    EditorRootViewFactory.saveDockLayout(controller, for: app.store.state.workspaceMode)
 }
 
 do {
