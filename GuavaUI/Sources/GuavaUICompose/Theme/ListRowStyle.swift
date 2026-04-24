@@ -9,6 +9,24 @@ public struct ListRowStyleConfiguration {
     public let theme: Theme
 }
 
+/// Equatable interaction snapshot used by built-in list row styles to key
+/// implicit transitions without requiring external `withAnimation` calls.
+public struct _ListRowInteractionKey: Equatable, Sendable {
+    public let isSelected: Bool
+    public let isHovered: Bool
+    public let isEnabled: Bool
+}
+
+public extension ListRowStyleConfiguration {
+    var interactionKey: _ListRowInteractionKey {
+        _ListRowInteractionKey(
+            isSelected: isSelected,
+            isHovered: isHovered,
+            isEnabled: isEnabled
+        )
+    }
+}
+
 public protocol ListRowStyle {
     associatedtype Body: View
     @ViewBuilder
