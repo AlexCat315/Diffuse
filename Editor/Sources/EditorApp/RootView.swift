@@ -17,6 +17,7 @@ struct EditorRootView: View {
 
                 EditorMainToolbar(playbackState: store.state.playbackState,
                                   workspaceMode: store.state.workspaceMode,
+                                  activeLayoutPreset: store.state.activeLayoutPreset,
                                   onSetPlaybackState: { next in
                     if store.state.playbackState != next {
                         store.dispatch(.setPlaybackState(next))
@@ -25,9 +26,39 @@ struct EditorRootView: View {
                                   onSetWorkspaceMode: { next in
                     guard store.state.workspaceMode != next else { return }
                     let previous = store.state.workspaceMode
-                    EditorRootViewFactory.saveDockLayout(controller, for: previous)
+                    let previousPreset = store.state.activeLayoutPreset
+                    EditorRootViewFactory.saveDockLayout(controller,
+                                                         for: previous,
+                                                         preset: previousPreset)
                     store.dispatch(.setWorkspaceMode(next))
-                    EditorRootViewFactory.loadLayoutPreset(into: controller, for: next)
+                    let nextPreset = store.state.activeLayoutPreset
+                    EditorRootViewFactory.loadLayoutPreset(into: controller,
+                                                          for: next,
+                                                          preset: nextPreset)
+                    EditorRootViewFactory.saveShellState(mode: next,
+                                                         preset: nextPreset)
+                },
+                                  onSetLayoutPreset: { nextPreset in
+                    guard nextPreset != store.state.activeLayoutPreset else { return }
+                    let mode = store.state.workspaceMode
+                    let previousPreset = store.state.activeLayoutPreset
+                    EditorRootViewFactory.saveDockLayout(controller,
+                                                         for: mode,
+                                                         preset: previousPreset)
+                    store.dispatch(.setActiveLayoutPreset(nextPreset))
+                    EditorRootViewFactory.loadLayoutPreset(into: controller,
+                                                          for: mode,
+                                                          preset: nextPreset)
+                    EditorRootViewFactory.saveShellState(mode: mode,
+                                                         preset: nextPreset)
+                },
+                                  onResetLayout: {
+                    let mode = store.state.workspaceMode
+                    let defaultPreset = EditorLayoutPreset.default(for: mode)
+                    store.dispatch(.setActiveLayoutPreset(defaultPreset))
+                    EditorRootViewFactory.resetLayout(into: controller, for: mode)
+                    EditorRootViewFactory.saveShellState(mode: mode,
+                                                         preset: defaultPreset)
                 })
                 Divider()
 
@@ -87,8 +118,11 @@ private struct EditorMenuItem: View {
 private struct EditorMainToolbar: View {
     let playbackState: PlaybackState
     let workspaceMode: EditorWorkspaceMode
+    let activeLayoutPreset: EditorLayoutPreset
     let onSetPlaybackState: (PlaybackState) -> Void
     let onSetWorkspaceMode: (EditorWorkspaceMode) -> Void
+    let onSetLayoutPreset: (EditorLayoutPreset) -> Void
+    let onResetLayout: () -> Void
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
@@ -123,6 +157,16 @@ private struct EditorMainToolbar: View {
                                isActive: workspaceMode == .animation,
                                onClick: { onSetWorkspaceMode(.animation) })
 
+            Divider()
+                .frame(width: 1, height: 20)
+
+            LayoutPresetSelector(workspaceMode: workspaceMode,
+                                 activePreset: activeLayoutPreset,
+                                 onSelectPreset: onSetLayoutPreset)
+
+            ToolbarActionButton(title: "Reset Layout",
+                                onClick: onResetLayout)
+
             Spacer(minLength: 0)
 
             Text("Platforms")
@@ -137,6 +181,44 @@ private struct EditorMainToolbar: View {
     }
 }
 
+private struct LayoutPresetSelector: View {
+    let workspaceMode: EditorWorkspaceMode
+    let activePreset: EditorLayoutPreset
+    let onSelectPreset: (EditorLayoutPreset) -> Void
+
+    var body: some View {
+        switch workspaceMode {
+        case .level:
+            Row(alignment: .center, spacing: 4) {
+                ToolbarStateButton(title: "Default",
+                                   isActive: activePreset == .levelDefault,
+                                   onClick: { onSelectPreset(.levelDefault) })
+                ToolbarStateButton(title: "Cinematics",
+                                   isActive: activePreset == .levelCinematics,
+                                   onClick: { onSelectPreset(.levelCinematics) })
+            }
+        case .modeling:
+            Row(alignment: .center, spacing: 4) {
+                ToolbarStateButton(title: "Default",
+                                   isActive: activePreset == .modelingDefault,
+                                   onClick: { onSelectPreset(.modelingDefault) })
+                ToolbarStateButton(title: "Sculpt",
+                                   isActive: activePreset == .modelingSculpt,
+                                   onClick: { onSelectPreset(.modelingSculpt) })
+            }
+        case .animation:
+            Row(alignment: .center, spacing: 4) {
+                ToolbarStateButton(title: "Default",
+                                   isActive: activePreset == .animationDefault,
+                                   onClick: { onSelectPreset(.animationDefault) })
+                ToolbarStateButton(title: "Sequencer",
+                                   isActive: activePreset == .animationSequencer,
+                                   onClick: { onSelectPreset(.animationSequencer) })
+            }
+        }
+    }
+}
+
 private struct ToolbarTextButton: View {
     let title: String
 
@@ -147,6 +229,22 @@ private struct ToolbarTextButton: View {
             .padding(horizontal: 8, vertical: 6)
             .background(.surfaceSunken)
             .cornerRadius(4)
+    }
+}
+
+private struct ToolbarActionButton: View {
+    let title: String
+    let onClick: () -> Void
+
+    var body: some View {
+        Button(action: onClick) {
+            Text(title)
+                .font(.caption)
+                .foregroundColor(.onSurface)
+                .padding(horizontal: 8, vertical: 6)
+                .background(.surfaceSunken)
+                .cornerRadius(4)
+        }
     }
 }
 
@@ -210,22 +308,46 @@ private struct EditorStatusBar: View {
 }
 
 enum EditorRootViewFactory {
-    static func makeController(for mode: EditorWorkspaceMode) -> DockController {
+    struct EditorShellState: Codable, Sendable {
+        var workspaceMode: EditorWorkspaceMode
+        var activeLayoutPreset: EditorLayoutPreset
+        var schemaVersion: Int
+
+        static let currentSchemaVersion = 1
+
+        init(workspaceMode: EditorWorkspaceMode,
+             activeLayoutPreset: EditorLayoutPreset,
+             schemaVersion: Int = currentSchemaVersion) {
+            self.workspaceMode = workspaceMode
+            self.activeLayoutPreset = activeLayoutPreset
+            self.schemaVersion = schemaVersion
+        }
+    }
+
+    static func makeController(for mode: EditorWorkspaceMode,
+                               preset: EditorLayoutPreset) -> DockController {
         // Try to restore saved layout, otherwise create default
-        if let saved = loadSavedLayout(for: mode) {
+        if let saved = loadSavedLayout(for: mode, preset: preset) {
             return saved
         }
-        if mode == .level, let legacy = loadLegacySavedLayout() {
+        if mode == .level,
+           preset == .levelDefault,
+           let legacy = loadLegacySavedLayout() {
             return legacy
         }
-        return makeDefaultController(for: mode)
+        return makeDefaultController(for: mode, preset: preset)
+    }
+
+    static func makeController(for mode: EditorWorkspaceMode) -> DockController {
+        makeController(for: mode, preset: .default(for: mode))
     }
 
     static func makeController() -> DockController {
         makeController(for: .level)
     }
 
-    static func makeDefaultController(for mode: EditorWorkspaceMode) -> DockController {
+    static func makeDefaultController(for mode: EditorWorkspaceMode,
+                                      preset: EditorLayoutPreset) -> DockController {
         let hierarchyTab = DockTab(userKey: "hierarchy", title: "Hierarchy")
         let inspectorTab = DockTab(userKey: "inspector", title: "Inspector")
         let viewportTab = DockTab(userKey: "viewport",
@@ -254,14 +376,14 @@ enum EditorRootViewFactory {
         let bottomLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
             tabs: [assetsTab, consoleTab, intentTab, confirmationTab],
-            activeTabID: defaultBottomTabID(for: mode,
+            activeTabID: defaultBottomTabID(for: preset,
                                             assetsTab: assetsTab,
                                             consoleTab: consoleTab,
                                             intentTab: intentTab,
                                             confirmationTab: confirmationTab)
         )
 
-        let fractions = defaultFractions(for: mode)
+        let fractions = defaultFractions(for: preset)
 
         let viewportAndInspector: DockLayoutNode = .split(
             id: DockNodeID(),
@@ -309,12 +431,20 @@ enum EditorRootViewFactory {
     }
 
     static func loadLayoutPreset(into controller: DockController,
-                                 for mode: EditorWorkspaceMode) {
-        if let saved = loadSavedLayout(for: mode) {
+                                 for mode: EditorWorkspaceMode,
+                                 preset: EditorLayoutPreset) {
+        if let saved = loadSavedLayout(for: mode, preset: preset) {
             controller.load(saved.snapshot())
             return
         }
-        let fallback = makeDefaultController(for: mode)
+        let fallback = makeDefaultController(for: mode, preset: preset)
+        controller.load(fallback.snapshot())
+    }
+
+    static func resetLayout(into controller: DockController,
+                            for mode: EditorWorkspaceMode) {
+        let defaultPreset = EditorLayoutPreset.default(for: mode)
+        let fallback = makeDefaultController(for: mode, preset: defaultPreset)
         controller.load(fallback.snapshot())
     }
 
@@ -396,6 +526,7 @@ enum EditorRootViewFactory {
     }
 
     private static let layoutPersistenceKey = "editor_dock_layout"
+    private static let shellStatePersistenceKey = "editor_shell_state"
 
     private struct LayoutFractions {
         let hierarchyAndMain: Float
@@ -403,43 +534,58 @@ enum EditorRootViewFactory {
         let topAndBottom: Float
     }
 
-    private static func defaultFractions(for mode: EditorWorkspaceMode) -> LayoutFractions {
-        switch mode {
-        case .level:
+    private static func defaultFractions(for preset: EditorLayoutPreset) -> LayoutFractions {
+        switch preset {
+        case .levelDefault:
             return LayoutFractions(hierarchyAndMain: 15.0 / 90.0,
                                    viewportAndInspector: 55.0 / 75.0,
                                    topAndBottom: 0.70)
-        case .modeling:
+        case .levelCinematics:
+            return LayoutFractions(hierarchyAndMain: 12.0 / 90.0,
+                                   viewportAndInspector: 60.0 / 78.0,
+                                   topAndBottom: 0.64)
+        case .modelingDefault:
             return LayoutFractions(hierarchyAndMain: 18.0 / 90.0,
                                    viewportAndInspector: 52.0 / 72.0,
                                    topAndBottom: 0.66)
-        case .animation:
+        case .modelingSculpt:
+            return LayoutFractions(hierarchyAndMain: 14.0 / 90.0,
+                                   viewportAndInspector: 54.0 / 76.0,
+                                   topAndBottom: 0.68)
+        case .animationDefault:
             return LayoutFractions(hierarchyAndMain: 16.0 / 90.0,
                                    viewportAndInspector: 50.0 / 74.0,
                                    topAndBottom: 0.62)
+        case .animationSequencer:
+            return LayoutFractions(hierarchyAndMain: 14.0 / 90.0,
+                                   viewportAndInspector: 49.0 / 76.0,
+                                   topAndBottom: 0.56)
         }
     }
 
-    private static func defaultBottomTabID(for mode: EditorWorkspaceMode,
+    private static func defaultBottomTabID(for preset: EditorLayoutPreset,
                                            assetsTab: DockTab,
                                            consoleTab: DockTab,
                                            intentTab: DockTab,
                                            confirmationTab: DockTab) -> DockTabID {
-        switch mode {
-        case .level:
+        switch preset {
+        case .levelDefault, .levelCinematics:
             return assetsTab.id
-        case .modeling:
+        case .modelingDefault, .modelingSculpt:
             return consoleTab.id
-        case .animation:
+        case .animationDefault, .animationSequencer:
             return intentTab.id
         }
     }
 
-    private static func layoutPersistenceKey(for mode: EditorWorkspaceMode) -> String {
-        "\(layoutPersistenceKey)_\(mode.rawValue)"
+    private static func layoutPersistenceKey(for mode: EditorWorkspaceMode,
+                                             preset: EditorLayoutPreset) -> String {
+        "\(layoutPersistenceKey)_\(mode.rawValue)_\(preset.rawValue)"
     }
 
-    static func saveDockLayout(_ controller: DockController, for mode: EditorWorkspaceMode) {
+    static func saveDockLayout(_ controller: DockController,
+                               for mode: EditorWorkspaceMode,
+                               preset: EditorLayoutPreset) {
         // Ensure viewport is not detached; if it is, redock it to center before saving
         if let centerLeaf = findCenterLeaf(controller.root) {
             ensureViewportDocked(in: controller, to: centerLeaf.id)
@@ -458,7 +604,9 @@ enum EditorRootViewFactory {
         do {
             let data = try encoder.encode(snapshot)
             if let layoutDir = getLayoutPersistenceDirectory() {
-                let layoutPath = layoutDir.appendingPathComponent(layoutPersistenceKey(for: mode) + ".json")
+                let layoutPath = layoutDir.appendingPathComponent(
+                    layoutPersistenceKey(for: mode, preset: preset) + ".json"
+                )
                 try data.write(to: layoutPath)
             }
         } catch {
@@ -467,12 +615,17 @@ enum EditorRootViewFactory {
     }
 
     static func saveDockLayout(_ controller: DockController) {
-        saveDockLayout(controller, for: .level)
+        saveDockLayout(controller,
+                       for: .level,
+                       preset: .levelDefault)
     }
 
-    private static func loadSavedLayout(for mode: EditorWorkspaceMode) -> DockController? {
+    private static func loadSavedLayout(for mode: EditorWorkspaceMode,
+                                        preset: EditorLayoutPreset) -> DockController? {
         guard let layoutDir = getLayoutPersistenceDirectory() else { return nil }
-        let layoutPath = layoutDir.appendingPathComponent(layoutPersistenceKey(for: mode) + ".json")
+        let layoutPath = layoutDir.appendingPathComponent(
+            layoutPersistenceKey(for: mode, preset: preset) + ".json"
+        )
         
         guard FileManager.default.fileExists(atPath: layoutPath.path) else { return nil }
 
@@ -503,6 +656,41 @@ enum EditorRootViewFactory {
             return controller
         } catch {
             fputs("[EditorRootViewFactory] failed to load legacy dock layout: \(error)\n", stderr)
+            return nil
+        }
+    }
+
+    static func saveShellState(mode: EditorWorkspaceMode,
+                               preset: EditorLayoutPreset) {
+        guard let layoutDir = getLayoutPersistenceDirectory() else { return }
+        let shell = EditorShellState(workspaceMode: mode,
+                                     activeLayoutPreset: preset)
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        do {
+            let data = try encoder.encode(shell)
+            let path = layoutDir.appendingPathComponent(shellStatePersistenceKey + ".json")
+            try data.write(to: path)
+        } catch {
+            fputs("[EditorRootViewFactory] failed to save shell state: \(error)\n", stderr)
+        }
+    }
+
+    static func loadShellState() -> EditorShellState? {
+        guard let layoutDir = getLayoutPersistenceDirectory() else { return nil }
+        let path = layoutDir.appendingPathComponent(shellStatePersistenceKey + ".json")
+        guard FileManager.default.fileExists(atPath: path.path) else { return nil }
+
+        do {
+            let data = try Data(contentsOf: path)
+            let decoder = JSONDecoder()
+            var shell = try decoder.decode(EditorShellState.self, from: data)
+            if shell.activeLayoutPreset.mode != shell.workspaceMode {
+                shell.activeLayoutPreset = .default(for: shell.workspaceMode)
+            }
+            return shell
+        } catch {
+            fputs("[EditorRootViewFactory] failed to load shell state: \(error)\n", stderr)
             return nil
         }
     }
