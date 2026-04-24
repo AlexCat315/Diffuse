@@ -106,6 +106,33 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    struct KeyedTreeHarness: View {
+        let selectionKeyProbe: Probe<TreeNodeKey<String>?>
+        let multiSelectionKeyProbe: Probe<Set<TreeNodeKey<String>>>
+        let roots: [TreeItem]
+
+        @State var selectionKey: TreeNodeKey<String>? = nil
+        @State var multiSelectionKeys: Set<TreeNodeKey<String>> = []
+
+        var body: some View {
+            Tree(roots,
+                  children: \.children,
+                 selectionKey: Binding(get: { selectionKey },
+                                       set: { next in
+                                           selectionKey = next
+                                           selectionKeyProbe.value = next
+                                       }),
+                 multiSelectionKeys: Binding(get: { multiSelectionKeys },
+                                             set: { next in
+                                                 multiSelectionKeys = next
+                                                 multiSelectionKeyProbe.value = next
+                                             })) { item, isSelected, _, depth in
+                Text("\(depth): \(item.title)",
+                     color: isSelected ? Color.white : Color.black)
+            }
+        }
+    }
+
     struct DragTreeHarness: View {
         let dropProbe: Probe<DropEvent?>
         let roots: [TreeItem]
@@ -275,6 +302,40 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         #expect(multiSelectionProbe.value == ["light"])
     } }
 
+    @Test("Tree cmd-toggle deselect keeps remaining primary selection")
+    func treeMultiSelectionToggleOffDoesNotReselectRemovedItem() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let roots = [
+            TreeItem(id: "camera", title: "Camera", children: []),
+            TreeItem(id: "light", title: "Light", children: []),
+            TreeItem(id: "mesh", title: "Mesh", children: [])
+        ]
+
+        let selectionProbe = Probe<String?>(nil)
+        let multiSelectionProbe = Probe<Set<String>>([])
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: MultiTreeHarness(selectionProbe: selectionProbe,
+                                             multiSelectionProbe: multiSelectionProbe,
+                                             roots: roots))
+        graph.computeLayout(width: 280, height: 220)
+
+        let rows = orderedPointerNodes(in: tree.root!, registry: registry)
+        #expect(rows.count == 3)
+
+        tap(rows[0], registry: registry)
+        tap(rows[1], modifiers: .gui, registry: registry)
+        #expect(multiSelectionProbe.value == ["camera", "light"])
+        #expect(selectionProbe.value == "light")
+
+        tap(rows[1], modifiers: .gui, registry: registry)
+        #expect(multiSelectionProbe.value == ["camera"])
+        #expect(selectionProbe.value == "camera")
+    } }
+
     @Test("Tree row hosts register hover handlers")
     func treeRowsRegisterHoverHandlers() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -367,6 +428,38 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
                                              sourceTitle: "Second",
                                              targetTitle: "First",
                                              position: .inside))
+    } }
+
+    @Test("TreeNodeKey selection disambiguates duplicate IDs")
+    func treeNodeKeySelectionDisambiguatesDuplicateIDs() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        InteractionRegistryHolder.current = registry
+
+        let roots = [
+            TreeItem(id: "dup", title: "First", children: []),
+            TreeItem(id: "dup", title: "Second", children: [])
+        ]
+
+        let selectionKeyProbe = Probe<TreeNodeKey<String>?>(nil)
+        let multiSelectionKeyProbe = Probe<Set<TreeNodeKey<String>>>([])
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: KeyedTreeHarness(selectionKeyProbe: selectionKeyProbe,
+                                             multiSelectionKeyProbe: multiSelectionKeyProbe,
+                                             roots: roots))
+        graph.computeLayout(width: 280, height: 220)
+
+        let rows = orderedPointerNodes(in: tree.root!, registry: registry)
+        #expect(rows.count == 2)
+
+        tap(rows[1], registry: registry)
+        #expect(selectionKeyProbe.value == TreeNodeKey(id: "dup", path: [1]))
+        #expect(multiSelectionKeyProbe.value == [TreeNodeKey(id: "dup", path: [1])])
+
+        tap(rows[0], modifiers: .gui, registry: registry)
+        #expect(multiSelectionKeyProbe.value == [TreeNodeKey(id: "dup", path: [0]),
+                                                TreeNodeKey(id: "dup", path: [1])])
     } }
 
     @Test("Tree guide lines use pixel-aligned 1pt strokes")
@@ -485,11 +578,18 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
 
     private func tap(_ node: Node,
                      registry: InteractionRegistry) {
+        tap(node, modifiers: [], registry: registry)
+    }
+
+    private func tap(_ node: Node,
+                     modifiers: KeyModifiers,
+                     registry: InteractionRegistry) {
         let pointer = registry.handlers(for: node).pointer!
         let evt = MouseButtonEvent(button: .left,
                                    x: Float(node.frame.midX.rounded()),
                                    y: Float(node.frame.midY.rounded()),
-                                   clicks: 1)
+                                   clicks: 1,
+                                   modifiers: modifiers)
         _ = pointer(evt, .down, .target)
         _ = pointer(evt, .up, .target)
     }
