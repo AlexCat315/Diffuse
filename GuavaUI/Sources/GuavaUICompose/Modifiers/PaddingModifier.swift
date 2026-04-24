@@ -1,5 +1,10 @@
 import GuavaUIRuntime
 
+private enum PaddingAnimationKeys {
+    static let property = "__layout.padding.insets"
+    static let attachment = "__layout.padding.insets"
+}
+
 public struct EdgeInsets: Equatable, Sendable {
     public var top: Float
     public var leading: Float
@@ -21,11 +26,23 @@ public struct PaddingModifier: ViewModifier {
     public let insets: EdgeInsets
     public init(insets: EdgeInsets) { self.insets = insets }
 
+    public func apply(node: Node) {
+        guard let layout = node.layoutNode else { return }
+        let current = (layout.attachments[PaddingAnimationKeys.attachment] as? EdgeInsets) ?? .zero
+        node.animatableSet(propertyKey: PaddingAnimationKeys.property,
+                           current: current,
+                           to: insets) { value in
+            layout.attachments[PaddingAnimationKeys.attachment] = value
+            layout.setPadding(value.top, edge: .top)
+            layout.setPadding(value.leading, edge: .left)
+            layout.setPadding(value.bottom, edge: .bottom)
+            layout.setPadding(value.trailing, edge: .right)
+        }
+    }
+
     public func apply(layout: LayoutNode) {
-        layout.setPadding(insets.top,      edge: .top)
-        layout.setPadding(insets.leading,  edge: .left)
-        layout.setPadding(insets.bottom,   edge: .bottom)
-        layout.setPadding(insets.trailing, edge: .right)
+        // Layout-affecting writes flow through `apply(node:)` so they can
+        // participate in `withAnimation` and `.animation(_:value:)`.
     }
 }
 
