@@ -69,13 +69,15 @@ struct EditorRootView: View {
 
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 EditorMainToolbar(playbackState: store.state.playbackState,
-                                  app: app,
                                   workspaceMode: store.state.workspaceMode,
                                   activeLayoutPreset: store.state.activeLayoutPreset,
                                   onSetPlaybackState: setPlaybackState,
                                   onSetWorkspaceMode: setWorkspaceMode,
                                   onSetLayoutPreset: setLayoutPreset,
-                                  onResetLayout: resetLayout)
+                                  onResetLayout: resetLayout,
+                                  onOpenSettings: {
+                                      app.openSettingsWindow()
+                                  })
                 Divider()
 
                 PanelWorkspace(controller: controller,
@@ -90,6 +92,22 @@ struct EditorRootView: View {
                                 aiStatusMessage: store.state.aiStatusMessage)
             }
             .appearance(store.state.themeMode == .dark ? .dark : .light)
+            .flex()
+        }
+    }
+}
+
+struct EditorSettingsWindowRoot: View {
+    let app: EditorApplication
+
+    var body: some View {
+        StoreScope(app.store) { store in
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                SettingsPanel(app: app)
+                    .flex()
+            }
+            .appearance(store.state.themeMode == .dark ? .dark : .light)
+            .background(.background)
             .flex()
         }
     }
@@ -324,14 +342,13 @@ private enum EditorMenuEntry {
 
 private struct EditorMainToolbar: View {
     let playbackState: PlaybackState
-    let app: EditorApplication
     let workspaceMode: EditorWorkspaceMode
     let activeLayoutPreset: EditorLayoutPreset
     let onSetPlaybackState: (PlaybackState) -> Void
     let onSetWorkspaceMode: (EditorWorkspaceMode) -> Void
     let onSetLayoutPreset: (EditorLayoutPreset) -> Void
     let onResetLayout: () -> Void
-    @State private var isSettingsPopoverPresented: Bool = false
+    let onOpenSettings: () -> Void
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
@@ -381,48 +398,7 @@ private struct EditorMainToolbar: View {
                               onClick: onResetLayout)
 
             Spacer(minLength: 0)
-
-            Popover(isPresented: $isSettingsPopoverPresented,
-                    width: 320) {
-                ToolbarIconChrome(icon: EditorToolbarIcon.settings.resource,
-                                  isActive: isSettingsPopoverPresented)
-            } content: {
-                Box(direction: .column, alignItems: .stretch, spacing: 8) {
-                    Row(alignment: .center, spacing: 6) {
-                        Text(L("Settings"))
-                            .font(.caption)
-                            .foregroundColor(.onSurface)
-
-                        Spacer(minLength: 0)
-
-                        Button(tooltip: "Close", action: {
-                            isSettingsPopoverPresented = false
-                        }) {
-                            Box(direction: .row,
-                                alignItems: .center,
-                                justifyContent: .center) {
-                                Text("×")
-                                    .font(.bodyStrong)
-                                    .foregroundColor(.onSurfaceVariant)
-                            }
-                            .frame(width: 24, height: 24)
-                            .background(.surfaceSunken)
-                            .cornerRadius(4)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .padding(horizontal: 10, vertical: 8)
-                    .background(.surfaceVariant)
-
-                    SettingsPanel(app: app)
-                        .frame(minWidth: 300,
-                               minHeight: 220,
-                               maxWidth: 360,
-                               maxHeight: 420)
-                }
-                .background(.surface)
-                .cornerRadius(6)
-            }
+            ToolbarIconButton(icon: .settings, tooltip: "Settings", onClick: onOpenSettings)
             ToolbarIconButton(icon: .package, tooltip: "Platforms") {}
         }
         .padding(horizontal: 8, vertical: 6)

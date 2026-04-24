@@ -1,4 +1,5 @@
 import Darwin
+import EngineKernel
 import EditorCore
 import GuavaUIApp
 import GuavaUIRuntime
@@ -31,6 +32,7 @@ private func runEditor() throws {
     let controller = EditorRootViewFactory.makeController(for: app.store.state.workspaceMode,
                                                           preset: app.store.state.activeLayoutPreset)
     let registry = EditorRootViewFactory.makeRegistry(app: app)
+    var settingsWindowID: WindowID?
 
     try AppRuntime.run(
         config: AppConfig(title: "GuavaNext Editor",
@@ -41,6 +43,17 @@ private func runEditor() throws {
         onDisplayReady: { display in
             app.setViewportRenderCompletionHandler { _ in
                 display.requestDisplay()
+            }
+            app.setOpenSettingsWindowHandler {
+                if let existing = settingsWindowID,
+                   display.isWindowOpen(existing) {
+                    return
+                }
+                settingsWindowID = display.openWindow(title: "Settings",
+                                                      width: 360,
+                                                      height: 420) {
+                    EditorSettingsWindowRoot(app: app)
+                }
             }
         }
     ) {
