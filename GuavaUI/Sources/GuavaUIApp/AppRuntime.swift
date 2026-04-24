@@ -1,3 +1,4 @@
+import EngineKernel
 import Foundation
 import GuavaUIBundledFonts
 import GuavaUICompose
@@ -87,6 +88,7 @@ public final class AppRuntime {
 
     private var didInstallRoot = false
     private var lastFrameTime: Double = 0
+    private var auxiliaryWindows: [WindowID: AuxiliaryAppWindow] = [:]
 
     /// 进程内 DevTools 调试服务器。仅当 `config.devTools != nil` 时创建。
     private var devTools: DevTools?
@@ -179,6 +181,17 @@ public final class AppRuntime {
         host.externalDisplayRequestDrain = {
             displayHandle.drainDisplayRequest()
         }
+        displayHandle.installAuxiliaryWindowControls(
+            open: { [weak self] request in
+                self?.openAuxiliaryWindow(request)
+            },
+            close: { [weak self] windowID in
+                self?.closeAuxiliaryWindow(windowID)
+            },
+            isOpen: { [weak self] windowID in
+                self?.isAuxiliaryWindowOpen(windowID) ?? false
+            }
+        )
         onDisplayReady?(displayHandle)
         host.run(tree: tree)
     }
@@ -343,6 +356,7 @@ public final class AppRuntime {
         let delta = max(0, deltaTime)
         lastFrameTime = ProcessInfo.processInfo.systemUptime
         onTick?(delta)
+        syncAuxiliaryWindows()
     }
 
     /// Recursive scene-graph node count used purely for the timing payload.
@@ -395,6 +409,283 @@ public final class AppRuntime {
             )
         }
         atlas.markClean()
+    }
+
+    private func ensureMSAATarget(widthPx: UInt32, heightPx: UInt32) throws {
+        guard config.msaaSampleCount > 1 else {
+            msaaColorTexture = nil
+            msaaColorView = nil
+            msaaColorWidth = 0
+            msaaColorHeight = 0
+            return
+        }
+
+        if msaaColorTexture != nil,
+           msaaColorView != nil,
+           msaaColorWidth == widthPx,
+           msaaColorHeight == heightPx {
+            return
+        }
+
+        let texture = try backend.createTexture(
+            width: widthPx,
+            height: heightPx,
+            format: .bgra8Unorm,
+            usage: [.renderAttachment],
+            mipLevels: 1,
+            depthOrLayers: 1,
+            sampleCount: config.msaaSampleCount
+        )
+        msaaColorTexture = texture
+        msaaColorView = try texture.createView()
+        msaaColorWidth = widthPx
+        msaaColorHeight = heightPx
+    }
+
+    private func openAuxiliaryWindow(_ request: AppAuxiliaryWindowRequest) -> WindowID? {
+        syncAuxiliaryWindows()
+
+        do {
+            let tree = NodeTree()
+            let recomposer = Recomposer()
+            let inputContext = PlatformInputContext()
+            let session = try host.openWindow(
+                title: request.title,
+                tree: tree,
+                recomposer: recomposer,
+                inputContext: inputContext,
+                options: WindowOptions(width: request.width, height: request.height)
+            )
+            let window = AuxiliaryAppWindow(session: session,
+                                            rootView: request.rootView,
+                                            backend: backend,
+                                            renderer: renderer,
+                                            config: config,
+                                            useLegacyRenderer: useLegacyRenderer)
+            auxiliaryWindows[session.id] = window
+
+            session.onInit = { [weak self, weak window] native, widthPx, heightPx in
+                guard let self, let window else { return }
+                try? window.handleInit(
+                    native: native,
+                    widthPx: widthPx,
+                    heightPx: heightPx,
+                    configureTextEnvironment: { scale in
+                        self.configureTextEnvironment(scale: scale)
+                    },
+                    uploadAtlasIfNeeded: { force in
+                        try self.uploadAtlasIfNeeded(force: force)
+                    }
+                )
+            }
+            session.onResize = { [weak self, weak window] widthPx, heightPx in
+                guard let self, let window else { return }
+                try? window.handleResize(
+                    widthPx: widthPx,
+                    heightPx: heightPx,
+                    configureTextEnvironment: { scale in
+                        self.configureTextEnvironment(scale: scale)
+                    },
+                    uploadAtlasIfNeeded: { force in
+                        try self.uploadAtlasIfNeeded(force: force)
+                    }
+                )
+            }
+            session.onFrame = { [weak self, weak window] _ in
+                guard let self, let window else { return false }
+                return window.handleFrame(
+                    configureTextEnvironment: { scale in
+                        self.configureTextEnvironment(scale: scale)
+                    },
+                    uploadAtlasIfNeeded: { force in
+                        try self.uploadAtlasIfNeeded(force: force)
+                    }
+                )
+            }
+            session.requestDisplay()
+            return session.id
+        } catch {
+            Logger(label: "com.guava.ui.app").warning("Auxiliary window open failed: \(error)")
+            return nil
+        }
+    }
+
+    private func closeAuxiliaryWindow(_ windowID: WindowID) {
+        auxiliaryWindows.removeValue(forKey: windowID)
+        host.closeWindow(windowID)
+    }
+
+    private func isAuxiliaryWindowOpen(_ windowID: WindowID) -> Bool {
+        syncAuxiliaryWindows()
+        return auxiliaryWindows[windowID] != nil && host.session(for: windowID) != nil
+    }
+
+    private func syncAuxiliaryWindows() {
+        let liveWindowIDs = Set(host.windowIDs)
+        auxiliaryWindows = auxiliaryWindows.filter { liveWindowIDs.contains($0.key) }
+    }
+}
+
+@MainActor
+private final class AuxiliaryAppWindow {
+    private let session: PlatformWindowSession
+    private let graph: ViewGraph
+    private let rootView: AnyView
+    private let backend: WGPUBackend
+    private let renderer: DrawListRenderer
+    private let config: AppConfig
+    private let useLegacyRenderer: Bool
+    private let drawList = DrawList()
+    private let layerRenderer = LayerAwareNodeRenderer()
+    private let nodeRenderer = NodeRenderer()
+
+    private var surface: GPUSurface?
+    private var configuredSurface = false
+    private var msaaColorTexture: GPUTexture?
+    private var msaaColorView: GPUTextureView?
+    private var msaaColorWidth: UInt32 = 0
+    private var msaaColorHeight: UInt32 = 0
+    private var drawableW: UInt32 = 0
+    private var drawableH: UInt32 = 0
+    private var logicalW: UInt32 = 0
+    private var logicalH: UInt32 = 0
+    private var didInstallRoot = false
+
+    init(session: PlatformWindowSession,
+         rootView: AnyView,
+         backend: WGPUBackend,
+         renderer: DrawListRenderer,
+         config: AppConfig,
+         useLegacyRenderer: Bool) {
+        self.session = session
+        self.rootView = rootView
+        self.backend = backend
+        self.renderer = renderer
+        self.config = config
+        self.useLegacyRenderer = useLegacyRenderer
+        self.graph = ViewGraph(tree: session.tree, recomposer: session.recomposer)
+    }
+
+    func handleInit(native: NativeRenderSurface,
+                    widthPx: UInt32,
+                    heightPx: UInt32,
+                    configureTextEnvironment: (Float) -> Void,
+                    uploadAtlasIfNeeded: (Bool) throws -> Void) throws {
+        drawableW = widthPx
+        drawableH = heightPx
+        logicalW = session.logicalSize.width
+        logicalH = session.logicalSize.height
+
+        let gpu = try SurfaceFactory.make(backend: backend, native: native)
+        try gpu.configure(
+            device: backend.rawDevice!,
+            format: .bgra8Unorm,
+            width: widthPx,
+            height: heightPx,
+            presentMode: .fifo
+        )
+        try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
+        surface = gpu
+
+        try session.withCurrent {
+            configureTextEnvironment(session.contentScaleFactor)
+            if !didInstallRoot {
+                graph.install(root: rootView)
+                graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
+                session.attachInputScene(graph.inputScene)
+                didInstallRoot = true
+            }
+            try uploadAtlasIfNeeded(false)
+        }
+
+        configuredSurface = true
+        session.requestDisplay()
+    }
+
+    func handleResize(widthPx: UInt32,
+                      heightPx: UInt32,
+                      configureTextEnvironment: (Float) -> Void,
+                      uploadAtlasIfNeeded: (Bool) throws -> Void) throws {
+        drawableW = widthPx
+        drawableH = heightPx
+        logicalW = session.logicalSize.width
+        logicalH = session.logicalSize.height
+        guard let surface, let device = backend.rawDevice else { return }
+        try surface.configure(
+            device: device,
+            format: .bgra8Unorm,
+            width: widthPx,
+            height: heightPx,
+            presentMode: .fifo
+        )
+        try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
+        try session.withCurrent {
+            configureTextEnvironment(session.contentScaleFactor)
+            try uploadAtlasIfNeeded(false)
+        }
+    }
+
+    func handleFrame(configureTextEnvironment: (Float) -> Void,
+                     uploadAtlasIfNeeded: (Bool) throws -> Void) -> Bool {
+        guard configuredSurface,
+              let surface,
+              let root = session.tree.root else {
+            return false
+        }
+
+        session.withCurrent {
+            configureTextEnvironment(session.contentScaleFactor)
+            _ = graph.computeLayoutIfNeeded(width: Float(logicalW), height: Float(logicalH))
+            drawList.reset()
+            if useLegacyRenderer {
+                nodeRenderer.render(root: root, into: drawList)
+            } else {
+                layerRenderer.render(tree: graph.renderTree, into: drawList)
+            }
+        }
+
+        do {
+            try uploadAtlasIfNeeded(false)
+        } catch {
+            return false
+        }
+
+        let acquired: (texture: GPUTexture, view: GPUTextureView)?
+        do {
+            acquired = try surface.getCurrentTextureView()
+        } catch {
+            return false
+        }
+        guard let frame = acquired else {
+            session.requestDisplay()
+            return false
+        }
+
+        do {
+            let encoder = try backend.createCommandEncoder()
+            let passColorView = msaaColorView ?? frame.view
+            let passResolveView = msaaColorView == nil ? nil : frame.view
+            let pass = try encoder.beginRenderPass(
+                colorView: passColorView,
+                resolveTargetView: passResolveView,
+                loadOp: .clear,
+                storeOp: .store,
+                clearColor: config.clearColor
+            )
+            try renderer.render(
+                list: drawList,
+                pass: pass,
+                viewportPx: (drawableW, drawableH),
+                coordinateSpace: (Float(logicalW), Float(logicalH))
+            )
+            pass.end()
+            let buffer = try encoder.finish()
+            backend.submit(buffer)
+            surface.present()
+            return true
+        } catch {
+            return false
+        }
     }
 
     private func ensureMSAATarget(widthPx: UInt32, heightPx: UInt32) throws {
