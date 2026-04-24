@@ -62,7 +62,12 @@ enum UIShader {
         }
         // Otherwise: alpha-only texture (font glyph). Sample .r as coverage.
         let a = textureSample(atlas_tex, atlas_sampler, in.uv).r;
-        return vec4<f32>(in.color.rgb, in.color.a * a);
+        // FreeType produces linear coverage fractions, but display gamma (~2.2)
+        // causes thin strokes to look lighter/thinner than intended. A mild
+        // power curve boosts midtone coverage so 12-14 px labels look crisp
+        // on a dark background without appearing artificially bold at larger sizes.
+        let a_corrected = pow(a, 0.75);
+        return vec4<f32>(in.color.rgb, in.color.a * a_corrected);
     }
     """
 }

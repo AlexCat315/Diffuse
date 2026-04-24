@@ -197,6 +197,10 @@ public final class AppRuntime {
         try uploadAtlasIfNeeded()
         configuredSurface = true
         lastFrameTime = ProcessInfo.processInfo.systemUptime
+        
+        // Request an initial frame to ensure surfaces like viewport have
+        // time to initialize before the first render.
+        host.requestDisplay()
     }
 
     private func handleResize(widthPx: UInt32, heightPx: UInt32) throws {

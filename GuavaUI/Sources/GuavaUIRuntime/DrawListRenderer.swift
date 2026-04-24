@@ -92,8 +92,8 @@ public final class DrawListRenderer {
 
         if alphaSampler == nil {
             self.alphaSampler = try backend.createSampler(desc: GPUSamplerDescriptor(
-                magFilter: .nearest,
-                minFilter: .nearest,
+                    magFilter: .linear,
+                    minFilter: .linear,
                 mipmapFilter: .nearest
             ))
         }

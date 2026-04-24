@@ -162,11 +162,12 @@ public final class LayerAwareNodeRenderer {
               w > 0, h > 0 else { return }
         let blur = max(0, node.shadowBlur)
         let radius = max(node.cornerRadius, 0)
-        let steps = blur > 0 ? 4 : 1
+                let steps = blur > 0 ? 6 : 1
         for i in 0..<steps {
-            let t = Float(i) / Float(steps)
+                        let t = Float(i) / Float(max(1, steps - 1))
             let inset = -blur * (1 - t)
-            let alpha = shadowColor.a * (1 - t) / Float(steps) * 2
+                        let weight = (1 - t) * (1 - t)
+                        let alpha = shadowColor.a * weight / Float(steps) * 2.4
             let rect = UIRect(
                 x: x + node.shadowOffsetX + inset,
                 y: y + node.shadowOffsetY + inset,
