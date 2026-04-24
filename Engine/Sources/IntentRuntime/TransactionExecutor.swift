@@ -314,6 +314,13 @@ public struct TransactionExecutor {
                 }
                 createdEntityIDs.append(entity.rawValue)
 
+            case let .moveEntity(entityID, parentID, index):
+                let entity = try requireEntity(entityID, in: scene)
+                let parent = try requireOptionalEntity(parentID, in: scene)
+                guard scene.moveEntity(entity, to: parent, at: index) else {
+                    throw TransactionExecutorError.invalidEntity(entityID)
+                }
+
             case let .setLocalTransform(entityID, transform):
                 let entity = try requireEntity(entityID, in: scene)
                 guard scene.setLocalTransform(transform, for: entity) else {
@@ -435,6 +442,12 @@ public struct TransactionExecutor {
             throw TransactionExecutorError.invalidEntity(rawID)
         }
         return entity
+    }
+
+    private func requireOptionalEntity(_ rawID: UInt64?,
+                                       in scene: SceneRuntime) throws -> EntityID? {
+        guard let rawID else { return nil }
+        return try requireEntity(rawID, in: scene)
     }
 
     private func appliedSequenceDocument(_ next: SequenceDocument,
@@ -650,6 +663,7 @@ public struct TransactionExecutor {
                 continue
             case let .deleteEntity(entityID),
                  let .duplicateEntity(entityID),
+                  let .moveEntity(entityID, _, _),
                  let .setLocalTransform(entityID, _),
                  let .setSceneName(entityID, _),
                  let .setRigidBodyAllowSleep(entityID, _),

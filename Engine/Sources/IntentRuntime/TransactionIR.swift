@@ -68,6 +68,7 @@ public enum SceneMutation: Sendable, Equatable {
                                  position: SIMD3<Float>)
     case deleteEntity(entityID: UInt64)
     case duplicateEntity(entityID: UInt64)
+    case moveEntity(entityID: UInt64, parentID: UInt64?, index: Int)
     case setLocalTransform(entityID: UInt64, transform: LocalTransform)
     case setSceneName(entityID: UInt64, value: String)
     case setRigidBodyAllowSleep(entityID: UInt64, value: Bool)
