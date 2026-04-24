@@ -53,7 +53,9 @@ public enum EditorReducer {
             state.workspaceMode = mode
             state.activeLayoutPreset = .default(for: mode)
         case let .setActiveLayoutPreset(preset):
-            state.activeLayoutPreset = preset
+            if preset.mode == state.workspaceMode {
+                state.activeLayoutPreset = preset
+            }
         case let .setSceneRevision(value):
             state.sceneRevision = value
         case let .setWindowFocused(value):

@@ -20,7 +20,13 @@ private func runEditor() throws {
     app.bootstrap()
     defer { app.shutdown() }
 
-    let controller = EditorRootViewFactory.makeController(for: app.store.state.workspaceMode)
+    if let shellState = EditorRootViewFactory.loadShellState() {
+        app.store.dispatch(.setWorkspaceMode(shellState.workspaceMode))
+        app.store.dispatch(.setActiveLayoutPreset(shellState.activeLayoutPreset))
+    }
+
+    let controller = EditorRootViewFactory.makeController(for: app.store.state.workspaceMode,
+                                                          preset: app.store.state.activeLayoutPreset)
     let registry = EditorRootViewFactory.makeRegistry(app: app)
 
     try AppRuntime.run(
@@ -34,7 +40,11 @@ private func runEditor() throws {
     }
 
     // Save layout state on shutdown
-    EditorRootViewFactory.saveDockLayout(controller, for: app.store.state.workspaceMode)
+    EditorRootViewFactory.saveShellState(mode: app.store.state.workspaceMode,
+                                         preset: app.store.state.activeLayoutPreset)
+    EditorRootViewFactory.saveDockLayout(controller,
+                                         for: app.store.state.workspaceMode,
+                                         preset: app.store.state.activeLayoutPreset)
 }
 
 do {
