@@ -10,6 +10,7 @@ struct InspectorPanel: View {
         StoreScope(store) { store in
             let entity = scene.entitySummary(id: store.state.selectedEntityID)
             let sections = scene.inspectorSections(for: store.state.selectedEntityID)
+            let collapsedIDs = store.state.inspectorCollapsedSectionIDs
 
             Box(direction: .column, alignItems: .stretch) {
                 if let entity {
@@ -17,9 +18,12 @@ struct InspectorPanel: View {
 
                     Divider()
 
-                    PropertyGrid(propertySections(sections),
-                                 labelWidth: 100,
-                                 rowHeight: 26)
+                    PropertyGrid(propertySections(sections, collapsedIDs: collapsedIDs),
+                                 labelWidth: 96,
+                                 rowHeight: 24,
+                                 onSectionCollapseChanged: { id, isCollapsed in
+                        store.dispatch(.setInspectorSectionCollapsed(id: id, isCollapsed: isCollapsed))
+                    })
                         .flex()
                 } else {
                     Box(direction: .column, alignItems: .stretch, spacing: 4) {
@@ -61,16 +65,22 @@ struct InspectorPanel: View {
         }
     }
 
-    private func propertySections(_ sections: [EditorInspectorSection]) -> [PropertyGridSection] {
+    private func propertySections(_ sections: [EditorInspectorSection],
+                                  collapsedIDs: Set<String>) -> [PropertyGridSection] {
         sections.map { section in
-            PropertyGridSection(
+            let startsCollapsed = collapsedIDs.contains(section.id)
+            return PropertyGridSection(
                 id: section.id,
                 title: section.title,
                 rows: section.fields.map { field in
-                    PropertyGridRow(id: field.id, label: field.label) {
+                    PropertyGridRow(id: field.id,
+                                    label: field.label,
+                                    rowHeight: field.value.preferredRowHeight(defaultHeight: 24)) {
                         fieldView(field.value)
                     }
-                }
+                },
+                isCollapsible: true,
+                startsCollapsed: startsCollapsed
             )
         }
     }
@@ -86,33 +96,46 @@ struct InspectorPanel: View {
         case let .text(binding):
             return AnyView(TextField(text: binding))
         case let .bool(binding):
-            return AnyView(Toggle(isOn: binding))
+            return AnyView(Checkbox(isOn: binding))
         case let .number(binding):
             return AnyView(NumberField(value: binding, size: .small))
+        case let .constrainedNumber(binding, min, max, step, showsStepper):
+            return AnyView(NumberField(value: binding,
+                                       size: .small,
+                                       minValue: min,
+                                       maxValue: max,
+                                       step: step,
+                                       showsStepper: showsStepper))
         case let .vector3(x, y, z):
-            return AnyView(vector3Field(x: x, y: y, z: z))
+            return AnyView(Vec3Field(x: x, y: y, z: z))
+        case let .color(binding):
+            return AnyView(ColorField(color: binding,
+                                      showAlpha: false,
+                                      showsInlineValues: true))
+        case let .json(binding, minHeight):
+            return AnyView(JsonField(text: binding, minHeight: minHeight))
+        case let .lightType(binding):
+            return AnyView(
+                EnumField(value: binding, width: 128) { type in
+                    switch type {
+                    case .directional: return "Directional"
+                    case .point: return "Point"
+                    case .spot: return "Spot"
+                    }
+                }
+            )
         }
     }
 
-    private func vector3Field(x: Binding<Float>,
-                              y: Binding<Float>,
-                              z: Binding<Float>) -> some View {
-        Row(alignment: .center, spacing: 4) {
-            axisField("X", value: x)
-            axisField("Y", value: y)
-            axisField("Z", value: z)
-        }
-    }
+}
 
-    private func axisField(_ label: String,
-                           value: Binding<Float>) -> some View {
-        Row(alignment: .center, spacing: 4) {
-            Text(label)
-                .font(.label)
-                .foregroundColor(.onSurfaceMuted)
-            NumberField(value: value, size: .small)
-                .flex()
+private extension EditorInspectorFieldValue {
+    func preferredRowHeight(defaultHeight: Float) -> Float? {
+        switch self {
+        case let .json(_, minHeight):
+            return max(defaultHeight, minHeight + 28)
+        default:
+            return nil
         }
-        .flex()
     }
 }

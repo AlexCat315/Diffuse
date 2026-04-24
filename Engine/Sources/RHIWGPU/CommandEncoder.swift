@@ -15,6 +15,7 @@ public final class GPUCommandEncoder {
     }
 
     public func beginRenderPass(colorView: GPUTextureView,
+                                resolveTargetView: GPUTextureView? = nil,
                                 loadOp: GPULoadOp = .clear,
                                 storeOp: GPUStoreOp = .store,
                                 clearColor: GPUColor = .black,
@@ -43,13 +44,13 @@ public final class GPUCommandEncoder {
         let ok: Int32
         if var da = depthAttachment {
             ok = wgpu_bridge_begin_render_pass(
-                handle, colorView.handle,
+                handle, colorView.handle, resolveTargetView?.handle,
                 loadOp.bridgeValue, storeOp.bridgeValue,
                 clearColor.bridgeValue, &da, &passPtr
             )
         } else {
             ok = wgpu_bridge_begin_render_pass(
-                handle, colorView.handle,
+                handle, colorView.handle, resolveTargetView?.handle,
                 loadOp.bridgeValue, storeOp.bridgeValue,
                 clearColor.bridgeValue, nil, &passPtr
             )

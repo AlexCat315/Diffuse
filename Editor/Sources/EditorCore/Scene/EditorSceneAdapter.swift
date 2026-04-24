@@ -2,6 +2,7 @@ import Foundation
 import GuavaUIRuntime
 import IntentRuntime
 import SceneRuntime
+import ScriptRuntime
 import simd
 
 public struct EditorSceneNode: Identifiable {
@@ -62,7 +63,11 @@ public enum EditorInspectorFieldValue {
     case text(Binding<String>)
     case bool(Binding<Bool>)
     case number(Binding<Float>)
+    case constrainedNumber(Binding<Float>, min: Float?, max: Float?, step: Float?, showsStepper: Bool)
     case vector3(x: Binding<Float>, y: Binding<Float>, z: Binding<Float>)
+    case color(Binding<Color>)
+    case json(Binding<String>, minHeight: Float)
+    case lightType(Binding<LightType>)
 }
 
 /// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`，
@@ -99,9 +104,19 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     }
 
     public var roots: [EditorSceneNode] {
-        scene.entities()
-            .filter { scene.parent(of: $0) == nil }
-            .map(buildNode)
+        scene.roots().map(buildNode)
+    }
+
+    @discardableResult
+    public func moveEntity(_ entityID: UInt64,
+                           to parentID: UInt64?,
+                           at index: Int) -> TransactionApplyResult? {
+        applySceneTransaction(intentVerb: "scene.move_entity",
+                              summary: "Move entity in hierarchy",
+                              targetRawIDs: [entityID],
+                              mutations: [.moveEntity(entityID: entityID,
+                                                      parentID: parentID,
+                                                      index: index)])
     }
 
     public func entitySummary(id rawID: UInt64?) -> EditorSceneEntitySummary? {
@@ -136,6 +151,12 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
         if let constraintSection = constraintSection(for: entity) {
             sections.append(constraintSection)
+        }
+        if let lightSection = lightSection(for: entity) {
+            sections.append(lightSection)
+        }
+        if let scriptSection = scriptSection(for: entity) {
+            sections.append(scriptSection)
         }
 
         return sections
@@ -353,6 +374,178 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func lightSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard let light = scene.component(LightComponent.self, for: entity) else {
+            return nil
+        }
+
+        var fields: [EditorInspectorField] = [
+            EditorInspectorField(
+                id: "type",
+                label: "Type",
+                value: .lightType(lightTypeBinding(for: entity))
+            ),
+            EditorInspectorField(
+                id: "color",
+                label: "Color",
+                value: .color(lightColorBinding(for: entity))
+            )
+        ]
+
+        switch light.type {
+        case .directional:
+            fields.append(
+                EditorInspectorField(
+                    id: "intensity",
+                    label: "Intensity",
+                    value: .number(lightIntensityBinding(for: entity))
+                )
+            )
+        case .point:
+            fields.append(
+                EditorInspectorField(
+                    id: "intensity",
+                    label: "Intensity",
+                    value: .constrainedNumber(lightIntensityBinding(for: entity),
+                                              min: 0,
+                                              max: nil,
+                                              step: 0.1,
+                                              showsStepper: true)
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "range",
+                    label: "Range",
+                    value: .constrainedNumber(lightRangeBinding(for: entity),
+                                              min: 0,
+                                              max: nil,
+                                              step: 0.1,
+                                              showsStepper: true)
+                )
+            )
+        case .spot:
+            fields.append(
+                EditorInspectorField(
+                    id: "intensity",
+                    label: "Intensity",
+                    value: .constrainedNumber(lightIntensityBinding(for: entity),
+                                              min: 0,
+                                              max: nil,
+                                              step: 0.1,
+                                              showsStepper: true)
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "range",
+                    label: "Range",
+                    value: .constrainedNumber(lightRangeBinding(for: entity),
+                                              min: 0,
+                                              max: nil,
+                                              step: 0.1,
+                                              showsStepper: true)
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "spot-inner-angle",
+                    label: "Inner Angle",
+                    value: .constrainedNumber(lightSpotInnerAngleBinding(for: entity),
+                                              min: 0,
+                                              max: 179,
+                                              step: 1,
+                                              showsStepper: true)
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "spot-outer-angle",
+                    label: "Outer Angle",
+                    value: .constrainedNumber(lightSpotOuterAngleBinding(for: entity),
+                                              min: 1,
+                                              max: 179,
+                                              step: 1,
+                                              showsStepper: true)
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "spot-cone-hint",
+                    label: "Cone",
+                    value: .readOnly("\(format(light.spotInnerAngleDegrees))° -> \(format(light.spotOuterAngleDegrees))°")
+                )
+            )
+        }
+
+        return EditorInspectorSection(
+            id: "light",
+            title: "Light",
+            fields: fields
+        )
+    }
+
+    private func scriptSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard let component = scene.component(ScriptComponent.self, for: entity) else {
+            return nil
+        }
+
+        var fields: [EditorInspectorField] = []
+        for (index, binding) in component.bindings.enumerated() {
+            let ordinal = index + 1
+            fields.append(
+                EditorInspectorField(
+                    id: "script-\(index)-enabled",
+                    label: "Script \(ordinal)",
+                    value: .bool(scriptEnabledBinding(for: entity, index: index))
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "script-\(index)-handle",
+                    label: "Handle",
+                    value: .readOnly("#\(binding.script.rawValue)")
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "script-\(index)-parameters",
+                    label: "Parameters",
+                    value: .json(scriptParametersBinding(for: entity, index: index), minHeight: 96)
+                )
+            )
+        }
+
+        if fields.isEmpty {
+            fields.append(
+                EditorInspectorField(
+                    id: "script-empty",
+                    label: "Bindings",
+                    value: .readOnly("No scripts")
+                )
+            )
+        }
+
+        return EditorInspectorSection(id: "scripts", title: "Scripts", fields: fields)
+    }
+
+    private func lightTypeBinding(for entity: EntityID) -> Binding<LightType> {
+        Binding(
+            get: { [self] in
+                scene.component(LightComponent.self, for: entity)?.type ?? .directional
+            },
+            set: { [self] next in
+                guard scene.component(LightComponent.self, for: entity)?.type != next else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_light_type",
+                                          summary: "Update light type",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLightType(entityID: entity.rawValue, type: next)])
+            }
+        )
+    }
+
     private func nameBinding(for entity: EntityID) -> Binding<String> {
         Binding(
             get: { [self] in
@@ -423,6 +616,150 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func lightColorBinding(for entity: EntityID) -> Binding<Color> {
+        Binding(
+            get: { [self] in
+                let linear = scene.component(LightComponent.self, for: entity)?.color ?? SIMD3<Float>(1, 1, 1)
+                return Color(r: linear.x, g: linear.y, b: linear.z, a: 1)
+            },
+            set: { [self] next in
+                let nextColor = SIMD3<Float>(
+                    max(0, min(1, next.r)),
+                    max(0, min(1, next.g)),
+                    max(0, min(1, next.b))
+                )
+                guard scene.component(LightComponent.self, for: entity)?.color != nextColor else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_light_color",
+                                          summary: "Update light color",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLightColor(entityID: entity.rawValue, color: nextColor)])
+            }
+        )
+    }
+
+    private func lightIntensityBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(LightComponent.self, for: entity)?.intensity ?? 1
+            },
+            set: { [self] next in
+                let clamped = max(0, next)
+                guard scene.component(LightComponent.self, for: entity)?.intensity != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_light_intensity",
+                                          summary: "Update light intensity",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLightIntensity(entityID: entity.rawValue, intensity: clamped)])
+            }
+        )
+    }
+
+    private func lightRangeBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(LightComponent.self, for: entity)?.range ?? 10
+            },
+            set: { [self] next in
+                let clamped = max(0, next)
+                guard scene.component(LightComponent.self, for: entity)?.range != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_light_range",
+                                          summary: "Update light range",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLightRange(entityID: entity.rawValue, range: clamped)])
+            }
+        )
+    }
+
+    private func lightSpotInnerAngleBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(LightComponent.self, for: entity)?.spotInnerAngleDegrees ?? 20
+            },
+            set: { [self] next in
+                let currentOuter = scene.component(LightComponent.self, for: entity)?.spotOuterAngleDegrees ?? 30
+                let clamped = max(0, min(currentOuter, next))
+                guard scene.component(LightComponent.self, for: entity)?.spotInnerAngleDegrees != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_light_spot_inner_angle",
+                                          summary: "Update spotlight inner angle",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLightSpotInnerAngle(entityID: entity.rawValue, angleDegrees: clamped)])
+            }
+        )
+    }
+
+    private func lightSpotOuterAngleBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(LightComponent.self, for: entity)?.spotOuterAngleDegrees ?? 30
+            },
+            set: { [self] next in
+                let clamped = max(1, min(179, next))
+                guard scene.component(LightComponent.self, for: entity)?.spotOuterAngleDegrees != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_light_spot_outer_angle",
+                                          summary: "Update spotlight outer angle",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setLightSpotOuterAngle(entityID: entity.rawValue, angleDegrees: clamped)])
+            }
+        )
+    }
+
+    private func scriptEnabledBinding(for entity: EntityID, index: Int) -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                guard let bindings = scene.component(ScriptComponent.self, for: entity)?.bindings,
+                      bindings.indices.contains(index)
+                else { return false }
+                return bindings[index].isEnabled
+            },
+            set: { [self] next in
+                guard var bindings = scene.component(ScriptComponent.self, for: entity)?.bindings,
+                      bindings.indices.contains(index),
+                      bindings[index].isEnabled != next
+                else { return }
+                bindings[index].isEnabled = next
+                _ = applySceneTransaction(intentVerb: "scene.set_script_enabled",
+                                          summary: "Update script enabled flag",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setScriptBindings(entityID: entity.rawValue,
+                                                                         bindings: bindings)])
+            }
+        )
+    }
+
+    private func scriptParametersBinding(for entity: EntityID, index: Int) -> Binding<String> {
+        Binding(
+            get: { [self] in
+                guard let bindings = scene.component(ScriptComponent.self, for: entity)?.bindings,
+                      bindings.indices.contains(index)
+                else { return "{}" }
+                return normalizedJSONCommitText(bindings[index].parametersJSON)
+            },
+            set: { [self] next in
+                let normalized = normalizedJSONCommitText(next)
+                guard isValidJSONDocument(normalized),
+                      var bindings = scene.component(ScriptComponent.self, for: entity)?.bindings,
+                      bindings.indices.contains(index),
+                      bindings[index].parametersJSON != normalized
+                else { return }
+                bindings[index].parametersJSON = normalized
+                _ = applySceneTransaction(intentVerb: "scene.set_script_parameters",
+                                          summary: "Update script parameters",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setScriptBindings(entityID: entity.rawValue,
+                                                                         bindings: bindings)])
+            }
+        )
+    }
+
     private func publishRevision() {
         onRevisionChanged?(scene.snapshot.revision)
     }
@@ -444,6 +781,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
         if scene.hasComponent(RigidBody.self, for: entity) || scene.hasComponent(Collider.self, for: entity) {
             return "Physics Entity"
+        }
+        if scene.hasComponent(ScriptComponent.self, for: entity) {
+            return "Scripted Entity"
         }
         return "Entity"
     }
@@ -623,6 +963,21 @@ private func composeMatrix(translation: SIMD3<Float>,
     m.columns.2 = SIMD4<Float>(c2, 0)
     m.columns.3 = SIMD4<Float>(translation, 1)
     return m
+}
+
+private func normalizedJSONCommitText(_ text: String) -> String {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? "{}" : trimmed
+}
+
+private func isValidJSONDocument(_ text: String) -> Bool {
+    guard let data = text.data(using: .utf8) else { return false }
+    do {
+        _ = try JSONSerialization.jsonObject(with: data)
+        return true
+    } catch {
+        return false
+    }
 }
 
 /// 从 3x3 旋转矩阵提取 Euler XYZ（intrinsic 顺序：R = Rx * Ry * Rz）。

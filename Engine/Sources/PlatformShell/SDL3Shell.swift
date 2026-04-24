@@ -557,7 +557,8 @@ public final class SDL3Shell: Shell {
             button: button,
             x: event.button.x,
             y: event.button.y,
-            clicks: event.button.clicks
+            clicks: event.button.clicks,
+            modifiers: Self.convertModifiers(SDL_GetModState())
         )
     }
 

@@ -223,6 +223,7 @@ typedef struct WGPUBridgeTextureDesc {
     uint32_t height;
     uint32_t depth_or_layers;
     uint32_t mip_level_count;
+    uint32_t sample_count;
     WGPUBridgeTextureFormat format;
     int usage_flags;
 } WGPUBridgeTextureDesc;
@@ -392,6 +393,7 @@ int wgpu_bridge_create_render_pipeline(
     uint32_t vertex_buffer_count,
     const WGPUBridgeBlendState* blend,
     const WGPUBridgeDepthStencilPipelineState* depth_stencil,
+    uint32_t sample_count,
     void* pipeline_layout,
     void** out_pipeline);
 
@@ -418,6 +420,7 @@ int wgpu_bridge_create_command_encoder(void* device,
 
 int wgpu_bridge_begin_render_pass(void* encoder,
                                   void* color_view,
+                                  void* resolve_target_view,
                                   WGPUBridgeLoadOp load_op,
                                   WGPUBridgeStoreOp store_op,
                                   WGPUBridgeColor clear_color,
@@ -599,6 +602,7 @@ int wgpu_bridge_create_render_pipeline_mrt(
     const WGPUBridgeVertexBufferLayout* vertex_buffers,
     uint32_t vertex_buffer_count,
     const WGPUBridgeDepthStencilPipelineState* depth_stencil,
+    uint32_t sample_count,
     void** out_pipeline);
 
 /* ─── Texture Copy ───────────────────────────────────────────────── */
@@ -637,6 +641,11 @@ void wgpu_bridge_render_bundle_set_index_buffer(void* enc, void* buffer,
                                                 WGPUBridgeIndexFormat format,
                                                 uint64_t offset, uint64_t size);
 void wgpu_bridge_render_bundle_set_bind_group(void* enc, uint32_t group_index, void* bind_group);
+void wgpu_bridge_render_bundle_set_bind_group_dynamic(void* enc,
+                                                      uint32_t group_index,
+                                                      void* bind_group,
+                                                      uint32_t dynamic_offset_count,
+                                                      const uint32_t* dynamic_offsets);
 void wgpu_bridge_render_bundle_draw(void* enc, uint32_t vertex_count, uint32_t instance_count,
                                     uint32_t first_vertex, uint32_t first_instance);
 void wgpu_bridge_render_bundle_draw_indexed(void* enc, uint32_t index_count, uint32_t instance_count,

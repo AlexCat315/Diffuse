@@ -36,13 +36,17 @@ public struct NodeRenderer {
             let blur = max(0, node.shadowBlur)
             let radius = max(node.cornerRadius, 0)
             // Cheap fake-blur: emit `steps` concentric expanded rects with
-            // decreasing alpha. Cost is bounded (≤ 4 per node), and gives a
-            // soft enough edge for chrome at typical 8–12px blur.
-            let steps = blur > 0 ? 4 : 1
+            // decreasing alpha. Cost is bounded (≤ 6 per node). 6 steps with a
+            // quadratic weight give a smoother gradient than 4 linear steps at
+            // typical 8–12 px blur radii used for tool-chrome elevation.
+            let steps = blur > 0 ? 6 : 1
             for i in 0..<steps {
-                let t = Float(i) / Float(steps)
+                let t = Float(i) / Float(max(1, steps - 1))
                 let inset = -blur * (1 - t)
-                let alpha = shadowColor.a * (1 - t) / Float(steps) * 2
+                // Quadratic falloff: concentrated near the element, trails to
+                // near-zero at the outer edge (t = 1 → weight = 0).
+                let weight = (1 - t) * (1 - t)
+                let alpha = shadowColor.a * weight / Float(steps) * 2.4
                 let rect = UIRect(
                     x: absX + node.shadowOffsetX + inset,
                     y: absY + node.shadowOffsetY + inset,

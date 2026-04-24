@@ -35,7 +35,7 @@
 | Primary | `accent` | `onAccent` | `accentHover` | `accentPressed` | 主操作（每屏 ≤1） |
 | Secondary | `surfaceVariant` + 1px `borderStrong` | `onSurface` | composited `stateLayerHover` | composited `stateLayerPressed` | 次操作 |
 | Ghost | transparent | `onSurface` | `stateLayerHover` | `stateLayerPressed` | 工具栏、密集列表里的命令 |
-| Destructive | `error` | `onAccent` | composited `stateLayerHover` | composited `stateLayerPressed` | 不可逆的破坏性操作 |
+| Destructive | `error` | `onAccent` | composited `stateLayerHover` | composited `stateLayerPressed` | 不可逆的破坏性操作（需显式 `.buttonStyle(.destructive)`） |
 | Plain | none | inherit | none | none | 把 Button 当成纯命中区（自定义 chrome 时） |
 
 ## States
@@ -48,12 +48,12 @@
 | focus | 多一圈 2px `focusRing` border | 键盘 Tab 聚焦 |
 | disabled | opacity 0.55，cursor 改为 `notAllowed` | `isEnabled: false` |
 
-State 切换全部走 `.animation(.buttonInteraction, value: configuration.interactionKey)`，时长 `theme.motion.fast = 80ms`。
+State 切换走语义动效 `.animation(.semantic(.fast, in: theme), value: configuration.interactionKey)`，默认主题下 `theme.motion.fast = 80ms`。
 
 ## Behavior
 
 - **指针**：down 设置 `isPressed = true`；up 在命中区内触发 `action()`，离开命中区释放则取消。
-- **键盘**：Space / Return 触发 `action()`（待 Phase 9 键盘焦点链接入）。
+- **键盘**：Space / Return / KP Enter（非重复键）触发 `action()`。
 - **Cursor**：enabled → `.pointer`，disabled → `.notAllowed`，可被外层 `.cursor(_:)` 覆盖。
 - **命中区**：完整 chrome 大小（不只 label）。
 
@@ -64,7 +64,7 @@ State 切换全部走 `.animation(.buttonInteraction, value: configuration.inter
 - 调用方写 `Button("Save") { … }`，让 ButtonStyle 决定 chrome
 - 自定义 chrome 时用 `.buttonStyle(.plain)` 并自己负责 padding / background / cornerRadius
 - 多元素 label 用 `Row(spacing: 6) { Icon(); Text("Save") }`，Box 会把整个 Row 居中
-- `role: .destructive` 自动选 `DestructiveButtonStyle`，不要手写颜色
+- `role: .destructive` 只表达语义；视觉危险态请显式写 `.buttonStyle(.destructive)`
 
 ❌ 不应：
 

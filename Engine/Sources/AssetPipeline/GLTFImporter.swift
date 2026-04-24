@@ -1,6 +1,17 @@
 import Foundation
 import simd
 
+/// Per-primitive topology using shared vertex pool with optional index remap.
+public struct PrimitiveMeshTopology: Sendable {
+    public var triangleIndices: [UInt32]
+    public var indexRemap: [UInt32]?
+
+    public init(triangleIndices: [UInt32], indexRemap: [UInt32]? = nil) {
+        self.triangleIndices = triangleIndices
+        self.indexRemap = indexRemap
+    }
+}
+
 public enum GLTFImporterError: Error, CustomStringConvertible {
     case fileNotFound(String)
     case invalidJSON(String)
@@ -41,17 +52,38 @@ public enum GLTFImporterError: Error, CustomStringConvertible {
 
 public enum GLTFImporter {
     public static func load(path: String) throws -> MeshAsset {
+        try loadWithTopology(path: path).mesh
+    }
+
+    public static func loadWithTopology(path: String) throws -> (mesh: MeshAsset, topologies: [MeshTopologySlice]) {
         let url = URL(fileURLWithPath: path)
         guard FileManager.default.fileExists(atPath: url.path) else {
             throw GLTFImporterError.fileNotFound(path)
         }
         let data = try Data(contentsOf: url)
-        return try parse(data: data,
-                         baseURL: url.deletingLastPathComponent(),
-                         name: url.lastPathComponent)
+        return try parseWithTopology(data: data,
+                                     baseURL: url.deletingLastPathComponent(),
+                                     name: url.lastPathComponent)
+    }
+
+    /// Load GLTF with shared vertex pool across all primitives, useful for reducing position redundancy.
+    /// Returns a shared position array and per-primitive topology slices with index remap if needed.
+    public static func loadWithSharedVertexPool(path: String) throws -> (positions: [SIMD3<Float>], primitives: [PrimitiveMeshTopology]) {
+        let url = URL(fileURLWithPath: path)
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            throw GLTFImporterError.fileNotFound(path)
+        }
+        let data = try Data(contentsOf: url)
+        return try parseWithSharedVertexPool(data: data,
+                                             baseURL: url.deletingLastPathComponent())
     }
 
     static func parse(data: Data, baseURL: URL, name: String) throws -> MeshAsset {
+        try parseWithTopology(data: data, baseURL: baseURL, name: name).mesh
+    }
+
+    static func parseWithTopology(data: Data, baseURL: URL, name: String)
+        throws -> (mesh: MeshAsset, topologies: [MeshTopologySlice]) {
         let document: GLTFDocument
         do {
             document = try JSONDecoder().decode(GLTFDocument.self, from: data)
@@ -69,7 +101,29 @@ public enum GLTFImporter {
         for nodeIndex in rootNodes {
             try builder.consumeNode(index: nodeIndex, parentTransform: matrix_identity_float4x4)
         }
-        return try builder.makeMesh(name: name)
+        return try builder.makeMeshWithTopology(name: name)
+    }
+
+    static func parseWithSharedVertexPool(data: Data, baseURL: URL)
+        throws -> (positions: [SIMD3<Float>], primitives: [PrimitiveMeshTopology]) {
+        let document: GLTFDocument
+        do {
+            document = try JSONDecoder().decode(GLTFDocument.self, from: data)
+        } catch {
+            throw GLTFImporterError.invalidJSON(String(describing: error))
+        }
+
+        let buffers = try document.buffers.map { try resolveBuffer($0, baseURL: baseURL) }
+        let rootNodes = try rootNodeIndices(in: document)
+        guard !rootNodes.isEmpty else {
+            throw GLTFImporterError.missingSceneGraph(nil)
+        }
+
+        var sharedBuilder = SharedVertexPoolBuilder(document: document, buffers: buffers)
+        for nodeIndex in rootNodes {
+            try sharedBuilder.consumeNode(index: nodeIndex, parentTransform: matrix_identity_float4x4)
+        }
+        return try sharedBuilder.makePrimitivesWithSharedPool()
     }
 
     private static func rootNodeIndices(in document: GLTFDocument) throws -> [Int] {
@@ -132,6 +186,7 @@ private struct MeshBuilder {
     var vertices: [Float] = []
     var indices: [UInt32] = []
     var nextIndex: UInt32 = 0
+    var topologies: [MeshTopologySlice] = []
 
     mutating func consumeNode(index: Int, parentTransform: simd_float4x4) throws {
         guard let node = document.nodes?[safe: index] else {
@@ -164,6 +219,18 @@ private struct MeshBuilder {
             let normals = try primitive.attributes["NORMAL"].map(readFloat3Accessor)
             let primitiveIndices = try primitive.indices.map(readIndexAccessor)
                 ?? Array(0..<positions.count)
+
+            let topologyPositions = positions.map { local in
+                let p = transform * SIMD4<Float>(local.x, local.y, local.z, 1)
+                return SIMD3<Float>(p.x, p.y, p.z)
+            }
+            let topologyIndices = primitiveIndices.map(UInt32.init)
+            topologies.append(
+                MeshTopologySlice(positions: topologyPositions,
+                                  triangleIndices: topologyIndices,
+                                  indexRemap: nil)
+            )
+
             let basis = simd_float3x3(columns: (
                 SIMD3<Float>(transform.columns.0.x, transform.columns.0.y, transform.columns.0.z),
                 SIMD3<Float>(transform.columns.1.x, transform.columns.1.y, transform.columns.1.z),
@@ -251,12 +318,16 @@ private struct MeshBuilder {
     }
 
     func makeMesh(name: String) throws -> MeshAsset {
+        try makeMeshWithTopology(name: name).mesh
+    }
+
+    func makeMeshWithTopology(name: String) throws -> (mesh: MeshAsset, topologies: [MeshTopologySlice]) {
         guard !vertices.isEmpty else {
             throw GLTFImporterError.invalidAccessor("gltf produced no triangles")
         }
         var mesh = MeshAsset(name: name, vertices: vertices, indices: indices)
         MeshNormalTools.fillMissingNormals(vertices: &mesh.vertices, indices: mesh.indices)
-        return mesh
+        return (mesh, topologies)
     }
 
     private func accessor(at index: Int) throws -> GLTFAccessor {
@@ -273,6 +344,176 @@ private struct MeshBuilder {
         }
         guard buffers.indices.contains(view.buffer) else {
             throw GLTFImporterError.outOfBounds("buffer view references missing buffer \(view.buffer)")
+        }
+        return view
+    }
+
+    private func byteWidth(of componentType: Int) throws -> Int {
+        switch componentType {
+        case 5121: return 1
+        case 5123: return 2
+        case 5125, 5126: return 4
+        default:
+            throw GLTFImporterError.invalidAccessor("unsupported component type \(componentType)")
+        }
+    }
+
+    private func readValue<T>(_ type: T.Type, from data: Data, offset: Int) throws -> T {
+        let width = MemoryLayout<T>.size
+        guard offset >= 0, offset + width <= data.count else {
+            throw GLTFImporterError.outOfBounds("offset \(offset) width \(width) exceeds buffer size \(data.count)")
+        }
+        return data.withUnsafeBytes { rawBuffer in
+            rawBuffer.loadUnaligned(fromByteOffset: offset, as: T.self)
+        }
+    }
+}
+
+private struct SharedVertexPoolBuilder {
+    let document: GLTFDocument
+    let buffers: [Data]
+
+    var sharedPositions: [SIMD3<Float>] = []
+    var primitives: [PrimitiveMeshTopology] = []
+    var positionToSharedIndex: [String: UInt32] = [:]
+
+    mutating func consumeNode(index: Int, parentTransform: simd_float4x4) throws {
+        guard let node = document.nodes?[safe: index] else {
+            throw GLTFImporterError.missingSceneGraph(index)
+        }
+        let worldTransform = parentTransform * node.localTransform
+        if let meshIndex = node.mesh {
+            try consumeMesh(index: meshIndex, transform: worldTransform)
+        }
+        for child in node.children ?? [] {
+            try consumeNode(index: child, parentTransform: worldTransform)
+        }
+    }
+
+    mutating func consumeMesh(index: Int, transform: simd_float4x4) throws {
+        guard let mesh = document.meshes?[safe: index] else {
+            throw GLTFImporterError.missingMesh(index)
+        }
+
+        for primitive in mesh.primitives {
+            let mode = primitive.mode ?? 4
+            guard mode == 4 else {
+                throw GLTFImporterError.unsupportedPrimitiveMode(mode)
+            }
+            guard let positionAccessor = primitive.attributes["POSITION"] else {
+                throw GLTFImporterError.invalidAccessor("primitive missing POSITION attribute")
+            }
+
+            let positions = try readFloat3Accessor(index: positionAccessor)
+            let primitiveIndices = try primitive.indices.map(readIndexAccessor)
+                ?? Array(0..<positions.count)
+
+            var remappedIndices: [UInt32] = []
+            var indexRemap: [UInt32]? = nil
+            var remapNeeded = false
+
+            for rawIndex in primitiveIndices {
+                guard positions.indices.contains(rawIndex) else {
+                    throw GLTFImporterError.outOfBounds("position index \(rawIndex) out of range")
+                }
+
+                let localPosition = positions[rawIndex]
+                let worldPosition4 = transform * SIMD4<Float>(localPosition.x, localPosition.y, localPosition.z, 1)
+                let worldPosition = SIMD3<Float>(worldPosition4.x, worldPosition4.y, worldPosition4.z)
+
+                let posKey = "\(worldPosition.x),\(worldPosition.y),\(worldPosition.z)"
+                if let existingIndex = positionToSharedIndex[posKey] {
+                    remappedIndices.append(existingIndex)
+                } else {
+                    let newIndex = UInt32(sharedPositions.count)
+                    sharedPositions.append(worldPosition)
+                    positionToSharedIndex[posKey] = newIndex
+                    remappedIndices.append(newIndex)
+                }
+
+                if UInt32(rawIndex) != remappedIndices.last! {
+                    remapNeeded = true
+                }
+            }
+
+            if remapNeeded {
+                indexRemap = (0..<primitiveIndices.count).map { i in UInt32(primitiveIndices[i]) }
+            }
+
+            primitives.append(
+                PrimitiveMeshTopology(triangleIndices: remappedIndices, indexRemap: indexRemap)
+            )
+        }
+    }
+
+    func makePrimitivesWithSharedPool() throws -> (positions: [SIMD3<Float>], primitives: [PrimitiveMeshTopology]) {
+        guard !sharedPositions.isEmpty else {
+            throw GLTFImporterError.invalidAccessor("gltf produced no vertices in shared pool")
+        }
+        return (sharedPositions, primitives)
+    }
+
+    func readFloat3Accessor(index: Int) throws -> [SIMD3<Float>] {
+        let accessor = try accessor(at: index)
+        guard accessor.type == "VEC3" else {
+            throw GLTFImporterError.invalidAccessor("expected VEC3 accessor at index \(index)")
+        }
+        guard accessor.componentType == 5126 else {
+            throw GLTFImporterError.invalidAccessor("expected FLOAT component type for accessor \(index)")
+        }
+        let view = try bufferView(for: accessor, accessorIndex: index)
+        let data = buffers[view.buffer]
+        let stride = view.byteStride ?? 12
+        let baseOffset = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+        return try (0..<accessor.count).map { element in
+            let offset = baseOffset + element * stride
+            return SIMD3<Float>(
+                try readValue(Float.self, from: data, offset: offset),
+                try readValue(Float.self, from: data, offset: offset + 4),
+                try readValue(Float.self, from: data, offset: offset + 8)
+            )
+        }
+    }
+
+    func readIndexAccessor(index: Int) throws -> [Int] {
+        let accessor = try accessor(at: index)
+        guard accessor.type == "SCALAR" else {
+            throw GLTFImporterError.invalidAccessor("expected SCALAR accessor at index \(index)")
+        }
+        let view = try bufferView(for: accessor, accessorIndex: index)
+        let data = buffers[view.buffer]
+        let componentSize = try byteWidth(of: accessor.componentType)
+        let stride = view.byteStride ?? componentSize
+        let baseOffset = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+        return try (0..<accessor.count).map { element in
+            let offset = baseOffset + element * stride
+            switch accessor.componentType {
+            case 5121:
+                return Int(try readValue(UInt8.self, from: data, offset: offset))
+            case 5123:
+                return Int(UInt16(littleEndian: try readValue(UInt16.self, from: data, offset: offset)))
+            case 5125:
+                return Int(UInt32(littleEndian: try readValue(UInt32.self, from: data, offset: offset)))
+            default:
+                throw GLTFImporterError.invalidAccessor("unsupported index component type \(accessor.componentType)")
+            }
+        }
+    }
+
+    private func accessor(at index: Int) throws -> GLTFAccessor {
+        guard let accessor = document.accessors[safe: index] else {
+            throw GLTFImporterError.missingAccessor(index)
+        }
+        return accessor
+    }
+
+    private func bufferView(for accessor: GLTFAccessor, accessorIndex: Int) throws -> GLTFBufferView {
+        guard let viewIndex = accessor.bufferView,
+              let view = document.bufferViews?[safe: viewIndex] else {
+            throw GLTFImporterError.invalidAccessor("accessor \(accessorIndex) has no bufferView")
+        }
+        guard buffers.indices.contains(view.buffer) else {
+            throw GLTFImporterError.invalidAccessor("accessor \(accessorIndex) references buffer \(view.buffer) which does not exist")
         }
         return view
     }

@@ -2,6 +2,7 @@ import AssetPipeline
 import Foundation
 import SceneRuntime
 import SequenceRuntime
+import ScriptRuntime
 import simd
 
 public enum TransactionDomain: String, Sendable, Equatable {
@@ -67,11 +68,19 @@ public enum SceneMutation: Sendable, Equatable {
                                  position: SIMD3<Float>)
     case deleteEntity(entityID: UInt64)
     case duplicateEntity(entityID: UInt64)
+    case moveEntity(entityID: UInt64, parentID: UInt64?, index: Int)
     case setLocalTransform(entityID: UInt64, transform: LocalTransform)
     case setSceneName(entityID: UInt64, value: String)
     case setRigidBodyAllowSleep(entityID: UInt64, value: Bool)
     case setColliderTrigger(entityID: UInt64, value: Bool)
     case setConstraintEnabled(entityID: UInt64, value: Bool)
+    case setLightType(entityID: UInt64, type: LightType)
+    case setLightColor(entityID: UInt64, color: SIMD3<Float>)
+    case setLightIntensity(entityID: UInt64, intensity: Float)
+    case setLightRange(entityID: UInt64, range: Float)
+    case setLightSpotInnerAngle(entityID: UInt64, angleDegrees: Float)
+    case setLightSpotOuterAngle(entityID: UInt64, angleDegrees: Float)
+    case setScriptBindings(entityID: UInt64, bindings: [ScriptBinding])
     case setCameraPose(entityID: UInt64,
                        localTransform: LocalTransform,
                        target: SIMD3<Float>,

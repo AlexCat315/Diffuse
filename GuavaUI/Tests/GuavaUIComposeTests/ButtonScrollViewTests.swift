@@ -37,6 +37,12 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         return origin
     }
 
+    private func menuEntries(count: Int) -> [MenuEntry] {
+        (0..<count).map { index in
+            .item(MenuItem(id: index, title: "Item \(index)") {})
+        }
+    }
+
     @Test("Button registers a pointer handler that fires on down+up")
     func buttonFiresOnTap() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -209,6 +215,115 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(scrollView.contentOffset.y == 0)
     } }
 
+    @Test("TextField wheel at boundary passes through to parent ScrollView")
+    func nestedTextFieldBoundaryPassesWheelToParentScrollView() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let focus = FocusChain()
+        InteractionRegistryHolder.current = registry
+        FocusChainHolder.current = focus
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        let store = TextStore()
+        store.value = Array(repeating: "line", count: 16).joined(separator: "\n")
+
+        graph.install(root:
+            ScrollView(.vertical) {
+                Column {
+                    Text("header").frame(height: 20)
+                    TextField(text: makeBinding(store)).frame(width: 180)
+                    Text("footer").frame(height: 320)
+                }
+            }
+            .frame(width: 220, height: 180)
+        )
+        graph.computeLayout(width: 220, height: 260)
+
+        let scrollView = tree.root!.children.first!
+        let field = firstNode(in: tree.root, where: { $0.attachments[TextField.surfaceMarkerKey] != nil })!
+        let fieldState = field.attachments["__textfield_state"] as? TextField.FieldState
+        #expect((fieldState?.maxScrollY ?? 0) > 0)
+
+        let dispatcher = EventDispatcher(
+            tree: tree,
+            interactions: registry,
+            capture: PointerCapture(),
+            focusChain: focus
+        )
+
+        let origin = absoluteOrigin(of: field)
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(origin.x + 12),
+                                                          y: Float(origin.y + 12),
+                                                          deltaX: 0,
+                                                          deltaY: 0)))
+
+        fieldState?.scrollOffsetY = fieldState?.maxScrollY ?? 0
+        field.contentOffset = CGPoint(x: 0, y: CGFloat(fieldState?.maxScrollY ?? 0))
+
+        let previousFieldOffset = field.contentOffset.y
+        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -1)))
+
+        #expect(field.contentOffset.y == previousFieldOffset)
+        #expect(scrollView.contentOffset.y > 0)
+    } }
+
+    @Test("Scrollable Menu in Popover-style list passes boundary wheel to parent ScrollView")
+    func nestedMenuBoundaryPassesWheelToParentScrollView() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let focus = FocusChain()
+        InteractionRegistryHolder.current = registry
+        FocusChainHolder.current = focus
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+
+        graph.install(root:
+            ScrollView(.vertical) {
+                Column {
+                    Text("header").frame(height: 20)
+                    Menu(menuEntries(count: 24), width: 180, maxVisibleRows: 5)
+                    Text("footer").frame(height: 320)
+                }
+            }
+            .frame(width: 240, height: 200)
+        )
+        graph.computeLayout(width: 240, height: 300)
+
+        let parentScrollView = tree.root!.children.first!
+        let menuScrollView = firstNode(in: tree.root, where: {
+            $0 !== parentScrollView
+                && registry.handlers(for: $0).wheel != nil
+                && abs($0.frame.height - 160) < 0.1
+        })
+        #expect(menuScrollView != nil)
+        guard let menuScrollView else { return }
+
+        if let child = menuScrollView.children.first {
+            let maxOffset = max(0, child.frame.height - menuScrollView.frame.height)
+            menuScrollView.contentOffset = CGPoint(x: 0, y: maxOffset)
+        }
+
+        let dispatcher = EventDispatcher(
+            tree: tree,
+            interactions: registry,
+            capture: PointerCapture(),
+            focusChain: focus
+        )
+
+        let origin = absoluteOrigin(of: menuScrollView)
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(origin.x + 8),
+                                                          y: Float(origin.y + 8),
+                                                          deltaX: 0,
+                                                          deltaY: 0)))
+
+        let previousMenuOffset = menuScrollView.contentOffset.y
+        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -1)))
+
+        #expect(menuScrollView.contentOffset.y == previousMenuOffset)
+        #expect(parentScrollView.contentOffset.y > 0)
+    } }
+
     @Test("Focused TextField wheel priority outranks hovered parent ScrollView")
     func focusedTextFieldWheelPriorityBeatsHoveredParent() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -225,7 +340,7 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         graph.install(root:
             ScrollView(.vertical) {
                 Column {
-                    Text("header").frame(height: 240)
+                    Text("header").frame(height: 20)
                     TextField(text: makeBinding(store)).frame(width: 180)
                     Text("footer").frame(height: 240)
                 }
@@ -249,13 +364,14 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
             capture: PointerCapture(),
             focusChain: focus
         )
+        let previousFieldOffset = field.contentOffset.y
         dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: 12,
                                                           y: 12,
                                                           deltaX: 0,
                                                           deltaY: 0)))
-        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -1)))
+        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: 1)))
 
-        #expect(field.contentOffset.y > 0)
+        #expect(field.contentOffset.y < previousFieldOffset)
         #expect(scrollView.contentOffset.y == 0)
     } }
 }

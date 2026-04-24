@@ -1,4 +1,5 @@
 import Foundation
+import simd
 
 public enum AssetRegistryError: Error, CustomStringConvertible {
     case invalidProjectRoot(String)
@@ -46,15 +47,18 @@ public struct RegisteredMeshAsset: Sendable {
     public let assetID: String
     public let kind: ImportableAssetKind
     public let mesh: MeshAsset
+    public let topologySlices: [MeshTopologySlice]?
 
     public init(meshIndex: Int,
                 assetID: String,
                 kind: ImportableAssetKind,
-                mesh: MeshAsset) {
+                mesh: MeshAsset,
+                topologySlices: [MeshTopologySlice]? = nil) {
         self.meshIndex = meshIndex
         self.assetID = assetID
         self.kind = kind
         self.mesh = mesh
+        self.topologySlices = topologySlices
     }
 }
 
@@ -85,8 +89,25 @@ public final class AssetRegistry: @unchecked Sendable {
 
         for candidate in candidates {
             let kind = candidate.kind
-            var mesh = try importMesh(at: candidate.url, kind: kind)
+            let imported = try importMesh(at: candidate.url, kind: kind)
+            var mesh = imported.mesh
             mesh.normalizeToUnitBounds(targetSize: 2.0)
+
+            let normalizedSlices: [MeshTopologySlice]? = {
+                guard let slices = imported.topologySlices else { return nil }
+                let src = mesh.localBounds
+                let minV = src.min
+                let maxV = src.max
+                let center = (minV + maxV) * 0.5
+                let extent = max(maxV.x - minV.x, max(maxV.y - minV.y, maxV.z - minV.z))
+                let scale: Float = extent > 0 ? (2.0 / extent) : 1.0
+                return slices.map { slice in
+                    let mapped = slice.positions.map { (($0 - center) * scale) }
+                    return MeshTopologySlice(positions: mapped,
+                                             triangleIndices: slice.triangleIndices,
+                                             indexRemap: slice.indexRemap)
+                }
+            }()
 
             let assetURL = candidate.url.resolvingSymlinksInPath()
             let rootPathWithSlash = rootURL.path.hasSuffix("/") ? rootURL.path : rootURL.path + "/"
@@ -104,7 +125,8 @@ public final class AssetRegistry: @unchecked Sendable {
                 meshIndex: nextMeshIndex,
                 assetID: entry.id,
                 kind: kind,
-                mesh: mesh
+                mesh: mesh,
+                topologySlices: normalizedSlices
             )
             nextMeshIndex += 1
         }
@@ -184,12 +206,14 @@ public final class AssetRegistry: @unchecked Sendable {
         return results.sorted { $0.url.path < $1.url.path }
     }
 
-    private func importMesh(at url: URL, kind: ImportableAssetKind) throws -> MeshAsset {
+    private func importMesh(at url: URL,
+                            kind: ImportableAssetKind) throws -> (mesh: MeshAsset, topologySlices: [MeshTopologySlice]?) {
         switch kind {
         case .gltf:
-            return try GLTFImporter.load(path: url.path)
+            let loaded = try GLTFImporter.loadWithTopology(path: url.path)
+            return (loaded.mesh, loaded.topologies)
         case .obj:
-            return try OBJLoader.load(path: url.path)
+            return (try OBJLoader.load(path: url.path), nil)
         }
     }
 }

@@ -48,6 +48,9 @@ public final class DrawListRenderer {
     /// Surface format used at pipeline creation time. Pipelines must be recreated
     /// if the format changes.
     private var configuredFormat: GPUTextureFormat?
+    private var configuredSampleCount: UInt32 = 1
+
+    public var sampleCount: UInt32 { configuredSampleCount }
 
     public init(backend: WGPUBackend) {
         self.backend = backend
@@ -56,8 +59,9 @@ public final class DrawListRenderer {
     // MARK: - Configuration
 
     /// Build the pipeline for the given color attachment format.
-    public func configure(format: GPUTextureFormat) throws {
-        if pipeline != nil && configuredFormat == format { return }
+    public func configure(format: GPUTextureFormat, sampleCount: UInt32 = 1) throws {
+        let resolvedSampleCount = max(1, sampleCount)
+        if pipeline != nil && configuredFormat == format && configuredSampleCount == resolvedSampleCount { return }
 
         let module = try backend.createShaderModule(wgsl: UIShader.wgsl, label: "GuavaUI")
 
@@ -85,15 +89,17 @@ public final class DrawListRenderer {
             frontFace: .ccw,
             cullMode: .none,
             vertexBuffers: [layout],
-            blend: .alphaBlending
+            blend: .alphaBlending,
+            sampleCount: resolvedSampleCount
         )
         self.pipeline = try backend.createRenderPipeline(desc: pipelineDesc)
         self.configuredFormat = format
+        self.configuredSampleCount = resolvedSampleCount
 
         if alphaSampler == nil {
             self.alphaSampler = try backend.createSampler(desc: GPUSamplerDescriptor(
-                magFilter: .nearest,
-                minFilter: .nearest,
+                    magFilter: .linear,
+                    minFilter: .linear,
                 mipmapFilter: .nearest
             ))
         }

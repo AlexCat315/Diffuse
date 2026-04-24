@@ -33,6 +33,37 @@ public struct CameraComponent: RuntimeComponent, Sendable, Equatable {
     }
 }
 
+public enum LightType: String, RuntimeComponent, CaseIterable, Sendable, Equatable {
+    case directional
+    case point
+    case spot
+}
+
+public struct LightComponent: RuntimeComponent, Sendable, Equatable {
+    public var type: LightType
+    public var color: SIMD3<Float>
+    public var intensity: Float
+    public var range: Float
+    public var spotInnerAngleDegrees: Float
+    public var spotOuterAngleDegrees: Float
+
+    public init(type: LightType = .directional,
+                color: SIMD3<Float> = SIMD3<Float>(1, 1, 1),
+                intensity: Float = 1.0,
+                range: Float = 10.0,
+                spotInnerAngleDegrees: Float = 20.0,
+                spotOuterAngleDegrees: Float = 30.0) {
+        self.type = type
+        self.color = color
+        self.intensity = intensity
+        self.range = max(0, range)
+        let outer = max(1, min(179, spotOuterAngleDegrees))
+        let inner = max(0, min(outer, spotInnerAngleDegrees))
+        self.spotInnerAngleDegrees = inner
+        self.spotOuterAngleDegrees = outer
+    }
+}
+
 public struct ExtractedRenderSceneResource: Sendable {
     public var scene: RenderScene
     public var activeCameraEntity: EntityID?

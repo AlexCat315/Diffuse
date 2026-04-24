@@ -1,4 +1,5 @@
 import Foundation
+import GuavaUIBundledFonts
 import GuavaUICompose
 import GuavaUIRuntime
 import GuavaUIDevTools
@@ -50,6 +51,7 @@ public final class AppRuntime {
     private let backend: WGPUBackend
     private let renderer: DrawListRenderer
     private let imageAssets: ImageAssetRegistry
+    private let assetDropRegistry = AssetDropRegistry()
     private let viewportTextures: ViewportTextureRegistry
     private let drawList = DrawList()
     /// Phase 4c: layer-aware renderer drives RenderTree-based composition with
@@ -67,6 +69,10 @@ public final class AppRuntime {
 
     private var surface: GPUSurface?
     private var configuredSurface = false
+    private var msaaColorTexture: GPUTexture?
+    private var msaaColorView: GPUTextureView?
+    private var msaaColorWidth: UInt32 = 0
+    private var msaaColorHeight: UInt32 = 0
 
     private var drawableW: UInt32 = 0
     private var drawableH: UInt32 = 0
@@ -101,6 +107,7 @@ public final class AppRuntime {
     }
 
     private func start<Root: View>(rootView: Root) throws {
+        BundledFonts.register()
         try backend.initialize()
 
         if let devConfig = config.devTools {
@@ -128,11 +135,14 @@ public final class AppRuntime {
 
         let previousViewportBridge = ViewportTextureBridgeHolder.current
         let previousImageAssets = ImageAssetRegistryHolder.current
+        let previousAssetDropRegistry = AssetDropRegistryHolder.current
         ViewportTextureBridgeHolder.current = viewportTextures
         ImageAssetRegistryHolder.current = imageAssets
+        AssetDropRegistryHolder.current = assetDropRegistry
         defer {
             ViewportTextureBridgeHolder.current = previousViewportBridge
             ImageAssetRegistryHolder.current = previousImageAssets
+            AssetDropRegistryHolder.current = previousAssetDropRegistry
         }
 
         // 把进程级 holder 接到主窗口的 input context 上，使 Compose 层
@@ -179,7 +189,9 @@ public final class AppRuntime {
             height: heightPx,
             presentMode: .fifo
         )
-        try renderer.configure(format: .bgra8Unorm)
+        try renderer.configure(format: .bgra8Unorm,
+                               sampleCount: config.msaaSampleCount)
+        try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
         surface = gpu
 
         configureTextEnvironment(scale: host.contentScaleFactor)
@@ -197,6 +209,10 @@ public final class AppRuntime {
         try uploadAtlasIfNeeded()
         configuredSurface = true
         lastFrameTime = ProcessInfo.processInfo.systemUptime
+        
+        // Request an initial frame to ensure surfaces like viewport have
+        // time to initialize before the first render.
+        host.requestDisplay()
     }
 
     private func handleResize(widthPx: UInt32, heightPx: UInt32) throws {
@@ -212,6 +228,7 @@ public final class AppRuntime {
             height: heightPx,
             presentMode: .fifo
         )
+        try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
         configureTextEnvironment(scale: host.contentScaleFactor)
         try uploadAtlasIfNeeded()
     }
@@ -259,8 +276,11 @@ public final class AppRuntime {
 
         do {
             let encoder = try backend.createCommandEncoder()
+            let passColorView = msaaColorView ?? frame.view
+            let passResolveView = msaaColorView == nil ? nil : frame.view
             let pass = try encoder.beginRenderPass(
-                colorView: frame.view,
+                colorView: passColorView,
+                resolveTargetView: passResolveView,
                 loadOp: .clear,
                 storeOp: .store,
                 clearColor: config.clearColor
@@ -360,5 +380,36 @@ public final class AppRuntime {
             )
         }
         atlas.markClean()
+    }
+
+    private func ensureMSAATarget(widthPx: UInt32, heightPx: UInt32) throws {
+        guard config.msaaSampleCount > 1 else {
+            msaaColorTexture = nil
+            msaaColorView = nil
+            msaaColorWidth = 0
+            msaaColorHeight = 0
+            return
+        }
+
+        if msaaColorTexture != nil,
+           msaaColorView != nil,
+           msaaColorWidth == widthPx,
+           msaaColorHeight == heightPx {
+            return
+        }
+
+        let texture = try backend.createTexture(
+            width: widthPx,
+            height: heightPx,
+            format: .bgra8Unorm,
+            usage: [.renderAttachment],
+            mipLevels: 1,
+            depthOrLayers: 1,
+            sampleCount: config.msaaSampleCount
+        )
+        msaaColorTexture = texture
+        msaaColorView = try texture.createView()
+        msaaColorWidth = widthPx
+        msaaColorHeight = heightPx
     }
 }

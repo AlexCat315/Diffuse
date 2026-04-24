@@ -46,6 +46,8 @@ public final class FrameTap {
 
     private var texture: GPUTexture?
     private var textureView: GPUTextureView?
+    private var msaaTexture: GPUTexture?
+    private var msaaTextureView: GPUTextureView?
     private var readback: GPUBuffer?
 
     private let log = Logger(label: "guava.devtools.frameTap")
@@ -79,6 +81,8 @@ public final class FrameTap {
         // Drop GPU resources so the next start() picks up the latest size.
         texture = nil
         textureView = nil
+        msaaTexture = nil
+        msaaTextureView = nil
         readback = nil
         widthPx = 0
         heightPx = 0
@@ -131,8 +135,11 @@ public final class FrameTap {
             guard let texture, let textureView, let readback else { return }
 
             let encoder = try backend.createCommandEncoder()
+            let passColorView = msaaTextureView ?? textureView
+            let passResolveView = msaaTextureView == nil ? nil : textureView
             let pass = try encoder.beginRenderPass(
-                colorView: textureView,
+                colorView: passColorView,
+                resolveTargetView: passResolveView,
                 loadOp: .clear,
                 storeOp: .store,
                 clearColor: .black
@@ -221,6 +228,25 @@ public final class FrameTap {
             depthOrLayers: 1
         )
         let view = try tex.createView()
+        let msaaCount = renderer.sampleCount
+        let msaaTex: GPUTexture?
+        let msaaView: GPUTextureView?
+        if msaaCount > 1 {
+            let texture = try backend.createTexture(
+                width: widthPx,
+                height: heightPx,
+                format: .bgra8Unorm,
+                usage: [.renderAttachment],
+                mipLevels: 1,
+                depthOrLayers: 1,
+                sampleCount: msaaCount
+            )
+            msaaTex = texture
+            msaaView = try texture.createView()
+        } else {
+            msaaTex = nil
+            msaaView = nil
+        }
         let buf = try backend.createBuffer(
             size: UInt64(stride * Int(heightPx)),
             usage: [.mapRead, .copyDst],
@@ -228,6 +254,8 @@ public final class FrameTap {
         )
         self.texture = tex
         self.textureView = view
+        self.msaaTexture = msaaTex
+        self.msaaTextureView = msaaView
         self.readback = buf
         self.widthPx = widthPx
         self.heightPx = heightPx

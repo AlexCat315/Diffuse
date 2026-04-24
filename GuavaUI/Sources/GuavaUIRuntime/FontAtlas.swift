@@ -271,7 +271,13 @@ public final class FontAtlas {
 
         let face = resolved.face
 
-        let err = FT_Load_Glyph(face, FT_UInt(glyphIndex), FT_Int32(FT_LOAD_RENDER))
+        // FT_LOAD_TARGET_LIGHT  = (1 & 15) << 16 = 0x10000: lighter vertical hinting,
+        //                         smoother diagonal strokes at small sizes.
+        // FT_LOAD_FORCE_AUTOHINT = 1 << 5 = 0x20: use FreeType autohinter instead of
+        //                         native font hinting, which is generally better for
+        //                         screen rendering of tool-chrome text (12-14 px).
+        let renderFlags = FT_Int32(FT_LOAD_RENDER) | (1 << 5) | (1 << 16)
+        let err = FT_Load_Glyph(face, FT_UInt(glyphIndex), renderFlags)
         guard err == 0 else { return nil }
 
         guard let glyphSlot = face.pointee.glyph else { return nil }

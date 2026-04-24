@@ -66,6 +66,34 @@ struct PrimitiveLayoutTests {
         #expect(kids[2].frame.origin.x == 160)  // 200 - 40
     }
 
+    @Test("Box alignment convenience maps center-bottom for columns")
+    func boxAlignmentColumnMapping() {
+        let layout = LayoutNode()
+        let box = Box(direction: .column, alignment: .bottom) {
+            EmptyView()
+        }
+
+        box._updateLayout(layout)
+
+        #expect(layout.flexDirection == .column)
+        #expect(layout.alignItems == .center)
+        #expect(layout.justifyContent == .flexEnd)
+    }
+
+    @Test("Box alignment convenience respects reverse row directions")
+    func boxAlignmentRowReverseMapping() {
+        let layout = LayoutNode()
+        let box = Box(direction: .rowReverse, alignment: .topLeading) {
+            EmptyView()
+        }
+
+        box._updateLayout(layout)
+
+        #expect(layout.flexDirection == .rowReverse)
+        #expect(layout.alignItems == .flexStart)
+        #expect(layout.justifyContent == .flexEnd)
+    }
+
     @Test("Padding modifier insets children")
     func padding() {
         let tree = NodeTree()
@@ -154,6 +182,84 @@ struct PrimitiveLayoutTests {
         let alphaByte = (packed >> 24) & 0xFF
         #expect(redByte >= 250)
         #expect(alphaByte >= 126 && alphaByte <= 129)
+    }
+
+    @Test("Image stretch mode fills container")
+    func imageStretchModeFillsContainer() {
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            Image(textureID: 7,
+                  width: 100,
+                  height: 100,
+                  sourcePixelSize: (200, 100),
+                  contentMode: .stretch)
+        )
+
+        graph.computeLayout(width: 100, height: 100)
+        let image = tree.root?.children.first
+        let list = DrawList()
+        image?.draw?(list, .zero)
+
+        #expect(list.vertices.count == 4)
+        let xs = list.vertices.map(\.posX)
+        let ys = list.vertices.map(\.posY)
+        #expect(xs.min() == 0)
+        #expect(xs.max() == 100)
+        #expect(ys.min() == 0)
+        #expect(ys.max() == 100)
+    }
+
+    @Test("Image fit mode preserves aspect ratio")
+    func imageFitModePreservesAspectRatio() {
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            Image(textureID: 7,
+                  width: 100,
+                  height: 100,
+                  sourcePixelSize: (200, 100),
+                  contentMode: .fit)
+        )
+
+        graph.computeLayout(width: 100, height: 100)
+        let image = tree.root?.children.first
+        let list = DrawList()
+        image?.draw?(list, .zero)
+
+        #expect(list.vertices.count == 4)
+        let xs = list.vertices.map(\.posX)
+        let ys = list.vertices.map(\.posY)
+        #expect(xs.min() == 0)
+        #expect(xs.max() == 100)
+        #expect(ys.min() == 25)
+        #expect(ys.max() == 75)
+    }
+
+    @Test("Image fill mode preserves aspect ratio and overdraws")
+    func imageFillModePreservesAspectRatioAndOverdraws() {
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            Image(textureID: 7,
+                  width: 100,
+                  height: 100,
+                  sourcePixelSize: (200, 100),
+                  contentMode: .fill)
+        )
+
+        graph.computeLayout(width: 100, height: 100)
+        let image = tree.root?.children.first
+        let list = DrawList()
+        image?.draw?(list, .zero)
+
+        #expect(list.vertices.count == 4)
+        let xs = list.vertices.map(\.posX)
+        let ys = list.vertices.map(\.posY)
+        #expect(xs.min() == -50)
+        #expect(xs.max() == 150)
+        #expect(ys.min() == 0)
+        #expect(ys.max() == 100)
     }
 
     @Test("Modifier stack: padding + frame + background")

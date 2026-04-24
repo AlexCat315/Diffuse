@@ -1,0 +1,10 @@
+{
+  "default-scene-policy": {
+    "policy_id": "default-scene-policy",
+    "summary": "default scene write policy"
+  },
+  "default-asset-policy": {
+    "policy_id": "default-asset-policy",
+    "summary": "default asset policy"
+  }
+}

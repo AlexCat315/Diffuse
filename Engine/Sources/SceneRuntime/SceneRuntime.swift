@@ -158,9 +158,20 @@ public struct SceneRuntime {
         world.children(of: entity)
     }
 
+    public func roots() -> [EntityID] {
+        world.roots()
+    }
+
     @discardableResult
     public mutating func setParent(_ parent: EntityID?, for child: EntityID) -> Bool {
         world.setParent(parent, for: child)
+    }
+
+    @discardableResult
+    public mutating func moveEntity(_ entity: EntityID,
+                                    to parent: EntityID?,
+                                    at index: Int) -> Bool {
+        world.moveEntity(entity, to: parent, at: index)
     }
 
     public func hierarchyNeedsPropagation() -> Bool {

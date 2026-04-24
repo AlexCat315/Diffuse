@@ -3,6 +3,7 @@ import Foundation
 import ObservationBus
 import SceneRuntime
 import SequenceRuntime
+import ScriptRuntime
 import simd
 
 public struct TransactionExecutionContext {
@@ -305,7 +306,20 @@ public struct TransactionExecutor {
                     copy.isActive = false
                     _ = scene.setComponent(copy, for: entity)
                 }
+                if let light = scene.component(LightComponent.self, for: source) {
+                    _ = scene.setComponent(light, for: entity)
+                }
+                if let scripts = scene.component(ScriptComponent.self, for: source) {
+                    _ = scene.setComponent(scripts, for: entity)
+                }
                 createdEntityIDs.append(entity.rawValue)
+
+            case let .moveEntity(entityID, parentID, index):
+                let entity = try requireEntity(entityID, in: scene)
+                let parent = try requireOptionalEntity(parentID, in: scene)
+                guard scene.moveEntity(entity, to: parent, at: index) else {
+                    throw TransactionExecutorError.invalidEntity(entityID)
+                }
 
             case let .setLocalTransform(entityID, transform):
                 let entity = try requireEntity(entityID, in: scene)
@@ -342,6 +356,63 @@ public struct TransactionExecutor {
                                                                    type: "Constraint")
                 }
 
+            case let .setLightType(entityID, type):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(LightComponent.self, for: entity, { $0.type = type }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "LightComponent")
+                }
+
+            case let .setLightColor(entityID, color):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(LightComponent.self, for: entity, { $0.color = color }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "LightComponent")
+                }
+
+            case let .setLightIntensity(entityID, intensity):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(LightComponent.self, for: entity, {
+                    $0.intensity = max(0, intensity)
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "LightComponent")
+                }
+
+            case let .setLightRange(entityID, range):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(LightComponent.self, for: entity, {
+                    $0.range = max(0, range)
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "LightComponent")
+                }
+
+            case let .setLightSpotInnerAngle(entityID, angleDegrees):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(LightComponent.self, for: entity, {
+                    let inner = max(0, min(179, angleDegrees))
+                    $0.spotInnerAngleDegrees = min(inner, $0.spotOuterAngleDegrees)
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "LightComponent")
+                }
+
+            case let .setLightSpotOuterAngle(entityID, angleDegrees):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(LightComponent.self, for: entity, {
+                    let outer = max(1, min(179, angleDegrees))
+                    $0.spotOuterAngleDegrees = outer
+                    $0.spotInnerAngleDegrees = min($0.spotInnerAngleDegrees, outer)
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "LightComponent")
+                }
+
+            case let .setScriptBindings(entityID, bindings):
+                let entity = try requireEntity(entityID, in: scene)
+                _ = scene.setComponent(ScriptComponent(bindings: bindings), for: entity)
+
             case let .setCameraPose(entityID, localTransform, target, up):
                 let entity = try requireEntity(entityID, in: scene)
                 guard scene.setLocalTransform(localTransform, for: entity) else {
@@ -371,6 +442,12 @@ public struct TransactionExecutor {
             throw TransactionExecutorError.invalidEntity(rawID)
         }
         return entity
+    }
+
+    private func requireOptionalEntity(_ rawID: UInt64?,
+                                       in scene: SceneRuntime) throws -> EntityID? {
+        guard let rawID else { return nil }
+        return try requireEntity(rawID, in: scene)
     }
 
     private func appliedSequenceDocument(_ next: SequenceDocument,
@@ -586,11 +663,19 @@ public struct TransactionExecutor {
                 continue
             case let .deleteEntity(entityID),
                  let .duplicateEntity(entityID),
+                  let .moveEntity(entityID, _, _),
                  let .setLocalTransform(entityID, _),
                  let .setSceneName(entityID, _),
                  let .setRigidBodyAllowSleep(entityID, _),
                  let .setColliderTrigger(entityID, _),
                  let .setConstraintEnabled(entityID, _),
+                 let .setLightType(entityID, _),
+                 let .setLightColor(entityID, _),
+                 let .setLightIntensity(entityID, _),
+                 let .setLightRange(entityID, _),
+                 let .setLightSpotInnerAngle(entityID, _),
+                 let .setLightSpotOuterAngle(entityID, _),
+                 let .setScriptBindings(entityID, _),
                  let .setCameraPose(entityID, _, _, _):
                 ids.insert(entityID)
             }
