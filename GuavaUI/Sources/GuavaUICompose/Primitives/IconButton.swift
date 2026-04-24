@@ -37,6 +37,7 @@ public struct IconButton: View {
     public let size: Float
     public let role: ButtonRole
     public let isEnabled: Bool
+    public let tooltip: String?
     public let tint: Color?
     public let action: () -> Void
 
@@ -44,12 +45,14 @@ public struct IconButton: View {
                 size: Float = 16,
                 role: ButtonRole = .normal,
                 isEnabled: Bool = true,
+                tooltip: String? = nil,
                 tint: Color? = nil,
                 action: @escaping () -> Void) {
         self.source = .texture(textureID)
         self.size = size
         self.role = role
         self.isEnabled = isEnabled
+        self.tooltip = tooltip
         self.tint = tint
         self.action = action
     }
@@ -58,12 +61,14 @@ public struct IconButton: View {
                 size: Float = 16,
                 role: ButtonRole = .normal,
                 isEnabled: Bool = true,
+                tooltip: String? = nil,
                 tint: Color? = nil,
                 action: @escaping () -> Void) {
         self.source = .file(path: path)
         self.size = size
         self.role = role
         self.isEnabled = isEnabled
+        self.tooltip = tooltip
         self.tint = tint
         self.action = action
     }
@@ -72,18 +77,20 @@ public struct IconButton: View {
                 size: Float = 16,
                 role: ButtonRole = .normal,
                 isEnabled: Bool = true,
+                tooltip: String? = nil,
                 tint: Color? = nil,
                 action: @escaping () -> Void) {
         self.source = .resource(resource)
         self.size = size
         self.role = role
         self.isEnabled = isEnabled
+        self.tooltip = tooltip
         self.tint = tint
         self.action = action
     }
 
     public var body: some View {
-        Button(role: role, isEnabled: isEnabled, action: action) {
+        Button(role: role, isEnabled: isEnabled, tooltip: tooltip, action: action) {
             iconView
         }
     }
