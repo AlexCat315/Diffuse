@@ -618,61 +618,70 @@ private struct _TreeGuideCell: View {
     }
 
     var body: some View {
-        switch style {
-        case .none:
-            return AnyView(
-                Box { EmptyView() }
-                    .frame(width: width, height: rowHeight)
-            )
-        case .vertical:
-            return AnyView(
-                Row(alignment: .center, spacing: 0) {
-                    Box { EmptyView() }
-                        .frame(width: centerLead, height: rowHeight)
+        _TreeGuidePrimitive(width: width,
+                            rowHeight: rowHeight,
+                            centerLead: centerLead,
+                            centerYLead: centerYLead,
+                            bottomHeight: bottomHeight,
+                            style: style)
+    }
+}
 
-                    Box { EmptyView() }
-                        .frame(width: 1, height: rowHeight)
-                        .background(.onSurfaceVariant)
-                        .opacity(0.52)
+private struct _TreeGuidePrimitive: _PrimitiveView {
+    let width: Float
+    let rowHeight: Float
+    let centerLead: Float
+    let centerYLead: Float
+    let bottomHeight: Float
+    let style: _TreeGuideCell.Style
 
-                    Box { EmptyView() }
-                        .frame(width: trailingWidth, height: rowHeight)
-                }
-                .frame(width: width, height: rowHeight)
-            )
-        case .branch(let hasNextSibling):
-            return AnyView(
-                Row(alignment: .center, spacing: 0) {
-                    Box { EmptyView() }
-                        .frame(width: centerLead, height: rowHeight)
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = false
+        return node
+    }
 
-                    Box(direction: .column, alignItems: .stretch, justifyContent: .flexStart) {
-                        Box { EmptyView() }
-                            .frame(width: 1,
-                                   height: centerYLead + 1 + (hasNextSibling ? bottomHeight : 0))
-                            .background(.onSurfaceVariant)
-                            .opacity(0.6)
-                    }
-                    .frame(width: 1, height: rowHeight)
+    func _updateNode(_ node: Node) {
+        node.attachments[Self.guideKey] = true
+        let style = style
+        let width = width
+        let rowHeight = rowHeight
+        let centerLead = centerLead
+        let centerYLead = centerYLead
+        let bottomHeight = bottomHeight
+        node.draw = { [weak node] list, origin in
+            guard let node else { return }
+            let color = (node.foregroundColor ?? node.theme.colors.onSurfaceVariant)
+                .multipliedAlpha(node.opacity * 0.6)
+            let x = Float(origin.x)
+            let y = Float(origin.y)
+            let strokeX = x + centerLead
+            let strokeY = y + centerYLead
 
-                    Box(direction: .column, alignItems: .stretch, justifyContent: .flexStart) {
-                        Box { EmptyView() }
-                            .frame(height: centerYLead)
-
-                        Box { EmptyView() }
-                            .frame(height: 1)
-                            .background(.onSurfaceVariant)
-                            .opacity(0.6)
-
-                        Box { EmptyView() }
-                            .frame(height: bottomHeight)
-                    }
-                    .frame(width: trailingWidth, height: rowHeight)
-                }
-                .frame(width: width, height: rowHeight)
-            )
+            switch style {
+            case .none:
+                return
+            case .vertical:
+                list.addRect(UIRect(x: strokeX, y: y, width: 1, height: rowHeight),
+                             color: color.multipliedAlpha(0.86))
+            case .branch(let hasNextSibling):
+                let verticalHeight = centerYLead + 1 + (hasNextSibling ? bottomHeight : 0)
+                list.addRect(UIRect(x: strokeX, y: y, width: 1, height: verticalHeight),
+                             color: color)
+                list.addRect(UIRect(x: strokeX, y: strokeY, width: max(1, width - centerLead), height: 1),
+                             color: color)
+            }
         }
     }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        layout.width = width
+        layout.height = rowHeight
+        return layout
+    }
+
+    static let guideKey = "__tree_guide"
 }
 
 struct _TreeRowHost: _PrimitiveView {
