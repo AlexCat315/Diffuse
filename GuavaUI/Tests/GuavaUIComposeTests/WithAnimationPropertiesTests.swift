@@ -93,6 +93,20 @@ struct WithAnimationPropertiesTests {
         }
     }
 
+    struct TypedDimensionHarness: View {
+        @State var width: FrameDimension = .points(40)
+        var body: some View {
+            _DebugNode(label: "x").frame(width: width)
+        }
+    }
+
+    struct PercentConvenienceHarness: View {
+        @State var widthPercent: Float = 20
+        var body: some View {
+            _DebugNode(label: "x").framePercent(width: widthPercent)
+        }
+    }
+
     @Test("backgroundColor animates through the scheduler")
     func backgroundAnimates() {
         let scheduler = AnimatorScheduler()
@@ -395,6 +409,56 @@ struct WithAnimationPropertiesTests {
             }
             recomp.commitAll()
 
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("typed frame dimension API animates points values")
+    func typedDimensionPointsAnimate() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = TypedDimensionHarness()
+            graph.install(root: h)
+
+            let node = tree.root?.children.first?.children.first
+            let layout = node?.layoutNode
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$width.wrappedValue = .points(80)
+            }
+            recomp.commitAll()
+            #expect(layout?.width == 40)
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.width == 60)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.width == 80)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("framePercent convenience maps to percent width animation")
+    func framePercentConvenienceAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = PercentConvenienceHarness()
+            graph.install(root: h)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$widthPercent.wrappedValue = 60
+            }
+            recomp.commitAll()
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 1.0)
             #expect(scheduler.activeCount == 0)
         }
     }

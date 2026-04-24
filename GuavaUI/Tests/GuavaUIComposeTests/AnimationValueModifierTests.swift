@@ -50,7 +50,7 @@ struct AnimationValueModifierTests {
         @State var widthPercent: Float = 20
         var body: some View {
             _DebugNode(label: "x")
-                .frame(widthPercent: widthPercent)
+                .frame(width: .percent(widthPercent))
                 .animation(Animation(duration: 1.0, curve: .linear), value: widthPercent)
         }
     }
@@ -68,7 +68,7 @@ struct AnimationValueModifierTests {
         @State var heightPercent: Float = 20
         var body: some View {
             _DebugNode(label: "x")
-                .frame(heightPercent: heightPercent)
+                .frame(height: .percent(heightPercent))
                 .animation(Animation(duration: 1.0, curve: .linear), value: heightPercent)
         }
     }
