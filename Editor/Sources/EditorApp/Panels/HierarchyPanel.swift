@@ -80,7 +80,7 @@ struct HierarchyPanel: View {
                      rowSpacing: 0,
                      indentation: 16,
                      disclosureWidth: 18,
-                     showsIndentGuides: true,
+                     showsIndentGuides: false,
                      disclosureContent: { isExpanded in
                          AnyView(HierarchyDisclosureIcon(isExpanded: isExpanded))
                      },
