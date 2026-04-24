@@ -146,6 +146,27 @@ public final class DrawList {
         appendQuad(v0, v1, v2, v3, textureID: textureID)
     }
 
+    /// Append a textured quad treating the source image's alpha channel as
+    /// coverage and the supplied tint as the final color. This is intended
+    /// for SVG/icon assets that must follow theme foreground tokens instead
+    /// of preserving hard-coded source colors.
+    public func addImageMaskQuad(
+        rect: UIRect,
+        textureID: TextureID,
+        tint: Color = .white,
+        uvMin: (x: Float, y: Float) = (0, 0),
+        uvMax: (x: Float, y: Float) = (1, 1)
+    ) {
+        let packed = tint.rgba8
+        let u0 = uvMin.x + 20
+        let u1 = uvMax.x + 20
+        let v0 = UIVertex(posX: rect.minX, posY: rect.minY, u: u0, v: uvMin.y, color: packed)
+        let v1 = UIVertex(posX: rect.maxX, posY: rect.minY, u: u1, v: uvMin.y, color: packed)
+        let v2 = UIVertex(posX: rect.maxX, posY: rect.maxY, u: u1, v: uvMax.y, color: packed)
+        let v3 = UIVertex(posX: rect.minX, posY: rect.maxY, u: u0, v: uvMax.y, color: packed)
+        appendQuad(v0, v1, v2, v3, textureID: textureID)
+    }
+
     /// Append a rounded image quad using the same CPU tessellation strategy as
     /// `addRoundedRect`, with UVs derived from the original image rect.
     public func addRoundedImageQuad(

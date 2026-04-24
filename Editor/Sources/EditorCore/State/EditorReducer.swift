@@ -20,6 +20,8 @@ public enum EditorAction: Sendable {
     case setRotateSnapEnabled(Bool)
     case setScaleSnapEnabled(Bool)
     case setCommandSelectBehavior(SelectionCommandBehavior)
+    case setThemeMode(EditorThemeMode)
+    case setLanguage(EditorLanguage)
     case beginAssetDrag(EditorAssetDragPayload)
     case updateAssetDragCursor(x: Float, y: Float)
     case endAssetDrag
@@ -99,6 +101,10 @@ public enum EditorReducer {
             state.scaleSnapEnabled = enabled
         case let .setCommandSelectBehavior(behavior):
             state.cmdSelectBehavior = behavior
+        case let .setThemeMode(mode):
+            state.themeMode = mode
+        case let .setLanguage(language):
+            state.language = language
         case let .beginAssetDrag(payload):
             state.activeAssetDrag = payload
         case let .updateAssetDragCursor(x, y):

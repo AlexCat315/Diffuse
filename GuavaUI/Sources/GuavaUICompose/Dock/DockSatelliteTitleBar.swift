@@ -30,7 +30,7 @@ struct _DockSatelliteTitleBar: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         let appearance = resolveDockAppearance(on: node)
-        node.backgroundColor = appearance.tabBarBackground
+        node.animatableSet(\.backgroundColor, to: appearance.tabBarBackground)
         node.layoutNode?.height = appearance.satelliteTitleBarHeight
 
         let stateKey = "__dock_satellite_titlebar_state"

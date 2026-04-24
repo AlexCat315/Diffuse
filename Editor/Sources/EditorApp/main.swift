@@ -1,4 +1,5 @@
 import Darwin
+import EngineKernel
 import EditorCore
 import GuavaUIApp
 import GuavaUIRuntime
@@ -23,25 +24,47 @@ private func runEditor() throws {
     if let shellState = EditorRootViewFactory.loadShellState() {
         app.store.dispatch(.setWorkspaceMode(shellState.workspaceMode))
         app.store.dispatch(.setActiveLayoutPreset(shellState.activeLayoutPreset))
+        app.store.dispatch(.setThemeMode(shellState.themeMode))
+        app.store.dispatch(.setLanguage(shellState.language))
+        EditorLocalizationPreferences.language = shellState.language
     }
 
     let controller = EditorRootViewFactory.makeController(for: app.store.state.workspaceMode,
                                                           preset: app.store.state.activeLayoutPreset)
     let registry = EditorRootViewFactory.makeRegistry(app: app)
+    var settingsWindowID: WindowID?
 
     try AppRuntime.run(
         config: AppConfig(title: "GuavaNext Editor",
                           backendConfig: launchOptions.backendConfig),
         backend: backend,
         events: events,
-        onTick: { dt in app.tick(deltaTime: dt) }
+        onTick: { dt in app.tick(deltaTime: dt) },
+        onDisplayReady: { display in
+            app.setViewportRenderCompletionHandler { _ in
+                display.requestDisplay()
+            }
+            app.setOpenSettingsWindowHandler {
+                if let existing = settingsWindowID,
+                   display.isWindowOpen(existing) {
+                    return
+                }
+                settingsWindowID = display.openWindow(title: "Settings",
+                                                      width: 360,
+                                                      height: 420) {
+                    EditorSettingsWindowRoot(app: app)
+                }
+            }
+        }
     ) {
         EditorRootView(app: app, controller: controller, registry: registry)
     }
 
     // Save layout state on shutdown
     EditorRootViewFactory.saveShellState(mode: app.store.state.workspaceMode,
-                                         preset: app.store.state.activeLayoutPreset)
+                                         preset: app.store.state.activeLayoutPreset,
+                                         themeMode: app.store.state.themeMode,
+                                         language: app.store.state.language)
     EditorRootViewFactory.saveDockLayout(controller,
                                          for: app.store.state.workspaceMode,
                                          preset: app.store.state.activeLayoutPreset)

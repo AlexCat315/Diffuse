@@ -70,6 +70,27 @@ private struct EngineHostState {
     var renderSettings: RenderSettings = .init()
     var renderStats: RenderFrameStats = .init()
     var viewportSurfaceState: ViewportSurfaceState = .init()
+    var renderCompletionHandler: (@Sendable (EngineRenderCompletion) -> Void)?
+}
+
+public struct EngineRenderCompletion: Sendable {
+    public var frameIndex: Int
+    public var deltaTime: Double
+    public var renderSubmitSeconds: Double
+    public var stats: RenderFrameStats
+    public var viewportSurfaceState: ViewportSurfaceState
+
+    public init(frameIndex: Int,
+                deltaTime: Double,
+                renderSubmitSeconds: Double,
+                stats: RenderFrameStats,
+                viewportSurfaceState: ViewportSurfaceState) {
+        self.frameIndex = frameIndex
+        self.deltaTime = deltaTime
+        self.renderSubmitSeconds = renderSubmitSeconds
+        self.stats = stats
+        self.viewportSurfaceState = viewportSurfaceState
+    }
 }
 
 public final class EngineHost: @unchecked Sendable {
@@ -204,10 +225,17 @@ public final class EngineHost: @unchecked Sendable {
         state.withLock { $0.viewportSurfaceState }
     }
 
+    public func setRenderCompletionHandler(_ handler: (@Sendable (EngineRenderCompletion) -> Void)?) {
+        state.withLock { state in
+            state.renderCompletionHandler = handler
+        }
+    }
+
     public func shutdown() {
         let shouldShutdown = state.withLock { state -> Bool in
             guard state.started else { return false }
             state.started = false
+            state.renderCompletionHandler = nil
             return true
         }
         guard shouldShutdown else { return }
@@ -238,13 +266,22 @@ public final class EngineHost: @unchecked Sendable {
     }
 
     private func handleRenderedFrame(_ report: RenderThreadReport) {
+        let completion = EngineRenderCompletion(
+            frameIndex: report.frameIndex,
+            deltaTime: report.deltaTime,
+            renderSubmitSeconds: report.renderSubmitSeconds,
+            stats: report.stats,
+            viewportSurfaceState: report.viewportSurfaceState
+        )
+        let handler = state.withLock { state in
+            state.renderStats = report.stats
+            state.viewportSurfaceState = report.viewportSurfaceState
+            return state.renderCompletionHandler
+        }
         timings.withLock { ledger in
             ledger.completeRender(report)
         }
-        state.withLock { state in
-            state.renderStats = report.stats
-            state.viewportSurfaceState = report.viewportSurfaceState
-        }
+        handler?(completion)
     }
 }
 
