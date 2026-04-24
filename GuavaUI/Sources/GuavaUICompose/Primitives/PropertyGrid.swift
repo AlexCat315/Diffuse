@@ -47,8 +47,8 @@ public struct PropertyGrid: View {
     public let onSectionCollapseChanged: ((String, Bool) -> Void)?
 
     public init(_ sections: [PropertyGridSection],
-            labelWidth: Float = 112,
-            rowHeight: Float = 28,
+                labelWidth: Float = 96,
+                rowHeight: Float = 24,
                 rowSpacing: Float = 1,
                 onSectionCollapseChanged: ((String, Bool) -> Void)? = nil) {
         self.sections = sections
@@ -76,8 +76,7 @@ private struct _StatefulPropertyGrid: View {
             Box(direction: .column, alignItems: .stretch, spacing: 12) {
                 sectionViews()
             }
-            .padding(10)
-            .flex()
+            .padding(8)
         }
         .flex()
     }
@@ -136,7 +135,6 @@ private struct _StatefulPropertyGrid: View {
                 .clipped()
             }
         }
-        .flex()
     }
 
     private func rowView(_ row: PropertyGridRow) -> some View {
@@ -153,14 +151,18 @@ private struct _StatefulPropertyGrid: View {
             Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
                 row.value
                     .frame(height: grid.rowHeight)
-                    .flex()
+                    .flex(1, shrink: 1, basis: 0)
+                    .clipped()
             }
             .frame(height: grid.rowHeight)
-            .padding(horizontal: 8)
+            .padding(horizontal: 6)
             .background(.surface)
-            .flex()
+            .flex(1, shrink: 1, basis: 0)
+            .clipped()
         }
         .background(.divider)
+        .frame(height: grid.rowHeight)
+        .clipped()
         .flex()
     }
 }
