@@ -269,8 +269,8 @@ public final class SDL3PlatformHost: PlatformHost {
             }
             timing.mark("commit")
 
-            AnimatorScheduler.current.tick(deltaTime: deltaTime)
-            let animationsActive = AnimatorScheduler.current.hasActiveAnimations
+            AnimatorScheduler.shared.tick(deltaTime: deltaTime)
+            let animationsActive = AnimatorScheduler.shared.hasActiveAnimations
             timing.mark("animations")
 
             var renderedAnyFrame = false

@@ -17,9 +17,9 @@ struct ConfirmationHostPanel: View {
                         ConfirmationBatchView(app: app, request: request)
                     } else {
                         Box(direction: .column, alignItems: .stretch, spacing: 6) {
-                            Text("No pending confirmation")
+                            Text(L("No pending confirmation"))
                                 .font(.bodyStrong)
-                            Text("Warn, required, and destructive AI actions will appear here before they mutate the scene.")
+                            Text(L("Warn, required, and destructive AI actions will appear here before they mutate the scene."))
                                 .font(.caption)
                                 .foregroundColor(.onSurfaceMuted)
                         }

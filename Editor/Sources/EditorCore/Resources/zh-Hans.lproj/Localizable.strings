@@ -1,0 +1,61 @@
+/* EditorCore — Chinese (Simplified) */
+
+/* Inspector section titles */
+"General" = "常规";
+"Hierarchy" = "层级";
+"Transform" = "变换";
+"Rigid Body" = "刚体";
+"Collider" = "碰撞体";
+"Constraint" = "约束";
+"Light" = "灯光";
+"Scripts" = "脚本";
+
+/* Entity properties */
+"Name" = "名称";
+"Kind" = "类型";
+"Entity ID" = "实体 ID";
+"Parent" = "父级";
+"Children" = "子级";
+"Root" = "根节点";
+
+/* Transform fields */
+"Local Position" = "局部位置";
+"Rotation" = "旋转";
+"Scale" = "缩放";
+"World Position" = "世界位置";
+
+/* Rigid Body fields */
+"Motion" = "运动";
+"Mass" = "质量";
+"Gravity" = "重力";
+"Allow Sleep" = "允许休眠";
+"Sleeping" = "休眠中";
+"Yes" = "是";
+"No" = "否";
+
+/* Collider fields */
+"Shape" = "形状";
+"Trigger" = "触发器";
+"Layer" = "层";
+
+/* Constraint fields */
+"Type" = "类型";
+"Entity A" = "实体 A";
+"Entity B" = "实体 B";
+"Limits" = "限制";
+"Enabled" = "启用";
+
+/* Light fields */
+"Color" = "颜色";
+"Intensity" = "强度";
+"Range" = "范围";
+"Inner Angle" = "内角";
+"Outer Angle" = "外角";
+"Cone" = "光锥";
+
+/* Script fields */
+"Script %d" = "脚本 %d";
+"Handle" = "句柄";
+"Parameters" = "参数";
+"Bindings" = "绑定";
+"No scripts" = "无脚本";

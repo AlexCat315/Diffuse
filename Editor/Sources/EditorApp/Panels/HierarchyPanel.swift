@@ -59,7 +59,7 @@ struct HierarchyPanel: View {
                     .padding(horizontal: 10, vertical: 7)
 
                 Box(direction: .row, alignItems: .center, spacing: 6) {
-                    Text("Search")
+                    Text(L("Search"))
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
 

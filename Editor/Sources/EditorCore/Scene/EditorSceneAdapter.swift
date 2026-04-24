@@ -174,21 +174,21 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     private func generalSection(for entity: EntityID) -> EditorInspectorSection {
         EditorInspectorSection(
             id: "general",
-            title: "General",
+            title: L("General"),
             fields: [
                 EditorInspectorField(
                     id: "name",
-                    label: "Name",
+                    label: L("Name"),
                     value: .text(nameBinding(for: entity))
                 ),
                 EditorInspectorField(
                     id: "kind",
-                    label: "Kind",
+                    label: L("Kind"),
                     value: .readOnly(displayKind(for: entity))
                 ),
                 EditorInspectorField(
                     id: "entity-id",
-                    label: "Entity ID",
+                    label: L("Entity ID"),
                     value: .readOnly(String(entity.rawValue))
                 ),
             ]
@@ -200,21 +200,21 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         if let parent = scene.parent(of: entity) {
             parentLabel = displayName(for: parent)
         } else {
-            parentLabel = "Root"
+            parentLabel = L("Root")
         }
 
         return EditorInspectorSection(
             id: "hierarchy",
-            title: "Hierarchy",
+            title: L("Hierarchy"),
             fields: [
                 EditorInspectorField(
                     id: "parent",
-                    label: "Parent",
+                    label: L("Parent"),
                     value: .readOnly(parentLabel)
                 ),
                 EditorInspectorField(
                     id: "children",
-                    label: "Children",
+                    label: L("Children"),
                     value: .readOnly(String(scene.children(of: entity).count))
                 ),
             ]
@@ -231,7 +231,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "local-position",
-                    label: "Local Position",
+                    label: L("Local Position"),
                     value: .vector3(x: localPositionBinding(for: entity, axis: \.x),
                                     y: localPositionBinding(for: entity, axis: \.y),
                                     z: localPositionBinding(for: entity, axis: \.z))
@@ -240,7 +240,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "local-rotation",
-                    label: "Rotation",
+                    label: L("Rotation"),
                     value: .vector3(x: localRotationBinding(for: entity, axis: \.x),
                                     y: localRotationBinding(for: entity, axis: \.y),
                                     z: localRotationBinding(for: entity, axis: \.z))
@@ -249,7 +249,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "local-scale",
-                    label: "Scale",
+                    label: L("Scale"),
                     value: .vector3(x: localScaleBinding(for: entity, axis: \.x),
                                     y: localScaleBinding(for: entity, axis: \.y),
                                     z: localScaleBinding(for: entity, axis: \.z))
@@ -261,13 +261,13 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "world-position",
-                    label: "World Position",
+                    label: L("World Position"),
                     value: .readOnly(format(displayed))
                 )
             )
         }
 
-        return EditorInspectorSection(id: "transform", title: "Transform", fields: fields)
+        return EditorInspectorSection(id: "transform", title: L("Transform"), fields: fields)
     }
 
     private func rigidBodySection(for entity: EntityID) -> EditorInspectorSection? {
@@ -277,32 +277,32 @@ public final class EditorSceneAdapter: @unchecked Sendable {
 
         return EditorInspectorSection(
             id: "rigid-body",
-            title: "Rigid Body",
+            title: L("Rigid Body"),
             fields: [
                 EditorInspectorField(
                     id: "motion",
-                    label: "Motion",
+                    label: L("Motion"),
                     value: .readOnly(body.motionType.rawValue)
                 ),
                 EditorInspectorField(
                     id: "mass",
-                    label: "Mass",
+                    label: L("Mass"),
                     value: .readOnly(format(body.mass))
                 ),
                 EditorInspectorField(
                     id: "gravity-scale",
-                    label: "Gravity",
+                    label: L("Gravity"),
                     value: .readOnly(format(body.gravityScale))
                 ),
                 EditorInspectorField(
                     id: "allow-sleep",
-                    label: "Allow Sleep",
+                    label: L("Allow Sleep"),
                     value: .bool(rigidBodyAllowSleepBinding(for: entity))
                 ),
                 EditorInspectorField(
                     id: "sleeping",
-                    label: "Sleeping",
-                    value: .readOnly(body.isSleeping ? "Yes" : "No")
+                    label: L("Sleeping"),
+                    value: .readOnly(body.isSleeping ? L("Yes") : L("No"))
                 ),
             ]
         )
@@ -315,21 +315,21 @@ public final class EditorSceneAdapter: @unchecked Sendable {
 
         return EditorInspectorSection(
             id: "collider",
-            title: "Collider",
+            title: L("Collider"),
             fields: [
                 EditorInspectorField(
                     id: "shape",
-                    label: "Shape",
+                    label: L("Shape"),
                     value: .readOnly(describe(collider.shape))
                 ),
                 EditorInspectorField(
                     id: "trigger",
-                    label: "Trigger",
+                    label: L("Trigger"),
                     value: .bool(colliderTriggerBinding(for: entity))
                 ),
                 EditorInspectorField(
                     id: "layer",
-                    label: "Layer",
+                    label: L("Layer"),
                     value: .readOnly(String(collider.layerID))
                 ),
             ]
@@ -343,31 +343,31 @@ public final class EditorSceneAdapter: @unchecked Sendable {
 
         return EditorInspectorSection(
             id: "constraint",
-            title: "Constraint",
+            title: L("Constraint"),
             fields: [
                 EditorInspectorField(
                     id: "type",
-                    label: "Type",
+                    label: L("Type"),
                     value: .readOnly(constraint.constraintType.rawValue)
                 ),
                 EditorInspectorField(
                     id: "entity-a",
-                    label: "Entity A",
+                    label: L("Entity A"),
                     value: .readOnly(displayName(for: constraint.entityA))
                 ),
                 EditorInspectorField(
                     id: "entity-b",
-                    label: "Entity B",
+                    label: L("Entity B"),
                     value: .readOnly(displayName(for: constraint.entityB))
                 ),
                 EditorInspectorField(
                     id: "limits",
-                    label: "Limits",
+                    label: L("Limits"),
                     value: .readOnly("\(format(constraint.minLimit)) ... \(format(constraint.maxLimit))")
                 ),
                 EditorInspectorField(
                     id: "enabled",
-                    label: "Enabled",
+                    label: L("Enabled"),
                     value: .bool(constraintEnabledBinding(for: entity))
                 ),
             ]
@@ -382,12 +382,12 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         var fields: [EditorInspectorField] = [
             EditorInspectorField(
                 id: "type",
-                label: "Type",
+                label: L("Type"),
                 value: .lightType(lightTypeBinding(for: entity))
             ),
             EditorInspectorField(
                 id: "color",
-                label: "Color",
+                label: L("Color"),
                 value: .color(lightColorBinding(for: entity))
             )
         ]
@@ -397,7 +397,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "intensity",
-                    label: "Intensity",
+                    label: L("Intensity"),
                     value: .number(lightIntensityBinding(for: entity))
                 )
             )
@@ -405,7 +405,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "intensity",
-                    label: "Intensity",
+                    label: L("Intensity"),
                     value: .constrainedNumber(lightIntensityBinding(for: entity),
                                               min: 0,
                                               max: nil,
@@ -416,7 +416,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "range",
-                    label: "Range",
+                    label: L("Range"),
                     value: .constrainedNumber(lightRangeBinding(for: entity),
                                               min: 0,
                                               max: nil,
@@ -428,7 +428,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "intensity",
-                    label: "Intensity",
+                    label: L("Intensity"),
                     value: .constrainedNumber(lightIntensityBinding(for: entity),
                                               min: 0,
                                               max: nil,
@@ -439,7 +439,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "range",
-                    label: "Range",
+                    label: L("Range"),
                     value: .constrainedNumber(lightRangeBinding(for: entity),
                                               min: 0,
                                               max: nil,
@@ -450,7 +450,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "spot-inner-angle",
-                    label: "Inner Angle",
+                    label: L("Inner Angle"),
                     value: .constrainedNumber(lightSpotInnerAngleBinding(for: entity),
                                               min: 0,
                                               max: 179,
@@ -461,7 +461,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "spot-outer-angle",
-                    label: "Outer Angle",
+                    label: L("Outer Angle"),
                     value: .constrainedNumber(lightSpotOuterAngleBinding(for: entity),
                                               min: 1,
                                               max: 179,
@@ -472,7 +472,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "spot-cone-hint",
-                    label: "Cone",
+                    label: L("Cone"),
                     value: .readOnly("\(format(light.spotInnerAngleDegrees))° -> \(format(light.spotOuterAngleDegrees))°")
                 )
             )
@@ -480,7 +480,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
 
         return EditorInspectorSection(
             id: "light",
-            title: "Light",
+            title: L("Light"),
             fields: fields
         )
     }
@@ -496,21 +496,21 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "script-\(index)-enabled",
-                    label: "Script \(ordinal)",
+                    label: String(format: L("Script %d"), ordinal),
                     value: .bool(scriptEnabledBinding(for: entity, index: index))
                 )
             )
             fields.append(
                 EditorInspectorField(
                     id: "script-\(index)-handle",
-                    label: "Handle",
+                    label: L("Handle"),
                     value: .readOnly("#\(binding.script.rawValue)")
                 )
             )
             fields.append(
                 EditorInspectorField(
                     id: "script-\(index)-parameters",
-                    label: "Parameters",
+                    label: L("Parameters"),
                     value: .json(scriptParametersBinding(for: entity, index: index), minHeight: 96)
                 )
             )
@@ -520,13 +520,13 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             fields.append(
                 EditorInspectorField(
                     id: "script-empty",
-                    label: "Bindings",
-                    value: .readOnly("No scripts")
+                    label: L("Bindings"),
+                    value: .readOnly(L("No scripts"))
                 )
             )
         }
 
-        return EditorInspectorSection(id: "scripts", title: "Scripts", fields: fields)
+        return EditorInspectorSection(id: "scripts", title: L("Scripts"), fields: fields)
     }
 
     private func lightTypeBinding(for entity: EntityID) -> Binding<LightType> {
