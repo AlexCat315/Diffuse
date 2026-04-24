@@ -134,7 +134,7 @@ private struct EditorMenuBar: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 2) {
-            Text("Guava Make")
+            Text(L("Guava Make"))
                 .font(.bodyStrong)
                 .foregroundColor(.onSurface)
                 .padding(horizontal: 10, vertical: 6)
@@ -166,7 +166,7 @@ private struct EditorMenuBar: View {
 
             Spacer(minLength: 0)
 
-            Text("Settings")
+            Text(L("Settings"))
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
                 .padding(horizontal: 10, vertical: 6)
@@ -402,7 +402,7 @@ private struct EditorMainToolbar: View {
 
             Spacer(minLength: 0)
 
-            Text("Platforms")
+            Text(L("Platforms"))
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
                 .padding(horizontal: 8, vertical: 6)
@@ -433,7 +433,7 @@ private struct LayoutPresetSelector: View {
         Popover(isPresented: $isPresented,
                 width: 132) {
             Row(alignment: .center, spacing: 6) {
-                Text("Preset")
+                Text(L("Preset"))
                     .font(.caption)
                     .foregroundColor(.onSurfaceVariant)
 
@@ -574,7 +574,7 @@ private struct EditorStatusBar: View {
                 .background(isConnected ? .success : .warning)
                 .cornerRadius(3)
 
-            Text(isConnected ? "Connected" : "Offline")
+            Text(isConnected ? L("Connected") : L("Offline"))
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
 
@@ -594,7 +594,7 @@ private struct EditorStatusBar: View {
 
             Spacer(minLength: 0)
 
-            Text(aiStatusMessage ?? "Ready")
+            Text(aiStatusMessage ?? L("Ready"))
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
         }

@@ -871,49 +871,49 @@ private struct ViewportInfoBar: View {
             }
 
             Row(alignment: .center, spacing: 6) {
-                GizmoButton(label: "Pick", target: .none,
+                GizmoButton(label: L("Pick"), target: .none,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
-                GizmoButton(label: "Move", target: .translate,
+                GizmoButton(label: L("Move"), target: .translate,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
-                GizmoButton(label: "Rotate", target: .rotate,
+                GizmoButton(label: L("Rotate"), target: .rotate,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
-                GizmoButton(label: "Scale", target: .scale,
+                GizmoButton(label: L("Scale"), target: .scale,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
 
                 Spacer(minLength: 2)
 
-                ToggleChip(label: "Local", isActive: gizmoSpace == .local) {
+                ToggleChip(label: L("Local"), isActive: gizmoSpace == .local) {
                     onSelectGizmoSpace(.local)
                 }
-                ToggleChip(label: "World", isActive: gizmoSpace == .world) {
+                ToggleChip(label: L("World"), isActive: gizmoSpace == .world) {
                     onSelectGizmoSpace(.world)
                 }
 
-                ToggleChip(label: "T Snap", isActive: translateSnapEnabled) {
+                ToggleChip(label: L("T Snap"), isActive: translateSnapEnabled) {
                     onToggleTranslateSnap(!translateSnapEnabled)
                 }
-                ToggleChip(label: "R Snap", isActive: rotateSnapEnabled) {
+                ToggleChip(label: L("R Snap"), isActive: rotateSnapEnabled) {
                     onToggleRotateSnap(!rotateSnapEnabled)
                 }
-                ToggleChip(label: "S Snap", isActive: scaleSnapEnabled) {
+                ToggleChip(label: L("S Snap"), isActive: scaleSnapEnabled) {
                     onToggleScaleSnap(!scaleSnapEnabled)
                 }
 
                 Spacer(minLength: 0)
 
-                ToggleChip(label: "Cmd-Sub", isActive: cmdSelectBehavior == .subtract) {
+                ToggleChip(label: L("Cmd-Sub"), isActive: cmdSelectBehavior == .subtract) {
                     onSetCommandSelectBehavior(.subtract)
                 }
-                ToggleChip(label: "Cmd-Tog", isActive: cmdSelectBehavior == .toggle) {
+                ToggleChip(label: L("Cmd-Tog"), isActive: cmdSelectBehavior == .toggle) {
                     onSetCommandSelectBehavior(.toggle)
                 }
 
                 Spacer(minLength: 0)
 
-                ToggleChip(label: "Lit", isActive: shadingMode == .lit) {
+                ToggleChip(label: L("Lit"), isActive: shadingMode == .lit) {
                     onSelectShadingMode(.lit)
                 }
-                ToggleChip(label: "Wire", isActive: shadingMode == .wireframe) {
+                ToggleChip(label: L("Wire"), isActive: shadingMode == .wireframe) {
                     onSelectShadingMode(.wireframe)
                 }
 
@@ -966,11 +966,11 @@ private struct GizmoButton: View {
 private struct ViewportIdleCard: View {
     var body: some View {
         Box(direction: .column, alignItems: .center, spacing: 4) {
-            Text("Viewport idle")
+            Text(L("Viewport idle"))
                 .font(.headline)
                 .foregroundColor(.onSurface)
 
-            Text("Waiting for the first render packet from the engine.")
+            Text(L("Waiting for the first render packet from the engine."))
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
         }
@@ -987,7 +987,7 @@ private struct DropTargetCard: View {
 
     var body: some View {
         Box(direction: .column, alignItems: .center, spacing: 4) {
-            Text("Drop to add")
+            Text(L("Drop to add"))
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
 

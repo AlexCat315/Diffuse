@@ -27,9 +27,9 @@ struct InspectorPanel: View {
                         .flex()
                 } else {
                     Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                        Text("No selection")
+                        Text(L("No selection"))
                             .font(.bodyStrong)
-                        Text("Select an entity in Hierarchy to inspect SceneRuntime components.")
+                        Text(L("Select an entity in Hierarchy to inspect SceneRuntime components."))
                             .font(.caption)
                             .foregroundColor(.onSurfaceMuted)
                     }
