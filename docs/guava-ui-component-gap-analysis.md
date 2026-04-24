@@ -10,6 +10,7 @@
 - 新增 `Vec3Field`，Inspector 的三轴 Transform 改为紧凑、可收缩、带 X/Y/Z 轴标识的正式组件
 - `PropertyGrid` 行布局改成更紧凑的可裁剪模式，避免窄 Inspector 中字段溢出
 - 新增 `AssetDropTarget` / `AssetRefField` 基础版，补上资源引用行、清空、按类型接收 drop 的 GuavaUI primitive
+- 新增 `JsonField` 基础版，覆盖脚本参数类 JSON 编辑、校验、格式化和有效提交语义
 
 ## 仍然缺少或不完整的项
 
@@ -22,7 +23,7 @@
 | `InspectorSection` 折叠头 | 不完整 | `CollapsibleSection` | 中 | Swift Inspector 目前是静态 `PropertyGridSection`，没有折叠 / 移除 / hover affordance |
 | `AssetDropTarget` | 基础版已接入组件层 | Inspector script/HDR drop zone | 中 | 已有 registry + hit-test + typed payload；仍需要文件级拖入、hover 精确状态和 Editor 字段落地 |
 | `Vec3Field` 专用交互增强 | 基础版已接入 | `Vec3Input` | 中 | 已有 per-axis 颜色和统一 step/min/max；仍缺少拖拽 scrub、重置轴值、复制/粘贴 vector |
-| `JsonField` / 代码型多行编辑 | 缺失 | Script parameters editor | 中 | 旧 Inspector 已有脚本参数 JSON 编辑；Swift 侧只有通用 `TextField(axis: .vertical)` |
+| `JsonField` / 代码型多行编辑 | 基础版已接入组件层 | Script parameters editor | 中 | 已有 JSON 校验、格式化、有效提交；仍缺少 schema-aware 提示、错误定位和具体 Script Inspector 字段绑定 |
 | `Stepper` / drag scrub | 缺失 | FloatField + number UX | 低 | 不是闭环阻塞项，但会直接影响数值编辑效率 |
 
 ## 排序依据
@@ -45,4 +46,4 @@
 3. `ColorField` overlay 化和 Inspector 行内适配
 4. `InspectorSection` 折叠头
 5. `Vec3Field` 专用交互增强
-6. `JsonField` 或轻量代码编辑器
+6. `JsonField` 接到 Script parameters schema，并补 schema-aware 提示

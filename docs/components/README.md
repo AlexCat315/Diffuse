@@ -24,6 +24,7 @@
 | NumberField | ✅ | [numberfield.md](numberfield.md) |
 | Vec3Field | ✅ | [vec3field.md](vec3field.md) |
 | AssetRefField / AssetDropTarget | ✅ | [assetref.md](assetref.md) |
+| JsonField | ✅ | [jsonfield.md](jsonfield.md) |
 | Slider | ✅ | [slider.md](slider.md) |
 | List / ListRow | ✅ | [list.md](list.md) |
 | Tree / TreeRow | ✅ | [tree.md](tree.md) |
