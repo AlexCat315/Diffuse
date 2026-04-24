@@ -4,9 +4,7 @@ import GuavaUIRuntime
 
 /// Step 6 — verify that `withAnimation` flows backgroundColor, foreground
 /// color, and cornerRadius through the scheduler too, sharing the same
-/// `animatableSet` helper as opacity. Frame and padding remain instant
-/// writes for now (animating Yoga layout requires per-frame relayout
-/// integration scheduled for a later step).
+/// `animatableSet` helper as opacity.
 @Suite("Phase 8 / withAnimation → bg / fg / cornerRadius")
 struct WithAnimationPropertiesTests {
 
@@ -28,6 +26,20 @@ struct WithAnimationPropertiesTests {
         @State var r: Float = 0
         var body: some View {
             _DebugNode(label: "x").cornerRadius(r)
+        }
+    }
+
+    struct FrameHarness: View {
+        @State var width: Float = 40
+        var body: some View {
+            _DebugNode(label: "x").frame(width: width)
+        }
+    }
+
+    struct PaddingHarness: View {
+        @State var insets: EdgeInsets = .init(all: 0)
+        var body: some View {
+            _DebugNode(label: "x").padding(insets)
         }
     }
 
@@ -126,6 +138,64 @@ struct WithAnimationPropertiesTests {
                 h.$r.wrappedValue = 0
             }
             recomp.commitAll()
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame(width:) animates through the scheduler")
+    func frameWidthAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = FrameHarness()
+            graph.install(root: h)
+
+            let node = tree.root?.children.first?.children.first
+            let layout = node?.layoutNode
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$width.wrappedValue = 80
+            }
+            recomp.commitAll()
+            #expect(layout?.width == 40)
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.width == 60)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.width == 80)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("padding animates through the scheduler")
+    func paddingAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = PaddingHarness()
+            graph.install(root: h)
+
+            let node = tree.root?.children.first?.children.first
+            let layout = node?.layoutNode
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$insets.wrappedValue = .init(all: 10)
+            }
+            recomp.commitAll()
+            #expect((layout?.attachments["__layout.padding.insets"] as? EdgeInsets) == .init(all: 0))
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect((layout?.attachments["__layout.padding.insets"] as? EdgeInsets) == .init(all: 5))
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect((layout?.attachments["__layout.padding.insets"] as? EdgeInsets) == .init(all: 10))
             #expect(scheduler.activeCount == 0)
         }
     }
