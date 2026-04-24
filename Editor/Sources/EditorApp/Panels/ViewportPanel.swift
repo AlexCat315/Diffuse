@@ -374,8 +374,6 @@ struct ViewportPanel: View {
                                   mode: EditorGizmoMode,
                                   shadingMode: EditorViewportShadingMode,
                                   selectedID: UInt64?) {
-        drawGridOverlay(list: list, frame: frame)
-        drawOriginAxesOverlay(list: list, frame: frame)
         if shadingMode == .wireframe {
             drawWireframeOverlay(list: list, frame: frame, selectedID: selectedID)
         }
@@ -871,13 +869,13 @@ private struct ViewportInfoBar: View {
             }
 
             Row(alignment: .center, spacing: 6) {
-                GizmoButton(label: L("Pick"), target: .none,
+                GizmoButton(icon: .cursor, tooltip: L("Pick"), target: .none,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
-                GizmoButton(label: L("Move"), target: .translate,
+                GizmoButton(icon: .translate, tooltip: L("Move"), target: .translate,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
-                GizmoButton(label: L("Rotate"), target: .rotate,
+                GizmoButton(icon: .rotate, tooltip: L("Rotate"), target: .rotate,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
-                GizmoButton(label: L("Scale"), target: .scale,
+                GizmoButton(icon: .scale, tooltip: L("Scale"), target: .scale,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
 
                 Spacer(minLength: 2)
@@ -910,10 +908,10 @@ private struct ViewportInfoBar: View {
 
                 Spacer(minLength: 0)
 
-                ToggleChip(label: L("Lit"), isActive: shadingMode == .lit) {
+                ViewportIconToggle(icon: .lit, tooltip: L("Lit"), isActive: shadingMode == .lit) {
                     onSelectShadingMode(.lit)
                 }
-                ToggleChip(label: L("Wire"), isActive: shadingMode == .wireframe) {
+                ViewportIconToggle(icon: .wireframe, tooltip: L("Wire"), isActive: shadingMode == .wireframe) {
                     onSelectShadingMode(.wireframe)
                 }
 
@@ -946,18 +944,53 @@ private struct ToggleChip: View {
 }
 
 private struct GizmoButton: View {
-    let label: String
+    let icon: ViewportToolbarIcon
+    let tooltip: String
     let target: EditorGizmoMode
     let current: EditorGizmoMode
     let onSelect: (EditorGizmoMode) -> Void
 
     var body: some View {
         let isActive = current == target
+        ViewportIconToggle(icon: icon, tooltip: tooltip, isActive: isActive) {
+            onSelect(target)
+        }
+    }
+}
+
+private enum ViewportToolbarIcon: String {
+    case cursor = "cursor-arrow-rays"
+    case translate = "direction-arrows"
+    case rotate = "toolbar-arrow-path"
+    case scale = "arrows-pointing-out"
+    case lit = "toolbar-eye"
+    case wireframe = "grid-pattern"
+
+    var resource: BundleImageResource {
+        .svg(named: rawValue,
+             in: .module,
+             subdirectory: "ToolbarIcons")
+    }
+}
+
+private struct ViewportIconToggle: View {
+    let icon: ViewportToolbarIcon
+    let tooltip: String
+    let isActive: Bool
+    let onTap: () -> Void
+
+    var body: some View {
         if isActive {
-            Button(label) { onSelect(target) }
+            IconButton(resource: icon.resource,
+                       size: 15,
+                       tooltip: tooltip,
+                       action: onTap)
                 .buttonStyle(.primary)
         } else {
-            Button(label) { onSelect(target) }
+            IconButton(resource: icon.resource,
+                       size: 15,
+                       tooltip: tooltip,
+                       action: onTap)
                 .buttonStyle(.secondary)
         }
     }

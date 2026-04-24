@@ -359,23 +359,26 @@ private struct EditorMainToolbar: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
-            ToolbarTextButton(title: "New")
-            ToolbarTextButton(title: "Open")
-            ToolbarTextButton(title: "Save")
-            ToolbarTextButton(title: "Import")
+            ToolbarIconButton(icon: .plus, tooltip: "New") {}
+            ToolbarIconButton(icon: .folderOpen, tooltip: "Open") {}
+            ToolbarIconButton(icon: .save, tooltip: "Save") {}
+            ToolbarIconButton(icon: .folder, tooltip: "Import") {}
 
             Divider()
                 .frame(width: 1, height: 20)
 
-            ToolbarStateButton(title: "Play",
-                               isActive: playbackState == .playing,
-                               onClick: { onSetPlaybackState(.playing) })
-            ToolbarStateButton(title: "Pause",
-                               isActive: playbackState == .paused,
-                               onClick: { onSetPlaybackState(.paused) })
-            ToolbarStateButton(title: "Stop",
-                               isActive: playbackState == .stopped,
-                               onClick: { onSetPlaybackState(.stopped) })
+            ToolbarIconStateButton(icon: .play,
+                                   tooltip: "Play",
+                                   isActive: playbackState == .playing,
+                                   onClick: { onSetPlaybackState(.playing) })
+            ToolbarIconStateButton(icon: .pause,
+                                   tooltip: "Pause",
+                                   isActive: playbackState == .paused,
+                                   onClick: { onSetPlaybackState(.paused) })
+            ToolbarIconStateButton(icon: .stop,
+                                   tooltip: "Stop",
+                                   isActive: playbackState == .stopped,
+                                   onClick: { onSetPlaybackState(.stopped) })
 
             Divider()
                 .frame(width: 1, height: 20)
@@ -397,17 +400,13 @@ private struct EditorMainToolbar: View {
                                  activePreset: activeLayoutPreset,
                                  onSelectPreset: onSetLayoutPreset)
 
-            ToolbarActionButton(title: "Reset Layout",
-                                onClick: onResetLayout)
+            ToolbarIconButton(icon: .layoutGrid,
+                              tooltip: "Reset Layout",
+                              onClick: onResetLayout)
 
             Spacer(minLength: 0)
 
-            Text(L("Platforms"))
-                .font(.caption)
-                .foregroundColor(.onSurfaceVariant)
-                .padding(horizontal: 8, vertical: 6)
-                .background(.surfaceSunken)
-                .cornerRadius(4)
+            ToolbarIconButton(icon: .package, tooltip: "Platforms") {}
         }
         .padding(horizontal: 8, vertical: 6)
         .background(.surfaceVariant)
@@ -509,6 +508,68 @@ private struct ToolbarTextButton: View {
 
     var body: some View {
         ToolbarButtonChrome(title: title)
+    }
+}
+
+private enum EditorToolbarIcon: String {
+    case plus = "plus"
+    case folderOpen = "folder-f"
+    case folder = "folder"
+    case save = "save"
+    case play = "play"
+    case pause = "pause"
+    case stop = "stop"
+    case package = "package"
+    case layoutGrid = "toolbar-squares-2x2"
+    case cursor = "cursor-arrow-rays"
+    case translate = "direction-arrows"
+    case rotate = "toolbar-arrow-path"
+    case scale = "arrows-pointing-out"
+    case globe = "globe"
+    case eye = "toolbar-eye"
+    case wireframe = "grid-pattern"
+
+    var resource: BundleImageResource {
+        .svg(named: rawValue,
+             in: .module,
+             subdirectory: "ToolbarIcons")
+    }
+}
+
+private struct ToolbarIconButton: View {
+    let icon: EditorToolbarIcon
+    let tooltip: String
+    let onClick: () -> Void
+
+    var body: some View {
+        IconButton(resource: icon.resource,
+                   size: 15,
+                   tooltip: tooltip,
+                   action: onClick)
+            .buttonStyle(.secondary)
+    }
+}
+
+private struct ToolbarIconStateButton: View {
+    let icon: EditorToolbarIcon
+    let tooltip: String
+    let isActive: Bool
+    let onClick: () -> Void
+
+    var body: some View {
+        if isActive {
+            IconButton(resource: icon.resource,
+                       size: 15,
+                       tooltip: tooltip,
+                       action: onClick)
+                .buttonStyle(.primary)
+        } else {
+            IconButton(resource: icon.resource,
+                       size: 15,
+                       tooltip: tooltip,
+                       action: onClick)
+                .buttonStyle(.secondary)
+        }
     }
 }
 
