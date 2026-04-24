@@ -3,13 +3,16 @@ import GuavaUIRuntime
 public struct PropertyGridRow: Identifiable {
     public let id: String
     public let label: String
+    public let rowHeight: Float?
     public let value: AnyView
 
     public init<ValueContent: View>(id: String,
                                     label: String,
+                                    rowHeight: Float? = nil,
                                     @ViewBuilder value: () -> ValueContent) {
         self.id = id
         self.label = label
+        self.rowHeight = rowHeight
         self.value = AnyView(value())
     }
 }
@@ -138,30 +141,31 @@ private struct _StatefulPropertyGrid: View {
     }
 
     private func rowView(_ row: PropertyGridRow) -> some View {
-        Row(alignment: .center, spacing: 1) {
+        let rowHeight = row.rowHeight ?? grid.rowHeight
+        return Row(alignment: .center, spacing: 1) {
             Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
                 Text(row.label)
                     .font(.caption)
                     .foregroundColor(.onSurfaceVariant)
             }
             .padding(horizontal: 8)
-            .frame(width: grid.labelWidth, height: grid.rowHeight)
+            .frame(width: grid.labelWidth, height: rowHeight)
             .background(.surfaceVariant)
 
             Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
                 row.value
-                    .frame(height: grid.rowHeight)
+                    .frame(height: rowHeight)
                     .flex(1, shrink: 1, basis: 0)
                     .clipped()
             }
-            .frame(height: grid.rowHeight)
+            .frame(height: rowHeight)
             .padding(horizontal: 6)
             .background(.surface)
             .flex(1, shrink: 1, basis: 0)
             .clipped()
         }
         .background(.divider)
-        .frame(height: grid.rowHeight)
+        .frame(height: rowHeight)
         .clipped()
         .flex()
     }
