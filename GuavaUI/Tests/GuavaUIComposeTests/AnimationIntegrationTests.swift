@@ -68,7 +68,8 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
         var body: some View {
             Box {
                 _DebugNode(label: "leaf")
-                    .frame(height: 20, widthPercent: widthPercent)
+                    .frame(width: .percent(widthPercent),
+                           height: .points(20))
             }
             .frame(width: 200, height: 60)
         }
@@ -83,7 +84,8 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
                         .frame(height: 20)
                 } else {
                     _DebugNode(label: "leaf")
-                        .frame(height: 20, widthPercent: 20)
+                        .frame(width: .percent(20),
+                               height: .points(20))
                 }
             }
             .frame(width: 200, height: 60)
@@ -95,7 +97,8 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
         var body: some View {
             Box {
                 _DebugNode(label: "leaf")
-                    .frame(width: 40, heightPercent: heightPercent)
+                    .frame(width: .points(40),
+                           height: .percent(heightPercent))
             }
             .frame(width: 200, height: 100)
         }
@@ -110,7 +113,8 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
                         .frame(width: 40)
                 } else {
                     _DebugNode(label: "leaf")
-                        .frame(width: 40, heightPercent: 20)
+                        .frame(width: .points(40),
+                               height: .percent(20))
                 }
             }
             .frame(width: 200, height: 100)
@@ -123,8 +127,8 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
         var body: some View {
             Box {
                 _DebugNode(label: "leaf")
-                    .frame(widthPercent: widthPercent,
-                           heightPercent: heightPercent,
+                    .frame(width: .percent(widthPercent),
+                           height: .percent(heightPercent),
                            minWidth: 70,
                            minHeight: 30,
                            maxWidth: 90,
@@ -143,7 +147,9 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
                         .frame(height: 20, minWidth: 70)
                 } else {
                     _DebugNode(label: "leaf")
-                        .frame(height: 20, widthPercent: 20, minWidth: 70)
+                        .frame(width: .percent(20),
+                               height: .points(20),
+                               minWidth: 70)
                 }
             }
             .frame(width: 200, height: 100)
