@@ -195,6 +195,85 @@ struct RuntimeWorldTests {
         #expect(world.worldTransform(for: child)?.translation == SIMD3<Float>(0, 1, 0))
     }
 
+    @Test("Hierarchy move reorders siblings within the same parent")
+    func moveEntityReordersSiblings() {
+        var world = RuntimeWorld()
+        let parent = world.createEntity()
+        let a = world.createEntity()
+        let b = world.createEntity()
+        let c = world.createEntity()
+
+        let parentedA = world.setParent(parent, for: a)
+        let parentedB = world.setParent(parent, for: b)
+        let parentedC = world.setParent(parent, for: c)
+        #expect(parentedA)
+        #expect(parentedB)
+        #expect(parentedC)
+        #expect(world.children(of: parent) == [a, b, c])
+
+        let movedWithinParent = world.moveEntity(c, to: parent, at: 1)
+        #expect(movedWithinParent)
+        #expect(world.children(of: parent) == [a, c, b])
+
+        let movedForwardWithinParent = world.moveEntity(a, to: parent, at: 2)
+        #expect(movedForwardWithinParent)
+        #expect(world.children(of: parent) == [c, a, b])
+    }
+
+    @Test("Hierarchy move reparents into a target slot and supports root ordering")
+    func moveEntityReparentsAndReordersRoots() {
+        var world = RuntimeWorld()
+        let rootA = world.createEntity()
+        let rootB = world.createEntity()
+        let child = world.createEntity()
+
+        #expect(world.roots() == [rootA, rootB, child])
+        let reparentedChild = world.moveEntity(child, to: rootA, at: 0)
+        #expect(reparentedChild)
+        #expect(world.parent(of: child) == rootA)
+        #expect(world.children(of: rootA) == [child])
+        #expect(world.roots() == [rootA, rootB])
+
+        let reorderedRoot = world.moveEntity(rootB, to: nil, at: 0)
+        #expect(reorderedRoot)
+        #expect(world.roots() == [rootB, rootA])
+
+        let rootC = world.createEntity()
+        #expect(world.roots() == [rootB, rootA, rootC])
+        let movedRootForward = world.moveEntity(rootB, to: nil, at: 2)
+        #expect(movedRootForward)
+        #expect(world.roots() == [rootA, rootB, rootC])
+    }
+
+    @Test("setParent removes child from rootEntities to prevent duplicate tree entries")
+    func setParentRemovesFromRootsOnReparent() {
+        var world = RuntimeWorld()
+        let parent = world.createEntity()
+        let child = world.createEntity()
+        #expect(world.roots() == [parent, child])
+
+        _ = world.setParent(parent, for: child)
+        // child must no longer appear in roots; previously it stayed in
+        // rootEntities and caused it to render twice in the hierarchy tree.
+        #expect(world.roots() == [parent])
+        #expect(world.children(of: parent) == [child])
+        #expect(world.parent(of: child) == parent)
+    }
+
+    @Test("setParent restores child to rootEntities when cleared to nil")
+    func setParentNilRestoresToRoots() {
+        var world = RuntimeWorld()
+        let parent = world.createEntity()
+        let child = world.createEntity()
+        _ = world.setParent(parent, for: child)
+        #expect(world.roots() == [parent])
+
+        _ = world.setParent(nil, for: child)
+        #expect(world.parent(of: child) == nil)
+        #expect(world.roots().contains(child))
+        #expect(world.children(of: parent).isEmpty)
+    }
+
     @Test("SceneRuntime runs a fixed phase schedule and applies queued commands")
     func sceneRuntimeRunsDeterministicSchedule() {
         var runtime = SceneRuntime()

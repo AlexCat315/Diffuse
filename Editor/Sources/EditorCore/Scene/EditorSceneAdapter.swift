@@ -104,9 +104,19 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     }
 
     public var roots: [EditorSceneNode] {
-        scene.entities()
-            .filter { scene.parent(of: $0) == nil }
-            .map(buildNode)
+        scene.roots().map(buildNode)
+    }
+
+    @discardableResult
+    public func moveEntity(_ entityID: UInt64,
+                           to parentID: UInt64?,
+                           at index: Int) -> TransactionApplyResult? {
+        applySceneTransaction(intentVerb: "scene.move_entity",
+                              summary: "Move entity in hierarchy",
+                              targetRawIDs: [entityID],
+                              mutations: [.moveEntity(entityID: entityID,
+                                                      parentID: parentID,
+                                                      index: index)])
     }
 
     public func entitySummary(id rawID: UInt64?) -> EditorSceneEntitySummary? {
