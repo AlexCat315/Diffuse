@@ -659,12 +659,12 @@ private struct _TreeGuideOverlayHost<Content: View>: _PrimitiveView {
                                             y: rowTop,
                                             width: 1,
                                             height: max(1, verticalBottom - rowTop)),
-                                     color: baseColor)
+                                  color: baseColor)
                         list.addRect(UIRect(x: strokeX,
                                             y: strokeY,
-                                            width: max(1, rightEdge - strokeX),
+                                      width: max(1, rightEdge - strokeX),
                                             height: 1),
-                                     color: baseColor)
+                                  color: baseColor)
                         continue
                     }
 
