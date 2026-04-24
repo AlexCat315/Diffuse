@@ -36,6 +36,11 @@
 "Settings" = "Settings";
 "Platforms" = "Platforms";
 "Preset" = "Preset";
+"Appearance" = "Appearance";
+"Dark" = "Dark";
+"Light" = "Light";
+"Language" = "Language";
+"System" = "System";
 
 /* Status bar */
 "Connected" = "Connected";

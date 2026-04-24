@@ -12,6 +12,9 @@ struct EditorRootView: View {
 
     var body: some View {
         StoreScope(app.store) { store in
+            let _: Void = {
+                EditorLocalizationPreferences.language = store.state.language
+            }()
             let setPlaybackState: (PlaybackState) -> Void = { next in
                 if store.state.playbackState != next {
                     store.dispatch(.setPlaybackState(next))
@@ -31,7 +34,9 @@ struct EditorRootView: View {
                                                       for: next,
                                                       preset: nextPreset)
                 EditorRootViewFactory.saveShellState(mode: next,
-                                                     preset: nextPreset)
+                                                     preset: nextPreset,
+                                                     themeMode: store.state.themeMode,
+                                                     language: store.state.language)
             }
 
             let setLayoutPreset: (EditorLayoutPreset) -> Void = { nextPreset in
@@ -46,7 +51,9 @@ struct EditorRootView: View {
                                                       for: mode,
                                                       preset: nextPreset)
                 EditorRootViewFactory.saveShellState(mode: mode,
-                                                     preset: nextPreset)
+                                                     preset: nextPreset,
+                                                     themeMode: store.state.themeMode,
+                                                     language: store.state.language)
             }
 
             let resetLayout: () -> Void = {
@@ -55,7 +62,9 @@ struct EditorRootView: View {
                 store.dispatch(.setActiveLayoutPreset(defaultPreset))
                 EditorRootViewFactory.resetLayout(into: controller, for: mode)
                 EditorRootViewFactory.saveShellState(mode: mode,
-                                                     preset: defaultPreset)
+                                                     preset: defaultPreset,
+                                                     themeMode: store.state.themeMode,
+                                                     language: store.state.language)
             }
 
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
@@ -65,7 +74,11 @@ struct EditorRootView: View {
                                   onSetPlaybackState: setPlaybackState,
                                   onSetWorkspaceMode: setWorkspaceMode,
                                   onSetLayoutPreset: setLayoutPreset,
-                                  onResetLayout: resetLayout)
+                                  onResetLayout: resetLayout,
+                                  onOpenSettings: {
+                                      EditorRootViewFactory.activateTab("settings",
+                                                                        in: controller)
+                                  })
                 Divider()
 
                 PanelWorkspace(controller: controller,
@@ -79,7 +92,7 @@ struct EditorRootView: View {
                                 selectedCount: store.state.selectedEntityIDs.count,
                                 aiStatusMessage: store.state.aiStatusMessage)
             }
-            .appearance(.dark)
+            .appearance(store.state.themeMode == .dark ? .dark : .light)
             .flex()
         }
     }
@@ -320,6 +333,7 @@ private struct EditorMainToolbar: View {
     let onSetWorkspaceMode: (EditorWorkspaceMode) -> Void
     let onSetLayoutPreset: (EditorLayoutPreset) -> Void
     let onResetLayout: () -> Void
+    let onOpenSettings: () -> Void
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
@@ -370,6 +384,7 @@ private struct EditorMainToolbar: View {
 
             Spacer(minLength: 0)
 
+            ToolbarIconButton(icon: .settings, tooltip: "Settings", onClick: onOpenSettings)
             ToolbarIconButton(icon: .package, tooltip: "Platforms") {}
         }
         .padding(horizontal: 8, vertical: 6)
@@ -484,6 +499,7 @@ private enum EditorToolbarIcon: String {
     case pause = "pause"
     case stop = "stop"
     case package = "package"
+    case settings = "cog-6-tooth"
     case layoutGrid = "toolbar-squares-2x2"
     case cursor = "cursor-arrow-rays"
     case translate = "direction-arrows"
@@ -537,7 +553,8 @@ private struct ToolbarIconChrome: View {
                   width: 15,
                   height: 15,
                   tint: .white,
-                  contentMode: .fit)
+                  contentMode: .fit,
+                  renderingMode: .alphaMask)
                 .foregroundColor(isActive ? .onAccent : .onSurfaceVariant)
         }
         .frame(width: 34, height: 34)
@@ -641,16 +658,40 @@ enum EditorRootViewFactory {
     struct EditorShellState: Codable, Sendable {
         var workspaceMode: EditorWorkspaceMode
         var activeLayoutPreset: EditorLayoutPreset
+        var themeMode: EditorThemeMode
+        var language: EditorLanguage
         var schemaVersion: Int
 
-        static let currentSchemaVersion = 1
+        static let currentSchemaVersion = 2
 
         init(workspaceMode: EditorWorkspaceMode,
              activeLayoutPreset: EditorLayoutPreset,
+             themeMode: EditorThemeMode = .dark,
+             language: EditorLanguage = .system,
              schemaVersion: Int = currentSchemaVersion) {
             self.workspaceMode = workspaceMode
             self.activeLayoutPreset = activeLayoutPreset
+            self.themeMode = themeMode
+            self.language = language
             self.schemaVersion = schemaVersion
+        }
+
+        enum CodingKeys: String, CodingKey {
+            case workspaceMode
+            case activeLayoutPreset
+            case themeMode
+            case language
+            case schemaVersion
+        }
+
+        init(from decoder: Decoder) throws {
+            let values = try decoder.container(keyedBy: CodingKeys.self)
+            workspaceMode = try values.decodeIfPresent(EditorWorkspaceMode.self, forKey: .workspaceMode) ?? .level
+            activeLayoutPreset = try values.decodeIfPresent(EditorLayoutPreset.self, forKey: .activeLayoutPreset)
+                ?? .default(for: workspaceMode)
+            themeMode = try values.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode) ?? .dark
+            language = try values.decodeIfPresent(EditorLanguage.self, forKey: .language) ?? .system
+            schemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         }
     }
 
@@ -687,6 +728,7 @@ enum EditorRootViewFactory {
         let assetsTab = DockTab(userKey: "assets", title: "Assets")
         let intentTab = DockTab(userKey: "intent-input", title: "AI Intent")
         let confirmationTab = DockTab(userKey: "confirmation-host", title: "Confirm")
+        let settingsTab = DockTab(userKey: "settings", title: "Settings")
 
         let hierarchyLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
@@ -705,7 +747,7 @@ enum EditorRootViewFactory {
         )
         let bottomLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
-            tabs: [assetsTab, consoleTab, intentTab, confirmationTab],
+            tabs: [assetsTab, consoleTab, intentTab, confirmationTab, settingsTab],
             activeTabID: defaultBottomTabID(for: preset,
                                             assetsTab: assetsTab,
                                             consoleTab: consoleTab,
@@ -745,6 +787,7 @@ enum EditorRootViewFactory {
             "assets": .bottomPanel,
             "intent-input": .bottomPanel,
             "confirmation-host": .bottomPanel,
+            "settings": .bottomPanel,
         ]
         controller.onAllowDrop = { [regionByKey] request in
             guard case .splitEdge(let targetID, let edge) = request.target else {
@@ -776,6 +819,20 @@ enum EditorRootViewFactory {
         let defaultPreset = EditorLayoutPreset.default(for: mode)
         let fallback = makeDefaultController(for: mode, preset: defaultPreset)
         controller.load(fallback.snapshot())
+    }
+
+    static func activateTab(_ userKey: String, in controller: DockController) {
+        if let target = findTab(userKey, in: controller.root) {
+            controller.apply(.setActive(node: target.leafID, tab: target.tabID))
+            return
+        }
+
+        let tab = DockTab(userKey: userKey, title: tabTitle(for: userKey))
+        let leafID = findBottomLeaf(in: controller.root) ?? firstTabsLeaf(in: controller.root)
+        if let leafID {
+            controller.apply(.insertTab(tab, into: leafID, at: Int.max))
+            controller.apply(.setActive(node: leafID, tab: tab.id))
+        }
     }
 
     private static func allowsSplitEdge(in region: PanelWorkspaceRegion,
@@ -812,6 +869,49 @@ enum EditorRootViewFactory {
             return nil
         }
         return findNode(id, in: first) ?? findNode(id, in: second)
+    }
+
+    private static func findTab(_ userKey: String,
+                                in node: DockLayoutNode) -> (leafID: DockNodeID, tabID: DockTabID)? {
+        switch node {
+        case .empty:
+            return nil
+        case .tabs(let id, let tabs, _):
+            guard let tab = tabs.first(where: { $0.userKey == userKey }) else { return nil }
+            return (id, tab.id)
+        case .split(_, _, _, let first, let second):
+            return findTab(userKey, in: first) ?? findTab(userKey, in: second)
+        }
+    }
+
+    private static func findBottomLeaf(in node: DockLayoutNode) -> DockNodeID? {
+        switch node {
+        case .empty:
+            return nil
+        case .tabs(let id, let tabs, _):
+            let bottomKeys: Set<String> = ["assets", "console", "intent-input", "confirmation-host", "settings"]
+            return tabs.contains(where: { bottomKeys.contains($0.userKey) }) ? id : nil
+        case .split(_, _, _, let first, let second):
+            return findBottomLeaf(in: second) ?? findBottomLeaf(in: first)
+        }
+    }
+
+    private static func firstTabsLeaf(in node: DockLayoutNode) -> DockNodeID? {
+        switch node {
+        case .empty:
+            return nil
+        case .tabs(let id, _, _):
+            return id
+        case .split(_, _, _, let first, let second):
+            return firstTabsLeaf(in: first) ?? firstTabsLeaf(in: second)
+        }
+    }
+
+    private static func tabTitle(for userKey: String) -> String {
+        switch userKey {
+        case "settings": return "Settings"
+        default: return userKey
+        }
     }
 
     static func makeRegistry(app: EditorApplication) -> PanelRegistry {
@@ -851,6 +951,11 @@ enum EditorRootViewFactory {
                             title: "Confirm",
                             preferredRegion: .bottomPanel) {
                 ConfirmationHostPanel(app: app)
+            },
+            PanelDescriptor(id: "settings",
+                            title: "Settings",
+                            preferredRegion: .bottomPanel) {
+                SettingsPanel(app: app)
             },
         ])
     }
@@ -997,7 +1102,7 @@ enum EditorRootViewFactory {
         case .empty, .tabs:
             return node
         case .split(let id, let axis, let fraction, let first, let second):
-            let clamped = max(0.15, min(0.85, fraction))
+            let clamped = max(0.05, min(0.95, fraction))
             return .split(id: id,
                           axis: axis,
                           fraction: clamped,
@@ -1007,10 +1112,14 @@ enum EditorRootViewFactory {
     }
 
     static func saveShellState(mode: EditorWorkspaceMode,
-                               preset: EditorLayoutPreset) {
+                               preset: EditorLayoutPreset,
+                               themeMode: EditorThemeMode,
+                               language: EditorLanguage) {
         guard let layoutDir = getLayoutPersistenceDirectory() else { return }
         let shell = EditorShellState(workspaceMode: mode,
-                                     activeLayoutPreset: preset)
+                                     activeLayoutPreset: preset,
+                                     themeMode: themeMode,
+                                     language: language)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {
