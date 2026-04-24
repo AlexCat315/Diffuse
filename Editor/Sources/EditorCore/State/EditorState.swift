@@ -94,6 +94,28 @@ public enum SelectionCommandBehavior: String, Codable, Sendable {
     case toggle
 }
 
+public enum EditorThemeMode: String, Codable, Sendable, CaseIterable {
+    case dark
+    case light
+}
+
+public enum EditorLanguage: String, Codable, Sendable, CaseIterable {
+    case system
+    case english
+    case simplifiedChinese
+
+    public var lprojName: String? {
+        switch self {
+        case .system:
+            return nil
+        case .english:
+            return "en"
+        case .simplifiedChinese:
+            return "zh-Hans"
+        }
+    }
+}
+
 public struct EditorAssetDragPayload: Codable, Sendable, Equatable {
     public var assetID: String
     public var displayName: String
@@ -132,6 +154,8 @@ public struct EditorState: Codable, Sendable {
     public var rotateSnapEnabled: Bool
     public var scaleSnapEnabled: Bool
     public var cmdSelectBehavior: SelectionCommandBehavior
+    public var themeMode: EditorThemeMode
+    public var language: EditorLanguage
     public var activeAssetDrag: EditorAssetDragPayload?
     public var inspectorCollapsedSectionIDs: Set<String>
     public var pendingConfirmationRequest: ConfirmationRequestBatch?
@@ -156,6 +180,8 @@ public struct EditorState: Codable, Sendable {
         rotateSnapEnabled: Bool = false,
         scaleSnapEnabled: Bool = false,
         cmdSelectBehavior: SelectionCommandBehavior = .subtract,
+        themeMode: EditorThemeMode = .dark,
+        language: EditorLanguage = .system,
         activeAssetDrag: EditorAssetDragPayload? = nil,
         inspectorCollapsedSectionIDs: Set<String> = [],
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
@@ -179,6 +205,8 @@ public struct EditorState: Codable, Sendable {
         self.rotateSnapEnabled = rotateSnapEnabled
         self.scaleSnapEnabled = scaleSnapEnabled
         self.cmdSelectBehavior = cmdSelectBehavior
+        self.themeMode = themeMode
+        self.language = language
         self.activeAssetDrag = activeAssetDrag
         self.inspectorCollapsedSectionIDs = inspectorCollapsedSectionIDs
         self.pendingConfirmationRequest = pendingConfirmationRequest

@@ -36,6 +36,11 @@
 "Settings" = "设置";
 "Platforms" = "平台";
 "Preset" = "预设";
+"Appearance" = "外观";
+"Dark" = "深色";
+"Light" = "浅色";
+"Language" = "语言";
+"System" = "系统";
 
 /* Status bar */
 "Connected" = "已连接";

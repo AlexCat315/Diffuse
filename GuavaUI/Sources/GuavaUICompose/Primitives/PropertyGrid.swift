@@ -146,6 +146,7 @@ private struct _StatefulPropertyGrid: View {
         return Row(alignment: .center, spacing: 1) {
             Box(direction: .row, alignItems: .center, justifyContent: .flexStart) {
                 Text(row.label)
+                    .lineLimit(1)
                     .font(.caption)
                     .foregroundColor(.onSurfaceVariant)
             }
