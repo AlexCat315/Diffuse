@@ -36,7 +36,7 @@ struct _DockTabsLeafHost: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         let appearance = resolveDockAppearance(on: node)
-        node.backgroundColor = appearance.leafBackground
+        node.animatableSet(\.backgroundColor, to: appearance.leafBackground)
         installDropOverlay(node: node, leafID: nodeID, controller: controller)
     }
 
@@ -91,7 +91,7 @@ struct _DockTabBarHost: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         let appearance = resolveDockAppearance(on: node)
-        node.backgroundColor = appearance.tabBarBackground
+        node.animatableSet(\.backgroundColor, to: appearance.tabBarBackground)
         // Drive the strip height from the resolved DockAppearance. The
         // layout node is linked by ViewGraph.materialisePrimitive before
         // _updateNode runs, so this writes through on the very first pass
@@ -184,9 +184,9 @@ struct _DockTabBarItemHost: _PrimitiveView {
     func _updateNode(_ node: Node) {
         let appearance = resolveDockAppearance(on: node)
         if isActive, let bg = appearance.tabActiveBackground {
-            node.backgroundColor = bg
+            node.animatableSet(\.backgroundColor, to: bg)
         } else {
-            node.backgroundColor = nil
+            node.animatableSet(\.backgroundColor, to: nil)
         }
 
         // Per-tab interaction state lives in `attachments` so it survives

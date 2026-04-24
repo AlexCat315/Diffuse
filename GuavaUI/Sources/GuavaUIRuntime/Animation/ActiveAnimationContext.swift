@@ -45,11 +45,11 @@ public enum ActiveAnimationContext {
     /// then restore the previous value. Nested calls stack; the innermost
     /// `withAnimation` wins.
     @discardableResult
-    public static func with<R>(_ animation: Animation?, _ body: () -> R) -> R {
+    public static func with<R>(_ animation: Animation?, _ body: () throws -> R) rethrows -> R {
         let storage = box
         let saved = storage.value
         storage.value = animation
         defer { storage.value = saved }
-        return body()
+        return try body()
     }
 }
