@@ -23,6 +23,15 @@ import Foundation
 
 public extension Node {
 
+    /// Cancel and clear the active controller for a custom property key.
+    ///
+    /// Useful for mode switches where interpolation is not defined
+    /// (for example points -> percent or any -> auto).
+    @inline(__always)
+    func cancelAnimation<Key: Hashable>(for propertyKey: Key) {
+        replaceAnimationController(for: AnyHashable(propertyKey), with: nil)
+    }
+
     /// Animate (or instantly assign) a custom property endpoint.
     ///
     /// Use this overload when the target value does not live behind a

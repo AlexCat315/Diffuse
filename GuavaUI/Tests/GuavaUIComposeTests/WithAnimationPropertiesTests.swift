@@ -50,6 +50,24 @@ struct WithAnimationPropertiesTests {
         }
     }
 
+    struct PercentFrameHarness: View {
+        @State var widthPercent: Float = 20
+        var body: some View {
+            _DebugNode(label: "x").frame(widthPercent: widthPercent)
+        }
+    }
+
+    struct WidthModeSwitchHarness: View {
+        @State var usePercent = false
+        var body: some View {
+            if usePercent {
+                _DebugNode(label: "x").frame(widthPercent: 50)
+            } else {
+                _DebugNode(label: "x").frame(width: 40)
+            }
+        }
+    }
+
     @Test("backgroundColor animates through the scheduler")
     func backgroundAnimates() {
         let scheduler = AnimatorScheduler()
@@ -232,6 +250,54 @@ struct WithAnimationPropertiesTests {
 
             scheduler.tick(deltaTime: 0.5)
             #expect(layout?.maxWidth == 200)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame(widthPercent:) animates through the scheduler")
+    func frameWidthPercentAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = PercentFrameHarness()
+            graph.install(root: h)
+
+            let node = tree.root?.children.first?.children.first
+            let layout = node?.layoutNode
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$widthPercent.wrappedValue = 60
+            }
+            recomp.commitAll()
+            #expect((layout?.attachments["__layout.frame.widthSpec"] as? Any) != nil)
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame width mode switch snaps and does not keep controller")
+    func frameWidthModeSwitchSnaps() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = WidthModeSwitchHarness()
+            graph.install(root: h)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$usePercent.wrappedValue = true
+            }
+            recomp.commitAll()
+
+            // points -> percent mode change is non-interpolable and should snap.
             #expect(scheduler.activeCount == 0)
         }
     }

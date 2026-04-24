@@ -63,6 +63,33 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    struct LayoutPercentWidthHarness: View {
+        @State var widthPercent: Float = 20
+        var body: some View {
+            Box {
+                _DebugNode(label: "leaf")
+                    .frame(height: 20, widthPercent: widthPercent)
+            }
+            .frame(width: 200, height: 60)
+        }
+    }
+
+    struct LayoutPercentToAutoHarness: View {
+        @State var useAuto = false
+        var body: some View {
+            Box {
+                if useAuto {
+                    _DebugNode(label: "leaf")
+                        .frame(height: 20)
+                } else {
+                    _DebugNode(label: "leaf")
+                        .frame(height: 20, widthPercent: 20)
+                }
+            }
+            .frame(width: 200, height: 60)
+        }
+    }
+
     private func leaves(_ root: Node) -> [Node] {
         var out: [Node] = []
         func walk(_ n: Node) {
@@ -347,6 +374,61 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
             graph.computeLayout(width: 300, height: 120)
             #expect(leaf?.frame.origin.x == 20)
             #expect(leaf?.frame.origin.y == 20)
+        }
+    } }
+
+    @Test("Layout frame width updates over ticks when widthPercent animates")
+    func layoutPercentWidthE2E() { GlobalTestLock.locked {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = LayoutPercentWidthHarness()
+            graph.install(root: h)
+
+            graph.computeLayout(width: 300, height: 120)
+            let leaf = leaves(tree.root!).first(where: { $0.isHitTestable })
+            #expect(leaf?.frame.width == 40)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$widthPercent.wrappedValue = 60
+            }
+            recomp.commitAll()
+
+            scheduler.tick(deltaTime: 0.5)
+            graph.computeLayout(width: 300, height: 120)
+            #expect(leaf?.frame.width == 80)
+
+            scheduler.tick(deltaTime: 0.5)
+            graph.computeLayout(width: 300, height: 120)
+            #expect(leaf?.frame.width == 120)
+        }
+    } }
+
+    @Test("Percent to auto mode switch snaps to container width")
+    func layoutPercentToAutoSnaps() { GlobalTestLock.locked {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = LayoutPercentToAutoHarness()
+            graph.install(root: h)
+
+            graph.computeLayout(width: 300, height: 120)
+            let leaf = leaves(tree.root!).first(where: { $0.isHitTestable })
+            #expect(leaf?.frame.width == 40)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$useAuto.wrappedValue = true
+            }
+            recomp.commitAll()
+            graph.computeLayout(width: 300, height: 120)
+
+            // percent -> auto is a mode switch and should snap immediately.
+            #expect(scheduler.activeCount == 0)
+            #expect(leaf?.frame.width == 200)
         }
     } }
 }
