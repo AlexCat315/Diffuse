@@ -696,6 +696,11 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
             recomp.commitAll()
             #expect(scheduler.activeCount == 1)
 
+            scheduler.tick(deltaTime: 0.5)
+            graph.computeLayout(width: 300, height: 160)
+            // Mid-flight percent interpolation should already be clamped.
+            #expect(leaf?.frame.width == 80)
+
             withAnimation(Animation(duration: 1.0, curve: .linear)) {
                 h.$useAuto.wrappedValue = true
             }
@@ -703,6 +708,7 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
             graph.computeLayout(width: 300, height: 160)
 
             #expect(leaf?.frame.width == 80)
+            #expect(scheduler.activeCount == 1)
 
             scheduler.tick(deltaTime: 0)
             #expect(scheduler.activeCount == 0)
