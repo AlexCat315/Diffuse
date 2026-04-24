@@ -30,20 +30,25 @@ public struct DockContainer: View {
     public let controller: DockController
     public let content: DockContentResolver
     public let hostBridge: DockHostBridge?
+    public let horizontalInset: Float
 
     public init(controller: DockController,
                 hostBridge: DockHostBridge? = nil,
+            horizontalInset: Float = 8,
                 @ViewBuilder content: @escaping () -> AnyView) {
         self.controller = controller
         self.hostBridge = hostBridge
+        self.horizontalInset = max(0, horizontalInset)
         self.content = { _ in content() }
     }
 
     public init(controller: DockController,
                 hostBridge: DockHostBridge? = nil,
+            horizontalInset: Float = 8,
                 content: @escaping DockContentResolver) {
         self.controller = controller
         self.hostBridge = hostBridge
+        self.horizontalInset = max(0, horizontalInset)
         self.content = content
     }
 
@@ -51,6 +56,7 @@ public struct DockContainer: View {
         _StatefulDockContainer(controller: controller,
                                hostBridge: hostBridge,
                                content: content)
+            .padding(horizontal: horizontalInset, vertical: 0)
     }
 }
 
@@ -256,7 +262,7 @@ struct _DockEmptyLeafHost: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         let appearance = resolveDockAppearance(on: node)
-        node.backgroundColor = appearance.emptyLeafBackground
+        node.animatableSet(\.backgroundColor, to: appearance.emptyLeafBackground)
         installDropOverlay(node: node, leafID: nodeID, controller: controller)
     }
 

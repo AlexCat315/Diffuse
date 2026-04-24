@@ -59,7 +59,7 @@ struct HierarchyPanel: View {
                     .padding(horizontal: 10, vertical: 7)
 
                 Box(direction: .row, alignItems: .center, spacing: 6) {
-                    Text("Search")
+                    Text(L("Search"))
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
 
@@ -432,7 +432,8 @@ private struct HierarchyRowTrailingSlots: View {
                           width: 13,
                           height: 13,
                           tint: .white,
-                          contentMode: .fit)
+                          contentMode: .fit,
+                          renderingMode: .alphaMask)
                         .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
                         .frame(width: 16, height: 16)
                 }
@@ -446,7 +447,8 @@ private struct HierarchyRowTrailingSlots: View {
                           width: 13,
                           height: 13,
                           tint: .white,
-                          contentMode: .fit)
+                          contentMode: .fit,
+                          renderingMode: .alphaMask)
                         .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
                         .frame(width: 16, height: 16)
                 }
@@ -472,7 +474,8 @@ private struct HierarchyDisclosureIcon: View {
               width: 12,
               height: 12,
                             tint: .white,
-                            contentMode: .fit)
+                            contentMode: .fit,
+                            renderingMode: .alphaMask)
             .foregroundColor(.onSurfaceVariant)
     }
 }
@@ -485,7 +488,8 @@ private struct HierarchyEntityIcon: View {
               width: 18,
               height: 18,
               tint: .white,
-              contentMode: .fit)
+              contentMode: .fit,
+              renderingMode: .alphaMask)
     }
 }
 

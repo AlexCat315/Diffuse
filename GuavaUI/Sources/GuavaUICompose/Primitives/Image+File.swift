@@ -47,14 +47,16 @@ public extension Image {
          width: Float,
          height: Float,
          tint: Color = .white,
-         contentMode: ContentMode = .stretch) {
+         contentMode: ContentMode = .stretch,
+         renderingMode: RenderingMode = .color) {
         let resolved = Self.resolve(path: path, width: width, height: height)
         self.init(textureID: resolved.textureID,
                   width: width,
                   height: height,
                   tint: tint,
                   sourcePixelSize: resolved.sourcePixelSize,
-                  contentMode: contentMode)
+                  contentMode: contentMode,
+                  renderingMode: renderingMode)
     }
 
     /// Bundle-resource form of `init(file:width:height:tint:)`. This keeps
@@ -63,7 +65,8 @@ public extension Image {
          width: Float,
          height: Float,
          tint: Color = .white,
-         contentMode: ContentMode = .stretch) {
+         contentMode: ContentMode = .stretch,
+         renderingMode: RenderingMode = .color) {
         guard let url = resource.url else {
             assertionFailure("Bundle image resource not found: \(resource)")
             ImageLoadDiagnostics.emit(path: String(describing: resource),
@@ -74,14 +77,16 @@ public extension Image {
                       height: height,
                       tint: tint,
                       sourcePixelSize: nil,
-                      contentMode: contentMode)
+                      contentMode: contentMode,
+                      renderingMode: renderingMode)
             return
         }
         self.init(url: url,
                   width: width,
                   height: height,
                   tint: tint,
-                  contentMode: contentMode)
+                  contentMode: contentMode,
+                  renderingMode: renderingMode)
     }
 
     /// URL form of `init(file:width:height:tint:)`.
@@ -89,12 +94,14 @@ public extension Image {
          width: Float,
          height: Float,
          tint: Color = .white,
-         contentMode: ContentMode = .stretch) {
+         contentMode: ContentMode = .stretch,
+         renderingMode: RenderingMode = .color) {
         self.init(file: url.path,
                   width: width,
                   height: height,
                   tint: tint,
-                  contentMode: contentMode)
+                  contentMode: contentMode,
+                  renderingMode: renderingMode)
     }
 
     private struct ResolvedTexture {

@@ -28,6 +28,51 @@ struct AnimationValueModifierTests {
         }
     }
 
+    struct ImplicitFrameHarness: View {
+        @State var width: Float = 40
+        var body: some View {
+            _DebugNode(label: "x")
+                .frame(width: width)
+                .animation(Animation(duration: 1.0, curve: .linear), value: width)
+        }
+    }
+
+    struct ImplicitMaxFrameHarness: View {
+        @State var maxWidth: Float? = 120
+        var body: some View {
+            _DebugNode(label: "x")
+                .frame(maxWidth: maxWidth)
+                .animation(Animation(duration: 1.0, curve: .linear), value: maxWidth)
+        }
+    }
+
+    struct ImplicitPercentFrameHarness: View {
+        @State var widthRatio: Float = 20
+        var body: some View {
+            _DebugNode(label: "x")
+                .frame(width: .percent(widthRatio))
+                .animation(Animation(duration: 1.0, curve: .linear), value: widthRatio)
+        }
+    }
+
+    struct ImplicitMaxHeightFrameHarness: View {
+        @State var maxHeight: Float? = 40
+        var body: some View {
+            _DebugNode(label: "x")
+                .frame(maxHeight: maxHeight)
+                .animation(Animation(duration: 1.0, curve: .linear), value: maxHeight)
+        }
+    }
+
+    struct ImplicitPercentHeightFrameHarness: View {
+        @State var heightRatio: Float = 20
+        var body: some View {
+            _DebugNode(label: "x")
+                .frame(height: .percent(heightRatio))
+                .animation(Animation(duration: 1.0, curve: .linear), value: heightRatio)
+        }
+    }
+
     /// The animation modifier wraps content via a synthetic anchor — find the
     /// inner _DebugNode by descending past the anchor.
     private func findLeaf(_ tree: NodeTree) -> Node? {
@@ -99,6 +144,128 @@ struct AnimationValueModifierTests {
             recomp.commitAll()
 
             #expect(leaf?.opacity == 1.0)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame(width:) animates implicitly on value change")
+    func implicitFrameAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = ImplicitFrameHarness()
+            graph.install(root: h)
+
+            let leaf = findLeaf(tree)
+            let layout = leaf?.layoutNode
+
+            h.$width.wrappedValue = 80
+            recomp.commitAll()
+
+            #expect(layout?.width == 40)
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.width == 60)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.width == 80)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame(maxWidth:) animates implicitly on value change")
+    func implicitMaxFrameAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = ImplicitMaxFrameHarness()
+            graph.install(root: h)
+
+            let leaf = findLeaf(tree)
+            let layout = leaf?.layoutNode
+
+            h.$maxWidth.wrappedValue = 200
+            recomp.commitAll()
+
+            #expect(layout?.maxWidth == 120)
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.maxWidth == 160)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.maxWidth == 200)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame(width: .percent()) animates implicitly on value change")
+    func implicitPercentFrameAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = ImplicitPercentFrameHarness()
+            graph.install(root: h)
+
+            h.$widthRatio.wrappedValue = 60
+            recomp.commitAll()
+
+            #expect(scheduler.activeCount == 1)
+            scheduler.tick(deltaTime: 1.0)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame(maxHeight:) animates implicitly on value change")
+    func implicitMaxHeightFrameAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = ImplicitMaxHeightFrameHarness()
+            graph.install(root: h)
+
+            let leaf = findLeaf(tree)
+            let layout = leaf?.layoutNode
+
+            h.$maxHeight.wrappedValue = 100
+            recomp.commitAll()
+
+            #expect(layout?.maxHeight == 40)
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.maxHeight == 70)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.maxHeight == 100)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame(height: .percent()) animates implicitly on value change")
+    func implicitPercentHeightFrameAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = ImplicitPercentHeightFrameHarness()
+            graph.install(root: h)
+
+            h.$heightRatio.wrappedValue = 60
+            recomp.commitAll()
+
+            #expect(scheduler.activeCount == 1)
+            scheduler.tick(deltaTime: 1.0)
             #expect(scheduler.activeCount == 0)
         }
     }

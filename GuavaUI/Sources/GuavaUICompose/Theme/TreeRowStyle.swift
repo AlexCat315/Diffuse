@@ -14,6 +14,26 @@ public struct TreeRowStyleConfiguration {
     public let theme: Theme
 }
 
+/// Equatable interaction snapshot used by built-in tree row styles to key
+/// implicit transitions.
+public struct _TreeRowInteractionKey: Equatable, Sendable {
+    public let isSearchHit: Bool
+    public let isSelected: Bool
+    public let isHovered: Bool
+    public let isEnabled: Bool
+}
+
+public extension TreeRowStyleConfiguration {
+    var interactionKey: _TreeRowInteractionKey {
+        _TreeRowInteractionKey(
+            isSearchHit: isSearchHit,
+            isSelected: isSelected,
+            isHovered: isHovered,
+            isEnabled: isEnabled
+        )
+    }
+}
+
 public protocol TreeRowStyle {
     associatedtype Body: View
     @ViewBuilder

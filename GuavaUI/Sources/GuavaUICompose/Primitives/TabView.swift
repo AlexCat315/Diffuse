@@ -1,5 +1,9 @@
 import GuavaUIRuntime
 
+private struct _TabItemInteractionKey: Equatable, Sendable {
+    let isSelected: Bool
+}
+
 public struct TabItem<ID: Hashable> {
     public let id: ID
     public let label: String
@@ -69,5 +73,6 @@ struct _TabBarItem: View {
             }
         }
         .buttonStyle(.plain)
+        .animation(.semantic(.bouncy), value: _TabItemInteractionKey(isSelected: isSelected))
     }
 }

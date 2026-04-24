@@ -20,9 +20,9 @@ public struct DefaultDockStyle: DockStyle {
             tabActiveAccentBar: t.colors.accent,
             tabActiveAccentBarHeight: 1,
             closeButtonSize: 16,
-            splitDividerThickness: 1,
+            splitDividerThickness: 2,
             splitDividerColor: t.colors.borderStrong,
-            splitDividerHitSlop: 4,
+            splitDividerHitSlop: 8,
             leafBackground: t.colors.surface,
             emptyLeafBackground: t.colors.surfaceSunken,
             satelliteTitleBarHeight: 24

@@ -20,25 +20,33 @@ public struct Image: _PrimitiveView {
         case fill
     }
 
+    public enum RenderingMode: Sendable {
+        case color
+        case alphaMask
+    }
+
     public let textureID: TextureID
     public let width: Float
     public let height: Float
     public let tint: Color
     public let sourcePixelSize: (width: Float, height: Float)?
     public let contentMode: ContentMode
+    public let renderingMode: RenderingMode
 
     public init(textureID: TextureID,
                 width: Float,
                 height: Float,
                 tint: Color = Color.white,
                 sourcePixelSize: (width: Float, height: Float)? = nil,
-                contentMode: ContentMode = .stretch) {
+                contentMode: ContentMode = .stretch,
+                renderingMode: RenderingMode = .color) {
         self.textureID = textureID
         self.width = width
         self.height = height
         self.tint = tint
         self.sourcePixelSize = sourcePixelSize
         self.contentMode = contentMode
+        self.renderingMode = renderingMode
     }
 
     public func _makeNode() -> Node {
@@ -65,7 +73,11 @@ public struct Image: _PrimitiveView {
                                    width: drawWidth,
                                    height: drawHeight)
             let rect = snap.destinationRect(container: container)
-            if node.cornerRadius > 0 {
+            if snap.renderingMode == .alphaMask {
+                list.addImageMaskQuad(rect: rect,
+                                      textureID: snap.textureID,
+                                      tint: baseTint)
+            } else if node.cornerRadius > 0 {
                 list.addRoundedImageQuad(rect: rect,
                                          radius: node.cornerRadius,
                                          textureID: snap.textureID,

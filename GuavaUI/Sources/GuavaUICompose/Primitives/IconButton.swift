@@ -99,19 +99,25 @@ public struct IconButton: View {
     private var iconView: some View {
         switch source {
         case .texture(let id):
-            Image(textureID: id, width: size, height: size, tint: tint ?? .white)
+            Image(textureID: id,
+                  width: size,
+                  height: size,
+                  tint: tint ?? .white,
+                  renderingMode: .alphaMask)
         case .file(let path):
             Image(file: path,
                   width: size,
                   height: size,
                   tint: tint ?? .white,
-                  contentMode: .fit)
+                  contentMode: .fit,
+                  renderingMode: .alphaMask)
         case .resource(let resource):
             Image(resource: resource,
                   width: size,
                   height: size,
                   tint: tint ?? .white,
-                  contentMode: .fit)
+                  contentMode: .fit,
+                  renderingMode: .alphaMask)
         }
     }
 }

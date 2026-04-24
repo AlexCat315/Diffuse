@@ -19,7 +19,7 @@ struct InspectorPanel: View {
                     Divider()
 
                     PropertyGrid(propertySections(sections, collapsedIDs: collapsedIDs),
-                                 labelWidth: 96,
+                                 labelWidth: 88,
                                  rowHeight: 24,
                                  onSectionCollapseChanged: { id, isCollapsed in
                         store.dispatch(.setInspectorSectionCollapsed(id: id, isCollapsed: isCollapsed))
@@ -27,16 +27,16 @@ struct InspectorPanel: View {
                         .flex()
                 } else {
                     Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                        Text("No selection")
+                        Text(L("No selection"))
                             .font(.bodyStrong)
-                        Text("Select an entity in Hierarchy to inspect SceneRuntime components.")
+                        Text(L("Select an entity in Hierarchy to inspect SceneRuntime components."))
                             .font(.caption)
                             .foregroundColor(.onSurfaceMuted)
                     }
                     .padding(10)
                 }
             }
-            .frame(minWidth: 340)
+            .frame(minWidth: 280)
         }
     }
 

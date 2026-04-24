@@ -18,6 +18,7 @@ public struct StoreScope<Content: View>: View {
     public let content: (EditorStore) -> Content
 
     @State private var version: UInt64 = 0
+    @State private var subscriptionID = EditorStoreSubscriptionID()
 
     public init(_ store: EditorStore,
                 @ViewBuilder content: @escaping (EditorStore) -> Content) {
@@ -28,23 +29,30 @@ public struct StoreScope<Content: View>: View {
     public var body: some View {
         let _ = version
         let bind = $version
-        EditorStoreSubscription.acquire(store: store, bind: bind)
+        EditorStoreSubscription.acquire(store: store,
+                                        subscriptionID: subscriptionID,
+                                        bind: bind)
         return content(store)
     }
 }
 
-/// 进程内订阅去重表。每个 `EditorStore` 在表里只保留最新的 binding，
-/// 重复订阅会替换旧句柄而不是叠加，避免 `@State` 写入呈倍数放大。
+private final class EditorStoreSubscriptionID: @unchecked Sendable {}
+
+/// 进程内订阅去重表。每个 `StoreScope` 在表里保留自己的 binding；
+/// 同一个 scope 重组时替换旧句柄，不会把其它面板的订阅覆盖掉。
 ///
 /// `View.body` 在协议层是 nonisolated，但运行期始终位于主线程；和
 /// `ControllerSubscription` 同样的契约：通过 `nonisolated(unsafe)`
 /// 暴露存储，调用方必须保证只在主线程访问。
 enum EditorStoreSubscription {
-    nonisolated(unsafe) private static var tokens: [ObjectIdentifier: EditorStore.SubscriptionToken] = [:]
+    nonisolated(unsafe) private static var tokens: [ObjectIdentifier: [ObjectIdentifier: EditorStore.SubscriptionToken]] = [:]
 
-    static func acquire(store: EditorStore, bind: Binding<UInt64>) {
-        let key = ObjectIdentifier(store)
-        if let existing = tokens[key] {
+    fileprivate static func acquire(store: EditorStore,
+                                    subscriptionID: EditorStoreSubscriptionID,
+                                    bind: Binding<UInt64>) {
+        let storeKey = ObjectIdentifier(store)
+        let scopeKey = ObjectIdentifier(subscriptionID)
+        if let existing = tokens[storeKey]?[scopeKey] {
             store.unsubscribe(existing)
         }
         let token = store.subscribe { s in
@@ -52,6 +60,8 @@ enum EditorStoreSubscription {
                 bind.wrappedValue = s.version
             }
         }
-        tokens[key] = token
+        var storeTokens = tokens[storeKey] ?? [:]
+        storeTokens[scopeKey] = token
+        tokens[storeKey] = storeTokens
     }
 }

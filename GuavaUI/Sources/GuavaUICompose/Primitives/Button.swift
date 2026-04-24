@@ -57,6 +57,17 @@ public extension Button where Label == Text {
             Text(title)
         }
     }
+
+    /// Localized title convenience initializer.
+    init(_ key: LocalizedStringKey,
+         role: ButtonRole = .normal,
+         isEnabled: Bool = true,
+         tooltip: String? = nil,
+         action: @escaping () -> Void) {
+        self.init(role: role, isEnabled: isEnabled, tooltip: tooltip, action: action) {
+            Text(key)
+        }
+    }
 }
 
 // MARK: - StatefulButton

@@ -48,7 +48,7 @@ struct _DockResizeHandle: _PrimitiveView {
         // inserted via `_children(for:)` so the visual stays at the
         // configured thickness while the grab area is wider.
         let appearance = resolveDockAppearance(on: node)
-        node.backgroundColor = nil
+        node.animatableSet(\.backgroundColor, to: nil)
         node.cursor = (axis == .horizontal) ? .resizeHorizontal : .resizeVertical
 
         let total = appearance.splitDividerThickness + appearance.splitDividerHitSlop * 2
@@ -169,7 +169,7 @@ struct _DockResizeHandleVisual: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         let appearance = resolveDockAppearance(on: node)
-        node.backgroundColor = appearance.splitDividerColor
+        node.animatableSet(\.backgroundColor, to: appearance.splitDividerColor)
         let thickness = max(1, appearance.splitDividerThickness)
         switch axis {
         case .horizontal:
