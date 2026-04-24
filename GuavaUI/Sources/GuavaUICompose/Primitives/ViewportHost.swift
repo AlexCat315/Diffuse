@@ -55,9 +55,9 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
 
     public func _updateNode(_ node: Node) {
         let snap = self
-        node.backgroundColor = snap.surface.isValid
+        node.animatableSet(\.backgroundColor, to: snap.surface.isValid
             ? node.theme.colors.surfaceSunken
-            : node.theme.colors.surfaceVariant
+            : node.theme.colors.surfaceVariant)
 
         if let registry = InteractionRegistryHolder.current {
             registry.setPointer(node) { event, phase, _ in

@@ -256,7 +256,7 @@ struct _DockEmptyLeafHost: _PrimitiveView {
 
     func _updateNode(_ node: Node) {
         let appearance = resolveDockAppearance(on: node)
-        node.backgroundColor = appearance.emptyLeafBackground
+        node.animatableSet(\.backgroundColor, to: appearance.emptyLeafBackground)
         installDropOverlay(node: node, leafID: nodeID, controller: controller)
     }
 
