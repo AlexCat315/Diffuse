@@ -47,11 +47,11 @@ struct AnimationValueModifierTests {
     }
 
     struct ImplicitPercentFrameHarness: View {
-        @State var widthPercent: Float = 20
+        @State var widthRatio: Float = 20
         var body: some View {
             _DebugNode(label: "x")
-                .frame(width: .percent(widthPercent))
-                .animation(Animation(duration: 1.0, curve: .linear), value: widthPercent)
+                .frame(width: .percent(widthRatio))
+                .animation(Animation(duration: 1.0, curve: .linear), value: widthRatio)
         }
     }
 
@@ -65,11 +65,11 @@ struct AnimationValueModifierTests {
     }
 
     struct ImplicitPercentHeightFrameHarness: View {
-        @State var heightPercent: Float = 20
+        @State var heightRatio: Float = 20
         var body: some View {
             _DebugNode(label: "x")
-                .frame(height: .percent(heightPercent))
-                .animation(Animation(duration: 1.0, curve: .linear), value: heightPercent)
+                .frame(height: .percent(heightRatio))
+                .animation(Animation(duration: 1.0, curve: .linear), value: heightRatio)
         }
     }
 
@@ -204,7 +204,7 @@ struct AnimationValueModifierTests {
         }
     }
 
-    @Test("frame(widthPercent:) animates implicitly on value change")
+    @Test("frame(width: .percent()) animates implicitly on value change")
     func implicitPercentFrameAnimates() {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
@@ -214,7 +214,7 @@ struct AnimationValueModifierTests {
             let h = ImplicitPercentFrameHarness()
             graph.install(root: h)
 
-            h.$widthPercent.wrappedValue = 60
+            h.$widthRatio.wrappedValue = 60
             recomp.commitAll()
 
             #expect(scheduler.activeCount == 1)
@@ -251,7 +251,7 @@ struct AnimationValueModifierTests {
         }
     }
 
-    @Test("frame(heightPercent:) animates implicitly on value change")
+    @Test("frame(height: .percent()) animates implicitly on value change")
     func implicitPercentHeightFrameAnimates() {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
@@ -261,7 +261,7 @@ struct AnimationValueModifierTests {
             let h = ImplicitPercentHeightFrameHarness()
             graph.install(root: h)
 
-            h.$heightPercent.wrappedValue = 60
+            h.$heightRatio.wrappedValue = 60
             recomp.commitAll()
 
             #expect(scheduler.activeCount == 1)

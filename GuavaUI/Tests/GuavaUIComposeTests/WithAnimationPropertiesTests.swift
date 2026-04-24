@@ -58,16 +58,16 @@ struct WithAnimationPropertiesTests {
     }
 
     struct PercentFrameHarness: View {
-        @State var widthPercent: Float = 20
+        @State var widthRatio: Float = 20
         var body: some View {
-            _DebugNode(label: "x").frame(width: .percent(widthPercent))
+            _DebugNode(label: "x").frame(width: .percent(widthRatio))
         }
     }
 
     struct PercentHeightFrameHarness: View {
-        @State var heightPercent: Float = 20
+        @State var heightRatio: Float = 20
         var body: some View {
-            _DebugNode(label: "x").frame(height: .percent(heightPercent))
+            _DebugNode(label: "x").frame(height: .percent(heightRatio))
         }
     }
 
@@ -101,9 +101,9 @@ struct WithAnimationPropertiesTests {
     }
 
     struct PercentConvenienceHarness: View {
-        @State var widthPercent: Float = 20
+        @State var widthRatio: Float = 20
         var body: some View {
-            _DebugNode(label: "x").framePercent(width: widthPercent)
+            _DebugNode(label: "x").framePercent(width: widthRatio)
         }
     }
 
@@ -322,8 +322,8 @@ struct WithAnimationPropertiesTests {
         }
     }
 
-    @Test("frame(widthPercent:) animates through the scheduler")
-    func frameWidthPercentAnimates() {
+    @Test("frame(width: .percent()) animates through the scheduler")
+    func frameWidthRatioDimensionAnimates() {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -336,7 +336,7 @@ struct WithAnimationPropertiesTests {
             let layout = node?.layoutNode
 
             withAnimation(Animation(duration: 1.0, curve: .linear)) {
-                h.$widthPercent.wrappedValue = 60
+                h.$widthRatio.wrappedValue = 60
             }
             recomp.commitAll()
             #expect((layout?.attachments["__layout.frame.widthSpec"] as? Any) != nil)
@@ -350,8 +350,8 @@ struct WithAnimationPropertiesTests {
         }
     }
 
-    @Test("frame(heightPercent:) animates through the scheduler")
-    func frameHeightPercentAnimates() {
+    @Test("frame(height: .percent()) animates through the scheduler")
+    func frameHeightRatioDimensionAnimates() {
         let scheduler = AnimatorScheduler()
         AnimatorScheduler.$current.withValue(scheduler) {
             let tree = NodeTree()
@@ -361,7 +361,7 @@ struct WithAnimationPropertiesTests {
             graph.install(root: h)
 
             withAnimation(Animation(duration: 1.0, curve: .linear)) {
-                h.$heightPercent.wrappedValue = 60
+                h.$heightRatio.wrappedValue = 60
             }
             recomp.commitAll()
             #expect(scheduler.activeCount == 1)
@@ -453,7 +453,7 @@ struct WithAnimationPropertiesTests {
             graph.install(root: h)
 
             withAnimation(Animation(duration: 1.0, curve: .linear)) {
-                h.$widthPercent.wrappedValue = 60
+                h.$widthRatio.wrappedValue = 60
             }
             recomp.commitAll()
             #expect(scheduler.activeCount == 1)
