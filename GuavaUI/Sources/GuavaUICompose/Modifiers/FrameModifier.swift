@@ -1,5 +1,11 @@
 import GuavaUIRuntime
 
+public enum FrameDimension: Equatable, Sendable {
+    case points(Float)
+    case percent(Float)
+    case auto
+}
+
 private enum FrameAnimationPropertyKey {
     static let width = "__layout.frame.width"
     static let height = "__layout.frame.height"
@@ -147,6 +153,64 @@ public struct FrameModifier: ViewModifier {
 }
 
 public extension View {
+    func frame(width: FrameDimension? = nil,
+               height: FrameDimension? = nil,
+               minWidth: Float? = nil,
+               minHeight: Float? = nil,
+               maxWidth: Float? = nil,
+               maxHeight: Float? = nil) -> some View {
+        let resolvedWidth: Float?
+        let resolvedWidthPercent: Float?
+        switch width {
+        case .points(let value):
+            resolvedWidth = value
+            resolvedWidthPercent = nil
+        case .percent(let value):
+            resolvedWidth = nil
+            resolvedWidthPercent = value
+        case .auto, .none:
+            resolvedWidth = nil
+            resolvedWidthPercent = nil
+        }
+
+        let resolvedHeight: Float?
+        let resolvedHeightPercent: Float?
+        switch height {
+        case .points(let value):
+            resolvedHeight = value
+            resolvedHeightPercent = nil
+        case .percent(let value):
+            resolvedHeight = nil
+            resolvedHeightPercent = value
+        case .auto, .none:
+            resolvedHeight = nil
+            resolvedHeightPercent = nil
+        }
+
+        return frame(width: resolvedWidth,
+                     height: resolvedHeight,
+                     widthPercent: resolvedWidthPercent,
+                     heightPercent: resolvedHeightPercent,
+                     minWidth: minWidth,
+                     minHeight: minHeight,
+                     maxWidth: maxWidth,
+                     maxHeight: maxHeight)
+    }
+
+    func framePercent(width: Float? = nil,
+                      height: Float? = nil,
+                      minWidth: Float? = nil,
+                      minHeight: Float? = nil,
+                      maxWidth: Float? = nil,
+                      maxHeight: Float? = nil) -> some View {
+        frame(width: width.map { .percent($0) },
+              height: height.map { .percent($0) },
+              minWidth: minWidth,
+              minHeight: minHeight,
+              maxWidth: maxWidth,
+              maxHeight: maxHeight)
+    }
+
     func frame(width: Float? = nil,
                height: Float? = nil,
                widthPercent: Float? = nil,

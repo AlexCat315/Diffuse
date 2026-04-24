@@ -168,6 +168,30 @@ struct MultiWindowSmokeTests {
     }
 
     @MainActor
+    @Test("Host frame loop ticks task-local animation scheduler")
+    func hostTicksTaskLocalScheduler() throws {
+        let shell = MockShell(eventBatches: [[], []])
+        let host = SDL3PlatformHost(shellFactory: { shell })
+
+        let tree = NodeTree()
+        let session = try host.openWindow(title: "A", tree: tree)
+        tree.root = Node()
+        (shell.window(for: session.id) as? MockWindowHandle)?.renderSurface = mockSurface
+
+        let scheduler = AnimatorScheduler()
+        let controller = TickCountingController()
+        scheduler.register(controller)
+
+        session.onFrame = { _ in true }
+
+        AnimatorScheduler.$current.withValue(scheduler) {
+            host.run()
+        }
+
+        #expect(controller.tickCount > 0)
+    }
+
+    @MainActor
     @Test("Failed frame callbacks keep the window pending for retry")
     func failedFrameCallbacksRetry() throws {
         let shell = MockShell(eventBatches: [[], [], []])
@@ -261,6 +285,25 @@ private final class IdleAnimationController: AnyAnimationController {
     var isFinished: Bool = false
 
     func tick(deltaTime: Double) {}
+
+    func finishImmediately() {
+        isFinished = true
+    }
+
+    func cancel() {
+        isFinished = true
+    }
+}
+
+private final class TickCountingController: AnyAnimationController {
+    var isFinished: Bool = false
+    var tickCount: Int = 0
+
+    func tick(deltaTime: Double) {
+        _ = deltaTime
+        tickCount += 1
+        isFinished = true
+    }
 
     func finishImmediately() {
         isFinished = true
