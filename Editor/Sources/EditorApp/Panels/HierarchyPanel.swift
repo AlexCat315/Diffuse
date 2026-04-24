@@ -390,29 +390,41 @@ private struct HierarchyRowTrailingSlots: View {
     let onToggleLock: () -> Void
 
     var body: some View {
-        Row(alignment: .center, spacing: 10) {
-            Button(action: onToggleVisibility) {
-                Image(resource: HierarchyIconCatalog.visibilityResource(isVisible: isVisible),
-                      width: 13,
-                      height: 13,
-                                            tint: .white,
-                                            contentMode: .fit)
-                    .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
-                    .frame(width: 16, height: 16)
+        Row(alignment: .center, spacing: 0) {
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                Button(action: onToggleVisibility) {
+                    Image(resource: HierarchyIconCatalog.visibilityResource(isVisible: isVisible),
+                          width: 13,
+                          height: 13,
+                          tint: .white,
+                          contentMode: .fit)
+                        .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .frame(width: 22, height: 28)
 
-            Button(action: onToggleLock) {
-                Image(resource: HierarchyIconCatalog.lockResource(isLocked: isLocked),
-                      width: 13,
-                      height: 13,
-                                            tint: .white,
-                                            contentMode: .fit)
-                    .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
-                    .frame(width: 16, height: 16)
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                Button(action: onToggleLock) {
+                    Image(resource: HierarchyIconCatalog.lockResource(isLocked: isLocked),
+                          width: 13,
+                          height: 13,
+                          tint: .white,
+                          contentMode: .fit)
+                        .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
+                        .frame(width: 16, height: 16)
+                }
+                .buttonStyle(.plain)
             }
-            .buttonStyle(.plain)
+            .frame(width: 22, height: 28)
+
+            // Reserve a narrow terminal gutter so disclosure chevrons from
+            // neighboring content never visually collide with icon columns.
+            Box { EmptyView() }
+                .frame(width: 10, height: 28)
         }
+        .frame(width: 54, height: 28)
         .opacity(showsControls ? 1 : 0)
     }
 }
