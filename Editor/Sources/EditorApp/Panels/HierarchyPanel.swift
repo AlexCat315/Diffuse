@@ -29,7 +29,7 @@ struct HierarchyPanel: View {
                 get: { store.state.selectedEntityID },
                 set: { next in
                     if store.state.selectedEntityID != next {
-                        store.dispatch(.setSelectedEntity(next))
+                        store.dispatch(.setPrimarySelectedEntity(next))
                     }
                 }
             )

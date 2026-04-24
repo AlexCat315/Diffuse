@@ -4,6 +4,7 @@ import IntentRuntime
 public enum EditorAction: Sendable {
     case setConnected(Bool)
     case setSelectedEntity(UInt64?)
+    case setPrimarySelectedEntity(UInt64?)
     case setSelectedEntities(Set<UInt64>)
     case setPlaybackState(PlaybackState)
     case setWorkspaceMode(EditorWorkspaceMode)
@@ -40,6 +41,16 @@ public enum EditorReducer {
             state.selectedEntityID = value
             if let entityID = value {
                 state.selectedEntityIDs = [entityID]
+            } else {
+                state.selectedEntityIDs.removeAll(keepingCapacity: false)
+            }
+
+        case let .setPrimarySelectedEntity(value):
+            state.selectedEntityID = value
+            if let entityID = value {
+                if !state.selectedEntityIDs.contains(entityID) {
+                    state.selectedEntityIDs = [entityID]
+                }
             } else {
                 state.selectedEntityIDs.removeAll(keepingCapacity: false)
             }
