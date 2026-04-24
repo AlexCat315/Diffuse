@@ -634,8 +634,10 @@ private struct _TreeGuideOverlayHost<Content: View>: _PrimitiveView {
                 return max(0, ((whole - 1) * 0.5).rounded(.down))
             }()
             let continuationExtension = max(0, rowSpacing.rounded(.up))
-            let baseColor = (node.foregroundColor ?? node.theme.colors.onSurfaceVariant)
-                .multipliedAlpha(node.opacity * 0.6)
+            let guideInk = (node.foregroundColor ?? node.theme.colors.onSurfaceVariant)
+                .multipliedAlpha(node.opacity)
+            let branchColor = guideInk.multipliedAlpha(0.82)
+            let ancestorColor = guideInk.multipliedAlpha(0.7)
 
             for (index, row) in rows.enumerated() {
                 guard row.depth > 0 else { continue }
@@ -659,12 +661,12 @@ private struct _TreeGuideOverlayHost<Content: View>: _PrimitiveView {
                                             y: rowTop,
                                             width: 1,
                                             height: max(1, verticalBottom - rowTop)),
-                                  color: baseColor)
+                                  color: branchColor)
                         list.addRect(UIRect(x: strokeX,
                                             y: strokeY,
                                       width: max(1, rightEdge - strokeX),
                                             height: 1),
-                                  color: baseColor)
+                                  color: branchColor)
                         continue
                     }
 
@@ -676,7 +678,7 @@ private struct _TreeGuideOverlayHost<Content: View>: _PrimitiveView {
                                             y: rowTop,
                                             width: 1,
                                             height: max(1, verticalBottom - rowTop)),
-                                     color: baseColor.multipliedAlpha(0.86))
+                                     color: ancestorColor)
                     }
                 }
             }
