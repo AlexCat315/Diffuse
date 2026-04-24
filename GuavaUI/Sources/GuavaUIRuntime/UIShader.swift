@@ -7,6 +7,8 @@
 ///                                * `0 ≤ u ≤ 1`    → alpha texture (font atlas)
 ///                                * `u ≥ 10`        → RGBA texture (Image),
 ///                                                    actual u = u - 10
+///                                * `u ≥ 20`        → image alpha mask,
+///                                                    actual u = u - 20
 ///   loc 2: unorm8x4   color    (linear RGBA, used as tint)
 ///
 /// Bindings:
@@ -52,6 +54,13 @@ enum UIShader {
         // u < 0 → solid color path (no texture sample).
         if (in.uv.x < 0.0) {
             return in.color;
+        }
+        // u >= 20 → alpha-mask image. Use the source alpha as coverage and
+        // theme/tint color as final RGB.
+        if (in.uv.x >= 20.0) {
+            let real_uv = vec2<f32>(in.uv.x - 20.0, in.uv.y);
+            let s = textureSample(atlas_tex, atlas_sampler, real_uv);
+            return vec4<f32>(in.color.rgb, in.color.a * s.a);
         }
         // u >= 10 → RGBA color image; subtract the 10-unit offset to recover
         // the real uv. Result is the texture sample tinted by `color`.

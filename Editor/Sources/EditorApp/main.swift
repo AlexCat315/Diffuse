@@ -23,6 +23,9 @@ private func runEditor() throws {
     if let shellState = EditorRootViewFactory.loadShellState() {
         app.store.dispatch(.setWorkspaceMode(shellState.workspaceMode))
         app.store.dispatch(.setActiveLayoutPreset(shellState.activeLayoutPreset))
+        app.store.dispatch(.setThemeMode(shellState.themeMode))
+        app.store.dispatch(.setLanguage(shellState.language))
+        EditorLocalizationPreferences.language = shellState.language
     }
 
     let controller = EditorRootViewFactory.makeController(for: app.store.state.workspaceMode,
@@ -46,7 +49,9 @@ private func runEditor() throws {
 
     // Save layout state on shutdown
     EditorRootViewFactory.saveShellState(mode: app.store.state.workspaceMode,
-                                         preset: app.store.state.activeLayoutPreset)
+                                         preset: app.store.state.activeLayoutPreset,
+                                         themeMode: app.store.state.themeMode,
+                                         language: app.store.state.language)
     EditorRootViewFactory.saveDockLayout(controller,
                                          for: app.store.state.workspaceMode,
                                          preset: app.store.state.activeLayoutPreset)

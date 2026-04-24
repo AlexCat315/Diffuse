@@ -993,7 +993,8 @@ private struct ViewportIconToggle: View {
                       width: 15,
                       height: 15,
                       tint: .white,
-                      contentMode: .fit)
+                      contentMode: .fit,
+                      renderingMode: .alphaMask)
                     .foregroundColor(isActive ? .onAccent : .onSurfaceVariant)
             }
             .frame(width: 28, height: 28)
