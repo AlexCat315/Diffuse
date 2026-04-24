@@ -34,7 +34,12 @@ private func runEditor() throws {
                           backendConfig: launchOptions.backendConfig),
         backend: backend,
         events: events,
-        onTick: { dt in app.tick(deltaTime: dt) }
+        onTick: { dt in app.tick(deltaTime: dt) },
+        onDisplayReady: { display in
+            app.setViewportRenderCompletionHandler { _ in
+                display.requestDisplay()
+            }
+        }
     ) {
         EditorRootView(app: app, controller: controller, registry: registry)
     }

@@ -35,7 +35,7 @@ public struct SecondaryButtonStyle: ButtonStyle {
             .cornerRadius(theme.radius.md)
             .border(border, width: borderWidth)
             .opacity(configuration.isEnabled ? 1 : 0.55)
-            .animation(.semantic(.fast, in: theme), value: configuration.interactionKey)
+            .animation(.semantic(.snappy, in: theme), value: configuration.interactionKey)
     }
 }
 

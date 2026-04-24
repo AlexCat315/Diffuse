@@ -125,6 +125,12 @@ public final class EditorApplication {
         viewportDrawableSize = size
     }
 
+    public func setViewportRenderCompletionHandler(_ handler: (@Sendable (ViewportSurfaceState) -> Void)?) {
+        engine.setRenderCompletionHandler { completion in
+            handler?(completion.viewportSurfaceState)
+        }
+    }
+
     /// 把资产生成到场景中，并把新实体设为当前选中。
     @discardableResult
     public func spawnAsset(_ asset: EditorAsset, at position: SIMD3<Float> = .zero) -> UInt64? {

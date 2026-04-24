@@ -38,6 +38,23 @@ struct SemanticMotionTests {
         theme.motion.fast = .milliseconds(50)
         let a = Animation.semantic(.fast, in: theme)
         #expect(abs(a.duration - 0.050) < 1e-6)
+
+        let snappy = Animation.semantic(.snappy, in: theme)
+        #expect(abs(snappy.duration - 0.050) < 1e-6)
+    }
+
+    @Test(".snappy resolves to spring on theme.motion.fast")
+    func snappyFollowsThemeFast() {
+        let a = Animation.semantic(.snappy, in: .defaultDark)
+        #expect(abs(a.duration - 0.080) < 1e-6)
+        #expect(a.curve == .spring(response: 0.08, dampingFraction: 0.9))
+    }
+
+    @Test(".bouncy resolves to spring on theme.motion.standard")
+    func bouncyFollowsThemeStandard() {
+        let a = Animation.semantic(.bouncy, in: .defaultDark)
+        #expect(abs(a.duration - 0.180) < 1e-6)
+        #expect(a.curve == .spring(response: 0.18, dampingFraction: 0.68))
     }
 
     @Test("Easing bridges to a cubic-bezier AnimationCurve")
