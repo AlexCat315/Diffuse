@@ -46,6 +46,15 @@ struct AnimationValueModifierTests {
         }
     }
 
+    struct ImplicitPercentFrameHarness: View {
+        @State var widthPercent: Float = 20
+        var body: some View {
+            _DebugNode(label: "x")
+                .frame(widthPercent: widthPercent)
+                .animation(Animation(duration: 1.0, curve: .linear), value: widthPercent)
+        }
+    }
+
     /// The animation modifier wraps content via a synthetic anchor — find the
     /// inner _DebugNode by descending past the anchor.
     private func findLeaf(_ tree: NodeTree) -> Node? {
@@ -173,6 +182,25 @@ struct AnimationValueModifierTests {
 
             scheduler.tick(deltaTime: 0.5)
             #expect(layout?.maxWidth == 200)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame(widthPercent:) animates implicitly on value change")
+    func implicitPercentFrameAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = ImplicitPercentFrameHarness()
+            graph.install(root: h)
+
+            h.$widthPercent.wrappedValue = 60
+            recomp.commitAll()
+
+            #expect(scheduler.activeCount == 1)
+            scheduler.tick(deltaTime: 1.0)
             #expect(scheduler.activeCount == 0)
         }
     }
