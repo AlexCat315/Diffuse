@@ -265,6 +265,10 @@ private final class IdleAnimationController: AnyAnimationController {
     func finishImmediately() {
         isFinished = true
     }
+
+    func cancel() {
+        isFinished = true
+    }
 }
 
 @MainActor

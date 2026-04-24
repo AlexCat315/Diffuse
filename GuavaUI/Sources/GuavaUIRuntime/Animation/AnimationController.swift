@@ -26,6 +26,11 @@ public protocol AnyAnimationController: AnyObject {
     /// being replaced for the same property so the visible state matches the
     /// caller's intent.
     func finishImmediately()
+
+    /// Stop the controller without applying any additional value.
+    /// Used when a same-node/same-property animation is superseded by
+    /// a newer target and should be discarded.
+    func cancel()
 }
 
 // MARK: - Concrete controller
@@ -89,6 +94,10 @@ public final class AnimationController<Value: Interpolatable>: AnyAnimationContr
         apply(to)
         isFinished = true
     }
+
+    public func cancel() {
+        isFinished = true
+    }
 }
 
 // MARK: - Scheduler
@@ -131,6 +140,9 @@ public final class AnimatorScheduler: @unchecked Sendable {
     /// strong reference until the controller becomes finished, after which
     /// it is dropped on the next `tick`.
     public func register(_ controller: AnyAnimationController) {
+        if active.contains(where: \.isFinished) {
+            active.removeAll(where: \.isFinished)
+        }
         active.append(controller)
     }
 

@@ -33,6 +33,13 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    struct SinglePropHarness: View {
+        @State var t: Float = 0.0
+        var body: some View {
+            _DebugNode(label: "single").opacity(t)
+        }
+    }
+
     private func leaves(_ root: Node) -> [Node] {
         var out: [Node] = []
         func walk(_ n: Node) {
@@ -189,6 +196,42 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
             }
             #expect(node?.opacity == 0.0)
             #expect(node?.backgroundColor?.r == 0.0)
+            #expect(scheduler.activeCount == 0)
+        }
+    } }
+
+    @Test("Retargeting same property cancels superseded controller")
+    func retargetCancelsSupersededController() { GlobalTestLock.locked {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = SinglePropHarness()
+            graph.install(root: h)
+
+            let node = leaves(tree.root!).first
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$t.wrappedValue = 1.0
+            }
+            recomp.commitAll()
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.3)
+            #expect(node?.opacity == 0.3)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$t.wrappedValue = 0.0
+            }
+            recomp.commitAll()
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.2)
+            #expect((node?.opacity ?? 0) < 0.3)
+
+            scheduler.tick(deltaTime: 0.8)
+            #expect(node?.opacity == 0.0)
             #expect(scheduler.activeCount == 0)
         }
     } }
