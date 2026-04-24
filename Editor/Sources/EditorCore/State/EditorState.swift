@@ -24,6 +24,11 @@ public enum EditorViewportShadingMode: String, Codable, Sendable {
     case wireframe
 }
 
+public enum SelectionCommandBehavior: String, Codable, Sendable {
+    case subtract
+    case toggle
+}
+
 public struct EditorAssetDragPayload: Codable, Sendable, Equatable {
     public var assetID: String
     public var displayName: String
@@ -59,6 +64,7 @@ public struct EditorState: Codable, Sendable {
     public var translateSnapEnabled: Bool
     public var rotateSnapEnabled: Bool
     public var scaleSnapEnabled: Bool
+    public var cmdSelectBehavior: SelectionCommandBehavior
     public var activeAssetDrag: EditorAssetDragPayload?
     public var inspectorCollapsedSectionIDs: Set<String>
     public var pendingConfirmationRequest: ConfirmationRequestBatch?
@@ -80,6 +86,7 @@ public struct EditorState: Codable, Sendable {
         translateSnapEnabled: Bool = false,
         rotateSnapEnabled: Bool = false,
         scaleSnapEnabled: Bool = false,
+        cmdSelectBehavior: SelectionCommandBehavior = .subtract,
         activeAssetDrag: EditorAssetDragPayload? = nil,
         inspectorCollapsedSectionIDs: Set<String> = [],
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
@@ -100,6 +107,7 @@ public struct EditorState: Codable, Sendable {
         self.translateSnapEnabled = translateSnapEnabled
         self.rotateSnapEnabled = rotateSnapEnabled
         self.scaleSnapEnabled = scaleSnapEnabled
+        self.cmdSelectBehavior = cmdSelectBehavior
         self.activeAssetDrag = activeAssetDrag
         self.inspectorCollapsedSectionIDs = inspectorCollapsedSectionIDs
         self.pendingConfirmationRequest = pendingConfirmationRequest

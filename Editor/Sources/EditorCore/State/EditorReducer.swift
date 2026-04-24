@@ -16,6 +16,7 @@ public enum EditorAction: Sendable {
     case setTranslateSnapEnabled(Bool)
     case setRotateSnapEnabled(Bool)
     case setScaleSnapEnabled(Bool)
+    case setCommandSelectBehavior(SelectionCommandBehavior)
     case beginAssetDrag(EditorAssetDragPayload)
     case updateAssetDragCursor(x: Float, y: Float)
     case endAssetDrag
@@ -68,6 +69,8 @@ public enum EditorReducer {
 
         case let .setScaleSnapEnabled(enabled):
             state.scaleSnapEnabled = enabled
+        case let .setCommandSelectBehavior(behavior):
+            state.cmdSelectBehavior = behavior
         case let .beginAssetDrag(payload):
             state.activeAssetDrag = payload
         case let .updateAssetDragCursor(x, y):
