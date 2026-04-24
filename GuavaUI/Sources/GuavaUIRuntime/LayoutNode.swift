@@ -171,6 +171,13 @@ public final class LayoutNode: @unchecked Sendable {
         }
     }
 
+    public var maxWidth: Float? {
+        didSet {
+            if let w = maxWidth { YGNodeStyleSetMaxWidth(ygNode, w) }
+            else { YGNodeStyleSetMaxWidth(ygNode, .nan) }
+        }
+    }
+
     public func setWidthPercent(_ value: Float) {
         YGNodeStyleSetWidthPercent(ygNode, value)
     }
@@ -186,6 +193,13 @@ public final class LayoutNode: @unchecked Sendable {
         didSet {
             if let h = minHeight { YGNodeStyleSetMinHeight(ygNode, h) }
             else { YGNodeStyleSetMinHeight(ygNode, .nan) }
+        }
+    }
+
+    public var maxHeight: Float? {
+        didSet {
+            if let h = maxHeight { YGNodeStyleSetMaxHeight(ygNode, h) }
+            else { YGNodeStyleSetMaxHeight(ygNode, .nan) }
         }
     }
 

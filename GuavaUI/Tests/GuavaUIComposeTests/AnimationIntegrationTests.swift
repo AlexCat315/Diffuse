@@ -40,6 +40,29 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    struct LayoutWidthHarness: View {
+        @State var width: Float = 40
+        var body: some View {
+            Box {
+                _DebugNode(label: "leaf")
+                    .frame(width: width, height: 20)
+            }
+            .frame(width: 200, height: 60)
+        }
+    }
+
+    struct LayoutPaddingHarness: View {
+        @State var pad: EdgeInsets = .init(all: 0)
+        var body: some View {
+            Box {
+                _DebugNode(label: "leaf")
+                    .frame(width: 40, height: 20)
+            }
+            .frame(width: 200, height: 60)
+            .padding(pad)
+        }
+    }
+
     private func leaves(_ root: Node) -> [Node] {
         var out: [Node] = []
         func walk(_ n: Node) {
@@ -263,6 +286,67 @@ struct AnimationIntegrationTests: GuavaUIComposeSerializedSuite {
 
             scheduler.tick(deltaTime: 0.7)
             #expect(scheduler.activeCount == 0)
+        }
+    } }
+
+    @Test("Layout frame width updates over ticks in a real container")
+    func layoutFrameWidthE2E() { GlobalTestLock.locked {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = LayoutWidthHarness()
+            graph.install(root: h)
+
+            graph.computeLayout(width: 300, height: 120)
+            let leaf = leaves(tree.root!).first(where: { $0.isHitTestable })
+            #expect(leaf?.frame.width == 40)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$width.wrappedValue = 120
+            }
+            recomp.commitAll()
+
+            scheduler.tick(deltaTime: 0.5)
+            graph.computeLayout(width: 300, height: 120)
+            #expect(leaf?.frame.width == 80)
+
+            scheduler.tick(deltaTime: 0.5)
+            graph.computeLayout(width: 300, height: 120)
+            #expect(leaf?.frame.width == 120)
+        }
+    } }
+
+    @Test("Layout frame origin updates over ticks when padding animates")
+    func layoutPaddingE2E() { GlobalTestLock.locked {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = LayoutPaddingHarness()
+            graph.install(root: h)
+
+            graph.computeLayout(width: 300, height: 120)
+            let leaf = leaves(tree.root!).first(where: { $0.isHitTestable })
+            #expect(leaf?.frame.origin.x == 0)
+            #expect(leaf?.frame.origin.y == 0)
+
+            withAnimation(Animation(duration: 1.0, curve: .linear)) {
+                h.$pad.wrappedValue = .init(all: 20)
+            }
+            recomp.commitAll()
+
+            scheduler.tick(deltaTime: 0.5)
+            graph.computeLayout(width: 300, height: 120)
+            #expect(leaf?.frame.origin.x == 10)
+            #expect(leaf?.frame.origin.y == 10)
+
+            scheduler.tick(deltaTime: 0.5)
+            graph.computeLayout(width: 300, height: 120)
+            #expect(leaf?.frame.origin.x == 20)
+            #expect(leaf?.frame.origin.y == 20)
         }
     } }
 }
