@@ -96,14 +96,9 @@ public struct Menu: View {
                 rows()
             }
         }
-        .padding(1)
-        .background(.divider)
-        .cornerRadius(8)
         .background(.surfaceFloating)
         .cornerRadius(8)
-        // Elevation shadow for the floating menu surface.
-        .shadow(color: Color(r: 0, g: 0, b: 0, a: 0.55),
-                offsetX: 0, offsetY: 4, blur: 14)
+        .border(Color(red: 58, green: 64, blue: 78), width: 1)
         .ifLet(width) { view, width in
             view.frame(width: width)
         }
@@ -195,7 +190,7 @@ public struct Popover<Label: View, Content: View>: View {
     }
 
     public var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 6) {
+        Box(direction: .column, alignItems: .flexStart, spacing: 6) {
             Button(role: .normal,
                    isEnabled: isEnabled,
                    action: {

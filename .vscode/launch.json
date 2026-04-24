@@ -19,6 +19,26 @@
             "target": "EditorApp",
             "configuration": "release",
             "preLaunchTask": "swift: Build Release EditorApp (Editor)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:guava}/GuavaUI",
+            "name": "Debug GuavaUIDemo (GuavaUI)",
+            "target": "GuavaUIDemo",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug GuavaUIDemo (GuavaUI)"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:guava}/GuavaUI",
+            "name": "Release GuavaUIDemo (GuavaUI)",
+            "target": "GuavaUIDemo",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release GuavaUIDemo (GuavaUI)"
         }
     ]
 }
