@@ -19,7 +19,7 @@ struct InspectorPanel: View {
                     Divider()
 
                     PropertyGrid(propertySections(sections, collapsedIDs: collapsedIDs),
-                                 labelWidth: 96,
+                                 labelWidth: 88,
                                  rowHeight: 24,
                                  onSectionCollapseChanged: { id, isCollapsed in
                         store.dispatch(.setInspectorSectionCollapsed(id: id, isCollapsed: isCollapsed))
@@ -36,7 +36,7 @@ struct InspectorPanel: View {
                     .padding(10)
                 }
             }
-            .frame(minWidth: 340)
+            .frame(minWidth: 280)
         }
     }
 

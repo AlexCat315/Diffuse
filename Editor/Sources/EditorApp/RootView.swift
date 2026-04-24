@@ -58,49 +58,7 @@ struct EditorRootView: View {
                                                      preset: defaultPreset)
             }
 
-            let dispatchMenuCommand: (EditorMenuCommand) -> Void = { command in
-                switch command {
-                case .newScene:
-                    store.dispatch(.setAIStatusMessage("New Scene command is not wired yet."))
-                case .openScene:
-                    store.dispatch(.setAIStatusMessage("Open Scene command is not wired yet."))
-                case .saveScene:
-                    store.dispatch(.setAIStatusMessage("Save Scene command is not wired yet."))
-                case .importAssets:
-                    store.dispatch(.setAIStatusMessage("Import Assets command is not wired yet."))
-                case .undo:
-                    store.dispatch(.setAIStatusMessage("Undo command is not wired yet."))
-                case .redo:
-                    store.dispatch(.setAIStatusMessage("Redo command is not wired yet."))
-                case .setWorkspaceMode(let mode):
-                    setWorkspaceMode(mode)
-                case .setLayoutPreset(let preset):
-                    setLayoutPreset(preset)
-                case .resetLayout:
-                    resetLayout()
-                case .setPlaybackState(let state):
-                    setPlaybackState(state)
-                case .openSettings:
-                    store.dispatch(.setAIStatusMessage("Settings panel is not wired yet."))
-                case .toggleTheme:
-                    store.dispatch(.setAIStatusMessage("Theme switching is not wired yet."))
-                case .buildProject:
-                    store.dispatch(.setAIStatusMessage("Build command is not wired yet."))
-                case .buildAndRun:
-                    store.dispatch(.setAIStatusMessage("Build and Run command is not wired yet."))
-                case .openDocumentation:
-                    store.dispatch(.setAIStatusMessage("Documentation link is not wired yet."))
-                case .about:
-                    store.dispatch(.setAIStatusMessage("Guava Editor (GuavaUI shell prototype)."))
-                }
-            }
-
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                EditorMenuBar(workspaceMode: store.state.workspaceMode,
-                              activeLayoutPreset: store.state.activeLayoutPreset,
-                              onCommand: dispatchMenuCommand)
-                Divider()
-
                 EditorMainToolbar(playbackState: store.state.playbackState,
                                   workspaceMode: store.state.workspaceMode,
                                   activeLayoutPreset: store.state.activeLayoutPreset,
@@ -143,26 +101,32 @@ private struct EditorMenuBar: View {
                            menuWidth: 220,
                            entries: fileEntries,
                            onCommand: onCommand)
+                .id("editor-menu-file")
             EditorMenuItem(title: "Edit",
                            menuWidth: 200,
                            entries: editEntries,
                            onCommand: onCommand)
+                .id("editor-menu-edit")
             EditorMenuItem(title: "Window",
                            menuWidth: 240,
                            entries: windowEntries,
                            onCommand: onCommand)
+                .id("editor-menu-window")
             EditorMenuItem(title: "Tools",
                            menuWidth: 200,
                            entries: toolsEntries,
                            onCommand: onCommand)
+                .id("editor-menu-tools")
             EditorMenuItem(title: "Build",
                            menuWidth: 200,
                            entries: buildEntries,
                            onCommand: onCommand)
+                .id("editor-menu-build")
             EditorMenuItem(title: "Help",
                            menuWidth: 220,
                            entries: helpEntries,
                            onCommand: onCommand)
+                .id("editor-menu-help")
 
             Spacer(minLength: 0)
 
@@ -542,11 +506,10 @@ private struct ToolbarIconButton: View {
     let onClick: () -> Void
 
     var body: some View {
-        IconButton(resource: icon.resource,
-                   size: 15,
-                   tooltip: tooltip,
-                   action: onClick)
-            .buttonStyle(.secondary)
+        Button(tooltip: tooltip, action: onClick) {
+            ToolbarIconChrome(icon: icon.resource, isActive: false)
+        }
+        .buttonStyle(.plain)
     }
 }
 
@@ -557,19 +520,29 @@ private struct ToolbarIconStateButton: View {
     let onClick: () -> Void
 
     var body: some View {
-        if isActive {
-            IconButton(resource: icon.resource,
-                       size: 15,
-                       tooltip: tooltip,
-                       action: onClick)
-                .buttonStyle(.primary)
-        } else {
-            IconButton(resource: icon.resource,
-                       size: 15,
-                       tooltip: tooltip,
-                       action: onClick)
-                .buttonStyle(.secondary)
+        Button(tooltip: tooltip, action: onClick) {
+            ToolbarIconChrome(icon: icon.resource, isActive: isActive)
         }
+        .buttonStyle(.plain)
+    }
+}
+
+private struct ToolbarIconChrome: View {
+    let icon: BundleImageResource
+    let isActive: Bool
+
+    var body: some View {
+        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            Image(resource: icon,
+                  width: 15,
+                  height: 15,
+                  tint: .white,
+                  contentMode: .fit)
+                .foregroundColor(isActive ? .onAccent : .onSurfaceVariant)
+        }
+        .frame(width: 34, height: 34)
+        .background(isActive ? .accent : .surfaceSunken)
+        .cornerRadius(4)
     }
 }
 
