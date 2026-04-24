@@ -700,34 +700,20 @@ private struct _TreeRowComposite: View {
     let content: AnyView
 
     var body: some View {
-        Row(alignment: .center, spacing: 0) {
-            if depth > 0 {
-                Box { EmptyView() }
-                    .frame(width: Float(depth) * indentation, height: rowHeight)
-            }
+        let indentWidth = max(0, Float(depth) * indentation)
+        let trailingWidth = trailingSlotWidth ?? 0
+        let trailing = trailingContent ?? AnyView(EmptyView())
 
-            // Disclosure: a Button (so it gets its own pointer node) with
-            // plain style so it adds no chrome of its own. Empty glyph when
-            // the row has no children, but the slot is reserved so siblings
-            // align.
-            if hasChildren {
-                Button(action: onToggle) {
-                    if let disclosureContent {
-                        disclosureContent(isExpanded)
-                            .frame(width: disclosureWidth, height: rowHeight)
-                    } else {
-                        Text(isExpanded ? "▾" : "▸")
-                            .font(.system(size: 11, weight: .medium))
-                            .foregroundColor(.onSurfaceVariant)
-                            .frame(width: disclosureWidth, height: rowHeight)
-                    }
-                }
-                .buttonStyle(.plain)
-                .frame(width: disclosureWidth, height: rowHeight)
-            } else {
-                Box { EmptyView() }
-                    .frame(width: disclosureWidth, height: rowHeight)
-            }
+        Row(alignment: .center, spacing: 0) {
+            Box { EmptyView() }
+                .frame(width: indentWidth, height: rowHeight)
+
+            _TreeDisclosureSlotHost(hasChildren: hasChildren,
+                                    isExpanded: isExpanded,
+                                    width: disclosureWidth,
+                                    rowHeight: rowHeight,
+                                    disclosureContent: disclosureContent,
+                                    onToggle: onToggle)
 
             // Row body — delegates visuals to the TreeRowStyle env.
             _TreeRowHost(
@@ -759,14 +745,41 @@ private struct _TreeRowComposite: View {
             )
             .flex()
 
-            if let trailingSlotWidth,
-               let trailingContent {
-                _TreeTrailingSlotHost(width: trailingSlotWidth,
-                                      rowHeight: rowHeight,
-                                      content: trailingContent)
-            }
+            _TreeTrailingSlotHost(width: trailingWidth,
+                                  rowHeight: rowHeight,
+                                  content: trailing)
         }
         .frame(height: rowHeight)
+    }
+}
+
+private struct _TreeDisclosureSlotHost: View {
+    let hasChildren: Bool
+    let isExpanded: Bool
+    let width: Float
+    let rowHeight: Float
+    let disclosureContent: Tree<[Int], Int, EmptyView>.DisclosureContent?
+    let onToggle: () -> Void
+
+    var body: some View {
+        Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            if hasChildren {
+                Button(action: onToggle) {
+                    if let disclosureContent {
+                        disclosureContent(isExpanded)
+                            .frame(width: width, height: rowHeight)
+                    } else {
+                        Text(isExpanded ? "▾" : "▸")
+                            .font(.system(size: 11, weight: .medium))
+                            .foregroundColor(.onSurfaceVariant)
+                            .frame(width: width, height: rowHeight)
+                    }
+                }
+                .buttonStyle(.plain)
+                .frame(width: width, height: rowHeight)
+            }
+        }
+        .frame(width: width, height: rowHeight)
     }
 }
 
@@ -909,7 +922,9 @@ private struct _TreeTrailingSlotHost: View {
 
     var body: some View {
         Box(direction: .row, alignItems: .center, justifyContent: .flexEnd) {
-            content
+            if width > 0 {
+                content
+            }
         }
         .padding(horizontal: 4, vertical: 0)
         .frame(width: width, height: rowHeight)
