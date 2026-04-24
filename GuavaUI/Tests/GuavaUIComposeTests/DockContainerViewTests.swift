@@ -121,6 +121,37 @@ struct DockContainerViewTests: GuavaUIComposeSerializedSuite {
         _ = graph
     } }
 
+    @Test("DockContainer applies default horizontal inset and allows opt-out")
+    func defaultHorizontalInset() { GlobalTestLock.locked {
+        InteractionRegistryHolder.current = InteractionRegistry()
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let tab = DockTab(userKey: "explorer", title: "Explorer")
+        let controller = DockController(root: .tabs([tab]))
+
+        let defaultTree = NodeTree()
+        let defaultGraph = ViewGraph(tree: defaultTree, recomposer: Recomposer())
+        defaultGraph.install(root: DockContainer(controller: controller, content: makeContent()))
+        defaultGraph.computeLayout(width: 200, height: 120)
+
+        let insetLeaf = firstNonWrapper(defaultTree.root!)
+        #expect(abs(Float(insetLeaf.frame.minX) - 8) < 0.5)
+        #expect(abs(Float(insetLeaf.frame.width) - 184) < 0.5)
+
+        let zeroTree = NodeTree()
+        let zeroGraph = ViewGraph(tree: zeroTree, recomposer: Recomposer())
+        zeroGraph.install(root: DockContainer(controller: controller,
+                                              horizontalInset: 0,
+                                              content: makeContent()))
+        zeroGraph.computeLayout(width: 200, height: 120)
+
+        let zeroLeaf = firstNonWrapper(zeroTree.root!)
+        #expect(abs(Float(zeroLeaf.frame.minX)) < 0.5)
+        #expect(abs(Float(zeroLeaf.frame.width) - 200) < 0.5)
+        _ = defaultGraph
+        _ = zeroGraph
+    } }
+
     // MARK: - Helpers
 
     private func firstNonWrapper(_ root: Node) -> Node {
