@@ -60,14 +60,14 @@ struct WithAnimationPropertiesTests {
     struct PercentFrameHarness: View {
         @State var widthPercent: Float = 20
         var body: some View {
-            _DebugNode(label: "x").frame(widthPercent: widthPercent)
+            _DebugNode(label: "x").frame(width: .percent(widthPercent))
         }
     }
 
     struct PercentHeightFrameHarness: View {
         @State var heightPercent: Float = 20
         var body: some View {
-            _DebugNode(label: "x").frame(heightPercent: heightPercent)
+            _DebugNode(label: "x").frame(height: .percent(heightPercent))
         }
     }
 
@@ -75,7 +75,7 @@ struct WithAnimationPropertiesTests {
         @State var usePercent = false
         var body: some View {
             if usePercent {
-                _DebugNode(label: "x").frame(widthPercent: 50)
+                _DebugNode(label: "x").frame(width: .percent(50))
             } else {
                 _DebugNode(label: "x").frame(width: 40)
             }
@@ -86,7 +86,7 @@ struct WithAnimationPropertiesTests {
         @State var usePercent = false
         var body: some View {
             if usePercent {
-                _DebugNode(label: "x").frame(heightPercent: 50)
+                _DebugNode(label: "x").frame(height: .percent(50))
             } else {
                 _DebugNode(label: "x").frame(height: 40)
             }
