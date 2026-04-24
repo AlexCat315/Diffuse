@@ -28,6 +28,15 @@ struct AnimationValueModifierTests {
         }
     }
 
+    struct ImplicitFrameHarness: View {
+        @State var width: Float = 40
+        var body: some View {
+            _DebugNode(label: "x")
+                .frame(width: width)
+                .animation(Animation(duration: 1.0, curve: .linear), value: width)
+        }
+    }
+
     /// The animation modifier wraps content via a synthetic anchor — find the
     /// inner _DebugNode by descending past the anchor.
     private func findLeaf(_ tree: NodeTree) -> Node? {
@@ -99,6 +108,34 @@ struct AnimationValueModifierTests {
             recomp.commitAll()
 
             #expect(leaf?.opacity == 1.0)
+            #expect(scheduler.activeCount == 0)
+        }
+    }
+
+    @Test("frame(width:) animates implicitly on value change")
+    func implicitFrameAnimates() {
+        let scheduler = AnimatorScheduler()
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let recomp = Recomposer()
+            let graph = ViewGraph(tree: tree, recomposer: recomp)
+            let h = ImplicitFrameHarness()
+            graph.install(root: h)
+
+            let leaf = findLeaf(tree)
+            let layout = leaf?.layoutNode
+
+            h.$width.wrappedValue = 80
+            recomp.commitAll()
+
+            #expect(layout?.width == 40)
+            #expect(scheduler.activeCount == 1)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.width == 60)
+
+            scheduler.tick(deltaTime: 0.5)
+            #expect(layout?.width == 80)
             #expect(scheduler.activeCount == 0)
         }
     }

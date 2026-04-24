@@ -23,6 +23,64 @@ import Foundation
 
 public extension Node {
 
+    /// Animate (or instantly assign) a custom property endpoint.
+    ///
+    /// Use this overload when the target value does not live behind a
+    /// `Node` key path (for example, layout properties on `LayoutNode`).
+    @inline(__always)
+    func animatableSet<Key: Hashable, Value: Interpolatable & Equatable>(
+        propertyKey: Key,
+        current: Value,
+        to target: Value,
+        apply: @escaping (Value) -> Void
+    ) {
+        let propertyKey = AnyHashable(propertyKey)
+        guard let anim = ActiveAnimationContext.current, current != target else {
+            replaceAnimationController(for: propertyKey, with: nil)
+            apply(target)
+            return
+        }
+        let controller = AnimationController(
+            from: current,
+            to: target,
+            animation: anim,
+            apply: apply
+        )
+        replaceAnimationController(for: propertyKey, with: controller)
+        AnimatorScheduler.current.register(controller)
+    }
+
+    /// Optional-typed variant of the custom-property API.
+    ///
+    /// If either endpoint is `nil`, the value snaps and no controller is
+    /// registered because interpolation is undefined.
+    @inline(__always)
+    func animatableSet<Key: Hashable, Value: Interpolatable & Equatable>(
+        propertyKey: Key,
+        current: Value?,
+        to target: Value?,
+        apply: @escaping (Value?) -> Void
+    ) {
+        let propertyKey = AnyHashable(propertyKey)
+        guard let anim = ActiveAnimationContext.current,
+              let from = current,
+              let to = target,
+              from != to
+        else {
+            replaceAnimationController(for: propertyKey, with: nil)
+            apply(target)
+            return
+        }
+        let controller = AnimationController(
+            from: from,
+            to: to,
+            animation: anim,
+            apply: { apply($0) }
+        )
+        replaceAnimationController(for: propertyKey, with: controller)
+        AnimatorScheduler.current.register(controller)
+    }
+
     /// Animate (or instantly assign, depending on the active animation
     /// context) a property of type `Value`.
     @inline(__always)
