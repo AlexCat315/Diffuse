@@ -121,6 +121,7 @@ let package = Package(
                 "ObservationBus",
                 "SceneRuntime",
                 "SequenceRuntime",
+                "ScriptRuntime",
             ]
         ),
         .target(
@@ -227,6 +228,7 @@ let package = Package(
                 "AssetPipeline",
                 "ObservationBus",
                 "SceneRuntime",
+                "ScriptRuntime",
                 "SequenceRuntime",
             ]
         ),

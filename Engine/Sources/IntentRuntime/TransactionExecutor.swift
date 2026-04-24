@@ -3,6 +3,7 @@ import Foundation
 import ObservationBus
 import SceneRuntime
 import SequenceRuntime
+import ScriptRuntime
 import simd
 
 public struct TransactionExecutionContext {
@@ -308,6 +309,9 @@ public struct TransactionExecutor {
                 if let light = scene.component(LightComponent.self, for: source) {
                     _ = scene.setComponent(light, for: entity)
                 }
+                if let scripts = scene.component(ScriptComponent.self, for: source) {
+                    _ = scene.setComponent(scripts, for: entity)
+                }
                 createdEntityIDs.append(entity.rawValue)
 
             case let .setLocalTransform(entityID, transform):
@@ -397,6 +401,10 @@ public struct TransactionExecutor {
                     throw TransactionExecutorError.missingComponent(entityID: entityID,
                                                                    type: "LightComponent")
                 }
+
+            case let .setScriptBindings(entityID, bindings):
+                let entity = try requireEntity(entityID, in: scene)
+                _ = scene.setComponent(ScriptComponent(bindings: bindings), for: entity)
 
             case let .setCameraPose(entityID, localTransform, target, up):
                 let entity = try requireEntity(entityID, in: scene)
@@ -653,6 +661,7 @@ public struct TransactionExecutor {
                  let .setLightRange(entityID, _),
                  let .setLightSpotInnerAngle(entityID, _),
                  let .setLightSpotOuterAngle(entityID, _),
+                 let .setScriptBindings(entityID, _),
                  let .setCameraPose(entityID, _, _, _):
                 ids.insert(entityID)
             }

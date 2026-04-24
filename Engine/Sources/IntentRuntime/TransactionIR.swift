@@ -2,6 +2,7 @@ import AssetPipeline
 import Foundation
 import SceneRuntime
 import SequenceRuntime
+import ScriptRuntime
 import simd
 
 public enum TransactionDomain: String, Sendable, Equatable {
@@ -78,6 +79,7 @@ public enum SceneMutation: Sendable, Equatable {
     case setLightRange(entityID: UInt64, range: Float)
     case setLightSpotInnerAngle(entityID: UInt64, angleDegrees: Float)
     case setLightSpotOuterAngle(entityID: UInt64, angleDegrees: Float)
+    case setScriptBindings(entityID: UInt64, bindings: [ScriptBinding])
     case setCameraPose(entityID: UInt64,
                        localTransform: LocalTransform,
                        target: SIMD3<Float>,

@@ -5,6 +5,7 @@ import IntentRuntime
 import ObservationBus
 import SceneRuntime
 import SequenceRuntime
+import ScriptRuntime
 import Testing
 import simd
 
@@ -69,6 +70,37 @@ struct IntentRuntimeTests {
         #expect(throws: TransactionExecutorError.self) {
             try executor.apply(transaction, to: &context)
         }
+    }
+
+    @Test("scene transactions update script binding parameters")
+    func sceneTransactionsUpdateScriptBindings() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let initial = ScriptBinding(ScriptHandle(rawValue: 7),
+                                    isEnabled: false,
+                                    parametersJSON: "{}")
+        _ = scene.setComponent(ScriptComponent(bindings: [initial]), for: entity)
+
+        let next = ScriptBinding(ScriptHandle(rawValue: 7),
+                                 isEnabled: true,
+                                 parametersJSON: "{\"speed\":3}")
+        let transaction = TransactionIR(
+            intent: IntentIR(verb: "scene.set_script_parameters",
+                             summary: "Update script parameters",
+                             source: .human),
+            summary: "Update script parameters",
+            operations: [.scene(.setScriptBindings(entityID: entity.rawValue, bindings: [next]))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+
+        let applied = try executor.apply(transaction, to: &context)
+        let updated = try #require(context.sceneRuntime?.component(ScriptComponent.self, for: entity))
+
+        #expect(applied.changedDomains == [.scene])
+        #expect(updated.bindings == [next])
     }
 
     @Test("sequence transactions replace the document and issue a new revision")

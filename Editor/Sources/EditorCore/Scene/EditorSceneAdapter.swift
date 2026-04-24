@@ -2,6 +2,7 @@ import Foundation
 import GuavaUIRuntime
 import IntentRuntime
 import SceneRuntime
+import ScriptRuntime
 import simd
 
 public struct EditorSceneNode: Identifiable {
@@ -65,6 +66,7 @@ public enum EditorInspectorFieldValue {
     case constrainedNumber(Binding<Float>, min: Float?, max: Float?, step: Float?, showsStepper: Bool)
     case vector3(x: Binding<Float>, y: Binding<Float>, z: Binding<Float>)
     case color(Binding<Color>)
+    case json(Binding<String>, minHeight: Float)
     case lightType(Binding<LightType>)
 }
 
@@ -142,6 +144,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
         if let lightSection = lightSection(for: entity) {
             sections.append(lightSection)
+        }
+        if let scriptSection = scriptSection(for: entity) {
+            sections.append(scriptSection)
         }
 
         return sections
@@ -470,6 +475,50 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func scriptSection(for entity: EntityID) -> EditorInspectorSection? {
+        guard let component = scene.component(ScriptComponent.self, for: entity) else {
+            return nil
+        }
+
+        var fields: [EditorInspectorField] = []
+        for (index, binding) in component.bindings.enumerated() {
+            let ordinal = index + 1
+            fields.append(
+                EditorInspectorField(
+                    id: "script-\(index)-enabled",
+                    label: "Script \(ordinal)",
+                    value: .bool(scriptEnabledBinding(for: entity, index: index))
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "script-\(index)-handle",
+                    label: "Handle",
+                    value: .readOnly("#\(binding.script.rawValue)")
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "script-\(index)-parameters",
+                    label: "Parameters",
+                    value: .json(scriptParametersBinding(for: entity, index: index), minHeight: 96)
+                )
+            )
+        }
+
+        if fields.isEmpty {
+            fields.append(
+                EditorInspectorField(
+                    id: "script-empty",
+                    label: "Bindings",
+                    value: .readOnly("No scripts")
+                )
+            )
+        }
+
+        return EditorInspectorSection(id: "scripts", title: "Scripts", fields: fields)
+    }
+
     private func lightTypeBinding(for entity: EntityID) -> Binding<LightType> {
         Binding(
             get: { [self] in
@@ -653,6 +702,54 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func scriptEnabledBinding(for entity: EntityID, index: Int) -> Binding<Bool> {
+        Binding(
+            get: { [self] in
+                guard let bindings = scene.component(ScriptComponent.self, for: entity)?.bindings,
+                      bindings.indices.contains(index)
+                else { return false }
+                return bindings[index].isEnabled
+            },
+            set: { [self] next in
+                guard var bindings = scene.component(ScriptComponent.self, for: entity)?.bindings,
+                      bindings.indices.contains(index),
+                      bindings[index].isEnabled != next
+                else { return }
+                bindings[index].isEnabled = next
+                _ = applySceneTransaction(intentVerb: "scene.set_script_enabled",
+                                          summary: "Update script enabled flag",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setScriptBindings(entityID: entity.rawValue,
+                                                                         bindings: bindings)])
+            }
+        )
+    }
+
+    private func scriptParametersBinding(for entity: EntityID, index: Int) -> Binding<String> {
+        Binding(
+            get: { [self] in
+                guard let bindings = scene.component(ScriptComponent.self, for: entity)?.bindings,
+                      bindings.indices.contains(index)
+                else { return "{}" }
+                return normalizedJSONCommitText(bindings[index].parametersJSON)
+            },
+            set: { [self] next in
+                let normalized = normalizedJSONCommitText(next)
+                guard isValidJSONDocument(normalized),
+                      var bindings = scene.component(ScriptComponent.self, for: entity)?.bindings,
+                      bindings.indices.contains(index),
+                      bindings[index].parametersJSON != normalized
+                else { return }
+                bindings[index].parametersJSON = normalized
+                _ = applySceneTransaction(intentVerb: "scene.set_script_parameters",
+                                          summary: "Update script parameters",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setScriptBindings(entityID: entity.rawValue,
+                                                                         bindings: bindings)])
+            }
+        )
+    }
+
     private func publishRevision() {
         onRevisionChanged?(scene.snapshot.revision)
     }
@@ -674,6 +771,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         }
         if scene.hasComponent(RigidBody.self, for: entity) || scene.hasComponent(Collider.self, for: entity) {
             return "Physics Entity"
+        }
+        if scene.hasComponent(ScriptComponent.self, for: entity) {
+            return "Scripted Entity"
         }
         return "Entity"
     }
@@ -853,6 +953,21 @@ private func composeMatrix(translation: SIMD3<Float>,
     m.columns.2 = SIMD4<Float>(c2, 0)
     m.columns.3 = SIMD4<Float>(translation, 1)
     return m
+}
+
+private func normalizedJSONCommitText(_ text: String) -> String {
+    let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? "{}" : trimmed
+}
+
+private func isValidJSONDocument(_ text: String) -> Bool {
+    guard let data = text.data(using: .utf8) else { return false }
+    do {
+        _ = try JSONSerialization.jsonObject(with: data)
+        return true
+    } catch {
+        return false
+    }
 }
 
 /// 从 3x3 旋转矩阵提取 Euler XYZ（intrinsic 顺序：R = Rx * Ry * Rz）。
