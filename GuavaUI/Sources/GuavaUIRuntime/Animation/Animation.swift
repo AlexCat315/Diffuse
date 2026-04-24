@@ -11,6 +11,17 @@ public enum AnimationCurve: Sendable, Equatable {
     case easeIn
     case easeOut
     case easeInOut
+    /// Damped spring curve using a response period and damping fraction.
+    ///
+    /// `response` is the approximate period in seconds for a single natural
+    /// oscillation. `dampingFraction` maps to classical damping ratio:
+    /// - `1.0`  => critical damping (no overshoot)
+    /// - `< 1`  => underdamped (can overshoot)
+    /// - `> 1`  => overdamped (slower settle)
+    ///
+    /// The runtime clamps the evaluated progress into `[0, 1]` to keep
+    /// interpolation stable across all value types.
+    case spring(response: Float, dampingFraction: Float)
     /// Cubic Bezier with control points `(c1x, c1y)` and `(c2x, c2y)`.
     /// Anchors `(0, 0)` and `(1, 1)` are implied.
     case cubicBezier(Float, Float, Float, Float)
@@ -37,9 +48,55 @@ public enum AnimationCurve: Sendable, Equatable {
                 let inv = 1 - x
                 return 1 - 2 * inv * inv
             }
+        case let .spring(response, dampingFraction):
+            return Self.evaluateSpring(
+                x: x,
+                response: response,
+                dampingFraction: dampingFraction
+            )
         case let .cubicBezier(c1x, c1y, c2x, c2y):
             return Self.evaluateCubicBezier(x: x, c1x: c1x, c1y: c1y, c2x: c2x, c2y: c2y)
         }
+    }
+
+    /// Evaluate a damped spring and normalize it so `f(0)=0` and `f(1)=1`.
+    /// The returned value is clamped into `[0, 1]`.
+    private static func evaluateSpring(x: Float,
+                                       response: Float,
+                                       dampingFraction: Float) -> Float {
+        let r = max(0.0001, response)
+        let zeta = max(0.0001, dampingFraction)
+        let omega0 = (2 * Float.pi) / r
+
+        @inline(__always)
+        func rawProgress(_ t: Float) -> Float {
+            if zeta < 1 {
+                let sqrtTerm = sqrt(max(0, 1 - zeta * zeta))
+                let omegaD = omega0 * sqrtTerm
+                let envelope = exp(-zeta * omega0 * t)
+                let value = 1 - envelope * (
+                    cos(omegaD * t) + (zeta / sqrtTerm) * sin(omegaD * t)
+                )
+                return value
+            } else if abs(zeta - 1) < 1e-4 {
+                let envelope = exp(-omega0 * t)
+                return 1 - envelope * (1 + omega0 * t)
+            } else {
+                let root = sqrt(max(0, zeta * zeta - 1))
+                let lambda1 = -omega0 * (zeta - root)
+                let lambda2 = -omega0 * (zeta + root)
+                let c1 = lambda2 / (lambda2 - lambda1)
+                let c2 = 1 - c1
+                return 1 - c1 * exp(lambda1 * t) - c2 * exp(lambda2 * t)
+            }
+        }
+
+        let y = rawProgress(x)
+        let y1 = rawProgress(1)
+        guard abs(y1) > 1e-5 else {
+            return max(0, min(1, y))
+        }
+        return max(0, min(1, y / y1))
     }
 
     /// Solve the cubic Bezier `y(x)` defined by the four control points
@@ -135,8 +192,28 @@ public extension Animation {
     /// `easeInOut` over 0.25 s.
     static let easeInOut = Animation(duration: 0.25, curve: .easeInOut)
 
+    /// Spring tuned for snappy control interactions.
+    static let snappy = Animation.spring(response: 0.30, dampingFraction: 0.90)
+
+    /// Spring tuned for bouncy decorative motion.
+    static let bouncy = Animation.spring(response: 0.45, dampingFraction: 0.65)
+
     /// Convenience for setting a custom duration while keeping `easeInOut`.
     static func easeInOut(duration: Double) -> Animation {
         Animation(duration: duration, curve: .easeInOut)
+    }
+
+    /// Spring animation convenience. Uses spring dynamics as the easing
+    /// curve while setting animation duration to `response`.
+    static func spring(response: Double = 0.40,
+                       dampingFraction: Double = 0.82,
+                       delay: Double = 0) -> Animation {
+        let r = max(0.0001, response)
+        let d = max(0.0001, dampingFraction)
+        return Animation(
+            duration: r,
+            curve: .spring(response: Float(r), dampingFraction: Float(d)),
+            delay: delay
+        )
     }
 }

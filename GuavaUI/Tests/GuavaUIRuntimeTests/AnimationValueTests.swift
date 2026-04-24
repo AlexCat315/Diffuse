@@ -75,6 +75,30 @@ struct AnimationValueTests {
         }
     }
 
+    @Test("spring curve anchors endpoints and stays bounded")
+    func springAnchorsAndBounds() {
+        let c = AnimationCurve.spring(response: 0.40, dampingFraction: 0.82)
+        #expect(abs(c.evaluate(0) - 0) < 1e-4)
+        #expect(abs(c.evaluate(1) - 1) < 1e-4)
+
+        for raw in stride(from: Float(0.0), through: Float(1.0), by: 0.05) {
+            let p = c.evaluate(raw)
+            #expect(p >= 0)
+            #expect(p <= 1)
+        }
+    }
+
+    @Test("critical spring is monotone")
+    func springCriticalMonotone() {
+        let c = AnimationCurve.spring(response: 0.35, dampingFraction: 1.0)
+        var last: Float = -1
+        for raw in stride(from: Float(0.0), through: Float(1.0), by: 0.05) {
+            let p = c.evaluate(raw)
+            #expect(p >= last)
+            last = p
+        }
+    }
+
     // MARK: - Animation value
 
     @Test("Animation defaults are sensible")
@@ -103,5 +127,30 @@ struct AnimationValueTests {
         #expect(a.duration == 0.5)
         #expect(a.curve == .easeInOut)
         #expect(a.delay == 0)
+    }
+
+    @Test("spring factory uses response as duration")
+    func springFactory() {
+        let a = Animation.spring(response: 0.6, dampingFraction: 0.9, delay: 0.1)
+        #expect(abs(a.duration - 0.6) < 1e-8)
+        #expect(abs(a.delay - 0.1) < 1e-8)
+        #expect(a.curve == .spring(response: 0.6, dampingFraction: 0.9))
+    }
+
+    @Test("snappy and bouncy presets are spring-based")
+    func springPresets() {
+        switch Animation.snappy.curve {
+        case .spring:
+            #expect(Bool(true))
+        default:
+            #expect(Bool(false))
+        }
+
+        switch Animation.bouncy.curve {
+        case .spring:
+            #expect(Bool(true))
+        default:
+            #expect(Bool(false))
+        }
     }
 }

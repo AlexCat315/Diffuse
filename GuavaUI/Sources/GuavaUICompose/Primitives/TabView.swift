@@ -73,6 +73,6 @@ struct _TabBarItem: View {
             }
         }
         .buttonStyle(.plain)
-        .animation(.semantic(.fast), value: _TabItemInteractionKey(isSelected: isSelected))
+        .animation(.semantic(.bouncy), value: _TabItemInteractionKey(isSelected: isSelected))
     }
 }
