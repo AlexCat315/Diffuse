@@ -167,13 +167,13 @@ private struct HierarchyTreeRowStyle: TreeRowStyle {
     func makeBody(configuration: TreeRowStyleConfiguration) -> some View {
         let bg: Color = {
             if configuration.isSelected {
-                return Color(red: 47, green: 68, blue: 112)
+                return Color(red: 56, green: 82, blue: 136)
             }
             if configuration.isSearchHit {
                 return Color(r: 73.0 / 255.0, g: 89.0 / 255.0, b: 42.0 / 255.0, a: 0.72)
             }
             if configuration.isHovered {
-                return Color(r: 42.0 / 255.0, g: 47.0 / 255.0, b: 56.0 / 255.0, a: 0.82)
+                return Color(r: 52.0 / 255.0, g: 59.0 / 255.0, b: 71.0 / 255.0, a: 0.96)
             }
             return Color(r: 0, g: 0, b: 0, a: 0)
         }()
@@ -186,7 +186,7 @@ private struct HierarchyTreeRowStyle: TreeRowStyle {
         .frame(height: 28)
         .clipped()
         .background(bg)
-        .cornerRadius(configuration.isSelected || configuration.isHovered || configuration.isSearchHit ? 4 : 0)
+        .cornerRadius(configuration.isSelected ? 4 : 0)
         .opacity(configuration.isEnabled ? 1 : 0.55)
     }
 }
@@ -224,12 +224,15 @@ private struct HierarchyEntityRow: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 7) {
-            HierarchyEntityIcon(kind: entity.kind)
-                .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
-                .frame(width: 18, height: 18)
+            Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                HierarchyEntityIcon(kind: entity.kind)
+                    .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
+                    .frame(width: 18, height: 18)
+            }
+            .frame(width: 18, height: 28)
 
             highlightedName()
-                .padding(horizontal: 2, vertical: 1)
+                .padding(horizontal: 2, vertical: 0)
                 .flex(1, shrink: 1, basis: 0)
                 .clipped()
         }
