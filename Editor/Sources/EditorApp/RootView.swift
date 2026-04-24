@@ -64,7 +64,8 @@ struct EditorRootView: View {
                 Divider()
 
                 PanelWorkspace(controller: controller,
-                               registry: registry)
+                               registry: registry,
+                               semantics: .ide)
                     .flex()
 
                 Divider()
@@ -74,6 +75,7 @@ struct EditorRootView: View {
                                 aiStatusMessage: store.state.aiStatusMessage)
             }
             .appearance(.dark)
+            .flex()
         }
     }
 }
@@ -298,6 +300,7 @@ private struct ToolbarActionButton: View {
                 .background(.surfaceSunken)
                 .cornerRadius(4)
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -315,6 +318,7 @@ private struct ToolbarStateButton: View {
                 .background(isActive ? .accent : .surfaceSunken)
                 .cornerRadius(4)
         }
+        .buttonStyle(.plain)
     }
 }
 
@@ -685,7 +689,8 @@ enum EditorRootViewFactory {
         do {
             let data = try Data(contentsOf: layoutPath)
             let decoder = JSONDecoder()
-            let snapshot = try decoder.decode(DockLayoutSnapshot.self, from: data)
+            var snapshot = try decoder.decode(DockLayoutSnapshot.self, from: data)
+            snapshot.root = sanitizeDockLayout(snapshot.root)
             let controller = DockController(root: snapshot.root)
             controller.load(snapshot)
             return controller
@@ -703,13 +708,28 @@ enum EditorRootViewFactory {
         do {
             let data = try Data(contentsOf: layoutPath)
             let decoder = JSONDecoder()
-            let snapshot = try decoder.decode(DockLayoutSnapshot.self, from: data)
+            var snapshot = try decoder.decode(DockLayoutSnapshot.self, from: data)
+            snapshot.root = sanitizeDockLayout(snapshot.root)
             let controller = DockController(root: snapshot.root)
             controller.load(snapshot)
             return controller
         } catch {
             fputs("[EditorRootViewFactory] failed to load legacy dock layout: \(error)\n", stderr)
             return nil
+        }
+    }
+
+    private static func sanitizeDockLayout(_ node: DockLayoutNode) -> DockLayoutNode {
+        switch node {
+        case .empty, .tabs:
+            return node
+        case .split(let id, let axis, let fraction, let first, let second):
+            let clamped = max(0.15, min(0.85, fraction))
+            return .split(id: id,
+                          axis: axis,
+                          fraction: clamped,
+                          first: sanitizeDockLayout(first),
+                          second: sanitizeDockLayout(second))
         }
     }
 
