@@ -191,6 +191,37 @@ struct EventDispatcherTests {
         #expect(box.recorder.bubble.isEmpty)
     }
 
+    @Test("mouseWheel can hit-test from event cursor coordinates without prior motion")
+    func wheelUsesEventCursorCoordinates() {
+        let tree = NodeTree()
+        let interactions = InteractionRegistry()
+        let box = Box()
+
+        let root = makeNode(name: "root",
+                            frame: CGRect(x: 0, y: 0, width: 200, height: 200),
+                            interactions: interactions, box: box)
+        let leaf = makeNode(name: "leaf",
+                            frame: CGRect(x: 40, y: 40, width: 80, height: 80),
+                            interactions: interactions, box: box, handle: true)
+        root.addChild(leaf)
+        tree.root = root
+
+        let dispatcher = EventDispatcher(
+            tree: tree,
+            interactions: interactions,
+            capture: PointerCapture(),
+            focusChain: FocusChain()
+        )
+
+        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0,
+                                                        y: -1,
+                                                        mouseX: 60,
+                                                        mouseY: 60)))
+
+        #expect(box.recorder.target == ["leaf"])
+        #expect(box.recorder.bubble.isEmpty)
+    }
+
     @Test("High-priority chrome route preempts target controls")
     func chromeRoutePreemptsTargetControl() {
         let tree = NodeTree()

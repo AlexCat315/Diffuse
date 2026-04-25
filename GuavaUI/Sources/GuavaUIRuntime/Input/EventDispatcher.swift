@@ -85,6 +85,7 @@ public final class EventDispatcher {
 
     private func dispatchPointerDown(_ event: MouseButtonEvent) {
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
+        lastCursor = point
         guard let hit = hitTest(point: point) else { return }
         if deliverPriority(path: hit.path,
                            kind: .pointer(event, .down),
@@ -100,6 +101,7 @@ public final class EventDispatcher {
     }
 
     private func dispatchPointerUp(_ event: MouseButtonEvent) {
+        lastCursor = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         if let captured = capture.target {
             let path = pathFromRoot(to: captured)
             _ = deliver(path: path, kind: .pointer(event, .up))
@@ -128,6 +130,9 @@ public final class EventDispatcher {
     }
 
     private func dispatchWheel(_ event: MouseWheelEvent) {
+        if let mouseX = event.mouseX, let mouseY = event.mouseY {
+            lastCursor = CGPoint(x: CGFloat(mouseX), y: CGFloat(mouseY))
+        }
         let hitPath = lastCursor.flatMap { cursor in
             hitTest(point: cursor)?.path
         }
