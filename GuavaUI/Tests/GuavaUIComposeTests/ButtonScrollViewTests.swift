@@ -338,6 +338,45 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(capture.target == nil)
     } }
 
+    @Test("ScrollView scrollbar drag accepts a small perpendicular hit slop")
+    func scrollViewScrollbarDragHitSlop() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = capture
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            ScrollView(.vertical) {
+                Column {
+                    Text("head").frame(width: 220, height: 120)
+                    Text("tail").frame(width: 220, height: 320)
+                }
+            }
+            .frame(width: 220, height: 160)
+        )
+        graph.computeLayout(width: 220, height: 160)
+
+        let scrollView = tree.root!.children.first!
+        let handlers = registry.handlers(for: scrollView)
+        let pointer = handlers.pointer!
+        let motion = handlers.motion!
+        let slopX = Float(scrollView.frame.width - 14)
+        let thumbY: Float = 10
+
+        #expect(pointer(MouseButtonEvent(button: .left,
+                                         x: slopX,
+                                         y: thumbY,
+                                         clicks: 1), .down, .target) == .handled)
+        #expect(capture.target === scrollView)
+        #expect(motion(MouseMotionEvent(x: slopX,
+                                        y: thumbY + 40,
+                                        deltaX: 0,
+                                        deltaY: 40), .target) == .handled)
+        #expect(scrollView.contentOffset.y > 0)
+    } }
+
     @Test("PropertyGrid scrolls inside a constrained inspector-sized viewport")
     func propertyGridScrollsInsideConstrainedViewport() { GlobalTestLock.locked {
         let registry = InteractionRegistry()

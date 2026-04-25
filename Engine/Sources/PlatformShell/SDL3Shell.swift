@@ -462,7 +462,10 @@ public final class SDL3Shell: Shell {
                     wy = -wy
                 }
                 collected.append(WindowInputEvent(windowID: windowID,
-                                                  event: .mouseWheel(MouseWheelEvent(x: wx, y: wy))))
+                                                  event: .mouseWheel(MouseWheelEvent(x: wx,
+                                                                                     y: wy,
+                                                                                     mouseX: event.wheel.mouse_x,
+                                                                                     mouseY: event.wheel.mouse_y))))
 
             default:
                 break
