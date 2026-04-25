@@ -62,7 +62,7 @@ struct _DockResizeHandle: _PrimitiveView {
         let snapshot = self
         guard let registry = InteractionRegistryHolder.current else { return }
 
-        registry.setPointer(node) { _, phase, _ in
+        registry.setPointer(node, route: .dockDrag) { _, phase, _ in
             switch phase {
             case .down:
                 PointerCaptureHolder.current?.acquire(node)
@@ -72,7 +72,7 @@ struct _DockResizeHandle: _PrimitiveView {
                 return .handled
             }
         }
-        registry.setMotion(node) { event, _ in
+        registry.setMotion(node, route: .dockDrag) { event, _ in
             // Only react when the handle is actively being dragged. The
             // capture target is set on `.down` and cleared on `.up`, so
             // checking the holder gives a cheap drag-active gate.

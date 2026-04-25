@@ -191,6 +191,47 @@ struct EventDispatcherTests {
         #expect(box.recorder.bubble.isEmpty)
     }
 
+    @Test("High-priority chrome route preempts target controls")
+    func chromeRoutePreemptsTargetControl() {
+        let tree = NodeTree()
+        let interactions = InteractionRegistry()
+
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 200, height: 200)
+        let leaf = Node()
+        leaf.frame = CGRect(x: 20, y: 20, width: 80, height: 80)
+        root.addChild(leaf)
+        tree.root = root
+
+        var calls: [String] = []
+        interactions.setPointer(root, route: .scrollChrome) { _, _, phase in
+            calls.append("chrome:\(phase)")
+            return .handled
+        }
+        interactions.setPointer(leaf) { _, _, phase in
+            calls.append("leaf:\(phase)")
+            return .handled
+        }
+
+        let dispatcher = EventDispatcher(
+            tree: tree,
+            interactions: interactions,
+            capture: PointerCapture(),
+            focusChain: FocusChain()
+        )
+        var traces: [InputDispatchTrace] = []
+        dispatcher.traceSink = { traces.append($0) }
+
+        dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(button: .left,
+                                                              x: 40,
+                                                              y: 40,
+                                                              clicks: 1)))
+
+        #expect(calls == ["chrome:capture"])
+        #expect(traces.first?.route?.role == .scrollChrome)
+        #expect(traces.first?.result == .handled)
+    }
+
     @Test("keyUp uses key-up handlers and does not replay key-down handlers")
     func keyUpHasDistinctDelivery() {
         let tree = NodeTree()
