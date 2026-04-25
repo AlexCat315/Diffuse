@@ -72,7 +72,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let capture = PointerCaptureHolder.current
 
         if let registry = InteractionRegistryHolder.current {
-            registry.setWheel(node) { event, _ in
+            registry.setWheel(node, route: .scroll) { event, _ in
                 // Wheel up (positive Y) scrolls content up — i.e. offset.y decreases.
                 let dx: Float = (axes == .horizontal || axes == .both) ? -event.x * step : 0
                 let dy: Float = (axes == .vertical   || axes == .both) ? -event.y * step : 0
@@ -96,7 +96,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 node.contentOffset = nextOffset
                 return consumePolicy.result(didScroll: nextOffset != previousOffset)
             }
-            registry.setPointer(node) { event, pointerPhase, eventPhase in
+            registry.setPointer(node, route: .scrollChrome) { event, pointerPhase, eventPhase in
                 switch pointerPhase {
                 case .down:
                     guard event.button == .left else { return .ignored }
@@ -134,7 +134,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     return .handled
                 }
             }
-            registry.setMotion(node) { event, _ in
+            registry.setMotion(node, route: .scrollChrome) { event, _ in
                 guard let state = node.attachments[_ScrollViewAttachmentKeys.dragState]
                         as? _ScrollViewDragState else {
                     return .ignored

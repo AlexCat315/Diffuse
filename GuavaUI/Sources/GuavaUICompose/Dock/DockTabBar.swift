@@ -201,7 +201,7 @@ struct _DockTabBarItemHost: _PrimitiveView {
         // primitive `_updateNode` runs before this node is attached to its
         // parent — the parent-chain walk would always return `nil` here.
 
-        registry.setKey(node) { event, _ in
+        registry.setKey(node, route: .dockDrag) { event, _ in
             // Esc cancels an in-progress drag (PointerCapture routes the
             // event here even when the node isn't focused — see
             // EventDispatcher.dispatchKey).
@@ -217,7 +217,7 @@ struct _DockTabBarItemHost: _PrimitiveView {
             return .ignored
         }
 
-        registry.setPointer(node) { event, phase, _ in
+        registry.setPointer(node, route: .dockDrag) { event, phase, _ in
             // Right-click forwards to the controller's context-menu hook
             // and is otherwise a complete no-op (no capture, no drag).
             if event.button == .right {
@@ -255,7 +255,7 @@ struct _DockTabBarItemHost: _PrimitiveView {
             }
         }
 
-        registry.setMotion(node) { event, _ in
+        registry.setMotion(node, route: .dockDrag) { event, _ in
             guard snapshot.tab.isDraggable else {
                 return .ignored
             }
@@ -452,7 +452,7 @@ struct _DockLeafDragHandleHost: _PrimitiveView {
             return tabs.first?.title ?? "Group"
         }()
 
-        registry.setKey(node) { event, _ in
+        registry.setKey(node, route: .dockDrag) { event, _ in
             if event.scancode == DOCK_KEY_SCANCODE_ESC {
                 let session = snapshot.controller.dragSession
                 if session.isActive {
@@ -465,7 +465,7 @@ struct _DockLeafDragHandleHost: _PrimitiveView {
             return .ignored
         }
 
-        registry.setPointer(node) { event, phase, _ in
+        registry.setPointer(node, route: .dockDrag) { event, phase, _ in
             switch phase {
             case .down:
                 node.attachments[stateKey] = TabPressState(downX: event.x,
@@ -486,7 +486,7 @@ struct _DockLeafDragHandleHost: _PrimitiveView {
             }
         }
 
-        registry.setMotion(node) { event, _ in
+        registry.setMotion(node, route: .dockDrag) { event, _ in
             guard PointerCaptureHolder.current?.target === node else {
                 return .ignored
             }

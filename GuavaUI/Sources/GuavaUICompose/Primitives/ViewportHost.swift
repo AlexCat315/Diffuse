@@ -60,7 +60,7 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
             : node.theme.colors.surfaceVariant)
 
         if let registry = InteractionRegistryHolder.current {
-            registry.setPointer(node) { event, phase, _ in
+            registry.setPointer(node, route: .viewport) { event, phase, _ in
                 if phase == .down {
                     FocusChainHolder.current?.focus(node)
                     snap.onInputEvent?(.mouseButtonDown(event))
@@ -69,27 +69,27 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
                 }
                 return .handled
             }
-            registry.setMotion(node) { event, _ in
+            registry.setMotion(node, route: .viewport) { event, _ in
                 snap.onInputEvent?(.mouseMotion(event))
                 return .handled
             }
-            registry.setWheel(node) { event, _ in
+            registry.setWheel(node, route: .viewport) { event, _ in
                 snap.onInputEvent?(.mouseWheel(event))
                 return .handled
             }
-            registry.setKey(node) { event, _ in
+            registry.setKey(node, route: .viewport) { event, _ in
                 snap.onInputEvent?(.keyDown(event))
                 return .handled
             }
-            registry.setKeyUp(node) { event, _ in
+            registry.setKeyUp(node, route: .viewport) { event, _ in
                 snap.onInputEvent?(.keyUp(event))
                 return .handled
             }
-            registry.setText(node) { text, _ in
+            registry.setText(node, route: .viewport) { text, _ in
                 snap.onInputEvent?(.textInput(text))
                 return .handled
             }
-            registry.setEditing(node) { event, _ in
+            registry.setEditing(node, route: .viewport) { event, _ in
                 snap.onInputEvent?(.textEditing(event))
                 return .handled
             }
