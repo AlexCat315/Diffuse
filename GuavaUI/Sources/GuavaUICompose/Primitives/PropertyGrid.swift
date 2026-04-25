@@ -170,7 +170,7 @@ private struct _StatefulPropertyGrid: View {
                     if section.isCollapsible {
                         Text(isCollapsed ? "▶" : "▼")
                             .font(.label)
-                            .foregroundColor(.onSurfaceMuted)
+                            .foregroundColor(.onSurfaceVariant)
                             .frame(width: 12)
                     }
                     Text(section.title)
@@ -180,15 +180,17 @@ private struct _StatefulPropertyGrid: View {
                     if grid.showsSectionRowCount {
                         Text("\(section.rows.count)")
                             .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
+                            .foregroundColor(.onSurfaceVariant)
                             .padding(horizontal: 6, vertical: 1)
-                            .background(.surfaceSunken)
+                            .background(.surfaceVariant)
                             .cornerRadius(3)
                     }
                 }
                 .padding(horizontal: 6, vertical: 4)
+                .frame(height: 28)
+                .flex()
             }
-            .buttonStyle(.ghost)
+            .buttonStyle(.plain)
             .frame(height: 28)
 
             if !isCollapsed {

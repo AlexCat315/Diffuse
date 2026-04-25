@@ -332,7 +332,7 @@ private struct _StatefulSelect<Value: Hashable>: View {
             .padding(horizontal: 10, vertical: 8)
             .background(.surface)
             .cornerRadius(6)
-            .border(Color(red: 58, green: 64, blue: 78), width: 1)
+            .border(.border, width: 1)
         }, content: {
             Menu(menuEntries,
                  width: select.width,

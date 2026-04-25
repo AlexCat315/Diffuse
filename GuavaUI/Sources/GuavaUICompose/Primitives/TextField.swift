@@ -415,7 +415,7 @@ public struct TextField: View {
         let renderBaseColor: Color =
             renderState.showsPlaceholder
                 ? resolvedPlaceholderColor
-                : (textColor ?? node.foregroundColor ?? env.defaultColor)
+                : (textColor ?? node.foregroundColor ?? theme.colors.onSurface)
         let renderColor = renderBaseColor.multipliedAlpha(node.opacity)
 
         let insetX = horizontalInset(theme: theme)
