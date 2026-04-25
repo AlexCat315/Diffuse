@@ -8,6 +8,13 @@
 /* Inspector */
 "No selection" = "未选择对象";
 "Select an entity in Hierarchy to inspect SceneRuntime components." = "请在层级面板中选择一个实体以查看 SceneRuntime 组件。";
+"Components" = "组件";
+"Sections" = "分组";
+"Expand all" = "全部展开";
+"Collapse all" = "全部折叠";
+"No properties" = "无属性";
+"On" = "开启";
+"Off" = "关闭";
 
 /* Hierarchy */
 "Search" = "搜索";

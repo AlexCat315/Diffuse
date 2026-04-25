@@ -335,6 +335,27 @@ public struct TransactionExecutor {
                     _ = scene.setComponent(SceneNameComponent(value: value), for: entity)
                 }
 
+            case let .setRigidBodyMotionType(entityID, value):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(RigidBody.self, for: entity, { $0.motionType = value }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "RigidBody")
+                }
+
+            case let .setRigidBodyMass(entityID, value):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(RigidBody.self, for: entity, { $0.mass = max(0, value) }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "RigidBody")
+                }
+
+            case let .setRigidBodyGravityScale(entityID, value):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(RigidBody.self, for: entity, { $0.gravityScale = value }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "RigidBody")
+                }
+
             case let .setRigidBodyAllowSleep(entityID, value):
                 let entity = try requireEntity(entityID, in: scene)
                 guard scene.updateComponent(RigidBody.self, for: entity, { $0.allowSleep = value }) else {
@@ -663,9 +684,12 @@ public struct TransactionExecutor {
                 continue
             case let .deleteEntity(entityID),
                  let .duplicateEntity(entityID),
-                  let .moveEntity(entityID, _, _),
+                 let .moveEntity(entityID, _, _),
                  let .setLocalTransform(entityID, _),
                  let .setSceneName(entityID, _),
+                 let .setRigidBodyMotionType(entityID, _),
+                 let .setRigidBodyMass(entityID, _),
+                 let .setRigidBodyGravityScale(entityID, _),
                  let .setRigidBodyAllowSleep(entityID, _),
                  let .setColliderTrigger(entityID, _),
                  let .setConstraintEnabled(entityID, _),
