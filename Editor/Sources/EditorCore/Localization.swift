@@ -8,10 +8,13 @@ public enum EditorLocalizationPreferences {
 ///
 /// Usage: `label: L("Name")`
 func L(_ key: String) -> String {
-    if let lproj = EditorLocalizationPreferences.language.lprojName,
-       let path = Bundle.module.path(forResource: lproj, ofType: "lproj"),
-       let bundle = Bundle(path: path) {
-        return bundle.localizedString(forKey: key, value: key, table: nil)
+    if let lproj = EditorLocalizationPreferences.language.lprojName {
+        for candidate in [lproj, lproj.lowercased()] {
+            if let path = Bundle.module.path(forResource: candidate, ofType: "lproj"),
+               let bundle = Bundle(path: path) {
+                return bundle.localizedString(forKey: key, value: key, table: nil)
+            }
+        }
     }
     return Bundle.module.localizedString(forKey: key, value: key, table: nil)
 }

@@ -15,6 +15,7 @@ struct ViewportPanel: View {
         StoreScope(app.store) { store in
             let surface = app.currentViewportSurfaceState()
             let stats = app.currentRenderStats()
+            let timing = app.currentFrameTiming()
             let entity = scene.entitySummary(id: store.state.selectedEntityID)
             let activeDrag = store.state.activeAssetDrag
             let gizmoMode = store.state.gizmoMode
@@ -57,6 +58,7 @@ struct ViewportPanel: View {
 
                     ViewportInfoBar(surface: surface,
                                     stats: stats,
+                                    timing: timing,
                                     entity: entity,
                                     gizmoMode: gizmoMode,
                                     gizmoSpace: gizmoSpace,
@@ -92,7 +94,7 @@ struct ViewportPanel: View {
                                     onSetCommandSelectBehavior: { behavior in
                                         store.dispatch(.setCommandSelectBehavior(behavior))
                                     })
-                        .absolutePosition(left: 10, top: 10, right: 10)
+                        .absolutePosition(left: 10, top: 10)
                 }
                 .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
             }
@@ -829,6 +831,7 @@ struct ViewportPanel: View {
 private struct ViewportInfoBar: View {
     let surface: ViewportSurfaceState
     let stats: RenderFrameStats
+    let timing: EditorFrameTiming
     let entity: EditorSceneEntitySummary?
     let gizmoMode: EditorGizmoMode
     let gizmoSpace: EditorGizmoSpace
@@ -846,17 +849,16 @@ private struct ViewportInfoBar: View {
     let onSetCommandSelectBehavior: (SelectionCommandBehavior) -> Void
 
     var body: some View {
-        let frameMs = Float(stats.cpuFrameTotalNS) / 1_000_000
-        let fps = frameMs > 0.001 ? 1_000 / frameMs : 0
-        Box(direction: .column, alignItems: .stretch, spacing: 4) {
+        let cpuMs = Float(stats.cpuFrameTotalNS) / 1_000_000
+        let fps = Float(timing.framesPerSecond)
+        let frameMs = Float(timing.frameMilliseconds)
+        Box(direction: .column, alignItems: .flexStart, spacing: 6) {
             Row(alignment: .center, spacing: 8) {
                 Text(surface.isValid
                      ? "\(surface.width) × \(surface.height)"
                      : "Waiting for first render packet")
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
-
-                Spacer(minLength: 0)
 
                 if let entity {
                     Text(entity.name)
@@ -865,6 +867,10 @@ private struct ViewportInfoBar: View {
                 }
 
                 Text(String(format: "FPS %.0f  %.2fms", fps, frameMs))
+                    .font(.mono)
+                    .foregroundColor(.onSurfaceMuted)
+
+                Text(String(format: "CPU %.2fms", cpuMs))
                     .font(.mono)
                     .foregroundColor(.onSurfaceMuted)
             }
@@ -878,8 +884,6 @@ private struct ViewportInfoBar: View {
                             current: gizmoMode, onSelect: onSelectGizmoMode)
                 GizmoButton(icon: .scale, tooltip: L("Scale"), target: .scale,
                             current: gizmoMode, onSelect: onSelectGizmoMode)
-
-                Spacer(minLength: 2)
 
                 ToggleChip(label: L("Local"), isActive: gizmoSpace == .local) {
                     onSelectGizmoSpace(.local)
@@ -898,16 +902,12 @@ private struct ViewportInfoBar: View {
                     onToggleScaleSnap(!scaleSnapEnabled)
                 }
 
-                Spacer(minLength: 0)
-
                 ToggleChip(label: L("Cmd-Sub"), isActive: cmdSelectBehavior == .subtract) {
                     onSetCommandSelectBehavior(.subtract)
                 }
                 ToggleChip(label: L("Cmd-Tog"), isActive: cmdSelectBehavior == .toggle) {
                     onSetCommandSelectBehavior(.toggle)
                 }
-
-                Spacer(minLength: 0)
 
                 ViewportIconToggle(icon: .lit, tooltip: L("Lit"), isActive: shadingMode == .lit) {
                     onSelectShadingMode(.lit)
@@ -921,7 +921,7 @@ private struct ViewportInfoBar: View {
                     .foregroundColor(.onSurfaceMuted)
             }
         }
-        .padding(8)
+        .padding(6)
         .background(.surfaceOverlay)
         .cornerRadius(2)
         .border(Color(r: 1, g: 1, b: 1, a: 0.08), width: 1)
@@ -940,8 +940,8 @@ private struct ToggleChip: View {
                     .font(.caption)
                     .foregroundColor(isActive ? .onAccent : .onSurface)
             }
-            .frame(height: 28, minWidth: 58)
-            .padding(horizontal: 8, vertical: 0)
+            .frame(height: 26, minWidth: 44)
+            .padding(horizontal: 6, vertical: 0)
             .background(isActive ? .accent : .surfaceSunken)
             .cornerRadius(4)
             .clipped()
@@ -997,7 +997,7 @@ private struct ViewportIconToggle: View {
                       renderingMode: .alphaMask)
                     .foregroundColor(isActive ? .onAccent : .onSurfaceVariant)
             }
-            .frame(width: 28, height: 28)
+            .frame(width: 26, height: 26)
             .background(isActive ? .accent : .surfaceSunken)
             .cornerRadius(4)
         }
