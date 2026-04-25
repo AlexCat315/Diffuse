@@ -110,6 +110,7 @@ public final class AppRuntime {
         self.imageAssets = ImageAssetRegistry(renderer: renderer)
         self.viewportTextures = ViewportTextureRegistry(renderer: renderer)
         self.host = SDL3PlatformHost(title: config.title)
+        self.host.setTargetFrameRate(config.targetFrameRate)
         self.graph = ViewGraph(tree: tree, recomposer: host.recomposer)
     }
 
@@ -190,6 +191,11 @@ public final class AppRuntime {
             },
             isOpen: { [weak self] windowID in
                 self?.isAuxiliaryWindowOpen(windowID) ?? false
+            }
+        )
+        displayHandle.installRuntimeControls(
+            setTargetFrameRate: { [weak self] framesPerSecond in
+                self?.host.setTargetFrameRate(framesPerSecond)
             }
         )
         onDisplayReady?(displayHandle)
