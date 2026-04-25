@@ -53,16 +53,15 @@ public final class RenderObject {
         refreshLayerClassification()
     }
 
-    /// Walk parents to the nearest layer-root ancestor (inclusive of self if
-    /// this is a layer root) and mark its cache invalid. Called from
-    /// `Node.markRenderDirty(reason:)` so any style/draw change forces the
-    /// owning layer to re-record on the next composite.
+    /// Walk parents and mark every layer-root cache on the path invalid.
+    /// Nested layer DrawLists are appended into their enclosing layer's cached
+    /// DrawList, so invalidating only the nearest layer would leave ancestors
+    /// free to reuse stale composite output.
     public func invalidateLayerChain() {
         var node: RenderObject? = self
         while let cur = node {
             if cur.isLayerRoot {
                 cur.cacheInvalid = true
-                return
             }
             node = cur.parent
         }

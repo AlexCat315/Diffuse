@@ -1292,6 +1292,11 @@ host.onFrame = { _ in
 
     do {
         let encoder = try backend.createCommandEncoder()
+        // Ensure MSAA target matches the current drawable size.
+        // The swapchain may report a different size than what was used to configure the surface.
+        if msaaColorTexture == nil || drawableW == 0 || drawableH == 0 {
+            try ensureDemoMSAATarget(width: drawableW, height: drawableH)
+        }
         let passColorView = msaaColorView ?? frame.view
         let passResolveView = msaaColorView == nil ? nil : frame.view
         let pass = try encoder.beginRenderPass(

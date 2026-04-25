@@ -27,6 +27,7 @@ public struct DefaultPanelStyle: PanelStyle {
 
             Box(direction: .column, alignItems: .stretch) {
                 configuration.content
+                    .flex()
             }
             .flex()
             .padding(EdgeInsets(top: t.spacing.md,

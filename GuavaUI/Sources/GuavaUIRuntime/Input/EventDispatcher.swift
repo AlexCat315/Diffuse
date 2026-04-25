@@ -37,6 +37,9 @@ public final class EventDispatcher {
     /// Callers (typically the platform host) should forward this to
     /// `Shell.setCursor(_:)`.
     public var cursorSink: ((SystemCursor) -> Void)?
+    /// Optional debug hook for tooling. It is invoked after each handler call
+    /// with the resolved route metadata and result.
+    public var traceSink: ((InputDispatchTrace) -> Void)?
     private var activeCursor: SystemCursor = .arrow
 
     /// Last known pointer position from `mouseMotion`. Used to hit-test wheel
@@ -68,8 +71,8 @@ public final class EventDispatcher {
         case .mouseButtonUp(let e):   dispatchPointerUp(e)
         case .mouseMotion(let e):     dispatchMotion(e)
         case .mouseWheel(let e):      dispatchWheel(e)
-        case .keyDown(let e),
-             .keyUp(let e):           dispatchKey(e)
+        case .keyDown(let e):         dispatchKey(e, phase: .down)
+        case .keyUp(let e):           dispatchKey(e, phase: .up)
         case .textEditing(let e):     dispatchTextEditing(e)
         case .textInput(let s):       dispatchText(s)
         default:
@@ -82,7 +85,19 @@ public final class EventDispatcher {
 
     private func dispatchPointerDown(_ event: MouseButtonEvent) {
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
+        lastCursor = point
+        if deliverGlobalRoutes(kind: .pointer(event, .down),
+                               role: .scrollChrome,
+                               minPriority: .chrome) == .handled {
+            return
+        }
         guard let hit = hitTest(point: point) else { return }
+        if deliverPriority(path: hit.path,
+                           kind: .pointer(event, .down),
+                           minPriority: .chrome,
+                           phase: .capture) == .handled {
+            return
+        }
         _ = deliver(path: hit.path, kind: .pointer(event, .down))
         // Auto-focus on click for focusable targets.
         if hit.node.isFocusable {
@@ -91,6 +106,7 @@ public final class EventDispatcher {
     }
 
     private func dispatchPointerUp(_ event: MouseButtonEvent) {
+        lastCursor = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         if let captured = capture.target {
             let path = pathFromRoot(to: captured)
             _ = deliver(path: path, kind: .pointer(event, .up))
@@ -119,6 +135,18 @@ public final class EventDispatcher {
     }
 
     private func dispatchWheel(_ event: MouseWheelEvent) {
+        var event = event
+        if let mouseX = event.mouseX, let mouseY = event.mouseY {
+            if mouseX == 0, mouseY == 0, let lastCursor {
+                event.mouseX = Float(lastCursor.x)
+                event.mouseY = Float(lastCursor.y)
+            } else {
+                lastCursor = CGPoint(x: CGFloat(mouseX), y: CGFloat(mouseY))
+            }
+        } else if let lastCursor {
+            event.mouseX = Float(lastCursor.x)
+            event.mouseY = Float(lastCursor.y)
+        }
         let hitPath = lastCursor.flatMap { cursor in
             hitTest(point: cursor)?.path
         }
@@ -144,6 +172,11 @@ public final class EventDispatcher {
            deliverWheel(path: focusedPath, event: event) == .handled {
             return
         }
+        if deliverGlobalRoutes(kind: .wheel(event),
+                               role: .scroll,
+                               minPriority: .normal) == .handled {
+            return
+        }
         guard let root = tree.root else { return }
         _ = deliverWheel(path: [root], event: event)
     }
@@ -160,19 +193,26 @@ public final class EventDispatcher {
 
     // MARK: - Key
 
-    private func dispatchKey(_ event: KeyEvent) {
+    private func dispatchKey(_ event: KeyEvent, phase: KeyPhase) {
+        let kind = EventKind.key(event, phase)
         // Pointer-capture intercept: while a node owns capture (typically a
         // drag in progress), give its key handler the first opportunity to
         // consume the event. Lets drags implement Esc-to-cancel without
         // also needing keyboard focus.
         if let captured = capture.target,
-           let keyHandler = interactions.handlers(for: captured).key,
-           keyHandler(event, .target) == .handled {
+           invoke(node: captured, kind: kind, phase: .target) == .handled {
             return
         }
-        guard let focused = focusChain.focused else { return }
-        let path = pathFromRoot(to: focused)
-        _ = deliver(path: path, kind: .key(event))
+        let focusedPath = focusChain.focused.map(pathFromRoot)
+        if let focusedPath,
+           deliverKeyPath(focusedPath, event: event, phase: phase) == .handled {
+            return
+        }
+        let excluded = Set((focusedPath ?? []).map(ObjectIdentifier.init))
+        _ = deliverGlobalRoutes(kind: kind,
+                                role: .shortcut,
+                                minPriority: .system,
+                                excluding: excluded)
     }
 
     private func dispatchText(_ text: String) {
@@ -193,9 +233,15 @@ public final class EventDispatcher {
         case pointer(MouseButtonEvent, PointerPhase)
         case motion(MouseMotionEvent)
         case wheel(MouseWheelEvent)
-        case key(KeyEvent)
+        case key(KeyEvent, KeyPhase)
         case editing(TextEditingEvent)
         case text(String)
+    }
+
+    private struct RouteCandidate {
+        var node: Node
+        var route: InputHandlerRoute
+        var depth: Int
     }
 
     private func deliver(path: [Node], kind: EventKind) -> EventResult {
@@ -237,6 +283,111 @@ public final class EventDispatcher {
         return .ignored
     }
 
+    private func deliverPriority(path: [Node],
+                                 kind: EventKind,
+                                 minPriority: InputRoutingPriority,
+                                 phase: EventPhase) -> EventResult {
+        for candidate in routeCandidates(in: path,
+                                         kind: kind,
+                                         minPriority: minPriority) {
+            if invoke(node: candidate.node, kind: kind, phase: phase) == .handled {
+                return .handled
+            }
+        }
+        return .ignored
+    }
+
+    private func deliverGlobalRoutes(kind: EventKind,
+                                     role: InputHandlerRole,
+                                     minPriority: InputRoutingPriority,
+                                     excluding excludedNodes: Set<ObjectIdentifier> = []) -> EventResult {
+        guard let root = tree.root else { return .ignored }
+        for candidate in routeCandidates(rootedAt: root,
+                                         kind: kind,
+                                         role: role,
+                                         minPriority: minPriority)
+            where !excludedNodes.contains(ObjectIdentifier(candidate.node)) {
+            let phase: EventPhase = (role == .shortcut || role == .scrollChrome) ? .capture : .target
+            if invoke(node: candidate.node, kind: kind, phase: phase) == .handled {
+                return .handled
+            }
+        }
+        return .ignored
+    }
+
+    private func routeCandidates(in path: [Node],
+                                 kind: EventKind,
+                                 minPriority: InputRoutingPriority = .background) -> [RouteCandidate] {
+        path.enumerated().compactMap { index, node in
+            let handlers = interactions.handlers(for: node)
+            guard let route = route(in: handlers, kind: kind),
+                  route.priority >= minPriority else {
+                return nil
+            }
+            return RouteCandidate(node: node, route: route, depth: index)
+        }
+        .sorted(by: routeCandidateSort)
+    }
+
+    private func routeCandidates(rootedAt root: Node,
+                                 kind: EventKind,
+                                 role: InputHandlerRole,
+                                 minPriority: InputRoutingPriority = .background) -> [RouteCandidate] {
+        var out: [RouteCandidate] = []
+        collectRouteCandidates(node: root,
+                               depth: 0,
+                               kind: kind,
+                               role: role,
+                               minPriority: minPriority,
+                               into: &out)
+        return out.sorted(by: routeCandidateSort)
+    }
+
+    private func collectRouteCandidates(node: Node,
+                                        depth: Int,
+                                        kind: EventKind,
+                                        role: InputHandlerRole,
+                                        minPriority: InputRoutingPriority,
+                                        into out: inout [RouteCandidate]) {
+        let handlers = interactions.handlers(for: node)
+        if let route = route(in: handlers, kind: kind),
+           route.role == role,
+           route.priority >= minPriority {
+            out.append(RouteCandidate(node: node, route: route, depth: depth))
+        }
+        for child in node.children {
+            collectRouteCandidates(node: child,
+                                   depth: depth + 1,
+                                   kind: kind,
+                                   role: role,
+                                   minPriority: minPriority,
+                                   into: &out)
+        }
+    }
+
+    private func routeCandidateSort(_ lhs: RouteCandidate,
+                                    _ rhs: RouteCandidate) -> Bool {
+        if lhs.route.priority != rhs.route.priority {
+            return lhs.route.priority > rhs.route.priority
+        }
+        return lhs.depth > rhs.depth
+    }
+
+    private func deliverKeyPath(_ path: [Node],
+                                event: KeyEvent,
+                                phase: KeyPhase) -> EventResult {
+        let kind = EventKind.key(event, phase)
+        for candidate in routeCandidates(in: path,
+                                         kind: kind,
+                                         minPriority: .system)
+            where candidate.route.role == .shortcut {
+            if invoke(node: candidate.node, kind: kind, phase: .capture) == .handled {
+                return .handled
+            }
+        }
+        return deliver(path: path, kind: kind)
+    }
+
     private func preferredFocusedWheelPath(from focusedPath: [Node]?) -> [Node]? {
         guard let focusedPath,
               let focused = focusedPath.last,
@@ -255,14 +406,21 @@ public final class EventDispatcher {
 
     private func invoke(node: Node, kind: EventKind, phase: EventPhase) -> EventResult {
         let handlers = interactions.handlers(for: node)
-        switch kind {
-        case .pointer(let e, let pp): return handlers.pointer?(e, pp, phase) ?? .ignored
-        case .motion(let e):  return handlers.motion?(e, phase)  ?? .ignored
-        case .wheel(let e):   return handlers.wheel?(e, phase)   ?? .ignored
-        case .key(let e):     return handlers.key?(e, phase)     ?? .ignored
-        case .editing(let e): return handlers.editing?(e, phase) ?? .ignored
-        case .text(let s):    return handlers.text?(s, phase)    ?? .ignored
+        let result: EventResult = switch kind {
+        case .pointer(let e, let pp): handlers.pointer?(e, pp, phase) ?? .ignored
+        case .motion(let e):  handlers.motion?(e, phase)  ?? .ignored
+        case .wheel(let e):   handlers.wheel?(e, phase)   ?? .ignored
+        case .key(let e, let keyPhase):
+            keyHandler(in: handlers, phase: keyPhase)?(e, phase) ?? .ignored
+        case .editing(let e): handlers.editing?(e, phase) ?? .ignored
+        case .text(let s):    handlers.text?(s, phase)    ?? .ignored
         }
+        traceSink?(InputDispatchTrace(kind: dispatchKind(for: kind),
+                                      nodeID: node.id,
+                                      phase: phase,
+                                      route: route(in: handlers, kind: kind),
+                                      result: result))
+        return result
     }
 
     // MARK: - Helpers
@@ -276,6 +434,49 @@ public final class EventDispatcher {
             cur = n.parent
         }
         return out.reversed()
+    }
+
+    private func keyHandler(in handlers: InteractionRegistry.Handlers,
+                            phase: KeyPhase) -> ((KeyEvent, EventPhase) -> EventResult)? {
+        switch phase {
+        case .down: return handlers.key
+        case .up: return handlers.keyUp
+        }
+    }
+
+    private func route(in handlers: InteractionRegistry.Handlers,
+                       kind: EventKind) -> InputHandlerRoute? {
+        switch kind {
+        case .pointer: return handlers.pointerRoute
+        case .motion: return handlers.motionRoute
+        case .wheel: return handlers.wheelRoute
+        case .key(_, let phase):
+            switch phase {
+            case .down: return handlers.keyRoute
+            case .up: return handlers.keyUpRoute
+            }
+        case .editing: return handlers.editingRoute
+        case .text: return handlers.textRoute
+        }
+    }
+
+    private func dispatchKind(for kind: EventKind) -> InputDispatchKind {
+        switch kind {
+        case .pointer(_, let phase):
+            switch phase {
+            case .down: return .pointerDown
+            case .up: return .pointerUp
+            }
+        case .motion: return .motion
+        case .wheel: return .wheel
+        case .key(_, let phase):
+            switch phase {
+            case .down: return .keyDown
+            case .up: return .keyUp
+            }
+        case .editing: return .editing
+        case .text: return .text
+        }
     }
 
     private func updateHoverPath(to newPath: [Node]) {

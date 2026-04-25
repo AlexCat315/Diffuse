@@ -151,7 +151,9 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
         let app = self.app
         let capture = PointerCaptureHolder.current
 
-        registry.setPointer(node) { event, phase, _ in
+        registry.setPointer(node, route: InputHandlerRoute(role: .drag,
+                                                           priority: .capture,
+                                                           debugName: "asset.drag")) { event, phase, _ in
             guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
@@ -166,14 +168,18 @@ private struct AssetDragSource<Content: View>: _PrimitiveView {
             }
         }
 
-        registry.setMotion(node) { event, _ in
+        registry.setMotion(node, route: InputHandlerRoute(role: .drag,
+                                                          priority: .capture,
+                                                          debugName: "asset.drag")) { event, _ in
             if app.store.state.activeAssetDrag != nil {
                 app.store.dispatch(.updateAssetDragCursor(x: event.x, y: event.y))
             }
             return .handled
         }
 
-        registry.setKey(node) { event, _ in
+        registry.setKey(node, route: InputHandlerRoute(role: .drag,
+                                                       priority: .capture,
+                                                       debugName: "asset.drag")) { event, _ in
             // Esc cancels an in-progress drag without spawning.
             if app.store.state.activeAssetDrag != nil,
                event.keycode == 0x1B /* SDLK_ESCAPE */ {

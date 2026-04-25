@@ -568,7 +568,8 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
     private func collectPointerNodes(from node: Node,
                                      registry: InteractionRegistry,
                                      into out: inout [Node]) {
-        if registry.handlers(for: node).pointer != nil {
+        let handlers = registry.handlers(for: node)
+        if handlers.pointer != nil, handlers.wheel == nil {
             out.append(node)
         }
         for child in node.children {

@@ -63,6 +63,6 @@ struct PanelHost: _PrimitiveView {
             isActive: isActive,
             theme: node.theme
         )
-        return [style.makeBody(cfg)]
+        return [AnyView(_erased: style.makeBody(cfg)).flex()]
     }
 }

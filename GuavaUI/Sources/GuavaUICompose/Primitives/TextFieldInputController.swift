@@ -13,7 +13,7 @@ extension TextField {
         }
 
         func install(on node: Node, registry: InteractionRegistry) {
-            registry.setEditing(node) { event, _ in
+            registry.setEditing(node, route: .textInput) { event, _ in
                 guard !textField.readOnly else { return .handled }
                 state.compositionText = event.text
                 let compositionCount = event.text.count
@@ -25,16 +25,16 @@ extension TextField {
                 textField.recordCaretActivity(state)
                 return .handled
             }
-            registry.setText(node) { incoming, _ in
+            registry.setText(node, route: .textInput) { incoming, _ in
                 guard !textField.readOnly else { return .handled }
                 textField.insertReplacingSelection(incoming, state: state)
                 notifyEditingChange(on: node)
                 return .handled
             }
-            registry.setKey(node) { event, _ in
+            registry.setKey(node, route: .textInput) { event, _ in
                 textField.handleKey(event, state: state, node: node) ? .handled : .ignored
             }
-            registry.setPointer(node) { event, phase, _ in
+            registry.setPointer(node, route: .textInput) { event, phase, _ in
                 switch phase {
                 case .down:
                     if textField.clearable,
@@ -52,7 +52,7 @@ extension TextField {
                     return .handled
                 }
             }
-            registry.setMotion(node) { event, _ in
+            registry.setMotion(node, route: .textInput) { event, _ in
                 guard state.isDragging else { return .ignored }
                 let target = textField.characterIndex(atWindowPoint: CGPoint(x: CGFloat(event.x),
                                                                              y: CGFloat(event.y)),
@@ -64,7 +64,7 @@ extension TextField {
                 state.cursorIndex = target
                 return .handled
             }
-            registry.setWheel(node) { event, _ in
+            registry.setWheel(node, route: .textInput) { event, _ in
                 textField.refreshScrollableMetrics(state: state, node: node)
                 guard state.maxScrollY > 0 else { return .ignored }
                 let previousOffset = state.scrollOffsetY
