@@ -86,7 +86,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 // Clamp to [0, max(0, contentSize - viewSize)] using the full
                 // content subtree. The direct wrapper can be flex-clamped to
                 // the viewport while its descendants still overflow.
-                let viewSize = node.frame.size
+                let viewSize = visibleViewportRect(for: node).size
                 let contentSize = scrollableContentSize(for: node)
                 if contentSize.width > 0 || contentSize.height > 0 {
                     nextOffset.x = max(0, min(nextOffset.x, max(0, contentSize.width  - viewSize.width)))
@@ -167,8 +167,9 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let thumbColor = theme.colors.onSurfaceMuted
         node.overlayDraw = { [weak node] list, origin in
             guard let node else { return }
-            let viewW = Float(node.frame.size.width)
-            let viewH = Float(node.frame.size.height)
+            let viewport = visibleViewportRect(for: node)
+            let viewW = Float(viewport.width)
+            let viewH = Float(viewport.height)
             let contentSize = scrollableContentSize(for: node)
             let contentW = Float(contentSize.width)
             let contentH = Float(contentSize.height)
@@ -178,8 +179,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
 
             // Vertical bar.
             if (axes == .vertical || axes == .both), contentH > viewH, viewH > 0 {
-                let trackX = Float(origin.x) + viewW - trackThickness - trackInset
-                let trackY = Float(origin.y) + trackInset
+                let trackX = Float(origin.x + viewport.maxX) - trackThickness - trackInset
+                let trackY = Float(origin.y + viewport.minY) + trackInset
                 let trackH = viewH - 2 * trackInset
                 list.addRoundedRect(
                     UIRect(x: trackX, y: trackY,
@@ -201,8 +202,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
 
             // Horizontal bar.
             if (axes == .horizontal || axes == .both), contentW > viewW, viewW > 0 {
-                let trackY = Float(origin.y) + viewH - trackThickness - trackInset
-                let trackX = Float(origin.x) + trackInset
+                let trackY = Float(origin.y + viewport.maxY) - trackThickness - trackInset
+                let trackX = Float(origin.x + viewport.minX) + trackInset
                 let trackW = viewW - 2 * trackInset
                 list.addRoundedRect(
                     UIRect(x: trackX, y: trackY,
@@ -227,6 +228,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     public func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
     public func _updateLayout(_ layout: LayoutNode) {
         layout.overflow = .hidden
+        layout.minWidth = 0
+        layout.minHeight = 0
     }
 
     public var _children: [any View] { [content] }
@@ -241,6 +244,36 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         }
         return CGPoint(x: CGFloat(x) - origin.x,
                        y: CGFloat(y) - origin.y)
+    }
+
+    private func visibleViewportRect(for node: Node) -> CGRect {
+        let nodeOrigin = absoluteOrigin(of: node)
+        var visible = CGRect(origin: nodeOrigin, size: node.frame.size)
+        var current = node.parent
+
+        while let ancestor = current {
+            if ancestor.clipsToBounds {
+                let ancestorOrigin = absoluteOrigin(of: ancestor)
+                let ancestorFrame = CGRect(origin: ancestorOrigin,
+                                           size: ancestor.frame.size)
+                visible = visible.intersection(ancestorFrame)
+                if visible.isNull { return .zero }
+            }
+            current = ancestor.parent
+        }
+
+        return visible.offsetBy(dx: -nodeOrigin.x, dy: -nodeOrigin.y)
+    }
+
+    private func absoluteOrigin(of node: Node) -> CGPoint {
+        var origin = node.frame.origin
+        var current = node.parent
+        while let parent = current {
+            origin.x += parent.frame.origin.x - parent.contentOffset.x
+            origin.y += parent.frame.origin.y - parent.contentOffset.y
+            current = parent.parent
+        }
+        return origin
     }
 
     private func scrollableContentSize(for node: Node) -> CGSize {
@@ -323,8 +356,9 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                    axes: Axis,
                                    trackThickness: Float,
                                    trackInset: Float) -> _ScrollViewScrollbarGeometry {
-        let viewW = node.frame.size.width
-        let viewH = node.frame.size.height
+        let viewport = visibleViewportRect(for: node)
+        let viewW = viewport.width
+        let viewH = viewport.height
         let contentSize = scrollableContentSize(for: node)
         let contentW = contentSize.width
         let contentH = contentSize.height
@@ -339,8 +373,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         var horizontalThumb: CGRect?
 
         if (axes == .vertical || axes == .both), maxOffsetY > 0, viewH > 0, contentH > 0 {
-            let track = CGRect(x: viewW - thickness - inset,
-                               y: inset,
+            let track = CGRect(x: viewport.maxX - thickness - inset,
+                               y: viewport.minY + inset,
                                width: thickness,
                                height: max(0, viewH - 2 * inset))
             let thumbH = max(thickness * 2, track.height * (viewH / contentH))
@@ -353,8 +387,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         }
 
         if (axes == .horizontal || axes == .both), maxOffsetX > 0, viewW > 0, contentW > 0 {
-            let track = CGRect(x: inset,
-                               y: viewH - thickness - inset,
+            let track = CGRect(x: viewport.minX + inset,
+                               y: viewport.maxY - thickness - inset,
                                width: max(0, viewW - 2 * inset),
                                height: thickness)
             let thumbW = max(thickness * 2, track.width * (viewW / contentW))
