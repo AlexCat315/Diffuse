@@ -80,7 +80,9 @@ public enum InputBridge {
         case "wheel":
             return .mouseWheel(MouseWheelEvent(
                 x: payload.deltaX ?? 0,
-                y: payload.deltaY ?? 0
+                y: payload.deltaY ?? 0,
+                mouseX: payload.x,
+                mouseY: payload.y
             ))
         case "text":
             guard let text = payload.text, !text.isEmpty else { return nil }
