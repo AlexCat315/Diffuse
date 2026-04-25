@@ -274,4 +274,88 @@ struct EventDispatcherTests {
         #expect(downs == 1)
         #expect(ups == 1)
     }
+
+    @Test("Global shortcut route receives key when focus chain ignores it")
+    func globalShortcutFallbackReceivesKey() {
+        let tree = NodeTree()
+        let interactions = InteractionRegistry()
+        let focus = FocusChain()
+
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 200, height: 200)
+        let focused = Node()
+        focused.frame = CGRect(x: 0, y: 0, width: 40, height: 40)
+        focused.isFocusable = true
+        let global = Node()
+        global.frame = CGRect(x: 50, y: 0, width: 40, height: 40)
+        root.addChild(focused)
+        root.addChild(global)
+        tree.root = root
+        focus.focus(focused)
+
+        var calls: [String] = []
+        interactions.setKey(focused) { _, _ in
+            calls.append("focused")
+            return .ignored
+        }
+        interactions.setKey(global, route: .shortcut) { _, phase in
+            calls.append("shortcut:\(phase)")
+            return .handled
+        }
+
+        let dispatcher = EventDispatcher(
+            tree: tree,
+            interactions: interactions,
+            capture: PointerCapture(),
+            focusChain: focus
+        )
+        dispatcher.dispatch(.keyDown(KeyEvent(scancode: 42,
+                                              keycode: 0,
+                                              modifiers: [],
+                                              isRepeat: false)))
+
+        #expect(calls == ["focused", "shortcut:capture"])
+    }
+
+    @Test("Focused key handler wins before global shortcut fallback")
+    func focusedKeyHandlerWinsBeforeGlobalShortcut() {
+        let tree = NodeTree()
+        let interactions = InteractionRegistry()
+        let focus = FocusChain()
+
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 200, height: 200)
+        let focused = Node()
+        focused.frame = CGRect(x: 0, y: 0, width: 40, height: 40)
+        focused.isFocusable = true
+        let global = Node()
+        global.frame = CGRect(x: 50, y: 0, width: 40, height: 40)
+        root.addChild(focused)
+        root.addChild(global)
+        tree.root = root
+        focus.focus(focused)
+
+        var calls: [String] = []
+        interactions.setKey(focused) { _, _ in
+            calls.append("focused")
+            return .handled
+        }
+        interactions.setKey(global, route: .shortcut) { _, _ in
+            calls.append("shortcut")
+            return .handled
+        }
+
+        let dispatcher = EventDispatcher(
+            tree: tree,
+            interactions: interactions,
+            capture: PointerCapture(),
+            focusChain: focus
+        )
+        dispatcher.dispatch(.keyDown(KeyEvent(scancode: 42,
+                                              keycode: 0,
+                                              modifiers: [],
+                                              isRepeat: false)))
+
+        #expect(calls == ["focused"])
+    }
 }
