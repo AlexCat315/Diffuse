@@ -116,11 +116,11 @@ public struct MouseButtonEvent: Sendable {
 }
 
 public struct MouseWheelEvent: Sendable {
-    /// Horizontal wheel delta. Positive/negative sign follows the platform
-    /// shell's normalized convention.
+    /// Horizontal wheel delta. Positive/negative sign preserves the platform
+    /// event source, including any OS or driver scroll-direction preference.
     public var x: Float
-    /// Vertical wheel delta. Positive/negative sign follows the platform
-    /// shell's normalized convention.
+    /// Vertical wheel delta. Positive/negative sign preserves the platform
+    /// event source, including any OS or driver scroll-direction preference.
     public var y: Float
     /// Optional cursor position in window-local logical coordinates at the
     /// moment the wheel event was produced.
