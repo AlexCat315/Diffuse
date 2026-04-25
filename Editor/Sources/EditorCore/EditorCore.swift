@@ -38,6 +38,9 @@ public final class EditorApplication {
     private var openSettingsWindowHandler: (() -> Void)?
     private var displayInvalidationHandler: (() -> Void)?
     private var targetFrameRateHandler: ((Double?) -> Void)?
+    private var frameTimingAccumulator: Double = 0
+    private var frameTimingCount: Int = 0
+    private var frameTiming = EditorFrameTiming()
 
     public init(projectDirectory: String,
                 backendConfig: WGPUDeviceConfig? = nil,
@@ -92,6 +95,7 @@ public final class EditorApplication {
     }
 
     public func tick(deltaTime: Double) {
+        let didUpdateFrameTiming = recordFrameTiming(deltaTime)
         let inputEvents = pendingViewportEvents
         pendingViewportEvents.removeAll(keepingCapacity: true)
         inputState.process(inputEvents)
@@ -107,6 +111,8 @@ public final class EditorApplication {
         let surface = engine.currentViewportSurfaceState()
         if surface != lastViewportSurfaceState {
             lastViewportSurfaceState = surface
+            store.dispatch(.viewportSurfaceUpdated)
+        } else if didUpdateFrameTiming {
             store.dispatch(.viewportSurfaceUpdated)
         }
     }
@@ -238,6 +244,10 @@ public final class EditorApplication {
 
     public func currentViewportSurfaceState() -> ViewportSurfaceState {
         engine.currentViewportSurfaceState()
+    }
+
+    public func currentFrameTiming() -> EditorFrameTiming {
+        frameTiming
     }
 
     public func currentSelectedEntityTranslation() -> SIMD3<Float>? {
@@ -453,5 +463,30 @@ public final class EditorApplication {
         guard let rawID else { return nil }
         return EntityID(index: UInt32(rawID & 0xFFFF_FFFF),
                         generation: UInt32(rawID >> 32))
+    }
+
+    private func recordFrameTiming(_ deltaTime: Double) -> Bool {
+        guard deltaTime.isFinite, deltaTime > 0 else { return false }
+        frameTimingAccumulator += deltaTime
+        frameTimingCount += 1
+        guard frameTimingAccumulator >= 0.25 else { return false }
+
+        let fps = Double(frameTimingCount) / frameTimingAccumulator
+        let frameMs = (frameTimingAccumulator / Double(frameTimingCount)) * 1_000
+        frameTiming = EditorFrameTiming(framesPerSecond: fps, frameMilliseconds: frameMs)
+        frameTimingAccumulator = 0
+        frameTimingCount = 0
+        return true
+    }
+}
+
+public struct EditorFrameTiming: Sendable, Equatable {
+    public var framesPerSecond: Double
+    public var frameMilliseconds: Double
+
+    public init(framesPerSecond: Double = 0,
+                frameMilliseconds: Double = 0) {
+        self.framesPerSecond = framesPerSecond
+        self.frameMilliseconds = frameMilliseconds
     }
 }

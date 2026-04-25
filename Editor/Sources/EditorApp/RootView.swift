@@ -110,6 +110,7 @@ struct EditorRootView: View {
                                 aiStatusMessage: store.state.aiStatusMessage)
             }
             .appearance(store.state.themeMode == .dark ? .dark : .light)
+            .background(.background)
             .flex()
         }
     }
@@ -826,7 +827,6 @@ enum EditorRootViewFactory {
         let assetsTab = DockTab(userKey: "assets", title: localizedPanelTitle(for: "assets"))
         let intentTab = DockTab(userKey: "intent-input", title: localizedPanelTitle(for: "intent-input"))
         let confirmationTab = DockTab(userKey: "confirmation-host", title: localizedPanelTitle(for: "confirmation-host"))
-        let settingsTab = DockTab(userKey: "settings", title: localizedPanelTitle(for: "settings"))
 
         let hierarchyLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
@@ -845,7 +845,7 @@ enum EditorRootViewFactory {
         )
         let bottomLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
-            tabs: [assetsTab, consoleTab, intentTab, confirmationTab, settingsTab],
+            tabs: [assetsTab, consoleTab, intentTab, confirmationTab],
             activeTabID: defaultBottomTabID(for: preset,
                                             assetsTab: assetsTab,
                                             consoleTab: consoleTab,
@@ -885,7 +885,6 @@ enum EditorRootViewFactory {
             "assets": .bottomPanel,
             "intent-input": .bottomPanel,
             "confirmation-host": .bottomPanel,
-            "settings": .bottomPanel,
         ]
         controller.onAllowDrop = { [regionByKey] request in
             guard case .splitEdge(let targetID, let edge) = request.target else {
@@ -1045,7 +1044,7 @@ enum EditorRootViewFactory {
         case .empty:
             return nil
         case .tabs(let id, let tabs, _):
-            let bottomKeys: Set<String> = ["assets", "console", "intent-input", "confirmation-host", "settings"]
+            let bottomKeys: Set<String> = ["assets", "console", "intent-input", "confirmation-host"]
             return tabs.contains(where: { bottomKeys.contains($0.userKey) }) ? id : nil
         case .split(_, _, _, let first, let second):
             return findBottomLeaf(in: second) ?? findBottomLeaf(in: first)
@@ -1142,11 +1141,6 @@ enum EditorRootViewFactory {
                             title: localizedPanelTitle(for: "confirmation-host"),
                             preferredRegion: .bottomPanel) {
                 ConfirmationHostPanel(app: app)
-            },
-            PanelDescriptor(id: "settings",
-                            title: localizedPanelTitle(for: "settings"),
-                            preferredRegion: .bottomPanel) {
-                SettingsPanel(app: app)
             },
         ])
     }
@@ -1260,6 +1254,9 @@ enum EditorRootViewFactory {
             let decoder = JSONDecoder()
             var snapshot = try decoder.decode(DockLayoutSnapshot.self, from: data)
             snapshot.root = sanitizeDockLayout(snapshot.root)
+            guard !isEmptyDockLayout(snapshot.root) else { return nil }
+            snapshot.satellites = sanitizeSatellites(snapshot.satellites)
+            snapshot.satelliteOrder = snapshot.satelliteOrder.filter { snapshot.satellites[$0] != nil }
             let controller = DockController(root: snapshot.root)
             controller.load(snapshot)
             return controller
@@ -1279,6 +1276,9 @@ enum EditorRootViewFactory {
             let decoder = JSONDecoder()
             var snapshot = try decoder.decode(DockLayoutSnapshot.self, from: data)
             snapshot.root = sanitizeDockLayout(snapshot.root)
+            guard !isEmptyDockLayout(snapshot.root) else { return nil }
+            snapshot.satellites = sanitizeSatellites(snapshot.satellites)
+            snapshot.satelliteOrder = snapshot.satelliteOrder.filter { snapshot.satellites[$0] != nil }
             let controller = DockController(root: snapshot.root)
             controller.load(snapshot)
             return controller
@@ -1290,16 +1290,42 @@ enum EditorRootViewFactory {
 
     private static func sanitizeDockLayout(_ node: DockLayoutNode) -> DockLayoutNode {
         switch node {
-        case .empty, .tabs:
+        case .empty:
             return node
+        case .tabs(let id, let tabs, let active):
+            let filtered = tabs.filter { $0.userKey != "settings" }
+            guard !filtered.isEmpty else { return .empty(id: id) }
+            let nextActive = active.flatMap { activeID in
+                filtered.contains(where: { $0.id == activeID }) ? activeID : nil
+            } ?? filtered.first?.id
+            return .tabs(id: id, tabs: filtered, activeTabID: nextActive)
         case .split(let id, let axis, let fraction, let first, let second):
             let clamped = max(0.05, min(0.95, fraction))
+            let sanitizedFirst = sanitizeDockLayout(first)
+            let sanitizedSecond = sanitizeDockLayout(second)
+            if case .empty = sanitizedFirst { return sanitizedSecond }
+            if case .empty = sanitizedSecond { return sanitizedFirst }
             return .split(id: id,
                           axis: axis,
                           fraction: clamped,
-                          first: sanitizeDockLayout(first),
-                          second: sanitizeDockLayout(second))
+                          first: sanitizedFirst,
+                          second: sanitizedSecond)
         }
+    }
+
+    private static func sanitizeSatellites(_ satellites: [DockNodeID: DockLayoutNode]) -> [DockNodeID: DockLayoutNode] {
+        satellites.compactMapValues { node in
+            let sanitized = sanitizeDockLayout(node)
+            if case .empty = sanitized {
+                return nil
+            }
+            return sanitized
+        }
+    }
+
+    private static func isEmptyDockLayout(_ node: DockLayoutNode) -> Bool {
+        if case .empty = node { return true }
+        return false
     }
 
     static func saveShellState(mode: EditorWorkspaceMode,
