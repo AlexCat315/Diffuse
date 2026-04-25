@@ -49,7 +49,7 @@ private func runEditor() throws {
                    display.isWindowOpen(existing) {
                     return
                 }
-                settingsWindowID = display.openWindow(title: "Settings",
+                settingsWindowID = display.openWindow(title: L("Settings"),
                                                       width: 360,
                                                       height: 420) {
                     EditorSettingsWindowRoot(app: app)
