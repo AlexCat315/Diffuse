@@ -15,6 +15,7 @@ struct EditorRootView: View {
         StoreScope(app.store) { store in
             let _: Void = {
                 EditorLocalizationPreferences.language = store.state.language
+                EditorRootViewFactory.localizeDockTitles(in: controller)
             }()
             let setPlaybackState: (PlaybackState) -> Void = { next in
                 if store.state.playbackState != next {
@@ -183,32 +184,32 @@ private struct EditorMenuBar: View {
                 .foregroundColor(.onSurface)
                 .padding(horizontal: 10, vertical: 6)
 
-            EditorMenuItem(title: "File",
+            EditorMenuItem(title: L("File"),
                            menuWidth: 220,
                            entries: fileEntries,
                            onCommand: onCommand)
                 .id("editor-menu-file")
-            EditorMenuItem(title: "Edit",
+            EditorMenuItem(title: L("Edit"),
                            menuWidth: 200,
                            entries: editEntries,
                            onCommand: onCommand)
                 .id("editor-menu-edit")
-            EditorMenuItem(title: "Window",
+            EditorMenuItem(title: L("Window"),
                            menuWidth: 240,
                            entries: windowEntries,
                            onCommand: onCommand)
                 .id("editor-menu-window")
-            EditorMenuItem(title: "Tools",
+            EditorMenuItem(title: L("Tools"),
                            menuWidth: 200,
                            entries: toolsEntries,
                            onCommand: onCommand)
                 .id("editor-menu-tools")
-            EditorMenuItem(title: "Build",
+            EditorMenuItem(title: L("Build"),
                            menuWidth: 200,
                            entries: buildEntries,
                            onCommand: onCommand)
                 .id("editor-menu-build")
-            EditorMenuItem(title: "Help",
+            EditorMenuItem(title: L("Help"),
                            menuWidth: 220,
                            entries: helpEntries,
                            onCommand: onCommand)
@@ -227,20 +228,20 @@ private struct EditorMenuBar: View {
 
     private var fileEntries: [EditorMenuEntry] {
         [
-            .item("new-scene", "New Scene", "⌘N", .newScene),
-            .item("open-scene", "Open Scene...", "⌘O", .openScene),
-            .item("save-scene", "Save Scene", "⌘S", .saveScene),
+            .item("new-scene", L("New Scene"), "⌘N", .newScene),
+            .item("open-scene", L("Open Scene..."), "⌘O", .openScene),
+            .item("save-scene", L("Save Scene"), "⌘S", .saveScene),
             .separator("file-sep-1"),
-            .item("import-assets", "Import Assets...", nil, .importAssets),
+            .item("import-assets", L("Import Assets..."), nil, .importAssets),
         ]
     }
 
     private var editEntries: [EditorMenuEntry] {
         [
-            .item("undo", "Undo", "⌘Z", .undo),
-            .item("redo", "Redo", "⇧⌘Z", .redo),
+            .item("undo", L("Undo"), "⌘Z", .undo),
+            .item("redo", L("Redo"), "⇧⌘Z", .redo),
             .separator("edit-sep-1"),
-            .item("settings", "Settings", "⌘,", .openSettings),
+            .item("settings", L("Settings"), "⌘,", .openSettings),
         ]
     }
 
@@ -257,7 +258,7 @@ private struct EditorMenuBar: View {
             .item("preset-animation-default", presetTitle(.animationDefault), nil, .setLayoutPreset(.animationDefault)),
             .item("preset-animation-seq", presetTitle(.animationSequencer), nil, .setLayoutPreset(.animationSequencer)),
             .separator("window-sep-2"),
-            .item("reset-layout", "Reset Layout", nil, .resetLayout),
+            .item("reset-layout", L("Reset Layout"), nil, .resetLayout),
         ]
     }
 
@@ -267,22 +268,22 @@ private struct EditorMenuBar: View {
             .item("pause", playbackTitle(for: .paused), nil, .setPlaybackState(.paused)),
             .item("stop", playbackTitle(for: .stopped), nil, .setPlaybackState(.stopped)),
             .separator("tools-sep-1"),
-            .item("toggle-theme", "Toggle Theme", nil, .toggleTheme),
+            .item("toggle-theme", L("Toggle Theme"), nil, .toggleTheme),
         ]
     }
 
     private var buildEntries: [EditorMenuEntry] {
         [
-            .item("build-project", "Build Editor", nil, .buildProject),
-            .item("build-run", "Build and Run", nil, .buildAndRun),
+            .item("build-project", L("Build Editor"), nil, .buildProject),
+            .item("build-run", L("Build and Run"), nil, .buildAndRun),
         ]
     }
 
     private var helpEntries: [EditorMenuEntry] {
         [
-            .item("open-docs", "Documentation", nil, .openDocumentation),
+            .item("open-docs", L("Documentation"), nil, .openDocumentation),
             .separator("help-sep-1"),
-            .item("about", "About Guava", nil, .about),
+            .item("about", L("About Guava"), nil, .about),
         ]
     }
 
@@ -290,27 +291,44 @@ private struct EditorMenuBar: View {
         let marker = workspaceMode == mode ? "✓" : "  "
         switch mode {
         case .level:
-            return "\(marker) Workspace: Level"
+            return "\(marker) \(L("Workspace: Level"))"
         case .modeling:
-            return "\(marker) Workspace: Modeling"
+            return "\(marker) \(L("Workspace: Modeling"))"
         case .animation:
-            return "\(marker) Workspace: Animation"
+            return "\(marker) \(L("Workspace: Animation"))"
         }
     }
 
     private func presetTitle(_ preset: EditorLayoutPreset) -> String {
         let marker = activeLayoutPreset == preset ? "✓" : "  "
-        return "\(marker) \(preset.title)"
+        return "\(marker) \(localizedPresetTitle(preset))"
+    }
+
+    private func localizedPresetTitle(_ preset: EditorLayoutPreset) -> String {
+        switch preset {
+        case .levelDefault:
+            return L("Level: Default")
+        case .levelCinematics:
+            return L("Level: Cinematics")
+        case .modelingDefault:
+            return L("Modeling: Default")
+        case .modelingSculpt:
+            return L("Modeling: Sculpt")
+        case .animationDefault:
+            return L("Animation: Default")
+        case .animationSequencer:
+            return L("Animation: Sequencer")
+        }
     }
 
     private func playbackTitle(for state: PlaybackState) -> String {
         switch state {
         case .playing:
-            return "Play"
+            return L("Play")
         case .paused:
-            return "Pause"
+            return L("Pause")
         case .stopped:
-            return "Stop"
+            return L("Stop")
         }
     }
 }
@@ -452,12 +470,12 @@ private struct EditorMainToolbar: View {
                                  onSelectPreset: onSetLayoutPreset)
 
             ToolbarIconButton(icon: .layoutGrid,
-                              tooltip: "Reset Layout",
+                              tooltip: L("Reset Layout"),
                               onClick: onResetLayout)
 
             Spacer(minLength: 0)
-            ToolbarIconButton(icon: .settings, tooltip: "Settings", onClick: onOpenSettings)
-            ToolbarIconButton(icon: .package, tooltip: "Platforms") {}
+            ToolbarIconButton(icon: .settings, tooltip: L("Settings"), onClick: onOpenSettings)
+            ToolbarIconButton(icon: .package, tooltip: L("Platforms")) {}
         }
         .padding(horizontal: 8, vertical: 6)
         .background(.surfaceVariant)
@@ -513,28 +531,28 @@ private struct LayoutPresetSelector: View {
         case .level:
             return [
                 .item(MenuItem(id: "level-default",
-                               title: "Default",
+                               title: L("Default"),
                                action: { onSelectPreset(.levelDefault) })),
                 .item(MenuItem(id: "level-cine",
-                               title: "Cine",
+                               title: L("Cine"),
                                action: { onSelectPreset(.levelCinematics) })),
             ]
         case .modeling:
             return [
                 .item(MenuItem(id: "modeling-default",
-                               title: "Default",
+                               title: L("Default"),
                                action: { onSelectPreset(.modelingDefault) })),
                 .item(MenuItem(id: "modeling-sculpt",
-                               title: "Sculpt",
+                               title: L("Sculpt"),
                                action: { onSelectPreset(.modelingSculpt) })),
             ]
         case .animation:
             return [
                 .item(MenuItem(id: "animation-default",
-                               title: "Default",
+                               title: L("Default"),
                                action: { onSelectPreset(.animationDefault) })),
                 .item(MenuItem(id: "animation-seq",
-                               title: "Seq",
+                               title: L("Seq"),
                                action: { onSelectPreset(.animationSequencer) })),
             ]
         }
@@ -543,13 +561,13 @@ private struct LayoutPresetSelector: View {
     private func shortLabel(for preset: EditorLayoutPreset) -> String {
         switch preset {
         case .levelDefault, .modelingDefault, .animationDefault:
-            return "Default"
+            return L("Default")
         case .levelCinematics:
-            return "Cine"
+            return L("Cine")
         case .modelingSculpt:
-            return "Sculpt"
+            return L("Sculpt")
         case .animationSequencer:
-            return "Seq"
+            return L("Seq")
         }
     }
 }
@@ -791,16 +809,16 @@ enum EditorRootViewFactory {
 
     static func makeDefaultController(for mode: EditorWorkspaceMode,
                                       preset: EditorLayoutPreset) -> DockController {
-        let hierarchyTab = DockTab(userKey: "hierarchy", title: "Hierarchy")
-        let inspectorTab = DockTab(userKey: "inspector", title: "Inspector")
+        let hierarchyTab = DockTab(userKey: "hierarchy", title: localizedPanelTitle(for: "hierarchy"))
+        let inspectorTab = DockTab(userKey: "inspector", title: localizedPanelTitle(for: "inspector"))
         let viewportTab = DockTab(userKey: "viewport",
-                                  title: "Viewport",
+                                  title: localizedPanelTitle(for: "viewport"),
                                   isClosable: false)
-        let consoleTab = DockTab(userKey: "console", title: "Console")
-        let assetsTab = DockTab(userKey: "assets", title: "Assets")
-        let intentTab = DockTab(userKey: "intent-input", title: "AI Intent")
-        let confirmationTab = DockTab(userKey: "confirmation-host", title: "Confirm")
-        let settingsTab = DockTab(userKey: "settings", title: "Settings")
+        let consoleTab = DockTab(userKey: "console", title: localizedPanelTitle(for: "console"))
+        let assetsTab = DockTab(userKey: "assets", title: localizedPanelTitle(for: "assets"))
+        let intentTab = DockTab(userKey: "intent-input", title: localizedPanelTitle(for: "intent-input"))
+        let confirmationTab = DockTab(userKey: "confirmation-host", title: localizedPanelTitle(for: "confirmation-host"))
+        let settingsTab = DockTab(userKey: "settings", title: localizedPanelTitle(for: "settings"))
 
         let hierarchyLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
@@ -899,7 +917,7 @@ enum EditorRootViewFactory {
             return
         }
 
-        let tab = DockTab(userKey: userKey, title: tabTitle(for: userKey))
+        let tab = DockTab(userKey: userKey, title: localizedPanelTitle(for: userKey))
         let leafID = findBottomLeaf(in: controller.root) ?? firstTabsLeaf(in: controller.root)
         if let leafID {
             controller.apply(.insertTab(tab, into: leafID, at: Int.max))
@@ -1037,9 +1055,44 @@ enum EditorRootViewFactory {
         }
     }
 
-    private static func tabTitle(for userKey: String) -> String {
+    static func localizeDockTitles(in controller: DockController) {
+        let root = localizeDockTitles(in: controller.root)
+        let satellites = controller.satellites.mapValues(localizeDockTitles(in:))
+        controller.replace(root: root,
+                           satellites: satellites,
+                           satelliteOrder: controller.satelliteOrder)
+    }
+
+    private static func localizeDockTitles(in node: DockLayoutNode) -> DockLayoutNode {
+        switch node {
+        case .empty:
+            return node
+        case .tabs(let id, let tabs, let active):
+            let localizedTabs = tabs.map { tab -> DockTab in
+                var next = tab
+                next.title = localizedPanelTitle(for: tab.userKey)
+                return next
+            }
+            return .tabs(id: id, tabs: localizedTabs, activeTabID: active)
+        case .split(let id, let axis, let fraction, let first, let second):
+            return .split(id: id,
+                          axis: axis,
+                          fraction: fraction,
+                          first: localizeDockTitles(in: first),
+                          second: localizeDockTitles(in: second))
+        }
+    }
+
+    private static func localizedPanelTitle(for userKey: String) -> String {
         switch userKey {
-        case "settings": return "Settings"
+        case "hierarchy": return L("Hierarchy")
+        case "inspector": return L("Inspector")
+        case "viewport": return L("Viewport")
+        case "console": return L("Console")
+        case "assets": return L("Assets")
+        case "intent-input": return L("AI Intent")
+        case "confirmation-host": return L("Confirm")
+        case "settings": return L("Settings")
         default: return userKey
         }
     }
@@ -1047,43 +1100,43 @@ enum EditorRootViewFactory {
     static func makeRegistry(app: EditorApplication) -> PanelRegistry {
         PanelRegistry([
             PanelDescriptor(id: "hierarchy",
-                            title: "Hierarchy",
+                            title: localizedPanelTitle(for: "hierarchy"),
                             preferredRegion: .leadingSidebar) {
                 HierarchyPanel(store: app.store, scene: app.scene)
             },
             PanelDescriptor(id: "inspector",
-                            title: "Inspector",
+                            title: localizedPanelTitle(for: "inspector"),
                             preferredRegion: .trailingSidebar) {
                 InspectorPanel(store: app.store, scene: app.scene)
             },
             PanelDescriptor(id: "viewport",
-                            title: "Viewport",
+                            title: localizedPanelTitle(for: "viewport"),
                             closable: false,
                             preferredRegion: .center) {
                 ViewportPanel(app: app, scene: app.scene)
             },
             PanelDescriptor(id: "console",
-                            title: "Console",
+                            title: localizedPanelTitle(for: "console"),
                             preferredRegion: .bottomPanel) {
                 ConsolePanel(store: app.store)
             },
             PanelDescriptor(id: "assets",
-                            title: "Assets",
+                            title: localizedPanelTitle(for: "assets"),
                             preferredRegion: .bottomPanel) {
                 AssetBrowserPanel(app: app)
             },
             PanelDescriptor(id: "intent-input",
-                            title: "AI Intent",
+                            title: localizedPanelTitle(for: "intent-input"),
                             preferredRegion: .bottomPanel) {
                 IntentInputPanel(app: app)
             },
             PanelDescriptor(id: "confirmation-host",
-                            title: "Confirm",
+                            title: localizedPanelTitle(for: "confirmation-host"),
                             preferredRegion: .bottomPanel) {
                 ConfirmationHostPanel(app: app)
             },
             PanelDescriptor(id: "settings",
-                            title: "Settings",
+                            title: localizedPanelTitle(for: "settings"),
                             preferredRegion: .bottomPanel) {
                 SettingsPanel(app: app)
             },

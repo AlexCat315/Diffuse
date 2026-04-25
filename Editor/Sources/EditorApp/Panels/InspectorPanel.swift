@@ -79,7 +79,7 @@ struct InspectorPanel: View {
 
                     Text("#\(entity.id)")
                         .font(.mono)
-                        .foregroundColor(.onSurfaceMuted)
+                        .foregroundColor(.onSurfaceVariant)
                         .padding(horizontal: 8, vertical: 3)
                         .background(.surfaceSunken)
                         .cornerRadius(3)
@@ -88,7 +88,7 @@ struct InspectorPanel: View {
                 Row(alignment: .center, spacing: 6) {
                     Text(L("Components"))
                         .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
+                        .foregroundColor(.onSurfaceVariant)
                     Text("\(componentCount)")
                         .font(.mono)
                         .foregroundColor(.onSurface)
@@ -111,7 +111,7 @@ struct InspectorPanel: View {
             Row(alignment: .center, spacing: 6) {
                 Text(L("Sections"))
                     .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
+                    .foregroundColor(.onSurfaceVariant)
                 Text("\(sectionIDs.count - collapsedCount)/\(sectionIDs.count)")
                     .font(.mono)
                     .foregroundColor(.onSurfaceVariant)
@@ -142,7 +142,7 @@ struct InspectorPanel: View {
                 Text(text)
                     .lineLimit(1)
                     .font(.mono)
-                    .foregroundColor(.onSurfaceMuted)
+                    .foregroundColor(.onSurfaceVariant)
                     .flex()
             }
             .padding(horizontal: 8, vertical: 4)
@@ -160,7 +160,7 @@ struct InspectorPanel: View {
                 Checkbox(isOn: binding)
                 Text(binding.wrappedValue ? L("On") : L("Off"))
                     .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
+                    .foregroundColor(.onSurfaceVariant)
                     .flex()
             }
         }
@@ -226,9 +226,9 @@ struct InspectorPanel: View {
         var body: some View {
             EnumField(value: binding, width: 150) { type in
                 switch type {
-                case .directional: return "Directional"
-                case .point: return "Point"
-                case .spot: return "Spot"
+                case .directional: return L("Directional")
+                case .point: return L("Point")
+                case .spot: return L("Spot")
                 }
             }
         }
@@ -240,9 +240,9 @@ struct InspectorPanel: View {
         var body: some View {
             EnumField(value: binding, width: 150) { type in
                 switch type {
-                case .static: return "Static"
-                case .dynamic: return "Dynamic"
-                case .kinematic: return "Kinematic"
+                case .static: return L("Static")
+                case .dynamic: return L("Dynamic")
+                case .kinematic: return L("Kinematic")
                 }
             }
         }

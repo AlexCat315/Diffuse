@@ -6,6 +6,7 @@
 "Add .gltf or .obj files under the project directory and relaunch the editor." = "Add .gltf or .obj files under the project directory and relaunch the editor.";
 
 /* Inspector */
+"Inspector" = "Inspector";
 "No selection" = "No selection";
 "Select an entity in Hierarchy to inspect SceneRuntime components." = "Select an entity in Hierarchy to inspect SceneRuntime components.";
 "Components" = "Components";
@@ -15,9 +16,22 @@
 "No properties" = "No properties";
 "On" = "On";
 "Off" = "Off";
+"Static" = "Static";
+"Dynamic" = "Dynamic";
+"Kinematic" = "Kinematic";
+"Directional" = "Directional";
+"Point" = "Point";
+"Spot" = "Spot";
 
 /* Hierarchy */
+"Hierarchy" = "Hierarchy";
 "Search" = "Search";
+
+/* Panels */
+"Viewport" = "Viewport";
+"Console" = "Console";
+"AI Intent" = "AI Intent";
+"Confirm" = "Confirm";
 
 /* Viewport toolbar */
 "Pick" = "Pick";
@@ -39,6 +53,40 @@
 "Drop to add" = "Drop to add";
 
 /* Menu bar */
+"File" = "File";
+"Edit" = "Edit";
+"Window" = "Window";
+"Tools" = "Tools";
+"Build" = "Build";
+"Help" = "Help";
+"New Scene" = "New Scene";
+"Open Scene..." = "Open Scene...";
+"Save Scene" = "Save Scene";
+"Import Assets..." = "Import Assets...";
+"Undo" = "Undo";
+"Redo" = "Redo";
+"Reset Layout" = "Reset Layout";
+"Toggle Theme" = "Toggle Theme";
+"Build Editor" = "Build Editor";
+"Build and Run" = "Build and Run";
+"Documentation" = "Documentation";
+"About Guava" = "About Guava";
+"Workspace: Level" = "Workspace: Level";
+"Workspace: Modeling" = "Workspace: Modeling";
+"Workspace: Animation" = "Workspace: Animation";
+"Level: Default" = "Level: Default";
+"Level: Cinematics" = "Level: Cinematics";
+"Modeling: Default" = "Modeling: Default";
+"Modeling: Sculpt" = "Modeling: Sculpt";
+"Animation: Default" = "Animation: Default";
+"Animation: Sequencer" = "Animation: Sequencer";
+"Default" = "Default";
+"Cine" = "Cine";
+"Sculpt" = "Sculpt";
+"Seq" = "Seq";
+"Play" = "Play";
+"Pause" = "Pause";
+"Stop" = "Stop";
 "Guava Make" = "Guava Make";
 "Settings" = "Settings";
 "Platforms" = "Platforms";

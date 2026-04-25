@@ -104,6 +104,7 @@ public enum EditorReducer {
         case let .setThemeMode(mode):
             state.themeMode = mode
         case let .setLanguage(language):
+            EditorLocalizationPreferences.language = language
             state.language = language
         case let .beginAssetDrag(payload):
             state.activeAssetDrag = payload
