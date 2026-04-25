@@ -69,6 +69,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let consumePolicy = self.consumePolicy
         let trackThickness: Float = 8
         let trackInset: Float = 2
+        let trackHitSlop: Float = 6
         let capture = PointerCaptureHolder.current
 
         if let registry = InteractionRegistryHolder.current {
@@ -112,6 +113,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     if let state = beginScrollbarDrag(axis: .vertical,
                                                       local: local,
                                                       geometry: geometry,
+                                                      hitSlop: CGFloat(trackHitSlop),
                                                       node: node) {
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         capture?.acquire(node)
@@ -120,6 +122,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     if let state = beginScrollbarDrag(axis: .horizontal,
                                                       local: local,
                                                       geometry: geometry,
+                                                      hitSlop: CGFloat(trackHitSlop),
                                                       node: node) {
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         capture?.acquire(node)
@@ -305,6 +308,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     private func beginScrollbarDrag(axis: _ScrollViewDragAxis,
                                     local: CGPoint,
                                     geometry: _ScrollViewScrollbarGeometry,
+                                    hitSlop: CGFloat,
                                     node: Node) -> _ScrollViewDragState? {
         let track: CGRect?
         let thumb: CGRect?
@@ -327,7 +331,11 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             pointer = local.x
         }
 
-        guard let track, let thumb, maxOffset > 0, track.contains(local) else {
+        guard let track, let thumb, maxOffset > 0 else {
+            return nil
+        }
+        let hitTrack = expandedHitTrack(axis: axis, track: track, hitSlop: hitSlop)
+        guard hitTrack.contains(local) else {
             return nil
         }
 
@@ -419,6 +427,17 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         switch axis {
         case .vertical: return track.height
         case .horizontal: return track.width
+        }
+    }
+
+    private func expandedHitTrack(axis: _ScrollViewDragAxis,
+                                  track: CGRect,
+                                  hitSlop: CGFloat) -> CGRect {
+        switch axis {
+        case .vertical:
+            return track.insetBy(dx: -hitSlop, dy: 0)
+        case .horizontal:
+            return track.insetBy(dx: 0, dy: -hitSlop)
         }
     }
 }
