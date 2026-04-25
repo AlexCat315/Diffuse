@@ -30,10 +30,7 @@ struct SettingsPanel: View {
                                 frameRateButton(.unlimited, store: store)
                                 frameRateButton(.fps30, store: store)
                                 frameRateButton(.fps60, store: store)
-                            }
-                            Row(alignment: .center, spacing: 8) {
                                 frameRateButton(.fps120, store: store)
-                                frameRateButton(.fps240, store: store)
                             }
                         }
                     }
@@ -84,7 +81,7 @@ struct SettingsPanel: View {
     private func title(for limit: EditorFrameRateLimit) -> String {
         switch limit {
         case .unlimited:
-            return L("Unlimited")
+            return L("System")
         case .fps30:
             return "30 FPS"
         case .fps60:
