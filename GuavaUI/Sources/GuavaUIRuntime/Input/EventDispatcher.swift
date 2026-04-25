@@ -68,8 +68,8 @@ public final class EventDispatcher {
         case .mouseButtonUp(let e):   dispatchPointerUp(e)
         case .mouseMotion(let e):     dispatchMotion(e)
         case .mouseWheel(let e):      dispatchWheel(e)
-        case .keyDown(let e),
-             .keyUp(let e):           dispatchKey(e)
+        case .keyDown(let e):         dispatchKey(e, phase: .down)
+        case .keyUp(let e):           dispatchKey(e, phase: .up)
         case .textEditing(let e):     dispatchTextEditing(e)
         case .textInput(let s):       dispatchText(s)
         default:
@@ -160,19 +160,19 @@ public final class EventDispatcher {
 
     // MARK: - Key
 
-    private func dispatchKey(_ event: KeyEvent) {
+    private func dispatchKey(_ event: KeyEvent, phase: KeyPhase) {
         // Pointer-capture intercept: while a node owns capture (typically a
         // drag in progress), give its key handler the first opportunity to
         // consume the event. Lets drags implement Esc-to-cancel without
         // also needing keyboard focus.
         if let captured = capture.target,
-           let keyHandler = interactions.handlers(for: captured).key,
+           let keyHandler = keyHandler(for: captured, phase: phase),
            keyHandler(event, .target) == .handled {
             return
         }
         guard let focused = focusChain.focused else { return }
         let path = pathFromRoot(to: focused)
-        _ = deliver(path: path, kind: .key(event))
+        _ = deliver(path: path, kind: .key(event, phase))
     }
 
     private func dispatchText(_ text: String) {
@@ -193,7 +193,7 @@ public final class EventDispatcher {
         case pointer(MouseButtonEvent, PointerPhase)
         case motion(MouseMotionEvent)
         case wheel(MouseWheelEvent)
-        case key(KeyEvent)
+        case key(KeyEvent, KeyPhase)
         case editing(TextEditingEvent)
         case text(String)
     }
@@ -259,7 +259,8 @@ public final class EventDispatcher {
         case .pointer(let e, let pp): return handlers.pointer?(e, pp, phase) ?? .ignored
         case .motion(let e):  return handlers.motion?(e, phase)  ?? .ignored
         case .wheel(let e):   return handlers.wheel?(e, phase)   ?? .ignored
-        case .key(let e):     return handlers.key?(e, phase)     ?? .ignored
+        case .key(let e, let keyPhase):
+            return keyHandler(in: handlers, phase: keyPhase)?(e, phase) ?? .ignored
         case .editing(let e): return handlers.editing?(e, phase) ?? .ignored
         case .text(let s):    return handlers.text?(s, phase)    ?? .ignored
         }
@@ -276,6 +277,19 @@ public final class EventDispatcher {
             cur = n.parent
         }
         return out.reversed()
+    }
+
+    private func keyHandler(for node: Node,
+                            phase: KeyPhase) -> ((KeyEvent, EventPhase) -> EventResult)? {
+        keyHandler(in: interactions.handlers(for: node), phase: phase)
+    }
+
+    private func keyHandler(in handlers: InteractionRegistry.Handlers,
+                            phase: KeyPhase) -> ((KeyEvent, EventPhase) -> EventResult)? {
+        switch phase {
+        case .down: return handlers.key
+        case .up: return handlers.keyUp
+        }
     }
 
     private func updateHoverPath(to newPath: [Node]) {

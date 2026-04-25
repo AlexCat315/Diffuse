@@ -1,6 +1,34 @@
 import CoreGraphics
 import GuavaUIRuntime
 
+private enum _ScrollViewDragAxis {
+    case vertical
+    case horizontal
+}
+
+private struct _ScrollViewDragState {
+    var axis: _ScrollViewDragAxis
+    var pointerStart: CGFloat
+    var offsetStart: CGFloat
+    var maxOffset: CGFloat
+    var trackStart: CGFloat
+    var trackLength: CGFloat
+    var thumbLength: CGFloat
+}
+
+private enum _ScrollViewAttachmentKeys {
+    static let dragState = "__scrollview_scrollbar_drag_state"
+}
+
+private struct _ScrollViewScrollbarGeometry {
+    var verticalTrack: CGRect?
+    var verticalThumb: CGRect?
+    var horizontalTrack: CGRect?
+    var horizontalThumb: CGRect?
+    var maxOffsetX: CGFloat
+    var maxOffsetY: CGFloat
+}
+
 /// Clipping container that scrolls its content via mouse wheel input.
 ///
 /// v1 limitations:
@@ -41,6 +69,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let consumePolicy = self.consumePolicy
         let trackThickness: Float = 8
         let trackInset: Float = 2
+        let capture = PointerCaptureHolder.current
 
         if let registry = InteractionRegistryHolder.current {
             registry.setWheel(node) { event, _ in
@@ -66,6 +95,65 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 }
                 node.contentOffset = nextOffset
                 return consumePolicy.result(didScroll: nextOffset != previousOffset)
+            }
+            registry.setPointer(node) { event, pointerPhase, eventPhase in
+                switch pointerPhase {
+                case .down:
+                    guard event.button == .left else { return .ignored }
+                    guard eventPhase == .capture || eventPhase == .target else {
+                        return .ignored
+                    }
+                    let local = localPoint(x: event.x, y: event.y, in: node)
+                    let geometry = scrollbarGeometry(for: node,
+                                                     axes: axes,
+                                                     trackThickness: trackThickness,
+                                                     trackInset: trackInset)
+                    if let state = beginScrollbarDrag(axis: .vertical,
+                                                      local: local,
+                                                      geometry: geometry,
+                                                      node: node) {
+                        node.attachments[_ScrollViewAttachmentKeys.dragState] = state
+                        capture?.acquire(node)
+                        return .handled
+                    }
+                    if let state = beginScrollbarDrag(axis: .horizontal,
+                                                      local: local,
+                                                      geometry: geometry,
+                                                      node: node) {
+                        node.attachments[_ScrollViewAttachmentKeys.dragState] = state
+                        capture?.acquire(node)
+                        return .handled
+                    }
+                    return .ignored
+                case .up:
+                    guard node.attachments[_ScrollViewAttachmentKeys.dragState] != nil else {
+                        return .ignored
+                    }
+                    node.attachments[_ScrollViewAttachmentKeys.dragState] = nil
+                    capture?.release()
+                    return .handled
+                }
+            }
+            registry.setMotion(node) { event, _ in
+                guard let state = node.attachments[_ScrollViewAttachmentKeys.dragState]
+                        as? _ScrollViewDragState else {
+                    return .ignored
+                }
+                let local = localPoint(x: event.x, y: event.y, in: node)
+                let pointer = state.axis == .vertical ? local.y : local.x
+                let availableTrack = max(1, state.trackLength - state.thumbLength)
+                let rawOffset = state.offsetStart
+                    + ((pointer - state.pointerStart) / availableTrack) * state.maxOffset
+                let clampedOffset = max(0, min(rawOffset, state.maxOffset))
+                var nextOffset = node.contentOffset
+                switch state.axis {
+                case .vertical:
+                    nextOffset.y = clampedOffset
+                case .horizontal:
+                    nextOffset.x = clampedOffset
+                }
+                node.contentOffset = nextOffset
+                return .handled
             }
         }
 
@@ -140,4 +228,134 @@ public struct ScrollView<Content: View>: _PrimitiveView {
     }
 
     public var _children: [any View] { [content] }
+
+    private func localPoint(x: Float, y: Float, in node: Node) -> CGPoint {
+        var origin = node.frame.origin
+        var current = node.parent
+        while let parent = current {
+            origin.x += parent.frame.origin.x - parent.contentOffset.x
+            origin.y += parent.frame.origin.y - parent.contentOffset.y
+            current = parent.parent
+        }
+        return CGPoint(x: CGFloat(x) - origin.x,
+                       y: CGFloat(y) - origin.y)
+    }
+
+    private func beginScrollbarDrag(axis: _ScrollViewDragAxis,
+                                    local: CGPoint,
+                                    geometry: _ScrollViewScrollbarGeometry,
+                                    node: Node) -> _ScrollViewDragState? {
+        let track: CGRect?
+        let thumb: CGRect?
+        let maxOffset: CGFloat
+        let offsetKeyPath: WritableKeyPath<CGPoint, CGFloat>
+        let pointer: CGFloat
+
+        switch axis {
+        case .vertical:
+            track = geometry.verticalTrack
+            thumb = geometry.verticalThumb
+            maxOffset = geometry.maxOffsetY
+            offsetKeyPath = \.y
+            pointer = local.y
+        case .horizontal:
+            track = geometry.horizontalTrack
+            thumb = geometry.horizontalThumb
+            maxOffset = geometry.maxOffsetX
+            offsetKeyPath = \.x
+            pointer = local.x
+        }
+
+        guard let track, let thumb, maxOffset > 0, track.contains(local) else {
+            return nil
+        }
+
+        var nextOffset = node.contentOffset
+        if !thumb.contains(local) {
+            let availableTrack = max(1, trackLength(for: axis, track: track) - trackLength(for: axis, track: thumb))
+            let centeredThumbStart = pointer - trackLength(for: axis, track: thumb) / 2
+            let rawOffset = ((centeredThumbStart - trackStart(for: axis, track: track))
+                             / availableTrack) * maxOffset
+            nextOffset[keyPath: offsetKeyPath] = max(0, min(rawOffset, maxOffset))
+            node.contentOffset = nextOffset
+        }
+
+        return _ScrollViewDragState(
+            axis: axis,
+            pointerStart: pointer,
+            offsetStart: node.contentOffset[keyPath: offsetKeyPath],
+            maxOffset: maxOffset,
+            trackStart: trackStart(for: axis, track: track),
+            trackLength: trackLength(for: axis, track: track),
+            thumbLength: trackLength(for: axis, track: thumb)
+        )
+    }
+
+    private func scrollbarGeometry(for node: Node,
+                                   axes: Axis,
+                                   trackThickness: Float,
+                                   trackInset: Float) -> _ScrollViewScrollbarGeometry {
+        let viewW = node.frame.size.width
+        let viewH = node.frame.size.height
+        let contentW = node.children.first?.frame.size.width ?? 0
+        let contentH = node.children.first?.frame.size.height ?? 0
+        let maxOffsetX = max(0, contentW - viewW)
+        let maxOffsetY = max(0, contentH - viewH)
+        let thickness = CGFloat(trackThickness)
+        let inset = CGFloat(trackInset)
+
+        var verticalTrack: CGRect?
+        var verticalThumb: CGRect?
+        var horizontalTrack: CGRect?
+        var horizontalThumb: CGRect?
+
+        if (axes == .vertical || axes == .both), maxOffsetY > 0, viewH > 0, contentH > 0 {
+            let track = CGRect(x: viewW - thickness - inset,
+                               y: inset,
+                               width: thickness,
+                               height: max(0, viewH - 2 * inset))
+            let thumbH = max(thickness * 2, track.height * (viewH / contentH))
+            let t = maxOffsetY > 0 ? node.contentOffset.y / maxOffsetY : 0
+            verticalTrack = track
+            verticalThumb = CGRect(x: track.minX,
+                                   y: track.minY + (track.height - thumbH) * t,
+                                   width: track.width,
+                                   height: thumbH)
+        }
+
+        if (axes == .horizontal || axes == .both), maxOffsetX > 0, viewW > 0, contentW > 0 {
+            let track = CGRect(x: inset,
+                               y: viewH - thickness - inset,
+                               width: max(0, viewW - 2 * inset),
+                               height: thickness)
+            let thumbW = max(thickness * 2, track.width * (viewW / contentW))
+            let t = maxOffsetX > 0 ? node.contentOffset.x / maxOffsetX : 0
+            horizontalTrack = track
+            horizontalThumb = CGRect(x: track.minX + (track.width - thumbW) * t,
+                                     y: track.minY,
+                                     width: thumbW,
+                                     height: track.height)
+        }
+
+        return _ScrollViewScrollbarGeometry(verticalTrack: verticalTrack,
+                                            verticalThumb: verticalThumb,
+                                            horizontalTrack: horizontalTrack,
+                                            horizontalThumb: horizontalThumb,
+                                            maxOffsetX: maxOffsetX,
+                                            maxOffsetY: maxOffsetY)
+    }
+
+    private func trackStart(for axis: _ScrollViewDragAxis, track: CGRect) -> CGFloat {
+        switch axis {
+        case .vertical: return track.minY
+        case .horizontal: return track.minX
+        }
+    }
+
+    private func trackLength(for axis: _ScrollViewDragAxis, track: CGRect) -> CGFloat {
+        switch axis {
+        case .vertical: return track.height
+        case .horizontal: return track.width
+        }
+    }
 }
