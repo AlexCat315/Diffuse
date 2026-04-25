@@ -14,12 +14,26 @@ struct SettingsPanel: View {
                             SettingsChoiceButton(title: L("Dark"),
                                                  isActive: store.state.themeMode == .dark) {
                                 store.dispatch(.setThemeMode(.dark))
-                                persistShell(store)
+                                applySettingsChange(store)
                             }
                             SettingsChoiceButton(title: L("Light"),
                                                  isActive: store.state.themeMode == .light) {
                                 store.dispatch(.setThemeMode(.light))
-                                persistShell(store)
+                                applySettingsChange(store)
+                            }
+                        }
+                    }
+
+                    SettingsSection(title: L("Frame Rate")) {
+                        Box(direction: .column, alignItems: .flexStart, spacing: 8) {
+                            Row(alignment: .center, spacing: 8) {
+                                frameRateButton(.unlimited, store: store)
+                                frameRateButton(.fps30, store: store)
+                                frameRateButton(.fps60, store: store)
+                            }
+                            Row(alignment: .center, spacing: 8) {
+                                frameRateButton(.fps120, store: store)
+                                frameRateButton(.fps240, store: store)
                             }
                         }
                     }
@@ -30,19 +44,19 @@ struct SettingsPanel: View {
                                                  isActive: store.state.language == .system) {
                                 store.dispatch(.setLanguage(.system))
                                 EditorLocalizationPreferences.language = .system
-                                persistShell(store)
+                                applySettingsChange(store)
                             }
                             SettingsChoiceButton(title: "English",
                                                  isActive: store.state.language == .english) {
                                 store.dispatch(.setLanguage(.english))
                                 EditorLocalizationPreferences.language = .english
-                                persistShell(store)
+                                applySettingsChange(store)
                             }
                             SettingsChoiceButton(title: "简体中文",
                                                  isActive: store.state.language == .simplifiedChinese) {
                                 store.dispatch(.setLanguage(.simplifiedChinese))
                                 EditorLocalizationPreferences.language = .simplifiedChinese
-                                persistShell(store)
+                                applySettingsChange(store)
                             }
                         }
                     }
@@ -54,11 +68,42 @@ struct SettingsPanel: View {
         }
     }
 
+    private func applySettingsChange(_ store: EditorStore) {
+        persistShell(store)
+        app.requestDisplayRefresh()
+    }
+
     private func persistShell(_ store: EditorStore) {
         EditorRootViewFactory.saveShellState(mode: store.state.workspaceMode,
                                              preset: store.state.activeLayoutPreset,
                                              themeMode: store.state.themeMode,
-                                             language: store.state.language)
+                                             language: store.state.language,
+                                             frameRateLimit: store.state.frameRateLimit)
+    }
+
+    private func title(for limit: EditorFrameRateLimit) -> String {
+        switch limit {
+        case .unlimited:
+            return L("Unlimited")
+        case .fps30:
+            return "30 FPS"
+        case .fps60:
+            return "60 FPS"
+        case .fps120:
+            return "120 FPS"
+        case .fps240:
+            return "240 FPS"
+        }
+    }
+
+    private func frameRateButton(_ limit: EditorFrameRateLimit,
+                                 store: EditorStore) -> SettingsChoiceButton {
+        SettingsChoiceButton(title: title(for: limit),
+                             isActive: store.state.frameRateLimit == limit) {
+            store.dispatch(.setFrameRateLimit(limit))
+            app.applyTargetFrameRate(limit.framesPerSecond)
+            applySettingsChange(store)
+        }
     }
 }
 

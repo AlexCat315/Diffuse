@@ -38,7 +38,8 @@ struct EditorRootView: View {
                 EditorRootViewFactory.saveShellState(mode: next,
                                                      preset: nextPreset,
                                                      themeMode: store.state.themeMode,
-                                                     language: store.state.language)
+                                                     language: store.state.language,
+                                                     frameRateLimit: store.state.frameRateLimit)
             }
 
             let setLayoutPreset: (EditorLayoutPreset) -> Void = { nextPreset in
@@ -55,7 +56,8 @@ struct EditorRootView: View {
                 EditorRootViewFactory.saveShellState(mode: mode,
                                                      preset: nextPreset,
                                                      themeMode: store.state.themeMode,
-                                                     language: store.state.language)
+                                                     language: store.state.language,
+                                                     frameRateLimit: store.state.frameRateLimit)
             }
 
             let resetLayout: () -> Void = {
@@ -66,7 +68,8 @@ struct EditorRootView: View {
                 EditorRootViewFactory.saveShellState(mode: mode,
                                                      preset: defaultPreset,
                                                      themeMode: store.state.themeMode,
-                                                     language: store.state.language)
+                                                     language: store.state.language,
+                                                     frameRateLimit: store.state.frameRateLimit)
             }
 
             let handleShortcut: (KeyEvent) -> Bool = { key in
@@ -750,19 +753,22 @@ enum EditorRootViewFactory {
         var activeLayoutPreset: EditorLayoutPreset
         var themeMode: EditorThemeMode
         var language: EditorLanguage
+        var frameRateLimit: EditorFrameRateLimit
         var schemaVersion: Int
 
-        static let currentSchemaVersion = 2
+        static let currentSchemaVersion = 3
 
         init(workspaceMode: EditorWorkspaceMode,
              activeLayoutPreset: EditorLayoutPreset,
              themeMode: EditorThemeMode = .dark,
              language: EditorLanguage = .system,
+             frameRateLimit: EditorFrameRateLimit = .unlimited,
              schemaVersion: Int = currentSchemaVersion) {
             self.workspaceMode = workspaceMode
             self.activeLayoutPreset = activeLayoutPreset
             self.themeMode = themeMode
             self.language = language
+            self.frameRateLimit = frameRateLimit
             self.schemaVersion = schemaVersion
         }
 
@@ -771,6 +777,7 @@ enum EditorRootViewFactory {
             case activeLayoutPreset
             case themeMode
             case language
+            case frameRateLimit
             case schemaVersion
         }
 
@@ -781,6 +788,7 @@ enum EditorRootViewFactory {
                 ?? .default(for: workspaceMode)
             themeMode = try values.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode) ?? .dark
             language = try values.decodeIfPresent(EditorLanguage.self, forKey: .language) ?? .system
+            frameRateLimit = try values.decodeIfPresent(EditorFrameRateLimit.self, forKey: .frameRateLimit) ?? .unlimited
             schemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         }
     }
@@ -1297,12 +1305,14 @@ enum EditorRootViewFactory {
     static func saveShellState(mode: EditorWorkspaceMode,
                                preset: EditorLayoutPreset,
                                themeMode: EditorThemeMode,
-                               language: EditorLanguage) {
+                               language: EditorLanguage,
+                               frameRateLimit: EditorFrameRateLimit) {
         guard let layoutDir = getLayoutPersistenceDirectory() else { return }
         let shell = EditorShellState(workspaceMode: mode,
                                      activeLayoutPreset: preset,
                                      themeMode: themeMode,
-                                     language: language)
+                                     language: language,
+                                     frameRateLimit: frameRateLimit)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {

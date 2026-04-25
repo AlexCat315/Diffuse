@@ -136,6 +136,8 @@ public final class SDL3PlatformHost: PlatformHost {
     public var onBeforeCommit: (@MainActor (_ deltaTime: Double) -> Void)?
     public var externalDisplayRequestDrain: (() -> Bool)?
 
+    private var targetFrameInterval: Double?
+
     public init(title: String = "GuavaUI",
                 recomposer: Recomposer = Recomposer(),
                 inputContext: PlatformInputContext = PlatformInputContext(),
@@ -226,6 +228,14 @@ public final class SDL3PlatformHost: PlatformHost {
         guard let resolvedWindowID,
               let session = sessions[resolvedWindowID] else { return }
         session.requestDisplay()
+    }
+
+    public func setTargetFrameRate(_ framesPerSecond: Double?) {
+        guard let framesPerSecond, framesPerSecond.isFinite, framesPerSecond > 0 else {
+            targetFrameInterval = nil
+            return
+        }
+        targetFrameInterval = 1.0 / max(1.0, min(240.0, framesPerSecond))
     }
 
     private func runLoop() {
@@ -369,7 +379,14 @@ public final class SDL3PlatformHost: PlatformHost {
 
             pruneClosedSessions(using: shell)
 
-            if !handledEvents && !committedAny && !renderedAnyFrame {
+            let producedWork = handledEvents || committedAny || renderedAnyFrame || animationsActive
+            if let targetFrameInterval, producedWork {
+                let elapsed = TimingTrace.now() - frameStart
+                let remaining = targetFrameInterval - elapsed
+                if remaining > 0 {
+                    Thread.sleep(forTimeInterval: remaining)
+                }
+            } else if !handledEvents && !committedAny && !renderedAnyFrame {
                 Thread.sleep(forTimeInterval: 0.001)
             }
         }
