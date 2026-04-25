@@ -222,6 +222,62 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(capture.target == nil)
     } }
 
+    @Test("ScrollView uses descendant overflow when its wrapper is clamped")
+    func scrollViewUsesDescendantOverflowForWheelAndScrollbar() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = capture
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            ScrollView(.vertical) {
+                Column {
+                    Text("content")
+                }
+            }
+            .frame(width: 220, height: 160)
+        )
+        graph.computeLayout(width: 220, height: 160)
+
+        let scrollView = tree.root!.children.first!
+        let wrapper = scrollView.children.first!
+        wrapper.frame = CGRect(x: 0, y: 0, width: 220, height: 160)
+
+        let overflowingDescendant = Node()
+        overflowingDescendant.frame = CGRect(x: 0, y: 0, width: 220, height: 360)
+        wrapper.addChild(overflowingDescendant)
+
+        let handlers = registry.handlers(for: scrollView)
+        #expect(handlers.wheel?(MouseWheelEvent(x: 0, y: -1), .target) == .handled)
+        #expect(scrollView.contentOffset.y > 0)
+
+        scrollView.contentOffset = .zero
+        let pointer = handlers.pointer!
+        let motion = handlers.motion!
+        let scrollbarX = Float(scrollView.frame.width - 6)
+        let thumbY: Float = 10
+
+        #expect(pointer(MouseButtonEvent(button: .left,
+                                         x: scrollbarX,
+                                         y: thumbY,
+                                         clicks: 1), .down, .target) == .handled)
+        #expect(capture.target === scrollView)
+
+        #expect(motion(MouseMotionEvent(x: scrollbarX,
+                                        y: thumbY + 40,
+                                        deltaX: 0,
+                                        deltaY: 40), .target) == .handled)
+        #expect(scrollView.contentOffset.y > 0)
+
+        #expect(pointer(MouseButtonEvent(button: .left,
+                                         x: scrollbarX,
+                                         y: thumbY + 40,
+                                         clicks: 1), .up, .target) == .handled)
+        #expect(capture.target == nil)
+    } }
+
     @Test("Wheel over a scrollable TextField does not bubble into the parent ScrollView")
     func nestedTextFieldConsumesWheelBeforeParentScrollView() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -357,9 +413,12 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(menuScrollView != nil)
         guard let menuScrollView else { return }
 
-        if let child = menuScrollView.children.first {
-            let maxOffset = max(0, child.frame.height - menuScrollView.frame.height)
-            menuScrollView.contentOffset = CGPoint(x: 0, y: maxOffset)
+        let menuWheel = registry.handlers(for: menuScrollView).wheel
+        #expect(menuWheel != nil)
+        if let menuWheel {
+            for _ in 0..<100 {
+                _ = menuWheel(MouseWheelEvent(x: 0, y: -1), .target)
+            }
         }
 
         let dispatcher = EventDispatcher(
