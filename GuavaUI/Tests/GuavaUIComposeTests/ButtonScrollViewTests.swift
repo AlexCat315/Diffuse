@@ -164,6 +164,64 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(sv.contentOffset.y == 0)
     } }
 
+    @Test("ScrollView scrollbar drag captures pointer before content handlers")
+    func scrollViewScrollbarDragCapturesPointer() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let focus = FocusChain()
+        let capture = PointerCapture()
+        InteractionRegistryHolder.current = registry
+        FocusChainHolder.current = focus
+        PointerCaptureHolder.current = capture
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        var contentPresses = 0
+        graph.install(root:
+            ScrollView(.vertical) {
+                Column {
+                    Button(action: { contentPresses += 1 }) {
+                        Text("content")
+                    }
+                    .frame(width: 220, height: 120)
+                    Text("tail").frame(width: 220, height: 320)
+                }
+            }
+            .frame(width: 220, height: 160)
+        )
+        graph.computeLayout(width: 220, height: 220)
+
+        let scrollView = tree.root!.children.first!
+        let dispatcher = EventDispatcher(
+            tree: tree,
+            interactions: registry,
+            capture: capture,
+            focusChain: focus
+        )
+
+        let origin = absoluteOrigin(of: scrollView)
+        let scrollbarX = Float(origin.x + scrollView.frame.width - 6)
+        let thumbY = Float(origin.y + 10)
+        dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(button: .left,
+                                                              x: scrollbarX,
+                                                              y: thumbY,
+                                                              clicks: 1)))
+
+        #expect(capture.target === scrollView)
+        #expect(contentPresses == 0)
+
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: scrollbarX,
+                                                          y: thumbY + 40,
+                                                          deltaX: 0,
+                                                          deltaY: 40)))
+        #expect(scrollView.contentOffset.y > 0)
+
+        dispatcher.dispatch(.mouseButtonUp(MouseButtonEvent(button: .left,
+                                                            x: scrollbarX,
+                                                            y: thumbY + 40,
+                                                            clicks: 1)))
+        #expect(capture.target == nil)
+    } }
+
     @Test("Wheel over a scrollable TextField does not bubble into the parent ScrollView")
     func nestedTextFieldConsumesWheelBeforeParentScrollView() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
