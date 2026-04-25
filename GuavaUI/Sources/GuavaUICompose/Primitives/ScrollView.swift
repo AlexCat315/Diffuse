@@ -83,11 +83,12 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                 nextOffset.x += CGFloat(dx)
                 nextOffset.y += CGFloat(dy)
 
-                // Clamp to [0, max(0, contentSize - viewSize)] using the immediate
-                // child's frame as content size. With multiple children we'd union.
+                // Clamp to [0, max(0, contentSize - viewSize)] using the full
+                // content subtree. The direct wrapper can be flex-clamped to
+                // the viewport while its descendants still overflow.
                 let viewSize = node.frame.size
-                if let child = node.children.first {
-                    let contentSize = child.frame.size
+                let contentSize = scrollableContentSize(for: node)
+                if contentSize.width > 0 || contentSize.height > 0 {
                     nextOffset.x = max(0, min(nextOffset.x, max(0, contentSize.width  - viewSize.width)))
                     nextOffset.y = max(0, min(nextOffset.y, max(0, contentSize.height - viewSize.height)))
                 } else {
@@ -168,9 +169,10 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             guard let node else { return }
             let viewW = Float(node.frame.size.width)
             let viewH = Float(node.frame.size.height)
-            guard let content = node.children.first else { return }
-            let contentW = Float(content.frame.size.width)
-            let contentH = Float(content.frame.size.height)
+            let contentSize = scrollableContentSize(for: node)
+            let contentW = Float(contentSize.width)
+            let contentH = Float(contentSize.height)
+            guard contentW > 0 || contentH > 0 else { return }
             let offX = Float(node.contentOffset.x)
             let offY = Float(node.contentOffset.y)
 
@@ -241,6 +243,32 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                        y: CGFloat(y) - origin.y)
     }
 
+    private func scrollableContentSize(for node: Node) -> CGSize {
+        var bounds: CGRect = .null
+        for child in node.children {
+            bounds = bounds.union(contentBounds(for: child, origin: .zero))
+        }
+        guard !bounds.isNull else { return .zero }
+        return CGSize(width: max(0, bounds.maxX),
+                      height: max(0, bounds.maxY))
+    }
+
+    private func contentBounds(for node: Node, origin: CGPoint) -> CGRect {
+        let frame = node.frame.offsetBy(dx: origin.x, dy: origin.y)
+        var bounds = frame
+
+        guard !node.clipsToBounds else {
+            return bounds
+        }
+
+        let childOrigin = CGPoint(x: origin.x + node.frame.origin.x,
+                                  y: origin.y + node.frame.origin.y)
+        for child in node.children {
+            bounds = bounds.union(contentBounds(for: child, origin: childOrigin))
+        }
+        return bounds
+    }
+
     private func beginScrollbarDrag(axis: _ScrollViewDragAxis,
                                     local: CGPoint,
                                     geometry: _ScrollViewScrollbarGeometry,
@@ -297,8 +325,9 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                    trackInset: Float) -> _ScrollViewScrollbarGeometry {
         let viewW = node.frame.size.width
         let viewH = node.frame.size.height
-        let contentW = node.children.first?.frame.size.width ?? 0
-        let contentH = node.children.first?.frame.size.height ?? 0
+        let contentSize = scrollableContentSize(for: node)
+        let contentW = contentSize.width
+        let contentH = contentSize.height
         let maxOffsetX = max(0, contentW - viewW)
         let maxOffsetY = max(0, contentH - viewH)
         let thickness = CGFloat(trackThickness)
