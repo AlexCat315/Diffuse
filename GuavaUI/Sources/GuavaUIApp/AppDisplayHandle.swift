@@ -34,11 +34,18 @@ public final class AppDisplayHandle: @unchecked Sendable {
     private var openAuxiliaryWindow: (@MainActor (AppAuxiliaryWindowRequest) -> WindowID?)?
     private var closeAuxiliaryWindow: (@MainActor (WindowID) -> Void)?
     private var auxiliaryWindowIsOpen: (@MainActor (WindowID) -> Bool)?
+    private var setRuntimeTargetFrameRate: (@MainActor (Double?) -> Void)?
 
     public init() {}
 
     public nonisolated func requestDisplay() {
         signal.request()
+    }
+
+    @MainActor
+    public func setTargetFrameRate(_ framesPerSecond: Double?) {
+        setRuntimeTargetFrameRate?(framesPerSecond)
+        requestDisplay()
     }
 
     @MainActor
@@ -73,5 +80,10 @@ public final class AppDisplayHandle: @unchecked Sendable {
         openAuxiliaryWindow = open
         closeAuxiliaryWindow = close
         auxiliaryWindowIsOpen = isOpen
+    }
+
+    @MainActor
+    func installRuntimeControls(setTargetFrameRate: @escaping @MainActor (Double?) -> Void) {
+        setRuntimeTargetFrameRate = setTargetFrameRate
     }
 }
