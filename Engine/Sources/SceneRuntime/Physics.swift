@@ -12,7 +12,7 @@ public enum PhysicsBackendKind: String, Sendable, Equatable {
     case jolt
 }
 
-public enum RigidBodyMotionType: String, Sendable, Equatable {
+public enum RigidBodyMotionType: String, CaseIterable, Sendable, Equatable {
     case `static`
     case dynamic
     case kinematic

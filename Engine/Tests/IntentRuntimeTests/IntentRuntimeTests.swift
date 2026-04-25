@@ -103,6 +103,41 @@ struct IntentRuntimeTests {
         #expect(updated.bindings == [next])
     }
 
+    @Test("scene transactions update rigid body inspector fields")
+    func sceneTransactionsUpdateRigidBodyInspectorFields() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RigidBody(motionType: .dynamic,
+                                         mass: 80,
+                                         gravityScale: 1,
+                                         allowSleep: true),
+                               for: entity)
+
+        let transaction = TransactionIR(
+            intent: IntentIR(verb: "scene.update_rigidbody",
+                             summary: "Update rigid body inspector fields",
+                             source: .human),
+            summary: "Update rigid body inspector fields",
+            operations: [
+                .scene(.setRigidBodyMotionType(entityID: entity.rawValue, value: .kinematic)),
+                .scene(.setRigidBodyMass(entityID: entity.rawValue, value: 42)),
+                .scene(.setRigidBodyGravityScale(entityID: entity.rawValue, value: 0.5)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored
+        )
+        var context = TransactionExecutionContext(sceneRuntime: scene)
+
+        let applied = try executor.apply(transaction, to: &context)
+        let updated = try #require(context.sceneRuntime?.component(RigidBody.self, for: entity))
+
+        #expect(applied.changedDomains == [.scene])
+        #expect(updated.motionType == .kinematic)
+        #expect(updated.mass == 42)
+        #expect(updated.gravityScale == 0.5)
+    }
+
     @Test("sequence transactions replace the document and issue a new revision")
     func sequenceTransactionsAdvanceRevisions() throws {
         let executor = TransactionExecutor()
