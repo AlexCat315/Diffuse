@@ -96,6 +96,15 @@ public enum DockOperation: Sendable {
     /// `.closeOthers`. Tab strip rendering (Phase O) reserves a separate
     /// pinned row for them. No-op when `tabID` is not present.
     case setPinned(tabID: DockTabID, isPinned: Bool)
+
+    /// Remove a `.tabs` leaf from the main tree and represent it on an edge
+    /// rail. The leaf keeps its node id, tabs, and active tab.
+    case minimizeLeaf(leafID: DockNodeID, edge: DockMinimizedEdge)
+
+    /// Restore a minimized leaf back into the main tree. The insertion edge
+    /// is the edge captured when the leaf was minimized; host normalizers may
+    /// then canonicalize it back into a semantic workspace region.
+    case restoreMinimizedLeaf(DockNodeID)
 }
 
 /// Owner of a `DockLayoutNode` tree. Reference type; callers (the demo, the
@@ -163,6 +172,11 @@ public final class DockController: @unchecked Sendable {
     /// the proposed target should remain visible / committable.
     public var onAllowDrop: ((DockDropRequest) -> Bool)?
 
+    /// Optional host policy for whether a leaf can be minimized and which
+    /// rail it should collapse into. `nil` means the built-in tab strip does
+    /// not render a minimize affordance for that leaf.
+    public var onResolveMinimizedEdge: ((DockNodeID) -> DockMinimizedEdge?)?
+
     /// One entry in the recent-closed-tab history, used by `.reopenLastClosed`
     /// and the default tab context menu's "Reopen Closed Tab" item.
     public struct ClosedTabRecord: Sendable {
@@ -185,6 +199,12 @@ public final class DockController: @unchecked Sendable {
     /// Maximum number of entries kept in `closedHistory`. Older entries
     /// are dropped from the head when a new close pushes over the cap.
     public var closedHistoryLimit: Int = 50
+
+    /// Leaves currently minimized out of the main tree.
+    public private(set) var minimizedLeaves: [DockNodeID: DockMinimizedLeaf] = [:]
+
+    /// Stable ordering for minimized edge rail rendering and persistence.
+    public private(set) var minimizedOrder: [DockNodeID] = []
 
     public init(root: DockLayoutNode) {
         self.root = root
@@ -271,6 +291,12 @@ public final class DockController: @unchecked Sendable {
             return
         case .setPinned(let tabID, let isPinned):
             next = Self.setPinned(tabID: tabID, isPinned: isPinned, in: root)
+        case .minimizeLeaf(let leafID, let edge):
+            applyMinimizeLeaf(leafID: leafID, edge: edge)
+            return
+        case .restoreMinimizedLeaf(let leafID):
+            applyRestoreMinimizedLeaf(leafID: leafID)
+            return
         }
         let normalized = normalizeRoot(next)
         guard normalized != root else { return }
@@ -348,6 +374,55 @@ public final class DockController: @unchecked Sendable {
     private func applyCloseSatellite(satelliteID: DockNodeID) {
         guard satellites.removeValue(forKey: satelliteID) != nil else { return }
         satelliteOrder.removeAll { $0 == satelliteID }
+        version &+= 1
+        notifyChange()
+    }
+
+    private func applyMinimizeLeaf(leafID: DockNodeID, edge: DockMinimizedEdge) {
+        guard satellites[leafID] == nil,
+              minimizedLeaves[leafID] == nil,
+              let found = Self.findNode(leafID, in: root),
+              case .tabs(_, let tabs, _) = found,
+              !tabs.isEmpty else {
+            return
+        }
+
+        let nextRoot: DockLayoutNode
+        if root.id == leafID {
+            nextRoot = .empty()
+        } else {
+            guard let removed = Self.removeNode(leafID, from: root),
+                  let stripped = removed.0 else {
+                return
+            }
+            nextRoot = stripped
+        }
+
+        root = normalizeRoot(nextRoot)
+        minimizedLeaves[leafID] = DockMinimizedLeaf(node: found, edge: edge)
+        minimizedOrder.append(leafID)
+        version &+= 1
+        notifyChange()
+    }
+
+    private func applyRestoreMinimizedLeaf(leafID: DockNodeID) {
+        guard let minimized = minimizedLeaves[leafID] else { return }
+
+        let nextRoot: DockLayoutNode
+        if case .empty = root {
+            nextRoot = minimized.node
+        } else {
+            nextRoot = Self.insertSubtreeAtDropTarget(
+                minimized.node,
+                target: .splitEdge(target: root.id, edge: minimized.edge.dockEdge),
+                in: root,
+                allowRootFallback: true
+            )
+        }
+
+        minimizedLeaves.removeValue(forKey: leafID)
+        minimizedOrder.removeAll { $0 == leafID }
+        root = normalizeRoot(nextRoot)
         version &+= 1
         notifyChange()
     }
@@ -571,14 +646,21 @@ public final class DockController: @unchecked Sendable {
     /// Optionally restores a satellite map captured by an earlier snapshot.
     public func replace(root newRoot: DockLayoutNode,
                         satellites newSatellites: [DockNodeID: DockLayoutNode] = [:],
-                        satelliteOrder newOrder: [DockNodeID] = []) {
+                        satelliteOrder newOrder: [DockNodeID] = [],
+                        minimizedLeaves newMinimizedLeaves: [DockNodeID: DockMinimizedLeaf] = [:],
+                        minimizedOrder newMinimizedOrder: [DockNodeID] = []) {
         let orderedSatellites = newOrder.isEmpty ? Array(newSatellites.keys) : newOrder
+        let orderedMinimized = newMinimizedOrder.isEmpty ? Array(newMinimizedLeaves.keys) : newMinimizedOrder
         guard newRoot != root
             || newSatellites != satellites
-            || orderedSatellites != satelliteOrder else { return }
+            || orderedSatellites != satelliteOrder
+            || newMinimizedLeaves != minimizedLeaves
+            || orderedMinimized != minimizedOrder else { return }
         root = normalizeRoot(newRoot)
         satellites = newSatellites
         satelliteOrder = orderedSatellites.filter { newSatellites[$0] != nil }
+        minimizedLeaves = newMinimizedLeaves
+        minimizedOrder = orderedMinimized.filter { newMinimizedLeaves[$0] != nil }
         version &+= 1
         notifyChange()
     }
@@ -1003,6 +1085,16 @@ public final class DockController: @unchecked Sendable {
             let s = transform(second, mutate: mutate)
             if f == first && s == second { return tree }
             return .split(id: id, axis: axis, fraction: frac, first: f, second: s)
+        }
+    }
+}
+
+private extension DockMinimizedEdge {
+    var dockEdge: DockEdge {
+        switch self {
+        case .left: return .left
+        case .right: return .right
+        case .bottom: return .bottom
         }
     }
 }

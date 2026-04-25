@@ -27,6 +27,8 @@ struct DockLayoutSnapshotTests {
         #expect(snap.root == controller.root)
         #expect(snap.satellites.keys.contains(leafBID))
         #expect(snap.satelliteOrder == [leafBID])
+        #expect(snap.minimizedLeaves.isEmpty)
+        #expect(snap.minimizedOrder.isEmpty)
         #expect(snap.schemaVersion == DockLayoutSnapshot.currentSchemaVersion)
     }
 
@@ -44,6 +46,8 @@ struct DockLayoutSnapshotTests {
         #expect(blank.root == controller.root)
         #expect(blank.satellites == controller.satellites)
         #expect(blank.satelliteOrder == controller.satelliteOrder)
+        #expect(blank.minimizedLeaves == controller.minimizedLeaves)
+        #expect(blank.minimizedOrder == controller.minimizedOrder)
     }
 
     @Test("Decode tolerates missing satellites/satelliteOrder/schemaVersion")
@@ -55,6 +59,8 @@ struct DockLayoutSnapshotTests {
         let decoded = try JSONDecoder().decode(DockLayoutSnapshot.self, from: data)
         #expect(decoded.satellites.isEmpty)
         #expect(decoded.satelliteOrder.isEmpty)
+        #expect(decoded.minimizedLeaves.isEmpty)
+        #expect(decoded.minimizedOrder.isEmpty)
         #expect(decoded.schemaVersion == DockLayoutSnapshot.currentSchemaVersion)
     }
 
@@ -71,5 +77,20 @@ struct DockLayoutSnapshotTests {
         let data = try JSONEncoder().encode(snap)
         let decoded = try JSONDecoder().decode(DockLayoutSnapshot.self, from: data)
         #expect(decoded.satelliteOrder == [realID])
+    }
+
+    @Test("Decode filters minimizedOrder against minimized leaves")
+    func decodeFiltersMinimizedOrder() throws {
+        let realID = DockNodeID()
+        let ghostID = DockNodeID()
+        let leaf = DockLayoutNode.tabs([DockTab(userKey: "x", title: "X")])
+        let snap = DockLayoutSnapshot(
+            root: .empty(),
+            minimizedLeaves: [realID: DockMinimizedLeaf(node: leaf, edge: .bottom)],
+            minimizedOrder: [ghostID, realID]
+        )
+        let data = try JSONEncoder().encode(snap)
+        let decoded = try JSONDecoder().decode(DockLayoutSnapshot.self, from: data)
+        #expect(decoded.minimizedOrder == [realID])
     }
 }

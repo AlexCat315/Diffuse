@@ -81,6 +81,9 @@ struct SettingsPanel: View {
     private func title(for limit: EditorFrameRateLimit) -> String {
         switch limit {
         case .unlimited:
+            if let refreshRate = app.currentDisplayRefreshRate() {
+                return String(format: "%@ %.0f FPS", L("System"), refreshRate)
+            }
             return L("System")
         case .fps30:
             return "30 FPS"
@@ -98,7 +101,7 @@ struct SettingsPanel: View {
         SettingsChoiceButton(title: title(for: limit),
                              isActive: store.state.frameRateLimit == limit) {
             store.dispatch(.setFrameRateLimit(limit))
-            app.applyTargetFrameRate(limit.framesPerSecond)
+            app.applyFrameRateLimit(limit)
             applySettingsChange(store)
         }
     }
