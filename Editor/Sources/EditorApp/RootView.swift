@@ -1,4 +1,5 @@
 import EditorCore
+import EngineKernel
 import GuavaUIApp
 import GuavaUICompose
 import GuavaUIRuntime
@@ -67,7 +68,20 @@ struct EditorRootView: View {
                                                      language: store.state.language)
             }
 
+            let handleShortcut: (KeyEvent) -> Bool = { key in
+                Self.handleEditorShortcut(key,
+                                          playbackState: store.state.playbackState,
+                                          setPlaybackState: setPlaybackState,
+                                          setWorkspaceMode: setWorkspaceMode,
+                                          resetLayout: resetLayout,
+                                          openSettings: {
+                                              app.openSettingsWindow()
+                                          })
+            }
+
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                ShortcutHost(onKeyDown: handleShortcut)
+
                 EditorMainToolbar(playbackState: store.state.playbackState,
                                   workspaceMode: store.state.workspaceMode,
                                   activeLayoutPreset: store.state.activeLayoutPreset,
@@ -94,6 +108,50 @@ struct EditorRootView: View {
             .appearance(store.state.themeMode == .dark ? .dark : .light)
             .flex()
         }
+    }
+
+    private static func handleEditorShortcut(_ key: KeyEvent,
+                                             playbackState: PlaybackState,
+                                             setPlaybackState: (PlaybackState) -> Void,
+                                             setWorkspaceMode: (EditorWorkspaceMode) -> Void,
+                                             resetLayout: () -> Void,
+                                             openSettings: () -> Void) -> Bool {
+        guard !key.isRepeat else { return false }
+
+        let commandLike = key.modifiers.contains(.gui) || key.modifiers.contains(.ctrl)
+        guard commandLike else { return false }
+
+        switch key.keycode {
+        case 0x2C:
+            openSettings()
+            return true
+        case 0x30:
+            resetLayout()
+            return true
+        case 0x31:
+            setWorkspaceMode(.level)
+            return true
+        case 0x32:
+            setWorkspaceMode(.modeling)
+            return true
+        case 0x33:
+            setWorkspaceMode(.animation)
+            return true
+        default:
+            break
+        }
+
+        if key.scancode == 40 || key.scancode == 88 {
+            switch playbackState {
+            case .playing:
+                setPlaybackState(.paused)
+            case .paused, .stopped:
+                setPlaybackState(.playing)
+            }
+            return true
+        }
+
+        return false
     }
 }
 

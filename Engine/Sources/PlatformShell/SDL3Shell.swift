@@ -461,8 +461,20 @@ public final class SDL3Shell: Shell {
                     wx = -wx
                     wy = -wy
                 }
+                var mouseX = event.wheel.mouse_x
+                var mouseY = event.wheel.mouse_y
+                if mouseX == 0, mouseY == 0 {
+                    var currentX: Float = 0
+                    var currentY: Float = 0
+                    _ = SDL_GetMouseState(&currentX, &currentY)
+                    mouseX = currentX
+                    mouseY = currentY
+                }
                 collected.append(WindowInputEvent(windowID: windowID,
-                                                  event: .mouseWheel(MouseWheelEvent(x: wx, y: wy))))
+                                                  event: .mouseWheel(MouseWheelEvent(x: wx,
+                                                                                     y: wy,
+                                                                                     mouseX: mouseX,
+                                                                                     mouseY: mouseY))))
 
             default:
                 break

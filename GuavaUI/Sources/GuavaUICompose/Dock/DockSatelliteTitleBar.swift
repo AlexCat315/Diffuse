@@ -37,7 +37,7 @@ struct _DockSatelliteTitleBar: _PrimitiveView {
         let snapshot = self
         guard let registry = InteractionRegistryHolder.current else { return }
 
-        registry.setKey(node) { event, _ in
+        registry.setKey(node, route: .dockDrag) { event, _ in
             if event.scancode == DOCK_KEY_SCANCODE_ESC {
                 let session = snapshot.controller.dragSession
                 if session.isActive {
@@ -50,7 +50,7 @@ struct _DockSatelliteTitleBar: _PrimitiveView {
             return .ignored
         }
 
-        registry.setPointer(node) { event, phase, _ in
+        registry.setPointer(node, route: .dockDrag) { event, phase, _ in
             guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
@@ -73,7 +73,7 @@ struct _DockSatelliteTitleBar: _PrimitiveView {
             }
         }
 
-        registry.setMotion(node) { event, _ in
+        registry.setMotion(node, route: .dockDrag) { event, _ in
             guard PointerCaptureHolder.current?.target === node else {
                 return .ignored
             }

@@ -92,6 +92,23 @@ struct LayerAwareNodeRendererTests {
         #expect(leafObj.cacheInvalid == false)
     }
 
+    @Test("markRenderDirty on a nested layer invalidates ancestor layer caches")
+    func dirtyNestedLayerInvalidatesAncestorLayerCaches() {
+        let t = Tree()
+        let renderer = LayerAwareNodeRenderer()
+        renderer.render(tree: t.render, into: DrawList())
+
+        let rootObj = t.render.root!
+        let leafObj = t.render.renderObject(for: t.b)!
+        #expect(rootObj.cacheInvalid == false)
+        #expect(leafObj.cacheInvalid == false)
+
+        t.b.contentOffset = CGPoint(x: 0, y: 12)
+
+        #expect(leafObj.cacheInvalid == true)
+        #expect(rootObj.cacheInvalid == true)
+    }
+
     @Test("After invalidation, a new composite re-records the dirty layer")
     func reRecordsAfterInvalidation() {
         let t = Tree()

@@ -116,11 +116,22 @@ public struct MouseButtonEvent: Sendable {
 }
 
 public struct MouseWheelEvent: Sendable {
+    /// Horizontal wheel delta. Positive/negative sign follows the platform
+    /// shell's normalized convention.
     public var x: Float
+    /// Vertical wheel delta. Positive/negative sign follows the platform
+    /// shell's normalized convention.
     public var y: Float
+    /// Optional cursor position in window-local logical coordinates at the
+    /// moment the wheel event was produced.
+    public var mouseX: Float?
+    public var mouseY: Float?
 
-    public init(x: Float, y: Float) {
-        self.x = x; self.y = y
+    public init(x: Float, y: Float, mouseX: Float? = nil, mouseY: Float? = nil) {
+        self.x = x
+        self.y = y
+        self.mouseX = mouseX
+        self.mouseY = mouseY
     }
 }
 
