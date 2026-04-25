@@ -190,4 +190,47 @@ struct EventDispatcherTests {
         #expect(box.recorder.target == ["leaf"])
         #expect(box.recorder.bubble.isEmpty)
     }
+
+    @Test("keyUp uses key-up handlers and does not replay key-down handlers")
+    func keyUpHasDistinctDelivery() {
+        let tree = NodeTree()
+        let interactions = InteractionRegistry()
+        let focus = FocusChain()
+
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 200, height: 200)
+        let leaf = Node()
+        leaf.frame = CGRect(x: 10, y: 10, width: 40, height: 40)
+        leaf.isFocusable = true
+        root.addChild(leaf)
+        tree.root = root
+        focus.focus(leaf)
+
+        var downs = 0
+        var ups = 0
+        interactions.setKey(leaf) { _, _ in
+            downs += 1
+            return .handled
+        }
+        interactions.setKeyUp(leaf) { _, _ in
+            ups += 1
+            return .handled
+        }
+
+        let dispatcher = EventDispatcher(
+            tree: tree,
+            interactions: interactions,
+            capture: PointerCapture(),
+            focusChain: focus
+        )
+        let key = KeyEvent(scancode: 44, keycode: 0, modifiers: [], isRepeat: false)
+
+        dispatcher.dispatch(.keyUp(key))
+        #expect(downs == 0)
+        #expect(ups == 1)
+
+        dispatcher.dispatch(.keyDown(key))
+        #expect(downs == 1)
+        #expect(ups == 1)
+    }
 }

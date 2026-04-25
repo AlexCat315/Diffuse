@@ -81,6 +81,10 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
                 snap.onInputEvent?(.keyDown(event))
                 return .handled
             }
+            registry.setKeyUp(node) { event, _ in
+                snap.onInputEvent?(.keyUp(event))
+                return .handled
+            }
             registry.setText(node) { text, _ in
                 snap.onInputEvent?(.textInput(text))
                 return .handled

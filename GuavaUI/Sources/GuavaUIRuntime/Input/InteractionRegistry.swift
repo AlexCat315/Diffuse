@@ -20,6 +20,12 @@ public enum PointerPhase: Sendable {
     case up
 }
 
+/// Distinguishes key-down from key-up within keyboard delivery.
+public enum KeyPhase: Sendable {
+    case down
+    case up
+}
+
 /// Boundary transition derived from mouse-motion hit-test changes.
 public enum HoverPhase: Sendable {
     case enter
@@ -38,13 +44,15 @@ public final class InteractionRegistry {
         public var motion:  ((MouseMotionEvent, EventPhase) -> EventResult)?
         public var wheel:   ((MouseWheelEvent,  EventPhase) -> EventResult)?
         public var key:     ((KeyEvent,         EventPhase) -> EventResult)?
+        public var keyUp:   ((KeyEvent,         EventPhase) -> EventResult)?
         public var editing: ((TextEditingEvent, EventPhase) -> EventResult)?
         public var text:    ((String,           EventPhase) -> EventResult)?
 
         public init() {}
 
         public var isEmpty: Bool {
-            pointer == nil && hover == nil && motion == nil && wheel == nil && key == nil && editing == nil && text == nil
+            pointer == nil && hover == nil && motion == nil && wheel == nil
+                && key == nil && keyUp == nil && editing == nil && text == nil
         }
     }
 
@@ -100,6 +108,14 @@ public final class InteractionRegistry {
                        _ handler: @escaping (KeyEvent, EventPhase) -> EventResult) {
         withLock {
             var h = table[ObjectIdentifier(node)] ?? Handlers(); h.key = handler
+            table[ObjectIdentifier(node)] = h
+        }
+    }
+
+    public func setKeyUp(_ node: Node,
+                         _ handler: @escaping (KeyEvent, EventPhase) -> EventResult) {
+        withLock {
+            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.keyUp = handler
             table[ObjectIdentifier(node)] = h
         }
     }
