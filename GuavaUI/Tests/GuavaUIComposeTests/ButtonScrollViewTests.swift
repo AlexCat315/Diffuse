@@ -43,6 +43,66 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         }
     }
 
+    private func inspectorSections(sectionCount: Int = 8,
+                                   rowCount: Int = 8) -> [PropertyGridSection] {
+        (0..<sectionCount).map { section in
+            PropertyGridSection(
+                id: "section-\(section)",
+                title: "Section \(section)",
+                rows: (0..<rowCount).map { row in
+                    PropertyGridRow(id: "row-\(section)-\(row)",
+                                    label: "Row \(row)") {
+                        Text("value")
+                    }
+                },
+                isCollapsible: true
+            )
+        }
+    }
+
+    private func inspectorLikeContent(sections: [PropertyGridSection]) -> some View {
+        Box(direction: .column, alignItems: .stretch) {
+            Row(alignment: .center, spacing: 8) {
+                Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                    Text("Cube")
+                    Text("Entity")
+                }
+                Spacer(minLength: 0)
+                Text("ID 1")
+            }
+            .padding(horizontal: 10, vertical: 9)
+
+            Divider()
+
+            PropertyGrid(sections, labelWidth: 88, rowHeight: 24)
+                .flex()
+        }
+        .frame(minWidth: 280)
+    }
+
+    private func scrollInspector(_ tree: NodeTree,
+                                 registry: InteractionRegistry,
+                                 capture: PointerCapture,
+                                 focus: FocusChain) -> Node? {
+        guard let scrollView = firstNode(in: tree.root, where: {
+            registry.handlers(for: $0).wheelRoute?.role == .scroll
+        }) else {
+            return nil
+        }
+
+        let dispatcher = EventDispatcher(tree: tree,
+                                         interactions: registry,
+                                         capture: capture,
+                                         focusChain: focus)
+        let origin = absoluteOrigin(of: scrollView)
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(origin.x + 12),
+                                                          y: Float(origin.y + 12),
+                                                          deltaX: 0,
+                                                          deltaY: 0)))
+        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0, y: -1)))
+        return scrollView
+    }
+
     @Test("Button registers a pointer handler that fires on down+up")
     func buttonFiresOnTap() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
@@ -276,6 +336,153 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
                                          y: thumbY + 40,
                                          clicks: 1), .up, .target) == .handled)
         #expect(capture.target == nil)
+    } }
+
+    @Test("PropertyGrid scrolls inside a constrained inspector-sized viewport")
+    func propertyGridScrollsInsideConstrainedViewport() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = capture
+
+        let sections = inspectorSections()
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            PropertyGrid(sections, labelWidth: 88, rowHeight: 24)
+                .frame(width: 260, height: 180)
+        )
+        graph.computeLayout(width: 260, height: 180)
+
+        let scrollView = firstNode(in: tree.root, where: {
+            registry.handlers(for: $0).wheelRoute?.role == .scroll
+        })
+        #expect(scrollView != nil)
+        guard let scrollView else { return }
+
+        let wheel = registry.handlers(for: scrollView).wheel!
+        #expect(wheel(MouseWheelEvent(x: 0, y: -1), .target) == .handled)
+        #expect(scrollView.contentOffset.y > 0)
+
+        scrollView.contentOffset = .zero
+        let pointer = registry.handlers(for: scrollView).pointer!
+        let motion = registry.handlers(for: scrollView).motion!
+        let scrollbarX = Float(scrollView.frame.width - 6)
+        let thumbY: Float = 10
+
+        #expect(pointer(MouseButtonEvent(button: .left,
+                                         x: scrollbarX,
+                                         y: thumbY,
+                                         clicks: 1), .down, .target) == .handled)
+        #expect(capture.target === scrollView)
+        #expect(motion(MouseMotionEvent(x: scrollbarX,
+                                        y: thumbY + 40,
+                                        deltaX: 0,
+                                        deltaY: 40), .target) == .handled)
+        #expect(scrollView.contentOffset.y > 0)
+    } }
+
+    @Test("Inspector-style PropertyGrid scrolls inside Panel chrome")
+    func inspectorPropertyGridScrollsInsidePanel() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        let focus = FocusChain()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = capture
+        FocusChainHolder.current = focus
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            Panel("Inspector") {
+                inspectorLikeContent(sections: inspectorSections())
+            }
+            .frame(width: 300, height: 260)
+        )
+        graph.computeLayout(width: 300, height: 260)
+
+        let scrollView = scrollInspector(tree,
+                                         registry: registry,
+                                         capture: capture,
+                                         focus: focus)
+        #expect(scrollView != nil)
+        guard let scrollView else { return }
+        #expect(scrollView.contentOffset.y > 0)
+
+        scrollView.contentOffset = .zero
+        let dispatcher = EventDispatcher(tree: tree,
+                                         interactions: registry,
+                                         capture: capture,
+                                         focusChain: focus)
+        let origin = absoluteOrigin(of: scrollView)
+        let rootRight = tree.root.map { absoluteOrigin(of: $0).x + $0.frame.width } ?? origin.x + scrollView.frame.width
+        let scrollbarX = Float(min(origin.x + scrollView.frame.width - 6, rootRight - 6))
+        let thumbY = Float(origin.y + 10)
+        dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(button: .left,
+                                                              x: scrollbarX,
+                                                              y: thumbY,
+                                                              clicks: 1)))
+        #expect(capture.target === scrollView)
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: scrollbarX,
+                                                          y: thumbY + 40,
+                                                          deltaX: 0,
+                                                          deltaY: 40)))
+        #expect(scrollView.contentOffset.y > 0)
+    } }
+
+    @Test("Inspector-style PropertyGrid scrolls when hosted by DockContainer")
+    func inspectorPropertyGridScrollsInsideDockContainer() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        let focus = FocusChain()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = capture
+        FocusChainHolder.current = focus
+
+        let tab = DockTab(userKey: "inspector", title: "Inspector")
+        let controller = DockController(root: .tabs([tab]))
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            DockContainer(controller: controller, horizontalInset: 0) { _ in
+                AnyView(
+                    Panel("Inspector") {
+                        inspectorLikeContent(sections: inspectorSections())
+                    }
+                )
+            }
+            .frame(width: 320, height: 300)
+        )
+        graph.computeLayout(width: 320, height: 300)
+
+        let scrollView = scrollInspector(tree,
+                                         registry: registry,
+                                         capture: capture,
+                                         focus: focus)
+        #expect(scrollView != nil)
+        guard let scrollView else { return }
+        #expect(scrollView.contentOffset.y > 0)
+
+        scrollView.contentOffset = .zero
+        let dispatcher = EventDispatcher(tree: tree,
+                                         interactions: registry,
+                                         capture: capture,
+                                         focusChain: focus)
+        let origin = absoluteOrigin(of: scrollView)
+        let rootRight = tree.root.map { absoluteOrigin(of: $0).x + $0.frame.width } ?? origin.x + scrollView.frame.width
+        let scrollbarX = Float(min(origin.x + scrollView.frame.width - 6, rootRight - 6))
+        let thumbY = Float(origin.y + 10)
+        dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(button: .left,
+                                                              x: scrollbarX,
+                                                              y: thumbY,
+                                                              clicks: 1)))
+        #expect(capture.target === scrollView)
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: scrollbarX,
+                                                          y: thumbY + 40,
+                                                          deltaX: 0,
+                                                          deltaY: 40)))
+        #expect(scrollView.contentOffset.y > 0)
     } }
 
     @Test("Wheel over a scrollable TextField does not bubble into the parent ScrollView")
