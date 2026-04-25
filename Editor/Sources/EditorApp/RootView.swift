@@ -1218,7 +1218,9 @@ enum EditorRootViewFactory {
         let snapshot = DockLayoutSnapshot(
             root: controller.root,
             satellites: controller.satellites,
-            satelliteOrder: controller.satelliteOrder
+            satelliteOrder: controller.satelliteOrder,
+            minimizedLeaves: controller.minimizedLeaves,
+            minimizedOrder: controller.minimizedOrder
         )
 
         // Encode and save to disk
@@ -1260,6 +1262,8 @@ enum EditorRootViewFactory {
             guard !isEmptyDockLayout(snapshot.root) else { return nil }
             snapshot.satellites = sanitizeSatellites(snapshot.satellites)
             snapshot.satelliteOrder = snapshot.satelliteOrder.filter { snapshot.satellites[$0] != nil }
+            snapshot.minimizedLeaves = sanitizeMinimizedLeaves(snapshot.minimizedLeaves)
+            snapshot.minimizedOrder = snapshot.minimizedOrder.filter { snapshot.minimizedLeaves[$0] != nil }
             let controller = DockController(root: snapshot.root)
             controller.load(snapshot)
             return controller
@@ -1282,6 +1286,8 @@ enum EditorRootViewFactory {
             guard !isEmptyDockLayout(snapshot.root) else { return nil }
             snapshot.satellites = sanitizeSatellites(snapshot.satellites)
             snapshot.satelliteOrder = snapshot.satelliteOrder.filter { snapshot.satellites[$0] != nil }
+            snapshot.minimizedLeaves = sanitizeMinimizedLeaves(snapshot.minimizedLeaves)
+            snapshot.minimizedOrder = snapshot.minimizedOrder.filter { snapshot.minimizedLeaves[$0] != nil }
             let controller = DockController(root: snapshot.root)
             controller.load(snapshot)
             return controller
@@ -1323,6 +1329,14 @@ enum EditorRootViewFactory {
                 return nil
             }
             return sanitized
+        }
+    }
+
+    private static func sanitizeMinimizedLeaves(_ leaves: [DockNodeID: DockMinimizedLeaf]) -> [DockNodeID: DockMinimizedLeaf] {
+        leaves.compactMapValues { leaf in
+            let sanitized = sanitizeDockLayout(leaf.node)
+            guard case .tabs = sanitized else { return nil }
+            return DockMinimizedLeaf(node: sanitized, edge: leaf.edge)
         }
     }
 
@@ -1394,6 +1408,14 @@ enum EditorRootViewFactory {
                 let viewportTab = tabs.first { $0.userKey == viewportKey }!
                 controller.apply(.insertTab(viewportTab, into: leafID, at: 0))
                 controller.apply(.closeSatellite(satelliteID))
+                return
+            }
+        }
+
+        for (leafID, minimized) in controller.minimizedLeaves {
+            if case .tabs(_, let tabs, _) = minimized.node,
+               tabs.contains(where: { $0.userKey == viewportKey }) {
+                controller.apply(.restoreMinimizedLeaf(leafID))
                 return
             }
         }

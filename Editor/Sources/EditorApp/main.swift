@@ -34,6 +34,14 @@ private func runEditor() throws {
                                                           preset: app.store.state.activeLayoutPreset)
     let registry = EditorRootViewFactory.makeRegistry(app: app)
     var settingsWindowID: WindowID?
+    func applyFrameRateLimit(_ limit: EditorFrameRateLimit, to display: AppDisplayHandle) {
+        switch limit {
+        case .unlimited:
+            display.setFrameRateMode(.displayRefresh)
+        case .fps30, .fps60, .fps120, .fps240:
+            display.setFrameRateMode(.fixed(limit.framesPerSecond ?? 60))
+        }
+    }
 
     try AppRuntime.run(
         config: AppConfig(title: "GuavaNext Editor",
@@ -42,9 +50,12 @@ private func runEditor() throws {
         events: events,
         onTick: { dt in app.tick(deltaTime: dt) },
         onDisplayReady: { display in
-            display.setTargetFrameRate(app.store.state.frameRateLimit.framesPerSecond)
-            app.setTargetFrameRateHandler { framesPerSecond in
-                display.setTargetFrameRate(framesPerSecond)
+            applyFrameRateLimit(app.store.state.frameRateLimit, to: display)
+            app.setFrameRateLimitHandler { limit in
+                applyFrameRateLimit(limit, to: display)
+            }
+            app.setDisplayRefreshRateProvider {
+                display.currentDisplayRefreshRate()
             }
             app.setDisplayInvalidationHandler {
                 display.requestDisplay()

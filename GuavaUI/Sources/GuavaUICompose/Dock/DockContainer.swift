@@ -94,10 +94,19 @@ struct _StatefulDockContainer: View {
         _ = dragToken
 
         return _DockContainerRoot(controller: controller, hostBridge: hostBridge) {
-            _DockNodeView(node: controller.root,
-                          controller: controller,
-                          content: content)
-                .flex()
+            if controller.minimizedLeaves.isEmpty {
+                _DockNodeView(node: controller.root,
+                              controller: controller,
+                              content: content)
+                    .flex()
+            } else {
+                _DockContainerFrame(controller: controller) {
+                    _DockNodeView(node: controller.root,
+                                  controller: controller,
+                                  content: content)
+                        .flex()
+                }
+            }
         }
     }
 }
@@ -152,6 +161,106 @@ struct _DockContainerRoot<Content: View>: _PrimitiveView {
     }
 
     var _children: [any View] { [content] }
+}
+
+struct _DockContainerFrame<Content: View>: View {
+    let controller: DockController
+    let content: Content
+
+    init(controller: DockController,
+         @ViewBuilder content: () -> Content) {
+        self.controller = controller
+        self.content = content()
+    }
+
+    var body: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            Box(direction: .row, alignItems: .stretch, spacing: 0) {
+                _DockMinimizedRail(edge: .left, controller: controller)
+                content.flex()
+                _DockMinimizedRail(edge: .right, controller: controller)
+            }
+            .flex()
+            _DockMinimizedRail(edge: .bottom, controller: controller)
+        }
+        .flex()
+    }
+}
+
+struct _DockMinimizedRail: _PrimitiveView {
+    let edge: DockMinimizedEdge
+    let controller: DockController
+
+    func _makeNode() -> Node {
+        let n = Node()
+        n.isHitTestable = false
+        return n
+    }
+
+    func _updateNode(_ node: Node) {
+        node.animatableSet(\.backgroundColor,
+                           to: items().isEmpty ? nil : node.theme.colors.surfaceVariant)
+    }
+
+    func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        let hasItems = !items().isEmpty
+        switch edge {
+        case .left, .right:
+            layout.flexDirection = .column
+            layout.alignItems = .center
+            layout.setGap(4, gutter: .all)
+            layout.width = hasItems ? 36 : 0
+            layout.flexShrink = 0
+        case .bottom:
+            layout.flexDirection = .row
+            layout.alignItems = .center
+            layout.setGap(6, gutter: .all)
+            layout.height = hasItems ? 36 : 0
+            layout.flexShrink = 0
+        }
+    }
+
+    func _children(for node: Node) -> [any View] {
+        items().map { id, leaf in
+            let title = railTitle(for: leaf.node, compact: edge != .bottom)
+            let tooltip = railTitle(for: leaf.node, compact: false)
+            let button = Button(title, tooltip: tooltip) {
+                controller.apply(.restoreMinimizedLeaf(id))
+            }
+            .buttonStyle(.ghost)
+            switch edge {
+            case .left, .right:
+                return button.frame(width: 28, height: 28) as any View
+            case .bottom:
+                return button as any View
+            }
+        }
+    }
+
+    private func items() -> [(DockNodeID, DockMinimizedLeaf)] {
+        controller.minimizedOrder.compactMap { id in
+            guard let leaf = controller.minimizedLeaves[id], leaf.edge == edge else { return nil }
+            return (id, leaf)
+        }
+    }
+
+    private func railTitle(for node: DockLayoutNode, compact: Bool) -> String {
+        let title: String
+        switch node {
+        case .tabs(_, let tabs, let active):
+            title = active.flatMap { activeID in
+                tabs.first(where: { $0.id == activeID })?.title
+            } ?? tabs.first?.title ?? "Panel"
+        case .empty:
+            title = "Panel"
+        case .split:
+            title = "Group"
+        }
+        guard compact else { return title }
+        return title.first.map { String($0).uppercased() } ?? "P"
+    }
 }
 
 /// Process-wide registry that gives each `(controller, container-instance)`

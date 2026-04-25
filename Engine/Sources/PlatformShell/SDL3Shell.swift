@@ -527,6 +527,35 @@ public final class SDL3Shell: Shell {
         _ = SDL_RaiseWindow(handle.window)
     }
 
+    public func displayRefreshRate(windowID: WindowID? = nil) -> Double? {
+        guard didInitializeSDL else { return nil }
+
+        let displayID: SDL_DisplayID
+        if let windowID,
+           let handle = windows[windowID] {
+            displayID = SDL_GetDisplayForWindow(handle.window)
+        } else if let mainWindowID,
+                  let handle = windows[mainWindowID] {
+            displayID = SDL_GetDisplayForWindow(handle.window)
+        } else {
+            displayID = SDL_GetPrimaryDisplay()
+        }
+
+        guard displayID != 0,
+              let mode = SDL_GetCurrentDisplayMode(displayID)
+        else { return nil }
+
+        let preciseNumerator = mode.pointee.refresh_rate_numerator
+        let preciseDenominator = mode.pointee.refresh_rate_denominator
+        if preciseNumerator > 0, preciseDenominator > 0 {
+            return Double(preciseNumerator) / Double(preciseDenominator)
+        }
+
+        let refreshRate = mode.pointee.refresh_rate
+        guard refreshRate.isFinite, refreshRate > 0 else { return nil }
+        return Double(refreshRate)
+    }
+
     public func shutdown() {
         let ids = windowIDs
         for id in ids {

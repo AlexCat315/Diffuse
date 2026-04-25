@@ -93,6 +93,10 @@ public protocol Shell: AnyObject {
     /// window is unknown.
     func raiseWindow(_ windowID: WindowID)
 
+    /// Refresh rate of the display currently containing `windowID`.
+    /// Returns `nil` when the platform cannot report it.
+    func displayRefreshRate(windowID: WindowID?) -> Double?
+
     func shutdown()
 }
 
@@ -150,6 +154,7 @@ public extension Shell {
     func windowPosition(_ windowID: WindowID) -> (x: Float, y: Float)? { nil }
     func setWindowPosition(_ windowID: WindowID, x: Float, y: Float) {}
     func raiseWindow(_ windowID: WindowID) {}
+    func displayRefreshRate(windowID: WindowID? = nil) -> Double? { nil }
 }
 
 @MainActor
