@@ -37,6 +37,9 @@ public final class EventDispatcher {
     /// Callers (typically the platform host) should forward this to
     /// `Shell.setCursor(_:)`.
     public var cursorSink: ((SystemCursor) -> Void)?
+    /// Optional debug hook for tooling. It is invoked after each handler call
+    /// with the resolved route metadata and result.
+    public var traceSink: ((InputDispatchTrace) -> Void)?
     private var activeCursor: SystemCursor = .arrow
 
     /// Last known pointer position from `mouseMotion`. Used to hit-test wheel
@@ -83,6 +86,12 @@ public final class EventDispatcher {
     private func dispatchPointerDown(_ event: MouseButtonEvent) {
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         guard let hit = hitTest(point: point) else { return }
+        if deliverPriority(path: hit.path,
+                           kind: .pointer(event, .down),
+                           minPriority: .chrome,
+                           phase: .capture) == .handled {
+            return
+        }
         _ = deliver(path: hit.path, kind: .pointer(event, .down))
         // Auto-focus on click for focusable targets.
         if hit.node.isFocusable {
@@ -237,6 +246,33 @@ public final class EventDispatcher {
         return .ignored
     }
 
+    private func deliverPriority(path: [Node],
+                                 kind: EventKind,
+                                 minPriority: InputRoutingPriority,
+                                 phase: EventPhase) -> EventResult {
+        let candidates = path.enumerated().compactMap { index, node -> (Int, Node, InputHandlerRoute)? in
+            let handlers = interactions.handlers(for: node)
+            guard let route = route(in: handlers, kind: kind),
+                  route.priority >= minPriority else {
+                return nil
+            }
+            return (index, node, route)
+        }
+        .sorted {
+            if $0.2.priority != $1.2.priority {
+                return $0.2.priority > $1.2.priority
+            }
+            return $0.0 > $1.0
+        }
+
+        for (_, node, _) in candidates {
+            if invoke(node: node, kind: kind, phase: phase) == .handled {
+                return .handled
+            }
+        }
+        return .ignored
+    }
+
     private func preferredFocusedWheelPath(from focusedPath: [Node]?) -> [Node]? {
         guard let focusedPath,
               let focused = focusedPath.last,
@@ -255,15 +291,21 @@ public final class EventDispatcher {
 
     private func invoke(node: Node, kind: EventKind, phase: EventPhase) -> EventResult {
         let handlers = interactions.handlers(for: node)
-        switch kind {
-        case .pointer(let e, let pp): return handlers.pointer?(e, pp, phase) ?? .ignored
-        case .motion(let e):  return handlers.motion?(e, phase)  ?? .ignored
-        case .wheel(let e):   return handlers.wheel?(e, phase)   ?? .ignored
+        let result: EventResult = switch kind {
+        case .pointer(let e, let pp): handlers.pointer?(e, pp, phase) ?? .ignored
+        case .motion(let e):  handlers.motion?(e, phase)  ?? .ignored
+        case .wheel(let e):   handlers.wheel?(e, phase)   ?? .ignored
         case .key(let e, let keyPhase):
-            return keyHandler(in: handlers, phase: keyPhase)?(e, phase) ?? .ignored
-        case .editing(let e): return handlers.editing?(e, phase) ?? .ignored
-        case .text(let s):    return handlers.text?(s, phase)    ?? .ignored
+            keyHandler(in: handlers, phase: keyPhase)?(e, phase) ?? .ignored
+        case .editing(let e): handlers.editing?(e, phase) ?? .ignored
+        case .text(let s):    handlers.text?(s, phase)    ?? .ignored
         }
+        traceSink?(InputDispatchTrace(kind: dispatchKind(for: kind),
+                                      nodeID: node.id,
+                                      phase: phase,
+                                      route: route(in: handlers, kind: kind),
+                                      result: result))
+        return result
     }
 
     // MARK: - Helpers
@@ -289,6 +331,41 @@ public final class EventDispatcher {
         switch phase {
         case .down: return handlers.key
         case .up: return handlers.keyUp
+        }
+    }
+
+    private func route(in handlers: InteractionRegistry.Handlers,
+                       kind: EventKind) -> InputHandlerRoute? {
+        switch kind {
+        case .pointer: return handlers.pointerRoute
+        case .motion: return handlers.motionRoute
+        case .wheel: return handlers.wheelRoute
+        case .key(_, let phase):
+            switch phase {
+            case .down: return handlers.keyRoute
+            case .up: return handlers.keyUpRoute
+            }
+        case .editing: return handlers.editingRoute
+        case .text: return handlers.textRoute
+        }
+    }
+
+    private func dispatchKind(for kind: EventKind) -> InputDispatchKind {
+        switch kind {
+        case .pointer(_, let phase):
+            switch phase {
+            case .down: return .pointerDown
+            case .up: return .pointerUp
+            }
+        case .motion: return .motion
+        case .wheel: return .wheel
+        case .key(_, let phase):
+            switch phase {
+            case .down: return .keyDown
+            case .up: return .keyUp
+            }
+        case .editing: return .editing
+        case .text: return .text
         }
     }
 

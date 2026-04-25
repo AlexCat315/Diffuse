@@ -32,6 +32,109 @@ public enum HoverPhase: Sendable {
     case leave
 }
 
+/// Semantic role attached to an input handler. Dispatch still works without
+/// roles, but richer roles let the router resolve chrome/focus/viewport
+/// conflicts without hard-coding component types.
+public enum InputHandlerRole: Sendable, Equatable {
+    case control
+    case scroll
+    case scrollChrome
+    case textInput
+    case viewport
+    case dock
+    case drag
+    case shortcut
+    case custom(String)
+}
+
+/// Coarse priority band used by the dispatcher before falling back to normal
+/// tree order. Values are intentionally spaced so future app layers can insert
+/// intermediate priorities without changing the enum cases.
+public struct InputRoutingPriority: Sendable, Comparable, Equatable {
+    public let rawValue: Int
+
+    public init(rawValue: Int) {
+        self.rawValue = rawValue
+    }
+
+    public static let background = InputRoutingPriority(rawValue: 0)
+    public static let normal = InputRoutingPriority(rawValue: 100)
+    public static let focused = InputRoutingPriority(rawValue: 200)
+    public static let chrome = InputRoutingPriority(rawValue: 300)
+    public static let capture = InputRoutingPriority(rawValue: 400)
+    public static let modal = InputRoutingPriority(rawValue: 500)
+    public static let system = InputRoutingPriority(rawValue: 600)
+
+    public static func < (lhs: InputRoutingPriority, rhs: InputRoutingPriority) -> Bool {
+        lhs.rawValue < rhs.rawValue
+    }
+}
+
+/// Metadata for a node handler in the input routing table.
+public struct InputHandlerRoute: Sendable, Equatable {
+    public var role: InputHandlerRole
+    public var priority: InputRoutingPriority
+    public var debugName: String
+
+    public init(role: InputHandlerRole = .control,
+                priority: InputRoutingPriority = .normal,
+                debugName: String = "") {
+        self.role = role
+        self.priority = priority
+        self.debugName = debugName
+    }
+
+    public static let control = InputHandlerRoute(role: .control,
+                                                  priority: .normal,
+                                                  debugName: "control")
+    public static let scroll = InputHandlerRoute(role: .scroll,
+                                                 priority: .normal,
+                                                 debugName: "scroll")
+    public static let scrollChrome = InputHandlerRoute(role: .scrollChrome,
+                                                       priority: .chrome,
+                                                       debugName: "scroll.chrome")
+    public static let textInput = InputHandlerRoute(role: .textInput,
+                                                    priority: .focused,
+                                                    debugName: "text.input")
+    public static let viewport = InputHandlerRoute(role: .viewport,
+                                                   priority: .focused,
+                                                   debugName: "viewport")
+    public static let dockDrag = InputHandlerRoute(role: .dock,
+                                                   priority: .capture,
+                                                   debugName: "dock.drag")
+}
+
+public enum InputDispatchKind: Sendable, Equatable {
+    case pointerDown
+    case pointerUp
+    case motion
+    case wheel
+    case keyDown
+    case keyUp
+    case editing
+    case text
+}
+
+public struct InputDispatchTrace: Sendable, Equatable {
+    public var kind: InputDispatchKind
+    public var nodeID: ElementID
+    public var phase: EventPhase
+    public var route: InputHandlerRoute?
+    public var result: EventResult
+
+    public init(kind: InputDispatchKind,
+                nodeID: ElementID,
+                phase: EventPhase,
+                route: InputHandlerRoute?,
+                result: EventResult) {
+        self.kind = kind
+        self.nodeID = nodeID
+        self.phase = phase
+        self.route = route
+        self.result = result
+    }
+}
+
 /// Per-node handler closures registered by Compose-layer modifiers.
 ///
 /// `Node` itself stays free of handler state so Runtime types remain
@@ -47,6 +150,14 @@ public final class InteractionRegistry {
         public var keyUp:   ((KeyEvent,         EventPhase) -> EventResult)?
         public var editing: ((TextEditingEvent, EventPhase) -> EventResult)?
         public var text:    ((String,           EventPhase) -> EventResult)?
+
+        public var pointerRoute: InputHandlerRoute?
+        public var motionRoute: InputHandlerRoute?
+        public var wheelRoute: InputHandlerRoute?
+        public var keyRoute: InputHandlerRoute?
+        public var keyUpRoute: InputHandlerRoute?
+        public var editingRoute: InputHandlerRoute?
+        public var textRoute: InputHandlerRoute?
 
         public init() {}
 
@@ -73,9 +184,12 @@ public final class InteractionRegistry {
     }
 
     public func setPointer(_ node: Node,
+                           route: InputHandlerRoute = .control,
                            _ handler: @escaping (MouseButtonEvent, PointerPhase, EventPhase) -> EventResult) {
         withLock {
-            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.pointer = handler
+            var h = table[ObjectIdentifier(node)] ?? Handlers()
+            h.pointer = handler
+            h.pointerRoute = route
             table[ObjectIdentifier(node)] = h
         }
     }
@@ -89,49 +203,67 @@ public final class InteractionRegistry {
     }
 
     public func setMotion(_ node: Node,
+                          route: InputHandlerRoute = .control,
                           _ handler: @escaping (MouseMotionEvent, EventPhase) -> EventResult) {
         withLock {
-            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.motion = handler
+            var h = table[ObjectIdentifier(node)] ?? Handlers()
+            h.motion = handler
+            h.motionRoute = route
             table[ObjectIdentifier(node)] = h
         }
     }
 
     public func setWheel(_ node: Node,
+                         route: InputHandlerRoute = .scroll,
                          _ handler: @escaping (MouseWheelEvent, EventPhase) -> EventResult) {
         withLock {
-            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.wheel = handler
+            var h = table[ObjectIdentifier(node)] ?? Handlers()
+            h.wheel = handler
+            h.wheelRoute = route
             table[ObjectIdentifier(node)] = h
         }
     }
 
     public func setKey(_ node: Node,
+                       route: InputHandlerRoute = .control,
                        _ handler: @escaping (KeyEvent, EventPhase) -> EventResult) {
         withLock {
-            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.key = handler
+            var h = table[ObjectIdentifier(node)] ?? Handlers()
+            h.key = handler
+            h.keyRoute = route
             table[ObjectIdentifier(node)] = h
         }
     }
 
     public func setKeyUp(_ node: Node,
+                         route: InputHandlerRoute = .control,
                          _ handler: @escaping (KeyEvent, EventPhase) -> EventResult) {
         withLock {
-            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.keyUp = handler
+            var h = table[ObjectIdentifier(node)] ?? Handlers()
+            h.keyUp = handler
+            h.keyUpRoute = route
             table[ObjectIdentifier(node)] = h
         }
     }
 
     public func setEditing(_ node: Node,
+                           route: InputHandlerRoute = .textInput,
                            _ handler: @escaping (TextEditingEvent, EventPhase) -> EventResult) {
         withLock {
-            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.editing = handler
+            var h = table[ObjectIdentifier(node)] ?? Handlers()
+            h.editing = handler
+            h.editingRoute = route
             table[ObjectIdentifier(node)] = h
         }
     }
 
     public func setText(_ node: Node,
+                        route: InputHandlerRoute = .textInput,
                         _ handler: @escaping (String, EventPhase) -> EventResult) {
         withLock {
-            var h = table[ObjectIdentifier(node)] ?? Handlers(); h.text = handler
+            var h = table[ObjectIdentifier(node)] ?? Handlers()
+            h.text = handler
+            h.textRoute = route
             table[ObjectIdentifier(node)] = h
         }
     }
