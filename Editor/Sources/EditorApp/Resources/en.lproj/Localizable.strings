@@ -8,6 +8,13 @@
 /* Inspector */
 "No selection" = "No selection";
 "Select an entity in Hierarchy to inspect SceneRuntime components." = "Select an entity in Hierarchy to inspect SceneRuntime components.";
+"Components" = "Components";
+"Sections" = "Sections";
+"Expand all" = "Expand all";
+"Collapse all" = "Collapse all";
+"No properties" = "No properties";
+"On" = "On";
+"Off" = "Off";
 
 /* Hierarchy */
 "Search" = "Search";
