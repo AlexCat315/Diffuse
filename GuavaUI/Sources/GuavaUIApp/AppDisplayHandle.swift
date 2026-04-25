@@ -35,6 +35,8 @@ public final class AppDisplayHandle: @unchecked Sendable {
     private var closeAuxiliaryWindow: (@MainActor (WindowID) -> Void)?
     private var auxiliaryWindowIsOpen: (@MainActor (WindowID) -> Bool)?
     private var setRuntimeTargetFrameRate: (@MainActor (Double?) -> Void)?
+    private var setRuntimeFrameRateMode: (@MainActor (PlatformFrameRateMode) -> Void)?
+    private var currentRuntimeDisplayRefreshRate: (@MainActor () -> Double?)?
 
     public init() {}
 
@@ -46,6 +48,17 @@ public final class AppDisplayHandle: @unchecked Sendable {
     public func setTargetFrameRate(_ framesPerSecond: Double?) {
         setRuntimeTargetFrameRate?(framesPerSecond)
         requestDisplay()
+    }
+
+    @MainActor
+    public func setFrameRateMode(_ mode: PlatformFrameRateMode) {
+        setRuntimeFrameRateMode?(mode)
+        requestDisplay()
+    }
+
+    @MainActor
+    public func currentDisplayRefreshRate() -> Double? {
+        currentRuntimeDisplayRefreshRate?()
     }
 
     @MainActor
@@ -83,7 +96,11 @@ public final class AppDisplayHandle: @unchecked Sendable {
     }
 
     @MainActor
-    func installRuntimeControls(setTargetFrameRate: @escaping @MainActor (Double?) -> Void) {
+    func installRuntimeControls(setTargetFrameRate: @escaping @MainActor (Double?) -> Void,
+                                setFrameRateMode: @escaping @MainActor (PlatformFrameRateMode) -> Void,
+                                currentDisplayRefreshRate: @escaping @MainActor () -> Double?) {
         setRuntimeTargetFrameRate = setTargetFrameRate
+        setRuntimeFrameRateMode = setFrameRateMode
+        currentRuntimeDisplayRefreshRate = currentDisplayRefreshRate
     }
 }

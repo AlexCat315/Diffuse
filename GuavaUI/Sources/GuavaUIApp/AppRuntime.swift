@@ -196,6 +196,12 @@ public final class AppRuntime {
         displayHandle.installRuntimeControls(
             setTargetFrameRate: { [weak self] framesPerSecond in
                 self?.host.setTargetFrameRate(framesPerSecond)
+            },
+            setFrameRateMode: { [weak self] mode in
+                self?.host.setFrameRateMode(mode)
+            },
+            currentDisplayRefreshRate: { [weak self] in
+                self?.host.currentDisplayRefreshRate()
             }
         )
         onDisplayReady?(displayHandle)

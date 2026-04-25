@@ -12,25 +12,35 @@ public struct DockLayoutSnapshot: Codable, Equatable, Sendable {
     /// Insertion order for `satellites`. Filtered against the dictionary on
     /// decode so callers get a deterministic, dict-aligned sequence.
     public var satelliteOrder: [DockNodeID]
+    /// Leaves minimized onto edge rails, keyed by their original node id.
+    public var minimizedLeaves: [DockNodeID: DockMinimizedLeaf]
+    /// Insertion order for minimized leaves.
+    public var minimizedOrder: [DockNodeID]
     /// Schema version. Bump when fields change shape.
     public var schemaVersion: Int
 
-    public static let currentSchemaVersion = 1
+    public static let currentSchemaVersion = 2
 
     public init(root: DockLayoutNode,
                 satellites: [DockNodeID: DockLayoutNode] = [:],
                 satelliteOrder: [DockNodeID] = [],
+                minimizedLeaves: [DockNodeID: DockMinimizedLeaf] = [:],
+                minimizedOrder: [DockNodeID] = [],
                 schemaVersion: Int = currentSchemaVersion) {
         self.root = root
         self.satellites = satellites
         self.satelliteOrder = satelliteOrder.isEmpty
             ? Array(satellites.keys)
             : satelliteOrder.filter { satellites[$0] != nil }
+        self.minimizedLeaves = minimizedLeaves
+        self.minimizedOrder = minimizedOrder.isEmpty
+            ? Array(minimizedLeaves.keys)
+            : minimizedOrder.filter { minimizedLeaves[$0] != nil }
         self.schemaVersion = schemaVersion
     }
 
     private enum CodingKeys: String, CodingKey {
-        case root, satellites, satelliteOrder, schemaVersion
+        case root, satellites, satelliteOrder, minimizedLeaves, minimizedOrder, schemaVersion
     }
 
     public init(from decoder: Decoder) throws {
@@ -43,9 +53,18 @@ public struct DockLayoutSnapshot: Codable, Equatable, Sendable {
         let normalisedOrder = order.isEmpty
             ? Array(decodedSats.keys)
             : order.filter { decodedSats[$0] != nil }
+        let decodedMinimized = try c.decodeIfPresent([DockNodeID: DockMinimizedLeaf].self,
+                                                      forKey: .minimizedLeaves) ?? [:]
+        let minimizedOrder = try c.decodeIfPresent([DockNodeID].self,
+                                                   forKey: .minimizedOrder) ?? []
+        let normalisedMinimizedOrder = minimizedOrder.isEmpty
+            ? Array(decodedMinimized.keys)
+            : minimizedOrder.filter { decodedMinimized[$0] != nil }
         self.root = decodedRoot
         self.satellites = decodedSats
         self.satelliteOrder = normalisedOrder
+        self.minimizedLeaves = decodedMinimized
+        self.minimizedOrder = normalisedMinimizedOrder
         self.schemaVersion = try c.decodeIfPresent(Int.self,
                                                     forKey: .schemaVersion)
             ?? Self.currentSchemaVersion
@@ -57,7 +76,9 @@ public extension DockController {
     func snapshot() -> DockLayoutSnapshot {
         DockLayoutSnapshot(root: root,
                            satellites: satellites,
-                           satelliteOrder: satelliteOrder)
+                           satelliteOrder: satelliteOrder,
+                           minimizedLeaves: minimizedLeaves,
+                           minimizedOrder: minimizedOrder)
     }
 
     /// Replace the current layout with the contents of `snapshot`.
@@ -65,6 +86,8 @@ public extension DockController {
     func load(_ snapshot: DockLayoutSnapshot) {
         replace(root: snapshot.root,
                 satellites: snapshot.satellites,
-                satelliteOrder: snapshot.satelliteOrder)
+                satelliteOrder: snapshot.satelliteOrder,
+                minimizedLeaves: snapshot.minimizedLeaves,
+                minimizedOrder: snapshot.minimizedOrder)
     }
 }

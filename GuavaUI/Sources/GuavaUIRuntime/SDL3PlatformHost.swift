@@ -94,6 +94,12 @@ public final class PlatformWindowSession {
     }
 }
 
+public enum PlatformFrameRateMode: Sendable, Equatable {
+    case eventDriven
+    case displayRefresh
+    case fixed(Double)
+}
+
 /// `PlatformHost` backed by SDL3 via Engine's `PlatformShell`.
 ///
 /// The host keeps one runtime session per native window: each session owns its
@@ -136,7 +142,7 @@ public final class SDL3PlatformHost: PlatformHost {
     public var onBeforeCommit: (@MainActor (_ deltaTime: Double) -> Void)?
     public var externalDisplayRequestDrain: (() -> Bool)?
 
-    private var targetFrameInterval: Double?
+    private var frameRateMode: PlatformFrameRateMode = .eventDriven
 
     public init(title: String = "GuavaUI",
                 recomposer: Recomposer = Recomposer(),
@@ -232,10 +238,25 @@ public final class SDL3PlatformHost: PlatformHost {
 
     public func setTargetFrameRate(_ framesPerSecond: Double?) {
         guard let framesPerSecond, framesPerSecond.isFinite, framesPerSecond > 0 else {
-            targetFrameInterval = nil
+            frameRateMode = .eventDriven
             return
         }
-        targetFrameInterval = 1.0 / max(1.0, min(240.0, framesPerSecond))
+        frameRateMode = .fixed(Self.sanitizedFrameRate(framesPerSecond))
+    }
+
+    public func setFrameRateMode(_ mode: PlatformFrameRateMode) {
+        switch mode {
+        case .eventDriven, .displayRefresh:
+            frameRateMode = mode
+        case let .fixed(framesPerSecond):
+            frameRateMode = .fixed(Self.sanitizedFrameRate(framesPerSecond))
+        }
+    }
+
+    public func currentDisplayRefreshRate(windowID: WindowID? = nil) -> Double? {
+        guard let shell else { return nil }
+        let resolvedWindowID = windowID ?? mainWindowID
+        return Self.sanitizedOptionalFrameRate(shell.displayRefreshRate(windowID: resolvedWindowID))
     }
 
     private func runLoop() {
@@ -243,12 +264,14 @@ public final class SDL3PlatformHost: PlatformHost {
 
         _isRunning = true
         Logger.runtime.info("running — \(title)")
-        var lastFrameTime = TimingTrace.now()
+        var lastLoopTime = TimingTrace.now()
+        var lastFramePreparationTime: Double?
 
         while _isRunning && shell.isRunning && !sessions.isEmpty {
             let frameStart = TimingTrace.now()
-            let deltaTime = frameStart - lastFrameTime
-            lastFrameTime = frameStart
+            let loopDeltaTime = frameStart - lastLoopTime
+            lastLoopTime = frameStart
+            var framePreparationDelta = loopDeltaTime
             var timing = TimingTrace(label: "[timing] host.frame")
 
             var handledEvents = false
@@ -274,11 +297,31 @@ public final class SDL3PlatformHost: PlatformHost {
             }
             timing.mark("events")
 
-            let shouldRunFramePreparation = sessions.values.contains { session in
+            let hasDisplayWork = sessions.values.contains { session in
                 session.needsDisplay || session.tree.hasRenderUpdates || session.recomposer.hasPending
             }
+            let targetFrameInterval = currentFrameInterval(shell: shell)
+            let frameDue: Bool = {
+                guard let targetFrameInterval else { return hasDisplayWork }
+                guard let lastFramePreparationTime else { return true }
+                return frameStart - lastFramePreparationTime >= targetFrameInterval
+            }()
+            let isCadenceDriven = targetFrameInterval != nil
+            var shouldRunFramePreparation = frameDue
+            if isCadenceDriven,
+               frameDue,
+               let mainWindowID,
+               let session = sessions[mainWindowID] {
+                session.needsDisplay = true
+            }
             if shouldRunFramePreparation {
-                onBeforeCommit?(deltaTime)
+                if let lastFramePreparationTime {
+                    framePreparationDelta = frameStart - lastFramePreparationTime
+                } else if let targetFrameInterval {
+                    framePreparationDelta = targetFrameInterval
+                }
+                lastFramePreparationTime = frameStart
+                onBeforeCommit?(framePreparationDelta)
             }
             timing.mark("prepare")
 
@@ -295,7 +338,7 @@ public final class SDL3PlatformHost: PlatformHost {
             }
             timing.mark("commit")
 
-            AnimatorScheduler.current.tick(deltaTime: deltaTime)
+            AnimatorScheduler.current.tick(deltaTime: loopDeltaTime)
             let animationsActive = AnimatorScheduler.current.hasActiveAnimations
             timing.mark("animations")
 
@@ -327,7 +370,8 @@ public final class SDL3PlatformHost: PlatformHost {
                 }
 
                 let hasRenderInvalidation = session.tree.hasRenderUpdates
-                let shouldRender = session.needsDisplay || hasRenderInvalidation
+                let shouldRender = (session.needsDisplay || hasRenderInvalidation)
+                    && (!isCadenceDriven || frameDue)
 
                 if shouldRender, let surface = handle.renderSurface {
                     var reasons: [String] = []
@@ -369,7 +413,7 @@ public final class SDL3PlatformHost: PlatformHost {
             timing.mark("windows")
 
             if renderedAnyFrame {
-                let deltaText = String(format: "%.2fms", deltaTime * 1000)
+                let deltaText = String(format: "%.2fms", framePreparationDelta * 1000)
                 let extra = [
                     "delta=\(deltaText)",
                     "animationsActive=\(animationsActive)",
@@ -379,12 +423,12 @@ public final class SDL3PlatformHost: PlatformHost {
 
             pruneClosedSessions(using: shell)
 
-            let producedWork = handledEvents || committedAny || renderedAnyFrame || animationsActive
-            if let targetFrameInterval, producedWork {
-                let elapsed = TimingTrace.now() - frameStart
-                let remaining = targetFrameInterval - elapsed
+            if let targetFrameInterval,
+               let lastFramePreparationTime {
+                let nextFrameTime = lastFramePreparationTime + targetFrameInterval
+                let remaining = nextFrameTime - TimingTrace.now()
                 if remaining > 0 {
-                    Thread.sleep(forTimeInterval: remaining)
+                    Thread.sleep(forTimeInterval: min(max(remaining, 0.001), 0.005))
                 }
             } else if !handledEvents && !committedAny && !renderedAnyFrame {
                 Thread.sleep(forTimeInterval: 0.001)
@@ -400,6 +444,31 @@ public final class SDL3PlatformHost: PlatformHost {
         drawableSize = (1, 1)
         logicalSize = (1, 1)
         Logger.runtime.info("stopped")
+    }
+
+    private func currentFrameInterval(shell: any Shell) -> Double? {
+        switch frameRateMode {
+        case .eventDriven:
+            return nil
+        case .displayRefresh:
+            let refreshRate = Self.sanitizedOptionalFrameRate(
+                shell.displayRefreshRate(windowID: mainWindowID)
+            ) ?? 60
+            return 1.0 / refreshRate
+        case let .fixed(framesPerSecond):
+            return 1.0 / Self.sanitizedFrameRate(framesPerSecond)
+        }
+    }
+
+    private static func sanitizedOptionalFrameRate(_ framesPerSecond: Double?) -> Double? {
+        guard let framesPerSecond, framesPerSecond.isFinite, framesPerSecond > 0 else {
+            return nil
+        }
+        return sanitizedFrameRate(framesPerSecond)
+    }
+
+    private static func sanitizedFrameRate(_ framesPerSecond: Double) -> Double {
+        max(1.0, min(240.0, framesPerSecond))
     }
 
     private func resolveShell() throws -> any Shell {

@@ -37,7 +37,8 @@ public final class EditorApplication {
     private var lastViewportSurfaceState = ViewportSurfaceState()
     private var openSettingsWindowHandler: (() -> Void)?
     private var displayInvalidationHandler: (() -> Void)?
-    private var targetFrameRateHandler: ((Double?) -> Void)?
+    private var frameRateLimitHandler: ((EditorFrameRateLimit) -> Void)?
+    private var displayRefreshRateProvider: (() -> Double?)?
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
     private var frameTiming = EditorFrameTiming()
@@ -156,12 +157,20 @@ public final class EditorApplication {
         displayInvalidationHandler?()
     }
 
-    public func setTargetFrameRateHandler(_ handler: ((Double?) -> Void)?) {
-        targetFrameRateHandler = handler
+    public func setFrameRateLimitHandler(_ handler: ((EditorFrameRateLimit) -> Void)?) {
+        frameRateLimitHandler = handler
     }
 
-    public func applyTargetFrameRate(_ framesPerSecond: Double?) {
-        targetFrameRateHandler?(framesPerSecond)
+    public func applyFrameRateLimit(_ limit: EditorFrameRateLimit) {
+        frameRateLimitHandler?(limit)
+    }
+
+    public func setDisplayRefreshRateProvider(_ provider: (() -> Double?)?) {
+        displayRefreshRateProvider = provider
+    }
+
+    public func currentDisplayRefreshRate() -> Double? {
+        displayRefreshRateProvider?()
     }
 
     /// 把资产生成到场景中，并把新实体设为当前选中。
