@@ -790,6 +790,9 @@ enum EditorRootViewFactory {
             themeMode = try values.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode) ?? .dark
             language = try values.decodeIfPresent(EditorLanguage.self, forKey: .language) ?? .system
             frameRateLimit = try values.decodeIfPresent(EditorFrameRateLimit.self, forKey: .frameRateLimit) ?? .unlimited
+            if frameRateLimit == .fps240 {
+                frameRateLimit = .unlimited
+            }
             schemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         }
     }

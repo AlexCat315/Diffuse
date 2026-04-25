@@ -107,12 +107,25 @@ public enum EditorLanguage: String, Codable, Sendable, CaseIterable {
     public var lprojName: String? {
         switch self {
         case .system:
-            return nil
+            return Self.systemLprojName()
         case .english:
             return "en"
         case .simplifiedChinese:
             return "zh-Hans"
         }
+    }
+
+    private static func systemLprojName() -> String {
+        for identifier in Locale.preferredLanguages {
+            let normalized = identifier.replacingOccurrences(of: "_", with: "-").lowercased()
+            if normalized == "zh" || normalized.hasPrefix("zh-") {
+                return "zh-Hans"
+            }
+            if normalized == "en" || normalized.hasPrefix("en-") {
+                return "en"
+            }
+        }
+        return "en"
     }
 }
 
