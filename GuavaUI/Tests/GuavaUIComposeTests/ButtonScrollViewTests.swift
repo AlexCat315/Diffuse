@@ -377,6 +377,170 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(scrollView.contentOffset.y > 0)
     } }
 
+    @Test("ScrollView chrome can capture scrollbar drag even when an overlay is hit-tested first")
+    func scrollViewScrollbarDragUsesGlobalChromeFallback() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        let focus = FocusChain()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = capture
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            ScrollView(.vertical) {
+                Column {
+                    Text("head").frame(width: 220, height: 120)
+                    Text("tail").frame(width: 220, height: 320)
+                }
+            }
+            .frame(width: 220, height: 160)
+        )
+        graph.computeLayout(width: 220, height: 160)
+
+        let scrollView = tree.root!.children.first!
+        let overlay = Node()
+        overlay.frame = CGRect(x: 0, y: 0, width: 220, height: 160)
+        overlay.isHitTestable = true
+        tree.root!.addChild(overlay)
+
+        let dispatcher = EventDispatcher(tree: tree,
+                                         interactions: registry,
+                                         capture: capture,
+                                         focusChain: focus)
+        let scrollbarX = Float(scrollView.frame.width - 6)
+        let thumbY: Float = 10
+
+        dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(button: .left,
+                                                              x: scrollbarX,
+                                                              y: thumbY,
+                                                              clicks: 1)))
+        #expect(capture.target === scrollView)
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: scrollbarX,
+                                                          y: thumbY + 40,
+                                                          deltaX: 0,
+                                                          deltaY: 40)))
+        #expect(scrollView.contentOffset.y > 0)
+    } }
+
+    @Test("ScrollView wheel can route through global fallback when an overlay is hit-tested first")
+    func scrollViewWheelUsesGlobalScrollFallback() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        let focus = FocusChain()
+        InteractionRegistryHolder.current = registry
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            ScrollView(.vertical) {
+                Column {
+                    Text("head").frame(width: 220, height: 120)
+                    Text("tail").frame(width: 220, height: 320)
+                }
+            }
+            .frame(width: 220, height: 160)
+        )
+        graph.computeLayout(width: 220, height: 160)
+
+        let scrollView = tree.root!.children.first!
+        let overlay = Node()
+        overlay.frame = CGRect(x: 0, y: 0, width: 220, height: 160)
+        overlay.isHitTestable = true
+        tree.root!.addChild(overlay)
+
+        let dispatcher = EventDispatcher(tree: tree,
+                                         interactions: registry,
+                                         capture: capture,
+                                         focusChain: focus)
+        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0,
+                                                        y: -1,
+                                                        mouseX: 20,
+                                                        mouseY: 20)))
+        #expect(scrollView.contentOffset.y > 0)
+    } }
+
+    @Test("ScrollView drag acquires the active pointer capture context at event time")
+    func scrollViewScrollbarDragUsesEventTimePointerCaptureContext() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        let focus = FocusChain()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = nil
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            ScrollView(.vertical) {
+                Column {
+                    Text("head").frame(width: 220, height: 120)
+                    Text("tail").frame(width: 220, height: 320)
+                }
+            }
+            .frame(width: 220, height: 160)
+        )
+        graph.computeLayout(width: 220, height: 160)
+
+        PointerCaptureHolder.current = capture
+        let scrollView = tree.root!.children.first!
+        let dispatcher = EventDispatcher(tree: tree,
+                                         interactions: registry,
+                                         capture: capture,
+                                         focusChain: focus)
+        let scrollbarX = Float(scrollView.frame.width - 6)
+        let thumbY: Float = 10
+
+        dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(button: .left,
+                                                              x: scrollbarX,
+                                                              y: thumbY,
+                                                              clicks: 1)))
+        #expect(capture.target === scrollView)
+    } }
+
+    @Test("Wheel coordinates at zero fall back to the last cursor position")
+    func wheelZeroCoordinatesFallbackToLastCursor() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let capture = PointerCapture()
+        let focus = FocusChain()
+        InteractionRegistryHolder.current = registry
+        PointerCaptureHolder.current = capture
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root:
+            Row {
+                Text("spacer").frame(width: 260, height: 160)
+                ScrollView(.vertical) {
+                    Column {
+                        Text("head").frame(width: 220, height: 120)
+                        Text("tail").frame(width: 220, height: 320)
+                    }
+                }
+                .frame(width: 220, height: 160)
+            }
+            .frame(width: 480, height: 160)
+        )
+        graph.computeLayout(width: 480, height: 160)
+
+        let scrollView = firstNode(in: tree.root, where: {
+            registry.handlers(for: $0).wheelRoute?.role == .scroll
+        })!
+        let dispatcher = EventDispatcher(tree: tree,
+                                         interactions: registry,
+                                         capture: capture,
+                                         focusChain: focus)
+        let origin = absoluteOrigin(of: scrollView)
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(origin.x + 20),
+                                                          y: Float(origin.y + 20),
+                                                          deltaX: 0,
+                                                          deltaY: 0)))
+        dispatcher.dispatch(.mouseWheel(MouseWheelEvent(x: 0,
+                                                        y: -1,
+                                                        mouseX: 0,
+                                                        mouseY: 0)))
+        #expect(scrollView.contentOffset.y > 0)
+    } }
+
     @Test("PropertyGrid scrolls inside a constrained inspector-sized viewport")
     func propertyGridScrollsInsideConstrainedViewport() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
