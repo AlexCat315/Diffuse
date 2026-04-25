@@ -170,18 +170,25 @@ public final class EventDispatcher {
     // MARK: - Key
 
     private func dispatchKey(_ event: KeyEvent, phase: KeyPhase) {
+        let kind = EventKind.key(event, phase)
         // Pointer-capture intercept: while a node owns capture (typically a
         // drag in progress), give its key handler the first opportunity to
         // consume the event. Lets drags implement Esc-to-cancel without
         // also needing keyboard focus.
         if let captured = capture.target,
-           let keyHandler = keyHandler(for: captured, phase: phase),
-           keyHandler(event, .target) == .handled {
+           invoke(node: captured, kind: kind, phase: .target) == .handled {
             return
         }
-        guard let focused = focusChain.focused else { return }
-        let path = pathFromRoot(to: focused)
-        _ = deliver(path: path, kind: .key(event, phase))
+        let focusedPath = focusChain.focused.map(pathFromRoot)
+        if let focusedPath,
+           deliverKeyPath(focusedPath, event: event, phase: phase) == .handled {
+            return
+        }
+        let excluded = Set((focusedPath ?? []).map(ObjectIdentifier.init))
+        _ = deliverGlobalRoutes(kind: kind,
+                                role: .shortcut,
+                                minPriority: .system,
+                                excluding: excluded)
     }
 
     private func dispatchText(_ text: String) {
@@ -205,6 +212,12 @@ public final class EventDispatcher {
         case key(KeyEvent, KeyPhase)
         case editing(TextEditingEvent)
         case text(String)
+    }
+
+    private struct RouteCandidate {
+        var node: Node
+        var route: InputHandlerRoute
+        var depth: Int
     }
 
     private func deliver(path: [Node], kind: EventKind) -> EventResult {
@@ -250,27 +263,105 @@ public final class EventDispatcher {
                                  kind: EventKind,
                                  minPriority: InputRoutingPriority,
                                  phase: EventPhase) -> EventResult {
-        let candidates = path.enumerated().compactMap { index, node -> (Int, Node, InputHandlerRoute)? in
+        for candidate in routeCandidates(in: path,
+                                         kind: kind,
+                                         minPriority: minPriority) {
+            if invoke(node: candidate.node, kind: kind, phase: phase) == .handled {
+                return .handled
+            }
+        }
+        return .ignored
+    }
+
+    private func deliverGlobalRoutes(kind: EventKind,
+                                     role: InputHandlerRole,
+                                     minPriority: InputRoutingPriority,
+                                     excluding excludedNodes: Set<ObjectIdentifier> = []) -> EventResult {
+        guard let root = tree.root else { return .ignored }
+        for candidate in routeCandidates(rootedAt: root,
+                                         kind: kind,
+                                         role: role,
+                                         minPriority: minPriority)
+            where !excludedNodes.contains(ObjectIdentifier(candidate.node)) {
+            let phase: EventPhase = role == .shortcut ? .capture : .target
+            if invoke(node: candidate.node, kind: kind, phase: phase) == .handled {
+                return .handled
+            }
+        }
+        return .ignored
+    }
+
+    private func routeCandidates(in path: [Node],
+                                 kind: EventKind,
+                                 minPriority: InputRoutingPriority = .background) -> [RouteCandidate] {
+        path.enumerated().compactMap { index, node in
             let handlers = interactions.handlers(for: node)
             guard let route = route(in: handlers, kind: kind),
                   route.priority >= minPriority else {
                 return nil
             }
-            return (index, node, route)
+            return RouteCandidate(node: node, route: route, depth: index)
         }
-        .sorted {
-            if $0.2.priority != $1.2.priority {
-                return $0.2.priority > $1.2.priority
-            }
-            return $0.0 > $1.0
-        }
+        .sorted(by: routeCandidateSort)
+    }
 
-        for (_, node, _) in candidates {
-            if invoke(node: node, kind: kind, phase: phase) == .handled {
+    private func routeCandidates(rootedAt root: Node,
+                                 kind: EventKind,
+                                 role: InputHandlerRole,
+                                 minPriority: InputRoutingPriority = .background) -> [RouteCandidate] {
+        var out: [RouteCandidate] = []
+        collectRouteCandidates(node: root,
+                               depth: 0,
+                               kind: kind,
+                               role: role,
+                               minPriority: minPriority,
+                               into: &out)
+        return out.sorted(by: routeCandidateSort)
+    }
+
+    private func collectRouteCandidates(node: Node,
+                                        depth: Int,
+                                        kind: EventKind,
+                                        role: InputHandlerRole,
+                                        minPriority: InputRoutingPriority,
+                                        into out: inout [RouteCandidate]) {
+        let handlers = interactions.handlers(for: node)
+        if let route = route(in: handlers, kind: kind),
+           route.role == role,
+           route.priority >= minPriority {
+            out.append(RouteCandidate(node: node, route: route, depth: depth))
+        }
+        for child in node.children {
+            collectRouteCandidates(node: child,
+                                   depth: depth + 1,
+                                   kind: kind,
+                                   role: role,
+                                   minPriority: minPriority,
+                                   into: &out)
+        }
+    }
+
+    private func routeCandidateSort(_ lhs: RouteCandidate,
+                                    _ rhs: RouteCandidate) -> Bool {
+        if lhs.route.priority != rhs.route.priority {
+            return lhs.route.priority > rhs.route.priority
+        }
+        return lhs.depth > rhs.depth
+    }
+
+    private func deliverKeyPath(_ path: [Node],
+                                event: KeyEvent,
+                                phase: KeyPhase) -> EventResult {
+        let kind = EventKind.key(event, phase)
+        for candidate in routeCandidates(in: path,
+                                         kind: kind,
+                                         minPriority: .system)
+            where candidate.route.role == .shortcut {
+            if invoke(node: candidate.node, kind: kind, phase: .capture) == .handled {
                 return .handled
             }
         }
-        return .ignored
+        return deliver(path: path, kind: kind)
     }
 
     private func preferredFocusedWheelPath(from focusedPath: [Node]?) -> [Node]? {
@@ -319,11 +410,6 @@ public final class EventDispatcher {
             cur = n.parent
         }
         return out.reversed()
-    }
-
-    private func keyHandler(for node: Node,
-                            phase: KeyPhase) -> ((KeyEvent, EventPhase) -> EventResult)? {
-        keyHandler(in: interactions.handlers(for: node), phase: phase)
     }
 
     private func keyHandler(in handlers: InteractionRegistry.Handlers,

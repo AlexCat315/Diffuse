@@ -102,6 +102,9 @@ public struct InputHandlerRoute: Sendable, Equatable {
     public static let dockDrag = InputHandlerRoute(role: .dock,
                                                    priority: .capture,
                                                    debugName: "dock.drag")
+    public static let shortcut = InputHandlerRoute(role: .shortcut,
+                                                   priority: .system,
+                                                   debugName: "shortcut")
 }
 
 public enum InputDispatchKind: Sendable, Equatable {
