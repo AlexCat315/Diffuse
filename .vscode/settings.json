@@ -1,9 +1,0 @@
-{
-    "cmake.sourceDirectory": "${workspaceFolder}/packages/engine/third_party/jolt/Build",
-    "zig.testArgs": [
-        "build",
-        "test",
-        "-Dtest-filter=${filter}"
-    ],
-    "commentTranslate.source": "Bing",
-}
