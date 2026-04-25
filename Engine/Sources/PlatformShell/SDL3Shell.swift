@@ -455,12 +455,8 @@ public final class SDL3Shell: Shell {
             case UInt32(GUAVA_SDL_EVENT_MOUSE_WHEEL):
                 let windowID = WindowID(event.wheel.windowID)
                 guard windows[windowID] != nil else { continue }
-                var wx = event.wheel.x
-                var wy = event.wheel.y
-                if event.wheel.direction.rawValue == UInt32(GUAVA_SDL_MOUSEWHEEL_FLIPPED) {
-                    wx = -wx
-                    wy = -wy
-                }
+                let wx = event.wheel.x
+                let wy = event.wheel.y
                 var mouseX = event.wheel.mouse_x
                 var mouseY = event.wheel.mouse_y
                 if mouseX == 0, mouseY == 0 {
