@@ -86,6 +86,11 @@ public final class EventDispatcher {
     private func dispatchPointerDown(_ event: MouseButtonEvent) {
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         lastCursor = point
+        if deliverGlobalRoutes(kind: .pointer(event, .down),
+                               role: .scrollChrome,
+                               minPriority: .chrome) == .handled {
+            return
+        }
         guard let hit = hitTest(point: point) else { return }
         if deliverPriority(path: hit.path,
                            kind: .pointer(event, .down),
@@ -130,8 +135,17 @@ public final class EventDispatcher {
     }
 
     private func dispatchWheel(_ event: MouseWheelEvent) {
+        var event = event
         if let mouseX = event.mouseX, let mouseY = event.mouseY {
-            lastCursor = CGPoint(x: CGFloat(mouseX), y: CGFloat(mouseY))
+            if mouseX == 0, mouseY == 0, let lastCursor {
+                event.mouseX = Float(lastCursor.x)
+                event.mouseY = Float(lastCursor.y)
+            } else {
+                lastCursor = CGPoint(x: CGFloat(mouseX), y: CGFloat(mouseY))
+            }
+        } else if let lastCursor {
+            event.mouseX = Float(lastCursor.x)
+            event.mouseY = Float(lastCursor.y)
         }
         let hitPath = lastCursor.flatMap { cursor in
             hitTest(point: cursor)?.path
@@ -156,6 +170,11 @@ public final class EventDispatcher {
            !sameWheelTarget(focusedPath, preferredFocusedPath),
            !sameWheelTarget(focusedPath, hitPath),
            deliverWheel(path: focusedPath, event: event) == .handled {
+            return
+        }
+        if deliverGlobalRoutes(kind: .wheel(event),
+                               role: .scroll,
+                               minPriority: .normal) == .handled {
             return
         }
         guard let root = tree.root else { return }
@@ -288,7 +307,7 @@ public final class EventDispatcher {
                                          role: role,
                                          minPriority: minPriority)
             where !excludedNodes.contains(ObjectIdentifier(candidate.node)) {
-            let phase: EventPhase = role == .shortcut ? .capture : .target
+            let phase: EventPhase = (role == .shortcut || role == .scrollChrome) ? .capture : .target
             if invoke(node: candidate.node, kind: kind, phase: phase) == .handled {
                 return .handled
             }

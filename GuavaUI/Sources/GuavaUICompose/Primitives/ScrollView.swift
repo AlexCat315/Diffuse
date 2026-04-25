@@ -70,10 +70,15 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let trackThickness: Float = 8
         let trackInset: Float = 2
         let trackHitSlop: Float = 6
-        let capture = PointerCaptureHolder.current
 
         if let registry = InteractionRegistryHolder.current {
             registry.setWheel(node, route: .scroll) { event, _ in
+                if let mouseX = event.mouseX, let mouseY = event.mouseY {
+                    let local = localPoint(x: mouseX, y: mouseY, in: node)
+                    guard visibleViewportRect(for: node).contains(local) else {
+                        return .ignored
+                    }
+                }
                 // Wheel up (positive Y) scrolls content up — i.e. offset.y decreases.
                 let dx: Float = (axes == .horizontal || axes == .both) ? -event.x * step : 0
                 let dy: Float = (axes == .vertical   || axes == .both) ? -event.y * step : 0
@@ -116,7 +121,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                       hitSlop: CGFloat(trackHitSlop),
                                                       node: node) {
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
-                        capture?.acquire(node)
+                        PointerCaptureHolder.current?.acquire(node)
                         return .handled
                     }
                     if let state = beginScrollbarDrag(axis: .horizontal,
@@ -125,7 +130,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                       hitSlop: CGFloat(trackHitSlop),
                                                       node: node) {
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
-                        capture?.acquire(node)
+                        PointerCaptureHolder.current?.acquire(node)
                         return .handled
                     }
                     return .ignored
@@ -134,7 +139,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                         return .ignored
                     }
                     node.attachments[_ScrollViewAttachmentKeys.dragState] = nil
-                    capture?.release()
+                    PointerCaptureHolder.current?.release()
                     return .handled
                 }
             }
