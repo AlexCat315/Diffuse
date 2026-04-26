@@ -188,12 +188,15 @@ struct _DockContainerFrame<Content: View>: View {
 }
 
 struct _DockMinimizedRail: _PrimitiveView {
+    static let kRailMarker = "DockContainer.minimizedRail"
+
     let edge: DockMinimizedEdge
     let controller: DockController
 
     func _makeNode() -> Node {
         let n = Node()
         n.isHitTestable = false
+        n.attachments[Self.kRailMarker] = edge
         return n
     }
 

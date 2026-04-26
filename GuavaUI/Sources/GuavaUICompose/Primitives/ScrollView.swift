@@ -18,6 +18,8 @@ private struct _ScrollViewDragState {
 
 private enum _ScrollViewAttachmentKeys {
     static let dragState = "__scrollview_scrollbar_drag_state"
+    static let isHovered = "__scrollview_scrollbar_is_hovered"
+    static let chromeOpacity = "__scrollview_scrollbar_chrome_opacity"
 }
 
 private struct _ScrollViewScrollbarGeometry {
@@ -71,7 +73,25 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         let trackInset: Float = 2
         let trackHitSlop: Float = 6
 
+        if node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] == nil {
+            node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] = Float(0)
+        }
+        if node.attachments[_ScrollViewAttachmentKeys.isHovered] == nil {
+            node.attachments[_ScrollViewAttachmentKeys.isHovered] = false
+        }
+
         if let registry = InteractionRegistryHolder.current {
+            registry.setHover(node) { phase in
+                switch phase {
+                case .enter:
+                    node.attachments[_ScrollViewAttachmentKeys.isHovered] = true
+                    setScrollbarChromeVisible(true, on: node)
+                case .leave:
+                    node.attachments[_ScrollViewAttachmentKeys.isHovered] = false
+                    let isDragging = node.attachments[_ScrollViewAttachmentKeys.dragState] != nil
+                    setScrollbarChromeVisible(isDragging, on: node)
+                }
+            }
             registry.setWheel(node, route: .scroll) { event, _ in
                 if let mouseX = event.mouseX, let mouseY = event.mouseY {
                     let local = localPoint(x: mouseX, y: mouseY, in: node)
@@ -122,6 +142,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                       node: node) {
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         PointerCaptureHolder.current?.acquire(node)
+                        setScrollbarChromeVisible(true, on: node)
                         return .handled
                     }
                     if let state = beginScrollbarDrag(axis: .horizontal,
@@ -131,6 +152,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                                                       node: node) {
                         node.attachments[_ScrollViewAttachmentKeys.dragState] = state
                         PointerCaptureHolder.current?.acquire(node)
+                        setScrollbarChromeVisible(true, on: node)
                         return .handled
                     }
                     return .ignored
@@ -140,6 +162,8 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     }
                     node.attachments[_ScrollViewAttachmentKeys.dragState] = nil
                     PointerCaptureHolder.current?.release()
+                    let isHovered = node.attachments[_ScrollViewAttachmentKeys.isHovered] as? Bool ?? false
+                    setScrollbarChromeVisible(isHovered, on: node)
                     return .handled
                 }
             }
@@ -182,8 +206,12 @@ public struct ScrollView<Content: View>: _PrimitiveView {
             let contentW = Float(contentSize.width)
             let contentH = Float(contentSize.height)
             guard contentW > 0 || contentH > 0 else { return }
+            let opacity = node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] as? Float ?? 0
+            guard opacity > 0.001 else { return }
             let offX = Float(node.contentOffset.x)
             let offY = Float(node.contentOffset.y)
+            let visibleTrackColor = trackColor.multipliedAlpha(opacity)
+            let visibleThumbColor = thumbColor.multipliedAlpha(opacity)
 
             // Vertical bar.
             if (axes == .vertical || axes == .both), contentH > viewH, viewH > 0 {
@@ -194,7 +222,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     UIRect(x: trackX, y: trackY,
                            width: trackThickness, height: trackH),
                     radius: trackThickness / 2,
-                    color: trackColor
+                    color: visibleTrackColor
                 )
                 let thumbH = max(trackThickness * 2, trackH * (viewH / contentH))
                 let maxOff = contentH - viewH
@@ -204,7 +232,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     UIRect(x: trackX, y: thumbY,
                            width: trackThickness, height: thumbH),
                     radius: trackThickness / 2,
-                    color: thumbColor
+                    color: visibleThumbColor
                 )
             }
 
@@ -217,7 +245,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     UIRect(x: trackX, y: trackY,
                            width: trackW, height: trackThickness),
                     radius: trackThickness / 2,
-                    color: trackColor
+                    color: visibleTrackColor
                 )
                 let thumbW = max(trackThickness * 2, trackW * (viewW / contentW))
                 let maxOff = contentW - viewW
@@ -227,7 +255,7 @@ public struct ScrollView<Content: View>: _PrimitiveView {
                     UIRect(x: thumbX, y: trackY,
                            width: thumbW, height: trackThickness),
                     radius: trackThickness / 2,
-                    color: thumbColor
+                    color: visibleThumbColor
                 )
             }
         }
@@ -292,6 +320,20 @@ public struct ScrollView<Content: View>: _PrimitiveView {
         guard !bounds.isNull else { return .zero }
         return CGSize(width: max(0, bounds.maxX),
                       height: max(0, bounds.maxY))
+    }
+
+    private func setScrollbarChromeVisible(_ visible: Bool, on node: Node) {
+        let current = node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] as? Float ?? 0
+        let target: Float = visible ? 1 : 0
+        withAnimation(.semantic(.fast, in: node.theme)) {
+            node.animatableSet(propertyKey: _ScrollViewAttachmentKeys.chromeOpacity,
+                               current: current,
+                               to: target) { [weak node] opacity in
+                guard let node else { return }
+                node.attachments[_ScrollViewAttachmentKeys.chromeOpacity] = opacity
+                node.markRenderDirty(reason: .styleSet(field: "scrollbarChromeOpacity"))
+            }
+        }
     }
 
     private func contentBounds(for node: Node, origin: CGPoint) -> CGRect {

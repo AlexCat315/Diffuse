@@ -224,6 +224,53 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(sv.contentOffset.y == 0)
     } }
 
+    @Test("ScrollView scrollbar chrome fades in on hover and hides on leave")
+    func scrollViewScrollbarChromeFollowsHover() { GlobalTestLock.locked {
+        let registry = InteractionRegistry()
+        let scheduler = AnimatorScheduler()
+        InteractionRegistryHolder.current = registry
+
+        AnimatorScheduler.$current.withValue(scheduler) {
+            let tree = NodeTree()
+            let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+            graph.install(root:
+                ScrollView(.vertical) {
+                    Column {
+                        Text("a").frame(height: 100)
+                        Text("b").frame(height: 100)
+                        Text("c").frame(height: 100)
+                    }
+                }
+                .frame(width: 220, height: 150)
+            )
+            graph.computeLayout(width: 220, height: 240)
+
+            let scrollView = tree.root!.children.first!
+            let hover = registry.handlers(for: scrollView).hover
+            #expect(hover != nil)
+
+            var list = DrawList()
+            scrollView.overlayDraw?(list, .zero)
+            #expect(list.vertices.isEmpty)
+
+            hover?(.enter)
+            #expect(scheduler.activeCount == 1)
+            scheduler.tick(deltaTime: 1.0)
+
+            list = DrawList()
+            scrollView.overlayDraw?(list, .zero)
+            #expect(!list.vertices.isEmpty)
+
+            hover?(.leave)
+            #expect(scheduler.activeCount == 1)
+            scheduler.tick(deltaTime: 1.0)
+
+            list = DrawList()
+            scrollView.overlayDraw?(list, .zero)
+            #expect(list.vertices.isEmpty)
+        }
+    } }
+
     @Test("ScrollView scrollbar drag captures pointer before content handlers")
     func scrollViewScrollbarDragCapturesPointer() { GlobalTestLock.locked {
         let registry = InteractionRegistry()

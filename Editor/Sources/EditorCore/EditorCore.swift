@@ -362,12 +362,28 @@ public final class EditorApplication {
 
     private func handlePlatformEvent(_ event: InputEvent) {
         switch event {
+        case let .mouseButtonDown(button):
+            if EditorViewportInputController.shared.hasActivePointerSession,
+               EditorViewportDropTarget.frame?.contains(x: button.x, y: button.y) != true {
+                EditorGizmoController.shared.clearDrag()
+                EditorViewportInputController.shared.endPointerSession()
+            }
+        case let .mouseButtonUp(button):
+            if EditorViewportInputController.shared.hasActivePointerSession,
+               EditorViewportDropTarget.frame?.contains(x: button.x, y: button.y) != true {
+                EditorGizmoController.shared.clearDrag()
+                EditorViewportInputController.shared.endPointerSession()
+            }
         case .windowFocusGained:
             store.dispatch(.setWindowFocused(true))
         case .windowFocusLost:
             store.dispatch(.setWindowFocused(false))
+            EditorGizmoController.shared.clearDrag()
+            EditorViewportInputController.shared.reset()
         case .windowMinimized:
             store.dispatch(.setWindowMinimized(true))
+            EditorGizmoController.shared.clearDrag()
+            EditorViewportInputController.shared.reset()
         case .windowRestored:
             store.dispatch(.setWindowMinimized(false))
             store.dispatch(.setWindowOccluded(false))
