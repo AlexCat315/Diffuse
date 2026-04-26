@@ -139,6 +139,23 @@ public enum DockEdge: String, Sendable, Codable {
     case left, right, top, bottom, center
 }
 
+/// Edge rail that owns a minimized dock leaf.
+public enum DockMinimizedEdge: String, Sendable, Codable, Equatable {
+    case left, right, bottom
+}
+
+/// A dock leaf that has been removed from the main tree and represented by
+/// a compact edge rail item until restored.
+public struct DockMinimizedLeaf: Sendable, Codable, Equatable {
+    public var node: DockLayoutNode
+    public var edge: DockMinimizedEdge
+
+    public init(node: DockLayoutNode, edge: DockMinimizedEdge) {
+        self.node = node
+        self.edge = edge
+    }
+}
+
 /// Recursive layout description.
 ///
 /// `.empty` is a placeholder kept around so an otherwise-collapsing tree

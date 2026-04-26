@@ -6,11 +6,32 @@
 "Add .gltf or .obj files under the project directory and relaunch the editor." = "请在项目目录下添加 .gltf 或 .obj 文件，然后重新启动编辑器。";
 
 /* Inspector */
+"Inspector" = "检查器";
 "No selection" = "未选择对象";
 "Select an entity in Hierarchy to inspect SceneRuntime components." = "请在层级面板中选择一个实体以查看 SceneRuntime 组件。";
+"Components" = "组件";
+"Sections" = "分组";
+"Expand all" = "全部展开";
+"Collapse all" = "全部折叠";
+"No properties" = "无属性";
+"On" = "开启";
+"Off" = "关闭";
+"Static" = "静态";
+"Dynamic" = "动态";
+"Kinematic" = "运动学";
+"Directional" = "方向光";
+"Point" = "点光";
+"Spot" = "聚光";
 
 /* Hierarchy */
+"Hierarchy" = "层级";
 "Search" = "搜索";
+
+/* Panels */
+"Viewport" = "视口";
+"Console" = "控制台";
+"AI Intent" = "AI 意图";
+"Confirm" = "确认";
 
 /* Viewport toolbar */
 "Pick" = "选择";
@@ -32,6 +53,40 @@
 "Drop to add" = "拖放以添加";
 
 /* Menu bar */
+"File" = "文件";
+"Edit" = "编辑";
+"Window" = "窗口";
+"Tools" = "工具";
+"Build" = "构建";
+"Help" = "帮助";
+"New Scene" = "新建场景";
+"Open Scene..." = "打开场景...";
+"Save Scene" = "保存场景";
+"Import Assets..." = "导入资源...";
+"Undo" = "撤销";
+"Redo" = "重做";
+"Reset Layout" = "重置布局";
+"Toggle Theme" = "切换主题";
+"Build Editor" = "构建编辑器";
+"Build and Run" = "构建并运行";
+"Documentation" = "文档";
+"About Guava" = "关于 Guava";
+"Workspace: Level" = "工作区：关卡";
+"Workspace: Modeling" = "工作区：建模";
+"Workspace: Animation" = "工作区：动画";
+"Level: Default" = "关卡：默认";
+"Level: Cinematics" = "关卡：过场";
+"Modeling: Default" = "建模：默认";
+"Modeling: Sculpt" = "建模：雕刻";
+"Animation: Default" = "动画：默认";
+"Animation: Sequencer" = "动画：序列";
+"Default" = "默认";
+"Cine" = "过场";
+"Sculpt" = "雕刻";
+"Seq" = "序列";
+"Play" = "播放";
+"Pause" = "暂停";
+"Stop" = "停止";
 "Guava Make" = "Guava 制作";
 "Settings" = "设置";
 "Platforms" = "平台";
@@ -39,6 +94,8 @@
 "Appearance" = "外观";
 "Dark" = "深色";
 "Light" = "浅色";
+"Frame Rate" = "帧率";
+"Unlimited" = "不限制";
 "Language" = "语言";
 "System" = "系统";
 

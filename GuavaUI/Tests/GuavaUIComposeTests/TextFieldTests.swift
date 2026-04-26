@@ -364,9 +364,10 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         #expect(Float(node.frame.height) > 32)
     } }
 
-    @Test("Default TextField auto-grows for explicit multiline content and shows a scrollbar when capped")
+    @Test("Default TextField auto-grows for explicit multiline content and shows a hover scrollbar when capped")
     func multilineAutoGrowCapsAndScrolls() { GlobalTestLock.locked {
         let rig = makeRig()
+        let scheduler = AnimatorScheduler()
         rig.store.value = Array(repeating: "line", count: 12).joined(separator: "\n")
         TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
 
@@ -384,7 +385,18 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
 
         let overlay = DrawList()
         node.overlayDraw?(overlay, CGPoint.zero)
-        #expect(overlay.indices.isEmpty == false)
+        #expect(overlay.indices.isEmpty == true)
+
+        let hover = rig.registry.handlers(for: node).hover
+        #expect(hover != nil)
+        AnimatorScheduler.$current.withValue(scheduler) {
+            hover?(.enter)
+            scheduler.tick(deltaTime: 1.0)
+        }
+
+        let hoveredOverlay = DrawList()
+        node.overlayDraw?(hoveredOverlay, CGPoint.zero)
+        #expect(hoveredOverlay.indices.isEmpty == false)
 
         let wheel = rig.registry.handlers(for: node).wheel
         #expect(wheel != nil)

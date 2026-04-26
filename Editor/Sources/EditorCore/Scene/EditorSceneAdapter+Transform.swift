@@ -73,6 +73,24 @@ extension EditorSceneAdapter {
         return parentWorld.matrix
     }
 
+    /// Returns true when `rawID` has an ancestor included in `candidateRawIDs`.
+    /// Multi-selection gizmo edits use this to avoid transforming a child twice
+    /// when both parent and child are selected.
+    public func entityHasAncestor(_ rawID: UInt64, in candidateRawIDs: Set<UInt64>) -> Bool {
+        guard var current = makeEntityID(rawID).flatMap({ scene.parent(of: $0) }) else {
+            return false
+        }
+        while true {
+            if candidateRawIDs.contains(current.rawValue) {
+                return true
+            }
+            guard let parent = scene.parent(of: current) else {
+                return false
+            }
+            current = parent
+        }
+    }
+
     /// 直接覆盖实体的 LocalTransform 矩阵（含旋转 / 缩放 / 平移）。
     public func setEntityLocalMatrix(_ rawID: UInt64, to matrix: simd_float4x4) {
         guard let entity = makeEntityID(rawID) else { return }
