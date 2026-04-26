@@ -67,7 +67,9 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         guard normalized != controller.root else { return }
         controller.replace(root: normalized,
                            satellites: controller.satellites,
-                           satelliteOrder: controller.satelliteOrder)
+                           satelliteOrder: controller.satelliteOrder,
+                           minimizedLeaves: controller.minimizedLeaves,
+                           minimizedOrder: controller.minimizedOrder)
     }
 
     private struct Fractions {

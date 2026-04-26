@@ -116,14 +116,18 @@ struct ViewportPanel: View {
         let viewport = EditorViewportInputController.shared
         switch event {
         case let .mouseButtonDown(button) where button.button == .left:
+            guard isInsideViewport(button.x, button.y) else {
+                EditorGizmoController.shared.clearDrag()
+                viewport.endPointerSession()
+                return
+            }
             viewport.modifiers = button.modifiers
-            viewport.leftDownAt = (button.x, button.y)
-            viewport.marqueeStart = nil
-            viewport.marqueeCurrent = nil
             viewport.gizmoGroupTargets.removeAll(keepingCapacity: false)
             if button.modifiers.contains(.alt) {
-                viewport.activeCameraDrag = .orbit
-                viewport.lastCursor = (button.x, button.y)
+                viewport.begin(.camera(.orbit, button: .left),
+                               at: (button.x, button.y),
+                               modifiers: button.modifiers)
+                app.enqueueViewportInput(event)
                 return
             }
             let mode = app.store.state.gizmoMode
@@ -134,56 +138,84 @@ struct ViewportPanel: View {
             {
                 viewport.gizmoGroupTargets = captureGizmoGroupTargets(primary: drag.entityID,
                                                                        selectedIDs: app.store.state.selectedEntityIDs)
+                viewport.begin(.gizmo(button: .left),
+                               at: (button.x, button.y),
+                               modifiers: button.modifiers)
+                app.enqueueViewportInput(event)
                 return
             }
+            viewport.begin(.pendingClick(button: .left),
+                           at: (button.x, button.y),
+                           modifiers: button.modifiers)
+            app.enqueueViewportInput(event)
+            return
         case let .mouseButtonDown(button) where button.button == .right:
-            viewport.modifiers = button.modifiers
-            viewport.activeCameraDrag = button.modifiers.contains(.alt) ? .dolly : .freelook
-            viewport.lastCursor = (button.x, button.y)
+            guard isInsideViewport(button.x, button.y) else {
+                EditorGizmoController.shared.clearDrag()
+                viewport.endPointerSession()
+                return
+            }
+            let drag: EditorViewportInputController.CameraDrag = button.modifiers.contains(.alt) ? .dolly : .freelook
+            viewport.begin(.camera(drag, button: .right),
+                           at: (button.x, button.y),
+                           modifiers: button.modifiers)
+            app.enqueueViewportInput(event)
             return
         case let .mouseButtonDown(button) where button.button == .middle:
-            viewport.modifiers = button.modifiers
-            viewport.activeCameraDrag = .pan
-            viewport.lastCursor = (button.x, button.y)
+            guard isInsideViewport(button.x, button.y) else {
+                EditorGizmoController.shared.clearDrag()
+                viewport.endPointerSession()
+                return
+            }
+            viewport.begin(.camera(.pan, button: .middle),
+                           at: (button.x, button.y),
+                           modifiers: button.modifiers)
+            app.enqueueViewportInput(event)
             return
         case let .mouseMotion(motion):
-            if let drag = EditorGizmoController.shared.activeDrag,
-               let newMatrix = EditorGizmoController.shared.updateDrag(
-                   cursorX: motion.x, cursorY: motion.y)
-            {
+            guard let interaction = viewport.activeInteraction else {
+                return
+            }
+            switch interaction {
+            case .gizmo:
+                guard let drag = EditorGizmoController.shared.activeDrag,
+                      let newMatrix = EditorGizmoController.shared.updateDrag(
+                          cursorX: motion.x, cursorY: motion.y)
+                else { return }
                 let snapped = applyGizmoSnapping(newMatrix,
                                                  mode: drag.mode,
                                                  state: app.store.state)
                 applyGizmoDragMatrix(snapped, drag: drag)
+                app.enqueueViewportInput(event)
                 return
-            }
-            if viewport.leftDownAt != nil,
-               viewport.activeCameraDrag == nil,
-               viewport.boxSelectArmed,
-               app.store.state.activeAssetDrag == nil,
-               let down = viewport.leftDownAt,
-               let frame = EditorViewportDropTarget.frame,
-               frame.contains(x: motion.x, y: motion.y)
-            {
-                let dx = motion.x - down.x
-                let dy = motion.y - down.y
-                if dx * dx + dy * dy > 64 {
-                    viewport.marqueeStart = down
-                    viewport.marqueeCurrent = (motion.x, motion.y)
-                    return
+            case .pendingClick:
+                if viewport.boxSelectArmed,
+                   app.store.state.activeAssetDrag == nil,
+                   let down = viewport.leftDownAt
+                {
+                    let dx = motion.x - down.x
+                    let dy = motion.y - down.y
+                    if dx * dx + dy * dy > 64 {
+                        viewport.activeInteraction = .marquee(button: .left)
+                        viewport.marqueeStart = down
+                        viewport.marqueeCurrent = (motion.x, motion.y)
+                        app.enqueueViewportInput(event)
+                        return
+                    }
                 }
-            }
-            if viewport.marqueeStart != nil {
-                viewport.marqueeCurrent = (motion.x, motion.y)
+                app.enqueueViewportInput(event)
                 return
-            }
-            if let camDrag = viewport.activeCameraDrag,
-               let frame = EditorViewportDropTarget.frame
-            {
+            case .marquee:
+                viewport.marqueeCurrent = (motion.x, motion.y)
+                app.enqueueViewportInput(event)
+                return
+            case .camera(let camDrag, _):
                 let last = viewport.lastCursor ?? (motion.x, motion.y)
                 let dx = motion.x - last.x
                 let dy = motion.y - last.y
                 viewport.lastCursor = (motion.x, motion.y)
+                let frame = EditorViewportDropTarget.frame
+                    ?? ViewportScreenFrame(x: 0, y: 0, width: 800, height: 600)
                 switch camDrag {
                 case .orbit: scene.orbitCamera(deltaScreenX: dx, deltaScreenY: dy, in: frame)
                 case .pan:   scene.panCamera(deltaScreenX: dx, deltaScreenY: dy, in: frame)
@@ -194,86 +226,95 @@ struct ViewportPanel: View {
                                          pressedScancodes: viewport.pressedScancodes,
                                          modifiers: viewport.modifiers)
                 }
+                app.enqueueViewportInput(event)
                 return
             }
         case let .mouseButtonUp(button) where button.button == .left:
-            if viewport.activeCameraDrag != nil {
-                viewport.activeCameraDrag = nil
-                viewport.lastCursor = nil
-                viewport.leftDownAt = nil
-                viewport.marqueeStart = nil
-                viewport.marqueeCurrent = nil
+            guard let interaction = viewport.activeInteraction else {
                 return
             }
-            if EditorGizmoController.shared.activeDrag != nil {
+            switch interaction {
+            case .camera(_, .left):
+                viewport.endPointerSession()
+                app.enqueueViewportInput(event)
+                return
+            case .gizmo(.left):
                 EditorGizmoController.shared.clearDrag()
-                viewport.gizmoGroupTargets.removeAll(keepingCapacity: false)
-                viewport.leftDownAt = nil
-                viewport.marqueeStart = nil
-                viewport.marqueeCurrent = nil
+                viewport.endPointerSession()
+                app.enqueueViewportInput(event)
                 return
-            }
-            if app.store.state.activeAssetDrag != nil {
-                _ = app.handleAssetDrop(at: button.x, cursorY: button.y)
-                viewport.leftDownAt = nil
-                viewport.marqueeStart = nil
-                viewport.marqueeCurrent = nil
-                return
-            }
-            if let start = viewport.marqueeStart,
-               let current = viewport.marqueeCurrent,
-               let frame = EditorViewportDropTarget.frame
-            {
-                let rect = normalizedRect(from: start, to: current)
-                let picked = scene.pickEntities(in: rect, frame: frame)
-                let baseSelection = app.store.state.selectedEntityIDs
-                let modifiers = viewport.modifiers.isEmpty ? app.inputState.modifiers : viewport.modifiers
-                let cmdBehavior = app.store.state.cmdSelectBehavior
-                let merged = mergeMarqueeSelection(base: baseSelection,
-                                                   picked: picked,
-                                                   modifiers: modifiers,
-                                                   cmdBehavior: cmdBehavior)
-                app.store.dispatch(.setSelectedEntities(merged))
-                viewport.leftDownAt = nil
-                viewport.marqueeStart = nil
-                viewport.marqueeCurrent = nil
-                return
-            }
-            // 没拖 gizmo / 没拖资产 → 视为单击拾取。
-            if let down = viewport.leftDownAt,
-               let frame = EditorViewportDropTarget.frame,
-               frame.contains(x: button.x, y: button.y)
-            {
-                let dx = button.x - down.x
-                let dy = button.y - down.y
-                if dx * dx + dy * dy < 16 {
-                    let picked = scene.pickEntity(cursorX: button.x,
-                                                  cursorY: button.y,
-                                                  in: frame)
+            case .marquee(.left):
+                if let start = viewport.marqueeStart,
+                   let current = viewport.marqueeCurrent,
+                   let frame = EditorViewportDropTarget.frame
+                {
+                    let rect = normalizedRect(from: start, to: current)
+                    let picked = scene.pickEntities(in: rect, frame: frame)
+                    let baseSelection = app.store.state.selectedEntityIDs
                     let modifiers = viewport.modifiers.isEmpty ? app.inputState.modifiers : viewport.modifiers
                     let cmdBehavior = app.store.state.cmdSelectBehavior
-                    let merged = mergeSinglePickSelection(base: app.store.state.selectedEntityIDs,
-                                                          picked: picked,
-                                                          modifiers: modifiers,
-                                                          cmdBehavior: cmdBehavior)
+                    let merged = mergeMarqueeSelection(base: baseSelection,
+                                                       picked: picked,
+                                                       modifiers: modifiers,
+                                                       cmdBehavior: cmdBehavior)
                     app.store.dispatch(.setSelectedEntities(merged))
                 }
+                viewport.endPointerSession()
+                app.enqueueViewportInput(event)
+                return
+            case .pendingClick(.left):
+                if app.store.state.activeAssetDrag != nil {
+                    _ = app.handleAssetDrop(at: button.x, cursorY: button.y)
+                    viewport.endPointerSession()
+                    app.enqueueViewportInput(event)
+                    return
+                }
+                if let down = viewport.leftDownAt,
+                   let frame = EditorViewportDropTarget.frame,
+                   frame.contains(x: button.x, y: button.y)
+                {
+                    let dx = button.x - down.x
+                    let dy = button.y - down.y
+                    if dx * dx + dy * dy < 16 {
+                        let picked = scene.pickEntity(cursorX: button.x,
+                                                      cursorY: button.y,
+                                                      in: frame)
+                        let modifiers = viewport.modifiers.isEmpty ? app.inputState.modifiers : viewport.modifiers
+                        let cmdBehavior = app.store.state.cmdSelectBehavior
+                        let merged = mergeSinglePickSelection(base: app.store.state.selectedEntityIDs,
+                                                              picked: picked,
+                                                              modifiers: modifiers,
+                                                              cmdBehavior: cmdBehavior)
+                        app.store.dispatch(.setSelectedEntities(merged))
+                    }
+                }
+                viewport.endPointerSession()
+                app.enqueueViewportInput(event)
+                return
+            default:
+                viewport.endPointerSession()
+                app.enqueueViewportInput(event)
+                return
             }
-            viewport.leftDownAt = nil
-            viewport.marqueeStart = nil
-            viewport.marqueeCurrent = nil
         case let .mouseButtonUp(button) where button.button == .right || button.button == .middle:
-            if viewport.activeCameraDrag != nil {
-                viewport.activeCameraDrag = nil
-                viewport.lastCursor = nil
+            if case .camera(_, let activeButton) = viewport.activeInteraction,
+               activeButton == button.button {
+                viewport.endPointerSession()
+                app.enqueueViewportInput(event)
                 return
             }
         case let .mouseWheel(wheel):
+            if viewport.hasActivePointerSession { return }
+            if let mx = wheel.mouseX, let my = wheel.mouseY,
+               !isInsideViewport(mx, my) {
+                return
+            }
             // wheel.y > 0 表示向上滚（拉近）。每格缩放系数 ~0.9 / 1.1。
             let step = wheel.y
             if abs(step) > 0 {
                 let factor = wheelZoomRatio(step)
                 scene.zoomCamera(factor: factor)
+                app.enqueueViewportInput(event)
                 return
             }
         case let .keyDown(key):
@@ -297,6 +338,8 @@ struct ViewportPanel: View {
                 return
             }
             if handleEditingShortcut(key) { return }
+            app.enqueueViewportInput(event)
+            return
         case let .keyUp(key):
             viewport.modifiers = key.modifiers
             viewport.pressedScancodes.remove(key.scancode)
@@ -305,10 +348,11 @@ struct ViewportPanel: View {
                 viewport.marqueeStart = nil
                 viewport.marqueeCurrent = nil
             }
+            app.enqueueViewportInput(event)
+            return
         default:
             break
         }
-        app.enqueueViewportInput(event)
     }
 
     private func mergeMarqueeSelection(base: Set<UInt64>,
@@ -340,6 +384,10 @@ struct ViewportPanel: View {
             return base
         }
         return mergeMarqueeSelection(base: base, picked: set, modifiers: modifiers, cmdBehavior: cmdBehavior)
+    }
+
+    private func isInsideViewport(_ x: Float, _ y: Float) -> Bool {
+        EditorViewportDropTarget.frame?.contains(x: x, y: y) == true
     }
 
     /// F = focus selection, Backspace/Delete = delete, Cmd/Ctrl+D = duplicate。
@@ -498,7 +546,6 @@ struct ViewportPanel: View {
             drawAxisHandles(list: list, projector: projector, snap: snap,
                              originScreen: originScreen, activeAxis: activeAxis,
                              tipShape: .square)
-            drawPlaneHandles(list: list, projector: projector, snap: snap)
         case .scale:
             drawAxisHandles(list: list, projector: projector, snap: snap,
                              originScreen: originScreen, activeAxis: activeAxis,

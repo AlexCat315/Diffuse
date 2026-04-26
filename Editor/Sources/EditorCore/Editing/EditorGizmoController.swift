@@ -289,15 +289,6 @@ public final class EditorGizmoController: @unchecked Sendable {
 
         switch snap.mode {
         case .translate:
-            // 平面手柄优先于轴：手柄在原点偏移处，命中区域比轴线小，
-            // 但与轴线不重叠，先尝试更精准。
-            if let drag = beginPlaneTranslateDrag(
-                snap: snap,
-                projector: projector,
-                cursorX: cursorX, cursorY: cursorY)
-            {
-                return drag
-            }
             if let drag = beginCenterDrag(snap: snap,
                                           projector: projector,
                                           cursorX: cursorX,
