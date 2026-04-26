@@ -113,6 +113,42 @@ struct RuntimeWorldTests {
         #expect(!insertedAfterDestroy)
     }
 
+    @Test("Typed queries return stable component views and batch updates")
+    func typedQueriesReturnStableComponentViewsAndBatchUpdates() {
+        var world = RuntimeWorld()
+        let first = world.createEntity()
+        let second = world.createEntity()
+        let third = world.createEntity()
+
+        _ = world.setComponent(TransformStub(x: 1, y: 1), for: first)
+        _ = world.setComponent(NameStub(value: "First"), for: first)
+        _ = world.setLocalTransform(LocalTransform(translation: SIMD3<Float>(1, 0, 0)), for: first)
+        _ = world.setComponent(TransformStub(x: 2, y: 2), for: second)
+        _ = world.setComponent(NameStub(value: "Second"), for: second)
+        _ = world.setLocalTransform(LocalTransform(translation: SIMD3<Float>(2, 0, 0)), for: second)
+        _ = world.setComponent(TransformStub(x: 3, y: 3), for: third)
+
+        #expect(world.componentCount(TransformStub.self) == 3)
+        #expect(world.entities(with: NameStub.self) == [first, second])
+        #expect(world.query(TransformStub.self).map(\ .entity) == [first, second, third])
+
+        let namedTransforms = world.query(TransformStub.self, NameStub.self)
+        #expect(namedTransforms.map(\ .entity) == [first, second])
+        #expect(namedTransforms.map(\ .a.x) == [1, 2])
+        #expect(namedTransforms.map(\ .b.value) == ["First", "Second"])
+        #expect(world.query(TransformStub.self, NameStub.self, LocalTransform.self).map(\ .entity) == [first, second])
+
+        let updatedCount = world.updateComponents(TransformStub.self) { entity, transform in
+            transform.x += Int(entity.index)
+            transform.y *= 10
+        }
+
+        #expect(updatedCount == 3)
+        #expect(world.component(TransformStub.self, for: first) == TransformStub(x: 1, y: 10))
+        #expect(world.component(TransformStub.self, for: second) == TransformStub(x: 3, y: 20))
+        #expect(world.component(TransformStub.self, for: third) == TransformStub(x: 5, y: 30))
+    }
+
     @Test("World resources are stored independently from entity components")
     func worldResourcesAreTypedAndMutable() {
         var world = RuntimeWorld()

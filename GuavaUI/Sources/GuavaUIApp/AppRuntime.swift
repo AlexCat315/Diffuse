@@ -89,6 +89,11 @@ public final class AppRuntime {
     private var didInstallRoot = false
     private var lastFrameTime: Double = 0
     private var auxiliaryWindows: [WindowID: AuxiliaryAppWindow] = [:]
+    private var isVSyncEnabled = true
+
+    private var currentPresentMode: GPUPresentMode {
+        isVSyncEnabled ? .fifo : .immediate
+    }
 
     /// 进程内 DevTools 调试服务器。仅当 `config.devTools != nil` 时创建。
     private var devTools: DevTools?
@@ -200,6 +205,9 @@ public final class AppRuntime {
             setFrameRateMode: { [weak self] mode in
                 self?.host.setFrameRateMode(mode)
             },
+            setVSyncEnabled: { [weak self] enabled in
+                self?.setVSyncEnabled(enabled)
+            },
             currentDisplayRefreshRate: { [weak self] in
                 self?.host.currentDisplayRefreshRate()
             }
@@ -225,7 +233,7 @@ public final class AppRuntime {
             format: .bgra8Unorm,
             width: widthPx,
             height: heightPx,
-            presentMode: .fifo
+            presentMode: currentPresentMode
         )
         try renderer.configure(format: .bgra8Unorm,
                                sampleCount: config.msaaSampleCount)
@@ -264,11 +272,48 @@ public final class AppRuntime {
             format: .bgra8Unorm,
             width: widthPx,
             height: heightPx,
-            presentMode: .fifo
+            presentMode: currentPresentMode
         )
         try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
         configureTextEnvironment(scale: host.contentScaleFactor)
         try uploadAtlasIfNeeded()
+    }
+
+    private func setVSyncEnabled(_ enabled: Bool) {
+        guard isVSyncEnabled != enabled else {
+            host.setFrameRateMode(enabled ? .displayRefresh : .eventDriven)
+            host.requestDisplay()
+            return
+        }
+
+        isVSyncEnabled = enabled
+        host.setFrameRateMode(enabled ? .displayRefresh : .eventDriven)
+        reconfigureMainSurfaceForCurrentPresentMode()
+        for window in auxiliaryWindows.values {
+            window.setPresentMode(currentPresentMode)
+        }
+        host.requestDisplay()
+    }
+
+    private func reconfigureMainSurfaceForCurrentPresentMode() {
+        guard configuredSurface,
+              let surface,
+              let device = backend.rawDevice,
+              drawableW > 0,
+              drawableH > 0
+        else { return }
+
+        do {
+            try surface.configure(
+                device: device,
+                format: .bgra8Unorm,
+                width: drawableW,
+                height: drawableH,
+                presentMode: currentPresentMode
+            )
+        } catch {
+            Logger(label: "com.guava.ui.app").warning("Main surface present mode update failed: \(error)")
+        }
     }
 
     private func handleFrame() -> Bool {
@@ -478,6 +523,7 @@ public final class AppRuntime {
                                             backend: backend,
                                             renderer: renderer,
                                             config: config,
+                                            presentMode: currentPresentMode,
                                             useLegacyRenderer: useLegacyRenderer)
             auxiliaryWindows[session.id] = window
 
@@ -555,6 +601,7 @@ private final class AuxiliaryAppWindow {
     private let drawList = DrawList()
     private let layerRenderer = LayerAwareNodeRenderer()
     private let nodeRenderer = NodeRenderer()
+    private var presentMode: GPUPresentMode
 
     private var surface: GPUSurface?
     private var configuredSurface = false
@@ -573,12 +620,14 @@ private final class AuxiliaryAppWindow {
          backend: WGPUBackend,
          renderer: DrawListRenderer,
          config: AppConfig,
+         presentMode: GPUPresentMode,
          useLegacyRenderer: Bool) {
         self.session = session
         self.rootView = rootView
         self.backend = backend
         self.renderer = renderer
         self.config = config
+        self.presentMode = presentMode
         self.useLegacyRenderer = useLegacyRenderer
         self.graph = ViewGraph(tree: session.tree, recomposer: session.recomposer)
     }
@@ -599,7 +648,7 @@ private final class AuxiliaryAppWindow {
             format: .bgra8Unorm,
             width: widthPx,
             height: heightPx,
-            presentMode: .fifo
+            presentMode: presentMode
         )
         try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
         surface = gpu
@@ -633,12 +682,36 @@ private final class AuxiliaryAppWindow {
             format: .bgra8Unorm,
             width: widthPx,
             height: heightPx,
-            presentMode: .fifo
+            presentMode: presentMode
         )
         try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
         try session.withCurrent {
             configureTextEnvironment(session.contentScaleFactor)
             try uploadAtlasIfNeeded(false)
+        }
+    }
+
+    func setPresentMode(_ mode: GPUPresentMode) {
+        guard presentMode != mode else { return }
+        presentMode = mode
+        guard configuredSurface,
+              let surface,
+              let device = backend.rawDevice,
+              drawableW > 0,
+              drawableH > 0
+        else { return }
+
+        do {
+            try surface.configure(
+                device: device,
+                format: .bgra8Unorm,
+                width: drawableW,
+                height: drawableH,
+                presentMode: presentMode
+            )
+            session.requestDisplay()
+        } catch {
+            Logger(label: "com.guava.ui.app").warning("Auxiliary surface present mode update failed: \(error)")
         }
     }
 

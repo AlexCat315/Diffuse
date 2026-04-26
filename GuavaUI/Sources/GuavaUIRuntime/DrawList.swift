@@ -33,6 +33,7 @@ public final class DrawList {
 
     /// Stack of clip rectangles applied via `pushClip` / `popClip`.
     private var clipStack: [UIRect] = []
+    public private(set) var viewportBounds: UIRect?
 
     public init() {}
 
@@ -42,6 +43,11 @@ public final class DrawList {
         indices.removeAll(keepingCapacity: true)
         batches.removeAll(keepingCapacity: true)
         clipStack.removeAll(keepingCapacity: true)
+        viewportBounds = nil
+    }
+
+    public func setViewportBounds(_ bounds: UIRect?) {
+        viewportBounds = bounds
     }
 
     // MARK: - Clipping

@@ -1,4 +1,5 @@
 import Testing
+import CoreGraphics
 import GuavaUIRuntime
 import EngineKernel
 @testable import GuavaUICompose
@@ -134,9 +135,10 @@ struct DockContainerViewTests: GuavaUIComposeSerializedSuite {
         defaultGraph.install(root: DockContainer(controller: controller, content: makeContent()))
         defaultGraph.computeLayout(width: 200, height: 120)
 
-        let insetLeaf = firstNonWrapper(defaultTree.root!)
-        #expect(abs(Float(insetLeaf.frame.minX) - 8) < 0.5)
-        #expect(abs(Float(insetLeaf.frame.width) - 184) < 0.5)
+        let insetLeaf = firstTabsLeafHost(defaultTree.root!) ?? firstNonWrapper(defaultTree.root!)
+        let insetFrame = absoluteFrame(of: insetLeaf)
+        #expect(abs(Float(insetFrame.minX) - 8) < 0.5)
+        #expect(abs(Float(insetFrame.width) - 184) < 0.5)
 
         let zeroTree = NodeTree()
         let zeroGraph = ViewGraph(tree: zeroTree, recomposer: Recomposer())
@@ -145,9 +147,10 @@ struct DockContainerViewTests: GuavaUIComposeSerializedSuite {
                                               content: makeContent()))
         zeroGraph.computeLayout(width: 200, height: 120)
 
-        let zeroLeaf = firstNonWrapper(zeroTree.root!)
-        #expect(abs(Float(zeroLeaf.frame.minX)) < 0.5)
-        #expect(abs(Float(zeroLeaf.frame.width) - 200) < 0.5)
+        let zeroLeaf = firstTabsLeafHost(zeroTree.root!) ?? firstNonWrapper(zeroTree.root!)
+        let zeroFrame = absoluteFrame(of: zeroLeaf)
+        #expect(abs(Float(zeroFrame.minX)) < 0.5)
+        #expect(abs(Float(zeroFrame.width) - 200) < 0.5)
         _ = defaultGraph
         _ = zeroGraph
     } }
@@ -162,6 +165,27 @@ struct DockContainerViewTests: GuavaUIComposeSerializedSuite {
             n = n.children[0]
         }
         return n
+    }
+
+    private func firstTabsLeafHost(_ node: Node) -> Node? {
+        if node.attachments[_DockTabsLeafHost.kTabsLeafMarker] != nil {
+            return node
+        }
+        for child in node.children {
+            if let found = firstTabsLeafHost(child) { return found }
+        }
+        return nil
+    }
+
+    private func absoluteFrame(of node: Node) -> CGRect {
+        var origin = node.frame.origin
+        var current = node.parent
+        while let node = current {
+            origin.x += node.frame.origin.x
+            origin.y += node.frame.origin.y
+            current = node.parent
+        }
+        return CGRect(origin: origin, size: node.frame.size)
     }
 
     private func findFirstHitTestable(_ node: Node) -> Node? {
