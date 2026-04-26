@@ -25,6 +25,12 @@ public final class LayerAwareNodeRenderer {
     /// before each render pass.
     public func render(tree: RenderTree, into frame: DrawList) {
         guard let root = tree.root else { return }
+        if let node = root.node {
+            frame.setViewportBounds(UIRect(x: Float(node.frame.origin.x),
+                                           y: Float(node.frame.origin.y),
+                                           width: Float(node.frame.width),
+                                           height: Float(node.frame.height)))
+        }
         compose(root, into: frame, parentOriginX: 0, parentOriginY: 0,
                 parentClipStack: [])
     }
@@ -57,6 +63,7 @@ public final class LayerAwareNodeRenderer {
             // Re-record. Use a fresh per-layer DrawList so the cache is
             // independent of the frame DrawList and reusable next time.
             let layerList = DrawList()
+            layerList.setViewportBounds(frame.viewportBounds)
             // Push the parent clip stack so nested clips intersect properly.
             for rect in parentClipStack { layerList.pushClip(rect) }
             recordSelfAndDescendants(

@@ -1,4 +1,5 @@
 import EngineKernel
+import simd
 
 public struct SceneRuntimeSnapshot: Sendable, Equatable {
     public var entityCount: Int
@@ -117,6 +118,35 @@ public struct SceneRuntime {
         world.hasComponent(type, for: entity)
     }
 
+    public func componentCount<Component: RuntimeComponent>(_ type: Component.Type) -> Int {
+        world.componentCount(type)
+    }
+
+    public func entities<Component: RuntimeComponent>(with type: Component.Type) -> [EntityID] {
+        world.entities(with: type)
+    }
+
+    public func query<Component: RuntimeComponent>(
+        _ type: Component.Type
+    ) -> [RuntimeComponentQuery<Component>] {
+        world.query(type)
+    }
+
+    public func query<A: RuntimeComponent, B: RuntimeComponent>(
+        _ a: A.Type,
+        _ b: B.Type
+    ) -> [RuntimeComponentPairQuery<A, B>] {
+        world.query(a, b)
+    }
+
+    public func query<A: RuntimeComponent, B: RuntimeComponent, C: RuntimeComponent>(
+        _ a: A.Type,
+        _ b: B.Type,
+        _ c: C.Type
+    ) -> [RuntimeComponentTripleQuery<A, B, C>] {
+        world.query(a, b, c)
+    }
+
     @discardableResult
     public mutating func updateComponent<Component: RuntimeComponent>(
         _ type: Component.Type,
@@ -124,6 +154,14 @@ public struct SceneRuntime {
         _ body: (inout Component) -> Void
     ) -> Bool {
         world.updateComponent(type, for: entity, body)
+    }
+
+    @discardableResult
+    public mutating func updateComponents<Component: RuntimeComponent>(
+        _ type: Component.Type,
+        _ body: (EntityID, inout Component) -> Void
+    ) -> Int {
+        world.updateComponents(type, body)
     }
 
     @discardableResult
@@ -219,6 +257,41 @@ public struct SceneRuntime {
 
     public var physicsFrameState: PhysicsFrameStateResource {
         world.resource(PhysicsFrameStateResource.self) ?? schedule.currentPhysicsFrameState
+    }
+
+    @discardableResult
+    public mutating func applyForce(_ force: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
+        world.applyForce(force, to: entity, wake: wake)
+    }
+
+    @discardableResult
+    public mutating func applyTorque(_ torque: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
+        world.applyTorque(torque, to: entity, wake: wake)
+    }
+
+    @discardableResult
+    public mutating func applyLinearImpulse(_ impulse: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
+        world.applyLinearImpulse(impulse, to: entity, wake: wake)
+    }
+
+    @discardableResult
+    public mutating func applyAngularImpulse(_ impulse: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
+        world.applyAngularImpulse(impulse, to: entity, wake: wake)
+    }
+
+    @discardableResult
+    public mutating func wakeRigidBody(_ entity: EntityID) -> Bool {
+        world.wakeRigidBody(entity)
+    }
+
+    @discardableResult
+    public mutating func sleepRigidBody(_ entity: EntityID) -> Bool {
+        world.sleepRigidBody(entity)
+    }
+
+    @discardableResult
+    public mutating func clearForces(for entity: EntityID) -> Bool {
+        world.clearForces(for: entity)
     }
 
     public func raycast(_ query: SceneRaycastQuery) -> SceneRaycastHit? {

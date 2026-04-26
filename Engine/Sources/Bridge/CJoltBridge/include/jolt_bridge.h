@@ -28,6 +28,12 @@ typedef struct GuavaJoltBodyDesc {
     float angular_velocity_x;
     float angular_velocity_y;
     float angular_velocity_z;
+    float accumulated_force_x;
+    float accumulated_force_y;
+    float accumulated_force_z;
+    float accumulated_torque_x;
+    float accumulated_torque_y;
+    float accumulated_torque_z;
     float box_half_extent_x;
     float box_half_extent_y;
     float box_half_extent_z;

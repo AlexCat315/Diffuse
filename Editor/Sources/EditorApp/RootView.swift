@@ -39,7 +39,7 @@ struct EditorRootView: View {
                                                      preset: nextPreset,
                                                      themeMode: store.state.themeMode,
                                                      language: store.state.language,
-                                                     frameRateLimit: store.state.frameRateLimit)
+                                                     vsyncMode: store.state.vsyncMode)
             }
 
             let setLayoutPreset: (EditorLayoutPreset) -> Void = { nextPreset in
@@ -57,7 +57,7 @@ struct EditorRootView: View {
                                                      preset: nextPreset,
                                                      themeMode: store.state.themeMode,
                                                      language: store.state.language,
-                                                     frameRateLimit: store.state.frameRateLimit)
+                                                     vsyncMode: store.state.vsyncMode)
             }
 
             let resetLayout: () -> Void = {
@@ -73,7 +73,7 @@ struct EditorRootView: View {
                                                      preset: preset,
                                                      themeMode: store.state.themeMode,
                                                      language: store.state.language,
-                                                     frameRateLimit: store.state.frameRateLimit)
+                                                     vsyncMode: store.state.vsyncMode)
             }
 
             let handleShortcut: (KeyEvent) -> Bool = { key in
@@ -436,26 +436,47 @@ private struct EditorMainToolbar: View {
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
-            ToolbarIconButton(icon: .plus, tooltip: "New") {}
-            ToolbarIconButton(icon: .folderOpen, tooltip: "Open") {}
-            ToolbarIconButton(icon: .save, tooltip: "Save") {}
-            ToolbarIconButton(icon: .folder, tooltip: "Import") {}
+            IconButton(resource: EditorToolbarIcon.plus.resource,
+                       size: 15,
+                       tooltip: L("New Scene")) {}
+                .buttonStyle(EditorIconButtonStyle(size: 34))
+            IconButton(resource: EditorToolbarIcon.folderOpen.resource,
+                       size: 15,
+                       tooltip: L("Open Scene...")) {}
+                .buttonStyle(EditorIconButtonStyle(size: 34))
+            IconButton(resource: EditorToolbarIcon.save.resource,
+                       size: 15,
+                       tooltip: L("Save Scene")) {}
+                .buttonStyle(EditorIconButtonStyle(size: 34))
+            IconButton(resource: EditorToolbarIcon.folder.resource,
+                       size: 15,
+                       tooltip: L("Import Assets...")) {}
+                .buttonStyle(EditorIconButtonStyle(size: 34))
 
             Divider()
                 .frame(width: 1, height: 20)
 
-            ToolbarIconStateButton(icon: .play,
-                                   tooltip: "Play",
-                                   isActive: playbackState == .playing,
-                                   onClick: { onSetPlaybackState(.playing) })
-            ToolbarIconStateButton(icon: .pause,
-                                   tooltip: "Pause",
-                                   isActive: playbackState == .paused,
-                                   onClick: { onSetPlaybackState(.paused) })
-            ToolbarIconStateButton(icon: .stop,
-                                   tooltip: "Stop",
-                                   isActive: playbackState == .stopped,
-                                   onClick: { onSetPlaybackState(.stopped) })
+            IconButton(resource: EditorToolbarIcon.play.resource,
+                       size: 15,
+                       tooltip: L("Play")) {
+                onSetPlaybackState(.playing)
+            }
+            .buttonStyle(EditorIconButtonStyle(isActive: playbackState == .playing,
+                                               size: 34))
+            IconButton(resource: EditorToolbarIcon.pause.resource,
+                       size: 15,
+                       tooltip: L("Pause")) {
+                onSetPlaybackState(.paused)
+            }
+            .buttonStyle(EditorIconButtonStyle(isActive: playbackState == .paused,
+                                               size: 34))
+            IconButton(resource: EditorToolbarIcon.stop.resource,
+                       size: 15,
+                       tooltip: L("Stop")) {
+                onSetPlaybackState(.stopped)
+            }
+            .buttonStyle(EditorIconButtonStyle(isActive: playbackState == .stopped,
+                                               size: 34))
 
             Divider()
                 .frame(width: 1, height: 20)
@@ -477,13 +498,22 @@ private struct EditorMainToolbar: View {
                                  activePreset: activeLayoutPreset,
                                  onSelectPreset: onSetLayoutPreset)
 
-            ToolbarIconButton(icon: .layoutGrid,
-                              tooltip: L("Reset Layout"),
-                              onClick: onResetLayout)
+            IconButton(resource: EditorToolbarIcon.layoutGrid.resource,
+                       size: 15,
+                       tooltip: L("Reset Layout"),
+                       action: onResetLayout)
+                .buttonStyle(EditorIconButtonStyle(size: 34))
 
             Spacer(minLength: 0)
-            ToolbarIconButton(icon: .settings, tooltip: L("Settings"), onClick: onOpenSettings)
-            ToolbarIconButton(icon: .package, tooltip: L("Platforms")) {}
+            IconButton(resource: EditorToolbarIcon.settings.resource,
+                       size: 15,
+                       tooltip: L("Settings"),
+                       action: onOpenSettings)
+                .buttonStyle(EditorIconButtonStyle(size: 34))
+            IconButton(resource: EditorToolbarIcon.package.resource,
+                       size: 15,
+                       tooltip: L("Platforms")) {}
+                .buttonStyle(EditorIconButtonStyle(size: 34))
         }
         .padding(horizontal: 8, vertical: 6)
         .background(.surfaceVariant)
@@ -614,53 +644,6 @@ private enum EditorToolbarIcon: String {
     }
 }
 
-private struct ToolbarIconButton: View {
-    let icon: EditorToolbarIcon
-    let tooltip: String
-    let onClick: () -> Void
-
-    var body: some View {
-        Button(tooltip: tooltip, action: onClick) {
-            ToolbarIconChrome(icon: icon.resource, isActive: false)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct ToolbarIconStateButton: View {
-    let icon: EditorToolbarIcon
-    let tooltip: String
-    let isActive: Bool
-    let onClick: () -> Void
-
-    var body: some View {
-        Button(tooltip: tooltip, action: onClick) {
-            ToolbarIconChrome(icon: icon.resource, isActive: isActive)
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-private struct ToolbarIconChrome: View {
-    let icon: BundleImageResource
-    let isActive: Bool
-
-    var body: some View {
-        Box(direction: .row, alignItems: .center, justifyContent: .center) {
-            Image(resource: icon,
-                  width: 15,
-                  height: 15,
-                  tint: .white,
-                  contentMode: .fit,
-                  renderingMode: .alphaMask)
-                .foregroundColor(isActive ? .onAccent : .onSurfaceVariant)
-        }
-        .frame(width: 34, height: 34)
-        .background(isActive ? .accent : .surfaceSunken)
-        .cornerRadius(4)
-    }
-}
-
 private struct ToolbarActionButton: View {
     let title: String
     let onClick: () -> Void
@@ -758,22 +741,22 @@ enum EditorRootViewFactory {
         var activeLayoutPreset: EditorLayoutPreset
         var themeMode: EditorThemeMode
         var language: EditorLanguage
-        var frameRateLimit: EditorFrameRateLimit
+        var vsyncMode: EditorVSyncMode
         var schemaVersion: Int
 
-        static let currentSchemaVersion = 3
+        static let currentSchemaVersion = 4
 
         init(workspaceMode: EditorWorkspaceMode,
              activeLayoutPreset: EditorLayoutPreset,
              themeMode: EditorThemeMode = .dark,
              language: EditorLanguage = .system,
-             frameRateLimit: EditorFrameRateLimit = .unlimited,
+             vsyncMode: EditorVSyncMode = .enabled,
              schemaVersion: Int = currentSchemaVersion) {
             self.workspaceMode = workspaceMode
             self.activeLayoutPreset = activeLayoutPreset
             self.themeMode = themeMode
             self.language = language
-            self.frameRateLimit = frameRateLimit
+            self.vsyncMode = vsyncMode
             self.schemaVersion = schemaVersion
         }
 
@@ -782,8 +765,22 @@ enum EditorRootViewFactory {
             case activeLayoutPreset
             case themeMode
             case language
-            case frameRateLimit
+            case vsyncMode
             case schemaVersion
+        }
+
+        enum LegacyCodingKeys: String, CodingKey {
+            case frameRateLimit
+        }
+
+        func encode(to encoder: Encoder) throws {
+            var values = encoder.container(keyedBy: CodingKeys.self)
+            try values.encode(workspaceMode, forKey: .workspaceMode)
+            try values.encode(activeLayoutPreset, forKey: .activeLayoutPreset)
+            try values.encode(themeMode, forKey: .themeMode)
+            try values.encode(language, forKey: .language)
+            try values.encode(vsyncMode, forKey: .vsyncMode)
+            try values.encode(schemaVersion, forKey: .schemaVersion)
         }
 
         init(from decoder: Decoder) throws {
@@ -793,9 +790,13 @@ enum EditorRootViewFactory {
                 ?? .default(for: workspaceMode)
             themeMode = try values.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode) ?? .dark
             language = try values.decodeIfPresent(EditorLanguage.self, forKey: .language) ?? .system
-            frameRateLimit = try values.decodeIfPresent(EditorFrameRateLimit.self, forKey: .frameRateLimit) ?? .unlimited
-            if frameRateLimit == .fps240 {
-                frameRateLimit = .unlimited
+            let legacyValues = try decoder.container(keyedBy: LegacyCodingKeys.self)
+            if let decodedVSync = try values.decodeIfPresent(EditorVSyncMode.self, forKey: .vsyncMode) {
+                vsyncMode = decodedVSync
+            } else if let legacyLimit = try legacyValues.decodeIfPresent(String.self, forKey: .frameRateLimit) {
+                vsyncMode = EditorVSyncMode(legacyFrameRateLimitRawValue: legacyLimit)
+            } else {
+                vsyncMode = .enabled
             }
             schemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         }
@@ -1366,13 +1367,13 @@ enum EditorRootViewFactory {
                                preset: EditorLayoutPreset,
                                themeMode: EditorThemeMode,
                                language: EditorLanguage,
-                               frameRateLimit: EditorFrameRateLimit) {
+                               vsyncMode: EditorVSyncMode) {
         guard let layoutDir = getLayoutPersistenceDirectory() else { return }
         let shell = EditorShellState(workspaceMode: mode,
                                      activeLayoutPreset: preset,
                                      themeMode: themeMode,
                                      language: language,
-                                     frameRateLimit: frameRateLimit)
+                                     vsyncMode: vsyncMode)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {

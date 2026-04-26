@@ -23,6 +23,8 @@ struct _DockTabsLeaf: View {
 }
 
 struct _DockTabsLeafHost: _PrimitiveView {
+    static let kTabsLeafMarker = "DockTabsLeaf.host"
+
     let nodeID: DockNodeID
     let tabs: [DockTab]
     let activeTabID: DockTabID?
@@ -32,6 +34,7 @@ struct _DockTabsLeafHost: _PrimitiveView {
     func _makeNode() -> Node {
         let n = Node()
         n.isHitTestable = false
+        n.attachments[Self.kTabsLeafMarker] = nodeID
         return n
     }
 

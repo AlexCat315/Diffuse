@@ -178,6 +178,67 @@ struct PhysicsBackendSelectionTests {
         #expect(runtime.component(RigidBody.self, for: entity)?.angularVelocity == SIMD3<Float>(0, .pi, 0))
     }
 
+    @Test("configured Jolt backend integrates runtime forces and impulses")
+    func configuredJoltBackendIntegratesRuntimeForcesAndImpulses() {
+        var runtime = SceneRuntime()
+        runtime.setPhysicsSettings(
+            PhysicsSettingsResource(
+                simulationMode: .play,
+                backendKind: .jolt,
+                gravity: .zero,
+                fixedTimeStepSeconds: 1.0 / 60.0,
+                maxSubstepsPerFrame: 1,
+                allowSleep: false
+            )
+        )
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform.identity, for: entity)
+        _ = runtime.setComponent(
+            RigidBody(
+                motionType: .dynamic,
+                mass: 2,
+                linearVelocity: .zero,
+                angularVelocity: .zero,
+                gravityScale: 0,
+                linearDamping: 0,
+                angularDamping: 0,
+                allowSleep: false,
+                isSleeping: true
+            ),
+            for: entity
+        )
+        _ = runtime.setComponent(
+            Collider(
+                shape: .sphere(radius: 0.5, center: .zero),
+                material: PhysicsMaterial(friction: 0.9, restitution: 0.25, density: 2)
+            ),
+            for: entity
+        )
+
+        let appliedImpulse = runtime.applyLinearImpulse(SIMD3<Float>(2, 0, 0), to: entity)
+        let appliedForce = runtime.applyForce(SIMD3<Float>(0, 120, 0), to: entity)
+        let appliedTorque = runtime.applyTorque(SIMD3<Float>(0, 0, 120), to: entity)
+        #expect(appliedImpulse)
+        #expect(appliedForce)
+        #expect(appliedTorque)
+
+        let report = runtime.tick(deltaTime: 1.0 / 60.0)
+        let body = runtime.component(RigidBody.self, for: entity)
+
+        #expect(report.physicsBackendIdentifier == "jolt")
+        #expect(report.physicsWritebackCount == 1)
+        #expect(abs((body?.linearVelocity.x ?? 0) - 1) < 0.000_1)
+        #expect(abs((body?.linearVelocity.y ?? 0) - 1) < 0.000_1)
+        #expect(abs((body?.angularVelocity.z ?? 0) - 1) < 0.000_1)
+        #expect(body?.accumulatedForce == .zero)
+        #expect(body?.accumulatedTorque == .zero)
+        #expect(body?.isSleeping == false)
+        #expect(abs((runtime.worldTransform(for: entity)?.translation.x ?? 0) - Float(1.0 / 60.0)) < 0.000_1)
+        #expect(abs((runtime.worldTransform(for: entity)?.translation.y ?? 0) - Float(1.0 / 60.0)) < 0.000_1)
+        #expect(runtime.component(Collider.self, for: entity)?.material == PhysicsMaterial(friction: 0.9, restitution: 0.25, density: 2))
+    }
+
     @Test("configured Jolt backend applies distance constraints between active bodies")
     func configuredJoltBackendAppliesDistanceConstraint() {
         var runtime = SceneRuntime()

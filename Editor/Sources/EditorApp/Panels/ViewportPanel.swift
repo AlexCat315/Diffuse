@@ -1348,14 +1348,34 @@ private struct ViewportInfoBar: View {
             }
 
             Row(alignment: .center, spacing: 6) {
-                GizmoButton(icon: .cursor, tooltip: L("Pick"), target: .none,
-                            current: gizmoMode, onSelect: onSelectGizmoMode)
-                GizmoButton(icon: .translate, tooltip: L("Move"), target: .translate,
-                            current: gizmoMode, onSelect: onSelectGizmoMode)
-                GizmoButton(icon: .rotate, tooltip: L("Rotate"), target: .rotate,
-                            current: gizmoMode, onSelect: onSelectGizmoMode)
-                GizmoButton(icon: .scale, tooltip: L("Scale"), target: .scale,
-                            current: gizmoMode, onSelect: onSelectGizmoMode)
+                IconButton(resource: ViewportToolbarIcon.cursor.resource,
+                           size: 15,
+                           tooltip: L("Pick")) {
+                    onSelectGizmoMode(.none)
+                }
+                .buttonStyle(EditorIconButtonStyle(isActive: gizmoMode == .none,
+                                                   size: 26))
+                IconButton(resource: ViewportToolbarIcon.translate.resource,
+                           size: 15,
+                           tooltip: L("Move")) {
+                    onSelectGizmoMode(.translate)
+                }
+                .buttonStyle(EditorIconButtonStyle(isActive: gizmoMode == .translate,
+                                                   size: 26))
+                IconButton(resource: ViewportToolbarIcon.rotate.resource,
+                           size: 15,
+                           tooltip: L("Rotate")) {
+                    onSelectGizmoMode(.rotate)
+                }
+                .buttonStyle(EditorIconButtonStyle(isActive: gizmoMode == .rotate,
+                                                   size: 26))
+                IconButton(resource: ViewportToolbarIcon.scale.resource,
+                           size: 15,
+                           tooltip: L("Scale")) {
+                    onSelectGizmoMode(.scale)
+                }
+                .buttonStyle(EditorIconButtonStyle(isActive: gizmoMode == .scale,
+                                                   size: 26))
 
                 ToggleChip(label: L("Local"), isActive: gizmoSpace == .local) {
                     onSelectGizmoSpace(.local)
@@ -1381,12 +1401,20 @@ private struct ViewportInfoBar: View {
                     onSetCommandSelectBehavior(.toggle)
                 }
 
-                ViewportIconToggle(icon: .lit, tooltip: L("Lit"), isActive: shadingMode == .lit) {
+                IconButton(resource: ViewportToolbarIcon.lit.resource,
+                           size: 15,
+                           tooltip: L("Lit")) {
                     onSelectShadingMode(.lit)
                 }
-                ViewportIconToggle(icon: .wireframe, tooltip: L("Wire"), isActive: shadingMode == .wireframe) {
+                .buttonStyle(EditorIconButtonStyle(isActive: shadingMode == .lit,
+                                                   size: 26))
+                IconButton(resource: ViewportToolbarIcon.wireframe.resource,
+                           size: 15,
+                           tooltip: L("Wire")) {
                     onSelectShadingMode(.wireframe)
                 }
+                .buttonStyle(EditorIconButtonStyle(isActive: shadingMode == .wireframe,
+                                                   size: 26))
 
                 Text("P \(stats.passCount)  D \(stats.drawCallCount)")
                     .font(.mono)
@@ -1422,21 +1450,6 @@ private struct ToggleChip: View {
     }
 }
 
-private struct GizmoButton: View {
-    let icon: ViewportToolbarIcon
-    let tooltip: String
-    let target: EditorGizmoMode
-    let current: EditorGizmoMode
-    let onSelect: (EditorGizmoMode) -> Void
-
-    var body: some View {
-        let isActive = current == target
-        ViewportIconToggle(icon: icon, tooltip: tooltip, isActive: isActive) {
-            onSelect(target)
-        }
-    }
-}
-
 private enum ViewportToolbarIcon: String {
     case cursor = "cursor-arrow-rays"
     case translate = "direction-arrows"
@@ -1449,31 +1462,6 @@ private enum ViewportToolbarIcon: String {
         .svg(named: rawValue,
              in: .module,
              subdirectory: "ToolbarIcons")
-    }
-}
-
-private struct ViewportIconToggle: View {
-    let icon: ViewportToolbarIcon
-    let tooltip: String
-    let isActive: Bool
-    let onTap: () -> Void
-
-    var body: some View {
-        Button(tooltip: tooltip, action: onTap) {
-            Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                Image(resource: icon.resource,
-                      width: 15,
-                      height: 15,
-                      tint: .white,
-                      contentMode: .fit,
-                      renderingMode: .alphaMask)
-                    .foregroundColor(isActive ? .onAccent : .onSurfaceVariant)
-            }
-            .frame(width: 26, height: 26)
-            .background(isActive ? .accent : .surfaceSunken)
-            .cornerRadius(4)
-        }
-        .buttonStyle(.plain)
     }
 }
 

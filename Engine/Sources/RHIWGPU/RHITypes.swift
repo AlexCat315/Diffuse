@@ -24,7 +24,7 @@ public enum GPUTextureFormat: Sendable {
 
 // MARK: - Present Mode
 
-public enum GPUPresentMode: Sendable {
+public enum GPUPresentMode: Sendable, Equatable {
     case fifo
     case fifoRelaxed
     case immediate

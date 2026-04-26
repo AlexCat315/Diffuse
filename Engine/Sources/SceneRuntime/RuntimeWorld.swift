@@ -69,6 +69,42 @@ public struct Children: RuntimeComponent, Sendable, Equatable {
     }
 }
 
+public struct RuntimeComponentQuery<Component: RuntimeComponent>: Sendable {
+    public var entity: EntityID
+    public var component: Component
+
+    public init(entity: EntityID, component: Component) {
+        self.entity = entity
+        self.component = component
+    }
+}
+
+public struct RuntimeComponentPairQuery<A: RuntimeComponent, B: RuntimeComponent>: Sendable {
+    public var entity: EntityID
+    public var a: A
+    public var b: B
+
+    public init(entity: EntityID, a: A, b: B) {
+        self.entity = entity
+        self.a = a
+        self.b = b
+    }
+}
+
+public struct RuntimeComponentTripleQuery<A: RuntimeComponent, B: RuntimeComponent, C: RuntimeComponent>: Sendable {
+    public var entity: EntityID
+    public var a: A
+    public var b: B
+    public var c: C
+
+    public init(entity: EntityID, a: A, b: B, c: C) {
+        self.entity = entity
+        self.a = a
+        self.b = b
+        self.c = c
+    }
+}
+
 public struct RuntimeWorld: @unchecked Sendable {
     private struct HierarchyReadSnapshot {
         var entities: [EntityID]
@@ -108,6 +144,18 @@ public struct RuntimeWorld: @unchecked Sendable {
             let key = ObjectIdentifier(type)
             guard let box = boxes[key] as? ComponentStoreBox<Component> else { return nil }
             return box.values[entity]
+        }
+
+        func entities<Component: RuntimeComponent>(with type: Component.Type) -> [EntityID] {
+            let key = ObjectIdentifier(type)
+            guard let box = boxes[key] as? ComponentStoreBox<Component> else { return [] }
+            return Array(box.values.keys)
+        }
+
+        func count<Component: RuntimeComponent>(for type: Component.Type) -> Int {
+            let key = ObjectIdentifier(type)
+            guard let box = boxes[key] as? ComponentStoreBox<Component> else { return 0 }
+            return box.values.count
         }
 
         mutating func remove<Component: RuntimeComponent>(_ type: Component.Type, for entity: EntityID) -> Component? {
@@ -323,6 +371,60 @@ public struct RuntimeWorld: @unchecked Sendable {
         component(type, for: entity) != nil
     }
 
+    public func componentCount<Component: RuntimeComponent>(_ type: Component.Type) -> Int {
+        components.count(for: type)
+    }
+
+    public func entities<Component: RuntimeComponent>(with type: Component.Type) -> [EntityID] {
+        let alive = Set(entities())
+        return components
+            .entities(with: type)
+            .filter { alive.contains($0) }
+            .sorted { lhs, rhs in lhs.rawValue < rhs.rawValue }
+    }
+
+    public func query<Component: RuntimeComponent>(
+        _ type: Component.Type
+    ) -> [RuntimeComponentQuery<Component>] {
+        entities()
+            .compactMap { entity in
+                guard let component = components.get(type, for: entity) else { return nil }
+                return RuntimeComponentQuery(entity: entity, component: component)
+            }
+    }
+
+    public func query<A: RuntimeComponent, B: RuntimeComponent>(
+        _ a: A.Type,
+        _ b: B.Type
+    ) -> [RuntimeComponentPairQuery<A, B>] {
+        entities()
+            .compactMap { entity in
+                guard let componentA = components.get(a, for: entity),
+                      let componentB = components.get(b, for: entity)
+                else {
+                    return nil
+                }
+                return RuntimeComponentPairQuery(entity: entity, a: componentA, b: componentB)
+            }
+    }
+
+    public func query<A: RuntimeComponent, B: RuntimeComponent, C: RuntimeComponent>(
+        _ a: A.Type,
+        _ b: B.Type,
+        _ c: C.Type
+    ) -> [RuntimeComponentTripleQuery<A, B, C>] {
+        entities()
+            .compactMap { entity in
+                guard let componentA = components.get(a, for: entity),
+                      let componentB = components.get(b, for: entity),
+                      let componentC = components.get(c, for: entity)
+                else {
+                    return nil
+                }
+                return RuntimeComponentTripleQuery(entity: entity, a: componentA, b: componentB, c: componentC)
+            }
+    }
+
     @discardableResult
     public mutating func updateComponent<Component: RuntimeComponent>(
         _ type: Component.Type,
@@ -335,6 +437,27 @@ public struct RuntimeWorld: @unchecked Sendable {
             revision &+= 1
         }
         return updated
+    }
+
+    @discardableResult
+    public mutating func updateComponents<Component: RuntimeComponent>(
+        _ type: Component.Type,
+        _ body: (EntityID, inout Component) -> Void
+    ) -> Int {
+        let matchedEntities = entities(with: type)
+        var updatedCount = 0
+        for entity in matchedEntities {
+            let updated = components.update(type, for: entity) { component in
+                body(entity, &component)
+            }
+            if updated {
+                updatedCount += 1
+            }
+        }
+        if updatedCount > 0 {
+            revision &+= 1
+        }
+        return updatedCount
     }
 
     @discardableResult
@@ -775,6 +898,75 @@ public struct RuntimeWorld: @unchecked Sendable {
         )
     }
 
+    @discardableResult
+    public mutating func applyForce(_ force: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
+        updateDynamicRigidBody(for: entity, wake: wake) { body in
+            body.accumulatedForce += force
+        }
+    }
+
+    @discardableResult
+    public mutating func applyTorque(_ torque: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
+        updateDynamicRigidBody(for: entity, wake: wake) { body in
+            body.accumulatedTorque += torque
+        }
+    }
+
+    @discardableResult
+    public mutating func applyLinearImpulse(_ impulse: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
+        updateDynamicRigidBody(for: entity, wake: wake) { body in
+            body.linearVelocity += impulse * inverseMass(for: body)
+        }
+    }
+
+    @discardableResult
+    public mutating func applyAngularImpulse(_ impulse: SIMD3<Float>, to entity: EntityID, wake: Bool = true) -> Bool {
+        updateDynamicRigidBody(for: entity, wake: wake) { body in
+            body.angularVelocity += impulse * inverseMass(for: body)
+        }
+    }
+
+    @discardableResult
+    public mutating func wakeRigidBody(_ entity: EntityID) -> Bool {
+        updateComponent(RigidBody.self, for: entity) { body in
+            body.isSleeping = false
+        }
+    }
+
+    @discardableResult
+    public mutating func sleepRigidBody(_ entity: EntityID) -> Bool {
+        updateComponent(RigidBody.self, for: entity) { body in
+            body.linearVelocity = .zero
+            body.angularVelocity = .zero
+            body.accumulatedForce = .zero
+            body.accumulatedTorque = .zero
+            body.isSleeping = true
+        }
+    }
+
+    @discardableResult
+    public mutating func clearForces(for entity: EntityID) -> Bool {
+        updateComponent(RigidBody.self, for: entity) { body in
+            body.accumulatedForce = .zero
+            body.accumulatedTorque = .zero
+        }
+    }
+
+    @discardableResult
+    mutating func clearPhysicsAccumulators(for entities: [EntityID]) -> Int {
+        var clearedCount = 0
+        for entity in entities {
+            let cleared = updateComponent(RigidBody.self, for: entity) { body in
+                body.accumulatedForce = .zero
+                body.accumulatedTorque = .zero
+            }
+            if cleared {
+                clearedCount += 1
+            }
+        }
+        return clearedCount
+    }
+
     mutating func applyPhysicsWriteback(_ writeback: PhysicsBodyWriteback) -> Bool {
         guard contains(writeback.entity) else { return false }
 
@@ -806,6 +998,22 @@ public struct RuntimeWorld: @unchecked Sendable {
 
         return true
     }
+
+    private mutating func updateDynamicRigidBody(
+        for entity: EntityID,
+        wake: Bool,
+        _ body: (inout RigidBody) -> Void
+    ) -> Bool {
+        guard component(RigidBody.self, for: entity)?.motionType == .dynamic else {
+            return false
+        }
+        return updateComponent(RigidBody.self, for: entity) { rigidBody in
+            body(&rigidBody)
+            if wake {
+                rigidBody.isSleeping = false
+            }
+        }
+    }
 }
 
 private func translationMatrix(_ translation: SIMD3<Float>) -> simd_float4x4 {
@@ -815,4 +1023,8 @@ private func translationMatrix(_ translation: SIMD3<Float>) -> simd_float4x4 {
         SIMD4<Float>(0, 0, 1, translation.z),
         SIMD4<Float>(0, 0, 0, 1),
     ])
+}
+
+private func inverseMass(for body: RigidBody) -> Float {
+    body.mass > 0.000_001 ? 1 / body.mass : 0
 }

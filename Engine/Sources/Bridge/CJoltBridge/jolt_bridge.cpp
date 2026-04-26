@@ -282,6 +282,14 @@ static void integrate_body(BodyRecord& body, const GuavaJoltStepConfig& config) 
         body.state.linear_velocity_y += config.gravity_y * body.desc.gravity_scale * config.delta_seconds;
         body.state.linear_velocity_z += config.gravity_z * body.desc.gravity_scale * config.delta_seconds;
 
+        const float inverseMass = inverse_mass(body);
+        body.state.linear_velocity_x += body.desc.accumulated_force_x * inverseMass * config.delta_seconds;
+        body.state.linear_velocity_y += body.desc.accumulated_force_y * inverseMass * config.delta_seconds;
+        body.state.linear_velocity_z += body.desc.accumulated_force_z * inverseMass * config.delta_seconds;
+        body.state.angular_velocity_x += body.desc.accumulated_torque_x * inverseMass * config.delta_seconds;
+        body.state.angular_velocity_y += body.desc.accumulated_torque_y * inverseMass * config.delta_seconds;
+        body.state.angular_velocity_z += body.desc.accumulated_torque_z * inverseMass * config.delta_seconds;
+
         const float linearDamping = damping_factor(body.desc.linear_damping, config.delta_seconds);
         const float angularDamping = damping_factor(body.desc.angular_damping, config.delta_seconds);
         body.state.linear_velocity_x *= linearDamping;

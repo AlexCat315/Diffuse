@@ -128,6 +128,53 @@ struct DockMinimizeTests: GuavaUIComposeSerializedSuite {
         _ = graph
     } }
 
+    @Test("minimized rails stay anchored to container edges")
+    func minimizedRailsStayAnchoredToContainerEdges() { GlobalTestLock.locked {
+        InteractionRegistryHolder.current = InteractionRegistry()
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let leftTab = DockTab(userKey: "left", title: "Left")
+        let centerTab = DockTab(userKey: "center", title: "Center")
+        let bottomTab = DockTab(userKey: "bottom", title: "Bottom")
+        let leftLeaf = DockLayoutNode.tabs([leftTab])
+        let centerLeaf = DockLayoutNode.tabs([centerTab])
+        let bottomLeaf = DockLayoutNode.tabs([bottomTab])
+        let controller = DockController(root: .hsplit(
+            first: leftLeaf,
+            second: .vsplit(first: centerLeaf, second: bottomLeaf)
+        ))
+        controller.onResolveMinimizedEdge = { leafID in
+            if leafID == leftLeaf.id { return .left }
+            if leafID == bottomLeaf.id { return .bottom }
+            return nil
+        }
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: { key in
+            AnyView(Text("content:\(key)"))
+        }))
+        graph.computeLayout(width: 600, height: 400)
+
+        controller.apply(.minimizeLeaf(leafID: leftLeaf.id, edge: .left))
+        controller.apply(.minimizeLeaf(leafID: bottomLeaf.id, edge: .bottom))
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 600, height: 400)
+
+        let leftRail = collect(tree.root!) { node in
+            node.attachments[_DockMinimizedRail.kRailMarker] as? DockMinimizedEdge == .left
+        }.first.map(absoluteFrame(of:))
+        let bottomRail = collect(tree.root!) { node in
+            node.attachments[_DockMinimizedRail.kRailMarker] as? DockMinimizedEdge == .bottom
+        }.first.map(absoluteFrame(of:))
+
+        #expect(leftRail?.minX == 0)
+        #expect((leftRail?.width ?? 0) >= 39)
+        #expect(bottomRail?.maxY == 400)
+        #expect((bottomRail?.height ?? 0) >= 39)
+        _ = graph
+    } }
+
     private func collect(_ root: Node, where predicate: (Node) -> Bool) -> [Node] {
         var out: [Node] = []
         func walk(_ node: Node) {

@@ -26,7 +26,7 @@ private func runEditor() throws {
         app.store.dispatch(.setActiveLayoutPreset(shellState.activeLayoutPreset))
         app.store.dispatch(.setThemeMode(shellState.themeMode))
         app.store.dispatch(.setLanguage(shellState.language))
-        app.store.dispatch(.setFrameRateLimit(shellState.frameRateLimit))
+        app.store.dispatch(.setVSyncMode(shellState.vsyncMode))
         EditorLocalizationPreferences.language = shellState.language
     }
 
@@ -34,13 +34,8 @@ private func runEditor() throws {
                                                           preset: app.store.state.activeLayoutPreset)
     let registry = EditorRootViewFactory.makeRegistry(app: app)
     var settingsWindowID: WindowID?
-    func applyFrameRateLimit(_ limit: EditorFrameRateLimit, to display: AppDisplayHandle) {
-        switch limit {
-        case .unlimited:
-            display.setFrameRateMode(.displayRefresh)
-        case .fps30, .fps60, .fps120, .fps240:
-            display.setFrameRateMode(.fixed(limit.framesPerSecond ?? 60))
-        }
+    func applyVSyncMode(_ mode: EditorVSyncMode, to display: AppDisplayHandle) {
+        display.setVSyncEnabled(mode.isEnabled)
     }
 
     try AppRuntime.run(
@@ -50,12 +45,9 @@ private func runEditor() throws {
         events: events,
         onTick: { dt in app.tick(deltaTime: dt) },
         onDisplayReady: { display in
-            applyFrameRateLimit(app.store.state.frameRateLimit, to: display)
-            app.setFrameRateLimitHandler { limit in
-                applyFrameRateLimit(limit, to: display)
-            }
-            app.setDisplayRefreshRateProvider {
-                display.currentDisplayRefreshRate()
+            applyVSyncMode(app.store.state.vsyncMode, to: display)
+            app.setVSyncModeHandler { mode in
+                applyVSyncMode(mode, to: display)
             }
             app.setDisplayInvalidationHandler {
                 display.requestDisplay()
@@ -84,7 +76,7 @@ private func runEditor() throws {
                                          preset: app.store.state.activeLayoutPreset,
                                          themeMode: app.store.state.themeMode,
                                          language: app.store.state.language,
-                                         frameRateLimit: app.store.state.frameRateLimit)
+                                         vsyncMode: app.store.state.vsyncMode)
     EditorRootViewFactory.saveDockLayout(controller,
                                          for: app.store.state.workspaceMode,
                                          preset: app.store.state.activeLayoutPreset)
