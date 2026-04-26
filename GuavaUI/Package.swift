@@ -148,6 +148,7 @@ let package = Package(
                 "GuavaUICompose",
                 "GuavaUIRuntime",
                 .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "RenderBackend", package: "Engine"),
             ]
         ),
         .testTarget(
