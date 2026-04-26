@@ -84,7 +84,10 @@ let package = Package(
             name: "GuavaUICompose",
             dependencies: ["GuavaUIRuntime",
                            .product(name: "EngineKernel", package: "Engine"),
-                           .product(name: "RenderBackend", package: "Engine")]
+                           .product(name: "RenderBackend", package: "Engine")],
+            resources: [
+                .process("Resources"),
+            ]
         ),
 
         // MARK: - Bundled fonts

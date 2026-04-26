@@ -11,6 +11,13 @@ public final class EditorViewportInputController: @unchecked Sendable {
 
     public enum CameraDrag: Equatable { case orbit, pan, dolly, freelook }
 
+    public enum ActiveInteraction: Equatable {
+        case pendingClick(button: MouseButton)
+        case camera(CameraDrag, button: MouseButton)
+        case gizmo(button: MouseButton)
+        case marquee(button: MouseButton)
+    }
+
     public struct GizmoGroupTarget: Sendable {
         public var entityID: UInt64
         public var startWorldMatrix: simd_float4x4
@@ -26,6 +33,7 @@ public final class EditorViewportInputController: @unchecked Sendable {
     }
 
     public var activeCameraDrag: CameraDrag?
+    public var activeInteraction: ActiveInteraction?
     public var lastCursor: (x: Float, y: Float)?
 
     /// 鼠标按下时记录起点，以便释放时判断是否算 "click" 触发拾取。
@@ -37,12 +45,45 @@ public final class EditorViewportInputController: @unchecked Sendable {
     public var boxSelectArmed: Bool = false
     public var gizmoGroupTargets: [GizmoGroupTarget] = []
 
-    public func reset() {
+    public var hasActivePointerSession: Bool {
+        activeInteraction != nil
+    }
+
+    public func begin(_ interaction: ActiveInteraction,
+                      at point: (x: Float, y: Float),
+                      modifiers: KeyModifiers) {
+        self.activeInteraction = interaction
+        self.modifiers = modifiers
+        self.lastCursor = point
+        self.leftDownAt = point
+        self.marqueeStart = nil
+        self.marqueeCurrent = nil
+        switch interaction {
+        case .camera(let drag, _):
+            self.activeCameraDrag = drag
+        default:
+            self.activeCameraDrag = nil
+        }
+    }
+
+    public func endPointerSession(keepingKeyboardState: Bool = true) {
+        activeInteraction = nil
         activeCameraDrag = nil
         lastCursor = nil
         leftDownAt = nil
         marqueeStart = nil
         marqueeCurrent = nil
+        gizmoGroupTargets.removeAll(keepingCapacity: false)
+        if !keepingKeyboardState {
+            modifiers = []
+            pressedScancodes.removeAll(keepingCapacity: false)
+            boxSelectArmed = false
+        }
+    }
+
+    public func reset() {
+        endPointerSession(keepingKeyboardState: false)
+        activeInteraction = nil
         modifiers = []
         pressedScancodes.removeAll(keepingCapacity: false)
         boxSelectArmed = false

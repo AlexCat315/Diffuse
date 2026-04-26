@@ -62,11 +62,15 @@ struct EditorRootView: View {
 
             let resetLayout: () -> Void = {
                 let mode = store.state.workspaceMode
-                let defaultPreset = EditorLayoutPreset.default(for: mode)
-                store.dispatch(.setActiveLayoutPreset(defaultPreset))
-                EditorRootViewFactory.resetLayout(into: controller, for: mode)
+                let preset = store.state.activeLayoutPreset
+                EditorRootViewFactory.resetLayout(into: controller,
+                                                  for: mode,
+                                                  preset: preset)
+                EditorRootViewFactory.saveDockLayout(controller,
+                                                     for: mode,
+                                                     preset: preset)
                 EditorRootViewFactory.saveShellState(mode: mode,
-                                                     preset: defaultPreset,
+                                                     preset: preset,
                                                      themeMode: store.state.themeMode,
                                                      language: store.state.language,
                                                      frameRateLimit: store.state.frameRateLimit)
@@ -915,10 +919,17 @@ enum EditorRootViewFactory {
     }
 
     static func resetLayout(into controller: DockController,
-                            for mode: EditorWorkspaceMode) {
-        let defaultPreset = EditorLayoutPreset.default(for: mode)
-        let fallback = makeDefaultController(for: mode, preset: defaultPreset)
+                            for mode: EditorWorkspaceMode,
+                            preset: EditorLayoutPreset) {
+        let fallback = makeDefaultController(for: mode, preset: preset)
         controller.load(fallback.snapshot())
+    }
+
+    static func resetLayout(into controller: DockController,
+                            for mode: EditorWorkspaceMode) {
+        resetLayout(into: controller,
+                    for: mode,
+                    preset: .default(for: mode))
     }
 
     static func activateTab(_ userKey: String, in controller: DockController) {
@@ -1068,9 +1079,15 @@ enum EditorRootViewFactory {
     static func localizeDockTitles(in controller: DockController) {
         let root = localizeDockTitles(in: controller.root)
         let satellites = controller.satellites.mapValues(localizeDockTitles(in:))
+        let minimizedLeaves = controller.minimizedLeaves.mapValues { leaf in
+            DockMinimizedLeaf(node: localizeDockTitles(in: leaf.node),
+                              edge: leaf.edge)
+        }
         controller.replace(root: root,
                            satellites: satellites,
-                           satelliteOrder: controller.satelliteOrder)
+                           satelliteOrder: controller.satelliteOrder,
+                           minimizedLeaves: minimizedLeaves,
+                           minimizedOrder: controller.minimizedOrder)
     }
 
     private static func localizeDockTitles(in node: DockLayoutNode) -> DockLayoutNode {

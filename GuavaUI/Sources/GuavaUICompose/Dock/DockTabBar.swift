@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import GuavaUIRuntime
 
 /// Renders one tabs leaf: a tab strip followed by the active tab's content.
@@ -120,15 +121,15 @@ struct _DockTabBarHost: _PrimitiveView {
                             isActive: tab.id == activeTabID,
                             controller: controller)
         }
+        children.append(_DockLeafDragHandle(sourceLeafID: nodeID,
+                                            activeTabID: activeTabID,
+                                            tabs: tabs,
+                                            controller: controller))
         if let edge = controller.onResolveMinimizedEdge?(nodeID) {
             children.append(_DockLeafMinimizeButton(sourceLeafID: nodeID,
                                                     edge: edge,
                                                     controller: controller))
         }
-        children.append(_DockLeafDragHandle(sourceLeafID: nodeID,
-                                            activeTabID: activeTabID,
-                                            tabs: tabs,
-                                            controller: controller))
         return children
     }
 }
@@ -428,6 +429,9 @@ struct _DockLeafMinimizeButton: View {
 
 struct _DockLeafMinimizeButtonHost: _PrimitiveView {
     static let kMinimizeButtonMarker = "DockTabBar.minimizeButton"
+    private static let icon = BundleImageResource.svg(named: "minimize",
+                                                      in: .module,
+                                                      subdirectory: "DockIcons")
 
     let sourceLeafID: DockNodeID
     let edge: DockMinimizedEdge
@@ -461,7 +465,12 @@ struct _DockLeafMinimizeButtonHost: _PrimitiveView {
                 snap.controller.apply(.minimizeLeaf(leafID: snap.sourceLeafID,
                                                     edge: snap.edge))
             }) {
-                Text("-")
+                Image(resource: Self.icon,
+                      width: 11,
+                      height: 11,
+                      tint: .white,
+                      contentMode: .fit,
+                      renderingMode: .alphaMask)
             }
             .buttonStyle(_DockTabCloseButtonStyle(isActive: false, size: size))
         ]

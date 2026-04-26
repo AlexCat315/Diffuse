@@ -1,9 +1,12 @@
 import Foundation
+import CoreGraphics
 import Testing
+import GuavaUIRuntime
+import EngineKernel
 @testable import GuavaUICompose
 
-@Suite("Dock minimize")
-struct DockMinimizeTests {
+@Suite("Dock minimize", .serialized)
+struct DockMinimizeTests: GuavaUIComposeSerializedSuite {
 
     @Test("minimizeLeaf removes a leaf from root and stores it by edge")
     func minimizeLeafStoresLeaf() {
@@ -53,5 +56,96 @@ struct DockMinimizeTests {
 
         controller.apply(.restoreMinimizedLeaf(leaf.id))
         #expect(controller.root.collectTabIDs() == [tab.id])
+    }
+
+    @Test("minimize button sits on the trailing edge of the tab strip")
+    func minimizeButtonSitsAtTrailingEdge() { GlobalTestLock.locked {
+        InteractionRegistryHolder.current = InteractionRegistry()
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let tab = DockTab(userKey: "a", title: "A")
+        let leaf = DockLayoutNode.tabs([tab])
+        let controller = DockController(root: leaf)
+        controller.onResolveMinimizedEdge = { leafID in
+            leafID == leaf.id ? .left : nil
+        }
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: { key in
+            AnyView(Text("content:\(key)"))
+        }))
+        graph.computeLayout(width: 600, height: 400)
+
+        let buttons = collect(tree.root!) { node in
+            node.attachments[_DockLeafMinimizeButtonHost.kMinimizeButtonMarker] as? Bool == true
+        }
+        #expect(buttons.count == 1)
+        if let button = buttons.first {
+            let frame = absoluteFrame(of: button)
+            #expect(frame.minX > 560)
+            #expect(frame.maxX <= 600)
+        }
+        _ = graph
+    } }
+
+    @Test("DockContainer renders a visible rail after minimizing a leaf")
+    func containerRendersRailAfterMinimize() { GlobalTestLock.locked {
+        InteractionRegistryHolder.current = InteractionRegistry()
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let tabA = DockTab(userKey: "a", title: "A")
+        let tabB = DockTab(userKey: "b", title: "B")
+        let leafA = DockLayoutNode.tabs([tabA])
+        let leafB = DockLayoutNode.tabs([tabB])
+        let controller = DockController(root: .hsplit(first: leafA, second: leafB))
+        controller.onResolveMinimizedEdge = { leafID in
+            leafID == leafA.id ? .left : nil
+        }
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: { key in
+            AnyView(Text("content:\(key)"))
+        }))
+        graph.computeLayout(width: 600, height: 400)
+
+        controller.apply(.minimizeLeaf(leafID: leafA.id, edge: .left))
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 600, height: 400)
+
+        let rails = collect(tree.root!) { node in
+            node.attachments[_DockMinimizedRail.kRailMarker] as? DockMinimizedEdge == .left
+        }
+        #expect(rails.count == 1)
+        #expect((rails.first?.frame.width ?? 0) >= 35)
+        #expect((rails.first?.frame.height ?? 0) >= 300)
+
+        let restoreButtons = collect(tree.root!) { node in
+            node.isHitTestable && node.cursor == .pointer
+        }
+        #expect(!restoreButtons.isEmpty)
+        _ = graph
+    } }
+
+    private func collect(_ root: Node, where predicate: (Node) -> Bool) -> [Node] {
+        var out: [Node] = []
+        func walk(_ node: Node) {
+            if predicate(node) { out.append(node) }
+            for child in node.children { walk(child) }
+        }
+        walk(root)
+        return out
+    }
+
+    private func absoluteFrame(of node: Node) -> CGRect {
+        var origin = node.frame.origin
+        var current = node.parent
+        while let node = current {
+            origin.x += node.frame.origin.x
+            origin.y += node.frame.origin.y
+            current = node.parent
+        }
+        return CGRect(origin: origin, size: node.frame.size)
     }
 }
