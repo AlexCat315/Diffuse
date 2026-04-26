@@ -204,6 +204,9 @@ public final class EditorGizmoController: @unchecked Sendable {
         public var startPlaneHit: SIMD3<Float>
         // rotate: 起始径向向量（在 plane 上，已归一化）
         public var startRadial: SIMD3<Float>
+        // free center handles use the camera-facing plane rather than a single axis.
+        public var isFree: Bool
+        public var uniformScaleStartDistance: Float
         // 拖拽时的 gizmo 远近 reference 长度（用于 scale 升压）
         public var referenceLength: Float
     }
@@ -245,7 +248,9 @@ public final class EditorGizmoController: @unchecked Sendable {
                           planeOrigin: SIMD3<Float>,
                           planeNormal: SIMD3<Float>,
                           startPlaneHit: SIMD3<Float>,
-                          startRadial: SIMD3<Float>) -> ActiveDrag {
+                          startRadial: SIMD3<Float>,
+                          isFree: Bool = false,
+                          uniformScaleStartDistance: Float = 1) -> ActiveDrag {
         let parentWorld = snap.parentWorldMatrix
         let parentInverse = simd_inverse(parentWorld)
         let startWorldMatrix = parentWorld * snap.entityLocalMatrix
@@ -264,6 +269,8 @@ public final class EditorGizmoController: @unchecked Sendable {
             planeNormal: planeNormal,
             startPlaneHit: startPlaneHit,
             startRadial: startRadial,
+            isFree: isFree,
+            uniformScaleStartDistance: max(uniformScaleStartDistance, 0.05),
             referenceLength: max(snap.axisLength, 0.001)
         )
     }
@@ -291,20 +298,34 @@ public final class EditorGizmoController: @unchecked Sendable {
             {
                 return drag
             }
+            if let drag = beginCenterDrag(snap: snap,
+                                          projector: projector,
+                                          cursorX: cursorX,
+                                          cursorY: cursorY,
+                                          screenTolerance: 20) {
+                return drag
+            }
             return beginAxisDrag(snap: snap,
                                  projector: projector,
                                  cursorX: cursorX, cursorY: cursorY,
-                                 screenTolerance: screenTolerance)
+                                 screenTolerance: max(screenTolerance, 18))
         case .scale:
+            if let drag = beginCenterDrag(snap: snap,
+                                          projector: projector,
+                                          cursorX: cursorX,
+                                          cursorY: cursorY,
+                                          screenTolerance: 22) {
+                return drag
+            }
             return beginAxisDrag(snap: snap,
                                  projector: projector,
                                  cursorX: cursorX, cursorY: cursorY,
-                                 screenTolerance: screenTolerance)
+                                 screenTolerance: max(screenTolerance, 18))
         case .rotate:
             return beginRotateDrag(snap: snap,
                                    projector: projector,
                                    cursorX: cursorX, cursorY: cursorY,
-                                   screenTolerance: screenTolerance)
+                                   screenTolerance: max(screenTolerance, 18))
         }
     }
 
@@ -393,6 +414,12 @@ public final class EditorGizmoController: @unchecked Sendable {
             planeOrigin: drag.planeOrigin,
             planeNormal: drag.planeNormal
         ) else { return nil }
+        if drag.isFree {
+            let deltaWorld = curHit - drag.startPlaneHit
+            var worldMatrix = drag.startEntityWorldMatrix
+            worldMatrix.columns.3 = SIMD4<Float>(drag.startEntityWorldPosition + deltaWorld, 1)
+            return drag.parentInverseMatrix * worldMatrix
+        }
         // 在拖拽平面上的偏移投影到轴向，得到沏平移。
         let deltaWorld = curHit - drag.startPlaneHit
         let along = simd_dot(deltaWorld, drag.axisWorld)
@@ -411,23 +438,47 @@ public final class EditorGizmoController: @unchecked Sendable {
             planeOrigin: drag.planeOrigin,
             planeNormal: drag.planeNormal
         ) else { return nil }
-        let along = simd_dot(curHit - drag.startPlaneHit, drag.axisWorld)
-        let factor = max(0.05, 1 + along / drag.referenceLength)
+        let factor: Float
+        if drag.isFree {
+            let currentOffset = curHit - drag.planeOrigin
+            let currentDistance = simd_length(currentOffset)
+            if currentDistance <= 1e-4 {
+                factor = 0.05
+            } else {
+                let currentDirection = simd_normalize(currentOffset)
+                let sameSide = simd_dot(currentDirection, drag.startRadial)
+                factor = sameSide < -0.1
+                    ? 0.05
+                    : max(0.05, min(20, currentDistance / drag.uniformScaleStartDistance))
+            }
+        } else {
+            let along = simd_dot(curHit - drag.startPlaneHit, drag.axisWorld)
+            factor = max(0.05, 1 + along / drag.referenceLength)
+        }
         // 以 startEntityWorldPosition 为中心、沿世界轴做非均匀缩放：
         // 只缩放世界矩阵的三个基底列，保持平移不变，避免以世界原点为中心缩放。
-        let s = scaleAlongAxisMatrix(factor: factor, axis: drag.axisWorld)
-        let s3 = simd_float3x3(
-            SIMD3<Float>(s.columns.0.x, s.columns.0.y, s.columns.0.z),
-            SIMD3<Float>(s.columns.1.x, s.columns.1.y, s.columns.1.z),
-            SIMD3<Float>(s.columns.2.x, s.columns.2.y, s.columns.2.z)
-        )
         let m = drag.startEntityWorldMatrix
         let c0 = SIMD3<Float>(m.columns.0.x, m.columns.0.y, m.columns.0.z)
         let c1 = SIMD3<Float>(m.columns.1.x, m.columns.1.y, m.columns.1.z)
         let c2 = SIMD3<Float>(m.columns.2.x, m.columns.2.y, m.columns.2.z)
-        let n0 = s3 * c0
-        let n1 = s3 * c1
-        let n2 = s3 * c2
+        let n0: SIMD3<Float>
+        let n1: SIMD3<Float>
+        let n2: SIMD3<Float>
+        if drag.isFree {
+            n0 = c0 * factor
+            n1 = c1 * factor
+            n2 = c2 * factor
+        } else {
+            let s = scaleAlongAxisMatrix(factor: factor, axis: drag.axisWorld)
+            let s3 = simd_float3x3(
+                SIMD3<Float>(s.columns.0.x, s.columns.0.y, s.columns.0.z),
+                SIMD3<Float>(s.columns.1.x, s.columns.1.y, s.columns.1.z),
+                SIMD3<Float>(s.columns.2.x, s.columns.2.y, s.columns.2.z)
+            )
+            n0 = s3 * c0
+            n1 = s3 * c1
+            n2 = s3 * c2
+        }
         var worldMatrix = m
         worldMatrix.columns.0 = SIMD4<Float>(n0, 0)
         worldMatrix.columns.1 = SIMD4<Float>(n1, 0)
@@ -437,6 +488,39 @@ public final class EditorGizmoController: @unchecked Sendable {
     }
 
     // MARK: - Plane translate
+
+    private func beginCenterDrag(snap: Snapshot,
+                                 projector: ScreenProjector,
+                                 cursorX: Float,
+                                 cursorY: Float,
+                                 screenTolerance: Float) -> ActiveDrag? {
+        guard let originScreen = projector.project(snap.entityWorldPosition) else { return nil }
+        let dx = cursorX - originScreen.x
+        let dy = cursorY - originScreen.y
+        guard (dx * dx + dy * dy).squareRoot() <= screenTolerance else { return nil }
+        guard let ray = projector.cursorRay(x: cursorX, y: cursorY) else { return nil }
+        guard let hit = rayPlaneIntersect(rayOrigin: ray.origin,
+                                          rayDir: ray.direction,
+                                          planeOrigin: snap.entityWorldPosition,
+                                          planeNormal: snap.cameraForward) else { return nil }
+
+        let offset = hit - snap.entityWorldPosition
+        let offsetLength = simd_length(offset)
+        let startRadial = offsetLength > 1e-4 ? offset / offsetLength : projector.cameraRight
+        let dragAxis = simd_normalize(projector.cameraRight + projector.cameraUp)
+        let drag = makeDrag(snap: snap,
+                            axis: .x,
+                            plane: nil,
+                            axisWorld: dragAxis,
+                            planeOrigin: snap.entityWorldPosition,
+                            planeNormal: snap.cameraForward,
+                            startPlaneHit: hit,
+                            startRadial: startRadial,
+                            isFree: true,
+                            uniformScaleStartDistance: max(offsetLength, snap.axisLength * 0.18))
+        lock.lock(); _activeDrag = drag; lock.unlock()
+        return drag
+    }
 
     /// 平面手柄在世界空间的几何范围：以原点为起点沿 (basisU, basisV) 方向
     /// 各取 `axisLength * 0.15 .. axisLength * 0.45` 形成一个矩形。
