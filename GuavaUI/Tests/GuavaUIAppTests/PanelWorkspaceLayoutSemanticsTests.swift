@@ -215,6 +215,74 @@ final class PanelWorkspaceLayoutSemanticsTests: XCTestCase {
         XCTAssertEqual(fractions.bottom, 0.57, accuracy: 0.0001)
     }
 
+    func testMinimizePolicyMapsRegionsToRailsAndRestoresCanonicalShell() {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        guard let hierarchyLeafID = leafID(containing: "hierarchy", in: controller.root),
+              let viewportLeafID = leafID(containing: "viewport", in: controller.root),
+              let consoleLeafID = leafID(containing: "console", in: controller.root) else {
+            XCTFail("missing expected leaves")
+            return
+        }
+
+        XCTAssertEqual(controller.onResolveMinimizedEdge?(hierarchyLeafID), .left)
+        XCTAssertNil(controller.onResolveMinimizedEdge?(viewportLeafID))
+        XCTAssertEqual(controller.onResolveMinimizedEdge?(consoleLeafID), .bottom)
+
+        controller.apply(.minimizeLeaf(leafID: hierarchyLeafID, edge: .left))
+        XCTAssertNil(leafID(containing: "hierarchy", in: controller.root))
+        XCTAssertEqual(controller.minimizedLeaves[hierarchyLeafID]?.edge, .left)
+
+        controller.apply(.restoreMinimizedLeaf(hierarchyLeafID))
+        assertCanonicalEditorShell(controller.root,
+                                   centerTabs: ["viewport"],
+                                   bottomTabs: ["console"])
+        XCTAssertEqual(leafID(containing: "hierarchy", in: controller.root), hierarchyLeafID)
+    }
+
+    func testReinstallPreservesMinimizedLeaves() {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+        guard let hierarchyLeafID = leafID(containing: "hierarchy", in: controller.root) else {
+            XCTFail("missing hierarchy leaf")
+            return
+        }
+
+        controller.apply(.minimizeLeaf(leafID: hierarchyLeafID, edge: .left))
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        XCTAssertEqual(controller.minimizedLeaves[hierarchyLeafID]?.edge, .left)
+        XCTAssertEqual(controller.minimizedOrder, [hierarchyLeafID])
+        XCTAssertNil(leafID(containing: "hierarchy", in: controller.root))
+    }
+
     private func makeRegistry() -> PanelRegistry {
         PanelRegistry([
             PanelDescriptor(id: "hierarchy",

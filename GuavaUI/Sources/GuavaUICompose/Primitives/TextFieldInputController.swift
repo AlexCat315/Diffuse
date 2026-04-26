@@ -64,6 +64,16 @@ extension TextField {
                 state.cursorIndex = target
                 return .handled
             }
+            registry.setHover(node) { phase in
+                switch phase {
+                case .enter:
+                    node.attachments[TextField.scrollbarHoveredKey] = true
+                    textField.setScrollbarChromeVisible(true, on: node)
+                case .leave:
+                    node.attachments[TextField.scrollbarHoveredKey] = false
+                    textField.setScrollbarChromeVisible(false, on: node)
+                }
+            }
             registry.setWheel(node, route: .textInput) { event, _ in
                 textField.refreshScrollableMetrics(state: state, node: node)
                 guard state.maxScrollY > 0 else { return .ignored }

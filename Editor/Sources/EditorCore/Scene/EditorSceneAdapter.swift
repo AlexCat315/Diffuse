@@ -68,6 +68,7 @@ public enum EditorInspectorFieldValue {
     case color(Binding<Color>)
     case json(Binding<String>, minHeight: Float)
     case lightType(Binding<LightType>)
+    case rigidBodyMotion(Binding<RigidBodyMotionType>)
 }
 
 /// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`，
@@ -282,17 +283,25 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 EditorInspectorField(
                     id: "motion",
                     label: L("Motion"),
-                    value: .readOnly(body.motionType.rawValue)
+                    value: .rigidBodyMotion(rigidBodyMotionBinding(for: entity))
                 ),
                 EditorInspectorField(
                     id: "mass",
                     label: L("Mass"),
-                    value: .readOnly(format(body.mass))
+                    value: .constrainedNumber(rigidBodyMassBinding(for: entity),
+                                              min: 0,
+                                              max: nil,
+                                              step: 0.5,
+                                              showsStepper: true)
                 ),
                 EditorInspectorField(
                     id: "gravity-scale",
                     label: L("Gravity"),
-                    value: .readOnly(format(body.gravityScale))
+                    value: .constrainedNumber(rigidBodyGravityScaleBinding(for: entity),
+                                              min: nil,
+                                              max: nil,
+                                              step: 0.1,
+                                              showsStepper: true)
                 ),
                 EditorInspectorField(
                     id: "allow-sleep",
@@ -578,6 +587,58 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                                           summary: "Update rigid body sleep flag",
                                           targetRawIDs: [entity.rawValue],
                                           mutations: [.setRigidBodyAllowSleep(entityID: entity.rawValue, value: next)])
+            }
+        )
+    }
+
+    private func rigidBodyMotionBinding(for entity: EntityID) -> Binding<RigidBodyMotionType> {
+        Binding(
+            get: { [self] in
+                scene.component(RigidBody.self, for: entity)?.motionType ?? .dynamic
+            },
+            set: { [self] next in
+                guard scene.component(RigidBody.self, for: entity)?.motionType != next else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_motion",
+                                          summary: "Update rigid body motion type",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRigidBodyMotionType(entityID: entity.rawValue, value: next)])
+            }
+        )
+    }
+
+    private func rigidBodyMassBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(RigidBody.self, for: entity)?.mass ?? 0
+            },
+            set: { [self] next in
+                let clamped = max(0, next)
+                guard scene.component(RigidBody.self, for: entity)?.mass != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_mass",
+                                          summary: "Update rigid body mass",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRigidBodyMass(entityID: entity.rawValue, value: clamped)])
+            }
+        )
+    }
+
+    private func rigidBodyGravityScaleBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(RigidBody.self, for: entity)?.gravityScale ?? 0
+            },
+            set: { [self] next in
+                guard scene.component(RigidBody.self, for: entity)?.gravityScale != next else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_rigidbody_gravity_scale",
+                                          summary: "Update rigid body gravity scale",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setRigidBodyGravityScale(entityID: entity.rawValue, value: next)])
             }
         )
     }
