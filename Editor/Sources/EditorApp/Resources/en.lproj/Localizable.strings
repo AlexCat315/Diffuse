@@ -96,6 +96,9 @@
 "Light" = "Light";
 "Frame Rate" = "Frame Rate";
 "Unlimited" = "Unlimited";
+"Vertical Sync" = "Vertical Sync";
+"On" = "On";
+"Off" = "Off";
 "Language" = "Language";
 "System" = "System";
 

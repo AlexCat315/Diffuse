@@ -13,6 +13,10 @@ public struct NodeRenderer {
 
     /// Render `root` into `list`. Coordinates are produced in viewport pixels.
     public func render(root: Node, into list: DrawList) {
+        list.setViewportBounds(UIRect(x: Float(root.frame.origin.x),
+                                      y: Float(root.frame.origin.y),
+                                      width: Float(root.frame.width),
+                                      height: Float(root.frame.height)))
         renderNode(root, list: list, originX: 0, originY: 0)
     }
 

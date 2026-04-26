@@ -302,6 +302,9 @@ public struct RuntimeWorldSchedule {
                         physicsWritebackCount += 1
                     }
                 }
+                if physicsStepCount > 0 {
+                    _ = world.clearPhysicsAccumulators(for: activeBodies.map(\ .entity))
+                }
                 if physicsWritebackCount > 0 {
                     let report = world.propagateTransforms(using: jobSystem)
                     scheduledJobCount += report.jobCount

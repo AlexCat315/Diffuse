@@ -129,25 +129,20 @@ public enum EditorLanguage: String, Codable, Sendable, CaseIterable {
     }
 }
 
-public enum EditorFrameRateLimit: String, Codable, Sendable, CaseIterable {
-    case unlimited
-    case fps30
-    case fps60
-    case fps120
-    case fps240
+public enum EditorVSyncMode: String, Codable, Sendable, CaseIterable {
+    case enabled
+    case disabled
 
-    public var framesPerSecond: Double? {
-        switch self {
-        case .unlimited:
-            return nil
-        case .fps30:
-            return 30
-        case .fps60:
-            return 60
-        case .fps120:
-            return 120
-        case .fps240:
-            return 240
+    public var isEnabled: Bool {
+        self == .enabled
+    }
+
+    public init(legacyFrameRateLimitRawValue rawValue: String) {
+        switch rawValue {
+        case "disabled":
+            self = .disabled
+        default:
+            self = .enabled
         }
     }
 }
@@ -192,7 +187,7 @@ public struct EditorState: Codable, Sendable {
     public var cmdSelectBehavior: SelectionCommandBehavior
     public var themeMode: EditorThemeMode
     public var language: EditorLanguage
-    public var frameRateLimit: EditorFrameRateLimit
+    public var vsyncMode: EditorVSyncMode
     public var activeAssetDrag: EditorAssetDragPayload?
     public var inspectorCollapsedSectionIDs: Set<String>
     public var pendingConfirmationRequest: ConfirmationRequestBatch?
@@ -219,7 +214,7 @@ public struct EditorState: Codable, Sendable {
         cmdSelectBehavior: SelectionCommandBehavior = .subtract,
         themeMode: EditorThemeMode = .dark,
         language: EditorLanguage = .system,
-        frameRateLimit: EditorFrameRateLimit = .unlimited,
+        vsyncMode: EditorVSyncMode = .enabled,
         activeAssetDrag: EditorAssetDragPayload? = nil,
         inspectorCollapsedSectionIDs: Set<String> = [],
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
@@ -245,7 +240,7 @@ public struct EditorState: Codable, Sendable {
         self.cmdSelectBehavior = cmdSelectBehavior
         self.themeMode = themeMode
         self.language = language
-        self.frameRateLimit = frameRateLimit
+        self.vsyncMode = vsyncMode
         self.activeAssetDrag = activeAssetDrag
         self.inspectorCollapsedSectionIDs = inspectorCollapsedSectionIDs
         self.pendingConfirmationRequest = pendingConfirmationRequest

@@ -194,15 +194,22 @@ struct ButtonHost: _PrimitiveView {
                 var x = centerX - width * 0.5
                 var y = Float(origin.y) - height - offset
 
-                if let clip = list.currentClip {
-                    let minX = clip.x + 2
-                    let maxX = clip.x + clip.width - width - 2
+                if let bounds = list.currentClip ?? list.viewportBounds {
+                    let inset: Float = 2
+                    let minX = bounds.x + inset
+                    let maxX = bounds.x + bounds.width - width - inset
                     if maxX >= minX {
                         x = min(max(x, minX), maxX)
                     }
-                    let topY = clip.y + 2
-                    if y < topY {
-                        y = Float(origin.y) + Float(node.frame.height) + offset
+                    let topY = bounds.y + inset
+                    let bottomY = bounds.y + bounds.height - height - inset
+                    let belowY = Float(origin.y) + Float(node.frame.height) + offset
+                    if y < topY, belowY <= bottomY {
+                        y = belowY
+                    } else if y < topY {
+                        y = topY
+                    } else if y > bottomY {
+                        y = max(topY, bottomY)
                     }
                 }
 

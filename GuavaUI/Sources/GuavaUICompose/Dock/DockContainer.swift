@@ -55,8 +55,8 @@ public struct DockContainer: View {
     public var body: some View {
         _StatefulDockContainer(controller: controller,
                                hostBridge: hostBridge,
+                               horizontalInset: horizontalInset,
                                content: content)
-            .padding(horizontal: horizontalInset, vertical: 0)
     }
 }
 
@@ -69,6 +69,7 @@ public struct DockContainer: View {
 struct _StatefulDockContainer: View {
     let controller: DockController
     let hostBridge: DockHostBridge?
+    let horizontalInset: Float
     let content: DockContentResolver
 
     @State private var version: UInt64 = 0
@@ -80,27 +81,29 @@ struct _StatefulDockContainer: View {
 
         let bind = $version
         let tag = ObjectIdentifier(controller)
-        let token = ControllerSubscription.acquire(controller: controller,
-                                                   tag: tag,
-                                                   bind: bind)
-        let dragToken = ControllerSubscription.acquire(session: controller.dragSession,
-                                                       tag: tag,
-                                                       bind: bind,
-                                                       extraTag: "drag-session")
+        let _ = ControllerSubscription.acquire(controller: controller,
+                                               tag: tag,
+                                               bind: bind)
+        let _ = ControllerSubscription.acquire(session: controller.dragSession,
+                                               tag: tag,
+                                               bind: bind,
+                                               extraTag: "drag-session")
         // Hold the token across recomposes via Node attachments? Not needed —
         // ControllerSubscription dedupes by tag so re-runs are idempotent and
         // we never accumulate handlers.
-        _ = token
-        _ = dragToken
 
-        return _DockContainerRoot(controller: controller, hostBridge: hostBridge) {
-            if controller.minimizedLeaves.isEmpty {
+        if controller.minimizedLeaves.isEmpty {
+            _DockContainerRoot(controller: controller, hostBridge: hostBridge) {
                 _DockNodeView(node: controller.root,
                               controller: controller,
                               content: content)
                     .flex()
-            } else {
-                _DockContainerFrame(controller: controller) {
+            }
+            .padding(horizontal: horizontalInset, vertical: 0)
+        } else {
+            _DockContainerRoot(controller: controller, hostBridge: hostBridge) {
+                _DockContainerFrame(controller: controller,
+                                    horizontalInset: horizontalInset) {
                     _DockNodeView(node: controller.root,
                                   controller: controller,
                                   content: content)
@@ -165,11 +168,14 @@ struct _DockContainerRoot<Content: View>: _PrimitiveView {
 
 struct _DockContainerFrame<Content: View>: View {
     let controller: DockController
+    let horizontalInset: Float
     let content: Content
 
     init(controller: DockController,
+         horizontalInset: Float,
          @ViewBuilder content: () -> Content) {
         self.controller = controller
+        self.horizontalInset = horizontalInset
         self.content = content()
     }
 
@@ -177,7 +183,9 @@ struct _DockContainerFrame<Content: View>: View {
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             Box(direction: .row, alignItems: .stretch, spacing: 0) {
                 _DockMinimizedRail(edge: .left, controller: controller)
-                content.flex()
+                content
+                    .flex()
+                    .padding(horizontal: horizontalInset, vertical: 0)
                 _DockMinimizedRail(edge: .right, controller: controller)
             }
             .flex()
@@ -213,14 +221,24 @@ struct _DockMinimizedRail: _PrimitiveView {
         case .left, .right:
             layout.flexDirection = .column
             layout.alignItems = .center
+            layout.justifyContent = .flexStart
             layout.setGap(4, gutter: .all)
-            layout.width = hasItems ? 36 : 0
+            layout.setPadding(hasItems ? 6 : 0, edge: .top)
+            layout.setPadding(hasItems ? 4 : 0, edge: .left)
+            layout.setPadding(hasItems ? 4 : 0, edge: .right)
+            layout.setPadding(hasItems ? 6 : 0, edge: .bottom)
+            layout.width = hasItems ? 40 : 0
             layout.flexShrink = 0
         case .bottom:
             layout.flexDirection = .row
             layout.alignItems = .center
+            layout.justifyContent = .flexStart
             layout.setGap(6, gutter: .all)
-            layout.height = hasItems ? 36 : 0
+            layout.setPadding(hasItems ? 4 : 0, edge: .left)
+            layout.setPadding(hasItems ? 4 : 0, edge: .right)
+            layout.setPadding(hasItems ? 4 : 0, edge: .top)
+            layout.setPadding(hasItems ? 4 : 0, edge: .bottom)
+            layout.height = hasItems ? 40 : 0
             layout.flexShrink = 0
         }
     }
@@ -229,15 +247,10 @@ struct _DockMinimizedRail: _PrimitiveView {
         items().map { id, leaf in
             let title = railTitle(for: leaf.node, compact: edge != .bottom)
             let tooltip = railTitle(for: leaf.node, compact: false)
-            let button = Button(title, tooltip: tooltip) {
+            return _DockMinimizedRailItem(edge: edge,
+                                          title: title,
+                                          tooltip: tooltip) {
                 controller.apply(.restoreMinimizedLeaf(id))
-            }
-            .buttonStyle(.ghost)
-            switch edge {
-            case .left, .right:
-                return button.frame(width: 28, height: 28) as any View
-            case .bottom:
-                return button as any View
             }
         }
     }
@@ -263,6 +276,56 @@ struct _DockMinimizedRail: _PrimitiveView {
         }
         guard compact else { return title }
         return title.first.map { String($0).uppercased() } ?? "P"
+    }
+}
+
+struct _DockMinimizedRailItem: View {
+    let edge: DockMinimizedEdge
+    let title: String
+    let tooltip: String
+    let action: () -> Void
+
+    var body: some View {
+        Button(tooltip: tooltip, action: action) {
+            switch edge {
+            case .left, .right:
+                Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                    Text(title)
+                        .font(.label)
+                        .foregroundColor(.onSurface)
+                }
+                .frame(width: 32, height: 32)
+            case .bottom:
+                Box(direction: .row, alignItems: .center, justifyContent: .center) {
+                    Text(title)
+                        .font(.label)
+                        .foregroundColor(.onSurface)
+                }
+                .frame(height: 32, minWidth: 72, maxWidth: 180)
+            }
+        }
+        .buttonStyle(_DockMinimizedRailButtonStyle())
+    }
+}
+
+struct _DockMinimizedRailButtonStyle: ButtonStyle {
+    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+        let theme = configuration.theme
+        let clear = Color(r: 0, g: 0, b: 0, a: 0)
+        let background: Color = {
+            if !configuration.isEnabled { return clear }
+            if configuration.isPressed { return theme.colors.stateLayerPressed }
+            if configuration.isHovered { return theme.colors.stateLayerHover }
+            return theme.colors.surfaceRaised
+        }()
+
+        return Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            AnyView(configuration.label)
+        }
+        .background(background)
+        .cornerRadius(theme.radius.sm)
+        .opacity(configuration.isEnabled ? 1 : 0.55)
+        .animation(.semantic(.snappy, in: theme), value: configuration.interactionKey)
     }
 }
 
