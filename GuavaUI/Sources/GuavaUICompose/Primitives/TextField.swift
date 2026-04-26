@@ -139,6 +139,8 @@ public struct TextField: View {
     private static let caretBlinkHalfPeriod: Double = 0.5
     private static let caretBlinkSteadyDuration: Double = 0.5
     private static let measureInputsKey = "__textfield_measure_inputs"
+    static let scrollbarHoveredKey = "__textfield_scrollbar_hovered"
+    static let scrollbarChromeOpacityKey = "__textfield_scrollbar_chrome_opacity"
     static let surfaceMarkerKey = "__textfield_surface"
     private var layoutEngine: LayoutEngine { LayoutEngine(textField: self) }
 
@@ -171,6 +173,12 @@ public struct TextField: View {
         node.isFocusable = !disabled
         node.isHitTestable = !disabled
         node.clipsToBounds = true
+        if node.attachments[Self.scrollbarHoveredKey] == nil {
+            node.attachments[Self.scrollbarHoveredKey] = false
+        }
+        if node.attachments[Self.scrollbarChromeOpacityKey] == nil {
+            node.attachments[Self.scrollbarChromeOpacityKey] = Float(0)
+        }
         if let sizeFontSize {
             // Seed a sensible default font for size variants when no
             // explicit `.font(...)` modifier was applied.
@@ -233,13 +241,29 @@ public struct TextField: View {
                                                                       node: node,
                                                                       origin: origin)
             else { return }
+            let opacity = node.attachments[Self.scrollbarChromeOpacityKey] as? Float ?? 0
+            guard opacity > 0.001 else { return }
             let colors = node.theme.colors
             list.addRoundedRect(metrics.trackRect,
                                 radius: Self.scrollbarTrackThickness / 2,
-                                color: colors.surfaceVariant.multipliedAlpha(node.opacity))
+                                color: colors.surfaceVariant.multipliedAlpha(node.opacity * opacity))
             list.addRoundedRect(metrics.thumbRect,
                                 radius: Self.scrollbarTrackThickness / 2,
-                                color: colors.onSurfaceMuted.multipliedAlpha(node.opacity))
+                                color: colors.onSurfaceMuted.multipliedAlpha(node.opacity * opacity))
+        }
+    }
+
+    func setScrollbarChromeVisible(_ visible: Bool, on node: Node) {
+        let current = node.attachments[Self.scrollbarChromeOpacityKey] as? Float ?? 0
+        let target: Float = visible ? 1 : 0
+        withAnimation(.semantic(.fast, in: node.theme)) {
+            node.animatableSet(propertyKey: Self.scrollbarChromeOpacityKey,
+                               current: current,
+                               to: target) { [weak node] opacity in
+                guard let node else { return }
+                node.attachments[Self.scrollbarChromeOpacityKey] = opacity
+                node.markRenderDirty(reason: .styleSet(field: "textFieldScrollbarChromeOpacity"))
+            }
         }
     }
 
@@ -415,7 +439,7 @@ public struct TextField: View {
         let renderBaseColor: Color =
             renderState.showsPlaceholder
                 ? resolvedPlaceholderColor
-                : (textColor ?? node.foregroundColor ?? env.defaultColor)
+                : (textColor ?? node.foregroundColor ?? theme.colors.onSurface)
         let renderColor = renderBaseColor.multipliedAlpha(node.opacity)
 
         let insetX = horizontalInset(theme: theme)

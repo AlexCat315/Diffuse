@@ -60,20 +60,27 @@ public struct ViewportHost<Overlay: View>: _PrimitiveView {
             : node.theme.colors.surfaceVariant)
 
         if let registry = InteractionRegistryHolder.current {
-            registry.setPointer(node, route: .viewport) { event, phase, _ in
-                if phase == .down {
+            registry.setPointer(node, route: .viewport) { event, pointerPhase, eventPhase in
+                guard eventPhase == .target else { return .ignored }
+                if pointerPhase == .down {
                     FocusChainHolder.current?.focus(node)
+                    PointerCaptureHolder.current?.acquire(node)
                     snap.onInputEvent?(.mouseButtonDown(event))
                 } else {
                     snap.onInputEvent?(.mouseButtonUp(event))
+                    if PointerCaptureHolder.current?.target === node {
+                        PointerCaptureHolder.current?.release()
+                    }
                 }
                 return .handled
             }
-            registry.setMotion(node, route: .viewport) { event, _ in
+            registry.setMotion(node, route: .viewport) { event, phase in
+                guard phase == .target else { return .ignored }
                 snap.onInputEvent?(.mouseMotion(event))
                 return .handled
             }
-            registry.setWheel(node, route: .viewport) { event, _ in
+            registry.setWheel(node, route: .viewport) { event, phase in
+                guard phase == .target else { return .ignored }
                 snap.onInputEvent?(.mouseWheel(event))
                 return .handled
             }

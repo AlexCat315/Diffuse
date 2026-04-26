@@ -1,4 +1,5 @@
 import CoreGraphics
+import Foundation
 import GuavaUIRuntime
 
 /// Renders one tabs leaf: a tab strip followed by the active tab's content.
@@ -124,6 +125,11 @@ struct _DockTabBarHost: _PrimitiveView {
                                             activeTabID: activeTabID,
                                             tabs: tabs,
                                             controller: controller))
+        if let edge = controller.onResolveMinimizedEdge?(nodeID) {
+            children.append(_DockLeafMinimizeButton(sourceLeafID: nodeID,
+                                                    edge: edge,
+                                                    controller: controller))
+        }
         return children
     }
 }
@@ -406,6 +412,68 @@ struct _DockLeafContent: View {
         } else {
             Box(direction: .column, alignItems: .stretch) { EmptyView() }
         }
+    }
+}
+
+struct _DockLeafMinimizeButton: View {
+    let sourceLeafID: DockNodeID
+    let edge: DockMinimizedEdge
+    let controller: DockController
+
+    var body: some View {
+        _DockLeafMinimizeButtonHost(sourceLeafID: sourceLeafID,
+                                    edge: edge,
+                                    controller: controller)
+    }
+}
+
+struct _DockLeafMinimizeButtonHost: _PrimitiveView {
+    static let kMinimizeButtonMarker = "DockTabBar.minimizeButton"
+    private static let icon = BundleImageResource.svg(named: "minimize",
+                                                      in: .module,
+                                                      subdirectory: "DockIcons")
+
+    let sourceLeafID: DockNodeID
+    let edge: DockMinimizedEdge
+    let controller: DockController
+
+    func _makeNode() -> Node {
+        let n = Node()
+        n.isHitTestable = false
+        n.attachments[Self.kMinimizeButtonMarker] = true
+        return n
+    }
+
+    func _updateNode(_ node: Node) {
+        let size = resolveDockAppearance(on: node).closeButtonSize
+        node.layoutNode?.width = size
+        node.layoutNode?.height = size
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let l = LayoutNode()
+        l.width = 16
+        l.height = 16
+        return l
+    }
+
+    func _children(for node: Node) -> [any View] {
+        let snap = self
+        let size = resolveDockAppearance(on: node).closeButtonSize
+        return [
+            Button(action: {
+                snap.controller.apply(.minimizeLeaf(leafID: snap.sourceLeafID,
+                                                    edge: snap.edge))
+            }) {
+                Image(resource: Self.icon,
+                      width: 11,
+                      height: 11,
+                      tint: .white,
+                      contentMode: .fit,
+                      renderingMode: .alphaMask)
+            }
+            .buttonStyle(_DockTabCloseButtonStyle(isActive: false, size: size))
+        ]
     }
 }
 

@@ -20,6 +20,21 @@ public struct SemanticForegroundColorModifier: ViewModifier {
     }
 }
 
+public struct SemanticBorderModifier: ViewModifier {
+    public let ref: SemanticColorRef
+    public let width: Float
+
+    public init(_ ref: SemanticColorRef, width: Float) {
+        self.ref = ref
+        self.width = max(0, width)
+    }
+
+    public func apply(node: Node) {
+        node.animatableSet(\.borderColor, to: ref.resolve(node.theme))
+        node.animatableSet(\.borderWidth, to: width)
+    }
+}
+
 /// Resolves a `SemanticFontRef` and writes both the font and its companion
 /// line-height into the same attachment slots used by `FontModifier` /
 /// `LineHeightModifier`. `Text` and `TextField` already read these slots, so
@@ -63,6 +78,12 @@ public extension View {
     /// the node's active `Theme`.
     func foregroundColor(_ ref: SemanticColorRef) -> some View {
         modifier(SemanticForegroundColorModifier(ref))
+    }
+
+    /// Set the border stroke from a semantic color slot. Resolves against the
+    /// node's active `Theme`.
+    func border(_ ref: SemanticColorRef, width: Float = 1) -> some View {
+        modifier(SemanticBorderModifier(ref, width: width))
     }
 
     /// Set both font and line-height from a semantic typography slot.

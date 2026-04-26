@@ -22,6 +22,7 @@ public enum EditorAction: Sendable {
     case setCommandSelectBehavior(SelectionCommandBehavior)
     case setThemeMode(EditorThemeMode)
     case setLanguage(EditorLanguage)
+    case setFrameRateLimit(EditorFrameRateLimit)
     case beginAssetDrag(EditorAssetDragPayload)
     case updateAssetDragCursor(x: Float, y: Float)
     case endAssetDrag
@@ -104,7 +105,10 @@ public enum EditorReducer {
         case let .setThemeMode(mode):
             state.themeMode = mode
         case let .setLanguage(language):
+            EditorLocalizationPreferences.language = language
             state.language = language
+        case let .setFrameRateLimit(limit):
+            state.frameRateLimit = limit
         case let .beginAssetDrag(payload):
             state.activeAssetDrag = payload
         case let .updateAssetDragCursor(x, y):

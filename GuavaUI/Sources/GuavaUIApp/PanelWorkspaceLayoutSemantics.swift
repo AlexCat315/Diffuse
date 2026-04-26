@@ -34,6 +34,24 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
                                    controller: controller,
                                    registry: registry)
         }
+        controller.onResolveMinimizedEdge = { [registry, weak controller] leafID in
+            guard let controller,
+                  let region = Self.regionOfLeaf(id: leafID,
+                                                  in: controller.root,
+                                                  registry: registry) else {
+                return nil
+            }
+            switch region {
+            case .leadingSidebar:
+                return .left
+            case .trailingSidebar:
+                return .right
+            case .bottomPanel:
+                return .bottom
+            case .center:
+                return nil
+            }
+        }
         controller.layoutNormalizer = { [registry] root in
             state.captureFractionsIfCanonical(from: root, registry: registry)
             state.captureLeafIDs(from: root, registry: registry)
@@ -49,7 +67,9 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         guard normalized != controller.root else { return }
         controller.replace(root: normalized,
                            satellites: controller.satellites,
-                           satelliteOrder: controller.satelliteOrder)
+                           satelliteOrder: controller.satelliteOrder,
+                           minimizedLeaves: controller.minimizedLeaves,
+                           minimizedOrder: controller.minimizedOrder)
     }
 
     private struct Fractions {

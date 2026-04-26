@@ -107,11 +107,47 @@ public enum EditorLanguage: String, Codable, Sendable, CaseIterable {
     public var lprojName: String? {
         switch self {
         case .system:
-            return nil
+            return Self.systemLprojName()
         case .english:
             return "en"
         case .simplifiedChinese:
             return "zh-Hans"
+        }
+    }
+
+    private static func systemLprojName() -> String {
+        for identifier in Locale.preferredLanguages {
+            let normalized = identifier.replacingOccurrences(of: "_", with: "-").lowercased()
+            if normalized == "zh" || normalized.hasPrefix("zh-") {
+                return "zh-Hans"
+            }
+            if normalized == "en" || normalized.hasPrefix("en-") {
+                return "en"
+            }
+        }
+        return "en"
+    }
+}
+
+public enum EditorFrameRateLimit: String, Codable, Sendable, CaseIterable {
+    case unlimited
+    case fps30
+    case fps60
+    case fps120
+    case fps240
+
+    public var framesPerSecond: Double? {
+        switch self {
+        case .unlimited:
+            return nil
+        case .fps30:
+            return 30
+        case .fps60:
+            return 60
+        case .fps120:
+            return 120
+        case .fps240:
+            return 240
         }
     }
 }
@@ -156,6 +192,7 @@ public struct EditorState: Codable, Sendable {
     public var cmdSelectBehavior: SelectionCommandBehavior
     public var themeMode: EditorThemeMode
     public var language: EditorLanguage
+    public var frameRateLimit: EditorFrameRateLimit
     public var activeAssetDrag: EditorAssetDragPayload?
     public var inspectorCollapsedSectionIDs: Set<String>
     public var pendingConfirmationRequest: ConfirmationRequestBatch?
@@ -182,6 +219,7 @@ public struct EditorState: Codable, Sendable {
         cmdSelectBehavior: SelectionCommandBehavior = .subtract,
         themeMode: EditorThemeMode = .dark,
         language: EditorLanguage = .system,
+        frameRateLimit: EditorFrameRateLimit = .unlimited,
         activeAssetDrag: EditorAssetDragPayload? = nil,
         inspectorCollapsedSectionIDs: Set<String> = [],
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
@@ -207,6 +245,7 @@ public struct EditorState: Codable, Sendable {
         self.cmdSelectBehavior = cmdSelectBehavior
         self.themeMode = themeMode
         self.language = language
+        self.frameRateLimit = frameRateLimit
         self.activeAssetDrag = activeAssetDrag
         self.inspectorCollapsedSectionIDs = inspectorCollapsedSectionIDs
         self.pendingConfirmationRequest = pendingConfirmationRequest

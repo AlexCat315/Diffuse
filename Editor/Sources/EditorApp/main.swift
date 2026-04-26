@@ -26,6 +26,7 @@ private func runEditor() throws {
         app.store.dispatch(.setActiveLayoutPreset(shellState.activeLayoutPreset))
         app.store.dispatch(.setThemeMode(shellState.themeMode))
         app.store.dispatch(.setLanguage(shellState.language))
+        app.store.dispatch(.setFrameRateLimit(shellState.frameRateLimit))
         EditorLocalizationPreferences.language = shellState.language
     }
 
@@ -33,6 +34,14 @@ private func runEditor() throws {
                                                           preset: app.store.state.activeLayoutPreset)
     let registry = EditorRootViewFactory.makeRegistry(app: app)
     var settingsWindowID: WindowID?
+    func applyFrameRateLimit(_ limit: EditorFrameRateLimit, to display: AppDisplayHandle) {
+        switch limit {
+        case .unlimited:
+            display.setFrameRateMode(.displayRefresh)
+        case .fps30, .fps60, .fps120, .fps240:
+            display.setFrameRateMode(.fixed(limit.framesPerSecond ?? 60))
+        }
+    }
 
     try AppRuntime.run(
         config: AppConfig(title: "GuavaNext Editor",
@@ -41,6 +50,16 @@ private func runEditor() throws {
         events: events,
         onTick: { dt in app.tick(deltaTime: dt) },
         onDisplayReady: { display in
+            applyFrameRateLimit(app.store.state.frameRateLimit, to: display)
+            app.setFrameRateLimitHandler { limit in
+                applyFrameRateLimit(limit, to: display)
+            }
+            app.setDisplayRefreshRateProvider {
+                display.currentDisplayRefreshRate()
+            }
+            app.setDisplayInvalidationHandler {
+                display.requestDisplay()
+            }
             app.setViewportRenderCompletionHandler { _ in
                 display.requestDisplay()
             }
@@ -49,7 +68,7 @@ private func runEditor() throws {
                    display.isWindowOpen(existing) {
                     return
                 }
-                settingsWindowID = display.openWindow(title: "Settings",
+                settingsWindowID = display.openWindow(title: L("Settings"),
                                                       width: 360,
                                                       height: 420) {
                     EditorSettingsWindowRoot(app: app)
@@ -64,7 +83,8 @@ private func runEditor() throws {
     EditorRootViewFactory.saveShellState(mode: app.store.state.workspaceMode,
                                          preset: app.store.state.activeLayoutPreset,
                                          themeMode: app.store.state.themeMode,
-                                         language: app.store.state.language)
+                                         language: app.store.state.language,
+                                         frameRateLimit: app.store.state.frameRateLimit)
     EditorRootViewFactory.saveDockLayout(controller,
                                          for: app.store.state.workspaceMode,
                                          preset: app.store.state.activeLayoutPreset)
