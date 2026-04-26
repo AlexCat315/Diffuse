@@ -473,24 +473,24 @@ struct RootView: View {
                 }
             }
 
-            card("IconButton") {
-                Row(alignment: .center, spacing: 12) {
-                    IconButton(textureID: previewTextureID, size: 16, action: { clickCount += 1 })
-                    IconButton(textureID: previewTextureID, size: 16, action: { clickCount += 1 })
-                        .buttonStyle(.secondary)
-                    IconButton(textureID: previewTextureID, size: 16, action: { clickCount += 1 })
-                        .buttonStyle(.ghost)
-                    IconButton(textureID: previewTextureID, size: 16, role: .destructive, action: { clickCount += 1 })
-                    IconButton(textureID: previewTextureID, size: 20, action: { clickCount += 1 })
-                        .buttonStyle(.ghost)
-                    IconButton(textureID: previewTextureID, size: 16, isEnabled: false, action: {})
-                        .buttonStyle(.ghost)
-                    Text("count: \(clickCount)")
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                    Spacer(minLength: 0)
-                }
-            }
+             card("IconButton") {
+                 Row(alignment: .center, spacing: 12) {
+                     IconButton(textureID: previewTextureID, size: 16, tooltip: "Primary Icon Button", action: { clickCount += 1 })
+                     IconButton(textureID: previewTextureID, size: 16, tooltip: "Secondary Icon Button", action: { clickCount += 1 })
+                         .buttonStyle(.secondary)
+                     IconButton(textureID: previewTextureID, size: 16, tooltip: "Ghost Icon Button", action: { clickCount += 1 })
+                         .buttonStyle(.ghost)
+                     IconButton(textureID: previewTextureID, size: 16, tooltip: "Destructive Icon Button", role: .destructive, action: { clickCount += 1 })
+                     IconButton(textureID: previewTextureID, size: 20, tooltip: "Larger Icon Button", action: { clickCount += 1 })
+                         .buttonStyle(.ghost)
+                     IconButton(textureID: previewTextureID, size: 16, tooltip: "Disabled Icon Button", isEnabled: false, action: {})
+                         .buttonStyle(.ghost)
+                     Text("count: \(clickCount)")
+                         .font(.caption)
+                         .foregroundColor(.onSurfaceMuted)
+                     Spacer(minLength: 0)
+                 }
+             }
 
             card("Popover · Menu · Select · EnumField") {
                 Column(alignment: .leading, spacing: 10) {
