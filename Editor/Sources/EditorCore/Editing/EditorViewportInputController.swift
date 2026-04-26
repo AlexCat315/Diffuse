@@ -1,5 +1,6 @@
 import EngineKernel
 import Foundation
+import simd
 
 /// 视口相机拖拽 / 选择状态的全局持有者。
 /// `ViewportPanel.handleViewportInput` 是值类型 view body 里的临时方法，
@@ -8,7 +9,21 @@ public final class EditorViewportInputController: @unchecked Sendable {
     public static let shared = EditorViewportInputController()
     private init() {}
 
-    public enum CameraDrag { case orbit, pan }
+    public enum CameraDrag: Equatable { case orbit, pan, dolly, freelook }
+
+    public struct GizmoGroupTarget: Sendable {
+        public var entityID: UInt64
+        public var startWorldMatrix: simd_float4x4
+        public var parentInverseMatrix: simd_float4x4
+
+        public init(entityID: UInt64,
+                    startWorldMatrix: simd_float4x4,
+                    parentInverseMatrix: simd_float4x4) {
+            self.entityID = entityID
+            self.startWorldMatrix = startWorldMatrix
+            self.parentInverseMatrix = parentInverseMatrix
+        }
+    }
 
     public var activeCameraDrag: CameraDrag?
     public var lastCursor: (x: Float, y: Float)?
@@ -18,6 +33,9 @@ public final class EditorViewportInputController: @unchecked Sendable {
     public var marqueeStart: (x: Float, y: Float)?
     public var marqueeCurrent: (x: Float, y: Float)?
     public var modifiers: KeyModifiers = []
+    public var pressedScancodes: Set<UInt32> = []
+    public var boxSelectArmed: Bool = false
+    public var gizmoGroupTargets: [GizmoGroupTarget] = []
 
     public func reset() {
         activeCameraDrag = nil
@@ -26,5 +44,8 @@ public final class EditorViewportInputController: @unchecked Sendable {
         marqueeStart = nil
         marqueeCurrent = nil
         modifiers = []
+        pressedScancodes.removeAll(keepingCapacity: false)
+        boxSelectArmed = false
+        gizmoGroupTargets.removeAll(keepingCapacity: false)
     }
 }
