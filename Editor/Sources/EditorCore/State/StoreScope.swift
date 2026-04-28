@@ -39,7 +39,7 @@ private final class EditorStoreSubscriptionID: @unchecked Sendable {}
 
 private struct EditorStoreSelectionSnapshot: Hashable {
     var value: AnyHashable
-    var uiRefreshRevision: UInt64
+    var presentationRevision: UInt64
 }
 
 enum EditorStoreSubscription {
@@ -59,7 +59,7 @@ enum EditorStoreSubscription {
         let token = store.subscribe { s in
             if let select {
                 let newValue = AnyHashable(EditorStoreSelectionSnapshot(value: select(s.state),
-                                                                        uiRefreshRevision: s.state.uiRefreshRevision))
+                                                                        presentationRevision: s.state.presentation.revision))
                 let old = lastValues[valueKey]
                 if old == newValue { return }
                 lastValues[valueKey] = newValue
@@ -76,7 +76,7 @@ enum EditorStoreSubscription {
 
         if let select {
             let newValue = AnyHashable(EditorStoreSelectionSnapshot(value: select(store.state),
-                                                                    uiRefreshRevision: store.state.uiRefreshRevision))
+                                                                    presentationRevision: store.state.presentation.revision))
             let old = lastValues[valueKey]
             if old != newValue {
                 lastValues[valueKey] = newValue
