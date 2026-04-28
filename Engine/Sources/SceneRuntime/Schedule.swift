@@ -589,10 +589,6 @@ public struct RuntimeWorldSchedule {
     }
 
     private func mergeDispatchReports(_ reports: [JobDispatchReport]) -> JobDispatchReport {
-        JobDispatchReport(
-            jobCount: reports.reduce(0) { $0 + $1.jobCount },
-            workerCount: jobSystem.workerCount,
-            executedInParallel: reports.contains(where: \ .executedInParallel)
-        )
+        JobDispatchReport.merged(reports, workerCount: jobSystem.workerCount)
     }
 }

@@ -16,4 +16,19 @@ struct JobSystemTests {
         #expect(report.workerCount == 4)
         #expect(report.executedInParallel)
     }
+
+    @Test("JobDispatchReport merges job counts and parallel state")
+    func jobDispatchReportMergesCountsAndParallelState() {
+        let report = JobDispatchReport.merged(
+            [
+                JobDispatchReport(jobCount: 1, workerCount: 2, executedInParallel: false),
+                JobDispatchReport(jobCount: 3, workerCount: 2, executedInParallel: true),
+            ],
+            workerCount: 2
+        )
+
+        #expect(report.jobCount == 4)
+        #expect(report.workerCount == 2)
+        #expect(report.executedInParallel)
+    }
 }
