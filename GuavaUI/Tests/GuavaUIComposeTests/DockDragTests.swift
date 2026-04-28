@@ -954,8 +954,8 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         #expect(centerHit?.edge == .center)
     }
 
-    @Test("DragSession.resolveDropHit prefers the workspace bottom edge when the root is registered")
-    func resolveDropWorkspaceBottomEdge() {
+    @Test("Leaf edge bands win over overlapping workspace edge bands")
+    func resolveDropLeafEdgeWinsOverWorkspaceEdge() {
         let registry = DockHitRegistry()
         let root = Node()
         root.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
@@ -972,8 +972,9 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
                                                        y: 390,
                                                        sourceLeafID: nil,
                                                        registry: registry)
-        #expect(bottomHit?.leafID == rootID)
+        #expect(bottomHit?.leafID == leafID)
         #expect(bottomHit?.edge == .bottom)
+        #expect(bottomHit?.scope == .leaf)
 
         let centerHit = DockDragSession.resolveDropHit(x: 200,
                                                        y: 200,
@@ -981,6 +982,59 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
                                                        registry: registry)
         #expect(centerHit?.leafID == leafID)
         #expect(centerHit?.edge == .center)
+    }
+
+    @Test("Workspace guide hotspots remain global after policy filtering")
+    func workspaceGuideHotspotsRemainGlobalAfterPolicyFiltering() {
+        let registry = DockHitRegistry()
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        let leaf = Node()
+        leaf.frame = CGRect(x: 0, y: 0, width: 400, height: 400)
+        root.addChild(leaf)
+
+        let rootID = DockNodeID()
+        let leafID = DockNodeID()
+        registry.registerRoot(nodeID: rootID, node: root)
+        registry.register(nodeID: leafID, node: leaf)
+
+        let controller = DockController(root: .split(
+            id: rootID,
+            axis: .horizontal,
+            fraction: 0.5,
+            first: .tabs(id: leafID,
+                         tabs: [DockTab(userKey: "a", title: "A")],
+                         activeTabID: nil),
+            second: .tabs([DockTab(userKey: "b", title: "B")])
+        ))
+        controller.onAllowDrop = { request in
+            switch request.target {
+            case .splitEdge(let target, _):
+                return target == rootID
+            case .replace, .tabSlot:
+                return true
+            }
+        }
+
+        let bottomTile = makeWorkspaceDropGuideTiles(in: UIRect(x: 0, y: 0, width: 400, height: 400))
+            .first(where: { $0.edge == .bottom })
+        #expect(bottomTile != nil)
+        guard let bottomTile else { return }
+
+        let hit = DockDragSession.resolveAllowedDropHit(
+            x: bottomTile.buttonRect.x + bottomTile.buttonRect.width * 0.5,
+            y: bottomTile.buttonRect.y + bottomTile.buttonRect.height * 0.5,
+            tabID: DockTabID(),
+            sourceLeafID: leafID,
+            origin: .mainTreeTab,
+            controller: controller,
+            registry: registry
+        )
+
+        #expect(hit?.leafID == rootID)
+        #expect(hit?.edge == .bottom)
+        #expect(hit?.scope == .workspace)
+        #expect(hit?.isGuideHit == true)
     }
 
     @Test("DragSession.resolveDropHit snaps to workspace guide hotspots before leaf hits")
@@ -1009,7 +1063,40 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
                                                      registry: registry)
             #expect(hit?.leafID == rootID)
             #expect(hit?.edge == tile.edge)
+            #expect(hit?.scope == .workspace)
+            #expect(hit?.isGuideHit == true)
         }
+    }
+
+    @Test("Leaf guide hotspots win over overlapping workspace guide hotspots")
+    func leafGuideHotspotsWinOverWorkspaceGuideHotspots() {
+        let registry = DockHitRegistry()
+        let root = Node()
+        root.frame = CGRect(x: 0, y: 0, width: 220, height: 160)
+        let leaf = Node()
+        leaf.frame = CGRect(x: 0, y: 0, width: 220, height: 160)
+        root.addChild(leaf)
+
+        let rootID = DockNodeID()
+        let leafID = DockNodeID()
+        registry.registerRoot(nodeID: rootID, node: root)
+        registry.register(nodeID: leafID, node: leaf)
+
+        let topTile = makeDockDropGuideTiles(in: UIRect(x: 0, y: 0, width: 220, height: 160))
+            .first(where: { $0.edge == .top })
+        #expect(topTile != nil)
+        guard let topTile else { return }
+
+        let px = topTile.buttonRect.x + topTile.buttonRect.width * 0.5
+        let py = topTile.buttonRect.y + topTile.buttonRect.height * 0.5
+        let hit = DockDragSession.resolveDropHit(x: px,
+                                                 y: py,
+                                                 sourceLeafID: nil,
+                                                 registry: registry)
+        #expect(hit?.leafID == leafID)
+        #expect(hit?.edge == .top)
+        #expect(hit?.scope == .leaf)
+        #expect(hit?.isGuideHit == true)
     }
 
     @Test("Dragging to the workspace bottom recreates a bottom split after the old bottom leaf collapsed")
@@ -1039,15 +1126,22 @@ struct DockDragTests: GuavaUIComposeSerializedSuite {
         let consoleNode = items[1]
         let pointer = registry.handlers(for: consoleNode).pointer!
         let motion = registry.handlers(for: consoleNode).motion!
+        let bottomTile = makeWorkspaceDropGuideTiles(in: UIRect(x: 0, y: 0, width: 600, height: 400))
+            .first(where: { $0.edge == .bottom })
+        #expect(bottomTile != nil)
+        guard let bottomTile else { return }
+        let targetX = bottomTile.buttonRect.x + bottomTile.buttonRect.width * 0.5
+        let targetY = bottomTile.buttonRect.y + bottomTile.buttonRect.height * 0.5
 
         _ = pointer(MouseButtonEvent(button: .left, x: 150, y: 12, clicks: 1), .down, .target)
         _ = motion(MouseMotionEvent(x: 170, y: 34, deltaX: 20, deltaY: 22), .target)
-        _ = motion(MouseMotionEvent(x: 300, y: 395, deltaX: 130, deltaY: 361), .target)
+        _ = motion(MouseMotionEvent(x: targetX, y: targetY, deltaX: targetX - 170, deltaY: targetY - 34), .target)
 
         #expect(controller.dragSession.dropHit?.leafID == previousRootID)
         #expect(controller.dragSession.dropHit?.edge == .bottom)
+        #expect(controller.dragSession.dropHit?.scope == .workspace)
 
-        _ = pointer(MouseButtonEvent(button: .left, x: 300, y: 395, clicks: 1), .up, .target)
+        _ = pointer(MouseButtonEvent(button: .left, x: targetX, y: targetY, clicks: 1), .up, .target)
 
         guard case .split(_, .vertical, _, let top, let bottom) = controller.root,
               case .split(let topID, .horizontal, _, let left, let right) = top,
