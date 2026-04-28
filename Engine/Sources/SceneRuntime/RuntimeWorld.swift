@@ -949,23 +949,6 @@ public struct RuntimeWorld: @unchecked Sendable {
     private mutating func propagateTransforms(
         from entity: EntityID,
         parentWorldMatrix: simd_float4x4,
-        visited: inout Set<EntityID>
-    ) {
-        guard contains(entity), !visited.contains(entity) else { return }
-        visited.insert(entity)
-
-        let localMatrix = components.get(LocalTransform.self, for: entity)?.matrix ?? matrix_identity_float4x4
-        let worldMatrix = parentWorldMatrix * localMatrix
-        components.set(WorldTransform(matrix: worldMatrix), for: entity)
-
-        for child in children(of: entity) {
-            propagateTransforms(from: child, parentWorldMatrix: worldMatrix, visited: &visited)
-        }
-    }
-
-    private mutating func propagateTransforms(
-        from entity: EntityID,
-        parentWorldMatrix: simd_float4x4,
         visited: inout Set<EntityID>,
         localMatrices: [EntityID: simd_float4x4],
         childrenByEntity: [EntityID: [EntityID]]
