@@ -8,6 +8,8 @@ struct EditorStatusBar: View {
     let sceneRevision: UInt64
     let selectedCount: Int
     let aiStatusMessage: String?
+    let fps: Double
+    let frameMs: Double
 
     var body: some View {
         Row(alignment: .center, spacing: 8) {
@@ -33,6 +35,12 @@ struct EditorStatusBar: View {
             Text("Selection \(selectedCount)")
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
+
+            Spacer(minLength: 0)
+
+            Text(String(format: "%.0f fps  %.1f ms", fps, frameMs))
+                .font(.mono)
+                .foregroundColor(.onSurfaceMuted)
 
             Spacer(minLength: 0)
 
