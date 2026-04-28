@@ -8,7 +8,7 @@ struct InspectorPanel: View {
     let scene: EditorSceneAdapter
 
     var body: some View {
-        StoreScope(store) { store in
+        StoreScope(store, select: InspectorPanelSelection.init) { store in
             let entity = scene.entitySummary(id: store.state.selectedEntityID)
             let sections = scene.inspectorSections(for: store.state.selectedEntityID)
             let collapsedIDs = store.state.inspectorCollapsedSectionIDs
@@ -313,5 +313,17 @@ private extension EditorInspectorFieldValue {
         default:
             return nil
         }
+    }
+}
+
+private struct InspectorPanelSelection: Hashable {
+    let selectedEntityID: UInt64?
+    let collapsedIDs: Set<String>
+    let sceneRevision: UInt64
+
+    init(_ state: EditorState) {
+        self.selectedEntityID = state.selectedEntityID
+        self.collapsedIDs = state.inspectorCollapsedSectionIDs
+        self.sceneRevision = state.sceneRevision
     }
 }

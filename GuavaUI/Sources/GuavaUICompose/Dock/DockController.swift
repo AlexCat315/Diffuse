@@ -420,9 +420,9 @@ public final class DockController: @unchecked Sendable {
             )
         }
 
+        root = normalizeRoot(nextRoot)
         minimizedLeaves.removeValue(forKey: leafID)
         minimizedOrder.removeAll { $0 == leafID }
-        root = normalizeRoot(nextRoot)
         version &+= 1
         notifyChange()
     }

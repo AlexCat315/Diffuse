@@ -113,6 +113,65 @@ struct RuntimeWorldTests {
         #expect(!insertedAfterDestroy)
     }
 
+    @Test("Typed queries return stable component views and batch updates")
+    func typedQueriesReturnStableComponentViewsAndBatchUpdates() {
+        var world = RuntimeWorld()
+        let first = world.createEntity()
+        let second = world.createEntity()
+        let third = world.createEntity()
+
+        _ = world.setComponent(TransformStub(x: 1, y: 1), for: first)
+        _ = world.setComponent(NameStub(value: "First"), for: first)
+        _ = world.setLocalTransform(LocalTransform(translation: SIMD3<Float>(1, 0, 0)), for: first)
+        _ = world.setComponent(TransformStub(x: 2, y: 2), for: second)
+        _ = world.setComponent(NameStub(value: "Second"), for: second)
+        _ = world.setLocalTransform(LocalTransform(translation: SIMD3<Float>(2, 0, 0)), for: second)
+        _ = world.setComponent(TransformStub(x: 3, y: 3), for: third)
+
+        #expect(world.componentCount(TransformStub.self) == 3)
+        #expect(world.entities(with: NameStub.self) == [first, second])
+        #expect(world.componentSnapshot(TransformStub.self).keys.sorted { $0.rawValue < $1.rawValue } == [first, second, third])
+        #expect(world.componentSnapshot(TransformStub.self, matching: [third, first]).keys.sorted { $0.rawValue < $1.rawValue } == [first, third])
+        #expect(world.localTransformSnapshot()[third] == .identity)
+        #expect(world.localTransformSnapshot(matching: [third])[third] == .identity)
+        #expect(world.worldTransformSnapshot()[third] == .identity)
+        #expect(world.worldTransformSnapshot(matching: [third])[third] == .identity)
+        #expect(world.query(TransformStub.self).map(\ .entity) == [first, second, third])
+
+        let namedTransforms = world.query(TransformStub.self, NameStub.self)
+        #expect(namedTransforms.map(\ .entity) == [first, second])
+        #expect(namedTransforms.map(\ .a.x) == [1, 2])
+        #expect(namedTransforms.map(\ .b.value) == ["First", "Second"])
+        #expect(world.query(TransformStub.self, NameStub.self, LocalTransform.self).map(\ .entity) == [first, second])
+
+        let jobSystem = JobSystem(workerCount: 4, minimumChunkSize: 1, label: "test.jobs.query")
+        let parallelTransforms = world.query(TransformStub.self, using: jobSystem)
+        #expect(parallelTransforms.0.map(\ .entity) == [first, second, third])
+        #expect(parallelTransforms.1.executedInParallel)
+
+        let parallelNamedTransforms = world.query(TransformStub.self, NameStub.self, using: jobSystem)
+        #expect(parallelNamedTransforms.0.map(\ .entity) == [first, second])
+        #expect(parallelNamedTransforms.1.executedInParallel)
+
+        let parallelTriples = world.query(TransformStub.self, NameStub.self, LocalTransform.self, using: jobSystem)
+        #expect(parallelTriples.0.map(\ .entity) == [first, second])
+        #expect(parallelTriples.1.executedInParallel)
+
+        let updatedCount = world.updateComponents(TransformStub.self) { entity, transform in
+            transform.x += Int(entity.index)
+            transform.y *= 10
+        }
+
+        #expect(updatedCount == 3)
+        #expect(world.component(TransformStub.self, for: first) == TransformStub(x: 1, y: 10))
+        #expect(world.component(TransformStub.self, for: second) == TransformStub(x: 3, y: 20))
+        #expect(world.component(TransformStub.self, for: third) == TransformStub(x: 5, y: 30))
+
+        let destroyedSecond = world.destroyEntity(second)
+        #expect(destroyedSecond)
+        #expect(world.componentSnapshot(TransformStub.self).keys.sorted { $0.rawValue < $1.rawValue } == [first, third])
+    }
+
     @Test("World resources are stored independently from entity components")
     func worldResourcesAreTypedAndMutable() {
         var world = RuntimeWorld()
@@ -149,6 +208,25 @@ struct RuntimeWorldTests {
         let destroyed = runtime.destroyEntity(entity)
         #expect(destroyed)
         #expect(runtime.snapshot.entityCount == 0)
+    }
+
+    @Test("SceneRuntime exposes job-backed component queries")
+    func sceneRuntimeExposesJobBackedComponentQueries() {
+        var runtime = SceneRuntime()
+        let first = runtime.createEntity()
+        let second = runtime.createEntity()
+        _ = runtime.setComponent(TransformStub(x: 1, y: 1), for: first)
+        _ = runtime.setComponent(TransformStub(x: 2, y: 2), for: second)
+        _ = runtime.setComponent(NameStub(value: "Second"), for: second)
+        let jobSystem = JobSystem(workerCount: 2, minimumChunkSize: 1, label: "test.jobs.runtime.query")
+
+        let transforms = runtime.query(TransformStub.self, using: jobSystem)
+        #expect(transforms.0.map(\ .entity) == [first, second])
+        #expect(transforms.1.executedInParallel)
+
+        let namedTransforms = runtime.query(TransformStub.self, NameStub.self, using: jobSystem)
+        #expect(namedTransforms.0.map(\ .entity) == [second])
+        #expect(namedTransforms.1.executedInParallel)
     }
 
     @Test("Hierarchy propagation composes parent and child transforms")
@@ -424,6 +502,12 @@ struct RuntimeWorldTests {
 
         #expect(report.jobWorkerCount == 4)
         #expect(report.scheduledJobCount >= 4)
+        #expect(report.scheduledJobCount == report.phaseJobCounts.values.reduce(0, +))
+        #expect(report.jobCount(for: .hierarchyPropagate) > 0)
+        #expect(report.jobCount(for: .fixedPhysicsPrepare) > 0)
+        #expect(report.jobCount(for: .spatialIndexUpdate) > 0)
+        #expect(report.jobCount(for: .renderExtract) > 0)
+        #expect(report.parallelPhases.contains(.hierarchyPropagate))
         #expect(report.parallelPhases.contains(.fixedPhysicsPrepare))
         #expect(report.parallelPhases.contains(.spatialIndexUpdate))
         #expect(report.parallelPhases.contains(.renderExtract))

@@ -97,6 +97,10 @@ enum DemoFrameModeHolder {
     nonisolated(unsafe) static var current: DemoFrameMode = .idle
 }
 
+enum DemoVSyncHolder {
+    nonisolated(unsafe) static var enabled: Bool = true
+}
+
 // MARK: - Root view (compose)
 
 /// Showcase app for the Phase 8.1 design system.
@@ -128,6 +132,7 @@ struct RootView: View {
     @State var showToolsMenu: Bool = false
     @State var selectedQualityProfile: String = "High"
     @State var renderMode: DemoRenderMode = .deferred
+    @State var vsyncEnabled: Bool = DemoVSyncHolder.enabled
 
     enum NavSection: String, Hashable, CaseIterable, Identifiable {
         case components, tokens, layouts, console
@@ -231,6 +236,11 @@ struct RootView: View {
             Button("Mode: \(frameMode.rawValue)") {
                 frameMode = (frameMode == .idle) ? .benchmark : .idle
                 DemoFrameModeHolder.current = frameMode
+            }
+            .buttonStyle(.ghost)
+            Button(vsyncEnabled ? "V-Sync ON" : "V-Sync OFF") {
+                vsyncEnabled.toggle()
+                DemoVSyncHolder.enabled = vsyncEnabled
             }
             .buttonStyle(.ghost)
             Button(appearance == .dark ? "☀︎ Light" : "☾ Dark") {
@@ -473,24 +483,24 @@ struct RootView: View {
                 }
             }
 
-            card("IconButton") {
-                Row(alignment: .center, spacing: 12) {
-                    IconButton(textureID: previewTextureID, size: 16, action: { clickCount += 1 })
-                    IconButton(textureID: previewTextureID, size: 16, action: { clickCount += 1 })
-                        .buttonStyle(.secondary)
-                    IconButton(textureID: previewTextureID, size: 16, action: { clickCount += 1 })
-                        .buttonStyle(.ghost)
-                    IconButton(textureID: previewTextureID, size: 16, role: .destructive, action: { clickCount += 1 })
-                    IconButton(textureID: previewTextureID, size: 20, action: { clickCount += 1 })
-                        .buttonStyle(.ghost)
-                    IconButton(textureID: previewTextureID, size: 16, isEnabled: false, action: {})
-                        .buttonStyle(.ghost)
-                    Text("count: \(clickCount)")
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                    Spacer(minLength: 0)
-                }
-            }
+             card("IconButton") {
+                 Row(alignment: .center, spacing: 12) {
+                     IconButton(textureID: previewTextureID, size: 16, tooltip: "Primary Icon Button", action: { clickCount += 1 })
+                     IconButton(textureID: previewTextureID, size: 16, tooltip: "Secondary Icon Button", action: { clickCount += 1 })
+                         .buttonStyle(.secondary)
+                     IconButton(textureID: previewTextureID, size: 16, tooltip: "Ghost Icon Button", action: { clickCount += 1 })
+                         .buttonStyle(.ghost)
+                     IconButton(textureID: previewTextureID, size: 16, role: .destructive, tooltip: "Destructive Icon Button", action: { clickCount += 1 })
+                     IconButton(textureID: previewTextureID, size: 20, tooltip: "Larger Icon Button", action: { clickCount += 1 })
+                         .buttonStyle(.ghost)
+                     IconButton(textureID: previewTextureID, size: 16, isEnabled: false, tooltip: "Disabled Icon Button", action: {})
+                         .buttonStyle(.ghost)
+                     Text("count: \(clickCount)")
+                         .font(.caption)
+                         .foregroundColor(.onSurfaceMuted)
+                     Spacer(minLength: 0)
+                 }
+             }
 
             card("Popover · Menu · Select · EnumField") {
                 Column(alignment: .leading, spacing: 10) {
@@ -889,7 +899,11 @@ struct RootView: View {
             Text("focus: \(demoSceneTitle(id: selectedSceneNodeID))")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
-            Text("mode: \(frameMode.rawValue)")
+            Text("mode: \(frameMode.rawValue)  V: \(vsyncEnabled ? "ON" : "OFF")")
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+            Spacer(minLength: 0)
+            Text("fps: \(hudRenderFPS)")
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
             Spacer(minLength: 0)
@@ -927,11 +941,11 @@ var activeTextScale: Float = 0
 var didInstallRoot = false
 var didPresentBootClear = false
 var demoRenderedFrameCount = 0
-var lastHUDSampleTime = ProcessInfo.processInfo.systemUptime
-var hudTickFrameCount: Int = 0
-var hudRenderFrameCount: Int = 0
-var hudTickFPS: Int = 0
-var hudRenderFPS: Int = 0
+nonisolated(unsafe) var lastHUDSampleTime = ProcessInfo.processInfo.systemUptime
+nonisolated(unsafe) var hudTickFrameCount: Int = 0
+nonisolated(unsafe) var hudRenderFrameCount: Int = 0
+nonisolated(unsafe) var hudTickFPS: Int = 0
+nonisolated(unsafe) var hudRenderFPS: Int = 0
 
 let demoBootGlyphSeed = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789 .,:;!?+-*/_=()[]{}<>/%@#&'\"`~|\\…●☀︎☾"
 
@@ -1167,6 +1181,8 @@ func appendPerformanceHUD(to list: DrawList) {
 host.onInit = { native, w, h in
     drawableW = w; drawableH = h
     logicalW = host.logicalSize.width; logicalH = host.logicalSize.height
+    let presentMode: GPUPresentMode = DemoVSyncHolder.enabled ? .fifo : .immediate
+    let isVSyncOn = DemoVSyncHolder.enabled
     do {
         var timing = TimingTrace(label: "[timing] demo.boot.main")
         surface = try makeSurface(backend: backend, native: native)
@@ -1174,7 +1190,10 @@ host.onInit = { native, w, h in
             device: backend.rawDevice!,
             format: .bgra8Unorm,
             width: w, height: h,
-            presentMode: .fifo)
+            presentMode: presentMode)
+        if !isVSyncOn { native.disableDisplaySync() }
+        storedNativeSurface = native
+        usedPresentMode = presentMode
         try renderer.configure(format: .bgra8Unorm,
                                sampleCount: demoMSAASampleCount)
         try ensureDemoMSAATarget(width: w, height: h)
@@ -1211,9 +1230,11 @@ host.onResize = { w, h in
     logicalW = host.logicalSize.width; logicalH = host.logicalSize.height
     guard let surface, let device = backend.rawDevice else { return }
     do {
+        let presentMode: GPUPresentMode = DemoVSyncHolder.enabled ? .fifo : .immediate
+        usedPresentMode = presentMode
         try surface.configure(
             device: device, format: .bgra8Unorm,
-            width: w, height: h, presentMode: .fifo)
+            width: w, height: h, presentMode: presentMode)
         try ensureDemoMSAATarget(width: w, height: h)
         let previousScale = activeTextScale
         configureTextEnvironment(scale: host.contentScaleFactor)
@@ -1226,9 +1247,30 @@ host.onResize = { w, h in
     }
 }
 
-host.onFrame = { _ in
+var usedPresentMode: GPUPresentMode = .fifo
+var storedNativeSurface: NativeRenderSurface? = nil
+
+host.onFrame = { native in
     guard configured, let surface, let root = tree.root else { return false }
     hudTickFrameCount += 1
+
+    // Reconfigure surface if vsync state changed since last frame.
+    let desired: GPUPresentMode = DemoVSyncHolder.enabled ? .fifo : .immediate
+    if usedPresentMode != desired, let device = backend.rawDevice {
+        do {
+            try surface.configure(
+                device: device, format: .bgra8Unorm,
+                width: drawableW, height: drawableH,
+                presentMode: desired)
+            if !DemoVSyncHolder.enabled {
+                storedNativeSurface?.disableDisplaySync()
+            }
+            usedPresentMode = desired
+            print("[demo] vsync changed: presentMode=\(desired) vsync=\(DemoVSyncHolder.enabled)")
+        } catch {
+            print("[demo] vsync reconfig failed: \(error)")
+        }
+    }
 
     var timing = TimingTrace(label: "[timing] demo.frame.main")
     let nextFrameIndex = demoRenderedFrameCount + 1
@@ -1316,6 +1358,15 @@ host.onFrame = { _ in
         hudRenderFrameCount += 1
         demoRenderedFrameCount = nextFrameIndex
         timing.mark("gpuSubmit")
+        let now = ProcessInfo.processInfo.systemUptime
+        let elapsed = now - lastHUDSampleTime
+        if elapsed >= 0.5 {
+            hudRenderFPS = Int(Double(hudRenderFrameCount) / elapsed)
+            hudTickFPS = Int(Double(hudTickFrameCount) / elapsed)
+            lastHUDSampleTime = now
+            hudRenderFrameCount = 0
+            hudTickFrameCount = 0
+        }
         if shouldLogMainDemoFrameTiming(frameIndex: demoRenderedFrameCount,
                                         didAtlasUpload: didAtlasUpload,
                                         didPreviewUpload: didPreviewUpload) {
@@ -1326,7 +1377,7 @@ host.onFrame = { _ in
                 "previewUploaded=\(didPreviewUpload)",
             ]))
         }
-        if DemoFrameModeHolder.current == .benchmark {
+        if DemoFrameModeHolder.current == .benchmark || !DemoVSyncHolder.enabled {
             host.requestDisplay()
         }
         return true

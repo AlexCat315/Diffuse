@@ -50,13 +50,12 @@ struct _StatefulDockSatellite: View {
         let bind = $version
         // Reuse the same dedupe registry but key it by the satellite leaf
         // so it doesn't collide with the main `DockContainer`'s subscription.
-        let token = ControllerSubscription.acquire(
+        let _ = ControllerSubscription.acquire(
             controller: controller,
             tag: ObjectIdentifier(controller),
             bind: bind,
             extraTag: leafID.raw.uuidString
         )
-        _ = token
 
         return _DockSatelliteHost(controller: controller,
                                   leafID: leafID,

@@ -1,4 +1,5 @@
 import Foundation
+import GuavaUIRuntime
 
 /// 编辑器状态的可观察容器。
 ///
@@ -26,6 +27,7 @@ public final class EditorStore: @unchecked Sendable {
 
     public func dispatch(_ action: EditorAction) {
         EditorReducer.reduce(state: &state, action: action)
+        guard action.notifiesSubscribers else { return }
         version &+= 1
         for handler in subscribers.values {
             handler(self)
@@ -43,4 +45,31 @@ public final class EditorStore: @unchecked Sendable {
     public func unsubscribe(_ token: SubscriptionToken) {
         subscribers.removeValue(forKey: token)
     }
+}
+
+extension EditorStore: _ObservableObject {
+    public func _registerObserver(_ handler: @escaping () -> Void) -> AnyHashable {
+        let token = subscribe { _ in handler() }
+        return AnyHashable(token)
+    }
+
+    public func _unregisterObserver(_ tok: AnyHashable) {
+        guard let token = tok.base as? SubscriptionToken else { return }
+        unsubscribe(token)
+    }
+}
+
+extension EditorStore {
+    public var connected: Bool { state.connected }
+    public var sceneRevision: UInt64 { state.sceneRevision }
+    public var frameIndex: UInt64 { state.frameIndex }
+    public var frameTimingRevision: UInt64 { state.frameTimingRevision }
+    public var viewportSurfaceRevision: UInt64 { state.viewportSurfaceRevision }
+    public var selectedEntityID: UInt64? { state.selectedEntityID }
+    public var selectedEntityIDsCount: Int { state.selectedEntityIDs.count }
+    public var aiStatusMessage: String? { state.aiStatusMessage }
+    public var playbackState: PlaybackState { state.playbackState }
+    public var workspaceMode: EditorWorkspaceMode { state.workspaceMode }
+    public var activeLayoutPreset: EditorLayoutPreset { state.activeLayoutPreset }
+    public var themeMode: EditorThemeMode { state.themeMode }
 }
