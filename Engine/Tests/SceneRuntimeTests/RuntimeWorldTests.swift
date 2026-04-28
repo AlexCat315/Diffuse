@@ -210,6 +210,25 @@ struct RuntimeWorldTests {
         #expect(runtime.snapshot.entityCount == 0)
     }
 
+    @Test("SceneRuntime exposes job-backed component queries")
+    func sceneRuntimeExposesJobBackedComponentQueries() {
+        var runtime = SceneRuntime()
+        let first = runtime.createEntity()
+        let second = runtime.createEntity()
+        _ = runtime.setComponent(TransformStub(x: 1, y: 1), for: first)
+        _ = runtime.setComponent(TransformStub(x: 2, y: 2), for: second)
+        _ = runtime.setComponent(NameStub(value: "Second"), for: second)
+        let jobSystem = JobSystem(workerCount: 2, minimumChunkSize: 1, label: "test.jobs.runtime.query")
+
+        let transforms = runtime.query(TransformStub.self, using: jobSystem)
+        #expect(transforms.0.map(\ .entity) == [first, second])
+        #expect(transforms.1.executedInParallel)
+
+        let namedTransforms = runtime.query(TransformStub.self, NameStub.self, using: jobSystem)
+        #expect(namedTransforms.0.map(\ .entity) == [second])
+        #expect(namedTransforms.1.executedInParallel)
+    }
+
     @Test("Hierarchy propagation composes parent and child transforms")
     func hierarchyPropagationBuildsWorldTransform() {
         var world = RuntimeWorld()
