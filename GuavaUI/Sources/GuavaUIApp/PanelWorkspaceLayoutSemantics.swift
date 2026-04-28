@@ -7,6 +7,8 @@ import GuavaUICompose
 /// splits inside a region, but cross-region moves are canonicalised back
 /// into this shell so hosts do not end up with arbitrary tree shapes.
 public struct PanelWorkspaceLayoutSemantics: Sendable {
+    private static let regionOverridesStorageKey = "GuavaUIApp.PanelWorkspaceLayoutSemantics.regionOverrides"
+
     public var leadingFraction: Float
     public var mainFraction: Float
     public var bottomFraction: Float
@@ -25,6 +27,7 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         let state = LayoutState(leadingFraction: leadingFraction,
                                 mainFraction: mainFraction,
                                 bottomFraction: bottomFraction)
+        state.regionOverrides = Self.decodeRegionOverrides(controller.semanticStorage[Self.regionOverridesStorageKey] ?? [:])
         // Preserve the controller's current split ratios when the semantics
         // layer is re-installed (e.g. parent view re-init).
         state.captureFractionsIfCanonical(from: controller.root, registry: registry)
@@ -32,13 +35,22 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
             guard let controller else { return true }
             return Self.allowsDrop(request,
                                    controller: controller,
-                                   registry: registry)
+                                   registry: registry,
+                                   state: state)
+        }
+        controller.onCommitDrop = { [registry, weak controller] request in
+            guard let controller else { return }
+            Self.commitDrop(request,
+                            controller: controller,
+                            registry: registry,
+                            state: state)
         }
         controller.onResolveMinimizedEdge = { [registry, weak controller] leafID in
             guard let controller,
                   let region = Self.regionOfLeaf(id: leafID,
                                                   in: controller.root,
-                                                  registry: registry) else {
+                                                  registry: registry,
+                                                  state: state) else {
                 return nil
             }
             switch region {
@@ -90,6 +102,7 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
     private final class LayoutState {
         var fractions: Fractions
         private var regionLeafIDs: [PanelWorkspaceRegion: DockNodeID] = [:]
+        var regionOverrides: [String: PanelWorkspaceRegion] = [:]
 
         init(leadingFraction: Float,
              mainFraction: Float,
@@ -102,7 +115,8 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         func captureFractionsIfCanonical(from root: DockLayoutNode,
                                          registry: PanelRegistry) {
             guard let captured = PanelWorkspaceLayoutSemantics.captureFractions(from: root,
-                                                                                registry: registry) else {
+                                                                                registry: registry,
+                                                                                state: self) else {
                 return
             }
             if let leading = captured.leading {
@@ -118,7 +132,9 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
 
         func captureLeafIDs(from root: DockLayoutNode,
                             registry: PanelRegistry) {
-            let collected = PanelWorkspaceLayoutSemantics.collectRegions(from: root, registry: registry)
+            let collected = PanelWorkspaceLayoutSemantics.collectRegions(from: root,
+                                                                         registry: registry,
+                                                                         state: self)
             let candidates = collected.resolvedLeafIDs()
             for region in [PanelWorkspaceRegion.leadingSidebar,
                            .center,
@@ -139,6 +155,24 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
             let resolved = candidate ?? DockNodeID()
             regionLeafIDs[region] = resolved
             return resolved
+        }
+
+        func region(for tab: DockTab,
+                    registry: PanelRegistry) -> PanelWorkspaceRegion {
+            regionOverrides[tab.userKey]
+                ?? registry.descriptor(for: tab.userKey)?.preferredRegion
+                ?? .center
+        }
+
+        func setRegion(_ region: PanelWorkspaceRegion,
+                       forUserKey userKey: String,
+                       registry: PanelRegistry) {
+            let preferred = registry.descriptor(for: userKey)?.preferredRegion ?? .center
+            if preferred == region {
+                regionOverrides.removeValue(forKey: userKey)
+            } else {
+                regionOverrides[userKey] = region
+            }
         }
     }
 
@@ -184,7 +218,7 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
      private static func normalize(root: DockLayoutNode,
                                              registry: PanelRegistry,
                                              state: LayoutState) -> DockLayoutNode {
-        let collected = collectRegions(from: root, registry: registry)
+        let collected = collectRegions(from: root, registry: registry, state: state)
         guard collected.hasAnyTabs else { return root }
         let leafIDs = collected.resolvedLeafIDs()
 
@@ -232,14 +266,16 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
     }
 
     private static func collectRegions(from node: DockLayoutNode,
-                                       registry: PanelRegistry) -> CollectedRegions {
+                                       registry: PanelRegistry,
+                                       state: LayoutState? = nil) -> CollectedRegions {
         var collected = CollectedRegions()
-        collectRegions(from: node, registry: registry, into: &collected)
+        collectRegions(from: node, registry: registry, state: state, into: &collected)
         return collected
     }
 
     private static func collectRegions(from node: DockLayoutNode,
                                        registry: PanelRegistry,
+                                       state: LayoutState?,
                                        into collected: inout CollectedRegions) {
         switch node {
         case .empty:
@@ -247,7 +283,9 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         case .tabs(let id, let tabs, let activeTabID):
             var regionsInLeaf: Set<PanelWorkspaceRegion> = []
             for tab in tabs {
-                let region = registry.descriptor(for: tab.userKey)?.preferredRegion ?? .center
+                let region = state?.region(for: tab, registry: registry)
+                    ?? registry.descriptor(for: tab.userKey)?.preferredRegion
+                    ?? .center
                 regionsInLeaf.insert(region)
                 switch region {
                 case .leadingSidebar:
@@ -277,8 +315,8 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
                 }
             }
         case .split(_, _, _, let first, let second):
-            collectRegions(from: first, registry: registry, into: &collected)
-            collectRegions(from: second, registry: registry, into: &collected)
+            collectRegions(from: first, registry: registry, state: state, into: &collected)
+            collectRegions(from: second, registry: registry, state: state, into: &collected)
         }
     }
 
@@ -295,8 +333,9 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
     }
 
     private static func captureFractions(from root: DockLayoutNode,
-                                         registry: PanelRegistry) -> CapturedFractions? {
-        let collected = collectRegions(from: root, registry: registry)
+                                         registry: PanelRegistry,
+                                         state: LayoutState? = nil) -> CapturedFractions? {
+        let collected = collectRegions(from: root, registry: registry, state: state)
         guard collected.hasAnyTabs else { return nil }
 
         let wantsLeading = !collected.leading.tabs.isEmpty
@@ -312,6 +351,7 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
                   matchesRegionLeaf(leadingNode,
                                     region: .leadingSidebar,
                                     registry: registry,
+                                    state: state,
                                     allowEmpty: false) else {
                 return nil
             }
@@ -327,6 +367,7 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
                   matchesRegionLeaf(trailingNode,
                                     region: .trailingSidebar,
                                     registry: registry,
+                                    state: state,
                                     allowEmpty: false) else {
                 return nil
             }
@@ -341,10 +382,12 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
                   matchesRegionLeaf(centerNode,
                                     region: .center,
                                     registry: registry,
+                                    state: state,
                                     allowEmpty: allowEmptyCenter),
                   matchesRegionLeaf(bottomNode,
                                     region: .bottomPanel,
                                     registry: registry,
+                                    state: state,
                                     allowEmpty: false) else {
                 return nil
             }
@@ -355,6 +398,7 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         guard matchesRegionLeaf(mainRoot,
                                 region: .center,
                                 registry: registry,
+                                state: state,
                                 allowEmpty: allowEmptyCenter) else {
             return nil
         }
@@ -364,6 +408,7 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
     private static func matchesRegionLeaf(_ node: DockLayoutNode,
                                           region: PanelWorkspaceRegion,
                                           registry: PanelRegistry,
+                                          state: LayoutState? = nil,
                                           allowEmpty: Bool) -> Bool {
         switch node {
         case .empty:
@@ -371,7 +416,9 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         case .tabs(_, let tabs, _):
             guard !tabs.isEmpty else { return allowEmpty }
             return tabs.allSatisfy {
-                (registry.descriptor(for: $0.userKey)?.preferredRegion ?? .center) == region
+                (state?.region(for: $0, registry: registry)
+                    ?? registry.descriptor(for: $0.userKey)?.preferredRegion
+                    ?? .center) == region
             }
         case .split:
             return false
@@ -394,27 +441,54 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
 
     private static func allowsDrop(_ request: DockDropRequest,
                                    controller: DockController,
-                                   registry: PanelRegistry) -> Bool {
-        guard let sourceRegion = sourceRegion(for: request, controller: controller, registry: registry),
-              let targetRegion = targetRegion(for: request.target, controller: controller, registry: registry) else {
-            return true
-        }
-
-        guard sourceRegion == targetRegion else { return false }
-
+                                   registry: PanelRegistry,
+                                   state: LayoutState) -> Bool {
+        _ = sourceRegion(for: request, controller: controller, registry: registry, state: state)
+        _ = targetRegion(for: request.target, controller: controller, registry: registry, state: state)
         return true
+    }
+
+    private static func commitDrop(_ request: DockDropRequest,
+                                   controller: DockController,
+                                   registry: PanelRegistry,
+                                   state: LayoutState) {
+        guard let targetRegion = targetRegion(for: request.target,
+                                              controller: controller,
+                                              registry: registry,
+                                              state: state) else {
+            return
+        }
+        for userKey in userKeys(for: request, controller: controller) {
+            state.setRegion(targetRegion, forUserKey: userKey, registry: registry)
+        }
+        controller.semanticStorage[regionOverridesStorageKey] = encodeRegionOverrides(state.regionOverrides)
+    }
+
+    private static func decodeRegionOverrides(_ raw: [String: String]) -> [String: PanelWorkspaceRegion] {
+        var decoded: [String: PanelWorkspaceRegion] = [:]
+        for (userKey, value) in raw {
+            if let region = PanelWorkspaceRegion(rawValue: value) {
+                decoded[userKey] = region
+            }
+        }
+        return decoded
+    }
+
+    private static func encodeRegionOverrides(_ overrides: [String: PanelWorkspaceRegion]) -> [String: String] {
+        overrides.mapValues(\.rawValue)
     }
 
     private static func sourceRegion(for request: DockDropRequest,
                                      controller: DockController,
-                                     registry: PanelRegistry) -> PanelWorkspaceRegion? {
+                                     registry: PanelRegistry,
+                                     state: LayoutState) -> PanelWorkspaceRegion? {
         if let tabID = request.tabID,
-           let region = regionOfTab(id: tabID, in: controller.root, registry: registry) {
+           let region = regionOfTab(id: tabID, in: controller.root, registry: registry, state: state) {
             return region
         }
         switch request.origin {
         case .mainTreeLeaf(let leafID), .satellite(let leafID):
-            return regionOfLeaf(id: leafID, in: controller.root, registry: registry)
+            return regionOfLeaf(id: leafID, in: controller.root, registry: registry, state: state)
         case .mainTreeTab:
             return nil
         }
@@ -422,7 +496,8 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
 
     private static func targetRegion(for target: DockDropTarget,
                                      controller: DockController,
-                                     registry: PanelRegistry) -> PanelWorkspaceRegion? {
+                                     registry: PanelRegistry,
+                                     state: LayoutState) -> PanelWorkspaceRegion? {
         let nodeID: DockNodeID
         switch target {
         case .tabSlot(let parent, _):
@@ -430,36 +505,81 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         case .replace(let target), .splitEdge(let target, _):
             nodeID = target
         }
-        return regionOfLeaf(id: nodeID, in: controller.root, registry: registry)
+        return regionOfLeaf(id: nodeID, in: controller.root, registry: registry, state: state)
     }
 
     private static func regionOfTab(id: DockTabID,
                                     in node: DockLayoutNode,
-                                    registry: PanelRegistry) -> PanelWorkspaceRegion? {
+                                    registry: PanelRegistry,
+                                    state: LayoutState) -> PanelWorkspaceRegion? {
         switch node {
         case .empty:
             return nil
         case .tabs(_, let tabs, _):
             guard let tab = tabs.first(where: { $0.id == id }) else { return nil }
-            return registry.descriptor(for: tab.userKey)?.preferredRegion ?? .center
+            return state.region(for: tab, registry: registry)
         case .split(_, _, _, let first, let second):
-            return regionOfTab(id: id, in: first, registry: registry)
-                ?? regionOfTab(id: id, in: second, registry: registry)
+            return regionOfTab(id: id, in: first, registry: registry, state: state)
+                ?? regionOfTab(id: id, in: second, registry: registry, state: state)
         }
     }
 
     private static func regionOfLeaf(id: DockNodeID,
                                      in node: DockLayoutNode,
-                                     registry: PanelRegistry) -> PanelWorkspaceRegion? {
+                                     registry: PanelRegistry,
+                                     state: LayoutState) -> PanelWorkspaceRegion? {
         guard let found = node.find(id) else { return nil }
         switch found {
         case .empty:
             return .center
         case .tabs(_, let tabs, _):
             guard let first = tabs.first else { return .center }
-            return registry.descriptor(for: first.userKey)?.preferredRegion ?? .center
+            return state.region(for: first, registry: registry)
         case .split:
             return nil
+        }
+    }
+
+    private static func userKeys(for request: DockDropRequest,
+                                 controller: DockController) -> [String] {
+        if let tabID = request.tabID,
+           let tab = tab(id: tabID, in: controller.root) {
+            return [tab.userKey]
+        }
+        guard let sourceLeafID = request.sourceLeafID else { return [] }
+        switch request.origin {
+        case .mainTreeTab:
+            return []
+        case .mainTreeLeaf:
+            return userKeys(inLeaf: sourceLeafID, root: controller.root)
+        case .satellite:
+            if let satellite = controller.satellites[sourceLeafID] {
+                return userKeys(inLeaf: sourceLeafID, root: satellite)
+            }
+            return []
+        }
+    }
+
+    private static func tab(id: DockTabID,
+                            in node: DockLayoutNode) -> DockTab? {
+        switch node {
+        case .empty:
+            return nil
+        case .tabs(_, let tabs, _):
+            return tabs.first { $0.id == id }
+        case .split(_, _, _, let first, let second):
+            return tab(id: id, in: first) ?? tab(id: id, in: second)
+        }
+    }
+
+    private static func userKeys(inLeaf leafID: DockNodeID,
+                                 root: DockLayoutNode) -> [String] {
+        guard let node = root.find(leafID) else { return [] }
+        switch node {
+        case .tabs(_, let tabs, _):
+            return tabs.map(\.userKey)
+        case .empty, .split:
+            return []
         }
     }
 }

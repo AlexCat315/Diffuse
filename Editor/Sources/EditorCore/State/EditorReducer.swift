@@ -23,6 +23,7 @@ public enum EditorAction: Sendable {
     case setCommandSelectBehavior(SelectionCommandBehavior)
     case setThemeMode(EditorThemeMode)
     case setLanguage(EditorLanguage)
+    case forceUIRefresh
     case setVSyncMode(EditorVSyncMode)
     case beginAssetDrag(EditorAssetDragPayload)
     case updateAssetDragCursor(x: Float, y: Float)
@@ -108,9 +109,13 @@ public enum EditorReducer {
             state.cmdSelectBehavior = behavior
         case let .setThemeMode(mode):
             state.themeMode = mode
+            state.uiRefreshRevision &+= 1
         case let .setLanguage(language):
             EditorLocalizationPreferences.language = language
             state.language = language
+            state.uiRefreshRevision &+= 1
+        case .forceUIRefresh:
+            state.uiRefreshRevision &+= 1
         case let .setVSyncMode(mode):
             state.vsyncMode = mode
         case let .beginAssetDrag(payload):
