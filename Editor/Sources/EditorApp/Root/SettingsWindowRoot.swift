@@ -8,23 +8,22 @@ struct EditorSettingsWindowRoot: View {
 
     var body: some View {
         StoreScope(app.store, select: SettingsWindowSelection.init) { store in
-            Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                SettingsPanel(app: app)
-                    .flex()
+            EditorPresentationBoundary(presentation: store.state.presentation) {
+                Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                    SettingsPanel(app: app)
+                        .flex()
+                }
+                .background(.background)
+                .flex()
             }
-            .appearance(store.state.themeMode == .dark ? .dark : .light)
-            .background(.background)
-            .flex()
         }
     }
 }
 
 private struct SettingsWindowSelection: Hashable {
-    let themeMode: EditorThemeMode
-    let language: EditorLanguage
+    let presentation: EditorPresentationState
 
     init(_ state: EditorState) {
-        self.themeMode = state.themeMode
-        self.language = state.language
+        self.presentation = state.presentation
     }
 }

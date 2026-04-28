@@ -108,14 +108,11 @@ public enum EditorReducer {
         case let .setCommandSelectBehavior(behavior):
             state.cmdSelectBehavior = behavior
         case let .setThemeMode(mode):
-            state.themeMode = mode
-            state.uiRefreshRevision &+= 1
+            state.presentation.setThemeMode(mode)
         case let .setLanguage(language):
-            EditorLocalizationPreferences.language = language
-            state.language = language
-            state.uiRefreshRevision &+= 1
+            state.presentation.setLanguage(language)
         case .forceUIRefresh:
-            state.uiRefreshRevision &+= 1
+            state.presentation.forceRefresh()
         case let .setVSyncMode(mode):
             state.vsyncMode = mode
         case let .beginAssetDrag(payload):

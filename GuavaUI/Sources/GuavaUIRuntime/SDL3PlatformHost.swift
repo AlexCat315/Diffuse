@@ -298,10 +298,10 @@ public final class SDL3PlatformHost: PlatformHost {
                 session.needsDisplay = true
             }
             let externalDisplayRequested = externalDisplayRequestDrain?() == true
-            if externalDisplayRequested,
-               let mainWindowID,
-               let session = sessions[mainWindowID] {
-                session.needsDisplay = true
+            if externalDisplayRequested {
+                for session in sessions.values {
+                    session.needsDisplay = true
+                }
             }
             timing.mark("events")
 

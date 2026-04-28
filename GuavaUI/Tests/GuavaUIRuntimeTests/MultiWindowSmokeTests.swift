@@ -141,6 +141,44 @@ struct MultiWindowSmokeTests {
     }
 
     @MainActor
+    @Test("External display requests redraw every open window")
+    func externalDisplayRequestsRedrawEveryWindow() throws {
+        let shell = MockShell(eventBatches: [[], [], []])
+        let host = SDL3PlatformHost(shellFactory: { shell })
+
+        let treeA = NodeTree()
+        let treeB = NodeTree()
+        let sessionA = try host.openWindow(title: "A", tree: treeA)
+        let sessionB = try host.openWindow(title: "B", tree: treeB)
+        treeA.root = Node()
+        treeB.root = Node()
+        (shell.window(for: sessionA.id) as? MockWindowHandle)?.renderSurface = mockSurface
+        (shell.window(for: sessionB.id) as? MockWindowHandle)?.renderSurface = mockSurface
+
+        var drainCount = 0
+        host.externalDisplayRequestDrain = {
+            drainCount += 1
+            return drainCount == 2
+        }
+
+        var framesA = 0
+        var framesB = 0
+        sessionA.onFrame = { _ in
+            framesA += 1
+            return true
+        }
+        sessionB.onFrame = { _ in
+            framesB += 1
+            return true
+        }
+
+        host.run()
+
+        #expect(framesA == 2)
+        #expect(framesB == 2)
+    }
+
+    @MainActor
     @Test("Active animations alone do not force extra frames")
     func activeAnimationsDoNotForceFrames() throws {
         let shell = MockShell(eventBatches: [[], []])
