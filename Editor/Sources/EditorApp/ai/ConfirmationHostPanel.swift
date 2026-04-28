@@ -39,11 +39,15 @@ private struct ConfirmationHostSelection: Hashable {
     let batchID: String?
     let correlationID: String?
     let questionIDs: [String]
+    let themeMode: EditorThemeMode
+    let language: EditorLanguage
 
     init(_ state: EditorState) {
         self.batchID = state.pendingConfirmationRequest?.batchID
         self.correlationID = state.pendingConfirmationRequest?.correlationID
         self.questionIDs = state.pendingConfirmationRequest?.questions.map(\.id) ?? []
+        self.themeMode = state.themeMode
+        self.language = state.language
     }
 }
 

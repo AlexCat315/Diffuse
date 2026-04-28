@@ -209,6 +209,7 @@ public struct Popover<Label: View, Content: View>: View {
                 }
             }
         }
+        .zIndex(isPresented.wrappedValue ? 10_000 : 0)
         .modifier(_PopoverFrontmostModifier(isPresented: isPresented.wrappedValue))
     }
 }

@@ -49,12 +49,14 @@ private struct EditorRootSelection: Hashable {
     let workspaceMode: EditorWorkspaceMode
     let activeLayoutPreset: EditorLayoutPreset
     let themeMode: EditorThemeMode
+    let language: EditorLanguage
 
     init(_ state: EditorState) {
         self.playbackState = state.playbackState
         self.workspaceMode = state.workspaceMode
         self.activeLayoutPreset = state.activeLayoutPreset
         self.themeMode = state.themeMode
+        self.language = state.language
     }
 }
 
