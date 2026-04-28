@@ -13,16 +13,7 @@ struct ViewportPanel: View {
     let scene: EditorSceneAdapter
 
     var body: some View {
-        StoreScope(app.store, select: { state in
-            ViewportStateKey(
-                sceneRevision: state.sceneRevision,
-                selectedEntityID: state.selectedEntityID,
-                gizmoMode: state.gizmoMode,
-                gizmoSpace: state.gizmoSpace,
-                shadingMode: state.viewportShadingMode,
-                hasActiveDrag: state.activeAssetDrag != nil
-            )
-        }) { store in
+        StoreScope(app.store) { store in
             let surface = app.currentViewportSurfaceState()
             let stats = app.currentRenderStats()
             let timing = app.currentFrameTiming()
@@ -1497,13 +1488,4 @@ private struct GizmoAxisChip: View {
             .background(color)
             .cornerRadius(2)
     }
-}
-
-private struct ViewportStateKey: Hashable {
-    let sceneRevision: UInt64
-    let selectedEntityID: UInt64?
-    let gizmoMode: EditorGizmoMode
-    let gizmoSpace: EditorGizmoSpace
-    let shadingMode: EditorViewportShadingMode
-    let hasActiveDrag: Bool
 }
