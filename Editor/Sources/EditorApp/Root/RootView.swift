@@ -34,15 +34,7 @@ struct EditorRootView: View {
 
             Divider()
 
-            StoreScope(app.store) { store in
-                let timing = app.currentFrameTiming()
-                EditorStatusBar(isConnected: store.state.connected,
-                                sceneRevision: store.state.sceneRevision,
-                                selectedCount: store.state.selectedEntityIDs.count,
-                                aiStatusMessage: store.state.aiStatusMessage,
-                                fps: timing.framesPerSecond,
-                                frameMs: timing.frameMilliseconds)
-            }
+            EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
         }
         .appearance(state.themeMode == .dark ? .dark : .light)
         .background(.background)

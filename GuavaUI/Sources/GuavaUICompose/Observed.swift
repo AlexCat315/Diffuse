@@ -26,6 +26,7 @@ public struct Observed<Object: AnyObject & _ObservableObject, Value: Equatable>:
     }
 
     public func _wire(invalidate: @escaping () -> Void) {
+        __value._setOnChange(invalidate)
         let kp = keyPath
         tokenBox.token = object._registerObserver { [weak object] in
             guard let object else { return }

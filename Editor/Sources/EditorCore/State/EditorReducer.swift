@@ -2,6 +2,7 @@ import Foundation
 import IntentRuntime
 
 public enum EditorAction: Sendable {
+    case tickFrame(UInt64)  // dispatched every engine frame
     case setConnected(Bool)
     case setSelectedEntity(UInt64?)
     case setPrimarySelectedEntity(UInt64?)
@@ -77,6 +78,8 @@ public enum EditorReducer {
             }
         case let .setSceneRevision(value):
             state.sceneRevision = value
+        case let .tickFrame(n):
+            state.frameIndex = n
         case let .setWindowFocused(value):
             state.windowFocused = value
         case let .setWindowMinimized(value):
