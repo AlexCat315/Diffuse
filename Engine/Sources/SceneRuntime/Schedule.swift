@@ -72,6 +72,7 @@ public struct RuntimeScheduleReport: Sendable {
     public var scheduledJobCount: Int
     public var jobWorkerCount: Int
     public var parallelPhases: [RuntimeSystemPhase]
+    public var phaseJobCounts: [RuntimeSystemPhase: Int]
     public var revision: UInt64
 
     public init(
@@ -88,6 +89,7 @@ public struct RuntimeScheduleReport: Sendable {
         scheduledJobCount: Int = 0,
         jobWorkerCount: Int = 1,
         parallelPhases: [RuntimeSystemPhase] = [],
+        phaseJobCounts: [RuntimeSystemPhase: Int] = [:],
         revision: UInt64 = 0
     ) {
         self.phases = phases
@@ -103,6 +105,7 @@ public struct RuntimeScheduleReport: Sendable {
         self.scheduledJobCount = scheduledJobCount
         self.jobWorkerCount = jobWorkerCount
         self.parallelPhases = parallelPhases
+        self.phaseJobCounts = phaseJobCounts
         self.revision = revision
     }
 }
@@ -201,6 +204,16 @@ public struct RuntimeWorldSchedule {
         var physicsContactCount = 0
         var scheduledJobCount = 0
         var parallelPhases = Set<RuntimeSystemPhase>()
+        var phaseJobCounts: [RuntimeSystemPhase: Int] = [:]
+
+        func recordJobReport(_ report: JobDispatchReport, for phase: RuntimeSystemPhase) {
+            guard report.jobCount > 0 else { return }
+            scheduledJobCount += report.jobCount
+            phaseJobCounts[phase, default: 0] += report.jobCount
+            if report.executedInParallel {
+                parallelPhases.insert(phase)
+            }
+        }
 
         var activeBodies: [PhysicsBodyDescriptor] = []
         var activeConstraints: [PhysicsConstraintDescriptor] = []
@@ -228,10 +241,7 @@ public struct RuntimeWorldSchedule {
                 }
             case .hierarchyPropagate:
                 let report = world.propagateTransforms(using: jobSystem)
-                scheduledJobCount += report.jobCount
-                if report.executedInParallel {
-                    parallelPhases.insert(.hierarchyPropagate)
-                }
+                recordJobReport(report, for: .hierarchyPropagate)
             case .fixedPhysicsPrepare:
                 guard physicsSettings.simulationMode != .off else {
                     physicsBackend.reset()
@@ -248,10 +258,8 @@ public struct RuntimeWorldSchedule {
                 activeBodies = bodyCollection.bodies
                 let constraintCollection = collectPhysicsConstraints(from: physicsReadView)
                 activeConstraints = constraintCollection.constraints
-                scheduledJobCount += bodyCollection.report.jobCount + constraintCollection.report.jobCount
-                if bodyCollection.report.executedInParallel || constraintCollection.report.executedInParallel {
-                    parallelPhases.insert(.fixedPhysicsPrepare)
-                }
+                recordJobReport(bodyCollection.report, for: .fixedPhysicsPrepare)
+                recordJobReport(constraintCollection.report, for: .fixedPhysicsPrepare)
                 physicsBodyCount = activeBodies.count
                 physicsConstraintCount = activeConstraints.count
                 let syncEventDiff = diffPhysicsSyncEvents(
@@ -259,10 +267,7 @@ public struct RuntimeWorldSchedule {
                     constraints: activeConstraints
                 )
                 syncEvents = syncEventDiff.events
-                scheduledJobCount += syncEventDiff.report.jobCount
-                if syncEventDiff.report.executedInParallel {
-                    parallelPhases.insert(.fixedPhysicsPrepare)
-                }
+                recordJobReport(syncEventDiff.report, for: .fixedPhysicsPrepare)
                 let prepareContext = PhysicsPrepareContext(
                     settings: physicsSettings,
                     deltaTimeSeconds: deltaTimeSeconds,
@@ -313,10 +318,7 @@ public struct RuntimeWorldSchedule {
                 }
                 if physicsWritebackCount > 0 {
                     let report = world.propagateTransforms(using: jobSystem)
-                    scheduledJobCount += report.jobCount
-                    if report.executedInParallel {
-                        parallelPhases.insert(.physicsWriteback)
-                    }
+                    recordJobReport(report, for: .physicsWriteback)
                 }
                 physicsFrameState = PhysicsFrameStateResource(
                     backendIdentifier: physicsBackend.identifier,
@@ -344,26 +346,17 @@ public struct RuntimeWorldSchedule {
                 }
                 if world.hierarchyNeedsPropagation() {
                     let report = world.propagateTransforms(using: jobSystem)
-                    scheduledJobCount += report.jobCount
-                    if report.executedInParallel {
-                        parallelPhases.insert(.animationAndScripts)
-                    }
+                    recordJobReport(report, for: .animationAndScripts)
                 }
             case .spatialIndexUpdate:
                 let spatialIndexBuild = buildSpatialIndexResource(in: world, using: jobSystem)
                 world.setDerivedResource(spatialIndexBuild.resource)
-                scheduledJobCount += spatialIndexBuild.report.jobCount
-                if spatialIndexBuild.report.executedInParallel {
-                    parallelPhases.insert(.spatialIndexUpdate)
-                }
+                recordJobReport(spatialIndexBuild.report, for: .spatialIndexUpdate)
                 break
             case .renderExtract:
                 let renderExtraction = extractRenderScene(in: world)
                 world.setDerivedResource(renderExtraction.resource)
-                scheduledJobCount += renderExtraction.report.jobCount
-                if renderExtraction.report.executedInParallel {
-                    parallelPhases.insert(.renderExtract)
-                }
+                recordJobReport(renderExtraction.report, for: .renderExtract)
                 break
             }
         }
@@ -384,6 +377,7 @@ public struct RuntimeWorldSchedule {
             scheduledJobCount: scheduledJobCount,
             jobWorkerCount: jobSystem.workerCount,
             parallelPhases: RuntimeSystemPhase.allCases.filter { parallelPhases.contains($0) },
+            phaseJobCounts: phaseJobCounts,
             revision: world.revision
         )
     }
