@@ -1,19 +1,19 @@
 import Foundation
 import IntentRuntime
 
-public enum PlaybackState: String, Codable, Sendable {
+public enum PlaybackState: String, Codable, Sendable, Hashable {
     case stopped
     case playing
     case paused
 }
 
-public enum EditorWorkspaceMode: String, Codable, Sendable {
+public enum EditorWorkspaceMode: String, Codable, Sendable, Hashable {
     case level
     case modeling
     case animation
 }
 
-public enum EditorLayoutPreset: String, Codable, Sendable {
+public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
     case levelDefault
     case levelCinematics
     case modelingDefault
@@ -72,19 +72,19 @@ public enum EditorLayoutPreset: String, Codable, Sendable {
     }
 }
 
-public enum EditorGizmoMode: String, Codable, Sendable {
-    case none
+public enum EditorGizmoMode: String, Codable, Sendable, Hashable {
+case none
     case translate
     case rotate
     case scale
 }
 
-public enum EditorGizmoSpace: String, Codable, Sendable {
+public enum EditorGizmoSpace: String, Codable, Sendable, Hashable {
     case local
     case world
 }
 
-public enum EditorViewportShadingMode: String, Codable, Sendable {
+public enum EditorViewportShadingMode: String, Codable, Sendable, Hashable {
     case lit
     case wireframe
 }
@@ -94,7 +94,7 @@ public enum SelectionCommandBehavior: String, Codable, Sendable {
     case toggle
 }
 
-public enum EditorThemeMode: String, Codable, Sendable, CaseIterable {
+public enum EditorThemeMode: String, Codable, Sendable, CaseIterable, Hashable {
     case dark
     case light
 }
