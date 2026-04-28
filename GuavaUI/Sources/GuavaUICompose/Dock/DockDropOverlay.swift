@@ -148,18 +148,18 @@ private func drawGuideTiles(list: DrawList,
                           width: (maxX - minX) + 16,
                           height: (maxY - minY) + 16)
     let backdropColor = theme.colors.surfaceFloating
-        .composited(over: Color.black.multipliedAlpha(0.18))
-        .multipliedAlpha(0.94)
-    list.addRoundedRect(backdrop, radius: 14, color: backdropColor)
+        .composited(over: Color.black.multipliedAlpha(0.12))
+        .multipliedAlpha(0.88)
+    list.addRoundedRect(backdrop, radius: 10, color: backdropColor)
 
     let inactiveFill = appearance.tabBarBackground
-        .composited(over: Color.black.multipliedAlpha(0.08))
-        .multipliedAlpha(0.98)
-    let inactiveMiniature = appearance.tabInactiveForeground.multipliedAlpha(0.16)
-    let activeFillOverlay = appearance.tabActiveAccentBar.multipliedAlpha(0.2)
-    let activeMiniature = appearance.tabActiveAccentBar.multipliedAlpha(0.92)
-    let activeStroke = appearance.tabActiveAccentBar.multipliedAlpha(0.85)
-    let inactiveStroke = appearance.tabInactiveForeground.multipliedAlpha(0.22)
+        .composited(over: Color.black.multipliedAlpha(0.05))
+        .multipliedAlpha(0.96)
+    let inactiveMiniature = appearance.tabInactiveForeground.multipliedAlpha(0.13)
+    let activeFillOverlay = appearance.tabActiveAccentBar.multipliedAlpha(0.18)
+    let activeMiniature = appearance.tabActiveAccentBar.multipliedAlpha(0.88)
+    let activeStroke = appearance.tabActiveAccentBar.multipliedAlpha(0.78)
+    let inactiveStroke = appearance.tabInactiveForeground.multipliedAlpha(0.18)
 
     for tile in tiles {
         let isActive = tile.edge == activeEdge
@@ -167,7 +167,7 @@ private func drawGuideTiles(list: DrawList,
             ? inactiveFill.composited(over: activeFillOverlay)
             : inactiveFill
         let strokeColor = isActive ? activeStroke : inactiveStroke
-        list.addRoundedRect(tile.buttonRect, radius: 8, color: buttonColor)
+        list.addRoundedRect(tile.buttonRect, radius: 7, color: buttonColor)
         let topStroke = UIRect(x: tile.buttonRect.x,
                                y: tile.buttonRect.y,
                                width: tile.buttonRect.width,
@@ -238,7 +238,12 @@ private func drawDropPreview(list: DrawList,
                              rect: UIRect,
                              fill: Color,
                              stroke: Color) {
-    list.addRect(rect, color: fill)
+    let inset: Float = 2
+    let rect = UIRect(x: rect.x + inset,
+                      y: rect.y + inset,
+                      width: max(0, rect.width - inset * 2),
+                      height: max(0, rect.height - inset * 2))
+    list.addRoundedRect(rect, radius: 8, color: fill)
     let t: Float = 2
     list.addRect(UIRect(x: rect.x, y: rect.y, width: rect.width, height: t), color: stroke)
     list.addRect(UIRect(x: rect.x, y: rect.y + rect.height - t, width: rect.width, height: t), color: stroke)
@@ -262,8 +267,7 @@ func installDropOverlay(node: Node, leafID: DockNodeID, controller: DockControll
         // guide tiles so the user can see edge drop targets even though
         // the centre drop is a no-op. The active-edge highlight will only
         // light up for genuine cross-leaf hits via the dropHit check below.
-        let rootTargetID = node.compositionValue(of: DockRootDropTargetIDLocal) ?? controller.root.id
-        if let hit = session.dropHit, hit.leafID == rootTargetID, hit.leafID != leafID {
+        if let hit = session.dropHit, hit.scope == .workspace {
             return
         }
 
@@ -279,7 +283,7 @@ func installDropOverlay(node: Node, leafID: DockNodeID, controller: DockControll
         let h = Float(node.frame.height)
         let frame = UIRect(x: absX, y: absY, width: w, height: h)
 
-        if let hit = session.dropHit, hit.leafID == leafID {
+        if let hit = session.dropHit, hit.scope == .leaf, hit.leafID == leafID {
             drawDropPreview(list: list,
                             rect: previewRect(for: hit.edge, in: frame),
                             fill: fill,
@@ -288,7 +292,7 @@ func installDropOverlay(node: Node, leafID: DockNodeID, controller: DockControll
 
         drawDropGuide(list: list,
                       leafRect: frame,
-                      activeEdge: session.dropHit?.leafID == leafID ? session.dropHit?.edge : nil,
+                      activeEdge: session.dropHit?.scope == .leaf && session.dropHit?.leafID == leafID ? session.dropHit?.edge : nil,
                       appearance: appearance,
                       theme: node.theme)
     }
@@ -312,24 +316,21 @@ func installDragGhostOverlay(node: Node,
                               height: Float(node.frame.height))
         let showWorkspaceGuide = session.isActive
             && session.intent == .detachOrSplit
-            && (session.hoverLeafID == nil
-                || session.hoverLeafID == session.sourceLeafID
-                || session.dropHit == nil
-                || session.dropHit?.leafID == rootNodeID)
+            && (session.dropHit?.scope == .workspace
+                || (session.hoverLeafID == nil && session.dropHit == nil))
         if showWorkspaceGuide {
             drawWorkspaceDropGuide(list: list,
                                    workspaceRect: rootRect,
-                                   activeEdge: session.dropHit?.leafID == rootNodeID ? session.dropHit?.edge : nil,
+                                   activeEdge: session.dropHit?.scope == .workspace ? session.dropHit?.edge : nil,
                                    appearance: appearance,
                                    theme: node.theme)
         }
         if session.isActive,
            session.intent == .detachOrSplit,
            let hit = session.dropHit,
-           hit.leafID == rootNodeID,
-           hit.leafID != session.hoverLeafID {
-            let fill = Color(r: accent.r, g: accent.g, b: accent.b, a: 0.25)
-            let stroke = Color(r: accent.r, g: accent.g, b: accent.b, a: 0.85)
+           hit.scope == .workspace {
+            let fill = Color(r: accent.r, g: accent.g, b: accent.b, a: 0.18)
+            let stroke = Color(r: accent.r, g: accent.g, b: accent.b, a: 0.78)
             drawDropPreview(list: list,
                             rect: previewRect(for: hit.edge, in: rootRect),
                             fill: fill,
