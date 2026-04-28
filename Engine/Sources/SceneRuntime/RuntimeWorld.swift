@@ -394,8 +394,22 @@ public struct RuntimeWorld: @unchecked Sendable {
     public func componentSnapshot<Component: RuntimeComponent>(
         _ type: Component.Type
     ) -> [EntityID: Component] {
-        let alive = Set(entities())
-        return components.snapshot(for: type).filter { alive.contains($0.key) }
+        componentSnapshot(type, matching: entities())
+    }
+
+    public func componentSnapshot<Component: RuntimeComponent>(
+        _ type: Component.Type,
+        matching entities: [EntityID]
+    ) -> [EntityID: Component] {
+        let storedComponents = components.snapshot(for: type)
+        var snapshot: [EntityID: Component] = [:]
+        snapshot.reserveCapacity(min(storedComponents.count, entities.count))
+        for entity in entities where contains(entity) {
+            if let component = storedComponents[entity] {
+                snapshot[entity] = component
+            }
+        }
+        return snapshot
     }
 
     public func query<Component: RuntimeComponent>(
@@ -558,10 +572,14 @@ public struct RuntimeWorld: @unchecked Sendable {
     }
 
     public func localTransformSnapshot() -> [EntityID: LocalTransform] {
+        localTransformSnapshot(matching: entities())
+    }
+
+    public func localTransformSnapshot(matching entities: [EntityID]) -> [EntityID: LocalTransform] {
         let explicitTransforms = components.snapshot(for: LocalTransform.self)
         var snapshot: [EntityID: LocalTransform] = [:]
-        snapshot.reserveCapacity(entityCount)
-        for entity in entities() {
+        snapshot.reserveCapacity(entities.count)
+        for entity in entities where contains(entity) {
             snapshot[entity] = explicitTransforms[entity] ?? .identity
         }
         return snapshot
@@ -573,10 +591,14 @@ public struct RuntimeWorld: @unchecked Sendable {
     }
 
     public func worldTransformSnapshot() -> [EntityID: WorldTransform] {
+        worldTransformSnapshot(matching: entities())
+    }
+
+    public func worldTransformSnapshot(matching entities: [EntityID]) -> [EntityID: WorldTransform] {
         let explicitTransforms = components.snapshot(for: WorldTransform.self)
         var snapshot: [EntityID: WorldTransform] = [:]
-        snapshot.reserveCapacity(entityCount)
-        for entity in entities() {
+        snapshot.reserveCapacity(entities.count)
+        for entity in entities where contains(entity) {
             snapshot[entity] = explicitTransforms[entity] ?? .identity
         }
         return snapshot

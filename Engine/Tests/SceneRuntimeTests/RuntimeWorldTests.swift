@@ -131,8 +131,11 @@ struct RuntimeWorldTests {
         #expect(world.componentCount(TransformStub.self) == 3)
         #expect(world.entities(with: NameStub.self) == [first, second])
         #expect(world.componentSnapshot(TransformStub.self).keys.sorted { $0.rawValue < $1.rawValue } == [first, second, third])
+        #expect(world.componentSnapshot(TransformStub.self, matching: [third, first]).keys.sorted { $0.rawValue < $1.rawValue } == [first, third])
         #expect(world.localTransformSnapshot()[third] == .identity)
+        #expect(world.localTransformSnapshot(matching: [third])[third] == .identity)
         #expect(world.worldTransformSnapshot()[third] == .identity)
+        #expect(world.worldTransformSnapshot(matching: [third])[third] == .identity)
         #expect(world.query(TransformStub.self).map(\ .entity) == [first, second, third])
 
         let namedTransforms = world.query(TransformStub.self, NameStub.self)
