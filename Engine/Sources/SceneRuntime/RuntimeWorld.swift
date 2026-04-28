@@ -423,6 +423,18 @@ public struct RuntimeWorld: @unchecked Sendable {
             }
     }
 
+    public func query<Component: RuntimeComponent>(
+        _ type: Component.Type,
+        using jobSystem: JobSystem
+    ) -> ([RuntimeComponentQuery<Component>], JobDispatchReport) {
+        let entities = entities()
+        let componentSnapshot = componentSnapshot(type, matching: entities)
+        return jobSystem.parallelCompactMap(items: entities) { entity -> RuntimeComponentQuery<Component>? in
+            guard let component = componentSnapshot[entity] else { return nil }
+            return RuntimeComponentQuery(entity: entity, component: component)
+        }
+    }
+
     public func query<A: RuntimeComponent, B: RuntimeComponent>(
         _ a: A.Type,
         _ b: B.Type
@@ -438,6 +450,24 @@ public struct RuntimeWorld: @unchecked Sendable {
                 }
                 return RuntimeComponentPairQuery(entity: entity, a: componentA, b: componentB)
             }
+    }
+
+    public func query<A: RuntimeComponent, B: RuntimeComponent>(
+        _ a: A.Type,
+        _ b: B.Type,
+        using jobSystem: JobSystem
+    ) -> ([RuntimeComponentPairQuery<A, B>], JobDispatchReport) {
+        let entities = entities()
+        let snapshotA = componentSnapshot(a, matching: entities)
+        let snapshotB = componentSnapshot(b, matching: entities)
+        return jobSystem.parallelCompactMap(items: entities) { entity -> RuntimeComponentPairQuery<A, B>? in
+            guard let componentA = snapshotA[entity],
+                  let componentB = snapshotB[entity]
+            else {
+                return nil
+            }
+            return RuntimeComponentPairQuery(entity: entity, a: componentA, b: componentB)
+        }
     }
 
     public func query<A: RuntimeComponent, B: RuntimeComponent, C: RuntimeComponent>(
@@ -458,6 +488,27 @@ public struct RuntimeWorld: @unchecked Sendable {
                 }
                 return RuntimeComponentTripleQuery(entity: entity, a: componentA, b: componentB, c: componentC)
             }
+    }
+
+    public func query<A: RuntimeComponent, B: RuntimeComponent, C: RuntimeComponent>(
+        _ a: A.Type,
+        _ b: B.Type,
+        _ c: C.Type,
+        using jobSystem: JobSystem
+    ) -> ([RuntimeComponentTripleQuery<A, B, C>], JobDispatchReport) {
+        let entities = entities()
+        let snapshotA = componentSnapshot(a, matching: entities)
+        let snapshotB = componentSnapshot(b, matching: entities)
+        let snapshotC = componentSnapshot(c, matching: entities)
+        return jobSystem.parallelCompactMap(items: entities) { entity -> RuntimeComponentTripleQuery<A, B, C>? in
+            guard let componentA = snapshotA[entity],
+                  let componentB = snapshotB[entity],
+                  let componentC = snapshotC[entity]
+            else {
+                return nil
+            }
+            return RuntimeComponentTripleQuery(entity: entity, a: componentA, b: componentB, c: componentC)
+        }
     }
 
     @discardableResult
