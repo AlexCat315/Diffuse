@@ -566,23 +566,10 @@ public struct RuntimeWorldSchedule {
 
     private func buildReadView(in world: RuntimeWorld) -> RuntimeReadView {
         let entities = world.entities()
-        let explicitLocalTransforms = world.componentSnapshot(LocalTransform.self)
-        let explicitWorldTransforms = world.componentSnapshot(WorldTransform.self)
-        var localTransforms: [EntityID: LocalTransform] = [:]
-        var worldTransforms: [EntityID: WorldTransform] = [:]
-
-        localTransforms.reserveCapacity(entities.count)
-        worldTransforms.reserveCapacity(entities.count)
-
-        for entity in entities {
-            localTransforms[entity] = explicitLocalTransforms[entity] ?? .identity
-            worldTransforms[entity] = explicitWorldTransforms[entity] ?? .identity
-        }
-
         return RuntimeReadView(
             entities: entities,
-            localTransforms: localTransforms,
-            worldTransforms: worldTransforms,
+            localTransforms: world.localTransformSnapshot(),
+            worldTransforms: world.worldTransformSnapshot(),
             rigidBodies: world.componentSnapshot(RigidBody.self),
             colliders: world.componentSnapshot(Collider.self),
             constraints: world.componentSnapshot(Constraint.self),
