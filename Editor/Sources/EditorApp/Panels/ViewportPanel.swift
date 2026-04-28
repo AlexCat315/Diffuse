@@ -15,6 +15,7 @@ struct ViewportPanel: View {
     var body: some View {
         StoreScope(app.store, select: { state in
             ViewportStateKey(
+                sceneRevision: state.sceneRevision,
                 selectedEntityID: state.selectedEntityID,
                 gizmoMode: state.gizmoMode,
                 gizmoSpace: state.gizmoSpace,
@@ -1499,6 +1500,7 @@ private struct GizmoAxisChip: View {
 }
 
 private struct ViewportStateKey: Hashable {
+    let sceneRevision: UInt64
     let selectedEntityID: UInt64?
     let gizmoMode: EditorGizmoMode
     let gizmoSpace: EditorGizmoSpace
