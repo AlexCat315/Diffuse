@@ -144,6 +144,19 @@ struct RuntimeWorldTests {
         #expect(namedTransforms.map(\ .b.value) == ["First", "Second"])
         #expect(world.query(TransformStub.self, NameStub.self, LocalTransform.self).map(\ .entity) == [first, second])
 
+        let jobSystem = JobSystem(workerCount: 4, minimumChunkSize: 1, label: "test.jobs.query")
+        let parallelTransforms = world.query(TransformStub.self, using: jobSystem)
+        #expect(parallelTransforms.0.map(\ .entity) == [first, second, third])
+        #expect(parallelTransforms.1.executedInParallel)
+
+        let parallelNamedTransforms = world.query(TransformStub.self, NameStub.self, using: jobSystem)
+        #expect(parallelNamedTransforms.0.map(\ .entity) == [first, second])
+        #expect(parallelNamedTransforms.1.executedInParallel)
+
+        let parallelTriples = world.query(TransformStub.self, NameStub.self, LocalTransform.self, using: jobSystem)
+        #expect(parallelTriples.0.map(\ .entity) == [first, second])
+        #expect(parallelTriples.1.executedInParallel)
+
         let updatedCount = world.updateComponents(TransformStub.self) { entity, transform in
             transform.x += Int(entity.index)
             transform.y *= 10
