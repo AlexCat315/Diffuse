@@ -332,6 +332,7 @@ public final class AppRuntime {
         } else {
             layerRenderer.render(tree: graph.renderTree, into: drawList)
         }
+        TooltipOverlayRegistry.drawAll(into: drawList)
         let drawEnd = ProcessInfo.processInfo.systemUptime
 
         do {
@@ -733,6 +734,7 @@ private final class AuxiliaryAppWindow {
                 layerRenderer.render(tree: graph.renderTree, into: drawList)
             }
         }
+        TooltipOverlayRegistry.drawAll(into: drawList)
 
         do {
             try uploadAtlasIfNeeded(false)
