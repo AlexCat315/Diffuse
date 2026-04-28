@@ -42,7 +42,8 @@ struct EditorStatusBar: View {
                 .font(.mono)
                 .foregroundColor(.onSurfaceMuted)
 
-            Spacer(minLength: 0)
+            Divider()
+                .frame(width: 1, height: 14)
 
             Text(aiStatusMessage ?? L("Ready"))
                 .font(.caption)
