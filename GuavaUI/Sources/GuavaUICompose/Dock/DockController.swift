@@ -172,10 +172,19 @@ public final class DockController: @unchecked Sendable {
     /// the proposed target should remain visible / committable.
     public var onAllowDrop: ((DockDropRequest) -> Bool)?
 
+    /// Optional host hook fired immediately before a drag/drop proposal is
+    /// committed. Hosts use this to update semantic state that the layout
+    /// normalizer depends on, such as a panel's current workspace region.
+    public var onCommitDrop: ((DockDropRequest) -> Void)?
+
     /// Optional host policy for whether a leaf can be minimized and which
     /// rail it should collapse into. `nil` means the built-in tab strip does
     /// not render a minimize affordance for that leaf.
     public var onResolveMinimizedEdge: ((DockNodeID) -> DockMinimizedEdge?)?
+
+    /// Small host-owned semantic storage that survives view re-installation
+    /// for the lifetime of this controller. Dock does not read these values.
+    public var semanticStorage: [String: [String: String]] = [:]
 
     /// One entry in the recent-closed-tab history, used by `.reopenLastClosed`
     /// and the default tab context menu's "Reopen Closed Tab" item.
@@ -671,6 +680,10 @@ public final class DockController: @unchecked Sendable {
 
     func allowsDrop(_ request: DockDropRequest) -> Bool {
         onAllowDrop?(request) ?? true
+    }
+
+    func commitDrop(_ request: DockDropRequest) {
+        onCommitDrop?(request)
     }
 
     private func notifyChange() {
