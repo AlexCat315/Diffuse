@@ -5,7 +5,6 @@ import GuavaUICompose
 import GuavaUIRuntime
 import Foundation
 
-/// 编辑器根视图。装配 `DockController` + `PanelRegistry` + 一个三列 `PanelWorkspace`。
 struct EditorRootView: View {
     let app: EditorApplication
     let controller: DockController
@@ -13,93 +12,62 @@ struct EditorRootView: View {
 
     var body: some View {
         StoreScope(app.store) { store in
-            let _: Void = {
-                EditorLocalizationPreferences.language = store.state.language
-                EditorRootViewFactory.localizeDockTitles(in: controller)
-            }()
-            let setPlaybackState: (PlaybackState) -> Void = { next in
-                if store.state.playbackState != next {
-                    store.dispatch(.setPlaybackState(next))
-                }
-            }
-
-            let setWorkspaceMode: (EditorWorkspaceMode) -> Void = { next in
-                guard store.state.workspaceMode != next else { return }
-                let previous = store.state.workspaceMode
-                let previousPreset = store.state.activeLayoutPreset
-                EditorRootViewFactory.saveDockLayout(controller,
-                                                     for: previous,
-                                                     preset: previousPreset)
-                store.dispatch(.setWorkspaceMode(next))
-                let nextPreset = store.state.activeLayoutPreset
-                EditorRootViewFactory.loadLayoutPreset(into: controller,
-                                                      for: next,
-                                                      preset: nextPreset)
-                EditorRootViewFactory.saveShellState(mode: next,
-                                                     preset: nextPreset,
-                                                     themeMode: store.state.themeMode,
-                                                     language: store.state.language,
-                                                     vsyncMode: store.state.vsyncMode)
-            }
-
-            let setLayoutPreset: (EditorLayoutPreset) -> Void = { nextPreset in
-                guard nextPreset != store.state.activeLayoutPreset else { return }
-                let mode = store.state.workspaceMode
-                let previousPreset = store.state.activeLayoutPreset
-                EditorRootViewFactory.saveDockLayout(controller,
-                                                     for: mode,
-                                                     preset: previousPreset)
-                store.dispatch(.setActiveLayoutPreset(nextPreset))
-                EditorRootViewFactory.loadLayoutPreset(into: controller,
-                                                      for: mode,
-                                                      preset: nextPreset)
-                EditorRootViewFactory.saveShellState(mode: mode,
-                                                     preset: nextPreset,
-                                                     themeMode: store.state.themeMode,
-                                                     language: store.state.language,
-                                                     vsyncMode: store.state.vsyncMode)
-            }
-
-            let resetLayout: () -> Void = {
-                let mode = store.state.workspaceMode
-                let preset = store.state.activeLayoutPreset
-                EditorRootViewFactory.resetLayout(into: controller,
-                                                  for: mode,
-                                                  preset: preset)
-                EditorRootViewFactory.saveDockLayout(controller,
-                                                     for: mode,
-                                                     preset: preset)
-                EditorRootViewFactory.saveShellState(mode: mode,
-                                                     preset: preset,
-                                                     themeMode: store.state.themeMode,
-                                                     language: store.state.language,
-                                                     vsyncMode: store.state.vsyncMode)
-            }
-
-            let handleShortcut: (KeyEvent) -> Bool = { key in
-                EditorShortcutHandler.handle(key,
-                                             playbackState: store.state.playbackState,
-                                             setPlaybackState: setPlaybackState,
-                                             setWorkspaceMode: setWorkspaceMode,
-                                             resetLayout: resetLayout,
-                                             openSettings: {
-                                                 app.openSettingsWindow()
-                                             })
-            }
-
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                ShortcutHost(onKeyDown: handleShortcut)
+                ShortcutHost(onKeyDown: { key in
+                    EditorShortcutHandler.handle(key,
+                                                 playbackState: store.state.playbackState,
+                                                 setPlaybackState: { next in if store.state.playbackState != next { store.dispatch(.setPlaybackState(next)) } },
+                                                 setWorkspaceMode: { next in
+                                                     guard store.state.workspaceMode != next else { return }
+                                                     let p = store.state.workspaceMode; let pp = store.state.activeLayoutPreset
+                                                     EditorRootViewFactory.saveDockLayout(controller, for: p, preset: pp)
+                                                     store.dispatch(.setWorkspaceMode(next))
+                                                     let np = store.state.activeLayoutPreset
+                                                     EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: np)
+                                                     EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: store.state.themeMode, language: store.state.language, vsyncMode: store.state.vsyncMode)
+                                                 },
+                                                 resetLayout: {
+                                                     let m = store.state.workspaceMode; let p = store.state.activeLayoutPreset
+                                                     EditorRootViewFactory.resetLayout(into: controller, for: m, preset: p)
+                                                     EditorRootViewFactory.saveDockLayout(controller, for: m, preset: p)
+                                                     EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: store.state.themeMode, language: store.state.language, vsyncMode: store.state.vsyncMode)
+                                                 },
+                                                 openSettings: { app.openSettingsWindow() })
+                })
 
                 EditorMainToolbar(playbackState: store.state.playbackState,
                                   workspaceMode: store.state.workspaceMode,
                                   activeLayoutPreset: store.state.activeLayoutPreset,
-                                  onSetPlaybackState: setPlaybackState,
-                                  onSetWorkspaceMode: setWorkspaceMode,
-                                  onSetLayoutPreset: setLayoutPreset,
-                                  onResetLayout: resetLayout,
-                                  onOpenSettings: {
-                                      app.openSettingsWindow()
-                                  })
+                                  onSetPlaybackState: { next in
+                                      let s = app.store; if s.state.playbackState != next { s.dispatch(.setPlaybackState(next)) }
+                                  },
+                                  onSetWorkspaceMode: { next in
+                                      let s = app.store
+                                      guard s.state.workspaceMode != next else { return }
+                                      let p = s.state.workspaceMode; let pp = s.state.activeLayoutPreset
+                                      EditorRootViewFactory.saveDockLayout(controller, for: p, preset: pp)
+                                      s.dispatch(.setWorkspaceMode(next))
+                                      let np = s.state.activeLayoutPreset
+                                      EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: np)
+                                      EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
+                                  },
+                                  onSetLayoutPreset: { nextPreset in
+                                      let s = app.store
+                                      guard nextPreset != s.state.activeLayoutPreset else { return }
+                                      let m = s.state.workspaceMode; let pp = s.state.activeLayoutPreset
+                                      EditorRootViewFactory.saveDockLayout(controller, for: m, preset: pp)
+                                      s.dispatch(.setActiveLayoutPreset(nextPreset))
+                                      EditorRootViewFactory.loadLayoutPreset(into: controller, for: m, preset: nextPreset)
+                                      EditorRootViewFactory.saveShellState(mode: m, preset: nextPreset, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
+                                  },
+                                  onResetLayout: {
+                                      let s = app.store
+                                      let m = s.state.workspaceMode; let p = s.state.activeLayoutPreset
+                                      EditorRootViewFactory.resetLayout(into: controller, for: m, preset: p)
+                                      EditorRootViewFactory.saveDockLayout(controller, for: m, preset: p)
+                                      EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
+                                  },
+                                  onOpenSettings: { app.openSettingsWindow() })
                 Divider()
 
                 PanelWorkspace(controller: controller,
@@ -118,5 +86,4 @@ struct EditorRootView: View {
             .flex()
         }
     }
-
 }
