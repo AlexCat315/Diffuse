@@ -1120,8 +1120,8 @@ func buildSpatialIndexResource(
     let buildSettings = world.resource(SpatialIndexBuildSettings.self) ?? SpatialIndexBuildSettings()
     let previousIndex = world.resource(SpatialIndexResource.self)
     let entities = world.entities()
-    let colliders = world.componentSnapshot(Collider.self)
-    let worldTransforms = world.worldTransformSnapshot()
+    let colliders = world.componentSnapshot(Collider.self, matching: entities)
+    let worldTransforms = world.worldTransformSnapshot(matching: entities)
 
     let result = jobSystem.parallelCompactMap(items: entities) { entity -> SpatialIndexEntry? in
         guard let collider = colliders[entity],

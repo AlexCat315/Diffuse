@@ -569,22 +569,24 @@ public struct RuntimeWorldSchedule {
     }
 
     private func buildRenderReadView(in world: RuntimeWorld) -> RuntimeRenderReadView {
-        RuntimeRenderReadView(
-            entities: world.entities(),
-            worldTransforms: world.worldTransformSnapshot(),
-            cameras: world.componentSnapshot(CameraComponent.self),
-            renderMeshes: world.componentSnapshot(RenderMeshComponent.self)
+        let entities = world.entities()
+        return RuntimeRenderReadView(
+            entities: entities,
+            worldTransforms: world.worldTransformSnapshot(matching: entities),
+            cameras: world.componentSnapshot(CameraComponent.self, matching: entities),
+            renderMeshes: world.componentSnapshot(RenderMeshComponent.self, matching: entities)
         )
     }
 
     private func buildPhysicsReadView(in world: RuntimeWorld) -> RuntimePhysicsReadView {
-        RuntimePhysicsReadView(
-            entities: world.entities(),
-            localTransforms: world.localTransformSnapshot(),
-            worldTransforms: world.worldTransformSnapshot(),
-            rigidBodies: world.componentSnapshot(RigidBody.self),
-            colliders: world.componentSnapshot(Collider.self),
-            constraints: world.componentSnapshot(Constraint.self)
+        let entities = world.entities()
+        return RuntimePhysicsReadView(
+            entities: entities,
+            localTransforms: world.localTransformSnapshot(matching: entities),
+            worldTransforms: world.worldTransformSnapshot(matching: entities),
+            rigidBodies: world.componentSnapshot(RigidBody.self, matching: entities),
+            colliders: world.componentSnapshot(Collider.self, matching: entities),
+            constraints: world.componentSnapshot(Constraint.self, matching: entities)
         )
     }
 
