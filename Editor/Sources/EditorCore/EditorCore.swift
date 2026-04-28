@@ -96,6 +96,7 @@ public final class EditorApplication {
 
     public func tick(deltaTime: Double) {
         let didUpdateFrameTiming = recordFrameTiming(deltaTime)
+        store.dispatch(.tickFrame(store.state.frameIndex &+ 1))
         let inputEvents = pendingViewportEvents
         pendingViewportEvents.removeAll(keepingCapacity: true)
         inputState.process(inputEvents)

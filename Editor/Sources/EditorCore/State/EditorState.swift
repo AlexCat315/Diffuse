@@ -175,6 +175,7 @@ public struct EditorState: Codable, Sendable {
     public var workspaceMode: EditorWorkspaceMode
     public var activeLayoutPreset: EditorLayoutPreset
     public var sceneRevision: UInt64
+    public var frameIndex: UInt64
     public var windowFocused: Bool
     public var windowMinimized: Bool
     public var windowOccluded: Bool
@@ -202,6 +203,7 @@ public struct EditorState: Codable, Sendable {
         workspaceMode: EditorWorkspaceMode = .level,
         activeLayoutPreset: EditorLayoutPreset = .levelDefault,
         sceneRevision: UInt64 = 0,
+        frameIndex: UInt64 = 0,
         windowFocused: Bool = true,
         windowMinimized: Bool = false,
         windowOccluded: Bool = false,
@@ -246,6 +248,7 @@ public struct EditorState: Codable, Sendable {
         self.pendingConfirmationRequest = pendingConfirmationRequest
         self.aiStatusMessage = aiStatusMessage
         self.aiWarnings = aiWarnings
+        self.frameIndex = frameIndex
     }
 
     public var shouldRender: Bool {
