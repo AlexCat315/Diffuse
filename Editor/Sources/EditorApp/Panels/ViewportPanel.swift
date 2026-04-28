@@ -13,7 +13,15 @@ struct ViewportPanel: View {
     let scene: EditorSceneAdapter
 
     var body: some View {
-        StoreScope(app.store) { store in
+        StoreScope(app.store, select: { state in
+            ViewportStateKey(
+                selectedEntityID: state.selectedEntityID,
+                gizmoMode: state.gizmoMode,
+                gizmoSpace: state.gizmoSpace,
+                shadingMode: state.viewportShadingMode,
+                hasActiveDrag: state.activeAssetDrag != nil
+            )
+        }) { store in
             let surface = app.currentViewportSurfaceState()
             let stats = app.currentRenderStats()
             let timing = app.currentFrameTiming()
@@ -60,16 +68,10 @@ struct ViewportPanel: View {
 
                     ViewportChromeInputBlocker {
                         ViewportInfoBar(surface: surface,
-                                        stats: stats,
-                                        timing: timing,
                                         entity: entity,
                                         gizmoMode: gizmoMode,
                                         gizmoSpace: gizmoSpace,
                                         shadingMode: shadingMode,
-                                        translateSnapEnabled: store.state.translateSnapEnabled,
-                                        rotateSnapEnabled: store.state.rotateSnapEnabled,
-                                        scaleSnapEnabled: store.state.scaleSnapEnabled,
-                                        cmdSelectBehavior: store.state.cmdSelectBehavior,
                                         onSelectGizmoMode: { mode in
                                             if store.state.gizmoMode != mode {
                                                 store.dispatch(.setGizmoMode(mode))
@@ -84,18 +86,6 @@ struct ViewportPanel: View {
                                             if store.state.viewportShadingMode != mode {
                                                 store.dispatch(.setViewportShadingMode(mode))
                                             }
-                                        },
-                                        onToggleTranslateSnap: { enabled in
-                                            store.dispatch(.setTranslateSnapEnabled(enabled))
-                                        },
-                                        onToggleRotateSnap: { enabled in
-                                            store.dispatch(.setRotateSnapEnabled(enabled))
-                                        },
-                                        onToggleScaleSnap: { enabled in
-                                            store.dispatch(.setScaleSnapEnabled(enabled))
-                                        },
-                                        onSetCommandSelectBehavior: { behavior in
-                                            store.dispatch(.setCommandSelectBehavior(behavior))
                                         })
                     }
                         .absolutePosition(left: 10, top: 10)
@@ -1302,51 +1292,16 @@ private struct ViewCubeControl: _PrimitiveView {
 
 private struct ViewportInfoBar: View {
     let surface: ViewportSurfaceState
-    let stats: RenderFrameStats
-    let timing: EditorFrameTiming
     let entity: EditorSceneEntitySummary?
     let gizmoMode: EditorGizmoMode
     let gizmoSpace: EditorGizmoSpace
     let shadingMode: EditorViewportShadingMode
-    let translateSnapEnabled: Bool
-    let rotateSnapEnabled: Bool
-    let scaleSnapEnabled: Bool
-    let cmdSelectBehavior: SelectionCommandBehavior
     let onSelectGizmoMode: (EditorGizmoMode) -> Void
     let onSelectGizmoSpace: (EditorGizmoSpace) -> Void
     let onSelectShadingMode: (EditorViewportShadingMode) -> Void
-    let onToggleTranslateSnap: (Bool) -> Void
-    let onToggleRotateSnap: (Bool) -> Void
-    let onToggleScaleSnap: (Bool) -> Void
-    let onSetCommandSelectBehavior: (SelectionCommandBehavior) -> Void
 
     var body: some View {
-        let cpuMs = Float(stats.cpuFrameTotalNS) / 1_000_000
-        let fps = Float(timing.framesPerSecond)
-        let frameMs = Float(timing.frameMilliseconds)
-        Box(direction: .column, alignItems: .flexStart, spacing: 6) {
-            Row(alignment: .center, spacing: 8) {
-                Text(surface.isValid
-                     ? "\(surface.width) × \(surface.height)"
-                     : "Waiting for first render packet")
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
-
-                if let entity {
-                    Text(entity.name)
-                        .font(.caption)
-                        .foregroundColor(.onSurface)
-                }
-
-                Text(String(format: "FPS %.0f  %.2fms", fps, frameMs))
-                    .font(.mono)
-                    .foregroundColor(.onSurfaceMuted)
-
-                Text(String(format: "CPU %.2fms", cpuMs))
-                    .font(.mono)
-                    .foregroundColor(.onSurfaceMuted)
-            }
-
+        Box(direction: .column, alignItems: .flexStart, spacing: 4) {
             Row(alignment: .center, spacing: 6) {
                 IconButton(resource: ViewportToolbarIcon.cursor.resource,
                            size: 15,
@@ -1380,23 +1335,6 @@ private struct ViewportInfoBar: View {
                     onSelectGizmoSpace(.world)
                 }
 
-                ToggleChip(label: L("T Snap"), isActive: translateSnapEnabled) {
-                    onToggleTranslateSnap(!translateSnapEnabled)
-                }
-                ToggleChip(label: L("R Snap"), isActive: rotateSnapEnabled) {
-                    onToggleRotateSnap(!rotateSnapEnabled)
-                }
-                ToggleChip(label: L("S Snap"), isActive: scaleSnapEnabled) {
-                    onToggleScaleSnap(!scaleSnapEnabled)
-                }
-
-                ToggleChip(label: L("Cmd-Sub"), isActive: cmdSelectBehavior == .subtract) {
-                    onSetCommandSelectBehavior(.subtract)
-                }
-                ToggleChip(label: L("Cmd-Tog"), isActive: cmdSelectBehavior == .toggle) {
-                    onSetCommandSelectBehavior(.toggle)
-                }
-
                 IconButton(resource: ViewportToolbarIcon.lit.resource,
                            size: 15,
                            tooltip: L("Lit")) {
@@ -1409,13 +1347,9 @@ private struct ViewportInfoBar: View {
                     onSelectShadingMode(.wireframe)
                 }
                 .toggleButtonStyle(shadingMode == .wireframe)
-
-                Text("P \(stats.passCount)  D \(stats.drawCallCount)")
-                    .font(.mono)
-                    .foregroundColor(.onSurfaceMuted)
             }
         }
-        .padding(6)
+        .padding(4)
         .background(.surfaceOverlay)
         .cornerRadius(2)
         .border(Color(r: 1, g: 1, b: 1, a: 0.08), width: 1)
@@ -1562,4 +1496,12 @@ private struct GizmoAxisChip: View {
             .background(color)
             .cornerRadius(2)
     }
+}
+
+private struct ViewportStateKey: Hashable {
+    let selectedEntityID: UInt64?
+    let gizmoMode: EditorGizmoMode
+    let gizmoSpace: EditorGizmoSpace
+    let shadingMode: EditorViewportShadingMode
+    let hasActiveDrag: Bool
 }
