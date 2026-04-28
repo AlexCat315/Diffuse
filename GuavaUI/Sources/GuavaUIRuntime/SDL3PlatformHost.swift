@@ -451,9 +451,11 @@ public final class SDL3PlatformHost: PlatformHost {
         case .eventDriven:
             return nil
         case .displayRefresh:
-            let refreshRate = Self.sanitizedOptionalFrameRate(
-                shell.displayRefreshRate(windowID: mainWindowID)
-            ) ?? 60
+            let refreshRate = max(60,
+                Self.sanitizedOptionalFrameRate(
+                    shell.displayRefreshRate(windowID: mainWindowID)
+                ) ?? 60
+            )
             return 1.0 / refreshRate
         case let .fixed(framesPerSecond):
             return 1.0 / Self.sanitizedFrameRate(framesPerSecond)

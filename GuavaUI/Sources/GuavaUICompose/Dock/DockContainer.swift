@@ -82,12 +82,12 @@ struct _StatefulDockContainer: View {
         let bind = $version
         let tag = ObjectIdentifier(controller)
         let _ = ControllerSubscription.acquire(controller: controller,
-                                               tag: tag,
-                                               bind: bind)
+                                                tag: tag,
+                                                bind: bind)
         let _ = ControllerSubscription.acquire(session: controller.dragSession,
-                                               tag: tag,
-                                               bind: bind,
-                                               extraTag: "drag-session")
+                                                tag: tag,
+                                                bind: bind,
+                                                extraTag: "drag-session")
         // Hold the token across recomposes via Node attachments? Not needed —
         // ControllerSubscription dedupes by tag so re-runs are idempotent and
         // we never accumulate handlers.
