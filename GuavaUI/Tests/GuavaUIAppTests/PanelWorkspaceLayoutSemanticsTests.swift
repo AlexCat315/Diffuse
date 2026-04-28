@@ -191,6 +191,46 @@ final class PanelWorkspaceLayoutSemanticsTests: XCTestCase {
         XCTAssertEqual(tabKeys(inLeaf: viewportLeafID, root: controller.root), ["viewport", "console"])
     }
 
+    func testDropIntoMinimizedRegionRestoresRegionLeaves() {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        guard let hierarchyLeafID = leafID(containing: "hierarchy", in: controller.root),
+              let inspectorLeafID = leafID(containing: "inspector", in: controller.root) else {
+            XCTFail("missing expected leaves")
+            return
+        }
+
+        controller.apply(.minimizeLeaf(leafID: hierarchyLeafID, edge: .left))
+        let request = DockDropRequest(tabID: tabs.inspector.id,
+                                      sourceLeafID: inspectorLeafID,
+                                      origin: .mainTreeTab,
+                                      target: .splitEdge(target: controller.root.id, edge: .left))
+
+        controller.onCommitDrop?(request)
+        controller.apply(.move(tabID: tabs.inspector.id, to: request.target))
+        controller.onDidCommitDrop?(request)
+
+        XCTAssertNil(controller.minimizedLeaves[hierarchyLeafID])
+        XCTAssertEqual(leafID(containing: "hierarchy", in: controller.root),
+                       leafID(containing: "inspector", in: controller.root))
+        XCTAssertEqual(Set(tabKeys(inLeaf: leafID(containing: "inspector", in: controller.root)!, root: controller.root)),
+                       Set(["hierarchy", "inspector"]))
+    }
+
     func testAllowDropKeepsCenterRegionFlexible() {
         let tabs = makeTabs()
         let registry = makeRegistry()

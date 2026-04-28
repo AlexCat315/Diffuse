@@ -49,6 +49,75 @@ struct RecomposerTests {
         _ = n
     }
 
+    @Test("commitAll drains child invalidations queued by parent recomposes")
+    func commitDrainsNestedInvalidations() {
+        let r = Recomposer()
+        var log: [Int] = []
+        let parent = Node(), child = Node()
+        let parentID = ObjectIdentifier(parent)
+        let childID = ObjectIdentifier(child)
+
+        r.invalidate(scopeID: parentID) {
+            log.append(1)
+            r.invalidate(scopeID: childID) {
+                log.append(2)
+            }
+        }
+        r.commitAll()
+
+        #expect(log == [1, 2])
+        #expect(r.hasPending == false)
+        _ = (parent, child)
+    }
+
+    @Test("commitAll leaves self-invalidations queued for the next frame")
+    func commitDefersSelfInvalidation() {
+        let r = Recomposer()
+        var callCount = 0
+        let node = Node()
+        let id = ObjectIdentifier(node)
+
+        r.invalidate(scopeID: id) {
+            callCount += 1
+            r.invalidate(scopeID: id) {
+                callCount += 1
+            }
+        }
+        r.commitAll()
+
+        #expect(callCount == 1)
+        #expect(r.hasPending == true)
+
+        r.commitAll()
+        #expect(callCount == 2)
+        #expect(r.hasPending == false)
+        _ = node
+    }
+
+    @Test("commitAll does not retain duplicate invalidations for scopes already queued")
+    func commitDropsDuplicateForAlreadyQueuedChild() {
+        let r = Recomposer()
+        var log: [Int] = []
+        let parent = Node(), child = Node()
+        let parentID = ObjectIdentifier(parent)
+        let childID = ObjectIdentifier(child)
+
+        r.invalidate(scopeID: parentID) {
+            log.append(1)
+            r.invalidate(scopeID: childID) {
+                log.append(3)
+            }
+        }
+        r.invalidate(scopeID: childID) {
+            log.append(2)
+        }
+        r.commitAll()
+
+        #expect(log == [1, 2])
+        #expect(r.hasPending == false)
+        _ = (parent, child)
+    }
+
     @Test("same scopeID is accepted again in the next frame")
     func scopeReusableAcrossFrames() {
         let r = Recomposer()
