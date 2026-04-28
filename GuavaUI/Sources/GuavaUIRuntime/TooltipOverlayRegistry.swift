@@ -14,6 +14,15 @@ public enum TooltipOverlayRegistry {
         draws.removeAll(where: { $0.0 == id })
     }
 
+    public static func contains(_ node: Node) -> Bool {
+        let id = ObjectIdentifier(node)
+        return draws.contains(where: { $0.0 == id })
+    }
+
+    public static func unregisterAll() {
+        draws.removeAll()
+    }
+
     public static func drawAll(into list: DrawList) {
         for (_, draw) in draws {
             draw(list)

@@ -469,13 +469,13 @@ struct _DockLeafMinimizeButtonHost: _PrimitiveView {
                                                     edge: snap.edge))
             }) {
                 Image(resource: Self.icon,
-                      width: 11,
-                      height: 11,
+                      width: 14,
+                      height: 14,
                       tint: .white,
                       contentMode: .fit,
                       renderingMode: .alphaMask)
             }
-            .buttonStyle(_DockTabCloseButtonStyle(isActive: false, size: size))
+            .buttonStyle(_DockTabIconButtonStyle(size: size))
         ]
     }
 }
