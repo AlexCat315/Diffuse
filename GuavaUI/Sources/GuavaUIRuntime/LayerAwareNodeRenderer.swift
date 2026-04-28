@@ -129,7 +129,7 @@ public final class LayerAwareNodeRenderer {
         let childX = originX - Float(node.contentOffset.x)
         let childY = originY - Float(node.contentOffset.y)
         let childClipStack: [UIRect] = clipped ? clipStack + [clipRect!] : clipStack
-        for child in obj.children {
+        for child in renderOrderedChildren(of: obj) {
             // A nested layer root composites separately (cache-aware), so we
             // call `compose` rather than recording inline.
             if child.isLayerRoot {
@@ -231,5 +231,16 @@ public final class LayerAwareNodeRenderer {
     private func applyOpacity(_ color: Color, _ opacity: Float) -> Color {
         guard opacity < 1 else { return color }
         return Color(r: color.r, g: color.g, b: color.b, a: color.a * opacity)
+    }
+
+    private func renderOrderedChildren(of obj: RenderObject) -> [RenderObject] {
+        obj.children.enumerated()
+            .sorted { lhs, rhs in
+                let lhsZ = lhs.element.node?.zIndex ?? 0
+                let rhsZ = rhs.element.node?.zIndex ?? 0
+                if lhsZ == rhsZ { return lhs.offset < rhs.offset }
+                return lhsZ < rhsZ
+            }
+            .map { $0.element }
     }
 }

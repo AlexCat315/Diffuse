@@ -1039,6 +1039,8 @@ private struct ViewportPanelSelection: Hashable {
     let shadingMode: EditorViewportShadingMode
     let sceneRevision: UInt64
     let viewportSurfaceRevision: UInt64
+    let themeMode: EditorThemeMode
+    let language: EditorLanguage
 
     init(_ state: EditorState) {
         self.selectedEntityID = state.selectedEntityID
@@ -1049,6 +1051,8 @@ private struct ViewportPanelSelection: Hashable {
         self.shadingMode = state.viewportShadingMode
         self.sceneRevision = state.sceneRevision
         self.viewportSurfaceRevision = state.viewportSurfaceRevision
+        self.themeMode = state.themeMode
+        self.language = state.language
     }
 }
 

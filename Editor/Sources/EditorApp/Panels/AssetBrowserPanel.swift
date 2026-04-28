@@ -35,9 +35,13 @@ struct AssetBrowserPanel: View {
 
 private struct AssetBrowserPanelSelection: Hashable {
     let activeAssetDragName: String?
+    let themeMode: EditorThemeMode
+    let language: EditorLanguage
 
     init(_ state: EditorState) {
         self.activeAssetDragName = state.activeAssetDrag?.displayName
+        self.themeMode = state.themeMode
+        self.language = state.language
     }
 }
 

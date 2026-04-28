@@ -21,8 +21,10 @@ struct EditorSettingsWindowRoot: View {
 
 private struct SettingsWindowSelection: Hashable {
     let themeMode: EditorThemeMode
+    let language: EditorLanguage
 
     init(_ state: EditorState) {
         self.themeMode = state.themeMode
+        self.language = state.language
     }
 }

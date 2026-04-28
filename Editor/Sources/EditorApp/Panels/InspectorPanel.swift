@@ -320,10 +320,14 @@ private struct InspectorPanelSelection: Hashable {
     let selectedEntityID: UInt64?
     let collapsedIDs: Set<String>
     let sceneRevision: UInt64
+    let themeMode: EditorThemeMode
+    let language: EditorLanguage
 
     init(_ state: EditorState) {
         self.selectedEntityID = state.selectedEntityID
         self.collapsedIDs = state.inspectorCollapsedSectionIDs
         self.sceneRevision = state.sceneRevision
+        self.themeMode = state.themeMode
+        self.language = state.language
     }
 }
