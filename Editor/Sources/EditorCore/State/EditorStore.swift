@@ -1,4 +1,5 @@
 import Foundation
+import GuavaUIRuntime
 
 /// 编辑器状态的可观察容器。
 ///
@@ -42,5 +43,17 @@ public final class EditorStore: @unchecked Sendable {
 
     public func unsubscribe(_ token: SubscriptionToken) {
         subscribers.removeValue(forKey: token)
+    }
+}
+
+extension EditorStore: _ObservableObject {
+    public func _registerObserver(_ handler: @escaping () -> Void) -> AnyHashable {
+        let token = subscribe { _ in handler() }
+        return AnyHashable(token)
+    }
+
+    public func _unregisterObserver(_ tok: AnyHashable) {
+        guard let token = tok.base as? SubscriptionToken else { return }
+        unsubscribe(token)
     }
 }
