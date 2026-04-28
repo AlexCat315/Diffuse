@@ -985,6 +985,9 @@ public struct RuntimeWorld: @unchecked Sendable {
     private func hierarchyReadSnapshot() -> HierarchyReadSnapshot {
         let entities = entities()
         let entitySet = Set(entities)
+        let localTransforms = componentSnapshot(LocalTransform.self, matching: entities)
+        let parents = componentSnapshot(Parent.self, matching: entities)
+        let children = componentSnapshot(Children.self, matching: entities)
 
         var localMatrices: [EntityID: simd_float4x4] = [:]
         localMatrices.reserveCapacity(entities.count)
@@ -994,13 +997,13 @@ public struct RuntimeWorld: @unchecked Sendable {
         childrenByEntity.reserveCapacity(entities.count)
 
         for entity in entities {
-            localMatrices[entity] = components.get(LocalTransform.self, for: entity)?.matrix ?? matrix_identity_float4x4
-            if let parent = components.get(Parent.self, for: entity)?.entity,
+            localMatrices[entity] = localTransforms[entity]?.matrix ?? matrix_identity_float4x4
+            if let parent = parents[entity]?.entity,
                entitySet.contains(parent) {
                 parentByEntity[entity] = parent
             }
-            if let children = components.get(Children.self, for: entity)?.entities {
-                childrenByEntity[entity] = children.filter { entitySet.contains($0) }
+            if let childList = children[entity]?.entities {
+                childrenByEntity[entity] = childList.filter { entitySet.contains($0) }
             }
         }
 
