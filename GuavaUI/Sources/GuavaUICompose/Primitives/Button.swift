@@ -160,21 +160,19 @@ struct ButtonHost: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        // Mirror the latest `isPressed` onto attachments so external test
-        // helpers and inspectors that walked the tree under the old contract
-        // can still read it. Production read path is the `_children(for:)`
-        // configuration field.
         node.attachments[ButtonHost.pressedKey] = isPressed
         node.attachments[ButtonHost.hoveredKey] = isHovered
         node.attachments[ButtonHost.tooltipKey] = tooltip
 
         let resolvedTooltip = tooltip?.trimmingCharacters(in: .whitespacesAndNewlines)
         if isEnabled, let resolvedTooltip, !resolvedTooltip.isEmpty {
-            node.overlayDraw = { [weak node] list, origin in
+            let draw: (DrawList) -> Void = { [weak node] list in
                 guard let node else { return }
                 let isFocused = (FocusChainHolder.current?.focused === node)
                 guard isHovered || isFocused else { return }
                 guard let env = TextEnvironmentHolder.current else { return }
+
+                let origin = absoluteOrigin(of: node)
 
                 let theme = node.theme
                 let tooltipFont = theme.typography.caption.font
@@ -194,7 +192,7 @@ struct ButtonHost: _PrimitiveView {
                 var x = centerX - width * 0.5
                 var y = Float(origin.y) - height - offset
 
-                if let bounds = list.currentClip ?? list.viewportBounds {
+                if let bounds = list.viewportBounds {
                     let inset: Float = 2
                     let minX = bounds.x + inset
                     let maxX = bounds.x + bounds.width - width - inset
@@ -240,8 +238,10 @@ struct ButtonHost: _PrimitiveView {
                              textureID: env.atlasTextureID,
                              atlas: env.atlas)
             }
+
+            TooltipOverlayRegistry.register(node, draw: draw)
         } else {
-            node.overlayDraw = nil
+            TooltipOverlayRegistry.unregister(node)
         }
 
         // Default cursor for buttons: `.pointer` when interactive,
@@ -314,4 +314,16 @@ struct ButtonHost: _PrimitiveView {
     static let pressedKey = "__button_pressed"
     static let hoveredKey = "__button_hovered"
     static let tooltipKey = "__button_tooltip"
+}
+
+private func absoluteOrigin(of node: Node) -> CGPoint {
+    var x: Float = 0
+    var y: Float = 0
+    var current: Node? = node
+    while let n = current {
+        x += Float(n.frame.origin.x)
+        y += Float(n.frame.origin.y)
+        current = n.parent
+    }
+    return CGPoint(x: Double(x), y: Double(y))
 }
