@@ -3,7 +3,12 @@ import GuavaUICompose
 import GuavaUIRuntime
 import Foundation
 
-// MARK: - Toolbar Icon Enum
+extension View {
+    func toggleButtonStyle(_ isActive: Bool) -> some View {
+        compositionLocal(ButtonStyleEnvironment.key,
+                         isActive ? AnyButtonStyle(PrimaryButtonStyle()) : AnyButtonStyle(GhostButtonStyle()))
+    }
+}
 
 enum EditorToolbarIcon: String {
     case plus = "plus"
@@ -31,8 +36,6 @@ enum EditorToolbarIcon: String {
     }
 }
 
-// MARK: - Main Toolbar View
-
 struct EditorMainToolbar: View {
     let playbackState: PlaybackState
     let workspaceMode: EditorWorkspaceMode
@@ -48,19 +51,19 @@ struct EditorMainToolbar: View {
             IconButton(resource: EditorToolbarIcon.plus.resource,
                        size: 15,
                        tooltip: L("New Scene")) {}
-                .buttonStyle(EditorIconButtonStyle(size: 34))
+                .buttonStyle(.ghost)
             IconButton(resource: EditorToolbarIcon.folderOpen.resource,
                        size: 15,
                        tooltip: L("Open Scene...")) {}
-                .buttonStyle(EditorIconButtonStyle(size: 34))
+                .buttonStyle(.ghost)
             IconButton(resource: EditorToolbarIcon.save.resource,
                        size: 15,
                        tooltip: L("Save Scene")) {}
-                .buttonStyle(EditorIconButtonStyle(size: 34))
+                .buttonStyle(.ghost)
             IconButton(resource: EditorToolbarIcon.folder.resource,
                        size: 15,
                        tooltip: L("Import Assets...")) {}
-                .buttonStyle(EditorIconButtonStyle(size: 34))
+                .buttonStyle(.ghost)
 
             Divider()
                 .frame(width: 1, height: 20)
@@ -70,35 +73,35 @@ struct EditorMainToolbar: View {
                        tooltip: L("Play")) {
                 onSetPlaybackState(.playing)
             }
-            .buttonStyle(EditorIconButtonStyle(isActive: playbackState == .playing,
-                                               size: 34))
+            .toggleButtonStyle(playbackState == .playing)
             IconButton(resource: EditorToolbarIcon.pause.resource,
                        size: 15,
                        tooltip: L("Pause")) {
                 onSetPlaybackState(.paused)
             }
-            .buttonStyle(EditorIconButtonStyle(isActive: playbackState == .paused,
-                                               size: 34))
+            .toggleButtonStyle(playbackState == .paused)
             IconButton(resource: EditorToolbarIcon.stop.resource,
                        size: 15,
                        tooltip: L("Stop")) {
                 onSetPlaybackState(.stopped)
             }
-            .buttonStyle(EditorIconButtonStyle(isActive: playbackState == .stopped,
-                                               size: 34))
+            .toggleButtonStyle(playbackState == .stopped)
 
             Divider()
                 .frame(width: 1, height: 20)
 
-            ToolbarStateButton(title: "Level",
-                               isActive: workspaceMode == .level,
-                               onClick: { onSetWorkspaceMode(.level) })
-            ToolbarStateButton(title: "Modeling",
-                               isActive: workspaceMode == .modeling,
-                               onClick: { onSetWorkspaceMode(.modeling) })
-            ToolbarStateButton(title: "Animation",
-                               isActive: workspaceMode == .animation,
-                               onClick: { onSetWorkspaceMode(.animation) })
+            Button(action: { onSetWorkspaceMode(.level) }) {
+                Text("Level").font(.caption)
+            }
+            .toggleButtonStyle(workspaceMode == .level)
+            Button(action: { onSetWorkspaceMode(.modeling) }) {
+                Text("Modeling").font(.caption)
+            }
+            .toggleButtonStyle(workspaceMode == .modeling)
+            Button(action: { onSetWorkspaceMode(.animation) }) {
+                Text("Animation").font(.caption)
+            }
+            .toggleButtonStyle(workspaceMode == .animation)
 
             Divider()
                 .frame(width: 1, height: 20)
@@ -111,18 +114,18 @@ struct EditorMainToolbar: View {
                        size: 15,
                        tooltip: L("Reset Layout"),
                        action: onResetLayout)
-                .buttonStyle(EditorIconButtonStyle(size: 34))
+                .buttonStyle(.ghost)
 
             Spacer(minLength: 0)
             IconButton(resource: EditorToolbarIcon.settings.resource,
                        size: 15,
                        tooltip: L("Settings"),
                        action: onOpenSettings)
-                .buttonStyle(EditorIconButtonStyle(size: 34))
+                .buttonStyle(.ghost)
             IconButton(resource: EditorToolbarIcon.package.resource,
                        size: 15,
                        tooltip: L("Platforms")) {}
-                .buttonStyle(EditorIconButtonStyle(size: 34))
+                .buttonStyle(.ghost)
         }
         .padding(horizontal: 8, vertical: 6)
         .background(.surfaceVariant)

@@ -17,33 +17,27 @@ struct EditorMenuBar: View {
 
             EditorMenuItem(title: L("File"),
                            menuWidth: 220,
-                           entries: fileEntries,
-                           onCommand: onCommand)
+                           entries: fileEntries)
                 .id("editor-menu-file")
             EditorMenuItem(title: L("Edit"),
                            menuWidth: 200,
-                           entries: editEntries,
-                           onCommand: onCommand)
+                           entries: editEntries)
                 .id("editor-menu-edit")
             EditorMenuItem(title: L("Window"),
                            menuWidth: 240,
-                           entries: windowEntries,
-                           onCommand: onCommand)
+                           entries: windowEntries)
                 .id("editor-menu-window")
             EditorMenuItem(title: L("Tools"),
                            menuWidth: 200,
-                           entries: toolsEntries,
-                           onCommand: onCommand)
+                           entries: toolsEntries)
                 .id("editor-menu-tools")
             EditorMenuItem(title: L("Build"),
                            menuWidth: 200,
-                           entries: buildEntries,
-                           onCommand: onCommand)
+                           entries: buildEntries)
                 .id("editor-menu-build")
             EditorMenuItem(title: L("Help"),
                            menuWidth: 220,
-                           entries: helpEntries,
-                           onCommand: onCommand)
+                           entries: helpEntries)
                 .id("editor-menu-help")
 
             Spacer(minLength: 0)
@@ -57,64 +51,64 @@ struct EditorMenuBar: View {
         .background(.surface)
     }
 
-    private var fileEntries: [EditorMenuEntry] {
+    private var fileEntries: [MenuEntry] {
         [
-            .item("new-scene", L("New Scene"), "⌘N", .newScene),
-            .item("open-scene", L("Open Scene..."), "⌘O", .openScene),
-            .item("save-scene", L("Save Scene"), "⌘S", .saveScene),
+            .item(MenuItem(id: "new-scene", title: L("New Scene"), shortcut: "⌘N") { onCommand(.newScene) }),
+            .item(MenuItem(id: "open-scene", title: L("Open Scene..."), shortcut: "⌘O") { onCommand(.openScene) }),
+            .item(MenuItem(id: "save-scene", title: L("Save Scene"), shortcut: "⌘S") { onCommand(.saveScene) }),
             .separator("file-sep-1"),
-            .item("import-assets", L("Import Assets..."), nil, .importAssets),
+            .item(MenuItem(id: "import-assets", title: L("Import Assets...")) { onCommand(.importAssets) }),
         ]
     }
 
-    private var editEntries: [EditorMenuEntry] {
+    private var editEntries: [MenuEntry] {
         [
-            .item("undo", L("Undo"), "⌘Z", .undo),
-            .item("redo", L("Redo"), "⇧⌘Z", .redo),
+            .item(MenuItem(id: "undo", title: L("Undo"), shortcut: "⌘Z") { onCommand(.undo) }),
+            .item(MenuItem(id: "redo", title: L("Redo"), shortcut: "⇧⌘Z") { onCommand(.redo) }),
             .separator("edit-sep-1"),
-            .item("settings", L("Settings"), "⌘,", .openSettings),
+            .item(MenuItem(id: "settings", title: L("Settings"), shortcut: "⌘,") { onCommand(.openSettings) }),
         ]
     }
 
-    private var windowEntries: [EditorMenuEntry] {
+    private var windowEntries: [MenuEntry] {
         [
-            .item("workspace-level", workspaceTitle(for: .level), nil, .setWorkspaceMode(.level)),
-            .item("workspace-modeling", workspaceTitle(for: .modeling), nil, .setWorkspaceMode(.modeling)),
-            .item("workspace-animation", workspaceTitle(for: .animation), nil, .setWorkspaceMode(.animation)),
+            .item(MenuItem(id: "workspace-level", title: workspaceTitle(for: .level)) { onCommand(.setWorkspaceMode(.level)) }),
+            .item(MenuItem(id: "workspace-modeling", title: workspaceTitle(for: .modeling)) { onCommand(.setWorkspaceMode(.modeling)) }),
+            .item(MenuItem(id: "workspace-animation", title: workspaceTitle(for: .animation)) { onCommand(.setWorkspaceMode(.animation)) }),
             .separator("window-sep-1"),
-            .item("preset-level-default", presetTitle(.levelDefault), nil, .setLayoutPreset(.levelDefault)),
-            .item("preset-level-cine", presetTitle(.levelCinematics), nil, .setLayoutPreset(.levelCinematics)),
-            .item("preset-modeling-default", presetTitle(.modelingDefault), nil, .setLayoutPreset(.modelingDefault)),
-            .item("preset-modeling-sculpt", presetTitle(.modelingSculpt), nil, .setLayoutPreset(.modelingSculpt)),
-            .item("preset-animation-default", presetTitle(.animationDefault), nil, .setLayoutPreset(.animationDefault)),
-            .item("preset-animation-seq", presetTitle(.animationSequencer), nil, .setLayoutPreset(.animationSequencer)),
+            .item(MenuItem(id: "preset-level-default", title: presetTitle(.levelDefault)) { onCommand(.setLayoutPreset(.levelDefault)) }),
+            .item(MenuItem(id: "preset-level-cine", title: presetTitle(.levelCinematics)) { onCommand(.setLayoutPreset(.levelCinematics)) }),
+            .item(MenuItem(id: "preset-modeling-default", title: presetTitle(.modelingDefault)) { onCommand(.setLayoutPreset(.modelingDefault)) }),
+            .item(MenuItem(id: "preset-modeling-sculpt", title: presetTitle(.modelingSculpt)) { onCommand(.setLayoutPreset(.modelingSculpt)) }),
+            .item(MenuItem(id: "preset-animation-default", title: presetTitle(.animationDefault)) { onCommand(.setLayoutPreset(.animationDefault)) }),
+            .item(MenuItem(id: "preset-animation-seq", title: presetTitle(.animationSequencer)) { onCommand(.setLayoutPreset(.animationSequencer)) }),
             .separator("window-sep-2"),
-            .item("reset-layout", L("Reset Layout"), nil, .resetLayout),
+            .item(MenuItem(id: "reset-layout", title: L("Reset Layout")) { onCommand(.resetLayout) }),
         ]
     }
 
-    private var toolsEntries: [EditorMenuEntry] {
+    private var toolsEntries: [MenuEntry] {
         [
-            .item("play", playbackTitle(for: .playing), nil, .setPlaybackState(.playing)),
-            .item("pause", playbackTitle(for: .paused), nil, .setPlaybackState(.paused)),
-            .item("stop", playbackTitle(for: .stopped), nil, .setPlaybackState(.stopped)),
+            .item(MenuItem(id: "play", title: playbackTitle(for: .playing)) { onCommand(.setPlaybackState(.playing)) }),
+            .item(MenuItem(id: "pause", title: playbackTitle(for: .paused)) { onCommand(.setPlaybackState(.paused)) }),
+            .item(MenuItem(id: "stop", title: playbackTitle(for: .stopped)) { onCommand(.setPlaybackState(.stopped)) }),
             .separator("tools-sep-1"),
-            .item("toggle-theme", L("Toggle Theme"), nil, .toggleTheme),
+            .item(MenuItem(id: "toggle-theme", title: L("Toggle Theme")) { onCommand(.toggleTheme) }),
         ]
     }
 
-    private var buildEntries: [EditorMenuEntry] {
+    private var buildEntries: [MenuEntry] {
         [
-            .item("build-project", L("Build Editor"), nil, .buildProject),
-            .item("build-run", L("Build and Run"), nil, .buildAndRun),
+            .item(MenuItem(id: "build-project", title: L("Build Editor")) { onCommand(.buildProject) }),
+            .item(MenuItem(id: "build-run", title: L("Build and Run")) { onCommand(.buildAndRun) }),
         ]
     }
 
-    private var helpEntries: [EditorMenuEntry] {
+    private var helpEntries: [MenuEntry] {
         [
-            .item("open-docs", L("Documentation"), nil, .openDocumentation),
+            .item(MenuItem(id: "open-docs", title: L("Documentation")) { onCommand(.openDocumentation) }),
             .separator("help-sep-1"),
-            .item("about", L("About Guava"), nil, .about),
+            .item(MenuItem(id: "about", title: L("About Guava")) { onCommand(.about) }),
         ]
     }
 
@@ -162,4 +156,23 @@ struct EditorMenuBar: View {
             return L("Stop")
         }
     }
+}
+
+enum EditorMenuCommand {
+    case newScene
+    case openScene
+    case saveScene
+    case importAssets
+    case undo
+    case redo
+    case setWorkspaceMode(EditorWorkspaceMode)
+    case setLayoutPreset(EditorLayoutPreset)
+    case resetLayout
+    case setPlaybackState(PlaybackState)
+    case openSettings
+    case toggleTheme
+    case buildProject
+    case buildAndRun
+    case openDocumentation
+    case about
 }
