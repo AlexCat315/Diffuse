@@ -113,6 +113,11 @@ public struct RuntimeWorld: @unchecked Sendable {
         var childrenByEntity: [EntityID: [EntityID]]
     }
 
+    private struct HierarchyReadSnapshotBuild {
+        var snapshot: HierarchyReadSnapshot
+        var report: JobDispatchReport
+    }
+
     private struct EntitySlot {
         var generation: UInt32 = 0
         var isAlive = false
@@ -756,13 +761,14 @@ public struct RuntimeWorld: @unchecked Sendable {
             return JobDispatchReport(jobCount: 0, workerCount: jobSystem.workerCount, executedInParallel: false)
         }
 
-        let snapshot = hierarchyReadSnapshot()
+        let snapshotBuild = hierarchyReadSnapshot(using: jobSystem)
+        let snapshot = snapshotBuild.snapshot
         let entitySet = Set(snapshot.entities)
         var worldMatrices: [EntityID: simd_float4x4] = [:]
         worldMatrices.reserveCapacity(snapshot.entities.count)
         var visited = Set<EntityID>()
-        var totalJobCount = 0
-        var executedInParallel = false
+        var totalJobCount = snapshotBuild.report.jobCount
+        var executedInParallel = snapshotBuild.report.executedInParallel
 
         var roots: [EntityID] = []
         roots.reserveCapacity(snapshot.entities.count)
@@ -982,36 +988,62 @@ public struct RuntimeWorld: @unchecked Sendable {
         }
     }
 
-    private func hierarchyReadSnapshot() -> HierarchyReadSnapshot {
+    private func hierarchyReadSnapshot(using jobSystem: JobSystem) -> HierarchyReadSnapshotBuild {
         let entities = entities()
         let entitySet = Set(entities)
         let localTransforms = componentSnapshot(LocalTransform.self, matching: entities)
         let parents = componentSnapshot(Parent.self, matching: entities)
         let children = componentSnapshot(Children.self, matching: entities)
 
-        var localMatrices: [EntityID: simd_float4x4] = [:]
-        localMatrices.reserveCapacity(entities.count)
-        var parentByEntity: [EntityID: EntityID] = [:]
-        parentByEntity.reserveCapacity(entities.count)
-        var childrenByEntity: [EntityID: [EntityID]] = [:]
-        childrenByEntity.reserveCapacity(entities.count)
-
-        for entity in entities {
-            localMatrices[entity] = localTransforms[entity]?.matrix ?? matrix_identity_float4x4
+        let localMatrixPairs = jobSystem.parallelMap(items: entities) { entity in
+            (entity, localTransforms[entity]?.matrix ?? matrix_identity_float4x4)
+        }
+        let parentPairs = jobSystem.parallelCompactMap(items: entities) { entity -> (EntityID, EntityID)? in
             if let parent = parents[entity]?.entity,
                entitySet.contains(parent) {
-                parentByEntity[entity] = parent
+                return (entity, parent)
             }
-            if let childList = children[entity]?.entities {
-                childrenByEntity[entity] = childList.filter { entitySet.contains($0) }
-            }
+            return nil
+        }
+        let childrenPairs = jobSystem.parallelCompactMap(items: entities) { entity -> (EntityID, [EntityID])? in
+            guard let childList = children[entity]?.entities else { return nil }
+            let liveChildren = childList.filter { entitySet.contains($0) }
+            guard !liveChildren.isEmpty else { return nil }
+            return (entity, liveChildren)
         }
 
-        return HierarchyReadSnapshot(
-            entities: entities,
-            localMatrices: localMatrices,
-            parentByEntity: parentByEntity,
-            childrenByEntity: childrenByEntity
+        var localMatrices: [EntityID: simd_float4x4] = [:]
+        localMatrices.reserveCapacity(entities.count)
+        for (entity, matrix) in localMatrixPairs.0 {
+            localMatrices[entity] = matrix
+        }
+
+        var parentByEntity: [EntityID: EntityID] = [:]
+        parentByEntity.reserveCapacity(parentPairs.0.count)
+        for (entity, parent) in parentPairs.0 {
+            parentByEntity[entity] = parent
+        }
+
+        var childrenByEntity: [EntityID: [EntityID]] = [:]
+        childrenByEntity.reserveCapacity(childrenPairs.0.count)
+        for (entity, children) in childrenPairs.0 {
+            childrenByEntity[entity] = children
+        }
+
+        return HierarchyReadSnapshotBuild(
+            snapshot: HierarchyReadSnapshot(
+                entities: entities,
+                localMatrices: localMatrices,
+                parentByEntity: parentByEntity,
+                childrenByEntity: childrenByEntity
+            ),
+            report: JobDispatchReport(
+                jobCount: localMatrixPairs.1.jobCount + parentPairs.1.jobCount + childrenPairs.1.jobCount,
+                workerCount: jobSystem.workerCount,
+                executedInParallel: localMatrixPairs.1.executedInParallel ||
+                    parentPairs.1.executedInParallel ||
+                    childrenPairs.1.executedInParallel
+            )
         )
     }
 
