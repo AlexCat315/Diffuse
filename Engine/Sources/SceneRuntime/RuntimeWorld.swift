@@ -704,8 +704,8 @@ public struct RuntimeWorld: @unchecked Sendable {
         while !frontier.isEmpty {
             let currentFrontier = frontier
             let parentWorldMatrices = worldMatrices
-            let computed = jobSystem.parallelCompactMap(items: currentFrontier, minimumChunkSize: 1) {
-                entity -> simd_float4x4? in
+            let computed = jobSystem.parallelMap(items: currentFrontier, minimumChunkSize: 1) {
+                entity -> simd_float4x4 in
                 let localMatrix = snapshot.localMatrices[entity] ?? matrix_identity_float4x4
                 let parentMatrix: simd_float4x4
                 if let parent = snapshot.parentByEntity[entity], let cachedParent = parentWorldMatrices[parent] {
