@@ -557,9 +557,29 @@ public struct RuntimeWorld: @unchecked Sendable {
         return components.get(LocalTransform.self, for: entity) ?? .identity
     }
 
+    public func localTransformSnapshot() -> [EntityID: LocalTransform] {
+        let explicitTransforms = components.snapshot(for: LocalTransform.self)
+        var snapshot: [EntityID: LocalTransform] = [:]
+        snapshot.reserveCapacity(entityCount)
+        for entity in entities() {
+            snapshot[entity] = explicitTransforms[entity] ?? .identity
+        }
+        return snapshot
+    }
+
     public func worldTransform(for entity: EntityID) -> WorldTransform? {
         guard contains(entity) else { return nil }
         return components.get(WorldTransform.self, for: entity) ?? .identity
+    }
+
+    public func worldTransformSnapshot() -> [EntityID: WorldTransform] {
+        let explicitTransforms = components.snapshot(for: WorldTransform.self)
+        var snapshot: [EntityID: WorldTransform] = [:]
+        snapshot.reserveCapacity(entityCount)
+        for entity in entities() {
+            snapshot[entity] = explicitTransforms[entity] ?? .identity
+        }
+        return snapshot
     }
 
     public func parent(of entity: EntityID) -> EntityID? {
