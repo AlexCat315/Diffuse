@@ -13,12 +13,9 @@ import GuavaUIRuntime
 /// `apply(node:)` / `apply(layout:)` by the materialiser; they are routed to
 /// `_applyScope(node:)` exclusively.
 public protocol _ScopeApplyingModifier {
-    func _applyScope(node: Node)
+    func _applyScope(node: Node) -> Bool
 }
 
-/// Internal modifier that pushes a `CompositionLocal` value onto the wrapper
-/// node. Idempotent: recompose calls `_applyScope` again, which simply
-/// overwrites the stored value with the latest one provided by the call site.
 public struct _ProvideCompositionLocalModifier<Value>: ViewModifier, _ScopeApplyingModifier {
     public typealias Body = _ViewModifier_Content<Self>
 
@@ -30,8 +27,17 @@ public struct _ProvideCompositionLocalModifier<Value>: ViewModifier, _ScopeApply
         self.value = value
     }
 
-    public func _applyScope(node: Node) {
+    public func _applyScope(node: Node) -> Bool {
+        let cacheKey = "__compLocal_\(ObjectIdentifier(local))"
+        if let hashable = value as? any Hashable {
+            let hash = AnyHashable(hashable)
+            if let cached = node.attachments[cacheKey] as? AnyHashable, cached == hash {
+                return false
+            }
+            node.attachments[cacheKey] = hash
+        }
         node.setCompositionValue(local, value)
+        return true
     }
 }
 

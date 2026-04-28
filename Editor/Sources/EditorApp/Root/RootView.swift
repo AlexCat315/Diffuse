@@ -60,8 +60,7 @@ private struct EditorCallbacks {
 
     init(app: EditorApplication, controller: DockController) {
         self.setPlaybackState = { next in
-            let s = app.store
-            if s.state.playbackState != next { s.dispatch(.setPlaybackState(next)) }
+            let s = app.store; if s.state.playbackState != next { s.dispatch(.setPlaybackState(next)) }
         }
         self.setWorkspaceMode = { next in
             let s = app.store
