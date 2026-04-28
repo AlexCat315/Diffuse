@@ -57,3 +57,16 @@ extension EditorStore: _ObservableObject {
         unsubscribe(token)
     }
 }
+
+extension EditorStore {
+    public var connected: Bool { state.connected }
+    public var sceneRevision: UInt64 { state.sceneRevision }
+    public var frameIndex: UInt64 { state.frameIndex }
+    public var selectedEntityID: UInt64? { state.selectedEntityID }
+    public var selectedEntityIDsCount: Int { state.selectedEntityIDs.count }
+    public var aiStatusMessage: String? { state.aiStatusMessage }
+    public var playbackState: PlaybackState { state.playbackState }
+    public var workspaceMode: EditorWorkspaceMode { state.workspaceMode }
+    public var activeLayoutPreset: EditorLayoutPreset { state.activeLayoutPreset }
+    public var themeMode: EditorThemeMode { state.themeMode }
+}
