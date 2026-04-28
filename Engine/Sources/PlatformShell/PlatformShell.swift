@@ -12,6 +12,20 @@ public enum NativeRenderSurface: @unchecked Sendable {
     case win32Window(hwnd: UnsafeMutableRawPointer, hinstance: UnsafeMutableRawPointer?)
     case xlibWindow(display: UnsafeMutableRawPointer, window: UInt64)
     case waylandSurface(display: UnsafeMutableRawPointer, surface: UnsafeMutableRawPointer)
+
+    public func disableDisplaySync() {
+        #if os(macOS)
+        guard case .metalLayer(let ptr) = self else { return }
+        let layer: AnyObject = Unmanaged<AnyObject>.fromOpaque(ptr).takeUnretainedValue()
+        let sel = Selector(("setDisplaySyncEnabled:"))
+        guard layer.responds(to: sel) else { return }
+        typealias SetDisplaySyncEnabled = @convention(c) (AnyObject, Selector, ObjCBool) -> Void
+        let method = class_getInstanceMethod(type(of: layer), sel)
+        guard let method else { return }
+        let imp = method_getImplementation(method)
+        unsafeBitCast(imp, to: SetDisplaySyncEnabled.self)(layer, sel, false)
+        #endif
+    }
 }
 
 public struct WindowOptions: Sendable, Equatable {

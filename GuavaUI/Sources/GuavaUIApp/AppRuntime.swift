@@ -235,6 +235,7 @@ public final class AppRuntime {
             height: heightPx,
             presentMode: currentPresentMode
         )
+        if !isVSyncEnabled { native.disableDisplaySync() }
         try renderer.configure(format: .bgra8Unorm,
                                sampleCount: config.msaaSampleCount)
         try ensureMSAATarget(widthPx: widthPx, heightPx: heightPx)
@@ -280,18 +281,15 @@ public final class AppRuntime {
     }
 
     private func setVSyncEnabled(_ enabled: Bool) {
-        guard isVSyncEnabled != enabled else {
-            host.setFrameRateMode(enabled ? .displayRefresh : .eventDriven)
-            host.requestDisplay()
-            return
+        let changed = isVSyncEnabled != enabled
+        if changed {
+            isVSyncEnabled = enabled
+            reconfigureMainSurfaceForCurrentPresentMode()
+            for window in auxiliaryWindows.values {
+                window.setPresentMode(currentPresentMode)
+            }
         }
-
-        isVSyncEnabled = enabled
         host.setFrameRateMode(enabled ? .displayRefresh : .eventDriven)
-        reconfigureMainSurfaceForCurrentPresentMode()
-        for window in auxiliaryWindows.values {
-            window.setPresentMode(currentPresentMode)
-        }
         host.requestDisplay()
     }
 
@@ -380,6 +378,7 @@ public final class AppRuntime {
             let buffer = try encoder.finish()
             backend.submit(buffer)
             surface.present()
+            host.requestDisplay()
             let presentEnd = ProcessInfo.processInfo.systemUptime
 
             if let dev = devTools {
