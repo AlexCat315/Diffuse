@@ -1,3 +1,4 @@
+import Foundation
 import GuavaUIRuntime
 
 /// Resolves a `DockTab.userKey` to the View that renders that tab's content.
@@ -245,11 +246,10 @@ struct _DockMinimizedRail: _PrimitiveView {
 
     func _children(for node: Node) -> [any View] {
         items().map { id, leaf in
-            let title = railTitle(for: leaf.node, compact: edge != .bottom)
-            let tooltip = railTitle(for: leaf.node, compact: false)
+            let title = railTitle(for: leaf.node)
             return _DockMinimizedRailItem(edge: edge,
                                           title: title,
-                                          tooltip: tooltip) {
+                                          tooltip: title) {
                 controller.apply(.restoreMinimizedLeaf(id))
             }
         }
@@ -262,20 +262,17 @@ struct _DockMinimizedRail: _PrimitiveView {
         }
     }
 
-    private func railTitle(for node: DockLayoutNode, compact: Bool) -> String {
-        let title: String
+    private func railTitle(for node: DockLayoutNode) -> String {
         switch node {
         case .tabs(_, let tabs, let active):
-            title = active.flatMap { activeID in
+            return active.flatMap { activeID in
                 tabs.first(where: { $0.id == activeID })?.title
             } ?? tabs.first?.title ?? "Panel"
         case .empty:
-            title = "Panel"
+            return "Panel"
         case .split:
-            title = "Group"
+            return "Group"
         }
-        guard compact else { return title }
-        return title.first.map { String($0).uppercased() } ?? "P"
     }
 }
 
@@ -289,12 +286,7 @@ struct _DockMinimizedRailItem: View {
         Button(tooltip: tooltip, action: action) {
             switch edge {
             case .left, .right:
-                Box(direction: .row, alignItems: .center, justifyContent: .center) {
-                    Text(title)
-                        .font(.label)
-                        .foregroundColor(.onSurface)
-                }
-                .frame(width: 32, height: 32)
+                _DockVerticalRailTitle(title: title)
             case .bottom:
                 Box(direction: .row, alignItems: .center, justifyContent: .center) {
                     Text(title)
@@ -305,6 +297,61 @@ struct _DockMinimizedRailItem: View {
             }
         }
         .buttonStyle(_DockMinimizedRailButtonStyle())
+    }
+}
+
+struct _DockVerticalRailTitle: _PrimitiveView {
+    static let kTitleMarker = "DockContainer.minimizedVerticalTitle"
+    static let kTitleValue = "DockContainer.minimizedVerticalTitle.value"
+
+    let title: String
+
+    func _makeNode() -> Node {
+        let n = Node()
+        n.isHitTestable = false
+        n.attachments[Self.kTitleMarker] = true
+        n.attachments[Self.kTitleValue] = title
+        return n
+    }
+
+    func _updateNode(_ node: Node) {
+        node.attachments[Self.kTitleValue] = title
+    }
+
+    func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        layout.flexDirection = .column
+        layout.alignItems = .center
+        layout.justifyContent = .center
+        layout.setGap(1, gutter: .all)
+        layout.setPadding(8, edge: .top)
+        layout.setPadding(8, edge: .bottom)
+        layout.width = 32
+        layout.minHeight = max(72, Float(verticalCharacters.count) * 13 + 16)
+        layout.maxHeight = 220
+        layout.flexShrink = 0
+    }
+
+    func _children(for node: Node) -> [any View] {
+        verticalCharacters.map { char in
+            AnyView(
+                Text(char, alignment: .center)
+                    .font(Font.system(size: 11, weight: .medium))
+                    .lineHeight(12)
+                    .foregroundColor(.onSurface)
+                    .frame(width: 24, height: 12)
+            )
+        }
+    }
+
+    private var verticalCharacters: [String] {
+        let cleaned = title
+            .replacingOccurrences(of: "\n", with: " ")
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        let source = cleaned.isEmpty ? "Panel" : cleaned
+        let chars = source.map { String($0) }
+        return Array(chars.prefix(16))
     }
 }
 
