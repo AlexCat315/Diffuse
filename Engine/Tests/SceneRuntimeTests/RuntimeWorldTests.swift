@@ -502,6 +502,10 @@ struct RuntimeWorldTests {
 
         #expect(report.jobWorkerCount == 4)
         #expect(report.scheduledJobCount >= 4)
+        #expect(report.scheduledJobCount == report.phaseJobCounts.values.reduce(0, +))
+        #expect((report.phaseJobCounts[.fixedPhysicsPrepare] ?? 0) > 0)
+        #expect((report.phaseJobCounts[.spatialIndexUpdate] ?? 0) > 0)
+        #expect((report.phaseJobCounts[.renderExtract] ?? 0) > 0)
         #expect(report.parallelPhases.contains(.fixedPhysicsPrepare))
         #expect(report.parallelPhases.contains(.spatialIndexUpdate))
         #expect(report.parallelPhases.contains(.renderExtract))
