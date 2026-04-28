@@ -147,7 +147,7 @@ public enum EditorVSyncMode: String, Codable, Sendable, CaseIterable {
     }
 }
 
-public struct EditorAssetDragPayload: Codable, Sendable, Equatable {
+public struct EditorAssetDragPayload: Codable, Sendable, Equatable, Hashable {
     public var assetID: String
     public var displayName: String
     public var kindLabel: String
@@ -176,6 +176,7 @@ public struct EditorState: Codable, Sendable {
     public var activeLayoutPreset: EditorLayoutPreset
     public var sceneRevision: UInt64
     public var frameIndex: UInt64
+    public var viewportSurfaceRevision: UInt64
     public var windowFocused: Bool
     public var windowMinimized: Bool
     public var windowOccluded: Bool
@@ -204,6 +205,7 @@ public struct EditorState: Codable, Sendable {
         activeLayoutPreset: EditorLayoutPreset = .levelDefault,
         sceneRevision: UInt64 = 0,
         frameIndex: UInt64 = 0,
+        viewportSurfaceRevision: UInt64 = 0,
         windowFocused: Bool = true,
         windowMinimized: Bool = false,
         windowOccluded: Bool = false,
@@ -230,6 +232,7 @@ public struct EditorState: Codable, Sendable {
         self.workspaceMode = workspaceMode
         self.activeLayoutPreset = activeLayoutPreset
         self.sceneRevision = sceneRevision
+        self.viewportSurfaceRevision = viewportSurfaceRevision
         self.windowFocused = windowFocused
         self.windowMinimized = windowMinimized
         self.windowOccluded = windowOccluded

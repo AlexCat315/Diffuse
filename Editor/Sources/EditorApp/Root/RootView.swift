@@ -12,33 +12,49 @@ struct EditorRootView: View {
 
     var body: some View {
         let cb = EditorCallbacks(app: app, controller: controller)
-        let state = app.store.state
+        StoreScope(app.store, select: EditorRootSelection.init) { store in
+            let state = store.state
 
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            ShortcutHost(onKeyDown: cb.handleShortcut)
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                ShortcutHost(onKeyDown: cb.handleShortcut)
 
-            EditorMainToolbar(playbackState: state.playbackState,
-                              workspaceMode: state.workspaceMode,
-                              activeLayoutPreset: state.activeLayoutPreset,
-                              onSetPlaybackState: cb.setPlaybackState,
-                              onSetWorkspaceMode: cb.setWorkspaceMode,
-                              onSetLayoutPreset: cb.setLayoutPreset,
-                              onResetLayout: cb.resetLayout,
-                              onOpenSettings: cb.openSettings)
-            Divider()
+                EditorMainToolbar(playbackState: state.playbackState,
+                                  workspaceMode: state.workspaceMode,
+                                  activeLayoutPreset: state.activeLayoutPreset,
+                                  onSetPlaybackState: cb.setPlaybackState,
+                                  onSetWorkspaceMode: cb.setWorkspaceMode,
+                                  onSetLayoutPreset: cb.setLayoutPreset,
+                                  onResetLayout: cb.resetLayout,
+                                  onOpenSettings: cb.openSettings)
+                Divider()
 
-            PanelWorkspace(controller: controller,
-                           registry: registry,
-                           semantics: .ide)
-                .flex()
+                PanelWorkspace(controller: controller,
+                               registry: registry,
+                               semantics: .ide)
+                    .flex()
 
-            Divider()
+                Divider()
 
-            EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
+                EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
+            }
+            .appearance(state.themeMode == .dark ? .dark : .light)
+            .background(.background)
+            .flex()
         }
-        .appearance(state.themeMode == .dark ? .dark : .light)
-        .background(.background)
-        .flex()
+    }
+}
+
+private struct EditorRootSelection: Hashable {
+    let playbackState: PlaybackState
+    let workspaceMode: EditorWorkspaceMode
+    let activeLayoutPreset: EditorLayoutPreset
+    let themeMode: EditorThemeMode
+
+    init(_ state: EditorState) {
+        self.playbackState = state.playbackState
+        self.workspaceMode = state.workspaceMode
+        self.activeLayoutPreset = state.activeLayoutPreset
+        self.themeMode = state.themeMode
     }
 }
 

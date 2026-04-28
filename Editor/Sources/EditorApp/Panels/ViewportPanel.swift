@@ -13,10 +13,8 @@ struct ViewportPanel: View {
     let scene: EditorSceneAdapter
 
     var body: some View {
-        StoreScope(app.store) { store in
+        StoreScope(app.store, select: ViewportPanelSelection.init) { store in
             let surface = app.currentViewportSurfaceState()
-            let stats = app.currentRenderStats()
-            let timing = app.currentFrameTiming()
             let entity = scene.entitySummary(id: store.state.selectedEntityID)
             let activeDrag = store.state.activeAssetDrag
             let gizmoMode = store.state.gizmoMode
@@ -1029,6 +1027,38 @@ struct ViewportPanel: View {
     private func wheelZoomRatio(_ wheelDelta: Float) -> Float {
         let scaled = max(-4, min(4, wheelDelta * 1.2))
         return expf(-scaled * 0.16)
+    }
+}
+
+private struct ViewportPanelSelection: Hashable {
+    let selectedEntityID: UInt64?
+    let selectedEntityIDs: Set<UInt64>
+    let activeAssetDrag: AssetDragVisualKey?
+    let gizmoMode: EditorGizmoMode
+    let gizmoSpace: EditorGizmoSpace
+    let shadingMode: EditorViewportShadingMode
+    let sceneRevision: UInt64
+    let viewportSurfaceRevision: UInt64
+
+    init(_ state: EditorState) {
+        self.selectedEntityID = state.selectedEntityID
+        self.selectedEntityIDs = state.selectedEntityIDs
+        self.activeAssetDrag = state.activeAssetDrag.map(AssetDragVisualKey.init)
+        self.gizmoMode = state.gizmoMode
+        self.gizmoSpace = state.gizmoSpace
+        self.shadingMode = state.viewportShadingMode
+        self.sceneRevision = state.sceneRevision
+        self.viewportSurfaceRevision = state.viewportSurfaceRevision
+    }
+}
+
+private struct AssetDragVisualKey: Hashable {
+    let displayName: String
+    let kindLabel: String
+
+    init(_ payload: EditorAssetDragPayload) {
+        self.displayName = payload.displayName
+        self.kindLabel = payload.kindLabel
     }
 }
 

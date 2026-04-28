@@ -57,6 +57,8 @@ enum EditorStoreSubscription {
                 let old = lastValues[valueKey]
                 if old == newValue { return }
                 lastValues[valueKey] = newValue
+                bind.wrappedValue &+= 1
+                return
             }
             if bind.wrappedValue != s.version {
                 bind.wrappedValue = s.version
@@ -65,10 +67,15 @@ enum EditorStoreSubscription {
         var storeTokens = tokens[storeKey] ?? [:]
         storeTokens[scopeKey] = token
         tokens[storeKey] = storeTokens
-        if bind.wrappedValue != store.version {
-            if let select {
-                lastValues[valueKey] = select(store.state)
+
+        if let select {
+            let newValue = select(store.state)
+            let old = lastValues[valueKey]
+            if old != newValue {
+                lastValues[valueKey] = newValue
+                bind.wrappedValue &+= 1
             }
+        } else if bind.wrappedValue != store.version {
             bind.wrappedValue = store.version
         }
     }
