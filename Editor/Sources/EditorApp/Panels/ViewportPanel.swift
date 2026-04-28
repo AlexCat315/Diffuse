@@ -1353,29 +1353,25 @@ private struct ViewportInfoBar: View {
                            tooltip: L("Pick")) {
                     onSelectGizmoMode(.none)
                 }
-                .buttonStyle(EditorIconButtonStyle(isActive: gizmoMode == .none,
-                                                   size: 26))
+                .toggleButtonStyle(gizmoMode == .none)
                 IconButton(resource: ViewportToolbarIcon.translate.resource,
                            size: 15,
                            tooltip: L("Move")) {
                     onSelectGizmoMode(.translate)
                 }
-                .buttonStyle(EditorIconButtonStyle(isActive: gizmoMode == .translate,
-                                                   size: 26))
+                .toggleButtonStyle(gizmoMode == .translate)
                 IconButton(resource: ViewportToolbarIcon.rotate.resource,
                            size: 15,
                            tooltip: L("Rotate")) {
                     onSelectGizmoMode(.rotate)
                 }
-                .buttonStyle(EditorIconButtonStyle(isActive: gizmoMode == .rotate,
-                                                   size: 26))
+                .toggleButtonStyle(gizmoMode == .rotate)
                 IconButton(resource: ViewportToolbarIcon.scale.resource,
                            size: 15,
                            tooltip: L("Scale")) {
                     onSelectGizmoMode(.scale)
                 }
-                .buttonStyle(EditorIconButtonStyle(isActive: gizmoMode == .scale,
-                                                   size: 26))
+                .toggleButtonStyle(gizmoMode == .scale)
 
                 ToggleChip(label: L("Local"), isActive: gizmoSpace == .local) {
                     onSelectGizmoSpace(.local)
@@ -1406,15 +1402,13 @@ private struct ViewportInfoBar: View {
                            tooltip: L("Lit")) {
                     onSelectShadingMode(.lit)
                 }
-                .buttonStyle(EditorIconButtonStyle(isActive: shadingMode == .lit,
-                                                   size: 26))
+                .toggleButtonStyle(shadingMode == .lit)
                 IconButton(resource: ViewportToolbarIcon.wireframe.resource,
                            size: 15,
                            tooltip: L("Wire")) {
                     onSelectShadingMode(.wireframe)
                 }
-                .buttonStyle(EditorIconButtonStyle(isActive: shadingMode == .wireframe,
-                                                   size: 26))
+                .toggleButtonStyle(shadingMode == .wireframe)
 
                 Text("P \(stats.passCount)  D \(stats.drawCallCount)")
                     .font(.mono)
