@@ -152,6 +152,14 @@ public struct RuntimeWorld: @unchecked Sendable {
             return Array(box.values.keys)
         }
 
+        func snapshot<Component: RuntimeComponent>(
+            for type: Component.Type
+        ) -> [EntityID: Component] {
+            let key = ObjectIdentifier(type)
+            guard let box = boxes[key] as? ComponentStoreBox<Component> else { return [:] }
+            return box.values
+        }
+
         func count<Component: RuntimeComponent>(for type: Component.Type) -> Int {
             let key = ObjectIdentifier(type)
             guard let box = boxes[key] as? ComponentStoreBox<Component> else { return 0 }
@@ -383,12 +391,20 @@ public struct RuntimeWorld: @unchecked Sendable {
             .sorted { lhs, rhs in lhs.rawValue < rhs.rawValue }
     }
 
+    public func componentSnapshot<Component: RuntimeComponent>(
+        _ type: Component.Type
+    ) -> [EntityID: Component] {
+        let alive = Set(entities())
+        return components.snapshot(for: type).filter { alive.contains($0.key) }
+    }
+
     public func query<Component: RuntimeComponent>(
         _ type: Component.Type
     ) -> [RuntimeComponentQuery<Component>] {
-        entities()
+        let componentSnapshot = componentSnapshot(type)
+        return entities()
             .compactMap { entity in
-                guard let component = components.get(type, for: entity) else { return nil }
+                guard let component = componentSnapshot[entity] else { return nil }
                 return RuntimeComponentQuery(entity: entity, component: component)
             }
     }
@@ -397,10 +413,12 @@ public struct RuntimeWorld: @unchecked Sendable {
         _ a: A.Type,
         _ b: B.Type
     ) -> [RuntimeComponentPairQuery<A, B>] {
-        entities()
+        let snapshotA = componentSnapshot(a)
+        let snapshotB = componentSnapshot(b)
+        return entities()
             .compactMap { entity in
-                guard let componentA = components.get(a, for: entity),
-                      let componentB = components.get(b, for: entity)
+                guard let componentA = snapshotA[entity],
+                      let componentB = snapshotB[entity]
                 else {
                     return nil
                 }
@@ -413,11 +431,14 @@ public struct RuntimeWorld: @unchecked Sendable {
         _ b: B.Type,
         _ c: C.Type
     ) -> [RuntimeComponentTripleQuery<A, B, C>] {
-        entities()
+        let snapshotA = componentSnapshot(a)
+        let snapshotB = componentSnapshot(b)
+        let snapshotC = componentSnapshot(c)
+        return entities()
             .compactMap { entity in
-                guard let componentA = components.get(a, for: entity),
-                      let componentB = components.get(b, for: entity),
-                      let componentC = components.get(c, for: entity)
+                guard let componentA = snapshotA[entity],
+                      let componentB = snapshotB[entity],
+                      let componentC = snapshotC[entity]
                 else {
                     return nil
                 }

@@ -130,6 +130,7 @@ struct RuntimeWorldTests {
 
         #expect(world.componentCount(TransformStub.self) == 3)
         #expect(world.entities(with: NameStub.self) == [first, second])
+        #expect(world.componentSnapshot(TransformStub.self).keys.sorted { $0.rawValue < $1.rawValue } == [first, second, third])
         #expect(world.query(TransformStub.self).map(\ .entity) == [first, second, third])
 
         let namedTransforms = world.query(TransformStub.self, NameStub.self)
@@ -147,6 +148,10 @@ struct RuntimeWorldTests {
         #expect(world.component(TransformStub.self, for: first) == TransformStub(x: 1, y: 10))
         #expect(world.component(TransformStub.self, for: second) == TransformStub(x: 3, y: 20))
         #expect(world.component(TransformStub.self, for: third) == TransformStub(x: 5, y: 30))
+
+        let destroyedSecond = world.destroyEntity(second)
+        #expect(destroyedSecond)
+        #expect(world.componentSnapshot(TransformStub.self).keys.sorted { $0.rawValue < $1.rawValue } == [first, third])
     }
 
     @Test("World resources are stored independently from entity components")
