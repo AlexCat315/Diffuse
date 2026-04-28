@@ -74,11 +74,12 @@ extension ModifiedContent: _AnyModifiedContent {
         // Mirror the materialise-time wrapping: scope-applying modifiers own a
         // synthetic anchor whose single child carries the wrapped content.
         if let scopeApply = modifier as? _ScopeApplyingModifier {
-            scopeApply._applyScope(node: node)
             node.viewTag = ViewGraph.slotTag(self)
-            graph.reconcileChildren(parent: node,
-                                    layoutParent: layoutParent,
-                                    newViews: [content])
+            if scopeApply._applyScope(node: node) {
+                graph.reconcileChildren(parent: node,
+                                        layoutParent: layoutParent,
+                                        newViews: [content])
+            }
             return
         }
 
