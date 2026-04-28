@@ -1020,12 +1020,9 @@ public struct RuntimeWorld: @unchecked Sendable {
                 parentByEntity: parentByEntity,
                 childrenByEntity: childrenByEntity
             ),
-            report: JobDispatchReport(
-                jobCount: localMatrixPairs.1.jobCount + parentPairs.1.jobCount + childrenPairs.1.jobCount,
-                workerCount: jobSystem.workerCount,
-                executedInParallel: localMatrixPairs.1.executedInParallel ||
-                    parentPairs.1.executedInParallel ||
-                    childrenPairs.1.executedInParallel
+            report: JobDispatchReport.merged(
+                [localMatrixPairs.1, parentPairs.1, childrenPairs.1],
+                workerCount: jobSystem.workerCount
             )
         )
     }

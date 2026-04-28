@@ -1182,11 +1182,7 @@ func buildSpatialIndexResource(
     if let previousIndex, previousIndex.buildConfig == buildConfig {
         let update = previousIndex.updated(entries: result.0, sourceRevision: world.revision, using: jobSystem)
         resource = update.resource
-        report = JobDispatchReport(
-            jobCount: result.1.jobCount + update.report.jobCount,
-            workerCount: jobSystem.workerCount,
-            executedInParallel: result.1.executedInParallel || update.report.executedInParallel
-        )
+        report = JobDispatchReport.merged([result.1, update.report], workerCount: jobSystem.workerCount)
     } else {
         resource = SpatialIndexResource(entries: result.0,
                                        sourceRevision: world.revision,
