@@ -92,6 +92,41 @@ public final class JobSystem: @unchecked Sendable {
         )
     }
 
+    public func parallelMap<Input: Sendable, Output: Sendable>(
+        items: [Input],
+        minimumChunkSize: Int? = nil,
+        _ transform: @escaping @Sendable (Input) -> Output
+    ) -> ([Output], JobDispatchReport) {
+        let chunks = chunkRanges(count: items.count, minimumChunkSize: minimumChunkSize)
+        guard !chunks.isEmpty else {
+            return ([], JobDispatchReport(jobCount: 0, workerCount: workerCount, executedInParallel: false))
+        }
+        if chunks.count == 1 {
+            return (
+                chunks[0].map { index in transform(items[index]) },
+                JobDispatchReport(jobCount: 1, workerCount: workerCount, executedInParallel: false)
+            )
+        }
+
+        let chunkResults = ChunkResultsBox<Output>(count: chunks.count)
+        let group = DispatchGroup()
+
+        for (chunkIndex, range) in chunks.enumerated() {
+            group.enter()
+            queue.async {
+                let output = range.map { index in transform(items[index]) }
+                chunkResults.set(output, at: chunkIndex)
+                group.leave()
+            }
+        }
+        group.wait()
+
+        return (
+            chunkResults.snapshot().flatMap { $0 },
+            JobDispatchReport(jobCount: chunks.count, workerCount: workerCount, executedInParallel: true)
+        )
+    }
+
     private func chunkRanges(count: Int, minimumChunkSize: Int?) -> [Range<Int>] {
         guard count > 0 else { return [] }
 
