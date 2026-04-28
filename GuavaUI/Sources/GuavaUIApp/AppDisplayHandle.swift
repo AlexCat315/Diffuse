@@ -36,6 +36,7 @@ public final class AppDisplayHandle: @unchecked Sendable {
     private var auxiliaryWindowIsOpen: (@MainActor (WindowID) -> Bool)?
     private var setRuntimeTargetFrameRate: (@MainActor (Double?) -> Void)?
     private var setRuntimeFrameRateMode: (@MainActor (PlatformFrameRateMode) -> Void)?
+    private var setRuntimeVSyncEnabled: (@MainActor (Bool) -> Void)?
     private var currentRuntimeDisplayRefreshRate: (@MainActor () -> Double?)?
 
     public init() {}
@@ -53,6 +54,12 @@ public final class AppDisplayHandle: @unchecked Sendable {
     @MainActor
     public func setFrameRateMode(_ mode: PlatformFrameRateMode) {
         setRuntimeFrameRateMode?(mode)
+        requestDisplay()
+    }
+
+    @MainActor
+    public func setVSyncEnabled(_ enabled: Bool) {
+        setRuntimeVSyncEnabled?(enabled)
         requestDisplay()
     }
 
@@ -98,9 +105,11 @@ public final class AppDisplayHandle: @unchecked Sendable {
     @MainActor
     func installRuntimeControls(setTargetFrameRate: @escaping @MainActor (Double?) -> Void,
                                 setFrameRateMode: @escaping @MainActor (PlatformFrameRateMode) -> Void,
+                                setVSyncEnabled: @escaping @MainActor (Bool) -> Void,
                                 currentDisplayRefreshRate: @escaping @MainActor () -> Double?) {
         setRuntimeTargetFrameRate = setTargetFrameRate
         setRuntimeFrameRateMode = setFrameRateMode
+        setRuntimeVSyncEnabled = setVSyncEnabled
         currentRuntimeDisplayRefreshRate = currentDisplayRefreshRate
     }
 }

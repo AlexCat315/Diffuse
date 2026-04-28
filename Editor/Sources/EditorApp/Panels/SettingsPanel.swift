@@ -6,7 +6,7 @@ struct SettingsPanel: View {
     let app: EditorApplication
 
     var body: some View {
-        StoreScope(app.store) { store in
+        StoreScope(app.store, select: SettingsPanelSelection.init) { store in
             ScrollView(.vertical) {
                 Box(direction: .column, alignItems: .stretch, spacing: 14) {
                     SettingsSection(title: L("Appearance")) {
@@ -24,14 +24,17 @@ struct SettingsPanel: View {
                         }
                     }
 
-                    SettingsSection(title: L("Frame Rate")) {
-                        Box(direction: .column, alignItems: .flexStart, spacing: 8) {
-                            Row(alignment: .center, spacing: 8) {
-                                frameRateButton(.unlimited, store: store)
-                                frameRateButton(.fps30, store: store)
-                                frameRateButton(.fps60, store: store)
-                                frameRateButton(.fps120, store: store)
-                            }
+                    SettingsSection(title: L("Vertical Sync")) {
+                        Row(alignment: .center, spacing: 10) {
+                            Toggle(isOn: Binding(get: {
+                                store.state.vsyncMode.isEnabled
+                            }, set: { enabled in
+                                applyVSyncMode(enabled ? .enabled : .disabled, store: store)
+                            }))
+
+                            Text(store.state.vsyncMode.isEnabled ? L("On") : L("Off"))
+                                .font(.caption)
+                                .foregroundColor(.onSurface)
                         }
                     }
 
@@ -75,35 +78,26 @@ struct SettingsPanel: View {
                                              preset: store.state.activeLayoutPreset,
                                              themeMode: store.state.themeMode,
                                              language: store.state.language,
-                                             frameRateLimit: store.state.frameRateLimit)
+                                             vsyncMode: store.state.vsyncMode)
     }
 
-    private func title(for limit: EditorFrameRateLimit) -> String {
-        switch limit {
-        case .unlimited:
-            if let refreshRate = app.currentDisplayRefreshRate() {
-                return String(format: "%@ %.0f FPS", L("System"), refreshRate)
-            }
-            return L("System")
-        case .fps30:
-            return "30 FPS"
-        case .fps60:
-            return "60 FPS"
-        case .fps120:
-            return "120 FPS"
-        case .fps240:
-            return "240 FPS"
-        }
+    private func applyVSyncMode(_ mode: EditorVSyncMode, store: EditorStore) {
+        guard store.state.vsyncMode != mode else { return }
+        store.dispatch(.setVSyncMode(mode))
+        app.applyVSyncMode(mode)
+        applySettingsChange(store)
     }
+}
 
-    private func frameRateButton(_ limit: EditorFrameRateLimit,
-                                 store: EditorStore) -> SettingsChoiceButton {
-        SettingsChoiceButton(title: title(for: limit),
-                             isActive: store.state.frameRateLimit == limit) {
-            store.dispatch(.setFrameRateLimit(limit))
-            app.applyFrameRateLimit(limit)
-            applySettingsChange(store)
-        }
+private struct SettingsPanelSelection: Hashable {
+    let themeMode: EditorThemeMode
+    let language: EditorLanguage
+    let vsyncMode: EditorVSyncMode
+
+    init(_ state: EditorState) {
+        self.themeMode = state.themeMode
+        self.language = state.language
+        self.vsyncMode = state.vsyncMode
     }
 }
 

@@ -96,6 +96,9 @@
 "Light" = "浅色";
 "Frame Rate" = "帧率";
 "Unlimited" = "不限制";
+"Vertical Sync" = "垂直同步";
+"On" = "开启";
+"Off" = "关闭";
 "Language" = "语言";
 "System" = "系统";
 

@@ -24,17 +24,30 @@ public final class DockDragSession {
     }
 
     public struct LeafHit: Sendable, Equatable {
+        public enum Scope: Sendable, Equatable {
+            case leaf
+            case workspace
+        }
+
         public let leafID: DockNodeID
         public let edge: DockEdge
         /// Insertion index when the drop is into the tab strip itself
         /// (`edge == .center` over a tabs leaf may degrade into this when
         /// the pointer is over the strip area). `nil` means "use edge".
         public let tabSlotIndex: Int?
+        public let scope: Scope
+        public let isGuideHit: Bool
 
-        public init(leafID: DockNodeID, edge: DockEdge, tabSlotIndex: Int?) {
+        public init(leafID: DockNodeID,
+                    edge: DockEdge,
+                    tabSlotIndex: Int?,
+                    scope: Scope = .leaf,
+                    isGuideHit: Bool = false) {
             self.leafID = leafID
             self.edge = edge
             self.tabSlotIndex = tabSlotIndex
+            self.scope = scope
+            self.isGuideHit = isGuideHit
         }
     }
 
@@ -341,23 +354,29 @@ public final class DockDragSession {
     public static func resolveDropHit(x: Float, y: Float,
                                       sourceLeafID: DockNodeID?,
                                       registry: DockHitRegistry) -> LeafHit? {
-        let leafHit = resolveLeafDropHit(x: x,
-                                         y: y,
-                                         sourceLeafID: sourceLeafID,
-                                         registry: registry)
-        if let rootGuideHit = resolveRootGuideHit(x: x, y: y, registry: registry),
-           leafHit == nil || leafHit?.edge == .center {
-            return rootGuideHit
+        let leafGuideHit = resolveLeafGuideHit(x: x,
+                                               y: y,
+                                               sourceLeafID: sourceLeafID,
+                                               registry: registry)
+        if leafGuideHit.isInsideGuide {
+            return leafGuideHit.hit
         }
-        if let rootHit = resolveRootEdgeHit(x: x, y: y, registry: registry),
-           leafHit == nil || leafHit?.edge == rootHit.edge {
-            return rootHit
+        if let workspaceGuideHit = resolveWorkspaceGuideHit(x: x,
+                                                            y: y,
+                                                            registry: registry) {
+            return workspaceGuideHit
         }
-        return leafHit
+        if let leafBandHit = resolveLeafBandHit(x: x,
+                                                y: y,
+                                                sourceLeafID: sourceLeafID,
+                                                registry: registry) {
+            return leafBandHit
+        }
+        return resolveWorkspaceEdgeHit(x: x, y: y, registry: registry)
     }
 
-    private static func resolveRootGuideHit(x: Float, y: Float,
-                                            registry: DockHitRegistry) -> LeafHit? {
+    private static func resolveWorkspaceGuideHit(x: Float, y: Float,
+                                                 registry: DockHitRegistry) -> LeafHit? {
         guard let root = registry.rootAt(x: x, y: y) else { return nil }
         return makeWorkspaceDropGuideTiles(in: UIRect(x: root.frame.x,
                                                       y: root.frame.y,
@@ -368,26 +387,49 @@ public final class DockDragSession {
                 return x >= rect.x && x < rect.x + rect.width
                     && y >= rect.y && y < rect.y + rect.height
             })
-            .map { LeafHit(leafID: root.id, edge: $0.edge, tabSlotIndex: nil) }
+            .map {
+                LeafHit(leafID: root.id,
+                        edge: $0.edge,
+                        tabSlotIndex: nil,
+                        scope: .workspace,
+                        isGuideHit: true)
+            }
     }
 
-    private static func resolveLeafDropHit(x: Float, y: Float,
-                                           sourceLeafID: DockNodeID?,
-                                           registry: DockHitRegistry) -> LeafHit? {
-        guard let hit = registry.leafAt(x: x, y: y) else { return nil }
+    private static func resolveLeafGuideHit(x: Float,
+                                            y: Float,
+                                            sourceLeafID: DockNodeID?,
+                                            registry: DockHitRegistry)
+    -> (isInsideGuide: Bool, hit: LeafHit?) {
+        guard let hit = registry.leafAt(x: x, y: y) else {
+            return (false, nil)
+        }
         let f = hit.frame
         let guideRect = UIRect(x: f.x, y: f.y, width: f.width, height: f.height)
-        if let guideEdge = makeDockDropGuideTiles(in: guideRect)
+        guard let guideEdge = makeDockDropGuideTiles(in: guideRect)
             .first(where: { tile in
                 let r = tile.buttonRect
                 return x >= r.x && x < r.x + r.width
                     && y >= r.y && y < r.y + r.height
-            })?.edge {
-            if let src = sourceLeafID, src == hit.id, guideEdge == .center {
-                return nil
-            }
-            return LeafHit(leafID: hit.id, edge: guideEdge, tabSlotIndex: nil)
+            })?.edge else {
+            return (false, nil)
         }
+
+        if let src = sourceLeafID, src == hit.id, guideEdge == .center {
+            return (true, nil)
+        }
+        return (true,
+                LeafHit(leafID: hit.id,
+                        edge: guideEdge,
+                        tabSlotIndex: nil,
+                        isGuideHit: true))
+    }
+
+    private static func resolveLeafBandHit(x: Float, y: Float,
+                                           sourceLeafID: DockNodeID?,
+                                           registry: DockHitRegistry) -> LeafHit? {
+        guard let hit = registry.leafAt(x: x, y: y) else { return nil }
+        let f = hit.frame
         // Edge bands: 25% of the smaller dimension on each side, capped at
         // 64 px so very large leaves don't have an absurdly wide drop band.
         let bandRaw = min(f.width, f.height) * 0.25
@@ -419,9 +461,10 @@ public final class DockDragSession {
         return LeafHit(leafID: hit.id, edge: edge, tabSlotIndex: nil)
     }
 
-    private static func resolveRootEdgeHit(x: Float, y: Float,
-                                           registry: DockHitRegistry) -> LeafHit? {
+    private static func resolveWorkspaceEdgeHit(x: Float, y: Float,
+                                                registry: DockHitRegistry) -> LeafHit? {
         guard let root = registry.rootAt(x: x, y: y) else { return nil }
+        guard registry.leafAt(x: x, y: y) == nil else { return nil }
         let f = root.frame
         let band = max(Float(20), min(Float(32), min(f.width, f.height) * 0.06))
         let leftLimit = f.x + band
@@ -442,7 +485,10 @@ public final class DockDragSession {
             return nil
         }
 
-        return LeafHit(leafID: root.id, edge: edge, tabSlotIndex: nil)
+        return LeafHit(leafID: root.id,
+                       edge: edge,
+                       tabSlotIndex: nil,
+                       scope: .workspace)
     }
 
     public static func resolveAllowedDropHit(x: Float, y: Float,
@@ -512,6 +558,8 @@ public final class DockDragSession {
                                                    controller: DockController,
                                                    registry: DockHitRegistry?) -> LeafHit? {
         guard rootHit.leafID == controller.root.id,
+              rootHit.scope == .workspace,
+              rootHit.isGuideHit == false,
               rootHit.edge != .center,
               let registry,
               let underlyingLeaf = registry.leafAt(x: pointerX, y: pointerY) else {

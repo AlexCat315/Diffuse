@@ -23,6 +23,8 @@ public struct RigidBody: RuntimeComponent, Sendable, Equatable {
     public var mass: Float
     public var linearVelocity: SIMD3<Float>
     public var angularVelocity: SIMD3<Float>
+    public var accumulatedForce: SIMD3<Float>
+    public var accumulatedTorque: SIMD3<Float>
     public var gravityScale: Float
     public var linearDamping: Float
     public var angularDamping: Float
@@ -34,6 +36,8 @@ public struct RigidBody: RuntimeComponent, Sendable, Equatable {
         mass: Float = 1,
         linearVelocity: SIMD3<Float> = .zero,
         angularVelocity: SIMD3<Float> = .zero,
+        accumulatedForce: SIMD3<Float> = .zero,
+        accumulatedTorque: SIMD3<Float> = .zero,
         gravityScale: Float = 1,
         linearDamping: Float = 0.04,
         angularDamping: Float = 0.04,
@@ -44,6 +48,8 @@ public struct RigidBody: RuntimeComponent, Sendable, Equatable {
         self.mass = mass
         self.linearVelocity = linearVelocity
         self.angularVelocity = angularVelocity
+        self.accumulatedForce = accumulatedForce
+        self.accumulatedTorque = accumulatedTorque
         self.gravityScale = gravityScale
         self.linearDamping = linearDamping
         self.angularDamping = angularDamping
@@ -59,22 +65,37 @@ public enum ColliderShape: Sendable, Equatable {
     case mesh(resourceID: String?, center: SIMD3<Float>)
 }
 
+public struct PhysicsMaterial: Sendable, Equatable {
+    public var friction: Float
+    public var restitution: Float
+    public var density: Float
+
+    public init(friction: Float = 0.6, restitution: Float = 0, density: Float = 1) {
+        self.friction = max(0, friction)
+        self.restitution = max(0, min(restitution, 1))
+        self.density = max(0, density)
+    }
+}
+
 public struct Collider: RuntimeComponent, Sendable, Equatable {
     public var shape: ColliderShape
     public var isTrigger: Bool
     public var layerID: UInt16
     public var layerMask: UInt16
+    public var material: PhysicsMaterial
 
     public init(
         shape: ColliderShape,
         isTrigger: Bool = false,
         layerID: UInt16 = 0,
-        layerMask: UInt16 = .max
+        layerMask: UInt16 = .max,
+        material: PhysicsMaterial = PhysicsMaterial()
     ) {
         self.shape = shape
         self.isTrigger = isTrigger
         self.layerID = layerID
         self.layerMask = layerMask
+        self.material = material
     }
 }
 
