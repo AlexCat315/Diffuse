@@ -127,6 +127,11 @@ public struct SpatialQueryStats: Sendable, Equatable {
     }
 }
 
+private enum SpatialIndexEntryChange: Sendable {
+    case entityMismatch
+    case boundsChanged(Int)
+}
+
 public final class SpatialQueryScratch: @unchecked Sendable {
     fileprivate var sceneOverlapHitsBuffer: [SceneOverlapHit] = []
     fileprivate var physicsOverlapHitsBuffer: [PhysicsOverlapHit] = []
@@ -174,32 +179,58 @@ public struct SpatialIndexResource: Sendable, Equatable {
 
     func updated(entries newEntries: [SpatialIndexEntry],
                  sourceRevision: UInt64) -> SpatialIndexResource {
+        updated(entries: newEntries, sourceRevision: sourceRevision, using: .shared).resource
+    }
+
+    func updated(
+        entries newEntries: [SpatialIndexEntry],
+        sourceRevision: UInt64,
+        using jobSystem: JobSystem
+    ) -> (resource: SpatialIndexResource, report: JobDispatchReport) {
         guard newEntries.count == entries.count,
               !newEntries.isEmpty else {
-            return SpatialIndexResource(entries: newEntries,
-                                        sourceRevision: sourceRevision,
-                                        buildConfig: buildConfig)
+            return (
+                SpatialIndexResource(entries: newEntries,
+                                     sourceRevision: sourceRevision,
+                                     buildConfig: buildConfig),
+                JobDispatchReport(jobCount: 0, workerCount: jobSystem.workerCount, executedInParallel: false)
+            )
         }
 
-        var changedEntryIndices: [Int] = []
-        changedEntryIndices.reserveCapacity(max(8, newEntries.count / 20))
-
-        for index in newEntries.indices {
+        let changes = jobSystem.parallelCompactMap(items: Array(newEntries.indices)) { index -> SpatialIndexEntryChange? in
             if entries[index].entity != newEntries[index].entity {
-                return SpatialIndexResource(entries: newEntries,
-                                            sourceRevision: sourceRevision,
-                                            buildConfig: buildConfig)
+                return .entityMismatch
             }
             if entries[index].bounds != newEntries[index].bounds {
-                changedEntryIndices.append(index)
+                return .boundsChanged(index)
             }
+            return nil
+        }
+
+        guard !changes.0.contains(where: {
+            if case .entityMismatch = $0 { return true }
+            return false
+        }) else {
+            return (
+                SpatialIndexResource(entries: newEntries,
+                                     sourceRevision: sourceRevision,
+                                     buildConfig: buildConfig),
+                changes.1
+            )
+        }
+
+        let changedEntryIndices = changes.0.compactMap { change -> Int? in
+            if case let .boundsChanged(index) = change {
+                return index
+            }
+            return nil
         }
 
         if changedEntryIndices.isEmpty {
             var next = self
             next.entries = newEntries
             next.sourceRevision = sourceRevision
-            return next
+            return (next, changes.1)
         }
 
         let changedRatio = Float(changedEntryIndices.count) / Float(newEntries.count)
@@ -212,15 +243,18 @@ public struct SpatialIndexResource: Sendable, Equatable {
                                                         changedEntryIndices: changedEntryIndices,
                                                         triggerRatio: buildConfig.rebuildThreshold)
             if rebuilt {
-                return next
+                return (next, changes.1)
             }
-            return SpatialIndexResource(entries: newEntries,
-                                        sourceRevision: sourceRevision,
-                                        buildConfig: buildConfig)
+            return (
+                SpatialIndexResource(entries: newEntries,
+                                     sourceRevision: sourceRevision,
+                                     buildConfig: buildConfig),
+                changes.1
+            )
         }
 
         next.bvh.refit(entries: newEntries, changedEntryIndices: changedEntryIndices)
-        return next
+        return (next, changes.1)
     }
 }
 
@@ -1120,22 +1154,8 @@ func buildSpatialIndexResource(
     let buildSettings = world.resource(SpatialIndexBuildSettings.self) ?? SpatialIndexBuildSettings()
     let previousIndex = world.resource(SpatialIndexResource.self)
     let entities = world.entities()
-    var mutableColliders: [EntityID: Collider] = [:]
-    var mutableWorldTransforms: [EntityID: WorldTransform] = [:]
-    mutableColliders.reserveCapacity(entities.count)
-    mutableWorldTransforms.reserveCapacity(entities.count)
-
-    for entity in entities {
-        if let collider = world.component(Collider.self, for: entity) {
-            mutableColliders[entity] = collider
-        }
-        if let worldTransform = world.worldTransform(for: entity) {
-            mutableWorldTransforms[entity] = worldTransform
-        }
-    }
-
-    let colliders = mutableColliders
-    let worldTransforms = mutableWorldTransforms
+    let colliders = world.componentSnapshot(Collider.self, matching: entities)
+    let worldTransforms = world.worldTransformSnapshot(matching: entities)
 
     let result = jobSystem.parallelCompactMap(items: entities) { entity -> SpatialIndexEntry? in
         guard let collider = colliders[entity],
@@ -1158,17 +1178,21 @@ func buildSpatialIndexResource(
     let buildConfig = buildSettings.resolvedConfig(entryCount: result.0.count)
 
     let resource: SpatialIndexResource
+    let report: JobDispatchReport
     if let previousIndex, previousIndex.buildConfig == buildConfig {
-        resource = previousIndex.updated(entries: result.0, sourceRevision: world.revision)
+        let update = previousIndex.updated(entries: result.0, sourceRevision: world.revision, using: jobSystem)
+        resource = update.resource
+        report = JobDispatchReport.merged([result.1, update.report], workerCount: jobSystem.workerCount)
     } else {
         resource = SpatialIndexResource(entries: result.0,
                                        sourceRevision: world.revision,
                                        buildConfig: buildConfig)
+        report = result.1
     }
 
     return (
         resource,
-        result.1
+        report
     )
 }
 

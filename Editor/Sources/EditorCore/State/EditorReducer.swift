@@ -2,6 +2,7 @@ import Foundation
 import IntentRuntime
 
 public enum EditorAction: Sendable {
+    case tickFrame(UInt64)  // dispatched every engine frame
     case setConnected(Bool)
     case setSelectedEntity(UInt64?)
     case setPrimarySelectedEntity(UInt64?)
@@ -22,7 +23,7 @@ public enum EditorAction: Sendable {
     case setCommandSelectBehavior(SelectionCommandBehavior)
     case setThemeMode(EditorThemeMode)
     case setLanguage(EditorLanguage)
-    case setFrameRateLimit(EditorFrameRateLimit)
+    case setVSyncMode(EditorVSyncMode)
     case beginAssetDrag(EditorAssetDragPayload)
     case updateAssetDragCursor(x: Float, y: Float)
     case endAssetDrag
@@ -30,8 +31,9 @@ public enum EditorAction: Sendable {
     case setPendingConfirmationRequest(ConfirmationRequestBatch?)
     case setAIStatusMessage(String?)
     case setAIWarnings([String])
-    /// Bump store version when viewport surface snapshot changes so
-    /// ViewportPanel can pull the newest `currentViewportSurfaceState()`.
+    case frameTimingUpdated
+    /// Bump the viewport surface revision so only viewport subscribers pull
+    /// the newest `currentViewportSurfaceState()`.
     case viewportSurfaceUpdated
 }
 
@@ -77,6 +79,8 @@ public enum EditorReducer {
             }
         case let .setSceneRevision(value):
             state.sceneRevision = value
+        case let .tickFrame(n):
+            state.frameIndex = n
         case let .setWindowFocused(value):
             state.windowFocused = value
         case let .setWindowMinimized(value):
@@ -107,8 +111,8 @@ public enum EditorReducer {
         case let .setLanguage(language):
             EditorLocalizationPreferences.language = language
             state.language = language
-        case let .setFrameRateLimit(limit):
-            state.frameRateLimit = limit
+        case let .setVSyncMode(mode):
+            state.vsyncMode = mode
         case let .beginAssetDrag(payload):
             state.activeAssetDrag = payload
         case let .updateAssetDragCursor(x, y):
@@ -130,10 +134,21 @@ public enum EditorReducer {
             state.aiStatusMessage = message
         case let .setAIWarnings(warnings):
             state.aiWarnings = warnings
+        case .frameTimingUpdated:
+            state.frameTimingRevision &+= 1
         case .viewportSurfaceUpdated:
-            // Intentionally no-op: EditorStore.dispatch still bumps `version`,
-            // which retriggers StoreScope and refreshes viewport surface snapshot.
-            break
+            state.viewportSurfaceRevision &+= 1
+        }
+    }
+}
+
+extension EditorAction {
+    var notifiesSubscribers: Bool {
+        switch self {
+        case .tickFrame:
+            return false
+        default:
+            return true
         }
     }
 }

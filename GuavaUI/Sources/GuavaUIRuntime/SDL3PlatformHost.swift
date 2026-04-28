@@ -109,6 +109,13 @@ public enum PlatformFrameRateMode: Sendable, Equatable {
 @MainActor
 public final class SDL3PlatformHost: PlatformHost {
     private static let focusedTextRefreshInterval: Double = 0.25
+    private static let frameTimingLogStride: Int = {
+        guard let raw = ProcessInfo.processInfo.environment["GUAVAUI_FRAME_TIMING_LOG_STRIDE"],
+              let value = Int(raw) else {
+            return 0
+        }
+        return max(0, value)
+    }()
 
     private let title: String
     private let shellFactory: @MainActor () throws -> any Shell
@@ -143,6 +150,7 @@ public final class SDL3PlatformHost: PlatformHost {
     public var externalDisplayRequestDrain: (() -> Bool)?
 
     private var frameRateMode: PlatformFrameRateMode = .eventDriven
+    private var frameTimingLogCounter = 0
 
     public init(title: String = "GuavaUI",
                 recomposer: Recomposer = Recomposer(),
@@ -307,7 +315,7 @@ public final class SDL3PlatformHost: PlatformHost {
                 return frameStart - lastFramePreparationTime >= targetFrameInterval
             }()
             let isCadenceDriven = targetFrameInterval != nil
-            var shouldRunFramePreparation = frameDue
+            let shouldRunFramePreparation = frameDue
             if isCadenceDriven,
                frameDue,
                let mainWindowID,
@@ -418,7 +426,11 @@ public final class SDL3PlatformHost: PlatformHost {
                     "delta=\(deltaText)",
                     "animationsActive=\(animationsActive)",
                 ] + renderSummaries
-                Logger.runtime.info("\(timing.summary(extra: extra))")
+                frameTimingLogCounter &+= 1
+                if Self.frameTimingLogStride > 0,
+                   frameTimingLogCounter % Self.frameTimingLogStride == 0 {
+                    Logger.runtime.debug("\(timing.summary(extra: extra))")
+                }
             }
 
             pruneClosedSessions(using: shell)
@@ -451,9 +463,11 @@ public final class SDL3PlatformHost: PlatformHost {
         case .eventDriven:
             return nil
         case .displayRefresh:
-            let refreshRate = Self.sanitizedOptionalFrameRate(
-                shell.displayRefreshRate(windowID: mainWindowID)
-            ) ?? 60
+            let refreshRate = max(60,
+                Self.sanitizedOptionalFrameRate(
+                    shell.displayRefreshRate(windowID: mainWindowID)
+                ) ?? 60
+            )
             return 1.0 / refreshRate
         case let .fixed(framesPerSecond):
             return 1.0 / Self.sanitizedFrameRate(framesPerSecond)

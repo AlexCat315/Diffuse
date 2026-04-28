@@ -254,6 +254,51 @@ final class PanelWorkspaceLayoutSemanticsTests: XCTestCase {
         XCTAssertEqual(leafID(containing: "hierarchy", in: controller.root), hierarchyLeafID)
     }
 
+    func testMinimizeRestoreKeepsUserResizedFractions() throws {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        var splitIDs = try XCTUnwrap(canonicalSplitIDs(in: controller.root))
+        controller.apply(.resizeSplit(node: splitIDs.leading, fraction: 0.31))
+        splitIDs = try XCTUnwrap(canonicalSplitIDs(in: controller.root))
+        controller.apply(.resizeSplit(node: splitIDs.main, fraction: 0.66))
+        splitIDs = try XCTUnwrap(canonicalSplitIDs(in: controller.root))
+        controller.apply(.resizeSplit(node: splitIDs.bottom, fraction: 0.57))
+
+        guard let hierarchyLeafID = leafID(containing: "hierarchy", in: controller.root),
+              let consoleLeafID = leafID(containing: "console", in: controller.root) else {
+            XCTFail("missing expected leaves")
+            return
+        }
+
+        controller.apply(.minimizeLeaf(leafID: hierarchyLeafID, edge: .left))
+        controller.apply(.restoreMinimizedLeaf(hierarchyLeafID))
+        var fractions = try XCTUnwrap(canonicalFractions(in: controller.root))
+        XCTAssertEqual(fractions.leading, 0.31, accuracy: 0.0001)
+        XCTAssertEqual(fractions.main, 0.66, accuracy: 0.0001)
+        XCTAssertEqual(fractions.bottom, 0.57, accuracy: 0.0001)
+
+        controller.apply(.minimizeLeaf(leafID: consoleLeafID, edge: .bottom))
+        controller.apply(.restoreMinimizedLeaf(consoleLeafID))
+        fractions = try XCTUnwrap(canonicalFractions(in: controller.root))
+        XCTAssertEqual(fractions.leading, 0.31, accuracy: 0.0001)
+        XCTAssertEqual(fractions.main, 0.66, accuracy: 0.0001)
+        XCTAssertEqual(fractions.bottom, 0.57, accuracy: 0.0001)
+    }
+
     func testReinstallPreservesMinimizedLeaves() {
         let tabs = makeTabs()
         let registry = makeRegistry()

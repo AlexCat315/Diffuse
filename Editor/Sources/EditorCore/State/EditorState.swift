@@ -1,19 +1,19 @@
 import Foundation
 import IntentRuntime
 
-public enum PlaybackState: String, Codable, Sendable {
+public enum PlaybackState: String, Codable, Sendable, Hashable {
     case stopped
     case playing
     case paused
 }
 
-public enum EditorWorkspaceMode: String, Codable, Sendable {
+public enum EditorWorkspaceMode: String, Codable, Sendable, Hashable {
     case level
     case modeling
     case animation
 }
 
-public enum EditorLayoutPreset: String, Codable, Sendable {
+public enum EditorLayoutPreset: String, Codable, Sendable, Hashable {
     case levelDefault
     case levelCinematics
     case modelingDefault
@@ -72,19 +72,19 @@ public enum EditorLayoutPreset: String, Codable, Sendable {
     }
 }
 
-public enum EditorGizmoMode: String, Codable, Sendable {
-    case none
+public enum EditorGizmoMode: String, Codable, Sendable, Hashable {
+case none
     case translate
     case rotate
     case scale
 }
 
-public enum EditorGizmoSpace: String, Codable, Sendable {
+public enum EditorGizmoSpace: String, Codable, Sendable, Hashable {
     case local
     case world
 }
 
-public enum EditorViewportShadingMode: String, Codable, Sendable {
+public enum EditorViewportShadingMode: String, Codable, Sendable, Hashable {
     case lit
     case wireframe
 }
@@ -94,7 +94,7 @@ public enum SelectionCommandBehavior: String, Codable, Sendable {
     case toggle
 }
 
-public enum EditorThemeMode: String, Codable, Sendable, CaseIterable {
+public enum EditorThemeMode: String, Codable, Sendable, CaseIterable, Hashable {
     case dark
     case light
 }
@@ -129,30 +129,25 @@ public enum EditorLanguage: String, Codable, Sendable, CaseIterable {
     }
 }
 
-public enum EditorFrameRateLimit: String, Codable, Sendable, CaseIterable {
-    case unlimited
-    case fps30
-    case fps60
-    case fps120
-    case fps240
+public enum EditorVSyncMode: String, Codable, Sendable, CaseIterable {
+    case enabled
+    case disabled
 
-    public var framesPerSecond: Double? {
-        switch self {
-        case .unlimited:
-            return nil
-        case .fps30:
-            return 30
-        case .fps60:
-            return 60
-        case .fps120:
-            return 120
-        case .fps240:
-            return 240
+    public var isEnabled: Bool {
+        self == .enabled
+    }
+
+    public init(legacyFrameRateLimitRawValue rawValue: String) {
+        switch rawValue {
+        case "disabled":
+            self = .disabled
+        default:
+            self = .enabled
         }
     }
 }
 
-public struct EditorAssetDragPayload: Codable, Sendable, Equatable {
+public struct EditorAssetDragPayload: Codable, Sendable, Equatable, Hashable {
     public var assetID: String
     public var displayName: String
     public var kindLabel: String
@@ -180,6 +175,9 @@ public struct EditorState: Codable, Sendable {
     public var workspaceMode: EditorWorkspaceMode
     public var activeLayoutPreset: EditorLayoutPreset
     public var sceneRevision: UInt64
+    public var frameIndex: UInt64
+    public var frameTimingRevision: UInt64
+    public var viewportSurfaceRevision: UInt64
     public var windowFocused: Bool
     public var windowMinimized: Bool
     public var windowOccluded: Bool
@@ -192,7 +190,7 @@ public struct EditorState: Codable, Sendable {
     public var cmdSelectBehavior: SelectionCommandBehavior
     public var themeMode: EditorThemeMode
     public var language: EditorLanguage
-    public var frameRateLimit: EditorFrameRateLimit
+    public var vsyncMode: EditorVSyncMode
     public var activeAssetDrag: EditorAssetDragPayload?
     public var inspectorCollapsedSectionIDs: Set<String>
     public var pendingConfirmationRequest: ConfirmationRequestBatch?
@@ -207,6 +205,9 @@ public struct EditorState: Codable, Sendable {
         workspaceMode: EditorWorkspaceMode = .level,
         activeLayoutPreset: EditorLayoutPreset = .levelDefault,
         sceneRevision: UInt64 = 0,
+        frameIndex: UInt64 = 0,
+        frameTimingRevision: UInt64 = 0,
+        viewportSurfaceRevision: UInt64 = 0,
         windowFocused: Bool = true,
         windowMinimized: Bool = false,
         windowOccluded: Bool = false,
@@ -219,7 +220,7 @@ public struct EditorState: Codable, Sendable {
         cmdSelectBehavior: SelectionCommandBehavior = .subtract,
         themeMode: EditorThemeMode = .dark,
         language: EditorLanguage = .system,
-        frameRateLimit: EditorFrameRateLimit = .unlimited,
+        vsyncMode: EditorVSyncMode = .enabled,
         activeAssetDrag: EditorAssetDragPayload? = nil,
         inspectorCollapsedSectionIDs: Set<String> = [],
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
@@ -233,6 +234,8 @@ public struct EditorState: Codable, Sendable {
         self.workspaceMode = workspaceMode
         self.activeLayoutPreset = activeLayoutPreset
         self.sceneRevision = sceneRevision
+        self.frameTimingRevision = frameTimingRevision
+        self.viewportSurfaceRevision = viewportSurfaceRevision
         self.windowFocused = windowFocused
         self.windowMinimized = windowMinimized
         self.windowOccluded = windowOccluded
@@ -245,12 +248,13 @@ public struct EditorState: Codable, Sendable {
         self.cmdSelectBehavior = cmdSelectBehavior
         self.themeMode = themeMode
         self.language = language
-        self.frameRateLimit = frameRateLimit
+        self.vsyncMode = vsyncMode
         self.activeAssetDrag = activeAssetDrag
         self.inspectorCollapsedSectionIDs = inspectorCollapsedSectionIDs
         self.pendingConfirmationRequest = pendingConfirmationRequest
         self.aiStatusMessage = aiStatusMessage
         self.aiWarnings = aiWarnings
+        self.frameIndex = frameIndex
     }
 
     public var shouldRender: Bool {

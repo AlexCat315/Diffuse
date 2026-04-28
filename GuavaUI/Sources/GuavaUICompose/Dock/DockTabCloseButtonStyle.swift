@@ -39,3 +39,27 @@ struct _DockTabCloseButtonStyle: ButtonStyle {
         .animation(.semantic(.snappy, in: theme), value: configuration.interactionKey)
     }
 }
+
+struct _DockTabIconButtonStyle: ButtonStyle {
+    let size: Float
+
+    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+        let theme = configuration.theme
+        let clear = Color(r: 0, g: 0, b: 0, a: 0)
+        let bg: Color = {
+            if !configuration.isEnabled { return clear }
+            if configuration.isPressed { return theme.colors.stateLayerPressed }
+            if configuration.isHovered { return theme.colors.stateLayerHover }
+            return clear
+        }()
+
+        return Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            AnyView(configuration.label)
+        }
+        .frame(width: size, height: size)
+        .background(bg)
+        .cornerRadius(theme.radius.sm)
+        .opacity(configuration.isEnabled ? 1 : 0.55)
+        .animation(.semantic(.snappy, in: theme), value: configuration.interactionKey)
+    }
+}

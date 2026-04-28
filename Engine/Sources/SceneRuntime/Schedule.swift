@@ -72,6 +72,7 @@ public struct RuntimeScheduleReport: Sendable {
     public var scheduledJobCount: Int
     public var jobWorkerCount: Int
     public var parallelPhases: [RuntimeSystemPhase]
+    public var phaseJobCounts: [RuntimeSystemPhase: Int]
     public var revision: UInt64
 
     public init(
@@ -88,6 +89,7 @@ public struct RuntimeScheduleReport: Sendable {
         scheduledJobCount: Int = 0,
         jobWorkerCount: Int = 1,
         parallelPhases: [RuntimeSystemPhase] = [],
+        phaseJobCounts: [RuntimeSystemPhase: Int] = [:],
         revision: UInt64 = 0
     ) {
         self.phases = phases
@@ -103,7 +105,12 @@ public struct RuntimeScheduleReport: Sendable {
         self.scheduledJobCount = scheduledJobCount
         self.jobWorkerCount = jobWorkerCount
         self.parallelPhases = parallelPhases
+        self.phaseJobCounts = phaseJobCounts
         self.revision = revision
+    }
+
+    public func jobCount(for phase: RuntimeSystemPhase) -> Int {
+        phaseJobCounts[phase] ?? 0
     }
 }
 
@@ -118,13 +125,18 @@ public struct RuntimeWorldSchedule {
         var constraints: [EntityID: PhysicsConstraintDescriptor] = [:]
     }
 
-    private struct RuntimeReadView {
+    private struct RuntimePhysicsReadView {
         var entities: [EntityID]
         var localTransforms: [EntityID: LocalTransform]
         var worldTransforms: [EntityID: WorldTransform]
         var rigidBodies: [EntityID: RigidBody]
         var colliders: [EntityID: Collider]
         var constraints: [EntityID: Constraint]
+    }
+
+    private struct RuntimeRenderReadView {
+        var entities: [EntityID]
+        var worldTransforms: [EntityID: WorldTransform]
         var cameras: [EntityID: CameraComponent]
         var renderMeshes: [EntityID: RenderMeshComponent]
     }
@@ -196,6 +208,16 @@ public struct RuntimeWorldSchedule {
         var physicsContactCount = 0
         var scheduledJobCount = 0
         var parallelPhases = Set<RuntimeSystemPhase>()
+        var phaseJobCounts: [RuntimeSystemPhase: Int] = [:]
+
+        func recordJobReport(_ report: JobDispatchReport, for phase: RuntimeSystemPhase) {
+            guard report.jobCount > 0 else { return }
+            scheduledJobCount += report.jobCount
+            phaseJobCounts[phase, default: 0] += report.jobCount
+            if report.executedInParallel {
+                parallelPhases.insert(phase)
+            }
+        }
 
         var activeBodies: [PhysicsBodyDescriptor] = []
         var activeConstraints: [PhysicsConstraintDescriptor] = []
@@ -223,10 +245,7 @@ public struct RuntimeWorldSchedule {
                 }
             case .hierarchyPropagate:
                 let report = world.propagateTransforms(using: jobSystem)
-                scheduledJobCount += report.jobCount
-                if report.executedInParallel {
-                    parallelPhases.insert(.hierarchyPropagate)
-                }
+                recordJobReport(report, for: .hierarchyPropagate)
             case .fixedPhysicsPrepare:
                 guard physicsSettings.simulationMode != .off else {
                     physicsBackend.reset()
@@ -238,14 +257,13 @@ public struct RuntimeWorldSchedule {
                     continue
                 }
 
-                let bodyCollection = collectPhysicsBodies(in: world)
+                let physicsReadView = buildPhysicsReadView(in: world)
+                let bodyCollection = collectPhysicsBodies(from: physicsReadView)
                 activeBodies = bodyCollection.bodies
-                let constraintCollection = collectPhysicsConstraints(in: world)
+                let constraintCollection = collectPhysicsConstraints(from: physicsReadView)
                 activeConstraints = constraintCollection.constraints
-                scheduledJobCount += bodyCollection.report.jobCount + constraintCollection.report.jobCount
-                if bodyCollection.report.executedInParallel || constraintCollection.report.executedInParallel {
-                    parallelPhases.insert(.fixedPhysicsPrepare)
-                }
+                recordJobReport(bodyCollection.report, for: .fixedPhysicsPrepare)
+                recordJobReport(constraintCollection.report, for: .fixedPhysicsPrepare)
                 physicsBodyCount = activeBodies.count
                 physicsConstraintCount = activeConstraints.count
                 let syncEventDiff = diffPhysicsSyncEvents(
@@ -253,10 +271,7 @@ public struct RuntimeWorldSchedule {
                     constraints: activeConstraints
                 )
                 syncEvents = syncEventDiff.events
-                scheduledJobCount += syncEventDiff.report.jobCount
-                if syncEventDiff.report.executedInParallel {
-                    parallelPhases.insert(.fixedPhysicsPrepare)
-                }
+                recordJobReport(syncEventDiff.report, for: .fixedPhysicsPrepare)
                 let prepareContext = PhysicsPrepareContext(
                     settings: physicsSettings,
                     deltaTimeSeconds: deltaTimeSeconds,
@@ -302,12 +317,12 @@ public struct RuntimeWorldSchedule {
                         physicsWritebackCount += 1
                     }
                 }
+                if physicsStepCount > 0 {
+                    _ = world.clearPhysicsAccumulators(for: activeBodies.map(\ .entity))
+                }
                 if physicsWritebackCount > 0 {
                     let report = world.propagateTransforms(using: jobSystem)
-                    scheduledJobCount += report.jobCount
-                    if report.executedInParallel {
-                        parallelPhases.insert(.physicsWriteback)
-                    }
+                    recordJobReport(report, for: .physicsWriteback)
                 }
                 physicsFrameState = PhysicsFrameStateResource(
                     backendIdentifier: physicsBackend.identifier,
@@ -335,26 +350,17 @@ public struct RuntimeWorldSchedule {
                 }
                 if world.hierarchyNeedsPropagation() {
                     let report = world.propagateTransforms(using: jobSystem)
-                    scheduledJobCount += report.jobCount
-                    if report.executedInParallel {
-                        parallelPhases.insert(.animationAndScripts)
-                    }
+                    recordJobReport(report, for: .animationAndScripts)
                 }
             case .spatialIndexUpdate:
                 let spatialIndexBuild = buildSpatialIndexResource(in: world, using: jobSystem)
                 world.setDerivedResource(spatialIndexBuild.resource)
-                scheduledJobCount += spatialIndexBuild.report.jobCount
-                if spatialIndexBuild.report.executedInParallel {
-                    parallelPhases.insert(.spatialIndexUpdate)
-                }
+                recordJobReport(spatialIndexBuild.report, for: .spatialIndexUpdate)
                 break
             case .renderExtract:
                 let renderExtraction = extractRenderScene(in: world)
                 world.setDerivedResource(renderExtraction.resource)
-                scheduledJobCount += renderExtraction.report.jobCount
-                if renderExtraction.report.executedInParallel {
-                    parallelPhases.insert(.renderExtract)
-                }
+                recordJobReport(renderExtraction.report, for: .renderExtract)
                 break
             }
         }
@@ -375,6 +381,7 @@ public struct RuntimeWorldSchedule {
             scheduledJobCount: scheduledJobCount,
             jobWorkerCount: jobSystem.workerCount,
             parallelPhases: RuntimeSystemPhase.allCases.filter { parallelPhases.contains($0) },
+            phaseJobCounts: phaseJobCounts,
             revision: world.revision
         )
     }
@@ -388,9 +395,8 @@ public struct RuntimeWorldSchedule {
     }
 
     private func collectPhysicsBodies(
-        in world: RuntimeWorld
+        from view: RuntimePhysicsReadView
     ) -> (bodies: [PhysicsBodyDescriptor], report: JobDispatchReport) {
-        let view = buildReadView(in: world)
         let result = jobSystem.parallelCompactMap(items: view.entities) { entity -> PhysicsBodyDescriptor? in
             let rigidBody = view.rigidBodies[entity]
             let collider = view.colliders[entity]
@@ -412,9 +418,8 @@ public struct RuntimeWorldSchedule {
     }
 
     private func collectPhysicsConstraints(
-        in world: RuntimeWorld
+        from view: RuntimePhysicsReadView
     ) -> (constraints: [PhysicsConstraintDescriptor], report: JobDispatchReport) {
-        let view = buildReadView(in: world)
         let result = jobSystem.parallelCompactMap(items: view.entities) { entity -> PhysicsConstraintDescriptor? in
             guard let constraint = view.constraints[entity],
                   let worldTransform = view.worldTransforms[entity]
@@ -488,7 +493,7 @@ public struct RuntimeWorldSchedule {
     private func extractRenderScene(
         in world: RuntimeWorld
     ) -> (resource: ExtractedRenderSceneResource, report: JobDispatchReport) {
-        let view = buildReadView(in: world)
+        let view = buildRenderReadView(in: world)
         let cameraSelection = selectRenderCamera(from: view)
         let instanceCollection = collectRenderInstances(from: view)
         let instances = instanceCollection.instances
@@ -507,7 +512,7 @@ public struct RuntimeWorldSchedule {
     }
 
     private func selectRenderCamera(
-        from view: RuntimeReadView
+        from view: RuntimeRenderReadView
     ) -> (entity: EntityID?, camera: RenderCamera, report: JobDispatchReport) {
         let candidates = jobSystem.parallelCompactMap(items: view.entities) { entity -> (EntityID, RenderCamera, Bool)? in
             guard let component = view.cameras[entity] else {
@@ -540,7 +545,7 @@ public struct RuntimeWorldSchedule {
     }
 
     private func collectRenderInstances(
-        from view: RuntimeReadView
+        from view: RuntimeRenderReadView
     ) -> (instances: [ExtractedRenderInstance], report: JobDispatchReport) {
         let result = jobSystem.parallelCompactMap(items: view.entities) { entity -> ExtractedRenderInstance? in
             guard let renderMesh = view.renderMeshes[entity],
@@ -561,65 +566,29 @@ public struct RuntimeWorldSchedule {
         return (result.0, result.1)
     }
 
-    private func buildReadView(in world: RuntimeWorld) -> RuntimeReadView {
+    private func buildRenderReadView(in world: RuntimeWorld) -> RuntimeRenderReadView {
         let entities = world.entities()
-        var localTransforms: [EntityID: LocalTransform] = [:]
-        var worldTransforms: [EntityID: WorldTransform] = [:]
-        var rigidBodies: [EntityID: RigidBody] = [:]
-        var colliders: [EntityID: Collider] = [:]
-        var constraints: [EntityID: Constraint] = [:]
-        var cameras: [EntityID: CameraComponent] = [:]
-        var renderMeshes: [EntityID: RenderMeshComponent] = [:]
-
-        localTransforms.reserveCapacity(entities.count)
-        worldTransforms.reserveCapacity(entities.count)
-        rigidBodies.reserveCapacity(entities.count)
-        colliders.reserveCapacity(entities.count)
-        constraints.reserveCapacity(entities.count)
-        cameras.reserveCapacity(entities.count)
-        renderMeshes.reserveCapacity(entities.count)
-
-        for entity in entities {
-            if let local = world.localTransform(for: entity) {
-                localTransforms[entity] = local
-            }
-            if let worldTransform = world.worldTransform(for: entity) {
-                worldTransforms[entity] = worldTransform
-            }
-            if let rigidBody = world.component(RigidBody.self, for: entity) {
-                rigidBodies[entity] = rigidBody
-            }
-            if let collider = world.component(Collider.self, for: entity) {
-                colliders[entity] = collider
-            }
-            if let constraint = world.component(Constraint.self, for: entity) {
-                constraints[entity] = constraint
-            }
-            if let camera = world.component(CameraComponent.self, for: entity) {
-                cameras[entity] = camera
-            }
-            if let renderMesh = world.component(RenderMeshComponent.self, for: entity) {
-                renderMeshes[entity] = renderMesh
-            }
-        }
-
-        return RuntimeReadView(
+        return RuntimeRenderReadView(
             entities: entities,
-            localTransforms: localTransforms,
-            worldTransforms: worldTransforms,
-            rigidBodies: rigidBodies,
-            colliders: colliders,
-            constraints: constraints,
-            cameras: cameras,
-            renderMeshes: renderMeshes
+            worldTransforms: world.worldTransformSnapshot(matching: entities),
+            cameras: world.componentSnapshot(CameraComponent.self, matching: entities),
+            renderMeshes: world.componentSnapshot(RenderMeshComponent.self, matching: entities)
+        )
+    }
+
+    private func buildPhysicsReadView(in world: RuntimeWorld) -> RuntimePhysicsReadView {
+        let entities = world.entities()
+        return RuntimePhysicsReadView(
+            entities: entities,
+            localTransforms: world.localTransformSnapshot(matching: entities),
+            worldTransforms: world.worldTransformSnapshot(matching: entities),
+            rigidBodies: world.componentSnapshot(RigidBody.self, matching: entities),
+            colliders: world.componentSnapshot(Collider.self, matching: entities),
+            constraints: world.componentSnapshot(Constraint.self, matching: entities)
         )
     }
 
     private func mergeDispatchReports(_ reports: [JobDispatchReport]) -> JobDispatchReport {
-        JobDispatchReport(
-            jobCount: reports.reduce(0) { $0 + $1.jobCount },
-            workerCount: jobSystem.workerCount,
-            executedInParallel: reports.contains(where: \ .executedInParallel)
-        )
+        JobDispatchReport.merged(reports, workerCount: jobSystem.workerCount)
     }
 }

@@ -10,6 +10,17 @@ public struct JobDispatchReport: Sendable, Equatable {
         self.workerCount = workerCount
         self.executedInParallel = executedInParallel
     }
+
+    public static func merged(
+        _ reports: [JobDispatchReport],
+        workerCount: Int
+    ) -> JobDispatchReport {
+        JobDispatchReport(
+            jobCount: reports.reduce(0) { $0 + $1.jobCount },
+            workerCount: workerCount,
+            executedInParallel: reports.contains(where: \ .executedInParallel)
+        )
+    }
 }
 
 public final class JobSystem: @unchecked Sendable {
@@ -80,6 +91,41 @@ public final class JobSystem: @unchecked Sendable {
             group.enter()
             queue.async {
                 let output = range.compactMap { index in transform(items[index]) }
+                chunkResults.set(output, at: chunkIndex)
+                group.leave()
+            }
+        }
+        group.wait()
+
+        return (
+            chunkResults.snapshot().flatMap { $0 },
+            JobDispatchReport(jobCount: chunks.count, workerCount: workerCount, executedInParallel: true)
+        )
+    }
+
+    public func parallelMap<Input: Sendable, Output: Sendable>(
+        items: [Input],
+        minimumChunkSize: Int? = nil,
+        _ transform: @escaping @Sendable (Input) -> Output
+    ) -> ([Output], JobDispatchReport) {
+        let chunks = chunkRanges(count: items.count, minimumChunkSize: minimumChunkSize)
+        guard !chunks.isEmpty else {
+            return ([], JobDispatchReport(jobCount: 0, workerCount: workerCount, executedInParallel: false))
+        }
+        if chunks.count == 1 {
+            return (
+                chunks[0].map { index in transform(items[index]) },
+                JobDispatchReport(jobCount: 1, workerCount: workerCount, executedInParallel: false)
+            )
+        }
+
+        let chunkResults = ChunkResultsBox<Output>(count: chunks.count)
+        let group = DispatchGroup()
+
+        for (chunkIndex, range) in chunks.enumerated() {
+            group.enter()
+            queue.async {
+                let output = range.map { index in transform(items[index]) }
                 chunkResults.set(output, at: chunkIndex)
                 group.leave()
             }

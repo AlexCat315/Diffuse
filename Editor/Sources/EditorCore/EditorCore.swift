@@ -37,8 +37,7 @@ public final class EditorApplication {
     private var lastViewportSurfaceState = ViewportSurfaceState()
     private var openSettingsWindowHandler: (() -> Void)?
     private var displayInvalidationHandler: (() -> Void)?
-    private var frameRateLimitHandler: ((EditorFrameRateLimit) -> Void)?
-    private var displayRefreshRateProvider: (() -> Double?)?
+    private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
     private var frameTiming = EditorFrameTiming()
@@ -97,6 +96,7 @@ public final class EditorApplication {
 
     public func tick(deltaTime: Double) {
         let didUpdateFrameTiming = recordFrameTiming(deltaTime)
+        store.dispatch(.tickFrame(store.state.frameIndex &+ 1))
         let inputEvents = pendingViewportEvents
         pendingViewportEvents.removeAll(keepingCapacity: true)
         inputState.process(inputEvents)
@@ -113,8 +113,9 @@ public final class EditorApplication {
         if surface != lastViewportSurfaceState {
             lastViewportSurfaceState = surface
             store.dispatch(.viewportSurfaceUpdated)
-        } else if didUpdateFrameTiming {
-            store.dispatch(.viewportSurfaceUpdated)
+        }
+        if didUpdateFrameTiming {
+            store.dispatch(.frameTimingUpdated)
         }
     }
 
@@ -157,20 +158,12 @@ public final class EditorApplication {
         displayInvalidationHandler?()
     }
 
-    public func setFrameRateLimitHandler(_ handler: ((EditorFrameRateLimit) -> Void)?) {
-        frameRateLimitHandler = handler
+    public func setVSyncModeHandler(_ handler: ((EditorVSyncMode) -> Void)?) {
+        vsyncModeHandler = handler
     }
 
-    public func applyFrameRateLimit(_ limit: EditorFrameRateLimit) {
-        frameRateLimitHandler?(limit)
-    }
-
-    public func setDisplayRefreshRateProvider(_ provider: (() -> Double?)?) {
-        displayRefreshRateProvider = provider
-    }
-
-    public func currentDisplayRefreshRate() -> Double? {
-        displayRefreshRateProvider?()
+    public func applyVSyncMode(_ mode: EditorVSyncMode) {
+        vsyncModeHandler?(mode)
     }
 
     /// 把资产生成到场景中，并把新实体设为当前选中。
