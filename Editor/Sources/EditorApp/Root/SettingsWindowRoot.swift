@@ -7,7 +7,7 @@ struct EditorSettingsWindowRoot: View {
     let app: EditorApplication
 
     var body: some View {
-        StoreScope(app.store) { store in
+        StoreScope(app.store, select: SettingsWindowSelection.init) { store in
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 SettingsPanel(app: app)
                     .flex()
@@ -16,5 +16,13 @@ struct EditorSettingsWindowRoot: View {
             .background(.background)
             .flex()
         }
+    }
+}
+
+private struct SettingsWindowSelection: Hashable {
+    let themeMode: EditorThemeMode
+
+    init(_ state: EditorState) {
+        self.themeMode = state.themeMode
     }
 }

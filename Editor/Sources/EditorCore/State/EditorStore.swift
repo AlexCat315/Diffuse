@@ -62,6 +62,7 @@ extension EditorStore {
     public var connected: Bool { state.connected }
     public var sceneRevision: UInt64 { state.sceneRevision }
     public var frameIndex: UInt64 { state.frameIndex }
+    public var viewportSurfaceRevision: UInt64 { state.viewportSurfaceRevision }
     public var selectedEntityID: UInt64? { state.selectedEntityID }
     public var selectedEntityIDsCount: Int { state.selectedEntityIDs.count }
     public var aiStatusMessage: String? { state.aiStatusMessage }

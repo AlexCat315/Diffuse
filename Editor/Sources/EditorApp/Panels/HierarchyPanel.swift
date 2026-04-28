@@ -26,7 +26,7 @@ struct HierarchyPanel: View {
     }
 
     var body: some View {
-        StoreScope(store) { store in
+        StoreScope(store, select: HierarchyPanelSelection.init) { store in
             let hierarchyRoots = scene.roots
             let keysByID = Self.keyIndex(in: hierarchyRoots)
             let selectionKey = Binding<TreeNodeKey<UInt64>?>(
@@ -283,6 +283,20 @@ struct HierarchyPanel: View {
                                             roots: [EditorSceneNode]) -> Set<TreeNodeKey<UInt64>> {
         let keysByID = keyIndex(in: roots)
         return Set(defaultIDs.compactMap { keysByID[$0]?.first })
+    }
+}
+
+private struct HierarchyPanelSelection: Hashable {
+    let connected: Bool
+    let sceneRevision: UInt64
+    let selectedEntityID: UInt64?
+    let selectedEntityIDs: Set<UInt64>
+
+    init(_ state: EditorState) {
+        self.connected = state.connected
+        self.sceneRevision = state.sceneRevision
+        self.selectedEntityID = state.selectedEntityID
+        self.selectedEntityIDs = state.selectedEntityIDs
     }
 }
 

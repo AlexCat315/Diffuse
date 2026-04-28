@@ -31,8 +31,8 @@ public enum EditorAction: Sendable {
     case setPendingConfirmationRequest(ConfirmationRequestBatch?)
     case setAIStatusMessage(String?)
     case setAIWarnings([String])
-    /// Bump store version when viewport surface snapshot changes so
-    /// ViewportPanel can pull the newest `currentViewportSurfaceState()`.
+    /// Bump the viewport surface revision so only viewport subscribers pull
+    /// the newest `currentViewportSurfaceState()`.
     case viewportSurfaceUpdated
 }
 
@@ -134,9 +134,7 @@ public enum EditorReducer {
         case let .setAIWarnings(warnings):
             state.aiWarnings = warnings
         case .viewportSurfaceUpdated:
-            // Intentionally no-op: EditorStore.dispatch still bumps `version`,
-            // which retriggers StoreScope and refreshes viewport surface snapshot.
-            break
+            state.viewportSurfaceRevision &+= 1
         }
     }
 }
