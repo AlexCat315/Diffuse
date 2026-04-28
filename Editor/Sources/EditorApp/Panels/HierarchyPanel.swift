@@ -291,12 +291,16 @@ private struct HierarchyPanelSelection: Hashable {
     let sceneRevision: UInt64
     let selectedEntityID: UInt64?
     let selectedEntityIDs: Set<UInt64>
+    let themeMode: EditorThemeMode
+    let language: EditorLanguage
 
     init(_ state: EditorState) {
         self.connected = state.connected
         self.sceneRevision = state.sceneRevision
         self.selectedEntityID = state.selectedEntityID
         self.selectedEntityIDs = state.selectedEntityIDs
+        self.themeMode = state.themeMode
+        self.language = state.language
     }
 }
 

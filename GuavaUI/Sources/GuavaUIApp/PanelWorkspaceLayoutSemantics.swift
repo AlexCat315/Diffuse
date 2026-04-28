@@ -402,16 +402,7 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
 
         guard sourceRegion == targetRegion else { return false }
 
-        if sourceRegion == .center {
-            return true
-        }
-
-        switch request.target {
-        case .splitEdge:
-            return false
-        case .tabSlot, .replace:
-            return true
-        }
+        return true
     }
 
     private static func sourceRegion(for request: DockDropRequest,

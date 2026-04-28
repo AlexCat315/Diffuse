@@ -75,11 +75,13 @@ enum EditorRootViewFactory {
                                preset: EditorLayoutPreset) -> DockController {
         // Try to restore saved layout, otherwise create default
         if let saved = loadSavedLayout(for: mode, preset: preset) {
+            localizeDockTitles(in: saved)
             return saved
         }
         if mode == .level,
            preset == .levelDefault,
            let legacy = loadLegacySavedLayout() {
+            localizeDockTitles(in: legacy)
             return legacy
         }
         return makeDefaultController(for: mode, preset: preset)
@@ -182,10 +184,12 @@ enum EditorRootViewFactory {
                                  preset: EditorLayoutPreset) {
         if let saved = loadSavedLayout(for: mode, preset: preset) {
             controller.load(saved.snapshot())
+            localizeDockTitles(in: controller)
             return
         }
         let fallback = makeDefaultController(for: mode, preset: preset)
         controller.load(fallback.snapshot())
+        localizeDockTitles(in: controller)
     }
 
     static func resetLayout(into controller: DockController,

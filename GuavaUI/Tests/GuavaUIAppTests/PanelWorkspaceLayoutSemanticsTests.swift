@@ -148,6 +148,34 @@ final class PanelWorkspaceLayoutSemanticsTests: XCTestCase {
         XCTAssertEqual(controller.onAllowDrop?(request), true)
     }
 
+    func testAllowDropKeepsPanelRegionGuidesInteractive() {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        guard let consoleLeafID = leafID(containing: "console", in: controller.root) else {
+            XCTFail("missing console leaf")
+            return
+        }
+        let request = DockDropRequest(tabID: tabs.console.id,
+                                      sourceLeafID: consoleLeafID,
+                                      origin: .mainTreeTab,
+                                      target: .splitEdge(target: consoleLeafID, edge: .left))
+        XCTAssertEqual(controller.onAllowDrop?(request), true)
+    }
+
     func testSemanticRegionLeafIDsStayStableAcrossCanonicalization() {
         let tabs = makeTabs()
         let registry = makeRegistry()

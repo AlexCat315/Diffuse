@@ -94,12 +94,16 @@ private struct IntentInputPanelSelection: Hashable {
     let aiStatusMessage: String?
     let aiWarnings: [String]
     let sceneRevision: UInt64
+    let themeMode: EditorThemeMode
+    let language: EditorLanguage
 
     init(_ state: EditorState) {
         self.selectedEntityID = state.selectedEntityID
         self.aiStatusMessage = state.aiStatusMessage
         self.aiWarnings = state.aiWarnings
         self.sceneRevision = state.sceneRevision
+        self.themeMode = state.themeMode
+        self.language = state.language
     }
 }
 

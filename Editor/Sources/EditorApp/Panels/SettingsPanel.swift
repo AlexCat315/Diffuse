@@ -43,19 +43,16 @@ struct SettingsPanel: View {
                             SettingsChoiceButton(title: L("System"),
                                                  isActive: store.state.language == .system) {
                                 store.dispatch(.setLanguage(.system))
-                                EditorLocalizationPreferences.language = .system
                                 applySettingsChange(store)
                             }
                             SettingsChoiceButton(title: "English",
                                                  isActive: store.state.language == .english) {
                                 store.dispatch(.setLanguage(.english))
-                                EditorLocalizationPreferences.language = .english
                                 applySettingsChange(store)
                             }
                             SettingsChoiceButton(title: "简体中文",
                                                  isActive: store.state.language == .simplifiedChinese) {
                                 store.dispatch(.setLanguage(.simplifiedChinese))
-                                EditorLocalizationPreferences.language = .simplifiedChinese
                                 applySettingsChange(store)
                             }
                         }

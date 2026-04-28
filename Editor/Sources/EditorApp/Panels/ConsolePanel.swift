@@ -8,7 +8,7 @@ struct ConsolePanel: View {
         StoreScope(store, select: ConsolePanelSelection.init) { store in
             Box(direction: .column, alignItems: .stretch, spacing: 8) {
                 Row(alignment: .center, spacing: 8) {
-                    Text(store.state.connected ? "Connected" : "Offline")
+                    Text(store.state.connected ? L("Connected") : L("Offline"))
                         .font(.caption)
                         .foregroundColor(store.state.connected ? .success : .warning)
 
@@ -41,11 +41,15 @@ private struct ConsolePanelSelection: Hashable {
     let sceneRevision: UInt64
     let playbackState: PlaybackState
     let selectedEntityID: UInt64?
+    let themeMode: EditorThemeMode
+    let language: EditorLanguage
 
     init(_ state: EditorState) {
         self.connected = state.connected
         self.sceneRevision = state.sceneRevision
         self.playbackState = state.playbackState
         self.selectedEntityID = state.selectedEntityID
+        self.themeMode = state.themeMode
+        self.language = state.language
     }
 }

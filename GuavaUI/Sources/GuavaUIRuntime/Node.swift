@@ -178,6 +178,17 @@ public final class Node: @unchecked Sendable {
         }
     }
 
+    /// Paint/input stacking order among siblings. Higher values render later
+    /// and receive hit-testing first. Equal values preserve tree order.
+    public var zIndex: Float = 0 {
+        didSet {
+            if oldValue != zIndex {
+                markRenderDirty(reason: .styleSet(field: "zIndex"))
+                parent?.inputNode?.scene?.invalidateHitCache()
+            }
+        }
+    }
+
     /// Optional custom-draw hook invoked after the background fill but before
     /// recursing into children. The closure receives the active `DrawList` and
     /// the node's absolute origin (top-left in viewport space).
