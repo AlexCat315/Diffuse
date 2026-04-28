@@ -122,6 +122,9 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
 
     @Test("IconButton tooltip installs host overlay draw")
     func tooltipInstallsOverlayDraw() { GlobalTestLock.locked {
+        TooltipOverlayRegistry.unregisterAll()
+        defer { TooltipOverlayRegistry.unregisterAll() }
+
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry
 
@@ -136,11 +139,13 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
             Issue.record("no ButtonHost found in tree"); return
         }
         #expect((host.attachments[ButtonHost.tooltipKey] as? String) == "Pin")
-        #expect(host.overlayDraw != nil)
+        #expect(TooltipOverlayRegistry.contains(host))
     } }
 
     @Test("Button tooltip flips below top-edge controls")
     func tooltipFlipsBelowTopEdgeControls() { GlobalTestLock.locked {
+        TooltipOverlayRegistry.unregisterAll()
+        defer { TooltipOverlayRegistry.unregisterAll() }
         TextEnvironmentHolder.current = TestTextEnvironmentFactory.make(size: 12, lineHeight: 16)
         defer { TextEnvironmentHolder.current = nil }
 
@@ -160,7 +165,7 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
 
         let list = DrawList()
         list.setViewportBounds(UIRect(x: 0, y: 0, width: 200, height: 120))
-        node.overlayDraw?(list, CGPoint(x: 10, y: 0))
+        TooltipOverlayRegistry.drawAll(into: list)
 
         let minY = list.vertices.map(\.posY).min() ?? -1
         #expect(minY >= 30)

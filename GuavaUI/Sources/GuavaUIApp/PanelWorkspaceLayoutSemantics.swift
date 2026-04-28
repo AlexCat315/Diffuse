@@ -52,8 +52,11 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
                 return nil
             }
         }
-        controller.layoutNormalizer = { [registry] root in
-            state.captureFractionsIfCanonical(from: root, registry: registry)
+        controller.layoutNormalizer = { [registry, weak controller] root in
+            let minimizedIDs = Set(controller.map { Array($0.minimizedLeaves.keys) } ?? [])
+            if !Self.containsAnyLeaf(in: root, ids: minimizedIDs) {
+                state.captureFractionsIfCanonical(from: root, registry: registry)
+            }
             state.captureLeafIDs(from: root, registry: registry)
             return Self.normalize(root: root,
                                   registry: registry,
@@ -78,6 +81,12 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         var bottom: Float
     }
 
+    private struct CapturedFractions {
+        var leading: Float?
+        var main: Float?
+        var bottom: Float?
+    }
+
     private final class LayoutState {
         var fractions: Fractions
         private var regionLeafIDs: [PanelWorkspaceRegion: DockNodeID] = [:]
@@ -96,7 +105,15 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
                                                                                 registry: registry) else {
                 return
             }
-            fractions = captured
+            if let leading = captured.leading {
+                fractions.leading = leading
+            }
+            if let main = captured.main {
+                fractions.main = main
+            }
+            if let bottom = captured.bottom {
+                fractions.bottom = bottom
+            }
         }
 
         func captureLeafIDs(from root: DockLayoutNode,
@@ -278,7 +295,7 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
     }
 
     private static func captureFractions(from root: DockLayoutNode,
-                                         registry: PanelRegistry) -> Fractions? {
+                                         registry: PanelRegistry) -> CapturedFractions? {
         let collected = collectRegions(from: root, registry: registry)
         guard collected.hasAnyTabs else { return nil }
 
@@ -287,7 +304,7 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         let wantsBottom = !collected.bottom.tabs.isEmpty
         let allowEmptyCenter = true
 
-        var fractions = Fractions(leading: 0.22, main: 0.78, bottom: 0.72)
+        var fractions = CapturedFractions()
         let workspaceRoot: DockLayoutNode
 
         if wantsLeading {
@@ -358,6 +375,20 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
             }
         case .split:
             return false
+        }
+    }
+
+    private static func containsAnyLeaf(in node: DockLayoutNode,
+                                        ids: Set<DockNodeID>) -> Bool {
+        guard !ids.isEmpty else { return false }
+        switch node {
+        case .empty:
+            return false
+        case .tabs(let id, _, _):
+            return ids.contains(id)
+        case .split(_, _, _, let first, let second):
+            return containsAnyLeaf(in: first, ids: ids)
+                || containsAnyLeaf(in: second, ids: ids)
         }
     }
 
