@@ -162,6 +162,49 @@ struct DockMinimizeTests: GuavaUIComposeSerializedSuite {
         _ = graph
     } }
 
+    @Test("side rail renders every tab from a minimized multi-tab leaf")
+    func sideRailRendersEveryTabInMinimizedLeaf() { GlobalTestLock.locked {
+        InteractionRegistryHolder.current = InteractionRegistry()
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let hierarchy = DockTab(userKey: "hierarchy", title: "Hierarchy")
+        let assets = DockTab(userKey: "assets", title: "Assets")
+        let center = DockTab(userKey: "center", title: "Center")
+        let sideLeaf = DockLayoutNode.tabs([hierarchy, assets], active: assets.id)
+        let centerLeaf = DockLayoutNode.tabs([center])
+        let controller = DockController(root: .hsplit(first: sideLeaf, second: centerLeaf))
+        controller.onResolveMinimizedEdge = { leafID in
+            leafID == sideLeaf.id ? .left : nil
+        }
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller, content: { key in
+            AnyView(Text("content:\(key)"))
+        }))
+        graph.computeLayout(width: 600, height: 400)
+
+        controller.apply(.minimizeLeaf(leafID: sideLeaf.id, edge: .left))
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 600, height: 400)
+
+        let titles = collect(tree.root!) { node in
+            node.attachments[_DockVerticalRailTitle.kTitleMarker] as? Bool == true
+        }.compactMap {
+            $0.attachments[_DockVerticalRailTitle.kTitleValue] as? String
+        }
+        #expect(titles == ["Hierarchy", "Assets"])
+
+        controller.restoreMinimizedLeaf(sideLeaf.id, activating: hierarchy.id)
+        guard case .split(_, _, _, let restored, _) = controller.root,
+              case .tabs(_, _, let active) = restored else {
+            Issue.record("expected restored side leaf")
+            return
+        }
+        #expect(active == hierarchy.id)
+        _ = graph
+    } }
+
     @Test("minimized rails stay anchored to container edges")
     func minimizedRailsStayAnchoredToContainerEdges() { GlobalTestLock.locked {
         InteractionRegistryHolder.current = InteractionRegistry()

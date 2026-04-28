@@ -245,12 +245,13 @@ struct _DockMinimizedRail: _PrimitiveView {
     }
 
     func _children(for node: Node) -> [any View] {
-        items().map { id, leaf in
-            let title = railTitle(for: leaf.node)
+        railItems().map { item in
+            let title = item.title
             return _DockMinimizedRailItem(edge: edge,
                                           title: title,
                                           tooltip: title) {
-                controller.apply(.restoreMinimizedLeaf(id))
+                controller.restoreMinimizedLeaf(item.leafID,
+                                                activating: item.tabID)
             }
         }
     }
@@ -272,6 +273,30 @@ struct _DockMinimizedRail: _PrimitiveView {
             return "Panel"
         case .split:
             return "Group"
+        }
+    }
+
+    private struct RailItem {
+        var leafID: DockNodeID
+        var tabID: DockTabID?
+        var title: String
+    }
+
+    private func railItems() -> [RailItem] {
+        items().flatMap { id, leaf -> [RailItem] in
+            switch leaf.node {
+            case .tabs(_, let tabs, _):
+                guard !tabs.isEmpty else {
+                    return [RailItem(leafID: id, tabID: nil, title: "Panel")]
+                }
+                return tabs.map { tab in
+                    RailItem(leafID: id, tabID: tab.id, title: tab.title)
+                }
+            case .empty:
+                return [RailItem(leafID: id, tabID: nil, title: "Panel")]
+            case .split:
+                return [RailItem(leafID: id, tabID: nil, title: "Group")]
+            }
         }
     }
 }
@@ -329,7 +354,6 @@ struct _DockVerticalRailTitle: _PrimitiveView {
         layout.setPadding(8, edge: .bottom)
         layout.width = 32
         layout.minHeight = max(72, Float(verticalCharacters.count) * 13 + 16)
-        layout.maxHeight = 220
         layout.flexShrink = 0
     }
 
@@ -351,7 +375,7 @@ struct _DockVerticalRailTitle: _PrimitiveView {
             .trimmingCharacters(in: .whitespacesAndNewlines)
         let source = cleaned.isEmpty ? "Panel" : cleaned
         let chars = source.map { String($0) }
-        return Array(chars.prefix(16))
+        return chars
     }
 }
 
