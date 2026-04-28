@@ -45,6 +45,13 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
                             registry: registry,
                             state: state)
         }
+        controller.onDidCommitDrop = { [registry, weak controller] request in
+            guard let controller else { return }
+            Self.didCommitDrop(request,
+                               controller: controller,
+                               registry: registry,
+                               state: state)
+        }
         controller.onResolveMinimizedEdge = { [registry, weak controller] leafID in
             guard let controller,
                   let region = Self.regionOfLeaf(id: leafID,
@@ -464,6 +471,28 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         controller.semanticStorage[regionOverridesStorageKey] = encodeRegionOverrides(state.regionOverrides)
     }
 
+    private static func didCommitDrop(_ request: DockDropRequest,
+                                      controller: DockController,
+                                      registry: PanelRegistry,
+                                      state: LayoutState) {
+        guard let targetRegion = targetRegion(for: request.target,
+                                              controller: controller,
+                                              registry: registry,
+                                              state: state),
+              targetRegion != .center else {
+            return
+        }
+        let restoreIDs = controller.minimizedOrder.filter { leafID in
+            guard let minimized = controller.minimizedLeaves[leafID] else { return false }
+            return regionOfMinimizedLeaf(minimized,
+                                         registry: registry,
+                                         state: state) == targetRegion
+        }
+        for leafID in restoreIDs {
+            controller.restoreMinimizedLeaf(leafID)
+        }
+    }
+
     private static func decodeRegionOverrides(_ raw: [String: String]) -> [String: PanelWorkspaceRegion] {
         var decoded: [String: PanelWorkspaceRegion] = [:]
         for (userKey, value) in raw {
@@ -505,7 +534,26 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         case .replace(let target), .splitEdge(let target, _):
             nodeID = target
         }
-        return regionOfLeaf(id: nodeID, in: controller.root, registry: registry, state: state)
+        if let region = regionOfLeaf(id: nodeID, in: controller.root, registry: registry, state: state) {
+            return region
+        }
+        if case .splitEdge(_, let edge) = target {
+            return region(forGlobalEdge: edge)
+        }
+        return nil
+    }
+
+    private static func region(forGlobalEdge edge: DockEdge) -> PanelWorkspaceRegion? {
+        switch edge {
+        case .left:
+            return .leadingSidebar
+        case .right:
+            return .trailingSidebar
+        case .bottom:
+            return .bottomPanel
+        case .top, .center:
+            return .center
+        }
     }
 
     private static func regionOfTab(id: DockTabID,
@@ -535,6 +583,20 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         case .tabs(_, let tabs, _):
             guard let first = tabs.first else { return .center }
             return state.region(for: first, registry: registry)
+        case .split:
+            return nil
+        }
+    }
+
+    private static func regionOfMinimizedLeaf(_ leaf: DockMinimizedLeaf,
+                                              registry: PanelRegistry,
+                                              state: LayoutState) -> PanelWorkspaceRegion? {
+        switch leaf.node {
+        case .tabs(_, let tabs, _):
+            guard let first = tabs.first else { return .center }
+            return state.region(for: first, registry: registry)
+        case .empty:
+            return .center
         case .split:
             return nil
         }
