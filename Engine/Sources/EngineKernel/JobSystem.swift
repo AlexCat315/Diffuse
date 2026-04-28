@@ -10,6 +10,17 @@ public struct JobDispatchReport: Sendable, Equatable {
         self.workerCount = workerCount
         self.executedInParallel = executedInParallel
     }
+
+    public static func merged(
+        _ reports: [JobDispatchReport],
+        workerCount: Int
+    ) -> JobDispatchReport {
+        JobDispatchReport(
+            jobCount: reports.reduce(0) { $0 + $1.jobCount },
+            workerCount: workerCount,
+            executedInParallel: reports.contains(where: \ .executedInParallel)
+        )
+    }
 }
 
 public final class JobSystem: @unchecked Sendable {
