@@ -1,4 +1,5 @@
 import SceneRuntime
+import EngineKernel
 import Testing
 import simd
 
@@ -24,6 +25,35 @@ struct SpatialQueryTests {
         let entry = runtime.spatialIndex.entries.first { $0.entity == childBox }
         #expect(entry?.bounds.center == SIMD3<Float>(3, 0, 0))
         #expect(entry?.bounds.halfExtents == SIMD3<Float>(0.5, 0.5, 0.5))
+    }
+
+    @Test("spatialIndexUpdate reports job-backed incremental cache diffs")
+    func spatialIndexUpdateReportsJobBackedIncrementalCacheDiffs() {
+        var runtime = SceneRuntime()
+        runtime.setJobSystem(JobSystem(workerCount: 4, minimumChunkSize: 1, label: "test.jobs.spatial.update"))
+
+        var entities: [EntityID] = []
+        for index in 0..<4 {
+            let entity = runtime.createEntity()
+            _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(Float(index), 0, 0)), for: entity)
+            _ = runtime.setComponent(
+                Collider(shape: .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: .zero)),
+                for: entity
+            )
+            entities.append(entity)
+        }
+
+        _ = runtime.tick()
+        _ = runtime.setComponent(
+            Collider(shape: .box(halfExtents: SIMD3<Float>(1, 0.5, 0.5), center: .zero)),
+            for: entities[0]
+        )
+
+        let report = runtime.tick()
+
+        #expect(report.parallelPhases.contains(.spatialIndexUpdate))
+        #expect(runtime.spatialIndex.entries.count == entities.count)
+        #expect(runtime.spatialIndex.entries.first { $0.entity == entities[0] }?.bounds.halfExtents.x == 1)
     }
 
     @Test("raycast returns the nearest collider hit from the spatial cache")
