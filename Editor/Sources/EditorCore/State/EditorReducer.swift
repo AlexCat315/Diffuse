@@ -31,6 +31,7 @@ public enum EditorAction: Sendable {
     case setPendingConfirmationRequest(ConfirmationRequestBatch?)
     case setAIStatusMessage(String?)
     case setAIWarnings([String])
+    case frameTimingUpdated
     /// Bump the viewport surface revision so only viewport subscribers pull
     /// the newest `currentViewportSurfaceState()`.
     case viewportSurfaceUpdated
@@ -133,8 +134,21 @@ public enum EditorReducer {
             state.aiStatusMessage = message
         case let .setAIWarnings(warnings):
             state.aiWarnings = warnings
+        case .frameTimingUpdated:
+            state.frameTimingRevision &+= 1
         case .viewportSurfaceUpdated:
             state.viewportSurfaceRevision &+= 1
+        }
+    }
+}
+
+extension EditorAction {
+    var notifiesSubscribers: Bool {
+        switch self {
+        case .tickFrame:
+            return false
+        default:
+            return true
         }
     }
 }

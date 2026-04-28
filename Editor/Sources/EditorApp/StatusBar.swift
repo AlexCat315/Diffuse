@@ -6,7 +6,7 @@ import Foundation
 struct EditorStatusBar: View {
     private let store: EditorStore
     private let getTiming: () -> EditorFrameTiming
-    private let _frameIndex: Observed<EditorStore, UInt64>
+    private let _frameTimingRevision: Observed<EditorStore, UInt64>
     private let _connected: Observed<EditorStore, Bool>
     private let _sceneRevision: Observed<EditorStore, UInt64>
     private let _selectedCount: Observed<EditorStore, Int>
@@ -15,7 +15,7 @@ struct EditorStatusBar: View {
     init(store: EditorStore, getTiming: @escaping () -> EditorFrameTiming) {
         self.store = store
         self.getTiming = getTiming
-        self._frameIndex = Observed(\.frameIndex, on: store)
+        self._frameTimingRevision = Observed(\.frameTimingRevision, on: store)
         self._connected = Observed(\.connected, on: store)
         self._sceneRevision = Observed(\.sceneRevision, on: store)
         self._selectedCount = Observed(\.selectedEntityIDsCount, on: store)
@@ -23,6 +23,7 @@ struct EditorStatusBar: View {
     }
 
     var body: some View {
+        let _ = _frameTimingRevision.wrappedValue
         let timing = getTiming()
         Row(alignment: .center, spacing: 8) {
             Box { EmptyView() }

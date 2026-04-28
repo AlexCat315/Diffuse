@@ -113,8 +113,9 @@ public final class EditorApplication {
         if surface != lastViewportSurfaceState {
             lastViewportSurfaceState = surface
             store.dispatch(.viewportSurfaceUpdated)
-        } else if didUpdateFrameTiming {
-            store.dispatch(.viewportSurfaceUpdated)
+        }
+        if didUpdateFrameTiming {
+            store.dispatch(.frameTimingUpdated)
         }
     }
 
