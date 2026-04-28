@@ -49,6 +49,7 @@ private func runEditor() throws {
         if next.language != lastShellPreferences.language {
             EditorLocalizationPreferences.language = next.language
             EditorRootViewFactory.localizeDockTitles(in: controller)
+            EditorRootViewFactory.localizePanelTitles(in: registry)
         }
         lastShellPreferences = next
         EditorRootViewFactory.saveShellState(mode: store.state.workspaceMode,

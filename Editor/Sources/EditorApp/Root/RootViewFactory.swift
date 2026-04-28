@@ -364,6 +364,14 @@ enum EditorRootViewFactory {
                            minimizedOrder: controller.minimizedOrder)
     }
 
+    static func localizePanelTitles(in registry: PanelRegistry) {
+        for id in registry.ids {
+            registry.updateDescriptor(id: id) { descriptor in
+                descriptor.title = localizedPanelTitle(for: descriptor.id)
+            }
+        }
+    }
+
     private static func localizeDockTitles(in node: DockLayoutNode) -> DockLayoutNode {
         switch node {
         case .empty:

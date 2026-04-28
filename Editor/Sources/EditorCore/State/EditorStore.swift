@@ -71,5 +71,7 @@ extension EditorStore {
     public var playbackState: PlaybackState { state.playbackState }
     public var workspaceMode: EditorWorkspaceMode { state.workspaceMode }
     public var activeLayoutPreset: EditorLayoutPreset { state.activeLayoutPreset }
+    public var presentation: EditorPresentationState { state.presentation }
+    public var presentationRevision: UInt64 { state.presentation.revision }
     public var themeMode: EditorThemeMode { state.themeMode }
 }
