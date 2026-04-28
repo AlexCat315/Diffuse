@@ -129,6 +129,13 @@ public struct RuntimeWorldSchedule {
         var renderMeshes: [EntityID: RenderMeshComponent]
     }
 
+    private struct RuntimeRenderReadView {
+        var entities: [EntityID]
+        var worldTransforms: [EntityID: WorldTransform]
+        var cameras: [EntityID: CameraComponent]
+        var renderMeshes: [EntityID: RenderMeshComponent]
+    }
+
     private var physicsBackend: any PhysicsBackend = NullPhysicsBackend()
     private var explicitPhysicsBackend: (any PhysicsBackend)?
     private var scriptDriver: (any RuntimeScriptDriver)?
@@ -490,7 +497,7 @@ public struct RuntimeWorldSchedule {
     private func extractRenderScene(
         in world: RuntimeWorld
     ) -> (resource: ExtractedRenderSceneResource, report: JobDispatchReport) {
-        let view = buildReadView(in: world)
+        let view = buildRenderReadView(in: world)
         let cameraSelection = selectRenderCamera(from: view)
         let instanceCollection = collectRenderInstances(from: view)
         let instances = instanceCollection.instances
@@ -509,7 +516,7 @@ public struct RuntimeWorldSchedule {
     }
 
     private func selectRenderCamera(
-        from view: RuntimeReadView
+        from view: RuntimeRenderReadView
     ) -> (entity: EntityID?, camera: RenderCamera, report: JobDispatchReport) {
         let candidates = jobSystem.parallelCompactMap(items: view.entities) { entity -> (EntityID, RenderCamera, Bool)? in
             guard let component = view.cameras[entity] else {
@@ -542,7 +549,7 @@ public struct RuntimeWorldSchedule {
     }
 
     private func collectRenderInstances(
-        from view: RuntimeReadView
+        from view: RuntimeRenderReadView
     ) -> (instances: [ExtractedRenderInstance], report: JobDispatchReport) {
         let result = jobSystem.parallelCompactMap(items: view.entities) { entity -> ExtractedRenderInstance? in
             guard let renderMesh = view.renderMeshes[entity],
@@ -561,6 +568,15 @@ public struct RuntimeWorldSchedule {
             )
         }
         return (result.0, result.1)
+    }
+
+    private func buildRenderReadView(in world: RuntimeWorld) -> RuntimeRenderReadView {
+        RuntimeRenderReadView(
+            entities: world.entities(),
+            worldTransforms: world.worldTransformSnapshot(),
+            cameras: world.componentSnapshot(CameraComponent.self),
+            renderMeshes: world.componentSnapshot(RenderMeshComponent.self)
+        )
     }
 
     private func buildReadView(in world: RuntimeWorld) -> RuntimeReadView {
