@@ -118,15 +118,13 @@ public struct RuntimeWorldSchedule {
         var constraints: [EntityID: PhysicsConstraintDescriptor] = [:]
     }
 
-    private struct RuntimeReadView {
+    private struct RuntimePhysicsReadView {
         var entities: [EntityID]
         var localTransforms: [EntityID: LocalTransform]
         var worldTransforms: [EntityID: WorldTransform]
         var rigidBodies: [EntityID: RigidBody]
         var colliders: [EntityID: Collider]
         var constraints: [EntityID: Constraint]
-        var cameras: [EntityID: CameraComponent]
-        var renderMeshes: [EntityID: RenderMeshComponent]
     }
 
     private struct RuntimeRenderReadView {
@@ -245,7 +243,7 @@ public struct RuntimeWorldSchedule {
                     continue
                 }
 
-                let physicsReadView = buildReadView(in: world)
+                let physicsReadView = buildPhysicsReadView(in: world)
                 let bodyCollection = collectPhysicsBodies(from: physicsReadView)
                 activeBodies = bodyCollection.bodies
                 let constraintCollection = collectPhysicsConstraints(from: physicsReadView)
@@ -399,7 +397,7 @@ public struct RuntimeWorldSchedule {
     }
 
     private func collectPhysicsBodies(
-        from view: RuntimeReadView
+        from view: RuntimePhysicsReadView
     ) -> (bodies: [PhysicsBodyDescriptor], report: JobDispatchReport) {
         let result = jobSystem.parallelCompactMap(items: view.entities) { entity -> PhysicsBodyDescriptor? in
             let rigidBody = view.rigidBodies[entity]
@@ -422,7 +420,7 @@ public struct RuntimeWorldSchedule {
     }
 
     private func collectPhysicsConstraints(
-        from view: RuntimeReadView
+        from view: RuntimePhysicsReadView
     ) -> (constraints: [PhysicsConstraintDescriptor], report: JobDispatchReport) {
         let result = jobSystem.parallelCompactMap(items: view.entities) { entity -> PhysicsConstraintDescriptor? in
             guard let constraint = view.constraints[entity],
@@ -579,17 +577,14 @@ public struct RuntimeWorldSchedule {
         )
     }
 
-    private func buildReadView(in world: RuntimeWorld) -> RuntimeReadView {
-        let entities = world.entities()
-        return RuntimeReadView(
-            entities: entities,
+    private func buildPhysicsReadView(in world: RuntimeWorld) -> RuntimePhysicsReadView {
+        RuntimePhysicsReadView(
+            entities: world.entities(),
             localTransforms: world.localTransformSnapshot(),
             worldTransforms: world.worldTransformSnapshot(),
             rigidBodies: world.componentSnapshot(RigidBody.self),
             colliders: world.componentSnapshot(Collider.self),
-            constraints: world.componentSnapshot(Constraint.self),
-            cameras: world.componentSnapshot(CameraComponent.self),
-            renderMeshes: world.componentSnapshot(RenderMeshComponent.self)
+            constraints: world.componentSnapshot(Constraint.self)
         )
     }
 
