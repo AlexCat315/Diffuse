@@ -207,7 +207,6 @@ private struct _StatefulPropertyGrid: View {
                 .padding(1)
                 .background(.divider)
                 .cornerRadius(2)
-                .clipped()
             }
         }
     }
@@ -230,17 +229,14 @@ private struct _StatefulPropertyGrid: View {
                 row.value
                     .frame(height: rowHeight)
                     .flex(1, shrink: 1, basis: 0)
-                    .clipped()
             }
             .frame(height: rowHeight)
             .padding(horizontal: 6, vertical: 2)
             .background(.surfaceSunken)
             .flex(1, shrink: 1, basis: 0)
-            .clipped()
         }
         .background(.divider)
         .frame(height: rowHeight)
-        .clipped()
         .flex()
     }
 }

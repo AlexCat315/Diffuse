@@ -265,6 +265,10 @@ public final class DockDragSession {
             guard let tabID else { return }
             if let hit = dropHit {
                 let target = Self.makeDropTarget(from: hit)
+                controller.commitDrop(DockDropRequest(tabID: tabID,
+                                                      sourceLeafID: sourceLeafID,
+                                                      origin: origin,
+                                                      target: target))
                 controller.apply(.move(tabID: tabID, to: target))
             } else if isOutsideAllHosts, let sourceLeafID {
                 let dx = globalPointerX - originGlobalX
@@ -277,11 +281,19 @@ public final class DockDragSession {
         case .satellite(let leafID):
             if let hit = dropHit {
                 let target = Self.makeDropTarget(from: hit)
+                controller.commitDrop(DockDropRequest(tabID: nil,
+                                                      sourceLeafID: leafID,
+                                                      origin: origin,
+                                                      target: target))
                 controller.apply(.redock(satelliteID: leafID, to: target))
             }
         case .mainTreeLeaf(let leafID):
             if let hit = dropHit {
                 let target = Self.makeDropTarget(from: hit)
+                controller.commitDrop(DockDropRequest(tabID: nil,
+                                                      sourceLeafID: leafID,
+                                                      origin: origin,
+                                                      target: target))
                 controller.apply(.moveLeaf(leafID: leafID, to: target))
             } else if isOutsideAllHosts {
                 let dx = globalPointerX - originGlobalX

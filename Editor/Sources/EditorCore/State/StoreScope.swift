@@ -37,6 +37,11 @@ public struct StoreScope<Content: View>: View {
 
 private final class EditorStoreSubscriptionID: @unchecked Sendable {}
 
+private struct EditorStoreSelectionSnapshot: Hashable {
+    var value: AnyHashable
+    var uiRefreshRevision: UInt64
+}
+
 enum EditorStoreSubscription {
     nonisolated(unsafe) private static var tokens: [ObjectIdentifier: [ObjectIdentifier: EditorStore.SubscriptionToken]] = [:]
     nonisolated(unsafe) private static var lastValues: [ObjectIdentifier: AnyHashable] = [:]
@@ -53,7 +58,8 @@ enum EditorStoreSubscription {
         }
         let token = store.subscribe { s in
             if let select {
-                let newValue = select(s.state)
+                let newValue = AnyHashable(EditorStoreSelectionSnapshot(value: select(s.state),
+                                                                        uiRefreshRevision: s.state.uiRefreshRevision))
                 let old = lastValues[valueKey]
                 if old == newValue { return }
                 lastValues[valueKey] = newValue
@@ -69,7 +75,8 @@ enum EditorStoreSubscription {
         tokens[storeKey] = storeTokens
 
         if let select {
-            let newValue = select(store.state)
+            let newValue = AnyHashable(EditorStoreSelectionSnapshot(value: select(store.state),
+                                                                    uiRefreshRevision: store.state.uiRefreshRevision))
             let old = lastValues[valueKey]
             if old != newValue {
                 lastValues[valueKey] = newValue

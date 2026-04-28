@@ -191,6 +191,7 @@ public struct EditorState: Codable, Sendable {
     public var themeMode: EditorThemeMode
     public var language: EditorLanguage
     public var vsyncMode: EditorVSyncMode
+    public var uiRefreshRevision: UInt64
     public var activeAssetDrag: EditorAssetDragPayload?
     public var inspectorCollapsedSectionIDs: Set<String>
     public var pendingConfirmationRequest: ConfirmationRequestBatch?
@@ -221,6 +222,7 @@ public struct EditorState: Codable, Sendable {
         themeMode: EditorThemeMode = .dark,
         language: EditorLanguage = .system,
         vsyncMode: EditorVSyncMode = .enabled,
+        uiRefreshRevision: UInt64 = 0,
         activeAssetDrag: EditorAssetDragPayload? = nil,
         inspectorCollapsedSectionIDs: Set<String> = [],
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
@@ -249,6 +251,7 @@ public struct EditorState: Codable, Sendable {
         self.themeMode = themeMode
         self.language = language
         self.vsyncMode = vsyncMode
+        self.uiRefreshRevision = uiRefreshRevision
         self.activeAssetDrag = activeAssetDrag
         self.inspectorCollapsedSectionIDs = inspectorCollapsedSectionIDs
         self.pendingConfirmationRequest = pendingConfirmationRequest
