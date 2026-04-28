@@ -238,9 +238,10 @@ public struct RuntimeWorldSchedule {
                     continue
                 }
 
-                let bodyCollection = collectPhysicsBodies(in: world)
+                let physicsReadView = buildReadView(in: world)
+                let bodyCollection = collectPhysicsBodies(from: physicsReadView)
                 activeBodies = bodyCollection.bodies
-                let constraintCollection = collectPhysicsConstraints(in: world)
+                let constraintCollection = collectPhysicsConstraints(from: physicsReadView)
                 activeConstraints = constraintCollection.constraints
                 scheduledJobCount += bodyCollection.report.jobCount + constraintCollection.report.jobCount
                 if bodyCollection.report.executedInParallel || constraintCollection.report.executedInParallel {
@@ -391,9 +392,8 @@ public struct RuntimeWorldSchedule {
     }
 
     private func collectPhysicsBodies(
-        in world: RuntimeWorld
+        from view: RuntimeReadView
     ) -> (bodies: [PhysicsBodyDescriptor], report: JobDispatchReport) {
-        let view = buildReadView(in: world)
         let result = jobSystem.parallelCompactMap(items: view.entities) { entity -> PhysicsBodyDescriptor? in
             let rigidBody = view.rigidBodies[entity]
             let collider = view.colliders[entity]
@@ -415,9 +415,8 @@ public struct RuntimeWorldSchedule {
     }
 
     private func collectPhysicsConstraints(
-        in world: RuntimeWorld
+        from view: RuntimeReadView
     ) -> (constraints: [PhysicsConstraintDescriptor], report: JobDispatchReport) {
-        let view = buildReadView(in: world)
         let result = jobSystem.parallelCompactMap(items: view.entities) { entity -> PhysicsConstraintDescriptor? in
             guard let constraint = view.constraints[entity],
                   let worldTransform = view.worldTransforms[entity]
