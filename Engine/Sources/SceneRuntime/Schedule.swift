@@ -566,55 +566,28 @@ public struct RuntimeWorldSchedule {
 
     private func buildReadView(in world: RuntimeWorld) -> RuntimeReadView {
         let entities = world.entities()
+        let explicitLocalTransforms = world.componentSnapshot(LocalTransform.self)
+        let explicitWorldTransforms = world.componentSnapshot(WorldTransform.self)
         var localTransforms: [EntityID: LocalTransform] = [:]
         var worldTransforms: [EntityID: WorldTransform] = [:]
-        var rigidBodies: [EntityID: RigidBody] = [:]
-        var colliders: [EntityID: Collider] = [:]
-        var constraints: [EntityID: Constraint] = [:]
-        var cameras: [EntityID: CameraComponent] = [:]
-        var renderMeshes: [EntityID: RenderMeshComponent] = [:]
 
         localTransforms.reserveCapacity(entities.count)
         worldTransforms.reserveCapacity(entities.count)
-        rigidBodies.reserveCapacity(entities.count)
-        colliders.reserveCapacity(entities.count)
-        constraints.reserveCapacity(entities.count)
-        cameras.reserveCapacity(entities.count)
-        renderMeshes.reserveCapacity(entities.count)
 
         for entity in entities {
-            if let local = world.localTransform(for: entity) {
-                localTransforms[entity] = local
-            }
-            if let worldTransform = world.worldTransform(for: entity) {
-                worldTransforms[entity] = worldTransform
-            }
-            if let rigidBody = world.component(RigidBody.self, for: entity) {
-                rigidBodies[entity] = rigidBody
-            }
-            if let collider = world.component(Collider.self, for: entity) {
-                colliders[entity] = collider
-            }
-            if let constraint = world.component(Constraint.self, for: entity) {
-                constraints[entity] = constraint
-            }
-            if let camera = world.component(CameraComponent.self, for: entity) {
-                cameras[entity] = camera
-            }
-            if let renderMesh = world.component(RenderMeshComponent.self, for: entity) {
-                renderMeshes[entity] = renderMesh
-            }
+            localTransforms[entity] = explicitLocalTransforms[entity] ?? .identity
+            worldTransforms[entity] = explicitWorldTransforms[entity] ?? .identity
         }
 
         return RuntimeReadView(
             entities: entities,
             localTransforms: localTransforms,
             worldTransforms: worldTransforms,
-            rigidBodies: rigidBodies,
-            colliders: colliders,
-            constraints: constraints,
-            cameras: cameras,
-            renderMeshes: renderMeshes
+            rigidBodies: world.componentSnapshot(RigidBody.self),
+            colliders: world.componentSnapshot(Collider.self),
+            constraints: world.componentSnapshot(Constraint.self),
+            cameras: world.componentSnapshot(CameraComponent.self),
+            renderMeshes: world.componentSnapshot(RenderMeshComponent.self)
         )
     }
 
