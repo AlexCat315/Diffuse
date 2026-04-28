@@ -132,11 +132,26 @@ public struct SceneRuntime {
         world.query(type)
     }
 
+    public func query<Component: RuntimeComponent>(
+        _ type: Component.Type,
+        using jobSystem: JobSystem
+    ) -> ([RuntimeComponentQuery<Component>], JobDispatchReport) {
+        world.query(type, using: jobSystem)
+    }
+
     public func query<A: RuntimeComponent, B: RuntimeComponent>(
         _ a: A.Type,
         _ b: B.Type
     ) -> [RuntimeComponentPairQuery<A, B>] {
         world.query(a, b)
+    }
+
+    public func query<A: RuntimeComponent, B: RuntimeComponent>(
+        _ a: A.Type,
+        _ b: B.Type,
+        using jobSystem: JobSystem
+    ) -> ([RuntimeComponentPairQuery<A, B>], JobDispatchReport) {
+        world.query(a, b, using: jobSystem)
     }
 
     public func query<A: RuntimeComponent, B: RuntimeComponent, C: RuntimeComponent>(
@@ -145,6 +160,15 @@ public struct SceneRuntime {
         _ c: C.Type
     ) -> [RuntimeComponentTripleQuery<A, B, C>] {
         world.query(a, b, c)
+    }
+
+    public func query<A: RuntimeComponent, B: RuntimeComponent, C: RuntimeComponent>(
+        _ a: A.Type,
+        _ b: B.Type,
+        _ c: C.Type,
+        using jobSystem: JobSystem
+    ) -> ([RuntimeComponentTripleQuery<A, B, C>], JobDispatchReport) {
+        world.query(a, b, c, using: jobSystem)
     }
 
     @discardableResult
