@@ -88,4 +88,40 @@ struct DockDropGuideOverlayTests {
 
         #expect(list.vertices.isEmpty)
     }
+
+    @Test("Workspace-scoped preview suppresses the leaf overlay")
+    func workspaceScopedPreviewSuppressesLeafOverlay() {
+        let root = DockLayoutNode.tabs([DockTab(userKey: "a", title: "A")])
+        let controller = DockController(root: root)
+        let node = Node()
+        node.frame = CGRect(x: 0, y: 0, width: 600, height: 400)
+        let registry = DockHitRegistry()
+        registry.registerRoot(nodeID: root.id, node: node)
+        registry.register(nodeID: root.id, node: node)
+        installDropOverlay(node: node, leafID: root.id, controller: controller)
+
+        controller.dragSession.start(tabID: DockTabID(),
+                                     sourceLeafID: DockNodeID(),
+                                     ghost: DockDragSession.GhostInfo(title: "A"),
+                                     x: 8,
+                                     y: 8,
+                                     intent: .detachOrSplit)
+        let bottomTile = makeWorkspaceDropGuideTiles(in: UIRect(x: 0, y: 0, width: 600, height: 400))
+            .first(where: { $0.edge == .bottom })
+        #expect(bottomTile != nil)
+        guard let bottomTile else { return }
+
+        controller.dragSession.updatePointer(
+            x: bottomTile.buttonRect.x + bottomTile.buttonRect.width * 0.5,
+            y: bottomTile.buttonRect.y + bottomTile.buttonRect.height * 0.5,
+            registry: registry
+        )
+
+        #expect(controller.dragSession.dropHit?.scope == .workspace)
+
+        let list = DrawList()
+        node.overlayDraw?(list, .zero)
+
+        #expect(list.vertices.isEmpty)
+    }
 }
