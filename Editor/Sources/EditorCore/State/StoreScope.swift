@@ -65,5 +65,11 @@ enum EditorStoreSubscription {
         var storeTokens = tokens[storeKey] ?? [:]
         storeTokens[scopeKey] = token
         tokens[storeKey] = storeTokens
+        if bind.wrappedValue != store.version {
+            if let select {
+                lastValues[valueKey] = select(store.state)
+            }
+            bind.wrappedValue = store.version
+        }
     }
 }

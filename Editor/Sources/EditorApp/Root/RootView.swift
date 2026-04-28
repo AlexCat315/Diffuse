@@ -11,16 +11,7 @@ struct EditorRootView: View {
     let registry: PanelRegistry
 
     var body: some View {
-        StoreScope(app.store, select: { state in
-            RootStateKey(connected: state.connected,
-                         sceneRevision: state.sceneRevision,
-                         selectedCount: state.selectedEntityIDs.count,
-                         aiStatusMessage: state.aiStatusMessage,
-                         playbackState: state.playbackState,
-                         workspaceMode: state.workspaceMode,
-                         activeLayoutPreset: state.activeLayoutPreset,
-                         themeMode: state.themeMode)
-        }) { store in
+        StoreScope(app.store) { store in
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 ShortcutHost(onKeyDown: { key in
                     EditorShortcutHandler.handle(key,
@@ -98,15 +89,4 @@ struct EditorRootView: View {
             .flex()
         }
     }
-}
-
-private struct RootStateKey: Hashable {
-    let connected: Bool
-    let sceneRevision: UInt64
-    let selectedCount: Int
-    let aiStatusMessage: String?
-    let playbackState: PlaybackState
-    let workspaceMode: EditorWorkspaceMode
-    let activeLayoutPreset: EditorLayoutPreset
-    let themeMode: EditorThemeMode
 }
