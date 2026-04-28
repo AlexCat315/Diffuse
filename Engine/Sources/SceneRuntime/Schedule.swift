@@ -108,6 +108,10 @@ public struct RuntimeScheduleReport: Sendable {
         self.phaseJobCounts = phaseJobCounts
         self.revision = revision
     }
+
+    public func jobCount(for phase: RuntimeSystemPhase) -> Int {
+        phaseJobCounts[phase] ?? 0
+    }
 }
 
 public struct RuntimeWorldSchedule {
