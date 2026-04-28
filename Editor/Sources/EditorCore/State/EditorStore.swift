@@ -27,6 +27,7 @@ public final class EditorStore: @unchecked Sendable {
 
     public func dispatch(_ action: EditorAction) {
         EditorReducer.reduce(state: &state, action: action)
+        guard action.notifiesSubscribers else { return }
         version &+= 1
         for handler in subscribers.values {
             handler(self)
@@ -62,6 +63,7 @@ extension EditorStore {
     public var connected: Bool { state.connected }
     public var sceneRevision: UInt64 { state.sceneRevision }
     public var frameIndex: UInt64 { state.frameIndex }
+    public var frameTimingRevision: UInt64 { state.frameTimingRevision }
     public var viewportSurfaceRevision: UInt64 { state.viewportSurfaceRevision }
     public var selectedEntityID: UInt64? { state.selectedEntityID }
     public var selectedEntityIDsCount: Int { state.selectedEntityIDs.count }
