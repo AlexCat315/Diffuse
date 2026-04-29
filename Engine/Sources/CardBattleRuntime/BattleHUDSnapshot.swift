@@ -53,8 +53,10 @@ public struct BattleHUDSnapshot: Sendable, Equatable {
     public var maxEnergy: Int
     public var health: Int
     public var maxHealth: Int
+    public var block: Int
     public var opponentHealth: Int
     public var opponentMaxHealth: Int
+    public var opponentBlock: Int
     public var deckCount: Int
     public var discardCount: Int
     public var hand: [BattleHandCardViewModel]
@@ -66,8 +68,10 @@ public struct BattleHUDSnapshot: Sendable, Equatable {
                 maxEnergy: Int,
                 health: Int,
                 maxHealth: Int,
+                block: Int = 0,
                 opponentHealth: Int,
                 opponentMaxHealth: Int,
+                opponentBlock: Int = 0,
                 deckCount: Int = 0,
                 discardCount: Int = 0,
                 hand: [BattleHandCardViewModel],
@@ -78,8 +82,10 @@ public struct BattleHUDSnapshot: Sendable, Equatable {
         self.maxEnergy = maxEnergy
         self.health = health
         self.maxHealth = maxHealth
+        self.block = block
         self.opponentHealth = opponentHealth
         self.opponentMaxHealth = opponentMaxHealth
+        self.opponentBlock = opponentBlock
         self.deckCount = deckCount
         self.discardCount = discardCount
         self.hand = hand
@@ -97,8 +103,10 @@ public struct BattleHUDSnapshot: Sendable, Equatable {
             maxEnergy: player.maxEnergy,
             health: player.health,
             maxHealth: player.maxHealth,
+            block: player.block,
             opponentHealth: opponentID.flatMap { state.players[$0]?.health } ?? 0,
             opponentMaxHealth: opponentID.flatMap { state.players[$0]?.maxHealth } ?? 0,
+            opponentBlock: opponentID.flatMap { state.players[$0]?.block } ?? 0,
             deckCount: player.deck.count,
             discardCount: player.discard.count,
             hand: player.hand.map {

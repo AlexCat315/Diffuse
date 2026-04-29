@@ -4,6 +4,7 @@ public struct BattlePlayerState: Sendable, Equatable, Codable {
     public var id: BattlePlayerID
     public var health: Int
     public var maxHealth: Int
+    public var block: Int
     public var maxEnergy: Int
     public var energy: Int
     public var deck: [BattleCard]
@@ -14,6 +15,7 @@ public struct BattlePlayerState: Sendable, Equatable, Codable {
     public init(id: BattlePlayerID,
                 health: Int,
                 maxHealth: Int? = nil,
+                block: Int = 0,
                 maxEnergy: Int,
                 energy: Int = 0,
                 deck: [BattleCard],
@@ -23,6 +25,7 @@ public struct BattlePlayerState: Sendable, Equatable, Codable {
         self.id = id
         self.health = health
         self.maxHealth = maxHealth ?? health
+        self.block = block
         self.maxEnergy = maxEnergy
         self.energy = energy
         self.deck = deck
@@ -35,6 +38,7 @@ public struct BattlePlayerState: Sendable, Equatable, Codable {
         case id
         case health
         case maxHealth
+        case block
         case maxEnergy
         case energy
         case deck
@@ -48,6 +52,7 @@ public struct BattlePlayerState: Sendable, Equatable, Codable {
         let id = try container.decode(BattlePlayerID.self, forKey: .id)
         let health = try container.decode(Int.self, forKey: .health)
         let maxHealth = try container.decodeIfPresent(Int.self, forKey: .maxHealth)
+        let block = try container.decodeIfPresent(Int.self, forKey: .block) ?? 0
         let maxEnergy = try container.decode(Int.self, forKey: .maxEnergy)
         let energy = try container.decodeIfPresent(Int.self, forKey: .energy) ?? 0
         let deck = try container.decode([BattleCard].self, forKey: .deck)
@@ -58,6 +63,7 @@ public struct BattlePlayerState: Sendable, Equatable, Codable {
             id: id,
             health: health,
             maxHealth: maxHealth,
+            block: block,
             maxEnergy: maxEnergy,
             energy: energy,
             deck: deck,
@@ -72,6 +78,7 @@ public struct BattlePlayerState: Sendable, Equatable, Codable {
         try container.encode(id, forKey: .id)
         try container.encode(health, forKey: .health)
         try container.encode(maxHealth, forKey: .maxHealth)
+        try container.encode(block, forKey: .block)
         try container.encode(maxEnergy, forKey: .maxEnergy)
         try container.encode(energy, forKey: .energy)
         try container.encode(deck, forKey: .deck)
