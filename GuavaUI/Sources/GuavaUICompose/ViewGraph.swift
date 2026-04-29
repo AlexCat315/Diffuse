@@ -596,7 +596,7 @@ final class ViewScope {
     /// preserved (along with anything in `Node.attachments`).
     func recompose() {
         guard let anchor = anchor, let graph = graph else { return }
-        let body = anyBody(of: view)
+        let body = trackedBody(scopeID: ObjectIdentifier(anchor))
         graph.reconcileChildren(parent: anchor,
                                 layoutParent: layoutParent,
                                 newViews: [body])
@@ -625,8 +625,28 @@ final class ViewScope {
 
     private func materialiseBody() {
         guard let graph = graph, let anchor = anchor else { return }
-        let body = anyBody(of: view)
+        let body = trackedBody(scopeID: ObjectIdentifier(anchor))
         _ = graph.materialise(body, into: anchor, layoutParent: layoutParent)
+    }
+
+    private func trackedBody(scopeID: ObjectIdentifier) -> any View {
+        ObservableStateTracking.withScope(id: scopeID,
+                                          invalidate: makeInvalidation(scopeID: scopeID)) {
+            anyBody(of: view)
+        }
+    }
+
+    private func makeInvalidation(scopeID: ObjectIdentifier) -> () -> Void {
+        { [weak self, weak graph] in
+            guard let self, let graph else { return }
+            let capturedAnim = ActiveAnimationContext.current
+            graph.recomposer.invalidate(
+                scopeID: scopeID,
+                animation: capturedAnim
+            ) { [weak self] in
+                self?.recompose()
+            }
+        }
     }
 
     /// Read `view.body` through an existential boundary. We don't care about
