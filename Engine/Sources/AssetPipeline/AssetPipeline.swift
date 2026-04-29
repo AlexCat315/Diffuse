@@ -67,6 +67,59 @@ public struct MeshSkin: Sendable, Equatable {
     }
 }
 
+public enum MeshAnimationInterpolation: String, Sendable, Equatable {
+    case linear
+    case step
+    case cubicSpline
+}
+
+public enum MeshAnimationPath: String, Sendable, Equatable {
+    case translation
+    case rotation
+    case scale
+    case weights
+}
+
+public struct MeshAnimationSampler: Sendable, Equatable {
+    public var inputTimes: [Float]
+    public var outputValues: [SIMD4<Float>]
+    public var interpolation: MeshAnimationInterpolation
+
+    public init(inputTimes: [Float],
+                outputValues: [SIMD4<Float>],
+                interpolation: MeshAnimationInterpolation = .linear) {
+        self.inputTimes = inputTimes
+        self.outputValues = outputValues
+        self.interpolation = interpolation
+    }
+}
+
+public struct MeshAnimationChannel: Sendable, Equatable {
+    public var samplerIndex: Int
+    public var targetNodeIndex: Int?
+    public var path: MeshAnimationPath
+
+    public init(samplerIndex: Int, targetNodeIndex: Int?, path: MeshAnimationPath) {
+        self.samplerIndex = samplerIndex
+        self.targetNodeIndex = targetNodeIndex
+        self.path = path
+    }
+}
+
+public struct MeshAnimation: Sendable, Equatable {
+    public var name: String?
+    public var samplers: [MeshAnimationSampler]
+    public var channels: [MeshAnimationChannel]
+
+    public init(name: String? = nil,
+                samplers: [MeshAnimationSampler],
+                channels: [MeshAnimationChannel]) {
+        self.name = name
+        self.samplers = samplers
+        self.channels = channels
+    }
+}
+
 /// Interleaved mesh vertex stream used by runtime render backends.
 ///
 /// Layout, in floats:
@@ -98,19 +151,22 @@ public struct MeshAsset: Sendable {
     public var materials: [MeshMaterial]
     public var textures: [MeshTexture]
     public var skins: [MeshSkin]
+    public var animations: [MeshAnimation]
 
     public init(name: String,
                 vertices: [Float],
                 indices: [UInt32],
                 materials: [MeshMaterial] = [MeshMaterial.fallback],
                 textures: [MeshTexture] = [],
-                skins: [MeshSkin] = []) {
+                skins: [MeshSkin] = [],
+                animations: [MeshAnimation] = []) {
         self.name = name
         self.vertices = vertices
         self.indices = indices
         self.materials = materials.isEmpty ? [MeshMaterial.fallback] : materials
         self.textures = textures
         self.skins = skins
+        self.animations = animations
     }
 
     public var indexCount: UInt32 { UInt32(indices.count) }
