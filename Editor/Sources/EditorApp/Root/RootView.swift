@@ -105,6 +105,7 @@ private struct EditorCallbacks {
                                                      EditorRootViewFactory.saveDockLayout(controller, for: m, preset: p)
                                                      EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
                                                  },
+                                                 newScene: { app.resetPreviewScene() },
                                                  openSettings: { app.openSettingsWindow() })
         }
     }
