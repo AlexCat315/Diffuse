@@ -56,4 +56,22 @@ public struct Bounds3D: Sendable, Equatable {
         guard !isEmpty else { return .zero }
         return simd_min(simd_max(point, min), max)
     }
+
+    public func union(_ other: Bounds3D) -> Bounds3D {
+        if isEmpty { return other }
+        if other.isEmpty { return self }
+        return Bounds3D(min: simd_min(min, other.min),
+                        max: simd_max(max, other.max))
+    }
+
+    public func intersection(_ other: Bounds3D) -> Bounds3D? {
+        guard !isEmpty, !other.isEmpty else { return nil }
+        let intersection = Bounds3D(min: simd_max(min, other.min),
+                                    max: simd_min(max, other.max))
+        return intersection.isEmpty ? nil : intersection
+    }
+
+    public func intersects(_ other: Bounds3D) -> Bool {
+        intersection(other) != nil
+    }
 }
