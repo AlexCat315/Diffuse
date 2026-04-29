@@ -13,4 +13,13 @@ struct MatrixTransformsTests {
         #expect(translated == SIMD4<Float>(5, 0, 4, 1))
         #expect(scaled == SIMD4<Float>(2, 6, 12, 1))
     }
+
+    @Test("axis rotations transform directions")
+    func axisRotationsTransformDirections() {
+        let rotated = MatrixTransforms.rotation(axis: SIMD3<Float>(0, 0, 1), radians: .pi / 2)
+            * SIMD4<Float>(1, 0, 0, 0)
+
+        #expect(FloatComparisons.nearlyEqual(SIMD3<Float>(rotated.x, rotated.y, rotated.z),
+                                            SIMD3<Float>(0, 1, 0)))
+    }
 }
