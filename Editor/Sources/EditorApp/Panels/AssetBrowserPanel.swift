@@ -11,7 +11,7 @@ struct AssetBrowserPanel: View {
         StoreScope(app.store) { store in
             let assets = EditorAssetCatalog.entries()
             Box(direction: .column, alignItems: .stretch) {
-                AssetBrowserHeader(dragLabel: store.state.activeAssetDrag?.displayName)
+                AssetBrowserHeader(dragLabel: store.activeAssetDrag?.displayName)
                     .padding(horizontal: 10, vertical: 7)
 
                 Divider()

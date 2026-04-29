@@ -8,21 +8,21 @@ struct ConsolePanel: View {
         StoreScope(store) { store in
             Box(direction: .column, alignItems: .stretch, spacing: 8) {
                 Row(alignment: .center, spacing: 8) {
-                    Text(store.state.connected ? L("Connected") : L("Offline"))
+                    Text(store.connected ? L("Connected") : L("Offline"))
                         .font(.caption)
-                        .foregroundColor(store.state.connected ? .success : .warning)
+                        .foregroundColor(store.connected ? .success : .warning)
 
                     Spacer(minLength: 0)
 
-                    Text("revision \(store.state.sceneRevision)")
+                    Text("revision \(store.sceneRevision)")
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
                 }
 
                 Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                    Text("playbackState = .\(store.state.playbackState.rawValue)")
+                    Text("playbackState = .\(store.playbackState.rawValue)")
                         .font(.mono)
-                    Text("selectedEntityID = \(store.state.selectedEntityID.map(String.init) ?? "nil")")
+                    Text("selectedEntityID = \(store.selectedEntityID.map(String.init) ?? "nil")")
                         .font(.mono)
                         .foregroundColor(.onSurfaceMuted)
                 }

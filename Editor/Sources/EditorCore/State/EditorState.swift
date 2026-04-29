@@ -89,7 +89,7 @@ public enum EditorViewportShadingMode: String, Codable, Sendable, Hashable {
     case wireframe
 }
 
-public enum SelectionCommandBehavior: String, Codable, Sendable {
+public enum SelectionCommandBehavior: String, Codable, Sendable, Hashable {
     case subtract
     case toggle
 }
@@ -99,7 +99,7 @@ public enum EditorThemeMode: String, Codable, Sendable, CaseIterable, Hashable {
     case light
 }
 
-public enum EditorLanguage: String, Codable, Sendable, CaseIterable {
+public enum EditorLanguage: String, Codable, Sendable, CaseIterable, Hashable {
     case system
     case english
     case simplifiedChinese
@@ -129,7 +129,7 @@ public enum EditorLanguage: String, Codable, Sendable, CaseIterable {
     }
 }
 
-public enum EditorVSyncMode: String, Codable, Sendable, CaseIterable {
+public enum EditorVSyncMode: String, Codable, Sendable, CaseIterable, Hashable {
     case enabled
     case disabled
 

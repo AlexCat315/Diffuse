@@ -13,7 +13,7 @@ struct ConfirmationHostPanel: View {
         StoreScope(app.store) { store in
             ScrollView(.vertical) {
                 Box(direction: .column, alignItems: .stretch, spacing: 10) {
-                    if let request = store.state.pendingConfirmationRequest {
+                    if let request = store.pendingConfirmationRequest {
                         ConfirmationBatchView(app: app, request: request)
                     } else {
                         Box(direction: .column, alignItems: .stretch, spacing: 6) {

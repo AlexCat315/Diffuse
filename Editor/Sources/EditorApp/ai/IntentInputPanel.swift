@@ -20,12 +20,13 @@ struct IntentInputPanel: View {
 
     var body: some View {
         StoreScope(app.store) { store in
-            let selection = app.scene.entitySummary(id: store.state.selectedEntityID)
+            let _ = store.sceneRevision
+            let selection = app.scene.entitySummary(id: store.selectedEntityID)
 
             ScrollView(.vertical) {
                 Box(direction: .column, alignItems: .stretch, spacing: 10) {
-                    AIStatusSummary(status: store.state.aiStatusMessage,
-                                    warnings: store.state.aiWarnings)
+                    AIStatusSummary(status: store.aiStatusMessage,
+                                    warnings: store.aiWarnings)
 
                     AISection(title: "Selection") {
                         Box(direction: .column, alignItems: .stretch, spacing: 4) {

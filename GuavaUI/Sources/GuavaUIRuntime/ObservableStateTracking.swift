@@ -15,26 +15,37 @@ public enum ObservableStateTracking {
     public typealias DependencyCleaner = (ObjectIdentifier) -> Void
 
     nonisolated(unsafe) private static var stack: [ObservableStateScope] = []
-    nonisolated(unsafe) private static var cleaners: [DependencyCleaner] = []
+    nonisolated(unsafe) private static var cleanersByScope: [ObjectIdentifier: [ObjectIdentifier: DependencyCleaner]] = [:]
 
     public static var current: ObservableStateScope? {
         stack.last
     }
 
-    public static func registerDependencyCleaner(_ cleaner: @escaping DependencyCleaner) {
-        cleaners.append(cleaner)
+    public static func registerDependencyCleaner(for scopeID: ObjectIdentifier,
+                                                 ownerID: ObjectIdentifier,
+                                                 _ cleaner: @escaping DependencyCleaner) {
+        cleanersByScope[scopeID, default: [:]][ownerID] = cleaner
     }
 
     @discardableResult
     public static func withScope<R>(id: ObjectIdentifier,
                                     invalidate: @escaping () -> Void,
                                     _ body: () throws -> R) rethrows -> R {
-        for cleaner in cleaners {
-            cleaner(id)
-        }
+        clearDependencies(for: id)
         stack.append(ObservableStateScope(id: id, invalidate: invalidate))
         defer { _ = stack.popLast() }
         return try body()
+    }
+
+    public static func removeScope(id: ObjectIdentifier) {
+        clearDependencies(for: id)
+    }
+
+    private static func clearDependencies(for scopeID: ObjectIdentifier) {
+        let cleaners = cleanersByScope.removeValue(forKey: scopeID).map { Array($0.values) } ?? []
+        for cleaner in cleaners {
+            cleaner(scopeID)
+        }
     }
 }
 
@@ -48,14 +59,15 @@ public final class ObservableStateRegistrar: @unchecked Sendable {
     private var observersByKey: [AnyHashable: [ObjectIdentifier: Observer]] = [:]
     private var keysByScope: [ObjectIdentifier: Set<AnyHashable>] = [:]
 
-    public init() {
-        ObservableStateTracking.registerDependencyCleaner { [weak self] scopeID in
-            self?.removeDependencies(for: scopeID)
-        }
-    }
+    public init() {}
 
     public func access(_ key: AnyHashable) {
         guard let scope = ObservableStateTracking.current else { return }
+        let ownerID = ObjectIdentifier(self)
+        ObservableStateTracking.registerDependencyCleaner(for: scope.id,
+                                                          ownerID: ownerID) { [weak self] scopeID in
+            self?.removeDependencies(for: scopeID)
+        }
         lock.withLock {
             observersByKey[key, default: [:]][scope.id] = Observer(id: scope.id,
                                                                     invalidate: scope.invalidate)

@@ -13,15 +13,13 @@ struct EditorRootView: View {
     var body: some View {
         let cb = EditorCallbacks(app: app, controller: controller)
         StoreScope(app.store) { store in
-            let state = store.state
-
-            EditorPresentationBoundary(presentation: state.presentation) {
+            EditorPresentationBoundary(presentation: store.presentation) {
                 Box(direction: .column, alignItems: .stretch, spacing: 0) {
                     ShortcutHost(onKeyDown: cb.handleShortcut)
 
-                    EditorMainToolbar(playbackState: state.playbackState,
-                                      workspaceMode: state.workspaceMode,
-                                      activeLayoutPreset: state.activeLayoutPreset,
+                    EditorMainToolbar(playbackState: store.playbackState,
+                                      workspaceMode: store.workspaceMode,
+                                      activeLayoutPreset: store.activeLayoutPreset,
                                       onSetPlaybackState: cb.setPlaybackState,
                                       onSetWorkspaceMode: cb.setWorkspaceMode,
                                       onSetLayoutPreset: cb.setLayoutPreset,
