@@ -150,6 +150,34 @@ struct CardBattleRuntimeTests {
         ])
     }
 
+    @Test("battle rules expose shared command availability")
+    func battleRulesExposeCommandAvailability() {
+        let strike = BattleCard(id: "strike", title: "Strike", cost: 1, damage: 6)
+        let finisher = BattleCard(id: "finisher", title: "Finisher", cost: 4, damage: 18)
+        let player = BattlePlayerState(
+            id: .player,
+            health: 32,
+            maxEnergy: 3,
+            energy: 2,
+            deck: [],
+            hand: [strike, finisher]
+        )
+        let enemy = BattlePlayerState(id: .enemy, health: 24, maxEnergy: 2, deck: [])
+        let state = BattleState(
+            phase: .main,
+            turn: 1,
+            activePlayerID: .player,
+            players: [.player: player, .enemy: enemy]
+        )
+
+        #expect(BattleRules.opponent(of: .player, in: state) == .enemy)
+        #expect(BattleRules.canPlayCards(in: state, playerID: .player))
+        #expect(BattleRules.canPlay(strike, for: .player, in: state))
+        #expect(BattleRules.canPlay(finisher, for: .player, in: state) == false)
+        #expect(BattleRules.canEndTurn(state, playerID: .player))
+        #expect(BattleRules.canResolveEnemyAction(state) == false)
+    }
+
     @Test("ending player turn discards hand and passes control to enemy")
     func endPlayerTurnDiscardsHand() {
         let strike = BattleCard(id: "strike", title: "Strike", cost: 1, damage: 6)
