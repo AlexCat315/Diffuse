@@ -42,7 +42,9 @@ public struct BattleHUDSnapshot: Sendable, Equatable {
     public var energy: Int
     public var maxEnergy: Int
     public var health: Int
+    public var maxHealth: Int
     public var opponentHealth: Int
+    public var opponentMaxHealth: Int
     public var hand: [BattleHandCardViewModel]
     public var skills: [BattleSkillViewModel]
 
@@ -51,7 +53,9 @@ public struct BattleHUDSnapshot: Sendable, Equatable {
                 energy: Int,
                 maxEnergy: Int,
                 health: Int,
+                maxHealth: Int,
                 opponentHealth: Int,
+                opponentMaxHealth: Int,
                 hand: [BattleHandCardViewModel],
                 skills: [BattleSkillViewModel]) {
         self.phase = phase
@@ -59,7 +63,9 @@ public struct BattleHUDSnapshot: Sendable, Equatable {
         self.energy = energy
         self.maxEnergy = maxEnergy
         self.health = health
+        self.maxHealth = maxHealth
         self.opponentHealth = opponentHealth
+        self.opponentMaxHealth = opponentMaxHealth
         self.hand = hand
         self.skills = skills
     }
@@ -74,7 +80,9 @@ public struct BattleHUDSnapshot: Sendable, Equatable {
             energy: player.energy,
             maxEnergy: player.maxEnergy,
             health: player.health,
+            maxHealth: player.maxHealth,
             opponentHealth: opponentID.flatMap { state.players[$0]?.health } ?? 0,
+            opponentMaxHealth: opponentID.flatMap { state.players[$0]?.maxHealth } ?? 0,
             hand: player.hand.map {
                 BattleHandCardViewModel(
                     id: $0.id,
