@@ -57,4 +57,17 @@ struct Bounds3DTests {
         #expect(a.intersects(b))
         #expect(!a.intersects(Bounds3D(min: SIMD3<Float>(5, 5, 5), max: SIMD3<Float>(6, 6, 6))))
     }
+
+    @Test("bounds can expand uniformly or per axis")
+    func boundsCanExpand() {
+        let bounds = Bounds3D(min: SIMD3<Float>(1, 2, 3), max: SIMD3<Float>(4, 5, 6))
+        let uniform = bounds.expanded(by: 1)
+        let perAxis = bounds.expanded(by: SIMD3<Float>(1, 2, 3))
+
+        #expect(uniform.min == SIMD3<Float>(0, 1, 2))
+        #expect(uniform.max == SIMD3<Float>(5, 6, 7))
+        #expect(perAxis.min == SIMD3<Float>(0, 0, 0))
+        #expect(perAxis.max == SIMD3<Float>(5, 7, 9))
+        #expect(Bounds3D.empty.expanded(by: 10).isEmpty)
+    }
 }
