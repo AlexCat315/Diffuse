@@ -60,21 +60,21 @@ public struct BattleHUDSnapshot: Sendable, Equatable {
 
     public static func make(from state: BattleState, playerID: BattlePlayerID) -> BattleHUDSnapshot? {
         guard let player = state.players[playerID] else { return nil }
-        let canPlayCards = state.phase == .main && state.activePlayerID == playerID
-        let opponentID: BattlePlayerID = playerID == .player ? .enemy : .player
+        let canPlayCards = BattleRules.canPlayCards(in: state, playerID: playerID)
+        let opponentID = BattleRules.opponent(of: playerID, in: state)
         return BattleHUDSnapshot(
             phase: state.phase,
             turn: state.turn,
             energy: player.energy,
             maxEnergy: player.maxEnergy,
             health: player.health,
-            opponentHealth: state.players[opponentID]?.health ?? 0,
+            opponentHealth: opponentID.flatMap { state.players[$0]?.health } ?? 0,
             hand: player.hand.map {
                 BattleHandCardViewModel(
                     id: $0.id,
                     title: $0.title,
                     cost: $0.cost,
-                    isPlayable: canPlayCards && player.energy >= $0.cost,
+                    isPlayable: canPlayCards && BattleRules.canPlay($0, for: playerID, in: state),
                     damage: $0.damage
                 )
             },
