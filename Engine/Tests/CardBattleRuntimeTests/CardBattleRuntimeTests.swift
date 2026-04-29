@@ -178,7 +178,9 @@ struct CardBattleRuntimeTests {
         #expect(snapshot.turn == 2)
         #expect(snapshot.energy == 2)
         #expect(snapshot.health == 32)
+        #expect(snapshot.maxHealth == 32)
         #expect(snapshot.opponentHealth == 24)
+        #expect(snapshot.opponentMaxHealth == 24)
         #expect(snapshot.hand.map(\.id) == ["strike", "finisher"])
         #expect(snapshot.hand.map(\.isPlayable) == [true, false])
         #expect(snapshot.skills == [
@@ -310,6 +312,7 @@ struct CardBattleRuntimeTests {
         let player = BattlePlayerState(
             id: .enemy,
             health: -10,
+            maxHealth: 2,
             maxEnergy: 2,
             energy: 3,
             deck: [badCard],
@@ -333,5 +336,15 @@ struct CardBattleRuntimeTests {
             skillID: "bad-skill",
             cooldownTurns: -1
         )))
+    }
+
+    @Test("player state decodes legacy max health")
+    func playerStateDecodesLegacyMaxHealth() throws {
+        let json = #"{"id":"player","health":12,"maxEnergy":3,"deck":[]}"#.data(using: .utf8)!
+        let player = try JSONDecoder().decode(BattlePlayerState.self, from: json)
+
+        #expect(player.health == 12)
+        #expect(player.maxHealth == 12)
+        #expect(player.energy == 0)
     }
 }

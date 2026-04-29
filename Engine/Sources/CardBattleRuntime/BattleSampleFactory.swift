@@ -11,6 +11,7 @@ public enum BattleSampleFactory {
         let player = BattlePlayerState(
             id: .player,
             health: 32_000,
+            maxHealth: 32_000,
             maxEnergy: 10,
             deck: playerDeck,
             skills: [
@@ -22,6 +23,7 @@ public enum BattleSampleFactory {
         let enemy = BattlePlayerState(
             id: .enemy,
             health: 32_000,
+            maxHealth: 32_000,
             maxEnergy: 8,
             deck: [
                 BattleCard(id: "halberd", title: "Halberd", cost: 3, damage: 10),
