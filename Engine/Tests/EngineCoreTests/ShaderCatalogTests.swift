@@ -59,4 +59,17 @@ struct ShaderCatalogTests {
         #expect(r4.passes == expectedR4)
         #expect(r5.passes == expectedR5)
     }
+
+    @Test("stylized character shading schedules outline after base pass")
+    func plannerSchedulesStylizedOutline() {
+        let plan = RenderFramePlanner.makePlan(
+            settings: RenderSettings(
+                stage: .r5PostProcess,
+                enableBloom: true,
+                enableStylizedCharacterShading: true
+            )
+        )
+
+        #expect(plan.passes == [.depthPrepass, .skybox, .basePass, .outline, .bloom, .tonemap])
+    }
 }
