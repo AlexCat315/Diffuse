@@ -11,6 +11,8 @@ struct StylizedStyle {
 
 @group(0) @binding(0) var<uniform> u : Uniforms;
 @group(0) @binding(1) var<uniform> style : StylizedStyle;
+@group(0) @binding(2) var base_color_sampler : sampler;
+@group(0) @binding(3) var base_color_texture : texture_2d<f32>;
 
 struct VsIn {
     @location(0) pos            : vec3<f32>,
@@ -68,7 +70,8 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let ink_wash = style.ink_wash_color.rgb;
     let material_bias = fract(in.material_index * 0.173) * style.params.z;
     let grain = (paper_grain(in.uv * 83.0) - 0.5) * style.params.x;
-    let base = mix(ink_wash, in.color, 0.78);
+    let texel = textureSample(base_color_texture, base_color_sampler, in.uv).rgb;
+    let base = mix(ink_wash, in.color * texel, 0.78);
     let shaded = base * (0.28 + ramp * 0.92 + rim * style.params.y + material_bias + grain);
     return vec4<f32>(shaded, 1.0);
 }

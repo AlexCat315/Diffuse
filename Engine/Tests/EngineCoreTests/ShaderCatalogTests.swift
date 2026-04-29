@@ -28,7 +28,9 @@ struct ShaderCatalogTests {
         let stylizedModule = try catalog.loadWGSLRenderModule(named: "stylized_character")
         #expect(stylizedModule.contains("toon_ramp"))
         #expect(stylizedModule.contains("@group(0) @binding(1) var<uniform> style"))
+        #expect(stylizedModule.contains("@group(0) @binding(3) var base_color_texture"))
         #expect(stylizedModule.contains("style.params.z"))
+        #expect(stylizedModule.contains("textureSample(base_color_texture"))
         let outlineModule = try catalog.loadWGSLRenderModule(named: "outline")
         #expect(outlineModule.contains("style.params.w"))
 
