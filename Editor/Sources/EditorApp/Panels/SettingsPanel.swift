@@ -12,12 +12,12 @@ struct SettingsPanel: View {
                     SettingsSection(title: L("Appearance")) {
                         Row(alignment: .center, spacing: 8) {
                             SettingsChoiceButton(title: L("Dark"),
-                                                 isActive: store.state.themeMode == .dark) {
+                                                 isActive: store.themeMode == .dark) {
                                 store.dispatch(.setThemeMode(.dark))
                                 applySettingsChange(store)
                             }
                             SettingsChoiceButton(title: L("Light"),
-                                                 isActive: store.state.themeMode == .light) {
+                                                 isActive: store.themeMode == .light) {
                                 store.dispatch(.setThemeMode(.light))
                                 applySettingsChange(store)
                             }
@@ -27,12 +27,12 @@ struct SettingsPanel: View {
                     SettingsSection(title: L("Vertical Sync")) {
                         Row(alignment: .center, spacing: 10) {
                             Toggle(isOn: Binding(get: {
-                                store.state.vsyncMode.isEnabled
+                                store.vsyncMode.isEnabled
                             }, set: { enabled in
                                 applyVSyncMode(enabled ? .enabled : .disabled, store: store)
                             }))
 
-                            Text(store.state.vsyncMode.isEnabled ? L("On") : L("Off"))
+                            Text(store.vsyncMode.isEnabled ? L("On") : L("Off"))
                                 .font(.caption)
                                 .foregroundColor(.onSurface)
                         }
@@ -41,17 +41,17 @@ struct SettingsPanel: View {
                     SettingsSection(title: L("Language")) {
                         Row(alignment: .center, spacing: 8) {
                             SettingsChoiceButton(title: L("System"),
-                                                 isActive: store.state.language == .system) {
+                                                 isActive: store.language == .system) {
                                 store.dispatch(.setLanguage(.system))
                                 applySettingsChange(store)
                             }
                             SettingsChoiceButton(title: "English",
-                                                 isActive: store.state.language == .english) {
+                                                 isActive: store.language == .english) {
                                 store.dispatch(.setLanguage(.english))
                                 applySettingsChange(store)
                             }
                             SettingsChoiceButton(title: "简体中文",
-                                                 isActive: store.state.language == .simplifiedChinese) {
+                                                 isActive: store.language == .simplifiedChinese) {
                                 store.dispatch(.setLanguage(.simplifiedChinese))
                                 applySettingsChange(store)
                             }
@@ -71,15 +71,15 @@ struct SettingsPanel: View {
     }
 
     private func persistShell(_ store: EditorStore) {
-        EditorRootViewFactory.saveShellState(mode: store.state.workspaceMode,
-                                             preset: store.state.activeLayoutPreset,
-                                             themeMode: store.state.themeMode,
-                                             language: store.state.language,
-                                             vsyncMode: store.state.vsyncMode)
+        EditorRootViewFactory.saveShellState(mode: store.workspaceMode,
+                                             preset: store.activeLayoutPreset,
+                                             themeMode: store.themeMode,
+                                             language: store.language,
+                                             vsyncMode: store.vsyncMode)
     }
 
     private func applyVSyncMode(_ mode: EditorVSyncMode, store: EditorStore) {
-        guard store.state.vsyncMode != mode else { return }
+        guard store.vsyncMode != mode else { return }
         store.dispatch(.setVSyncMode(mode))
         app.applyVSyncMode(mode)
         applySettingsChange(store)

@@ -9,9 +9,11 @@ struct InspectorPanel: View {
 
     var body: some View {
         StoreScope(store) { store in
-            let entity = scene.entitySummary(id: store.state.selectedEntityID)
-            let sections = scene.inspectorSections(for: store.state.selectedEntityID)
-            let collapsedIDs = store.state.inspectorCollapsedSectionIDs
+            let _ = store.sceneRevision
+            let selectedEntityID = store.selectedEntityID
+            let entity = scene.entitySummary(id: selectedEntityID)
+            let sections = scene.inspectorSections(for: selectedEntityID)
+            let collapsedIDs = store.inspectorCollapsedSectionIDs
 
             Box(direction: .column, alignItems: .stretch) {
                 if let entity {

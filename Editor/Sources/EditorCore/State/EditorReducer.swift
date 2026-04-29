@@ -147,7 +147,7 @@ public enum EditorReducer {
 extension EditorAction {
     var notifiesSubscribers: Bool {
         switch self {
-        case .tickFrame:
+        case .tickFrame, .updateAssetDragCursor:
             return false
         default:
             return true
