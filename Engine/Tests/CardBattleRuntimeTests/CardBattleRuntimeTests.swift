@@ -144,6 +144,9 @@ struct CardBattleRuntimeTests {
         let legacy = try JSONDecoder().decode(BattleCard.self, from: legacyJSON)
         #expect(legacy.effects == [.damage(5)])
         #expect(legacy.totalDamage == 5)
+
+        let guardCard = BattleCard(id: "guard", title: "Guard", cost: 1, effects: [.block(7)])
+        #expect(guardCard.totalBlock == 7)
     }
 
     @Test("playing a healing card restores health up to max health")

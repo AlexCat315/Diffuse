@@ -27,7 +27,7 @@ public struct BattleCard: Identifiable, Hashable, Sendable, Codable {
             switch effect {
             case let .damage(amount):
                 return total + amount
-            case .heal:
+            case .heal, .block:
                 return total
             }
         }
@@ -39,6 +39,19 @@ public struct BattleCard: Identifiable, Hashable, Sendable, Codable {
             case .damage:
                 return total
             case let .heal(amount):
+                return total + amount
+            case .block:
+                return total
+            }
+        }
+    }
+
+    public var totalBlock: Int {
+        effects.reduce(0) { total, effect in
+            switch effect {
+            case .damage, .heal:
+                return total
+            case let .block(amount):
                 return total + amount
             }
         }

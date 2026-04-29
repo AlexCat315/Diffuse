@@ -12,6 +12,7 @@ public enum BattleValidationIssue: Sendable, Equatable, Codable {
     case negativeCardCost(playerID: BattlePlayerID, cardID: String, cost: Int)
     case negativeCardDamage(playerID: BattlePlayerID, cardID: String, damage: Int)
     case negativeCardHealing(playerID: BattlePlayerID, cardID: String, healing: Int)
+    case negativeCardBlock(playerID: BattlePlayerID, cardID: String, block: Int)
     case negativeSkillCooldown(playerID: BattlePlayerID, skillID: String, cooldownTurns: Int)
 }
 
@@ -83,9 +84,13 @@ public enum BattleStateValidator {
                     issues.append(.negativeCardDamage(playerID: playerID, cardID: card.id, damage: amount))
                 case let .heal(amount) where amount < 0:
                     issues.append(.negativeCardHealing(playerID: playerID, cardID: card.id, healing: amount))
+                case let .block(amount) where amount < 0:
+                    issues.append(.negativeCardBlock(playerID: playerID, cardID: card.id, block: amount))
                 case .damage:
                     break
                 case .heal:
+                    break
+                case .block:
                     break
                 }
             }
