@@ -28,6 +28,19 @@ struct CardBattleRuntimeTests {
         #expect(next.log == ["turn 1: player drew 2 card(s)"])
     }
 
+    @Test("starting turn reports actual drawn count when deck is short")
+    func startPlayerTurnReportsActualDrawnCount() {
+        let strike = BattleCard(id: "strike", title: "Strike", cost: 1, damage: 6)
+        let player = BattlePlayerState(id: .player, health: 32, maxEnergy: 3, deck: [strike])
+        let initial = BattleState(players: [.player: player])
+
+        let result = BattleStateMachine.reduceWithResult(initial, command: .startPlayerTurn(drawCount: 3))
+
+        #expect(result.state.players[.player]?.hand.map(\.id) == ["strike"])
+        #expect(result.state.log == ["turn 1: player drew 1 card(s)"])
+        #expect(result.events == [.turnStarted(turn: 1, playerID: .player, cardsDrawn: 1)])
+    }
+
     @Test("playing a card spends energy moves it to discard and damages target")
     func playCardResolvesDamage() {
         let strike = BattleCard(id: "strike", title: "Strike", cost: 1, skillID: "slash", damage: 6)
