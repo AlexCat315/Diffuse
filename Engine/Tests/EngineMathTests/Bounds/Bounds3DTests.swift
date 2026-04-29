@@ -70,4 +70,19 @@ struct Bounds3DTests {
         #expect(perAxis.max == SIMD3<Float>(5, 7, 9))
         #expect(Bounds3D.empty.expanded(by: 10).isEmpty)
     }
+
+    @Test("bounds transform by matrices")
+    func boundsTransformByMatrices() {
+        let bounds = Bounds3D(min: SIMD3<Float>(-1, -2, -3), max: SIMD3<Float>(1, 2, 3))
+        let transform = simd_float4x4(rows: [
+            SIMD4<Float>(2, 0, 0, 4),
+            SIMD4<Float>(0, 3, 0, -5),
+            SIMD4<Float>(0, 0, 1, 6),
+            SIMD4<Float>(0, 0, 0, 1),
+        ])
+        let transformed = bounds.transformed(by: transform)
+
+        #expect(transformed.min == SIMD3<Float>(2, -11, 3))
+        #expect(transformed.max == SIMD3<Float>(6, 1, 9))
+    }
 }
