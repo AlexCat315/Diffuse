@@ -677,6 +677,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                                            max: cubeBounds.max)
         MeshWireframeRegistry.shared.register(meshIndex: 0, mesh: cube)
         MeshMaterialRegistry.shared.register(meshIndex: 0, mesh: cube)
+        MeshTextureRegistry.shared.register(meshIndex: 0, mesh: cube, sourceDirectory: nil)
         if let objMesh, let objAsset {
             meshes.append(objMesh)
             let b = objAsset.localBounds
@@ -685,6 +686,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                                                max: b.max)
             MeshWireframeRegistry.shared.register(meshIndex: 1, mesh: objAsset)
             MeshMaterialRegistry.shared.register(meshIndex: 1, mesh: objAsset)
+            MeshTextureRegistry.shared.register(meshIndex: 1, mesh: objAsset, sourceDirectory: nil)
         } else {
             let fallbackFixture = GPUMesh(vertexBuffer: cubeMesh.vertexBuffer,
                                           indexBuffer: cubeMesh.indexBuffer,
@@ -696,6 +698,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                                                max: cubeBounds.max)
             MeshWireframeRegistry.shared.register(meshIndex: 1, mesh: cube)
             MeshMaterialRegistry.shared.register(meshIndex: 1, mesh: cube)
+            MeshTextureRegistry.shared.register(meshIndex: 1, mesh: cube, sourceDirectory: nil)
         }
 
         let meshNames = meshes.map(\ .name)
@@ -882,6 +885,16 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                                                max: bounds.max)
             MeshMaterialRegistry.shared.register(meshIndex: registered.meshIndex,
                                                  mesh: registered.mesh)
+            let textureReport = MeshTextureRegistry.shared.register(
+                meshIndex: registered.meshIndex,
+                mesh: registered.mesh,
+                sourceDirectory: registered.sourceDirectory
+            )
+            for failure in textureReport.failures {
+                Logger.renderer.warning(
+                    "mesh texture decode failed: meshIndex=\(registered.meshIndex) textureIndex=\(failure.textureIndex) uri=\(failure.sourceURI ?? "<nil>") reason=\(failure.reason)"
+                )
+            }
             if let slices = registered.topologySlices, !slices.isEmpty {
                 let submeshes = slices.map {
                     MeshWireframeTopology(positions: $0.positions,
