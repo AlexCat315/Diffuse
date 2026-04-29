@@ -659,6 +659,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                                            min: cubeBounds.min,
                                            max: cubeBounds.max)
         MeshWireframeRegistry.shared.register(meshIndex: 0, mesh: cube)
+        MeshMaterialRegistry.shared.register(meshIndex: 0, mesh: cube)
         if let objMesh, let objAsset {
             meshes.append(objMesh)
             let b = objAsset.localBounds
@@ -666,6 +667,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                                                min: b.min,
                                                max: b.max)
             MeshWireframeRegistry.shared.register(meshIndex: 1, mesh: objAsset)
+            MeshMaterialRegistry.shared.register(meshIndex: 1, mesh: objAsset)
         } else {
             let fallbackFixture = GPUMesh(vertexBuffer: cubeMesh.vertexBuffer,
                                           indexBuffer: cubeMesh.indexBuffer,
@@ -676,6 +678,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                                                min: cubeBounds.min,
                                                max: cubeBounds.max)
             MeshWireframeRegistry.shared.register(meshIndex: 1, mesh: cube)
+            MeshMaterialRegistry.shared.register(meshIndex: 1, mesh: cube)
         }
 
         let meshNames = meshes.map(\ .name)
@@ -798,6 +801,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             MeshBoundsRegistry.shared.register(meshIndex: registered.meshIndex,
                                                min: bounds.min,
                                                max: bounds.max)
+            MeshMaterialRegistry.shared.register(meshIndex: registered.meshIndex,
+                                                 mesh: registered.mesh)
             if let slices = registered.topologySlices, !slices.isEmpty {
                 let submeshes = slices.map {
                     MeshWireframeTopology(positions: $0.positions,
