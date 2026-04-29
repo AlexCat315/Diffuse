@@ -17,54 +17,6 @@ public final class MetalPlaceholderRenderer: RenderPacketConsumer, @unchecked Se
     public func currentViewportSurfaceState() -> ViewportSurfaceState { .init() }
 }
 
-/// One mesh resident on the GPU.
-private struct GPUMesh {
-    let vertexBuffer: GPUBuffer
-    let indexBuffer: GPUBuffer
-    let indexCount: UInt32
-    let name: String
-}
-
-extension GPUMesh: @unchecked Sendable {}
-
-/// Per-instance GPU resources (uniform buffer + bind group). One slot per draw call.
-private struct InstanceResources {
-    let uniformBuffer: GPUBuffer
-    let bindGroup: GPUBindGroup
-}
-
-extension InstanceResources: @unchecked Sendable {}
-
-/// Shared uniform-buffer path using dynamic bind offsets.
-private struct DynamicInstanceResources {
-    let uniformBuffer: GPUBuffer
-    let bindGroup: GPUBindGroup
-    let stride: UInt64
-    let capacity: Int
-}
-
-extension DynamicInstanceResources: @unchecked Sendable {}
-
-private struct RenderTextureTarget {
-    let texture: GPUTexture
-    let view: GPUTextureView
-}
-
-private struct GPUMeshTextureResource {
-    let texture: GPUTexture
-    let view: GPUTextureView
-    let width: UInt32
-    let height: UInt32
-    let sourcePath: String
-}
-
-private struct BasePassEncodingReport {
-    let drawCallCount: Int
-    let renderBundleCount: Int
-    let parallelJobCount: Int
-    let bundleRecordNS: UInt64
-}
-
 private struct SkyboxUniforms {
     var invViewProj: simd_float4x4
     var skyTint: SIMD4<Float>
