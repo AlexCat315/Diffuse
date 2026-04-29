@@ -5,9 +5,14 @@ struct Uniforms {
 @group(0) @binding(0) var<uniform> u : Uniforms;
 
 struct VsIn {
-    @location(0) pos : vec3<f32>,
-    @location(1) normal : vec3<f32>,
-    @location(2) color : vec3<f32>,
+    @location(0) pos            : vec3<f32>,
+    @location(1) normal         : vec3<f32>,
+    @location(2) color          : vec3<f32>,
+    @location(3) uv             : vec2<f32>,
+    @location(4) tangent        : vec4<f32>,
+    @location(5) material_index : f32,
+    @location(6) joints         : vec4<f32>,
+    @location(7) weights        : vec4<f32>,
 };
 
 struct VsOut {

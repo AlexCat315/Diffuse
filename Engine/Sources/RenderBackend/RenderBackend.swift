@@ -103,6 +103,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var meshPipelineHDR: GPURenderPipeline?
     private var stylizedMeshPipelineLDR: GPURenderPipeline?
     private var stylizedMeshPipelineHDR: GPURenderPipeline?
+    private var outlinePipelineLDR: GPURenderPipeline?
+    private var outlinePipelineHDR: GPURenderPipeline?
     private var meshBindGroupLayout: GPUBindGroupLayout?
     private var meshPipelineLayout: GPUPipelineLayout?
     private var skyboxPipeline: GPURenderPipeline?
@@ -242,6 +244,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             if framePlan.passes.contains(.ssao) {
                 try ensureSSAOPipeline()
             }
+            if framePlan.passes.contains(.outline) {
+                _ = try ensureOutlinePipeline(hdr: usesHDRFrameGraph)
+            }
             try ensureFullscreenResources()
 
             let prepareDoneNS = DispatchTime.now().uptimeNanoseconds
@@ -291,6 +296,16 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         renderBundleCount += report.renderBundleCount
                         renderBundleParallelJobs += report.parallelJobCount
                         bundleRecordNS &+= report.bundleRecordNS
+
+                    case .outline:
+                        let outlinePipeline = try ensureOutlinePipeline(hdr: usesHDRFrameGraph)
+                        drawCallCount += try encodeOutlinePass(
+                            encoder: encoder,
+                            colorView: usesHDRFrameGraph ? sceneColorTarget?.view ?? colorTarget.view : colorTarget.view,
+                            depthView: depthView,
+                            pipeline: outlinePipeline,
+                            scene: packet.scene
+                        )
 
                     case .ssao:
                         guard let input = hdrCurrent,
@@ -386,8 +401,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             pipeline: fxaaPipeline
                         )
 
-                    case .outline,
-                         .depthPrepass,
+                    case .depthPrepass,
                          .shadowPass:
                         emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
 
@@ -774,6 +788,58 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             } else {
                 meshPipelineLDR = pipeline
             }
+        }
+        return pipeline
+    }
+
+    private func ensureOutlinePipeline(hdr: Bool) throws -> GPURenderPipeline {
+        try ensureMeshAssetsUploaded()
+        if hdr, let outlinePipelineHDR { return outlinePipelineHDR }
+        if !hdr, let outlinePipelineLDR { return outlinePipelineLDR }
+        guard backend.rawDevice != nil else {
+            throw WGPUBackendError.initFailed("device not ready")
+        }
+
+        let module = try backend.createShaderModule(
+            wgsl: try Self.loadShaderSource(named: "outline"),
+            label: "outline"
+        )
+
+        if meshBindGroupLayout == nil {
+            meshBindGroupLayout = try backend.createBindGroupLayout(
+                entries: [
+                    GPUBindGroupLayoutEntry(
+                        binding: 0,
+                        visibility: .vertex,
+                        type: .uniformBuffer,
+                        hasDynamicOffset: true
+                    )
+                ]
+            )
+        }
+        if meshPipelineLayout == nil, let meshBindGroupLayout {
+            meshPipelineLayout = try backend.createPipelineLayout(bindGroupLayouts: [meshBindGroupLayout])
+        }
+
+        let pipeline = try backend.createRenderPipeline(
+            desc: GPURenderPipelineDescriptor(
+                shaderModule: module,
+                pipelineLayout: meshPipelineLayout,
+                colorFormat: hdr ? hdrFormat : format,
+                cullMode: .front,
+                vertexBuffers: [makeMeshVertexLayout()],
+                depthStencil: GPUDepthStencilPipelineState(
+                    format: depthFormat,
+                    depthWriteEnabled: false,
+                    depthCompare: .lessEqual
+                )
+            )
+        )
+
+        if hdr {
+            outlinePipelineHDR = pipeline
+        } else {
+            outlinePipelineLDR = pipeline
         }
         return pipeline
     }
@@ -1223,6 +1289,55 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             parallelJobCount: 0,
             bundleRecordNS: 0
         )
+    }
+
+    private func encodeOutlinePass(
+        encoder: GPUCommandEncoder,
+        colorView: GPUTextureView,
+        depthView: GPUTextureView,
+        pipeline: GPURenderPipeline,
+        scene: RenderScene
+    ) throws -> Int {
+        let drawOrder = makeBasePassDrawOrder(scene: scene)
+        let pass = try encoder.beginRenderPass(
+            colorView: colorView,
+            loadOp: .load,
+            storeOp: .store,
+            clearColor: GPUColor(r: 0.0, g: 0.0, b: 0.0, a: 1.0),
+            depthView: depthView,
+            depthLoadOp: .load,
+            depthStoreOp: .store,
+            depthClearValue: 1.0
+        )
+        pass.setPipeline(pipeline)
+        var drawCallCount = 0
+        if let dyn = dynamicInstanceResources {
+            for i in drawOrder {
+                let instance = scene.instances[i]
+                guard meshes.indices.contains(instance.meshIndex) else { continue }
+                let mesh = meshes[instance.meshIndex]
+                let drawOffset = UInt64(i) * dyn.stride
+                guard drawOffset <= UInt64(UInt32.max) else { continue }
+                pass.setBindGroup(dyn.bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
+                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                pass.drawIndexed(indexCount: mesh.indexCount)
+                drawCallCount += 1
+            }
+        } else {
+            for i in drawOrder where i < instanceResources.count {
+                let instance = scene.instances[i]
+                guard meshes.indices.contains(instance.meshIndex) else { continue }
+                let mesh = meshes[instance.meshIndex]
+                pass.setBindGroup(instanceResources[i].bindGroup, index: 0, dynamicOffsets: [0])
+                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                pass.drawIndexed(indexCount: mesh.indexCount)
+                drawCallCount += 1
+            }
+        }
+        pass.end()
+        return drawCallCount
     }
 
     private func encodeBasePassWithRenderBundles(
