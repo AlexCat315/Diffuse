@@ -31,6 +31,7 @@ struct AssetRegistryTests {
         #expect(registry.entry(for: entries[0].id) == entries[0])
         #expect(registry.meshAsset(for: entries[0].meshIndex)?.name == "triangle.gltf")
         #expect(registry.registeredMeshes().map(\ .meshIndex) == [AssetRegistry.importedMeshStartIndex])
+        #expect(registry.registeredMeshes().first?.sourceDirectory == meshesDir.path)
     }
 
     private func writeTriangleGLTF(into directory: URL) throws {

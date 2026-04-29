@@ -217,6 +217,11 @@ private struct MeshBuilder {
 
             let positions = try readFloat3Accessor(index: positionAccessor)
             let normals = try primitive.attributes["NORMAL"].map(readFloat3Accessor)
+            let uvs = try primitive.attributes["TEXCOORD_0"].map(readFloat2Accessor)
+            let tangents = try primitive.attributes["TANGENT"].map(readFloat4Accessor)
+            let joints = try primitive.attributes["JOINTS_0"].map(readJoint4Accessor)
+            let weights = try primitive.attributes["WEIGHTS_0"].map(readWeight4Accessor)
+            let materialIndex = Float(primitive.material ?? 0)
             let primitiveIndices = try primitive.indices.map(readIndexAccessor)
                 ?? Array(0..<positions.count)
 
@@ -259,14 +264,64 @@ private struct MeshBuilder {
                     worldNormal = SIMD3<Float>(0, 0, 0)
                 }
 
-                vertices.append(contentsOf: [
-                    worldPosition.x, worldPosition.y, worldPosition.z,
-                    worldNormal.x, worldNormal.y, worldNormal.z,
-                    1, 1, 1,
-                ])
+                let uv = uvs.flatMap { $0.indices.contains(rawIndex) ? $0[rawIndex] : nil } ?? .zero
+                let tangent = tangents.flatMap { $0.indices.contains(rawIndex) ? $0[rawIndex] : nil }
+                    ?? SIMD4<Float>(1, 0, 0, 1)
+                let joint = joints.flatMap { $0.indices.contains(rawIndex) ? $0[rawIndex] : nil } ?? .zero
+                let weight = weights.flatMap { $0.indices.contains(rawIndex) ? $0[rawIndex] : nil }
+                    ?? SIMD4<Float>(1, 0, 0, 0)
+
+                MeshAsset.appendVertex(
+                    to: &vertices,
+                    position: worldPosition,
+                    normal: worldNormal,
+                    uv: uv,
+                    tangent: tangent,
+                    materialIndex: materialIndex,
+                    joints: joint,
+                    weights: weight
+                )
                 indices.append(nextIndex)
                 nextIndex += 1
             }
+        }
+    }
+
+    func readFloat2Accessor(index: Int) throws -> [SIMD2<Float>] {
+        let accessor = try accessor(at: index)
+        guard accessor.type == "VEC2" else {
+            throw GLTFImporterError.invalidAccessor("expected VEC2 accessor at index \(index)")
+        }
+        guard accessor.componentType == 5126 else {
+            throw GLTFImporterError.invalidAccessor("expected FLOAT component type for accessor \(index)")
+        }
+        let view = try bufferView(for: accessor, accessorIndex: index)
+        let data = buffers[view.buffer]
+        let stride = view.byteStride ?? 8
+        let baseOffset = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+        return try (0..<accessor.count).map { element in
+            let offset = baseOffset + element * stride
+            return SIMD2<Float>(
+                try readValue(Float.self, from: data, offset: offset),
+                try readValue(Float.self, from: data, offset: offset + 4)
+            )
+        }
+    }
+
+    func readFloatScalarAccessor(index: Int) throws -> [Float] {
+        let accessor = try accessor(at: index)
+        guard accessor.type == "SCALAR" else {
+            throw GLTFImporterError.invalidAccessor("expected SCALAR accessor at index \(index)")
+        }
+        guard accessor.componentType == 5126 else {
+            throw GLTFImporterError.invalidAccessor("expected FLOAT component type for accessor \(index)")
+        }
+        let view = try bufferView(for: accessor, accessorIndex: index)
+        let data = buffers[view.buffer]
+        let stride = view.byteStride ?? 4
+        let baseOffset = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+        return try (0..<accessor.count).map { element in
+            try readValue(Float.self, from: data, offset: baseOffset + element * stride)
         }
     }
 
@@ -289,6 +344,161 @@ private struct MeshBuilder {
                 try readValue(Float.self, from: data, offset: offset + 4),
                 try readValue(Float.self, from: data, offset: offset + 8)
             )
+        }
+    }
+
+    func readFloat4Accessor(index: Int) throws -> [SIMD4<Float>] {
+        let accessor = try accessor(at: index)
+        guard accessor.type == "VEC4" else {
+            throw GLTFImporterError.invalidAccessor("expected VEC4 accessor at index \(index)")
+        }
+        guard accessor.componentType == 5126 else {
+            throw GLTFImporterError.invalidAccessor("expected FLOAT component type for accessor \(index)")
+        }
+        let view = try bufferView(for: accessor, accessorIndex: index)
+        let data = buffers[view.buffer]
+        let stride = view.byteStride ?? 16
+        let baseOffset = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+        return try (0..<accessor.count).map { element in
+            let offset = baseOffset + element * stride
+            return SIMD4<Float>(
+                try readValue(Float.self, from: data, offset: offset),
+                try readValue(Float.self, from: data, offset: offset + 4),
+                try readValue(Float.self, from: data, offset: offset + 8),
+                try readValue(Float.self, from: data, offset: offset + 12)
+            )
+        }
+    }
+
+    func readAnimationOutputAccessor(index: Int) throws -> [SIMD4<Float>] {
+        let accessor = try accessor(at: index)
+        switch accessor.type {
+        case "SCALAR":
+            return try readFloatScalarAccessor(index: index).map { SIMD4<Float>($0, 0, 0, 0) }
+        case "VEC3":
+            return try readFloat3Accessor(index: index).map { SIMD4<Float>($0.x, $0.y, $0.z, 0) }
+        case "VEC4":
+            return try readFloat4Accessor(index: index)
+        default:
+            throw GLTFImporterError.invalidAccessor("unsupported animation output accessor type \(accessor.type)")
+        }
+    }
+
+    func readFloat4x4Accessor(index: Int) throws -> [simd_float4x4] {
+        let accessor = try accessor(at: index)
+        guard accessor.type == "MAT4" else {
+            throw GLTFImporterError.invalidAccessor("expected MAT4 accessor at index \(index)")
+        }
+        guard accessor.componentType == 5126 else {
+            throw GLTFImporterError.invalidAccessor("expected FLOAT component type for accessor \(index)")
+        }
+        let view = try bufferView(for: accessor, accessorIndex: index)
+        let data = buffers[view.buffer]
+        let stride = view.byteStride ?? 64
+        let baseOffset = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+        return try (0..<accessor.count).map { element in
+            let offset = baseOffset + element * stride
+            return simd_float4x4(columns: (
+                SIMD4<Float>(
+                    try readValue(Float.self, from: data, offset: offset),
+                    try readValue(Float.self, from: data, offset: offset + 4),
+                    try readValue(Float.self, from: data, offset: offset + 8),
+                    try readValue(Float.self, from: data, offset: offset + 12)
+                ),
+                SIMD4<Float>(
+                    try readValue(Float.self, from: data, offset: offset + 16),
+                    try readValue(Float.self, from: data, offset: offset + 20),
+                    try readValue(Float.self, from: data, offset: offset + 24),
+                    try readValue(Float.self, from: data, offset: offset + 28)
+                ),
+                SIMD4<Float>(
+                    try readValue(Float.self, from: data, offset: offset + 32),
+                    try readValue(Float.self, from: data, offset: offset + 36),
+                    try readValue(Float.self, from: data, offset: offset + 40),
+                    try readValue(Float.self, from: data, offset: offset + 44)
+                ),
+                SIMD4<Float>(
+                    try readValue(Float.self, from: data, offset: offset + 48),
+                    try readValue(Float.self, from: data, offset: offset + 52),
+                    try readValue(Float.self, from: data, offset: offset + 56),
+                    try readValue(Float.self, from: data, offset: offset + 60)
+                )
+            ))
+        }
+    }
+
+    func readJoint4Accessor(index: Int) throws -> [SIMD4<Float>] {
+        let accessor = try accessor(at: index)
+        guard accessor.type == "VEC4" else {
+            throw GLTFImporterError.invalidAccessor("expected VEC4 accessor at index \(index)")
+        }
+        let view = try bufferView(for: accessor, accessorIndex: index)
+        let data = buffers[view.buffer]
+        let componentSize = try byteWidth(of: accessor.componentType)
+        let stride = view.byteStride ?? componentSize * 4
+        let baseOffset = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+        return try (0..<accessor.count).map { element in
+            let offset = baseOffset + element * stride
+            switch accessor.componentType {
+            case 5121:
+                return SIMD4<Float>(
+                    Float(try readValue(UInt8.self, from: data, offset: offset)),
+                    Float(try readValue(UInt8.self, from: data, offset: offset + 1)),
+                    Float(try readValue(UInt8.self, from: data, offset: offset + 2)),
+                    Float(try readValue(UInt8.self, from: data, offset: offset + 3))
+                )
+            case 5123:
+                return SIMD4<Float>(
+                    Float(UInt16(littleEndian: try readValue(UInt16.self, from: data, offset: offset))),
+                    Float(UInt16(littleEndian: try readValue(UInt16.self, from: data, offset: offset + 2))),
+                    Float(UInt16(littleEndian: try readValue(UInt16.self, from: data, offset: offset + 4))),
+                    Float(UInt16(littleEndian: try readValue(UInt16.self, from: data, offset: offset + 6)))
+                )
+            default:
+                throw GLTFImporterError.invalidAccessor("unsupported joint component type \(accessor.componentType)")
+            }
+        }
+    }
+
+    func readWeight4Accessor(index: Int) throws -> [SIMD4<Float>] {
+        let accessor = try accessor(at: index)
+        guard accessor.type == "VEC4" else {
+            throw GLTFImporterError.invalidAccessor("expected VEC4 accessor at index \(index)")
+        }
+        let view = try bufferView(for: accessor, accessorIndex: index)
+        let data = buffers[view.buffer]
+        let componentSize = try byteWidth(of: accessor.componentType)
+        let stride = view.byteStride ?? componentSize * 4
+        let baseOffset = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+        return try (0..<accessor.count).map { element in
+            let offset = baseOffset + element * stride
+            switch accessor.componentType {
+            case 5126:
+                return SIMD4<Float>(
+                    try readValue(Float.self, from: data, offset: offset),
+                    try readValue(Float.self, from: data, offset: offset + 4),
+                    try readValue(Float.self, from: data, offset: offset + 8),
+                    try readValue(Float.self, from: data, offset: offset + 12)
+                )
+            case 5121:
+                let divisor: Float = accessor.normalized == true ? 255 : 1
+                return SIMD4<Float>(
+                    Float(try readValue(UInt8.self, from: data, offset: offset)) / divisor,
+                    Float(try readValue(UInt8.self, from: data, offset: offset + 1)) / divisor,
+                    Float(try readValue(UInt8.self, from: data, offset: offset + 2)) / divisor,
+                    Float(try readValue(UInt8.self, from: data, offset: offset + 3)) / divisor
+                )
+            case 5123:
+                let divisor: Float = accessor.normalized == true ? 65_535 : 1
+                return SIMD4<Float>(
+                    Float(UInt16(littleEndian: try readValue(UInt16.self, from: data, offset: offset))) / divisor,
+                    Float(UInt16(littleEndian: try readValue(UInt16.self, from: data, offset: offset + 2))) / divisor,
+                    Float(UInt16(littleEndian: try readValue(UInt16.self, from: data, offset: offset + 4))) / divisor,
+                    Float(UInt16(littleEndian: try readValue(UInt16.self, from: data, offset: offset + 6))) / divisor
+                )
+            default:
+                throw GLTFImporterError.invalidAccessor("unsupported weight component type \(accessor.componentType)")
+            }
         }
     }
 
@@ -325,9 +535,59 @@ private struct MeshBuilder {
         guard !vertices.isEmpty else {
             throw GLTFImporterError.invalidAccessor("gltf produced no triangles")
         }
-        var mesh = MeshAsset(name: name, vertices: vertices, indices: indices)
+        var mesh = MeshAsset(
+            name: name,
+            vertices: vertices,
+            indices: indices,
+            materials: document.meshMaterials(),
+            textures: document.meshTextures(buffers: buffers),
+            skins: try meshSkins(),
+            animations: try meshAnimations()
+        )
         MeshNormalTools.fillMissingNormals(vertices: &mesh.vertices, indices: mesh.indices)
         return (mesh, topologies)
+    }
+
+    func meshSkins() throws -> [MeshSkin] {
+        guard let skins = document.skins, !skins.isEmpty else { return [] }
+        return try skins.map { skin in
+            let inverseBindMatrices: [simd_float4x4]
+            if let accessorIndex = skin.inverseBindMatrices {
+                inverseBindMatrices = try readFloat4x4Accessor(index: accessorIndex)
+            } else {
+                inverseBindMatrices = Array(repeating: matrix_identity_float4x4,
+                                            count: skin.joints.count)
+            }
+            return MeshSkin(name: skin.name,
+                            jointNodeIndices: skin.joints,
+                            inverseBindMatrices: inverseBindMatrices)
+        }
+    }
+
+    func meshAnimations() throws -> [MeshAnimation] {
+        guard let animations = document.animations, !animations.isEmpty else { return [] }
+        return try animations.map { animation in
+            let samplers = try animation.samplers.map { sampler in
+                MeshAnimationSampler(
+                    inputTimes: try readFloatScalarAccessor(index: sampler.input),
+                    outputValues: try readAnimationOutputAccessor(index: sampler.output),
+                    interpolation: MeshAnimationInterpolation(gltfName: sampler.interpolation)
+                )
+            }
+            let channels = try animation.channels.map { channel in
+                guard let path = MeshAnimationPath(rawValue: channel.target.path) else {
+                    throw GLTFImporterError.invalidAccessor("unsupported animation target path \(channel.target.path)")
+                }
+                return MeshAnimationChannel(
+                    samplerIndex: channel.sampler,
+                    targetNodeIndex: channel.target.node,
+                    path: path
+                )
+            }
+            return MeshAnimation(name: animation.name,
+                                 samplers: samplers,
+                                 channels: channels)
+        }
     }
 
     private func accessor(at index: Int) throws -> GLTFAccessor {
@@ -544,6 +804,12 @@ private struct GLTFDocument: Decodable {
     let scenes: [GLTFScene]?
     let nodes: [GLTFNode]?
     let meshes: [GLTFMesh]?
+    let materials: [GLTFMaterial]?
+    let textures: [GLTFTexture]?
+    let images: [GLTFImage]?
+    let samplers: [GLTFSampler]?
+    let skins: [GLTFSkin]?
+    let animations: [GLTFAnimation]?
     let accessors: [GLTFAccessor]
     let bufferViews: [GLTFBufferView]?
     let buffers: [GLTFBuffer]
@@ -554,7 +820,9 @@ private struct GLTFScene: Decodable {
 }
 
 private struct GLTFNode: Decodable {
+    let name: String?
     let mesh: Int?
+    let skin: Int?
     let children: [Int]?
     let matrix: [Float]?
     let translation: [Float]?
@@ -617,6 +885,74 @@ private struct GLTFPrimitive: Decodable {
     let attributes: [String: Int]
     let indices: Int?
     let mode: Int?
+    let material: Int?
+}
+
+private struct GLTFMaterial: Decodable {
+    let name: String?
+    let pbrMetallicRoughness: GLTFPBRMetallicRoughness?
+    let normalTexture: GLTFTextureInfo?
+}
+
+private struct GLTFPBRMetallicRoughness: Decodable {
+    let baseColorFactor: [Float]?
+    let baseColorTexture: GLTFTextureInfo?
+    let metallicFactor: Float?
+    let roughnessFactor: Float?
+}
+
+private struct GLTFTextureInfo: Decodable {
+    let index: Int
+}
+
+private struct GLTFTexture: Decodable {
+    let name: String?
+    let sampler: Int?
+    let source: Int?
+}
+
+private struct GLTFImage: Decodable {
+    let name: String?
+    let uri: String?
+    let bufferView: Int?
+    let mimeType: String?
+}
+
+private struct GLTFSampler: Decodable {
+    let name: String?
+    let magFilter: Int?
+    let minFilter: Int?
+    let wrapS: Int?
+    let wrapT: Int?
+}
+
+private struct GLTFSkin: Decodable {
+    let name: String?
+    let inverseBindMatrices: Int?
+    let skeleton: Int?
+    let joints: [Int]
+}
+
+private struct GLTFAnimation: Decodable {
+    let name: String?
+    let samplers: [GLTFAnimationSampler]
+    let channels: [GLTFAnimationChannel]
+}
+
+private struct GLTFAnimationSampler: Decodable {
+    let input: Int
+    let output: Int
+    let interpolation: String?
+}
+
+private struct GLTFAnimationChannel: Decodable {
+    let sampler: Int
+    let target: GLTFAnimationTarget
+}
+
+private struct GLTFAnimationTarget: Decodable {
+    let node: Int?
+    let path: String
 }
 
 private struct GLTFAccessor: Decodable {
@@ -625,6 +961,7 @@ private struct GLTFAccessor: Decodable {
     let componentType: Int
     let count: Int
     let type: String
+    let normalized: Bool?
 }
 
 private struct GLTFBufferView: Decodable {
@@ -637,6 +974,68 @@ private struct GLTFBufferView: Decodable {
 private struct GLTFBuffer: Decodable {
     let uri: String?
     let byteLength: Int
+}
+
+private extension GLTFDocument {
+    func meshMaterials() -> [MeshMaterial] {
+        guard let materials, !materials.isEmpty else {
+            return [MeshMaterial.fallback]
+        }
+        return materials.map { material in
+            let pbr = material.pbrMetallicRoughness
+            return MeshMaterial(
+                name: material.name,
+                baseColorFactor: Self.vec4(pbr?.baseColorFactor, fallback: SIMD4<Float>(1, 1, 1, 1)),
+                baseColorTextureIndex: pbr?.baseColorTexture?.index,
+                normalTextureIndex: material.normalTexture?.index,
+                metallicFactor: pbr?.metallicFactor ?? 1,
+                roughnessFactor: pbr?.roughnessFactor ?? 1
+            )
+        }
+    }
+
+    func meshTextures(buffers: [Data]) -> [MeshTexture] {
+        guard let textures, !textures.isEmpty else { return [] }
+        return textures.map { texture in
+            let image = texture.source.flatMap { images?[safe: $0] }
+            let data = image?.bufferView.flatMap { imageData(bufferViewIndex: $0, buffers: buffers) }
+            return MeshTexture(
+                name: texture.name ?? image?.name,
+                sourceURI: image?.uri,
+                mimeType: image?.mimeType,
+                samplerIndex: texture.sampler,
+                data: data
+            )
+        }
+    }
+
+    private func imageData(bufferViewIndex: Int, buffers: [Data]) -> Data? {
+        guard let view = bufferViews?[safe: bufferViewIndex],
+              let buffer = buffers[safe: view.buffer]
+        else { return nil }
+        let start = view.byteOffset ?? 0
+        let end = start + view.byteLength
+        guard start >= 0, end <= buffer.count else { return nil }
+        return buffer.subdata(in: start..<end)
+    }
+
+    private static func vec4(_ values: [Float]?, fallback: SIMD4<Float>) -> SIMD4<Float> {
+        guard let values, values.count >= 4 else { return fallback }
+        return SIMD4<Float>(values[0], values[1], values[2], values[3])
+    }
+}
+
+private extension MeshAnimationInterpolation {
+    init(gltfName: String?) {
+        switch gltfName {
+        case "STEP":
+            self = .step
+        case "CUBICSPLINE":
+            self = .cubicSpline
+        default:
+            self = .linear
+        }
+    }
 }
 
 private extension Array {

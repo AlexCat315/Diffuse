@@ -17,9 +17,18 @@ struct EditorRootView: View {
                 Box(direction: .column, alignItems: .stretch, spacing: 0) {
                     ShortcutHost(onKeyDown: cb.handleShortcut)
 
+                    EditorMenuBar(workspaceMode: store.workspaceMode,
+                                  activeLayoutPreset: store.activeLayoutPreset,
+                                  onCommand: cb.handleMenuCommand)
+                    Divider()
+
                     EditorMainToolbar(playbackState: store.playbackState,
                                       workspaceMode: store.workspaceMode,
                                       activeLayoutPreset: store.activeLayoutPreset,
+                                      onNewScene: cb.newScene,
+                                      onOpenScene: cb.openScene,
+                                      onSaveScene: cb.saveScene,
+                                      onReloadAssets: cb.reloadAssets,
                                       onSetPlaybackState: cb.setPlaybackState,
                                       onSetWorkspaceMode: cb.setWorkspaceMode,
                                       onSetLayoutPreset: cb.setLayoutPreset,
@@ -49,9 +58,18 @@ private struct EditorCallbacks {
     let setLayoutPreset: (EditorLayoutPreset) -> Void
     let resetLayout: () -> Void
     let openSettings: () -> Void
+    let newScene: () -> Void
+    let openScene: () -> Void
+    let saveScene: () -> Void
+    let reloadAssets: () -> Void
+    let handleMenuCommand: (EditorMenuCommand) -> Void
     let handleShortcut: (KeyEvent) -> Bool
 
     init(app: EditorApplication, controller: DockController) {
+        self.newScene = { app.resetPreviewScene() }
+        self.openScene = { _ = app.openSceneManifest() }
+        self.saveScene = { _ = app.saveSceneManifest() }
+        self.reloadAssets = { _ = app.reloadAssets() }
         self.setPlaybackState = { next in
             let s = app.store; if s.state.playbackState != next { s.dispatch(.setPlaybackState(next)) }
         }
@@ -63,7 +81,7 @@ private struct EditorCallbacks {
             s.dispatch(.setWorkspaceMode(next))
             let np = s.state.activeLayoutPreset
             EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: np)
-            EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
+            EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, cmdSelectBehavior: s.state.cmdSelectBehavior)
         }
         self.setLayoutPreset = { nextPreset in
             let s = app.store
@@ -72,16 +90,87 @@ private struct EditorCallbacks {
             EditorRootViewFactory.saveDockLayout(controller, for: m, preset: pp)
             s.dispatch(.setActiveLayoutPreset(nextPreset))
             EditorRootViewFactory.loadLayoutPreset(into: controller, for: m, preset: nextPreset)
-            EditorRootViewFactory.saveShellState(mode: m, preset: nextPreset, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
+            EditorRootViewFactory.saveShellState(mode: m, preset: nextPreset, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, cmdSelectBehavior: s.state.cmdSelectBehavior)
         }
         self.resetLayout = {
             let s = app.store
             let m = s.state.workspaceMode; let p = s.state.activeLayoutPreset
             EditorRootViewFactory.resetLayout(into: controller, for: m, preset: p)
             EditorRootViewFactory.saveDockLayout(controller, for: m, preset: p)
-            EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
+            EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, cmdSelectBehavior: s.state.cmdSelectBehavior)
         }
         self.openSettings = { app.openSettingsWindow() }
+        self.handleMenuCommand = { command in
+            let s = app.store
+            switch command {
+            case .newScene:
+                app.resetPreviewScene()
+            case .openScene:
+                _ = app.openSceneManifest()
+            case .saveScene:
+                _ = app.saveSceneManifest()
+            case .importAssets:
+                _ = app.reloadAssets()
+            case .undo:
+                app.logConsole("Undo is not available for this command path yet", severity: .warning)
+            case .redo:
+                app.logConsole("Redo is not available for this command path yet", severity: .warning)
+            case let .setWorkspaceMode(next):
+                guard s.state.workspaceMode != next else { return }
+                let previousMode = s.state.workspaceMode
+                let previousPreset = s.state.activeLayoutPreset
+                EditorRootViewFactory.saveDockLayout(controller, for: previousMode, preset: previousPreset)
+                s.dispatch(.setWorkspaceMode(next))
+                let nextPreset = s.state.activeLayoutPreset
+                EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: nextPreset)
+                EditorRootViewFactory.saveShellState(mode: next,
+                                                     preset: nextPreset,
+                                                     themeMode: s.state.themeMode,
+                                                     language: s.state.language,
+                                                     vsyncMode: s.state.vsyncMode,
+                                                     cmdSelectBehavior: s.state.cmdSelectBehavior)
+            case let .setLayoutPreset(nextPreset):
+                guard nextPreset != s.state.activeLayoutPreset else { return }
+                let mode = s.state.workspaceMode
+                let previousPreset = s.state.activeLayoutPreset
+                EditorRootViewFactory.saveDockLayout(controller, for: mode, preset: previousPreset)
+                s.dispatch(.setActiveLayoutPreset(nextPreset))
+                EditorRootViewFactory.loadLayoutPreset(into: controller, for: mode, preset: nextPreset)
+                EditorRootViewFactory.saveShellState(mode: mode,
+                                                     preset: nextPreset,
+                                                     themeMode: s.state.themeMode,
+                                                     language: s.state.language,
+                                                     vsyncMode: s.state.vsyncMode,
+                                                     cmdSelectBehavior: s.state.cmdSelectBehavior)
+            case .resetLayout:
+                let mode = s.state.workspaceMode
+                let preset = s.state.activeLayoutPreset
+                EditorRootViewFactory.resetLayout(into: controller, for: mode, preset: preset)
+                EditorRootViewFactory.saveDockLayout(controller, for: mode, preset: preset)
+                EditorRootViewFactory.saveShellState(mode: mode,
+                                                     preset: preset,
+                                                     themeMode: s.state.themeMode,
+                                                     language: s.state.language,
+                                                     vsyncMode: s.state.vsyncMode,
+                                                     cmdSelectBehavior: s.state.cmdSelectBehavior)
+            case let .setPlaybackState(next):
+                if s.state.playbackState != next {
+                    s.dispatch(.setPlaybackState(next))
+                }
+            case .openSettings:
+                app.openSettingsWindow()
+            case .toggleTheme:
+                s.dispatch(.setThemeMode(s.state.themeMode == .dark ? .light : .dark))
+            case .buildProject:
+                app.logConsole("Build Editor command recorded", detail: "Use swift build in Editor until build jobs are wired")
+            case .buildAndRun:
+                app.logConsole("Build and Run command recorded", detail: "Use swift run EditorApp until build jobs are wired")
+            case .openDocumentation:
+                app.logConsole("Documentation command recorded", detail: "Docs live under docs/")
+            case .about:
+                app.logConsole("GuavaNext Editor", detail: "Swift native editor shell")
+            }
+        }
         self.handleShortcut = { key in
             let s = app.store
             return EditorShortcutHandler.handle(key,
@@ -94,14 +183,15 @@ private struct EditorCallbacks {
                                                      s.dispatch(.setWorkspaceMode(next))
                                                      let np = s.state.activeLayoutPreset
                                                      EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: np)
-                                                     EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
+                                                     EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, cmdSelectBehavior: s.state.cmdSelectBehavior)
                                                  },
                                                  resetLayout: {
                                                      let m = s.state.workspaceMode; let p = s.state.activeLayoutPreset
                                                      EditorRootViewFactory.resetLayout(into: controller, for: m, preset: p)
                                                      EditorRootViewFactory.saveDockLayout(controller, for: m, preset: p)
-                                                     EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
+                                                     EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, cmdSelectBehavior: s.state.cmdSelectBehavior)
                                                  },
+                                                 newScene: { app.resetPreviewScene() },
                                                  openSettings: { app.openSettingsWindow() })
         }
     }

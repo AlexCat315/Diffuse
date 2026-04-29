@@ -2,12 +2,25 @@ struct Uniforms {
     mvp : mat4x4<f32>,
 };
 
+struct StylizedStyle {
+    toon_thresholds : vec4<f32>,
+    toon_levels : vec4<f32>,
+    ink_wash_color : vec4<f32>,
+    params : vec4<f32>,
+};
+
 @group(0) @binding(0) var<uniform> u : Uniforms;
+@group(0) @binding(1) var<uniform> style : StylizedStyle;
 
 struct VsIn {
-    @location(0) pos : vec3<f32>,
-    @location(1) normal : vec3<f32>,
-    @location(2) color : vec3<f32>,
+    @location(0) pos            : vec3<f32>,
+    @location(1) normal         : vec3<f32>,
+    @location(2) color          : vec3<f32>,
+    @location(3) uv             : vec2<f32>,
+    @location(4) tangent        : vec4<f32>,
+    @location(5) material_index : f32,
+    @location(6) joints         : vec4<f32>,
+    @location(7) weights        : vec4<f32>,
 };
 
 struct VsOut {
@@ -17,7 +30,7 @@ struct VsOut {
 @vertex
 fn vs_main(in : VsIn) -> VsOut {
     var out : VsOut;
-    let expanded = in.pos + normalize(in.normal) * 0.015;
+    let expanded = in.pos + normalize(in.normal) * style.params.w;
     out.position = u.mvp * vec4<f32>(expanded, 1.0);
     return out;
 }

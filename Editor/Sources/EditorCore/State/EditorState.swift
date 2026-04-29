@@ -147,6 +147,29 @@ public enum EditorVSyncMode: String, Codable, Sendable, CaseIterable, Hashable {
     }
 }
 
+public enum EditorConsoleSeverity: String, Codable, Sendable, CaseIterable, Hashable {
+    case info
+    case warning
+    case error
+}
+
+public struct EditorConsoleEntry: Identifiable, Codable, Sendable, Equatable, Hashable {
+    public let id: UInt64
+    public var severity: EditorConsoleSeverity
+    public var message: String
+    public var detail: String?
+
+    public init(id: UInt64,
+                severity: EditorConsoleSeverity = .info,
+                message: String,
+                detail: String? = nil) {
+        self.id = id
+        self.severity = severity
+        self.message = message
+        self.detail = detail
+    }
+}
+
 public struct EditorAssetDragPayload: Codable, Sendable, Equatable, Hashable {
     public var assetID: String
     public var displayName: String
@@ -195,6 +218,8 @@ public struct EditorState: Codable, Sendable {
     public var pendingConfirmationRequest: ConfirmationRequestBatch?
     public var aiStatusMessage: String?
     public var aiWarnings: [String]
+    public var consoleEntries: [EditorConsoleEntry]
+    public var nextConsoleEntryID: UInt64
 
     public init(
         connected: Bool = false,
@@ -225,7 +250,9 @@ public struct EditorState: Codable, Sendable {
         inspectorCollapsedSectionIDs: Set<String> = [],
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
         aiStatusMessage: String? = nil,
-        aiWarnings: [String] = []
+        aiWarnings: [String] = [],
+        consoleEntries: [EditorConsoleEntry] = [],
+        nextConsoleEntryID: UInt64 = 1
     ) {
         self.connected = connected
         self.selectedEntityID = selectedEntityID
@@ -255,6 +282,8 @@ public struct EditorState: Codable, Sendable {
         self.pendingConfirmationRequest = pendingConfirmationRequest
         self.aiStatusMessage = aiStatusMessage
         self.aiWarnings = aiWarnings
+        self.consoleEntries = consoleEntries
+        self.nextConsoleEntryID = max(nextConsoleEntryID, (consoleEntries.map(\.id).max() ?? 0) &+ 1)
         self.frameIndex = frameIndex
     }
 
@@ -305,6 +334,8 @@ public struct EditorState: Codable, Sendable {
         case pendingConfirmationRequest
         case aiStatusMessage
         case aiWarnings
+        case consoleEntries
+        case nextConsoleEntryID
     }
 
     public init(from decoder: Decoder) throws {
@@ -343,7 +374,9 @@ public struct EditorState: Codable, Sendable {
             inspectorCollapsedSectionIDs: try c.decodeIfPresent(Set<String>.self, forKey: .inspectorCollapsedSectionIDs) ?? [],
             pendingConfirmationRequest: try c.decodeIfPresent(ConfirmationRequestBatch.self, forKey: .pendingConfirmationRequest),
             aiStatusMessage: try c.decodeIfPresent(String.self, forKey: .aiStatusMessage),
-            aiWarnings: try c.decodeIfPresent([String].self, forKey: .aiWarnings) ?? []
+            aiWarnings: try c.decodeIfPresent([String].self, forKey: .aiWarnings) ?? [],
+            consoleEntries: try c.decodeIfPresent([EditorConsoleEntry].self, forKey: .consoleEntries) ?? [],
+            nextConsoleEntryID: try c.decodeIfPresent(UInt64.self, forKey: .nextConsoleEntryID) ?? 1
         )
     }
 
@@ -379,5 +412,7 @@ public struct EditorState: Codable, Sendable {
         try c.encodeIfPresent(pendingConfirmationRequest, forKey: .pendingConfirmationRequest)
         try c.encodeIfPresent(aiStatusMessage, forKey: .aiStatusMessage)
         try c.encode(aiWarnings, forKey: .aiWarnings)
+        try c.encode(consoleEntries, forKey: .consoleEntries)
+        try c.encode(nextConsoleEntryID, forKey: .nextConsoleEntryID)
     }
 }

@@ -15,6 +15,7 @@ let package = Package(
     ],
     products: [
         .library(name: "EngineKernel", targets: ["EngineKernel"]),
+        .library(name: "EngineMath", targets: ["EngineMath"]),
         .library(name: "RHIWGPU", targets: ["RHIWGPU"]),
         .library(name: "PlatformShell", targets: ["PlatformShell"]),
         .library(name: "RenderBackend", targets: ["RenderBackend"]),
@@ -23,11 +24,13 @@ let package = Package(
         .library(name: "SceneRuntime", targets: ["SceneRuntime"]),
         .library(name: "AssetPipeline", targets: ["AssetPipeline"]),
         .library(name: "SequenceRuntime", targets: ["SequenceRuntime"]),
+        .library(name: "CardBattleRuntime", targets: ["CardBattleRuntime"]),
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
         .executable(name: "SceneRuntimeBenchmarks", targets: ["SceneRuntimeBenchmarks"]),
         .executable(name: "RenderBackendBenchmarks", targets: ["RenderBackendBenchmarks"]),
+        .executable(name: "StylizedCharacterPreviewDemo", targets: ["StylizedCharacterPreviewDemo"]),
     ],
     dependencies: [
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
@@ -73,6 +76,7 @@ let package = Package(
 
         // MARK: - Core Kernel (no deps, pure Swift protocols and types)
         .target(name: "EngineKernel"),
+        .target(name: "EngineMath"),
 
         // MARK: - Rendering
         .target(
@@ -113,6 +117,7 @@ let package = Package(
         ),
         .target(name: "AssetPipeline"),
         .target(name: "SequenceRuntime"),
+        .target(name: "CardBattleRuntime"),
         .target(
             name: "IntentRuntime",
             dependencies: [
@@ -133,6 +138,7 @@ let package = Package(
         .target(
             name: "RenderBackend",
             dependencies: [
+                "EngineMath",
                 "RHIWGPU",
                 "AssetPipeline",
                 "SceneRuntime",
@@ -173,13 +179,29 @@ let package = Package(
             ],
             path: "Benchmarks/RenderBackendBenchmarks"
         ),
+        .executableTarget(
+            name: "StylizedCharacterPreviewDemo",
+            dependencies: [
+                "RenderBackend",
+                "RHIWGPU",
+                "SceneRuntime",
+            ],
+            path: "Demos/StylizedCharacterPreviewDemo"
+        ),
         .testTarget(
             name: "EngineCoreTests",
             dependencies: [
                 "EngineCore",
                 "EngineKernel",
+                "EngineMath",
                 "RenderBackend",
                 "SceneRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "EngineMathTests",
+            dependencies: [
+                "EngineMath",
             ]
         ),
         .testTarget(
@@ -219,6 +241,12 @@ let package = Package(
             name: "SequenceRuntimeTests",
             dependencies: [
                 "SequenceRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "CardBattleRuntimeTests",
+            dependencies: [
+                "CardBattleRuntime",
             ]
         ),
         .testTarget(
