@@ -72,4 +72,25 @@ struct ShaderCatalogTests {
 
         #expect(plan.passes == [.depthPrepass, .skybox, .basePass, .outline, .bloom, .tonemap])
     }
+
+    @Test("stylized character settings carry card ink style parameters")
+    func stylizedCharacterSettingsCarryStyleParameters() {
+        let style = StylizedCharacterStyle(
+            toonThresholds: .init(0.2, 0.6, 0.0, 0.0),
+            toonLevels: .init(0.25, 0.55, 1.0, 0.0),
+            inkWashColor: .init(0.8, 0.75, 0.65, 1.0),
+            paperGrainStrength: 0.04,
+            rimStrength: 0.22,
+            materialBiasStrength: 0.09,
+            outlineWidth: 0.02
+        )
+        let settings = RenderSettings(
+            enableStylizedCharacterShading: true,
+            stylizedCharacterStyle: style
+        )
+
+        #expect(settings.enableStylizedCharacterShading)
+        #expect(settings.stylizedCharacterStyle == style)
+        #expect(RenderSettings().stylizedCharacterStyle == .colorfulInkCard)
+    }
 }

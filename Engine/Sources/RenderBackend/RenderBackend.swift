@@ -517,7 +517,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         if shouldEmitPlannerLog(frameIndex: frameIndex) {
             let gen = settingsGeneration
             Logger.renderer.debug(
-                "applied render settings generation=\(gen) stage=\(settings.stage.rawValue) fxaa=\(settings.enableFXAA) ssao=\(settings.enableSSAO) ssr=\(settings.enableSSR) taa=\(settings.enableTAA) bloom=\(settings.enableBloom) bundles=\(settings.enableRenderBundles) grouped=\(settings.enableGroupedDrawByMesh) chunk=\(settings.renderBundleChunkSize)"
+                "applied render settings generation=\(gen) stage=\(settings.stage.rawValue) fxaa=\(settings.enableFXAA) ssao=\(settings.enableSSAO) ssr=\(settings.enableSSR) taa=\(settings.enableTAA) bloom=\(settings.enableBloom) stylized=\(settings.enableStylizedCharacterShading) outlineWidth=\(settings.stylizedCharacterStyle.outlineWidth) bundles=\(settings.enableRenderBundles) grouped=\(settings.enableGroupedDrawByMesh) chunk=\(settings.renderBundleChunkSize)"
             )
         }
     }
