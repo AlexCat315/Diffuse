@@ -19,7 +19,7 @@ struct IntentInputPanel: View {
     }
 
     var body: some View {
-        StoreScope(app.store, select: IntentInputPanelSelection.init) { store in
+        StoreScope(app.store) { store in
             let selection = app.scene.entitySummary(id: store.state.selectedEntityID)
 
             ScrollView(.vertical) {
@@ -86,24 +86,6 @@ struct IntentInputPanel: View {
             }
             .frame(minWidth: 320)
         }
-    }
-}
-
-private struct IntentInputPanelSelection: Hashable {
-    let selectedEntityID: UInt64?
-    let aiStatusMessage: String?
-    let aiWarnings: [String]
-    let sceneRevision: UInt64
-    let themeMode: EditorThemeMode
-    let language: EditorLanguage
-
-    init(_ state: EditorState) {
-        self.selectedEntityID = state.selectedEntityID
-        self.aiStatusMessage = state.aiStatusMessage
-        self.aiWarnings = state.aiWarnings
-        self.sceneRevision = state.sceneRevision
-        self.themeMode = state.themeMode
-        self.language = state.language
     }
 }
 

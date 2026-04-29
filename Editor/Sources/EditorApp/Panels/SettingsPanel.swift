@@ -6,7 +6,7 @@ struct SettingsPanel: View {
     let app: EditorApplication
 
     var body: some View {
-        StoreScope(app.store, select: SettingsPanelSelection.init) { store in
+        StoreScope(app.store) { store in
             ScrollView(.vertical) {
                 Box(direction: .column, alignItems: .stretch, spacing: 14) {
                     SettingsSection(title: L("Appearance")) {
@@ -83,18 +83,6 @@ struct SettingsPanel: View {
         store.dispatch(.setVSyncMode(mode))
         app.applyVSyncMode(mode)
         applySettingsChange(store)
-    }
-}
-
-private struct SettingsPanelSelection: Hashable {
-    let themeMode: EditorThemeMode
-    let language: EditorLanguage
-    let vsyncMode: EditorVSyncMode
-
-    init(_ state: EditorState) {
-        self.themeMode = state.themeMode
-        self.language = state.language
-        self.vsyncMode = state.vsyncMode
     }
 }
 
