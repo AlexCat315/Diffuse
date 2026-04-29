@@ -11,21 +11,24 @@ enum EditorRootViewFactory {
         var themeMode: EditorThemeMode
         var language: EditorLanguage
         var vsyncMode: EditorVSyncMode
+        var cmdSelectBehavior: SelectionCommandBehavior
         var schemaVersion: Int
 
-        static let currentSchemaVersion = 4
+        static let currentSchemaVersion = 5
 
         init(workspaceMode: EditorWorkspaceMode,
              activeLayoutPreset: EditorLayoutPreset,
              themeMode: EditorThemeMode = .dark,
              language: EditorLanguage = .system,
              vsyncMode: EditorVSyncMode = .enabled,
+             cmdSelectBehavior: SelectionCommandBehavior = .subtract,
              schemaVersion: Int = currentSchemaVersion) {
             self.workspaceMode = workspaceMode
             self.activeLayoutPreset = activeLayoutPreset
             self.themeMode = themeMode
             self.language = language
             self.vsyncMode = vsyncMode
+            self.cmdSelectBehavior = cmdSelectBehavior
             self.schemaVersion = schemaVersion
         }
 
@@ -35,6 +38,7 @@ enum EditorRootViewFactory {
             case themeMode
             case language
             case vsyncMode
+            case cmdSelectBehavior
             case schemaVersion
         }
 
@@ -49,6 +53,7 @@ enum EditorRootViewFactory {
             try values.encode(themeMode, forKey: .themeMode)
             try values.encode(language, forKey: .language)
             try values.encode(vsyncMode, forKey: .vsyncMode)
+            try values.encode(cmdSelectBehavior, forKey: .cmdSelectBehavior)
             try values.encode(schemaVersion, forKey: .schemaVersion)
         }
 
@@ -67,6 +72,8 @@ enum EditorRootViewFactory {
             } else {
                 vsyncMode = .enabled
             }
+            cmdSelectBehavior = try values.decodeIfPresent(SelectionCommandBehavior.self, forKey: .cmdSelectBehavior)
+                ?? .subtract
             schemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
         }
     }
@@ -648,13 +655,15 @@ enum EditorRootViewFactory {
                                preset: EditorLayoutPreset,
                                themeMode: EditorThemeMode,
                                language: EditorLanguage,
-                               vsyncMode: EditorVSyncMode) {
+                               vsyncMode: EditorVSyncMode,
+                               cmdSelectBehavior: SelectionCommandBehavior = .subtract) {
         guard let layoutDir = getLayoutPersistenceDirectory() else { return }
         let shell = EditorShellState(workspaceMode: mode,
                                      activeLayoutPreset: preset,
                                      themeMode: themeMode,
                                      language: language,
-                                     vsyncMode: vsyncMode)
+                                     vsyncMode: vsyncMode,
+                                     cmdSelectBehavior: cmdSelectBehavior)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {

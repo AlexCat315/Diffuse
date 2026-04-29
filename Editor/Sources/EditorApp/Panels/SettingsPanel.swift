@@ -90,7 +90,8 @@ struct SettingsPanel: View {
                                              preset: store.activeLayoutPreset,
                                              themeMode: store.themeMode,
                                              language: store.language,
-                                             vsyncMode: store.vsyncMode)
+                                             vsyncMode: store.vsyncMode,
+                                             cmdSelectBehavior: store.cmdSelectBehavior)
     }
 
     private func applyVSyncMode(_ mode: EditorVSyncMode, store: EditorStore) {
