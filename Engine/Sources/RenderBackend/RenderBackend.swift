@@ -101,6 +101,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
     private var meshPipelineLDR: GPURenderPipeline?
     private var meshPipelineHDR: GPURenderPipeline?
+    private var stylizedMeshPipelineLDR: GPURenderPipeline?
+    private var stylizedMeshPipelineHDR: GPURenderPipeline?
     private var meshBindGroupLayout: GPUBindGroupLayout?
     private var meshPipelineLayout: GPUPipelineLayout?
     private var skyboxPipeline: GPURenderPipeline?
@@ -711,19 +713,21 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
     private func ensureMeshPipeline(hdr: Bool) throws -> GPURenderPipeline {
         try ensureMeshAssetsUploaded()
-        if hdr, let meshPipelineHDR {
-            return meshPipelineHDR
-        }
-        if !hdr, let meshPipelineLDR {
-            return meshPipelineLDR
+        let stylized = activeRenderSettings.enableStylizedCharacterShading
+        if stylized {
+            if hdr, let stylizedMeshPipelineHDR { return stylizedMeshPipelineHDR }
+            if !hdr, let stylizedMeshPipelineLDR { return stylizedMeshPipelineLDR }
+        } else {
+            if hdr, let meshPipelineHDR { return meshPipelineHDR }
+            if !hdr, let meshPipelineLDR { return meshPipelineLDR }
         }
         guard backend.rawDevice != nil else {
             throw WGPUBackendError.initFailed("device not ready")
         }
 
         let module = try backend.createShaderModule(
-            wgsl: try Self.loadShaderSource(named: "mesh"),
-            label: "mesh"
+            wgsl: try Self.loadShaderSource(named: stylized ? "stylized_character" : "mesh"),
+            label: stylized ? "stylized_character" : "mesh"
         )
 
         if meshBindGroupLayout == nil {
@@ -758,9 +762,17 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         )
 
         if hdr {
-            meshPipelineHDR = pipeline
+            if stylized {
+                stylizedMeshPipelineHDR = pipeline
+            } else {
+                meshPipelineHDR = pipeline
+            }
         } else {
-            meshPipelineLDR = pipeline
+            if stylized {
+                stylizedMeshPipelineLDR = pipeline
+            } else {
+                meshPipelineLDR = pipeline
+            }
         }
         return pipeline
     }
