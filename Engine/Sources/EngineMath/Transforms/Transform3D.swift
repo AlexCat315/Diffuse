@@ -20,4 +20,13 @@ public struct Transform3D: Sendable, Equatable {
             * simd_float4x4(rotation)
             * MatrixTransforms.scale(scale)
     }
+
+    public var inverseMatrix: simd_float4x4 {
+        simd_inverse(matrix)
+    }
+
+    public func transformPoint(_ point: SIMD3<Float>) -> SIMD3<Float> {
+        let result = matrix * SIMD4<Float>(point.x, point.y, point.z, 1)
+        return SIMD3<Float>(result.x, result.y, result.z)
+    }
 }

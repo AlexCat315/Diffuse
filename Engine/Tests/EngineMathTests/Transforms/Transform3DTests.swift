@@ -16,4 +16,18 @@ struct Transform3DTests {
         #expect(FloatComparisons.nearlyEqual(SIMD3<Float>(point.x, point.y, point.z),
                                             SIMD3<Float>(3, 2, 0)))
     }
+
+    @Test("transform exposes point transform and inverse matrix")
+    func transformExposesPointTransformAndInverse() {
+        let transform = Transform3D(
+            translation: SIMD3<Float>(5, -2, 1),
+            scale: SIMD3<Float>(2, 2, 2)
+        )
+        let world = transform.transformPoint(SIMD3<Float>(1, 2, 3))
+        let local4 = transform.inverseMatrix * SIMD4<Float>(world.x, world.y, world.z, 1)
+
+        #expect(world == SIMD3<Float>(7, 2, 7))
+        #expect(FloatComparisons.nearlyEqual(SIMD3<Float>(local4.x, local4.y, local4.z),
+                                            SIMD3<Float>(1, 2, 3)))
+    }
 }
