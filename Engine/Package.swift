@@ -193,6 +193,7 @@ let package = Package(
             dependencies: [
                 "EngineCore",
                 "EngineKernel",
+                "EngineMath",
                 "RenderBackend",
                 "SceneRuntime",
             ]
