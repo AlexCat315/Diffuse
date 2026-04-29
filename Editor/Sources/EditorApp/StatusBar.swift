@@ -14,29 +14,29 @@ struct EditorStatusBar: View {
 
     var body: some View {
         StoreScope(store) { store in
-            let state = store.state
+            let _ = store.frameTimingRevision
             let timing = getTiming()
             Row(alignment: .center, spacing: 8) {
                 Box { EmptyView() }
                     .frame(width: 6, height: 6)
-                    .background(state.connected ? .success : .warning)
+                    .background(store.connected ? .success : .warning)
                     .cornerRadius(3)
 
-                Text(state.connected ? L("Connected") : L("Offline"))
+                Text(store.connected ? L("Connected") : L("Offline"))
                     .font(.caption)
                     .foregroundColor(.onSurfaceVariant)
 
                 Divider()
                     .frame(width: 1, height: 14)
 
-                Text("Revision \(state.sceneRevision)")
+                Text("Revision \(store.sceneRevision)")
                     .font(.caption)
                     .foregroundColor(.onSurfaceVariant)
 
                 Divider()
                     .frame(width: 1, height: 14)
 
-                Text("Selection \(state.selectedEntityIDs.count)")
+                Text("Selection \(store.selectedEntityIDsCount)")
                     .font(.caption)
                     .foregroundColor(.onSurfaceVariant)
 
@@ -49,7 +49,7 @@ struct EditorStatusBar: View {
                 Divider()
                     .frame(width: 1, height: 14)
 
-                Text(state.aiStatusMessage ?? L("Ready"))
+                Text(store.aiStatusMessage ?? L("Ready"))
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
             }

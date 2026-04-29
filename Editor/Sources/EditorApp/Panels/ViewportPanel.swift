@@ -14,15 +14,19 @@ struct ViewportPanel: View {
 
     var body: some View {
         StoreScope(app.store) { store in
+            let _ = store.viewportSurfaceRevision
+            let _ = store.sceneRevision
             let surface = app.currentViewportSurfaceState()
-            let entity = scene.entitySummary(id: store.state.selectedEntityID)
-            let activeDrag = store.state.activeAssetDrag
-            let gizmoMode = store.state.gizmoMode
-            let gizmoSpace = store.state.gizmoSpace
-            let shadingMode = store.state.viewportShadingMode
+            let selectedEntityID = store.selectedEntityID
+            let selectedEntityIDs = store.selectedEntityIDs
+            let entity = scene.entitySummary(id: selectedEntityID)
+            let activeDrag = store.activeAssetDrag
+            let gizmoMode = store.gizmoMode
+            let gizmoSpace = store.gizmoSpace
+            let shadingMode = store.viewportShadingMode
 
             // 推送 gizmo 控制器所需的快照（摄像机 / 视口矩形 / 实体世界坐标）。
-            let _: Void = updateGizmoSnapshot(selectedID: store.state.selectedEntityID,
+            let _: Void = updateGizmoSnapshot(selectedID: selectedEntityID,
                                               gizmoMode: gizmoMode,
                                               gizmoSpace: gizmoSpace,
                                               surface: surface)
@@ -40,8 +44,8 @@ struct ViewportPanel: View {
                                               frame: frame,
                                               mode: gizmoMode,
                                               shadingMode: shadingMode,
-                                              selectedID: store.state.selectedEntityID,
-                                              selectedIDs: store.state.selectedEntityIDs)
+                                              selectedID: selectedEntityID,
+                                              selectedIDs: selectedEntityIDs)
                          }) {
                 Box(direction: .column, alignItems: .stretch) {
                     Box(direction: .column, alignItems: .center, justifyContent: .center) {
@@ -63,17 +67,17 @@ struct ViewportPanel: View {
                                         gizmoSpace: gizmoSpace,
                                         shadingMode: shadingMode,
                                         onSelectGizmoMode: { mode in
-                                            if store.state.gizmoMode != mode {
+                                            if gizmoMode != mode {
                                                 store.dispatch(.setGizmoMode(mode))
                                             }
                                         },
                                         onSelectGizmoSpace: { space in
-                                            if store.state.gizmoSpace != space {
+                                            if gizmoSpace != space {
                                                 store.dispatch(.setGizmoSpace(space))
                                             }
                                         },
                                         onSelectShadingMode: { mode in
-                                            if store.state.viewportShadingMode != mode {
+                                            if shadingMode != mode {
                                                 store.dispatch(.setViewportShadingMode(mode))
                                             }
                                         })

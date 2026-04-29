@@ -412,7 +412,9 @@ public final class ViewGraph {
         if let myLN = layoutOf.removeValue(forKey: id) {
             parentLayout?.removeChild(myLN)
         }
-        scopes.removeValue(forKey: id)
+        if scopes.removeValue(forKey: id) != nil {
+            ObservableStateTracking.removeScope(id: id)
+        }
         for child in node.children {
             tearDownSubtreeBookkeeping(child,
                                        parentLayout: layoutOf[id] ?? parentLayout)

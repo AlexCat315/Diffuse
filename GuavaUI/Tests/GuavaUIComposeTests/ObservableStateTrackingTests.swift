@@ -47,6 +47,28 @@ struct ObservableStateTrackingTests: GuavaUIComposeSerializedSuite {
         #expect(recomposer.hasPending == false)
         #expect(counter.count == 3)
     } }
+
+    @Test("Independent keys only recompose their readers")
+    func independentKeysRecomposeOnlyReadingScopes() { GlobalTestLock.locked {
+        let store = TestObservableStore()
+        let valueCounter = BodyCounter()
+        let otherCounter = BodyCounter()
+        let tree = NodeTree()
+        let recomposer = Recomposer()
+        let graph = ViewGraph(tree: tree, recomposer: recomposer)
+
+        graph.install(root: TwoObservedValuesView(store: store,
+                                                  valueCounter: valueCounter,
+                                                  otherCounter: otherCounter))
+        #expect(valueCounter.count == 1)
+        #expect(otherCounter.count == 1)
+
+        store.value = 1
+        recomposer.commitAll()
+
+        #expect(valueCounter.count == 2)
+        #expect(otherCounter.count == 1)
+    } }
 }
 
 private final class BodyCounter {
@@ -60,11 +82,13 @@ private final class BodyCounter {
 private final class TestObservableStore {
     private enum Key: Hashable {
         case value
+        case otherValue
         case shouldRead
     }
 
     private let registrar = ObservableStateRegistrar()
     private var storedValue = 0
+    private var storedOtherValue = 0
     private var storedShouldRead = true
 
     var value: Int {
@@ -86,6 +110,17 @@ private final class TestObservableStore {
         set {
             storedShouldRead = newValue
             registrar.invalidate(AnyHashable(Key.shouldRead))
+        }
+    }
+
+    var otherValue: Int {
+        get {
+            registrar.access(AnyHashable(Key.otherValue))
+            return storedOtherValue
+        }
+        set {
+            storedOtherValue = newValue
+            registrar.invalidate(AnyHashable(Key.otherValue))
         }
     }
 }
@@ -111,5 +146,28 @@ private struct ConditionalObservedValueView: View {
         } else {
             Text("idle")
         }
+    }
+}
+
+private struct TwoObservedValuesView: View {
+    let store: TestObservableStore
+    let valueCounter: BodyCounter
+    let otherCounter: BodyCounter
+
+    var body: some View {
+        Row {
+            ObservedValueView(store: store, counter: valueCounter)
+            ObservedOtherValueView(store: store, counter: otherCounter)
+        }
+    }
+}
+
+private struct ObservedOtherValueView: View {
+    let store: TestObservableStore
+    let counter: BodyCounter
+
+    var body: some View {
+        let _ = counter.bump()
+        Text("other \(store.otherValue)")
     }
 }
