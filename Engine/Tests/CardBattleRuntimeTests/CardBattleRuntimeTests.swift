@@ -1,4 +1,5 @@
 import CardBattleRuntime
+import Foundation
 import Testing
 
 @Suite("CardBattleRuntime")
@@ -100,6 +101,16 @@ struct CardBattleRuntimeTests {
             .commandRejected(.insufficientEnergy(cardID: "finisher", available: 1, required: 4))
         ])
         #expect(result.state.log == ["not enough energy for finisher"])
+    }
+
+    @Test("battle commands are codable for replay and networking")
+    func battleCommandsAreCodable() throws {
+        let command = BattleCommand.playCard(cardID: "strike", target: .enemy)
+
+        let data = try JSONEncoder().encode(command)
+        let decoded = try JSONDecoder().decode(BattleCommand.self, from: data)
+
+        #expect(decoded == command)
     }
 
     @Test("hud snapshot projects playable hand and skills for ui")
