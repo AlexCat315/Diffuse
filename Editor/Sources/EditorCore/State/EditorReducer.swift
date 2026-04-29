@@ -32,6 +32,8 @@ public enum EditorAction: Sendable {
     case setPendingConfirmationRequest(ConfirmationRequestBatch?)
     case setAIStatusMessage(String?)
     case setAIWarnings([String])
+    case appendConsoleMessage(String, severity: EditorConsoleSeverity = .info, detail: String? = nil)
+    case clearConsole
     case frameTimingUpdated
     /// Bump the viewport surface revision so only viewport subscribers pull
     /// the newest `currentViewportSurfaceState()`.
@@ -136,6 +138,21 @@ public enum EditorReducer {
             state.aiStatusMessage = message
         case let .setAIWarnings(warnings):
             state.aiWarnings = warnings
+        case let .appendConsoleMessage(message, severity, detail):
+            let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !trimmed.isEmpty else { return }
+            state.consoleEntries.append(
+                EditorConsoleEntry(id: state.nextConsoleEntryID,
+                                   severity: severity,
+                                   message: trimmed,
+                                   detail: detail)
+            )
+            state.nextConsoleEntryID &+= 1
+            if state.consoleEntries.count > 200 {
+                state.consoleEntries.removeFirst(state.consoleEntries.count - 200)
+            }
+        case .clearConsole:
+            state.consoleEntries.removeAll(keepingCapacity: false)
         case .frameTimingUpdated:
             state.frameTimingRevision &+= 1
         case .viewportSurfaceUpdated:
