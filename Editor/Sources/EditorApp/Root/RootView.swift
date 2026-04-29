@@ -27,6 +27,7 @@ struct EditorRootView: View {
                                       activeLayoutPreset: store.activeLayoutPreset,
                                       onNewScene: cb.newScene,
                                       onSaveScene: cb.saveScene,
+                                      onReloadAssets: cb.reloadAssets,
                                       onSetPlaybackState: cb.setPlaybackState,
                                       onSetWorkspaceMode: cb.setWorkspaceMode,
                                       onSetLayoutPreset: cb.setLayoutPreset,
@@ -58,12 +59,14 @@ private struct EditorCallbacks {
     let openSettings: () -> Void
     let newScene: () -> Void
     let saveScene: () -> Void
+    let reloadAssets: () -> Void
     let handleMenuCommand: (EditorMenuCommand) -> Void
     let handleShortcut: (KeyEvent) -> Bool
 
     init(app: EditorApplication, controller: DockController) {
         self.newScene = { app.resetPreviewScene() }
         self.saveScene = { _ = app.saveSceneManifest() }
+        self.reloadAssets = { _ = app.reloadAssets() }
         self.setPlaybackState = { next in
             let s = app.store; if s.state.playbackState != next { s.dispatch(.setPlaybackState(next)) }
         }
@@ -104,7 +107,7 @@ private struct EditorCallbacks {
             case .saveScene:
                 _ = app.saveSceneManifest()
             case .importAssets:
-                app.logConsole("Import Assets scans the project folder on launch", severity: .info)
+                _ = app.reloadAssets()
             case .undo:
                 app.logConsole("Undo is not available for this command path yet", severity: .warning)
             case .redo:
