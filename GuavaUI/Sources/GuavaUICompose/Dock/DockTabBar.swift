@@ -362,7 +362,7 @@ struct _DockTabBarItemHost: _PrimitiveView {
     func _children(for node: Node) -> [any View] {
         let appearance = resolveDockAppearance(on: node)
         let label = Text(tab.title)
-            .font(.bodyStrong)
+            .font(.label)
             .foregroundColor(isActive ? .onSurface : .onSurfaceMuted)
 
         let row = Row(alignment: .center, spacing: appearance.tabHorizontalSpacing) {

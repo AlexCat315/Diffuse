@@ -14,7 +14,7 @@ enum EditorRootViewFactory {
         var cmdSelectBehavior: SelectionCommandBehavior
         var schemaVersion: Int
 
-        static let currentSchemaVersion = 5
+        static let currentSchemaVersion = 6
 
         init(workspaceMode: EditorWorkspaceMode,
              activeLayoutPreset: EditorLayoutPreset,
@@ -62,7 +62,12 @@ enum EditorRootViewFactory {
             workspaceMode = try values.decodeIfPresent(EditorWorkspaceMode.self, forKey: .workspaceMode) ?? .level
             activeLayoutPreset = try values.decodeIfPresent(EditorLayoutPreset.self, forKey: .activeLayoutPreset)
                 ?? .default(for: workspaceMode)
-            themeMode = try values.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode) ?? .dark
+            let decodedSchemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+            if decodedSchemaVersion < 6 {
+                themeMode = .dark
+            } else {
+                themeMode = try values.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode) ?? .dark
+            }
             language = try values.decodeIfPresent(EditorLanguage.self, forKey: .language) ?? .system
             let legacyValues = try decoder.container(keyedBy: LegacyCodingKeys.self)
             if let decodedVSync = try values.decodeIfPresent(EditorVSyncMode.self, forKey: .vsyncMode) {
@@ -74,7 +79,7 @@ enum EditorRootViewFactory {
             }
             cmdSelectBehavior = try values.decodeIfPresent(SelectionCommandBehavior.self, forKey: .cmdSelectBehavior)
                 ?? .subtract
-            schemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+            schemaVersion = decodedSchemaVersion
         }
     }
 
@@ -454,7 +459,7 @@ enum EditorRootViewFactory {
         ])
     }
 
-    private static let layoutPersistenceKey = "editor_dock_layout"
+    private static let layoutPersistenceKey = "editor_dock_layout_v2"
     private static let shellStatePersistenceKey = "editor_shell_state"
 
     private struct LayoutFractions {
@@ -466,29 +471,29 @@ enum EditorRootViewFactory {
     private static func defaultFractions(for preset: EditorLayoutPreset) -> LayoutFractions {
         switch preset {
         case .levelDefault:
-            return LayoutFractions(hierarchyAndMain: 15.0 / 90.0,
-                                   viewportAndInspector: 55.0 / 75.0,
-                                   topAndBottom: 0.70)
+            return LayoutFractions(hierarchyAndMain: 0.22,
+                                   viewportAndInspector: 0.78,
+                                   topAndBottom: 0.74)
         case .levelCinematics:
-            return LayoutFractions(hierarchyAndMain: 12.0 / 90.0,
-                                   viewportAndInspector: 60.0 / 78.0,
-                                   topAndBottom: 0.64)
-        case .modelingDefault:
-            return LayoutFractions(hierarchyAndMain: 18.0 / 90.0,
-                                   viewportAndInspector: 52.0 / 72.0,
-                                   topAndBottom: 0.66)
-        case .modelingSculpt:
-            return LayoutFractions(hierarchyAndMain: 14.0 / 90.0,
-                                   viewportAndInspector: 54.0 / 76.0,
+            return LayoutFractions(hierarchyAndMain: 0.18,
+                                   viewportAndInspector: 0.80,
                                    topAndBottom: 0.68)
+        case .modelingDefault:
+            return LayoutFractions(hierarchyAndMain: 0.22,
+                                   viewportAndInspector: 0.76,
+                                   topAndBottom: 0.72)
+        case .modelingSculpt:
+            return LayoutFractions(hierarchyAndMain: 0.19,
+                                   viewportAndInspector: 0.78,
+                                   topAndBottom: 0.72)
         case .animationDefault:
-            return LayoutFractions(hierarchyAndMain: 16.0 / 90.0,
-                                   viewportAndInspector: 50.0 / 74.0,
-                                   topAndBottom: 0.62)
+            return LayoutFractions(hierarchyAndMain: 0.20,
+                                   viewportAndInspector: 0.76,
+                                   topAndBottom: 0.66)
         case .animationSequencer:
-            return LayoutFractions(hierarchyAndMain: 14.0 / 90.0,
-                                   viewportAndInspector: 49.0 / 76.0,
-                                   topAndBottom: 0.56)
+            return LayoutFractions(hierarchyAndMain: 0.18,
+                                   viewportAndInspector: 0.74,
+                                   topAndBottom: 0.58)
         }
     }
 

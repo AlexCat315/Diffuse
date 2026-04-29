@@ -1265,7 +1265,7 @@ private struct ViewportInfoBar: View {
 
     var body: some View {
         Box(direction: .column, alignItems: .flexStart, spacing: 4) {
-            Row(alignment: .center, spacing: 6) {
+            Row(alignment: .center, spacing: 5) {
                 IconButton(resource: ViewportToolbarIcon.cursor.resource,
                            size: 15,
                            tooltip: L("Pick")) {
@@ -1312,10 +1312,10 @@ private struct ViewportInfoBar: View {
                 .toggleButtonStyle(shadingMode == .wireframe)
             }
         }
-        .padding(4)
-        .background(.surfaceOverlay)
+        .padding(3)
+        .background(.surfaceVariant)
         .cornerRadius(2)
-        .border(Color(r: 1, g: 1, b: 1, a: 0.08), width: 1)
+        .border(Color(r: 0, g: 0, b: 0, a: 0.55), width: 1)
     }
 }
 
@@ -1331,10 +1331,10 @@ private struct ToggleChip: View {
                     .font(.caption)
                     .foregroundColor(isActive ? .onAccent : .onSurface)
             }
-            .frame(height: 26, minWidth: 44)
-            .padding(horizontal: 6, vertical: 0)
+            .frame(height: 26, minWidth: 42)
+            .padding(horizontal: 5, vertical: 0)
             .background(isActive ? .accent : .surfaceSunken)
-            .cornerRadius(4)
+            .cornerRadius(3)
             .clipped()
         }
         .buttonStyle(.plain)

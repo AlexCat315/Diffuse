@@ -68,16 +68,17 @@ struct HierarchyPanel: View {
                         .font(.caption)
                         .flex()
                 }
-                .padding(horizontal: 10, vertical: 6)
+                .padding(horizontal: 8, vertical: 5)
+                .background(.surfaceSunken)
 
                 Divider()
 
-             Tree(hierarchyRoots,
+                Tree(hierarchyRoots,
                      children: \.children,
                      selectionKey: selectionKey,
                      multiSelectionKeys: multiSelectionKeys,
                      expandedKeys: $expandedKeys,
-                     rowHeight: 28,
+                     rowHeight: 26,
                      rowSpacing: 0,
                      indentation: 16,
                      disclosureWidth: 18,
@@ -85,7 +86,7 @@ struct HierarchyPanel: View {
                      disclosureContent: { isExpanded in
                          AnyView(HierarchyDisclosureIcon(isExpanded: isExpanded))
                      },
-                     trailingSlotWidth: 72,
+                     trailingSlotWidth: 58,
                      trailingContent: { entity, isSelected, _, _, isHovered, _ in
                          AnyView(
                             HierarchyRowTrailingSlots(
@@ -126,7 +127,7 @@ struct HierarchyPanel: View {
                                        isSelected: isSelected,
                                        searchQuery: searchQuery)
                 }
-                .padding(horizontal: 5, vertical: 4)
+                .padding(horizontal: 4, vertical: 4)
                 .flex()
                 .treeRowStyle(HierarchyTreeRowStyle())
             }
@@ -317,11 +318,11 @@ private struct HierarchyTreeRowStyle: TreeRowStyle {
             configuration.content
                 .flex(1, shrink: 1, basis: 0)
         }
-        .padding(horizontal: 7, vertical: 0)
-        .frame(height: 28)
+        .padding(horizontal: 6, vertical: 0)
+        .frame(height: 26)
         .clipped()
         .background(bg)
-        .cornerRadius(configuration.isSelected ? 4 : 0)
+        .cornerRadius(configuration.isSelected || configuration.isHovered ? 3 : 0)
         .opacity(configuration.isEnabled ? 1 : 0.55)
     }
 }
@@ -364,14 +365,14 @@ private struct HierarchyEntityRow: View {
                     .foregroundColor(isSelected ? .onSurface : .onSurfaceVariant)
                     .frame(width: 18, height: 18)
             }
-            .frame(width: 18, height: 28)
+            .frame(width: 18, height: 26)
 
             highlightedName()
                 .padding(horizontal: 2, vertical: 0)
                 .flex(1, shrink: 1, basis: 0)
                 .clipped()
         }
-        .frame(height: 28)
+        .frame(height: 26)
         .clipped()
     }
 
@@ -440,7 +441,7 @@ private struct HierarchyRowTrailingSlots: View {
                 }
                 .buttonStyle(.plain)
             }
-            .frame(width: 22, height: 28)
+            .frame(width: 20, height: 26)
 
             Box(direction: .row, alignItems: .center, justifyContent: .center) {
                 Button(action: onToggleLock) {
@@ -455,14 +456,14 @@ private struct HierarchyRowTrailingSlots: View {
                 }
                 .buttonStyle(.plain)
             }
-            .frame(width: 22, height: 28)
+            .frame(width: 20, height: 26)
 
             // Reserve a narrow terminal gutter so disclosure chevrons from
             // neighboring content never visually collide with icon columns.
             Box { EmptyView() }
-                .frame(width: 10, height: 28)
+                .frame(width: 8, height: 26)
         }
-        .frame(width: 54, height: 28)
+        .frame(width: 48, height: 26)
         .opacity(showsControls ? 1 : 0)
     }
 }

@@ -20,24 +20,13 @@ struct InspectorPanel: View {
                     InspectorSelectionSummary(entity: entity,
                                               componentCount: max(0, sections.count - 2))
 
-                    Divider()
-
-                    InspectorSectionControls(sectionIDs: sections.map(\.id),
-                                             collapsedCount: collapsedIDs.count,
-                                             onSetCollapsed: { ids, isCollapsed in
-                        for id in ids {
-                            store.dispatch(.setInspectorSectionCollapsed(id: id,
-                                                                         isCollapsed: isCollapsed))
-                        }
-                    })
-
                     PropertyGrid(propertySections(sections, collapsedIDs: collapsedIDs),
-                                 labelWidth: 104,
-                                 minValueWidth: 148,
-                                 rowHeight: 28,
+                                 labelWidth: 108,
+                                 minValueWidth: 132,
+                                 rowHeight: 26,
                                  rowSpacing: 1,
-                                 sectionSpacing: 8,
-                                 contentPadding: 8,
+                                 sectionSpacing: 6,
+                                 contentPadding: 6,
                                  scrollAxes: .vertical,
                                  emptyText: L("No properties"),
                                  onSectionCollapseChanged: { id, isCollapsed in
@@ -55,7 +44,7 @@ struct InspectorPanel: View {
                     .padding(10)
                 }
             }
-            .frame(minWidth: 280)
+            .frame(minWidth: 300)
         }
     }
 
@@ -64,12 +53,12 @@ struct InspectorPanel: View {
         let componentCount: Int
 
         var body: some View {
-            Box(direction: .column, alignItems: .stretch, spacing: 8) {
+            Box(direction: .column, alignItems: .stretch, spacing: 6) {
                 Row(alignment: .center, spacing: 8) {
                     Box(direction: .column, alignItems: .stretch, spacing: 2) {
                         Text(entity.name)
                             .lineLimit(1)
-                            .font(.headline)
+                            .font(.bodyStrong)
                             .foregroundColor(.onSurface)
 
                         Text(entity.kind)
@@ -79,12 +68,6 @@ struct InspectorPanel: View {
                     }
                     .flex()
 
-                    Text("#\(entity.id)")
-                        .font(.mono)
-                        .foregroundColor(.onSurfaceVariant)
-                        .padding(horizontal: 8, vertical: 3)
-                        .background(.surfaceSunken)
-                        .cornerRadius(3)
                 }
 
                 Row(alignment: .center, spacing: 6) {
@@ -100,39 +83,8 @@ struct InspectorPanel: View {
                     Spacer(minLength: 0)
                 }
             }
-            .padding(horizontal: 10, vertical: 9)
-        }
-    }
-
-    private struct InspectorSectionControls: View {
-        let sectionIDs: [String]
-        let collapsedCount: Int
-        let onSetCollapsed: ([String], Bool) -> Void
-
-        var body: some View {
-            Row(alignment: .center, spacing: 6) {
-                Text(L("Sections"))
-                    .font(.caption)
-                    .foregroundColor(.onSurfaceVariant)
-                Text("\(sectionIDs.count - collapsedCount)/\(sectionIDs.count)")
-                    .font(.mono)
-                    .foregroundColor(.onSurfaceVariant)
-                Spacer(minLength: 0)
-
-                Button(L("Expand all"), isEnabled: !sectionIDs.isEmpty) {
-                    onSetCollapsed(sectionIDs, false)
-                }
-                .buttonStyle(.ghost)
-                .frame(height: 24)
-
-                Button(L("Collapse all"), isEnabled: !sectionIDs.isEmpty) {
-                    onSetCollapsed(sectionIDs, true)
-                }
-                .buttonStyle(.ghost)
-                .frame(height: 24)
-            }
-            .padding(horizontal: 10, vertical: 6)
-            .background(.surfaceSunken)
+            .padding(horizontal: 9, vertical: 8)
+            .background(.surface)
         }
     }
 
