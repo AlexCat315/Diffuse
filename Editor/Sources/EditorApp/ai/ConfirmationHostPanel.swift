@@ -10,10 +10,10 @@ struct ConfirmationHostPanel: View {
     }
 
     var body: some View {
-        StoreScope(app.store, select: ConfirmationHostSelection.init) { store in
+        StoreScope(app.store) { store in
             ScrollView(.vertical) {
                 Box(direction: .column, alignItems: .stretch, spacing: 10) {
-                    if let request = store.state.pendingConfirmationRequest {
+                    if let request = store.pendingConfirmationRequest {
                         ConfirmationBatchView(app: app, request: request)
                     } else {
                         Box(direction: .column, alignItems: .stretch, spacing: 6) {
@@ -32,18 +32,6 @@ struct ConfirmationHostPanel: View {
             }
             .frame(minWidth: 320)
         }
-    }
-}
-
-private struct ConfirmationHostSelection: Hashable {
-    let batchID: String?
-    let correlationID: String?
-    let questionIDs: [String]
-
-    init(_ state: EditorState) {
-        self.batchID = state.pendingConfirmationRequest?.batchID
-        self.correlationID = state.pendingConfirmationRequest?.correlationID
-        self.questionIDs = state.pendingConfirmationRequest?.questions.map(\.id) ?? []
     }
 }
 

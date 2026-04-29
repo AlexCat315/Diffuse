@@ -34,6 +34,32 @@ private func runEditor() throws {
                                                           preset: app.store.state.activeLayoutPreset)
     let registry = EditorRootViewFactory.makeRegistry(app: app)
     var settingsWindowID: WindowID?
+    var lastShellPreferences = (
+        themeMode: app.store.state.themeMode,
+        language: app.store.state.language,
+        vsyncMode: app.store.state.vsyncMode
+    )
+    let shellPreferenceToken = app.store.subscribe { store in
+        let next = (
+            themeMode: store.state.themeMode,
+            language: store.state.language,
+            vsyncMode: store.state.vsyncMode
+        )
+        guard next != lastShellPreferences else { return }
+        if next.language != lastShellPreferences.language {
+            EditorLocalizationPreferences.language = next.language
+            EditorRootViewFactory.localizeDockTitles(in: controller)
+            EditorRootViewFactory.localizePanelTitles(in: registry)
+        }
+        lastShellPreferences = next
+        EditorRootViewFactory.saveShellState(mode: store.state.workspaceMode,
+                                             preset: store.state.activeLayoutPreset,
+                                             themeMode: store.state.themeMode,
+                                             language: store.state.language,
+                                             vsyncMode: store.state.vsyncMode)
+        app.requestDisplayRefresh()
+    }
+    defer { app.store.unsubscribe(shellPreferenceToken) }
     func applyVSyncMode(_ mode: EditorVSyncMode, to display: AppDisplayHandle) {
         display.setVSyncEnabled(mode.isEnabled)
     }

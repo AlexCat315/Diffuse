@@ -474,6 +474,7 @@ struct _DockLeafMinimizeButtonHost: _PrimitiveView {
                       tint: .white,
                       contentMode: .fit,
                       renderingMode: .alphaMask)
+                    .foregroundColor(.onSurfaceVariant)
             }
             .buttonStyle(_DockTabIconButtonStyle(size: size))
         ]

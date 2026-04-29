@@ -8,7 +8,8 @@ import Foundation
 ///    `Recomposer` instance owned by the host.
 /// 3. A second call with the same `scopeID` in the same frame is dropped.
 /// 4. The platform host calls `recomposer.commitAll()` at frame start,
-///    executing all pending recomposes and clearing the queue.
+///    executing pending recomposes and any child-scope recomposes they queue
+///    before layout/draw for that frame.
 ///
 /// Each `PlatformHost` (and therefore each window) owns its own `Recomposer`
 /// instance — see blueprint §9.4 windowing strategy.
@@ -48,25 +49,34 @@ public final class Recomposer: @unchecked Sendable {
 
     // MARK: - Commit
 
-    /// Execute all pending recomposes in registration order, then clear the queue.
+    /// Execute all pending recomposes in registration order, draining child
+    /// invalidations queued by those recomposes before returning.
     ///
-    /// Call once per frame, before flushing the `NodeTree`.
+    /// A scope that invalidates itself while it is already being committed is
+    /// left queued for the next frame; different child scopes are committed in
+    /// the current frame so parent-driven environment changes settle before
+    /// layout/draw.
     @discardableResult
     public func commitAll() -> Bool {
-        let scopes = lock.withLock {
-            let s = pending
-            pending = []
-            return s
-        }
-        guard !scopes.isEmpty else {
-            return false
-        }
-        for scope in scopes {
+        var committedIDs = Set<ObjectIdentifier>()
+        var didCommit = false
+
+        while true {
+            let scope: PendingScope? = lock.withLock {
+                guard let index = pending.firstIndex(where: { !committedIDs.contains($0.id) }) else {
+                    return nil
+                }
+                return pending.remove(at: index)
+            }
+            guard let scope else { break }
+            didCommit = true
+            committedIDs.insert(scope.id)
             ActiveAnimationContext.with(scope.animation) {
                 scope.body()
             }
         }
-        return true
+
+        return didCommit
     }
 
     /// `true` when there are pending recomposes queued for the next `commitAll()`.

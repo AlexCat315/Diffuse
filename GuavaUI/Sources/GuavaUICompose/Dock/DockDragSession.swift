@@ -265,7 +265,13 @@ public final class DockDragSession {
             guard let tabID else { return }
             if let hit = dropHit {
                 let target = Self.makeDropTarget(from: hit)
+                let request = DockDropRequest(tabID: tabID,
+                                              sourceLeafID: sourceLeafID,
+                                              origin: origin,
+                                              target: target)
+                controller.commitDrop(request)
                 controller.apply(.move(tabID: tabID, to: target))
+                controller.didCommitDrop(request)
             } else if isOutsideAllHosts, let sourceLeafID {
                 let dx = globalPointerX - originGlobalX
                 let dy = globalPointerY - originGlobalY
@@ -277,12 +283,24 @@ public final class DockDragSession {
         case .satellite(let leafID):
             if let hit = dropHit {
                 let target = Self.makeDropTarget(from: hit)
+                let request = DockDropRequest(tabID: nil,
+                                              sourceLeafID: leafID,
+                                              origin: origin,
+                                              target: target)
+                controller.commitDrop(request)
                 controller.apply(.redock(satelliteID: leafID, to: target))
+                controller.didCommitDrop(request)
             }
         case .mainTreeLeaf(let leafID):
             if let hit = dropHit {
                 let target = Self.makeDropTarget(from: hit)
+                let request = DockDropRequest(tabID: nil,
+                                              sourceLeafID: leafID,
+                                              origin: origin,
+                                              target: target)
+                controller.commitDrop(request)
                 controller.apply(.moveLeaf(leafID: leafID, to: target))
+                controller.didCommitDrop(request)
             } else if isOutsideAllHosts {
                 let dx = globalPointerX - originGlobalX
                 let dy = globalPointerY - originGlobalY

@@ -34,6 +34,21 @@ final class PanelRegistryTests: XCTestCase {
         XCTAssertEqual(registry.descriptor(for: "b")?.title, "B'")
     }
 
+    func testUpdateDescriptorKeepsFactoryAndOrder() {
+        let registry = PanelRegistry([
+            PanelDescriptor(id: "a", title: "A") { Text("A") },
+            PanelDescriptor(id: "b", title: "B") { Text("B") },
+        ])
+
+        registry.updateDescriptor(id: "b") { descriptor in
+            descriptor.title = "Localized B"
+        }
+
+        XCTAssertEqual(registry.ids, ["a", "b"])
+        XCTAssertEqual(registry.descriptor(for: "b")?.title, "Localized B")
+        _ = registry.make("b")
+    }
+
     func testUnregister() {
         let registry = PanelRegistry([
             PanelDescriptor(id: "a", title: "A") { EmptyView() },
