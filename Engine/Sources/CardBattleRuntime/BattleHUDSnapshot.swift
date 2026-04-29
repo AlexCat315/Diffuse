@@ -19,12 +19,18 @@ public struct BattleHandCardViewModel: Identifiable, Sendable, Equatable {
 public struct BattleSkillViewModel: Identifiable, Sendable, Equatable {
     public var id: String
     public var title: String
+    public var cooldownTurns: Int
     public var target: BattleSkill.Target
     public var isEnabled: Bool
 
-    public init(id: String, title: String, target: BattleSkill.Target, isEnabled: Bool) {
+    public init(id: String,
+                title: String,
+                cooldownTurns: Int = 0,
+                target: BattleSkill.Target,
+                isEnabled: Bool) {
         self.id = id
         self.title = title
+        self.cooldownTurns = cooldownTurns
         self.target = target
         self.isEnabled = isEnabled
     }
@@ -82,8 +88,9 @@ public struct BattleHUDSnapshot: Sendable, Equatable {
                 BattleSkillViewModel(
                     id: $0.id,
                     title: $0.title,
+                    cooldownTurns: $0.cooldownTurns,
                     target: $0.target,
-                    isEnabled: canPlayCards
+                    isEnabled: canPlayCards && $0.cooldownTurns == 0
                 )
             }
         )
