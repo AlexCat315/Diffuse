@@ -27,6 +27,10 @@ struct ShaderCatalogTests {
         #expect(meshModule.contains("@fragment"))
         let stylizedModule = try catalog.loadWGSLRenderModule(named: "stylized_character")
         #expect(stylizedModule.contains("toon_ramp"))
+        #expect(stylizedModule.contains("@group(0) @binding(1) var<uniform> style"))
+        #expect(stylizedModule.contains("style.params.z"))
+        let outlineModule = try catalog.loadWGSLRenderModule(named: "outline")
+        #expect(outlineModule.contains("style.params.w"))
 
         #expect(catalog.manifest.programs.allSatisfy { $0.vertex.hasPrefix("WGSL/") && ($0.fragment?.hasPrefix("WGSL/") ?? true) })
         #expect(catalog.manifest.computePrograms.allSatisfy { $0.compute.hasPrefix("WGSL/") })

@@ -89,6 +89,13 @@ private struct SSRUniforms {
     var tracing: SIMD4<Float>
 }
 
+private struct StylizedCharacterUniforms {
+    var toonThresholds: SIMD4<Float>
+    var toonLevels: SIMD4<Float>
+    var inkWashColor: SIMD4<Float>
+    var params: SIMD4<Float>
+}
+
 ///  RHIWGPU renderer: scene of multiple instances drawn through one shared pipeline.
 public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private let backend: WGPUBackend
@@ -141,6 +148,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var ssrUniformBuffer: GPUBuffer?
     private var taaUniformBuffer: GPUBuffer?
     private var ssaoUniformBuffer: GPUBuffer?
+    private var stylizedCharacterUniformBuffer: GPUBuffer?
     private var historyValid = false
 
     private let dynamicOffsetThreshold = 64
@@ -220,6 +228,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             let view = computeView(scene: packet.scene)
             let viewProj = projection * view
             let meshPipeline = try ensureMeshPipeline(hdr: usesHDRFrameGraph)
+            try ensureStylizedCharacterUniformBuffer()
+            writeStylizedCharacterUniforms()
             try ensureInstanceResources(instanceCount: packet.scene.instances.count, pipeline: meshPipeline)
             writeInstanceUniforms(scene: packet.scene, viewProj: viewProj)
 
@@ -756,6 +766,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         visibility: .vertex,
                         type: .uniformBuffer,
                         hasDynamicOffset: true
+                    ),
+                    GPUBindGroupLayoutEntry(
+                        binding: 1,
+                        visibility: [.vertex, .fragment],
+                        type: .uniformBuffer
                     )
                 ]
             )
@@ -816,6 +831,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         visibility: .vertex,
                         type: .uniformBuffer,
                         hasDynamicOffset: true
+                    ),
+                    GPUBindGroupLayoutEntry(
+                        binding: 1,
+                        visibility: [.vertex, .fragment],
+                        type: .uniformBuffer
                     )
                 ]
             )
@@ -930,7 +950,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             let uniformBuffer = try backend.createBuffer(size: totalSize, usage: [.uniform, .copyDst])
             let bindGroup = try backend.createBindGroup(
                 layout: bindGroupLayout,
-                entries: [GPUBindGroupEntry(binding: 0, buffer: uniformBuffer, offset: 0, size: 64)]
+                entries: try meshBindGroupEntries(instanceUniformBuffer: uniformBuffer)
             )
             dynamicInstanceResources = DynamicInstanceResources(
                 uniformBuffer: uniformBuffer,
@@ -951,10 +971,55 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             let uniformBuffer = try backend.createBuffer(size: 64, usage: [.uniform, .copyDst])
             let bindGroup = try backend.createBindGroup(
                 layout: bindGroupLayout,
-                entries: [GPUBindGroupEntry(binding: 0, buffer: uniformBuffer, offset: 0, size: 64)]
+                entries: try meshBindGroupEntries(instanceUniformBuffer: uniformBuffer)
             )
             instanceResources.append(
                 InstanceResources(uniformBuffer: uniformBuffer, bindGroup: bindGroup))
+        }
+    }
+
+    private func meshBindGroupEntries(instanceUniformBuffer: GPUBuffer) throws -> [GPUBindGroupEntry] {
+        try ensureStylizedCharacterUniformBuffer()
+        guard let stylizedCharacterUniformBuffer else {
+            throw WGPUBackendError.initFailed("stylized character uniform buffer missing")
+        }
+        return [
+            GPUBindGroupEntry(binding: 0, buffer: instanceUniformBuffer, offset: 0, size: 64),
+            GPUBindGroupEntry(
+                binding: 1,
+                buffer: stylizedCharacterUniformBuffer,
+                offset: 0,
+                size: UInt64(MemoryLayout<StylizedCharacterUniforms>.stride)
+            ),
+        ]
+    }
+
+    private func ensureStylizedCharacterUniformBuffer() throws {
+        guard backend.rawDevice != nil else { return }
+        if stylizedCharacterUniformBuffer != nil { return }
+        stylizedCharacterUniformBuffer = try backend.createBuffer(size: 256, usage: [.uniform, .copyDst])
+    }
+
+    private func writeStylizedCharacterUniforms() {
+        guard let stylizedCharacterUniformBuffer else { return }
+        let style = activeRenderSettings.stylizedCharacterStyle
+        var uniforms = StylizedCharacterUniforms(
+            toonThresholds: style.toonThresholds,
+            toonLevels: style.toonLevels,
+            inkWashColor: style.inkWashColor,
+            params: SIMD4<Float>(
+                style.paperGrainStrength,
+                style.rimStrength,
+                style.materialBiasStrength,
+                style.outlineWidth
+            )
+        )
+        withUnsafeBytes(of: &uniforms) { raw in
+            if let base = raw.baseAddress {
+                backend.writeBuffer(stylizedCharacterUniformBuffer,
+                                    data: base,
+                                    size: raw.count)
+            }
         }
     }
 
