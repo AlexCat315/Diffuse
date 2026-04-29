@@ -27,4 +27,24 @@ public struct Plane3D: Sendable, Equatable {
     public func signedDistance(to point: SIMD3<Float>) -> Float {
         simd_dot(normal, point) + distance
     }
+
+    public func maxSignedDistance(to bounds: Bounds3D) -> Float {
+        guard !bounds.isEmpty else { return -.infinity }
+        let point = SIMD3<Float>(
+            normal.x >= 0 ? bounds.max.x : bounds.min.x,
+            normal.y >= 0 ? bounds.max.y : bounds.min.y,
+            normal.z >= 0 ? bounds.max.z : bounds.min.z
+        )
+        return signedDistance(to: point)
+    }
+
+    public func minSignedDistance(to bounds: Bounds3D) -> Float {
+        guard !bounds.isEmpty else { return .infinity }
+        let point = SIMD3<Float>(
+            normal.x >= 0 ? bounds.min.x : bounds.max.x,
+            normal.y >= 0 ? bounds.min.y : bounds.max.y,
+            normal.z >= 0 ? bounds.min.z : bounds.max.z
+        )
+        return signedDistance(to: point)
+    }
 }
