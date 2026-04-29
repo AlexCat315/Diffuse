@@ -42,6 +42,24 @@ struct CardBattleRuntimeTests {
         #expect(result.events == [.turnStarted(turn: 1, playerID: .player, cardsDrawn: 1)])
     }
 
+    @Test("starting a turn supports any battle player")
+    func startTurnSupportsAnyPlayer() {
+        let enemyCard = BattleCard(id: "counter", title: "Counter", cost: 1, damage: 4)
+        let enemy = BattlePlayerState(id: .enemy, health: 24, maxEnergy: 2, deck: [enemyCard])
+        let initial = BattleState(players: [.enemy: enemy])
+
+        let result = BattleStateMachine.reduceWithResult(
+            initial,
+            command: .startTurn(playerID: .enemy, drawCount: 1)
+        )
+
+        #expect(result.state.turn == 1)
+        #expect(result.state.activePlayerID == .enemy)
+        #expect(result.state.players[.enemy]?.energy == 2)
+        #expect(result.state.players[.enemy]?.hand.map(\.id) == ["counter"])
+        #expect(result.events == [.turnStarted(turn: 1, playerID: .enemy, cardsDrawn: 1)])
+    }
+
     @Test("playing a card spends energy moves it to discard and damages target")
     func playCardResolvesDamage() {
         let strike = BattleCard(id: "strike", title: "Strike", cost: 1, skillID: "slash", damage: 6)
