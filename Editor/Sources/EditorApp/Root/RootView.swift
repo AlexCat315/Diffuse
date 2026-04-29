@@ -78,7 +78,7 @@ private struct EditorCallbacks {
             s.dispatch(.setWorkspaceMode(next))
             let np = s.state.activeLayoutPreset
             EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: np)
-            EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
+            EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, cmdSelectBehavior: s.state.cmdSelectBehavior)
         }
         self.setLayoutPreset = { nextPreset in
             let s = app.store
@@ -87,14 +87,14 @@ private struct EditorCallbacks {
             EditorRootViewFactory.saveDockLayout(controller, for: m, preset: pp)
             s.dispatch(.setActiveLayoutPreset(nextPreset))
             EditorRootViewFactory.loadLayoutPreset(into: controller, for: m, preset: nextPreset)
-            EditorRootViewFactory.saveShellState(mode: m, preset: nextPreset, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
+            EditorRootViewFactory.saveShellState(mode: m, preset: nextPreset, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, cmdSelectBehavior: s.state.cmdSelectBehavior)
         }
         self.resetLayout = {
             let s = app.store
             let m = s.state.workspaceMode; let p = s.state.activeLayoutPreset
             EditorRootViewFactory.resetLayout(into: controller, for: m, preset: p)
             EditorRootViewFactory.saveDockLayout(controller, for: m, preset: p)
-            EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
+            EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, cmdSelectBehavior: s.state.cmdSelectBehavior)
         }
         self.openSettings = { app.openSettingsWindow() }
         self.handleMenuCommand = { command in
@@ -124,7 +124,8 @@ private struct EditorCallbacks {
                                                      preset: nextPreset,
                                                      themeMode: s.state.themeMode,
                                                      language: s.state.language,
-                                                     vsyncMode: s.state.vsyncMode)
+                                                     vsyncMode: s.state.vsyncMode,
+                                                     cmdSelectBehavior: s.state.cmdSelectBehavior)
             case let .setLayoutPreset(nextPreset):
                 guard nextPreset != s.state.activeLayoutPreset else { return }
                 let mode = s.state.workspaceMode
@@ -136,7 +137,8 @@ private struct EditorCallbacks {
                                                      preset: nextPreset,
                                                      themeMode: s.state.themeMode,
                                                      language: s.state.language,
-                                                     vsyncMode: s.state.vsyncMode)
+                                                     vsyncMode: s.state.vsyncMode,
+                                                     cmdSelectBehavior: s.state.cmdSelectBehavior)
             case .resetLayout:
                 let mode = s.state.workspaceMode
                 let preset = s.state.activeLayoutPreset
@@ -146,7 +148,8 @@ private struct EditorCallbacks {
                                                      preset: preset,
                                                      themeMode: s.state.themeMode,
                                                      language: s.state.language,
-                                                     vsyncMode: s.state.vsyncMode)
+                                                     vsyncMode: s.state.vsyncMode,
+                                                     cmdSelectBehavior: s.state.cmdSelectBehavior)
             case let .setPlaybackState(next):
                 if s.state.playbackState != next {
                     s.dispatch(.setPlaybackState(next))
@@ -177,13 +180,13 @@ private struct EditorCallbacks {
                                                      s.dispatch(.setWorkspaceMode(next))
                                                      let np = s.state.activeLayoutPreset
                                                      EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: np)
-                                                     EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
+                                                     EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, cmdSelectBehavior: s.state.cmdSelectBehavior)
                                                  },
                                                  resetLayout: {
                                                      let m = s.state.workspaceMode; let p = s.state.activeLayoutPreset
                                                      EditorRootViewFactory.resetLayout(into: controller, for: m, preset: p)
                                                      EditorRootViewFactory.saveDockLayout(controller, for: m, preset: p)
-                                                     EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode)
+                                                     EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, cmdSelectBehavior: s.state.cmdSelectBehavior)
                                                  },
                                                  newScene: { app.resetPreviewScene() },
                                                  openSettings: { app.openSettingsWindow() })
