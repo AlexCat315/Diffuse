@@ -134,6 +134,32 @@ struct GLTFImporterTests {
             { "bufferView": 5, "componentType": 5126, "count": 3, "type": "VEC4" },
             { "bufferView": 6, "componentType": 5123, "count": 3, "type": "SCALAR" }
           ],
+          "images": [
+            { "uri": "hero_base.png", "mimeType": "image/png" },
+            { "uri": "hero_normal.png", "mimeType": "image/png" }
+          ],
+          "textures": [
+            { "source": 0 },
+            { "source": 1 }
+          ],
+          "materials": [
+            {
+              "name": "unused",
+              "pbrMetallicRoughness": {
+                "baseColorFactor": [1, 1, 1, 1]
+              }
+            },
+            {
+              "name": "ink hero",
+              "pbrMetallicRoughness": {
+                "baseColorFactor": [0.8, 0.7, 0.6, 1],
+                "baseColorTexture": { "index": 0 },
+                "metallicFactor": 0,
+                "roughnessFactor": 0.95
+              },
+              "normalTexture": { "index": 1 }
+            }
+          ],
           "meshes": [
             {
               "primitives": [
@@ -146,7 +172,8 @@ struct GLTFImporterTests {
                     "JOINTS_0": 4,
                     "WEIGHTS_0": 5
                   },
-                  "indices": 6
+                  "indices": 6,
+                  "material": 1
                 }
               ]
             }
@@ -169,10 +196,19 @@ struct GLTFImporterTests {
         #expect(mesh.vertices[MeshAsset.uvFloatOffset + 1] == 0)
         #expect(mesh.vertices[MeshAsset.tangentFloatOffset] == 1)
         #expect(mesh.vertices[MeshAsset.tangentFloatOffset + 3] == 1)
+        #expect(mesh.vertices[MeshAsset.materialIndexFloatOffset] == 1)
         #expect(mesh.vertices[MeshAsset.jointsFloatOffset] == 0)
         #expect(mesh.vertices[MeshAsset.jointsFloatOffset + 3] == 3)
         #expect(mesh.vertices[MeshAsset.weightsFloatOffset] == 0.4)
         #expect(mesh.vertices[MeshAsset.weightsFloatOffset + 3] == 0.1)
+        #expect(mesh.textures.map(\.sourceURI) == ["hero_base.png", "hero_normal.png"])
+        #expect(mesh.materials.count == 2)
+        #expect(mesh.materials[1].name == "ink hero")
+        #expect(mesh.materials[1].baseColorFactor == SIMD4<Float>(0.8, 0.7, 0.6, 1))
+        #expect(mesh.materials[1].baseColorTextureIndex == 0)
+        #expect(mesh.materials[1].normalTextureIndex == 1)
+        #expect(mesh.materials[1].metallicFactor == 0)
+        #expect(mesh.materials[1].roughnessFactor == 0.95)
     }
 
     private func append(_ values: [Float], to data: inout Data) {

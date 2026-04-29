@@ -11,6 +11,48 @@ public struct AssetPipeline {
 
 // MARK: - Mesh Asset
 
+public struct MeshTexture: Sendable, Equatable {
+    public var name: String?
+    public var sourceURI: String?
+    public var mimeType: String?
+    public var samplerIndex: Int?
+
+    public init(name: String? = nil,
+                sourceURI: String? = nil,
+                mimeType: String? = nil,
+                samplerIndex: Int? = nil) {
+        self.name = name
+        self.sourceURI = sourceURI
+        self.mimeType = mimeType
+        self.samplerIndex = samplerIndex
+    }
+}
+
+public struct MeshMaterial: Sendable, Equatable {
+    public var name: String?
+    public var baseColorFactor: SIMD4<Float>
+    public var baseColorTextureIndex: Int?
+    public var normalTextureIndex: Int?
+    public var metallicFactor: Float
+    public var roughnessFactor: Float
+
+    public init(name: String? = nil,
+                baseColorFactor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
+                baseColorTextureIndex: Int? = nil,
+                normalTextureIndex: Int? = nil,
+                metallicFactor: Float = 1,
+                roughnessFactor: Float = 1) {
+        self.name = name
+        self.baseColorFactor = baseColorFactor
+        self.baseColorTextureIndex = baseColorTextureIndex
+        self.normalTextureIndex = normalTextureIndex
+        self.metallicFactor = metallicFactor
+        self.roughnessFactor = roughnessFactor
+    }
+
+    public static let fallback = MeshMaterial()
+}
+
 /// Interleaved mesh vertex stream used by runtime render backends.
 ///
 /// Layout, in floats:
@@ -39,11 +81,19 @@ public struct MeshAsset: Sendable {
     public var vertices: [Float]
     public var indices: [UInt32]
     public var name: String
+    public var materials: [MeshMaterial]
+    public var textures: [MeshTexture]
 
-    public init(name: String, vertices: [Float], indices: [UInt32]) {
+    public init(name: String,
+                vertices: [Float],
+                indices: [UInt32],
+                materials: [MeshMaterial] = [MeshMaterial.fallback],
+                textures: [MeshTexture] = []) {
         self.name = name
         self.vertices = vertices
         self.indices = indices
+        self.materials = materials.isEmpty ? [MeshMaterial.fallback] : materials
+        self.textures = textures
     }
 
     public var indexCount: UInt32 { UInt32(indices.count) }
