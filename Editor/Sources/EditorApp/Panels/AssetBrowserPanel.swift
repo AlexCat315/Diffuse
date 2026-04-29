@@ -97,8 +97,8 @@ private struct AssetBrowserRow: View {
 
                 Spacer(minLength: 0)
             }
-            .padding(horizontal: 8, vertical: 6)
-            .background(.surfaceOverlay)
+            .padding(horizontal: 7, vertical: 5)
+            .background(.surfaceVariant)
             .cornerRadius(2)
         }
     }
