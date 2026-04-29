@@ -540,7 +540,7 @@ private struct MeshBuilder {
             vertices: vertices,
             indices: indices,
             materials: document.meshMaterials(),
-            textures: document.meshTextures(),
+            textures: document.meshTextures(buffers: buffers),
             skins: try meshSkins(),
             animations: try meshAnimations()
         )
@@ -914,6 +914,7 @@ private struct GLTFTexture: Decodable {
 private struct GLTFImage: Decodable {
     let name: String?
     let uri: String?
+    let bufferView: Int?
     let mimeType: String?
 }
 
@@ -993,17 +994,29 @@ private extension GLTFDocument {
         }
     }
 
-    func meshTextures() -> [MeshTexture] {
+    func meshTextures(buffers: [Data]) -> [MeshTexture] {
         guard let textures, !textures.isEmpty else { return [] }
         return textures.map { texture in
             let image = texture.source.flatMap { images?[safe: $0] }
+            let data = image?.bufferView.flatMap { imageData(bufferViewIndex: $0, buffers: buffers) }
             return MeshTexture(
                 name: texture.name ?? image?.name,
                 sourceURI: image?.uri,
                 mimeType: image?.mimeType,
-                samplerIndex: texture.sampler
+                samplerIndex: texture.sampler,
+                data: data
             )
         }
+    }
+
+    private func imageData(bufferViewIndex: Int, buffers: [Data]) -> Data? {
+        guard let view = bufferViews?[safe: bufferViewIndex],
+              let buffer = buffers[safe: view.buffer]
+        else { return nil }
+        let start = view.byteOffset ?? 0
+        let end = start + view.byteLength
+        guard start >= 0, end <= buffer.count else { return nil }
+        return buffer.subdata(in: start..<end)
     }
 
     private static func vec4(_ values: [Float]?, fallback: SIMD4<Float>) -> SIMD4<Float> {
