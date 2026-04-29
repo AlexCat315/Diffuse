@@ -5,24 +5,24 @@ struct ConsolePanel: View {
     let store: EditorStore
 
     var body: some View {
-        StoreScope(store, select: ConsolePanelSelection.init) { store in
+        StoreScope(store) { store in
             Box(direction: .column, alignItems: .stretch, spacing: 8) {
                 Row(alignment: .center, spacing: 8) {
-                    Text(store.state.connected ? "Connected" : "Offline")
+                    Text(store.connected ? L("Connected") : L("Offline"))
                         .font(.caption)
-                        .foregroundColor(store.state.connected ? .success : .warning)
+                        .foregroundColor(store.connected ? .success : .warning)
 
                     Spacer(minLength: 0)
 
-                    Text("revision \(store.state.sceneRevision)")
+                    Text("revision \(store.sceneRevision)")
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
                 }
 
                 Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                    Text("playbackState = .\(store.state.playbackState.rawValue)")
+                    Text("playbackState = .\(store.playbackState.rawValue)")
                         .font(.mono)
-                    Text("selectedEntityID = \(store.state.selectedEntityID.map(String.init) ?? "nil")")
+                    Text("selectedEntityID = \(store.selectedEntityID.map(String.init) ?? "nil")")
                         .font(.mono)
                         .foregroundColor(.onSurfaceMuted)
                 }
@@ -33,19 +33,5 @@ struct ConsolePanel: View {
             .padding(10)
             .frame(minHeight: 140)
         }
-    }
-}
-
-private struct ConsolePanelSelection: Hashable {
-    let connected: Bool
-    let sceneRevision: UInt64
-    let playbackState: PlaybackState
-    let selectedEntityID: UInt64?
-
-    init(_ state: EditorState) {
-        self.connected = state.connected
-        self.sceneRevision = state.sceneRevision
-        self.playbackState = state.playbackState
-        self.selectedEntityID = state.selectedEntityID
     }
 }

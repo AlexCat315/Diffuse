@@ -8,10 +8,10 @@ struct AssetBrowserPanel: View {
     let app: EditorApplication
 
     var body: some View {
-        StoreScope(app.store, select: AssetBrowserPanelSelection.init) { store in
+        StoreScope(app.store) { store in
             let assets = EditorAssetCatalog.entries()
             Box(direction: .column, alignItems: .stretch) {
-                AssetBrowserHeader(dragLabel: store.state.activeAssetDrag?.displayName)
+                AssetBrowserHeader(dragLabel: store.activeAssetDrag?.displayName)
                     .padding(horizontal: 10, vertical: 7)
 
                 Divider()
@@ -30,14 +30,6 @@ struct AssetBrowserPanel: View {
             }
             .frame(minWidth: 220)
         }
-    }
-}
-
-private struct AssetBrowserPanelSelection: Hashable {
-    let activeAssetDragName: String?
-
-    init(_ state: EditorState) {
-        self.activeAssetDragName = state.activeAssetDrag?.displayName
     }
 }
 

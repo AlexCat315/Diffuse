@@ -51,7 +51,7 @@ public struct HitTester {
         // must apply the inverse translation when descending.
         let childPoint = CGPoint(x: local.x + node.contentOffset.x,
                                  y: local.y + node.contentOffset.y)
-        for child in node.children.reversed() {
+        for child in hitTestOrderedChildren(of: node) {
             if let hit = walk(node: child, pointInParent: childPoint, path: &path) {
                 return hit
             }
@@ -112,7 +112,7 @@ public struct HitTester {
         // render traversal by applying contentOffset while descending.
         let childPoint = CGPoint(x: local.x + node.contentOffset.x,
                                  y: local.y + node.contentOffset.y)
-        for child in input.children.reversed() {
+        for child in hitTestOrderedChildren(of: input) {
             if let hit = walk(input: child, pointInParent: childPoint, path: &path) {
                 return hit
             }
@@ -124,5 +124,27 @@ public struct HitTester {
 
         path.removeLast()
         return nil
+    }
+
+    private static func hitTestOrderedChildren(of node: Node) -> [Node] {
+        node.children.enumerated()
+            .sorted { lhs, rhs in
+                let lhsZ = lhs.element.zIndex
+                let rhsZ = rhs.element.zIndex
+                if lhsZ == rhsZ { return lhs.offset > rhs.offset }
+                return lhsZ > rhsZ
+            }
+            .map { $0.element }
+    }
+
+    private static func hitTestOrderedChildren(of input: InputNode) -> [InputNode] {
+        input.children.enumerated()
+            .sorted { lhs, rhs in
+                let lhsZ = lhs.element.node?.zIndex ?? 0
+                let rhsZ = rhs.element.node?.zIndex ?? 0
+                if lhsZ == rhsZ { return lhs.offset > rhs.offset }
+                return lhsZ > rhsZ
+            }
+            .map { $0.element }
     }
 }

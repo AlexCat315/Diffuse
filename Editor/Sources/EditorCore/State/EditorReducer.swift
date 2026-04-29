@@ -23,6 +23,7 @@ public enum EditorAction: Sendable {
     case setCommandSelectBehavior(SelectionCommandBehavior)
     case setThemeMode(EditorThemeMode)
     case setLanguage(EditorLanguage)
+    case forceUIRefresh
     case setVSyncMode(EditorVSyncMode)
     case beginAssetDrag(EditorAssetDragPayload)
     case updateAssetDragCursor(x: Float, y: Float)
@@ -107,10 +108,11 @@ public enum EditorReducer {
         case let .setCommandSelectBehavior(behavior):
             state.cmdSelectBehavior = behavior
         case let .setThemeMode(mode):
-            state.themeMode = mode
+            state.presentation.setThemeMode(mode)
         case let .setLanguage(language):
-            EditorLocalizationPreferences.language = language
-            state.language = language
+            state.presentation.setLanguage(language)
+        case .forceUIRefresh:
+            state.presentation.forceRefresh()
         case let .setVSyncMode(mode):
             state.vsyncMode = mode
         case let .beginAssetDrag(payload):
@@ -145,7 +147,7 @@ public enum EditorReducer {
 extension EditorAction {
     var notifiesSubscribers: Bool {
         switch self {
-        case .tickFrame:
+        case .tickFrame, .updateAssetDragCursor:
             return false
         default:
             return true

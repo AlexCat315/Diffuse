@@ -89,7 +89,7 @@ public enum EditorViewportShadingMode: String, Codable, Sendable, Hashable {
     case wireframe
 }
 
-public enum SelectionCommandBehavior: String, Codable, Sendable {
+public enum SelectionCommandBehavior: String, Codable, Sendable, Hashable {
     case subtract
     case toggle
 }
@@ -99,7 +99,7 @@ public enum EditorThemeMode: String, Codable, Sendable, CaseIterable, Hashable {
     case light
 }
 
-public enum EditorLanguage: String, Codable, Sendable, CaseIterable {
+public enum EditorLanguage: String, Codable, Sendable, CaseIterable, Hashable {
     case system
     case english
     case simplifiedChinese
@@ -129,7 +129,7 @@ public enum EditorLanguage: String, Codable, Sendable, CaseIterable {
     }
 }
 
-public enum EditorVSyncMode: String, Codable, Sendable, CaseIterable {
+public enum EditorVSyncMode: String, Codable, Sendable, CaseIterable, Hashable {
     case enabled
     case disabled
 
@@ -188,8 +188,7 @@ public struct EditorState: Codable, Sendable {
     public var rotateSnapEnabled: Bool
     public var scaleSnapEnabled: Bool
     public var cmdSelectBehavior: SelectionCommandBehavior
-    public var themeMode: EditorThemeMode
-    public var language: EditorLanguage
+    public var presentation: EditorPresentationState
     public var vsyncMode: EditorVSyncMode
     public var activeAssetDrag: EditorAssetDragPayload?
     public var inspectorCollapsedSectionIDs: Set<String>
@@ -221,6 +220,7 @@ public struct EditorState: Codable, Sendable {
         themeMode: EditorThemeMode = .dark,
         language: EditorLanguage = .system,
         vsyncMode: EditorVSyncMode = .enabled,
+        uiRefreshRevision: UInt64 = 0,
         activeAssetDrag: EditorAssetDragPayload? = nil,
         inspectorCollapsedSectionIDs: Set<String> = [],
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
@@ -246,8 +246,9 @@ public struct EditorState: Codable, Sendable {
         self.rotateSnapEnabled = rotateSnapEnabled
         self.scaleSnapEnabled = scaleSnapEnabled
         self.cmdSelectBehavior = cmdSelectBehavior
-        self.themeMode = themeMode
-        self.language = language
+        self.presentation = EditorPresentationState(themeMode: themeMode,
+                                                    language: language,
+                                                    revision: uiRefreshRevision)
         self.vsyncMode = vsyncMode
         self.activeAssetDrag = activeAssetDrag
         self.inspectorCollapsedSectionIDs = inspectorCollapsedSectionIDs
@@ -259,5 +260,124 @@ public struct EditorState: Codable, Sendable {
 
     public var shouldRender: Bool {
         !windowMinimized && !windowOccluded
+    }
+
+    public var themeMode: EditorThemeMode {
+        presentation.themeMode
+    }
+
+    public var language: EditorLanguage {
+        presentation.language
+    }
+
+    public var uiRefreshRevision: UInt64 {
+        presentation.revision
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case connected
+        case selectedEntityID
+        case selectedEntityIDs
+        case playbackState
+        case workspaceMode
+        case activeLayoutPreset
+        case sceneRevision
+        case frameIndex
+        case frameTimingRevision
+        case viewportSurfaceRevision
+        case windowFocused
+        case windowMinimized
+        case windowOccluded
+        case gizmoMode
+        case gizmoSpace
+        case viewportShadingMode
+        case translateSnapEnabled
+        case rotateSnapEnabled
+        case scaleSnapEnabled
+        case cmdSelectBehavior
+        case presentation
+        case themeMode
+        case language
+        case uiRefreshRevision
+        case vsyncMode
+        case activeAssetDrag
+        case inspectorCollapsedSectionIDs
+        case pendingConfirmationRequest
+        case aiStatusMessage
+        case aiWarnings
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        let decodedPresentation = try c.decodeIfPresent(EditorPresentationState.self, forKey: .presentation)
+        let legacyThemeMode = try c.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode)
+        let legacyLanguage = try c.decodeIfPresent(EditorLanguage.self, forKey: .language)
+        let legacyRevision = try c.decodeIfPresent(UInt64.self, forKey: .uiRefreshRevision)
+
+        self.init(
+            connected: try c.decodeIfPresent(Bool.self, forKey: .connected) ?? false,
+            selectedEntityID: try c.decodeIfPresent(UInt64.self, forKey: .selectedEntityID),
+            selectedEntityIDs: try c.decodeIfPresent(Set<UInt64>.self, forKey: .selectedEntityIDs) ?? [],
+            playbackState: try c.decodeIfPresent(PlaybackState.self, forKey: .playbackState) ?? .stopped,
+            workspaceMode: try c.decodeIfPresent(EditorWorkspaceMode.self, forKey: .workspaceMode) ?? .level,
+            activeLayoutPreset: try c.decodeIfPresent(EditorLayoutPreset.self, forKey: .activeLayoutPreset) ?? .levelDefault,
+            sceneRevision: try c.decodeIfPresent(UInt64.self, forKey: .sceneRevision) ?? 0,
+            frameIndex: try c.decodeIfPresent(UInt64.self, forKey: .frameIndex) ?? 0,
+            frameTimingRevision: try c.decodeIfPresent(UInt64.self, forKey: .frameTimingRevision) ?? 0,
+            viewportSurfaceRevision: try c.decodeIfPresent(UInt64.self, forKey: .viewportSurfaceRevision) ?? 0,
+            windowFocused: try c.decodeIfPresent(Bool.self, forKey: .windowFocused) ?? true,
+            windowMinimized: try c.decodeIfPresent(Bool.self, forKey: .windowMinimized) ?? false,
+            windowOccluded: try c.decodeIfPresent(Bool.self, forKey: .windowOccluded) ?? false,
+            gizmoMode: try c.decodeIfPresent(EditorGizmoMode.self, forKey: .gizmoMode) ?? .translate,
+            gizmoSpace: try c.decodeIfPresent(EditorGizmoSpace.self, forKey: .gizmoSpace) ?? .local,
+            viewportShadingMode: try c.decodeIfPresent(EditorViewportShadingMode.self, forKey: .viewportShadingMode) ?? .lit,
+            translateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .translateSnapEnabled) ?? false,
+            rotateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .rotateSnapEnabled) ?? false,
+            scaleSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .scaleSnapEnabled) ?? false,
+            cmdSelectBehavior: try c.decodeIfPresent(SelectionCommandBehavior.self, forKey: .cmdSelectBehavior) ?? .subtract,
+            themeMode: decodedPresentation?.themeMode ?? legacyThemeMode ?? .dark,
+            language: decodedPresentation?.language ?? legacyLanguage ?? .system,
+            vsyncMode: try c.decodeIfPresent(EditorVSyncMode.self, forKey: .vsyncMode) ?? .enabled,
+            uiRefreshRevision: decodedPresentation?.revision ?? legacyRevision ?? 0,
+            activeAssetDrag: try c.decodeIfPresent(EditorAssetDragPayload.self, forKey: .activeAssetDrag),
+            inspectorCollapsedSectionIDs: try c.decodeIfPresent(Set<String>.self, forKey: .inspectorCollapsedSectionIDs) ?? [],
+            pendingConfirmationRequest: try c.decodeIfPresent(ConfirmationRequestBatch.self, forKey: .pendingConfirmationRequest),
+            aiStatusMessage: try c.decodeIfPresent(String.self, forKey: .aiStatusMessage),
+            aiWarnings: try c.decodeIfPresent([String].self, forKey: .aiWarnings) ?? []
+        )
+    }
+
+    public func encode(to encoder: Encoder) throws {
+        var c = encoder.container(keyedBy: CodingKeys.self)
+        try c.encode(connected, forKey: .connected)
+        try c.encodeIfPresent(selectedEntityID, forKey: .selectedEntityID)
+        try c.encode(selectedEntityIDs, forKey: .selectedEntityIDs)
+        try c.encode(playbackState, forKey: .playbackState)
+        try c.encode(workspaceMode, forKey: .workspaceMode)
+        try c.encode(activeLayoutPreset, forKey: .activeLayoutPreset)
+        try c.encode(sceneRevision, forKey: .sceneRevision)
+        try c.encode(frameIndex, forKey: .frameIndex)
+        try c.encode(frameTimingRevision, forKey: .frameTimingRevision)
+        try c.encode(viewportSurfaceRevision, forKey: .viewportSurfaceRevision)
+        try c.encode(windowFocused, forKey: .windowFocused)
+        try c.encode(windowMinimized, forKey: .windowMinimized)
+        try c.encode(windowOccluded, forKey: .windowOccluded)
+        try c.encode(gizmoMode, forKey: .gizmoMode)
+        try c.encode(gizmoSpace, forKey: .gizmoSpace)
+        try c.encode(viewportShadingMode, forKey: .viewportShadingMode)
+        try c.encode(translateSnapEnabled, forKey: .translateSnapEnabled)
+        try c.encode(rotateSnapEnabled, forKey: .rotateSnapEnabled)
+        try c.encode(scaleSnapEnabled, forKey: .scaleSnapEnabled)
+        try c.encode(cmdSelectBehavior, forKey: .cmdSelectBehavior)
+        try c.encode(presentation, forKey: .presentation)
+        try c.encode(themeMode, forKey: .themeMode)
+        try c.encode(language, forKey: .language)
+        try c.encode(uiRefreshRevision, forKey: .uiRefreshRevision)
+        try c.encode(vsyncMode, forKey: .vsyncMode)
+        try c.encodeIfPresent(activeAssetDrag, forKey: .activeAssetDrag)
+        try c.encode(inspectorCollapsedSectionIDs, forKey: .inspectorCollapsedSectionIDs)
+        try c.encodeIfPresent(pendingConfirmationRequest, forKey: .pendingConfirmationRequest)
+        try c.encodeIfPresent(aiStatusMessage, forKey: .aiStatusMessage)
+        try c.encode(aiWarnings, forKey: .aiWarnings)
     }
 }

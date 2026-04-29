@@ -172,10 +172,24 @@ public final class DockController: @unchecked Sendable {
     /// the proposed target should remain visible / committable.
     public var onAllowDrop: ((DockDropRequest) -> Bool)?
 
+    /// Optional host hook fired immediately before a drag/drop proposal is
+    /// committed. Hosts use this to update semantic state that the layout
+    /// normalizer depends on, such as a panel's current workspace region.
+    public var onCommitDrop: ((DockDropRequest) -> Void)?
+
+    /// Optional host hook fired immediately after a drag/drop proposal was
+    /// applied. Hosts use this for follow-up mutations such as restoring
+    /// minimized leaves that now belong to the visible target region.
+    public var onDidCommitDrop: ((DockDropRequest) -> Void)?
+
     /// Optional host policy for whether a leaf can be minimized and which
     /// rail it should collapse into. `nil` means the built-in tab strip does
     /// not render a minimize affordance for that leaf.
     public var onResolveMinimizedEdge: ((DockNodeID) -> DockMinimizedEdge?)?
+
+    /// Small host-owned semantic storage that survives view re-installation
+    /// for the lifetime of this controller. Dock does not read these values.
+    public var semanticStorage: [String: [String: String]] = [:]
 
     /// One entry in the recent-closed-tab history, used by `.reopenLastClosed`
     /// and the default tab context menu's "Reopen Closed Tab" item.
@@ -295,7 +309,7 @@ public final class DockController: @unchecked Sendable {
             applyMinimizeLeaf(leafID: leafID, edge: edge)
             return
         case .restoreMinimizedLeaf(let leafID):
-            applyRestoreMinimizedLeaf(leafID: leafID)
+            restoreMinimizedLeaf(leafID)
             return
         }
         let normalized = normalizeRoot(next)
@@ -405,15 +419,24 @@ public final class DockController: @unchecked Sendable {
         notifyChange()
     }
 
-    private func applyRestoreMinimizedLeaf(leafID: DockNodeID) {
+    public func restoreMinimizedLeaf(_ leafID: DockNodeID,
+                                     activating tabID: DockTabID? = nil) {
         guard let minimized = minimizedLeaves[leafID] else { return }
+        let restoredNode: DockLayoutNode
+        if let tabID {
+            restoredNode = Self.setActive(node: minimized.node.id,
+                                          tab: tabID,
+                                          in: minimized.node)
+        } else {
+            restoredNode = minimized.node
+        }
 
         let nextRoot: DockLayoutNode
         if case .empty = root {
-            nextRoot = minimized.node
+            nextRoot = restoredNode
         } else {
             nextRoot = Self.insertSubtreeAtDropTarget(
-                minimized.node,
+                restoredNode,
                 target: .splitEdge(target: root.id, edge: minimized.edge.dockEdge),
                 in: root,
                 allowRootFallback: true
@@ -671,6 +694,14 @@ public final class DockController: @unchecked Sendable {
 
     func allowsDrop(_ request: DockDropRequest) -> Bool {
         onAllowDrop?(request) ?? true
+    }
+
+    func commitDrop(_ request: DockDropRequest) {
+        onCommitDrop?(request)
+    }
+
+    func didCommitDrop(_ request: DockDropRequest) {
+        onDidCommitDrop?(request)
     }
 
     private func notifyChange() {

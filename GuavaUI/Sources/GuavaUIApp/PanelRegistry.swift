@@ -28,6 +28,13 @@ public final class PanelRegistry {
         byID[descriptor.id] = descriptor
     }
 
+    public func updateDescriptor(id: String,
+                                 _ update: (inout PanelDescriptor) -> Void) {
+        guard var descriptor = byID[id] else { return }
+        update(&descriptor)
+        byID[id] = descriptor
+    }
+
     public func unregister(id: String) {
         byID.removeValue(forKey: id)
         order.removeAll { $0 == id }

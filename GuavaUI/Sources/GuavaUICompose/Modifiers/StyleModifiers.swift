@@ -34,6 +34,15 @@ public struct OpacityModifier: ViewModifier {
     }
 }
 
+public struct ZIndexModifier: ViewModifier {
+    public let value: Float
+    public init(_ value: Float) { self.value = value }
+
+    public func apply(node: Node) {
+        node.zIndex = value
+    }
+}
+
 public struct ClipModifier: ViewModifier {
     public init() {}
     public func apply(node: Node) {
@@ -126,6 +135,10 @@ public extension View {
 
     func opacity(_ value: Float) -> some View {
         modifier(OpacityModifier(value))
+    }
+
+    func zIndex(_ value: Float) -> some View {
+        modifier(ZIndexModifier(value))
     }
 
     func clipped() -> some View {
