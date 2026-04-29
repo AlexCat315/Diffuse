@@ -1,0 +1,69 @@
+import Foundation
+
+public enum BattleValidationIssue: Sendable, Equatable, Codable {
+    case missingActivePlayer(BattlePlayerID)
+    case mismatchedPlayerKey(expected: BattlePlayerID, actual: BattlePlayerID)
+    case negativeHealth(playerID: BattlePlayerID, health: Int)
+    case negativeMaxEnergy(playerID: BattlePlayerID, maxEnergy: Int)
+    case negativeEnergy(playerID: BattlePlayerID, energy: Int)
+    case energyExceedsMaximum(playerID: BattlePlayerID, energy: Int, maxEnergy: Int)
+    case negativeCardCost(playerID: BattlePlayerID, cardID: String, cost: Int)
+    case negativeCardDamage(playerID: BattlePlayerID, cardID: String, damage: Int)
+    case negativeSkillCooldown(playerID: BattlePlayerID, skillID: String, cooldownTurns: Int)
+}
+
+public enum BattleStateValidator {
+    public static func validate(_ state: BattleState) -> [BattleValidationIssue] {
+        var issues: [BattleValidationIssue] = []
+        if state.players[state.activePlayerID] == nil {
+            issues.append(.missingActivePlayer(state.activePlayerID))
+        }
+
+        for (playerID, player) in state.players {
+            if player.id != playerID {
+                issues.append(.mismatchedPlayerKey(expected: playerID, actual: player.id))
+            }
+            if player.health < 0 {
+                issues.append(.negativeHealth(playerID: playerID, health: player.health))
+            }
+            if player.maxEnergy < 0 {
+                issues.append(.negativeMaxEnergy(playerID: playerID, maxEnergy: player.maxEnergy))
+            }
+            if player.energy < 0 {
+                issues.append(.negativeEnergy(playerID: playerID, energy: player.energy))
+            }
+            if player.energy > player.maxEnergy {
+                issues.append(.energyExceedsMaximum(
+                    playerID: playerID,
+                    energy: player.energy,
+                    maxEnergy: player.maxEnergy
+                ))
+            }
+            validateCards(player.deck, owner: playerID, issues: &issues)
+            validateCards(player.hand, owner: playerID, issues: &issues)
+            validateCards(player.discard, owner: playerID, issues: &issues)
+            for skill in player.skills where skill.cooldownTurns < 0 {
+                issues.append(.negativeSkillCooldown(
+                    playerID: playerID,
+                    skillID: skill.id,
+                    cooldownTurns: skill.cooldownTurns
+                ))
+            }
+        }
+
+        return issues
+    }
+
+    private static func validateCards(_ cards: [BattleCard],
+                                      owner playerID: BattlePlayerID,
+                                      issues: inout [BattleValidationIssue]) {
+        for card in cards {
+            if card.cost < 0 {
+                issues.append(.negativeCardCost(playerID: playerID, cardID: card.id, cost: card.cost))
+            }
+            if card.damage < 0 {
+                issues.append(.negativeCardDamage(playerID: playerID, cardID: card.id, damage: card.damage))
+            }
+        }
+    }
+}
