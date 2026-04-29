@@ -6,6 +6,7 @@ public enum BattleValidationIssue: Sendable, Equatable, Codable {
     case negativeHealth(playerID: BattlePlayerID, health: Int)
     case negativeMaxHealth(playerID: BattlePlayerID, maxHealth: Int)
     case healthExceedsMaximum(playerID: BattlePlayerID, health: Int, maxHealth: Int)
+    case negativeBlock(playerID: BattlePlayerID, block: Int)
     case negativeMaxEnergy(playerID: BattlePlayerID, maxEnergy: Int)
     case negativeEnergy(playerID: BattlePlayerID, energy: Int)
     case energyExceedsMaximum(playerID: BattlePlayerID, energy: Int, maxEnergy: Int)
@@ -39,6 +40,9 @@ public enum BattleStateValidator {
                     health: player.health,
                     maxHealth: player.maxHealth
                 ))
+            }
+            if player.block < 0 {
+                issues.append(.negativeBlock(playerID: playerID, block: player.block))
             }
             if player.maxEnergy < 0 {
                 issues.append(.negativeMaxEnergy(playerID: playerID, maxEnergy: player.maxEnergy))
