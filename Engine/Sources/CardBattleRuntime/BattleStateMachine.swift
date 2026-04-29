@@ -91,17 +91,29 @@ public enum BattleStateMachine {
         state.players[player.id] = player
 
         let damage = card.totalDamage
+        let healing = card.totalHealing
+        var didApplyEffect = false
         if damage > 0, var targetPlayer = state.players[target] {
             targetPlayer.health = max(0, targetPlayer.health - damage)
             state.players[target] = targetPlayer
             state.log.append("\(player.id.rawValue) played \(card.id) for \(damage) damage")
             events.append(.cardPlayed(playerID: player.id, cardID: card.id, targetID: target, damage: damage))
+            didApplyEffect = true
             if targetPlayer.health == 0 {
                 state.phase = target == .enemy ? .victory : .defeat
                 events.append(.playerDefeated(target))
                 return nil
             }
-        } else {
+        }
+        if healing > 0, var targetPlayer = state.players[target] {
+            let restored = min(healing, max(0, targetPlayer.maxHealth - targetPlayer.health))
+            targetPlayer.health += restored
+            state.players[target] = targetPlayer
+            state.log.append("\(player.id.rawValue) played \(card.id) for \(restored) healing")
+            events.append(.healthRestored(playerID: target, amount: restored))
+            didApplyEffect = true
+        }
+        if !didApplyEffect {
             state.log.append("\(player.id.rawValue) played \(card.id)")
             events.append(.cardPlayed(playerID: player.id, cardID: card.id, targetID: target, damage: 0))
         }
