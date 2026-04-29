@@ -141,4 +141,16 @@ struct CardBattleRuntimeTests {
         #expect(next.players[.player]?.health == 27)
         #expect(next.log == ["enemy dealt 5 damage"])
     }
+
+    @Test("sample factory creates playable duel state")
+    func sampleFactoryCreatesDuel() {
+        let initial = BattleSampleFactory.makeThreeKingdomsDuel()
+        let turn = BattleStateMachine.reduce(initial, command: .startPlayerTurn(drawCount: 3))
+        let snapshot = BattleHUDSnapshot.make(from: turn, playerID: .player)
+
+        #expect(initial.players[.player]?.deck.count == 4)
+        #expect(initial.players[.enemy]?.health == 32_000)
+        #expect(snapshot?.hand.count == 3)
+        #expect(snapshot?.skills.map(\.id) == ["slash", "rally", "duel"])
+    }
 }
