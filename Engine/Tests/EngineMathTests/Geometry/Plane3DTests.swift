@@ -12,4 +12,13 @@ struct Plane3DTests {
         #expect(plane.signedDistance(to: SIMD3<Float>(0, 5, 0)) == 2)
         #expect(plane.signedDistance(to: SIMD3<Float>(0, 1, 0)) == -2)
     }
+
+    @Test("plane computes conservative bounds distances")
+    func planeComputesBoundsDistances() {
+        let plane = Plane3D(normal: SIMD3<Float>(1, 0, 0), distance: -2)
+        let bounds = Bounds3D(min: SIMD3<Float>(1, -1, -1), max: SIMD3<Float>(4, 1, 1))
+
+        #expect(plane.minSignedDistance(to: bounds) == -1)
+        #expect(plane.maxSignedDistance(to: bounds) == 2)
+    }
 }
