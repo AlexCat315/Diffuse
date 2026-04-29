@@ -57,6 +57,38 @@ struct CardBattleRuntimeTests {
         #expect(next.log == ["player played strike for 6 damage"])
     }
 
+    @Test("reducer exposes structured events and rejections")
+    func reducerExposesStructuredResult() {
+        let finisher = BattleCard(id: "finisher", title: "Finisher", cost: 4, damage: 18)
+        let player = BattlePlayerState(
+            id: .player,
+            health: 32,
+            maxEnergy: 3,
+            energy: 1,
+            deck: [],
+            hand: [finisher]
+        )
+        let enemy = BattlePlayerState(id: .enemy, health: 24, maxEnergy: 2, deck: [])
+        let state = BattleState(
+            phase: .main,
+            turn: 1,
+            activePlayerID: .player,
+            players: [.player: player, .enemy: enemy]
+        )
+
+        let result = BattleStateMachine.reduceWithResult(
+            state,
+            command: .playCard(cardID: "finisher", target: .enemy)
+        )
+
+        #expect(result.state.players[.player]?.energy == 1)
+        #expect(result.rejection == .insufficientEnergy(cardID: "finisher", available: 1, required: 4))
+        #expect(result.events == [
+            .commandRejected(.insufficientEnergy(cardID: "finisher", available: 1, required: 4))
+        ])
+        #expect(result.state.log == ["not enough energy for finisher"])
+    }
+
     @Test("hud snapshot projects playable hand and skills for ui")
     func hudSnapshotProjectsHandAndSkills() throws {
         let strike = BattleCard(id: "strike", title: "Strike", cost: 1, skillID: "slash", damage: 6)
