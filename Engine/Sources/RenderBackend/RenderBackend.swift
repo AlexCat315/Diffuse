@@ -1,4 +1,5 @@
 import AssetPipeline
+import EngineMath
 import Foundation
 import Logging
 import RHIWGPU
@@ -1399,13 +1400,13 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private func computeProjection(scene: RenderScene, drawableSize: RenderDrawableSize) -> simd_float4x4 {
         let aspect = Float(max(drawableSize.width, 1)) / Float(max(drawableSize.height, 1))
         let cam = scene.camera
-        return perspective(
+        return CameraMatrices.perspectiveRH_ZO(
             fovYRadians: cam.fovYRadians, aspect: aspect, near: cam.near, far: cam.far)
     }
 
     private func computeView(scene: RenderScene) -> simd_float4x4 {
         let cam = scene.camera
-        return lookAt(eye: cam.eye, target: cam.target, up: cam.up)
+        return CameraMatrices.lookAtRH(eye: cam.eye, target: cam.target, up: cam.up)
     }
 
     private func nextPingPongTarget(after current: RenderTextureTarget) -> RenderTextureTarget? {
@@ -1973,31 +1974,4 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private static func loadShaderSource(named name: String) throws -> String {
         try ShaderCatalog().loadWGSLRenderModule(named: name)
     }
-}
-
-// MARK: - Math helpers (right-handed, depth 0..1)
-
-private func perspective(fovYRadians: Float, aspect: Float, near: Float, far: Float)
-    -> simd_float4x4
-{
-    let f = 1.0 / tan(fovYRadians * 0.5)
-    let nf = 1.0 / (near - far)
-    return simd_float4x4(rows: [
-        SIMD4<Float>(f / aspect, 0, 0, 0),
-        SIMD4<Float>(0, f, 0, 0),
-        SIMD4<Float>(0, 0, far * nf, near * far * nf),
-        SIMD4<Float>(0, 0, -1, 0),
-    ])
-}
-
-private func lookAt(eye: SIMD3<Float>, target: SIMD3<Float>, up: SIMD3<Float>) -> simd_float4x4 {
-    let f = simd_normalize(target - eye)
-    let s = simd_normalize(simd_cross(f, up))
-    let u = simd_cross(s, f)
-    return simd_float4x4(rows: [
-        SIMD4<Float>(s.x, s.y, s.z, -simd_dot(s, eye)),
-        SIMD4<Float>(u.x, u.y, u.z, -simd_dot(u, eye)),
-        SIMD4<Float>(-f.x, -f.y, -f.z, simd_dot(f, eye)),
-        SIMD4<Float>(0, 0, 0, 1),
-    ])
 }

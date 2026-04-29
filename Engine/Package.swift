@@ -15,6 +15,7 @@ let package = Package(
     ],
     products: [
         .library(name: "EngineKernel", targets: ["EngineKernel"]),
+        .library(name: "EngineMath", targets: ["EngineMath"]),
         .library(name: "RHIWGPU", targets: ["RHIWGPU"]),
         .library(name: "PlatformShell", targets: ["PlatformShell"]),
         .library(name: "RenderBackend", targets: ["RenderBackend"]),
@@ -75,6 +76,7 @@ let package = Package(
 
         // MARK: - Core Kernel (no deps, pure Swift protocols and types)
         .target(name: "EngineKernel"),
+        .target(name: "EngineMath"),
 
         // MARK: - Rendering
         .target(
@@ -136,6 +138,7 @@ let package = Package(
         .target(
             name: "RenderBackend",
             dependencies: [
+                "EngineMath",
                 "RHIWGPU",
                 "AssetPipeline",
                 "SceneRuntime",
@@ -192,6 +195,12 @@ let package = Package(
                 "EngineKernel",
                 "RenderBackend",
                 "SceneRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "EngineMathTests",
+            dependencies: [
+                "EngineMath",
             ]
         ),
         .testTarget(
