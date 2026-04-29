@@ -56,4 +56,36 @@ struct CardBattleRuntimeTests {
         #expect(next.players[.enemy]?.health == 0)
         #expect(next.log == ["player played strike for 6 damage"])
     }
+
+    @Test("hud snapshot projects playable hand and skills for ui")
+    func hudSnapshotProjectsHandAndSkills() throws {
+        let strike = BattleCard(id: "strike", title: "Strike", cost: 1, skillID: "slash", damage: 6)
+        let finisher = BattleCard(id: "finisher", title: "Finisher", cost: 4, damage: 18)
+        let player = BattlePlayerState(
+            id: .player,
+            health: 32,
+            maxEnergy: 3,
+            energy: 2,
+            deck: [],
+            hand: [strike, finisher],
+            skills: [BattleSkill(id: "slash", title: "Slash", target: .opponent)]
+        )
+        let state = BattleState(
+            phase: .main,
+            turn: 2,
+            activePlayerID: .player,
+            players: [.player: player]
+        )
+
+        let snapshot = try #require(BattleHUDSnapshot.make(from: state, playerID: .player))
+
+        #expect(snapshot.phase == .main)
+        #expect(snapshot.turn == 2)
+        #expect(snapshot.energy == 2)
+        #expect(snapshot.hand.map(\.id) == ["strike", "finisher"])
+        #expect(snapshot.hand.map(\.isPlayable) == [true, false])
+        #expect(snapshot.skills == [
+            BattleSkillViewModel(id: "slash", title: "Slash", target: .opponent, isEnabled: true)
+        ])
+    }
 }
