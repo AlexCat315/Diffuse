@@ -49,6 +49,14 @@ private struct RenderTextureTarget {
     let view: GPUTextureView
 }
 
+private struct GPUMeshTextureResource {
+    let texture: GPUTexture
+    let view: GPUTextureView
+    let width: UInt32
+    let height: UInt32
+    let sourcePath: String
+}
+
 private struct BasePassEncodingReport {
     let drawCallCount: Int
     let renderBundleCount: Int
@@ -138,6 +146,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var historyTarget: RenderTextureTarget?
 
     private var meshes: [GPUMesh] = []
+    private var meshTextureResources: [Int: [Int: GPUMeshTextureResource]] = [:]
     private var instanceResources: [InstanceResources] = []
     private var dynamicInstanceResources: DynamicInstanceResources?
     private var linearSampler: GPUSampler?
@@ -910,6 +919,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 mesh: registered.mesh,
                 sourceDirectory: registered.sourceDirectory
             )
+            try uploadMeshTextures(meshIndex: registered.meshIndex, report: textureReport)
             for failure in textureReport.failures {
                 Logger.renderer.warning(
                     "mesh texture decode failed: meshIndex=\(registered.meshIndex) textureIndex=\(failure.textureIndex) uri=\(failure.sourceURI ?? "<nil>") reason=\(failure.reason)"
@@ -928,6 +938,45 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                                                       mesh: registered.mesh)
             }
         }
+    }
+
+    private func uploadMeshTextures(meshIndex: Int, report: MeshTextureRegistrationReport) throws {
+        guard !report.decodedTextures.isEmpty else { return }
+        var resources = meshTextureResources[meshIndex] ?? [:]
+        for decoded in report.decodedTextures where resources[decoded.textureIndex] == nil {
+            let textureWidth = UInt32(decoded.texture.width)
+            let textureHeight = UInt32(decoded.texture.height)
+            let gpuTexture = try backend.createTexture(
+                width: textureWidth,
+                height: textureHeight,
+                format: .rgba8Unorm,
+                usage: [.textureBinding, .copyDst]
+            )
+            decoded.texture.pixels.withUnsafeBytes { raw in
+                if let base = raw.baseAddress {
+                    backend.writeTexture(
+                        gpuTexture,
+                        data: base,
+                        dataSize: raw.count,
+                        bytesPerRow: textureWidth * 4,
+                        rowsPerImage: textureHeight,
+                        width: textureWidth,
+                        height: textureHeight
+                    )
+                }
+            }
+            resources[decoded.textureIndex] = GPUMeshTextureResource(
+                texture: gpuTexture,
+                view: try gpuTexture.createView(),
+                width: textureWidth,
+                height: textureHeight,
+                sourcePath: decoded.sourcePath
+            )
+            Logger.renderer.debug(
+                "uploaded mesh texture: meshIndex=\(meshIndex) textureIndex=\(decoded.textureIndex) size=\(textureWidth)x\(textureHeight) source=\(decoded.sourcePath)"
+            )
+        }
+        meshTextureResources[meshIndex] = resources
     }
 
     private func ensureInstanceResources(instanceCount: Int, pipeline: GPURenderPipeline) throws {
