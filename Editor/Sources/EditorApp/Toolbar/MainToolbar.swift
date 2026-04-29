@@ -40,6 +40,7 @@ struct EditorMainToolbar: View {
     let playbackState: PlaybackState
     let workspaceMode: EditorWorkspaceMode
     let activeLayoutPreset: EditorLayoutPreset
+    let onNewScene: () -> Void
     let onSetPlaybackState: (PlaybackState) -> Void
     let onSetWorkspaceMode: (EditorWorkspaceMode) -> Void
     let onSetLayoutPreset: (EditorLayoutPreset) -> Void
@@ -50,7 +51,8 @@ struct EditorMainToolbar: View {
         Row(alignment: .center, spacing: 8) {
             IconButton(resource: EditorToolbarIcon.plus.resource,
                        size: 15,
-                       tooltip: L("New Scene")) {}
+                       tooltip: L("New Scene"),
+                       action: onNewScene)
                 .buttonStyle(.ghost)
             IconButton(resource: EditorToolbarIcon.folderOpen.resource,
                        size: 15,
