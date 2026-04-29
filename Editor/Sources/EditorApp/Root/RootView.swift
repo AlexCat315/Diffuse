@@ -12,7 +12,7 @@ struct EditorRootView: View {
 
     var body: some View {
         let cb = EditorCallbacks(app: app, controller: controller)
-        StoreScope(app.store, select: EditorRootSelection.init) { store in
+        StoreScope(app.store) { store in
             let state = store.state
 
             EditorPresentationBoundary(presentation: state.presentation) {
@@ -42,20 +42,6 @@ struct EditorRootView: View {
                 .flex()
             }
         }
-    }
-}
-
-private struct EditorRootSelection: Hashable {
-    let playbackState: PlaybackState
-    let workspaceMode: EditorWorkspaceMode
-    let activeLayoutPreset: EditorLayoutPreset
-    let presentation: EditorPresentationState
-
-    init(_ state: EditorState) {
-        self.playbackState = state.playbackState
-        self.workspaceMode = state.workspaceMode
-        self.activeLayoutPreset = state.activeLayoutPreset
-        self.presentation = state.presentation
     }
 }
 

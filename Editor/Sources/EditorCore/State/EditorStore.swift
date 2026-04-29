@@ -11,7 +11,18 @@ import GuavaUIRuntime
 /// 内部不加锁。`@unchecked Sendable` 仅用于穿过 nonisolated 闭包，
 /// 调用方不应把这个对象交给后台线程。
 public final class EditorStore: @unchecked Sendable {
-    public private(set) var state: EditorState
+    private enum ObservationKey: Hashable {
+        case state
+    }
+
+    private var storage: EditorState
+    private let registrar = ObservableStateRegistrar()
+
+    public var state: EditorState {
+        registrar.access(AnyHashable(ObservationKey.state))
+        return storage
+    }
+
     public private(set) var version: UInt64 = 0
 
     public struct SubscriptionToken: Hashable, Sendable {
@@ -22,13 +33,14 @@ public final class EditorStore: @unchecked Sendable {
     private var nextSubscriberID: UInt64 = 0
 
     public init(state: EditorState = EditorState()) {
-        self.state = state
+        self.storage = state
     }
 
     public func dispatch(_ action: EditorAction) {
-        EditorReducer.reduce(state: &state, action: action)
+        EditorReducer.reduce(state: &storage, action: action)
         guard action.notifiesSubscribers else { return }
         version &+= 1
+        registrar.invalidate(AnyHashable(ObservationKey.state))
         for handler in subscribers.values {
             handler(self)
         }
