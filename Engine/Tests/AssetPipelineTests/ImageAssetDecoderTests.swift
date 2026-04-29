@@ -34,6 +34,23 @@ struct ImageAssetDecoderTests {
         ])
     }
 
+    @Test("decodes in-memory png into rgba8 pixels")
+    func decodesInMemoryPNG() throws {
+        let data = try makePNGData(pixels: [
+            2, 4, 6, 255,
+            8, 10, 12, 255,
+        ], width: 2, height: 1)
+
+        let decoded = try ImageAssetDecoder.decodeRGBA8(data: data, label: "memory.png")
+
+        #expect(decoded.width == 2)
+        #expect(decoded.height == 1)
+        #expect(decoded.pixels == [
+            2, 4, 6, 255,
+            8, 10, 12, 255,
+        ])
+    }
+
     @Test("resolves and decodes relative mesh texture uri")
     func resolvesRelativeMeshTextureURI() throws {
         let tempRoot = FileManager.default.temporaryDirectory
@@ -73,6 +90,11 @@ struct ImageAssetDecoderTests {
     }
 
     private func writePNG(url: URL, pixels: [UInt8], width: Int, height: Int) throws {
+        let data = try makePNGData(pixels: pixels, width: width, height: height)
+        try data.write(to: url)
+    }
+
+    private func makePNGData(pixels: [UInt8], width: Int, height: Int) throws -> Data {
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         guard let provider = CGDataProvider(data: Data(pixels) as CFData),
               let image = CGImage(width: width,
@@ -86,10 +108,11 @@ struct ImageAssetDecoderTests {
                                   decode: nil,
                                   shouldInterpolate: false,
                                   intent: .defaultIntent),
-              let destination = CGImageDestinationCreateWithURL(url as CFURL,
-                                                                UTType.png.identifier as CFString,
-                                                                1,
-                                                                nil)
+              let output = CFDataCreateMutable(nil, 0),
+              let destination = CGImageDestinationCreateWithData(output,
+                                                                 UTType.png.identifier as CFString,
+                                                                 1,
+                                                                 nil)
         else {
             throw CocoaError(.fileWriteUnknown)
         }
@@ -97,5 +120,6 @@ struct ImageAssetDecoderTests {
         if !CGImageDestinationFinalize(destination) {
             throw CocoaError(.fileWriteUnknown)
         }
+        return output as Data
     }
 }

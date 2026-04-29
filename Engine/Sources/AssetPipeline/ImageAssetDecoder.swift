@@ -40,14 +40,25 @@ public enum ImageAssetDecoder {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
             throw ImageAssetDecoderError.sourceUnreadable(path)
         }
+        return try decodeRGBA8(source: source, label: path)
+    }
+
+    public static func decodeRGBA8(data: Data, label: String = "<memory>") throws -> DecodedTextureAsset {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+            throw ImageAssetDecoderError.sourceUnreadable(label)
+        }
+        return try decodeRGBA8(source: source, label: label)
+    }
+
+    private static func decodeRGBA8(source: CGImageSource, label: String) throws -> DecodedTextureAsset {
         guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            throw ImageAssetDecoderError.imageMissing(path)
+            throw ImageAssetDecoderError.imageMissing(label)
         }
 
         let width = image.width
         let height = image.height
         guard width > 0, height > 0 else {
-            throw ImageAssetDecoderError.invalidDimensions(path)
+            throw ImageAssetDecoderError.invalidDimensions(label)
         }
 
         var pixels = [UInt8](repeating: 0, count: width * height * 4)
@@ -63,7 +74,7 @@ public enum ImageAssetDecoder {
             space: colorSpace,
             bitmapInfo: bitmapInfo
         ) else {
-            throw ImageAssetDecoderError.contextCreationFailed(path)
+            throw ImageAssetDecoderError.contextCreationFailed(label)
         }
 
         context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
