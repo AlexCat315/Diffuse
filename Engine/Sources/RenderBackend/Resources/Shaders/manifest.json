@@ -66,6 +66,11 @@
       "fragment": "WGSL/bloom.wgsl"
     },
     {
+      "name": "ink_paper_post",
+      "vertex": "WGSL/ink_paper_post.wgsl",
+      "fragment": "WGSL/ink_paper_post.wgsl"
+    },
+    {
       "name": "fxaa",
       "vertex": "WGSL/fxaa.wgsl",
       "fragment": "WGSL/fxaa.wgsl"
