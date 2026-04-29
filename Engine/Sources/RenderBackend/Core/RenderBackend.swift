@@ -18,7 +18,7 @@ public final class MetalPlaceholderRenderer: RenderPacketConsumer, @unchecked Se
 
 ///  RHIWGPU renderer: scene of multiple instances drawn through one shared pipeline.
 public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
-    private let backend: WGPUBackend
+    let backend: WGPUBackend
     private let renderSurface: RenderSurfaceDescriptor?
     var surface: GPUSurface?
     private var configuredSize: RenderDrawableSize = .init(width: 0, height: 0)
@@ -53,8 +53,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var publishedSurfaceHandle: UInt64 = 0
     var nextSurfaceID: UInt64 = 0
     private var sceneColorTarget: RenderTextureTarget?
-    private var postProcessTargetA: RenderTextureTarget?
-    private var postProcessTargetB: RenderTextureTarget?
+    var postProcessTargetA: RenderTextureTarget?
+    var postProcessTargetB: RenderTextureTarget?
     private var ldrPostProcessTarget: RenderTextureTarget?
     private var historyTarget: RenderTextureTarget?
 
@@ -1155,35 +1155,6 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 cullMode: .none
             )
         )
-    }
-
-    private func makeRenderTarget(width: UInt32, height: UInt32, format: GPUTextureFormat) throws -> RenderTextureTarget {
-        let texture = try backend.createTexture(
-            width: width,
-            height: height,
-            format: format,
-            usage: [.renderAttachment, .textureBinding, .copySrc, .copyDst]
-        )
-        let view = try texture.createView()
-        return RenderTextureTarget(texture: texture, view: view)
-    }
-
-    private func nextPingPongTarget(after current: RenderTextureTarget) -> RenderTextureTarget? {
-        guard let postProcessTargetA, let postProcessTargetB else { return nil }
-        return current.texture === postProcessTargetA.texture ? postProcessTargetB : postProcessTargetA
-    }
-
-    private func writeUniform<T>(_ value: inout T, buffer: GPUBuffer) {
-        withUnsafeBytes(of: &value) { raw in
-            if let base = raw.baseAddress {
-                backend.writeBuffer(buffer, data: base, size: raw.count)
-            }
-        }
-    }
-
-    private func makeBindGroup(pipeline: GPURenderPipeline, entries: [GPUBindGroupEntry]) throws -> GPUBindGroup {
-        let layout = try pipeline.getBindGroupLayout(group: 0)
-        return try backend.createBindGroup(layout: layout, entries: entries)
     }
 
     private func encodeSkyboxPass(
