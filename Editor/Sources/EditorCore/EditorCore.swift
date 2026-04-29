@@ -285,6 +285,20 @@ public final class EditorApplication {
         }
     }
 
+    @discardableResult
+    public func reloadAssets() -> Int {
+        do {
+            let assets = try EditorAssetCatalog.loadProject(at: projectDirectory)
+            logConsole("Reloaded assets", detail: "\(assets.count) importable files")
+            return assets.count
+        } catch {
+            logConsole("Failed to reload assets",
+                       severity: .error,
+                       detail: String(describing: error))
+            return 0
+        }
+    }
+
     public func currentRenderStats() -> RenderFrameStats {
         engine.currentRenderStats()
     }
