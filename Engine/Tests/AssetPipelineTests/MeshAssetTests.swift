@@ -28,4 +28,21 @@ struct MeshAssetTests {
         #expect(mesh.position(at: 1) == SIMD3<Float>(2, 3, 4))
         #expect(mesh.position(at: 5) == nil)
     }
+
+    @Test("mesh transforms positions")
+    func meshTransformsPositions() {
+        var vertices: [Float] = []
+        MeshAsset.appendVertex(to: &vertices, position: SIMD3<Float>(1, 2, 3))
+        var mesh = MeshAsset(name: "point", vertices: vertices, indices: [0])
+        let matrix = simd_float4x4(rows: [
+            SIMD4<Float>(1, 0, 0, 4),
+            SIMD4<Float>(0, 1, 0, 5),
+            SIMD4<Float>(0, 0, 1, 6),
+            SIMD4<Float>(0, 0, 0, 1),
+        ])
+
+        mesh.transformPositions(by: matrix)
+
+        #expect(mesh.position(at: 0) == SIMD3<Float>(5, 7, 9))
+    }
 }

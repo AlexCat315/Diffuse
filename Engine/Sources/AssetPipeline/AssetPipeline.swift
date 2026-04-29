@@ -203,6 +203,14 @@ public struct MeshAsset: Sendable {
         vertices[offset + 2] = position.z
     }
 
+    public mutating func transformPositions(by matrix: simd_float4x4) {
+        for vertexIndex in 0..<vertexCount {
+            guard let position = position(at: vertexIndex) else { continue }
+            let transformed = matrix * SIMD4<Float>(position.x, position.y, position.z, 1)
+            setPosition(SIMD3<Float>(transformed.x, transformed.y, transformed.z), at: vertexIndex)
+        }
+    }
+
     public static func appendVertex(
         to vertices: inout [Float],
         position: SIMD3<Float>,
