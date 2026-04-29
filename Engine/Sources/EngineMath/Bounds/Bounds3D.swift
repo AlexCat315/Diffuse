@@ -83,4 +83,18 @@ public struct Bounds3D: Sendable, Equatable {
         guard !isEmpty else { return self }
         return Bounds3D(min: min - amount, max: max + amount)
     }
+
+    public func transformed(by matrix: simd_float4x4) -> Bounds3D {
+        guard !isEmpty else { return self }
+        var result = Bounds3D.empty
+        for x in [min.x, max.x] {
+            for y in [min.y, max.y] {
+                for z in [min.z, max.z] {
+                    let point = matrix * SIMD4<Float>(x, y, z, 1)
+                    result.include(SIMD3<Float>(point.x, point.y, point.z))
+                }
+            }
+        }
+        return result
+    }
 }
