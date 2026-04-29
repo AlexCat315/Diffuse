@@ -6,13 +6,20 @@ public struct BattleHandCardViewModel: Identifiable, Sendable, Equatable {
     public var cost: Int
     public var isPlayable: Bool
     public var damage: Int
+    public var healing: Int
 
-    public init(id: String, title: String, cost: Int, isPlayable: Bool, damage: Int) {
+    public init(id: String,
+                title: String,
+                cost: Int,
+                isPlayable: Bool,
+                damage: Int,
+                healing: Int = 0) {
         self.id = id
         self.title = title
         self.cost = cost
         self.isPlayable = isPlayable
         self.damage = damage
+        self.healing = healing
     }
 }
 
@@ -89,7 +96,8 @@ public struct BattleHUDSnapshot: Sendable, Equatable {
                     title: $0.title,
                     cost: $0.cost,
                     isPlayable: canPlayCards && BattleRules.canPlay($0, for: playerID, in: state),
-                    damage: $0.totalDamage
+                    damage: $0.totalDamage,
+                    healing: $0.totalHealing
                 )
             },
             skills: player.skills.map {

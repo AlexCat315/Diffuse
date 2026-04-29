@@ -146,6 +146,34 @@ struct CardBattleRuntimeTests {
         #expect(legacy.totalDamage == 5)
     }
 
+    @Test("playing a healing card restores health up to max health")
+    func playCardResolvesHealing() {
+        let heal = BattleCard(id: "heal", title: "Heal", cost: 1, effects: [.heal(10)])
+        let player = BattlePlayerState(
+            id: .player,
+            health: 18,
+            maxHealth: 24,
+            maxEnergy: 3,
+            energy: 2,
+            deck: [],
+            hand: [heal]
+        )
+        let initial = BattleState(
+            phase: .main,
+            turn: 1,
+            activePlayerID: .player,
+            players: [.player: player]
+        )
+
+        let result = BattleStateMachine.reduceWithResult(initial, command: .playCard(cardID: "heal", target: .player))
+
+        #expect(result.state.phase == .main)
+        #expect(result.state.players[.player]?.health == 24)
+        #expect(result.state.players[.player]?.discard.map(\.id) == ["heal"])
+        #expect(result.events == [.healthRestored(playerID: .player, amount: 6)])
+        #expect(result.state.log == ["player played heal for 6 healing"])
+    }
+
     @Test("hud snapshot projects playable hand and skills for ui")
     func hudSnapshotProjectsHandAndSkills() throws {
         let strike = BattleCard(id: "strike", title: "Strike", cost: 1, skillID: "slash", damage: 6)
