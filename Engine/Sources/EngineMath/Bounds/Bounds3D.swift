@@ -9,15 +9,39 @@ public struct Bounds3D: Sendable, Equatable {
         self.max = max
     }
 
+    public static let empty = Bounds3D(
+        min: SIMD3<Float>(repeating: .infinity),
+        max: SIMD3<Float>(repeating: -.infinity)
+    )
+
+    public init(points: some Sequence<SIMD3<Float>>) {
+        var bounds = Bounds3D.empty
+        for point in points {
+            bounds.include(point)
+        }
+        self = bounds.isEmpty ? Bounds3D(min: .zero, max: .zero) : bounds
+    }
+
+    public var isEmpty: Bool {
+        min.x > max.x || min.y > max.y || min.z > max.z
+    }
+
     public var center: SIMD3<Float> {
-        (min + max) * 0.5
+        guard !isEmpty else { return .zero }
+        return (min + max) * 0.5
     }
 
     public var extent: SIMD3<Float> {
-        max - min
+        guard !isEmpty else { return .zero }
+        return max - min
     }
 
     public var halfExtent: SIMD3<Float> {
         extent * 0.5
+    }
+
+    public mutating func include(_ point: SIMD3<Float>) {
+        min = simd_min(min, point)
+        max = simd_max(max, point)
     }
 }
