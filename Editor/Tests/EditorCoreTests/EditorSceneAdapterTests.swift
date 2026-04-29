@@ -14,4 +14,16 @@ struct EditorSceneAdapterTests {
         #expect(!manifest.roots.isEmpty)
         #expect(manifest.roots.contains { $0.name == "Main Camera" })
     }
+
+    @Test("Resetting preview scene publishes a new revision")
+    func resetPreviewScenePublishesRevision() {
+        let scene = EditorSceneAdapter()
+        var revisions: [UInt64] = []
+        scene.onRevisionChanged = { revisions.append($0) }
+
+        scene.resetToPreviewScene()
+
+        #expect(revisions == [scene.revision])
+        #expect(scene.defaultSelectionID != nil)
+    }
 }
