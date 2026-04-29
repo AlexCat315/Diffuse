@@ -382,6 +382,7 @@ struct CardBattleRuntimeTests {
         let snapshot = BattleHUDSnapshot.make(from: turn, playerID: .player)
 
         #expect(initial.players[.player]?.deck.count == 4)
+        #expect(initial.players[.player]?.deck.last?.totalBlock == 6)
         #expect(initial.players[.enemy]?.health == 32_000)
         #expect(snapshot?.hand.count == 3)
         #expect(snapshot?.skills.map(\.id) == ["slash", "rally", "duel"])
