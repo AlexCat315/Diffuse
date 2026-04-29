@@ -40,6 +40,7 @@ public enum BattleStateMachine {
         state.turn += 1
         state.phase = .draw
         state.activePlayerID = playerID
+        player.block = 0
         player.energy = player.maxEnergy
         state.players[playerID] = player
         let drawnCount = drawCards(for: playerID, count: drawCount, state: &state)
