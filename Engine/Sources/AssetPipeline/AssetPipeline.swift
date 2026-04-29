@@ -53,6 +53,20 @@ public struct MeshMaterial: Sendable, Equatable {
     public static let fallback = MeshMaterial()
 }
 
+public struct MeshSkin: Sendable, Equatable {
+    public var name: String?
+    public var jointNodeIndices: [Int]
+    public var inverseBindMatrices: [simd_float4x4]
+
+    public init(name: String? = nil,
+                jointNodeIndices: [Int],
+                inverseBindMatrices: [simd_float4x4] = []) {
+        self.name = name
+        self.jointNodeIndices = jointNodeIndices
+        self.inverseBindMatrices = inverseBindMatrices
+    }
+}
+
 /// Interleaved mesh vertex stream used by runtime render backends.
 ///
 /// Layout, in floats:
@@ -83,17 +97,20 @@ public struct MeshAsset: Sendable {
     public var name: String
     public var materials: [MeshMaterial]
     public var textures: [MeshTexture]
+    public var skins: [MeshSkin]
 
     public init(name: String,
                 vertices: [Float],
                 indices: [UInt32],
                 materials: [MeshMaterial] = [MeshMaterial.fallback],
-                textures: [MeshTexture] = []) {
+                textures: [MeshTexture] = [],
+                skins: [MeshSkin] = []) {
         self.name = name
         self.vertices = vertices
         self.indices = indices
         self.materials = materials.isEmpty ? [MeshMaterial.fallback] : materials
         self.textures = textures
+        self.skins = skins
     }
 
     public var indexCount: UInt32 { UInt32(indices.count) }

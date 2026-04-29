@@ -107,6 +107,14 @@ struct GLTFImporterTests {
         append([Float(0.4), 0.3, 0.2, 0.1,
                 1, 0, 0, 0,
                 0.5, 0.5, 0, 0], to: &buffer)
+        append([Float(1), 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                0, 0, 0, 1,
+                1, 0, 0, 0,
+                0, 1, 0, 0,
+                0, 0, 1, 0,
+                2, 0, 0, 1], to: &buffer)
         append([UInt16(0), 1, 2], to: &buffer)
         try buffer.write(to: bufferURL)
 
@@ -114,7 +122,7 @@ struct GLTFImporterTests {
         {
           "asset": { "version": "2.0" },
           "buffers": [
-            { "uri": "character-triangle.bin", "byteLength": 222 }
+            { "uri": "character-triangle.bin", "byteLength": 350 }
           ],
           "bufferViews": [
             { "buffer": 0, "byteOffset": 0, "byteLength": 36 },
@@ -123,7 +131,8 @@ struct GLTFImporterTests {
             { "buffer": 0, "byteOffset": 96, "byteLength": 48 },
             { "buffer": 0, "byteOffset": 144, "byteLength": 24 },
             { "buffer": 0, "byteOffset": 168, "byteLength": 48 },
-            { "buffer": 0, "byteOffset": 216, "byteLength": 6 }
+            { "buffer": 0, "byteOffset": 216, "byteLength": 128 },
+            { "buffer": 0, "byteOffset": 344, "byteLength": 6 }
           ],
           "accessors": [
             { "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3" },
@@ -132,7 +141,8 @@ struct GLTFImporterTests {
             { "bufferView": 3, "componentType": 5126, "count": 3, "type": "VEC4" },
             { "bufferView": 4, "componentType": 5123, "count": 3, "type": "VEC4" },
             { "bufferView": 5, "componentType": 5126, "count": 3, "type": "VEC4" },
-            { "bufferView": 6, "componentType": 5123, "count": 3, "type": "SCALAR" }
+            { "bufferView": 6, "componentType": 5126, "count": 2, "type": "MAT4" },
+            { "bufferView": 7, "componentType": 5123, "count": 3, "type": "SCALAR" }
           ],
           "images": [
             { "uri": "hero_base.png", "mimeType": "image/png" },
@@ -172,14 +182,23 @@ struct GLTFImporterTests {
                     "JOINTS_0": 4,
                     "WEIGHTS_0": 5
                   },
-                  "indices": 6,
+                  "indices": 7,
                   "material": 1
                 }
               ]
             }
           ],
           "nodes": [
-            { "mesh": 0 }
+            { "name": "hero", "mesh": 0, "skin": 0 },
+            { "name": "root" },
+            { "name": "weapon" }
+          ],
+          "skins": [
+            {
+              "name": "hero rig",
+              "joints": [1, 2],
+              "inverseBindMatrices": 6
+            }
           ],
           "scenes": [
             { "nodes": [0] }
@@ -209,6 +228,11 @@ struct GLTFImporterTests {
         #expect(mesh.materials[1].normalTextureIndex == 1)
         #expect(mesh.materials[1].metallicFactor == 0)
         #expect(mesh.materials[1].roughnessFactor == 0.95)
+        #expect(mesh.skins.count == 1)
+        #expect(mesh.skins[0].name == "hero rig")
+        #expect(mesh.skins[0].jointNodeIndices == [1, 2])
+        #expect(mesh.skins[0].inverseBindMatrices.count == 2)
+        #expect(mesh.skins[0].inverseBindMatrices[1].columns.3.x == 2)
     }
 
     private func append(_ values: [Float], to data: inout Data) {
