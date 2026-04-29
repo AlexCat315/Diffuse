@@ -20,7 +20,7 @@ public final class MetalPlaceholderRenderer: RenderPacketConsumer, @unchecked Se
 public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private let backend: WGPUBackend
     private let renderSurface: RenderSurfaceDescriptor?
-    private var surface: GPUSurface?
+    var surface: GPUSurface?
     private var configuredSize: RenderDrawableSize = .init(width: 0, height: 0)
     private let format: GPUTextureFormat = .bgra8Unorm
     private let hdrFormat: GPUTextureFormat = .rgba16Float
@@ -42,16 +42,16 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var ssrPipeline: GPURenderPipeline?
     private var taaPipeline: GPURenderPipeline?
     private var ssaoPipeline: GPURenderPipeline?
-    private var offscreenColorTexture: GPUTexture?
-    private var offscreenColorView: GPUTextureView?
+    var offscreenColorTexture: GPUTexture?
+    var offscreenColorView: GPUTextureView?
     private var depthTexture: GPUTexture?
     private var depthView: GPUTextureView?
-    private var publishedTextureRetainer: Unmanaged<GPUTexture>?
-    private var stalePublishedTextureRetainers: [Unmanaged<GPUTexture>] = []
-    private let publishedTextureRetainerHistoryLimit = 32
-    private var publishedSurfaceID: UInt64 = 0
-    private var publishedSurfaceHandle: UInt64 = 0
-    private var nextSurfaceID: UInt64 = 0
+    var publishedTextureRetainer: Unmanaged<GPUTexture>?
+    var stalePublishedTextureRetainers: [Unmanaged<GPUTexture>] = []
+    let publishedTextureRetainerHistoryLimit = 32
+    var publishedSurfaceID: UInt64 = 0
+    var publishedSurfaceHandle: UInt64 = 0
+    var nextSurfaceID: UInt64 = 0
     private var sceneColorTarget: RenderTextureTarget?
     private var postProcessTargetA: RenderTextureTarget?
     private var postProcessTargetB: RenderTextureTarget?
@@ -74,14 +74,14 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var taaUniformBuffer: GPUBuffer?
     private var ssaoUniformBuffer: GPUBuffer?
     private var stylizedCharacterUniformBuffer: GPUBuffer?
-    private var historyValid = false
+    var historyValid = false
 
     private let dynamicOffsetThreshold = 64
     private let dynamicUniformStride: UInt64 = 256
 
-    private var activeRenderSettings: RenderSettings = .init()
-    private var settingsGeneration: UInt64 = 0
-    private var viewportSurfaceState: ViewportSurfaceState = .init()
+    var activeRenderSettings: RenderSettings = .init()
+    var settingsGeneration: UInt64 = 0
+    var viewportSurfaceState: ViewportSurfaceState = .init()
 
     public private(set) var lastFrameStats: RenderFrameStats = .init()
 
@@ -434,50 +434,6 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         }
     }
 
-    private struct FrameColorTarget {
-        let texture: GPUTexture
-        let view: GPUTextureView
-        let presentAfterSubmit: Bool
-    }
-
-    private func acquireColorTarget() throws -> FrameColorTarget? {
-        if let surface {
-            guard let acquired = try surface.getCurrentTextureView() else {
-                return nil
-            }
-            return FrameColorTarget(
-                texture: acquired.texture,
-                view: acquired.view,
-                presentAfterSubmit: true
-            )
-        }
-
-        guard let offscreenColorTexture, let offscreenColorView else {
-            return nil
-        }
-        return FrameColorTarget(
-            texture: offscreenColorTexture,
-            view: offscreenColorView,
-            presentAfterSubmit: false
-        )
-    }
-
-    private func applyPacketRenderSettingsIfNeeded(_ settings: RenderSettings, frameIndex: Int) {
-        guard settings != activeRenderSettings else { return }
-        activeRenderSettings = settings
-        settingsGeneration &+= 1
-        if !settings.enableTAA {
-            historyValid = false
-        }
-
-        if shouldEmitPlannerLog(frameIndex: frameIndex) {
-            let gen = settingsGeneration
-            Logger.renderer.debug(
-                "applied render settings generation=\(gen) stage=\(settings.stage.rawValue) fxaa=\(settings.enableFXAA) ssao=\(settings.enableSSAO) ssr=\(settings.enableSSR) taa=\(settings.enableTAA) bloom=\(settings.enableBloom) stylized=\(settings.enableStylizedCharacterShading) outlineWidth=\(settings.stylizedCharacterStyle.outlineWidth) bundles=\(settings.enableRenderBundles) grouped=\(settings.enableGroupedDrawByMesh) chunk=\(settings.renderBundleChunkSize)"
-            )
-        }
-    }
-
     private func writeInstanceUniforms(scene: RenderScene, viewProj: simd_float4x4) {
         if let dyn = dynamicInstanceResources {
             for (i, instance) in scene.instances.enumerated() {
@@ -549,55 +505,6 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         pass.end()
 
         return drawCallCount
-    }
-
-    private func emitPlannedPassLog(_ passKind: RenderPassKind, frameIndex: Int) {
-        guard shouldEmitPlannerLog(frameIndex: frameIndex) else { return }
-        Logger.renderer.debug("executing placeholder pass=\(passKind.rawValue)")
-    }
-
-    private func shouldEmitPlannerLog(frameIndex: Int) -> Bool {
-        frameIndex == 0 || frameIndex % 120 == 0
-    }
-
-    private func registerViewportSurface(texture: GPUTexture, size: RenderDrawableSize) {
-        // Reuse the previously-published handle/ID when the texture object
-        // is unchanged so editors keep their cached BindGroup. When the
-        // texture is replaced (resize, etc.), retain the new one and keep
-        // a bounded history of prior retainers. UI can momentarily render
-        // with an older surface snapshot; immediate release would turn that
-        // snapshot handle into a dangling pointer.
-        if let publishedTextureRetainer,
-           publishedTextureRetainer.takeUnretainedValue() === texture {
-            viewportSurfaceState = ViewportSurfaceState(
-                surfaceID: publishedSurfaceID,
-                handle: publishedSurfaceHandle,
-                width: size.width,
-                height: size.height,
-                zeroCopy: true
-            )
-            return
-        }
-
-        if let previous = publishedTextureRetainer {
-            stalePublishedTextureRetainers.append(previous)
-            if stalePublishedTextureRetainers.count > publishedTextureRetainerHistoryLimit {
-                stalePublishedTextureRetainers.removeFirst().release()
-            }
-        }
-        let retained = Unmanaged.passRetained(texture)
-        publishedTextureRetainer = retained
-        nextSurfaceID &+= 1
-        publishedSurfaceID = nextSurfaceID
-        publishedSurfaceHandle = UInt64(UInt(bitPattern: retained.toOpaque()))
-
-        viewportSurfaceState = ViewportSurfaceState(
-            surfaceID: publishedSurfaceID,
-            handle: publishedSurfaceHandle,
-            width: size.width,
-            height: size.height,
-            zeroCopy: true
-        )
     }
 
     // MARK: - Pipeline + mesh construction
