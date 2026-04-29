@@ -329,6 +329,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             scene: packet.scene
                         )
 
+                    case .inkPaperPost:
+                        emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
+
                     case .ssao:
                         guard let input = hdrCurrent,
                               let output = nextPingPongTarget(after: input),
@@ -439,7 +442,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     cpuSkyboxEncodeNS &+= passElapsedNS
                 case .basePass:
                     cpuBaseEncodeNS &+= passElapsedNS
-                case .ssao, .ssr, .taa, .bloom, .tonemap, .fxaa:
+                case .inkPaperPost, .ssao, .ssr, .taa, .bloom, .tonemap, .fxaa:
                     cpuPostProcessEncodeNS &+= passElapsedNS
                 case .outline, .depthPrepass, .shadowPass, .viewportResolve:
                     break
