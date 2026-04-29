@@ -88,4 +88,33 @@ struct CardBattleRuntimeTests {
             BattleSkillViewModel(id: "slash", title: "Slash", target: .opponent, isEnabled: true)
         ])
     }
+
+    @Test("ending player turn discards hand and passes control to enemy")
+    func endPlayerTurnDiscardsHand() {
+        let strike = BattleCard(id: "strike", title: "Strike", cost: 1, damage: 6)
+        let guardCard = BattleCard(id: "guard", title: "Guard", cost: 1)
+        let player = BattlePlayerState(
+            id: .player,
+            health: 32,
+            maxEnergy: 3,
+            energy: 2,
+            deck: [],
+            hand: [strike, guardCard]
+        )
+        let state = BattleState(
+            phase: .main,
+            turn: 2,
+            activePlayerID: .player,
+            players: [.player: player]
+        )
+
+        let next = BattleStateMachine.reduce(state, command: .endPlayerTurn)
+
+        #expect(next.phase == .enemyTurn)
+        #expect(next.activePlayerID == .enemy)
+        #expect(next.players[.player]?.energy == 0)
+        #expect(next.players[.player]?.hand.isEmpty == true)
+        #expect(next.players[.player]?.discard.map(\.id) == ["strike", "guard"])
+        #expect(next.log == ["turn 2: player ended turn"])
+    }
 }
