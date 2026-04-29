@@ -692,6 +692,16 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     format: .float32x3, offset: UInt64(MeshAsset.normalOffset), shaderLocation: 1),
                 GPUVertexAttribute(
                     format: .float32x3, offset: UInt64(MeshAsset.colorOffset), shaderLocation: 2),
+                GPUVertexAttribute(
+                    format: .float32x2, offset: UInt64(MeshAsset.uvOffset), shaderLocation: 3),
+                GPUVertexAttribute(
+                    format: .float32x4, offset: UInt64(MeshAsset.tangentOffset), shaderLocation: 4),
+                GPUVertexAttribute(
+                    format: .float32, offset: UInt64(MeshAsset.materialIndexOffset), shaderLocation: 5),
+                GPUVertexAttribute(
+                    format: .float32x4, offset: UInt64(MeshAsset.jointsOffset), shaderLocation: 6),
+                GPUVertexAttribute(
+                    format: .float32x4, offset: UInt64(MeshAsset.weightsOffset), shaderLocation: 7),
             ]
         )
     }
