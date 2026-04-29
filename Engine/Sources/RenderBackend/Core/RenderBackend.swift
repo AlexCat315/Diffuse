@@ -459,54 +459,6 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         }
     }
 
-    private func encodeBasePass(
-        encoder: GPUCommandEncoder,
-        colorView: GPUTextureView,
-        depthView: GPUTextureView,
-        pipeline: GPURenderPipeline,
-        scene: RenderScene
-    ) throws -> Int {
-        let pass = try encoder.beginRenderPass(
-            colorView: colorView,
-            loadOp: .clear,
-            storeOp: .store,
-            clearColor: GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1.0),
-            depthView: depthView,
-            depthLoadOp: .clear,
-            depthStoreOp: .store,
-            depthClearValue: 1.0
-        )
-
-        pass.setPipeline(pipeline)
-        var drawCallCount = 0
-        if let dyn = dynamicInstanceResources {
-            for (i, instance) in scene.instances.enumerated() {
-                guard meshes.indices.contains(instance.meshIndex) else { continue }
-                let mesh = meshes[instance.meshIndex]
-                let drawOffset = UInt64(i) * dyn.stride
-                guard drawOffset <= UInt64(UInt32.max) else { continue }
-                pass.setBindGroup(dyn.bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
-                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
-                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
-                pass.drawIndexed(indexCount: mesh.indexCount)
-                drawCallCount += 1
-            }
-        } else {
-            for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
-                guard meshes.indices.contains(instance.meshIndex) else { continue }
-                let mesh = meshes[instance.meshIndex]
-                pass.setBindGroup(instanceResources[i].bindGroup, index: 0)
-                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
-                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
-                pass.drawIndexed(indexCount: mesh.indexCount)
-                drawCallCount += 1
-            }
-        }
-        pass.end()
-
-        return drawCallCount
-    }
-
     // MARK: - Pipeline + mesh construction
 
     private func ensureMeshAssetsUploaded() throws {
