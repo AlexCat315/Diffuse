@@ -26,6 +26,11 @@
       "fragment": "WGSL/mesh.wgsl"
     },
     {
+      "name": "stylized_character",
+      "vertex": "WGSL/stylized_character.wgsl",
+      "fragment": "WGSL/stylized_character.wgsl"
+    },
+    {
       "name": "wireframe",
       "vertex": "WGSL/wireframe.wgsl",
       "fragment": "WGSL/wireframe.wgsl"

@@ -21,6 +21,7 @@ public struct RenderSettings: Sendable, Equatable {
     public var renderBundleChunkSize: Int
     public var enableShadows: Bool
     public var enableOffscreenViewport: Bool
+    public var enableStylizedCharacterShading: Bool
 
     public init(
         stage: ReplacementStage = .r1MeshCamera,
@@ -33,7 +34,8 @@ public struct RenderSettings: Sendable, Equatable {
         enableGroupedDrawByMesh: Bool = false,
         renderBundleChunkSize: Int = 0,
         enableShadows: Bool = false,
-        enableOffscreenViewport: Bool = false
+        enableOffscreenViewport: Bool = false,
+        enableStylizedCharacterShading: Bool = false
     ) {
         self.stage = stage
         self.enableFXAA = enableFXAA
@@ -46,5 +48,6 @@ public struct RenderSettings: Sendable, Equatable {
         self.renderBundleChunkSize = max(renderBundleChunkSize, 0)
         self.enableShadows = enableShadows
         self.enableOffscreenViewport = enableOffscreenViewport
+        self.enableStylizedCharacterShading = enableStylizedCharacterShading
     }
 }
