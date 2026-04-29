@@ -1,4 +1,5 @@
 import Foundation
+import CardBattleRuntime
 import GuavaUIRuntime
 import GuavaUICompose
 import PlatformShell
@@ -14,21 +15,6 @@ struct DemoLogEntry: Identifiable {
     let id: Int
     let level: String
     let message: String
-}
-
-struct DemoBattleCard: Identifiable {
-    let id: String
-    let title: String
-    let cost: Int
-    let damage: Int
-    let isPlayable: Bool
-}
-
-struct DemoBattleSkill: Identifiable {
-    let id: String
-    let title: String
-    let cooldown: Int
-    let isEnabled: Bool
 }
 
 let demoSceneTree: [DemoSceneNode] = [
@@ -55,18 +41,20 @@ let demoLogEntries: [DemoLogEntry] = [
     DemoLogEntry(id: 6, level: "INFO", message: "Phase 7 foundation is ready for SplitView and DockContainer."),
 ]
 
-let demoBattleHand: [DemoBattleCard] = [
-    DemoBattleCard(id: "green-dragon", title: "Green Dragon", cost: 5, damage: 18, isPlayable: false),
-    DemoBattleCard(id: "seven-strike", title: "Seven Strike", cost: 3, damage: 9, isPlayable: true),
-    DemoBattleCard(id: "fire-ambush", title: "Fire Ambush", cost: 4, damage: 14, isPlayable: true),
-    DemoBattleCard(id: "borrow-east", title: "Borrow East", cost: 2, damage: 0, isPlayable: true),
-]
-
-let demoBattleSkills: [DemoBattleSkill] = [
-    DemoBattleSkill(id: "slash", title: "Slash", cooldown: 0, isEnabled: true),
-    DemoBattleSkill(id: "rally", title: "Rally", cooldown: 1, isEnabled: false),
-    DemoBattleSkill(id: "duel", title: "Duel", cooldown: 2, isEnabled: false),
-]
+let demoBattleSnapshot: BattleHUDSnapshot = {
+    let initial = BattleSampleFactory.makeThreeKingdomsDuel()
+    let turn = BattleStateMachine.reduce(initial, command: .startPlayerTurn(drawCount: 4))
+    return BattleHUDSnapshot.make(from: turn, playerID: .player) ?? BattleHUDSnapshot(
+        phase: .setup,
+        turn: 0,
+        energy: 0,
+        maxEnergy: 0,
+        health: 0,
+        opponentHealth: 0,
+        hand: [],
+        skills: []
+    )
+}()
 
 /// Longer log list — used by the scrollable Console panel to exercise
 /// `ScrollView` wheel routing and Text shape caching together.
@@ -625,10 +613,10 @@ struct RootView: View {
         Box(direction: .column, alignItems: .stretch, spacing: 16) {
             card("Battle state") {
                 Row(alignment: .center, spacing: 14) {
-                    battleStat("TURN", "2")
-                    battleStat("ENERGY", "6 / 10")
-                    battleStat("ALLY HP", "28645 / 32000")
-                    battleStat("ENEMY HP", "24000 / 32000")
+                    battleStat("TURN", "\(demoBattleSnapshot.turn)")
+                    battleStat("ENERGY", "\(demoBattleSnapshot.energy) / \(demoBattleSnapshot.maxEnergy)")
+                    battleStat("ALLY HP", "\(demoBattleSnapshot.health)")
+                    battleStat("ENEMY HP", "\(demoBattleSnapshot.opponentHealth)")
                     Spacer(minLength: 0)
                     Button("End Turn") { clickCount += 1 }
                         .buttonStyle(.secondary)
@@ -637,19 +625,19 @@ struct RootView: View {
 
             card("Hand") {
                 Row(alignment: .bottom, spacing: 12) {
-                    battleCard(demoBattleHand[0])
-                    battleCard(demoBattleHand[1])
-                    battleCard(demoBattleHand[2])
-                    battleCard(demoBattleHand[3])
+                    battleCard(demoBattleSnapshot.hand[0])
+                    battleCard(demoBattleSnapshot.hand[1])
+                    battleCard(demoBattleSnapshot.hand[2])
+                    battleCard(demoBattleSnapshot.hand[3])
                     Spacer(minLength: 0)
                 }
             }
 
             card("Skills") {
                 Row(alignment: .center, spacing: 10) {
-                    battleSkillButton(demoBattleSkills[0])
-                    battleSkillButton(demoBattleSkills[1])
-                    battleSkillButton(demoBattleSkills[2])
+                    battleSkillButton(demoBattleSnapshot.skills[0])
+                    battleSkillButton(demoBattleSnapshot.skills[1])
+                    battleSkillButton(demoBattleSnapshot.skills[2])
                     Spacer(minLength: 0)
                 }
             }
@@ -670,7 +658,7 @@ struct RootView: View {
         .cornerRadius(6)
     }
 
-    private func battleCard(_ card: DemoBattleCard) -> some View {
+    private func battleCard(_ card: BattleHandCardViewModel) -> some View {
         Button(action: { clickCount += 1 }) {
             Box(direction: .column, alignItems: .stretch, spacing: 8) {
                 Row(alignment: .center, spacing: 6) {
@@ -703,14 +691,14 @@ struct RootView: View {
     }
 
     @ViewBuilder
-    private func battleSkillButton(_ skill: DemoBattleSkill) -> some View {
+    private func battleSkillButton(_ skill: BattleSkillViewModel) -> some View {
         if skill.isEnabled {
             Button("\(skill.title)  Ready") {
                 clickCount += 1
             }
             .buttonStyle(.secondary)
         } else {
-            Button("\(skill.title)  CD \(skill.cooldown)", isEnabled: false) {}
+            Button("\(skill.title)  CD \(skill.cooldownTurns)", isEnabled: false) {}
                 .buttonStyle(.ghost)
         }
     }
