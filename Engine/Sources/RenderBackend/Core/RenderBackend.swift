@@ -1502,12 +1502,4 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         pass.draw(vertexCount: 3)
         pass.end()
     }
-
-    // MARK: - Shader
-
-    // MARK: - Shader
-
-    private static func loadShaderSource(named name: String) throws -> String {
-        try ShaderCatalog().loadWGSLRenderModule(named: name)
-    }
 }
