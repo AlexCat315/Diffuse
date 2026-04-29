@@ -182,6 +182,12 @@ public final class SDL3Shell: Shell {
                 }
             }
         }
+
+        func activateNativeWindow() {
+            guard let window = cocoaWindow else { return }
+            window.makeKeyAndOrderFront(nil)
+            NSApplication.shared.activate(ignoringOtherApps: true)
+        }
 #endif
 
         private func resolveCursor(_ cursor: SystemCursor) -> OpaquePointer? {
@@ -298,6 +304,10 @@ public final class SDL3Shell: Shell {
         isQuitting = false
 
 #if os(macOS)
+        NSApplication.shared.setActivationPolicy(.regular)
+#endif
+
+#if os(macOS)
         let windowFlags = SDL_WindowFlags(
             GUAVA_SDL_WINDOW_RESIZABLE | GUAVA_SDL_WINDOW_HIGH_PIXEL_DENSITY | GUAVA_SDL_WINDOW_METAL)
 #else
@@ -336,6 +346,7 @@ public final class SDL3Shell: Shell {
             )
 #if os(macOS)
             handle.applyTitleBarStyle(options.titleBarStyle)
+            handle.activateNativeWindow()
 #endif
             windows[handle.id] = handle
             windowOrder.removeAll { $0 == handle.id }
