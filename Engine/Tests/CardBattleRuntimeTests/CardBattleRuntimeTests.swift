@@ -124,7 +124,10 @@ struct CardBattleRuntimeTests {
             energy: 2,
             deck: [],
             hand: [strike, finisher],
-            skills: [BattleSkill(id: "slash", title: "Slash", target: .opponent)]
+            skills: [
+                BattleSkill(id: "slash", title: "Slash", target: .opponent),
+                BattleSkill(id: "duel", title: "Duel", cooldownTurns: 2, target: .opponent),
+            ]
         )
         let state = BattleState(
             phase: .main,
@@ -146,7 +149,8 @@ struct CardBattleRuntimeTests {
         #expect(snapshot.hand.map(\.id) == ["strike", "finisher"])
         #expect(snapshot.hand.map(\.isPlayable) == [true, false])
         #expect(snapshot.skills == [
-            BattleSkillViewModel(id: "slash", title: "Slash", target: .opponent, isEnabled: true)
+            BattleSkillViewModel(id: "slash", title: "Slash", target: .opponent, isEnabled: true),
+            BattleSkillViewModel(id: "duel", title: "Duel", cooldownTurns: 2, target: .opponent, isEnabled: false),
         ])
     }
 
