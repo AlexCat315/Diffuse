@@ -18,10 +18,10 @@ public enum BattleStateMachine {
                 player.energy = player.maxEnergy
                 next.players[.player] = player
             }
-            drawCards(for: .player, count: drawCount, state: &next)
+            let drawnCount = drawCards(for: .player, count: drawCount, state: &next)
             next.phase = .main
-            next.log.append("turn \(next.turn): player drew \(drawCount) card(s)")
-            events.append(.turnStarted(turn: next.turn, playerID: .player, cardsDrawn: drawCount))
+            next.log.append("turn \(next.turn): player drew \(drawnCount) card(s)")
+            events.append(.turnStarted(turn: next.turn, playerID: .player, cardsDrawn: drawnCount))
         case let .playCard(cardID, target):
             rejection = playCard(cardID: cardID, target: target, state: &next, events: &events)
         case .endPlayerTurn:
@@ -35,13 +35,16 @@ public enum BattleStateMachine {
         return BattleReductionResult(state: next, events: events, rejection: rejection)
     }
 
-    private static func drawCards(for playerID: BattlePlayerID, count: Int, state: inout BattleState) {
-        guard count > 0, var player = state.players[playerID] else { return }
+    private static func drawCards(for playerID: BattlePlayerID, count: Int, state: inout BattleState) -> Int {
+        guard count > 0, var player = state.players[playerID] else { return 0 }
+        var drawnCount = 0
         for _ in 0..<count {
             guard !player.deck.isEmpty else { break }
             player.hand.append(player.deck.removeFirst())
+            drawnCount += 1
         }
         state.players[playerID] = player
+        return drawnCount
     }
 
     private static func playCard(cardID: String,
