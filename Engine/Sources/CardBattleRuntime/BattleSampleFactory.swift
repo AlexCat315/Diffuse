@@ -6,7 +6,7 @@ public enum BattleSampleFactory {
             BattleCard(id: "green-dragon", title: "Green Dragon", cost: 5, skillID: "cleave", damage: 18),
             BattleCard(id: "seven-strike", title: "Seven Strike", cost: 3, skillID: "slash", damage: 9),
             BattleCard(id: "fire-ambush", title: "Fire Ambush", cost: 4, skillID: "burn", damage: 14),
-            BattleCard(id: "borrow-east", title: "Borrow East", cost: 2, skillID: "draw", damage: 0),
+            BattleCard(id: "borrow-east", title: "Borrow East", cost: 2, skillID: "draw", effects: [.block(6)]),
         ]
         let player = BattlePlayerState(
             id: .player,
