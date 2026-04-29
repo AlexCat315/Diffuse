@@ -148,6 +148,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var meshes: [GPUMesh] = []
     private var meshTextureResources: [Int: [Int: GPUMeshTextureResource]] = [:]
     private var instanceResources: [InstanceResources] = []
+    private var instanceResourceMeshIndices: [Int] = []
     private var dynamicInstanceResources: DynamicInstanceResources?
     private var linearSampler: GPUSampler?
     private var nearestSampler: GPUSampler?
@@ -241,7 +242,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             let meshPipeline = try ensureMeshPipeline(hdr: usesHDRFrameGraph)
             try ensureStylizedCharacterUniformBuffer()
             writeStylizedCharacterUniforms()
-            try ensureInstanceResources(instanceCount: packet.scene.instances.count, pipeline: meshPipeline)
+            try ensureInstanceResources(scene: packet.scene, pipeline: meshPipeline)
             writeInstanceUniforms(scene: packet.scene, viewProj: viewProj)
 
             if framePlan.passes.contains(.skybox) {
@@ -1001,7 +1002,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         meshTextureResources[meshIndex] = resources
     }
 
-    private func ensureInstanceResources(instanceCount: Int, pipeline: GPURenderPipeline) throws {
+    private func ensureInstanceResources(scene: RenderScene, pipeline: GPURenderPipeline) throws {
+        let instanceCount = scene.instances.count
+        let meshIndices = scene.instances.map(\.meshIndex)
 
         let useDynamicOffsets = instanceCount > dynamicOffsetThreshold
         let bindGroupLayout: GPUBindGroupLayout
@@ -1013,9 +1016,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
         if useDynamicOffsets {
             if let dyn = dynamicInstanceResources, dyn.capacity >= instanceCount {
+                instanceResourceMeshIndices = meshIndices
                 return
             }
             instanceResources.removeAll(keepingCapacity: false)
+            instanceResourceMeshIndices = meshIndices
 
             let totalSize = UInt64(max(instanceCount, 1)) * dynamicUniformStride
             let uniformBuffer = try backend.createBuffer(size: totalSize, usage: [.uniform, .copyDst])
@@ -1032,24 +1037,31 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             return
         }
 
-        if dynamicInstanceResources == nil && instanceResources.count == instanceCount {
+        if dynamicInstanceResources == nil
+            && instanceResources.count == instanceCount
+            && instanceResourceMeshIndices == meshIndices {
             return
         }
 
         dynamicInstanceResources = nil
         instanceResources.removeAll(keepingCapacity: false)
-        for _ in 0..<instanceCount {
+        instanceResourceMeshIndices = meshIndices
+        for meshIndex in meshIndices {
             let uniformBuffer = try backend.createBuffer(size: 64, usage: [.uniform, .copyDst])
             let bindGroup = try backend.createBindGroup(
                 layout: bindGroupLayout,
-                entries: try meshBindGroupEntries(instanceUniformBuffer: uniformBuffer)
+                entries: try meshBindGroupEntries(
+                    instanceUniformBuffer: uniformBuffer,
+                    baseColorTextureView: baseColorTextureView(for: meshIndex)
+                )
             )
             instanceResources.append(
                 InstanceResources(uniformBuffer: uniformBuffer, bindGroup: bindGroup))
         }
     }
 
-    private func meshBindGroupEntries(instanceUniformBuffer: GPUBuffer) throws -> [GPUBindGroupEntry] {
+    private func meshBindGroupEntries(instanceUniformBuffer: GPUBuffer,
+                                      baseColorTextureView: GPUTextureView? = nil) throws -> [GPUBindGroupEntry] {
         try ensureStylizedCharacterUniformBuffer()
         try ensureMeshSamplingFallbackResources()
         guard let stylizedCharacterUniformBuffer,
@@ -1058,6 +1070,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         else {
             throw WGPUBackendError.initFailed("mesh bind group resources missing")
         }
+        let textureView = baseColorTextureView ?? fallbackMeshTextureView
         return [
             GPUBindGroupEntry(binding: 0, buffer: instanceUniformBuffer, offset: 0, size: 64),
             GPUBindGroupEntry(
@@ -1067,8 +1080,17 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 size: UInt64(MemoryLayout<StylizedCharacterUniforms>.stride)
             ),
             GPUBindGroupEntry(binding: 2, sampler: linearSampler),
-            GPUBindGroupEntry(binding: 3, textureView: fallbackMeshTextureView),
+            GPUBindGroupEntry(binding: 3, textureView: textureView),
         ]
+    }
+
+    private func baseColorTextureView(for meshIndex: Int) -> GPUTextureView? {
+        guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
+              let textureIndex = materialSet.materials.first?.baseColorTextureIndex
+        else {
+            return nil
+        }
+        return meshTextureResources[meshIndex]?[textureIndex]?.view
     }
 
     private func ensureStylizedCharacterUniformBuffer() throws {
