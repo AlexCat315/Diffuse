@@ -16,12 +16,14 @@ public struct BattleCard: Identifiable, Hashable, Sendable, Codable {
     public var title: String
     public var cost: Int
     public var skillID: String?
+    public var damage: Int
 
-    public init(id: String, title: String, cost: Int, skillID: String? = nil) {
+    public init(id: String, title: String, cost: Int, skillID: String? = nil, damage: Int = 0) {
         self.id = id
         self.title = title
         self.cost = cost
         self.skillID = skillID
+        self.damage = damage
     }
 }
 
@@ -106,6 +108,7 @@ public struct BattleState: Sendable, Equatable, Codable {
 
 public enum BattleCommand: Sendable, Equatable {
     case startPlayerTurn(drawCount: Int)
+    case playCard(cardID: String, target: BattlePlayerID)
 }
 
 public enum BattleStateMachine {
@@ -123,6 +126,8 @@ public enum BattleStateMachine {
             drawCards(for: .player, count: drawCount, state: &next)
             next.phase = .main
             next.log.append("turn \(next.turn): player drew \(drawCount) card(s)")
+        case let .playCard(cardID, target):
+            playCard(cardID: cardID, target: target, state: &next)
         }
         return next
     }
@@ -134,5 +139,40 @@ public enum BattleStateMachine {
             player.hand.append(player.deck.removeFirst())
         }
         state.players[playerID] = player
+    }
+
+    private static func playCard(cardID: String, target: BattlePlayerID, state: inout BattleState) {
+        guard state.phase == .main,
+              var player = state.players[state.activePlayerID],
+              let cardIndex = player.hand.firstIndex(where: { $0.id == cardID })
+        else {
+            state.log.append("cannot play \(cardID)")
+            return
+        }
+
+        let card = player.hand[cardIndex]
+        guard player.energy >= card.cost else {
+            state.log.append("not enough energy for \(card.id)")
+            return
+        }
+
+        state.phase = .resolvingCard
+        player.energy -= card.cost
+        player.hand.remove(at: cardIndex)
+        player.discard.append(card)
+        state.players[player.id] = player
+
+        if card.damage > 0, var targetPlayer = state.players[target] {
+            targetPlayer.health = max(0, targetPlayer.health - card.damage)
+            state.players[target] = targetPlayer
+            state.log.append("\(player.id.rawValue) played \(card.id) for \(card.damage) damage")
+            if targetPlayer.health == 0 {
+                state.phase = target == .enemy ? .victory : .defeat
+                return
+            }
+        } else {
+            state.log.append("\(player.id.rawValue) played \(card.id)")
+        }
+        state.phase = .main
     }
 }
