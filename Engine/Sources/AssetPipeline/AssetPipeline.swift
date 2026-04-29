@@ -189,6 +189,20 @@ public struct MeshAsset: Sendable {
     public var vertexBufferSize: Int { vertices.count * MemoryLayout<Float>.size }
     public var indexBufferSize: Int { indices.count * MemoryLayout<UInt32>.size }
 
+    public func position(at vertexIndex: Int) -> SIMD3<Float>? {
+        guard vertexIndex >= 0, vertexIndex < vertexCount else { return nil }
+        let offset = vertexIndex * MeshAsset.vertexFloatCount + MeshAsset.positionFloatOffset
+        return SIMD3<Float>(vertices[offset], vertices[offset + 1], vertices[offset + 2])
+    }
+
+    public mutating func setPosition(_ position: SIMD3<Float>, at vertexIndex: Int) {
+        guard vertexIndex >= 0, vertexIndex < vertexCount else { return }
+        let offset = vertexIndex * MeshAsset.vertexFloatCount + MeshAsset.positionFloatOffset
+        vertices[offset] = position.x
+        vertices[offset + 1] = position.y
+        vertices[offset + 2] = position.z
+    }
+
     public static func appendVertex(
         to vertices: inout [Float],
         position: SIMD3<Float>,
