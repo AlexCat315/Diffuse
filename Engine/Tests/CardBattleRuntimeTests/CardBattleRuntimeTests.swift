@@ -11,6 +11,7 @@ struct CardBattleRuntimeTests {
         let player = BattlePlayerState(
             id: .player,
             health: 32,
+            block: 4,
             maxEnergy: 3,
             deck: [strike, guardCard],
             skills: [BattleSkill(id: "slash", title: "Slash", target: .opponent)]
@@ -23,6 +24,7 @@ struct CardBattleRuntimeTests {
         #expect(next.turn == 1)
         #expect(next.phase == .main)
         #expect(next.activePlayerID == .player)
+        #expect(next.players[.player]?.block == 0)
         #expect(next.players[.player]?.energy == 3)
         #expect(next.players[.player]?.hand.map(\.id) == ["strike", "guard"])
         #expect(next.players[.player]?.deck.isEmpty == true)
