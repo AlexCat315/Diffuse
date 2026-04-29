@@ -24,7 +24,7 @@ struct IntentInputPanel: View {
             let selection = app.scene.entitySummary(id: store.selectedEntityID)
 
             ScrollView(.vertical) {
-                Box(direction: .column, alignItems: .stretch, spacing: 10) {
+                Box(direction: .column, alignItems: .stretch, spacing: 6) {
                     AIStatusSummary(status: store.aiStatusMessage,
                                     warnings: store.aiWarnings)
 
@@ -83,7 +83,7 @@ struct IntentInputPanel: View {
                         }
                     }
                 }
-                .padding(10)
+                .padding(8)
             }
             .frame(minWidth: 320)
         }
@@ -109,8 +109,8 @@ private struct AIStatusSummary: View {
                     .foregroundColor(.warning)
             }
         }
-        .padding(8)
-        .background(.surfaceSunken)
+        .padding(horizontal: 8, vertical: 6)
+        .background(.surface)
         .cornerRadius(2)
     }
 }
@@ -126,14 +126,14 @@ private struct AISection<Content: View>: View {
     }
 
     var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 8) {
+        Box(direction: .column, alignItems: .stretch, spacing: 6) {
             Text(title)
                 .font(.mono)
                 .foregroundColor(.onSurfaceMuted)
             content
         }
-        .padding(8)
-        .background(.surfaceOverlay)
+        .padding(horizontal: 8, vertical: 7)
+        .background(.surfaceVariant)
         .cornerRadius(2)
     }
 }
