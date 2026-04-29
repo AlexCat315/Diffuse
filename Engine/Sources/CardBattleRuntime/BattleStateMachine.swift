@@ -16,8 +16,10 @@ public enum BattleStateMachine {
             rejection = startTurn(playerID: .player, drawCount: drawCount, state: &next, events: &events)
         case let .playCard(cardID, target):
             rejection = playCard(cardID: cardID, target: target, state: &next, events: &events)
+        case let .endTurn(playerID):
+            rejection = endTurn(playerID: playerID, state: &next, events: &events)
         case .endPlayerTurn:
-            rejection = endPlayerTurn(state: &next, events: &events)
+            rejection = endTurn(playerID: .player, state: &next, events: &events)
         case let .resolveEnemyAction(damage):
             rejection = resolveEnemyAction(damage: damage, state: &next, events: &events)
         }
@@ -106,30 +108,35 @@ public enum BattleStateMachine {
         return nil
     }
 
-    private static func endPlayerTurn(state: inout BattleState,
-                                      events: inout [BattleEvent]) -> BattleCommandRejection? {
+    private static func endTurn(playerID: BattlePlayerID,
+                                state: inout BattleState,
+                                events: inout [BattleEvent]) -> BattleCommandRejection? {
         guard state.phase == .main else {
-            state.log.append("cannot end player turn")
+            state.log.append("cannot end \(playerID.rawValue) turn")
             return .invalidPhase(expected: .main, actual: state.phase)
         }
-        guard state.activePlayerID == .player else {
-            state.log.append("cannot end player turn")
-            return .inactivePlayer(expected: .player, actual: state.activePlayerID)
+        guard state.activePlayerID == playerID else {
+            state.log.append("cannot end \(playerID.rawValue) turn")
+            return .inactivePlayer(expected: playerID, actual: state.activePlayerID)
         }
-        guard var player = state.players[.player] else {
-            state.log.append("cannot end player turn")
-            return .missingPlayer(.player)
+        guard var player = state.players[playerID] else {
+            state.log.append("cannot end \(playerID.rawValue) turn")
+            return .missingPlayer(playerID)
         }
 
         player.discard.append(contentsOf: player.hand)
         player.hand.removeAll(keepingCapacity: true)
         player.energy = 0
-        state.players[.player] = player
-        state.activePlayerID = .enemy
-        state.phase = .enemyTurn
-        state.log.append("turn \(state.turn): player ended turn")
-        events.append(.turnEnded(turn: state.turn, playerID: .player))
+        state.players[playerID] = player
+        state.activePlayerID = BattleRules.opponent(of: playerID, in: state) ?? defaultOpponent(of: playerID)
+        state.phase = playerID == .player ? .enemyTurn : .draw
+        state.log.append("turn \(state.turn): \(playerID.rawValue) ended turn")
+        events.append(.turnEnded(turn: state.turn, playerID: playerID))
         return nil
+    }
+
+    private static func defaultOpponent(of playerID: BattlePlayerID) -> BattlePlayerID {
+        playerID == .player ? .enemy : .player
     }
 
     private static func resolveEnemyAction(damage: Int,

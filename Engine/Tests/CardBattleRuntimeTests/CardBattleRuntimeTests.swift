@@ -229,6 +229,35 @@ struct CardBattleRuntimeTests {
         #expect(next.log == ["turn 2: player ended turn"])
     }
 
+    @Test("ending a turn supports any battle player")
+    func endTurnSupportsAnyPlayer() {
+        let enemyCard = BattleCard(id: "counter", title: "Counter", cost: 1, damage: 4)
+        let enemy = BattlePlayerState(
+            id: .enemy,
+            health: 24,
+            maxEnergy: 2,
+            energy: 1,
+            deck: [],
+            hand: [enemyCard]
+        )
+        let player = BattlePlayerState(id: .player, health: 32, maxEnergy: 3, deck: [])
+        let state = BattleState(
+            phase: .main,
+            turn: 3,
+            activePlayerID: .enemy,
+            players: [.player: player, .enemy: enemy]
+        )
+
+        let result = BattleStateMachine.reduceWithResult(state, command: .endTurn(playerID: .enemy))
+
+        #expect(result.state.phase == .draw)
+        #expect(result.state.activePlayerID == .player)
+        #expect(result.state.players[.enemy]?.energy == 0)
+        #expect(result.state.players[.enemy]?.hand.isEmpty == true)
+        #expect(result.state.players[.enemy]?.discard.map(\.id) == ["counter"])
+        #expect(result.events == [.turnEnded(turn: 3, playerID: .enemy)])
+    }
+
     @Test("enemy action damages player and returns to player draw phase")
     func enemyActionReturnsToPlayerDraw() {
         let player = BattlePlayerState(id: .player, health: 32, maxEnergy: 3, deck: [])
