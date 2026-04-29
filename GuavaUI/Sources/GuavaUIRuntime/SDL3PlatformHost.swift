@@ -118,6 +118,7 @@ public final class SDL3PlatformHost: PlatformHost {
     }()
 
     private let title: String
+    private let mainWindowOptions: WindowOptions
     private let shellFactory: @MainActor () throws -> any Shell
     private let mainInputContext: PlatformInputContext
     private let mainRecomposer: Recomposer
@@ -153,10 +154,12 @@ public final class SDL3PlatformHost: PlatformHost {
     private var frameTimingLogCounter = 0
 
     public init(title: String = "GuavaUI",
+                mainWindowOptions: WindowOptions = WindowOptions(),
                 recomposer: Recomposer = Recomposer(),
                 inputContext: PlatformInputContext = PlatformInputContext(),
                 shellFactory: @escaping @MainActor () throws -> any Shell = { try makeDefaultShell() }) {
         self.title = title
+        self.mainWindowOptions = mainWindowOptions
         self.mainRecomposer = recomposer
         self.mainInputContext = inputContext
         self.shellFactory = shellFactory
@@ -500,7 +503,9 @@ public final class SDL3PlatformHost: PlatformHost {
         }
 
         let shell = try resolveShell()
-        try shell.initializeWindow(title: title)
+        if shell.mainWindowID == nil {
+            _ = try shell.createWindow(title: title, options: mainWindowOptions)
+        }
         guard let mainWindowID = shell.mainWindowID,
               let handle = shell.window(for: mainWindowID) else {
             throw ShellError.initializationFailed("main window was not registered after initializeWindow")

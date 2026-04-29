@@ -4,6 +4,7 @@ import Foundation
 import Logging
 
 #if os(macOS)
+import AppKit
 import QuartzCore
 #endif
 
@@ -166,6 +167,23 @@ public final class SDL3Shell: Shell {
             lastTextInputArea = nil
         }
 
+#if os(macOS)
+        func applyTitleBarStyle(_ style: WindowTitleBarStyle) {
+            guard let window = cocoaWindow else { return }
+            switch style {
+            case .standard:
+                break
+            case .hiddenInset:
+                window.titleVisibility = .hidden
+                window.titlebarAppearsTransparent = true
+                window.styleMask.insert(.fullSizeContentView)
+                if #available(macOS 11.0, *) {
+                    window.toolbarStyle = .unifiedCompact
+                }
+            }
+        }
+#endif
+
         private func resolveCursor(_ cursor: SystemCursor) -> OpaquePointer? {
             if let cached = cursorCache[cursor] { return cached }
 
@@ -218,6 +236,13 @@ public final class SDL3Shell: Shell {
             layer.pixelFormat = .bgra8Unorm
             layer.framebufferOnly = true
             syncDrawableSize()
+        }
+
+        private var cocoaWindow: NSWindow? {
+            guard let pointer = pointerWindowProperty(named: "SDL.window.cocoa.window") else {
+                return nil
+            }
+            return Unmanaged<NSWindow>.fromOpaque(pointer).takeUnretainedValue()
         }
 #endif
 
@@ -309,6 +334,9 @@ public final class SDL3Shell: Shell {
                 window: createdWindow,
                 metalView: createdMetalView
             )
+#if os(macOS)
+            handle.applyTitleBarStyle(options.titleBarStyle)
+#endif
             windows[handle.id] = handle
             windowOrder.removeAll { $0 == handle.id }
             windowOrder.append(handle.id)

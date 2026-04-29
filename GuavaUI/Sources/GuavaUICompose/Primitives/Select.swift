@@ -97,8 +97,8 @@ public struct Menu: View {
             }
         }
         .background(.surfaceFloating)
-        .cornerRadius(8)
-        .border(Color(red: 58, green: 64, blue: 78), width: 1)
+        .cornerRadius(6)
+        .border(.border, width: 1)
         .ifLet(width) { view, width in
             view.frame(width: width)
         }
