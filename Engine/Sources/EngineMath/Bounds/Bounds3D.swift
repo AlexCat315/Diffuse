@@ -44,4 +44,16 @@ public struct Bounds3D: Sendable, Equatable {
         min = simd_min(min, point)
         max = simd_max(max, point)
     }
+
+    public func contains(_ point: SIMD3<Float>) -> Bool {
+        guard !isEmpty else { return false }
+        return point.x >= min.x && point.x <= max.x
+            && point.y >= min.y && point.y <= max.y
+            && point.z >= min.z && point.z <= max.z
+    }
+
+    public func closestPoint(to point: SIMD3<Float>) -> SIMD3<Float> {
+        guard !isEmpty else { return .zero }
+        return simd_min(simd_max(point, min), max)
+    }
 }
