@@ -11,9 +11,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private let renderSurface: RenderSurfaceDescriptor?
     var surface: GPUSurface?
     private var configuredSize: RenderDrawableSize = .init(width: 0, height: 0)
-    private let format: GPUTextureFormat = .bgra8Unorm
-    private let hdrFormat: GPUTextureFormat = .rgba16Float
-    private let depthFormat: GPUTextureFormat = .depth32Float
+    let format: GPUTextureFormat = .bgra8Unorm
+    let hdrFormat: GPUTextureFormat = .rgba16Float
+    let depthFormat: GPUTextureFormat = .depth32Float
 
     private var meshPipelineLDR: GPURenderPipeline?
     private var meshPipelineHDR: GPURenderPipeline?
@@ -23,14 +23,14 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var outlinePipelineHDR: GPURenderPipeline?
     var meshBindGroupLayout: GPUBindGroupLayout?
     private var meshPipelineLayout: GPUPipelineLayout?
-    private var skyboxPipeline: GPURenderPipeline?
-    private var tonemapPipeline: GPURenderPipeline?
-    private var bloomPipeline: GPURenderPipeline?
-    private var inkPaperPostPipeline: GPURenderPipeline?
-    private var fxaaPipeline: GPURenderPipeline?
-    private var ssrPipeline: GPURenderPipeline?
-    private var taaPipeline: GPURenderPipeline?
-    private var ssaoPipeline: GPURenderPipeline?
+    var skyboxPipeline: GPURenderPipeline?
+    var tonemapPipeline: GPURenderPipeline?
+    var bloomPipeline: GPURenderPipeline?
+    var inkPaperPostPipeline: GPURenderPipeline?
+    var fxaaPipeline: GPURenderPipeline?
+    var ssrPipeline: GPURenderPipeline?
+    var taaPipeline: GPURenderPipeline?
+    var ssaoPipeline: GPURenderPipeline?
     var offscreenColorTexture: GPUTexture?
     var offscreenColorView: GPUTextureView?
     private var depthTexture: GPUTexture?
@@ -860,107 +860,6 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         if ssaoUniformBuffer == nil {
             ssaoUniformBuffer = try backend.createBuffer(size: 512, usage: [.uniform, .copyDst])
         }
-    }
-
-    private func ensureSkyboxPipeline() throws {
-        guard skyboxPipeline == nil else { return }
-        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "skybox"), label: "skybox")
-        skyboxPipeline = try backend.createRenderPipeline(
-            desc: GPURenderPipelineDescriptor(
-                shaderModule: module,
-                colorFormat: hdrFormat,
-                cullMode: .none,
-                depthStencil: GPUDepthStencilPipelineState(
-                    format: depthFormat,
-                    depthWriteEnabled: false,
-                    depthCompare: .lessEqual
-                )
-            )
-        )
-    }
-
-    private func ensureTonemapPipeline() throws {
-        guard tonemapPipeline == nil else { return }
-        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "tonemap"), label: "tonemap")
-        tonemapPipeline = try backend.createRenderPipeline(
-            desc: GPURenderPipelineDescriptor(
-                shaderModule: module,
-                colorFormat: format,
-                cullMode: .none
-            )
-        )
-    }
-
-    private func ensureBloomPipeline() throws {
-        guard bloomPipeline == nil else { return }
-        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "bloom"), label: "bloom")
-        bloomPipeline = try backend.createRenderPipeline(
-            desc: GPURenderPipelineDescriptor(
-                shaderModule: module,
-                colorFormat: hdrFormat,
-                cullMode: .none
-            )
-        )
-    }
-
-    private func ensureInkPaperPostPipeline() throws {
-        guard inkPaperPostPipeline == nil else { return }
-        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "ink_paper_post"), label: "ink_paper_post")
-        inkPaperPostPipeline = try backend.createRenderPipeline(
-            desc: GPURenderPipelineDescriptor(
-                shaderModule: module,
-                colorFormat: hdrFormat,
-                cullMode: .none
-            )
-        )
-    }
-
-    private func ensureFXAAPipeline() throws {
-        guard fxaaPipeline == nil else { return }
-        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "fxaa"), label: "fxaa")
-        fxaaPipeline = try backend.createRenderPipeline(
-            desc: GPURenderPipelineDescriptor(
-                shaderModule: module,
-                colorFormat: format,
-                cullMode: .none
-            )
-        )
-    }
-
-    private func ensureSSRPipeline() throws {
-        guard ssrPipeline == nil else { return }
-        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "ssr"), label: "ssr")
-        ssrPipeline = try backend.createRenderPipeline(
-            desc: GPURenderPipelineDescriptor(
-                shaderModule: module,
-                colorFormat: hdrFormat,
-                cullMode: .none
-            )
-        )
-    }
-
-    private func ensureTAAPipeline() throws {
-        guard taaPipeline == nil else { return }
-        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "taa"), label: "taa")
-        taaPipeline = try backend.createRenderPipeline(
-            desc: GPURenderPipelineDescriptor(
-                shaderModule: module,
-                colorFormat: hdrFormat,
-                cullMode: .none
-            )
-        )
-    }
-
-    private func ensureSSAOPipeline() throws {
-        guard ssaoPipeline == nil else { return }
-        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "ssao"), label: "ssao")
-        ssaoPipeline = try backend.createRenderPipeline(
-            desc: GPURenderPipelineDescriptor(
-                shaderModule: module,
-                colorFormat: hdrFormat,
-                cullMode: .none
-            )
-        )
     }
 
     private func encodeSkyboxPass(
