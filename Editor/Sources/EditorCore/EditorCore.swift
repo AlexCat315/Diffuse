@@ -253,6 +253,16 @@ public final class EditorApplication {
         engine.queueRenderSettings(settings)
     }
 
+    public func resetPreviewScene() {
+        scene.resetToPreviewScene()
+        if let selection = scene.defaultSelectionID {
+            store.dispatch(.setSelectedEntity(selection))
+        } else {
+            store.dispatch(.setSelectedEntity(nil))
+        }
+        logConsole("Created new preview scene")
+    }
+
     public func currentRenderStats() -> RenderFrameStats {
         engine.currentRenderStats()
     }
