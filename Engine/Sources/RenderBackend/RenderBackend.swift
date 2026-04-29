@@ -17,46 +17,6 @@ public final class MetalPlaceholderRenderer: RenderPacketConsumer, @unchecked Se
     public func currentViewportSurfaceState() -> ViewportSurfaceState { .init() }
 }
 
-private struct SkyboxUniforms {
-    var invViewProj: simd_float4x4
-    var skyTint: SIMD4<Float>
-    var horizonTint: SIMD4<Float>
-    var groundTint: SIMD4<Float>
-}
-
-private struct TonemapUniforms {
-    var params: SIMD4<Float>
-}
-
-private struct BloomUniforms {
-    var params: SIMD4<Float>
-}
-
-private struct TAAUniforms {
-    var params: SIMD4<Float>
-}
-
-private struct SSAOUniforms {
-    var projection: simd_float4x4
-    var invProjection: simd_float4x4
-    var resolutionRadius: SIMD4<Float>
-    var tuning: SIMD4<Float>
-}
-
-private struct SSRUniforms {
-    var projection: simd_float4x4
-    var invProjection: simd_float4x4
-    var resolutionIntensity: SIMD4<Float>
-    var tracing: SIMD4<Float>
-}
-
-private struct StylizedCharacterUniforms {
-    var toonThresholds: SIMD4<Float>
-    var toonLevels: SIMD4<Float>
-    var inkWashColor: SIMD4<Float>
-    var params: SIMD4<Float>
-}
-
 ///  RHIWGPU renderer: scene of multiple instances drawn through one shared pipeline.
 public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private let backend: WGPUBackend
