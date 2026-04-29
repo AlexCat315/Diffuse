@@ -355,6 +355,24 @@ struct CardBattleRuntimeTests {
         #expect(next.log == ["enemy dealt 5 damage"])
     }
 
+    @Test("block absorbs incoming damage")
+    func blockAbsorbsIncomingDamage() {
+        let player = BattlePlayerState(id: .player, health: 32, block: 3, maxEnergy: 3, deck: [])
+        let enemy = BattlePlayerState(id: .enemy, health: 24, maxEnergy: 2, deck: [])
+        let state = BattleState(
+            phase: .enemyTurn,
+            turn: 2,
+            activePlayerID: .enemy,
+            players: [.player: player, .enemy: enemy]
+        )
+
+        let next = BattleStateMachine.reduce(state, command: .resolveEnemyAction(damage: 5))
+
+        #expect(next.players[.player]?.health == 30)
+        #expect(next.players[.player]?.block == 0)
+        #expect(next.log == ["enemy dealt 2 damage (3 blocked)"])
+    }
+
     @Test("sample factory creates playable duel state")
     func sampleFactoryCreatesDuel() {
         let initial = BattleSampleFactory.makeThreeKingdomsDuel()
