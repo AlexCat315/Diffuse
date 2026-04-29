@@ -221,6 +221,7 @@ private struct MeshBuilder {
             let tangents = try primitive.attributes["TANGENT"].map(readFloat4Accessor)
             let joints = try primitive.attributes["JOINTS_0"].map(readJoint4Accessor)
             let weights = try primitive.attributes["WEIGHTS_0"].map(readWeight4Accessor)
+            let materialIndex = Float(primitive.material ?? 0)
             let primitiveIndices = try primitive.indices.map(readIndexAccessor)
                 ?? Array(0..<positions.count)
 
@@ -276,6 +277,7 @@ private struct MeshBuilder {
                     normal: worldNormal,
                     uv: uv,
                     tangent: tangent,
+                    materialIndex: materialIndex,
                     joints: joint,
                     weights: weight
                 )
@@ -459,7 +461,13 @@ private struct MeshBuilder {
         guard !vertices.isEmpty else {
             throw GLTFImporterError.invalidAccessor("gltf produced no triangles")
         }
-        var mesh = MeshAsset(name: name, vertices: vertices, indices: indices)
+        var mesh = MeshAsset(
+            name: name,
+            vertices: vertices,
+            indices: indices,
+            materials: document.meshMaterials(),
+            textures: document.meshTextures()
+        )
         MeshNormalTools.fillMissingNormals(vertices: &mesh.vertices, indices: mesh.indices)
         return (mesh, topologies)
     }
@@ -678,6 +686,10 @@ private struct GLTFDocument: Decodable {
     let scenes: [GLTFScene]?
     let nodes: [GLTFNode]?
     let meshes: [GLTFMesh]?
+    let materials: [GLTFMaterial]?
+    let textures: [GLTFTexture]?
+    let images: [GLTFImage]?
+    let samplers: [GLTFSampler]?
     let accessors: [GLTFAccessor]
     let bufferViews: [GLTFBufferView]?
     let buffers: [GLTFBuffer]
@@ -751,6 +763,44 @@ private struct GLTFPrimitive: Decodable {
     let attributes: [String: Int]
     let indices: Int?
     let mode: Int?
+    let material: Int?
+}
+
+private struct GLTFMaterial: Decodable {
+    let name: String?
+    let pbrMetallicRoughness: GLTFPBRMetallicRoughness?
+    let normalTexture: GLTFTextureInfo?
+}
+
+private struct GLTFPBRMetallicRoughness: Decodable {
+    let baseColorFactor: [Float]?
+    let baseColorTexture: GLTFTextureInfo?
+    let metallicFactor: Float?
+    let roughnessFactor: Float?
+}
+
+private struct GLTFTextureInfo: Decodable {
+    let index: Int
+}
+
+private struct GLTFTexture: Decodable {
+    let name: String?
+    let sampler: Int?
+    let source: Int?
+}
+
+private struct GLTFImage: Decodable {
+    let name: String?
+    let uri: String?
+    let mimeType: String?
+}
+
+private struct GLTFSampler: Decodable {
+    let name: String?
+    let magFilter: Int?
+    let minFilter: Int?
+    let wrapS: Int?
+    let wrapT: Int?
 }
 
 private struct GLTFAccessor: Decodable {
@@ -772,6 +822,43 @@ private struct GLTFBufferView: Decodable {
 private struct GLTFBuffer: Decodable {
     let uri: String?
     let byteLength: Int
+}
+
+private extension GLTFDocument {
+    func meshMaterials() -> [MeshMaterial] {
+        guard let materials, !materials.isEmpty else {
+            return [MeshMaterial.fallback]
+        }
+        return materials.map { material in
+            let pbr = material.pbrMetallicRoughness
+            return MeshMaterial(
+                name: material.name,
+                baseColorFactor: Self.vec4(pbr?.baseColorFactor, fallback: SIMD4<Float>(1, 1, 1, 1)),
+                baseColorTextureIndex: pbr?.baseColorTexture?.index,
+                normalTextureIndex: material.normalTexture?.index,
+                metallicFactor: pbr?.metallicFactor ?? 1,
+                roughnessFactor: pbr?.roughnessFactor ?? 1
+            )
+        }
+    }
+
+    func meshTextures() -> [MeshTexture] {
+        guard let textures, !textures.isEmpty else { return [] }
+        return textures.map { texture in
+            let image = texture.source.flatMap { images?[safe: $0] }
+            return MeshTexture(
+                name: texture.name ?? image?.name,
+                sourceURI: image?.uri,
+                mimeType: image?.mimeType,
+                samplerIndex: texture.sampler
+            )
+        }
+    }
+
+    private static func vec4(_ values: [Float]?, fallback: SIMD4<Float>) -> SIMD4<Float> {
+        guard let values, values.count >= 4 else { return fallback }
+        return SIMD4<Float>(values[0], values[1], values[2], values[3])
+    }
 }
 
 private extension Array {
