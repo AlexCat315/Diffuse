@@ -28,13 +28,22 @@ public enum NativeRenderSurface: @unchecked Sendable {
     }
 }
 
+public enum WindowTitleBarStyle: String, Sendable, Equatable {
+    case standard
+    case hiddenInset
+}
+
 public struct WindowOptions: Sendable, Equatable {
     public var width: Int32
     public var height: Int32
+    public var titleBarStyle: WindowTitleBarStyle
 
-    public init(width: Int32 = 1280, height: Int32 = 720) {
+    public init(width: Int32 = 1280,
+                height: Int32 = 720,
+                titleBarStyle: WindowTitleBarStyle = .standard) {
         self.width = width
         self.height = height
+        self.titleBarStyle = titleBarStyle
     }
 }
 
@@ -251,6 +260,7 @@ public final class AppKitShell: Shell {
         let win = NSWindow(contentRect: frame, styleMask: style, backing: .buffered, defer: false)
         win.title = title
         win.isReleasedWhenClosed = false
+        applyTitleBarStyle(options.titleBarStyle, to: win)
 
         let view = NSView(frame: frame)
         view.wantsLayer = true
@@ -330,6 +340,21 @@ public final class AppKitShell: Shell {
         metalLayer = nil
         mainHandle = nil
         isRunning = false
+    }
+}
+
+@MainActor
+private func applyTitleBarStyle(_ style: WindowTitleBarStyle, to window: NSWindow) {
+    switch style {
+    case .standard:
+        break
+    case .hiddenInset:
+        window.titleVisibility = .hidden
+        window.titlebarAppearsTransparent = true
+        window.styleMask.insert(.fullSizeContentView)
+        if #available(macOS 11.0, *) {
+            window.toolbarStyle = .unifiedCompact
+        }
     }
 }
 

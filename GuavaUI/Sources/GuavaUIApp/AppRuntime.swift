@@ -114,7 +114,10 @@ public final class AppRuntime {
         self.renderer = DrawListRenderer(backend: resolvedBackend)
         self.imageAssets = ImageAssetRegistry(renderer: renderer)
         self.viewportTextures = ViewportTextureRegistry(renderer: renderer)
-        self.host = SDL3PlatformHost(title: config.title)
+        self.host = SDL3PlatformHost(
+            title: config.title,
+            mainWindowOptions: WindowOptions(titleBarStyle: config.titleBarStyle.platformStyle)
+        )
         self.host.setTargetFrameRate(config.targetFrameRate)
         self.graph = ViewGraph(tree: tree, recomposer: host.recomposer)
     }
@@ -210,6 +213,9 @@ public final class AppRuntime {
             },
             currentDisplayRefreshRate: { [weak self] in
                 self?.host.currentDisplayRefreshRate()
+            },
+            installNativeMenuBar: { menuBar in
+                NativeMenuInstaller.install(menuBar)
             }
         )
         onDisplayReady?(displayHandle)
@@ -586,6 +592,17 @@ public final class AppRuntime {
     private func syncAuxiliaryWindows() {
         let liveWindowIDs = Set(host.windowIDs)
         auxiliaryWindows = auxiliaryWindows.filter { liveWindowIDs.contains($0.key) }
+    }
+}
+
+private extension AppWindowTitleBarStyle {
+    var platformStyle: WindowTitleBarStyle {
+        switch self {
+        case .standard:
+            return .standard
+        case .hiddenInset:
+            return .hiddenInset
+        }
     }
 }
 
