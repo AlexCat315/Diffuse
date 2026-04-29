@@ -184,6 +184,8 @@ public struct MeshAsset: Sendable {
     }
 
     public var indexCount: UInt32 { UInt32(indices.count) }
+    public var vertexCount: Int { vertices.count / MeshAsset.vertexFloatCount }
+    public var triangleCount: Int { indices.count / 3 }
     public var vertexBufferSize: Int { vertices.count * MemoryLayout<Float>.size }
     public var indexBufferSize: Int { indices.count * MemoryLayout<UInt32>.size }
 
