@@ -92,6 +92,7 @@ public final class EditorApplication {
                            enableOffscreenViewport: true)
         )
         store.dispatch(.setConnected(true))
+        logConsole("Editor connected to runtime")
     }
 
     public func tick(deltaTime: Double) {
@@ -120,6 +121,7 @@ public final class EditorApplication {
     }
 
     public func shutdown() {
+        logConsole("Editor runtime shutdown")
         if let eventToken {
             events.unsubscribe(eventToken)
             self.eventToken = nil
@@ -158,6 +160,12 @@ public final class EditorApplication {
         displayInvalidationHandler?()
     }
 
+    public func logConsole(_ message: String,
+                           severity: EditorConsoleSeverity = .info,
+                           detail: String? = nil) {
+        store.dispatch(.appendConsoleMessage(message, severity: severity, detail: detail))
+    }
+
     public func setVSyncModeHandler(_ handler: ((EditorVSyncMode) -> Void)?) {
         vsyncModeHandler = handler
     }
@@ -170,9 +178,11 @@ public final class EditorApplication {
     @discardableResult
     public func spawnAsset(_ asset: EditorAsset, at position: SIMD3<Float> = .zero) -> UInt64? {
         guard let id = scene.spawnEntity(from: asset, at: position) else {
+            logConsole("Failed to spawn \(asset.name)", severity: .error)
             return nil
         }
         store.dispatch(.setSelectedEntity(id))
+        logConsole("Spawned \(asset.name)", detail: "entity \(id)")
         return id
     }
 
@@ -186,14 +196,17 @@ public final class EditorApplication {
                                            name: payload.displayName,
                                            kind: payload.kindLabel)
         if AssetDropRegistryHolder.current?.drop(dropPayload, atX: cursorX, y: cursorY) == true {
+            logConsole("Dropped \(payload.displayName)")
             return true
         }
         guard let frame = EditorViewportDropTarget.frame,
               frame.contains(x: cursorX, y: cursorY)
         else {
+            logConsole("Canceled asset drop", severity: .warning, detail: payload.displayName)
             return false
         }
         guard let asset = EditorAssetCatalog.asset(for: payload.assetID) else {
+            logConsole("Missing asset for drop", severity: .error, detail: payload.assetID)
             return false
         }
         let position = dropWorldPosition(cursorX: cursorX, cursorY: cursorY, frame: frame)
