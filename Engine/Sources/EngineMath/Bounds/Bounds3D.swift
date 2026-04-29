@@ -74,4 +74,13 @@ public struct Bounds3D: Sendable, Equatable {
     public func intersects(_ other: Bounds3D) -> Bool {
         intersection(other) != nil
     }
+
+    public func expanded(by amount: Float) -> Bounds3D {
+        expanded(by: SIMD3<Float>(repeating: amount))
+    }
+
+    public func expanded(by amount: SIMD3<Float>) -> Bounds3D {
+        guard !isEmpty else { return self }
+        return Bounds3D(min: min - amount, max: max + amount)
+    }
 }
