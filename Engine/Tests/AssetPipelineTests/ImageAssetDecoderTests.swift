@@ -106,6 +106,19 @@ struct ImageAssetDecoderTests {
         #expect(resolved.texture.pixels == [21, 22, 23, 255])
     }
 
+    @Test("decodes embedded mesh texture data")
+    func decodesEmbeddedTextureData() throws {
+        let data = try makePNGData(pixels: [
+            31, 32, 33, 255,
+        ], width: 1, height: 1)
+        let texture = MeshTexture(name: "embedded-base", mimeType: "image/png", data: data)
+
+        let resolved = try MeshTextureResolver.decode(texture, sourceDirectory: nil)
+
+        #expect(resolved.path == "embedded-base")
+        #expect(resolved.texture.pixels == [31, 32, 33, 255])
+    }
+
     private func writePNG(url: URL, pixels: [UInt8], width: Int, height: Int) throws {
         let data = try makePNGData(pixels: pixels, width: width, height: height)
         try data.write(to: url)

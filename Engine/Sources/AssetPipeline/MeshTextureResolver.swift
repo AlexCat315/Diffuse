@@ -60,6 +60,11 @@ public enum MeshTextureResolver {
     }
 
     public static func decode(_ texture: MeshTexture, sourceDirectory: String?) throws -> ResolvedMeshTexture {
+        if let data = texture.data {
+            let label = texture.sourceURI ?? texture.name ?? "<embedded>"
+            return ResolvedMeshTexture(path: label,
+                                       texture: try ImageAssetDecoder.decodeRGBA8(data: data, label: label))
+        }
         if let uri = texture.sourceURI, uri.hasPrefix("data:") {
             let data = try decodeDataURI(uri)
             return ResolvedMeshTexture(path: uri, texture: try ImageAssetDecoder.decodeRGBA8(data: data, label: uri))

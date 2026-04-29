@@ -16,15 +16,29 @@ public struct MeshTexture: Sendable, Equatable {
     public var sourceURI: String?
     public var mimeType: String?
     public var samplerIndex: Int?
+    public var data: Data?
+
+    public init(name: String? = nil,
+                sourceURI: String? = nil,
+                mimeType: String? = nil,
+                samplerIndex: Int? = nil,
+                data: Data?) {
+        self.name = name
+        self.sourceURI = sourceURI
+        self.mimeType = mimeType
+        self.samplerIndex = samplerIndex
+        self.data = data
+    }
 
     public init(name: String? = nil,
                 sourceURI: String? = nil,
                 mimeType: String? = nil,
                 samplerIndex: Int? = nil) {
-        self.name = name
-        self.sourceURI = sourceURI
-        self.mimeType = mimeType
-        self.samplerIndex = samplerIndex
+        self.init(name: name,
+                  sourceURI: sourceURI,
+                  mimeType: mimeType,
+                  samplerIndex: samplerIndex,
+                  data: nil)
     }
 }
 
