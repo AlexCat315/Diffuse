@@ -131,6 +131,21 @@ struct CardBattleRuntimeTests {
         #expect(decoded == command)
     }
 
+    @Test("battle cards preserve legacy damage while exposing typed effects")
+    func battleCardsExposeTypedEffects() throws {
+        let card = BattleCard(id: "strike", title: "Strike", cost: 1, damage: 6)
+        let encoded = try JSONEncoder().encode(card)
+        let decoded = try JSONDecoder().decode(BattleCard.self, from: encoded)
+
+        #expect(card.effects == [.damage(6)])
+        #expect(decoded.totalDamage == 6)
+
+        let legacyJSON = #"{"id":"old","title":"Old Strike","cost":1,"damage":5}"#.data(using: .utf8)!
+        let legacy = try JSONDecoder().decode(BattleCard.self, from: legacyJSON)
+        #expect(legacy.effects == [.damage(5)])
+        #expect(legacy.totalDamage == 5)
+    }
+
     @Test("hud snapshot projects playable hand and skills for ui")
     func hudSnapshotProjectsHandAndSkills() throws {
         let strike = BattleCard(id: "strike", title: "Strike", cost: 1, skillID: "slash", damage: 6)

@@ -90,11 +90,12 @@ public enum BattleStateMachine {
         player.discard.append(card)
         state.players[player.id] = player
 
-        if card.damage > 0, var targetPlayer = state.players[target] {
-            targetPlayer.health = max(0, targetPlayer.health - card.damage)
+        let damage = card.totalDamage
+        if damage > 0, var targetPlayer = state.players[target] {
+            targetPlayer.health = max(0, targetPlayer.health - damage)
             state.players[target] = targetPlayer
-            state.log.append("\(player.id.rawValue) played \(card.id) for \(card.damage) damage")
-            events.append(.cardPlayed(playerID: player.id, cardID: card.id, targetID: target, damage: card.damage))
+            state.log.append("\(player.id.rawValue) played \(card.id) for \(damage) damage")
+            events.append(.cardPlayed(playerID: player.id, cardID: card.id, targetID: target, damage: damage))
             if targetPlayer.health == 0 {
                 state.phase = target == .enemy ? .victory : .defeat
                 events.append(.playerDefeated(target))
