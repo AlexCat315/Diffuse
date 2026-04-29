@@ -210,8 +210,10 @@ struct CardBattleRuntimeTests {
         #expect(snapshot.energy == 2)
         #expect(snapshot.health == 32)
         #expect(snapshot.maxHealth == 32)
+        #expect(snapshot.block == 0)
         #expect(snapshot.opponentHealth == 24)
         #expect(snapshot.opponentMaxHealth == 24)
+        #expect(snapshot.opponentBlock == 0)
         #expect(snapshot.deckCount == 0)
         #expect(snapshot.discardCount == 0)
         #expect(snapshot.hand.map(\.id) == ["strike", "finisher"])
@@ -378,6 +380,7 @@ struct CardBattleRuntimeTests {
 
         #expect(player.health == 12)
         #expect(player.maxHealth == 12)
+        #expect(player.block == 0)
         #expect(player.energy == 0)
     }
 }
