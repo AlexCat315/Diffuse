@@ -8,6 +8,7 @@ enum EditorShortcutHandler {
                        setPlaybackState: (PlaybackState) -> Void,
                        setWorkspaceMode: (EditorWorkspaceMode) -> Void,
                        resetLayout: () -> Void,
+                       newScene: () -> Void,
                        openSettings: () -> Void) -> Bool {
         guard !key.isRepeat else { return false }
 
@@ -15,6 +16,9 @@ enum EditorShortcutHandler {
         guard commandLike else { return false }
 
         switch key.keycode {
+        case 0x6E:
+            newScene()
+            return true
         case 0x2C:
             openSettings()
             return true
