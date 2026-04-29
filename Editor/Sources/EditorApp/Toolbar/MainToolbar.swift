@@ -41,6 +41,7 @@ struct EditorMainToolbar: View {
     let workspaceMode: EditorWorkspaceMode
     let activeLayoutPreset: EditorLayoutPreset
     let onNewScene: () -> Void
+    let onOpenScene: () -> Void
     let onSaveScene: () -> Void
     let onReloadAssets: () -> Void
     let onSetPlaybackState: (PlaybackState) -> Void
@@ -58,7 +59,8 @@ struct EditorMainToolbar: View {
                 .buttonStyle(.ghost)
             IconButton(resource: EditorToolbarIcon.folderOpen.resource,
                        size: 15,
-                       tooltip: L("Open Scene...")) {}
+                       tooltip: L("Open Scene..."),
+                       action: onOpenScene)
                 .buttonStyle(.ghost)
             IconButton(resource: EditorToolbarIcon.save.resource,
                        size: 15,
