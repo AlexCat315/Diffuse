@@ -92,6 +92,7 @@ public enum BattleStateMachine {
 
         let damage = card.totalDamage
         let healing = card.totalHealing
+        let block = card.totalBlock
         var didApplyEffect = false
         if damage > 0, var targetPlayer = state.players[target] {
             targetPlayer.health = max(0, targetPlayer.health - damage)
@@ -111,6 +112,13 @@ public enum BattleStateMachine {
             state.players[target] = targetPlayer
             state.log.append("\(player.id.rawValue) played \(card.id) for \(restored) healing")
             events.append(.healthRestored(playerID: target, amount: restored))
+            didApplyEffect = true
+        }
+        if block > 0, var targetPlayer = state.players[target] {
+            targetPlayer.block += block
+            state.players[target] = targetPlayer
+            state.log.append("\(player.id.rawValue) played \(card.id) for \(block) block")
+            events.append(.blockGained(playerID: target, amount: block))
             didApplyEffect = true
         }
         if !didApplyEffect {

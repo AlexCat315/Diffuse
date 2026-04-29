@@ -177,6 +177,32 @@ struct CardBattleRuntimeTests {
         #expect(result.state.log == ["player played heal for 6 healing"])
     }
 
+    @Test("playing a block card adds block")
+    func playCardResolvesBlock() {
+        let guardCard = BattleCard(id: "guard", title: "Guard", cost: 1, effects: [.block(8)])
+        let player = BattlePlayerState(
+            id: .player,
+            health: 18,
+            maxHealth: 24,
+            maxEnergy: 3,
+            energy: 2,
+            deck: [],
+            hand: [guardCard]
+        )
+        let initial = BattleState(
+            phase: .main,
+            turn: 1,
+            activePlayerID: .player,
+            players: [.player: player]
+        )
+
+        let result = BattleStateMachine.reduceWithResult(initial, command: .playCard(cardID: "guard", target: .player))
+
+        #expect(result.state.players[.player]?.block == 8)
+        #expect(result.events == [.blockGained(playerID: .player, amount: 8)])
+        #expect(result.state.log == ["player played guard for 8 block"])
+    }
+
     @Test("hud snapshot projects playable hand and skills for ui")
     func hudSnapshotProjectsHandAndSkills() throws {
         let strike = BattleCard(id: "strike", title: "Strike", cost: 1, skillID: "slash", damage: 6)
