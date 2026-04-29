@@ -353,6 +353,49 @@ private struct MeshBuilder {
         }
     }
 
+    func readFloat4x4Accessor(index: Int) throws -> [simd_float4x4] {
+        let accessor = try accessor(at: index)
+        guard accessor.type == "MAT4" else {
+            throw GLTFImporterError.invalidAccessor("expected MAT4 accessor at index \(index)")
+        }
+        guard accessor.componentType == 5126 else {
+            throw GLTFImporterError.invalidAccessor("expected FLOAT component type for accessor \(index)")
+        }
+        let view = try bufferView(for: accessor, accessorIndex: index)
+        let data = buffers[view.buffer]
+        let stride = view.byteStride ?? 64
+        let baseOffset = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+        return try (0..<accessor.count).map { element in
+            let offset = baseOffset + element * stride
+            return simd_float4x4(columns: (
+                SIMD4<Float>(
+                    try readValue(Float.self, from: data, offset: offset),
+                    try readValue(Float.self, from: data, offset: offset + 4),
+                    try readValue(Float.self, from: data, offset: offset + 8),
+                    try readValue(Float.self, from: data, offset: offset + 12)
+                ),
+                SIMD4<Float>(
+                    try readValue(Float.self, from: data, offset: offset + 16),
+                    try readValue(Float.self, from: data, offset: offset + 20),
+                    try readValue(Float.self, from: data, offset: offset + 24),
+                    try readValue(Float.self, from: data, offset: offset + 28)
+                ),
+                SIMD4<Float>(
+                    try readValue(Float.self, from: data, offset: offset + 32),
+                    try readValue(Float.self, from: data, offset: offset + 36),
+                    try readValue(Float.self, from: data, offset: offset + 40),
+                    try readValue(Float.self, from: data, offset: offset + 44)
+                ),
+                SIMD4<Float>(
+                    try readValue(Float.self, from: data, offset: offset + 48),
+                    try readValue(Float.self, from: data, offset: offset + 52),
+                    try readValue(Float.self, from: data, offset: offset + 56),
+                    try readValue(Float.self, from: data, offset: offset + 60)
+                )
+            ))
+        }
+    }
+
     func readJoint4Accessor(index: Int) throws -> [SIMD4<Float>] {
         let accessor = try accessor(at: index)
         guard accessor.type == "VEC4" else {
@@ -466,10 +509,27 @@ private struct MeshBuilder {
             vertices: vertices,
             indices: indices,
             materials: document.meshMaterials(),
-            textures: document.meshTextures()
+            textures: document.meshTextures(),
+            skins: try meshSkins()
         )
         MeshNormalTools.fillMissingNormals(vertices: &mesh.vertices, indices: mesh.indices)
         return (mesh, topologies)
+    }
+
+    func meshSkins() throws -> [MeshSkin] {
+        guard let skins = document.skins, !skins.isEmpty else { return [] }
+        return try skins.map { skin in
+            let inverseBindMatrices: [simd_float4x4]
+            if let accessorIndex = skin.inverseBindMatrices {
+                inverseBindMatrices = try readFloat4x4Accessor(index: accessorIndex)
+            } else {
+                inverseBindMatrices = Array(repeating: matrix_identity_float4x4,
+                                            count: skin.joints.count)
+            }
+            return MeshSkin(name: skin.name,
+                            jointNodeIndices: skin.joints,
+                            inverseBindMatrices: inverseBindMatrices)
+        }
     }
 
     private func accessor(at index: Int) throws -> GLTFAccessor {
@@ -690,6 +750,7 @@ private struct GLTFDocument: Decodable {
     let textures: [GLTFTexture]?
     let images: [GLTFImage]?
     let samplers: [GLTFSampler]?
+    let skins: [GLTFSkin]?
     let accessors: [GLTFAccessor]
     let bufferViews: [GLTFBufferView]?
     let buffers: [GLTFBuffer]
@@ -700,7 +761,9 @@ private struct GLTFScene: Decodable {
 }
 
 private struct GLTFNode: Decodable {
+    let name: String?
     let mesh: Int?
+    let skin: Int?
     let children: [Int]?
     let matrix: [Float]?
     let translation: [Float]?
@@ -801,6 +864,13 @@ private struct GLTFSampler: Decodable {
     let minFilter: Int?
     let wrapS: Int?
     let wrapT: Int?
+}
+
+private struct GLTFSkin: Decodable {
+    let name: String?
+    let inverseBindMatrices: Int?
+    let skeleton: Int?
+    let joints: [Int]
 }
 
 private struct GLTFAccessor: Decodable {
