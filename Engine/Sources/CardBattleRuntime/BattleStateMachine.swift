@@ -95,10 +95,14 @@ public enum BattleStateMachine {
         let block = card.totalBlock
         var didApplyEffect = false
         if damage > 0, var targetPlayer = state.players[target] {
-            targetPlayer.health = max(0, targetPlayer.health - damage)
+            let resolvedDamage = applyDamage(damage, to: &targetPlayer)
             state.players[target] = targetPlayer
-            state.log.append("\(player.id.rawValue) played \(card.id) for \(damage) damage")
-            events.append(.cardPlayed(playerID: player.id, cardID: card.id, targetID: target, damage: damage))
+            if resolvedDamage.blocked > 0 {
+                state.log.append("\(player.id.rawValue) played \(card.id) for \(resolvedDamage.dealt) damage (\(resolvedDamage.blocked) blocked)")
+            } else {
+                state.log.append("\(player.id.rawValue) played \(card.id) for \(resolvedDamage.dealt) damage")
+            }
+            events.append(.cardPlayed(playerID: player.id, cardID: card.id, targetID: target, damage: resolvedDamage.dealt))
             didApplyEffect = true
             if targetPlayer.health == 0 {
                 state.phase = target == .enemy ? .victory : .defeat
@@ -173,10 +177,14 @@ public enum BattleStateMachine {
         }
 
         if damage > 0, var player = state.players[.player] {
-            player.health = max(0, player.health - damage)
+            let resolvedDamage = applyDamage(damage, to: &player)
             state.players[.player] = player
-            state.log.append("enemy dealt \(damage) damage")
-            events.append(.enemyActionResolved(damage: damage))
+            if resolvedDamage.blocked > 0 {
+                state.log.append("enemy dealt \(resolvedDamage.dealt) damage (\(resolvedDamage.blocked) blocked)")
+            } else {
+                state.log.append("enemy dealt \(resolvedDamage.dealt) damage")
+            }
+            events.append(.enemyActionResolved(damage: resolvedDamage.dealt))
             if player.health == 0 {
                 state.phase = .defeat
                 events.append(.playerDefeated(.player))
@@ -189,5 +197,13 @@ public enum BattleStateMachine {
         state.activePlayerID = .player
         state.phase = .draw
         return nil
+    }
+
+    private static func applyDamage(_ amount: Int, to player: inout BattlePlayerState) -> (dealt: Int, blocked: Int) {
+        let blocked = min(player.block, amount)
+        player.block -= blocked
+        let dealt = max(0, amount - blocked)
+        player.health = max(0, player.health - dealt)
+        return (dealt, blocked)
     }
 }
