@@ -76,7 +76,7 @@ struct ShaderCatalogTests {
             )
         )
 
-        #expect(plan.passes == [.depthPrepass, .skybox, .basePass, .outline, .bloom, .tonemap])
+        #expect(plan.passes == [.depthPrepass, .skybox, .basePass, .outline, .inkPaperPost, .bloom, .tonemap])
     }
 
     @Test("stylized character settings carry card ink style parameters")
