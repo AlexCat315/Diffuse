@@ -64,6 +64,14 @@ public enum BattleStateValidator {
             if card.damage < 0 {
                 issues.append(.negativeCardDamage(playerID: playerID, cardID: card.id, damage: card.damage))
             }
+            for effect in card.effects {
+                switch effect {
+                case let .damage(amount) where amount < 0:
+                    issues.append(.negativeCardDamage(playerID: playerID, cardID: card.id, damage: amount))
+                case .damage:
+                    break
+                }
+            }
         }
     }
 }

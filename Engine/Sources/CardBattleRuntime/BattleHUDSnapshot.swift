@@ -81,7 +81,7 @@ public struct BattleHUDSnapshot: Sendable, Equatable {
                     title: $0.title,
                     cost: $0.cost,
                     isPlayable: canPlayCards && BattleRules.canPlay($0, for: playerID, in: state),
-                    damage: $0.damage
+                    damage: $0.totalDamage
                 )
             },
             skills: player.skills.map {
