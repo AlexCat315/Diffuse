@@ -23,6 +23,7 @@ let package = Package(
         .library(name: "SceneRuntime", targets: ["SceneRuntime"]),
         .library(name: "AssetPipeline", targets: ["AssetPipeline"]),
         .library(name: "SequenceRuntime", targets: ["SequenceRuntime"]),
+        .library(name: "CardBattleRuntime", targets: ["CardBattleRuntime"]),
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
@@ -114,6 +115,7 @@ let package = Package(
         ),
         .target(name: "AssetPipeline"),
         .target(name: "SequenceRuntime"),
+        .target(name: "CardBattleRuntime"),
         .target(
             name: "IntentRuntime",
             dependencies: [
@@ -229,6 +231,12 @@ let package = Package(
             name: "SequenceRuntimeTests",
             dependencies: [
                 "SequenceRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "CardBattleRuntimeTests",
+            dependencies: [
+                "CardBattleRuntime",
             ]
         ),
         .testTarget(
