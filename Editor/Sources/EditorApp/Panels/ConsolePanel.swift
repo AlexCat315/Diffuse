@@ -17,21 +17,78 @@ struct ConsolePanel: View {
                     Text("revision \(store.sceneRevision)")
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
+
+                    Button(L("Clear")) {
+                        store.dispatch(.clearConsole)
+                    }
+                    .buttonStyle(.ghost)
+                    .frame(height: 24)
                 }
 
-                Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                    Text("playbackState = .\(store.playbackState.rawValue)")
-                        .font(.mono)
-                    Text("selectedEntityID = \(store.selectedEntityID.map(String.init) ?? "nil")")
-                        .font(.mono)
-                        .foregroundColor(.onSurfaceMuted)
+                ScrollView(.vertical) {
+                    Box(direction: .column, alignItems: .stretch, spacing: 4) {
+                        if store.consoleEntries.isEmpty {
+                            ConsoleEntryRow(
+                                entry: EditorConsoleEntry(id: 0,
+                                                          severity: .info,
+                                                          message: L("No console messages"))
+                            )
+                        } else {
+                            for entry in store.consoleEntries.suffix(80) {
+                                ConsoleEntryRow(entry: entry)
+                            }
+                        }
+                    }
+                    .padding(8)
                 }
-                .padding(8)
                 .background(.surfaceSunken)
                 .cornerRadius(2)
+                .flex()
             }
             .padding(10)
             .frame(minHeight: 140)
+        }
+    }
+}
+
+private struct ConsoleEntryRow: View {
+    let entry: EditorConsoleEntry
+
+    var body: some View {
+        Row(alignment: .top, spacing: 8) {
+            Text(severityLabel)
+                .font(.mono)
+                .foregroundColor(severityColor)
+                .frame(width: 44)
+
+            Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                Text(entry.message, lineLimit: 1)
+                    .font(.mono)
+                    .foregroundColor(.onSurface)
+                if let detail = entry.detail, !detail.isEmpty {
+                    Text(detail, lineLimit: 2)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                }
+            }
+            .flex()
+        }
+        .padding(horizontal: 6, vertical: 3)
+    }
+
+    private var severityLabel: String {
+        switch entry.severity {
+        case .info: return "INFO"
+        case .warning: return "WARN"
+        case .error: return "ERR"
+        }
+    }
+
+    private var severityColor: SemanticColorRef {
+        switch entry.severity {
+        case .info: return .onSurfaceMuted
+        case .warning: return .warning
+        case .error: return .error
         }
     }
 }

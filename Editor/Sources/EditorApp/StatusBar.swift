@@ -49,12 +49,34 @@ struct EditorStatusBar: View {
                 Divider()
                     .frame(width: 1, height: 14)
 
-                Text(store.aiStatusMessage ?? L("Ready"))
+                Text(statusText(store: store))
                     .font(.caption)
-                    .foregroundColor(.onSurfaceMuted)
+                    .foregroundColor(statusColor(store: store))
             }
             .padding(horizontal: 10, vertical: 5)
             .background(.surfaceVariant)
+        }
+    }
+
+    private func statusText(store: EditorStore) -> String {
+        if let message = store.aiStatusMessage {
+            return message
+        }
+        if let latest = store.latestConsoleEntry {
+            return latest.message
+        }
+        return L("Ready")
+    }
+
+    private func statusColor(store: EditorStore) -> SemanticColorRef {
+        guard store.aiStatusMessage == nil,
+              let latest = store.latestConsoleEntry else {
+            return .onSurfaceMuted
+        }
+        switch latest.severity {
+        case .info: return .onSurfaceMuted
+        case .warning: return .warning
+        case .error: return .error
         }
     }
 }

@@ -34,6 +34,37 @@ public struct EditorSceneEntitySummary {
     }
 }
 
+public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
+    public let id: UInt64
+    public let name: String
+    public let kind: String
+    public let children: [EditorSceneManifestNode]
+
+    public init(id: UInt64,
+                name: String,
+                kind: String,
+                children: [EditorSceneManifestNode] = []) {
+        self.id = id
+        self.name = name
+        self.kind = kind
+        self.children = children
+    }
+}
+
+public struct EditorSceneManifest: Codable, Sendable, Equatable {
+    public let revision: UInt64
+    public let entityCount: Int
+    public let roots: [EditorSceneManifestNode]
+
+    public init(revision: UInt64,
+                entityCount: Int,
+                roots: [EditorSceneManifestNode]) {
+        self.revision = revision
+        self.entityCount = entityCount
+        self.roots = roots
+    }
+}
+
 public struct EditorInspectorSection {
     public let id: String
     public let title: String
@@ -82,10 +113,22 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     public var onRevisionChanged: ((UInt64) -> Void)?
 
     public init() {
+        resetToPreviewScene(notify: false)
+    }
+
+    public func resetToPreviewScene() {
+        resetToPreviewScene(notify: true)
+    }
+
+    private func resetToPreviewScene(notify: Bool) {
+        scene = SceneRuntime()
         scene.bootstrapEditorPreviewScene()
         let defaults = scene.resource(SceneBootstrapDefaultsResource.self)
         initialSelectionID = defaults?.defaultSelection?.rawValue
         initialExpandedIDs = Set(defaults?.defaultExpanded.map(\ .rawValue) ?? [])
+        if notify {
+            notifyRevisionChanged()
+        }
     }
 
     public var revision: UInt64 {
@@ -106,6 +149,12 @@ public final class EditorSceneAdapter: @unchecked Sendable {
 
     public var roots: [EditorSceneNode] {
         scene.roots().map(buildNode)
+    }
+
+    public func manifest() -> EditorSceneManifest {
+        EditorSceneManifest(revision: revision,
+                            entityCount: entityCount,
+                            roots: roots.map(manifestNode))
     }
 
     @discardableResult
@@ -170,6 +219,13 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             kind: displayKind(for: entity),
             children: scene.children(of: entity).map(buildNode)
         )
+    }
+
+    private func manifestNode(_ node: EditorSceneNode) -> EditorSceneManifestNode {
+        EditorSceneManifestNode(id: node.id,
+                                name: node.name,
+                                kind: node.kind,
+                                children: node.children.map(manifestNode))
     }
 
     private func generalSection(for entity: EntityID) -> EditorInspectorSection {

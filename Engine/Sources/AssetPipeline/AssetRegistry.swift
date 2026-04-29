@@ -46,17 +46,20 @@ public struct RegisteredMeshAsset: Sendable {
     public let meshIndex: Int
     public let assetID: String
     public let kind: ImportableAssetKind
+    public let sourceDirectory: String?
     public let mesh: MeshAsset
     public let topologySlices: [MeshTopologySlice]?
 
     public init(meshIndex: Int,
                 assetID: String,
                 kind: ImportableAssetKind,
+                sourceDirectory: String? = nil,
                 mesh: MeshAsset,
                 topologySlices: [MeshTopologySlice]? = nil) {
         self.meshIndex = meshIndex
         self.assetID = assetID
         self.kind = kind
+        self.sourceDirectory = sourceDirectory
         self.mesh = mesh
         self.topologySlices = topologySlices
     }
@@ -125,6 +128,7 @@ public final class AssetRegistry: @unchecked Sendable {
                 meshIndex: nextMeshIndex,
                 assetID: entry.id,
                 kind: kind,
+                sourceDirectory: assetURL.deletingLastPathComponent().path,
                 mesh: mesh,
                 topologySlices: normalizedSlices
             )

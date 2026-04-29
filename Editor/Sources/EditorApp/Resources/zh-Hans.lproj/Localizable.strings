@@ -104,6 +104,11 @@
 "Off" = "关闭";
 "Language" = "语言";
 "System" = "系统";
+"Selection" = "选择";
+"Subtract" = "减选";
+"Toggle" = "切换";
+"Clear" = "清空";
+"No console messages" = "暂无控制台消息";
 
 /* Status bar */
 "Connected" = "已连接";

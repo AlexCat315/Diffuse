@@ -237,10 +237,10 @@ struct ViewportPanel: View {
                     let baseSelection = app.store.state.selectedEntityIDs
                     let modifiers = viewport.modifiers.isEmpty ? app.inputState.modifiers : viewport.modifiers
                     let cmdBehavior = app.store.state.cmdSelectBehavior
-                    let merged = mergeMarqueeSelection(base: baseSelection,
-                                                       picked: picked,
-                                                       modifiers: modifiers,
-                                                       cmdBehavior: cmdBehavior)
+                    let merged = EditorSelectionReducer.merge(base: baseSelection,
+                                                              picked: picked,
+                                                              modifiers: modifiers,
+                                                              commandBehavior: cmdBehavior)
                     app.store.dispatch(.setSelectedEntities(merged))
                 }
                 viewport.endPointerSession()
@@ -265,10 +265,10 @@ struct ViewportPanel: View {
                                                       in: frame)
                         let modifiers = viewport.modifiers.isEmpty ? app.inputState.modifiers : viewport.modifiers
                         let cmdBehavior = app.store.state.cmdSelectBehavior
-                        let merged = mergeSinglePickSelection(base: app.store.state.selectedEntityIDs,
-                                                              picked: picked,
-                                                              modifiers: modifiers,
-                                                              cmdBehavior: cmdBehavior)
+                        let merged = EditorSelectionReducer.mergeSingle(base: app.store.state.selectedEntityIDs,
+                                                                        picked: picked,
+                                                                        modifiers: modifiers,
+                                                                        commandBehavior: cmdBehavior)
                         app.store.dispatch(.setSelectedEntities(merged))
                     }
                 }
@@ -337,37 +337,6 @@ struct ViewportPanel: View {
         default:
             break
         }
-    }
-
-    private func mergeMarqueeSelection(base: Set<UInt64>,
-                                       picked: Set<UInt64>,
-                                       modifiers: KeyModifiers,
-                                       cmdBehavior: SelectionCommandBehavior) -> Set<UInt64> {
-        if modifiers.contains(.shift) || modifiers.contains(.ctrl) || modifiers.contains(.gui) {
-            var next = base
-            for item in picked {
-                if next.contains(item) {
-                    next.remove(item)
-                } else {
-                    next.insert(item)
-                }
-            }
-            return next
-        }
-        // No modifiers: replace selection
-        return picked
-    }
-
-    private func mergeSinglePickSelection(base: Set<UInt64>,
-                                          picked: UInt64?,
-                                          modifiers: KeyModifiers,
-                                          cmdBehavior: SelectionCommandBehavior) -> Set<UInt64> {
-        let set = picked.map { Set([ $0 ]) } ?? []
-        if picked == nil,
-           modifiers.contains(.shift) || modifiers.contains(.ctrl) || modifiers.contains(.gui) {
-            return base
-        }
-        return mergeMarqueeSelection(base: base, picked: set, modifiers: modifiers, cmdBehavior: cmdBehavior)
     }
 
     private func isInsideViewport(_ x: Float, _ y: Float) -> Bool {

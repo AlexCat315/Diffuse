@@ -26,6 +26,11 @@
       "fragment": "WGSL/mesh.wgsl"
     },
     {
+      "name": "stylized_character",
+      "vertex": "WGSL/stylized_character.wgsl",
+      "fragment": "WGSL/stylized_character.wgsl"
+    },
+    {
       "name": "wireframe",
       "vertex": "WGSL/wireframe.wgsl",
       "fragment": "WGSL/wireframe.wgsl"
@@ -59,6 +64,11 @@
       "name": "bloom",
       "vertex": "WGSL/bloom.wgsl",
       "fragment": "WGSL/bloom.wgsl"
+    },
+    {
+      "name": "ink_paper_post",
+      "vertex": "WGSL/ink_paper_post.wgsl",
+      "fragment": "WGSL/ink_paper_post.wgsl"
     },
     {
       "name": "fxaa",

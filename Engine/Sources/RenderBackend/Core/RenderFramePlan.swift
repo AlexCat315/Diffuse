@@ -5,6 +5,8 @@ public enum RenderPassKind: String, Sendable, CaseIterable {
     case shadowPass
     case skybox
     case basePass
+    case outline
+    case inkPaperPost
     case ssao
     case ssr
     case taa
@@ -29,12 +31,15 @@ enum RenderFramePlanner {
         switch settings.stage {
             case .r0RainbowTriangle, .r1MeshCamera:
                 passes.append(.basePass)
+                appendStylizedPassesIfNeeded(settings: settings, passes: &passes)
 
             case .r2MultiObjectDepth:
                 passes.append(contentsOf: [.depthPrepass, .basePass])
+                appendStylizedPassesIfNeeded(settings: settings, passes: &passes)
 
             case .r3ViewportInterop:
                 passes.append(contentsOf: [.depthPrepass, .basePass])
+                appendStylizedPassesIfNeeded(settings: settings, passes: &passes)
                 if settings.enableOffscreenViewport {
                     passes.append(.viewportResolve)
                 }
@@ -44,7 +49,9 @@ enum RenderFramePlanner {
                 if settings.enableShadows {
                     passes.append(.shadowPass)
                 }
-                passes.append(contentsOf: [.skybox, .basePass, .tonemap])
+                passes.append(contentsOf: [.skybox, .basePass])
+                appendStylizedPassesIfNeeded(settings: settings, passes: &passes)
+                passes.append(.tonemap)
                 if settings.enableOffscreenViewport {
                     passes.append(.viewportResolve)
                 }
@@ -55,6 +62,7 @@ enum RenderFramePlanner {
                     passes.append(.shadowPass)
                 }
                 passes.append(contentsOf: [.skybox, .basePass])
+                appendStylizedPassesIfNeeded(settings: settings, passes: &passes)
                 if settings.enableSSAO {
                     passes.append(.ssao)
                 }
@@ -77,5 +85,13 @@ enum RenderFramePlanner {
         }
 
         return RenderFramePlan(passes: passes)
+    }
+
+    private static func appendStylizedPassesIfNeeded(settings: RenderSettings,
+                                                     passes: inout [RenderPassKind]) {
+        if settings.enableStylizedCharacterShading {
+            passes.append(.outline)
+            passes.append(.inkPaperPost)
+        }
     }
 }
