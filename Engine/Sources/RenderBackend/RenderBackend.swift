@@ -386,7 +386,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             pipeline: fxaaPipeline
                         )
 
-                    case .depthPrepass,
+                    case .outline,
+                         .depthPrepass,
                          .shadowPass:
                         emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
 
@@ -404,7 +405,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     cpuBaseEncodeNS &+= passElapsedNS
                 case .ssao, .ssr, .taa, .bloom, .tonemap, .fxaa:
                     cpuPostProcessEncodeNS &+= passElapsedNS
-                case .depthPrepass, .shadowPass, .viewportResolve:
+                case .outline, .depthPrepass, .shadowPass, .viewportResolve:
                     break
                 }
             }
