@@ -671,7 +671,7 @@ struct RootView: View {
                         .background(card.isPlayable ? .accent : .surfaceVariant)
                         .cornerRadius(9999)
                     Spacer(minLength: 0)
-                    Text(card.damage > 0 ? "\(card.damage)" : "TACTIC")
+                    Text(battleCardEffectLabel(card))
                         .font(.label)
                         .foregroundColor(card.damage > 0 ? .warning : .info)
                 }
@@ -690,6 +690,12 @@ struct RootView: View {
             .border(card.isPlayable ? SemanticColorRef.accent : SemanticColorRef.surfaceVariant, width: 1)
         }
         .buttonStyle(.plain)
+    }
+
+    private func battleCardEffectLabel(_ card: BattleHandCardViewModel) -> String {
+        if card.damage > 0 { return "\(card.damage)" }
+        if card.healing > 0 { return "+\(card.healing)" }
+        return "TACTIC"
     }
 
     @ViewBuilder

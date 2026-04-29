@@ -11,6 +11,7 @@ public enum BattleValidationIssue: Sendable, Equatable, Codable {
     case energyExceedsMaximum(playerID: BattlePlayerID, energy: Int, maxEnergy: Int)
     case negativeCardCost(playerID: BattlePlayerID, cardID: String, cost: Int)
     case negativeCardDamage(playerID: BattlePlayerID, cardID: String, damage: Int)
+    case negativeCardHealing(playerID: BattlePlayerID, cardID: String, healing: Int)
     case negativeSkillCooldown(playerID: BattlePlayerID, skillID: String, cooldownTurns: Int)
 }
 
@@ -80,7 +81,11 @@ public enum BattleStateValidator {
                 switch effect {
                 case let .damage(amount) where amount < 0:
                     issues.append(.negativeCardDamage(playerID: playerID, cardID: card.id, damage: amount))
+                case let .heal(amount) where amount < 0:
+                    issues.append(.negativeCardHealing(playerID: playerID, cardID: card.id, healing: amount))
                 case .damage:
+                    break
+                case .heal:
                     break
                 }
             }
