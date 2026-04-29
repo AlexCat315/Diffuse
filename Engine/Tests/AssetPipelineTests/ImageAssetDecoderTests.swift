@@ -89,6 +89,23 @@ struct ImageAssetDecoderTests {
         }
     }
 
+    @Test("decodes base64 data uri mesh texture")
+    func decodesBase64DataURITexture() throws {
+        let data = try makePNGData(pixels: [
+            21, 22, 23, 255,
+        ], width: 1, height: 1)
+        let uri = "data:image/png;base64,\(data.base64EncodedString())"
+        let resolved = try MeshTextureResolver.decode(
+            MeshTexture(sourceURI: uri, mimeType: "image/png"),
+            sourceDirectory: nil
+        )
+
+        #expect(resolved.path == uri)
+        #expect(resolved.texture.width == 1)
+        #expect(resolved.texture.height == 1)
+        #expect(resolved.texture.pixels == [21, 22, 23, 255])
+    }
+
     private func writePNG(url: URL, pixels: [UInt8], width: Int, height: Int) throws {
         let data = try makePNGData(pixels: pixels, width: width, height: height)
         try data.write(to: url)

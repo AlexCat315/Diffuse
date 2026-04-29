@@ -60,7 +60,29 @@ public enum MeshTextureResolver {
     }
 
     public static func decode(_ texture: MeshTexture, sourceDirectory: String?) throws -> ResolvedMeshTexture {
+        if let uri = texture.sourceURI, uri.hasPrefix("data:") {
+            let data = try decodeDataURI(uri)
+            return ResolvedMeshTexture(path: uri, texture: try ImageAssetDecoder.decodeRGBA8(data: data, label: uri))
+        }
         let path = try resolvePath(for: texture, sourceDirectory: sourceDirectory)
         return ResolvedMeshTexture(path: path, texture: try ImageAssetDecoder.decodeRGBA8(path: path))
+    }
+
+    private static func decodeDataURI(_ uri: String) throws -> Data {
+        guard let comma = uri.firstIndex(of: ",") else {
+            throw MeshTextureResolverError.unsupportedEmbeddedURI(uri)
+        }
+        let metadata = uri[..<comma]
+        let payload = String(uri[uri.index(after: comma)...])
+        if metadata.contains(";base64") {
+            guard let data = Data(base64Encoded: payload) else {
+                throw MeshTextureResolverError.unsupportedEmbeddedURI(uri)
+            }
+            return data
+        }
+        guard let decoded = payload.removingPercentEncoding else {
+            throw MeshTextureResolverError.unsupportedEmbeddedURI(uri)
+        }
+        return Data(decoded.utf8)
     }
 }
