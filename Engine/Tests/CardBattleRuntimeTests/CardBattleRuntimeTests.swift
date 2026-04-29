@@ -348,6 +348,7 @@ struct CardBattleRuntimeTests {
             id: .enemy,
             health: -10,
             maxHealth: 2,
+            block: -3,
             maxEnergy: 2,
             energy: 3,
             deck: [badCard],
@@ -363,6 +364,7 @@ struct CardBattleRuntimeTests {
         #expect(issues.contains(.missingActivePlayer(.player)))
         #expect(issues.contains(.mismatchedPlayerKey(expected: .enemy, actual: .enemy)) == false)
         #expect(issues.contains(.negativeHealth(playerID: .enemy, health: -10)))
+        #expect(issues.contains(.negativeBlock(playerID: .enemy, block: -3)))
         #expect(issues.contains(.energyExceedsMaximum(playerID: .enemy, energy: 3, maxEnergy: 2)))
         #expect(issues.contains(.negativeCardCost(playerID: .enemy, cardID: "bad-card", cost: -1)))
         #expect(issues.contains(.negativeCardDamage(playerID: .enemy, cardID: "bad-card", damage: -4)))
