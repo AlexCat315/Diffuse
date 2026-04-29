@@ -56,5 +56,11 @@ let package = Package(
                 .process("Resources")
             ]
         ),
+        .testTarget(
+            name: "EditorCoreTests",
+            dependencies: [
+                "EditorCore",
+            ]
+        ),
     ]
 )
