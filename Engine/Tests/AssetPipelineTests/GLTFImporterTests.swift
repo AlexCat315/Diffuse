@@ -235,6 +235,93 @@ struct GLTFImporterTests {
         #expect(mesh.skins[0].inverseBindMatrices[1].columns.3.x == 2)
     }
 
+    @Test("loads gltf animation channels and sampler keyframes")
+    func loadsAnimationChannels() throws {
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot,
+                                                withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+        let bufferURL = tempRoot.appendingPathComponent("animated-triangle.bin")
+        let gltfURL = tempRoot.appendingPathComponent("animated-triangle.gltf")
+
+        var buffer = Data()
+        append([Float(0), 0, 0,
+                1, 0, 0,
+                0, 1, 0], to: &buffer)
+        append([Float(0), 0, 1,
+                0, 0, 1,
+                0, 0, 1], to: &buffer)
+        append([Float(0), 1], to: &buffer)
+        append([Float(0), 0, 0,
+                1, 2, 3], to: &buffer)
+        append([UInt16(0), 1, 2], to: &buffer)
+        try buffer.write(to: bufferURL)
+
+        let json = #"""
+        {
+          "asset": { "version": "2.0" },
+          "buffers": [
+            { "uri": "animated-triangle.bin", "byteLength": 110 }
+          ],
+          "bufferViews": [
+            { "buffer": 0, "byteOffset": 0, "byteLength": 36 },
+            { "buffer": 0, "byteOffset": 36, "byteLength": 36 },
+            { "buffer": 0, "byteOffset": 72, "byteLength": 8 },
+            { "buffer": 0, "byteOffset": 80, "byteLength": 24 },
+            { "buffer": 0, "byteOffset": 104, "byteLength": 6 }
+          ],
+          "accessors": [
+            { "bufferView": 0, "componentType": 5126, "count": 3, "type": "VEC3" },
+            { "bufferView": 1, "componentType": 5126, "count": 3, "type": "VEC3" },
+            { "bufferView": 2, "componentType": 5126, "count": 2, "type": "SCALAR" },
+            { "bufferView": 3, "componentType": 5126, "count": 2, "type": "VEC3" },
+            { "bufferView": 4, "componentType": 5123, "count": 3, "type": "SCALAR" }
+          ],
+          "meshes": [
+            {
+              "primitives": [
+                {
+                  "attributes": { "POSITION": 0, "NORMAL": 1 },
+                  "indices": 4
+                }
+              ]
+            }
+          ],
+          "nodes": [
+            { "name": "animated", "mesh": 0 }
+          ],
+          "animations": [
+            {
+              "name": "idle",
+              "samplers": [
+                { "input": 2, "output": 3, "interpolation": "STEP" }
+              ],
+              "channels": [
+                { "sampler": 0, "target": { "node": 0, "path": "translation" } }
+              ]
+            }
+          ],
+          "scenes": [
+            { "nodes": [0] }
+          ],
+          "scene": 0
+        }
+        """#
+        try Data(json.utf8).write(to: gltfURL)
+
+        let mesh = try GLTFImporter.load(path: gltfURL.path)
+
+        #expect(mesh.animations.count == 1)
+        #expect(mesh.animations[0].name == "idle")
+        #expect(mesh.animations[0].samplers[0].inputTimes == [0, 1])
+        #expect(mesh.animations[0].samplers[0].outputValues[1] == SIMD4<Float>(1, 2, 3, 0))
+        #expect(mesh.animations[0].samplers[0].interpolation == .step)
+        #expect(mesh.animations[0].channels[0].targetNodeIndex == 0)
+        #expect(mesh.animations[0].channels[0].path == .translation)
+    }
+
     private func append(_ values: [Float], to data: inout Data) {
         for value in values {
             var copy = value.bitPattern.littleEndian

@@ -308,6 +308,23 @@ private struct MeshBuilder {
         }
     }
 
+    func readFloatScalarAccessor(index: Int) throws -> [Float] {
+        let accessor = try accessor(at: index)
+        guard accessor.type == "SCALAR" else {
+            throw GLTFImporterError.invalidAccessor("expected SCALAR accessor at index \(index)")
+        }
+        guard accessor.componentType == 5126 else {
+            throw GLTFImporterError.invalidAccessor("expected FLOAT component type for accessor \(index)")
+        }
+        let view = try bufferView(for: accessor, accessorIndex: index)
+        let data = buffers[view.buffer]
+        let stride = view.byteStride ?? 4
+        let baseOffset = (view.byteOffset ?? 0) + (accessor.byteOffset ?? 0)
+        return try (0..<accessor.count).map { element in
+            try readValue(Float.self, from: data, offset: baseOffset + element * stride)
+        }
+    }
+
     func readFloat3Accessor(index: Int) throws -> [SIMD3<Float>] {
         let accessor = try accessor(at: index)
         guard accessor.type == "VEC3" else {
@@ -350,6 +367,20 @@ private struct MeshBuilder {
                 try readValue(Float.self, from: data, offset: offset + 8),
                 try readValue(Float.self, from: data, offset: offset + 12)
             )
+        }
+    }
+
+    func readAnimationOutputAccessor(index: Int) throws -> [SIMD4<Float>] {
+        let accessor = try accessor(at: index)
+        switch accessor.type {
+        case "SCALAR":
+            return try readFloatScalarAccessor(index: index).map { SIMD4<Float>($0, 0, 0, 0) }
+        case "VEC3":
+            return try readFloat3Accessor(index: index).map { SIMD4<Float>($0.x, $0.y, $0.z, 0) }
+        case "VEC4":
+            return try readFloat4Accessor(index: index)
+        default:
+            throw GLTFImporterError.invalidAccessor("unsupported animation output accessor type \(accessor.type)")
         }
     }
 
@@ -510,7 +541,8 @@ private struct MeshBuilder {
             indices: indices,
             materials: document.meshMaterials(),
             textures: document.meshTextures(),
-            skins: try meshSkins()
+            skins: try meshSkins(),
+            animations: try meshAnimations()
         )
         MeshNormalTools.fillMissingNormals(vertices: &mesh.vertices, indices: mesh.indices)
         return (mesh, topologies)
@@ -529,6 +561,32 @@ private struct MeshBuilder {
             return MeshSkin(name: skin.name,
                             jointNodeIndices: skin.joints,
                             inverseBindMatrices: inverseBindMatrices)
+        }
+    }
+
+    func meshAnimations() throws -> [MeshAnimation] {
+        guard let animations = document.animations, !animations.isEmpty else { return [] }
+        return try animations.map { animation in
+            let samplers = try animation.samplers.map { sampler in
+                MeshAnimationSampler(
+                    inputTimes: try readFloatScalarAccessor(index: sampler.input),
+                    outputValues: try readAnimationOutputAccessor(index: sampler.output),
+                    interpolation: MeshAnimationInterpolation(gltfName: sampler.interpolation)
+                )
+            }
+            let channels = try animation.channels.map { channel in
+                guard let path = MeshAnimationPath(rawValue: channel.target.path) else {
+                    throw GLTFImporterError.invalidAccessor("unsupported animation target path \(channel.target.path)")
+                }
+                return MeshAnimationChannel(
+                    samplerIndex: channel.sampler,
+                    targetNodeIndex: channel.target.node,
+                    path: path
+                )
+            }
+            return MeshAnimation(name: animation.name,
+                                 samplers: samplers,
+                                 channels: channels)
         }
     }
 
@@ -751,6 +809,7 @@ private struct GLTFDocument: Decodable {
     let images: [GLTFImage]?
     let samplers: [GLTFSampler]?
     let skins: [GLTFSkin]?
+    let animations: [GLTFAnimation]?
     let accessors: [GLTFAccessor]
     let bufferViews: [GLTFBufferView]?
     let buffers: [GLTFBuffer]
@@ -873,6 +932,28 @@ private struct GLTFSkin: Decodable {
     let joints: [Int]
 }
 
+private struct GLTFAnimation: Decodable {
+    let name: String?
+    let samplers: [GLTFAnimationSampler]
+    let channels: [GLTFAnimationChannel]
+}
+
+private struct GLTFAnimationSampler: Decodable {
+    let input: Int
+    let output: Int
+    let interpolation: String?
+}
+
+private struct GLTFAnimationChannel: Decodable {
+    let sampler: Int
+    let target: GLTFAnimationTarget
+}
+
+private struct GLTFAnimationTarget: Decodable {
+    let node: Int?
+    let path: String
+}
+
 private struct GLTFAccessor: Decodable {
     let bufferView: Int?
     let byteOffset: Int?
@@ -928,6 +1009,19 @@ private extension GLTFDocument {
     private static func vec4(_ values: [Float]?, fallback: SIMD4<Float>) -> SIMD4<Float> {
         guard let values, values.count >= 4 else { return fallback }
         return SIMD4<Float>(values[0], values[1], values[2], values[3])
+    }
+}
+
+private extension MeshAnimationInterpolation {
+    init(gltfName: String?) {
+        switch gltfName {
+        case "STEP":
+            self = .step
+        case "CUBICSPLINE":
+            self = .cubicSpline
+        default:
+            self = .linear
+        }
     }
 }
 
