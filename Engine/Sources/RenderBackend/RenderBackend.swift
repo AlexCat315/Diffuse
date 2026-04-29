@@ -151,6 +151,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var dynamicInstanceResources: DynamicInstanceResources?
     private var linearSampler: GPUSampler?
     private var nearestSampler: GPUSampler?
+    private var fallbackMeshTexture: GPUTexture?
+    private var fallbackMeshTextureView: GPUTextureView?
     private var skyboxUniformBuffer: GPUBuffer?
     private var tonemapUniformBuffer: GPUBuffer?
     private var bloomUniformBuffer: GPUBuffer?
@@ -780,6 +782,16 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         binding: 1,
                         visibility: [.vertex, .fragment],
                         type: .uniformBuffer
+                    ),
+                    GPUBindGroupLayoutEntry(
+                        binding: 2,
+                        visibility: .fragment,
+                        type: .sampler
+                    ),
+                    GPUBindGroupLayoutEntry(
+                        binding: 3,
+                        visibility: .fragment,
+                        type: .sampledTexture
                     )
                 ]
             )
@@ -845,6 +857,16 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         binding: 1,
                         visibility: [.vertex, .fragment],
                         type: .uniformBuffer
+                    ),
+                    GPUBindGroupLayoutEntry(
+                        binding: 2,
+                        visibility: .fragment,
+                        type: .sampler
+                    ),
+                    GPUBindGroupLayoutEntry(
+                        binding: 3,
+                        visibility: .fragment,
+                        type: .sampledTexture
                     )
                 ]
             )
@@ -1029,8 +1051,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
     private func meshBindGroupEntries(instanceUniformBuffer: GPUBuffer) throws -> [GPUBindGroupEntry] {
         try ensureStylizedCharacterUniformBuffer()
-        guard let stylizedCharacterUniformBuffer else {
-            throw WGPUBackendError.initFailed("stylized character uniform buffer missing")
+        try ensureMeshSamplingFallbackResources()
+        guard let stylizedCharacterUniformBuffer,
+              let linearSampler,
+              let fallbackMeshTextureView
+        else {
+            throw WGPUBackendError.initFailed("mesh bind group resources missing")
         }
         return [
             GPUBindGroupEntry(binding: 0, buffer: instanceUniformBuffer, offset: 0, size: 64),
@@ -1040,6 +1066,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 offset: 0,
                 size: UInt64(MemoryLayout<StylizedCharacterUniforms>.stride)
             ),
+            GPUBindGroupEntry(binding: 2, sampler: linearSampler),
+            GPUBindGroupEntry(binding: 3, textureView: fallbackMeshTextureView),
         ]
     }
 
@@ -1070,6 +1098,44 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                                     size: raw.count)
             }
         }
+    }
+
+    private func ensureMeshSamplingFallbackResources() throws {
+        guard backend.rawDevice != nil else { return }
+        if linearSampler == nil {
+            linearSampler = try backend.createSampler(
+                desc: GPUSamplerDescriptor(
+                    addressModeU: .clampToEdge,
+                    addressModeV: .clampToEdge,
+                    magFilter: .linear,
+                    minFilter: .linear,
+                    mipmapFilter: .linear
+                )
+            )
+        }
+        if fallbackMeshTextureView != nil { return }
+        let texture = try backend.createTexture(
+            width: 1,
+            height: 1,
+            format: .rgba8Unorm,
+            usage: [.textureBinding, .copyDst]
+        )
+        let whitePixel: [UInt8] = [255, 255, 255, 255]
+        whitePixel.withUnsafeBytes { raw in
+            if let base = raw.baseAddress {
+                backend.writeTexture(
+                    texture,
+                    data: base,
+                    dataSize: raw.count,
+                    bytesPerRow: 4,
+                    rowsPerImage: 1,
+                    width: 1,
+                    height: 1
+                )
+            }
+        }
+        fallbackMeshTexture = texture
+        fallbackMeshTextureView = try texture.createView()
     }
 
     private func ensureConfigured(size: RenderDrawableSize) throws {
