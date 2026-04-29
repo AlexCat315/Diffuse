@@ -34,6 +34,44 @@ struct ImageAssetDecoderTests {
         ])
     }
 
+    @Test("resolves and decodes relative mesh texture uri")
+    func resolvesRelativeMeshTextureURI() throws {
+        let tempRoot = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tempRoot,
+                                                withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tempRoot) }
+
+        let textureURL = tempRoot.appendingPathComponent("hero_base.png")
+        try writePNG(url: textureURL,
+                     pixels: [
+                        12, 34, 56, 255,
+                        78, 90, 123, 255,
+                     ],
+                     width: 2,
+                     height: 1)
+
+        let texture = MeshTexture(sourceURI: "hero_base.png", mimeType: "image/png")
+        let resolved = try MeshTextureResolver.decode(texture, sourceDirectory: tempRoot.path)
+
+        #expect(resolved.path == textureURL.path)
+        #expect(resolved.texture.width == 2)
+        #expect(resolved.texture.height == 1)
+        #expect(resolved.texture.pixels == [
+            12, 34, 56, 255,
+            78, 90, 123, 255,
+        ])
+    }
+
+    @Test("rejects embedded mesh texture uri until buffer image import is implemented")
+    func rejectsEmbeddedMeshTextureURI() throws {
+        let texture = MeshTexture(sourceURI: "data:image/png;base64,AAAA", mimeType: "image/png")
+
+        #expect(throws: MeshTextureResolverError.unsupportedEmbeddedURI("data:image/png;base64,AAAA")) {
+            _ = try MeshTextureResolver.resolvePath(for: texture, sourceDirectory: "/tmp")
+        }
+    }
+
     private func writePNG(url: URL, pixels: [UInt8], width: Int, height: Int) throws {
         let colorSpace = CGColorSpaceCreateDeviceRGB()
         guard let provider = CGDataProvider(data: Data(pixels) as CFData),
