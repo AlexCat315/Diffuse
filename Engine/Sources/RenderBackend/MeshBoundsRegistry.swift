@@ -1,3 +1,4 @@
+import EngineMath
 import Foundation
 import simd
 
@@ -10,19 +11,28 @@ public final class MeshBoundsRegistry: @unchecked Sendable {
     public static let shared = MeshBoundsRegistry()
 
     private let lock = NSLock()
-    private var storage: [Int: (min: SIMD3<Float>, max: SIMD3<Float>)] = [:]
+    private var storage: [Int: Bounds3D] = [:]
 
     private init() {}
 
     public func register(meshIndex: Int,
                          min: SIMD3<Float>,
                          max: SIMD3<Float>) {
+        register(meshIndex: meshIndex, bounds: Bounds3D(min: min, max: max))
+    }
+
+    public func register(meshIndex: Int, bounds: Bounds3D) {
         lock.lock()
-        storage[meshIndex] = (min, max)
+        storage[meshIndex] = bounds
         lock.unlock()
     }
 
     public func bounds(for meshIndex: Int) -> (min: SIMD3<Float>, max: SIMD3<Float>)? {
+        guard let bounds = bounds3D(for: meshIndex) else { return nil }
+        return (bounds.min, bounds.max)
+    }
+
+    public func bounds3D(for meshIndex: Int) -> Bounds3D? {
         lock.lock()
         let value = storage[meshIndex]
         lock.unlock()
