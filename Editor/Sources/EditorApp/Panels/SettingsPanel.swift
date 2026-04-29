@@ -57,6 +57,21 @@ struct SettingsPanel: View {
                             }
                         }
                     }
+
+                    SettingsSection(title: L("Selection")) {
+                        Row(alignment: .center, spacing: 8) {
+                            SettingsChoiceButton(title: L("Subtract"),
+                                                 isActive: store.cmdSelectBehavior == .subtract) {
+                                store.dispatch(.setCommandSelectBehavior(.subtract))
+                                applySettingsChange(store)
+                            }
+                            SettingsChoiceButton(title: L("Toggle"),
+                                                 isActive: store.cmdSelectBehavior == .toggle) {
+                                store.dispatch(.setCommandSelectBehavior(.toggle))
+                                applySettingsChange(store)
+                            }
+                        }
+                    }
                 }
                 .padding(12)
             }
