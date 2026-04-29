@@ -42,6 +42,7 @@ struct EditorMainToolbar: View {
     let activeLayoutPreset: EditorLayoutPreset
     let onNewScene: () -> Void
     let onSaveScene: () -> Void
+    let onReloadAssets: () -> Void
     let onSetPlaybackState: (PlaybackState) -> Void
     let onSetWorkspaceMode: (EditorWorkspaceMode) -> Void
     let onSetLayoutPreset: (EditorLayoutPreset) -> Void
@@ -66,7 +67,8 @@ struct EditorMainToolbar: View {
                 .buttonStyle(.ghost)
             IconButton(resource: EditorToolbarIcon.folder.resource,
                        size: 15,
-                       tooltip: L("Import Assets...")) {}
+                       tooltip: L("Import Assets..."),
+                       action: onReloadAssets)
                 .buttonStyle(.ghost)
 
             Divider()
