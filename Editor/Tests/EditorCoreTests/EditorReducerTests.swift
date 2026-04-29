@@ -65,4 +65,17 @@ struct EditorReducerTests {
         #expect(state.consoleEntries.isEmpty)
         #expect(state.nextConsoleEntryID == 1)
     }
+
+    @Test("Console history keeps the latest 200 entries")
+    func consoleHistoryIsBounded() {
+        var state = EditorState()
+
+        for index in 0..<205 {
+            EditorReducer.reduce(state: &state, action: .appendConsoleMessage("entry \(index)"))
+        }
+
+        #expect(state.consoleEntries.count == 200)
+        #expect(state.consoleEntries.first?.message == "entry 5")
+        #expect(state.consoleEntries.last?.message == "entry 204")
+    }
 }
