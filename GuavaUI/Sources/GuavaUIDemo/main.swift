@@ -16,6 +16,21 @@ struct DemoLogEntry: Identifiable {
     let message: String
 }
 
+struct DemoBattleCard: Identifiable {
+    let id: String
+    let title: String
+    let cost: Int
+    let damage: Int
+    let isPlayable: Bool
+}
+
+struct DemoBattleSkill: Identifiable {
+    let id: String
+    let title: String
+    let cooldown: Int
+    let isEnabled: Bool
+}
+
 let demoSceneTree: [DemoSceneNode] = [
     DemoSceneNode(id: "scene", title: "Scene Root", children: [
         DemoSceneNode(id: "camera", title: "Main Camera", children: []),
@@ -38,6 +53,19 @@ let demoLogEntries: [DemoLogEntry] = [
     DemoLogEntry(id: 4, level: "INFO", message: "Scene hierarchy selection now feeds inspector text."),
     DemoLogEntry(id: 5, level: "DEBUG", message: "ScrollView wheel routing drives both components."),
     DemoLogEntry(id: 6, level: "INFO", message: "Phase 7 foundation is ready for SplitView and DockContainer."),
+]
+
+let demoBattleHand: [DemoBattleCard] = [
+    DemoBattleCard(id: "green-dragon", title: "Green Dragon", cost: 5, damage: 18, isPlayable: false),
+    DemoBattleCard(id: "seven-strike", title: "Seven Strike", cost: 3, damage: 9, isPlayable: true),
+    DemoBattleCard(id: "fire-ambush", title: "Fire Ambush", cost: 4, damage: 14, isPlayable: true),
+    DemoBattleCard(id: "borrow-east", title: "Borrow East", cost: 2, damage: 0, isPlayable: true),
+]
+
+let demoBattleSkills: [DemoBattleSkill] = [
+    DemoBattleSkill(id: "slash", title: "Slash", cooldown: 0, isEnabled: true),
+    DemoBattleSkill(id: "rally", title: "Rally", cooldown: 1, isEnabled: false),
+    DemoBattleSkill(id: "duel", title: "Duel", cooldown: 2, isEnabled: false),
 ]
 
 /// Longer log list — used by the scrollable Console panel to exercise
@@ -135,11 +163,12 @@ struct RootView: View {
     @State var vsyncEnabled: Bool = DemoVSyncHolder.enabled
 
     enum NavSection: String, Hashable, CaseIterable, Identifiable {
-        case components, tokens, layouts, console
+        case components, battle, tokens, layouts, console
         var id: String { rawValue }
         var title: String {
             switch self {
             case .components: return "Components"
+            case .battle:     return "Battle HUD"
             case .tokens:     return "Design Tokens"
             case .layouts:    return "Layouts"
             case .console:    return "Console"
@@ -148,6 +177,7 @@ struct RootView: View {
         var hint: String {
             switch self {
             case .components: return "Buttons · TextFields · Sliders · Toggles · NumberField · Popover · Menu · Select"
+            case .battle:     return "Hand · Skills · Energy · Turn state"
             case .tokens:     return "Surfaces · Accent · State layers · Typography"
             case .layouts:    return "Tree · List · SplitView · TabView · Panel · PropertyGrid"
             case .console:    return "Streaming log feed"
@@ -263,6 +293,7 @@ struct RootView: View {
 
             Box(direction: .column, alignItems: .stretch, spacing: 2) {
                 sidebarRow(.components)
+                sidebarRow(.battle)
                 sidebarRow(.tokens)
                 sidebarRow(.layouts)
                 sidebarRow(.console)
@@ -330,6 +361,7 @@ struct RootView: View {
                 workspaceHeader
                 switch section {
                 case .components: componentsPage
+                case .battle:     battlePage
                 case .tokens:     tokensPage
                 case .layouts:    layoutsPage
                 case .console:    consolePage
@@ -584,6 +616,102 @@ struct RootView: View {
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
                 .frame(width: 50)
+        }
+    }
+
+    // MARK: battle page
+
+    private var battlePage: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 16) {
+            card("Battle state") {
+                Row(alignment: .center, spacing: 14) {
+                    battleStat("TURN", "2")
+                    battleStat("ENERGY", "6 / 10")
+                    battleStat("ALLY HP", "28645 / 32000")
+                    battleStat("ENEMY HP", "24000 / 32000")
+                    Spacer(minLength: 0)
+                    Button("End Turn") { clickCount += 1 }
+                        .buttonStyle(.secondary)
+                }
+            }
+
+            card("Hand") {
+                Row(alignment: .bottom, spacing: 12) {
+                    battleCard(demoBattleHand[0])
+                    battleCard(demoBattleHand[1])
+                    battleCard(demoBattleHand[2])
+                    battleCard(demoBattleHand[3])
+                    Spacer(minLength: 0)
+                }
+            }
+
+            card("Skills") {
+                Row(alignment: .center, spacing: 10) {
+                    battleSkillButton(demoBattleSkills[0])
+                    battleSkillButton(demoBattleSkills[1])
+                    battleSkillButton(demoBattleSkills[2])
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    private func battleStat(_ label: String, _ value: String) -> some View {
+        Column(alignment: .leading, spacing: 3) {
+            Text(label)
+                .font(.label)
+                .foregroundColor(.onSurfaceMuted)
+            Text(value)
+                .font(.bodyStrong)
+                .foregroundColor(.onSurface)
+        }
+        .padding(horizontal: 12, vertical: 8)
+        .background(.surfaceVariant)
+        .cornerRadius(6)
+    }
+
+    private func battleCard(_ card: DemoBattleCard) -> some View {
+        Button(action: { clickCount += 1 }) {
+            Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                Row(alignment: .center, spacing: 6) {
+                    Text("\(card.cost)")
+                        .font(.bodyStrong)
+                        .foregroundColor(.onAccent)
+                        .padding(horizontal: 8, vertical: 3)
+                        .background(card.isPlayable ? .accent : .surfaceVariant)
+                        .cornerRadius(9999)
+                    Spacer(minLength: 0)
+                    Text(card.damage > 0 ? "\(card.damage)" : "TACTIC")
+                        .font(.label)
+                        .foregroundColor(card.damage > 0 ? .warning : .info)
+                }
+                Spacer(minLength: 0)
+                Text(card.title)
+                    .font(.bodyStrong)
+                    .foregroundColor(card.isPlayable ? .onSurface : .onSurfaceMuted)
+                Text(card.isPlayable ? "Playable" : "Need energy")
+                    .font(.caption)
+                    .foregroundColor(card.isPlayable ? .success : .onSurfaceMuted)
+            }
+            .padding(10)
+            .frame(width: 132, height: 176)
+            .background(card.isPlayable ? .surfaceRaised : .surfaceVariant)
+            .cornerRadius(8)
+            .border(card.isPlayable ? SemanticColorRef.accent : SemanticColorRef.surfaceVariant, width: 1)
+        }
+        .buttonStyle(.plain)
+    }
+
+    @ViewBuilder
+    private func battleSkillButton(_ skill: DemoBattleSkill) -> some View {
+        if skill.isEnabled {
+            Button("\(skill.title)  Ready") {
+                clickCount += 1
+            }
+            .buttonStyle(.secondary)
+        } else {
+            Button("\(skill.title)  CD \(skill.cooldown)", isEnabled: false) {}
+                .buttonStyle(.ghost)
         }
     }
 
