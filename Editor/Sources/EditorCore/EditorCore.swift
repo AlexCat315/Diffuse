@@ -92,6 +92,7 @@ public final class EditorApplication {
                            enableOffscreenViewport: true)
         )
         store.dispatch(.setConnected(true))
+        logConsole("Editor connected to runtime")
     }
 
     public func tick(deltaTime: Double) {
@@ -120,6 +121,7 @@ public final class EditorApplication {
     }
 
     public func shutdown() {
+        logConsole("Editor runtime shutdown")
         if let eventToken {
             events.unsubscribe(eventToken)
             self.eventToken = nil
@@ -158,6 +160,12 @@ public final class EditorApplication {
         displayInvalidationHandler?()
     }
 
+    public func logConsole(_ message: String,
+                           severity: EditorConsoleSeverity = .info,
+                           detail: String? = nil) {
+        store.dispatch(.appendConsoleMessage(message, severity: severity, detail: detail))
+    }
+
     public func setVSyncModeHandler(_ handler: ((EditorVSyncMode) -> Void)?) {
         vsyncModeHandler = handler
     }
@@ -170,9 +178,11 @@ public final class EditorApplication {
     @discardableResult
     public func spawnAsset(_ asset: EditorAsset, at position: SIMD3<Float> = .zero) -> UInt64? {
         guard let id = scene.spawnEntity(from: asset, at: position) else {
+            logConsole("Failed to spawn \(asset.name)", severity: .error)
             return nil
         }
         store.dispatch(.setSelectedEntity(id))
+        logConsole("Spawned \(asset.name)", detail: "entity \(id)")
         return id
     }
 
@@ -186,14 +196,17 @@ public final class EditorApplication {
                                            name: payload.displayName,
                                            kind: payload.kindLabel)
         if AssetDropRegistryHolder.current?.drop(dropPayload, atX: cursorX, y: cursorY) == true {
+            logConsole("Dropped \(payload.displayName)")
             return true
         }
         guard let frame = EditorViewportDropTarget.frame,
               frame.contains(x: cursorX, y: cursorY)
         else {
+            logConsole("Canceled asset drop", severity: .warning, detail: payload.displayName)
             return false
         }
         guard let asset = EditorAssetCatalog.asset(for: payload.assetID) else {
+            logConsole("Missing asset for drop", severity: .error, detail: payload.assetID)
             return false
         }
         let position = dropWorldPosition(cursorX: cursorX, cursorY: cursorY, frame: frame)
@@ -238,6 +251,75 @@ public final class EditorApplication {
 
     public func queueViewportRenderSettings(_ settings: RenderSettings) {
         engine.queueRenderSettings(settings)
+    }
+
+    public func resetPreviewScene() {
+        scene.resetToPreviewScene()
+        if let selection = scene.defaultSelectionID {
+            store.dispatch(.setSelectedEntity(selection))
+        } else {
+            store.dispatch(.setSelectedEntity(nil))
+        }
+        logConsole("Created new preview scene")
+    }
+
+    @discardableResult
+    public func saveSceneManifest() -> URL? {
+        do {
+            let guavaDirectory = URL(fileURLWithPath: projectDirectory, isDirectory: true)
+                .appendingPathComponent(".guava", isDirectory: true)
+            try FileManager.default.createDirectory(at: guavaDirectory,
+                                                    withIntermediateDirectories: true)
+            let url = guavaDirectory.appendingPathComponent("editor-scene-manifest.json")
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(scene.manifest())
+            try data.write(to: url, options: [.atomic])
+            logConsole("Saved scene manifest", detail: url.path)
+            return url
+        } catch {
+            logConsole("Failed to save scene manifest",
+                       severity: .error,
+                       detail: String(describing: error))
+            return nil
+        }
+    }
+
+    public func openSceneManifest() -> EditorSceneManifest? {
+        let url = URL(fileURLWithPath: projectDirectory, isDirectory: true)
+            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent("editor-scene-manifest.json")
+        do {
+            let data = try Data(contentsOf: url)
+            let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+            logConsole("Opened scene manifest",
+                       detail: "\(manifest.entityCount) entities, revision \(manifest.revision)")
+            return manifest
+        } catch CocoaError.fileReadNoSuchFile {
+            logConsole("No saved scene manifest",
+                       severity: .warning,
+                       detail: url.path)
+            return nil
+        } catch {
+            logConsole("Failed to open scene manifest",
+                       severity: .error,
+                       detail: String(describing: error))
+            return nil
+        }
+    }
+
+    @discardableResult
+    public func reloadAssets() -> Int {
+        do {
+            let assets = try EditorAssetCatalog.loadProject(at: projectDirectory)
+            logConsole("Reloaded assets", detail: "\(assets.count) importable files")
+            return assets.count
+        } catch {
+            logConsole("Failed to reload assets",
+                       severity: .error,
+                       detail: String(describing: error))
+            return 0
+        }
     }
 
     public func currentRenderStats() -> RenderFrameStats {

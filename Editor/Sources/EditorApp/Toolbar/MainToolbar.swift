@@ -40,6 +40,10 @@ struct EditorMainToolbar: View {
     let playbackState: PlaybackState
     let workspaceMode: EditorWorkspaceMode
     let activeLayoutPreset: EditorLayoutPreset
+    let onNewScene: () -> Void
+    let onOpenScene: () -> Void
+    let onSaveScene: () -> Void
+    let onReloadAssets: () -> Void
     let onSetPlaybackState: (PlaybackState) -> Void
     let onSetWorkspaceMode: (EditorWorkspaceMode) -> Void
     let onSetLayoutPreset: (EditorLayoutPreset) -> Void
@@ -50,19 +54,23 @@ struct EditorMainToolbar: View {
         Row(alignment: .center, spacing: 8) {
             IconButton(resource: EditorToolbarIcon.plus.resource,
                        size: 15,
-                       tooltip: L("New Scene")) {}
+                       tooltip: L("New Scene"),
+                       action: onNewScene)
                 .buttonStyle(.ghost)
             IconButton(resource: EditorToolbarIcon.folderOpen.resource,
                        size: 15,
-                       tooltip: L("Open Scene...")) {}
+                       tooltip: L("Open Scene..."),
+                       action: onOpenScene)
                 .buttonStyle(.ghost)
             IconButton(resource: EditorToolbarIcon.save.resource,
                        size: 15,
-                       tooltip: L("Save Scene")) {}
+                       tooltip: L("Save Scene"),
+                       action: onSaveScene)
                 .buttonStyle(.ghost)
             IconButton(resource: EditorToolbarIcon.folder.resource,
                        size: 15,
-                       tooltip: L("Import Assets...")) {}
+                       tooltip: L("Import Assets..."),
+                       action: onReloadAssets)
                 .buttonStyle(.ghost)
 
             Divider()

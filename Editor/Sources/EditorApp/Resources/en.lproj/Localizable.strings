@@ -104,6 +104,11 @@
 "Off" = "Off";
 "Language" = "Language";
 "System" = "System";
+"Selection" = "Selection";
+"Subtract" = "Subtract";
+"Toggle" = "Toggle";
+"Clear" = "Clear";
+"No console messages" = "No console messages";
 
 /* Status bar */
 "Connected" = "Connected";
