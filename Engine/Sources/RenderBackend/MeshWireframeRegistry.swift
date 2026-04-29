@@ -89,7 +89,7 @@ public final class MeshWireframeRegistry: @unchecked Sendable {
     }
 
     private static func extractWireframeEdges(from mesh: MeshAsset) -> [MeshWireframeEdge] {
-        let stride = MeshAsset.vertexStride / MemoryLayout<Float>.size
+        let stride = MeshAsset.vertexFloatCount
         guard stride >= 3 else { return [] }
 
         let vertexCount = mesh.vertices.count / stride
