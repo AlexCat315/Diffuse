@@ -117,4 +117,23 @@ struct CardBattleRuntimeTests {
         #expect(next.players[.player]?.discard.map(\.id) == ["strike", "guard"])
         #expect(next.log == ["turn 2: player ended turn"])
     }
+
+    @Test("enemy action damages player and returns to player draw phase")
+    func enemyActionReturnsToPlayerDraw() {
+        let player = BattlePlayerState(id: .player, health: 32, maxEnergy: 3, deck: [])
+        let enemy = BattlePlayerState(id: .enemy, health: 24, maxEnergy: 2, deck: [])
+        let state = BattleState(
+            phase: .enemyTurn,
+            turn: 2,
+            activePlayerID: .enemy,
+            players: [.player: player, .enemy: enemy]
+        )
+
+        let next = BattleStateMachine.reduce(state, command: .resolveEnemyAction(damage: 5))
+
+        #expect(next.phase == .draw)
+        #expect(next.activePlayerID == .player)
+        #expect(next.players[.player]?.health == 27)
+        #expect(next.log == ["enemy dealt 5 damage"])
+    }
 }

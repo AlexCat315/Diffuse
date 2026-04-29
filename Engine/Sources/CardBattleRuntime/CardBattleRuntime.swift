@@ -110,6 +110,7 @@ public enum BattleCommand: Sendable, Equatable {
     case startPlayerTurn(drawCount: Int)
     case playCard(cardID: String, target: BattlePlayerID)
     case endPlayerTurn
+    case resolveEnemyAction(damage: Int)
 }
 
 public enum BattleStateMachine {
@@ -131,6 +132,8 @@ public enum BattleStateMachine {
             playCard(cardID: cardID, target: target, state: &next)
         case .endPlayerTurn:
             endPlayerTurn(state: &next)
+        case let .resolveEnemyAction(damage):
+            resolveEnemyAction(damage: damage, state: &next)
         }
         return next
     }
@@ -195,6 +198,29 @@ public enum BattleStateMachine {
         state.activePlayerID = .enemy
         state.phase = .enemyTurn
         state.log.append("turn \(state.turn): player ended turn")
+    }
+
+    private static func resolveEnemyAction(damage: Int, state: inout BattleState) {
+        guard state.phase == .enemyTurn,
+              state.activePlayerID == .enemy
+        else {
+            state.log.append("cannot resolve enemy action")
+            return
+        }
+
+        if damage > 0, var player = state.players[.player] {
+            player.health = max(0, player.health - damage)
+            state.players[.player] = player
+            state.log.append("enemy dealt \(damage) damage")
+            if player.health == 0 {
+                state.phase = .defeat
+                return
+            }
+        } else {
+            state.log.append("enemy waited")
+        }
+        state.activePlayerID = .player
+        state.phase = .draw
     }
 }
 
