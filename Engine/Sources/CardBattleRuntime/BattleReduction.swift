@@ -12,6 +12,7 @@ public enum BattleEvent: Sendable, Equatable, Codable {
     case turnStarted(turn: Int, playerID: BattlePlayerID, cardsDrawn: Int)
     case cardPlayed(playerID: BattlePlayerID, cardID: String, targetID: BattlePlayerID, damage: Int)
     case healthRestored(playerID: BattlePlayerID, amount: Int)
+    case blockGained(playerID: BattlePlayerID, amount: Int)
     case turnEnded(turn: Int, playerID: BattlePlayerID)
     case enemyActionResolved(damage: Int)
     case playerDefeated(BattlePlayerID)
