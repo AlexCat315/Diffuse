@@ -1,5 +1,4 @@
 import AssetPipeline
-import EngineMath
 import Foundation
 import Logging
 import RHIWGPU
@@ -150,14 +149,15 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 try ensureFrameGraphResources(size: packet.drawableSize)
             }
 
-            let projection = computeProjection(scene: packet.scene, drawableSize: packet.drawableSize)
-            let view = computeView(scene: packet.scene)
-            let viewProj = projection * view
+            let cameraMatrices = RenderCameraMatrices.make(
+                scene: packet.scene,
+                drawableSize: packet.drawableSize
+            )
             let meshPipeline = try ensureMeshPipeline(hdr: usesHDRFrameGraph)
             try ensureStylizedCharacterUniformBuffer()
             writeStylizedCharacterUniforms()
             try ensureInstanceResources(scene: packet.scene, pipeline: meshPipeline)
-            writeInstanceUniforms(scene: packet.scene, viewProj: viewProj)
+            writeInstanceUniforms(scene: packet.scene, viewProj: cameraMatrices.viewProjection)
 
             if framePlan.passes.contains(.skybox) {
                 try ensureSkyboxPipeline()
@@ -216,7 +216,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             colorView: target.view,
                             depthView: depthView,
                             pipeline: skyboxPipeline,
-                            viewProj: viewProj
+                            viewProj: cameraMatrices.viewProjection
                         )
                         skyboxEncoded = true
 
@@ -275,7 +275,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             output: output,
                             depthTexture: depthTexture,
                             pipeline: ssaoPipeline,
-                            projection: projection
+                            projection: cameraMatrices.projection
                         )
                         hdrCurrent = output
 
@@ -291,7 +291,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             output: output,
                             depthTexture: depthTexture,
                             pipeline: ssrPipeline,
-                            projection: projection
+                            projection: cameraMatrices.projection
                         )
                         hdrCurrent = output
 
@@ -1307,18 +1307,6 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         )
         let view = try texture.createView()
         return RenderTextureTarget(texture: texture, view: view)
-    }
-
-    private func computeProjection(scene: RenderScene, drawableSize: RenderDrawableSize) -> simd_float4x4 {
-        let aspect = Float(max(drawableSize.width, 1)) / Float(max(drawableSize.height, 1))
-        let cam = scene.camera
-        return CameraMatrices.perspectiveRH_ZO(
-            fovYRadians: cam.fovYRadians, aspect: aspect, near: cam.near, far: cam.far)
-    }
-
-    private func computeView(scene: RenderScene) -> simd_float4x4 {
-        let cam = scene.camera
-        return CameraMatrices.lookAtRH(eye: cam.eye, target: cam.target, up: cam.up)
     }
 
     private func nextPingPongTarget(after current: RenderTextureTarget) -> RenderTextureTarget? {
