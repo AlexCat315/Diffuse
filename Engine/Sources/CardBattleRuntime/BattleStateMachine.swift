@@ -10,18 +10,10 @@ public enum BattleStateMachine {
         var events: [BattleEvent] = []
         var rejection: BattleCommandRejection?
         switch command {
+        case let .startTurn(playerID, drawCount):
+            rejection = startTurn(playerID: playerID, drawCount: drawCount, state: &next, events: &events)
         case let .startPlayerTurn(drawCount):
-            next.turn += 1
-            next.phase = .draw
-            next.activePlayerID = .player
-            if var player = next.players[.player] {
-                player.energy = player.maxEnergy
-                next.players[.player] = player
-            }
-            let drawnCount = drawCards(for: .player, count: drawCount, state: &next)
-            next.phase = .main
-            next.log.append("turn \(next.turn): player drew \(drawnCount) card(s)")
-            events.append(.turnStarted(turn: next.turn, playerID: .player, cardsDrawn: drawnCount))
+            rejection = startTurn(playerID: .player, drawCount: drawCount, state: &next, events: &events)
         case let .playCard(cardID, target):
             rejection = playCard(cardID: cardID, target: target, state: &next, events: &events)
         case .endPlayerTurn:
@@ -33,6 +25,26 @@ public enum BattleStateMachine {
             events.append(.commandRejected(rejection))
         }
         return BattleReductionResult(state: next, events: events, rejection: rejection)
+    }
+
+    private static func startTurn(playerID: BattlePlayerID,
+                                  drawCount: Int,
+                                  state: inout BattleState,
+                                  events: inout [BattleEvent]) -> BattleCommandRejection? {
+        guard var player = state.players[playerID] else {
+            return .missingPlayer(playerID)
+        }
+
+        state.turn += 1
+        state.phase = .draw
+        state.activePlayerID = playerID
+        player.energy = player.maxEnergy
+        state.players[playerID] = player
+        let drawnCount = drawCards(for: playerID, count: drawCount, state: &state)
+        state.phase = .main
+        state.log.append("turn \(state.turn): \(playerID.rawValue) drew \(drawnCount) card(s)")
+        events.append(.turnStarted(turn: state.turn, playerID: playerID, cardsDrawn: drawnCount))
+        return nil
     }
 
     private static func drawCards(for playerID: BattlePlayerID, count: Int, state: inout BattleState) -> Int {
