@@ -125,6 +125,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var skyboxPipeline: GPURenderPipeline?
     private var tonemapPipeline: GPURenderPipeline?
     private var bloomPipeline: GPURenderPipeline?
+    private var inkPaperPostPipeline: GPURenderPipeline?
     private var fxaaPipeline: GPURenderPipeline?
     private var ssrPipeline: GPURenderPipeline?
     private var taaPipeline: GPURenderPipeline?
@@ -254,6 +255,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             if framePlan.passes.contains(.bloom) {
                 try ensureBloomPipeline()
             }
+            if framePlan.passes.contains(.inkPaperPost) {
+                try ensureInkPaperPostPipeline()
+            }
             if framePlan.passes.contains(.fxaa) {
                 try ensureFXAAPipeline()
             }
@@ -330,7 +334,21 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         )
 
                     case .inkPaperPost:
-                        emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
+                        guard usesHDRFrameGraph,
+                              let input = hdrCurrent,
+                              let output = nextPingPongTarget(after: input),
+                              let inkPaperPostPipeline
+                        else {
+                            emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
+                            break
+                        }
+                        try encodeInkPaperPostPass(
+                            encoder: encoder,
+                            input: input,
+                            output: output,
+                            pipeline: inkPaperPostPipeline
+                        )
+                        hdrCurrent = output
 
                     case .ssao:
                         guard let input = hdrCurrent,
@@ -1307,6 +1325,18 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         )
     }
 
+    private func ensureInkPaperPostPipeline() throws {
+        guard inkPaperPostPipeline == nil else { return }
+        let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "ink_paper_post"), label: "ink_paper_post")
+        inkPaperPostPipeline = try backend.createRenderPipeline(
+            desc: GPURenderPipelineDescriptor(
+                shaderModule: module,
+                colorFormat: hdrFormat,
+                cullMode: .none
+            )
+        )
+    }
+
     private func ensureFXAAPipeline() throws {
         guard fxaaPipeline == nil else { return }
         let module = try backend.createShaderModule(wgsl: try Self.loadShaderSource(named: "fxaa"), label: "fxaa")
@@ -1762,6 +1792,28 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 GPUBindGroupEntry(binding: 0, sampler: linearSampler),
                 GPUBindGroupEntry(binding: 1, textureView: input.view),
                 GPUBindGroupEntry(binding: 2, buffer: bloomUniformBuffer, offset: 0, size: UInt64(MemoryLayout<BloomUniforms>.stride)),
+            ]
+        )
+        let pass = try encoder.beginRenderPass(colorView: output.view, loadOp: .clear, storeOp: .store, clearColor: .clear)
+        pass.setPipeline(pipeline)
+        pass.setBindGroup(bindGroup, index: 0)
+        pass.draw(vertexCount: 3)
+        pass.end()
+    }
+
+    private func encodeInkPaperPostPass(
+        encoder: GPUCommandEncoder,
+        input: RenderTextureTarget,
+        output: RenderTextureTarget,
+        pipeline: GPURenderPipeline
+    ) throws {
+        guard let linearSampler, let stylizedCharacterUniformBuffer else { return }
+        let bindGroup = try makeBindGroup(
+            pipeline: pipeline,
+            entries: [
+                GPUBindGroupEntry(binding: 0, sampler: linearSampler),
+                GPUBindGroupEntry(binding: 1, textureView: input.view),
+                GPUBindGroupEntry(binding: 2, buffer: stylizedCharacterUniformBuffer, offset: 0, size: UInt64(MemoryLayout<StylizedCharacterUniforms>.stride)),
             ]
         )
         let pass = try encoder.beginRenderPass(colorView: output.view, loadOp: .clear, storeOp: .store, clearColor: .clear)
