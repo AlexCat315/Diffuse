@@ -209,6 +209,8 @@ struct CardBattleRuntimeTests {
         #expect(snapshot.maxHealth == 32)
         #expect(snapshot.opponentHealth == 24)
         #expect(snapshot.opponentMaxHealth == 24)
+        #expect(snapshot.deckCount == 0)
+        #expect(snapshot.discardCount == 0)
         #expect(snapshot.hand.map(\.id) == ["strike", "finisher"])
         #expect(snapshot.hand.map(\.isPlayable) == [true, false])
         #expect(snapshot.skills == [
