@@ -50,7 +50,9 @@ let demoBattleSnapshot: BattleHUDSnapshot = {
         energy: 0,
         maxEnergy: 0,
         health: 0,
+        maxHealth: 0,
         opponentHealth: 0,
+        opponentMaxHealth: 0,
         hand: [],
         skills: []
     )
@@ -615,8 +617,8 @@ struct RootView: View {
                 Row(alignment: .center, spacing: 14) {
                     battleStat("TURN", "\(demoBattleSnapshot.turn)")
                     battleStat("ENERGY", "\(demoBattleSnapshot.energy) / \(demoBattleSnapshot.maxEnergy)")
-                    battleStat("ALLY HP", "\(demoBattleSnapshot.health)")
-                    battleStat("ENEMY HP", "\(demoBattleSnapshot.opponentHealth)")
+                    battleStat("ALLY HP", "\(demoBattleSnapshot.health) / \(demoBattleSnapshot.maxHealth)")
+                    battleStat("ENEMY HP", "\(demoBattleSnapshot.opponentHealth) / \(demoBattleSnapshot.opponentMaxHealth)")
                     Spacer(minLength: 0)
                     Button("End Turn") { clickCount += 1 }
                         .buttonStyle(.secondary)
