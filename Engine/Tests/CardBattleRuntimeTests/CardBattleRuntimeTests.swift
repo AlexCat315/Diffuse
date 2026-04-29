@@ -74,7 +74,10 @@ struct CardBattleRuntimeTests {
             phase: .main,
             turn: 2,
             activePlayerID: .player,
-            players: [.player: player]
+            players: [
+                .player: player,
+                .enemy: BattlePlayerState(id: .enemy, health: 24, maxEnergy: 2, deck: [])
+            ]
         )
 
         let snapshot = try #require(BattleHUDSnapshot.make(from: state, playerID: .player))
@@ -82,6 +85,8 @@ struct CardBattleRuntimeTests {
         #expect(snapshot.phase == .main)
         #expect(snapshot.turn == 2)
         #expect(snapshot.energy == 2)
+        #expect(snapshot.health == 32)
+        #expect(snapshot.opponentHealth == 24)
         #expect(snapshot.hand.map(\.id) == ["strike", "finisher"])
         #expect(snapshot.hand.map(\.isPlayable) == [true, false])
         #expect(snapshot.skills == [
