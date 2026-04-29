@@ -92,7 +92,7 @@ final class PanelWorkspaceLayoutSemanticsTests: XCTestCase {
         XCTAssertEqual(fractions.bottom, 0.58, accuracy: 0.0001)
     }
 
-    func testAllowDropRejectsCrossRegionSplitForBottomPanel() {
+    func testAllowDropAllowsCrossRegionPanelMoves() {
         let tabs = makeTabs()
         let registry = makeRegistry()
         let controller = DockController(root: DockLayoutNode.hsplit(
@@ -117,7 +117,118 @@ final class PanelWorkspaceLayoutSemanticsTests: XCTestCase {
                                       sourceLeafID: leafID(containing: "console", in: controller.root),
                                       origin: .mainTreeTab,
                                       target: .splitEdge(target: viewportLeafID, edge: .top))
-        XCTAssertEqual(controller.onAllowDrop?(request), false)
+        XCTAssertEqual(controller.onAllowDrop?(request), true)
+    }
+
+    func testCommittedCrossRegionDropMovesPanelToTargetRegion() {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        guard let viewportLeafID = leafID(containing: "viewport", in: controller.root),
+              let consoleLeafID = leafID(containing: "console", in: controller.root) else {
+            XCTFail("missing expected leaves")
+            return
+        }
+        let request = DockDropRequest(tabID: tabs.console.id,
+                                      sourceLeafID: consoleLeafID,
+                                      origin: .mainTreeTab,
+                                      target: .tabSlot(parent: viewportLeafID, index: 1))
+
+        controller.onCommitDrop?(request)
+        controller.apply(.move(tabID: tabs.console.id, to: request.target))
+
+        XCTAssertEqual(leafID(containing: "console", in: controller.root),
+                       leafID(containing: "viewport", in: controller.root))
+        XCTAssertEqual(tabKeys(inLeaf: viewportLeafID, root: controller.root), ["viewport", "console"])
+    }
+
+    func testReinstallKeepsCommittedCrossRegionPanelMove() {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        guard let viewportLeafID = leafID(containing: "viewport", in: controller.root),
+              let consoleLeafID = leafID(containing: "console", in: controller.root) else {
+            XCTFail("missing expected leaves")
+            return
+        }
+        let request = DockDropRequest(tabID: tabs.console.id,
+                                      sourceLeafID: consoleLeafID,
+                                      origin: .mainTreeTab,
+                                      target: .tabSlot(parent: viewportLeafID, index: 1))
+
+        controller.onCommitDrop?(request)
+        controller.apply(.move(tabID: tabs.console.id, to: request.target))
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        XCTAssertEqual(leafID(containing: "console", in: controller.root),
+                       leafID(containing: "viewport", in: controller.root))
+        XCTAssertEqual(tabKeys(inLeaf: viewportLeafID, root: controller.root), ["viewport", "console"])
+    }
+
+    func testDropIntoMinimizedRegionRestoresRegionLeaves() {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        guard let hierarchyLeafID = leafID(containing: "hierarchy", in: controller.root),
+              let inspectorLeafID = leafID(containing: "inspector", in: controller.root) else {
+            XCTFail("missing expected leaves")
+            return
+        }
+
+        controller.apply(.minimizeLeaf(leafID: hierarchyLeafID, edge: .left))
+        let request = DockDropRequest(tabID: tabs.inspector.id,
+                                      sourceLeafID: inspectorLeafID,
+                                      origin: .mainTreeTab,
+                                      target: .splitEdge(target: controller.root.id, edge: .left))
+
+        controller.onCommitDrop?(request)
+        controller.apply(.move(tabID: tabs.inspector.id, to: request.target))
+        controller.onDidCommitDrop?(request)
+
+        XCTAssertNil(controller.minimizedLeaves[hierarchyLeafID])
+        XCTAssertEqual(leafID(containing: "hierarchy", in: controller.root),
+                       leafID(containing: "inspector", in: controller.root))
+        XCTAssertEqual(Set(tabKeys(inLeaf: leafID(containing: "inspector", in: controller.root)!, root: controller.root)),
+                       Set(["hierarchy", "inspector"]))
     }
 
     func testAllowDropKeepsCenterRegionFlexible() {
@@ -145,6 +256,34 @@ final class PanelWorkspaceLayoutSemanticsTests: XCTestCase {
                                       sourceLeafID: viewportLeafID,
                                       origin: .mainTreeTab,
                                       target: .splitEdge(target: viewportLeafID, edge: .right))
+        XCTAssertEqual(controller.onAllowDrop?(request), true)
+    }
+
+    func testAllowDropKeepsPanelRegionGuidesInteractive() {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        guard let consoleLeafID = leafID(containing: "console", in: controller.root) else {
+            XCTFail("missing console leaf")
+            return
+        }
+        let request = DockDropRequest(tabID: tabs.console.id,
+                                      sourceLeafID: consoleLeafID,
+                                      origin: .mainTreeTab,
+                                      target: .splitEdge(target: consoleLeafID, edge: .left))
         XCTAssertEqual(controller.onAllowDrop?(request), true)
     }
 
@@ -396,6 +535,17 @@ final class PanelWorkspaceLayoutSemanticsTests: XCTestCase {
         case .split(_, _, _, let first, let second):
             return leafID(containing: userKey, in: first)
                 ?? leafID(containing: userKey, in: second)
+        }
+    }
+
+    private func tabKeys(inLeaf leafID: DockNodeID,
+                         root: DockLayoutNode) -> [String] {
+        guard let node = root.find(leafID) else { return [] }
+        switch node {
+        case .tabs(_, let tabs, _):
+            return tabs.map(\.userKey)
+        case .empty, .split:
+            return []
         }
     }
 

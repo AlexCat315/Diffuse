@@ -1,5 +1,6 @@
 import Foundation
 import GuavaUIRuntime
+import IntentRuntime
 
 /// 编辑器状态的可观察容器。
 ///
@@ -11,7 +12,48 @@ import GuavaUIRuntime
 /// 内部不加锁。`@unchecked Sendable` 仅用于穿过 nonisolated 闭包，
 /// 调用方不应把这个对象交给后台线程。
 public final class EditorStore: @unchecked Sendable {
-    public private(set) var state: EditorState
+    private enum ObservationKey: Hashable {
+        case state
+        case connected
+        case selectedEntityID
+        case selectedEntityIDs
+        case playbackState
+        case workspaceMode
+        case activeLayoutPreset
+        case sceneRevision
+        case frameIndex
+        case frameTimingRevision
+        case viewportSurfaceRevision
+        case windowFocused
+        case windowMinimized
+        case windowOccluded
+        case shouldRender
+        case gizmoMode
+        case gizmoSpace
+        case viewportShadingMode
+        case translateSnapEnabled
+        case rotateSnapEnabled
+        case scaleSnapEnabled
+        case cmdSelectBehavior
+        case presentation
+        case themeMode
+        case language
+        case uiRefreshRevision
+        case vsyncMode
+        case activeAssetDrag
+        case inspectorCollapsedSectionIDs
+        case pendingConfirmationRequest
+        case aiStatusMessage
+        case aiWarnings
+    }
+
+    private var storage: EditorState
+    private let registrar = ObservableStateRegistrar()
+
+    public var state: EditorState {
+        read(.state, storage)
+    }
+
     public private(set) var version: UInt64 = 0
 
     public struct SubscriptionToken: Hashable, Sendable {
@@ -22,13 +64,17 @@ public final class EditorStore: @unchecked Sendable {
     private var nextSubscriberID: UInt64 = 0
 
     public init(state: EditorState = EditorState()) {
-        self.state = state
+        self.storage = state
     }
 
     public func dispatch(_ action: EditorAction) {
-        EditorReducer.reduce(state: &state, action: action)
+        let previous = storage
+        EditorReducer.reduce(state: &storage, action: action)
         guard action.notifiesSubscribers else { return }
+        let keys = observationKeys(for: action, previous: previous, current: storage)
+        guard !keys.isEmpty else { return }
         version &+= 1
+        invalidate(keys)
         for handler in subscribers.values {
             handler(self)
         }
@@ -45,6 +91,109 @@ public final class EditorStore: @unchecked Sendable {
     public func unsubscribe(_ token: SubscriptionToken) {
         subscribers.removeValue(forKey: token)
     }
+
+    private func read<Value>(_ key: ObservationKey, _ value: Value) -> Value {
+        registrar.access(AnyHashable(key))
+        return value
+    }
+
+    private func invalidate(_ keys: Set<ObservationKey>) {
+        for key in keys {
+            registrar.invalidate(AnyHashable(key))
+        }
+    }
+
+    private func observationKeys(for action: EditorAction,
+                                 previous old: EditorState,
+                                 current new: EditorState) -> Set<ObservationKey> {
+        var keys: Set<ObservationKey> = []
+
+        func mark<T: Equatable>(_ key: ObservationKey, _ oldValue: T, _ newValue: T) {
+            if oldValue != newValue {
+                keys.insert(key)
+            }
+        }
+
+        switch action {
+        case .tickFrame:
+            mark(.frameIndex, old.frameIndex, new.frameIndex)
+        case .setConnected:
+            mark(.connected, old.connected, new.connected)
+        case .setSelectedEntity, .setPrimarySelectedEntity, .setSelectedEntities:
+            mark(.selectedEntityID, old.selectedEntityID, new.selectedEntityID)
+            mark(.selectedEntityIDs, old.selectedEntityIDs, new.selectedEntityIDs)
+        case .setPlaybackState:
+            mark(.playbackState, old.playbackState, new.playbackState)
+        case .setWorkspaceMode:
+            mark(.workspaceMode, old.workspaceMode, new.workspaceMode)
+            mark(.activeLayoutPreset, old.activeLayoutPreset, new.activeLayoutPreset)
+        case .setActiveLayoutPreset:
+            mark(.activeLayoutPreset, old.activeLayoutPreset, new.activeLayoutPreset)
+        case .setSceneRevision:
+            mark(.sceneRevision, old.sceneRevision, new.sceneRevision)
+        case .setWindowFocused:
+            mark(.windowFocused, old.windowFocused, new.windowFocused)
+        case .setWindowMinimized:
+            mark(.windowMinimized, old.windowMinimized, new.windowMinimized)
+        case .setWindowOccluded:
+            mark(.windowOccluded, old.windowOccluded, new.windowOccluded)
+        case .setGizmoMode:
+            mark(.gizmoMode, old.gizmoMode, new.gizmoMode)
+        case .setGizmoSpace:
+            mark(.gizmoSpace, old.gizmoSpace, new.gizmoSpace)
+        case .setViewportShadingMode:
+            mark(.viewportShadingMode, old.viewportShadingMode, new.viewportShadingMode)
+        case .setTranslateSnapEnabled:
+            mark(.translateSnapEnabled, old.translateSnapEnabled, new.translateSnapEnabled)
+        case .setRotateSnapEnabled:
+            mark(.rotateSnapEnabled, old.rotateSnapEnabled, new.rotateSnapEnabled)
+        case .setScaleSnapEnabled:
+            mark(.scaleSnapEnabled, old.scaleSnapEnabled, new.scaleSnapEnabled)
+        case .setCommandSelectBehavior:
+            mark(.cmdSelectBehavior, old.cmdSelectBehavior, new.cmdSelectBehavior)
+        case .setThemeMode:
+            mark(.presentation, old.presentation, new.presentation)
+            mark(.themeMode, old.themeMode, new.themeMode)
+            mark(.uiRefreshRevision, old.uiRefreshRevision, new.uiRefreshRevision)
+        case .setLanguage:
+            mark(.presentation, old.presentation, new.presentation)
+            mark(.language, old.language, new.language)
+            mark(.uiRefreshRevision, old.uiRefreshRevision, new.uiRefreshRevision)
+        case .forceUIRefresh:
+            mark(.presentation, old.presentation, new.presentation)
+            mark(.uiRefreshRevision, old.uiRefreshRevision, new.uiRefreshRevision)
+        case .setVSyncMode:
+            mark(.vsyncMode, old.vsyncMode, new.vsyncMode)
+        case .beginAssetDrag, .endAssetDrag:
+            mark(.activeAssetDrag, old.activeAssetDrag, new.activeAssetDrag)
+        case .updateAssetDragCursor:
+            break
+        case .setInspectorSectionCollapsed:
+            mark(.inspectorCollapsedSectionIDs,
+                 old.inspectorCollapsedSectionIDs,
+                 new.inspectorCollapsedSectionIDs)
+        case .setPendingConfirmationRequest:
+            mark(.pendingConfirmationRequest,
+                 old.pendingConfirmationRequest,
+                 new.pendingConfirmationRequest)
+        case .setAIStatusMessage:
+            mark(.aiStatusMessage, old.aiStatusMessage, new.aiStatusMessage)
+        case .setAIWarnings:
+            mark(.aiWarnings, old.aiWarnings, new.aiWarnings)
+        case .frameTimingUpdated:
+            mark(.frameTimingRevision, old.frameTimingRevision, new.frameTimingRevision)
+        case .viewportSurfaceUpdated:
+            mark(.viewportSurfaceRevision, old.viewportSurfaceRevision, new.viewportSurfaceRevision)
+        }
+
+        if old.shouldRender != new.shouldRender {
+            keys.insert(.shouldRender)
+        }
+        if !keys.isEmpty {
+            keys.insert(.state)
+        }
+        return keys
+    }
 }
 
 extension EditorStore: _ObservableObject {
@@ -60,16 +209,41 @@ extension EditorStore: _ObservableObject {
 }
 
 extension EditorStore {
-    public var connected: Bool { state.connected }
-    public var sceneRevision: UInt64 { state.sceneRevision }
-    public var frameIndex: UInt64 { state.frameIndex }
-    public var frameTimingRevision: UInt64 { state.frameTimingRevision }
-    public var viewportSurfaceRevision: UInt64 { state.viewportSurfaceRevision }
-    public var selectedEntityID: UInt64? { state.selectedEntityID }
-    public var selectedEntityIDsCount: Int { state.selectedEntityIDs.count }
-    public var aiStatusMessage: String? { state.aiStatusMessage }
-    public var playbackState: PlaybackState { state.playbackState }
-    public var workspaceMode: EditorWorkspaceMode { state.workspaceMode }
-    public var activeLayoutPreset: EditorLayoutPreset { state.activeLayoutPreset }
-    public var themeMode: EditorThemeMode { state.themeMode }
+    public var connected: Bool { read(.connected, storage.connected) }
+    public var selectedEntityID: UInt64? { read(.selectedEntityID, storage.selectedEntityID) }
+    public var selectedEntityIDs: Set<UInt64> { read(.selectedEntityIDs, storage.selectedEntityIDs) }
+    public var selectedEntityIDsCount: Int { read(.selectedEntityIDs, storage.selectedEntityIDs.count) }
+    public var sceneRevision: UInt64 { read(.sceneRevision, storage.sceneRevision) }
+    public var frameIndex: UInt64 { read(.frameIndex, storage.frameIndex) }
+    public var frameTimingRevision: UInt64 { read(.frameTimingRevision, storage.frameTimingRevision) }
+    public var viewportSurfaceRevision: UInt64 { read(.viewportSurfaceRevision, storage.viewportSurfaceRevision) }
+    public var windowFocused: Bool { read(.windowFocused, storage.windowFocused) }
+    public var windowMinimized: Bool { read(.windowMinimized, storage.windowMinimized) }
+    public var windowOccluded: Bool { read(.windowOccluded, storage.windowOccluded) }
+    public var shouldRender: Bool { read(.shouldRender, storage.shouldRender) }
+    public var aiStatusMessage: String? { read(.aiStatusMessage, storage.aiStatusMessage) }
+    public var aiWarnings: [String] { read(.aiWarnings, storage.aiWarnings) }
+    public var playbackState: PlaybackState { read(.playbackState, storage.playbackState) }
+    public var workspaceMode: EditorWorkspaceMode { read(.workspaceMode, storage.workspaceMode) }
+    public var activeLayoutPreset: EditorLayoutPreset { read(.activeLayoutPreset, storage.activeLayoutPreset) }
+    public var gizmoMode: EditorGizmoMode { read(.gizmoMode, storage.gizmoMode) }
+    public var gizmoSpace: EditorGizmoSpace { read(.gizmoSpace, storage.gizmoSpace) }
+    public var viewportShadingMode: EditorViewportShadingMode { read(.viewportShadingMode, storage.viewportShadingMode) }
+    public var translateSnapEnabled: Bool { read(.translateSnapEnabled, storage.translateSnapEnabled) }
+    public var rotateSnapEnabled: Bool { read(.rotateSnapEnabled, storage.rotateSnapEnabled) }
+    public var scaleSnapEnabled: Bool { read(.scaleSnapEnabled, storage.scaleSnapEnabled) }
+    public var cmdSelectBehavior: SelectionCommandBehavior { read(.cmdSelectBehavior, storage.cmdSelectBehavior) }
+    public var presentation: EditorPresentationState { read(.presentation, storage.presentation) }
+    public var presentationRevision: UInt64 { read(.uiRefreshRevision, storage.presentation.revision) }
+    public var themeMode: EditorThemeMode { read(.themeMode, storage.themeMode) }
+    public var language: EditorLanguage { read(.language, storage.language) }
+    public var uiRefreshRevision: UInt64 { read(.uiRefreshRevision, storage.uiRefreshRevision) }
+    public var vsyncMode: EditorVSyncMode { read(.vsyncMode, storage.vsyncMode) }
+    public var activeAssetDrag: EditorAssetDragPayload? { read(.activeAssetDrag, storage.activeAssetDrag) }
+    public var inspectorCollapsedSectionIDs: Set<String> {
+        read(.inspectorCollapsedSectionIDs, storage.inspectorCollapsedSectionIDs)
+    }
+    public var pendingConfirmationRequest: ConfirmationRequestBatch? {
+        read(.pendingConfirmationRequest, storage.pendingConfirmationRequest)
+    }
 }

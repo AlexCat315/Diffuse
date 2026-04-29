@@ -112,7 +112,7 @@ public struct NodeRenderer {
         // 6. Children — translated by -contentOffset for scrollable containers.
         let childOriginX = absX - Float(node.contentOffset.x)
         let childOriginY = absY - Float(node.contentOffset.y)
-        for child in node.children {
+        for child in renderOrderedChildren(of: node) {
             renderNode(child, list: list, originX: childOriginX, originY: childOriginY)
         }
 
@@ -130,5 +130,16 @@ public struct NodeRenderer {
     private func applyOpacity(_ color: Color, _ opacity: Float) -> Color {
         guard opacity < 1 else { return color }
         return Color(r: color.r, g: color.g, b: color.b, a: color.a * opacity)
+    }
+
+    private func renderOrderedChildren(of node: Node) -> [Node] {
+        node.children.enumerated()
+            .sorted { lhs, rhs in
+                let lhsZ = lhs.element.zIndex
+                let rhsZ = rhs.element.zIndex
+                if lhsZ == rhsZ { return lhs.offset < rhs.offset }
+                return lhsZ < rhsZ
+            }
+            .map { $0.element }
     }
 }

@@ -91,15 +91,15 @@ struct EditorMainToolbar: View {
                 .frame(width: 1, height: 20)
 
             Button(action: { onSetWorkspaceMode(.level) }) {
-                Text("Level").font(.caption)
+                Text(L("Level")).font(.caption)
             }
             .toggleButtonStyle(workspaceMode == .level)
             Button(action: { onSetWorkspaceMode(.modeling) }) {
-                Text("Modeling").font(.caption)
+                Text(L("Modeling")).font(.caption)
             }
             .toggleButtonStyle(workspaceMode == .modeling)
             Button(action: { onSetWorkspaceMode(.animation) }) {
-                Text("Animation").font(.caption)
+                Text(L("Animation")).font(.caption)
             }
             .toggleButtonStyle(workspaceMode == .animation)
 

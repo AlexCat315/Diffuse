@@ -8,10 +8,12 @@ struct InspectorPanel: View {
     let scene: EditorSceneAdapter
 
     var body: some View {
-        StoreScope(store, select: InspectorPanelSelection.init) { store in
-            let entity = scene.entitySummary(id: store.state.selectedEntityID)
-            let sections = scene.inspectorSections(for: store.state.selectedEntityID)
-            let collapsedIDs = store.state.inspectorCollapsedSectionIDs
+        StoreScope(store) { store in
+            let _ = store.sceneRevision
+            let selectedEntityID = store.selectedEntityID
+            let entity = scene.entitySummary(id: selectedEntityID)
+            let sections = scene.inspectorSections(for: selectedEntityID)
+            let collapsedIDs = store.inspectorCollapsedSectionIDs
 
             Box(direction: .column, alignItems: .stretch) {
                 if let entity {
@@ -313,17 +315,5 @@ private extension EditorInspectorFieldValue {
         default:
             return nil
         }
-    }
-}
-
-private struct InspectorPanelSelection: Hashable {
-    let selectedEntityID: UInt64?
-    let collapsedIDs: Set<String>
-    let sceneRevision: UInt64
-
-    init(_ state: EditorState) {
-        self.selectedEntityID = state.selectedEntityID
-        self.collapsedIDs = state.inspectorCollapsedSectionIDs
-        self.sceneRevision = state.sceneRevision
     }
 }

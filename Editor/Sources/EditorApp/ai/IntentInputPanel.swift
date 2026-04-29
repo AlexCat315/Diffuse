@@ -19,13 +19,14 @@ struct IntentInputPanel: View {
     }
 
     var body: some View {
-        StoreScope(app.store, select: IntentInputPanelSelection.init) { store in
-            let selection = app.scene.entitySummary(id: store.state.selectedEntityID)
+        StoreScope(app.store) { store in
+            let _ = store.sceneRevision
+            let selection = app.scene.entitySummary(id: store.selectedEntityID)
 
             ScrollView(.vertical) {
                 Box(direction: .column, alignItems: .stretch, spacing: 10) {
-                    AIStatusSummary(status: store.state.aiStatusMessage,
-                                    warnings: store.state.aiWarnings)
+                    AIStatusSummary(status: store.aiStatusMessage,
+                                    warnings: store.aiWarnings)
 
                     AISection(title: "Selection") {
                         Box(direction: .column, alignItems: .stretch, spacing: 4) {
@@ -86,20 +87,6 @@ struct IntentInputPanel: View {
             }
             .frame(minWidth: 320)
         }
-    }
-}
-
-private struct IntentInputPanelSelection: Hashable {
-    let selectedEntityID: UInt64?
-    let aiStatusMessage: String?
-    let aiWarnings: [String]
-    let sceneRevision: UInt64
-
-    init(_ state: EditorState) {
-        self.selectedEntityID = state.selectedEntityID
-        self.aiStatusMessage = state.aiStatusMessage
-        self.aiWarnings = state.aiWarnings
-        self.sceneRevision = state.sceneRevision
     }
 }
 

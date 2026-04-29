@@ -26,28 +26,29 @@ struct HierarchyPanel: View {
     }
 
     var body: some View {
-        StoreScope(store, select: HierarchyPanelSelection.init) { store in
+        StoreScope(store) { store in
+            let _ = store.sceneRevision
             let hierarchyRoots = scene.roots
             let keysByID = Self.keyIndex(in: hierarchyRoots)
             let selectionKey = Binding<TreeNodeKey<UInt64>?>(
                 get: {
-                    guard let selected = store.state.selectedEntityID else { return nil }
+                    guard let selected = store.selectedEntityID else { return nil }
                     return keysByID[selected]?.first
                 },
                 set: { next in
                     let nextID = next?.id
-                    if store.state.selectedEntityID != nextID {
+                    if store.selectedEntityID != nextID {
                         store.dispatch(.setPrimarySelectedEntity(nextID))
                     }
                 }
             )
             let multiSelectionKeys = Binding<Set<TreeNodeKey<UInt64>>>(
                 get: {
-                    Set(store.state.selectedEntityIDs.compactMap { keysByID[$0]?.first })
+                    Set(store.selectedEntityIDs.compactMap { keysByID[$0]?.first })
                 },
                 set: { next in
                     let nextIDs = Set(next.map(\ .id))
-                    if store.state.selectedEntityIDs != nextIDs {
+                    if store.selectedEntityIDs != nextIDs {
                         store.dispatch(.setSelectedEntities(nextIDs))
                     }
                 }
@@ -55,7 +56,7 @@ struct HierarchyPanel: View {
 
             Box(direction: .column, alignItems: .stretch) {
                 HierarchyPanelHeader(entityCount: scene.entityCount,
-                                     isConnected: store.state.connected)
+                                     isConnected: store.connected)
                     .padding(horizontal: 10, vertical: 7)
 
                 Box(direction: .row, alignItems: .center, spacing: 6) {
@@ -94,11 +95,11 @@ struct HierarchyPanel: View {
                                 isSelected: isSelected,
                                 onToggleVisibility: {
                                     toggleVisibility(entityID: entity.id,
-                                                     selectedIDs: store.state.selectedEntityIDs)
+                                                     selectedIDs: store.selectedEntityIDs)
                                 },
                                 onToggleLock: {
                                     toggleLock(entityID: entity.id,
-                                               selectedIDs: store.state.selectedEntityIDs)
+                                               selectedIDs: store.selectedEntityIDs)
                                 }
                             )
                          )
@@ -283,20 +284,6 @@ struct HierarchyPanel: View {
                                             roots: [EditorSceneNode]) -> Set<TreeNodeKey<UInt64>> {
         let keysByID = keyIndex(in: roots)
         return Set(defaultIDs.compactMap { keysByID[$0]?.first })
-    }
-}
-
-private struct HierarchyPanelSelection: Hashable {
-    let connected: Bool
-    let sceneRevision: UInt64
-    let selectedEntityID: UInt64?
-    let selectedEntityIDs: Set<UInt64>
-
-    init(_ state: EditorState) {
-        self.connected = state.connected
-        self.sceneRevision = state.sceneRevision
-        self.selectedEntityID = state.selectedEntityID
-        self.selectedEntityIDs = state.selectedEntityIDs
     }
 }
 
