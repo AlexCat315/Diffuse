@@ -26,6 +26,7 @@ struct EditorRootView: View {
                                       workspaceMode: store.workspaceMode,
                                       activeLayoutPreset: store.activeLayoutPreset,
                                       onNewScene: cb.newScene,
+                                      onSaveScene: cb.saveScene,
                                       onSetPlaybackState: cb.setPlaybackState,
                                       onSetWorkspaceMode: cb.setWorkspaceMode,
                                       onSetLayoutPreset: cb.setLayoutPreset,
@@ -56,11 +57,13 @@ private struct EditorCallbacks {
     let resetLayout: () -> Void
     let openSettings: () -> Void
     let newScene: () -> Void
+    let saveScene: () -> Void
     let handleMenuCommand: (EditorMenuCommand) -> Void
     let handleShortcut: (KeyEvent) -> Bool
 
     init(app: EditorApplication, controller: DockController) {
         self.newScene = { app.resetPreviewScene() }
+        self.saveScene = { _ = app.saveSceneManifest() }
         self.setPlaybackState = { next in
             let s = app.store; if s.state.playbackState != next { s.dispatch(.setPlaybackState(next)) }
         }
@@ -99,7 +102,7 @@ private struct EditorCallbacks {
             case .openScene:
                 app.logConsole("Open Scene is not connected to a file picker yet", severity: .warning)
             case .saveScene:
-                app.logConsole("Save Scene is not connected to scene serialization yet", severity: .warning)
+                _ = app.saveSceneManifest()
             case .importAssets:
                 app.logConsole("Import Assets scans the project folder on launch", severity: .info)
             case .undo:
