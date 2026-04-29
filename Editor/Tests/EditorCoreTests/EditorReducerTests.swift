@@ -43,4 +43,26 @@ struct EditorReducerTests {
 
         #expect(state.activeLayoutPreset == .modelingDefault)
     }
+
+    @Test("Appending console messages assigns stable increasing IDs")
+    func appendingConsoleMessagesAssignsIDs() {
+        var state = EditorState()
+
+        EditorReducer.reduce(state: &state, action: .appendConsoleMessage(" First "))
+        EditorReducer.reduce(state: &state, action: .appendConsoleMessage("Second", severity: .warning))
+
+        #expect(state.consoleEntries.map(\.id) == [1, 2])
+        #expect(state.consoleEntries.map(\.message) == ["First", "Second"])
+        #expect(state.consoleEntries.last?.severity == .warning)
+    }
+
+    @Test("Empty console messages are ignored")
+    func emptyConsoleMessagesAreIgnored() {
+        var state = EditorState()
+
+        EditorReducer.reduce(state: &state, action: .appendConsoleMessage("   \n\t"))
+
+        #expect(state.consoleEntries.isEmpty)
+        #expect(state.nextConsoleEntryID == 1)
+    }
 }
