@@ -134,7 +134,11 @@ let package = Package(
         // MARK: - Demo
         .executableTarget(
             name: "GuavaUIDemo",
-            dependencies: ["GuavaUIRuntime", "GuavaUICompose"]
+            dependencies: [
+                "GuavaUIRuntime",
+                "GuavaUICompose",
+                .product(name: "CardBattleRuntime", package: "Engine"),
+            ]
         ),
 
         // MARK: - Tests
