@@ -109,6 +109,7 @@ public struct BattleState: Sendable, Equatable, Codable {
 public enum BattleCommand: Sendable, Equatable {
     case startPlayerTurn(drawCount: Int)
     case playCard(cardID: String, target: BattlePlayerID)
+    case endPlayerTurn
 }
 
 public enum BattleStateMachine {
@@ -128,6 +129,8 @@ public enum BattleStateMachine {
             next.log.append("turn \(next.turn): player drew \(drawCount) card(s)")
         case let .playCard(cardID, target):
             playCard(cardID: cardID, target: target, state: &next)
+        case .endPlayerTurn:
+            endPlayerTurn(state: &next)
         }
         return next
     }
@@ -174,6 +177,24 @@ public enum BattleStateMachine {
             state.log.append("\(player.id.rawValue) played \(card.id)")
         }
         state.phase = .main
+    }
+
+    private static func endPlayerTurn(state: inout BattleState) {
+        guard state.phase == .main,
+              state.activePlayerID == .player,
+              var player = state.players[.player]
+        else {
+            state.log.append("cannot end player turn")
+            return
+        }
+
+        player.discard.append(contentsOf: player.hand)
+        player.hand.removeAll(keepingCapacity: true)
+        player.energy = 0
+        state.players[.player] = player
+        state.activePlayerID = .enemy
+        state.phase = .enemyTurn
+        state.log.append("turn \(state.turn): player ended turn")
     }
 }
 
