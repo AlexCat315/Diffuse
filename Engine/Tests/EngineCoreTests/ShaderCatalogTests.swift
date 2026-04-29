@@ -9,6 +9,7 @@ struct ShaderCatalogTests {
 
         let mesh = try catalog.renderProgram(named: "mesh")
         let stylizedCharacter = try catalog.renderProgram(named: "stylized_character")
+        let inkPaperPost = try catalog.renderProgram(named: "ink_paper_post")
         let skybox = try catalog.renderProgram(named: "skybox")
         let tonemap = try catalog.renderProgram(named: "tonemap")
         let fxaa = try catalog.renderProgram(named: "fxaa")
@@ -17,6 +18,7 @@ struct ShaderCatalogTests {
         #expect(mesh.vertex == "WGSL/mesh.wgsl")
         #expect(mesh.fragment == "WGSL/mesh.wgsl")
         #expect(stylizedCharacter.vertex == "WGSL/stylized_character.wgsl")
+        #expect(inkPaperPost.fragment == "WGSL/ink_paper_post.wgsl")
         #expect(skybox.vertex == "WGSL/skybox.wgsl")
         #expect(tonemap.fragment == "WGSL/tonemap.wgsl")
         #expect(fxaa.vertex == "WGSL/fxaa.wgsl")
@@ -33,6 +35,9 @@ struct ShaderCatalogTests {
         #expect(stylizedModule.contains("textureSample(base_color_texture"))
         let outlineModule = try catalog.loadWGSLRenderModule(named: "outline")
         #expect(outlineModule.contains("style.params.w"))
+        let inkPaperPostModule = try catalog.loadWGSLRenderModule(named: "ink_paper_post")
+        #expect(inkPaperPostModule.contains("paper_hash"))
+        #expect(inkPaperPostModule.contains("style.ink_wash_color"))
 
         #expect(catalog.manifest.programs.allSatisfy { $0.vertex.hasPrefix("WGSL/") && ($0.fragment?.hasPrefix("WGSL/") ?? true) })
         #expect(catalog.manifest.computePrograms.allSatisfy { $0.compute.hasPrefix("WGSL/") })
