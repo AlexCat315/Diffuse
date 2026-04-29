@@ -263,6 +263,28 @@ public final class EditorApplication {
         logConsole("Created new preview scene")
     }
 
+    @discardableResult
+    public func saveSceneManifest() -> URL? {
+        do {
+            let guavaDirectory = URL(fileURLWithPath: projectDirectory, isDirectory: true)
+                .appendingPathComponent(".guava", isDirectory: true)
+            try FileManager.default.createDirectory(at: guavaDirectory,
+                                                    withIntermediateDirectories: true)
+            let url = guavaDirectory.appendingPathComponent("editor-scene-manifest.json")
+            let encoder = JSONEncoder()
+            encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+            let data = try encoder.encode(scene.manifest())
+            try data.write(to: url, options: [.atomic])
+            logConsole("Saved scene manifest", detail: url.path)
+            return url
+        } catch {
+            logConsole("Failed to save scene manifest",
+                       severity: .error,
+                       detail: String(describing: error))
+            return nil
+        }
+    }
+
     public func currentRenderStats() -> RenderFrameStats {
         engine.currentRenderStats()
     }
