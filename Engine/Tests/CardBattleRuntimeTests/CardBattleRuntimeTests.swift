@@ -185,4 +185,35 @@ struct CardBattleRuntimeTests {
         #expect(snapshot?.hand.count == 3)
         #expect(snapshot?.skills.map(\.id) == ["slash", "rally", "duel"])
     }
+
+    @Test("state validator reports invalid battle data")
+    func validatorReportsInvalidBattleData() {
+        let badCard = BattleCard(id: "bad-card", title: "Bad Card", cost: -1, damage: -4)
+        let player = BattlePlayerState(
+            id: .enemy,
+            health: -10,
+            maxEnergy: 2,
+            energy: 3,
+            deck: [badCard],
+            skills: [BattleSkill(id: "bad-skill", title: "Bad Skill", cooldownTurns: -1, target: .opponent)]
+        )
+        let state = BattleState(
+            activePlayerID: .player,
+            players: [.enemy: player]
+        )
+
+        let issues = BattleStateValidator.validate(state)
+
+        #expect(issues.contains(.missingActivePlayer(.player)))
+        #expect(issues.contains(.mismatchedPlayerKey(expected: .enemy, actual: .enemy)) == false)
+        #expect(issues.contains(.negativeHealth(playerID: .enemy, health: -10)))
+        #expect(issues.contains(.energyExceedsMaximum(playerID: .enemy, energy: 3, maxEnergy: 2)))
+        #expect(issues.contains(.negativeCardCost(playerID: .enemy, cardID: "bad-card", cost: -1)))
+        #expect(issues.contains(.negativeCardDamage(playerID: .enemy, cardID: "bad-card", damage: -4)))
+        #expect(issues.contains(.negativeSkillCooldown(
+            playerID: .enemy,
+            skillID: "bad-skill",
+            cooldownTurns: -1
+        )))
+    }
 }
