@@ -285,6 +285,29 @@ public final class EditorApplication {
         }
     }
 
+    public func openSceneManifest() -> EditorSceneManifest? {
+        let url = URL(fileURLWithPath: projectDirectory, isDirectory: true)
+            .appendingPathComponent(".guava", isDirectory: true)
+            .appendingPathComponent("editor-scene-manifest.json")
+        do {
+            let data = try Data(contentsOf: url)
+            let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+            logConsole("Opened scene manifest",
+                       detail: "\(manifest.entityCount) entities, revision \(manifest.revision)")
+            return manifest
+        } catch CocoaError.fileReadNoSuchFile {
+            logConsole("No saved scene manifest",
+                       severity: .warning,
+                       detail: url.path)
+            return nil
+        } catch {
+            logConsole("Failed to open scene manifest",
+                       severity: .error,
+                       detail: String(describing: error))
+            return nil
+        }
+    }
+
     @discardableResult
     public func reloadAssets() -> Int {
         do {
