@@ -6,7 +6,7 @@ import ImageIO
 import Testing
 import UniformTypeIdentifiers
 
-@Suite("MeshTextureRegistry")
+@Suite("MeshTextureRegistry", .serialized)
 struct MeshTextureRegistryTests {
     @Test("decodes mesh textures into render texture cache")
     func decodesMeshTextures() throws {

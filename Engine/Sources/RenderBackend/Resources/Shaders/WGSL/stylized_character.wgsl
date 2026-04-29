@@ -2,7 +2,15 @@ struct Uniforms {
     mvp : mat4x4<f32>,
 };
 
+struct StylizedStyle {
+    toon_thresholds : vec4<f32>,
+    toon_levels : vec4<f32>,
+    ink_wash_color : vec4<f32>,
+    params : vec4<f32>,
+};
+
 @group(0) @binding(0) var<uniform> u : Uniforms;
+@group(0) @binding(1) var<uniform> style : StylizedStyle;
 
 struct VsIn {
     @location(0) pos            : vec3<f32>,
@@ -35,13 +43,13 @@ fn vs_main(in : VsIn) -> VsOut {
 }
 
 fn toon_ramp(v : f32) -> f32 {
-    if v < 0.24 {
-        return 0.30;
+    if v < style.toon_thresholds.x {
+        return style.toon_levels.x;
     }
-    if v < 0.58 {
-        return 0.58;
+    if v < style.toon_thresholds.y {
+        return style.toon_levels.y;
     }
-    return 1.0;
+    return style.toon_levels.z;
 }
 
 fn paper_grain(uv : vec2<f32>) -> f32 {
@@ -57,10 +65,10 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let lambert = max(dot(normal, light_dir), 0.0);
     let ramp = toon_ramp(lambert);
     let rim = smoothstep(0.38, 0.95, 1.0 - max(normal.z, 0.0));
-    let ink_wash = vec3<f32>(0.92, 0.88, 0.78);
-    let material_bias = fract(in.material_index * 0.173) * 0.08;
-    let grain = (paper_grain(in.uv * 83.0) - 0.5) * 0.035;
+    let ink_wash = style.ink_wash_color.rgb;
+    let material_bias = fract(in.material_index * 0.173) * style.params.z;
+    let grain = (paper_grain(in.uv * 83.0) - 0.5) * style.params.x;
     let base = mix(ink_wash, in.color, 0.78);
-    let shaded = base * (0.28 + ramp * 0.92 + rim * 0.18 + material_bias + grain);
+    let shaded = base * (0.28 + ramp * 0.92 + rim * style.params.y + material_bias + grain);
     return vec4<f32>(shaded, 1.0);
 }
