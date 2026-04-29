@@ -11,13 +11,30 @@ public struct AssetPipeline {
 
 // MARK: - Mesh Asset
 
-/// Interleaved mesh: position (3 floats) + normal (3 floats) + color (3 floats),
-/// stride = 36 bytes. Indices are 32-bit. Used as the canonical R1-stage input format.
+/// Interleaved mesh vertex stream used by runtime render backends.
+///
+/// Layout, in floats:
+/// position3 + normal3 + color3 + uv2 + tangent4 + materialIndex1 + joints4 + weights4.
 public struct MeshAsset: Sendable {
-    public static let vertexStride: Int = 36
+    public static let vertexFloatCount: Int = 24
+    public static let vertexStride: Int = vertexFloatCount * MemoryLayout<Float>.size
     public static let positionOffset: Int = 0
     public static let normalOffset: Int = 12
     public static let colorOffset: Int = 24
+    public static let uvOffset: Int = 36
+    public static let tangentOffset: Int = 44
+    public static let materialIndexOffset: Int = 60
+    public static let jointsOffset: Int = 64
+    public static let weightsOffset: Int = 80
+
+    public static let positionFloatOffset: Int = 0
+    public static let normalFloatOffset: Int = 3
+    public static let colorFloatOffset: Int = 6
+    public static let uvFloatOffset: Int = 9
+    public static let tangentFloatOffset: Int = 11
+    public static let materialIndexFloatOffset: Int = 15
+    public static let jointsFloatOffset: Int = 16
+    public static let weightsFloatOffset: Int = 20
 
     public var vertices: [Float]
     public var indices: [UInt32]
@@ -33,10 +50,33 @@ public struct MeshAsset: Sendable {
     public var vertexBufferSize: Int { vertices.count * MemoryLayout<Float>.size }
     public var indexBufferSize: Int { indices.count * MemoryLayout<UInt32>.size }
 
+    public static func appendVertex(
+        to vertices: inout [Float],
+        position: SIMD3<Float>,
+        normal: SIMD3<Float> = .zero,
+        color: SIMD3<Float> = SIMD3<Float>(1, 1, 1),
+        uv: SIMD2<Float> = .zero,
+        tangent: SIMD4<Float> = SIMD4<Float>(1, 0, 0, 1),
+        materialIndex: Float = 0,
+        joints: SIMD4<Float> = .zero,
+        weights: SIMD4<Float> = SIMD4<Float>(1, 0, 0, 0)
+    ) {
+        vertices.append(contentsOf: [
+            position.x, position.y, position.z,
+            normal.x, normal.y, normal.z,
+            color.x, color.y, color.z,
+            uv.x, uv.y,
+            tangent.x, tangent.y, tangent.z, tangent.w,
+            materialIndex,
+            joints.x, joints.y, joints.z, joints.w,
+            weights.x, weights.y, weights.z, weights.w,
+        ])
+    }
+
     /// Local-space axis-aligned bounding box of all vertex positions.
     /// 空 mesh 退化为 (.zero, .zero)。
     public var localBounds: (min: SIMD3<Float>, max: SIMD3<Float>) {
-        let stride = MeshAsset.vertexStride / MemoryLayout<Float>.size
+        let stride = MeshAsset.vertexFloatCount
         var lo = SIMD3<Float>(repeating: .infinity)
         var hi = SIMD3<Float>(repeating: -.infinity)
         var i = 0
@@ -52,7 +92,7 @@ public struct MeshAsset: Sendable {
 
     /// Recenter to origin and uniform-scale longest axis to `targetSize`.
     public mutating func normalizeToUnitBounds(targetSize: Float = 2.0) {
-        let stride = MeshAsset.vertexStride / MemoryLayout<Float>.size
+        let stride = MeshAsset.vertexFloatCount
         var minX: Float = .infinity, minY: Float = .infinity, minZ: Float = .infinity
         var maxX: Float = -.infinity, maxY: Float = -.infinity, maxZ: Float = -.infinity
         var i = 0
@@ -112,16 +152,17 @@ public enum BuiltinMesh {
 
         var vertices: [Float] = []
         var indices: [UInt32] = []
-        vertices.reserveCapacity(faces.count * 4 * 9)
+        vertices.reserveCapacity(faces.count * 4 * MeshAsset.vertexFloatCount)
         indices.reserveCapacity(faces.count * 6)
 
         for (faceIdx, face) in faces.enumerated() {
             for v in face.verts {
-                vertices.append(contentsOf: [
-                    v.0, v.1, v.2,
-                    face.n.0, face.n.1, face.n.2,
-                    face.c.0, face.c.1, face.c.2,
-                ])
+                MeshAsset.appendVertex(
+                    to: &vertices,
+                    position: SIMD3<Float>(v.0, v.1, v.2),
+                    normal: SIMD3<Float>(face.n.0, face.n.1, face.n.2),
+                    color: SIMD3<Float>(face.c.0, face.c.1, face.c.2)
+                )
             }
             let base = UInt32(faceIdx * 4)
             indices.append(contentsOf: [base, base + 1, base + 2, base, base + 2, base + 3])
@@ -205,11 +246,11 @@ public enum OBJLoader {
                 }
                 for i in 1..<(resolved.count - 1) {
                     for vert in [resolved[0], resolved[i], resolved[i + 1]] {
-                        vertices.append(contentsOf: [
-                            vert.pos.0, vert.pos.1, vert.pos.2,
-                            vert.nrm.0, vert.nrm.1, vert.nrm.2,
-                            1.0, 1.0, 1.0,
-                        ])
+                        MeshAsset.appendVertex(
+                            to: &vertices,
+                            position: SIMD3<Float>(vert.pos.0, vert.pos.1, vert.pos.2),
+                            normal: SIMD3<Float>(vert.nrm.0, vert.nrm.1, vert.nrm.2)
+                        )
                         indices.append(nextIndex)
                         nextIndex += 1
                     }
@@ -231,7 +272,7 @@ public enum OBJLoader {
     /// and write it to those slots. Triangles whose normals were already supplied by the OBJ
     /// (via `vn` references) are left untouched.
     private static func fillMissingNormals(vertices: inout [Float], indices: [UInt32]) {
-        let stride = MeshAsset.vertexStride / MemoryLayout<Float>.size // 9
+        let stride = MeshAsset.vertexFloatCount
         var i = 0
         while i + 2 < indices.count {
             let i0 = Int(indices[i]) * stride
@@ -240,7 +281,9 @@ public enum OBJLoader {
 
             // Check if any of the three vertices already has a non-zero normal.
             func hasNormal(_ base: Int) -> Bool {
-                vertices[base + 3] != 0 || vertices[base + 4] != 0 || vertices[base + 5] != 0
+                vertices[base + MeshAsset.normalFloatOffset] != 0
+                    || vertices[base + MeshAsset.normalFloatOffset + 1] != 0
+                    || vertices[base + MeshAsset.normalFloatOffset + 2] != 0
             }
             if hasNormal(i0) || hasNormal(i1) || hasNormal(i2) {
                 i += 3
@@ -262,9 +305,9 @@ public enum OBJLoader {
             }
 
             for slot in [i0, i1, i2] {
-                vertices[slot + 3] = nx
-                vertices[slot + 4] = ny
-                vertices[slot + 5] = nz
+                vertices[slot + MeshAsset.normalFloatOffset] = nx
+                vertices[slot + MeshAsset.normalFloatOffset + 1] = ny
+                vertices[slot + MeshAsset.normalFloatOffset + 2] = nz
             }
             i += 3
         }
@@ -273,7 +316,7 @@ public enum OBJLoader {
 
 enum MeshNormalTools {
     static func fillMissingNormals(vertices: inout [Float], indices: [UInt32]) {
-        let stride = MeshAsset.vertexStride / MemoryLayout<Float>.size
+        let stride = MeshAsset.vertexFloatCount
         var i = 0
         while i + 2 < indices.count {
             let i0 = Int(indices[i]) * stride
@@ -281,7 +324,9 @@ enum MeshNormalTools {
             let i2 = Int(indices[i + 2]) * stride
 
             func hasNormal(_ base: Int) -> Bool {
-                vertices[base + 3] != 0 || vertices[base + 4] != 0 || vertices[base + 5] != 0
+                vertices[base + MeshAsset.normalFloatOffset] != 0
+                    || vertices[base + MeshAsset.normalFloatOffset + 1] != 0
+                    || vertices[base + MeshAsset.normalFloatOffset + 2] != 0
             }
             if hasNormal(i0) || hasNormal(i1) || hasNormal(i2) {
                 i += 3
@@ -303,9 +348,9 @@ enum MeshNormalTools {
             }
 
             for slot in [i0, i1, i2] {
-                vertices[slot + 3] = nx
-                vertices[slot + 4] = ny
-                vertices[slot + 5] = nz
+                vertices[slot + MeshAsset.normalFloatOffset] = nx
+                vertices[slot + MeshAsset.normalFloatOffset + 1] = ny
+                vertices[slot + MeshAsset.normalFloatOffset + 2] = nz
             }
             i += 3
         }

@@ -5,15 +5,22 @@ struct Uniforms {
 @group(0) @binding(0) var<uniform> u : Uniforms;
 
 struct VsIn {
-    @location(0) pos    : vec3<f32>,
-    @location(1) normal : vec3<f32>,
-    @location(2) color  : vec3<f32>,
+    @location(0) pos            : vec3<f32>,
+    @location(1) normal         : vec3<f32>,
+    @location(2) color          : vec3<f32>,
+    @location(3) uv             : vec2<f32>,
+    @location(4) tangent        : vec4<f32>,
+    @location(5) material_index : f32,
+    @location(6) joints         : vec4<f32>,
+    @location(7) weights        : vec4<f32>,
 };
 
 struct VsOut {
     @builtin(position) position : vec4<f32>,
     @location(0) color : vec3<f32>,
     @location(1) normal : vec3<f32>,
+    @location(2) uv : vec2<f32>,
+    @location(3) material_index : f32,
 };
 
 @vertex
@@ -22,6 +29,8 @@ fn vs_main(in : VsIn) -> VsOut {
     out.position = u.mvp * vec4<f32>(in.pos, 1.0);
     out.color = in.color;
     out.normal = in.normal;
+    out.uv = in.uv;
+    out.material_index = in.material_index;
     return out;
 }
 
