@@ -20,6 +20,7 @@ struct EditorRootView: View {
                     EditorMainToolbar(playbackState: store.playbackState,
                                       workspaceMode: store.workspaceMode,
                                       activeLayoutPreset: store.activeLayoutPreset,
+                                      onNewScene: cb.newScene,
                                       onSetPlaybackState: cb.setPlaybackState,
                                       onSetWorkspaceMode: cb.setWorkspaceMode,
                                       onSetLayoutPreset: cb.setLayoutPreset,
@@ -49,9 +50,11 @@ private struct EditorCallbacks {
     let setLayoutPreset: (EditorLayoutPreset) -> Void
     let resetLayout: () -> Void
     let openSettings: () -> Void
+    let newScene: () -> Void
     let handleShortcut: (KeyEvent) -> Bool
 
     init(app: EditorApplication, controller: DockController) {
+        self.newScene = { app.resetPreviewScene() }
         self.setPlaybackState = { next in
             let s = app.store; if s.state.playbackState != next { s.dispatch(.setPlaybackState(next)) }
         }
