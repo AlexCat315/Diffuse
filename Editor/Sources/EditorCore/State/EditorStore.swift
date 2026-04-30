@@ -34,7 +34,7 @@ public final class EditorStore: @unchecked Sendable {
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
-        case cmdSelectBehavior
+        case primarySelectBehavior
         case presentation
         case themeMode
         case language
@@ -150,8 +150,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.rotateSnapEnabled, old.rotateSnapEnabled, new.rotateSnapEnabled)
         case .setScaleSnapEnabled:
             mark(.scaleSnapEnabled, old.scaleSnapEnabled, new.scaleSnapEnabled)
-        case .setCommandSelectBehavior:
-            mark(.cmdSelectBehavior, old.cmdSelectBehavior, new.cmdSelectBehavior)
+        case .setPrimarySelectBehavior:
+            mark(.primarySelectBehavior, old.primarySelectBehavior, new.primarySelectBehavior)
         case .setThemeMode:
             mark(.presentation, old.presentation, new.presentation)
             mark(.themeMode, old.themeMode, new.themeMode)
@@ -237,7 +237,7 @@ extension EditorStore {
     public var translateSnapEnabled: Bool { read(.translateSnapEnabled, storage.translateSnapEnabled) }
     public var rotateSnapEnabled: Bool { read(.rotateSnapEnabled, storage.rotateSnapEnabled) }
     public var scaleSnapEnabled: Bool { read(.scaleSnapEnabled, storage.scaleSnapEnabled) }
-    public var cmdSelectBehavior: SelectionCommandBehavior { read(.cmdSelectBehavior, storage.cmdSelectBehavior) }
+    public var primarySelectBehavior: SelectionPrimaryModifierBehavior { read(.primarySelectBehavior, storage.primarySelectBehavior) }
     public var presentation: EditorPresentationState { read(.presentation, storage.presentation) }
     public var presentationRevision: UInt64 { read(.uiRefreshRevision, storage.presentation.revision) }
     public var themeMode: EditorThemeMode { read(.themeMode, storage.themeMode) }

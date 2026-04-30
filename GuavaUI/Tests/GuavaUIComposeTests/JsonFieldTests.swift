@@ -27,7 +27,7 @@ struct JsonFieldTests: GuavaUIComposeSerializedSuite {
         #expect(pretty == "{\n  \"a\" : 2,\n  \"z\" : 1\n}")
     }
 
-    @Test("Cmd-Return commits only valid JSON through the field")
+    @Test("Primary-Return commits only valid JSON through the field")
     func commitsValidJson() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         let focus = FocusChain()
@@ -49,9 +49,9 @@ struct JsonFieldTests: GuavaUIComposeSerializedSuite {
         graph.recomposer.commitAll()
 
         let handlers = registry.handlers(for: node)
-        _ = handlers.key!(key(4, cmd: true), .target)
+        _ = handlers.key!(key(4, primary: true), .target)
         _ = handlers.text!("{\"speed\":4}", .target)
-        _ = handlers.key!(key(40, cmd: true), .target)
+        _ = handlers.key!(key(40, primary: true), .target)
 
         #expect(store.value == "{\"speed\":4}")
         #expect(commits == ["{\"speed\":4}"])
@@ -78,9 +78,9 @@ struct JsonFieldTests: GuavaUIComposeSerializedSuite {
         graph.recomposer.commitAll()
 
         let handlers = registry.handlers(for: node)
-        _ = handlers.key!(key(4, cmd: true), .target)
+        _ = handlers.key!(key(4, primary: true), .target)
         _ = handlers.text!("{ nope }", .target)
-        _ = handlers.key!(key(40, cmd: true), .target)
+        _ = handlers.key!(key(40, primary: true), .target)
 
         #expect(store.value == "{\"ok\":true}")
     } }
@@ -103,9 +103,9 @@ struct JsonFieldTests: GuavaUIComposeSerializedSuite {
         return nil
     }
 
-    private func key(_ scancode: UInt32, cmd: Bool = false) -> KeyEvent {
+    private func key(_ scancode: UInt32, primary: Bool = false) -> KeyEvent {
         var mods = KeyModifiers()
-        if cmd { mods.insert(.lgui) }
+        if primary { mods.insert(.lgui) }
         return KeyEvent(scancode: scancode, keycode: 0, modifiers: mods, isRepeat: false)
     }
 }

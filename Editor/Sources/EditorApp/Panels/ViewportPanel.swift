@@ -236,11 +236,11 @@ struct ViewportPanel: View {
                     let picked = scene.pickEntities(in: rect, frame: frame)
                     let baseSelection = app.store.state.selectedEntityIDs
                     let modifiers = viewport.modifiers.isEmpty ? app.inputState.modifiers : viewport.modifiers
-                    let cmdBehavior = app.store.state.cmdSelectBehavior
+                    let primaryModifierBehavior = app.store.state.primarySelectBehavior
                     let merged = EditorSelectionReducer.merge(base: baseSelection,
                                                               picked: picked,
                                                               modifiers: modifiers,
-                                                              commandBehavior: cmdBehavior)
+                                                              primaryModifierBehavior: primaryModifierBehavior)
                     app.store.dispatch(.setSelectedEntities(merged))
                 }
                 viewport.endPointerSession()
@@ -264,11 +264,11 @@ struct ViewportPanel: View {
                                                       cursorY: button.y,
                                                       in: frame)
                         let modifiers = viewport.modifiers.isEmpty ? app.inputState.modifiers : viewport.modifiers
-                        let cmdBehavior = app.store.state.cmdSelectBehavior
+                        let primaryModifierBehavior = app.store.state.primarySelectBehavior
                         let merged = EditorSelectionReducer.mergeSingle(base: app.store.state.selectedEntityIDs,
                                                                         picked: picked,
                                                                         modifiers: modifiers,
-                                                                        commandBehavior: cmdBehavior)
+                                                                        primaryModifierBehavior: primaryModifierBehavior)
                         app.store.dispatch(.setSelectedEntities(merged))
                     }
                 }
@@ -343,7 +343,7 @@ struct ViewportPanel: View {
         EditorViewportDropTarget.frame?.contains(x: x, y: y) == true
     }
 
-    /// F = focus selection, Backspace/Delete = delete, Cmd/Ctrl+D = duplicate。
+    /// F = focus selection, Backspace/Delete = delete, primary+D = duplicate.
     private func handleEditingShortcut(_ key: KeyEvent) -> Bool {
         let selected = app.store.state.selectedEntityID
         switch key.keycode {
@@ -359,9 +359,9 @@ struct ViewportPanel: View {
             return true
         case 0x64 /* d */:
             let mods = key.modifiers
-            let cmdLike = mods.contains(.lgui) || mods.contains(.rgui)
-                       || mods.contains(.lctrl) || mods.contains(.rctrl)
-            guard cmdLike, let id = selected else { return false }
+            let primaryModifier = mods.contains(.lgui) || mods.contains(.rgui)
+                               || mods.contains(.lctrl) || mods.contains(.rctrl)
+            guard primaryModifier, let id = selected else { return false }
             if let new = scene.duplicateEntity(id) {
                 app.store.dispatch(.setSelectedEntity(new))
             }

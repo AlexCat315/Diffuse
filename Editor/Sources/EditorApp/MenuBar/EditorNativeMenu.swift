@@ -18,7 +18,7 @@ enum EditorNativeMenuBuilder {
             ]),
             NativeMenu(title: L("Edit"), items: [
                 action(L("Undo"), key: "z") { onCommand(.undo) },
-                action(L("Redo"), key: "z", modifiers: [.command, .shift]) { onCommand(.redo) },
+                action(L("Redo"), key: "z", modifiers: [.primary, .shift]) { onCommand(.redo) },
                 .separator,
                 action(L("Settings"), key: ",") { onCommand(.openSettings) },
             ]),
@@ -81,7 +81,7 @@ enum EditorNativeMenuBuilder {
 
     private static func action(_ title: String,
                                key: String,
-                               modifiers: NativeMenuKeyModifiers = [.command],
+                               modifiers: NativeMenuKeyModifiers = [.primary],
                                selected: Bool = false,
                                handler: @escaping @MainActor () -> Void) -> NativeMenuItem {
         .action(NativeMenuAction(title: title,

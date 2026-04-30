@@ -11,24 +11,24 @@ enum EditorRootViewFactory {
         var themeMode: EditorThemeMode
         var language: EditorLanguage
         var vsyncMode: EditorVSyncMode
-        var cmdSelectBehavior: SelectionCommandBehavior
+        var primarySelectBehavior: SelectionPrimaryModifierBehavior
         var schemaVersion: Int
 
-        static let currentSchemaVersion = 6
+        static let currentSchemaVersion = 7
 
         init(workspaceMode: EditorWorkspaceMode,
              activeLayoutPreset: EditorLayoutPreset,
              themeMode: EditorThemeMode = .dark,
              language: EditorLanguage = .system,
              vsyncMode: EditorVSyncMode = .enabled,
-             cmdSelectBehavior: SelectionCommandBehavior = .subtract,
+             primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract,
              schemaVersion: Int = currentSchemaVersion) {
             self.workspaceMode = workspaceMode
             self.activeLayoutPreset = activeLayoutPreset
             self.themeMode = themeMode
             self.language = language
             self.vsyncMode = vsyncMode
-            self.cmdSelectBehavior = cmdSelectBehavior
+            self.primarySelectBehavior = primarySelectBehavior
             self.schemaVersion = schemaVersion
         }
 
@@ -38,12 +38,13 @@ enum EditorRootViewFactory {
             case themeMode
             case language
             case vsyncMode
-            case cmdSelectBehavior
+            case primarySelectBehavior
             case schemaVersion
         }
 
         enum LegacyCodingKeys: String, CodingKey {
             case frameRateLimit
+            case cmdSelectBehavior
         }
 
         func encode(to encoder: Encoder) throws {
@@ -53,7 +54,7 @@ enum EditorRootViewFactory {
             try values.encode(themeMode, forKey: .themeMode)
             try values.encode(language, forKey: .language)
             try values.encode(vsyncMode, forKey: .vsyncMode)
-            try values.encode(cmdSelectBehavior, forKey: .cmdSelectBehavior)
+            try values.encode(primarySelectBehavior, forKey: .primarySelectBehavior)
             try values.encode(schemaVersion, forKey: .schemaVersion)
         }
 
@@ -77,8 +78,15 @@ enum EditorRootViewFactory {
             } else {
                 vsyncMode = .enabled
             }
-            cmdSelectBehavior = try values.decodeIfPresent(SelectionCommandBehavior.self, forKey: .cmdSelectBehavior)
-                ?? .subtract
+            let decodedPrimarySelectBehavior = try values.decodeIfPresent(
+                SelectionPrimaryModifierBehavior.self,
+                forKey: .primarySelectBehavior
+            )
+            let legacyPrimarySelectBehavior = try legacyValues.decodeIfPresent(
+                SelectionPrimaryModifierBehavior.self,
+                forKey: .cmdSelectBehavior
+            )
+            primarySelectBehavior = decodedPrimarySelectBehavior ?? legacyPrimarySelectBehavior ?? .subtract
             schemaVersion = decodedSchemaVersion
         }
     }
@@ -661,14 +669,14 @@ enum EditorRootViewFactory {
                                themeMode: EditorThemeMode,
                                language: EditorLanguage,
                                vsyncMode: EditorVSyncMode,
-                               cmdSelectBehavior: SelectionCommandBehavior = .subtract) {
+                               primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract) {
         guard let layoutDir = getLayoutPersistenceDirectory() else { return }
         let shell = EditorShellState(workspaceMode: mode,
                                      activeLayoutPreset: preset,
                                      themeMode: themeMode,
                                      language: language,
                                      vsyncMode: vsyncMode,
-                                     cmdSelectBehavior: cmdSelectBehavior)
+                                     primarySelectBehavior: primarySelectBehavior)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {

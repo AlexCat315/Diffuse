@@ -38,30 +38,439 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let id: UInt64
     public let name: String
     public let kind: String
+    public let localTransform: EditorSceneManifestMatrix?
+    public let renderMesh: EditorSceneManifestRenderMesh?
+    public let camera: EditorSceneManifestCamera?
+    public let light: EditorSceneManifestLight?
+    public let rigidBody: EditorSceneManifestRigidBody?
+    public let collider: EditorSceneManifestCollider?
+    public let constraint: EditorSceneManifestConstraint?
+    public let script: EditorSceneManifestScript?
     public let children: [EditorSceneManifestNode]
 
     public init(id: UInt64,
                 name: String,
                 kind: String,
+                localTransform: EditorSceneManifestMatrix? = nil,
+                renderMesh: EditorSceneManifestRenderMesh? = nil,
+                camera: EditorSceneManifestCamera? = nil,
+                light: EditorSceneManifestLight? = nil,
+                rigidBody: EditorSceneManifestRigidBody? = nil,
+                collider: EditorSceneManifestCollider? = nil,
+                constraint: EditorSceneManifestConstraint? = nil,
+                script: EditorSceneManifestScript? = nil,
                 children: [EditorSceneManifestNode] = []) {
         self.id = id
         self.name = name
         self.kind = kind
+        self.localTransform = localTransform
+        self.renderMesh = renderMesh
+        self.camera = camera
+        self.light = light
+        self.rigidBody = rigidBody
+        self.collider = collider
+        self.constraint = constraint
+        self.script = script
         self.children = children
     }
 }
 
 public struct EditorSceneManifest: Codable, Sendable, Equatable {
+    public let schemaVersion: Int
     public let revision: UInt64
     public let entityCount: Int
+    public let selectedEntityID: UInt64?
     public let roots: [EditorSceneManifestNode]
 
-    public init(revision: UInt64,
+    public init(schemaVersion: Int = 2,
+                revision: UInt64,
                 entityCount: Int,
+                selectedEntityID: UInt64? = nil,
                 roots: [EditorSceneManifestNode]) {
+        self.schemaVersion = schemaVersion
         self.revision = revision
         self.entityCount = entityCount
+        self.selectedEntityID = selectedEntityID
         self.roots = roots
+    }
+}
+
+public struct EditorSceneManifestLoadResult: Sendable, Equatable {
+    public let entityCount: Int
+    public let selectedEntityID: UInt64?
+
+    public init(entityCount: Int, selectedEntityID: UInt64?) {
+        self.entityCount = entityCount
+        self.selectedEntityID = selectedEntityID
+    }
+}
+
+public struct EditorSceneManifestVector3: Codable, Sendable, Equatable {
+    public let x: Float
+    public let y: Float
+    public let z: Float
+
+    public init(x: Float, y: Float, z: Float) {
+        self.x = x
+        self.y = y
+        self.z = z
+    }
+
+    public init(_ value: SIMD3<Float>) {
+        self.init(x: value.x, y: value.y, z: value.z)
+    }
+
+    var simdValue: SIMD3<Float> {
+        SIMD3<Float>(x, y, z)
+    }
+}
+
+public struct EditorSceneManifestMatrix: Codable, Sendable, Equatable {
+    public let rows: [Float]
+
+    public init(rows: [Float]) {
+        self.rows = rows
+    }
+
+    public init(_ matrix: simd_float4x4) {
+        let c0 = matrix.columns.0
+        let c1 = matrix.columns.1
+        let c2 = matrix.columns.2
+        let c3 = matrix.columns.3
+        self.rows = [
+            c0.x, c1.x, c2.x, c3.x,
+            c0.y, c1.y, c2.y, c3.y,
+            c0.z, c1.z, c2.z, c3.z,
+            c0.w, c1.w, c2.w, c3.w,
+        ]
+    }
+
+    var simdValue: simd_float4x4? {
+        guard rows.count == 16 else { return nil }
+        return simd_float4x4(rows: [
+            SIMD4<Float>(rows[0], rows[1], rows[2], rows[3]),
+            SIMD4<Float>(rows[4], rows[5], rows[6], rows[7]),
+            SIMD4<Float>(rows[8], rows[9], rows[10], rows[11]),
+            SIMD4<Float>(rows[12], rows[13], rows[14], rows[15]),
+        ])
+    }
+
+    var localTransform: LocalTransform? {
+        simdValue.map(LocalTransform.init(matrix:))
+    }
+}
+
+public struct EditorSceneManifestRenderMesh: Codable, Sendable, Equatable {
+    public let meshIndex: Int
+    public let isVisible: Bool
+
+    public init(meshIndex: Int, isVisible: Bool) {
+        self.meshIndex = meshIndex
+        self.isVisible = isVisible
+    }
+
+    public init(_ component: RenderMeshComponent) {
+        self.init(meshIndex: component.meshIndex, isVisible: component.isVisible)
+    }
+
+    var component: RenderMeshComponent {
+        RenderMeshComponent(meshIndex: meshIndex, isVisible: isVisible)
+    }
+}
+
+public struct EditorSceneManifestCamera: Codable, Sendable, Equatable {
+    public let target: EditorSceneManifestVector3
+    public let up: EditorSceneManifestVector3
+    public let fovYRadians: Float
+    public let near: Float
+    public let far: Float
+    public let isActive: Bool
+
+    public init(target: EditorSceneManifestVector3,
+                up: EditorSceneManifestVector3,
+                fovYRadians: Float,
+                near: Float,
+                far: Float,
+                isActive: Bool) {
+        self.target = target
+        self.up = up
+        self.fovYRadians = fovYRadians
+        self.near = near
+        self.far = far
+        self.isActive = isActive
+    }
+
+    public init(_ component: CameraComponent) {
+        self.init(target: EditorSceneManifestVector3(component.target),
+                  up: EditorSceneManifestVector3(component.up),
+                  fovYRadians: component.fovYRadians,
+                  near: component.near,
+                  far: component.far,
+                  isActive: component.isActive)
+    }
+
+    var component: CameraComponent {
+        CameraComponent(target: target.simdValue,
+                        up: up.simdValue,
+                        fovYRadians: fovYRadians,
+                        near: near,
+                        far: far,
+                        isActive: isActive)
+    }
+}
+
+public struct EditorSceneManifestLight: Codable, Sendable, Equatable {
+    public let type: String
+    public let color: EditorSceneManifestVector3
+    public let intensity: Float
+    public let range: Float
+    public let spotInnerAngleDegrees: Float
+    public let spotOuterAngleDegrees: Float
+
+    public init(type: String,
+                color: EditorSceneManifestVector3,
+                intensity: Float,
+                range: Float,
+                spotInnerAngleDegrees: Float,
+                spotOuterAngleDegrees: Float) {
+        self.type = type
+        self.color = color
+        self.intensity = intensity
+        self.range = range
+        self.spotInnerAngleDegrees = spotInnerAngleDegrees
+        self.spotOuterAngleDegrees = spotOuterAngleDegrees
+    }
+
+    public init(_ component: LightComponent) {
+        self.init(type: component.type.rawValue,
+                  color: EditorSceneManifestVector3(component.color),
+                  intensity: component.intensity,
+                  range: component.range,
+                  spotInnerAngleDegrees: component.spotInnerAngleDegrees,
+                  spotOuterAngleDegrees: component.spotOuterAngleDegrees)
+    }
+
+    var component: LightComponent {
+        LightComponent(type: LightType(rawValue: type) ?? .directional,
+                       color: color.simdValue,
+                       intensity: intensity,
+                       range: range,
+                       spotInnerAngleDegrees: spotInnerAngleDegrees,
+                       spotOuterAngleDegrees: spotOuterAngleDegrees)
+    }
+}
+
+public struct EditorSceneManifestRigidBody: Codable, Sendable, Equatable {
+    public let motionType: String
+    public let mass: Float
+    public let linearVelocity: EditorSceneManifestVector3
+    public let angularVelocity: EditorSceneManifestVector3
+    public let accumulatedForce: EditorSceneManifestVector3
+    public let accumulatedTorque: EditorSceneManifestVector3
+    public let gravityScale: Float
+    public let linearDamping: Float
+    public let angularDamping: Float
+    public let allowSleep: Bool
+    public let isSleeping: Bool
+
+    public init(_ component: RigidBody) {
+        self.motionType = component.motionType.rawValue
+        self.mass = component.mass
+        self.linearVelocity = EditorSceneManifestVector3(component.linearVelocity)
+        self.angularVelocity = EditorSceneManifestVector3(component.angularVelocity)
+        self.accumulatedForce = EditorSceneManifestVector3(component.accumulatedForce)
+        self.accumulatedTorque = EditorSceneManifestVector3(component.accumulatedTorque)
+        self.gravityScale = component.gravityScale
+        self.linearDamping = component.linearDamping
+        self.angularDamping = component.angularDamping
+        self.allowSleep = component.allowSleep
+        self.isSleeping = component.isSleeping
+    }
+
+    var component: RigidBody {
+        RigidBody(motionType: RigidBodyMotionType(rawValue: motionType) ?? .dynamic,
+                  mass: mass,
+                  linearVelocity: linearVelocity.simdValue,
+                  angularVelocity: angularVelocity.simdValue,
+                  accumulatedForce: accumulatedForce.simdValue,
+                  accumulatedTorque: accumulatedTorque.simdValue,
+                  gravityScale: gravityScale,
+                  linearDamping: linearDamping,
+                  angularDamping: angularDamping,
+                  allowSleep: allowSleep,
+                  isSleeping: isSleeping)
+    }
+}
+
+public struct EditorSceneManifestPhysicsMaterial: Codable, Sendable, Equatable {
+    public let friction: Float
+    public let restitution: Float
+    public let density: Float
+
+    public init(_ material: PhysicsMaterial) {
+        self.friction = material.friction
+        self.restitution = material.restitution
+        self.density = material.density
+    }
+
+    var material: PhysicsMaterial {
+        PhysicsMaterial(friction: friction, restitution: restitution, density: density)
+    }
+}
+
+public struct EditorSceneManifestColliderShape: Codable, Sendable, Equatable {
+    public let kind: String
+    public let halfExtents: EditorSceneManifestVector3?
+    public let radius: Float?
+    public let halfHeight: Float?
+    public let resourceID: String?
+    public let center: EditorSceneManifestVector3
+
+    public init(_ shape: ColliderShape) {
+        switch shape {
+        case let .box(halfExtents, center):
+            self.kind = "box"
+            self.halfExtents = EditorSceneManifestVector3(halfExtents)
+            self.radius = nil
+            self.halfHeight = nil
+            self.resourceID = nil
+            self.center = EditorSceneManifestVector3(center)
+        case let .sphere(radius, center):
+            self.kind = "sphere"
+            self.halfExtents = nil
+            self.radius = radius
+            self.halfHeight = nil
+            self.resourceID = nil
+            self.center = EditorSceneManifestVector3(center)
+        case let .capsule(radius, halfHeight, center):
+            self.kind = "capsule"
+            self.halfExtents = nil
+            self.radius = radius
+            self.halfHeight = halfHeight
+            self.resourceID = nil
+            self.center = EditorSceneManifestVector3(center)
+        case let .mesh(resourceID, center):
+            self.kind = "mesh"
+            self.halfExtents = nil
+            self.radius = nil
+            self.halfHeight = nil
+            self.resourceID = resourceID
+            self.center = EditorSceneManifestVector3(center)
+        }
+    }
+
+    var shape: ColliderShape {
+        switch kind {
+        case "box":
+            return .box(halfExtents: halfExtents?.simdValue ?? SIMD3<Float>(0.5, 0.5, 0.5),
+                        center: center.simdValue)
+        case "sphere":
+            return .sphere(radius: radius ?? 0.5, center: center.simdValue)
+        case "capsule":
+            return .capsule(radius: radius ?? 0.5,
+                            halfHeight: halfHeight ?? 0.5,
+                            center: center.simdValue)
+        case "mesh":
+            return .mesh(resourceID: resourceID, center: center.simdValue)
+        default:
+            return .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: center.simdValue)
+        }
+    }
+}
+
+public struct EditorSceneManifestCollider: Codable, Sendable, Equatable {
+    public let shape: EditorSceneManifestColliderShape
+    public let isTrigger: Bool
+    public let layerID: UInt16
+    public let layerMask: UInt16
+    public let material: EditorSceneManifestPhysicsMaterial
+
+    public init(_ component: Collider) {
+        self.shape = EditorSceneManifestColliderShape(component.shape)
+        self.isTrigger = component.isTrigger
+        self.layerID = component.layerID
+        self.layerMask = component.layerMask
+        self.material = EditorSceneManifestPhysicsMaterial(component.material)
+    }
+
+    var component: Collider {
+        Collider(shape: shape.shape,
+                 isTrigger: isTrigger,
+                 layerID: layerID,
+                 layerMask: layerMask,
+                 material: material.material)
+    }
+}
+
+public struct EditorSceneManifestConstraint: Codable, Sendable, Equatable {
+    public let constraintType: String
+    public let entityA: UInt64
+    public let entityB: UInt64
+    public let pivotA: EditorSceneManifestVector3
+    public let pivotB: EditorSceneManifestVector3
+    public let axisA: EditorSceneManifestVector3
+    public let axisB: EditorSceneManifestVector3
+    public let minLimit: Float
+    public let maxLimit: Float
+    public let isEnabled: Bool
+
+    public init(_ component: Constraint) {
+        self.constraintType = component.constraintType.rawValue
+        self.entityA = component.entityA.rawValue
+        self.entityB = component.entityB.rawValue
+        self.pivotA = EditorSceneManifestVector3(component.pivotA)
+        self.pivotB = EditorSceneManifestVector3(component.pivotB)
+        self.axisA = EditorSceneManifestVector3(component.axisA)
+        self.axisB = EditorSceneManifestVector3(component.axisB)
+        self.minLimit = component.minLimit
+        self.maxLimit = component.maxLimit
+        self.isEnabled = component.isEnabled
+    }
+
+    func component(idMap: [UInt64: EntityID]) -> Constraint? {
+        guard let mappedA = idMap[entityA],
+              let mappedB = idMap[entityB]
+        else { return nil }
+        return Constraint(constraintType: ConstraintType(rawValue: constraintType) ?? .distance,
+                          entityA: mappedA,
+                          entityB: mappedB,
+                          pivotA: pivotA.simdValue,
+                          pivotB: pivotB.simdValue,
+                          axisA: axisA.simdValue,
+                          axisB: axisB.simdValue,
+                          minLimit: minLimit,
+                          maxLimit: maxLimit,
+                          isEnabled: isEnabled)
+    }
+}
+
+public struct EditorSceneManifestScriptBinding: Codable, Sendable, Equatable {
+    public let script: UInt64
+    public let isEnabled: Bool
+    public let parametersJSON: String
+
+    public init(_ binding: ScriptBinding) {
+        self.script = binding.script.rawValue
+        self.isEnabled = binding.isEnabled
+        self.parametersJSON = binding.parametersJSON
+    }
+
+    var binding: ScriptBinding {
+        ScriptBinding(ScriptHandle(rawValue: script),
+                      isEnabled: isEnabled,
+                      parametersJSON: parametersJSON)
+    }
+}
+
+public struct EditorSceneManifestScript: Codable, Sendable, Equatable {
+    public let bindings: [EditorSceneManifestScriptBinding]
+
+    public init(_ component: ScriptComponent) {
+        self.bindings = component.bindings.map(EditorSceneManifestScriptBinding.init)
+    }
+
+    var component: ScriptComponent {
+        ScriptComponent(bindings: bindings.map(\.binding))
     }
 }
 
@@ -151,10 +560,80 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         scene.roots().map(buildNode)
     }
 
-    public func manifest() -> EditorSceneManifest {
-        EditorSceneManifest(revision: revision,
-                            entityCount: entityCount,
-                            roots: roots.map(manifestNode))
+    public func manifest(selectedEntityID: UInt64? = nil) -> EditorSceneManifest {
+        let selectedEntity = entity(from: selectedEntityID)
+        let restoredSelection = selectedEntity.flatMap { scene.contains($0) ? $0.rawValue : nil }
+        return EditorSceneManifest(revision: revision,
+                                   entityCount: entityCount,
+                                   selectedEntityID: restoredSelection,
+                                   roots: scene.roots().map(manifestNode))
+    }
+
+    @discardableResult
+    public func load(manifest: EditorSceneManifest, notify: Bool = true) -> EditorSceneManifestLoadResult {
+        var restoredScene = SceneRuntime()
+        var idMap: [UInt64: EntityID] = [:]
+
+        @discardableResult
+        func restoreNode(_ node: EditorSceneManifestNode) -> EntityID {
+            let entity = restoredScene.createEntity()
+            idMap[node.id] = entity
+            _ = restoredScene.setComponent(SceneNameComponent(value: node.name), for: entity)
+            _ = restoredScene.setComponent(SceneKindComponent(value: node.kind), for: entity)
+            _ = restoredScene.setLocalTransform(node.localTransform?.localTransform ?? .identity,
+                                                for: entity)
+            if let renderMesh = node.renderMesh {
+                _ = restoredScene.setComponent(renderMesh.component, for: entity)
+            }
+            if let camera = node.camera {
+                _ = restoredScene.setComponent(camera.component, for: entity)
+            }
+            if let light = node.light {
+                _ = restoredScene.setComponent(light.component, for: entity)
+            }
+            if let rigidBody = node.rigidBody {
+                _ = restoredScene.setComponent(rigidBody.component, for: entity)
+            }
+            if let collider = node.collider {
+                _ = restoredScene.setComponent(collider.component, for: entity)
+            }
+            if let script = node.script {
+                _ = restoredScene.setComponent(script.component, for: entity)
+            }
+            for child in node.children {
+                let childEntity = restoreNode(child)
+                _ = restoredScene.setParent(entity, for: childEntity)
+            }
+            return entity
+        }
+
+        func restoreConstraints(_ node: EditorSceneManifestNode) {
+            if let entity = idMap[node.id],
+               let constraint = node.constraint?.component(idMap: idMap) {
+                _ = restoredScene.setComponent(constraint, for: entity)
+            }
+            for child in node.children {
+                restoreConstraints(child)
+            }
+        }
+
+        for root in manifest.roots {
+            restoreNode(root)
+        }
+        for root in manifest.roots {
+            restoreConstraints(root)
+        }
+        restoredScene.propagateTransforms()
+
+        scene = restoredScene
+        initialSelectionID = manifest.selectedEntityID.flatMap { idMap[$0]?.rawValue }
+            ?? scene.roots().first?.rawValue
+        initialExpandedIDs = Set(scene.roots().map(\.rawValue))
+        if notify {
+            notifyRevisionChanged()
+        }
+        return EditorSceneManifestLoadResult(entityCount: entityCount,
+                                             selectedEntityID: initialSelectionID)
     }
 
     @discardableResult
@@ -221,11 +700,28 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
-    private func manifestNode(_ node: EditorSceneNode) -> EditorSceneManifestNode {
-        EditorSceneManifestNode(id: node.id,
-                                name: node.name,
-                                kind: node.kind,
-                                children: node.children.map(manifestNode))
+    private func manifestNode(_ entity: EntityID) -> EditorSceneManifestNode {
+        EditorSceneManifestNode(
+            id: entity.rawValue,
+            name: displayName(for: entity),
+            kind: displayKind(for: entity),
+            localTransform: scene.localTransform(for: entity).map { EditorSceneManifestMatrix($0.matrix) },
+            renderMesh: scene.component(RenderMeshComponent.self, for: entity)
+                .map(EditorSceneManifestRenderMesh.init),
+            camera: scene.component(CameraComponent.self, for: entity)
+                .map(EditorSceneManifestCamera.init),
+            light: scene.component(LightComponent.self, for: entity)
+                .map(EditorSceneManifestLight.init),
+            rigidBody: scene.component(RigidBody.self, for: entity)
+                .map(EditorSceneManifestRigidBody.init),
+            collider: scene.component(Collider.self, for: entity)
+                .map(EditorSceneManifestCollider.init),
+            constraint: scene.component(Constraint.self, for: entity)
+                .map(EditorSceneManifestConstraint.init),
+            script: scene.component(ScriptComponent.self, for: entity)
+                .map(EditorSceneManifestScript.init),
+            children: scene.children(of: entity).map(manifestNode)
+        )
     }
 
     private func generalSection(for entity: EntityID) -> EditorInspectorSection {
