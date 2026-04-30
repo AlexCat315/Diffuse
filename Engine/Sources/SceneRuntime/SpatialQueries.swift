@@ -113,6 +113,24 @@ public struct SpatialIndexBuildSettings: Sendable, Equatable {
     }
 }
 
+public struct MeshColliderBoundsResource: Sendable, Equatable {
+    public var boundsByResourceID: [String: SpatialAABB]
+    public var defaultBounds: SpatialAABB?
+
+    public init(boundsByResourceID: [String: SpatialAABB] = [:],
+                defaultBounds: SpatialAABB? = nil) {
+        self.boundsByResourceID = boundsByResourceID
+        self.defaultBounds = defaultBounds
+    }
+
+    public func bounds(for resourceID: String?) -> SpatialAABB? {
+        if let resourceID, let bounds = boundsByResourceID[resourceID] {
+            return bounds
+        }
+        return defaultBounds
+    }
+}
+
 public struct SpatialQueryStats: Sendable, Equatable {
     public var nodeVisits: Int
     public var leafTests: Int
@@ -1156,17 +1174,21 @@ func buildSpatialIndexResource(
     let entities = world.entities()
     let colliders = world.componentSnapshot(Collider.self, matching: entities)
     let worldTransforms = world.worldTransformSnapshot(matching: entities)
+    let meshBounds = world.resource(MeshColliderBoundsResource.self)
 
     let result = jobSystem.parallelCompactMap(items: entities) { entity -> SpatialIndexEntry? in
         guard let collider = colliders[entity],
-              let worldTransform = worldTransforms[entity],
-              let bounds = colliderBounds(shape: collider.shape, worldTransform: worldTransform) else {
+              let worldTransform = worldTransforms[entity] else {
+            return nil
+        }
+        let resolvedShape = resolvedColliderShape(collider.shape, meshBounds: meshBounds)
+        guard let bounds = colliderBounds(shape: resolvedShape, worldTransform: worldTransform) else {
             return nil
         }
 
         return SpatialIndexEntry(
             entity: entity,
-            shape: collider.shape,
+            shape: resolvedShape,
             worldTransform: worldTransform,
             bounds: bounds,
             isTrigger: collider.isTrigger,
@@ -1484,6 +1506,16 @@ private func colliderBounds(shape: ColliderShape,
         return transformedBounds(corners: boxCorners(center: center, halfExtents: placeholderHalfExtents),
                                  matrix: worldTransform.matrix)
     }
+}
+
+private func resolvedColliderShape(_ shape: ColliderShape,
+                                   meshBounds: MeshColliderBoundsResource?) -> ColliderShape {
+    guard case let .mesh(resourceID, center) = shape,
+          let localBounds = meshBounds?.bounds(for: resourceID) else {
+        return shape
+    }
+    return .box(halfExtents: localBounds.halfExtents,
+                center: center + localBounds.center)
 }
 
 private func boxCorners(center: SIMD3<Float>, halfExtents: SIMD3<Float>) -> [SIMD3<Float>] {

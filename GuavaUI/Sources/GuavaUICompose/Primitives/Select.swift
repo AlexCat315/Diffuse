@@ -1,6 +1,101 @@
 import Foundation
 import GuavaUIRuntime
 
+public enum KeyboardShortcutPlatform: Sendable, Equatable {
+    case macOS
+    case windows
+    case linux
+    case other
+
+    public static var current: KeyboardShortcutPlatform {
+        #if os(macOS)
+        return .macOS
+        #elseif os(Windows)
+        return .windows
+        #elseif os(Linux)
+        return .linux
+        #else
+        return .other
+        #endif
+    }
+}
+
+public enum KeyboardShortcutModifier: Sendable, Equatable, Hashable {
+    case primary
+    case command
+    case control
+    case option
+    case shift
+}
+
+public struct KeyboardShortcut: Sendable, Equatable, Hashable {
+    public var modifiers: [KeyboardShortcutModifier]
+    public var key: String
+
+    public init(_ key: String, modifiers: [KeyboardShortcutModifier] = []) {
+        self.key = key
+        self.modifiers = modifiers
+    }
+
+    public static func primary(_ key: String) -> KeyboardShortcut {
+        KeyboardShortcut(key, modifiers: [.primary])
+    }
+
+    public static func primaryShift(_ key: String) -> KeyboardShortcut {
+        KeyboardShortcut(key, modifiers: [.primary, .shift])
+    }
+
+    public var displayString: String {
+        displayString(platform: .current)
+    }
+
+    public func displayString(platform: KeyboardShortcutPlatform) -> String {
+        let labels = resolvedModifiers(for: platform).map { modifierDisplay($0, platform: platform) }
+        switch platform {
+        case .macOS:
+            return labels.joined() + key
+        case .windows, .linux, .other:
+            return (labels + [key]).joined(separator: "+")
+        }
+    }
+
+    private func resolvedModifiers(for platform: KeyboardShortcutPlatform) -> [KeyboardShortcutModifier] {
+        var resolved: [KeyboardShortcutModifier] = []
+        for modifier in modifiers {
+            let platformModifier: KeyboardShortcutModifier
+            if modifier == .primary {
+                platformModifier = platform == .macOS ? .command : .control
+            } else {
+                platformModifier = modifier
+            }
+            if !resolved.contains(platformModifier) {
+                resolved.append(platformModifier)
+            }
+        }
+        return resolved
+    }
+
+    private func modifierDisplay(_ modifier: KeyboardShortcutModifier,
+                                 platform: KeyboardShortcutPlatform) -> String {
+        switch platform {
+        case .macOS:
+            switch modifier {
+            case .primary, .command: return "⌘"
+            case .control: return "⌃"
+            case .option: return "⌥"
+            case .shift: return "⇧"
+            }
+        case .windows, .linux, .other:
+            switch modifier {
+            case .primary, .control: return "Ctrl"
+            case .command: return "Meta"
+            case .option: return "Alt"
+            case .shift: return "Shift"
+            }
+        }
+    }
+}
+
 public enum MenuItemRole: Sendable {
     case normal
     case destructive
@@ -157,7 +252,7 @@ public extension Menu {
                 return .item(MenuItem(
                     id: "item-\(index)",
                     title: title,
-                    shortcut: shortcut,
+                    shortcut: shortcut?.displayString,
                     isEnabled: isEnabled,
                     role: .normal,
                     action: action

@@ -542,7 +542,9 @@ struct RootView: View {
                             .border(Color(red: 58, green: 64, blue: 78), width: 1)
                         } content: {
                             Menu([
-                                .item(MenuItem(id: "duplicate", title: "Duplicate", shortcut: "⌘D") {
+                                .item(MenuItem(id: "duplicate",
+                                               title: "Duplicate",
+                                               shortcut: KeyboardShortcut.primary("D").displayString) {
                                     clickCount += 1
                                 }),
                                 .item(MenuItem(id: "rename", title: "Rename", shortcut: "Return") {

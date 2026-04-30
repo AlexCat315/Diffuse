@@ -89,7 +89,7 @@ public enum EditorViewportShadingMode: String, Codable, Sendable, Hashable {
     case wireframe
 }
 
-public enum SelectionCommandBehavior: String, Codable, Sendable, Hashable {
+public enum SelectionPrimaryModifierBehavior: String, Codable, Sendable, Hashable {
     case subtract
     case toggle
 }
@@ -210,7 +210,7 @@ public struct EditorState: Codable, Sendable {
     public var translateSnapEnabled: Bool
     public var rotateSnapEnabled: Bool
     public var scaleSnapEnabled: Bool
-    public var cmdSelectBehavior: SelectionCommandBehavior
+    public var primarySelectBehavior: SelectionPrimaryModifierBehavior
     public var presentation: EditorPresentationState
     public var vsyncMode: EditorVSyncMode
     public var activeAssetDrag: EditorAssetDragPayload?
@@ -241,7 +241,7 @@ public struct EditorState: Codable, Sendable {
         translateSnapEnabled: Bool = false,
         rotateSnapEnabled: Bool = false,
         scaleSnapEnabled: Bool = false,
-        cmdSelectBehavior: SelectionCommandBehavior = .subtract,
+        primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract,
         themeMode: EditorThemeMode = .dark,
         language: EditorLanguage = .system,
         vsyncMode: EditorVSyncMode = .enabled,
@@ -272,7 +272,7 @@ public struct EditorState: Codable, Sendable {
         self.translateSnapEnabled = translateSnapEnabled
         self.rotateSnapEnabled = rotateSnapEnabled
         self.scaleSnapEnabled = scaleSnapEnabled
-        self.cmdSelectBehavior = cmdSelectBehavior
+        self.primarySelectBehavior = primarySelectBehavior
         self.presentation = EditorPresentationState(themeMode: themeMode,
                                                     language: language,
                                                     revision: uiRefreshRevision)
@@ -323,7 +323,7 @@ public struct EditorState: Codable, Sendable {
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
-        case cmdSelectBehavior
+        case primarySelectBehavior
         case presentation
         case themeMode
         case language
@@ -338,12 +338,25 @@ public struct EditorState: Codable, Sendable {
         case nextConsoleEntryID
     }
 
+    private enum LegacyCodingKeys: String, CodingKey {
+        case cmdSelectBehavior
+    }
+
     public init(from decoder: Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
+        let legacy = try decoder.container(keyedBy: LegacyCodingKeys.self)
         let decodedPresentation = try c.decodeIfPresent(EditorPresentationState.self, forKey: .presentation)
         let legacyThemeMode = try c.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode)
         let legacyLanguage = try c.decodeIfPresent(EditorLanguage.self, forKey: .language)
         let legacyRevision = try c.decodeIfPresent(UInt64.self, forKey: .uiRefreshRevision)
+        let decodedPrimarySelectBehavior = try c.decodeIfPresent(
+            SelectionPrimaryModifierBehavior.self,
+            forKey: .primarySelectBehavior
+        )
+        let legacyPrimarySelectBehavior = try legacy.decodeIfPresent(
+            SelectionPrimaryModifierBehavior.self,
+            forKey: .cmdSelectBehavior
+        )
 
         self.init(
             connected: try c.decodeIfPresent(Bool.self, forKey: .connected) ?? false,
@@ -365,7 +378,7 @@ public struct EditorState: Codable, Sendable {
             translateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .translateSnapEnabled) ?? false,
             rotateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .rotateSnapEnabled) ?? false,
             scaleSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .scaleSnapEnabled) ?? false,
-            cmdSelectBehavior: try c.decodeIfPresent(SelectionCommandBehavior.self, forKey: .cmdSelectBehavior) ?? .subtract,
+            primarySelectBehavior: decodedPrimarySelectBehavior ?? legacyPrimarySelectBehavior ?? .subtract,
             themeMode: decodedPresentation?.themeMode ?? legacyThemeMode ?? .dark,
             language: decodedPresentation?.language ?? legacyLanguage ?? .system,
             vsyncMode: try c.decodeIfPresent(EditorVSyncMode.self, forKey: .vsyncMode) ?? .enabled,
@@ -401,7 +414,7 @@ public struct EditorState: Codable, Sendable {
         try c.encode(translateSnapEnabled, forKey: .translateSnapEnabled)
         try c.encode(rotateSnapEnabled, forKey: .rotateSnapEnabled)
         try c.encode(scaleSnapEnabled, forKey: .scaleSnapEnabled)
-        try c.encode(cmdSelectBehavior, forKey: .cmdSelectBehavior)
+        try c.encode(primarySelectBehavior, forKey: .primarySelectBehavior)
         try c.encode(presentation, forKey: .presentation)
         try c.encode(themeMode, forKey: .themeMode)
         try c.encode(language, forKey: .language)

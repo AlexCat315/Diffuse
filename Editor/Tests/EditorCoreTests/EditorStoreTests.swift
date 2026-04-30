@@ -1,4 +1,5 @@
 import EditorCore
+import Foundation
 import Testing
 
 @Suite("EditorStore")
@@ -39,5 +40,25 @@ struct EditorStoreTests {
         #expect(store.version == 1)
         #expect(notifications == 1)
         #expect(store.latestConsoleEntry?.message == "Built project")
+    }
+
+    @Test("Selection primary modifier behavior decodes legacy command key")
+    func primaryModifierBehaviorDecodesLegacyCommandKey() throws {
+        let data = Data(#"{"cmdSelectBehavior":"toggle"}"#.utf8)
+
+        let state = try JSONDecoder().decode(EditorState.self, from: data)
+
+        #expect(state.primarySelectBehavior == .toggle)
+    }
+
+    @Test("Selection primary modifier behavior encodes platform-neutral key")
+    func primaryModifierBehaviorEncodesPlatformNeutralKey() throws {
+        let state = EditorState(primarySelectBehavior: .toggle)
+
+        let data = try JSONEncoder().encode(state)
+        let json = String(decoding: data, as: UTF8.self)
+
+        #expect(json.contains(#""primarySelectBehavior":"toggle""#))
+        #expect(!json.contains("cmdSelectBehavior"))
     }
 }

@@ -1,4 +1,5 @@
 import Foundation
+import GuavaUIRuntime
 
 public struct NativeMenuBar {
     public var appName: String
@@ -35,7 +36,7 @@ public struct NativeMenuAction {
 
     public init(title: String,
                 keyEquivalent: String = "",
-                keyModifiers: NativeMenuKeyModifiers = [.command],
+                keyModifiers: NativeMenuKeyModifiers = [.primary],
                 isEnabled: Bool = true,
                 isSelected: Bool = false,
                 action: @escaping @MainActor () -> Void) {
@@ -59,6 +60,12 @@ public struct NativeMenuKeyModifiers: OptionSet, Sendable {
     public static let shift = NativeMenuKeyModifiers(rawValue: 1 << 1)
     public static let option = NativeMenuKeyModifiers(rawValue: 1 << 2)
     public static let control = NativeMenuKeyModifiers(rawValue: 1 << 3)
+
+    #if os(macOS)
+    public static let primary: NativeMenuKeyModifiers = .command
+    #else
+    public static let primary: NativeMenuKeyModifiers = .control
+    #endif
 }
 
 #if os(macOS)
