@@ -49,13 +49,13 @@ private struct EditorCallbacks {
                                                      s.dispatch(.setWorkspaceMode(next))
                                                      let np = s.state.activeLayoutPreset
                                                      EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: np)
-                                                     EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, cmdSelectBehavior: s.state.cmdSelectBehavior)
+                                                     EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, primarySelectBehavior: s.state.primarySelectBehavior)
                                                  },
                                                  resetLayout: {
                                                      let m = s.state.workspaceMode; let p = s.state.activeLayoutPreset
                                                      EditorRootViewFactory.resetLayout(into: controller, for: m, preset: p)
                                                      EditorRootViewFactory.saveDockLayout(controller, for: m, preset: p)
-                                                     EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, cmdSelectBehavior: s.state.cmdSelectBehavior)
+                                                     EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, primarySelectBehavior: s.state.primarySelectBehavior)
                                                  },
                                                  newScene: { app.resetPreviewScene() },
                                                  openSettings: { app.openSettingsWindow() })

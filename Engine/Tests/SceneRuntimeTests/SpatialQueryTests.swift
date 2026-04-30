@@ -27,6 +27,38 @@ struct SpatialQueryTests {
         #expect(entry?.bounds.halfExtents == SIMD3<Float>(0.5, 0.5, 0.5))
     }
 
+    @Test("mesh colliders use registered local mesh bounds")
+    func meshCollidersUseRegisteredLocalMeshBounds() {
+        var runtime = SceneRuntime()
+        runtime.setResource(MeshColliderBoundsResource(
+            boundsByResourceID: [
+                "wide-mesh": SpatialAABB(min: SIMD3<Float>(-2, -1, -0.25),
+                                         max: SIMD3<Float>(2, 1, 0.25)),
+            ]
+        ))
+
+        let entity = runtime.createEntity()
+        _ = runtime.setLocalTransform(LocalTransform(translation: SIMD3<Float>(10, 0, 0)), for: entity)
+        _ = runtime.setComponent(
+            Collider(shape: .mesh(resourceID: "wide-mesh", center: SIMD3<Float>(1, 0, 0))),
+            for: entity
+        )
+
+        _ = runtime.tick()
+
+        let entry = runtime.spatialIndex.entries.first { $0.entity == entity }
+        #expect(entry?.bounds.center == SIMD3<Float>(11, 0, 0))
+        #expect(entry?.bounds.halfExtents == SIMD3<Float>(2, 1, 0.25))
+
+        let hit = runtime.physicsRaycast(
+            PhysicsRaycastQuery(origin: SIMD3<Float>(6, 0, 0),
+                                direction: SIMD3<Float>(1, 0, 0),
+                                maxDistance: 10)
+        )
+        #expect(hit?.entity == entity)
+        #expect(abs((hit?.distance ?? 0) - 3) < 0.000_1)
+    }
+
     @Test("spatialIndexUpdate reports job-backed incremental cache diffs")
     func spatialIndexUpdateReportsJobBackedIncrementalCacheDiffs() {
         var runtime = SceneRuntime()

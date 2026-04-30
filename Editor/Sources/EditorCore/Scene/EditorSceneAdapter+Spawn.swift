@@ -1,5 +1,6 @@
 import Foundation
 import IntentRuntime
+import RenderBackend
 import SceneRuntime
 import simd
 
@@ -18,7 +19,9 @@ extension EditorSceneAdapter {
                                                                      meshIndex: asset.meshIndex,
                                                                      position: position)
                                            ])
-        return result?.createdEntityIDs.first
+        guard let entityID = result?.createdEntityIDs.first else { return nil }
+        attachMeshColliderIfAvailable(entityID: entityID, meshIndex: asset.meshIndex)
+        return entityID
     }
 
     private func uniqueDisplayName(base: String) -> String {
@@ -31,5 +34,33 @@ extension EditorSceneAdapter {
             suffix += 1
         }
         return "\(base) \(suffix)"
+    }
+
+    private func attachMeshColliderIfAvailable(entityID rawID: UInt64, meshIndex: Int) {
+        guard let entity = EntityID(rawValue: rawID),
+              scene.contains(entity),
+              let bounds = MeshBoundsRegistry.shared.bounds(for: meshIndex)
+        else {
+            return
+        }
+
+        let resourceID = meshColliderResourceID(for: meshIndex)
+        var resource = scene.resource(MeshColliderBoundsResource.self) ?? MeshColliderBoundsResource()
+        resource.boundsByResourceID[resourceID] = SpatialAABB(min: bounds.min, max: bounds.max)
+        scene.setResource(resource)
+
+        _ = scene.setComponent(Collider(shape: .mesh(resourceID: resourceID, center: .zero)), for: entity)
+        notifyRevisionChanged()
+    }
+
+    private func meshColliderResourceID(for meshIndex: Int) -> String {
+        "meshIndex:\(meshIndex)"
+    }
+}
+
+private extension EntityID {
+    init?(rawValue: UInt64) {
+        self.init(index: UInt32(rawValue & 0xFFFF_FFFF),
+                  generation: UInt32(rawValue >> 32))
     }
 }

@@ -3,6 +3,8 @@ struct Uniforms {
 };
 
 @group(0) @binding(0) var<uniform> u : Uniforms;
+@group(0) @binding(2) var base_color_sampler : sampler;
+@group(0) @binding(3) var base_color_texture : texture_2d<f32>;
 
 struct VsIn {
     @location(0) pos            : vec3<f32>,
@@ -40,6 +42,8 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let normal = normalize(in.normal);
     let lambert = max(dot(normal, light_dir), 0.0);
     let rim = pow(1.0 - max(normal.z, 0.0), 2.0);
-    let hdr = in.color * (0.22 + lambert * 1.15 + rim * 0.18);
-    return vec4<f32>(hdr, 1.0);
+    let texel = textureSample(base_color_texture, base_color_sampler, in.uv);
+    let base = in.color * texel.rgb;
+    let hdr = base * (0.22 + lambert * 1.15 + rim * 0.18);
+    return vec4<f32>(hdr, texel.a);
 }

@@ -27,7 +27,7 @@ private func runEditor() throws {
         app.store.dispatch(.setThemeMode(shellState.themeMode))
         app.store.dispatch(.setLanguage(shellState.language))
         app.store.dispatch(.setVSyncMode(shellState.vsyncMode))
-        app.store.dispatch(.setCommandSelectBehavior(shellState.cmdSelectBehavior))
+        app.store.dispatch(.setPrimarySelectBehavior(shellState.primarySelectBehavior))
         EditorLocalizationPreferences.language = shellState.language
     }
 
@@ -70,14 +70,14 @@ private func runEditor() throws {
         themeMode: app.store.state.themeMode,
         language: app.store.state.language,
         vsyncMode: app.store.state.vsyncMode,
-        cmdSelectBehavior: app.store.state.cmdSelectBehavior
+        primarySelectBehavior: app.store.state.primarySelectBehavior
     )
     let shellPreferenceToken = app.store.subscribe { store in
         let next = (
             themeMode: store.state.themeMode,
             language: store.state.language,
             vsyncMode: store.state.vsyncMode,
-            cmdSelectBehavior: store.state.cmdSelectBehavior
+            primarySelectBehavior: store.state.primarySelectBehavior
         )
         guard next != lastShellPreferences else { return }
         if next.language != lastShellPreferences.language {
@@ -91,7 +91,7 @@ private func runEditor() throws {
                                              themeMode: store.state.themeMode,
                                              language: store.state.language,
                                              vsyncMode: store.state.vsyncMode,
-                                             cmdSelectBehavior: store.state.cmdSelectBehavior)
+                                             primarySelectBehavior: store.state.primarySelectBehavior)
         app.requestDisplayRefresh()
     }
     defer { app.store.unsubscribe(shellPreferenceToken) }
@@ -141,7 +141,7 @@ private func runEditor() throws {
                                          themeMode: app.store.state.themeMode,
                                          language: app.store.state.language,
                                          vsyncMode: app.store.state.vsyncMode,
-                                         cmdSelectBehavior: app.store.state.cmdSelectBehavior)
+                                         primarySelectBehavior: app.store.state.primarySelectBehavior)
     EditorRootViewFactory.saveDockLayout(controller,
                                          for: app.store.state.workspaceMode,
                                          preset: app.store.state.activeLayoutPreset)

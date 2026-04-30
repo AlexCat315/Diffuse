@@ -9,27 +9,27 @@ struct EditorSelectionReducerTests {
         let result = EditorSelectionReducer.merge(base: [1, 2],
                                                   picked: [2, 3],
                                                   modifiers: .shift,
-                                                  commandBehavior: .subtract)
+                                                  primaryModifierBehavior: .subtract)
 
         #expect(result == [1, 2, 3])
     }
 
-    @Test("Command subtract behavior removes picked entities")
-    func commandSubtractRemovesPickedEntities() {
+    @Test("Primary modifier subtract behavior removes picked entities")
+    func primaryModifierSubtractRemovesPickedEntities() {
         let result = EditorSelectionReducer.merge(base: [1, 2, 3],
                                                   picked: [2, 4],
                                                   modifiers: .gui,
-                                                  commandBehavior: .subtract)
+                                                  primaryModifierBehavior: .subtract)
 
         #expect(result == [1, 3])
     }
 
-    @Test("Command toggle behavior flips picked entities")
-    func commandToggleFlipsPickedEntities() {
+    @Test("Primary modifier toggle behavior flips picked entities")
+    func primaryModifierToggleFlipsPickedEntities() {
         let result = EditorSelectionReducer.merge(base: [1, 2],
                                                   picked: [2, 3],
                                                   modifiers: .ctrl,
-                                                  commandBehavior: .toggle)
+                                                  primaryModifierBehavior: .toggle)
 
         #expect(result == [1, 3])
     }

@@ -310,16 +310,16 @@ public struct TextField: View {
     func handleKey(_ event: KeyEvent, state: FieldState, node: Node) -> Bool {
         let mods = event.modifiers
         let shift = !mods.isDisjoint(with: .shift)
-        let cmdOrCtrl = !mods.isDisjoint(with: .gui) || !mods.isDisjoint(with: .ctrl)
+        let primaryModifier = !mods.isDisjoint(with: .gui) || !mods.isDisjoint(with: .ctrl)
         let count = text.wrappedValue.count
         // In read-only mode the field still accepts caret motion, selection,
-        // and Cmd+A / Cmd+C so users can copy the value, but every mutation
+        // and primary select/copy shortcuts so users can copy the value, but every mutation
         // (typing, paste, cut, backspace, delete, newline insert) is silently
         // dropped — matching Element Plus' readonly Input behaviour.
         let blockMutations = readOnly
 
-        // Cmd/Ctrl shortcuts take priority over plain bindings.
-        if cmdOrCtrl {
+        // Primary shortcuts take priority over plain bindings.
+        if primaryModifier {
             switch event.scancode {
             case 4:  // A
                 state.selectionAnchor = 0
@@ -406,7 +406,7 @@ public struct TextField: View {
             moveCursorVertically(lineDelta: 1, extendSelection: shift, state: state, node: node)
             return true
         case 40, 88: // RETURN, KP_ENTER
-            if !cmdOrCtrl, !blockMutations, (axis == .vertical || shift) {
+            if !primaryModifier, !blockMutations, (axis == .vertical || shift) {
                 insertReplacingSelection("\n", state: state)
             } else {
                 onSubmit?()

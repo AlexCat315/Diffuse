@@ -188,8 +188,8 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         #expect(submitted == false)
     } }
 
-    @Test("Vertical axis uses Cmd-Return for submit")
-    func multilineCmdReturnSubmits() { GlobalTestLock.locked {
+    @Test("Vertical axis uses Primary-Return for submit")
+    func multilinePrimaryReturnSubmits() { GlobalTestLock.locked {
         let rig = makeRig()
         rig.store.value = "abc"
         var submitted = false
@@ -562,10 +562,10 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
 
     // MARK: - Phase 6.4d — selection + modifiers + clipboard
 
-    private func key(_ scancode: UInt32, shift: Bool = false, cmd: Bool = false) -> KeyEvent {
+    private func key(_ scancode: UInt32, shift: Bool = false, primary: Bool = false) -> KeyEvent {
         var mods = KeyModifiers()
         if shift { mods.insert(.lshift) }
-        if cmd   { mods.insert(.lgui) }
+        if primary { mods.insert(.lgui) }
         return KeyEvent(scancode: scancode, keycode: 0, modifiers: mods, isRepeat: false)
     }
 
@@ -584,20 +584,20 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         #expect(rig.store.value == "X")
     } }
 
-    @Test("Cmd+A selects all; backspace clears the field")
-    func cmdASelectAll() { GlobalTestLock.locked {
+    @Test("Primary+A selects all; backspace clears the field")
+    func primaryASelectAll() { GlobalTestLock.locked {
         let rig = makeRig()
         rig.store.value = "hello"
         rig.graph.install(root: TextField(text: makeBinding(rig.store)))
         let node = fieldNode(in: rig.tree.root)
         let h = rig.registry.handlers(for: node).key!
-        _ = h(key(4, cmd: true), .target)        // Cmd+A
+        _ = h(key(4, primary: true), .target)    // primary+A
         _ = h(key(42), .target)                  // backspace deletes selection
         #expect(rig.store.value == "")
     } }
 
-    @Test("Cmd+C / Cmd+V round-trip via ClipboardHolder")
-    func cmdCV() { GlobalTestLock.locked {
+    @Test("Primary+C / Primary+V round-trip via ClipboardHolder")
+    func primaryCV() { GlobalTestLock.locked {
         let rig = makeRig()
         rig.store.value = "hello"
         var pasteboard: String = ""
@@ -611,17 +611,17 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         rig.graph.install(root: TextField(text: makeBinding(rig.store)))
         let node = fieldNode(in: rig.tree.root)
         let h = rig.registry.handlers(for: node).key!
-        _ = h(key(4, cmd: true), .target)        // select all
-        _ = h(key(6, cmd: true), .target)        // copy
+        _ = h(key(4, primary: true), .target)    // select all
+        _ = h(key(6, primary: true), .target)    // copy
         #expect(pasteboard == "hello")
 
         _ = h(key(77), .target)                  // End — collapse to end
-        _ = h(key(25, cmd: true), .target)       // paste
+        _ = h(key(25, primary: true), .target)   // paste
         #expect(rig.store.value == "hellohello")
     } }
 
-    @Test("Cmd+X cuts the selection to the clipboard")
-    func cmdX() { GlobalTestLock.locked {
+    @Test("Primary+X cuts the selection to the clipboard")
+    func primaryX() { GlobalTestLock.locked {
         let rig = makeRig()
         rig.store.value = "abcdef"
         var pasteboard: String = ""
@@ -639,7 +639,7 @@ struct TextFieldTests: GuavaUIComposeSerializedSuite {
         _ = h(key(80, shift: true), .target)
         _ = h(key(80, shift: true), .target)
         _ = h(key(80, shift: true), .target)
-        _ = h(key(27, cmd: true), .target)       // cut
+        _ = h(key(27, primary: true), .target)   // cut
         #expect(pasteboard == "def")
         #expect(rig.store.value == "abc")
     } }

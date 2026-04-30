@@ -70,6 +70,6 @@ enum EditorCommandDispatcher {
                                              themeMode: state.themeMode,
                                              language: state.language,
                                              vsyncMode: state.vsyncMode,
-                                             cmdSelectBehavior: state.cmdSelectBehavior)
+                                             primarySelectBehavior: state.primarySelectBehavior)
     }
 }

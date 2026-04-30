@@ -50,9 +50,9 @@ struct NumberFieldTests: GuavaUIComposeSerializedSuite {
         return nil
     }
 
-    private func key(_ scancode: UInt32, cmd: Bool = false) -> KeyEvent {
+    private func key(_ scancode: UInt32, primary: Bool = false) -> KeyEvent {
         var mods = KeyModifiers()
-        if cmd { mods.insert(.lgui) }
+        if primary { mods.insert(.lgui) }
         return KeyEvent(scancode: scancode, keycode: 0, modifiers: mods, isRepeat: false)
     }
 
@@ -67,7 +67,7 @@ struct NumberFieldTests: GuavaUIComposeSerializedSuite {
         rig.graph.recomposer.commitAll()
 
         let handlers = rig.registry.handlers(for: node)
-        _ = handlers.key!(key(4, cmd: true), .target)
+        _ = handlers.key!(key(4, primary: true), .target)
         _ = handlers.text!("12.5", .target)
         _ = handlers.key!(key(40), .target)
 
@@ -85,7 +85,7 @@ struct NumberFieldTests: GuavaUIComposeSerializedSuite {
         rig.graph.recomposer.commitAll()
 
         let handlers = rig.registry.handlers(for: node)
-        _ = handlers.key!(key(4, cmd: true), .target)
+        _ = handlers.key!(key(4, primary: true), .target)
         _ = handlers.text!("7.25", .target)
         rig.focus.clear()
         rig.graph.recomposer.commitAll()
@@ -104,7 +104,7 @@ struct NumberFieldTests: GuavaUIComposeSerializedSuite {
         rig.graph.recomposer.commitAll()
 
         let handlers = rig.registry.handlers(for: node)
-        _ = handlers.key!(key(4, cmd: true), .target)
+        _ = handlers.key!(key(4, primary: true), .target)
         _ = handlers.text!("abc", .target)
         rig.focus.clear()
         rig.graph.recomposer.commitAll()
