@@ -1,3 +1,4 @@
+import Foundation
 import ImageIO
 import Testing
 
@@ -5,10 +6,10 @@ import Testing
 struct ImageIOTests {
 
     @Test("EXRWriter layer construction yields correct channel counts")
-    func exrWriterLayerConstruction() {
+    func exrWriterLayerConstruction() throws {
         let beauty = EXRWriter.Layer(name: "beauty", channels: ["R", "G", "B", "A"])
         let depth = EXRWriter.Layer(name: "depth", channels: ["Z"], pixelType: .float)
-        let writer = EXRWriter(path: "/tmp/test.exr", width: 1920, height: 1080)
+        let writer = try EXRWriter(path: "/tmp/test.exr", width: 1920, height: 1080)
         writer.addLayer(beauty)
         writer.addLayer(depth)
 
@@ -42,5 +43,83 @@ struct ImageIOTests {
         let ctx = EXRWriterError.contextCreationFailed
         let layer = EXRWriterError.layerCreationFailed("test")
         #expect(String(describing: ctx) != String(describing: layer))
+    }
+
+    @Test("EXR write-then-read roundtrip preserves RGBA pixel data")
+    func exrRoundtripRGBA() throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let path = tmpDir.appendingPathComponent("roundtrip_rgba.exr").path
+        let width = 64
+        let height = 32
+        let pixelCount = width * height * 4
+
+        // Create known pixel data
+        var original = [Float](repeating: 0, count: pixelCount)
+        for i in 0..<(width * height) {
+            let r = Float(i % 256) / 255.0
+            let g = Float((i / 3) % 256) / 255.0
+            let b = Float((i / 7) % 256) / 255.0
+            original[i * 4 + 0] = r
+            original[i * 4 + 1] = g
+            original[i * 4 + 2] = b
+            original[i * 4 + 3] = 1.0
+        }
+
+        // Write
+        let writer = try EXRWriter(path: path, width: width, height: height)
+        writer.addLayer(EXRWriter.Layer(name: "beauty", channels: ["R", "G", "B", "A"], pixelType: .float))
+        #expect(writer.setPixels(original, for: "beauty"))
+        try writer.write()
+
+        // Read back
+        let reader = try EXRReader(path: path)
+        #expect(reader.width == width)
+        #expect(reader.height == height)
+        #expect(reader.layerCount == 1)
+
+        let info = reader.layerInfo(at: 0)
+        #expect(info?.name == "beauty")
+
+        let readPixels = reader.readPixels(layerName: "beauty")
+        #expect(readPixels.count == pixelCount)
+
+        // Verify
+        for i in 0..<pixelCount {
+            #expect(abs(readPixels[i] - original[i]) < 0.005)
+        }
+    }
+
+    @Test("EXR two-layer write produces correct layer count on read")
+    func exrTwoLayerRoundtrip() throws {
+        let tmpDir = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: tmpDir, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: tmpDir) }
+
+        let path = tmpDir.appendingPathComponent("twolayer.exr").path
+        let writer = try EXRWriter(path: path, width: 16, height: 16)
+        writer.addLayer(EXRWriter.Layer(name: "beauty", channels: ["R", "G", "B", "A"]))
+        writer.addLayer(EXRWriter.Layer(name: "depth", channels: ["Z"]))
+
+        let rgba = [Float](repeating: 0.5, count: 16 * 16 * 4)
+        let depth = [Float](repeating: 0.75, count: 16 * 16)
+        #expect(writer.setPixels(rgba, for: "beauty"))
+        #expect(writer.setPixels(depth, for: "depth"))
+        try writer.write()
+
+        let reader = try EXRReader(path: path)
+        #expect(reader.layerCount == 2)
+
+        let names = (0..<reader.layerCount).compactMap { reader.layerInfo(at: $0)?.name }
+        #expect(names.contains("beauty"))
+        #expect(names.contains("depth"))
+
+        let readDepth = reader.readPixels(layerName: "depth")
+        #expect(readDepth.count >= 16 * 16)
+        #expect(abs(readDepth[0] - 0.75) < 0.01)
     }
 }

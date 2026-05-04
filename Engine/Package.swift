@@ -79,12 +79,44 @@ let package = Package(
         .target(
             name: "COCIOBridge",
             path: "Sources/Bridge/COCIOBridge",
-            publicHeadersPath: "include"
+            publicHeadersPath: "include",
+            cxxSettings: [
+                .unsafeFlags([
+                    "-I/opt/homebrew/include",
+                ])
+            ],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-L/opt/homebrew/lib",
+                    "-lOpenColorIO",
+                    "-Xlinker", "-rpath", "-Xlinker", "/opt/homebrew/lib",
+                ])
+            ]
         ),
         .target(
             name: "COpenEXRBridge",
             path: "Sources/Bridge/COpenEXRBridge",
-            publicHeadersPath: "include"
+            publicHeadersPath: "include",
+            cxxSettings: [
+                .unsafeFlags([
+                    "-I/opt/homebrew/include",
+                    "-I/opt/homebrew/include/OpenEXR",
+                    "-I/opt/homebrew/include/Imath",
+                ])
+            ],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-L/opt/homebrew/lib",
+                    "-lOpenEXR-3_4",
+                    "-lOpenEXRUtil-3_4",
+                    "-lOpenEXRCore-3_4",
+                    "-lIex-3_4",
+                    "-lIlmThread-3_4",
+                    "-L/opt/homebrew/Cellar/imath/3.2.2/lib",
+                    "-lImath-3_2",
+                    "-Xlinker", "-rpath", "-Xlinker", "/opt/homebrew/lib",
+                ])
+            ]
         ),
 
         // MARK: - Core Kernel (no deps, pure Swift protocols and types)
