@@ -1,3 +1,4 @@
+import EngineKernel
 import Foundation
 import GuavaUIRuntime
 
@@ -176,14 +177,17 @@ public struct Menu: View {
     public let width: Float?
     public let maxVisibleRows: Int
     public let onItemActivated: (() -> Void)?
+    public let highlightedIndex: Int?
 
     public init(_ entries: [MenuEntry],
                 width: Float? = nil,
                 maxVisibleRows: Int = 8,
+                highlightedIndex: Int? = nil,
                 onItemActivated: (() -> Void)? = nil) {
         self.entries = entries
         self.width = width
         self.maxVisibleRows = max(1, maxVisibleRows)
+        self.highlightedIndex = highlightedIndex
         self.onItemActivated = onItemActivated
     }
 
@@ -212,12 +216,20 @@ public struct Menu: View {
     }
 
     private func rows() -> [AnyView] {
-        entries.map { entry in
-            AnyView(menuEntry(entry).id(entry.id))
+        var itemIndex = 0
+        return entries.map { entry in
+            let isHighlighted: Bool = {
+                if case .item = entry {
+                    defer { itemIndex += 1 }
+                    return highlightedIndex == itemIndex
+                }
+                return false
+            }()
+            return AnyView(menuEntry(entry, isHighlighted: isHighlighted).id(entry.id))
         }
     }
 
-    private func menuEntry(_ entry: MenuEntry) -> some View {
+    private func menuEntry(_ entry: MenuEntry, isHighlighted: Bool) -> some View {
         switch entry {
         case .separator:
             return AnyView(
@@ -225,6 +237,18 @@ public struct Menu: View {
                     .background(.divider)
             )
         case .item(let item):
+            let row = Row(alignment: .center, spacing: 8) {
+                Text(item.title)
+                    .font(.body)
+                    .foregroundColor(.onSurface)
+                    .flex()
+                if let shortcut = item.shortcut {
+                    Text(shortcut)
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                }
+            }
+            .padding(horizontal: 10, vertical: 7)
             return AnyView(
                 Button(role: item.role == .destructive ? .destructive : .normal,
                        isEnabled: item.isEnabled,
@@ -232,18 +256,11 @@ public struct Menu: View {
                     item.action()
                     onItemActivated?()
                 }) {
-                    Row(alignment: .center, spacing: 8) {
-                        Text(item.title)
-                            .font(.body)
-                            .foregroundColor(.onSurface)
-                            .flex()
-                        if let shortcut = item.shortcut {
-                            Text(shortcut)
-                                .font(.caption)
-                                .foregroundColor(.onSurfaceMuted)
-                        }
+                    if isHighlighted {
+                        row.background(.surfaceVariant)
+                    } else {
+                        row
                     }
-                    .padding(horizontal: 10, vertical: 7)
                 }
                 .buttonStyle(.ghost)
             )
@@ -273,6 +290,7 @@ public extension Menu {
         }
         self.width = width
         self.maxVisibleRows = max(1, maxVisibleRows)
+        self.highlightedIndex = nil
         self.onItemActivated = onItemActivated
     }
 }
@@ -283,15 +301,18 @@ public struct Popover<Label: View, Content: View>: View {
     public let width: Float?
     public let label: Label
     public let content: Content
+    public let onKey: ((KeyEvent, EventPhase) -> EventResult)?
 
     public init(isPresented: Binding<Bool>,
                 isEnabled: Bool = true,
                 width: Float? = nil,
+                onKey: ((KeyEvent, EventPhase) -> EventResult)? = nil,
                 @ViewBuilder label: () -> Label,
                 @ViewBuilder content: () -> Content) {
         self.isPresented = isPresented
         self.isEnabled = isEnabled
         self.width = width
+        self.onKey = onKey
         self.label = label()
         self.content = content()
     }
@@ -308,7 +329,7 @@ public struct Popover<Label: View, Content: View>: View {
             .buttonStyle(.plain)
 
             if isPresented.wrappedValue {
-                _PopoverOverlayHost(width: width) {
+                _PopoverOverlayHost(width: width, keyHandler: onKey) {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         content
                     }
@@ -325,7 +346,13 @@ private struct _PopoverFrontmostModifier: ViewModifier {
     let isPresented: Bool
 
     func apply(node: Node) {
-        guard isPresented else { return }
+        guard isPresented else {
+            if let entryID = node.attachments["__popover_entry_id"] as? UUID {
+                PopoverOverlayRegistry.unregister(entryID)
+                node.attachments.removeValue(forKey: "__popover_entry_id")
+            }
+            return
+        }
         var current: Node? = node
         while let child = current, let parent = child.parent {
             guard let index = parent.children.firstIndex(where: { $0 === child }) else {
@@ -346,9 +373,13 @@ private struct _PopoverFrontmostModifier: ViewModifier {
 private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     let width: Float?
     let content: Content
+    let keyHandler: ((KeyEvent, EventPhase) -> EventResult)?
 
-    init(width: Float?, @ViewBuilder content: () -> Content) {
+    init(width: Float?,
+         keyHandler: ((KeyEvent, EventPhase) -> EventResult)? = nil,
+         @ViewBuilder content: () -> Content) {
         self.width = width
+        self.keyHandler = keyHandler
         self.content = content()
     }
 
@@ -358,7 +389,47 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         return node
     }
 
-    func _updateNode(_ node: Node) {}
+    func _updateNode(_ node: Node) {
+        // Compute absolute position from the trigger container (parent Box)
+        let boxNode = node.parent
+        var absX: CGFloat = 0
+        var absY: CGFloat = 0
+        var current = boxNode
+        while let n = current {
+            absX += n.frame.origin.x
+            absY += n.frame.origin.y
+            current = n.parent
+        }
+        let overlayY = absY + (boxNode?.frame.height ?? 0)
+        let position = CGPoint(x: absX, y: overlayY)
+
+        // Register / update the portal overlay entry
+        if let entryID = node.attachments["__popover_entry_id"] as? UUID {
+            PopoverOverlayRegistry.updatePosition(entryID, position: position)
+            PopoverOverlayRegistry.updateContent(entryID, content: AnyView(content))
+        } else {
+            let entryID = PopoverOverlayRegistry.register(
+                position: position,
+                width: width,
+                content: AnyView(content)
+            )
+            node.attachments["__popover_entry_id"] = entryID
+            // Also store on parent so _PopoverFrontmostModifier can clean up
+            boxNode?.attachments["__popover_entry_id"] = entryID
+        }
+
+        // Keyboard handler
+        node.isFocusable = keyHandler != nil
+        if let keyHandler, let registry = InteractionRegistryHolder.current {
+            registry.setKey(node, keyHandler)
+            if node.attachments["__popover_autofocused"] == nil {
+                node.attachments["__popover_autofocused"] = true
+                FocusChainHolder.current?.focus(node)
+            }
+        } else {
+            InteractionRegistryHolder.current?.remove(node)
+        }
+    }
 
     func _makeLayoutNode() -> LayoutNode? {
         LayoutNode()
@@ -374,7 +445,8 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     }
 
     var _children: [any View] {
-        [content]
+        // Content is portal-rendered via PopoverOverlayRegistry + OverlayHost
+        []
     }
 }
 
@@ -422,11 +494,45 @@ private struct _StatefulSelect<Value: Hashable>: View {
     let select: Select<Value>
 
     @State var isPresented: Bool = false
+    @State var highlightedIndex: Int = 0
+    @State var popoverWasPresented: Bool = false
 
     var body: some View {
+        let _ = {
+            if isPresented, !popoverWasPresented {
+                highlightedIndex = 0
+            }
+            popoverWasPresented = isPresented
+        }()
+
+        let itemCount = select.options.count
+        let keyHandler: (KeyEvent, EventPhase) -> EventResult = { event, phase in
+            guard phase == .target || phase == .bubble else { return .ignored }
+            switch event.scancode {
+            case 81: // Arrow Down
+                if highlightedIndex + 1 < itemCount { highlightedIndex += 1 }
+                return .handled
+            case 82: // Arrow Up
+                if highlightedIndex > 0 { highlightedIndex -= 1 }
+                return .handled
+            case 40, 88: // Return, KP Enter
+                if highlightedIndex < itemCount {
+                    select.selection.wrappedValue = select.options[highlightedIndex].value
+                }
+                isPresented = false
+                return .handled
+            case 41: // Escape
+                isPresented = false
+                return .handled
+            default:
+                return .ignored
+            }
+        }
+
         Popover(isPresented: $isPresented,
                 isEnabled: select.isEnabled,
                 width: select.width,
+                onKey: keyHandler,
                 label: {
             Row(alignment: .center, spacing: 8) {
                 Text(selectedLabel)
@@ -448,6 +554,7 @@ private struct _StatefulSelect<Value: Hashable>: View {
         }, content: {
             Menu(menuEntries,
                  width: select.width,
+                 highlightedIndex: isPresented ? highlightedIndex : nil,
                  onItemActivated: {
                 isPresented = false
             })
