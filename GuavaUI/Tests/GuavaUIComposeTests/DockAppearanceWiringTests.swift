@@ -119,7 +119,7 @@ struct DockAppearanceWiringTests: GuavaUIComposeSerializedSuite {
         }
     }}
 
-    @Test("Default DockStyle preserves the legacy 32 / 1 / 16 / 24 sizes")
+    @Test("Default DockStyle preserves the compact 30 / 3 / 16 / 24 sizes")
     func defaultsUnchanged() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry
@@ -143,7 +143,7 @@ struct DockAppearanceWiringTests: GuavaUIComposeSerializedSuite {
         }
         #expect(!strips.isEmpty)
         for s in strips {
-            #expect(abs(Float(s.frame.height) - 32) < 0.5)
+            #expect(abs(Float(s.frame.height) - 30) < 0.5)
         }
 
         let closeHosts = collect(root) {

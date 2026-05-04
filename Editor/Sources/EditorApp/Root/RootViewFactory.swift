@@ -11,24 +11,24 @@ enum EditorRootViewFactory {
         var themeMode: EditorThemeMode
         var language: EditorLanguage
         var vsyncMode: EditorVSyncMode
-        var cmdSelectBehavior: SelectionCommandBehavior
+        var primarySelectBehavior: SelectionPrimaryModifierBehavior
         var schemaVersion: Int
 
-        static let currentSchemaVersion = 5
+        static let currentSchemaVersion = 7
 
         init(workspaceMode: EditorWorkspaceMode,
              activeLayoutPreset: EditorLayoutPreset,
              themeMode: EditorThemeMode = .dark,
              language: EditorLanguage = .system,
              vsyncMode: EditorVSyncMode = .enabled,
-             cmdSelectBehavior: SelectionCommandBehavior = .subtract,
+             primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract,
              schemaVersion: Int = currentSchemaVersion) {
             self.workspaceMode = workspaceMode
             self.activeLayoutPreset = activeLayoutPreset
             self.themeMode = themeMode
             self.language = language
             self.vsyncMode = vsyncMode
-            self.cmdSelectBehavior = cmdSelectBehavior
+            self.primarySelectBehavior = primarySelectBehavior
             self.schemaVersion = schemaVersion
         }
 
@@ -38,12 +38,13 @@ enum EditorRootViewFactory {
             case themeMode
             case language
             case vsyncMode
-            case cmdSelectBehavior
+            case primarySelectBehavior
             case schemaVersion
         }
 
         enum LegacyCodingKeys: String, CodingKey {
             case frameRateLimit
+            case cmdSelectBehavior
         }
 
         func encode(to encoder: Encoder) throws {
@@ -53,7 +54,7 @@ enum EditorRootViewFactory {
             try values.encode(themeMode, forKey: .themeMode)
             try values.encode(language, forKey: .language)
             try values.encode(vsyncMode, forKey: .vsyncMode)
-            try values.encode(cmdSelectBehavior, forKey: .cmdSelectBehavior)
+            try values.encode(primarySelectBehavior, forKey: .primarySelectBehavior)
             try values.encode(schemaVersion, forKey: .schemaVersion)
         }
 
@@ -62,7 +63,12 @@ enum EditorRootViewFactory {
             workspaceMode = try values.decodeIfPresent(EditorWorkspaceMode.self, forKey: .workspaceMode) ?? .level
             activeLayoutPreset = try values.decodeIfPresent(EditorLayoutPreset.self, forKey: .activeLayoutPreset)
                 ?? .default(for: workspaceMode)
-            themeMode = try values.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode) ?? .dark
+            let decodedSchemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+            if decodedSchemaVersion < 6 {
+                themeMode = .dark
+            } else {
+                themeMode = try values.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode) ?? .dark
+            }
             language = try values.decodeIfPresent(EditorLanguage.self, forKey: .language) ?? .system
             let legacyValues = try decoder.container(keyedBy: LegacyCodingKeys.self)
             if let decodedVSync = try values.decodeIfPresent(EditorVSyncMode.self, forKey: .vsyncMode) {
@@ -72,9 +78,16 @@ enum EditorRootViewFactory {
             } else {
                 vsyncMode = .enabled
             }
-            cmdSelectBehavior = try values.decodeIfPresent(SelectionCommandBehavior.self, forKey: .cmdSelectBehavior)
-                ?? .subtract
-            schemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
+            let decodedPrimarySelectBehavior = try values.decodeIfPresent(
+                SelectionPrimaryModifierBehavior.self,
+                forKey: .primarySelectBehavior
+            )
+            let legacyPrimarySelectBehavior = try legacyValues.decodeIfPresent(
+                SelectionPrimaryModifierBehavior.self,
+                forKey: .cmdSelectBehavior
+            )
+            primarySelectBehavior = decodedPrimarySelectBehavior ?? legacyPrimarySelectBehavior ?? .subtract
+            schemaVersion = decodedSchemaVersion
         }
     }
 
@@ -454,7 +467,7 @@ enum EditorRootViewFactory {
         ])
     }
 
-    private static let layoutPersistenceKey = "editor_dock_layout"
+    private static let layoutPersistenceKey = "editor_dock_layout_v2"
     private static let shellStatePersistenceKey = "editor_shell_state"
 
     private struct LayoutFractions {
@@ -466,29 +479,29 @@ enum EditorRootViewFactory {
     private static func defaultFractions(for preset: EditorLayoutPreset) -> LayoutFractions {
         switch preset {
         case .levelDefault:
-            return LayoutFractions(hierarchyAndMain: 15.0 / 90.0,
-                                   viewportAndInspector: 55.0 / 75.0,
-                                   topAndBottom: 0.70)
+            return LayoutFractions(hierarchyAndMain: 0.22,
+                                   viewportAndInspector: 0.78,
+                                   topAndBottom: 0.74)
         case .levelCinematics:
-            return LayoutFractions(hierarchyAndMain: 12.0 / 90.0,
-                                   viewportAndInspector: 60.0 / 78.0,
-                                   topAndBottom: 0.64)
-        case .modelingDefault:
-            return LayoutFractions(hierarchyAndMain: 18.0 / 90.0,
-                                   viewportAndInspector: 52.0 / 72.0,
-                                   topAndBottom: 0.66)
-        case .modelingSculpt:
-            return LayoutFractions(hierarchyAndMain: 14.0 / 90.0,
-                                   viewportAndInspector: 54.0 / 76.0,
+            return LayoutFractions(hierarchyAndMain: 0.18,
+                                   viewportAndInspector: 0.80,
                                    topAndBottom: 0.68)
+        case .modelingDefault:
+            return LayoutFractions(hierarchyAndMain: 0.22,
+                                   viewportAndInspector: 0.76,
+                                   topAndBottom: 0.72)
+        case .modelingSculpt:
+            return LayoutFractions(hierarchyAndMain: 0.19,
+                                   viewportAndInspector: 0.78,
+                                   topAndBottom: 0.72)
         case .animationDefault:
-            return LayoutFractions(hierarchyAndMain: 16.0 / 90.0,
-                                   viewportAndInspector: 50.0 / 74.0,
-                                   topAndBottom: 0.62)
+            return LayoutFractions(hierarchyAndMain: 0.20,
+                                   viewportAndInspector: 0.76,
+                                   topAndBottom: 0.66)
         case .animationSequencer:
-            return LayoutFractions(hierarchyAndMain: 14.0 / 90.0,
-                                   viewportAndInspector: 49.0 / 76.0,
-                                   topAndBottom: 0.56)
+            return LayoutFractions(hierarchyAndMain: 0.18,
+                                   viewportAndInspector: 0.74,
+                                   topAndBottom: 0.58)
         }
     }
 
@@ -656,14 +669,14 @@ enum EditorRootViewFactory {
                                themeMode: EditorThemeMode,
                                language: EditorLanguage,
                                vsyncMode: EditorVSyncMode,
-                               cmdSelectBehavior: SelectionCommandBehavior = .subtract) {
+                               primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract) {
         guard let layoutDir = getLayoutPersistenceDirectory() else { return }
         let shell = EditorShellState(workspaceMode: mode,
                                      activeLayoutPreset: preset,
                                      themeMode: themeMode,
                                      language: language,
                                      vsyncMode: vsyncMode,
-                                     cmdSelectBehavior: cmdSelectBehavior)
+                                     primarySelectBehavior: primarySelectBehavior)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {

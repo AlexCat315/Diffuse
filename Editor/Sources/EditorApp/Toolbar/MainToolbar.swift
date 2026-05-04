@@ -1,141 +1,44 @@
 import EditorCore
 import GuavaUICompose
 import GuavaUIRuntime
-import Foundation
 
 extension View {
     func toggleButtonStyle(_ isActive: Bool) -> some View {
         compositionLocal(ButtonStyleEnvironment.key,
-                         isActive ? AnyButtonStyle(PrimaryButtonStyle()) : AnyButtonStyle(GhostButtonStyle()))
+                         AnyButtonStyle(EditorViewportToolbarButtonStyle(isActive: isActive)))
     }
 }
 
-enum EditorToolbarIcon: String {
-    case plus = "plus"
-    case folderOpen = "folder-f"
-    case folder = "folder"
-    case save = "save"
-    case play = "play"
-    case pause = "pause"
-    case stop = "stop"
-    case package = "package"
-    case settings = "cog-6-tooth"
-    case layoutGrid = "toolbar-squares-2x2"
-    case cursor = "cursor-arrow-rays"
-    case translate = "direction-arrows"
-    case rotate = "toolbar-arrow-path"
-    case scale = "arrows-pointing-out"
-    case globe = "globe"
-    case eye = "toolbar-eye"
-    case wireframe = "grid-pattern"
+private struct EditorViewportToolbarButtonStyle: ButtonStyle {
+    let isActive: Bool
 
-    var resource: BundleImageResource {
-        .svg(named: rawValue,
-             in: .module,
-             subdirectory: "ToolbarIcons")
-    }
-}
-
-struct EditorMainToolbar: View {
-    let playbackState: PlaybackState
-    let workspaceMode: EditorWorkspaceMode
-    let activeLayoutPreset: EditorLayoutPreset
-    let onNewScene: () -> Void
-    let onOpenScene: () -> Void
-    let onSaveScene: () -> Void
-    let onReloadAssets: () -> Void
-    let onSetPlaybackState: (PlaybackState) -> Void
-    let onSetWorkspaceMode: (EditorWorkspaceMode) -> Void
-    let onSetLayoutPreset: (EditorLayoutPreset) -> Void
-    let onResetLayout: () -> Void
-    let onOpenSettings: () -> Void
-
-    var body: some View {
-        Row(alignment: .center, spacing: 8) {
-            IconButton(resource: EditorToolbarIcon.plus.resource,
-                       size: 15,
-                       tooltip: L("New Scene"),
-                       action: onNewScene)
-                .buttonStyle(.ghost)
-            IconButton(resource: EditorToolbarIcon.folderOpen.resource,
-                       size: 15,
-                       tooltip: L("Open Scene..."),
-                       action: onOpenScene)
-                .buttonStyle(.ghost)
-            IconButton(resource: EditorToolbarIcon.save.resource,
-                       size: 15,
-                       tooltip: L("Save Scene"),
-                       action: onSaveScene)
-                .buttonStyle(.ghost)
-            IconButton(resource: EditorToolbarIcon.folder.resource,
-                       size: 15,
-                       tooltip: L("Import Assets..."),
-                       action: onReloadAssets)
-                .buttonStyle(.ghost)
-
-            Divider()
-                .frame(width: 1, height: 20)
-
-            IconButton(resource: EditorToolbarIcon.play.resource,
-                       size: 15,
-                       tooltip: L("Play")) {
-                onSetPlaybackState(.playing)
+    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+        let theme = configuration.theme
+        let bg: Color = {
+            if !configuration.isEnabled { return theme.colors.surfaceSunken }
+            if isActive {
+                if configuration.isPressed { return theme.colors.accentPressed }
+                if configuration.isHovered { return theme.colors.accentHover }
+                return theme.colors.accent
             }
-            .toggleButtonStyle(playbackState == .playing)
-            IconButton(resource: EditorToolbarIcon.pause.resource,
-                       size: 15,
-                       tooltip: L("Pause")) {
-                onSetPlaybackState(.paused)
-            }
-            .toggleButtonStyle(playbackState == .paused)
-            IconButton(resource: EditorToolbarIcon.stop.resource,
-                       size: 15,
-                       tooltip: L("Stop")) {
-                onSetPlaybackState(.stopped)
-            }
-            .toggleButtonStyle(playbackState == .stopped)
+            if configuration.isPressed { return theme.colors.surfaceRaised }
+            if configuration.isHovered { return theme.colors.surfaceVariant }
+            return theme.colors.surfaceSunken
+        }()
+        let border: Color = configuration.isFocused ? theme.colors.focusRing : theme.colors.border
+        let borderWidth: Float = configuration.isFocused ? 2 : 1
 
-            Divider()
-                .frame(width: 1, height: 20)
-
-            Button(action: { onSetWorkspaceMode(.level) }) {
-                Text(L("Level")).font(.caption)
-            }
-            .toggleButtonStyle(workspaceMode == .level)
-            Button(action: { onSetWorkspaceMode(.modeling) }) {
-                Text(L("Modeling")).font(.caption)
-            }
-            .toggleButtonStyle(workspaceMode == .modeling)
-            Button(action: { onSetWorkspaceMode(.animation) }) {
-                Text(L("Animation")).font(.caption)
-            }
-            .toggleButtonStyle(workspaceMode == .animation)
-
-            Divider()
-                .frame(width: 1, height: 20)
-
-            LayoutPresetSelector(workspaceMode: workspaceMode,
-                                 activePreset: activeLayoutPreset,
-                                 onSelectPreset: onSetLayoutPreset)
-
-            IconButton(resource: EditorToolbarIcon.layoutGrid.resource,
-                       size: 15,
-                       tooltip: L("Reset Layout"),
-                       action: onResetLayout)
-                .buttonStyle(.ghost)
-
-            Spacer(minLength: 0)
-            IconButton(resource: EditorToolbarIcon.settings.resource,
-                       size: 15,
-                       tooltip: L("Settings"),
-                       action: onOpenSettings)
-                .buttonStyle(.ghost)
-            IconButton(resource: EditorToolbarIcon.package.resource,
-                       size: 15,
-                       tooltip: L("Platforms")) {}
-                .buttonStyle(.ghost)
+        return Box(direction: .row, alignItems: .center, justifyContent: .center) {
+            AnyView(configuration.label)
+                .font(SemanticFontRef.label)
+                .foregroundColor(isActive ? SemanticColorRef.onAccent : SemanticColorRef.onSurfaceVariant)
         }
-        .padding(horizontal: 8, vertical: 6)
-        .background(.surfaceVariant)
+        .frame(width: 28, height: 26)
+        .padding(horizontal: 0, vertical: 0)
+        .background(bg)
+        .cornerRadius(3)
+        .border(border, width: borderWidth)
+        .opacity(configuration.isEnabled ? 1 : 0.55)
+        .animation(.semantic(.snappy, in: theme), value: configuration.interactionKey)
     }
 }

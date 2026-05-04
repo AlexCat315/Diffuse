@@ -1,4 +1,5 @@
 import Foundation
+import GuavaUIRuntime
 
 /// Pure data describing a context-menu (or any popover-with-actions UI)
 /// that the dock layer wants the host to render. The dock layer never
@@ -12,13 +13,12 @@ public struct MenuDescriptor: Sendable {
 
 /// One row of a `MenuDescriptor`. Use `.separator` for the visual
 /// dividers between groups; everything else is an actionable item.
-/// `shortcut` is a display-only hint (e.g. "⌘W") — wiring the actual
-/// key binding is the host's job (and the dock-level shortcuts in
-/// Phase R.C handle the canonical ones independently).
+/// `shortcut` is a display-only hint; wiring the actual key binding is
+/// the host's job.
 public enum MenuItemDescriptor: Sendable {
     case separator
     case action(title: String,
-                shortcut: String? = nil,
+                shortcut: KeyboardShortcut? = nil,
                 isEnabled: Bool = true,
                 action: @Sendable () -> Void)
 }
@@ -50,7 +50,7 @@ extension DockController {
         // controller alive past its expected lifetime.
         let items: [MenuItemDescriptor] = [
             .action(title: "Close Tab",
-                    shortcut: "⌘W",
+                    shortcut: .primary("W"),
                     isEnabled: snapshot.tab != nil) { [weak self] in
                 self?.apply(.closeTab(tabID))
             },
@@ -73,7 +73,7 @@ extension DockController {
             },
             .separator,
             .action(title: "Reopen Closed Tab",
-                    shortcut: "⌘⇧T",
+                    shortcut: .primaryShift("T"),
                     isEnabled: canReopen) { [weak self] in
                 self?.apply(.reopenLastClosed)
             },

@@ -24,6 +24,9 @@ let package = Package(
         .library(name: "SceneRuntime", targets: ["SceneRuntime"]),
         .library(name: "AssetPipeline", targets: ["AssetPipeline"]),
         .library(name: "SequenceRuntime", targets: ["SequenceRuntime"]),
+        .library(name: "ColorPipeline", targets: ["ColorPipeline"]),
+        .library(name: "ImageIO", targets: ["ImageIO"]),
+        .library(name: "CinematicRenderer", targets: ["CinematicRenderer"]),
         .library(name: "CardBattleRuntime", targets: ["CardBattleRuntime"]),
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
@@ -73,6 +76,48 @@ let package = Package(
             path: "Sources/Bridge/CJoltBridge",
             publicHeadersPath: "include"
         ),
+        .target(
+            name: "COCIOBridge",
+            path: "Sources/Bridge/COCIOBridge",
+            publicHeadersPath: "include",
+            cxxSettings: [
+                .unsafeFlags([
+                    "-I/opt/homebrew/include",
+                ])
+            ],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-L/opt/homebrew/lib",
+                    "-lOpenColorIO",
+                    "-Xlinker", "-rpath", "-Xlinker", "/opt/homebrew/lib",
+                ])
+            ]
+        ),
+        .target(
+            name: "COpenEXRBridge",
+            path: "Sources/Bridge/COpenEXRBridge",
+            publicHeadersPath: "include",
+            cxxSettings: [
+                .unsafeFlags([
+                    "-I/opt/homebrew/include",
+                    "-I/opt/homebrew/include/OpenEXR",
+                    "-I/opt/homebrew/include/Imath",
+                ])
+            ],
+            linkerSettings: [
+                .unsafeFlags([
+                    "-L/opt/homebrew/lib",
+                    "-lOpenEXR-3_4",
+                    "-lOpenEXRUtil-3_4",
+                    "-lOpenEXRCore-3_4",
+                    "-lIex-3_4",
+                    "-lIlmThread-3_4",
+                    "-L/opt/homebrew/Cellar/imath/3.2.2/lib",
+                    "-lImath-3_2",
+                    "-Xlinker", "-rpath", "-Xlinker", "/opt/homebrew/lib",
+                ])
+            ]
+        ),
 
         // MARK: - Core Kernel (no deps, pure Swift protocols and types)
         .target(name: "EngineKernel"),
@@ -117,6 +162,24 @@ let package = Package(
         ),
         .target(name: "AssetPipeline"),
         .target(name: "SequenceRuntime"),
+        .target(
+            name: "ColorPipeline",
+            dependencies: [
+                "COCIOBridge",
+            ]
+        ),
+        .target(
+            name: "ImageIO",
+            dependencies: [
+                "COpenEXRBridge",
+            ]
+        ),
+        .target(
+            name: "CinematicRenderer",
+            dependencies: [
+                "SceneRuntime",
+            ]
+        ),
         .target(name: "CardBattleRuntime"),
         .target(
             name: "IntentRuntime",
@@ -258,6 +321,24 @@ let package = Package(
                 "SceneRuntime",
                 "ScriptRuntime",
                 "SequenceRuntime",
+            ]
+        ),
+        .testTarget(
+            name: "ColorPipelineTests",
+            dependencies: [
+                "ColorPipeline",
+            ]
+        ),
+        .testTarget(
+            name: "ImageIOTests",
+            dependencies: [
+                "ImageIO",
+            ]
+        ),
+        .testTarget(
+            name: "CinematicRendererTests",
+            dependencies: [
+                "CinematicRenderer",
             ]
         ),
     ]

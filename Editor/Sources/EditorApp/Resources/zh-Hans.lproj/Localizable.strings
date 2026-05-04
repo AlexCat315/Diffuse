@@ -42,8 +42,6 @@
 "T Snap" = "平移吸附";
 "R Snap" = "旋转吸附";
 "S Snap" = "缩放吸附";
-"Cmd-Sub" = "Cmd 减选";
-"Cmd-Tog" = "Cmd 切换";
 "Lit" = "光照";
 "Wire" = "线框";
 

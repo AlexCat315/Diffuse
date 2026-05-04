@@ -61,13 +61,13 @@ struct SettingsPanel: View {
                     SettingsSection(title: L("Selection")) {
                         Row(alignment: .center, spacing: 8) {
                             SettingsChoiceButton(title: L("Subtract"),
-                                                 isActive: store.cmdSelectBehavior == .subtract) {
-                                store.dispatch(.setCommandSelectBehavior(.subtract))
+                                                 isActive: store.primarySelectBehavior == .subtract) {
+                                store.dispatch(.setPrimarySelectBehavior(.subtract))
                                 applySettingsChange(store)
                             }
                             SettingsChoiceButton(title: L("Toggle"),
-                                                 isActive: store.cmdSelectBehavior == .toggle) {
-                                store.dispatch(.setCommandSelectBehavior(.toggle))
+                                                 isActive: store.primarySelectBehavior == .toggle) {
+                                store.dispatch(.setPrimarySelectBehavior(.toggle))
                                 applySettingsChange(store)
                             }
                         }
@@ -91,7 +91,7 @@ struct SettingsPanel: View {
                                              themeMode: store.themeMode,
                                              language: store.language,
                                              vsyncMode: store.vsyncMode,
-                                             cmdSelectBehavior: store.cmdSelectBehavior)
+                                             primarySelectBehavior: store.primarySelectBehavior)
     }
 
     private func applyVSyncMode(_ mode: EditorVSyncMode, store: EditorStore) {
