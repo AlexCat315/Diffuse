@@ -457,9 +457,15 @@ static bool solve_slider_constraint(BodyRecord& bodyA,
 
 }  // namespace
 
+struct MeshGeometryRecord {
+    std::vector<float> vertices;
+    std::vector<uint32_t> indices;
+};
+
 struct GuavaJoltContextImpl {
     std::unordered_map<uint64_t, BodyRecord> bodies;
     std::unordered_map<uint64_t, GuavaJoltConstraintDesc> constraints;
+    std::unordered_map<uint64_t, MeshGeometryRecord> meshGeometries;
 };
 
 namespace {
@@ -500,6 +506,7 @@ void guava_jolt_context_reset(GuavaJoltContext context) {
     }
     context->bodies.clear();
     context->constraints.clear();
+    context->meshGeometries.clear();
 }
 
 bool guava_jolt_context_prepare(GuavaJoltContext context,
@@ -558,6 +565,48 @@ bool guava_jolt_context_prepare(GuavaJoltContext context,
     out_stats->synchronized_constraints = static_cast<uint32_t>(context->constraints.size());
     out_stats->removed_bodies = removedBodies;
     out_stats->removed_constraints = removedConstraints;
+    return true;
+}
+
+bool guava_jolt_context_prepare_with_meshes(
+    GuavaJoltContext context,
+    const GuavaJoltBodyDesc* bodies,
+    size_t body_count,
+    const GuavaJoltConstraintDesc* constraints,
+    size_t constraint_count,
+    const GuavaJoltMeshGeometry* meshes,
+    size_t mesh_count,
+    GuavaJoltPrepareStats* out_stats) {
+    if (context == nullptr || out_stats == nullptr) {
+        return false;
+    }
+
+    // Delegate body/constraint sync to the base prepare path.
+    if (!guava_jolt_context_prepare(context, bodies, body_count,
+                                   constraints, constraint_count,
+                                   out_stats)) {
+        return false;
+    }
+
+    // Store mesh geometry snapshots.
+    context->meshGeometries.clear();
+    if (meshes != nullptr && mesh_count > 0) {
+        context->meshGeometries.reserve(mesh_count);
+        for (size_t i = 0; i < mesh_count; ++i) {
+            const GuavaJoltMeshGeometry& src = meshes[i];
+            MeshGeometryRecord record;
+            if (src.vertices != nullptr && src.vertex_count > 0) {
+                record.vertices.assign(src.vertices,
+                                       src.vertices + src.vertex_count * 3);
+            }
+            if (src.indices != nullptr && src.index_count > 0) {
+                record.indices.assign(src.indices,
+                                      src.indices + src.index_count);
+            }
+            context->meshGeometries[src.entity_id] = std::move(record);
+        }
+    }
+
     return true;
 }
 

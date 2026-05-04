@@ -99,6 +99,47 @@ public enum SceneMutation: Sendable, Equatable {
                        localTransform: LocalTransform,
                        target: SIMD3<Float>,
                        up: SIMD3<Float>?)
+
+    /// The primary entity targeted by this mutation, if any.
+    /// `spawnImportedMeshEntity` returns `nil` because it creates entities
+    /// rather than referencing an existing one.
+    public var entityID: UInt64? {
+        switch self {
+        case .spawnImportedMeshEntity:
+            return nil
+        case let .deleteEntity(id),
+             let .duplicateEntity(id),
+             let .moveEntity(id, _, _),
+             let .setLocalTransform(id, _),
+             let .setSceneName(id, _),
+             let .setRigidBodyMotionType(id, _),
+             let .setRigidBodyMass(id, _),
+             let .setRigidBodyGravityScale(id, _),
+             let .setRigidBodyAllowSleep(id, _),
+             let .setCollider(id, _),
+             let .setColliderTrigger(id, _),
+             let .setColliderShapeType(id, _),
+             let .setColliderShapeBoxHalfExtents(id, _),
+             let .setColliderShapeSphereRadius(id, _),
+             let .setColliderShapeCapsuleRadius(id, _),
+             let .setColliderShapeCapsuleHalfHeight(id, _),
+             let .setColliderMaterialFriction(id, _),
+             let .setColliderMaterialRestitution(id, _),
+             let .setColliderMaterialDensity(id, _),
+             let .setColliderLayer(id, _),
+             let .setColliderLayerMask(id, _),
+             let .setConstraintEnabled(id, _),
+             let .setLightType(id, _),
+             let .setLightColor(id, _),
+             let .setLightIntensity(id, _),
+             let .setLightRange(id, _),
+             let .setLightSpotInnerAngle(id, _),
+             let .setLightSpotOuterAngle(id, _),
+             let .setScriptBindings(id, _),
+             let .setCameraPose(id, _, _, _):
+            return id
+        }
+    }
 }
 
 public enum SequenceMutation: Sendable, Equatable {
