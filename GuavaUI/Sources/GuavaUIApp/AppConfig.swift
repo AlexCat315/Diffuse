@@ -2,6 +2,11 @@ import GuavaUIRuntime
 import GuavaUIDevTools
 import RHIWGPU
 
+public enum AppWindowTitleBarStyle: Sendable, Equatable {
+    case standard
+    case hiddenInset
+}
+
 /// 启动一个 GuavaUI 应用窗口时所需的最小参数。所有字段都有默认值，
 /// 调用方通常只需要传 `title` 加 root view。
 public struct AppConfig: Sendable {
@@ -19,6 +24,9 @@ public struct AppConfig: Sendable {
     public var backendConfig: WGPUDeviceConfig
     /// UI 渲染 MSAA 采样数。1 表示关闭，常用值是 4。
     public var msaaSampleCount: UInt32
+    /// Native window titlebar behavior. macOS maps `.hiddenInset` to a
+    /// transparent full-size content titlebar.
+    public var titleBarStyle: AppWindowTitleBarStyle
     /// Optional UI frame-rate cap. `nil` preserves the event-driven default.
     public var targetFrameRate: Double?
     /// DevTools 配置。`nil` 关闭。默认从 `GUAVA_DEVTOOLS=1` env var 读取，
@@ -32,6 +40,7 @@ public struct AppConfig: Sendable {
                 clearColor: GPUColor = GPUColor(r: 0.05, g: 0.06, b: 0.08, a: 1),
                 backendConfig: WGPUDeviceConfig = WGPUDeviceConfig(),
                 msaaSampleCount: UInt32 = 4,
+                titleBarStyle: AppWindowTitleBarStyle = .standard,
                 targetFrameRate: Double? = nil,
                 devTools: DevToolsConfig? = nil) {
         self.title = title
@@ -41,6 +50,7 @@ public struct AppConfig: Sendable {
         self.clearColor = clearColor
         self.backendConfig = backendConfig
         self.msaaSampleCount = max(1, msaaSampleCount)
+        self.titleBarStyle = titleBarStyle
         if let targetFrameRate, targetFrameRate.isFinite, targetFrameRate > 0 {
             self.targetFrameRate = max(1.0, min(240.0, targetFrameRate))
         } else {

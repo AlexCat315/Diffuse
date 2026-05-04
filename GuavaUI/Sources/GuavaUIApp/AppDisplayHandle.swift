@@ -38,6 +38,7 @@ public final class AppDisplayHandle: @unchecked Sendable {
     private var setRuntimeFrameRateMode: (@MainActor (PlatformFrameRateMode) -> Void)?
     private var setRuntimeVSyncEnabled: (@MainActor (Bool) -> Void)?
     private var currentRuntimeDisplayRefreshRate: (@MainActor () -> Double?)?
+    private var installRuntimeNativeMenuBar: (@MainActor (NativeMenuBar) -> Void)?
 
     public init() {}
 
@@ -66,6 +67,11 @@ public final class AppDisplayHandle: @unchecked Sendable {
     @MainActor
     public func currentDisplayRefreshRate() -> Double? {
         currentRuntimeDisplayRefreshRate?()
+    }
+
+    @MainActor
+    public func installNativeMenuBar(_ menuBar: NativeMenuBar) {
+        installRuntimeNativeMenuBar?(menuBar)
     }
 
     @MainActor
@@ -106,10 +112,12 @@ public final class AppDisplayHandle: @unchecked Sendable {
     func installRuntimeControls(setTargetFrameRate: @escaping @MainActor (Double?) -> Void,
                                 setFrameRateMode: @escaping @MainActor (PlatformFrameRateMode) -> Void,
                                 setVSyncEnabled: @escaping @MainActor (Bool) -> Void,
-                                currentDisplayRefreshRate: @escaping @MainActor () -> Double?) {
+                                currentDisplayRefreshRate: @escaping @MainActor () -> Double?,
+                                installNativeMenuBar: @escaping @MainActor (NativeMenuBar) -> Void) {
         setRuntimeTargetFrameRate = setTargetFrameRate
         setRuntimeFrameRateMode = setFrameRateMode
         setRuntimeVSyncEnabled = setVSyncEnabled
         currentRuntimeDisplayRefreshRate = currentDisplayRefreshRate
+        installRuntimeNativeMenuBar = installNativeMenuBar
     }
 }

@@ -112,7 +112,7 @@ extension WGPURenderer {
 
     func baseColorTextureView(for meshIndex: Int) -> GPUTextureView? {
         guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
-              let textureIndex = materialSet.materials.first?.baseColorTextureIndex
+              let textureIndex = materialSet.materials.compactMap(\.baseColorTextureIndex).first
         else {
             return nil
         }

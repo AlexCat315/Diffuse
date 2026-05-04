@@ -581,8 +581,18 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         case .empty:
             return .center
         case .tabs(_, let tabs, _):
-            guard let first = tabs.first else { return .center }
-            return state.region(for: first, registry: registry)
+            guard !tabs.isEmpty else { return .center }
+            // Use majority vote across all tabs, falling back to the first
+            // tab's region. This prevents a single stray tab from
+            // misidentifying the leaf's region (e.g. right after a drag-drop
+            // before the normalizer has canonicalised).
+            var counts: [PanelWorkspaceRegion: Int] = [:]
+            for tab in tabs {
+                let region = state.region(for: tab, registry: registry)
+                counts[region, default: 0] += 1
+            }
+            return counts.max(by: { $0.value < $1.value })?.key
+                ?? state.region(for: tabs[0], registry: registry)
         case .split:
             return nil
         }

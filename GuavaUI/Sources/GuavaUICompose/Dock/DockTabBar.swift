@@ -362,7 +362,7 @@ struct _DockTabBarItemHost: _PrimitiveView {
     func _children(for node: Node) -> [any View] {
         let appearance = resolveDockAppearance(on: node)
         let label = Text(tab.title)
-            .font(.bodyStrong)
+            .font(.label)
             .foregroundColor(isActive ? .onSurface : .onSurfaceMuted)
 
         let row = Row(alignment: .center, spacing: appearance.tabHorizontalSpacing) {
@@ -463,14 +463,15 @@ struct _DockLeafMinimizeButtonHost: _PrimitiveView {
     func _children(for node: Node) -> [any View] {
         let snap = self
         let size = resolveDockAppearance(on: node).closeButtonSize
+        let iconSize = max(10, size - 4)
         return [
             Button(action: {
                 snap.controller.apply(.minimizeLeaf(leafID: snap.sourceLeafID,
                                                     edge: snap.edge))
             }) {
                 Image(resource: Self.icon,
-                      width: 14,
-                      height: 14,
+                      width: iconSize,
+                      height: iconSize,
                       tint: .white,
                       contentMode: .fit,
                       renderingMode: .alphaMask)

@@ -210,8 +210,13 @@ struct _DockMinimizedRail: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        node.animatableSet(\.backgroundColor,
-                           to: items().isEmpty ? nil : node.theme.colors.surfaceVariant)
+        // Only side rails get a background tint; the bottom rail sits
+        // flush with the content area and looks like a full-width bar
+        // when tinted, which reads as "taking over the entire bottom".
+        if edge != .bottom {
+            node.animatableSet(\.backgroundColor,
+                               to: items().isEmpty ? nil : node.theme.colors.surfaceVariant)
+        }
     }
 
     func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
@@ -316,9 +321,8 @@ struct _DockMinimizedRailItem: View {
                 Box(direction: .row, alignItems: .center, justifyContent: .center) {
                     Text(title)
                         .font(.label)
-                        .foregroundColor(.onSurface)
                 }
-                .frame(height: 32, minWidth: 72, maxWidth: 180)
+                .padding(horizontal: 10, vertical: 6)
             }
         }
         .buttonStyle(_DockMinimizedRailButtonStyle())
@@ -363,7 +367,6 @@ struct _DockVerticalRailTitle: _PrimitiveView {
                 Text(char, alignment: .center)
                     .font(Font.system(size: 11, weight: .medium))
                     .lineHeight(12)
-                    .foregroundColor(.onSurface)
                     .frame(width: 24, height: 12)
             )
         }
@@ -389,9 +392,11 @@ struct _DockMinimizedRailButtonStyle: ButtonStyle {
             if configuration.isHovered { return theme.colors.stateLayerHover }
             return theme.colors.surfaceRaised
         }()
+        let labelColor: SemanticColorRef = configuration.isHovered ? .onSurface : .onSurfaceVariant
 
         return Box(direction: .row, alignItems: .center, justifyContent: .center) {
             AnyView(configuration.label)
+                .foregroundColor(labelColor)
         }
         .background(background)
         .cornerRadius(theme.radius.sm)

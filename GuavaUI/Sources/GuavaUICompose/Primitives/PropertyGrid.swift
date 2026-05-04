@@ -1,4 +1,14 @@
+import Foundation
 import GuavaUIRuntime
+
+private enum PropertyGridIcons {
+    static let chevronDown = BundleImageResource.svg(named: "chevron-down",
+                                                      in: .module,
+                                                      subdirectory: "UIIcons")
+    static let chevronRight = BundleImageResource.svg(named: "chevron-right",
+                                                       in: .module,
+                                                       subdirectory: "UIIcons")
+}
 
 public struct PropertyGridRow: Identifiable {
     public let id: String
@@ -157,7 +167,7 @@ private struct _StatefulPropertyGrid: View {
 
     private func sectionView(_ section: PropertyGridSection,
                               isCollapsed: Bool) -> some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 4) {
+        Box(direction: .column, alignItems: .stretch, spacing: 2) {
             Button(role: .normal,
                    isEnabled: section.isCollapsible,
                    action: {
@@ -168,13 +178,16 @@ private struct _StatefulPropertyGrid: View {
             }) {
                 Row(alignment: .center, spacing: 6) {
                     if section.isCollapsible {
-                        Text(isCollapsed ? "▶" : "▼")
-                            .font(.label)
+                        Image(resource: isCollapsed ? PropertyGridIcons.chevronRight : PropertyGridIcons.chevronDown,
+                              width: 12,
+                              height: 12,
+                              tint: .white,
+                              contentMode: .fit,
+                              renderingMode: .alphaMask)
                             .foregroundColor(.onSurfaceVariant)
-                            .frame(width: 12)
                     }
                     Text(section.title)
-                        .font(.bodyStrong)
+                        .font(.label)
                         .foregroundColor(.onSurface)
                         .flex()
                     if grid.showsSectionRowCount {
@@ -186,12 +199,13 @@ private struct _StatefulPropertyGrid: View {
                             .cornerRadius(3)
                     }
                 }
-                .padding(horizontal: 6, vertical: 4)
-                .frame(height: 28)
+                .padding(horizontal: 7, vertical: 3)
+                .frame(height: 26)
                 .flex()
             }
             .buttonStyle(.plain)
-            .frame(height: 28)
+            .frame(height: 26)
+            .background(.surface)
 
             if !isCollapsed {
                 Box(direction: .column, alignItems: .stretch, spacing: grid.rowSpacing) {
@@ -206,7 +220,6 @@ private struct _StatefulPropertyGrid: View {
                 }
                 .padding(1)
                 .background(.divider)
-                .cornerRadius(2)
             }
         }
     }
@@ -221,7 +234,7 @@ private struct _StatefulPropertyGrid: View {
                     .font(.caption)
                     .foregroundColor(.onSurfaceVariant)
             }
-            .padding(horizontal: 8)
+            .padding(horizontal: 7)
             .frame(width: grid.labelWidth, height: rowHeight)
             .background(.surfaceVariant)
 
@@ -231,7 +244,7 @@ private struct _StatefulPropertyGrid: View {
                     .flex(1, shrink: 1, basis: 0)
             }
             .frame(height: rowHeight)
-            .padding(horizontal: 6, vertical: 2)
+            .padding(horizontal: 5, vertical: 2)
             .background(.surfaceSunken)
             .flex(1, shrink: 1, basis: 0)
         }

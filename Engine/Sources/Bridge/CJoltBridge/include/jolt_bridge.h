@@ -74,6 +74,14 @@ typedef struct GuavaJoltConstraintDesc {
     float max_limit;
 } GuavaJoltConstraintDesc;
 
+typedef struct GuavaJoltMeshGeometry {
+    uint64_t entity_id;
+    const float* vertices;
+    uint32_t vertex_count;
+    const uint32_t* indices;
+    uint32_t index_count;
+} GuavaJoltMeshGeometry;
+
 typedef struct GuavaJoltPrepareStats {
     uint32_t synchronized_bodies;
     uint32_t synchronized_constraints;
@@ -130,6 +138,15 @@ bool guava_jolt_context_prepare(GuavaJoltContext context,
                                 const GuavaJoltConstraintDesc* constraints,
                                 size_t constraint_count,
                                 GuavaJoltPrepareStats* out_stats);
+bool guava_jolt_context_prepare_with_meshes(
+    GuavaJoltContext context,
+    const GuavaJoltBodyDesc* bodies,
+    size_t body_count,
+    const GuavaJoltConstraintDesc* constraints,
+    size_t constraint_count,
+    const GuavaJoltMeshGeometry* meshes,
+    size_t mesh_count,
+    GuavaJoltPrepareStats* out_stats);
 bool guava_jolt_context_step(GuavaJoltContext context,
                              const GuavaJoltStepConfig* config,
                              GuavaJoltBodyState* states,
