@@ -16,6 +16,29 @@ public struct SceneKindComponent: RuntimeComponent, Sendable, Equatable {
     }
 }
 
+public struct AssetReferenceComponent: RuntimeComponent, Sendable, Equatable {
+    public var assetID: String
+    public var name: String
+    public var relativePath: String
+    public var absolutePath: String
+    public var kind: String
+    public var meshIndex: Int
+
+    public init(assetID: String,
+                name: String,
+                relativePath: String,
+                absolutePath: String,
+                kind: String,
+                meshIndex: Int) {
+        self.assetID = assetID
+        self.name = name
+        self.relativePath = relativePath
+        self.absolutePath = absolutePath
+        self.kind = kind
+        self.meshIndex = meshIndex
+    }
+}
+
 public struct SceneBootstrapDefaultsResource: Sendable, Equatable {
     public var defaultSelection: EntityID?
     public var defaultExpanded: [EntityID]

@@ -58,11 +58,51 @@ public struct RigidBody: RuntimeComponent, Sendable, Equatable {
     }
 }
 
+public enum ColliderShapeKind: String, CaseIterable, Sendable, Equatable {
+    case box
+    case sphere
+    case capsule
+    case mesh
+    case convex
+}
+
 public enum ColliderShape: Sendable, Equatable {
     case box(halfExtents: SIMD3<Float>, center: SIMD3<Float>)
     case sphere(radius: Float, center: SIMD3<Float>)
     case capsule(radius: Float, halfHeight: Float, center: SIMD3<Float>)
     case mesh(resourceID: String?, center: SIMD3<Float>)
+    case convex(resourceID: String?, center: SIMD3<Float>)
+
+    public var kind: ColliderShapeKind {
+        switch self {
+        case .box: return .box
+        case .sphere: return .sphere
+        case .capsule: return .capsule
+        case .mesh: return .mesh
+        case .convex: return .convex
+        }
+    }
+
+    public var center: SIMD3<Float> {
+        switch self {
+        case let .box(_, center),
+             let .sphere(_, center),
+             let .capsule(_, _, center),
+             let .mesh(_, center),
+             let .convex(_, center):
+            return center
+        }
+    }
+
+    public var resourceID: String? {
+        switch self {
+        case let .mesh(resourceID, _),
+             let .convex(resourceID, _):
+            return resourceID
+        default:
+            return nil
+        }
+    }
 }
 
 public struct PhysicsMaterial: Sendable, Equatable {
