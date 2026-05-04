@@ -1,4 +1,14 @@
+import Foundation
 import GuavaUIRuntime
+
+private enum PropertyGridIcons {
+    static let chevronDown = BundleImageResource.svg(named: "chevron-down",
+                                                      in: .module,
+                                                      subdirectory: "UIIcons")
+    static let chevronRight = BundleImageResource.svg(named: "chevron-right",
+                                                       in: .module,
+                                                       subdirectory: "UIIcons")
+}
 
 public struct PropertyGridRow: Identifiable {
     public let id: String
@@ -168,10 +178,13 @@ private struct _StatefulPropertyGrid: View {
             }) {
                 Row(alignment: .center, spacing: 6) {
                     if section.isCollapsible {
-                        Text(isCollapsed ? "▶" : "▼")
-                            .font(.label)
+                        Image(resource: isCollapsed ? PropertyGridIcons.chevronRight : PropertyGridIcons.chevronDown,
+                              width: 12,
+                              height: 12,
+                              tint: .white,
+                              contentMode: .fit,
+                              renderingMode: .alphaMask)
                             .foregroundColor(.onSurfaceVariant)
-                            .frame(width: 12)
                     }
                     Text(section.title)
                         .font(.label)

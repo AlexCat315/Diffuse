@@ -1,6 +1,18 @@
 import Foundation
 import GuavaUIRuntime
 
+private enum SelectIcons {
+    static let chevronDown = BundleImageResource.svg(named: "chevron-down",
+                                                      in: .module,
+                                                      subdirectory: "UIIcons")
+    static let chevronUp = BundleImageResource.svg(named: "chevron-up",
+                                                    in: .module,
+                                                    subdirectory: "UIIcons")
+    static let checkmark = BundleImageResource.svg(named: "checkmark",
+                                                    in: .module,
+                                                    subdirectory: "UIIcons")
+}
+
 public enum KeyboardShortcutPlatform: Sendable, Equatable {
     case macOS
     case windows
@@ -421,8 +433,12 @@ private struct _StatefulSelect<Value: Hashable>: View {
                     .font(.body)
                     .foregroundColor(select.isEnabled ? .onSurface : .onSurfaceMuted)
                     .flex()
-                Text(isPresented ? "▲" : "▼")
-                    .font(.caption)
+                Image(resource: isPresented ? SelectIcons.chevronUp : SelectIcons.chevronDown,
+                      width: 10,
+                      height: 10,
+                      tint: .white,
+                      contentMode: .fit,
+                      renderingMode: .alphaMask)
                     .foregroundColor(.onSurfaceMuted)
             }
             .padding(horizontal: 10, vertical: 8)

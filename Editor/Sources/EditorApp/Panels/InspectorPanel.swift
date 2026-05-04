@@ -202,6 +202,22 @@ struct InspectorPanel: View {
         }
     }
 
+    private struct InspectorColliderShapeKindValue: View {
+        let binding: Binding<ColliderShapeKind>
+
+        var body: some View {
+            EnumField(value: binding, width: 150) { kind in
+                switch kind {
+                case .box: return L("Box")
+                case .sphere: return L("Sphere")
+                case .capsule: return L("Capsule")
+                case .mesh: return L("Mesh")
+                case .convex: return L("Convex")
+                }
+            }
+        }
+    }
+
     private func propertySections(_ sections: [EditorInspectorSection],
                                   collapsedIDs: Set<String>) -> [PropertyGridSection] {
         sections.map { section in
@@ -252,6 +268,8 @@ struct InspectorPanel: View {
             return AnyView(InspectorLightTypeValue(binding: binding))
         case let .rigidBodyMotion(binding):
             return AnyView(InspectorRigidBodyMotionValue(binding: binding))
+        case let .colliderShapeKind(binding):
+            return AnyView(InspectorColliderShapeKindValue(binding: binding))
         }
     }
 
