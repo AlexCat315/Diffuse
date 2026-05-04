@@ -132,6 +132,7 @@ public struct RuntimeWorldSchedule {
         var rigidBodies: [EntityID: RigidBody]
         var colliders: [EntityID: Collider]
         var constraints: [EntityID: Constraint]
+        var meshGeometries: [EntityID: MeshColliderGeometry]
     }
 
     private struct RuntimeRenderReadView {
@@ -411,7 +412,8 @@ public struct RuntimeWorldSchedule {
                 localTransform: localTransform,
                 worldTransform: worldTransform,
                 rigidBody: rigidBody,
-                collider: collider
+                collider: collider,
+                meshGeometry: view.meshGeometries[entity]
             )
         }
         return (result.0, result.1)
@@ -578,13 +580,23 @@ public struct RuntimeWorldSchedule {
 
     private func buildPhysicsReadView(in world: RuntimeWorld) -> RuntimePhysicsReadView {
         let entities = world.entities()
+        let colliders = world.componentSnapshot(Collider.self, matching: entities)
+        let geometryResource = world.resource(MeshColliderGeometryResource.self)
+        var meshGeometries: [EntityID: MeshColliderGeometry] = [:]
+        for (entity, collider) in colliders {
+            let resourceID = collider.shape.resourceID
+            if let geometry = geometryResource?.geometry(for: resourceID) {
+                meshGeometries[entity] = geometry
+            }
+        }
         return RuntimePhysicsReadView(
             entities: entities,
             localTransforms: world.localTransformSnapshot(matching: entities),
             worldTransforms: world.worldTransformSnapshot(matching: entities),
             rigidBodies: world.componentSnapshot(RigidBody.self, matching: entities),
-            colliders: world.componentSnapshot(Collider.self, matching: entities),
-            constraints: world.componentSnapshot(Constraint.self, matching: entities)
+            colliders: colliders,
+            constraints: world.componentSnapshot(Constraint.self, matching: entities),
+            meshGeometries: meshGeometries
         )
     }
 

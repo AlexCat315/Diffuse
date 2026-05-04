@@ -377,19 +377,22 @@ public struct PhysicsBodyDescriptor: Sendable, Equatable {
     public var worldTransform: WorldTransform
     public var rigidBody: RigidBody?
     public var collider: Collider?
+    public var meshGeometry: MeshColliderGeometry?
 
     public init(
         entity: EntityID,
         localTransform: LocalTransform,
         worldTransform: WorldTransform,
         rigidBody: RigidBody?,
-        collider: Collider?
+        collider: Collider?,
+        meshGeometry: MeshColliderGeometry? = nil
     ) {
         self.entity = entity
         self.localTransform = localTransform
         self.worldTransform = worldTransform
         self.rigidBody = rigidBody
         self.collider = collider
+        self.meshGeometry = meshGeometry
     }
 }
 
