@@ -210,8 +210,13 @@ struct _DockMinimizedRail: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        node.animatableSet(\.backgroundColor,
-                           to: items().isEmpty ? nil : node.theme.colors.surfaceVariant)
+        // Only side rails get a background tint; the bottom rail sits
+        // flush with the content area and looks like a full-width bar
+        // when tinted, which reads as "taking over the entire bottom".
+        if edge != .bottom {
+            node.animatableSet(\.backgroundColor,
+                               to: items().isEmpty ? nil : node.theme.colors.surfaceVariant)
+        }
     }
 
     func _makeLayoutNode() -> LayoutNode? { LayoutNode() }
