@@ -463,14 +463,15 @@ struct _DockLeafMinimizeButtonHost: _PrimitiveView {
     func _children(for node: Node) -> [any View] {
         let snap = self
         let size = resolveDockAppearance(on: node).closeButtonSize
+        let iconSize = max(10, size - 4)
         return [
             Button(action: {
                 snap.controller.apply(.minimizeLeaf(leafID: snap.sourceLeafID,
                                                     edge: snap.edge))
             }) {
                 Image(resource: Self.icon,
-                      width: 14,
-                      height: 14,
+                      width: iconSize,
+                      height: iconSize,
                       tint: .white,
                       contentMode: .fit,
                       renderingMode: .alphaMask)
