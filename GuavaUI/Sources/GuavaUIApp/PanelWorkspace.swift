@@ -23,7 +23,7 @@ public struct PanelWorkspace: View {
     }
 
     public var body: some View {
-        DockContainer(controller: controller, hostBridge: hostBridge) { [registry] key in
+        DockContainer(controller: controller, hostBridge: hostBridge, horizontalInset: 0) { [registry] key in
             registry.make(key)
         }
     }

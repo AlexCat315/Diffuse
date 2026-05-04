@@ -273,7 +273,7 @@ public final class EditorApplication {
             let url = guavaDirectory.appendingPathComponent("editor-scene-manifest.json")
             let encoder = JSONEncoder()
             encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-            let data = try encoder.encode(scene.manifest())
+            let data = try encoder.encode(scene.manifest(selectedEntityID: store.state.selectedEntityID))
             try data.write(to: url, options: [.atomic])
             logConsole("Saved scene manifest", detail: url.path)
             return url
@@ -292,8 +292,10 @@ public final class EditorApplication {
         do {
             let data = try Data(contentsOf: url)
             let manifest = try JSONDecoder().decode(EditorSceneManifest.self, from: data)
+            let result = scene.load(manifest: manifest)
+            store.dispatch(.setSelectedEntity(result.selectedEntityID))
             logConsole("Opened scene manifest",
-                       detail: "\(manifest.entityCount) entities, revision \(manifest.revision)")
+                       detail: "\(result.entityCount) entities restored from revision \(manifest.revision)")
             return manifest
         } catch CocoaError.fileReadNoSuchFile {
             logConsole("No saved scene manifest",

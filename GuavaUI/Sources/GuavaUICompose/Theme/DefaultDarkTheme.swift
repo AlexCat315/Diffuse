@@ -9,39 +9,39 @@ import GuavaUIRuntime
 public enum DefaultDarkTheme {
     public static let value: Theme = Theme(
         colors: ColorScheme(
-            background:       Color(red: 0x13, green: 0x15, blue: 0x1A),
-            surface:          Color(red: 0x1B, green: 0x1E, blue: 0x24),
-            surfaceVariant:   Color(red: 0x23, green: 0x27, blue: 0x2F),
-            surfaceSunken:    Color(red: 0x16, green: 0x18, blue: 0x1E),
-            surfaceRaised:    Color(red: 0x2A, green: 0x2F, blue: 0x38),
-            surfaceFloating:  Color(red: 0x31, green: 0x37, blue: 0x42),
-            surfaceOverlay:   Color(red: 0x39, green: 0x40, blue: 0x4C),
+            background:       Color(red: 0x16, green: 0x16, blue: 0x16),
+            surface:          Color(red: 0x23, green: 0x23, blue: 0x23),
+            surfaceVariant:   Color(red: 0x2D, green: 0x2D, blue: 0x2D),
+            surfaceSunken:    Color(red: 0x1C, green: 0x1C, blue: 0x1C),
+            surfaceRaised:    Color(red: 0x32, green: 0x32, blue: 0x32),
+            surfaceFloating:  Color(red: 0x36, green: 0x36, blue: 0x36),
+            surfaceOverlay:   Color(red: 0x30, green: 0x30, blue: 0x30),
 
             onBackground:     Color(red: 0xF4, green: 0xF6, blue: 0xF9),
             onSurface:        Color(red: 0xE7, green: 0xEB, blue: 0xF2),
             onSurfaceVariant: Color(red: 0xBE, green: 0xC6, blue: 0xD3),
             onSurfaceMuted:   Color(red: 0x87, green: 0x91, blue: 0xA0),
 
-            accent:           Color(red: 0x4A, green: 0x8C, blue: 0xF7),
-            accentHover:      Color(red: 0x6B, green: 0xA5, blue: 0xFF),
-            accentPressed:    Color(red: 0x36, green: 0x77, blue: 0xE6),
+            accent:           Color(red: 0x4F, green: 0x9D, blue: 0xFF),
+            accentHover:      Color(red: 0x75, green: 0xB5, blue: 0xFF),
+            accentPressed:    Color(red: 0x2E, green: 0x83, blue: 0xE6),
             onAccent:         Color(red: 0xFF, green: 0xFF, blue: 0xFF),
-            accentMuted:      Color(red: 0x4A, green: 0x8C, blue: 0xF7, alpha: 0x30),
+            accentMuted:      Color(red: 0x4F, green: 0x9D, blue: 0xFF, alpha: 0x30),
 
             stateLayerHover:    Color(red: 0xFF, green: 0xFF, blue: 0xFF, alpha: 0x12),
             stateLayerPressed:  Color(red: 0xFF, green: 0xFF, blue: 0xFF, alpha: 0x1E),
-            stateLayerSelected: Color(red: 0x4A, green: 0x8C, blue: 0xF7, alpha: 0x26),
+            stateLayerSelected: Color(red: 0x4F, green: 0x9D, blue: 0xFF, alpha: 0x26),
 
             success:          Color(red: 0x48, green: 0xC7, blue: 0x8E),
             warning:          Color(red: 0xE0, green: 0xA9, blue: 0x4A),
             error:            Color(red: 0xE2, green: 0x6D, blue: 0x5A),
             info:             Color(red: 0x65, green: 0xAF, blue: 0xFF),
 
-            border:           Color(red: 0x31, green: 0x36, blue: 0x40),
-            borderStrong:     Color(red: 0x42, green: 0x48, blue: 0x54),
-            divider:          Color(red: 0x2A, green: 0x2F, blue: 0x38),
-            focusRing:        Color(red: 0x4A, green: 0x8C, blue: 0xF7, alpha: 0xAA),
-            selection:        Color(red: 0x4A, green: 0x8C, blue: 0xF7, alpha: 0x3D),
+            border:           Color(red: 0x14, green: 0x14, blue: 0x14),
+            borderStrong:     Color(red: 0x0E, green: 0x0E, blue: 0x0E),
+            divider:          Color(red: 0x14, green: 0x14, blue: 0x14),
+            focusRing:        Color(red: 0x4F, green: 0x9D, blue: 0xFF, alpha: 0xAA),
+            selection:        Color(red: 0x4F, green: 0x9D, blue: 0xFF, alpha: 0x42),
             overlay:          Color(red: 0x00, green: 0x00, blue: 0x00, alpha: 0xB8)
         ),
         typography: Typography(
@@ -79,4 +79,3 @@ public extension Theme {
     /// for identity within a frame.
     static let defaultDark: Theme = DefaultDarkTheme.value
 }
-

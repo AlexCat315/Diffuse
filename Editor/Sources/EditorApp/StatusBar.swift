@@ -54,7 +54,7 @@ struct EditorStatusBar: View {
                     .foregroundColor(statusColor(store: store))
             }
             .padding(horizontal: 10, vertical: 5)
-            .background(.surfaceVariant)
+            .background(.surfaceSunken)
         }
     }
 

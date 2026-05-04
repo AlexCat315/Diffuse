@@ -8,6 +8,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     private static let colliderIsTriggerFlag: UInt32 = 1 << 3
     private static let rigidBodyAllowSleepFlag: UInt32 = 1 << 4
     private static let colliderHasCapsuleFlag: UInt32 = 1 << 5
+    private static let colliderHasConvexFlag: UInt32 = 1 << 6
 
     private var context: GuavaJoltContext?
 
@@ -35,17 +36,62 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
 
         let bodyDescs = context.activeBodies.map(makeBodyDesc)
         let constraintDescs = context.activeConstraints.map(makeConstraintDesc)
+
+        // Collect mesh geometry into flat arrays so C pointers stay valid.
+        var flatVertices: [Float] = []
+        var flatIndices: [UInt32] = []
+        var meshDescs: [GuavaJoltMeshGeometry] = []
+        meshDescs.reserveCapacity(context.activeBodies.count)
+        for descriptor in context.activeBodies {
+            guard let geometry = descriptor.meshGeometry,
+                  geometry.triangleCount > 0,
+                  !geometry.positions.isEmpty else {
+                continue
+            }
+            var desc = GuavaJoltMeshGeometry()
+            desc.entity_id = descriptor.entity.rawValue
+            desc.vertex_count = UInt32(geometry.positions.count)
+            desc.index_count = UInt32(geometry.triangleIndices.count)
+            meshDescs.append(desc)
+            for position in geometry.positions {
+                flatVertices.append(position.x)
+                flatVertices.append(position.y)
+                flatVertices.append(position.z)
+            }
+            flatIndices.append(contentsOf: geometry.triangleIndices)
+        }
+
+        // Patch pointers after all data is collected.
+        var vertexCursor: UInt32 = 0
+        var indexCursor: UInt32 = 0
+        for i in 0..<meshDescs.count {
+            let vc = meshDescs[i].vertex_count
+            let ic = meshDescs[i].index_count
+            meshDescs[i].vertices = flatVertices.withUnsafeBufferPointer { $0.baseAddress }.map { $0.advanced(by: Int(vertexCursor * 3)) } ?? nil
+            meshDescs[i].indices = flatIndices.withUnsafeBufferPointer { $0.baseAddress }.map { $0.advanced(by: Int(indexCursor)) } ?? nil
+            vertexCursor += vc
+            indexCursor += ic
+        }
+
         var stats = GuavaJoltPrepareStats()
         let success = bodyDescs.withUnsafeBufferPointer { bodyBuffer in
             constraintDescs.withUnsafeBufferPointer { constraintBuffer in
-                guava_jolt_context_prepare(
-                    nativeContext,
-                    bodyBuffer.baseAddress,
-                    bodyBuffer.count,
-                    constraintBuffer.baseAddress,
-                    constraintBuffer.count,
-                    &stats
-                )
+                flatVertices.withUnsafeBufferPointer { _ in
+                    flatIndices.withUnsafeBufferPointer { _ in
+                        meshDescs.withUnsafeBufferPointer { meshBuffer in
+                            guava_jolt_context_prepare_with_meshes(
+                                nativeContext,
+                                bodyBuffer.baseAddress,
+                                bodyBuffer.count,
+                                constraintBuffer.baseAddress,
+                                constraintBuffer.count,
+                                meshBuffer.baseAddress,
+                                meshBuffer.count,
+                                &stats
+                            )
+                        }
+                    }
+                }
             }
         }
 
@@ -156,6 +202,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 capsuleHalfHeight = halfHeight
             case .mesh:
                 flags |= Self.colliderHasMeshFlag
+            case .convex:
+                flags |= Self.colliderHasConvexFlag
             }
         }
 

@@ -302,7 +302,7 @@ struct ListTreeTests: GuavaUIComposeSerializedSuite {
         #expect(multiSelectionProbe.value == ["light"])
     } }
 
-    @Test("Tree cmd-toggle deselect keeps remaining primary selection")
+    @Test("Tree primary-toggle deselect keeps remaining primary selection")
     func treeMultiSelectionToggleOffDoesNotReselectRemovedItem() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry

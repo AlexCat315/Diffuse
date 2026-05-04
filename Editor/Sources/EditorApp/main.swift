@@ -27,7 +27,7 @@ private func runEditor() throws {
         app.store.dispatch(.setThemeMode(shellState.themeMode))
         app.store.dispatch(.setLanguage(shellState.language))
         app.store.dispatch(.setVSyncMode(shellState.vsyncMode))
-        app.store.dispatch(.setCommandSelectBehavior(shellState.cmdSelectBehavior))
+        app.store.dispatch(.setPrimarySelectBehavior(shellState.primarySelectBehavior))
         EditorLocalizationPreferences.language = shellState.language
     }
 
@@ -35,18 +35,49 @@ private func runEditor() throws {
                                                           preset: app.store.state.activeLayoutPreset)
     let registry = EditorRootViewFactory.makeRegistry(app: app)
     var settingsWindowID: WindowID?
+    var displayHandle: AppDisplayHandle?
+    func installNativeMenu(on display: AppDisplayHandle) {
+        display.installNativeMenuBar(EditorNativeMenuBuilder.make(
+            workspaceMode: app.store.state.workspaceMode,
+            activeLayoutPreset: app.store.state.activeLayoutPreset,
+            playbackState: app.store.state.playbackState,
+            onCommand: { command in
+                EditorCommandDispatcher.handle(command, app: app, controller: controller)
+            }
+        ))
+    }
+    var lastNativeMenuState = (
+        workspaceMode: app.store.state.workspaceMode,
+        activeLayoutPreset: app.store.state.activeLayoutPreset,
+        playbackState: app.store.state.playbackState,
+        language: app.store.state.language
+    )
+    let nativeMenuToken = app.store.subscribe { store in
+        let next = (
+            workspaceMode: store.state.workspaceMode,
+            activeLayoutPreset: store.state.activeLayoutPreset,
+            playbackState: store.state.playbackState,
+            language: store.state.language
+        )
+        guard next != lastNativeMenuState else { return }
+        lastNativeMenuState = next
+        if let displayHandle {
+            installNativeMenu(on: displayHandle)
+        }
+    }
+    defer { app.store.unsubscribe(nativeMenuToken) }
     var lastShellPreferences = (
         themeMode: app.store.state.themeMode,
         language: app.store.state.language,
         vsyncMode: app.store.state.vsyncMode,
-        cmdSelectBehavior: app.store.state.cmdSelectBehavior
+        primarySelectBehavior: app.store.state.primarySelectBehavior
     )
     let shellPreferenceToken = app.store.subscribe { store in
         let next = (
             themeMode: store.state.themeMode,
             language: store.state.language,
             vsyncMode: store.state.vsyncMode,
-            cmdSelectBehavior: store.state.cmdSelectBehavior
+            primarySelectBehavior: store.state.primarySelectBehavior
         )
         guard next != lastShellPreferences else { return }
         if next.language != lastShellPreferences.language {
@@ -60,7 +91,7 @@ private func runEditor() throws {
                                              themeMode: store.state.themeMode,
                                              language: store.state.language,
                                              vsyncMode: store.state.vsyncMode,
-                                             cmdSelectBehavior: store.state.cmdSelectBehavior)
+                                             primarySelectBehavior: store.state.primarySelectBehavior)
         app.requestDisplayRefresh()
     }
     defer { app.store.unsubscribe(shellPreferenceToken) }
@@ -70,11 +101,14 @@ private func runEditor() throws {
 
     try AppRuntime.run(
         config: AppConfig(title: "GuavaNext Editor",
-                          backendConfig: launchOptions.backendConfig),
+                          backendConfig: launchOptions.backendConfig,
+                          titleBarStyle: .standard),
         backend: backend,
         events: events,
         onTick: { dt in app.tick(deltaTime: dt) },
         onDisplayReady: { display in
+            displayHandle = display
+            installNativeMenu(on: display)
             applyVSyncMode(app.store.state.vsyncMode, to: display)
             app.setVSyncModeHandler { mode in
                 applyVSyncMode(mode, to: display)
@@ -107,7 +141,7 @@ private func runEditor() throws {
                                          themeMode: app.store.state.themeMode,
                                          language: app.store.state.language,
                                          vsyncMode: app.store.state.vsyncMode,
-                                         cmdSelectBehavior: app.store.state.cmdSelectBehavior)
+                                         primarySelectBehavior: app.store.state.primarySelectBehavior)
     EditorRootViewFactory.saveDockLayout(controller,
                                          for: app.store.state.workspaceMode,
                                          preset: app.store.state.activeLayoutPreset)

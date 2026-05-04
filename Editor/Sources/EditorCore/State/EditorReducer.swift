@@ -20,7 +20,7 @@ public enum EditorAction: Sendable {
     case setTranslateSnapEnabled(Bool)
     case setRotateSnapEnabled(Bool)
     case setScaleSnapEnabled(Bool)
-    case setCommandSelectBehavior(SelectionCommandBehavior)
+    case setPrimarySelectBehavior(SelectionPrimaryModifierBehavior)
     case setThemeMode(EditorThemeMode)
     case setLanguage(EditorLanguage)
     case forceUIRefresh
@@ -107,8 +107,8 @@ public enum EditorReducer {
 
         case let .setScaleSnapEnabled(enabled):
             state.scaleSnapEnabled = enabled
-        case let .setCommandSelectBehavior(behavior):
-            state.cmdSelectBehavior = behavior
+        case let .setPrimarySelectBehavior(behavior):
+            state.primarySelectBehavior = behavior
         case let .setThemeMode(mode):
             state.presentation.setThemeMode(mode)
         case let .setLanguage(language):
