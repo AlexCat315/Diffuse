@@ -23,39 +23,37 @@ public final class EXRWriter: @unchecked Sendable {
     private let width: Int
     private let height: Int
     private var context: GuavaEXRContext?
-    private var layers: [Layer] = []
+    private var layerNames: [String] = []
 
-    public init(path: String, width: Int, height: Int) {
+    public init(path: String, width: Int, height: Int) throws {
         self.path = path
         self.width = width
         self.height = height
-    }
-
-    public func addLayer(_ layer: Layer) {
-        layers.append(layer)
-    }
-
-    public func write() throws -> Bool {
         guard let ctx = guava_exr_writer_create(path, Int32(width), Int32(height)) else {
             throw EXRWriterError.contextCreationFailed
         }
-        context = ctx
-        defer { guava_exr_writer_destroy(ctx) }
+        self.context = ctx
+    }
 
-        for layer in layers {
-            var desc = GuavaEXRLayerDesc(
-                name: (layer.name as NSString).utf8String,
-                channels: (layer.channels.joined(separator: ",") as NSString).utf8String,
-                channel_count: Int32(layer.channels.count)
-            )
-            let pixelType: GuavaEXRPixelType = layer.pixelType == .float
-                ? GUAVA_EXR_FLOAT : GUAVA_EXR_HALF
-            guard guava_exr_writer_add_layer(ctx, &desc, pixelType) else {
-                throw EXRWriterError.layerCreationFailed(layer.name)
-            }
+    deinit {
+        if let ctx = context {
+            guava_exr_writer_destroy(ctx)
         }
+    }
 
-        return guava_exr_writer_write(ctx)
+    public func addLayer(_ layer: Layer) {
+        guard let ctx = context else { return }
+        let channelStr = layer.channels.joined(separator: ",")
+        var desc = GuavaEXRLayerDesc(
+            name: (layer.name as NSString).utf8String,
+            channels: (channelStr as NSString).utf8String,
+            channel_count: Int32(layer.channels.count)
+        )
+        let pixelType: GuavaEXRPixelType = layer.pixelType == .float
+            ? GUAVA_EXR_FLOAT : GUAVA_EXR_HALF
+        if guava_exr_writer_add_layer(ctx, &desc, pixelType) {
+            layerNames.append(layer.name)
+        }
     }
 
     public func setPixels(_ pixels: [Float], for layerName: String) -> Bool {
@@ -67,9 +65,19 @@ public final class EXRWriter: @unchecked Sendable {
             Int32(pixels.count)
         )
     }
+
+    public func write() throws {
+        guard let ctx = context else {
+            throw EXRWriterError.contextCreationFailed
+        }
+        guard guava_exr_writer_write(ctx) else {
+            throw EXRWriterError.writeFailed(path)
+        }
+    }
 }
 
 public enum EXRWriterError: Error {
     case contextCreationFailed
     case layerCreationFailed(String)
+    case writeFailed(String)
 }
