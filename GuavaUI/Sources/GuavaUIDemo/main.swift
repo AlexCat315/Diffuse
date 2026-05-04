@@ -210,6 +210,7 @@ struct RootView: View {
             }
             .flex()
             statusBar
+            OverlayHost()
         }
         .flex()
         .background(.background)

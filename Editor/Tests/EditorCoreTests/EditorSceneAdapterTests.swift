@@ -13,7 +13,7 @@ struct EditorSceneAdapterTests {
 
         let manifest = scene.manifest(selectedEntityID: scene.defaultSelectionID)
 
-        #expect(manifest.schemaVersion == 2)
+        #expect(manifest.schemaVersion == 3)
         #expect(manifest.revision == scene.revision)
         #expect(manifest.entityCount == scene.entityCount)
         #expect(manifest.selectedEntityID == scene.defaultSelectionID)

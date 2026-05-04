@@ -25,6 +25,8 @@ struct EditorRootView: View {
                     Divider()
 
                     EditorStatusBar(store: app.store, getTiming: { app.currentFrameTiming() })
+
+                    OverlayHost()
                 }
                 .background(.background)
                 .flex()
