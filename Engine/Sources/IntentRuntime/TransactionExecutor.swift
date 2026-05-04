@@ -295,6 +295,9 @@ public struct TransactionExecutor {
                 if let mesh = scene.component(RenderMeshComponent.self, for: source) {
                     _ = scene.setComponent(mesh, for: entity)
                 }
+                if let asset = scene.component(AssetReferenceComponent.self, for: source) {
+                    _ = scene.setComponent(asset, for: entity)
+                }
                 if let body = scene.component(RigidBody.self, for: source) {
                     _ = scene.setComponent(body, for: entity)
                 }
@@ -363,9 +366,137 @@ public struct TransactionExecutor {
                                                                    type: "RigidBody")
                 }
 
+            case let .setCollider(entityID, collider):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.setComponent(collider, for: entity) else {
+                    throw TransactionExecutorError.invalidEntity(entityID)
+                }
+
             case let .setColliderTrigger(entityID, value):
                 let entity = try requireEntity(entityID, in: scene)
                 guard scene.updateComponent(Collider.self, for: entity, { $0.isTrigger = value }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "Collider")
+                }
+
+            case let .setColliderShapeType(entityID, kind):
+                let entity = try requireEntity(entityID, in: scene)
+                guard let collider = scene.component(Collider.self, for: entity) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "Collider")
+                }
+                let newShape: ColliderShape
+                switch kind {
+                case .box:
+                    newShape = .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: collider.shape.center)
+                case .sphere:
+                    newShape = .sphere(radius: 0.5, center: collider.shape.center)
+                case .capsule:
+                    newShape = .capsule(radius: 0.5, halfHeight: 0.5, center: collider.shape.center)
+                case .mesh:
+                    newShape = .mesh(resourceID: nil, center: collider.shape.center)
+                case .convex:
+                    newShape = .convex(resourceID: nil, center: collider.shape.center)
+                }
+                var updated = collider
+                updated.shape = newShape
+                guard scene.setComponent(updated, for: entity) else {
+                    throw TransactionExecutorError.invalidEntity(entityID)
+                }
+
+            case let .setColliderShapeBoxHalfExtents(entityID, halfExtents):
+                let entity = try requireEntity(entityID, in: scene)
+                guard let collider = scene.component(Collider.self, for: entity),
+                      case .box(_, let center) = collider.shape else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "Collider.box")
+                }
+                var updated = collider
+                updated.shape = .box(halfExtents: halfExtents, center: center)
+                guard scene.setComponent(updated, for: entity) else {
+                    throw TransactionExecutorError.invalidEntity(entityID)
+                }
+
+            case let .setColliderShapeSphereRadius(entityID, radius):
+                let entity = try requireEntity(entityID, in: scene)
+                guard let collider = scene.component(Collider.self, for: entity),
+                      case .sphere(_, let center) = collider.shape else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "Collider.sphere")
+                }
+                var updated = collider
+                updated.shape = .sphere(radius: radius, center: center)
+                guard scene.setComponent(updated, for: entity) else {
+                    throw TransactionExecutorError.invalidEntity(entityID)
+                }
+
+            case let .setColliderShapeCapsuleRadius(entityID, radius):
+                let entity = try requireEntity(entityID, in: scene)
+                guard let collider = scene.component(Collider.self, for: entity),
+                      case .capsule(_, let halfHeight, let center) = collider.shape else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "Collider.capsule")
+                }
+                var updated = collider
+                updated.shape = .capsule(radius: radius, halfHeight: halfHeight, center: center)
+                guard scene.setComponent(updated, for: entity) else {
+                    throw TransactionExecutorError.invalidEntity(entityID)
+                }
+
+            case let .setColliderShapeCapsuleHalfHeight(entityID, halfHeight):
+                let entity = try requireEntity(entityID, in: scene)
+                guard let collider = scene.component(Collider.self, for: entity),
+                      case .capsule(let radius, _, let center) = collider.shape else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "Collider.capsule")
+                }
+                var updated = collider
+                updated.shape = .capsule(radius: radius, halfHeight: halfHeight, center: center)
+                guard scene.setComponent(updated, for: entity) else {
+                    throw TransactionExecutorError.invalidEntity(entityID)
+                }
+
+            case let .setColliderMaterialFriction(entityID, value):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(Collider.self, for: entity, {
+                    $0.material.friction = max(0, value)
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "Collider")
+                }
+
+            case let .setColliderMaterialRestitution(entityID, value):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(Collider.self, for: entity, {
+                    $0.material.restitution = max(0, min(value, 1))
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "Collider")
+                }
+
+            case let .setColliderMaterialDensity(entityID, value):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(Collider.self, for: entity, {
+                    $0.material.density = max(0, value)
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "Collider")
+                }
+
+            case let .setColliderLayer(entityID, layerID):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(Collider.self, for: entity, {
+                    $0.layerID = layerID
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "Collider")
+                }
+
+            case let .setColliderLayerMask(entityID, layerMask):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(Collider.self, for: entity, {
+                    $0.layerMask = layerMask
+                }) else {
                     throw TransactionExecutorError.missingComponent(entityID: entityID,
                                                                    type: "Collider")
                 }
@@ -691,7 +822,18 @@ public struct TransactionExecutor {
                  let .setRigidBodyMass(entityID, _),
                  let .setRigidBodyGravityScale(entityID, _),
                  let .setRigidBodyAllowSleep(entityID, _),
+                 let .setCollider(entityID, _),
                  let .setColliderTrigger(entityID, _),
+                 let .setColliderShapeType(entityID, _),
+                 let .setColliderShapeBoxHalfExtents(entityID, _),
+                 let .setColliderShapeSphereRadius(entityID, _),
+                 let .setColliderShapeCapsuleRadius(entityID, _),
+                 let .setColliderShapeCapsuleHalfHeight(entityID, _),
+                 let .setColliderMaterialFriction(entityID, _),
+                 let .setColliderMaterialRestitution(entityID, _),
+                 let .setColliderMaterialDensity(entityID, _),
+                 let .setColliderLayer(entityID, _),
+                 let .setColliderLayerMask(entityID, _),
                  let .setConstraintEnabled(entityID, _),
                  let .setLightType(entityID, _),
                  let .setLightColor(entityID, _),

@@ -8,6 +8,7 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     private static let colliderIsTriggerFlag: UInt32 = 1 << 3
     private static let rigidBodyAllowSleepFlag: UInt32 = 1 << 4
     private static let colliderHasCapsuleFlag: UInt32 = 1 << 5
+    private static let colliderHasConvexFlag: UInt32 = 1 << 6
 
     private var context: GuavaJoltContext?
 
@@ -156,6 +157,8 @@ public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
                 capsuleHalfHeight = halfHeight
             case .mesh:
                 flags |= Self.colliderHasMeshFlag
+            case .convex:
+                flags |= Self.colliderHasConvexFlag
             }
         }
 

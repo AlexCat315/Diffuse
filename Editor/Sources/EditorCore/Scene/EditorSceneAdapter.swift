@@ -1,4 +1,5 @@
 import Foundation
+import AssetPipeline
 import GuavaUIRuntime
 import IntentRuntime
 import SceneRuntime
@@ -39,6 +40,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let name: String
     public let kind: String
     public let localTransform: EditorSceneManifestMatrix?
+    public let asset: EditorSceneManifestAssetReference?
     public let renderMesh: EditorSceneManifestRenderMesh?
     public let camera: EditorSceneManifestCamera?
     public let light: EditorSceneManifestLight?
@@ -52,6 +54,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
                 name: String,
                 kind: String,
                 localTransform: EditorSceneManifestMatrix? = nil,
+                asset: EditorSceneManifestAssetReference? = nil,
                 renderMesh: EditorSceneManifestRenderMesh? = nil,
                 camera: EditorSceneManifestCamera? = nil,
                 light: EditorSceneManifestLight? = nil,
@@ -64,6 +67,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.name = name
         self.kind = kind
         self.localTransform = localTransform
+        self.asset = asset
         self.renderMesh = renderMesh
         self.camera = camera
         self.light = light
@@ -75,22 +79,63 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     }
 }
 
+public struct EditorSceneManifestPhysicsSettings: Codable, Sendable, Equatable {
+    public let simulationMode: String
+    public let backendKind: String
+    public let gravity: EditorSceneManifestVector3
+    public let fixedTimeStepSeconds: Double
+    public let maxSubstepsPerFrame: Int
+    public let allowSleep: Bool
+
+    public init(_ settings: PhysicsSettingsResource) {
+        self.simulationMode = settings.simulationMode.rawValue
+        self.backendKind = settings.backendKind.rawValue
+        self.gravity = EditorSceneManifestVector3(settings.gravity)
+        self.fixedTimeStepSeconds = settings.fixedTimeStepSeconds
+        self.maxSubstepsPerFrame = settings.maxSubstepsPerFrame
+        self.allowSleep = settings.allowSleep
+    }
+
+    var settings: PhysicsSettingsResource {
+        PhysicsSettingsResource(
+            simulationMode: PhysicsSimulationMode(rawValue: simulationMode) ?? .off,
+            backendKind: PhysicsBackendKind(rawValue: backendKind) ?? .none,
+            gravity: gravity.simdValue,
+            fixedTimeStepSeconds: fixedTimeStepSeconds,
+            maxSubstepsPerFrame: maxSubstepsPerFrame,
+            allowSleep: allowSleep
+        )
+    }
+}
+
 public struct EditorSceneManifest: Codable, Sendable, Equatable {
     public let schemaVersion: Int
     public let revision: UInt64
     public let entityCount: Int
     public let selectedEntityID: UInt64?
+    public let sceneKind: String?
+    public let physicsSettings: EditorSceneManifestPhysicsSettings?
+    public let projectAssetCount: Int?
+    public let lastModifiedAt: String?
     public let roots: [EditorSceneManifestNode]
 
-    public init(schemaVersion: Int = 2,
+    public init(schemaVersion: Int = 3,
                 revision: UInt64,
                 entityCount: Int,
                 selectedEntityID: UInt64? = nil,
+                sceneKind: String? = nil,
+                physicsSettings: EditorSceneManifestPhysicsSettings? = nil,
+                projectAssetCount: Int? = nil,
+                lastModifiedAt: String? = nil,
                 roots: [EditorSceneManifestNode]) {
         self.schemaVersion = schemaVersion
         self.revision = revision
         self.entityCount = entityCount
         self.selectedEntityID = selectedEntityID
+        self.sceneKind = sceneKind
+        self.physicsSettings = physicsSettings
+        self.projectAssetCount = projectAssetCount
+        self.lastModifiedAt = lastModifiedAt
         self.roots = roots
     }
 }
@@ -157,6 +202,47 @@ public struct EditorSceneManifestMatrix: Codable, Sendable, Equatable {
 
     var localTransform: LocalTransform? {
         simdValue.map(LocalTransform.init(matrix:))
+    }
+}
+
+public struct EditorSceneManifestAssetReference: Codable, Sendable, Equatable {
+    public let assetID: String
+    public let name: String
+    public let relativePath: String
+    public let absolutePath: String
+    public let kind: String
+    public let meshIndex: Int
+
+    public init(assetID: String,
+                name: String,
+                relativePath: String,
+                absolutePath: String,
+                kind: String,
+                meshIndex: Int) {
+        self.assetID = assetID
+        self.name = name
+        self.relativePath = relativePath
+        self.absolutePath = absolutePath
+        self.kind = kind
+        self.meshIndex = meshIndex
+    }
+
+    public init(_ component: AssetReferenceComponent) {
+        self.init(assetID: component.assetID,
+                  name: component.name,
+                  relativePath: component.relativePath,
+                  absolutePath: component.absolutePath,
+                  kind: component.kind,
+                  meshIndex: component.meshIndex)
+    }
+
+    var component: AssetReferenceComponent {
+        AssetReferenceComponent(assetID: assetID,
+                                name: name,
+                                relativePath: relativePath,
+                                absolutePath: absolutePath,
+                                kind: kind,
+                                meshIndex: meshIndex)
     }
 }
 
@@ -356,6 +442,13 @@ public struct EditorSceneManifestColliderShape: Codable, Sendable, Equatable {
             self.halfHeight = nil
             self.resourceID = resourceID
             self.center = EditorSceneManifestVector3(center)
+        case let .convex(resourceID, center):
+            self.kind = "convex"
+            self.halfExtents = nil
+            self.radius = nil
+            self.halfHeight = nil
+            self.resourceID = resourceID
+            self.center = EditorSceneManifestVector3(center)
         }
     }
 
@@ -372,6 +465,8 @@ public struct EditorSceneManifestColliderShape: Codable, Sendable, Equatable {
                             center: center.simdValue)
         case "mesh":
             return .mesh(resourceID: resourceID, center: center.simdValue)
+        case "convex":
+            return .convex(resourceID: resourceID, center: center.simdValue)
         default:
             return .box(halfExtents: SIMD3<Float>(0.5, 0.5, 0.5), center: center.simdValue)
         }
@@ -509,6 +604,7 @@ public enum EditorInspectorFieldValue {
     case json(Binding<String>, minHeight: Float)
     case lightType(Binding<LightType>)
     case rigidBodyMotion(Binding<RigidBodyMotionType>)
+    case colliderShapeKind(Binding<ColliderShapeKind>)
 }
 
 /// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`，
@@ -563,9 +659,18 @@ public final class EditorSceneAdapter: @unchecked Sendable {
     public func manifest(selectedEntityID: UInt64? = nil) -> EditorSceneManifest {
         let selectedEntity = entity(from: selectedEntityID)
         let restoredSelection = selectedEntity.flatMap { scene.contains($0) ? $0.rawValue : nil }
+        let physicsSettings = scene.resource(PhysicsSettingsResource.self)
+            .map(EditorSceneManifestPhysicsSettings.init)
+        let sceneKind = scene.resource(SceneKindComponent.self)?.value
+        let assetCount = AssetRegistry.shared.entriesSnapshot().count
+        let timestamp = ISO8601DateFormatter().string(from: Date())
         return EditorSceneManifest(revision: revision,
                                    entityCount: entityCount,
                                    selectedEntityID: restoredSelection,
+                                   sceneKind: sceneKind,
+                                   physicsSettings: physicsSettings,
+                                   projectAssetCount: assetCount > 0 ? assetCount : nil,
+                                   lastModifiedAt: timestamp,
                                    roots: scene.roots().map(manifestNode))
     }
 
@@ -582,6 +687,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             _ = restoredScene.setComponent(SceneKindComponent(value: node.kind), for: entity)
             _ = restoredScene.setLocalTransform(node.localTransform?.localTransform ?? .identity,
                                                 for: entity)
+            if let asset = node.asset {
+                _ = restoredScene.setComponent(asset.component, for: entity)
+            }
             if let renderMesh = node.renderMesh {
                 _ = restoredScene.setComponent(renderMesh.component, for: entity)
             }
@@ -623,6 +731,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         for root in manifest.roots {
             restoreConstraints(root)
         }
+        if let physicsSettings = manifest.physicsSettings {
+            restoredScene.setResource(physicsSettings.settings)
+        }
+        rebuildMeshColliderResources(in: &restoredScene)
         restoredScene.propagateTransforms()
 
         scene = restoredScene
@@ -706,6 +818,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             name: displayName(for: entity),
             kind: displayKind(for: entity),
             localTransform: scene.localTransform(for: entity).map { EditorSceneManifestMatrix($0.matrix) },
+            asset: scene.component(AssetReferenceComponent.self, for: entity)
+                .map(EditorSceneManifestAssetReference.init),
             renderMesh: scene.component(RenderMeshComponent.self, for: entity)
                 .map(EditorSceneManifestRenderMesh.init),
             camera: scene.component(CameraComponent.self, for: entity)
@@ -722,6 +836,43 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 .map(EditorSceneManifestScript.init),
             children: scene.children(of: entity).map(manifestNode)
         )
+    }
+
+    private func rebuildMeshColliderResources(in runtime: inout SceneRuntime) {
+        var boundsResource = runtime.resource(MeshColliderBoundsResource.self) ?? MeshColliderBoundsResource()
+        var geometryResource = runtime.resource(MeshColliderGeometryResource.self) ?? MeshColliderGeometryResource()
+        var changedBounds = false
+        var changedGeometry = false
+
+        for entity in runtime.entities() {
+            guard let asset = runtime.component(AssetReferenceComponent.self, for: entity),
+                  let collider = runtime.component(Collider.self, for: entity),
+                  case let .mesh(resourceID, _) = collider.shape,
+                  let mesh = AssetRegistry.shared.meshAsset(for: asset.meshIndex) else {
+                continue
+            }
+
+            let resolvedResourceID = resourceID ?? meshColliderResourceID(for: asset.meshIndex)
+            let bounds = SpatialAABB(min: mesh.localBounds.min, max: mesh.localBounds.max)
+            boundsResource.boundsByResourceID[resolvedResourceID] = bounds
+            changedBounds = true
+
+            if mesh.triangleCount > 0 {
+                geometryResource.geometryByResourceID[resolvedResourceID] = MeshColliderGeometry(
+                    positions: (0..<mesh.vertexCount).compactMap { mesh.position(at: $0) },
+                    triangleIndices: mesh.indices,
+                    localBounds: bounds
+                )
+                changedGeometry = true
+            }
+        }
+
+        if changedBounds {
+            runtime.setResource(boundsResource)
+        }
+        if changedGeometry {
+            runtime.setResource(geometryResource)
+        }
     }
 
     private func generalSection(for entity: EntityID) -> EditorInspectorSection {
@@ -874,26 +1025,117 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             return nil
         }
 
+        var fields: [EditorInspectorField] = [
+            EditorInspectorField(
+                id: "shape-kind",
+                label: L("Shape"),
+                value: .colliderShapeKind(colliderShapeKindBinding(for: entity))
+            ),
+        ]
+
+        switch collider.shape {
+        case .box:
+            fields.append(
+                EditorInspectorField(
+                    id: "shape-box-extents",
+                    label: L("Half Extents"),
+                    value: .vector3(x: colliderBoxHalfExtentsBinding(for: entity, axis: \.x),
+                                    y: colliderBoxHalfExtentsBinding(for: entity, axis: \.y),
+                                    z: colliderBoxHalfExtentsBinding(for: entity, axis: \.z))
+                )
+            )
+        case .sphere:
+            fields.append(
+                EditorInspectorField(
+                    id: "shape-sphere-radius",
+                    label: L("Radius"),
+                    value: .constrainedNumber(colliderSphereRadiusBinding(for: entity),
+                                              min: 0.01, max: nil, step: 0.1, showsStepper: true)
+                )
+            )
+        case .capsule:
+            fields.append(
+                EditorInspectorField(
+                    id: "shape-capsule-radius",
+                    label: L("Radius"),
+                    value: .constrainedNumber(colliderCapsuleRadiusBinding(for: entity),
+                                              min: 0.01, max: nil, step: 0.1, showsStepper: true)
+                )
+            )
+            fields.append(
+                EditorInspectorField(
+                    id: "shape-capsule-half-height",
+                    label: L("Half Height"),
+                    value: .constrainedNumber(colliderCapsuleHalfHeightBinding(for: entity),
+                                              min: 0.01, max: nil, step: 0.1, showsStepper: true)
+                )
+            )
+        case .mesh:
+            let resourceLabel = collider.shape.resourceID ?? L("(auto)")
+            fields.append(
+                EditorInspectorField(
+                    id: "shape-mesh-resource",
+                    label: L("Resource"),
+                    value: .readOnly(resourceLabel)
+                )
+            )
+        case .convex:
+            let resourceLabel = collider.shape.resourceID ?? L("(auto)")
+            fields.append(
+                EditorInspectorField(
+                    id: "shape-convex-resource",
+                    label: L("Resource"),
+                    value: .readOnly(resourceLabel)
+                )
+            )
+        }
+
+        fields.append(
+            EditorInspectorField(
+                id: "trigger",
+                label: L("Trigger"),
+                value: .bool(colliderTriggerBinding(for: entity))
+            )
+        )
+
+        fields.append(
+            EditorInspectorField(
+                id: "material-friction",
+                label: L("Friction"),
+                value: .constrainedNumber(colliderFrictionBinding(for: entity),
+                                          min: 0, max: nil, step: 0.1, showsStepper: true)
+            )
+        )
+        fields.append(
+            EditorInspectorField(
+                id: "material-restitution",
+                label: L("Restitution"),
+                value: .constrainedNumber(colliderRestitutionBinding(for: entity),
+                                          min: 0, max: 1, step: 0.05, showsStepper: true)
+            )
+        )
+        fields.append(
+            EditorInspectorField(
+                id: "material-density",
+                label: L("Density"),
+                value: .constrainedNumber(colliderDensityBinding(for: entity),
+                                          min: 0, max: nil, step: 0.1, showsStepper: true)
+            )
+        )
+
+        fields.append(
+            EditorInspectorField(
+                id: "layer",
+                label: L("Layer"),
+                value: .constrainedNumber(colliderLayerBinding(for: entity),
+                                          min: 0, max: 65535, step: 1, showsStepper: true)
+            )
+        )
+
         return EditorInspectorSection(
             id: "collider",
             title: L("Collider"),
-            fields: [
-                EditorInspectorField(
-                    id: "shape",
-                    label: L("Shape"),
-                    value: .readOnly(describe(collider.shape))
-                ),
-                EditorInspectorField(
-                    id: "trigger",
-                    label: L("Trigger"),
-                    value: .bool(colliderTriggerBinding(for: entity))
-                ),
-                EditorInspectorField(
-                    id: "layer",
-                    label: L("Layer"),
-                    value: .readOnly(String(collider.layerID))
-                ),
-            ]
+            fields: fields
         )
     }
 
@@ -1212,6 +1454,193 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         )
     }
 
+    private func colliderShapeKindBinding(for entity: EntityID) -> Binding<ColliderShapeKind> {
+        Binding(
+            get: { [self] in
+                scene.component(Collider.self, for: entity)?.shape.kind ?? .box
+            },
+            set: { [self] next in
+                guard scene.component(Collider.self, for: entity)?.shape.kind != next else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_collider_shape_type",
+                                          summary: "Update collider shape type",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setColliderShapeType(entityID: entity.rawValue, kind: next)])
+            }
+        )
+    }
+
+    private func colliderBoxHalfExtentsBinding(for entity: EntityID,
+                                                axis: WritableKeyPath<SIMD3<Float>, Float>) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                if let collider = scene.component(Collider.self, for: entity),
+                   case let .box(he, _) = collider.shape {
+                    return he[keyPath: axis]
+                }
+                return 0.5
+            },
+            set: { [self] next in
+                guard let collider = scene.component(Collider.self, for: entity),
+                      case let .box(he, _) = collider.shape,
+                      he[keyPath: axis] != next else { return }
+                var newHE = he
+                newHE[keyPath: axis] = max(0.01, next)
+                _ = applySceneTransaction(intentVerb: "scene.set_collider_box_extents",
+                                          summary: "Update collider box extents",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setColliderShapeBoxHalfExtents(entityID: entity.rawValue,
+                                                                                      halfExtents: newHE)])
+            }
+        )
+    }
+
+    private func colliderSphereRadiusBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                if let collider = scene.component(Collider.self, for: entity),
+                   case let .sphere(r, _) = collider.shape {
+                    return r
+                }
+                return 0.5
+            },
+            set: { [self] next in
+                let clamped = max(0.01, next)
+                guard let collider = scene.component(Collider.self, for: entity),
+                      case let .sphere(r, _) = collider.shape,
+                      r != clamped else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_collider_sphere_radius",
+                                          summary: "Update collider sphere radius",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setColliderShapeSphereRadius(entityID: entity.rawValue,
+                                                                                    radius: clamped)])
+            }
+        )
+    }
+
+    private func colliderCapsuleRadiusBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                if let collider = scene.component(Collider.self, for: entity),
+                   case let .capsule(r, _, _) = collider.shape {
+                    return r
+                }
+                return 0.5
+            },
+            set: { [self] next in
+                let clamped = max(0.01, next)
+                guard let collider = scene.component(Collider.self, for: entity),
+                      case let .capsule(r, _, _) = collider.shape,
+                      r != clamped else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_collider_capsule_radius",
+                                          summary: "Update collider capsule radius",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setColliderShapeCapsuleRadius(entityID: entity.rawValue,
+                                                                                     radius: clamped)])
+            }
+        )
+    }
+
+    private func colliderCapsuleHalfHeightBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                if let collider = scene.component(Collider.self, for: entity),
+                   case let .capsule(_, hh, _) = collider.shape {
+                    return hh
+                }
+                return 0.5
+            },
+            set: { [self] next in
+                let clamped = max(0.01, next)
+                guard let collider = scene.component(Collider.self, for: entity),
+                      case let .capsule(_, hh, _) = collider.shape,
+                      hh != clamped else { return }
+                _ = applySceneTransaction(intentVerb: "scene.set_collider_capsule_half_height",
+                                          summary: "Update collider capsule half height",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setColliderShapeCapsuleHalfHeight(entityID: entity.rawValue,
+                                                                                         halfHeight: clamped)])
+            }
+        )
+    }
+
+    private func colliderFrictionBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(Collider.self, for: entity)?.material.friction ?? 0.6
+            },
+            set: { [self] next in
+                let clamped = max(0, next)
+                guard scene.component(Collider.self, for: entity)?.material.friction != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_collider_friction",
+                                          summary: "Update collider friction",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setColliderMaterialFriction(entityID: entity.rawValue,
+                                                                                   value: clamped)])
+            }
+        )
+    }
+
+    private func colliderRestitutionBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(Collider.self, for: entity)?.material.restitution ?? 0
+            },
+            set: { [self] next in
+                let clamped = max(0, min(next, 1))
+                guard scene.component(Collider.self, for: entity)?.material.restitution != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_collider_restitution",
+                                          summary: "Update collider restitution",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setColliderMaterialRestitution(entityID: entity.rawValue,
+                                                                                      value: clamped)])
+            }
+        )
+    }
+
+    private func colliderDensityBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                scene.component(Collider.self, for: entity)?.material.density ?? 1
+            },
+            set: { [self] next in
+                let clamped = max(0, next)
+                guard scene.component(Collider.self, for: entity)?.material.density != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_collider_density",
+                                          summary: "Update collider density",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setColliderMaterialDensity(entityID: entity.rawValue,
+                                                                                  value: clamped)])
+            }
+        )
+    }
+
+    private func colliderLayerBinding(for entity: EntityID) -> Binding<Float> {
+        Binding(
+            get: { [self] in
+                Float(scene.component(Collider.self, for: entity)?.layerID ?? 0)
+            },
+            set: { [self] next in
+                let clamped = UInt16(max(0, min(next, 65535)))
+                guard scene.component(Collider.self, for: entity)?.layerID != clamped else {
+                    return
+                }
+                _ = applySceneTransaction(intentVerb: "scene.set_collider_layer",
+                                          summary: "Update collider layer",
+                                          targetRawIDs: [entity.rawValue],
+                                          mutations: [.setColliderLayer(entityID: entity.rawValue,
+                                                                        layerID: clamped)])
+            }
+        )
+    }
+
     private func constraintEnabledBinding(for entity: EntityID) -> Binding<Bool> {
         Binding(
             get: { [self] in
@@ -1405,6 +1834,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
         "Entity \(entity.index)"
     }
 
+    private func meshColliderResourceID(for meshIndex: Int) -> String {
+        "meshIndex:\(meshIndex)"
+    }
+
     private func describe(_ shape: ColliderShape) -> String {
         switch shape {
         case let .box(halfExtents, _):
@@ -1415,6 +1848,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             return "Capsule r=\(format(radius)) h=\(format(halfHeight * 2))"
         case let .mesh(resourceID, _):
             return resourceID.map { "Mesh \($0)" } ?? "Mesh"
+        case let .convex(resourceID, _):
+            return resourceID.map { "Convex \($0)" } ?? "Convex"
         }
     }
 
