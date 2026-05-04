@@ -611,3 +611,231 @@ struct IntentRuntimeTests {
                  generation: UInt32(rawID >> 32))
     }
 }
+
+// MARK: - End-to-end integration tests
+
+@Suite("IntentRuntime end-to-end", .serialized)
+struct IntentRuntimeEndToEndTests {
+
+    @Test("ObservationBus → IntentIR → TransactionIR → SceneRuntime full pipeline")
+    func fullPipelineSpawnEntity() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        // 1. ObservationBus
+        let bus = try ObservationBus(coldLogDirectory: root.path)
+        let txSubscription = bus.subscribe(spec: SubscriptionSpec(
+            filter: .kindIn([.transactionApplied]),
+            startFrom: .latest,
+            bufferPolicy: .dropOldest(size: 8)))
+        let sceneSubscription = bus.subscribe(spec: SubscriptionSpec(
+            filter: .kindIn([.sceneChanged]),
+            startFrom: .latest,
+            bufferPolicy: .dropOldest(size: 8)))
+
+        // 2. IntentIR — what the user/AI intends
+        let intent = IntentIR(
+            id: "intent-\(UUID().uuidString.prefix(8))",
+            verb: "scene.spawn_entity",
+            summary: "Spawn a hero mesh at the origin",
+            targetObjectIDs: [],
+            source: .human,
+            createdAt: Date()
+        )
+
+        // 3. TransactionIR — structured operations
+        let tx = TransactionIR(
+            intent: intent,
+            summary: "Spawn hero mesh",
+            operations: [
+                .scene(.spawnImportedMeshEntity(
+                    label: "Hero",
+                    kindLabel: "Static Mesh",
+                    meshIndex: 7,
+                    position: SIMD3<Float>(2, 0, -3)))
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: 0),
+            provenance: .authored
+        )
+
+        // 4. SceneRuntime — target for mutation
+        var context = TransactionExecutionContext(
+            sceneRuntime: SceneRuntime(),
+            observationBus: bus,
+            eventOrigin: EventOrigin(process: .editor, host: "test", user: "e2e"),
+            sceneStreamID: "scene:e2e")
+
+        // 5. TransactionExecutor — applies transaction, emits events
+        let executor = TransactionExecutor()
+        let result = try executor.apply(tx, to: &context)
+
+        // 6. Verify SceneRuntime state
+        let scene = try #require(context.sceneRuntime)
+        #expect(scene.snapshot.entityCount == 1)
+        #expect(result.createdEntityIDs.count == 1)
+        let entity = EntityID(index: UInt32(result.createdEntityIDs[0] & 0xFFFF_FFFF),
+                             generation: UInt32(result.createdEntityIDs[0] >> 32))
+        #expect(scene.component(SceneNameComponent.self, for: entity)?.value == "Hero")
+        #expect(scene.localTransform(for: entity)?.translation == SIMD3<Float>(2, 0, -3))
+
+        // 7. Verify ObservationBus events
+        #expect(txSubscription.drain().map(\.kind) == [.transactionApplied])
+        #expect(sceneSubscription.drain().map(\.kind) == [.sceneChanged])
+
+        // 8. Cold log replay — at minimum sceneChanged events are recorded
+        let replayed = try bus.replay(streamID: "scene:e2e", fromSeq: 1)
+        #expect(replayed.count >= 1)
+        #expect(replayed.contains { $0.kind == .sceneChanged })
+    }
+
+    @Test("Multi-step pipeline: spawn → setLocalTransform → verify via cold log replay")
+    func multiStepSpawnAndTransform() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let bus = try ObservationBus(coldLogDirectory: root.path)
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+        let origin = EventOrigin(process: .editor, host: "test", user: "e2e")
+
+        // Step 1: Spawn entity
+        var ctx = TransactionExecutionContext(
+            sceneRuntime: scene, observationBus: bus,
+            eventOrigin: origin, sceneStreamID: "scene:e2e")
+        let spawnTx = TransactionIR(
+            intent: IntentIR(verb: "scene.spawn_entity", summary: "Spawn",
+                             source: .human),
+            summary: "Spawn cube",
+            operations: [.scene(.spawnImportedMeshEntity(
+                label: "Cube", kindLabel: "Static Mesh",
+                meshIndex: 2, position: SIMD3<Float>(1, 2, 3)))],
+            provenance: .authored)
+        let spawnResult = try executor.apply(spawnTx, to: &ctx)
+        let entityID = EntityID(index: UInt32(spawnResult.createdEntityIDs[0] & 0xFFFF_FFFF),
+                               generation: UInt32(spawnResult.createdEntityIDs[0] >> 32))
+        let revision1 = ctx.sceneRuntime!.snapshot.revision
+        #expect(ctx.sceneRuntime!.localTransform(for: entityID)?.translation == SIMD3<Float>(1, 2, 3))
+
+        // Step 2: Set local transform
+        scene = ctx.sceneRuntime!
+        var ctx2 = TransactionExecutionContext(
+            sceneRuntime: scene, observationBus: bus,
+            eventOrigin: origin, sceneStreamID: "scene:e2e")
+        let newTransform = LocalTransform(translation: SIMD3<Float>(10, 20, 30))
+        let moveTx = TransactionIR(
+            intent: IntentIR(verb: "scene.set_transform", summary: "Move",
+                             source: .human),
+            summary: "Move cube",
+            operations: [.scene(.setLocalTransform(
+                entityID: entityID.rawValue, transform: newTransform))],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: revision1),
+            provenance: .authored)
+        let moveResult = try executor.apply(moveTx, to: &ctx2)
+        #expect(moveResult.changedDomains == [.scene])
+        #expect(ctx2.sceneRuntime!.localTransform(for: entityID)?.translation == SIMD3<Float>(10, 20, 30))
+        #expect(ctx2.sceneRuntime!.snapshot.revision > revision1)
+
+        // Verify cold log captured both scene changes in sequence
+        let replayed = try bus.replay(streamID: "scene:e2e", fromSeq: 1)
+        let sceneChanges = replayed.filter { $0.kind == .sceneChanged }
+        #expect(sceneChanges.count >= 2)
+        #expect(sceneChanges[0].seq < sceneChanges[1].seq)
+    }
+
+    @Test("Spawn entity, set rigid-body via SceneRuntime, then update via transaction")
+    func spawnEntityWithPhysicsViaDirectAPIThenTransaction() throws {
+        let executor = TransactionExecutor()
+        var scene = SceneRuntime()
+
+        // Step 1: Spawn entity and directly set RigidBody
+        let entity = scene.createEntity()
+        scene.setLocalTransform(LocalTransform(translation: SIMD3<Float>(0, 5, 0)), for: entity)
+        scene.setComponent(RigidBody(motionType: .static), for: entity)
+        #expect(scene.snapshot.entityCount == 1)
+
+        // Step 2: Use transaction to update rigid body fields and add collider
+        var ctx = TransactionExecutionContext(sceneRuntime: scene)
+        let rawID = entity.rawValue
+        let collider = Collider(shape: .box(halfExtents: SIMD3<Float>(1, 1, 1),
+                                           center: .zero))
+        let tx = TransactionIR(
+            intent: IntentIR(verb: "scene.update_entity", summary: "Add physics",
+                             source: .human),
+            summary: "Add physics components",
+            operations: [
+                .scene(.setRigidBodyMotionType(entityID: rawID, value: .dynamic)),
+                .scene(.setRigidBodyMass(entityID: rawID, value: 2.0)),
+                .scene(.setRigidBodyGravityScale(entityID: rawID, value: 1.0)),
+                .scene(.setCollider(entityID: rawID, collider: collider)),
+            ],
+            baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+            provenance: .authored)
+        _ = try executor.apply(tx, to: &ctx)
+
+        // Verify
+        let body = try #require(ctx.sceneRuntime?.component(RigidBody.self, for: entity))
+        #expect(body.motionType == .dynamic)
+        #expect(body.mass == 2.0)
+        let colliderComponent = try #require(ctx.sceneRuntime?.component(Collider.self, for: entity))
+        #expect(colliderComponent.shape.kind == .box)
+
+        // Apply force
+        #expect(ctx.sceneRuntime?.applyForce(SIMD3<Float>(0, 9.8, 0), to: entity) == true)
+        let updatedBody = ctx.sceneRuntime?.component(RigidBody.self, for: entity)
+        #expect(updatedBody?.accumulatedForce == SIMD3<Float>(0, 9.8, 0))
+    }
+
+    @Test("Observable state hydration: bus events match scene mutations across coordinator")
+    func coordinatorPipelineEmitsConsistentEvents() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+
+        let bus = try ObservationBus(coldLogDirectory: root.path)
+        let coordinator = try IntentRuntimeCoordinator.default()
+        let sceneSubscription = bus.subscribe(spec: SubscriptionSpec(
+            filter: .kindIn([.transactionApplied, .sceneChanged]),
+            startFrom: .latest,
+            bufferPolicy: .dropOldest(size: 16)))
+
+        let scene = SceneRuntime()
+        var context = TransactionExecutionContext(
+            sceneRuntime: scene, observationBus: bus,
+            eventOrigin: EventOrigin(process: .editor, host: "test", user: "e2e"),
+            sceneStreamID: "scene:coordinator")
+
+        let tx = TransactionIR(
+            intent: IntentIR(verb: "scene.spawn_entity", summary: "Coordinator spawn",
+                             source: .human),
+            summary: "Coordinator spawn test",
+            operations: [
+                .scene(.spawnImportedMeshEntity(label: "CoordEntity",
+                                               kindLabel: "Static Mesh",
+                                               meshIndex: 5,
+                                               position: .zero))
+            ],
+            provenance: .authored)
+
+        let result = try coordinator.submit(
+            tx,
+            capabilityContext: CapabilityInvocationContext(role: .editor, releasePhase: .beta),
+            executionContext: &context)
+
+        #expect(result.disposition == .applied)
+        #expect(context.sceneRuntime?.snapshot.entityCount == 1)
+
+        let events = sceneSubscription.drain()
+        #expect(events.count == 2)
+        #expect(events.map(\.kind) == [.transactionApplied, .sceneChanged])
+
+        // Verify both event kinds are present
+        let kinds = Set(events.map(\.kind))
+        #expect(kinds.contains(.transactionApplied))
+        #expect(kinds.contains(.sceneChanged))
+    }
+}
