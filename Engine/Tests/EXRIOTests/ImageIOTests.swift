@@ -1,5 +1,5 @@
 import Foundation
-import ImageIO
+import EXRIO
 import Testing
 
 @Suite("ImageIO")
