@@ -16,7 +16,7 @@ final class PanelRegistryTests: XCTestCase {
         })
 
         XCTAssertEqual(registry.count, 2)
-        XCTAssertEqual(registry.ids, ["hierarchy", "inspector"])
+        XCTAssertEqual(registry.ids, [PanelID("hierarchy"), PanelID("inspector")])
         XCTAssertEqual(registry.descriptor(for: "hierarchy")?.title, "Scene")
         XCTAssertNil(registry.descriptor(for: "missing"))
     }
@@ -30,7 +30,7 @@ final class PanelRegistryTests: XCTestCase {
 
         registry.register(PanelDescriptor(id: "b", title: "B'") { EmptyView() })
 
-        XCTAssertEqual(registry.ids, ["a", "b", "c"])
+        XCTAssertEqual(registry.ids, [PanelID("a"), PanelID("b"), PanelID("c")])
         XCTAssertEqual(registry.descriptor(for: "b")?.title, "B'")
     }
 
@@ -44,7 +44,7 @@ final class PanelRegistryTests: XCTestCase {
             descriptor.title = "Localized B"
         }
 
-        XCTAssertEqual(registry.ids, ["a", "b"])
+        XCTAssertEqual(registry.ids, [PanelID("a"), PanelID("b")])
         XCTAssertEqual(registry.descriptor(for: "b")?.title, "Localized B")
         _ = registry.make("b")
     }
@@ -57,7 +57,7 @@ final class PanelRegistryTests: XCTestCase {
 
         registry.unregister(id: "a")
 
-        XCTAssertEqual(registry.ids, ["b"])
+        XCTAssertEqual(registry.ids, [PanelID("b")])
         XCTAssertNil(registry.descriptor(for: "a"))
     }
 

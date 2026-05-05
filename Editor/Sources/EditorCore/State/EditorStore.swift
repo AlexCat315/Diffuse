@@ -8,7 +8,7 @@ import IntentRuntime
 /// 调用方只通过 `dispatch(_:)` 改写状态，并通过 `subscribe(_:)` 监听变化。
 /// `version` 单调递增，每次 dispatch 后 +1，UI 层用它驱动 `@State` 失效。
 ///
-/// 与 `DockController` 同样的线程契约：所有 API 假设在主线程上调用，
+/// 与 `WorkspaceController` 同样的线程契约：所有 API 假设在主线程上调用，
 /// 内部不加锁。`@unchecked Sendable` 仅用于穿过 nonisolated 闭包，
 /// 调用方不应把这个对象交给后台线程。
 public final class EditorStore: @unchecked Sendable {

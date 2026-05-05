@@ -22,6 +22,9 @@ public enum PointerCaptureHolder {
     nonisolated(unsafe) public static var current: PointerCapture?
 }
 
+/// Runtime input services bound to one platform window.
+public typealias InputContext = PlatformInputContext
+
 /// Runtime services bound to one platform window.
 public final class PlatformInputContext {
     public let interactions: InteractionRegistry
