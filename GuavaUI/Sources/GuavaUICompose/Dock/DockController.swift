@@ -401,20 +401,28 @@ public final class DockController: @unchecked Sendable {
             return
         }
 
-        let nextRoot: DockLayoutNode
-        if root.id == leafID {
-            nextRoot = .empty()
-        } else {
-            guard let removed = Self.removeNode(leafID, from: root),
-                  let stripped = removed.0 else {
-                return
-            }
-            nextRoot = stripped
-        }
-
-        root = normalizeRoot(nextRoot)
         minimizedLeaves[leafID] = DockMinimizedLeaf(node: found, edge: edge)
         minimizedOrder.append(leafID)
+        if edge == .bottom {
+            let placeholder = DockLayoutNode.empty(id: leafID)
+            root = normalizeRoot(Self.transform(root) { node in
+                node.id == leafID ? placeholder : nil
+            })
+        } else {
+            let nextRoot: DockLayoutNode
+            if root.id == leafID {
+                nextRoot = .empty()
+            } else {
+                guard let removed = Self.removeNode(leafID, from: root),
+                      let stripped = removed.0 else {
+                    minimizedLeaves.removeValue(forKey: leafID)
+                    minimizedOrder.removeAll { $0 == leafID }
+                    return
+                }
+                nextRoot = stripped
+            }
+            root = normalizeRoot(nextRoot)
+        }
         version &+= 1
         notifyChange()
     }
@@ -432,7 +440,12 @@ public final class DockController: @unchecked Sendable {
         }
 
         let nextRoot: DockLayoutNode
-        if case .empty = root {
+        if let existing = Self.findNode(leafID, in: root),
+           case .empty = existing {
+            nextRoot = Self.transform(root) { node in
+                node.id == leafID ? restoredNode : nil
+            }
+        } else if case .empty = root {
             nextRoot = restoredNode
         } else {
             nextRoot = Self.insertSubtreeAtDropTarget(
