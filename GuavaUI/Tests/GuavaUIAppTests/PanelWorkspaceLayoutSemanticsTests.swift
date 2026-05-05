@@ -501,6 +501,75 @@ final class PanelWorkspaceLayoutSemanticsTests: XCTestCase {
         XCTAssertEqual(controller.minimizedLeaves[inspectorLeafID]?.edge, .right)
     }
 
+    func testMinimizingBottomKeepsPlaceholderInCanonicalBottomRegion() throws {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        let consoleLeafID = try XCTUnwrap(leafID(containing: "console", in: controller.root))
+        controller.apply(.minimizeLeaf(leafID: consoleLeafID, edge: .bottom))
+
+        guard case .split(_, .horizontal, _, _, let workspace) = controller.root,
+              case .split(_, .horizontal, _, let main, _) = workspace,
+              case .split(_, .vertical, _, let center, let bottom) = main,
+              case .tabs(_, let centerTabs, _) = center,
+              case .empty(let bottomID) = bottom else {
+            XCTFail("expected minimized bottom placeholder in canonical bottom slot")
+            return
+        }
+
+        XCTAssertEqual(centerTabs.map(\.userKey), ["viewport"])
+        XCTAssertEqual(bottomID, consoleLeafID)
+        XCTAssertEqual(controller.minimizedLeaves[consoleLeafID]?.edge, .bottom)
+
+        controller.apply(.restoreMinimizedLeaf(consoleLeafID))
+        assertCanonicalEditorShell(controller.root,
+                                   centerTabs: ["viewport"],
+                                   bottomTabs: ["console"])
+        XCTAssertEqual(leafID(containing: "console", in: controller.root), consoleLeafID)
+    }
+
+    func testReinstallPreservesMinimizedBottomPlaceholder() throws {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        let consoleLeafID = try XCTUnwrap(leafID(containing: "console", in: controller.root))
+        controller.apply(.minimizeLeaf(leafID: consoleLeafID, edge: .bottom))
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        guard case .empty(let bottomID) = controller.root.find(consoleLeafID) else {
+            XCTFail("expected minimized bottom placeholder to survive semantics reinstall")
+            return
+        }
+        XCTAssertEqual(bottomID, consoleLeafID)
+        XCTAssertEqual(controller.minimizedOrder, [consoleLeafID])
+    }
+
     func testMinimizeRestoreKeepsUserResizedFractions() throws {
         let tabs = makeTabs()
         let registry = makeRegistry()
