@@ -15,12 +15,41 @@ struct _DockSplit: View {
     var body: some View {
         let f = clampFraction(fraction)
         let direction: FlexDirection = (axis == .horizontal) ? .row : .column
+        let firstMinimized = controller.minimizedLeaves[first.id] != nil
+        let secondMinimized = controller.minimizedLeaves[second.id] != nil
         return Box(direction: direction, alignItems: .stretch, spacing: 0) {
-            _DockNodeView(node: first, controller: controller, content: content)
-                .flex(f, shrink: 1, basis: 0)
-            _DockResizeHandle(splitID: splitID, axis: axis, controller: controller)
-            _DockNodeView(node: second, controller: controller, content: content)
-                .flex(1 - f, shrink: 1, basis: 0)
+            _DockSplitChild(node: first,
+                            share: secondMinimized ? 1 : f,
+                            isMinimizedPlaceholder: firstMinimized,
+                            controller: controller,
+                            content: content)
+            if !firstMinimized && !secondMinimized {
+                _DockResizeHandle(splitID: splitID, axis: axis, controller: controller)
+            }
+            _DockSplitChild(node: second,
+                            share: firstMinimized ? 1 : 1 - f,
+                            isMinimizedPlaceholder: secondMinimized,
+                            controller: controller,
+                            content: content)
+        }
+        .flex()
+    }
+}
+
+private struct _DockSplitChild: View {
+    let node: DockLayoutNode
+    let share: Float
+    let isMinimizedPlaceholder: Bool
+    let controller: DockController
+    let content: DockContentResolver
+
+    var body: some View {
+        if isMinimizedPlaceholder {
+            _DockNodeView(node: node, controller: controller, content: content)
+                .flex(0, shrink: 0)
+        } else {
+            _DockNodeView(node: node, controller: controller, content: content)
+                .flex(share, shrink: 1, basis: 0)
         }
     }
 }

@@ -123,12 +123,6 @@ public final class DockController: @unchecked Sendable {
     /// matches flexlayout-react with `tabSetEnableDeleteWhenEmpty = false`.
     public var preserveEmptyTabSets: Bool = false
 
-    /// Optional host-supplied canonicalisation pass applied to the main
-    /// tree after every mutation. Hosts use this to keep a higher-level
-    /// workspace shell stable (for example fixed left/center/right/bottom
-    /// regions) while still reusing Dock's tab/split operations inside it.
-    public var layoutNormalizer: ((DockLayoutNode) -> DockLayoutNode)?
-
     /// Detached leaves keyed by their original `DockNodeID`. Each entry is
     /// a `.tabs` subtree that has been removed from `root` by `.detach` and
     /// is awaiting either `.redock` or `.closeSatellite`.
@@ -401,20 +395,28 @@ public final class DockController: @unchecked Sendable {
             return
         }
 
-        let nextRoot: DockLayoutNode
-        if root.id == leafID {
-            nextRoot = .empty()
-        } else {
-            guard let removed = Self.removeNode(leafID, from: root),
-                  let stripped = removed.0 else {
-                return
-            }
-            nextRoot = stripped
-        }
-
-        root = normalizeRoot(nextRoot)
         minimizedLeaves[leafID] = DockMinimizedLeaf(node: found, edge: edge)
         minimizedOrder.append(leafID)
+        if edge == .bottom {
+            let placeholder = DockLayoutNode.empty(id: leafID)
+            root = normalizeRoot(Self.transform(root) { node in
+                node.id == leafID ? placeholder : nil
+            })
+        } else {
+            let nextRoot: DockLayoutNode
+            if root.id == leafID {
+                nextRoot = .empty()
+            } else {
+                guard let removed = Self.removeNode(leafID, from: root),
+                      let stripped = removed.0 else {
+                    minimizedLeaves.removeValue(forKey: leafID)
+                    minimizedOrder.removeAll { $0 == leafID }
+                    return
+                }
+                nextRoot = stripped
+            }
+            root = normalizeRoot(nextRoot)
+        }
         version &+= 1
         notifyChange()
     }
@@ -432,7 +434,12 @@ public final class DockController: @unchecked Sendable {
         }
 
         let nextRoot: DockLayoutNode
-        if case .empty = root {
+        if let existing = Self.findNode(leafID, in: root),
+           case .empty = existing {
+            nextRoot = Self.transform(root) { node in
+                node.id == leafID ? restoredNode : nil
+            }
+        } else if case .empty = root {
             nextRoot = restoredNode
         } else {
             nextRoot = Self.insertSubtreeAtDropTarget(
@@ -679,7 +686,7 @@ public final class DockController: @unchecked Sendable {
             || orderedSatellites != satelliteOrder
             || newMinimizedLeaves != minimizedLeaves
             || orderedMinimized != minimizedOrder else { return }
-        root = normalizeRoot(newRoot)
+        root = newRoot
         satellites = newSatellites
         satelliteOrder = orderedSatellites.filter { newSatellites[$0] != nil }
         minimizedLeaves = newMinimizedLeaves
@@ -689,7 +696,7 @@ public final class DockController: @unchecked Sendable {
     }
 
     private func normalizeRoot(_ candidate: DockLayoutNode) -> DockLayoutNode {
-        layoutNormalizer?(candidate) ?? candidate
+        candidate
     }
 
     func allowsDrop(_ request: DockDropRequest) -> Bool {

@@ -347,8 +347,8 @@ private struct _PopoverFrontmostModifier: ViewModifier {
 
     func apply(node: Node) {
         guard isPresented else {
-            if let entryID = node.attachments["__popover_entry_id"] as? UUID {
-                PopoverOverlayRegistry.unregister(entryID)
+            if let entryID = node.attachments["__popover_entry_id"] as? String {
+                PortalRegistry.unregister(entryID)
                 node.attachments.removeValue(forKey: "__popover_entry_id")
             }
             return
@@ -404,11 +404,11 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
         let position = CGPoint(x: absX, y: overlayY)
 
         // Register / update the portal overlay entry
-        if let entryID = node.attachments["__popover_entry_id"] as? UUID {
-            PopoverOverlayRegistry.updatePosition(entryID, position: position)
-            PopoverOverlayRegistry.updateContent(entryID, content: AnyView(content))
+        if let entryID = node.attachments["__popover_entry_id"] as? String {
+            PortalRegistry.updatePosition(entryID, position: position)
+            PortalRegistry.updateContent(entryID, content: AnyView(content))
         } else {
-            let entryID = PopoverOverlayRegistry.register(
+            let entryID = PortalRegistry.register(
                 position: position,
                 width: width,
                 content: AnyView(content)
@@ -445,7 +445,7 @@ private struct _PopoverOverlayHost<Content: View>: _PrimitiveView {
     }
 
     var _children: [any View] {
-        // Content is portal-rendered via PopoverOverlayRegistry + OverlayHost
+        // Content is portal-rendered via PortalRegistry + PortalHost
         []
     }
 }

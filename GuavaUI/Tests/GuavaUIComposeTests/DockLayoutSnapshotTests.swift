@@ -29,7 +29,6 @@ struct DockLayoutSnapshotTests {
         #expect(snap.satelliteOrder == [leafBID])
         #expect(snap.minimizedLeaves.isEmpty)
         #expect(snap.minimizedOrder.isEmpty)
-        #expect(snap.schemaVersion == DockLayoutSnapshot.currentSchemaVersion)
     }
 
     @Test("JSON round-trip preserves layout")
@@ -50,7 +49,7 @@ struct DockLayoutSnapshotTests {
         #expect(blank.minimizedOrder == controller.minimizedOrder)
     }
 
-    @Test("Decode tolerates missing satellites/satelliteOrder/schemaVersion")
+    @Test("Decode tolerates missing satellites/satelliteOrder")
     func decodeTolerantDefaults() throws {
         let json = """
         { "root": \(try String(data: JSONEncoder().encode(DockLayoutNode.tabs([DockTab(userKey: "x", title: "X")])), encoding: .utf8)!) }
@@ -61,7 +60,6 @@ struct DockLayoutSnapshotTests {
         #expect(decoded.satelliteOrder.isEmpty)
         #expect(decoded.minimizedLeaves.isEmpty)
         #expect(decoded.minimizedOrder.isEmpty)
-        #expect(decoded.schemaVersion == DockLayoutSnapshot.currentSchemaVersion)
     }
 
     @Test("Decode filters satelliteOrder against satellites dict")

@@ -27,6 +27,25 @@ import GuavaUIRuntime
 ///   recompose; preserving nested `@State` across parent recomposes is a
 ///   Phase 7 task.
 public final class ViewGraph {
+    public struct LayoutSnapshotEntry: Sendable, Equatable {
+        public var debugName: String?
+        public var layoutRole: String?
+        public var semanticRole: String?
+        public var frame: CGRect
+        public var absoluteFrame: CGRect
+
+        public init(debugName: String?,
+                    layoutRole: String?,
+                    semanticRole: String?,
+                    frame: CGRect,
+                    absoluteFrame: CGRect) {
+            self.debugName = debugName
+            self.layoutRole = layoutRole
+            self.semanticRole = semanticRole
+            self.frame = frame
+            self.absoluteFrame = absoluteFrame
+        }
+    }
 
     public let tree: NodeTree
     public let recomposer: Recomposer
@@ -147,6 +166,36 @@ public final class ViewGraph {
     /// Layout node paired with `node`, if any.
     public func layoutNode(for node: Node) -> LayoutNode? {
         layoutOf[ObjectIdentifier(node)]
+    }
+
+    public func layoutSnapshot() -> [LayoutSnapshotEntry] {
+        guard let root = tree.root else { return [] }
+        var result: [LayoutSnapshotEntry] = []
+        collectLayoutSnapshot(node: root, parentOrigin: .zero, into: &result)
+        return result
+    }
+
+    private func collectLayoutSnapshot(node: Node,
+                                       parentOrigin: CGPoint,
+                                       into result: inout [LayoutSnapshotEntry]) {
+        let absoluteOrigin = CGPoint(x: parentOrigin.x + node.frame.origin.x,
+                                     y: parentOrigin.y + node.frame.origin.y)
+        let absoluteFrame = CGRect(origin: absoluteOrigin, size: node.frame.size)
+        let debugName = node.attachments[LayoutDebugAttachmentKey.debugName] as? String
+        let layoutRole = node.attachments[LayoutDebugAttachmentKey.layoutRole] as? String
+        let semanticRole = node.attachments[LayoutDebugAttachmentKey.semanticRole] as? String
+        if debugName != nil || layoutRole != nil || semanticRole != nil {
+            result.append(LayoutSnapshotEntry(debugName: debugName,
+                                              layoutRole: layoutRole,
+                                              semanticRole: semanticRole,
+                                              frame: node.frame,
+                                              absoluteFrame: absoluteFrame))
+        }
+        for child in node.children {
+            collectLayoutSnapshot(node: child,
+                                  parentOrigin: absoluteOrigin,
+                                  into: &result)
+        }
     }
 
     // MARK: - Reconcile entry points
@@ -634,8 +683,25 @@ final class ViewScope {
     private func trackedBody(scopeID: ObjectIdentifier) -> any View {
         ObservableStateTracking.withScope(id: scopeID,
                                           invalidate: makeInvalidation(scopeID: scopeID)) {
-            anyBody(of: view)
+            if isMaterialisedDirectly(view) {
+                return view
+            }
+            return anyBody(of: view)
         }
+    }
+
+    /// Defensive guard for bodyless view forms. These should normally be
+    /// handled by `ViewGraph.materialise` before a user-view scope is created,
+    /// but shutdown/reconcile paths can still hand a scoped slot a bodyless
+    /// wrapper. Returning it directly lets the materialiser expand it instead
+    /// of reading its `Never` body.
+    private func isMaterialisedDirectly(_ view: any View) -> Bool {
+        view is EmptyView
+            || view is AnyView
+            || view is any _PrimitiveView
+            || view is any _AnyModifiedContent
+            || view is any _StructuralView
+            || view is _AnyIdentifiedView
     }
 
     private func makeInvalidation(scopeID: ObjectIdentifier) -> () -> Void {
