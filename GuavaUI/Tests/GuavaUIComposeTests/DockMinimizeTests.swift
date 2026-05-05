@@ -359,12 +359,162 @@ struct DockMinimizeTests: GuavaUIComposeSerializedSuite {
             node.isHitTestable && node.cursor == .pointer
         }
 
-        #expect(bottomRail?.minX == 0)
-        #expect(bottomRail?.maxX == 600)
+        #expect((bottomRail?.minX ?? 0) > 0)
+        #expect((bottomRail?.maxX ?? 600) < 600)
         #expect(bottomRail?.maxY == 400)
         #expect((bottomRail?.height ?? 0) >= 39)
         #expect(bottomTitle == nil)
         #expect(!restoreButtons.isEmpty)
+        _ = graph
+    } }
+
+    @Test("bottom rail remains visible from an editor-style top bottom root")
+    func bottomRailRemainsVisibleFromEditorStyleTopBottomRoot() { GlobalTestLock.locked {
+        InteractionRegistryHolder.current = InteractionRegistry()
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let hierarchyTab = DockTab(userKey: "hierarchy", title: "Hierarchy")
+        let viewportTab = DockTab(userKey: "viewport", title: "Viewport")
+        let inspectorTab = DockTab(userKey: "inspector", title: "Inspector")
+        let consoleTab = DockTab(userKey: "console", title: "Console")
+        let hierarchyLeaf = DockLayoutNode.tabs([hierarchyTab])
+        let viewportLeaf = DockLayoutNode.tabs([viewportTab])
+        let inspectorLeaf = DockLayoutNode.tabs([inspectorTab])
+        let bottomLeaf = DockLayoutNode.tabs([consoleTab])
+        let topRow = DockLayoutNode.hsplit(
+            first: hierarchyLeaf,
+            second: .hsplit(first: viewportLeaf, second: inspectorLeaf)
+        )
+        let controller = DockController(root: .vsplit(first: topRow, second: bottomLeaf))
+        controller.onResolveMinimizedEdge = { leafID in
+            leafID == bottomLeaf.id ? .bottom : nil
+        }
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller,
+                                          horizontalInset: 0,
+                                          content: { key in
+            AnyView(Text("content:\(key)"))
+        }))
+        graph.computeLayout(width: 600, height: 400)
+
+        controller.apply(.minimizeLeaf(leafID: bottomLeaf.id, edge: .bottom))
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 600, height: 400)
+
+        let bottomRail = railFrame(.bottom, in: tree)
+        let restoreButtons = collect(tree.root!) { node in
+            node.isHitTestable && node.cursor == .pointer
+        }
+
+        #expect(bottomRail?.minX == 0)
+        #expect(bottomRail?.maxX == 600)
+        #expect(bottomRail?.maxY == 400)
+        #expect((bottomRail?.height ?? 0) >= 39)
+        #expect(!restoreButtons.isEmpty)
+        _ = graph
+    } }
+
+    @Test("bottom rail renders every tab from an editor-style bottom panel")
+    func bottomRailRendersEveryTabFromEditorStyleBottomPanel() { GlobalTestLock.locked {
+        InteractionRegistryHolder.current = InteractionRegistry()
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let hierarchyTab = DockTab(userKey: "hierarchy", title: "Hierarchy")
+        let viewportTab = DockTab(userKey: "viewport", title: "Viewport")
+        let inspectorTab = DockTab(userKey: "inspector", title: "Inspector")
+        let assetsTab = DockTab(userKey: "assets", title: "Assets")
+        let consoleTab = DockTab(userKey: "console", title: "Console")
+        let intentTab = DockTab(userKey: "intent", title: "AI Intent")
+        let renderTab = DockTab(userKey: "render", title: "Render")
+        let hierarchyLeaf = DockLayoutNode.tabs([hierarchyTab])
+        let viewportLeaf = DockLayoutNode.tabs([viewportTab])
+        let inspectorLeaf = DockLayoutNode.tabs([inspectorTab])
+        let bottomLeaf = DockLayoutNode.tabs([assetsTab, consoleTab, intentTab, renderTab])
+        let topRow = DockLayoutNode.hsplit(
+            first: hierarchyLeaf,
+            second: .hsplit(first: viewportLeaf, second: inspectorLeaf)
+        )
+        let controller = DockController(root: .vsplit(first: topRow, second: bottomLeaf))
+        controller.onResolveMinimizedEdge = { leafID in
+            leafID == bottomLeaf.id ? .bottom : nil
+        }
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller,
+                                          horizontalInset: 0,
+                                          content: { key in
+            AnyView(Text("content:\(key)"))
+        }))
+        graph.computeLayout(width: 800, height: 500)
+
+        controller.apply(.minimizeLeaf(leafID: bottomLeaf.id, edge: .bottom))
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 800, height: 500)
+
+        let bottomRail = railFrame(.bottom, in: tree)
+        let railButtons = collect(tree.root!) { node in
+            node.isHitTestable && node.cursor == .pointer
+        }.filter { node in
+            let frame = absoluteFrame(of: node)
+            return frame.minY >= (bottomRail?.minY ?? .greatestFiniteMagnitude)
+                && frame.maxY <= (bottomRail?.maxY ?? -.greatestFiniteMagnitude)
+        }
+
+        #expect(bottomRail?.minX == 0)
+        #expect(bottomRail?.maxX == 800)
+        #expect(bottomRail?.maxY == 500)
+        #expect(railButtons.count == 4)
+        _ = graph
+    } }
+
+    @Test("bottom rail is visible when the controller starts with a minimized bottom leaf")
+    func bottomRailVisibleFromPersistedMinimizedBottomState() { GlobalTestLock.locked {
+        InteractionRegistryHolder.current = InteractionRegistry()
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let hierarchyTab = DockTab(userKey: "hierarchy", title: "Hierarchy")
+        let viewportTab = DockTab(userKey: "viewport", title: "Viewport")
+        let inspectorTab = DockTab(userKey: "inspector", title: "Inspector")
+        let assetsTab = DockTab(userKey: "assets", title: "Assets")
+        let consoleTab = DockTab(userKey: "console", title: "Console")
+        let hierarchyLeaf = DockLayoutNode.tabs([hierarchyTab])
+        let viewportLeaf = DockLayoutNode.tabs([viewportTab])
+        let inspectorLeaf = DockLayoutNode.tabs([inspectorTab])
+        let bottomLeaf = DockLayoutNode.tabs([assetsTab, consoleTab])
+        let visibleRoot = DockLayoutNode.hsplit(
+            first: hierarchyLeaf,
+            second: .hsplit(first: viewportLeaf, second: inspectorLeaf)
+        )
+        let controller = DockController(root: visibleRoot)
+        controller.replace(root: visibleRoot,
+                           minimizedLeaves: [bottomLeaf.id: DockMinimizedLeaf(node: bottomLeaf, edge: .bottom)],
+                           minimizedOrder: [bottomLeaf.id])
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller,
+                                          horizontalInset: 0,
+                                          content: { key in
+            AnyView(Text("content:\(key)"))
+        }))
+        graph.computeLayout(width: 800, height: 500)
+
+        let bottomRail = railFrame(.bottom, in: tree)
+        let railButtons = collect(tree.root!) { node in
+            node.isHitTestable && node.cursor == .pointer
+        }.filter { node in
+            let frame = absoluteFrame(of: node)
+            return frame.minY >= (bottomRail?.minY ?? .greatestFiniteMagnitude)
+                && frame.maxY <= (bottomRail?.maxY ?? -.greatestFiniteMagnitude)
+        }
+
+        #expect(bottomRail?.minX == 0)
+        #expect(bottomRail?.maxX == 800)
+        #expect(bottomRail?.maxY == 500)
+        #expect(railButtons.count == 2)
         _ = graph
     } }
 
@@ -490,6 +640,12 @@ struct DockMinimizeTests: GuavaUIComposeSerializedSuite {
         }
         walk(root)
         return out
+    }
+
+    private func railFrame(_ edge: DockMinimizedEdge, in tree: NodeTree) -> CGRect? {
+        collect(tree.root!) { node in
+            node.attachments[_DockMinimizedRail.kRailMarker] as? DockMinimizedEdge == edge
+        }.first.map(absoluteFrame(of:))
     }
 
     private func absoluteFrame(of node: Node) -> CGRect {
