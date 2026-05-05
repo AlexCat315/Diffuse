@@ -123,12 +123,6 @@ public final class DockController: @unchecked Sendable {
     /// matches flexlayout-react with `tabSetEnableDeleteWhenEmpty = false`.
     public var preserveEmptyTabSets: Bool = false
 
-    /// Optional host-supplied canonicalisation pass applied to the main
-    /// tree after every mutation. Hosts use this to keep a higher-level
-    /// workspace shell stable (for example fixed left/center/right/bottom
-    /// regions) while still reusing Dock's tab/split operations inside it.
-    public var layoutNormalizer: ((DockLayoutNode) -> DockLayoutNode)?
-
     /// Detached leaves keyed by their original `DockNodeID`. Each entry is
     /// a `.tabs` subtree that has been removed from `root` by `.detach` and
     /// is awaiting either `.redock` or `.closeSatellite`.
@@ -692,7 +686,7 @@ public final class DockController: @unchecked Sendable {
             || orderedSatellites != satelliteOrder
             || newMinimizedLeaves != minimizedLeaves
             || orderedMinimized != minimizedOrder else { return }
-        root = normalizeRoot(newRoot)
+        root = newRoot
         satellites = newSatellites
         satelliteOrder = orderedSatellites.filter { newSatellites[$0] != nil }
         minimizedLeaves = newMinimizedLeaves
@@ -702,7 +696,7 @@ public final class DockController: @unchecked Sendable {
     }
 
     private func normalizeRoot(_ candidate: DockLayoutNode) -> DockLayoutNode {
-        layoutNormalizer?(candidate) ?? candidate
+        candidate
     }
 
     func allowsDrop(_ request: DockDropRequest) -> Bool {

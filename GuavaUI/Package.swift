@@ -16,6 +16,7 @@ let package = Package(
         .executable(name: "GuavaUIDemo", targets: ["GuavaUIDemo"]),
         .library(name: "GuavaUIRuntime", targets: ["GuavaUIRuntime"]),
         .library(name: "GuavaUICompose", targets: ["GuavaUICompose"]),
+        .library(name: "GuavaUIWorkspace", targets: ["GuavaUIWorkspace"]),
         .library(name: "GuavaUIApp", targets: ["GuavaUIApp"]),
         .library(name: "GuavaUIDevTools", targets: ["GuavaUIDevTools"]),
     ],
@@ -90,6 +91,17 @@ let package = Package(
             ]
         ),
 
+        // MARK: - Workspace
+        // Production workspace/dock model and renderer. Keeps editor-style
+        // panel semantics out of Compose primitives and App hosting.
+        .target(
+            name: "GuavaUIWorkspace",
+            dependencies: ["GuavaUICompose", "GuavaUIRuntime"],
+            resources: [
+                .process("Resources"),
+            ]
+        ),
+
         // MARK: - Bundled fonts
         // Google Sans Code variable font shipped with GuavaUI.
         .target(
@@ -109,6 +121,7 @@ let package = Package(
             dependencies: [
                 "GuavaUIRuntime",
                 "GuavaUICompose",
+                "GuavaUIWorkspace",
                 "GuavaUIDevTools",
                 "GuavaUIBundledFonts",
                 .product(name: "PlatformShell", package: "Engine"),
@@ -163,6 +176,15 @@ let package = Package(
             dependencies: [
                 "GuavaUIApp",
                 "GuavaUICompose",
+                "GuavaUIWorkspace",
+            ]
+        ),
+        .testTarget(
+            name: "GuavaUIWorkspaceTests",
+            dependencies: [
+                "GuavaUIWorkspace",
+                "GuavaUICompose",
+                "GuavaUIRuntime",
             ]
         ),
         .testTarget(

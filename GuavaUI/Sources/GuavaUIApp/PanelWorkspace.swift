@@ -1,29 +1,22 @@
 import GuavaUICompose
+import GuavaUIWorkspace
 
 /// 面向编辑器/工具应用的工作台根视图。
 ///
-/// 把 `DockController` 与 `PanelRegistry` 绑在一起，调用方不再直接拼装
-/// `DockContainer(controller:content:)`，也不再手维护 `DockTab.userKey`
-/// 到面板视图的解析闭包。
+/// 把 `WorkspaceController` 与 `PanelRegistry` 绑在一起，调用方不再手动
+/// 管理 Dock tree / tab key / layout normalizer。
 public struct PanelWorkspace: View {
-    public let controller: DockController
+    public let controller: WorkspaceController
     public let registry: PanelRegistry
-    public let hostBridge: DockHostBridge?
-    public let semantics: PanelWorkspaceLayoutSemantics?
 
-    public init(controller: DockController,
-                registry: PanelRegistry,
-                hostBridge: DockHostBridge? = nil,
-                semantics: PanelWorkspaceLayoutSemantics? = nil) {
+    public init(controller: WorkspaceController,
+                registry: PanelRegistry) {
         self.controller = controller
         self.registry = registry
-        self.hostBridge = hostBridge
-        self.semantics = semantics
-        semantics?.install(on: controller, registry: registry)
     }
 
     public var body: some View {
-        DockContainer(controller: controller, hostBridge: hostBridge, horizontalInset: 0) { [registry] key in
+        WorkspaceView(controller: controller) { [registry] key in
             registry.make(key)
         }
     }
