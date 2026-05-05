@@ -222,54 +222,149 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         }
     }
 
-     private static func normalize(root: DockLayoutNode,
-                                             registry: PanelRegistry,
-                                             state: LayoutState) -> DockLayoutNode {
+    private static func normalize(root: DockLayoutNode,
+                                  registry: PanelRegistry,
+                                  state: LayoutState) -> DockLayoutNode {
         let collected = collectRegions(from: root, registry: registry, state: state)
         guard collected.hasAnyTabs else { return root }
         let leafIDs = collected.resolvedLeafIDs()
 
-          let centerNode = regionNode(id: state.leafID(for: .center,
-                                                                      candidate: leafIDs[.center] ?? nil),
-                        tabs: collected.center.tabs,
-                        activeTabID: collected.center.activeTabID,
-                        allowEmpty: true) ?? .empty()
+        let regions = partitionRegions(from: root,
+                                       registry: registry,
+                                       state: state)
+        let centerNode = regions[.center]
+            ?? .empty(id: state.leafID(for: .center,
+                                       candidate: leafIDs[.center] ?? nil))
 
         var mainNode = centerNode
-        if !collected.bottom.tabs.isEmpty,
-              let bottomNode = regionNode(id: state.leafID(for: .bottomPanel,
-                                                                          candidate: leafIDs[.bottomPanel] ?? nil),
-                                       tabs: collected.bottom.tabs,
-                                       activeTabID: collected.bottom.activeTabID,
-                                       allowEmpty: false) {
-                mainNode = .vsplit(fraction: state.fractions.bottom,
+        if let bottomNode = regions[.bottomPanel] {
+            mainNode = .vsplit(fraction: state.fractions.bottom,
                                first: centerNode,
                                second: bottomNode)
         }
 
         var workspaceNode = mainNode
-        if !collected.trailing.tabs.isEmpty,
-              let trailingNode = regionNode(id: state.leafID(for: .trailingSidebar,
-                                                                             candidate: leafIDs[.trailingSidebar] ?? nil),
-                                         tabs: collected.trailing.tabs,
-                                         activeTabID: collected.trailing.activeTabID,
-                                         allowEmpty: false) {
-                workspaceNode = .hsplit(fraction: state.fractions.main,
+        if let trailingNode = regions[.trailingSidebar] {
+            workspaceNode = .hsplit(fraction: state.fractions.main,
                                     first: mainNode,
                                     second: trailingNode)
         }
 
-        if !collected.leading.tabs.isEmpty,
-              let leadingNode = regionNode(id: state.leafID(for: .leadingSidebar,
-                                                                            candidate: leafIDs[.leadingSidebar] ?? nil),
-                                        tabs: collected.leading.tabs,
-                                        activeTabID: collected.leading.activeTabID,
-                                        allowEmpty: false) {
-                return .hsplit(fraction: state.fractions.leading,
+        if let leadingNode = regions[.leadingSidebar] {
+            return .hsplit(fraction: state.fractions.leading,
                            first: leadingNode,
                            second: workspaceNode)
         }
         return workspaceNode
+    }
+
+    private static func partitionRegions(from node: DockLayoutNode,
+                                         registry: PanelRegistry,
+                                         state: LayoutState) -> [PanelWorkspaceRegion: DockLayoutNode] {
+        switch node {
+        case .empty:
+            return [:]
+        case .tabs(let id, let tabs, let activeTabID):
+            guard !tabs.isEmpty else { return [:] }
+            var buckets: [PanelWorkspaceRegion: [DockTab]] = [:]
+            for tab in tabs {
+                buckets[state.region(for: tab, registry: registry), default: []].append(tab)
+            }
+            let isSingleRegionLeaf = buckets.count == 1
+            var result: [PanelWorkspaceRegion: DockLayoutNode] = [:]
+            for (region, regionTabs) in buckets {
+                let tabIDs = Set(regionTabs.map(\.id))
+                let leafID = isSingleRegionLeaf ? id : state.leafID(for: region, candidate: nil)
+                let active = activeTabID.flatMap { tabIDs.contains($0) ? $0 : nil }
+                    ?? regionTabs.first?.id
+                result[region] = .tabs(id: leafID,
+                                       tabs: regionTabs,
+                                       activeTabID: active)
+            }
+            return result
+        case .split(let id, let axis, let fraction, let first, let second):
+            let firstRegions = partitionRegions(from: first,
+                                                registry: registry,
+                                                state: state)
+            let secondRegions = partitionRegions(from: second,
+                                                 registry: registry,
+                                                 state: state)
+            let allRegions = Set(firstRegions.keys).union(secondRegions.keys)
+            let preservesWholeSplit = allRegions.count == 1
+            var result: [PanelWorkspaceRegion: DockLayoutNode] = [:]
+            for region in allRegions {
+                switch (firstRegions[region], secondRegions[region]) {
+                case (let left?, let right?):
+                    if preservesWholeSplit {
+                        result[region] = .split(id: id,
+                                                axis: axis,
+                                                fraction: fraction,
+                                                first: left,
+                                                second: right)
+                    } else {
+                        result[region] = mergedRegionFragments(left,
+                                                               right,
+                                                               region: region,
+                                                               state: state)
+                    }
+                case (let only?, nil), (nil, let only?):
+                    result[region] = preservesWholeSplit
+                        ? only
+                        : promotedRegionFragment(only, region: region, state: state)
+                case (nil, nil):
+                    break
+                }
+            }
+            return result
+        }
+    }
+
+    private struct RegionFragmentTabs {
+        var tabs: [DockTab] = []
+        var activeTabID: DockTabID?
+    }
+
+    private static func promotedRegionFragment(_ node: DockLayoutNode,
+                                               region: PanelWorkspaceRegion,
+                                               state: LayoutState) -> DockLayoutNode {
+        switch node {
+        case .tabs(let id, let tabs, let activeTabID):
+            return .tabs(id: state.leafID(for: region, candidate: id),
+                         tabs: tabs,
+                         activeTabID: activeTabID)
+        case .empty, .split:
+            return node
+        }
+    }
+
+    private static func mergedRegionFragments(_ first: DockLayoutNode,
+                                              _ second: DockLayoutNode,
+                                              region: PanelWorkspaceRegion,
+                                              state: LayoutState) -> DockLayoutNode {
+        let left = fragmentTabs(in: first)
+        let right = fragmentTabs(in: second)
+        let tabs = left.tabs + right.tabs
+        guard !tabs.isEmpty else {
+            return .empty(id: state.leafID(for: region, candidate: nil))
+        }
+        return .tabs(id: state.leafID(for: region, candidate: nil),
+                     tabs: tabs,
+                     activeTabID: right.activeTabID ?? left.activeTabID ?? tabs.first?.id)
+    }
+
+    private static func fragmentTabs(in node: DockLayoutNode) -> RegionFragmentTabs {
+        switch node {
+        case .empty:
+            return RegionFragmentTabs()
+        case .tabs(_, let tabs, let activeTabID):
+            return RegionFragmentTabs(tabs: tabs,
+                                      activeTabID: activeTabID)
+        case .split(_, _, _, let first, let second):
+            let left = fragmentTabs(in: first)
+            let right = fragmentTabs(in: second)
+            return RegionFragmentTabs(tabs: left.tabs + right.tabs,
+                                      activeTabID: right.activeTabID ?? left.activeTabID)
+        }
     }
 
     private static func collectRegions(from node: DockLayoutNode,
@@ -327,18 +422,6 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         }
     }
 
-    private static func regionNode(id: DockNodeID?,
-                                   tabs: [DockTab],
-                                   activeTabID: DockTabID?,
-                                   allowEmpty: Bool) -> DockLayoutNode? {
-        if tabs.isEmpty {
-            return allowEmpty ? .empty(id: id ?? DockNodeID()) : nil
-        }
-        return .tabs(id: id ?? DockNodeID(),
-                     tabs: tabs,
-                     activeTabID: activeTabID ?? tabs.first?.id)
-    }
-
     private static func captureFractions(from root: DockLayoutNode,
                                          registry: PanelRegistry,
                                          state: LayoutState? = nil) -> CapturedFractions? {
@@ -355,11 +438,11 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
 
         if wantsLeading {
             guard case .split(_, .horizontal, let leadingFraction, let leadingNode, let remainder) = root,
-                  matchesRegionLeaf(leadingNode,
-                                    region: .leadingSidebar,
-                                    registry: registry,
-                                    state: state,
-                                    allowEmpty: false) else {
+                  matchesRegionSubtree(leadingNode,
+                                       region: .leadingSidebar,
+                                       registry: registry,
+                                       state: state,
+                                       allowEmpty: false) else {
                 return nil
             }
             fractions.leading = leadingFraction
@@ -371,11 +454,11 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
         let mainRoot: DockLayoutNode
         if wantsTrailing {
             guard case .split(_, .horizontal, let mainFraction, let mainNode, let trailingNode) = workspaceRoot,
-                  matchesRegionLeaf(trailingNode,
-                                    region: .trailingSidebar,
-                                    registry: registry,
-                                    state: state,
-                                    allowEmpty: false) else {
+                  matchesRegionSubtree(trailingNode,
+                                       region: .trailingSidebar,
+                                       registry: registry,
+                                       state: state,
+                                       allowEmpty: false) else {
                 return nil
             }
             fractions.main = mainFraction
@@ -386,37 +469,37 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
 
         if wantsBottom {
             guard case .split(_, .vertical, let bottomFraction, let centerNode, let bottomNode) = mainRoot,
-                  matchesRegionLeaf(centerNode,
-                                    region: .center,
-                                    registry: registry,
-                                    state: state,
-                                    allowEmpty: allowEmptyCenter),
-                  matchesRegionLeaf(bottomNode,
-                                    region: .bottomPanel,
-                                    registry: registry,
-                                    state: state,
-                                    allowEmpty: false) else {
+                  matchesRegionSubtree(centerNode,
+                                       region: .center,
+                                       registry: registry,
+                                       state: state,
+                                       allowEmpty: allowEmptyCenter),
+                  matchesRegionSubtree(bottomNode,
+                                       region: .bottomPanel,
+                                       registry: registry,
+                                       state: state,
+                                       allowEmpty: false) else {
                 return nil
             }
             fractions.bottom = bottomFraction
             return fractions
         }
 
-        guard matchesRegionLeaf(mainRoot,
-                                region: .center,
-                                registry: registry,
-                                state: state,
-                                allowEmpty: allowEmptyCenter) else {
+        guard matchesRegionSubtree(mainRoot,
+                                   region: .center,
+                                   registry: registry,
+                                   state: state,
+                                   allowEmpty: allowEmptyCenter) else {
             return nil
         }
         return fractions
     }
 
-    private static func matchesRegionLeaf(_ node: DockLayoutNode,
-                                          region: PanelWorkspaceRegion,
-                                          registry: PanelRegistry,
-                                          state: LayoutState? = nil,
-                                          allowEmpty: Bool) -> Bool {
+    private static func matchesRegionSubtree(_ node: DockLayoutNode,
+                                             region: PanelWorkspaceRegion,
+                                             registry: PanelRegistry,
+                                             state: LayoutState? = nil,
+                                             allowEmpty: Bool) -> Bool {
         switch node {
         case .empty:
             return allowEmpty
@@ -427,8 +510,17 @@ public struct PanelWorkspaceLayoutSemantics: Sendable {
                     ?? registry.descriptor(for: $0.userKey)?.preferredRegion
                     ?? .center) == region
             }
-        case .split:
-            return false
+        case .split(_, _, _, let first, let second):
+            return matchesRegionSubtree(first,
+                                        region: region,
+                                        registry: registry,
+                                        state: state,
+                                        allowEmpty: false)
+                && matchesRegionSubtree(second,
+                                        region: region,
+                                        registry: registry,
+                                        state: state,
+                                        allowEmpty: false)
         }
     }
 
