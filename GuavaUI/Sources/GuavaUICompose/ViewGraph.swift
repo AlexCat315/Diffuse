@@ -683,8 +683,25 @@ final class ViewScope {
     private func trackedBody(scopeID: ObjectIdentifier) -> any View {
         ObservableStateTracking.withScope(id: scopeID,
                                           invalidate: makeInvalidation(scopeID: scopeID)) {
-            anyBody(of: view)
+            if isMaterialisedDirectly(view) {
+                return view
+            }
+            return anyBody(of: view)
         }
+    }
+
+    /// Defensive guard for bodyless view forms. These should normally be
+    /// handled by `ViewGraph.materialise` before a user-view scope is created,
+    /// but shutdown/reconcile paths can still hand a scoped slot a bodyless
+    /// wrapper. Returning it directly lets the materialiser expand it instead
+    /// of reading its `Never` body.
+    private func isMaterialisedDirectly(_ view: any View) -> Bool {
+        view is EmptyView
+            || view is AnyView
+            || view is any _PrimitiveView
+            || view is any _AnyModifiedContent
+            || view is any _StructuralView
+            || view is _AnyIdentifiedView
     }
 
     private func makeInvalidation(scopeID: ObjectIdentifier) -> () -> Void {
