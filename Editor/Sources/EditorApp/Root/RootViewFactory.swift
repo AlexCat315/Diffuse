@@ -1,7 +1,7 @@
 import EditorCore
 import GuavaUIApp
 import GuavaUICompose
-import GuavaUIRuntime
+import GuavaUIWorkspace
 import Foundation
 
 enum EditorRootViewFactory {
@@ -12,24 +12,19 @@ enum EditorRootViewFactory {
         var language: EditorLanguage
         var vsyncMode: EditorVSyncMode
         var primarySelectBehavior: SelectionPrimaryModifierBehavior
-        var schemaVersion: Int
-
-        static let currentSchemaVersion = 7
 
         init(workspaceMode: EditorWorkspaceMode,
              activeLayoutPreset: EditorLayoutPreset,
              themeMode: EditorThemeMode = .dark,
              language: EditorLanguage = .system,
              vsyncMode: EditorVSyncMode = .enabled,
-             primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract,
-             schemaVersion: Int = currentSchemaVersion) {
+             primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract) {
             self.workspaceMode = workspaceMode
             self.activeLayoutPreset = activeLayoutPreset
             self.themeMode = themeMode
             self.language = language
             self.vsyncMode = vsyncMode
             self.primarySelectBehavior = primarySelectBehavior
-            self.schemaVersion = schemaVersion
         }
 
         enum CodingKeys: String, CodingKey {
@@ -39,12 +34,6 @@ enum EditorRootViewFactory {
             case language
             case vsyncMode
             case primarySelectBehavior
-            case schemaVersion
-        }
-
-        enum LegacyCodingKeys: String, CodingKey {
-            case frameRateLimit
-            case cmdSelectBehavior
         }
 
         func encode(to encoder: Encoder) throws {
@@ -55,7 +44,6 @@ enum EditorRootViewFactory {
             try values.encode(language, forKey: .language)
             try values.encode(vsyncMode, forKey: .vsyncMode)
             try values.encode(primarySelectBehavior, forKey: .primarySelectBehavior)
-            try values.encode(schemaVersion, forKey: .schemaVersion)
         }
 
         init(from decoder: Decoder) throws {
@@ -63,373 +51,78 @@ enum EditorRootViewFactory {
             workspaceMode = try values.decodeIfPresent(EditorWorkspaceMode.self, forKey: .workspaceMode) ?? .level
             activeLayoutPreset = try values.decodeIfPresent(EditorLayoutPreset.self, forKey: .activeLayoutPreset)
                 ?? .default(for: workspaceMode)
-            let decodedSchemaVersion = try values.decodeIfPresent(Int.self, forKey: .schemaVersion) ?? 1
-            if decodedSchemaVersion < 6 {
-                themeMode = .dark
-            } else {
-                themeMode = try values.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode) ?? .dark
-            }
+            themeMode = try values.decodeIfPresent(EditorThemeMode.self, forKey: .themeMode) ?? .dark
             language = try values.decodeIfPresent(EditorLanguage.self, forKey: .language) ?? .system
-            let legacyValues = try decoder.container(keyedBy: LegacyCodingKeys.self)
-            if let decodedVSync = try values.decodeIfPresent(EditorVSyncMode.self, forKey: .vsyncMode) {
-                vsyncMode = decodedVSync
-            } else if let legacyLimit = try legacyValues.decodeIfPresent(String.self, forKey: .frameRateLimit) {
-                vsyncMode = EditorVSyncMode(legacyFrameRateLimitRawValue: legacyLimit)
-            } else {
-                vsyncMode = .enabled
-            }
-            let decodedPrimarySelectBehavior = try values.decodeIfPresent(
+            vsyncMode = try values.decodeIfPresent(EditorVSyncMode.self, forKey: .vsyncMode) ?? .enabled
+            primarySelectBehavior = try values.decodeIfPresent(
                 SelectionPrimaryModifierBehavior.self,
                 forKey: .primarySelectBehavior
-            )
-            let legacyPrimarySelectBehavior = try legacyValues.decodeIfPresent(
-                SelectionPrimaryModifierBehavior.self,
-                forKey: .cmdSelectBehavior
-            )
-            primarySelectBehavior = decodedPrimarySelectBehavior ?? legacyPrimarySelectBehavior ?? .subtract
-            schemaVersion = decodedSchemaVersion
+            ) ?? .subtract
         }
     }
 
     static func makeController(for mode: EditorWorkspaceMode,
-                               preset: EditorLayoutPreset) -> DockController {
-        // Try to restore saved layout, otherwise create default
-        if let saved = loadSavedLayout(for: mode, preset: preset) {
-            localizeDockTitles(in: saved)
-            return saved
-        }
-        if mode == .level,
-           preset == .levelDefault,
-           let legacy = loadLegacySavedLayout() {
-            localizeDockTitles(in: legacy)
-            return legacy
-        }
-        return makeDefaultController(for: mode, preset: preset)
-    }
-
-    static func makeController(for mode: EditorWorkspaceMode) -> DockController {
-        makeController(for: mode, preset: .default(for: mode))
-    }
-
-    static func makeController() -> DockController {
-        makeController(for: .level)
-    }
-
-    static func makeDefaultController(for mode: EditorWorkspaceMode,
-                                      preset: EditorLayoutPreset) -> DockController {
-        let hierarchyTab = DockTab(userKey: "hierarchy", title: localizedPanelTitle(for: "hierarchy"))
-        let inspectorTab = DockTab(userKey: "inspector", title: localizedPanelTitle(for: "inspector"))
-        let viewportTab = DockTab(userKey: "viewport",
-                                  title: localizedPanelTitle(for: "viewport"),
-                                  isClosable: false)
-        let consoleTab = DockTab(userKey: "console", title: localizedPanelTitle(for: "console"))
-        let assetsTab = DockTab(userKey: "assets", title: localizedPanelTitle(for: "assets"))
-        let intentTab = DockTab(userKey: "intent-input", title: localizedPanelTitle(for: "intent-input"))
-        let confirmationTab = DockTab(userKey: "confirmation-host", title: localizedPanelTitle(for: "confirmation-host"))
-        let renderPipelineTab = DockTab(userKey: "render-pipeline", title: localizedPanelTitle(for: "render-pipeline"))
-
-        let hierarchyLeaf: DockLayoutNode = .tabs(
-            id: DockNodeID(),
-            tabs: [hierarchyTab],
-            activeTabID: hierarchyTab.id
-        )
-        let inspectorLeaf: DockLayoutNode = .tabs(
-            id: DockNodeID(),
-            tabs: [inspectorTab],
-            activeTabID: inspectorTab.id
-        )
-        let viewportLeaf: DockLayoutNode = .tabs(
-            id: DockNodeID(),
-            tabs: [viewportTab],
-            activeTabID: viewportTab.id
-        )
-        let bottomLeaf: DockLayoutNode = .tabs(
-            id: DockNodeID(),
-            tabs: [assetsTab, consoleTab, intentTab, confirmationTab, renderPipelineTab],
-            activeTabID: defaultBottomTabID(for: preset,
-                                            assetsTab: assetsTab,
-                                            consoleTab: consoleTab,
-                                            intentTab: intentTab,
-                                            confirmationTab: confirmationTab)
-        )
-
-        let fractions = defaultFractions(for: preset)
-
-        let viewportAndInspector: DockLayoutNode = .split(
-            id: DockNodeID(),
-            axis: .horizontal,
-            fraction: fractions.viewportAndInspector,
-            first: viewportLeaf,
-            second: inspectorLeaf
-        )
-        let topRow: DockLayoutNode = .split(
-            id: DockNodeID(),
-            axis: .horizontal,
-            fraction: fractions.hierarchyAndMain,
-            first: hierarchyLeaf,
-            second: viewportAndInspector
-        )
-        let root: DockLayoutNode = .split(
-            id: DockNodeID(),
-            axis: .vertical,
-            fraction: fractions.topAndBottom,
-            first: topRow,
-            second: bottomLeaf
-        )
-        let controller = DockController(root: root)
-        let regionByKey: [String: PanelWorkspaceRegion] = [
-            "hierarchy": .leadingSidebar,
-            "viewport": .center,
-            "inspector": .trailingSidebar,
-            "console": .bottomPanel,
-            "assets": .bottomPanel,
-            "intent-input": .bottomPanel,
-            "confirmation-host": .bottomPanel,
-        ]
-        controller.onAllowDrop = { [regionByKey] request in
-            guard case .splitEdge(let targetID, let edge) = request.target else {
-                return true
+                               preset: EditorLayoutPreset,
+                               registry: PanelRegistry) -> WorkspaceController {
+        if let saved = loadSavedWorkspaceDocument(for: mode, preset: preset) {
+            let document = reconciledWorkspaceDocument(saved, registry: registry)
+            if document != saved {
+                saveWorkspaceDocument(document, for: mode, preset: preset)
             }
-            guard let targetRegion = regionOfLeaf(id: targetID,
-                                                  in: controller.root,
-                                                  regionByKey: regionByKey) else {
-                return true
-            }
-            return allowsSplitEdge(in: targetRegion, edge: edge)
+            return WorkspaceController(document: document)
         }
-        return controller
+        let document = EditorWorkspaceDefaults.makeDocument(mode: mode,
+                                                            preset: preset,
+                                                            registry: registry)
+        saveWorkspaceDocument(document, for: mode, preset: preset)
+        return WorkspaceController(document: document)
     }
 
-    static func loadLayoutPreset(into controller: DockController,
+    static func loadLayoutPreset(into controller: WorkspaceController,
                                  for mode: EditorWorkspaceMode,
-                                 preset: EditorLayoutPreset) {
-        if let saved = loadSavedLayout(for: mode, preset: preset) {
-            // Ensure newly registered panels appear in persisted layouts.
-            let updatedRoot = ensureBottomTabs(in: saved.root,
-                                                include: "render-pipeline",
-                                                title: localizedPanelTitle(for: "render-pipeline"))
-            saved.replace(root: updatedRoot)
-            controller.load(saved.snapshot())
-            localizeDockTitles(in: controller)
-            return
+                                 preset: EditorLayoutPreset,
+                                 registry: PanelRegistry) {
+        let document: WorkspaceDocument
+        if let saved = loadSavedWorkspaceDocument(for: mode, preset: preset) {
+            document = reconciledWorkspaceDocument(saved, registry: registry)
+        } else {
+            document = EditorWorkspaceDefaults.makeDocument(mode: mode, preset: preset, registry: registry)
         }
-        let fallback = makeDefaultController(for: mode, preset: preset)
-        controller.load(fallback.snapshot())
-        localizeDockTitles(in: controller)
+        controller.replace(document)
+        saveWorkspaceDocument(controller.document, for: mode, preset: preset)
     }
 
-    static func resetLayout(into controller: DockController,
+    static func resetLayout(into controller: WorkspaceController,
                             for mode: EditorWorkspaceMode,
-                            preset: EditorLayoutPreset) {
-        let fallback = makeDefaultController(for: mode, preset: preset)
-        controller.load(fallback.snapshot())
+                            preset: EditorLayoutPreset,
+                            registry: PanelRegistry) {
+        let document = EditorWorkspaceDefaults.makeDocument(mode: mode, preset: preset, registry: registry)
+        controller.replace(document)
+        saveWorkspaceDocument(document, for: mode, preset: preset)
     }
 
-    static func resetLayout(into controller: DockController,
-                            for mode: EditorWorkspaceMode) {
-        resetLayout(into: controller,
-                    for: mode,
-                    preset: .default(for: mode))
+    static func activatePanel(_ id: PanelID, in controller: WorkspaceController) {
+        guard let group = controller.document.groupContaining(panelID: id) else { return }
+        _ = controller.dispatch(.setActivePanel(groupID: group.id, panelID: id))
     }
 
-    static func activateTab(_ userKey: String, in controller: DockController) {
-        if let target = findTab(userKey, in: controller.root) {
-            controller.apply(.setActive(node: target.leafID, tab: target.tabID))
-            return
+    static func localizeWorkspaceTitles(in controller: WorkspaceController,
+                                        registry: PanelRegistry) {
+        var document = controller.document
+        for panelID in Array(document.panels.keys) {
+            guard var panel = document.panels[panelID] else { continue }
+            panel.title = localizedPanelTitle(for: panelID.rawValue)
+            document.panels[panelID] = panel
         }
-
-        let tab = DockTab(userKey: userKey, title: localizedPanelTitle(for: userKey))
-        let leafID = findBottomLeaf(in: controller.root) ?? firstTabsLeaf(in: controller.root)
-        if let leafID {
-            controller.apply(.insertTab(tab, into: leafID, at: Int.max))
-            controller.apply(.setActive(node: leafID, tab: tab.id))
-        }
-    }
-
-    static func openSettingsSatellite(in controller: DockController) {
-        let settingsKey = "settings"
-
-        // Settings is already detached; keep the existing satellite.
-        if findTabInSatellites(settingsKey, in: controller.satellites) != nil {
-            return
-        }
-
-        if let location = findTabLocation(settingsKey, in: controller.root) {
-            if location.tabCount > 1 {
-                controller.apply(.move(tabID: location.tabID,
-                                       to: .splitEdge(target: location.leafID,
-                                                      edge: .right)))
-            }
-            if let detached = findTab(settingsKey, in: controller.root) {
-                controller.apply(.detach(leafID: detached.leafID))
-            }
-            return
-        }
-
-        activateTab(settingsKey, in: controller)
-        if let inserted = findTabLocation(settingsKey, in: controller.root) {
-            if inserted.tabCount > 1 {
-                controller.apply(.move(tabID: inserted.tabID,
-                                       to: .splitEdge(target: inserted.leafID,
-                                                      edge: .right)))
-            }
-            if let detached = findTab(settingsKey, in: controller.root) {
-                controller.apply(.detach(leafID: detached.leafID))
-            }
-        }
-    }
-
-    private static func allowsSplitEdge(in region: PanelWorkspaceRegion,
-                                        edge: DockEdge) -> Bool {
-        switch region {
-        case .center:
-            return true
-        case .leadingSidebar, .trailingSidebar:
-            return edge == .top || edge == .bottom
-        case .bottomPanel:
-            return edge == .left || edge == .right
-        }
-    }
-
-    private static func regionOfLeaf(id: DockNodeID,
-                                     in node: DockLayoutNode,
-                                     regionByKey: [String: PanelWorkspaceRegion]) -> PanelWorkspaceRegion? {
-        guard let found = findNode(id, in: node) else { return nil }
-        switch found {
-        case .empty:
-            return .center
-        case .tabs(_, let tabs, _):
-            guard let first = tabs.first else { return .center }
-            return regionByKey[first.userKey] ?? .center
-        case .split:
-            return nil
-        }
-    }
-
-    private static func findNode(_ id: DockNodeID,
-                                 in node: DockLayoutNode) -> DockLayoutNode? {
-        if node.id == id { return node }
-        guard case .split(_, _, _, let first, let second) = node else {
-            return nil
-        }
-        return findNode(id, in: first) ?? findNode(id, in: second)
-    }
-
-    private static func findTab(_ userKey: String,
-                                in node: DockLayoutNode) -> (leafID: DockNodeID, tabID: DockTabID)? {
-        switch node {
-        case .empty:
-            return nil
-        case .tabs(let id, let tabs, _):
-            guard let tab = tabs.first(where: { $0.userKey == userKey }) else { return nil }
-            return (id, tab.id)
-        case .split(_, _, _, let first, let second):
-            return findTab(userKey, in: first) ?? findTab(userKey, in: second)
-        }
-    }
-
-    private static func findTabLocation(_ userKey: String,
-                                        in node: DockLayoutNode) -> (leafID: DockNodeID, tabID: DockTabID, tabCount: Int)? {
-        switch node {
-        case .empty:
-            return nil
-        case .tabs(let id, let tabs, _):
-            guard let tab = tabs.first(where: { $0.userKey == userKey }) else { return nil }
-            return (leafID: id, tabID: tab.id, tabCount: tabs.count)
-        case .split(_, _, _, let first, let second):
-            return findTabLocation(userKey, in: first) ?? findTabLocation(userKey, in: second)
-        }
-    }
-
-    private static func findTabInSatellites(_ userKey: String,
-                                            in satellites: [DockNodeID: DockLayoutNode]) -> (leafID: DockNodeID, tabID: DockTabID)? {
-        for (leafID, node) in satellites {
-            guard case .tabs(_, let tabs, _) = node,
-                  let tab = tabs.first(where: { $0.userKey == userKey }) else {
-                continue
-            }
-            return (leafID: leafID, tabID: tab.id)
-        }
-        return nil
-    }
-
-    private static func findBottomLeaf(in node: DockLayoutNode) -> DockNodeID? {
-        switch node {
-        case .empty:
-            return nil
-        case .tabs(let id, let tabs, _):
-            let bottomKeys: Set<String> = ["assets", "console", "intent-input", "confirmation-host"]
-            return tabs.contains(where: { bottomKeys.contains($0.userKey) }) ? id : nil
-        case .split(_, _, _, let first, let second):
-            return findBottomLeaf(in: second) ?? findBottomLeaf(in: first)
-        }
-    }
-
-    private static func firstTabsLeaf(in node: DockLayoutNode) -> DockNodeID? {
-        switch node {
-        case .empty:
-            return nil
-        case .tabs(let id, _, _):
-            return id
-        case .split(_, _, _, let first, let second):
-            return firstTabsLeaf(in: first) ?? firstTabsLeaf(in: second)
-        }
-    }
-
-    static func localizeDockTitles(in controller: DockController) {
-        let root = localizeDockTitles(in: controller.root)
-        let satellites = controller.satellites.mapValues(localizeDockTitles(in:))
-        let minimizedLeaves = controller.minimizedLeaves.mapValues { leaf in
-            DockMinimizedLeaf(node: localizeDockTitles(in: leaf.node),
-                              edge: leaf.edge)
-        }
-        controller.replace(root: root,
-                           satellites: satellites,
-                           satelliteOrder: controller.satelliteOrder,
-                           minimizedLeaves: minimizedLeaves,
-                           minimizedOrder: controller.minimizedOrder)
+        controller.replace(document)
+        localizePanelTitles(in: registry)
     }
 
     static func localizePanelTitles(in registry: PanelRegistry) {
         for id in registry.ids {
             registry.updateDescriptor(id: id) { descriptor in
-                descriptor.title = localizedPanelTitle(for: descriptor.id)
+                descriptor.title = localizedPanelTitle(for: descriptor.id.rawValue)
             }
-        }
-    }
-
-    private static func localizeDockTitles(in node: DockLayoutNode) -> DockLayoutNode {
-        switch node {
-        case .empty:
-            return node
-        case .tabs(let id, let tabs, let active):
-            let localizedTabs = tabs.map { tab -> DockTab in
-                var next = tab
-                next.title = localizedPanelTitle(for: tab.userKey)
-                return next
-            }
-            return .tabs(id: id, tabs: localizedTabs, activeTabID: active)
-        case .split(let id, let axis, let fraction, let first, let second):
-            return .split(id: id,
-                          axis: axis,
-                          fraction: fraction,
-                          first: localizeDockTitles(in: first),
-                          second: localizeDockTitles(in: second))
-        }
-    }
-
-    private static func localizedPanelTitle(for userKey: String) -> String {
-        switch userKey {
-        case "hierarchy": return L("Hierarchy")
-        case "inspector": return L("Inspector")
-        case "viewport": return L("Viewport")
-        case "console": return L("Console")
-        case "assets": return L("Assets")
-        case "intent-input": return L("AI Intent")
-        case "confirmation-host": return L("Confirm")
-        case "render-pipeline": return L("Render")
-        case "settings": return L("Settings")
-        default: return userKey
         }
     }
 
@@ -437,12 +130,12 @@ enum EditorRootViewFactory {
         PanelRegistry([
             PanelDescriptor(id: "hierarchy",
                             title: localizedPanelTitle(for: "hierarchy"),
-                            preferredRegion: .leadingSidebar) {
+                            preferredRegion: .leading) {
                 HierarchyPanel(store: app.store, scene: app.scene)
             },
             PanelDescriptor(id: "inspector",
                             title: localizedPanelTitle(for: "inspector"),
-                            preferredRegion: .trailingSidebar) {
+                            preferredRegion: .trailing) {
                 InspectorPanel(store: app.store, scene: app.scene)
             },
             PanelDescriptor(id: "viewport",
@@ -453,290 +146,42 @@ enum EditorRootViewFactory {
             },
             PanelDescriptor(id: "console",
                             title: localizedPanelTitle(for: "console"),
-                            preferredRegion: .bottomPanel) {
+                            preferredRegion: .bottom) {
                 ConsolePanel(store: app.store)
             },
             PanelDescriptor(id: "assets",
                             title: localizedPanelTitle(for: "assets"),
-                            preferredRegion: .bottomPanel) {
+                            preferredRegion: .bottom) {
                 AssetBrowserPanel(app: app)
             },
             PanelDescriptor(id: "intent-input",
                             title: localizedPanelTitle(for: "intent-input"),
-                            preferredRegion: .bottomPanel) {
+                            preferredRegion: .bottom) {
                 IntentInputPanel(app: app)
             },
             PanelDescriptor(id: "confirmation-host",
                             title: localizedPanelTitle(for: "confirmation-host"),
-                            preferredRegion: .bottomPanel) {
+                            preferredRegion: .bottom) {
                 ConfirmationHostPanel(app: app)
             },
             PanelDescriptor(id: "render-pipeline",
                             title: localizedPanelTitle(for: "render-pipeline"),
-                            preferredRegion: .bottomPanel) {
+                            preferredRegion: .bottom) {
                 RenderPipelinePanel()
             },
         ])
     }
 
-    private static let layoutPersistenceKey = "editor_dock_layout_v2"
-    private static let shellStatePersistenceKey = "editor_shell_state"
-
-    private struct LayoutFractions {
-        let hierarchyAndMain: Float
-        let viewportAndInspector: Float
-        let topAndBottom: Float
+    static func saveWorkspaceLayout(_ controller: WorkspaceController,
+                                    for mode: EditorWorkspaceMode,
+                                    preset: EditorLayoutPreset) {
+        saveWorkspaceDocument(controller.document, for: mode, preset: preset)
     }
 
-    private static func defaultFractions(for preset: EditorLayoutPreset) -> LayoutFractions {
-        switch preset {
-        case .levelDefault:
-            return LayoutFractions(hierarchyAndMain: 0.22,
-                                   viewportAndInspector: 0.78,
-                                   topAndBottom: 0.74)
-        case .levelCinematics:
-            return LayoutFractions(hierarchyAndMain: 0.18,
-                                   viewportAndInspector: 0.80,
-                                   topAndBottom: 0.68)
-        case .modelingDefault:
-            return LayoutFractions(hierarchyAndMain: 0.22,
-                                   viewportAndInspector: 0.76,
-                                   topAndBottom: 0.72)
-        case .modelingSculpt:
-            return LayoutFractions(hierarchyAndMain: 0.19,
-                                   viewportAndInspector: 0.78,
-                                   topAndBottom: 0.72)
-        case .animationDefault:
-            return LayoutFractions(hierarchyAndMain: 0.20,
-                                   viewportAndInspector: 0.76,
-                                   topAndBottom: 0.66)
-        case .animationSequencer:
-            return LayoutFractions(hierarchyAndMain: 0.18,
-                                   viewportAndInspector: 0.74,
-                                   topAndBottom: 0.58)
-        }
-    }
-
-    private static func defaultBottomTabID(for preset: EditorLayoutPreset,
-                                           assetsTab: DockTab,
-                                           consoleTab: DockTab,
-                                           intentTab: DockTab,
-                                           confirmationTab: DockTab) -> DockTabID {
-        switch preset {
-        case .levelDefault, .levelCinematics:
-            return assetsTab.id
-        case .modelingDefault, .modelingSculpt:
-            return consoleTab.id
-        case .animationDefault, .animationSequencer:
-            return intentTab.id
-        }
-    }
-
-    private static func layoutPersistenceKey(for mode: EditorWorkspaceMode,
-                                             preset: EditorLayoutPreset) -> String {
-        "\(layoutPersistenceKey)_\(mode.rawValue)_\(preset.rawValue)"
-    }
-
-    static func saveDockLayout(_ controller: DockController,
-                               for mode: EditorWorkspaceMode,
-                               preset: EditorLayoutPreset) {
-        // Ensure viewport is not detached; if it is, redock it to center before saving
-        if let centerLeaf = findCenterLeaf(controller.root) {
-            ensureViewportDocked(in: controller, to: centerLeaf.id)
-        }
-
-        // Create a snapshot of the current layout state
-        let snapshot = DockLayoutSnapshot(
-            root: controller.root,
-            satellites: controller.satellites,
-            satelliteOrder: controller.satelliteOrder,
-            minimizedLeaves: controller.minimizedLeaves,
-            minimizedOrder: controller.minimizedOrder
-        )
-
-        // Encode and save to disk
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        do {
-            let data = try encoder.encode(snapshot)
-            if let layoutDir = getLayoutPersistenceDirectory() {
-                let layoutPath = layoutDir.appendingPathComponent(
-                    layoutPersistenceKey(for: mode, preset: preset) + ".json"
-                )
-                try data.write(to: layoutPath)
-            }
-        } catch {
-            fputs("[EditorRootViewFactory] failed to save dock layout: \(error)\n", stderr)
-        }
-    }
-
-    static func saveDockLayout(_ controller: DockController) {
-        saveDockLayout(controller,
-                       for: .level,
-                       preset: .levelDefault)
-    }
-
-    private static func loadSavedLayout(for mode: EditorWorkspaceMode,
-                                        preset: EditorLayoutPreset) -> DockController? {
-        guard let layoutDir = getLayoutPersistenceDirectory() else { return nil }
-        let layoutPath = layoutDir.appendingPathComponent(
-            layoutPersistenceKey(for: mode, preset: preset) + ".json"
-        )
-        
-        guard FileManager.default.fileExists(atPath: layoutPath.path) else { return nil }
-
-        do {
-            let data = try Data(contentsOf: layoutPath)
-            let decoder = JSONDecoder()
-            var snapshot = try decoder.decode(DockLayoutSnapshot.self, from: data)
-            snapshot.root = sanitizeDockLayout(snapshot.root)
-            guard !isEmptyDockLayout(snapshot.root) else { return nil }
-            snapshot.satellites = sanitizeSatellites(snapshot.satellites)
-            snapshot.satelliteOrder = snapshot.satelliteOrder.filter { snapshot.satellites[$0] != nil }
-            snapshot.minimizedLeaves = sanitizeMinimizedLeaves(snapshot.minimizedLeaves)
-            snapshot.minimizedOrder = snapshot.minimizedOrder.filter { snapshot.minimizedLeaves[$0] != nil }
-            let controller = DockController(root: snapshot.root)
-            controller.load(snapshot)
-            return controller
-        } catch {
-            fputs("[EditorRootViewFactory] failed to load dock layout: \(error)\n", stderr)
-            return nil
-        }
-    }
-
-    private static func loadLegacySavedLayout() -> DockController? {
-        guard let layoutDir = getLayoutPersistenceDirectory() else { return nil }
-        let layoutPath = layoutDir.appendingPathComponent(layoutPersistenceKey + ".json")
-        guard FileManager.default.fileExists(atPath: layoutPath.path) else { return nil }
-
-        do {
-            let data = try Data(contentsOf: layoutPath)
-            let decoder = JSONDecoder()
-            var snapshot = try decoder.decode(DockLayoutSnapshot.self, from: data)
-            snapshot.root = sanitizeDockLayout(snapshot.root)
-            guard !isEmptyDockLayout(snapshot.root) else { return nil }
-            snapshot.satellites = sanitizeSatellites(snapshot.satellites)
-            snapshot.satelliteOrder = snapshot.satelliteOrder.filter { snapshot.satellites[$0] != nil }
-            snapshot.minimizedLeaves = sanitizeMinimizedLeaves(snapshot.minimizedLeaves)
-            snapshot.minimizedOrder = snapshot.minimizedOrder.filter { snapshot.minimizedLeaves[$0] != nil }
-            let controller = DockController(root: snapshot.root)
-            controller.load(snapshot)
-            return controller
-        } catch {
-            fputs("[EditorRootViewFactory] failed to load legacy dock layout: \(error)\n", stderr)
-            return nil
-        }
-    }
-
-    private static func sanitizeDockLayout(_ node: DockLayoutNode) -> DockLayoutNode {
-        switch node {
-        case .empty:
-            return node
-        case .tabs(let id, let tabs, let active):
-            let filtered = tabs.filter { $0.userKey != "settings" }
-            guard !filtered.isEmpty else { return .empty(id: id) }
-            let nextActive = active.flatMap { activeID in
-                filtered.contains(where: { $0.id == activeID }) ? activeID : nil
-            } ?? filtered.first?.id
-            return .tabs(id: id, tabs: filtered, activeTabID: nextActive)
-        case .split(let id, let axis, let fraction, let first, let second):
-            let clamped = max(0.05, min(0.95, fraction))
-            let sanitizedFirst = sanitizeDockLayout(first)
-            let sanitizedSecond = sanitizeDockLayout(second)
-            if case .empty = sanitizedFirst { return sanitizedSecond }
-            if case .empty = sanitizedSecond { return sanitizedFirst }
-            return .split(id: id,
-                          axis: axis,
-                          fraction: clamped,
-                          first: sanitizedFirst,
-                          second: sanitizedSecond)
-        }
-    }
-
-    private static func sanitizeSatellites(_ satellites: [DockNodeID: DockLayoutNode]) -> [DockNodeID: DockLayoutNode] {
-        satellites.compactMapValues { node in
-            let sanitized = sanitizeDockLayout(node)
-            if case .empty = sanitized {
-                return nil
-            }
-            return sanitized
-        }
-    }
-
-    private static func sanitizeMinimizedLeaves(_ leaves: [DockNodeID: DockMinimizedLeaf]) -> [DockNodeID: DockMinimizedLeaf] {
-        leaves.compactMapValues { leaf in
-            let sanitized = sanitizeDockLayout(leaf.node)
-            guard case .tabs = sanitized else { return nil }
-            return DockMinimizedLeaf(node: sanitized, edge: leaf.edge)
-        }
-    }
-
-    private static func isEmptyDockLayout(_ node: DockLayoutNode) -> Bool {
-        if case .empty = node { return true }
-        return false
-    }
-
-    /// Recursively walks `node` and ensures `userKey` exists as a tab in the
-    /// first `.tabs` leaf that already contains known bottom-panel tabs.
-    /// Falls back to the first `.tabs` leaf found anywhere.
-    private static func ensureBottomTabs(in node: DockLayoutNode,
-                                         include userKey: String,
-                                         title: String) -> DockLayoutNode {
-        let bottomKeys = Set(["assets", "console", "intent-input", "confirmation-host"])
-        // Find the best-matching tabs node
-        var firstTabs: DockLayoutNode?
-        var bestTabs: DockLayoutNode?
-        func walk(_ n: DockLayoutNode) {
-            switch n {
-            case .tabs(_, let tabs, _):
-                if firstTabs == nil { firstTabs = n }
-                let existing = Set(tabs.map(\.userKey))
-                if !existing.intersection(bottomKeys).isEmpty { bestTabs = n }
-            case .split(_, _, _, let first, let second):
-                walk(first); walk(second)
-            default: break
-            }
-        }
-        walk(node)
-
-        guard let target = bestTabs ?? firstTabs else { return node }
-
-        return insertTabIfMissing(userKey, title: title, into: target, within: node)
-    }
-
-    /// Replaces the matching tabs node in the tree with one that includes `userKey`.
-    private static func insertTabIfMissing(_ userKey: String,
-                                            title: String,
-                                            into target: DockLayoutNode,
-                                            within root: DockLayoutNode) -> DockLayoutNode {
-        func nodeID(_ n: DockLayoutNode) -> DockNodeID {
-            switch n {
-            case .tabs(let id, _, _): return id
-            case .split(let id, _, _, _, _): return id
-            case .empty(let id): return id
-            }
-        }
-        func splitFraction(_ n: DockLayoutNode) -> Float {
-            if case .split(_, _, let f, _, _) = n { return f }
-            return 0.5
-        }
-        func replace(_ n: DockLayoutNode) -> DockLayoutNode {
-            switch n {
-            case .tabs(let id, var tabs, let active):
-                if nodeID(n) == nodeID(target) {
-                    if !tabs.contains(where: { $0.userKey == userKey }) {
-                        tabs.append(DockTab(userKey: userKey, title: title))
-                    }
-                    return .tabs(id: id, tabs: tabs, activeTabID: active)
-                }
-                return n
-            case .split(let id, let axis, let fraction, let first, let second):
-                return .split(id: id, axis: axis, fraction: fraction,
-                             first: replace(first), second: replace(second))
-            default: return n
-            }
-        }
-        return replace(root)
+    static func saveWorkspaceLayout(_ controller: WorkspaceController) {
+        saveWorkspaceLayout(controller,
+                            for: .level,
+                            preset: .levelDefault)
     }
 
     static func saveShellState(mode: EditorWorkspaceMode,
@@ -782,6 +227,153 @@ enum EditorRootViewFactory {
         }
     }
 
+    private static let workspaceLayoutPersistenceKey = "editor_workspace_document"
+    private static let legacyWorkspaceLayoutPersistencePrefix = "editor_workspace_layout"
+    private static let legacyDockLayoutPersistencePrefix = "editor_dock_layout"
+    private static let shellStatePersistenceKey = "editor_shell_state"
+
+    private static func localizedPanelTitle(for id: String) -> String {
+        switch id {
+        case "hierarchy":
+            return L("Hierarchy")
+        case "inspector":
+            return L("Inspector")
+        case "viewport":
+            return L("Viewport")
+        case "console":
+            return L("Console")
+        case "assets":
+            return L("Assets")
+        case "intent-input":
+            return L("AI Intent")
+        case "confirmation-host":
+            return L("Confirmations")
+        case "render-pipeline":
+            return L("Render Pipeline")
+        default:
+            return id
+        }
+    }
+
+    private static func reconciledWorkspaceDocument(_ document: WorkspaceDocument,
+                                                    registry: PanelRegistry) -> WorkspaceDocument {
+        var next = document
+        let registeredIDs = Set(registry.ids)
+
+        for staleID in next.panels.keys where !registeredIDs.contains(staleID) {
+            next.panels.removeValue(forKey: staleID)
+        }
+
+        for groupID in Array(next.groups.keys) {
+            guard var group = next.groups[groupID] else { continue }
+            group.panels.removeAll { !registeredIDs.contains($0) }
+            if group.panels.isEmpty {
+                next.groups.removeValue(forKey: groupID)
+                for index in next.regions.indices {
+                    next.regions[index].groupIDs.removeAll { $0 == groupID }
+                }
+                continue
+            }
+            if let active = group.activePanelID, group.panels.contains(active) {
+                group.activePanelID = active
+            } else {
+                group.activePanelID = group.panels.first
+            }
+            next.groups[groupID] = group
+        }
+
+        for descriptor in registry.descriptors {
+            next.panels[descriptor.id] = workspacePanel(for: descriptor)
+            guard next.groupContaining(panelID: descriptor.id) == nil else { continue }
+            let groupID = defaultGroupID(for: descriptor.preferredRegion)
+            var group = next.groups[groupID] ?? WorkspaceTabGroup(id: groupID, panels: [])
+            if !group.panels.contains(descriptor.id) {
+                group.panels.append(descriptor.id)
+            }
+            group.activePanelID = group.activePanelID ?? descriptor.id
+            next.groups[groupID] = group
+
+            var region = next.region(descriptor.preferredRegion)
+            if !region.groupIDs.contains(groupID) {
+                region.groupIDs.append(groupID)
+                next.setRegion(region)
+            }
+        }
+
+        return WorkspaceDocument(panels: next.panels,
+                                 groups: next.groups,
+                                 regions: next.regions,
+                                 floatingWindows: next.floatingWindows,
+                                 splitFractions: next.splitFractions)
+    }
+
+    private static func workspacePanel(for descriptor: PanelDescriptor) -> WorkspacePanel {
+        WorkspacePanel(id: descriptor.id,
+                       title: descriptor.title,
+                       isClosable: descriptor.closable,
+                       isDraggable: true,
+                       isCollapsible: descriptor.preferredRegion != .center,
+                       iconAssetKey: descriptor.iconAssetKey)
+    }
+
+    private static func defaultGroupID(for region: WorkspaceRegionID) -> WorkspaceTabGroupID {
+        WorkspaceTabGroupID(rawValue: region.rawValue)
+    }
+
+    private static func layoutPersistenceKey(for mode: EditorWorkspaceMode,
+                                             preset: EditorLayoutPreset) -> String {
+        "\(workspaceLayoutPersistenceKey)_\(mode.rawValue)_\(preset.rawValue)"
+    }
+
+    private static func loadSavedWorkspaceDocument(for mode: EditorWorkspaceMode,
+                                                   preset: EditorLayoutPreset) -> WorkspaceDocument? {
+        discardLegacyWorkspaceLayoutFiles()
+        guard let layoutDir = getLayoutPersistenceDirectory() else { return nil }
+        let layoutPath = layoutDir.appendingPathComponent(
+            layoutPersistenceKey(for: mode, preset: preset) + ".json"
+        )
+
+        guard FileManager.default.fileExists(atPath: layoutPath.path) else { return nil }
+
+        do {
+            let data = try Data(contentsOf: layoutPath)
+            return try JSONDecoder().decode(WorkspaceDocument.self, from: data)
+        } catch {
+            fputs("[EditorRootViewFactory] discarded invalid workspace layout: \(error)\n", stderr)
+            return nil
+        }
+    }
+
+    private static func saveWorkspaceDocument(_ document: WorkspaceDocument,
+                                              for mode: EditorWorkspaceMode,
+                                              preset: EditorLayoutPreset) {
+        discardLegacyWorkspaceLayoutFiles()
+        guard let layoutDir = getLayoutPersistenceDirectory() else { return }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        do {
+            let data = try encoder.encode(document)
+            let path = layoutDir.appendingPathComponent(
+                layoutPersistenceKey(for: mode, preset: preset) + ".json"
+            )
+            try data.write(to: path)
+        } catch {
+            fputs("[EditorRootViewFactory] failed to save workspace layout: \(error)\n", stderr)
+        }
+    }
+
+    private static func discardLegacyWorkspaceLayoutFiles() {
+        guard let layoutDir = getLayoutPersistenceDirectory(),
+              let contents = try? FileManager.default.contentsOfDirectory(at: layoutDir,
+                                                                          includingPropertiesForKeys: nil) else {
+            return
+        }
+        for url in contents where url.lastPathComponent.hasPrefix(legacyDockLayoutPersistencePrefix)
+            || url.lastPathComponent.hasPrefix(legacyWorkspaceLayoutPersistencePrefix) {
+            try? FileManager.default.removeItem(at: url)
+        }
+    }
+
     private static func getLayoutPersistenceDirectory() -> URL? {
         guard let appSupport = FileManager.default.urls(for: .applicationSupportDirectory,
                                                          in: .userDomainMask).first else {
@@ -791,41 +383,72 @@ enum EditorRootViewFactory {
         try? FileManager.default.createDirectory(at: guavaDir, withIntermediateDirectories: true)
         return guavaDir
     }
+}
 
-    /// If viewport tab is in satellites, redock it to the center leaf
-    private static func ensureViewportDocked(in controller: DockController, to leafID: DockNodeID) {
-        let viewportKey = "viewport"
-        
-        // Check if viewport is in satellites
-        for (satelliteID, satellite) in controller.satellites {
-            if case .tabs(_, let tabs, _) = satellite,
-               tabs.contains(where: { $0.userKey == viewportKey }) {
-                // Found viewport in a satellite, redock it
-                let viewportTab = tabs.first { $0.userKey == viewportKey }!
-                controller.apply(.insertTab(viewportTab, into: leafID, at: 0))
-                controller.apply(.closeSatellite(satelliteID))
-                return
-            }
-        }
+enum EditorWorkspaceDefaults {
+    static func makeDocument(mode: EditorWorkspaceMode,
+                             preset: EditorLayoutPreset,
+                             registry: PanelRegistry) -> WorkspaceDocument {
+        let panels = Dictionary(uniqueKeysWithValues: registry.descriptors.map { descriptor in
+            (descriptor.id,
+             WorkspacePanel(id: descriptor.id,
+                            title: descriptor.title,
+                            isClosable: descriptor.closable,
+                            isDraggable: true,
+                            isCollapsible: descriptor.preferredRegion != .center,
+                            iconAssetKey: descriptor.iconAssetKey))
+        })
+        let fractions = defaultFractions(for: preset)
+        let groups: [WorkspaceTabGroupID: WorkspaceTabGroup] = [
+            "leading": WorkspaceTabGroup(id: "leading", panels: ["hierarchy"], activePanelID: "hierarchy"),
+            "center": WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport"),
+            "trailing": WorkspaceTabGroup(id: "trailing", panels: ["inspector"], activePanelID: "inspector"),
+            "bottom": WorkspaceTabGroup(id: "bottom",
+                                        panels: ["assets",
+                                                 "console",
+                                                 "intent-input",
+                                                 "confirmation-host",
+                                                 "render-pipeline"],
+                                        activePanelID: defaultBottomPanelID(for: preset))
+        ]
+        return WorkspaceDocument(
+            panels: panels,
+            groups: groups,
+            regions: [
+                WorkspaceRegion(id: .leading, groupIDs: ["leading"]),
+                WorkspaceRegion(id: .center, groupIDs: ["center"]),
+                WorkspaceRegion(id: .trailing, groupIDs: ["trailing"]),
+                WorkspaceRegion(id: .bottom, groupIDs: ["bottom"]),
+            ],
+            splitFractions: fractions
+        )
+    }
 
-        for (leafID, minimized) in controller.minimizedLeaves {
-            if case .tabs(_, let tabs, _) = minimized.node,
-               tabs.contains(where: { $0.userKey == viewportKey }) {
-                controller.apply(.restoreMinimizedLeaf(leafID))
-                return
-            }
+    private static func defaultFractions(for preset: EditorLayoutPreset) -> WorkspaceSplitFractions {
+        switch preset {
+        case .levelDefault:
+            return WorkspaceSplitFractions(leading: 0.22, centerTrailing: 0.78, topBottom: 0.74)
+        case .levelCinematics:
+            return WorkspaceSplitFractions(leading: 0.18, centerTrailing: 0.80, topBottom: 0.68)
+        case .modelingDefault:
+            return WorkspaceSplitFractions(leading: 0.22, centerTrailing: 0.76, topBottom: 0.72)
+        case .modelingSculpt:
+            return WorkspaceSplitFractions(leading: 0.19, centerTrailing: 0.78, topBottom: 0.72)
+        case .animationDefault:
+            return WorkspaceSplitFractions(leading: 0.20, centerTrailing: 0.76, topBottom: 0.66)
+        case .animationSequencer:
+            return WorkspaceSplitFractions(leading: 0.18, centerTrailing: 0.74, topBottom: 0.58)
         }
     }
 
-    private static func findCenterLeaf(_ node: DockLayoutNode) -> DockLayoutNode? {
-        switch node {
-        case .empty:
-            return node
-        case .tabs:
-            return node
-        case .split(_, _, _, let first, let second):
-            if let found = findCenterLeaf(first) { return found }
-            return findCenterLeaf(second)
+    private static func defaultBottomPanelID(for preset: EditorLayoutPreset) -> WorkspacePanelID {
+        switch preset {
+        case .levelDefault, .levelCinematics:
+            return "assets"
+        case .modelingDefault, .modelingSculpt:
+            return "console"
+        case .animationDefault, .animationSequencer:
+            return "intent-input"
         }
     }
 }

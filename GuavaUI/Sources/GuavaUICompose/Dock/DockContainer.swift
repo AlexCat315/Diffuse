@@ -93,6 +93,10 @@ struct _StatefulDockContainer: View {
         // ControllerSubscription dedupes by tag so re-runs are idempotent and
         // we never accumulate handlers.
 
+        let orphanMinimizedLeafIDs = Set(controller.minimizedLeaves.keys.filter { id in
+            controller.root.find(id) == nil
+        })
+
         if controller.minimizedLeaves.isEmpty {
             _DockContainerRoot(controller: controller, hostBridge: hostBridge) {
                 _DockNodeView(node: controller.root,
@@ -104,6 +108,7 @@ struct _StatefulDockContainer: View {
         } else {
             _DockContainerRoot(controller: controller, hostBridge: hostBridge) {
                 _DockContainerFrame(controller: controller,
+                                    leafIDs: orphanMinimizedLeafIDs,
                                     horizontalInset: horizontalInset) {
                     _DockNodeView(node: controller.root,
                                   controller: controller,
@@ -169,28 +174,34 @@ struct _DockContainerRoot<Content: View>: _PrimitiveView {
 
 struct _DockContainerFrame<Content: View>: View {
     let controller: DockController
+    let leafIDs: Set<DockNodeID>
     let horizontalInset: Float
     let content: Content
 
     init(controller: DockController,
+         leafIDs: Set<DockNodeID>,
          horizontalInset: Float,
          @ViewBuilder content: () -> Content) {
         self.controller = controller
+        self.leafIDs = leafIDs
         self.horizontalInset = horizontalInset
         self.content = content()
     }
 
     var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            Box(direction: .row, alignItems: .stretch, spacing: 0) {
-                _DockMinimizedRail(edge: .left, controller: controller)
-                content
-                    .flex()
-                    .padding(horizontal: horizontalInset, vertical: 0)
-                _DockMinimizedRail(edge: .right, controller: controller)
+        Box(direction: .row, alignItems: .stretch, spacing: 0) {
+            _DockMinimizedRail(edge: .left, controller: controller, leafIDs: leafIDs)
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                    content
+                        .padding(horizontal: horizontalInset, vertical: 0)
+                        .flex()
+                }
+                .flex()
+                _DockMinimizedRail(edge: .bottom, controller: controller, leafIDs: leafIDs)
             }
             .flex()
-            _DockMinimizedRail(edge: .bottom, controller: controller)
+            _DockMinimizedRail(edge: .right, controller: controller, leafIDs: leafIDs)
         }
         .flex()
     }
@@ -201,15 +212,16 @@ struct _DockMinimizedRail: _PrimitiveView {
 
     let edge: DockMinimizedEdge
     let controller: DockController
+    var leafIDs: Set<DockNodeID>? = nil
 
     func _makeNode() -> Node {
         let n = Node()
         n.isHitTestable = false
-        n.attachments[Self.kRailMarker] = edge
         return n
     }
 
     func _updateNode(_ node: Node) {
+        node.attachments[Self.kRailMarker] = items().isEmpty ? nil : edge
         // Only side rails get a background tint; the bottom rail sits
         // flush with the content area and looks like a full-width bar
         // when tinted, which reads as "taking over the entire bottom".
@@ -263,6 +275,7 @@ struct _DockMinimizedRail: _PrimitiveView {
 
     private func items() -> [(DockNodeID, DockMinimizedLeaf)] {
         controller.minimizedOrder.compactMap { id in
+            guard leafIDs?.contains(id) ?? true else { return nil }
             guard let leaf = controller.minimizedLeaves[id], leaf.edge == edge else { return nil }
             return (id, leaf)
         }
@@ -470,6 +483,11 @@ struct _DockNodeView: View {
     var body: some View {
         switch node {
         case .empty(let id):
+            if let minimized = controller.minimizedLeaves[id] {
+                return AnyView(_DockMinimizedPlaceholderLeaf(nodeID: id,
+                                                             edge: minimized.edge,
+                                                             controller: controller))
+            }
             return AnyView(_DockEmptyLeaf(nodeID: id, controller: controller))
 
         case .tabs(let id, let tabs, let active):
@@ -488,6 +506,18 @@ struct _DockNodeView: View {
                                       controller: controller,
                                       content: content))
         }
+    }
+}
+
+struct _DockMinimizedPlaceholderLeaf: View {
+    let nodeID: DockNodeID
+    let edge: DockMinimizedEdge
+    let controller: DockController
+
+    var body: some View {
+        _DockMinimizedRail(edge: edge,
+                           controller: controller,
+                           leafIDs: Set([nodeID]))
     }
 }
 

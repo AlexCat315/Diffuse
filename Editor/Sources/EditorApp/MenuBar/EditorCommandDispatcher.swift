@@ -1,11 +1,13 @@
 import EditorCore
-import GuavaUICompose
+import GuavaUIApp
+import GuavaUIWorkspace
 
 @MainActor
 enum EditorCommandDispatcher {
     static func handle(_ command: EditorMenuCommand,
                        app: EditorApplication,
-                       controller: DockController) {
+                       controller: WorkspaceController,
+                       registry: PanelRegistry) {
         let store = app.store
 
         switch command {
@@ -25,24 +27,24 @@ enum EditorCommandDispatcher {
             guard store.state.workspaceMode != next else { return }
             let previousMode = store.state.workspaceMode
             let previousPreset = store.state.activeLayoutPreset
-            EditorRootViewFactory.saveDockLayout(controller, for: previousMode, preset: previousPreset)
+            EditorRootViewFactory.saveWorkspaceLayout(controller, for: previousMode, preset: previousPreset)
             store.dispatch(.setWorkspaceMode(next))
             let nextPreset = store.state.activeLayoutPreset
-            EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: nextPreset)
+            EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: nextPreset, registry: registry)
             saveShellState(app)
         case let .setLayoutPreset(nextPreset):
             guard nextPreset != store.state.activeLayoutPreset else { return }
             let mode = store.state.workspaceMode
             let previousPreset = store.state.activeLayoutPreset
-            EditorRootViewFactory.saveDockLayout(controller, for: mode, preset: previousPreset)
+            EditorRootViewFactory.saveWorkspaceLayout(controller, for: mode, preset: previousPreset)
             store.dispatch(.setActiveLayoutPreset(nextPreset))
-            EditorRootViewFactory.loadLayoutPreset(into: controller, for: mode, preset: nextPreset)
+            EditorRootViewFactory.loadLayoutPreset(into: controller, for: mode, preset: nextPreset, registry: registry)
             saveShellState(app)
         case .resetLayout:
             let mode = store.state.workspaceMode
             let preset = store.state.activeLayoutPreset
-            EditorRootViewFactory.resetLayout(into: controller, for: mode, preset: preset)
-            EditorRootViewFactory.saveDockLayout(controller, for: mode, preset: preset)
+            EditorRootViewFactory.resetLayout(into: controller, for: mode, preset: preset, registry: registry)
+            EditorRootViewFactory.saveWorkspaceLayout(controller, for: mode, preset: preset)
             saveShellState(app)
         case let .setPlaybackState(next):
             if store.state.playbackState != next {
