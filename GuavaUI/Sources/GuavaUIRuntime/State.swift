@@ -79,3 +79,10 @@ public struct State<Value>: DynamicProperty {
         _storage.value = other._storage.value
     }
 }
+
+// MARK: - Sendable
+
+// State is Sendable when the wrapped value is. StateStorage is already
+// @unchecked Sendable, and writes are safe from any thread because
+// StateStorage propagates through the recomposer (main-thread queue).
+extension State: @unchecked Sendable where Value: Sendable {}

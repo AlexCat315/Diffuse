@@ -25,7 +25,7 @@ let package = Package(
         .library(name: "AssetPipeline", targets: ["AssetPipeline"]),
         .library(name: "SequenceRuntime", targets: ["SequenceRuntime"]),
         .library(name: "ColorPipeline", targets: ["ColorPipeline"]),
-        .library(name: "ImageIO", targets: ["ImageIO"]),
+        .library(name: "EXRIO", targets: ["EXRIO"]),
         .library(name: "CinematicRenderer", targets: ["CinematicRenderer"]),
         .library(name: "CardBattleRuntime", targets: ["CardBattleRuntime"]),
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
@@ -81,9 +81,7 @@ let package = Package(
             path: "Sources/Bridge/COCIOBridge",
             publicHeadersPath: "include",
             cxxSettings: [
-                .unsafeFlags([
-                    "-I/opt/homebrew/include",
-                ])
+                .unsafeFlags(["-I/opt/homebrew/include"]),
             ],
             linkerSettings: [
                 .unsafeFlags([
@@ -102,7 +100,7 @@ let package = Package(
                     "-I/opt/homebrew/include",
                     "-I/opt/homebrew/include/OpenEXR",
                     "-I/opt/homebrew/include/Imath",
-                ])
+                ]),
             ],
             linkerSettings: [
                 .unsafeFlags([
@@ -169,7 +167,7 @@ let package = Package(
             ]
         ),
         .target(
-            name: "ImageIO",
+            name: "EXRIO",
             dependencies: [
                 "COpenEXRBridge",
             ]
@@ -330,9 +328,9 @@ let package = Package(
             ]
         ),
         .testTarget(
-            name: "ImageIOTests",
+            name: "EXRIOTests",
             dependencies: [
-                "ImageIO",
+                "EXRIO",
             ]
         ),
         .testTarget(

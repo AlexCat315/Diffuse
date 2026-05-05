@@ -126,6 +126,7 @@ enum EditorRootViewFactory {
         let assetsTab = DockTab(userKey: "assets", title: localizedPanelTitle(for: "assets"))
         let intentTab = DockTab(userKey: "intent-input", title: localizedPanelTitle(for: "intent-input"))
         let confirmationTab = DockTab(userKey: "confirmation-host", title: localizedPanelTitle(for: "confirmation-host"))
+        let renderPipelineTab = DockTab(userKey: "render-pipeline", title: localizedPanelTitle(for: "render-pipeline"))
 
         let hierarchyLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
@@ -144,7 +145,7 @@ enum EditorRootViewFactory {
         )
         let bottomLeaf: DockLayoutNode = .tabs(
             id: DockNodeID(),
-            tabs: [assetsTab, consoleTab, intentTab, confirmationTab],
+            tabs: [assetsTab, consoleTab, intentTab, confirmationTab, renderPipelineTab],
             activeTabID: defaultBottomTabID(for: preset,
                                             assetsTab: assetsTab,
                                             consoleTab: consoleTab,
@@ -203,6 +204,11 @@ enum EditorRootViewFactory {
                                  for mode: EditorWorkspaceMode,
                                  preset: EditorLayoutPreset) {
         if let saved = loadSavedLayout(for: mode, preset: preset) {
+            // Ensure newly registered panels appear in persisted layouts.
+            let updatedRoot = ensureBottomTabs(in: saved.root,
+                                                include: "render-pipeline",
+                                                title: localizedPanelTitle(for: "render-pipeline"))
+            saved.replace(root: updatedRoot)
             controller.load(saved.snapshot())
             localizeDockTitles(in: controller)
             return
@@ -421,6 +427,7 @@ enum EditorRootViewFactory {
         case "assets": return L("Assets")
         case "intent-input": return L("AI Intent")
         case "confirmation-host": return L("Confirm")
+        case "render-pipeline": return L("Render")
         case "settings": return L("Settings")
         default: return userKey
         }
@@ -463,6 +470,11 @@ enum EditorRootViewFactory {
                             title: localizedPanelTitle(for: "confirmation-host"),
                             preferredRegion: .bottomPanel) {
                 ConfirmationHostPanel(app: app)
+            },
+            PanelDescriptor(id: "render-pipeline",
+                            title: localizedPanelTitle(for: "render-pipeline"),
+                            preferredRegion: .bottomPanel) {
+                RenderPipelinePanel()
             },
         ])
     }
@@ -662,6 +674,69 @@ enum EditorRootViewFactory {
     private static func isEmptyDockLayout(_ node: DockLayoutNode) -> Bool {
         if case .empty = node { return true }
         return false
+    }
+
+    /// Recursively walks `node` and ensures `userKey` exists as a tab in the
+    /// first `.tabs` leaf that already contains known bottom-panel tabs.
+    /// Falls back to the first `.tabs` leaf found anywhere.
+    private static func ensureBottomTabs(in node: DockLayoutNode,
+                                         include userKey: String,
+                                         title: String) -> DockLayoutNode {
+        let bottomKeys = Set(["assets", "console", "intent-input", "confirmation-host"])
+        // Find the best-matching tabs node
+        var firstTabs: DockLayoutNode?
+        var bestTabs: DockLayoutNode?
+        func walk(_ n: DockLayoutNode) {
+            switch n {
+            case .tabs(_, let tabs, _):
+                if firstTabs == nil { firstTabs = n }
+                let existing = Set(tabs.map(\.userKey))
+                if !existing.intersection(bottomKeys).isEmpty { bestTabs = n }
+            case .split(_, _, _, let first, let second):
+                walk(first); walk(second)
+            default: break
+            }
+        }
+        walk(node)
+
+        guard let target = bestTabs ?? firstTabs else { return node }
+
+        return insertTabIfMissing(userKey, title: title, into: target, within: node)
+    }
+
+    /// Replaces the matching tabs node in the tree with one that includes `userKey`.
+    private static func insertTabIfMissing(_ userKey: String,
+                                            title: String,
+                                            into target: DockLayoutNode,
+                                            within root: DockLayoutNode) -> DockLayoutNode {
+        func nodeID(_ n: DockLayoutNode) -> DockNodeID {
+            switch n {
+            case .tabs(let id, _, _): return id
+            case .split(let id, _, _, _, _): return id
+            case .empty(let id): return id
+            }
+        }
+        func splitFraction(_ n: DockLayoutNode) -> Float {
+            if case .split(_, _, let f, _, _) = n { return f }
+            return 0.5
+        }
+        func replace(_ n: DockLayoutNode) -> DockLayoutNode {
+            switch n {
+            case .tabs(let id, var tabs, let active):
+                if nodeID(n) == nodeID(target) {
+                    if !tabs.contains(where: { $0.userKey == userKey }) {
+                        tabs.append(DockTab(userKey: userKey, title: title))
+                    }
+                    return .tabs(id: id, tabs: tabs, activeTabID: active)
+                }
+                return n
+            case .split(let id, let axis, let fraction, let first, let second):
+                return .split(id: id, axis: axis, fraction: fraction,
+                             first: replace(first), second: replace(second))
+            default: return n
+            }
+        }
+        return replace(root)
     }
 
     static func saveShellState(mode: EditorWorkspaceMode,
