@@ -69,6 +69,20 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(controller.document.splitFractions.topBottom, 0.68, accuracy: 0.0001)
     }
 
+    func testCenterRegionCannotCollapseEvenWithCollapsiblePanels() {
+        let controller = WorkspaceController(document: makeDocument())
+
+        _ = controller.dispatch(.movePanel("inspector",
+                                           to: WorkspaceTarget(region: .center,
+                                                               groupID: "center",
+                                                               zone: .tabGroup)))
+        let result = controller.dispatch(.collapse("center"))
+
+        XCTAssertFalse(result.didChange)
+        XCTAssertEqual(controller.document.groups["center"]?.isCollapsed, false)
+        XCTAssertEqual(controller.document.groups["center"]?.panels, ["viewport", "inspector"])
+    }
+
     private func makeDocument() -> WorkspaceDocument {
         WorkspaceDocument(
             panels: [

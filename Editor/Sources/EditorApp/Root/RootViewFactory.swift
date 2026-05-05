@@ -227,7 +227,8 @@ enum EditorRootViewFactory {
         }
     }
 
-    private static let workspaceLayoutPersistenceKey = "editor_workspace_layout"
+    private static let workspaceLayoutPersistenceKey = "editor_workspace_document"
+    private static let legacyWorkspaceLayoutPersistencePrefix = "editor_workspace_layout"
     private static let legacyDockLayoutPersistencePrefix = "editor_dock_layout"
     private static let shellStatePersistenceKey = "editor_shell_state"
 
@@ -326,7 +327,7 @@ enum EditorRootViewFactory {
 
     private static func loadSavedWorkspaceDocument(for mode: EditorWorkspaceMode,
                                                    preset: EditorLayoutPreset) -> WorkspaceDocument? {
-        discardLegacyDockLayoutFiles()
+        discardLegacyWorkspaceLayoutFiles()
         guard let layoutDir = getLayoutPersistenceDirectory() else { return nil }
         let layoutPath = layoutDir.appendingPathComponent(
             layoutPersistenceKey(for: mode, preset: preset) + ".json"
@@ -346,7 +347,7 @@ enum EditorRootViewFactory {
     private static func saveWorkspaceDocument(_ document: WorkspaceDocument,
                                               for mode: EditorWorkspaceMode,
                                               preset: EditorLayoutPreset) {
-        discardLegacyDockLayoutFiles()
+        discardLegacyWorkspaceLayoutFiles()
         guard let layoutDir = getLayoutPersistenceDirectory() else { return }
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
@@ -361,13 +362,14 @@ enum EditorRootViewFactory {
         }
     }
 
-    private static func discardLegacyDockLayoutFiles() {
+    private static func discardLegacyWorkspaceLayoutFiles() {
         guard let layoutDir = getLayoutPersistenceDirectory(),
               let contents = try? FileManager.default.contentsOfDirectory(at: layoutDir,
                                                                           includingPropertiesForKeys: nil) else {
             return
         }
-        for url in contents where url.lastPathComponent.hasPrefix(legacyDockLayoutPersistencePrefix) {
+        for url in contents where url.lastPathComponent.hasPrefix(legacyDockLayoutPersistencePrefix)
+            || url.lastPathComponent.hasPrefix(legacyWorkspaceLayoutPersistencePrefix) {
             try? FileManager.default.removeItem(at: url)
         }
     }

@@ -155,6 +155,15 @@ public final class WorkspaceController: @unchecked Sendable {
               group.isCollapsed != collapsed else {
             return .unchanged
         }
+        guard document.regionContaining(groupID: groupID) != .center else {
+            return .unchanged
+        }
+        if collapsed {
+            let canCollapse = group.panels.contains { panelID in
+                document.panels[panelID]?.isCollapsible == true
+            }
+            guard canCollapse else { return .unchanged }
+        }
         group.isCollapsed = collapsed
         document.groups[groupID] = group
         let region = document.regionContaining(groupID: groupID)
