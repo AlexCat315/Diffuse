@@ -47,6 +47,7 @@ let package = Package(
                 "EditorCore",
                 .product(name: "GuavaUIApp", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
+                .product(name: "GuavaUIWorkspace", package: "GuavaUI"),
                 .product(name: "GuavaUIRuntime", package: "GuavaUI"),
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),

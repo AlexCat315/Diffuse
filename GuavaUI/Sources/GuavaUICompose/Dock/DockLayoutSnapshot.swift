@@ -16,17 +16,11 @@ public struct DockLayoutSnapshot: Codable, Equatable, Sendable {
     public var minimizedLeaves: [DockNodeID: DockMinimizedLeaf]
     /// Insertion order for minimized leaves.
     public var minimizedOrder: [DockNodeID]
-    /// Schema version. Bump when fields change shape.
-    public var schemaVersion: Int
-
-    public static let currentSchemaVersion = 2
-
     public init(root: DockLayoutNode,
                 satellites: [DockNodeID: DockLayoutNode] = [:],
                 satelliteOrder: [DockNodeID] = [],
                 minimizedLeaves: [DockNodeID: DockMinimizedLeaf] = [:],
-                minimizedOrder: [DockNodeID] = [],
-                schemaVersion: Int = currentSchemaVersion) {
+                minimizedOrder: [DockNodeID] = []) {
         self.root = root
         self.satellites = satellites
         self.satelliteOrder = satelliteOrder.isEmpty
@@ -36,11 +30,10 @@ public struct DockLayoutSnapshot: Codable, Equatable, Sendable {
         self.minimizedOrder = minimizedOrder.isEmpty
             ? Array(minimizedLeaves.keys)
             : minimizedOrder.filter { minimizedLeaves[$0] != nil }
-        self.schemaVersion = schemaVersion
     }
 
     private enum CodingKeys: String, CodingKey {
-        case root, satellites, satelliteOrder, minimizedLeaves, minimizedOrder, schemaVersion
+        case root, satellites, satelliteOrder, minimizedLeaves, minimizedOrder
     }
 
     public init(from decoder: Decoder) throws {
@@ -65,9 +58,6 @@ public struct DockLayoutSnapshot: Codable, Equatable, Sendable {
         self.satelliteOrder = normalisedOrder
         self.minimizedLeaves = decodedMinimized
         self.minimizedOrder = normalisedMinimizedOrder
-        self.schemaVersion = try c.decodeIfPresent(Int.self,
-                                                    forKey: .schemaVersion)
-            ?? Self.currentSchemaVersion
     }
 }
 

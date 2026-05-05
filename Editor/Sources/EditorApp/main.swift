@@ -3,6 +3,7 @@ import EngineKernel
 import EditorCore
 import GuavaUIApp
 import GuavaUIRuntime
+import GuavaUIWorkspace
 import RHIWGPU
 
 @MainActor
@@ -31,9 +32,10 @@ private func runEditor() throws {
         EditorLocalizationPreferences.language = shellState.language
     }
 
-    let controller = EditorRootViewFactory.makeController(for: app.store.state.workspaceMode,
-                                                          preset: app.store.state.activeLayoutPreset)
     let registry = EditorRootViewFactory.makeRegistry(app: app)
+    let controller = EditorRootViewFactory.makeController(for: app.store.state.workspaceMode,
+                                                          preset: app.store.state.activeLayoutPreset,
+                                                          registry: registry)
     var settingsWindowID: WindowID?
     var displayHandle: AppDisplayHandle?
     func installNativeMenu(on display: AppDisplayHandle) {
@@ -42,7 +44,7 @@ private func runEditor() throws {
             activeLayoutPreset: app.store.state.activeLayoutPreset,
             playbackState: app.store.state.playbackState,
             onCommand: { command in
-                EditorCommandDispatcher.handle(command, app: app, controller: controller)
+                EditorCommandDispatcher.handle(command, app: app, controller: controller, registry: registry)
             }
         ))
     }
@@ -82,8 +84,11 @@ private func runEditor() throws {
         guard next != lastShellPreferences else { return }
         if next.language != lastShellPreferences.language {
             EditorLocalizationPreferences.language = next.language
-            EditorRootViewFactory.localizeDockTitles(in: controller)
+            EditorRootViewFactory.localizeWorkspaceTitles(in: controller, registry: registry)
             EditorRootViewFactory.localizePanelTitles(in: registry)
+            EditorRootViewFactory.saveWorkspaceLayout(controller,
+                                                      for: store.state.workspaceMode,
+                                                      preset: store.state.activeLayoutPreset)
         }
         lastShellPreferences = next
         EditorRootViewFactory.saveShellState(mode: store.state.workspaceMode,
@@ -142,9 +147,9 @@ private func runEditor() throws {
                                          language: app.store.state.language,
                                          vsyncMode: app.store.state.vsyncMode,
                                          primarySelectBehavior: app.store.state.primarySelectBehavior)
-    EditorRootViewFactory.saveDockLayout(controller,
-                                         for: app.store.state.workspaceMode,
-                                         preset: app.store.state.activeLayoutPreset)
+    EditorRootViewFactory.saveWorkspaceLayout(controller,
+                                              for: app.store.state.workspaceMode,
+                                              preset: app.store.state.activeLayoutPreset)
 }
 
 do {
