@@ -312,6 +312,62 @@ struct DockMinimizeTests: GuavaUIComposeSerializedSuite {
         _ = graph
     } }
 
+    @Test("bottom rail remains visible when it is the only minimized edge")
+    func bottomRailRemainsVisibleWhenOnlyBottomIsMinimized() { GlobalTestLock.locked {
+        InteractionRegistryHolder.current = InteractionRegistry()
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let leftTab = DockTab(userKey: "left", title: "Left")
+        let centerTab = DockTab(userKey: "center", title: "Center")
+        let rightTab = DockTab(userKey: "right", title: "Right")
+        let bottomTab = DockTab(userKey: "bottom", title: "Bottom")
+        let leftLeaf = DockLayoutNode.tabs([leftTab])
+        let centerLeaf = DockLayoutNode.tabs([centerTab])
+        let rightLeaf = DockLayoutNode.tabs([rightTab])
+        let bottomLeaf = DockLayoutNode.tabs([bottomTab])
+        let controller = DockController(root: .hsplit(
+            first: leftLeaf,
+            second: .hsplit(
+                first: .vsplit(first: centerLeaf, second: bottomLeaf),
+                second: rightLeaf
+            )
+        ))
+        controller.onResolveMinimizedEdge = { leafID in
+            leafID == bottomLeaf.id ? .bottom : nil
+        }
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller,
+                                          horizontalInset: 0,
+                                          content: { key in
+            AnyView(Text("content:\(key)"))
+        }))
+        graph.computeLayout(width: 600, height: 400)
+
+        controller.apply(.minimizeLeaf(leafID: bottomLeaf.id, edge: .bottom))
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 600, height: 400)
+
+        let bottomRail = collect(tree.root!) { node in
+            node.attachments[_DockMinimizedRail.kRailMarker] as? DockMinimizedEdge == .bottom
+        }.first.map(absoluteFrame(of:))
+        let bottomTitle = collect(tree.root!) { node in
+            node.attachments[_DockVerticalRailTitle.kTitleValue] as? String == "Bottom"
+        }.first
+        let restoreButtons = collect(tree.root!) { node in
+            node.isHitTestable && node.cursor == .pointer
+        }
+
+        #expect(bottomRail?.minX == 0)
+        #expect(bottomRail?.maxX == 600)
+        #expect(bottomRail?.maxY == 400)
+        #expect((bottomRail?.height ?? 0) >= 39)
+        #expect(bottomTitle == nil)
+        #expect(!restoreButtons.isEmpty)
+        _ = graph
+    } }
+
     @Test("right rail remains anchored after minimizing left first")
     func rightRailRemainsAnchoredAfterMinimizingLeftFirst() { GlobalTestLock.locked {
         InteractionRegistryHolder.current = InteractionRegistry()
@@ -359,6 +415,70 @@ struct DockMinimizeTests: GuavaUIComposeSerializedSuite {
         #expect(leftRail?.minX == 0)
         #expect(rightRail?.maxX == 600)
         #expect(rightRail?.minX == 560)
+        _ = graph
+    } }
+
+    @Test("bottom rail stays bottom after minimizing bottom right then left")
+    func bottomRailStaysBottomAfterMinimizingBottomRightThenLeft() { GlobalTestLock.locked {
+        InteractionRegistryHolder.current = InteractionRegistry()
+        TextEnvironmentHolder.current = TestTextEnvironmentFactory.make()
+
+        let leftTab = DockTab(userKey: "left", title: "Left")
+        let centerTab = DockTab(userKey: "center", title: "Center")
+        let rightTab = DockTab(userKey: "right", title: "Right")
+        let bottomTab = DockTab(userKey: "bottom", title: "Bottom")
+        let leftLeaf = DockLayoutNode.tabs([leftTab])
+        let centerLeaf = DockLayoutNode.tabs([centerTab])
+        let rightLeaf = DockLayoutNode.tabs([rightTab])
+        let bottomLeaf = DockLayoutNode.tabs([bottomTab])
+        let controller = DockController(root: .hsplit(
+            first: leftLeaf,
+            second: .hsplit(
+                first: .vsplit(first: centerLeaf, second: bottomLeaf),
+                second: rightLeaf
+            )
+        ))
+        controller.onResolveMinimizedEdge = { leafID in
+            if leafID == leftLeaf.id { return .left }
+            if leafID == rightLeaf.id { return .right }
+            if leafID == bottomLeaf.id { return .bottom }
+            return nil
+        }
+
+        let tree = NodeTree()
+        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
+        graph.install(root: DockContainer(controller: controller,
+                                          horizontalInset: 0,
+                                          content: { key in
+            AnyView(Text("content:\(key)"))
+        }))
+        graph.computeLayout(width: 600, height: 400)
+
+        controller.apply(.minimizeLeaf(leafID: bottomLeaf.id, edge: .bottom))
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 600, height: 400)
+        controller.apply(.minimizeLeaf(leafID: rightLeaf.id, edge: .right))
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 600, height: 400)
+        controller.apply(.minimizeLeaf(leafID: leftLeaf.id, edge: .left))
+        graph.recomposer.commitAll()
+        graph.computeLayout(width: 600, height: 400)
+
+        let bottomRail = collect(tree.root!) { node in
+            node.attachments[_DockMinimizedRail.kRailMarker] as? DockMinimizedEdge == .bottom
+        }.first.map(absoluteFrame(of:))
+        let leftRail = collect(tree.root!) { node in
+            node.attachments[_DockMinimizedRail.kRailMarker] as? DockMinimizedEdge == .left
+        }.first.map(absoluteFrame(of:))
+        let rightRail = collect(tree.root!) { node in
+            node.attachments[_DockMinimizedRail.kRailMarker] as? DockMinimizedEdge == .right
+        }.first.map(absoluteFrame(of:))
+
+        #expect(leftRail?.minX == 0)
+        #expect(rightRail?.maxX == 600)
+        #expect(bottomRail?.minX == leftRail?.maxX)
+        #expect(bottomRail?.maxX == rightRail?.minX)
+        #expect(bottomRail?.maxY == 400)
         _ = graph
     } }
 
