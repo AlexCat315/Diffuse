@@ -155,6 +155,81 @@ final class PanelWorkspaceLayoutSemanticsTests: XCTestCase {
         XCTAssertEqual(tabKeys(inLeaf: viewportLeafID, root: controller.root), ["viewport", "console"])
     }
 
+    func testCenterRegionSplitDropPreservesLocalSplit() throws {
+        let tabs = makeTabs()
+        let assets = DockTab(userKey: "assets", title: "Assets")
+        let registry = makeRegistry()
+        registry.register(PanelDescriptor(id: "assets",
+                                          title: "Assets",
+                                          preferredRegion: .center) {
+            EmptyView()
+        })
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport, assets], active: tabs.viewport.id),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        let viewportLeafID = try XCTUnwrap(leafID(containing: "viewport", in: controller.root))
+        controller.apply(.move(tabID: assets.id,
+                               to: .splitEdge(target: viewportLeafID, edge: .right)))
+
+        guard case .split(_, .horizontal, _, let viewportNode, let assetsNode) = canonicalCenterNode(in: controller.root),
+              case .tabs(_, let viewportTabs, _) = viewportNode,
+              case .tabs(_, let assetsTabs, _) = assetsNode else {
+            XCTFail("expected center region split to survive normalization")
+            return
+        }
+        XCTAssertEqual(viewportTabs.map(\.userKey), ["viewport"])
+        XCTAssertEqual(assetsTabs.map(\.userKey), ["assets"])
+    }
+
+    func testCommittedCrossRegionSplitDropPreservesTargetRegionSplit() throws {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        let viewportLeafID = try XCTUnwrap(leafID(containing: "viewport", in: controller.root))
+        let inspectorLeafID = try XCTUnwrap(leafID(containing: "inspector", in: controller.root))
+        let request = DockDropRequest(tabID: tabs.inspector.id,
+                                      sourceLeafID: inspectorLeafID,
+                                      origin: .mainTreeTab,
+                                      target: .splitEdge(target: viewportLeafID, edge: .right))
+
+        controller.onCommitDrop?(request)
+        controller.apply(.move(tabID: tabs.inspector.id, to: request.target))
+
+        guard case .split(_, .horizontal, _, let viewportNode, let inspectorNode) = canonicalCenterNode(in: controller.root),
+              case .tabs(_, let viewportTabs, _) = viewportNode,
+              case .tabs(_, let inspectorTabs, _) = inspectorNode else {
+            XCTFail("expected target region split to survive cross-region normalization")
+            return
+        }
+        XCTAssertEqual(viewportTabs.map(\.userKey), ["viewport"])
+        XCTAssertEqual(inspectorTabs.map(\.userKey), ["inspector"])
+        XCTAssertNil(leafID(containing: "inspector", in: trailingNode(in: controller.root) ?? .empty()))
+    }
+
     func testReinstallKeepsCommittedCrossRegionPanelMove() {
         let tabs = makeTabs()
         let registry = makeRegistry()
@@ -393,6 +468,39 @@ final class PanelWorkspaceLayoutSemanticsTests: XCTestCase {
         XCTAssertEqual(leafID(containing: "hierarchy", in: controller.root), hierarchyLeafID)
     }
 
+    func testMinimizingLeftThenRightKeepsRightPanelOnRightRail() {
+        let tabs = makeTabs()
+        let registry = makeRegistry()
+        let controller = DockController(root: DockLayoutNode.hsplit(
+            fraction: 0.22,
+            first: .tabs([tabs.hierarchy]),
+            second: .hsplit(
+                fraction: 0.78,
+                first: .vsplit(fraction: 0.72,
+                               first: .tabs([tabs.viewport]),
+                               second: .tabs([tabs.console])),
+                second: .tabs([tabs.inspector])
+            )
+        ))
+
+        PanelWorkspaceLayoutSemantics.ide.install(on: controller, registry: registry)
+
+        guard let hierarchyLeafID = leafID(containing: "hierarchy", in: controller.root),
+              let inspectorLeafID = leafID(containing: "inspector", in: controller.root) else {
+            XCTFail("missing expected leaves")
+            return
+        }
+
+        XCTAssertEqual(controller.onResolveMinimizedEdge?(hierarchyLeafID), .left)
+        controller.apply(.minimizeLeaf(leafID: hierarchyLeafID, edge: .left))
+
+        XCTAssertEqual(controller.onResolveMinimizedEdge?(inspectorLeafID), .right)
+        controller.apply(.minimizeLeaf(leafID: inspectorLeafID, edge: .right))
+
+        XCTAssertEqual(controller.minimizedLeaves[hierarchyLeafID]?.edge, .left)
+        XCTAssertEqual(controller.minimizedLeaves[inspectorLeafID]?.edge, .right)
+    }
+
     func testMinimizeRestoreKeepsUserResizedFractions() throws {
         let tabs = makeTabs()
         let registry = makeRegistry()
@@ -565,5 +673,42 @@ final class PanelWorkspaceLayoutSemanticsTests: XCTestCase {
             return nil
         }
         return (leading: leadingFraction, main: mainFraction, bottom: bottomFraction)
+    }
+
+    private func canonicalCenterNode(in root: DockLayoutNode) -> DockLayoutNode? {
+        let workspace: DockLayoutNode
+        if case .split(_, .horizontal, _, let leading, let remainder) = root,
+           leafID(containing: "hierarchy", in: leading) != nil {
+            workspace = remainder
+        } else {
+            workspace = root
+        }
+
+        let main: DockLayoutNode
+        if case .split(_, .horizontal, _, let mainNode, let trailing) = workspace,
+           leafID(containing: "inspector", in: trailing) != nil {
+            main = mainNode
+        } else {
+            main = workspace
+        }
+
+        if case .split(_, .vertical, _, let center, _) = main {
+            return center
+        }
+        return main
+    }
+
+    private func trailingNode(in root: DockLayoutNode) -> DockLayoutNode? {
+        let workspace: DockLayoutNode
+        if case .split(_, .horizontal, _, let leading, let remainder) = root,
+           leafID(containing: "hierarchy", in: leading) != nil {
+            workspace = remainder
+        } else {
+            workspace = root
+        }
+        if case .split(_, .horizontal, _, _, let trailing) = workspace {
+            return trailing
+        }
+        return nil
     }
 }

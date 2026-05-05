@@ -181,16 +181,16 @@ struct _DockContainerFrame<Content: View>: View {
     }
 
     var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            Box(direction: .row, alignItems: .stretch, spacing: 0) {
-                _DockMinimizedRail(edge: .left, controller: controller)
+        Box(direction: .row, alignItems: .stretch, spacing: 0) {
+            _DockMinimizedRail(edge: .left, controller: controller)
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 content
                     .flex()
                     .padding(horizontal: horizontalInset, vertical: 0)
-                _DockMinimizedRail(edge: .right, controller: controller)
+                _DockMinimizedRail(edge: .bottom, controller: controller)
             }
             .flex()
-            _DockMinimizedRail(edge: .bottom, controller: controller)
+            _DockMinimizedRail(edge: .right, controller: controller)
         }
         .flex()
     }
