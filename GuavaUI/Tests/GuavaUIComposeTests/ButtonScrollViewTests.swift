@@ -681,60 +681,6 @@ struct ButtonScrollViewTests: GuavaUIComposeSerializedSuite {
         #expect(scrollView.contentOffset.y > 0)
     } }
 
-    @Test("Inspector-style PropertyGrid scrolls when hosted by DockContainer")
-    func inspectorPropertyGridScrollsInsideDockContainer() { GlobalTestLock.locked {
-        let registry = InteractionRegistry()
-        let capture = PointerCapture()
-        let focus = FocusChain()
-        InteractionRegistryHolder.current = registry
-        PointerCaptureHolder.current = capture
-        FocusChainHolder.current = focus
-
-        let tab = DockTab(userKey: "inspector", title: "Inspector")
-        let controller = DockController(root: .tabs([tab]))
-        let tree = NodeTree()
-        let graph = ViewGraph(tree: tree, recomposer: Recomposer())
-        graph.install(root:
-            DockContainer(controller: controller, horizontalInset: 0) { _ in
-                AnyView(
-                    Panel("Inspector") {
-                        inspectorLikeContent(sections: inspectorSections())
-                    }
-                )
-            }
-            .frame(width: 320, height: 300)
-        )
-        graph.computeLayout(width: 320, height: 300)
-
-        let scrollView = scrollInspector(tree,
-                                         registry: registry,
-                                         capture: capture,
-                                         focus: focus)
-        #expect(scrollView != nil)
-        guard let scrollView else { return }
-        #expect(scrollView.contentOffset.y > 0)
-
-        scrollView.contentOffset = .zero
-        let dispatcher = EventDispatcher(tree: tree,
-                                         interactions: registry,
-                                         capture: capture,
-                                         focusChain: focus)
-        let origin = absoluteOrigin(of: scrollView)
-        let rootRight = tree.root.map { absoluteOrigin(of: $0).x + $0.frame.width } ?? origin.x + scrollView.frame.width
-        let scrollbarX = Float(min(origin.x + scrollView.frame.width - 6, rootRight - 6))
-        let thumbY = Float(origin.y + 10)
-        dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(button: .left,
-                                                              x: scrollbarX,
-                                                              y: thumbY,
-                                                              clicks: 1)))
-        #expect(capture.target === scrollView)
-        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: scrollbarX,
-                                                          y: thumbY + 40,
-                                                          deltaX: 0,
-                                                          deltaY: 40)))
-        #expect(scrollView.contentOffset.y > 0)
-    } }
-
     @Test("Wheel over a scrollable TextField does not bubble into the parent ScrollView")
     func nestedTextFieldConsumesWheelBeforeParentScrollView() { GlobalTestLock.locked {
         let registry = InteractionRegistry()

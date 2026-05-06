@@ -264,9 +264,8 @@ struct ButtonHost: _PrimitiveView {
         }
         registry.setPointer(node) { event, phase, _ in
             // Buttons handle the primary mouse button only. Right- and
-            // middle-clicks bubble so parents (e.g. a DockTab wrapping
-            // the close button) can surface their own context-menu /
-            // middle-click semantics.
+            // middle-clicks bubble so parent chrome can surface context-menu
+            // or middle-click semantics.
             if event.button != .left { return .ignored }
             switch phase {
             case .down:

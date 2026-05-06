@@ -2,6 +2,7 @@ import Foundation
 import CardBattleRuntime
 import GuavaUIRuntime
 import GuavaUICompose
+import GuavaUIWorkspace
 import PlatformShell
 import RHIWGPU
 
@@ -38,7 +39,7 @@ let demoLogEntries: [DemoLogEntry] = [
     DemoLogEntry(id: 3, level: "WARN", message: "Rounded clip is still axis-aligned at the subtree level."),
     DemoLogEntry(id: 4, level: "INFO", message: "Scene hierarchy selection now feeds inspector text."),
     DemoLogEntry(id: 5, level: "DEBUG", message: "ScrollView wheel routing drives both components."),
-    DemoLogEntry(id: 6, level: "INFO", message: "Phase 7 foundation is ready for SplitView and DockContainer."),
+    DemoLogEntry(id: 6, level: "INFO", message: "WorkspaceView drives the production dock shell."),
 ]
 
 let demoBattleSnapshot: BattleHUDSnapshot = {
@@ -175,24 +176,44 @@ struct RootView: View {
         }
     }
 
-    // The dock controller drives the 3-pane chrome (sidebar / workspace /
-    // inspector). Tabs are addressed by a string key so the demo stays
-    // decoupled from the layout tree shape.
-    static func makeDefaultLayout() -> DockLayoutNode {
-        let sidebar   = DockTab(userKey: "sidebar",   title: "Navigator")
-        let workspace = DockTab(userKey: "workspace", title: "Workspace")
-        let inspector = DockTab(userKey: "inspector", title: "Inspector")
-        return .hsplit(fraction: 0.18,
-            first: .tabs([sidebar]),
-            second: .hsplit(fraction: 0.74,
-                first: .tabs([workspace]),
-                second: .tabs([inspector])))
+    // WorkspaceController drives the production 3-pane shell.
+    static func makeDefaultWorkspaceDocument() -> WorkspaceDocument {
+        WorkspaceDocument(
+            panels: [
+                "sidebar": WorkspacePanel(id: "sidebar", title: "Navigator"),
+                "workspace": WorkspacePanel(id: "workspace",
+                                            title: "Workspace",
+                                            isClosable: false,
+                                            isCollapsible: false),
+                "inspector": WorkspacePanel(id: "inspector", title: "Inspector"),
+            ],
+            groups: [
+                "sidebar": WorkspaceTabGroup(id: "sidebar",
+                                             panels: ["sidebar"],
+                                             activePanelID: "sidebar"),
+                "workspace": WorkspaceTabGroup(id: "workspace",
+                                               panels: ["workspace"],
+                                               activePanelID: "workspace"),
+                "inspector": WorkspaceTabGroup(id: "inspector",
+                                               panels: ["inspector"],
+                                               activePanelID: "inspector"),
+            ],
+            regions: [
+                WorkspaceRegion(id: .leading, groupIDs: ["sidebar"]),
+                WorkspaceRegion(id: .center, groupIDs: ["workspace"]),
+                WorkspaceRegion(id: .trailing, groupIDs: ["inspector"]),
+                WorkspaceRegion(id: .bottom, groupIDs: []),
+            ],
+            splitFractions: WorkspaceSplitFractions(leading: 0.18,
+                                                    centerTrailing: 0.74,
+                                                    topBottom: 0.74)
+        )
     }
 
-    let dockController: DockController = {
-        let controller = DockController(root: makeDefaultLayout())
-        if let snapshot = DemoLayoutPersistence.load() {
-            controller.load(snapshot)
+    let workspaceController: WorkspaceController = {
+        let controller = WorkspaceController(document: makeDefaultWorkspaceDocument())
+        if let document = DemoLayoutPersistence.load() {
+            controller.replace(document)
         }
         return controller
     }()
@@ -200,8 +221,8 @@ struct RootView: View {
     var body: some View {
         Box(direction: .column, alignItems: .stretch) {
             topBar
-            DockContainer(controller: dockController) { [self] key in
-                switch key {
+            WorkspaceView(controller: workspaceController) { [self] panelID in
+                switch panelID.rawValue {
                 case "sidebar":   return AnyView(sidebar)
                 case "workspace": return AnyView(workspace)
                 case "inspector": return AnyView(inspector)
@@ -237,18 +258,18 @@ struct RootView: View {
                 .foregroundColor(.onSurfaceVariant)
             Spacer(minLength: 0)
             Button("Save") { [self] in
-                try? DemoLayoutPersistence.save(dockController.snapshot())
+                try? DemoLayoutPersistence.save(workspaceController.document)
             }
             .buttonStyle(.ghost)
             Button("Load") { [self] in
-                if let snapshot = DemoLayoutPersistence.load() {
-                    dockController.load(snapshot)
+                if let document = DemoLayoutPersistence.load() {
+                    workspaceController.replace(document)
                 }
             }
             .buttonStyle(.ghost)
             Button("Reset") { [self] in
                 DemoLayoutPersistence.delete()
-                dockController.replace(root: Self.makeDefaultLayout())
+                workspaceController.replace(Self.makeDefaultWorkspaceDocument())
             }
             .buttonStyle(.ghost)
             Button("Run") { clickCount += 1 }

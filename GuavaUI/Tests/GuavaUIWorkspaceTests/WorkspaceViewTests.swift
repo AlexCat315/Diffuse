@@ -122,7 +122,9 @@ final class WorkspaceViewTests: XCTestCase {
 
         let leadingRegion = rig.frame(named: "workspace-region-leading")
         let centerRegion = rig.frame(named: "workspace-region-center")
+        let leadingSplit = rig.frame(named: "workspace-split-leading")
         let trailingRegion = rig.frame(named: "workspace-region-trailing")
+        let trailingSplit = rig.frame(named: "workspace-split-centerTrailing")
         let bottomRegion = rig.frame(named: "workspace-region-bottom")
         let restoredStatusBar = rig.frame(named: "editor-status-bar")
 
@@ -130,8 +132,10 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertNil(rig.optionalFrame(named: "workspace-rail-trailing"))
         XCTAssertNil(rig.optionalFrame(named: "workspace-rail-bottom"))
         XCTAssertEqual(leadingRegion.minX, 0, accuracy: 0.5)
-        XCTAssertEqual(leadingRegion.maxX, centerRegion.minX, accuracy: 1.0)
-        XCTAssertLessThan(centerRegion.maxX, trailingRegion.minX)
+        XCTAssertEqual(leadingRegion.maxX, leadingSplit.minX, accuracy: 1.0)
+        XCTAssertEqual(leadingSplit.maxX, centerRegion.minX, accuracy: 1.0)
+        XCTAssertEqual(centerRegion.maxX, trailingSplit.minX, accuracy: 1.0)
+        XCTAssertEqual(trailingSplit.maxX, trailingRegion.minX, accuracy: 1.0)
         XCTAssertEqual(bottomRegion.minX, centerRegion.minX, accuracy: 1.0)
         XCTAssertEqual(bottomRegion.maxX, centerRegion.maxX, accuracy: 1.0)
         XCTAssertEqual(restoredStatusBar.maxY, 640, accuracy: 0.5)
@@ -156,6 +160,60 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertGreaterThanOrEqual(hierarchyPanel.minX, trailingRegion.minX)
         XCTAssertLessThanOrEqual(hierarchyPanel.maxX, trailingRegion.maxX)
         XCTAssertEqual(rig.frame(named: "workspace-region-trailing").maxX, 1000, accuracy: 0.5)
+    }
+
+    func testDraggingTabWithinSameGroupReordersPanel() {
+        let controller = WorkspaceController(document: Self.makeMultiTabDocument())
+        let rig = WorkspaceViewRig(controller: controller,
+                                   width: 1000,
+                                   height: 640,
+                                   root: Self.makeWorkspaceRoot(controller: controller))
+
+        let source = rig.frame(named: "workspace-tab-console").center
+        let assets = rig.frame(named: "workspace-tab-assets")
+        let target = CGPoint(x: assets.maxX + 8, y: assets.midY)
+        rig.drag(from: source, to: target)
+
+        XCTAssertEqual(rig.controller.document.groups["bottom"]?.panels, ["assets", "console"])
+        XCTAssertEqual(rig.controller.document.groups["bottom"]?.activePanelID, "console")
+    }
+
+    func testClickingTabCloseButtonRemovesPanelWithoutMovingRegions() {
+        let controller = WorkspaceController(document: Self.makeMultiTabDocument())
+        let rig = WorkspaceViewRig(controller: controller,
+                                   width: 1000,
+                                   height: 640,
+                                   root: Self.makeWorkspaceRoot(controller: controller))
+
+        rig.click(rig.frame(named: "workspace-tab-close-console").center)
+
+        XCTAssertEqual(rig.controller.document.groups["bottom"]?.panels, ["assets"])
+        XCTAssertEqual(rig.controller.document.groups["bottom"]?.activePanelID, "assets")
+        XCTAssertEqual(rig.controller.document.region(.bottom).groupIDs, ["bottom"])
+        XCTAssertNil(rig.optionalFrame(named: "workspace-tab-console"))
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-bottom"))
+    }
+
+    func testDraggingWorkspaceSplitDividersUpdatesFractions() {
+        let rig = makeRigWithStatusBar(width: 1000, height: 640)
+
+        let leadingBefore = rig.controller.document.splitFractions.leading
+        let leadingSplit = rig.frame(named: "workspace-split-leading")
+        rig.drag(from: leadingSplit.center,
+                 to: CGPoint(x: leadingSplit.center.x + 70, y: leadingSplit.center.y))
+        XCTAssertGreaterThan(rig.controller.document.splitFractions.leading, leadingBefore)
+
+        let centerTrailingBefore = rig.controller.document.splitFractions.centerTrailing
+        let centerTrailingSplit = rig.frame(named: "workspace-split-centerTrailing")
+        rig.drag(from: centerTrailingSplit.center,
+                 to: CGPoint(x: centerTrailingSplit.center.x - 60, y: centerTrailingSplit.center.y))
+        XCTAssertLessThan(rig.controller.document.splitFractions.centerTrailing, centerTrailingBefore)
+
+        let topBottomBefore = rig.controller.document.splitFractions.topBottom
+        let bottomSplit = rig.frame(named: "workspace-split-topBottom")
+        rig.drag(from: bottomSplit.center,
+                 to: CGPoint(x: bottomSplit.center.x, y: bottomSplit.center.y - 50))
+        XCTAssertLessThan(rig.controller.document.splitFractions.topBottom, topBottomBefore)
     }
 
     func testDraggingTabToGroupEdgeCreatesAdjacentGroup() {
@@ -270,6 +328,14 @@ final class WorkspaceViewTests: XCTestCase {
                                                     centerTrailing: 0.78,
                                                     topBottom: 0.74)
         )
+    }
+
+    private static func makeMultiTabDocument() -> WorkspaceDocument {
+        var document = makeDocument()
+        document.panels["assets"] = WorkspacePanel(id: "assets", title: "Assets")
+        document.groups["bottom"]?.panels = ["console", "assets"]
+        document.groups["bottom"]?.activePanelID = "console"
+        return document
     }
 
     private static func makeWorkspaceRoot(controller: WorkspaceController) -> AnyView {
