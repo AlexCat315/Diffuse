@@ -2,7 +2,7 @@ import XCTest
 import GuavaUIWorkspace
 
 final class WorkspaceControllerTests: XCTestCase {
-    func testCollapseExpandLeftRightBottomInAnyOrderPreservesRegions() {
+    func testCollapseExpandLeftRightBottomInAnyOrderPreservesSlots() {
         let controller = WorkspaceController(document: makeDocument())
 
         let left = controller.dispatch(.collapse("leading"))
@@ -15,9 +15,9 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertTrue(controller.document.groups["leading"]?.isCollapsed == true)
         XCTAssertTrue(controller.document.groups["trailing"]?.isCollapsed == true)
         XCTAssertTrue(controller.document.groups["bottom"]?.isCollapsed == true)
-        XCTAssertEqual(controller.document.region(.leading).layout?.leafGroupIDs ?? [], ["leading"])
-        XCTAssertEqual(controller.document.region(.trailing).layout?.leafGroupIDs ?? [], ["trailing"])
-        XCTAssertEqual(controller.document.region(.bottom).layout?.leafGroupIDs ?? [], ["bottom"])
+        XCTAssertEqual(controller.document.slot(.leading).layout?.leafGroupIDs ?? [], ["leading"])
+        XCTAssertEqual(controller.document.slot(.trailing).layout?.leafGroupIDs ?? [], ["trailing"])
+        XCTAssertEqual(controller.document.slot(.bottom).layout?.leafGroupIDs ?? [], ["bottom"])
 
         _ = controller.dispatch(.expand("bottom"))
         _ = controller.dispatch(.expand("trailing"))
@@ -28,13 +28,46 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertFalse(controller.document.groups["bottom"]?.isCollapsed == true)
         XCTAssertEqual(controller.document.splitFractions.leading, 0.24, accuracy: 0.0001)
         XCTAssertEqual(controller.document.splitFractions.topBottom, 0.68, accuracy: 0.0001)
+        XCTAssertTrue(controller.document.collapsed.isEmpty)
     }
 
-    func testMovePanelIntoAnotherGroupDoesNotRebuildRegions() {
+    func testDocumentSupportsApplicationDefinedSlotsAndChromePolicies() {
+        let drawerSlot = WorkspaceSlotID(rawValue: "drawer.properties")
+        let bottomToolbar = WorkspaceSlotID(rawValue: "chrome.bottom.timeline-toolbar")
+        var document = makeDocument()
+        document.panels["properties"] = WorkspacePanel(id: "properties", title: "Properties")
+        document.groups["properties"] = WorkspaceTabGroup(id: "properties",
+                                                          panels: ["properties"],
+                                                          activePanelID: "properties")
+        document.slots[drawerSlot] = WorkspaceSlot(id: drawerSlot,
+                                                   kind: .content,
+                                                   layout: .group("properties"))
+        document.slots[bottomToolbar] = WorkspaceSlot(id: bottomToolbar,
+                                                      kind: .chrome(edge: .bottom, size: .fixed(28)))
+
+        let controller = WorkspaceController(document: document)
+
+        XCTAssertEqual(controller.document.slot(drawerSlot).layout?.leafGroupIDs ?? [], ["properties"])
+        XCTAssertEqual(controller.document.slot(bottomToolbar).kind,
+                       .chrome(edge: .bottom, size: .fixed(28)))
+
+        _ = controller.dispatch(.movePanel("properties",
+                                           to: .split(slot: .center,
+                                                      anchorGroupID: "center",
+                                                      edge: .trailing,
+                                                      fraction: 0.35)))
+
+        XCTAssertEqual(controller.document.slot(drawerSlot).layout?.leafGroupIDs ?? [], [])
+        XCTAssertTrue((controller.document.slot(.center).layout?.leafGroupIDs ?? []).contains { groupID in
+            controller.document.groups[groupID]?.panels == ["properties"]
+        })
+    }
+
+    func testMovePanelIntoAnotherGroupDoesNotRebuildSlots() {
         let controller = WorkspaceController(document: makeDocument())
 
         let result = controller.dispatch(.movePanel("inspector",
-                                                    to: WorkspaceTarget(region: .center,
+                                                    to: WorkspaceTarget(slot: .center,
                                                                         groupID: "center",
                                                                         placement: .tabGroup)))
 
@@ -42,15 +75,15 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(controller.document.groups["center"]?.panels, ["viewport", "inspector"])
         XCTAssertEqual(controller.document.groups["center"]?.activePanelID, "inspector")
         XCTAssertNil(controller.document.groups["trailing"])
-        XCTAssertEqual(controller.document.region(.trailing).layout?.leafGroupIDs ?? [], [])
-        XCTAssertEqual(controller.document.region(.bottom).layout?.leafGroupIDs ?? [], ["bottom"])
+        XCTAssertEqual(controller.document.slot(.trailing).layout?.leafGroupIDs ?? [], [])
+        XCTAssertEqual(controller.document.slot(.bottom).layout?.leafGroupIDs ?? [], ["bottom"])
 
         _ = controller.dispatch(.movePanel("inspector",
-                                           to: WorkspaceTarget(region: .trailing,
+                                           to: WorkspaceTarget(slot: .trailing,
                                                                groupID: "trailing",
                                                                placement: .tabGroup)))
 
-        XCTAssertEqual(controller.document.region(.trailing).layout?.leafGroupIDs ?? [], ["trailing"])
+        XCTAssertEqual(controller.document.slot(.trailing).layout?.leafGroupIDs ?? [], ["trailing"])
         XCTAssertEqual(controller.document.groups["trailing"]?.panels, ["inspector"])
     }
 
@@ -58,32 +91,32 @@ final class WorkspaceControllerTests: XCTestCase {
         let controller = WorkspaceController(document: makeDocument())
 
         _ = controller.dispatch(.movePanel("inspector",
-                                           to: WorkspaceTarget(region: .center,
+                                           to: WorkspaceTarget(slot: .center,
                                                                groupID: "center",
                                                                placement: .split,
                                                                edge: .trailing)))
-        XCTAssertEqual(controller.document.region(.trailing).layout?.leafGroupIDs ?? [], [])
+        XCTAssertEqual(controller.document.slot(.trailing).layout?.leafGroupIDs ?? [], [])
         XCTAssertEqual(controller.document.groups["center"]?.panels, ["viewport"])
-        let inspectorGroupID = (controller.document.region(.center).layout?.leafGroupIDs ?? []).last
+        let inspectorGroupID = (controller.document.slot(.center).layout?.leafGroupIDs ?? []).last
         XCTAssertNotNil(inspectorGroupID)
         XCTAssertEqual(controller.document.groups[inspectorGroupID!]?.panels, ["inspector"])
 
         _ = controller.dispatch(.movePanel("hierarchy",
-                                           to: WorkspaceTarget(region: .center,
+                                           to: WorkspaceTarget(slot: .center,
                                                                groupID: "center",
                                                                placement: .split,
                                                                edge: .leading)))
-        XCTAssertEqual(controller.document.region(.leading).layout?.leafGroupIDs ?? [], [])
-        XCTAssertEqual((controller.document.region(.center).layout?.leafGroupIDs ?? []).count, 3)
+        XCTAssertEqual(controller.document.slot(.leading).layout?.leafGroupIDs ?? [], [])
+        XCTAssertEqual((controller.document.slot(.center).layout?.leafGroupIDs ?? []).count, 3)
         XCTAssertEqual(controller.document.groups["center"]?.panels, ["viewport"])
 
         _ = controller.dispatch(.movePanel("console",
-                                           to: WorkspaceTarget(region: .center,
+                                           to: WorkspaceTarget(slot: .center,
                                                                groupID: "center",
                                                                placement: .split,
                                                                edge: .bottom)))
-        XCTAssertEqual(controller.document.region(.bottom).layout?.leafGroupIDs ?? [], [])
-        XCTAssertEqual((controller.document.region(.center).layout?.leafGroupIDs ?? []).count, 4)
+        XCTAssertEqual(controller.document.slot(.bottom).layout?.leafGroupIDs ?? [], [])
+        XCTAssertEqual((controller.document.slot(.center).layout?.leafGroupIDs ?? []).count, 4)
         XCTAssertEqual(controller.document.groups["center"]?.panels, ["viewport"])
     }
 
@@ -91,18 +124,18 @@ final class WorkspaceControllerTests: XCTestCase {
         let controller = WorkspaceController(document: makeDocument())
 
         _ = controller.dispatch(.movePanel("inspector",
-                                           to: WorkspaceTarget(region: .leading,
+                                           to: WorkspaceTarget(slot: .leading,
                                                                groupID: "leading",
                                                                placement: .split,
                                                                edge: .trailing)))
 
-        let leadingGroupIDs = controller.document.region(.leading).layout?.leafGroupIDs ?? []
+        let leadingGroupIDs = controller.document.slot(.leading).layout?.leafGroupIDs ?? []
         XCTAssertEqual(leadingGroupIDs.count, 2)
         XCTAssertEqual(leadingGroupIDs.first, "leading")
         let insertedGroupID = leadingGroupIDs[1]
         XCTAssertEqual(controller.document.groups["leading"]?.panels, ["hierarchy"])
         XCTAssertEqual(controller.document.groups[insertedGroupID]?.panels, ["inspector"])
-        XCTAssertEqual(controller.document.region(.trailing).layout?.leafGroupIDs ?? [], [])
+        XCTAssertEqual(controller.document.slot(.trailing).layout?.leafGroupIDs ?? [], [])
     }
 
     func testNestedSplitTreePreservesArbitraryPanelPlacement() {
@@ -112,34 +145,34 @@ final class WorkspaceControllerTests: XCTestCase {
         let controller = WorkspaceController(document: document)
 
         _ = controller.dispatch(.movePanel("inspector",
-                                           to: .split(region: .center,
+                                           to: .split(slot: .center,
                                                       anchorGroupID: "center",
                                                       edge: .trailing,
                                                       fraction: 0.35)))
-        let inspectorGroupID = (controller.document.region(.center).layout?.leafGroupIDs ?? []).last!
+        let inspectorGroupID = (controller.document.slot(.center).layout?.leafGroupIDs ?? []).last!
         _ = controller.dispatch(.movePanel("console",
-                                           to: .split(region: .center,
+                                           to: .split(slot: .center,
                                                       anchorGroupID: inspectorGroupID,
                                                       edge: .bottom,
                                                       fraction: 0.4)))
         _ = controller.dispatch(.movePanel("hierarchy",
-                                           to: .split(region: .center,
+                                           to: .split(slot: .center,
                                                       anchorGroupID: "center",
                                                       edge: .top,
                                                       fraction: 0.3)))
 
-        guard case .split(let outerAxis, _, let first, let second) = controller.document.region(.center).layout else {
+        guard case .split(let outerAxis, _, let first, let second) = controller.document.slot(.center).layout else {
             XCTFail("Expected center region to be backed by a split tree")
             return
         }
         XCTAssertEqual(outerAxis, .horizontal)
-        XCTAssertEqual((controller.document.region(.center).layout?.leafGroupIDs ?? []).count, 4)
+        XCTAssertEqual((controller.document.slot(.center).layout?.leafGroupIDs ?? []).count, 4)
         XCTAssertTrue(first.leafGroupIDs.contains("center"))
         XCTAssertTrue(first.leafGroupIDs.contains { controller.document.groups[$0]?.panels == ["hierarchy"] })
         XCTAssertTrue(second.leafGroupIDs.contains(inspectorGroupID))
         XCTAssertTrue(second.leafGroupIDs.contains { controller.document.groups[$0]?.panels == ["console"] })
-        XCTAssertEqual(controller.document.region(.leading).layout?.leafGroupIDs ?? [], [])
-        XCTAssertEqual(controller.document.region(.bottom).layout?.leafGroupIDs ?? [], ["bottom"])
+        XCTAssertEqual(controller.document.slot(.leading).layout?.leafGroupIDs ?? [], [])
+        XCTAssertEqual(controller.document.slot(.bottom).layout?.leafGroupIDs ?? [], ["bottom"])
     }
 
     func testDocumentRejectsUnattachedGroupsFromObsoletePersistedShape() {
@@ -152,12 +185,7 @@ final class WorkspaceControllerTests: XCTestCase {
                 "center": WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport"),
                 "trailing": WorkspaceTabGroup(id: "trailing", panels: ["inspector"], activePanelID: "inspector"),
             ],
-            regions: [
-                WorkspaceRegion(id: .leading),
-                WorkspaceRegion(id: .center),
-                WorkspaceRegion(id: .trailing),
-                WorkspaceRegion(id: .bottom),
-            ]
+            slots: WorkspaceSlot.standardEditorSlots()
         )
 
         XCTAssertFalse(obsolete.hasValidLayoutReferences)
@@ -183,7 +211,7 @@ final class WorkspaceControllerTests: XCTestCase {
         let controller = WorkspaceController(document: makeDocument())
 
         _ = controller.dispatch(.movePanel("inspector",
-                                           to: WorkspaceTarget(region: .center,
+                                           to: WorkspaceTarget(slot: .center,
                                                                groupID: "center",
                                                                placement: .tabGroup)))
         let result = controller.dispatch(.collapse("center"))
@@ -274,7 +302,7 @@ final class WorkspaceControllerTests: XCTestCase {
                                                      frame: WorkspaceRect(x: 160, y: 120, width: 420, height: 320)))
 
         XCTAssertTrue(result.didChange)
-        XCTAssertEqual(controller.document.region(.trailing).layout?.leafGroupIDs ?? [], [])
+        XCTAssertEqual(controller.document.slot(.trailing).layout?.leafGroupIDs ?? [], [])
         XCTAssertEqual(controller.document.groups["trailing"]?.panels, ["inspector"])
         XCTAssertEqual(controller.document.floatingWindows.first?.id, "inspector-window")
         XCTAssertEqual(controller.document.floatingWindows.first?.groupID, "trailing")
@@ -288,15 +316,15 @@ final class WorkspaceControllerTests: XCTestCase {
                                             windowID: "inspector-window",
                                             frame: WorkspaceRect(x: 160, y: 120, width: 420, height: 320)))
         let result = controller.dispatch(.redockFloatingWindow("inspector-window",
-                                                               to: WorkspaceTarget(region: .leading,
+                                                               to: WorkspaceTarget(slot: .leading,
                                                                                    groupID: "leading",
                                                                                    placement: .split,
                                                                edge: .trailing)))
 
         XCTAssertTrue(result.persistenceDirty)
         XCTAssertTrue(controller.document.floatingWindows.isEmpty)
-        XCTAssertEqual((controller.document.region(.leading).layout?.leafGroupIDs ?? []).count, 2)
-        XCTAssertEqual((controller.document.region(.leading).layout?.leafGroupIDs ?? []).last, "trailing")
+        XCTAssertEqual((controller.document.slot(.leading).layout?.leafGroupIDs ?? []).count, 2)
+        XCTAssertEqual((controller.document.slot(.leading).layout?.leafGroupIDs ?? []).last, "trailing")
         XCTAssertEqual(controller.document.groups["trailing"]?.panels, ["inspector"])
     }
 
@@ -310,7 +338,7 @@ final class WorkspaceControllerTests: XCTestCase {
                                             windowID: "inspector-window",
                                             frame: WorkspaceRect()))
         _ = controller.dispatch(.movePanel("inspector",
-                                           to: WorkspaceTarget(region: .center,
+                                           to: WorkspaceTarget(slot: .center,
                                                                groupID: "center",
                                                                placement: .tabGroup)))
 
@@ -327,7 +355,7 @@ final class WorkspaceControllerTests: XCTestCase {
                                             windowID: "inspector-window",
                                             frame: WorkspaceRect()))
         _ = controller.dispatch(.movePanel("inspector",
-                                           to: WorkspaceTarget(region: .center,
+                                           to: WorkspaceTarget(slot: .center,
                                                                groupID: "center",
                                                                placement: .tabGroup)))
 
@@ -369,12 +397,11 @@ final class WorkspaceControllerTests: XCTestCase {
                 "trailing": WorkspaceTabGroup(id: "trailing", panels: ["inspector"], activePanelID: "inspector"),
                 "bottom": WorkspaceTabGroup(id: "bottom", panels: ["console"], activePanelID: "console"),
             ],
-            regions: [
-                WorkspaceRegion(id: .leading, layout: .group("leading")),
-                WorkspaceRegion(id: .center, layout: .group("center")),
-                WorkspaceRegion(id: .trailing, layout: .group("trailing")),
-                WorkspaceRegion(id: .bottom, layout: .group("bottom")),
-            ],
+            slots: WorkspaceSlot.standardEditorSlots(leading: .group("leading"),
+                                                     center: .group("center"),
+                                                     trailing: .group("trailing"),
+                                                     bottom: .group("bottom")),
+            layoutTree: .group("center"),
             splitFractions: WorkspaceSplitFractions(leading: 0.24,
                                                     centerTrailing: 0.72,
                                                     topBottom: 0.68)

@@ -40,6 +40,33 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertLessThan(bottomRail.minY, statusBar.minY)
     }
 
+    func testTopSlotAndBottomChromeSlotUseFixedWorkspaceSlots() {
+        var document = Self.makeDocument()
+        document.panels["timeline"] = WorkspacePanel(id: "timeline", title: "Timeline")
+        document.groups["timeline"] = WorkspaceTabGroup(id: "timeline",
+                                                        panels: ["timeline"],
+                                                        activePanelID: "timeline")
+        document.slots[.top] = WorkspaceSlot(id: .top,
+                                             kind: .content,
+                                             layout: .group("timeline"))
+        let toolbarID = WorkspaceSlotID(rawValue: "chrome.bottom.toolbar")
+        document.slots[toolbarID] = WorkspaceSlot(id: toolbarID,
+                                                  kind: .chrome(edge: .bottom, size: .fixed(28)),
+                                                  layout: .group("timeline"))
+        let controller = WorkspaceController(document: document)
+        let rig = WorkspaceViewRig(controller: controller,
+                                   width: 1000,
+                                   height: 640,
+                                   root: Self.makeWorkspaceRoot(controller: controller))
+
+        let topSlot = rig.frame(named: "workspace-slot-top")
+        let bottomChrome = rig.frame(named: "workspace-chrome-\(toolbarID.rawValue)")
+        XCTAssertEqual(topSlot.minY, 0, accuracy: 0.5)
+        XCTAssertEqual(topSlot.height, 160, accuracy: 0.5)
+        XCTAssertEqual(bottomChrome.height, 28, accuracy: 0.5)
+        XCTAssertEqual(bottomChrome.maxY, 640, accuracy: 0.5)
+    }
+
     func testCollapsedRailsKeepBottomRailBetweenWorkspaceEdges() {
         let rig = makeRigWithStatusBar(width: 1000, height: 640)
 
@@ -84,12 +111,40 @@ final class WorkspaceViewTests: XCTestCase {
 
         XCTAssertEqual(rig.controller.document.groups["bottom"]?.isCollapsed, true)
         XCTAssertNil(rig.optionalFrame(named: "workspace-region-bottom"))
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-leading"))
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-trailing"))
         let center = rig.frame(named: "workspace-region-center")
+        let bottomSlot = rig.frame(named: "workspace-bottom-slot")
         let bottomRail = rig.frame(named: "workspace-rail-bottom")
         let statusBar = rig.frame(named: "editor-status-bar")
+        XCTAssertEqual(bottomSlot.height, 40, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.height, 40, accuracy: 0.5)
         XCTAssertEqual(bottomRail.minX, center.minX, accuracy: 1.0)
         XCTAssertEqual(bottomRail.maxX, center.maxX, accuracy: 1.0)
+        XCTAssertEqual(bottomRail.minY, bottomSlot.minY, accuracy: 1.0)
         XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
+    }
+
+    func testBottomRailRemainsAllocatedWhenBottomCollapsesBeforeSideRails() {
+        let rig = makeRigWithStatusBar(width: 1998, height: 1246)
+
+        rig.click(rig.frame(named: "workspace-collapse-bottom").center)
+
+        let bottomSlot = rig.frame(named: "workspace-bottom-slot")
+        let bottomRail = rig.frame(named: "workspace-rail-bottom")
+        let statusBar = rig.frame(named: "editor-status-bar")
+        XCTAssertEqual(bottomSlot.height, 40, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.height, 40, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-leading"))
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-trailing"))
+
+        let beforeSideCollapseRail = bottomRail
+        rig.click(rig.frame(named: "workspace-collapse-leading").center)
+
+        let afterSideCollapseRail = rig.frame(named: "workspace-rail-bottom")
+        XCTAssertEqual(afterSideCollapseRail.height, beforeSideCollapseRail.height, accuracy: 0.5)
+        XCTAssertEqual(afterSideCollapseRail.maxY, statusBar.minY, accuracy: 1.0)
     }
 
     func testClickingLeftRightThenBottomCanCollapseAndRestoreInPlace() {
@@ -120,26 +175,26 @@ final class WorkspaceViewTests: XCTestCase {
         rig.click(rig.frame(named: "workspace-restore-trailing").center)
         rig.click(rig.frame(named: "workspace-restore-bottom").center)
 
-        let leadingRegion = rig.frame(named: "workspace-region-leading")
-        let centerRegion = rig.frame(named: "workspace-region-center")
+        let leadingSlot = rig.frame(named: "workspace-region-leading")
+        let centerSlot = rig.frame(named: "workspace-region-center")
         let leadingSplit = rig.frame(named: "workspace-split-leading")
-        let trailingRegion = rig.frame(named: "workspace-region-trailing")
+        let trailingSlot = rig.frame(named: "workspace-region-trailing")
         let trailingSplit = rig.frame(named: "workspace-split-centerTrailing")
-        let bottomRegion = rig.frame(named: "workspace-region-bottom")
+        let bottomSlot = rig.frame(named: "workspace-region-bottom")
         let restoredStatusBar = rig.frame(named: "editor-status-bar")
 
         XCTAssertNil(rig.optionalFrame(named: "workspace-rail-leading"))
         XCTAssertNil(rig.optionalFrame(named: "workspace-rail-trailing"))
         XCTAssertNil(rig.optionalFrame(named: "workspace-rail-bottom"))
-        XCTAssertEqual(leadingRegion.minX, 0, accuracy: 0.5)
-        XCTAssertEqual(leadingRegion.maxX, leadingSplit.minX, accuracy: 1.0)
-        XCTAssertEqual(leadingSplit.maxX, centerRegion.minX, accuracy: 1.0)
-        XCTAssertEqual(centerRegion.maxX, trailingSplit.minX, accuracy: 1.0)
-        XCTAssertEqual(trailingSplit.maxX, trailingRegion.minX, accuracy: 1.0)
-        XCTAssertEqual(bottomRegion.minX, centerRegion.minX, accuracy: 1.0)
-        XCTAssertEqual(bottomRegion.maxX, centerRegion.maxX, accuracy: 1.0)
+        XCTAssertEqual(leadingSlot.minX, 0, accuracy: 0.5)
+        XCTAssertEqual(leadingSlot.maxX, leadingSplit.minX, accuracy: 1.0)
+        XCTAssertEqual(leadingSplit.maxX, centerSlot.minX, accuracy: 1.0)
+        XCTAssertEqual(centerSlot.maxX, trailingSplit.minX, accuracy: 1.0)
+        XCTAssertEqual(trailingSplit.maxX, trailingSlot.minX, accuracy: 1.0)
+        XCTAssertEqual(bottomSlot.minX, centerSlot.minX, accuracy: 1.0)
+        XCTAssertEqual(bottomSlot.maxX, centerSlot.maxX, accuracy: 1.0)
         XCTAssertEqual(restoredStatusBar.maxY, 640, accuracy: 0.5)
-        XCTAssertEqual(bottomRegion.maxY, restoredStatusBar.minY, accuracy: 1.0)
+        XCTAssertEqual(bottomSlot.maxY, restoredStatusBar.minY, accuracy: 1.0)
     }
 
     func testDraggingTabIntoAnotherGroupMovesPanel() {
@@ -152,13 +207,13 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertFalse(rig.controller.document.groups.values.contains { group in
             group.id != "trailing" && group.panels.contains("hierarchy")
         })
-        XCTAssertEqual(rig.controller.document.region(.leading).layout?.leafGroupIDs ?? [], [])
+        XCTAssertEqual(rig.controller.document.slot(.leading).layout?.leafGroupIDs ?? [], [])
         XCTAssertEqual(rig.controller.document.groups["trailing"]?.panels.contains("hierarchy"), true)
         XCTAssertEqual(rig.controller.document.groups["trailing"]?.activePanelID, "hierarchy")
         let hierarchyPanel = rig.frame(named: "workspace-panel-hierarchy")
-        let trailingRegion = rig.frame(named: "workspace-region-trailing")
-        XCTAssertGreaterThanOrEqual(hierarchyPanel.minX, trailingRegion.minX)
-        XCTAssertLessThanOrEqual(hierarchyPanel.maxX, trailingRegion.maxX)
+        let trailingSlot = rig.frame(named: "workspace-region-trailing")
+        XCTAssertGreaterThanOrEqual(hierarchyPanel.minX, trailingSlot.minX)
+        XCTAssertLessThanOrEqual(hierarchyPanel.maxX, trailingSlot.maxX)
         XCTAssertEqual(rig.frame(named: "workspace-region-trailing").maxX, 1000, accuracy: 0.5)
     }
 
@@ -178,7 +233,7 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertEqual(rig.controller.document.groups["bottom"]?.activePanelID, "console")
     }
 
-    func testClickingTabCloseButtonRemovesPanelWithoutMovingRegions() {
+    func testClickingTabCloseButtonRemovesPanelWithoutMovingSlots() {
         let controller = WorkspaceController(document: Self.makeMultiTabDocument())
         let rig = WorkspaceViewRig(controller: controller,
                                    width: 1000,
@@ -189,7 +244,7 @@ final class WorkspaceViewTests: XCTestCase {
 
         XCTAssertEqual(rig.controller.document.groups["bottom"]?.panels, ["assets"])
         XCTAssertEqual(rig.controller.document.groups["bottom"]?.activePanelID, "assets")
-        XCTAssertEqual(rig.controller.document.region(.bottom).layout?.leafGroupIDs ?? [], ["bottom"])
+        XCTAssertEqual(rig.controller.document.slot(.bottom).layout?.leafGroupIDs ?? [], ["bottom"])
         XCTAssertNil(rig.optionalFrame(named: "workspace-tab-console"))
         XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-bottom"))
     }
@@ -225,7 +280,7 @@ final class WorkspaceViewTests: XCTestCase {
         rig.pump()
 
         XCTAssertNil(rig.optionalFrame(named: "workspace-region-trailing"))
-        XCTAssertEqual(rig.controller.document.region(.trailing).layout?.leafGroupIDs ?? [], [])
+        XCTAssertEqual(rig.controller.document.slot(.trailing).layout?.leafGroupIDs ?? [], [])
         XCTAssertEqual(rig.frame(named: "workspace-region-center").maxX, 1000, accuracy: 0.5)
         let floating = rig.frame(named: "workspace-floating-window-inspector-window")
         XCTAssertEqual(floating.minX, 120, accuracy: 0.5)
@@ -266,7 +321,7 @@ final class WorkspaceViewTests: XCTestCase {
         rig.click(rig.frame(named: "workspace-floating-redock-inspector-window").center)
 
         XCTAssertTrue(rig.controller.document.floatingWindows.isEmpty)
-        XCTAssertEqual(rig.controller.document.region(.center).layout?.leafGroupIDs ?? [], ["center", "trailing"])
+        XCTAssertEqual(rig.controller.document.slot(.center).layout?.leafGroupIDs ?? [], ["center", "trailing"])
         XCTAssertEqual(rig.controller.document.groups["trailing"]?.panels, ["inspector"])
         XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-center"))
         XCTAssertNil(rig.optionalFrame(named: "workspace-floating-window-inspector-window"))
@@ -280,9 +335,9 @@ final class WorkspaceViewTests: XCTestCase {
         let target = CGPoint(x: trailingGroup.minX + 8, y: trailingGroup.midY)
         rig.drag(from: source, to: target)
 
-        let trailingRegion = rig.controller.document.region(.trailing)
-        XCTAssertEqual((trailingRegion.layout?.leafGroupIDs ?? []).count, 2)
-        let movedGroupID = (trailingRegion.layout?.leafGroupIDs ?? []).first
+        let trailingSlot = rig.controller.document.slot(.trailing)
+        XCTAssertEqual((trailingSlot.layout?.leafGroupIDs ?? []).count, 2)
+        let movedGroupID = (trailingSlot.layout?.leafGroupIDs ?? []).first
         XCTAssertNotEqual(movedGroupID, "trailing")
         XCTAssertEqual(rig.controller.document.groups[movedGroupID ?? ""]?.panels, ["hierarchy"])
         XCTAssertEqual(rig.controller.document.groups[movedGroupID ?? ""]?.activePanelID, "hierarchy")
@@ -319,7 +374,7 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertEqual(rig.controller.document.groups["center"]?.isCollapsed, false)
 
         _ = rig.controller.dispatch(.movePanel("inspector",
-                                               to: WorkspaceTarget(region: .center,
+                                               to: WorkspaceTarget(slot: .center,
                                                                    groupID: "center",
                                                                    placement: .tabGroup)))
         rig.pump()
@@ -374,12 +429,11 @@ final class WorkspaceViewTests: XCTestCase {
                 "trailing": WorkspaceTabGroup(id: "trailing", panels: ["inspector"], activePanelID: "inspector"),
                 "bottom": WorkspaceTabGroup(id: "bottom", panels: ["console"], activePanelID: "console"),
             ],
-            regions: [
-                WorkspaceRegion(id: .leading, layout: .group("leading")),
-                WorkspaceRegion(id: .center, layout: .group("center")),
-                WorkspaceRegion(id: .trailing, layout: .group("trailing")),
-                WorkspaceRegion(id: .bottom, layout: .group("bottom")),
-            ],
+            slots: WorkspaceSlot.standardEditorSlots(leading: .group("leading"),
+                                                     center: .group("center"),
+                                                     trailing: .group("trailing"),
+                                                     bottom: .group("bottom")),
+            layoutTree: .group("center"),
             splitFractions: WorkspaceSplitFractions(leading: 0.22,
                                                     centerTrailing: 0.78,
                                                     topBottom: 0.74)
