@@ -197,7 +197,7 @@ private struct _WorkspaceFloatingWindowView: View {
                     _ = controller.dispatch(.redockFloatingWindow(window.id,
                                                                   to: WorkspaceTarget(region: .center,
                                                                                       groupID: "center",
-                                                                                      zone: .tabGroup)))
+                                                                                      placement: .tabGroup)))
                 }
                 .buttonStyle(.ghost)
                 .frame(width: 24, height: 24)
@@ -277,7 +277,7 @@ private struct _WorkspaceFloatingWindowDragModifier: ViewModifier {
                     _ = controller.dispatch(.redockFloatingWindow(window.id,
                                                                   to: WorkspaceTarget(region: .center,
                                                                                       groupID: "center",
-                                                                                      zone: .tabGroup)))
+                                                                                      placement: .tabGroup)))
                     return .handled
                 }
                 node.attachments.removeValue(forKey: Self.dragKey)
@@ -443,21 +443,64 @@ private struct _WorkspaceRegionView: View {
     let content: (WorkspacePanelID) -> AnyView
 
     var body: some View {
-        let groupViews = visibleGroups(in: regionID, document: document).map { group in
-            AnyView(_WorkspaceTabGroupView(group: group,
-                                           document: document,
-                                           controller: controller,
-                                           content: content)
-                .id(group.id)
-                .flex())
-        }
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
-            groupViews
+            if let layout = renderableLayout(in: regionID, document: document) {
+                _WorkspaceLayoutNodeView(node: layout,
+                                         document: document,
+                                         controller: controller,
+                                         content: content)
+                    .flex()
+            } else {
+                EmptyView()
+                    .flex()
+            }
         }
         .background(.surface)
         .layoutRole("workspace-region")
         .semanticRole("workspace.region.\(regionID.rawValue)")
         .debugName("workspace-region-\(regionID.rawValue)")
+    }
+}
+
+private struct _WorkspaceLayoutNodeView: View {
+    let node: WorkspaceLayoutNode
+    let document: WorkspaceDocument
+    let controller: WorkspaceController
+    let content: (WorkspacePanelID) -> AnyView
+
+    var body: some View {
+        switch node {
+        case .group(let groupID):
+            if let group = document.groups[groupID] {
+                _WorkspaceTabGroupView(group: group,
+                                       document: document,
+                                       controller: controller,
+                                       content: content)
+                    .id(group.id)
+                    .flex()
+            } else {
+                EmptyView()
+                    .flex()
+            }
+        case .split(let axis, let fraction, let first, let second):
+            Box(direction: axis == .horizontal ? .row : .column,
+                alignItems: .stretch,
+                spacing: 1) {
+                _WorkspaceLayoutNodeView(node: first,
+                                         document: document,
+                                         controller: controller,
+                                         content: content)
+                    .flex(fraction, shrink: 1, basis: 0)
+                _WorkspaceLayoutNodeView(node: second,
+                                         document: document,
+                                         controller: controller,
+                                         content: content)
+                    .flex(1 - fraction, shrink: 1, basis: 0)
+            }
+            .background(.border)
+            .layoutRole("workspace-split")
+            .semanticRole("workspace.split.\(axis.rawValue)")
+        }
     }
 }
 
@@ -1043,14 +1086,47 @@ private struct RailItem {
 
 private func visibleGroups(in regionID: WorkspaceRegionID,
                            document: WorkspaceDocument) -> [WorkspaceTabGroup] {
-    document.region(regionID).groupIDs
+    (document.region(regionID).layout?.leafGroupIDs ?? [])
         .compactMap { document.groups[$0] }
         .filter { !$0.isCollapsed }
 }
 
+private func renderableLayout(in regionID: WorkspaceRegionID,
+                              document: WorkspaceDocument) -> WorkspaceLayoutNode? {
+    compactLayout(document.region(regionID).layout, document: document)
+}
+
+private func compactLayout(_ node: WorkspaceLayoutNode?,
+                           document: WorkspaceDocument) -> WorkspaceLayoutNode? {
+    guard let node else { return nil }
+    switch node {
+    case .group(let groupID):
+        guard let group = document.groups[groupID],
+              !group.isCollapsed,
+              !group.panels.isEmpty else {
+            return nil
+        }
+        return .group(groupID)
+    case .split(let axis, let fraction, let first, let second):
+        let nextFirst = compactLayout(first, document: document)
+        let nextSecond = compactLayout(second, document: document)
+        switch (nextFirst, nextSecond) {
+        case (nil, nil):
+            return nil
+        case (let remaining?, nil), (nil, let remaining?):
+            return remaining
+        case (let nextFirst?, let nextSecond?):
+            return .split(axis: axis,
+                          fraction: fraction,
+                          first: nextFirst,
+                          second: nextSecond)
+        }
+    }
+}
+
 private func collapsedGroups(in regionID: WorkspaceRegionID,
                              document: WorkspaceDocument) -> [WorkspaceTabGroup] {
-    document.region(regionID).groupIDs
+    (document.region(regionID).layout?.leafGroupIDs ?? [])
         .compactMap { document.groups[$0] }
         .filter(\.isCollapsed)
 }
@@ -1158,7 +1234,7 @@ private func resolveWorkspaceDropTarget(x: Float,
     let point = CGPoint(x: CGFloat(x), y: CGFloat(y))
 
     let visibleGroupIDs = document.regions.flatMap { region in
-        region.groupIDs.filter { document.groups[$0]?.isCollapsed == false }
+        (region.layout?.leafGroupIDs ?? []).filter { document.groups[$0]?.isCollapsed == false }
     }
     for groupID in visibleGroupIDs {
         guard let groupNode = firstNode(rootedAt: root,
@@ -1168,11 +1244,14 @@ private func resolveWorkspaceDropTarget(x: Float,
         let frame = absoluteFrame(of: groupNode)
         guard frame.contains(point) else { continue }
         guard let regionID = document.regionContaining(groupID: groupID) else { continue }
-        let zone = dropZone(in: frame, point: point)
-        if groupID == sourceGroupID, zone == .tabGroup {
-            return WorkspaceTarget(region: regionID, groupID: groupID, zone: .tabGroup)
+        let target = dropTarget(in: frame,
+                                point: point,
+                                regionID: regionID,
+                                groupID: groupID)
+        if groupID == sourceGroupID, target.placement == .tabGroup {
+            return WorkspaceTarget(region: regionID, groupID: groupID, placement: .tabGroup)
         }
-        return WorkspaceTarget(region: regionID, groupID: groupID, zone: zone)
+        return target
     }
 
     for regionID in WorkspaceRegionID.allCases {
@@ -1183,22 +1262,32 @@ private func resolveWorkspaceDropTarget(x: Float,
         }
         let frame = absoluteFrame(of: regionNode)
         guard frame.contains(point) else { continue }
-        let targetGroup = visibleGroups(in: regionID, document: document).first?.id
-        return WorkspaceTarget(region: regionID, groupID: targetGroup, zone: .region)
+        return WorkspaceTarget.region(regionID)
     }
 
     return nil
 }
 
-private func dropZone(in frame: CGRect, point: CGPoint) -> WorkspaceDropZone {
+private func dropTarget(in frame: CGRect,
+                        point: CGPoint,
+                        regionID: WorkspaceRegionID,
+                        groupID: WorkspaceTabGroupID) -> WorkspaceTarget {
     let localX = Float((point.x - frame.minX) / max(frame.width, 1))
     let localY = Float((point.y - frame.minY) / max(frame.height, 1))
     let edge: Float = 0.24
-    if localX < edge { return .left }
-    if localX > 1 - edge { return .right }
-    if localY < edge { return .top }
-    if localY > 1 - edge { return .bottom }
-    return .tabGroup
+    if localX < edge {
+        return .split(region: regionID, anchorGroupID: groupID, edge: .leading)
+    }
+    if localX > 1 - edge {
+        return .split(region: regionID, anchorGroupID: groupID, edge: .trailing)
+    }
+    if localY < edge {
+        return .split(region: regionID, anchorGroupID: groupID, edge: .top)
+    }
+    if localY > 1 - edge {
+        return .split(region: regionID, anchorGroupID: groupID, edge: .bottom)
+    }
+    return .tabGroup(region: regionID, groupID: groupID)
 }
 
 private func workspaceRoot(from node: Node) -> Node? {
