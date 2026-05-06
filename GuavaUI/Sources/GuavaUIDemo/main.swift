@@ -198,12 +198,10 @@ struct RootView: View {
                                                panels: ["inspector"],
                                                activePanelID: "inspector"),
             ],
-            regions: [
-                WorkspaceRegion(id: .leading, layout: .group("sidebar")),
-                WorkspaceRegion(id: .center, layout: .group("workspace")),
-                WorkspaceRegion(id: .trailing, layout: .group("inspector")),
-                WorkspaceRegion(id: .bottom),
-            ],
+            slots: WorkspaceSlot.standardEditorSlots(leading: .group("sidebar"),
+                                                     center: .group("workspace"),
+                                                     trailing: .group("inspector")),
+            layoutTree: .group("workspace"),
             splitFractions: WorkspaceSplitFractions(leading: 0.18,
                                                     centerTrailing: 0.74,
                                                     topBottom: 0.74)
