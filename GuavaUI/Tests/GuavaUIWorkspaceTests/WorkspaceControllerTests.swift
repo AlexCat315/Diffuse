@@ -128,6 +128,79 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(controller.document.groups["center"]?.panels, ["viewport", "inspector"])
     }
 
+    func testReorderPanelKeepsPinnedBoundary() {
+        var document = makeDocument()
+        document.panels["assets"] = WorkspacePanel(id: "assets", title: "Assets")
+        document.groups["bottom"]?.panels = ["console", "assets"]
+        document.groups["bottom"]?.activePanelID = "console"
+        let controller = WorkspaceController(document: document)
+
+        _ = controller.dispatch(.setPinned(panelID: "assets", isPinned: true))
+        _ = controller.dispatch(.reorderPanel("console", in: "bottom", toIndex: 0))
+
+        XCTAssertEqual(controller.document.groups["bottom"]?.pinnedPanelIDs, ["assets"])
+        XCTAssertEqual(controller.document.groups["bottom"]?.panels, ["assets", "console"])
+
+        _ = controller.dispatch(.reorderPanel("assets", in: "bottom", toIndex: 2))
+        XCTAssertEqual(controller.document.groups["bottom"]?.panels, ["assets", "console"])
+    }
+
+    func testCloseReopenRestoresPanelAtOriginalGroupAndIndex() {
+        var document = makeDocument()
+        document.panels["assets"] = WorkspacePanel(id: "assets", title: "Assets")
+        document.groups["bottom"]?.panels = ["console", "assets"]
+        document.groups["bottom"]?.activePanelID = "assets"
+        let controller = WorkspaceController(document: document)
+
+        _ = controller.dispatch(.closePanel("console"))
+
+        XCTAssertEqual(controller.document.groups["bottom"]?.panels, ["assets"])
+        XCTAssertEqual(controller.document.closedHistory.last?.panelID, "console")
+
+        _ = controller.dispatch(.reopenLastClosed)
+
+        XCTAssertEqual(controller.document.groups["bottom"]?.panels, ["console", "assets"])
+        XCTAssertEqual(controller.document.groups["bottom"]?.activePanelID, "console")
+        XCTAssertTrue(controller.document.closedHistory.isEmpty)
+    }
+
+    func testCloseOthersKeepsPinnedTabsAndSelectedTab() {
+        var document = makeDocument()
+        document.panels["assets"] = WorkspacePanel(id: "assets", title: "Assets")
+        document.groups["bottom"]?.panels = ["console", "assets"]
+        document.groups["bottom"]?.pinnedPanelIDs = ["assets"]
+        let controller = WorkspaceController(document: document)
+
+        _ = controller.dispatch(.closeOthers(groupID: "bottom", keeping: "console"))
+
+        XCTAssertEqual(controller.document.groups["bottom"]?.panels, ["console", "assets"])
+        XCTAssertEqual(controller.document.groups["bottom"]?.activePanelID, "console")
+        XCTAssertTrue(controller.document.closedHistory.isEmpty)
+    }
+
+    func testCloseToRightSkipsPinnedTabs() {
+        var document = makeDocument()
+        document.panels["assets"] = WorkspacePanel(id: "assets", title: "Assets")
+        document.panels["timeline"] = WorkspacePanel(id: "timeline", title: "Timeline")
+        document.groups["bottom"]?.panels = ["console", "assets", "timeline"]
+        document.groups["bottom"]?.pinnedPanelIDs = ["timeline"]
+        let controller = WorkspaceController(document: document)
+
+        _ = controller.dispatch(.closeToTheRight(groupID: "bottom", of: "console"))
+
+        XCTAssertEqual(controller.document.groups["bottom"]?.panels, ["console", "timeline"])
+        XCTAssertEqual(controller.document.closedHistory.map(\.panelID), ["assets"])
+    }
+
+    func testUnclosablePanelCannotClose() {
+        let controller = WorkspaceController(document: makeDocument())
+
+        let result = controller.dispatch(.closePanel("viewport"))
+
+        XCTAssertFalse(result.didChange)
+        XCTAssertEqual(controller.document.groups["center"]?.panels, ["viewport"])
+    }
+
     private func makeDocument() -> WorkspaceDocument {
         WorkspaceDocument(
             panels: [

@@ -84,15 +84,24 @@ private struct _WorkspaceShell: View {
                                      content: content)
                     .id("workspace-region-leading")
                     .flex(weights.leading, shrink: 1, basis: 0)
+                _WorkspaceSplitDivider(splitID: "leading",
+                                       axis: .vertical,
+                                       controller: controller)
+                    .debugName("workspace-split-leading")
+                    .id("workspace-split-leading")
             }
             _WorkspaceCenterColumn(document: document,
                                    controller: controller,
                                    content: content)
+                .debugName("workspace-center-column")
                 .id("workspace-center-column")
                 .flex(weights.center, shrink: 1, basis: 0)
             if trailingVisible {
-                Divider(axis: .vertical)
-                    .id("workspace-divider-trailing")
+                _WorkspaceSplitDivider(splitID: "centerTrailing",
+                                       axis: .vertical,
+                                       controller: controller)
+                    .debugName("workspace-split-centerTrailing")
+                    .id("workspace-split-centerTrailing")
                 _WorkspaceSideRegion(regionID: .trailing,
                                      document: document,
                                      controller: controller,
@@ -149,7 +158,15 @@ private struct _WorkspaceCenterColumn: View {
                       shrink: 1,
                       basis: 0)
             if bottomVisible || bottomCollapsed {
-                Divider()
+                if bottomVisible {
+                    _WorkspaceSplitDivider(splitID: "topBottom",
+                                           axis: .horizontal,
+                                           controller: controller)
+                        .debugName("workspace-split-topBottom")
+                        .id("workspace-split-topBottom")
+                } else {
+                    Divider()
+                }
                 _WorkspaceBottomSlot(document: document,
                                      controller: controller,
                                      content: content)
@@ -271,14 +288,28 @@ private struct _WorkspaceTabBar: View {
         }
         let tabButtons = group.panels.compactMap { panelID -> AnyView? in
             guard let panel = document.panels[panelID] else { return nil }
-            return AnyView(_WorkspaceTabButton(groupID: group.id,
-                                               panelID: panelID,
-                                               title: panel.title,
-                                               isActive: panelID == group.activePanelID,
-                                               document: document,
-                                               controller: controller)
-                .semanticRole("workspace.tab")
-                .debugName("workspace-tab-\(panelID.rawValue)"))
+            return AnyView(Row(alignment: .center, spacing: 0) {
+                _WorkspaceTabButton(groupID: group.id,
+                                    panelID: panelID,
+                                    title: panel.title,
+                                    isActive: panelID == group.activePanelID,
+                                    isPinned: group.isPinned(panelID),
+                                    document: document,
+                                    controller: controller)
+                    .semanticRole("workspace.tab")
+                    .debugName("workspace-tab-\(panelID.rawValue)")
+                if panel.isClosable {
+                    IconButton(resource: WorkspaceIcons.close,
+                               size: 10,
+                               tooltip: "Close") {
+                        _ = controller.dispatch(.closePanel(panelID))
+                    }
+                    .buttonStyle(.ghost)
+                    .frame(width: 20, height: 24)
+                    .semanticRole("workspace.tab.close")
+                    .debugName("workspace-tab-close-\(panelID.rawValue)")
+                }
+            })
         }
         Row(alignment: .center, spacing: 0) {
             tabButtons
@@ -307,6 +338,7 @@ private struct _WorkspaceTabButton: View {
     let panelID: WorkspacePanelID
     let title: String
     let isActive: Bool
+    let isPinned: Bool
     let document: WorkspaceDocument
     let controller: WorkspaceController
 
@@ -318,6 +350,7 @@ private struct _WorkspaceTabButton: View {
                                 panelID: panelID,
                                 title: title,
                                 isActive: isActive,
+                                isPinned: isPinned,
                                 isPressed: isPressed,
                                 isHovered: isHovered,
                                 document: document,
@@ -342,6 +375,10 @@ private struct _WorkspaceTabButton: View {
                                 onDrop: { target in
                                     isPressed = false
                                     _ = controller.dispatch(.movePanel(panelID, to: target))
+                                },
+                                onReorder: { groupID, index in
+                                    isPressed = false
+                                    _ = controller.dispatch(.reorderPanel(panelID, in: groupID, toIndex: index))
                                 })
     }
 }
@@ -351,6 +388,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
     let panelID: WorkspacePanelID
     let title: String
     let isActive: Bool
+    let isPinned: Bool
     let isPressed: Bool
     let isHovered: Bool
     let document: WorkspaceDocument
@@ -360,6 +398,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
     let onCancelPress: () -> Void
     let onClick: () -> Void
     let onDrop: (WorkspaceTarget) -> Void
+    let onReorder: (WorkspaceTabGroupID, Int) -> Void
 
     func _makeNode() -> Node {
         let node = Node()
@@ -380,6 +419,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
         let cancelPress = onCancelPress
         let click = onClick
         let drop = onDrop
+        let reorder = onReorder
         let document = document
         let groupID = groupID
         let panelID = panelID
@@ -392,7 +432,10 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
                 hoverChange(false)
             }
         }
-        registry.setPointer(node, route: .dockDrag) { event, phase, _ in
+        let route = InputHandlerRoute(role: .dock,
+                                      priority: .capture,
+                                      debugName: "workspace.tab.drag")
+        registry.setPointer(node, route: route) { event, phase, _ in
             guard event.button == .left else { return .ignored }
             switch phase {
             case .down:
@@ -415,12 +458,18 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
                 }
                 guard let state else { return .ignored }
                 if state.didDrag {
-                    if let target = resolveWorkspaceDropTarget(x: event.x,
-                                                               y: event.y,
-                                                               sourceGroupID: groupID,
-                                                               sourcePanelID: panelID,
-                                                               document: document,
-                                                               from: node) {
+                    if let targetIndex = resolveWorkspaceTabReorder(x: event.x,
+                                                                    y: event.y,
+                                                                    sourceGroupID: groupID,
+                                                                    document: document,
+                                                                    from: node) {
+                        reorder(groupID, targetIndex)
+                    } else if let target = resolveWorkspaceDropTarget(x: event.x,
+                                                                      y: event.y,
+                                                                      sourceGroupID: groupID,
+                                                                      sourcePanelID: panelID,
+                                                                      document: document,
+                                                                      from: node) {
                         drop(target)
                     } else {
                         cancelPress()
@@ -431,7 +480,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
                 return .handled
             }
         }
-        registry.setMotion(node, route: .dockDrag) { event, _ in
+        registry.setMotion(node, route: route) { event, _ in
             guard PointerCaptureHolder.current?.target === node,
                   let state = node.attachments[Self.pressKey] as? _WorkspaceTabPressState else {
                 return .ignored
@@ -458,7 +507,13 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
 
     func _children(for node: Node) -> [any View] {
         let style = isActive ? AnyButtonStyle(SecondaryButtonStyle()) : AnyButtonStyle(GhostButtonStyle())
-        let config = ButtonStyleConfiguration(label: AnyView(Text(title).font(.label)),
+        let config = ButtonStyleConfiguration(label: AnyView(Row(alignment: .center, spacing: 4) {
+                                                  if isPinned {
+                                                      Text("•")
+                                                          .font(.label)
+                                                  }
+                                                  Text(title).font(.label)
+                                              }),
                                               role: .normal,
                                               isPressed: isPressed,
                                               isHovered: isHovered,
@@ -484,6 +539,150 @@ private final class _WorkspaceTabPressState {
         self.lastX = lastX
         self.lastY = lastY
         self.didDrag = didDrag
+    }
+}
+
+private enum _WorkspaceSplitAxis {
+    case vertical
+    case horizontal
+}
+
+private struct _WorkspaceSplitDivider: _PrimitiveView {
+    let splitID: WorkspaceSplitID
+    let axis: _WorkspaceSplitAxis
+    let controller: WorkspaceController
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = true
+        return node
+    }
+
+    func _updateNode(_ node: Node) {
+        let theme = resolveWorkspaceTheme(on: node)
+        let hitSize = max(1, theme.splitDividerThickness + theme.splitDividerHitSlop * 2)
+        node.cursor = axis == .vertical ? .resizeHorizontal : .resizeVertical
+        node.animatableSet(\.backgroundColor, to: nil)
+        switch axis {
+        case .vertical:
+            node.layoutNode?.width = hitSize
+        case .horizontal:
+            node.layoutNode?.height = hitSize
+        }
+
+        let controller = controller
+        let splitID = splitID
+        let axis = axis
+        guard let registry = InteractionRegistryHolder.current else { return }
+        let route = InputHandlerRoute(role: .dock,
+                                      priority: .capture,
+                                      debugName: "workspace.split")
+        registry.setPointer(node, route: route) { _, phase, _ in
+            switch phase {
+            case .down:
+                PointerCaptureHolder.current?.acquire(node)
+                return .handled
+            case .up:
+                if PointerCaptureHolder.current?.target === node {
+                    PointerCaptureHolder.current?.release()
+                }
+                return .handled
+            }
+        }
+        registry.setMotion(node, route: route) { event, _ in
+            guard PointerCaptureHolder.current?.target === node,
+                  let fraction = resolveWorkspaceSplitFraction(splitID: splitID,
+                                                               axis: axis,
+                                                               x: event.x,
+                                                               y: event.y,
+                                                               from: node) else {
+                return .ignored
+            }
+            _ = controller.dispatch(.resizeSplit(splitID, fraction: fraction))
+            return .handled
+        }
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        switch axis {
+        case .vertical:
+            layout.flexDirection = .row
+            layout.alignItems = .stretch
+            layout.justifyContent = .center
+            layout.width = 1
+        case .horizontal:
+            layout.flexDirection = .column
+            layout.alignItems = .stretch
+            layout.justifyContent = .center
+            layout.height = 1
+        }
+        return layout
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        switch axis {
+        case .vertical:
+            layout.flexDirection = .row
+            layout.alignItems = .stretch
+            layout.justifyContent = .center
+            if (layout.width ?? 0) <= 0 { layout.width = 1 }
+        case .horizontal:
+            layout.flexDirection = .column
+            layout.alignItems = .stretch
+            layout.justifyContent = .center
+            if (layout.height ?? 0) <= 0 { layout.height = 1 }
+        }
+    }
+
+    func _children(for node: Node) -> [any View] {
+        [_WorkspaceSplitDividerLine(axis: axis)]
+    }
+}
+
+private struct _WorkspaceSplitDividerLine: _PrimitiveView {
+    let axis: _WorkspaceSplitAxis
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = false
+        return node
+    }
+
+    func _updateNode(_ node: Node) {
+        let theme = resolveWorkspaceTheme(on: node)
+        node.animatableSet(\.backgroundColor, to: node.theme.colors.divider)
+        let thickness = max(1, theme.splitDividerThickness)
+        switch axis {
+        case .vertical:
+            node.layoutNode?.width = thickness
+        case .horizontal:
+            node.layoutNode?.height = thickness
+        }
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        switch axis {
+        case .vertical:
+            layout.width = 1
+            layout.alignSelf = .stretch
+        case .horizontal:
+            layout.height = 1
+            layout.alignSelf = .stretch
+        }
+        return layout
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        switch axis {
+        case .vertical:
+            layout.alignSelf = .stretch
+            if (layout.width ?? 0) <= 0 { layout.width = 1 }
+        case .horizontal:
+            layout.alignSelf = .stretch
+            if (layout.height ?? 0) <= 0 { layout.height = 1 }
+        }
     }
 }
 
@@ -650,6 +849,91 @@ private func railItems(group: WorkspaceTabGroup,
     }
 }
 
+private func resolveWorkspaceSplitFraction(splitID: WorkspaceSplitID,
+                                           axis: _WorkspaceSplitAxis,
+                                           x: Float,
+                                           y: Float,
+                                           from node: Node) -> Float? {
+    guard let root = workspaceRoot(from: node) else { return nil }
+    let point = CGPoint(x: CGFloat(x), y: CGFloat(y))
+
+    switch splitID.rawValue {
+    case "leading":
+        guard axis == .vertical,
+              let leading = firstNode(rootedAt: root, debugName: "workspace-region-leading"),
+              let center = firstNode(rootedAt: root, debugName: "workspace-center-column") else {
+            return nil
+        }
+        let leadingFrame = absoluteFrame(of: leading)
+        let centerFrame = absoluteFrame(of: center)
+        let minX = leadingFrame.minX
+        let maxX = centerFrame.maxX
+        return Float((point.x - minX) / max(maxX - minX, 1))
+    case "centerTrailing":
+        guard axis == .vertical,
+              let center = firstNode(rootedAt: root, debugName: "workspace-center-column"),
+              let trailing = firstNode(rootedAt: root, debugName: "workspace-region-trailing") else {
+            return nil
+        }
+        let centerFrame = absoluteFrame(of: center)
+        let trailingFrame = absoluteFrame(of: trailing)
+        let minX = centerFrame.minX
+        let maxX = trailingFrame.maxX
+        return Float((point.x - minX) / max(maxX - minX, 1))
+    case "topBottom":
+        guard axis == .horizontal,
+              let center = firstNode(rootedAt: root, debugName: "workspace-region-center"),
+              let bottom = firstNode(rootedAt: root, debugName: "workspace-bottom-slot") else {
+            return nil
+        }
+        let centerFrame = absoluteFrame(of: center)
+        let bottomFrame = absoluteFrame(of: bottom)
+        let minY = centerFrame.minY
+        let maxY = bottomFrame.maxY
+        return Float((point.y - minY) / max(maxY - minY, 1))
+    default:
+        return nil
+    }
+}
+
+private func resolveWorkspaceTabReorder(x: Float,
+                                        y: Float,
+                                        sourceGroupID: WorkspaceTabGroupID,
+                                        document: WorkspaceDocument,
+                                        from node: Node) -> Int? {
+    guard let root = workspaceRoot(from: node),
+          let group = document.groups[sourceGroupID],
+          group.panels.count > 1,
+          let groupNode = firstNode(rootedAt: root,
+                                    debugName: "workspace-group-\(sourceGroupID.rawValue)") else {
+        return nil
+    }
+    let point = CGPoint(x: CGFloat(x), y: CGFloat(y))
+    let groupFrame = absoluteFrame(of: groupNode)
+    guard groupFrame.contains(point) else { return nil }
+
+    let tabFrames = group.panels.compactMap { panelID -> (WorkspacePanelID, CGRect)? in
+        guard let tabNode = firstNode(rootedAt: root,
+                                      debugName: "workspace-tab-\(panelID.rawValue)") else {
+            return nil
+        }
+        let frame = absoluteFrame(of: tabNode)
+        guard frame.width > 0, frame.height > 0 else { return nil }
+        return (panelID, frame)
+    }
+    guard !tabFrames.isEmpty else { return nil }
+
+    let tabBand = tabFrames.reduce(tabFrames[0].1) { partial, item in
+        partial.union(item.1)
+    }.insetBy(dx: -10, dy: -8)
+    guard tabBand.contains(point) else { return nil }
+
+    for (index, item) in tabFrames.enumerated() where point.x < item.1.midX {
+        return index
+    }
+    return group.panels.count
+}
+
 private func resolveWorkspaceDropTarget(x: Float,
                                         y: Float,
                                         sourceGroupID: WorkspaceTabGroupID,
@@ -749,4 +1033,7 @@ private enum WorkspaceIcons {
     static let expandDown = BundleImageResource.svg(named: "expand-down",
                                                     in: .module,
                                                     subdirectory: "WorkspaceIcons")
+    static let close = BundleImageResource.svg(named: "close",
+                                               in: .module,
+                                               subdirectory: "WorkspaceIcons")
 }

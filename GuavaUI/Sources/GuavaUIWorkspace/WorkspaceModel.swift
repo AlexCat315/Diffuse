@@ -78,15 +78,22 @@ public struct WorkspaceTabGroup: Sendable, Codable, Equatable {
     public var panels: [WorkspacePanelID]
     public var activePanelID: WorkspacePanelID?
     public var isCollapsed: Bool
+    public var pinnedPanelIDs: [WorkspacePanelID]
 
     public init(id: WorkspaceTabGroupID,
                 panels: [WorkspacePanelID],
                 activePanelID: WorkspacePanelID? = nil,
-                isCollapsed: Bool = false) {
+                isCollapsed: Bool = false,
+                pinnedPanelIDs: [WorkspacePanelID] = []) {
         self.id = id
         self.panels = panels
         self.activePanelID = activePanelID ?? panels.first
         self.isCollapsed = isCollapsed
+        self.pinnedPanelIDs = pinnedPanelIDs.filter { panels.contains($0) }
+    }
+
+    public func isPinned(_ panelID: WorkspacePanelID) -> Bool {
+        pinnedPanelIDs.contains(panelID)
     }
 }
 
@@ -133,18 +140,37 @@ public struct WorkspaceFloatingWindow: Sendable, Codable, Equatable {
     }
 }
 
+public struct WorkspaceClosedPanel: Sendable, Codable, Equatable {
+    public var panelID: WorkspacePanelID
+    public var groupID: WorkspaceTabGroupID
+    public var regionID: WorkspaceRegionID
+    public var index: Int
+
+    public init(panelID: WorkspacePanelID,
+                groupID: WorkspaceTabGroupID,
+                regionID: WorkspaceRegionID,
+                index: Int) {
+        self.panelID = panelID
+        self.groupID = groupID
+        self.regionID = regionID
+        self.index = index
+    }
+}
+
 public struct WorkspaceDocument: Sendable, Codable, Equatable {
     public var panels: [WorkspacePanelID: WorkspacePanel]
     public var groups: [WorkspaceTabGroupID: WorkspaceTabGroup]
     public var regions: [WorkspaceRegion]
     public var floatingWindows: [WorkspaceFloatingWindow]
     public var splitFractions: WorkspaceSplitFractions
+    public var closedHistory: [WorkspaceClosedPanel]
 
     public init(panels: [WorkspacePanelID: WorkspacePanel],
                 groups: [WorkspaceTabGroupID: WorkspaceTabGroup],
                 regions: [WorkspaceRegion],
                 floatingWindows: [WorkspaceFloatingWindow] = [],
-                splitFractions: WorkspaceSplitFractions = WorkspaceSplitFractions()) {
+                splitFractions: WorkspaceSplitFractions = WorkspaceSplitFractions(),
+                closedHistory: [WorkspaceClosedPanel] = []) {
         self.panels = panels
         self.groups = groups
         self.regions = WorkspaceRegionID.allCases.map { id in
@@ -152,6 +178,7 @@ public struct WorkspaceDocument: Sendable, Codable, Equatable {
         }
         self.floatingWindows = floatingWindows
         self.splitFractions = splitFractions
+        self.closedHistory = closedHistory
     }
 
     public func region(_ id: WorkspaceRegionID) -> WorkspaceRegion {
@@ -276,4 +303,3 @@ public final class WorkspacePanelRegistry {
     public var ids: [WorkspacePanelID] { order }
     public var descriptors: [WorkspacePanelDescriptor] { order.compactMap { byID[$0] } }
 }
-
