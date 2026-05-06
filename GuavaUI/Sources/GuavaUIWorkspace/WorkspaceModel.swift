@@ -362,6 +362,32 @@ public struct WorkspaceDocument: Sendable, Codable, Equatable {
     public func floatingWindowContaining(groupID: WorkspaceTabGroupID) -> WorkspaceFloatingWindow? {
         floatingWindows.first { $0.groupID == groupID }
     }
+
+    public var referencedLayoutGroupIDs: Set<WorkspaceTabGroupID> {
+        Set(regions.flatMap { $0.layout?.leafGroupIDs ?? [] })
+    }
+
+    public var referencedFloatingGroupIDs: Set<WorkspaceTabGroupID> {
+        Set(floatingWindows.map(\.groupID))
+    }
+
+    public var hasValidLayoutReferences: Bool {
+        let layoutGroupIDs = referencedLayoutGroupIDs
+        let floatingGroupIDs = referencedFloatingGroupIDs
+        let attachedGroupIDs = layoutGroupIDs.union(floatingGroupIDs)
+
+        guard layoutGroupIDs.allSatisfy({ groups[$0] != nil }),
+              floatingGroupIDs.allSatisfy({ groups[$0] != nil }) else {
+            return false
+        }
+
+        for (groupID, group) in groups where !group.panels.isEmpty {
+            guard attachedGroupIDs.contains(groupID) else {
+                return false
+            }
+        }
+        return true
+    }
 }
 
 public struct WorkspacePanelDescriptor {

@@ -142,6 +142,28 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(controller.document.region(.bottom).layout?.leafGroupIDs ?? [], ["bottom"])
     }
 
+    func testDocumentRejectsUnattachedGroupsFromObsoletePersistedShape() {
+        let obsolete = WorkspaceDocument(
+            panels: [
+                "viewport": WorkspacePanel(id: "viewport", title: "Viewport", isClosable: false),
+                "inspector": WorkspacePanel(id: "inspector", title: "Inspector"),
+            ],
+            groups: [
+                "center": WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport"),
+                "trailing": WorkspaceTabGroup(id: "trailing", panels: ["inspector"], activePanelID: "inspector"),
+            ],
+            regions: [
+                WorkspaceRegion(id: .leading),
+                WorkspaceRegion(id: .center),
+                WorkspaceRegion(id: .trailing),
+                WorkspaceRegion(id: .bottom),
+            ]
+        )
+
+        XCTAssertFalse(obsolete.hasValidLayoutReferences)
+        XCTAssertTrue(makeDocument().hasValidLayoutReferences)
+    }
+
     func testCollapseRestoreKeepsActiveTabAndOrder() {
         var document = makeDocument()
         document.groups["bottom"]?.panels = ["console", "assets"]
