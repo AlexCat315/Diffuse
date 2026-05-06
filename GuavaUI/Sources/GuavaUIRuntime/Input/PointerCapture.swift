@@ -10,7 +10,7 @@ import Foundation
 /// out of scope until touch input is added.
 public final class PointerCapture {
 
-    public private(set) weak var target: Node?
+    public private(set) var target: Node?
 
     public init() {}
 

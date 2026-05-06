@@ -110,13 +110,9 @@ struct _StatefulButton: View {
                 }
             },
             onUp: { [action] in
-                // Capture-then-clear so the pointer handler can both report
-                // whether the gesture completed (action fires only on a true
-                // down → up sequence) and update `isPressed` in one mutation.
-                let was = isPressed
                 isPressed = false
-                if was { action(); return true }
-                return false
+                action()
+                return true
             },
             onKey: { [action] scancode, isRepeat in
                 guard !isRepeat else { return EventResult.ignored }
@@ -274,10 +270,20 @@ struct ButtonHost: _PrimitiveView {
             if event.button != .left { return .ignored }
             switch phase {
             case .down:
+                node.attachments[ButtonHost.activePressKey] = ActiveButtonPress(onUp: up)
+                PointerCaptureHolder.current?.acquire(node)
                 down()
                 return .handled
             case .up:
-                return up() ? .handled : .ignored
+                let activePress = node.attachments[ButtonHost.activePressKey] as? ActiveButtonPress
+                node.attachments.removeValue(forKey: ButtonHost.activePressKey)
+                defer {
+                    if PointerCaptureHolder.current?.target === node {
+                        PointerCaptureHolder.current?.release()
+                    }
+                }
+                guard let activePress else { return .ignored }
+                return activePress.onUp() ? .handled : .ignored
             }
         }
         registry.setKey(node) { event, _ in
@@ -314,6 +320,15 @@ struct ButtonHost: _PrimitiveView {
     static let pressedKey = "__button_pressed"
     static let hoveredKey = "__button_hovered"
     static let tooltipKey = "__button_tooltip"
+    static let activePressKey = "__button_active_press"
+}
+
+private final class ActiveButtonPress {
+    let onUp: () -> Bool
+
+    init(onUp: @escaping () -> Bool) {
+        self.onUp = onUp
+    }
 }
 
 private func absoluteOrigin(of node: Node) -> CGPoint {
