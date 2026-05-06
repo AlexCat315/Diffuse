@@ -57,11 +57,29 @@ public struct WorkspaceFloatingWindowID: Hashable, Sendable, Codable, RawReprese
     public var description: String { rawValue }
 }
 
-public enum WorkspaceRegionID: String, Sendable, Codable, CaseIterable {
-    case leading
-    case center
-    case trailing
-    case bottom
+public struct WorkspaceSlotID: Hashable, Sendable, Codable, RawRepresentable, ExpressibleByStringLiteral, CustomStringConvertible {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+        self.rawValue = value
+    }
+
+    public var description: String { rawValue }
+
+    public static let content = WorkspaceSlotID(rawValue: "content")
+    public static let leading = WorkspaceSlotID(rawValue: "leading")
+    public static let center = WorkspaceSlotID(rawValue: "center")
+    public static let trailing = WorkspaceSlotID(rawValue: "trailing")
+    public static let top = WorkspaceSlotID(rawValue: "top")
+    public static let bottom = WorkspaceSlotID(rawValue: "bottom")
+    public static let overlay = WorkspaceSlotID(rawValue: "overlay")
+    public static let floating = WorkspaceSlotID(rawValue: "floating")
+
+    public static let standardEditorSlots: [WorkspaceSlotID] = [.leading, .center, .trailing, .bottom]
 }
 
 public enum WorkspaceSplitAxis: String, Sendable, Codable, Equatable {
@@ -225,13 +243,33 @@ public struct WorkspaceTabGroup: Sendable, Codable, Equatable {
     }
 }
 
-public struct WorkspaceRegion: Sendable, Codable, Equatable {
-    public var id: WorkspaceRegionID
+public enum WorkspaceSlotSize: Sendable, Codable, Equatable {
+    case fixed(Float)
+    case fraction(Float)
+
+    public var fixedValue: Float? {
+        if case .fixed(let value) = self { return value }
+        return nil
+    }
+}
+
+public enum WorkspaceSlotKind: Sendable, Codable, Equatable {
+    case content
+    case chrome(edge: WorkspaceEdge, size: WorkspaceSlotSize)
+    case overlay
+    case floating
+}
+
+public struct WorkspaceSlot: Sendable, Codable, Equatable {
+    public var id: WorkspaceSlotID
+    public var kind: WorkspaceSlotKind
     public var layout: WorkspaceLayoutNode?
 
-    public init(id: WorkspaceRegionID,
+    public init(id: WorkspaceSlotID,
+                kind: WorkspaceSlotKind = .content,
                 layout: WorkspaceLayoutNode? = nil) {
         self.id = id
+        self.kind = kind
         self.layout = layout
     }
 
@@ -246,6 +284,34 @@ public struct WorkspaceRegion: Sendable, Codable, Equatable {
 
     public mutating func removeGroup(_ groupID: WorkspaceTabGroupID) {
         layout = layout?.removing(groupID: groupID)
+    }
+
+    public static func standardEditorSlots(leading: WorkspaceLayoutNode? = nil,
+                                           center: WorkspaceLayoutNode? = nil,
+                                           trailing: WorkspaceLayoutNode? = nil,
+                                           bottom: WorkspaceLayoutNode? = nil) -> [WorkspaceSlotID: WorkspaceSlot] {
+        [
+            .leading: WorkspaceSlot(id: .leading,
+                                    kind: .content,
+                                    layout: leading),
+            .center: WorkspaceSlot(id: .center,
+                                   kind: .content,
+                                   layout: center),
+            .trailing: WorkspaceSlot(id: .trailing,
+                                     kind: .content,
+                                     layout: trailing),
+            .bottom: WorkspaceSlot(id: .bottom,
+                                   kind: .content,
+                                   layout: bottom),
+            WorkspaceSlotID(rawValue: "chrome.leading.rail"): WorkspaceSlot(id: WorkspaceSlotID(rawValue: "chrome.leading.rail"),
+                                                                            kind: .chrome(edge: .leading, size: .fixed(40))),
+            WorkspaceSlotID(rawValue: "chrome.trailing.rail"): WorkspaceSlot(id: WorkspaceSlotID(rawValue: "chrome.trailing.rail"),
+                                                                             kind: .chrome(edge: .trailing, size: .fixed(40))),
+            WorkspaceSlotID(rawValue: "chrome.bottom.rail"): WorkspaceSlot(id: WorkspaceSlotID(rawValue: "chrome.bottom.rail"),
+                                                                           kind: .chrome(edge: .bottom, size: .fixed(40))),
+            .overlay: WorkspaceSlot(id: .overlay, kind: .overlay),
+            .floating: WorkspaceSlot(id: .floating, kind: .floating),
+        ]
     }
 }
 
@@ -290,57 +356,71 @@ public struct WorkspaceFloatingWindow: Sendable, Codable, Equatable {
 public struct WorkspaceClosedPanel: Sendable, Codable, Equatable {
     public var panelID: WorkspacePanelID
     public var groupID: WorkspaceTabGroupID
-    public var regionID: WorkspaceRegionID?
+    public var slotID: WorkspaceSlotID?
     public var floatingWindowID: WorkspaceFloatingWindowID?
     public var index: Int
 
     public init(panelID: WorkspacePanelID,
                 groupID: WorkspaceTabGroupID,
-                regionID: WorkspaceRegionID?,
+                slotID: WorkspaceSlotID?,
                 floatingWindowID: WorkspaceFloatingWindowID? = nil,
                 index: Int) {
         self.panelID = panelID
         self.groupID = groupID
-        self.regionID = regionID
+        self.slotID = slotID
         self.floatingWindowID = floatingWindowID
         self.index = index
+    }
+}
+
+public struct WorkspaceCollapsedItem: Sendable, Codable, Equatable {
+    public var groupID: WorkspaceTabGroupID
+    public var slotID: WorkspaceSlotID
+    public var edge: WorkspaceEdge
+
+    public init(groupID: WorkspaceTabGroupID,
+                slotID: WorkspaceSlotID,
+                edge: WorkspaceEdge) {
+        self.groupID = groupID
+        self.slotID = slotID
+        self.edge = edge
     }
 }
 
 public struct WorkspaceDocument: Sendable, Codable, Equatable {
     public var panels: [WorkspacePanelID: WorkspacePanel]
     public var groups: [WorkspaceTabGroupID: WorkspaceTabGroup]
-    public var regions: [WorkspaceRegion]
+    public var slots: [WorkspaceSlotID: WorkspaceSlot]
+    public var layoutTree: WorkspaceLayoutNode?
+    public var collapsed: [WorkspaceCollapsedItem]
     public var floatingWindows: [WorkspaceFloatingWindow]
     public var splitFractions: WorkspaceSplitFractions
     public var closedHistory: [WorkspaceClosedPanel]
 
     public init(panels: [WorkspacePanelID: WorkspacePanel],
                 groups: [WorkspaceTabGroupID: WorkspaceTabGroup],
-                regions: [WorkspaceRegion],
+                slots: [WorkspaceSlotID: WorkspaceSlot],
+                layoutTree: WorkspaceLayoutNode? = nil,
+                collapsed: [WorkspaceCollapsedItem] = [],
                 floatingWindows: [WorkspaceFloatingWindow] = [],
                 splitFractions: WorkspaceSplitFractions = WorkspaceSplitFractions(),
                 closedHistory: [WorkspaceClosedPanel] = []) {
         self.panels = panels
         self.groups = groups
-        self.regions = WorkspaceRegionID.allCases.map { id in
-            regions.first { $0.id == id } ?? WorkspaceRegion(id: id)
-        }
+        self.slots = slots
+        self.layoutTree = layoutTree ?? slots[.center]?.layout ?? slots[.content]?.layout
+        self.collapsed = collapsed
         self.floatingWindows = floatingWindows
         self.splitFractions = splitFractions
         self.closedHistory = closedHistory
     }
 
-    public func region(_ id: WorkspaceRegionID) -> WorkspaceRegion {
-        regions.first { $0.id == id } ?? WorkspaceRegion(id: id)
+    public func slot(_ id: WorkspaceSlotID) -> WorkspaceSlot {
+        slots[id] ?? WorkspaceSlot(id: id)
     }
 
-    public mutating func setRegion(_ region: WorkspaceRegion) {
-        if let index = regions.firstIndex(where: { $0.id == region.id }) {
-            regions[index] = region
-        } else {
-            regions.append(region)
-        }
+    public mutating func setSlot(_ slot: WorkspaceSlot) {
+        slots[slot.id] = slot
     }
 
     public func group(_ id: WorkspaceTabGroupID) -> WorkspaceTabGroup? {
@@ -355,8 +435,8 @@ public struct WorkspaceDocument: Sendable, Codable, Equatable {
         groups.values.first { $0.panels.contains(panelID) }
     }
 
-    public func regionContaining(groupID: WorkspaceTabGroupID) -> WorkspaceRegionID? {
-        regions.first { $0.containsGroup(groupID) }?.id
+    public func slotContaining(groupID: WorkspaceTabGroupID) -> WorkspaceSlotID? {
+        slots.values.first { $0.containsGroup(groupID) }?.id
     }
 
     public func floatingWindowContaining(groupID: WorkspaceTabGroupID) -> WorkspaceFloatingWindow? {
@@ -364,7 +444,7 @@ public struct WorkspaceDocument: Sendable, Codable, Equatable {
     }
 
     public var referencedLayoutGroupIDs: Set<WorkspaceTabGroupID> {
-        Set(regions.flatMap { $0.layout?.leafGroupIDs ?? [] })
+        Set(slots.values.flatMap { $0.layout?.leafGroupIDs ?? [] })
     }
 
     public var referencedFloatingGroupIDs: Set<WorkspaceTabGroupID> {
@@ -393,7 +473,7 @@ public struct WorkspaceDocument: Sendable, Codable, Equatable {
 public struct WorkspacePanelDescriptor {
     public var id: WorkspacePanelID
     public var title: String
-    public var defaultRegion: WorkspaceRegionID
+    public var defaultSlot: WorkspaceSlotID
     public var isClosable: Bool
     public var isDraggable: Bool
     public var isCollapsible: Bool
@@ -402,7 +482,7 @@ public struct WorkspacePanelDescriptor {
 
     public init(id: WorkspacePanelID,
                 title: String,
-                defaultRegion: WorkspaceRegionID = .center,
+                defaultSlot: WorkspaceSlotID = .center,
                 isClosable: Bool = true,
                 isDraggable: Bool = true,
                 isCollapsible: Bool = true,
@@ -410,7 +490,7 @@ public struct WorkspacePanelDescriptor {
                 factory: @escaping () -> AnyView) {
         self.id = id
         self.title = title
-        self.defaultRegion = defaultRegion
+        self.defaultSlot = defaultSlot
         self.isClosable = isClosable
         self.isDraggable = isDraggable
         self.isCollapsible = isCollapsible
@@ -420,7 +500,7 @@ public struct WorkspacePanelDescriptor {
 
     public init<Content: View>(id: WorkspacePanelID,
                                title: String,
-                               defaultRegion: WorkspaceRegionID = .center,
+                               defaultSlot: WorkspaceSlotID = .center,
                                isClosable: Bool = true,
                                isDraggable: Bool = true,
                                isCollapsible: Bool = true,
@@ -428,7 +508,7 @@ public struct WorkspacePanelDescriptor {
                                @ViewBuilder content: @escaping () -> Content) {
         self.init(id: id,
                   title: title,
-                  defaultRegion: defaultRegion,
+                  defaultSlot: defaultSlot,
                   isClosable: isClosable,
                   isDraggable: isDraggable,
                   isCollapsible: isCollapsible,

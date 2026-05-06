@@ -130,43 +130,43 @@ enum EditorRootViewFactory {
         PanelRegistry([
             PanelDescriptor(id: "hierarchy",
                             title: localizedPanelTitle(for: "hierarchy"),
-                            preferredRegion: .leading) {
+                            preferredSlot: .leading) {
                 HierarchyPanel(store: app.store, scene: app.scene)
             },
             PanelDescriptor(id: "inspector",
                             title: localizedPanelTitle(for: "inspector"),
-                            preferredRegion: .trailing) {
+                            preferredSlot: .trailing) {
                 InspectorPanel(store: app.store, scene: app.scene)
             },
             PanelDescriptor(id: "viewport",
                             title: localizedPanelTitle(for: "viewport"),
                             closable: false,
-                            preferredRegion: .center) {
+                            preferredSlot: .center) {
                 ViewportPanel(app: app, scene: app.scene)
             },
             PanelDescriptor(id: "console",
                             title: localizedPanelTitle(for: "console"),
-                            preferredRegion: .bottom) {
+                            preferredSlot: .bottom) {
                 ConsolePanel(store: app.store)
             },
             PanelDescriptor(id: "assets",
                             title: localizedPanelTitle(for: "assets"),
-                            preferredRegion: .bottom) {
+                            preferredSlot: .bottom) {
                 AssetBrowserPanel(app: app)
             },
             PanelDescriptor(id: "intent-input",
                             title: localizedPanelTitle(for: "intent-input"),
-                            preferredRegion: .bottom) {
+                            preferredSlot: .bottom) {
                 IntentInputPanel(app: app)
             },
             PanelDescriptor(id: "confirmation-host",
                             title: localizedPanelTitle(for: "confirmation-host"),
-                            preferredRegion: .bottom) {
+                            preferredSlot: .bottom) {
                 ConfirmationHostPanel(app: app)
             },
             PanelDescriptor(id: "render-pipeline",
                             title: localizedPanelTitle(for: "render-pipeline"),
-                            preferredRegion: .bottom) {
+                            preferredSlot: .bottom) {
                 RenderPipelinePanel()
             },
         ])
@@ -271,8 +271,8 @@ enum EditorRootViewFactory {
             group.panels.removeAll { !registeredIDs.contains($0) }
             if group.panels.isEmpty {
                 next.groups.removeValue(forKey: groupID)
-                for index in next.regions.indices {
-                    next.regions[index].removeGroup(groupID)
+                for slotID in Array(next.slots.keys) {
+                    next.slots[slotID]?.removeGroup(groupID)
                 }
                 continue
             }
@@ -293,7 +293,7 @@ enum EditorRootViewFactory {
         for descriptor in registry.descriptors {
             next.panels[descriptor.id] = workspacePanel(for: descriptor)
             guard next.groupContaining(panelID: descriptor.id) == nil else { continue }
-            let groupID = defaultGroupID(for: descriptor.preferredRegion)
+            let groupID = defaultGroupID(for: descriptor.preferredSlot)
             var group = next.groups[groupID] ?? WorkspaceTabGroup(id: groupID, panels: [])
             if !group.panels.contains(descriptor.id) {
                 group.panels.append(descriptor.id)
@@ -301,16 +301,18 @@ enum EditorRootViewFactory {
             group.activePanelID = group.activePanelID ?? descriptor.id
             next.groups[groupID] = group
 
-            var region = next.region(descriptor.preferredRegion)
-            if !region.containsGroup(groupID) {
-                region.appendGroup(groupID)
-                next.setRegion(region)
+            var slot = next.slot(descriptor.preferredSlot)
+            if !slot.containsGroup(groupID) {
+                slot.appendGroup(groupID)
+                next.setSlot(slot)
             }
         }
 
         return WorkspaceDocument(panels: next.panels,
                                  groups: next.groups,
-                                 regions: next.regions,
+                                 slots: next.slots,
+                                 layoutTree: next.layoutTree,
+                                 collapsed: next.collapsed,
                                  floatingWindows: next.floatingWindows,
                                  splitFractions: next.splitFractions,
                                  closedHistory: next.closedHistory)
@@ -321,12 +323,12 @@ enum EditorRootViewFactory {
                        title: descriptor.title,
                        isClosable: descriptor.closable,
                        isDraggable: true,
-                       isCollapsible: descriptor.preferredRegion != .center,
+                       isCollapsible: descriptor.preferredSlot != .center,
                        iconAssetKey: descriptor.iconAssetKey)
     }
 
-    private static func defaultGroupID(for region: WorkspaceRegionID) -> WorkspaceTabGroupID {
-        WorkspaceTabGroupID(rawValue: region.rawValue)
+    private static func defaultGroupID(for slot: WorkspaceSlotID) -> WorkspaceTabGroupID {
+        WorkspaceTabGroupID(rawValue: slot.rawValue)
     }
 
     private static func layoutPersistenceKey(for mode: EditorWorkspaceMode,
@@ -413,7 +415,7 @@ enum EditorWorkspaceDefaults {
                             title: descriptor.title,
                             isClosable: descriptor.closable,
                             isDraggable: true,
-                            isCollapsible: descriptor.preferredRegion != .center,
+                            isCollapsible: descriptor.preferredSlot != .center,
                             iconAssetKey: descriptor.iconAssetKey))
         })
         let fractions = defaultFractions(for: preset)
@@ -432,12 +434,11 @@ enum EditorWorkspaceDefaults {
         return WorkspaceDocument(
             panels: panels,
             groups: groups,
-            regions: [
-                WorkspaceRegion(id: .leading, layout: .group("leading")),
-                WorkspaceRegion(id: .center, layout: .group("center")),
-                WorkspaceRegion(id: .trailing, layout: .group("trailing")),
-                WorkspaceRegion(id: .bottom, layout: .group("bottom")),
-            ],
+            slots: WorkspaceSlot.standardEditorSlots(leading: .group("leading"),
+                                                     center: .group("center"),
+                                                     trailing: .group("trailing"),
+                                                     bottom: .group("bottom")),
+            layoutTree: .group("center"),
             splitFractions: fractions
         )
     }

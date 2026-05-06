@@ -2,56 +2,56 @@ import Foundation
 
 public enum WorkspacePlacementKind: String, Sendable, Codable, Equatable {
     case tabGroup
-    case region
+    case slot
     case split
 }
 
 public struct WorkspaceTarget: Sendable, Codable, Equatable {
-    public var region: WorkspaceRegionID
+    public var slot: WorkspaceSlotID
     public var groupID: WorkspaceTabGroupID?
     public var placement: WorkspacePlacementKind
     public var edge: WorkspaceEdge?
     public var tabIndex: Int?
-    public var regionIndex: Int?
+    public var slotIndex: Int?
     public var fraction: Float
 
-    public init(region: WorkspaceRegionID,
+    public init(slot: WorkspaceSlotID,
                 groupID: WorkspaceTabGroupID? = nil,
                 placement: WorkspacePlacementKind = .tabGroup,
                 edge: WorkspaceEdge? = nil,
                 tabIndex: Int? = nil,
-                regionIndex: Int? = nil,
+                slotIndex: Int? = nil,
                 fraction: Float = 0.5) {
-        self.region = region
+        self.slot = slot
         self.groupID = groupID
         self.placement = placement
         self.edge = edge
         self.tabIndex = tabIndex
-        self.regionIndex = regionIndex
+        self.slotIndex = slotIndex
         self.fraction = WorkspaceSplitFractions.clamp(fraction)
     }
 
-    public static func tabGroup(region: WorkspaceRegionID,
+    public static func tabGroup(slot: WorkspaceSlotID,
                                 groupID: WorkspaceTabGroupID,
                                 tabIndex: Int? = nil) -> WorkspaceTarget {
-        WorkspaceTarget(region: region,
+        WorkspaceTarget(slot: slot,
                         groupID: groupID,
                         placement: .tabGroup,
                         tabIndex: tabIndex)
     }
 
-    public static func region(_ region: WorkspaceRegionID,
+    public static func slot(_ slot: WorkspaceSlotID,
                               index: Int? = nil) -> WorkspaceTarget {
-        WorkspaceTarget(region: region,
-                        placement: .region,
-                        regionIndex: index)
+        WorkspaceTarget(slot: slot,
+                        placement: .slot,
+                        slotIndex: index)
     }
 
-    public static func split(region: WorkspaceRegionID,
+    public static func split(slot: WorkspaceSlotID,
                              anchorGroupID: WorkspaceTabGroupID,
                              edge: WorkspaceEdge,
                              fraction: Float = 0.5) -> WorkspaceTarget {
-        WorkspaceTarget(region: region,
+        WorkspaceTarget(slot: slot,
                         groupID: anchorGroupID,
                         placement: .split,
                         edge: edge,
@@ -60,16 +60,16 @@ public struct WorkspaceTarget: Sendable, Codable, Equatable {
 }
 
 public struct WorkspaceHitTarget: Sendable, Equatable {
-    public var region: WorkspaceRegionID
+    public var slot: WorkspaceSlotID
     public var groupID: WorkspaceTabGroupID?
     public var panelID: WorkspacePanelID?
     public var target: WorkspaceTarget
 
-    public init(region: WorkspaceRegionID,
+    public init(slot: WorkspaceSlotID,
                 groupID: WorkspaceTabGroupID? = nil,
                 panelID: WorkspacePanelID? = nil,
                 target: WorkspaceTarget) {
-        self.region = region
+        self.slot = slot
         self.groupID = groupID
         self.panelID = panelID
         self.target = target
@@ -98,21 +98,21 @@ public enum WorkspaceCommand: Sendable, Equatable {
 
 public struct WorkspaceTransactionResult: Sendable, Equatable {
     public var didChange: Bool
-    public var changedRegions: Set<WorkspaceRegionID>
+    public var changedSlots: Set<WorkspaceSlotID>
     public var focusPanelID: WorkspacePanelID?
     public var persistenceDirty: Bool
 
     public static let unchanged = WorkspaceTransactionResult(didChange: false,
-                                                             changedRegions: [],
+                                                             changedSlots: [],
                                                              focusPanelID: nil,
                                                              persistenceDirty: false)
 
     public init(didChange: Bool,
-                changedRegions: Set<WorkspaceRegionID>,
+                changedSlots: Set<WorkspaceSlotID>,
                 focusPanelID: WorkspacePanelID?,
                 persistenceDirty: Bool) {
         self.didChange = didChange
-        self.changedRegions = changedRegions
+        self.changedSlots = changedSlots
         self.focusPanelID = focusPanelID
         self.persistenceDirty = persistenceDirty
     }
@@ -166,7 +166,7 @@ public final class WorkspaceController: @unchecked Sendable {
             guard document != next else { return .unchanged }
             document = next
             return WorkspaceTransactionResult(didChange: true,
-                                              changedRegions: Set(WorkspaceRegionID.allCases),
+                                              changedSlots: Set(document.slots.keys),
                                               focusPanelID: activeCenterPanel(),
                                               persistenceDirty: true)
         case .collapse(let groupID):
@@ -185,7 +185,7 @@ public final class WorkspaceController: @unchecked Sendable {
             group.activePanelID = panelID
             document.groups[groupID] = group
             return WorkspaceTransactionResult(didChange: true,
-                                              changedRegions: [document.regionContaining(groupID: groupID)].compactSet(),
+                                              changedSlots: [document.slotContaining(groupID: groupID)].compactSet(),
                                               focusPanelID: panelID,
                                               persistenceDirty: true)
         case .reorderPanel(let panelID, let groupID, let index):
@@ -221,8 +221,8 @@ public final class WorkspaceController: @unchecked Sendable {
               group.isCollapsed != collapsed else {
             return .unchanged
         }
-        guard let regionID = document.regionContaining(groupID: groupID),
-              regionID != .center else {
+        guard let slotID = document.slotContaining(groupID: groupID),
+              slotID != .center else {
             return .unchanged
         }
         if collapsed {
@@ -233,8 +233,18 @@ public final class WorkspaceController: @unchecked Sendable {
         }
         group.isCollapsed = collapsed
         document.groups[groupID] = group
+        if collapsed {
+            let edge = collapsedEdge(for: slotID)
+            if !document.collapsed.contains(where: { $0.groupID == groupID }) {
+                document.collapsed.append(WorkspaceCollapsedItem(groupID: groupID,
+                                                                 slotID: slotID,
+                                                                 edge: edge))
+            }
+        } else {
+            document.collapsed.removeAll { $0.groupID == groupID }
+        }
         return WorkspaceTransactionResult(didChange: true,
-                                          changedRegions: [regionID],
+                                          changedSlots: [slotID],
                                           focusPanelID: collapsed ? nil : group.activePanelID,
                                           persistenceDirty: true)
     }
@@ -242,25 +252,25 @@ public final class WorkspaceController: @unchecked Sendable {
     private func movePanel(_ panelID: WorkspacePanelID,
                            to target: WorkspaceTarget) -> WorkspaceTransactionResult {
         guard document.panels[panelID] != nil else { return .unchanged }
-        var changedRegions = Set<WorkspaceRegionID>()
+        var changedSlots = Set<WorkspaceSlotID>()
         var sourceGroupID: WorkspaceTabGroupID?
-        var sourceRegionID: WorkspaceRegionID?
+        var sourceSlotID: WorkspaceSlotID?
 
         if let located = locate(panelID: panelID) {
             sourceGroupID = located.group.id
-            sourceRegionID = located.regionID
+            sourceSlotID = located.slotID
         }
 
-        if let sourceRegionID {
-            changedRegions.insert(sourceRegionID)
+        if let sourceSlotID {
+            changedSlots.insert(sourceSlotID)
         }
 
         let destination = destination(for: target)
-        changedRegions.insert(destination.region)
+        changedSlots.insert(destination.slot)
 
         if let sourceGroupID,
            sourceGroupID == target.groupID,
-           destination.region == sourceRegionID,
+           destination.slot == sourceSlotID,
            destination.placement == .tabGroup {
             guard var group = document.groups[sourceGroupID] else { return .unchanged }
             let didChange = group.activePanelID != panelID || group.isCollapsed
@@ -269,7 +279,7 @@ public final class WorkspaceController: @unchecked Sendable {
             document.groups[group.id] = group
             guard didChange else { return .unchanged }
             return WorkspaceTransactionResult(didChange: true,
-                                              changedRegions: changedRegions,
+                                              changedSlots: changedSlots,
                                               focusPanelID: panelID,
                                               persistenceDirty: true)
         }
@@ -282,16 +292,16 @@ public final class WorkspaceController: @unchecked Sendable {
         if destination.placement == .split,
            let edge = destination.splitEdge,
            let anchorID = destination.anchorGroupID {
-            targetGroupID = makeGroup(in: destination.region,
+            targetGroupID = makeGroup(in: destination.slot,
                                       splitFrom: anchorID,
                                       edge: edge,
                                       fraction: destination.fraction)
         } else if let groupID = destination.anchorGroupID,
                   document.groups[groupID] != nil {
             targetGroupID = groupID
-            ensureGroup(groupID, in: destination.region)
+            ensureGroup(groupID, in: destination.slot)
         } else {
-            targetGroupID = firstGroupID(in: destination.region) ?? makePrimaryGroup(in: destination.region)
+            targetGroupID = firstGroupID(in: destination.slot) ?? makePrimaryGroup(in: destination.slot)
         }
         var targetGroup = document.groups[targetGroupID] ?? WorkspaceTabGroup(id: targetGroupID, panels: [])
         if !targetGroup.panels.contains(panelID) {
@@ -302,7 +312,7 @@ public final class WorkspaceController: @unchecked Sendable {
         document.groups[targetGroupID] = targetGroup
 
         return WorkspaceTransactionResult(didChange: true,
-                                          changedRegions: changedRegions,
+                                          changedSlots: changedSlots,
                                           focusPanelID: panelID,
                                           persistenceDirty: true)
     }
@@ -328,7 +338,7 @@ public final class WorkspaceController: @unchecked Sendable {
         group.pinnedPanelIDs = group.pinnedPanelIDs.filter { group.panels.contains($0) }
         document.groups[groupID] = group
         return WorkspaceTransactionResult(didChange: true,
-                                          changedRegions: [document.regionContaining(groupID: groupID)].compactSet(),
+                                          changedSlots: [document.slotContaining(groupID: groupID)].compactSet(),
                                           focusPanelID: panelID,
                                           persistenceDirty: true)
     }
@@ -340,12 +350,12 @@ public final class WorkspaceController: @unchecked Sendable {
         }
         recordClosed(panelID: panelID,
                      groupID: located.group.id,
-                     regionID: located.regionID,
+                     slotID: located.slotID,
                      floatingWindowID: located.floatingWindowID,
                      index: located.index)
         remove(panelID: panelID, from: located.group.id)
         return WorkspaceTransactionResult(didChange: true,
-                                          changedRegions: [located.regionID].compactSet(),
+                                          changedSlots: [located.slotID].compactSet(),
                                           focusPanelID: document.groups[located.group.id]?.activePanelID,
                                           persistenceDirty: true)
     }
@@ -354,7 +364,7 @@ public final class WorkspaceController: @unchecked Sendable {
                              keeping keepPanelID: WorkspacePanelID) -> WorkspaceTransactionResult {
         guard var group = document.groups[groupID],
               group.panels.contains(keepPanelID),
-              let regionID = document.regionContaining(groupID: groupID) else {
+              let slotID = document.slotContaining(groupID: groupID) else {
             return .unchanged
         }
         let keepSet = Set(group.pinnedPanelIDs + [keepPanelID])
@@ -365,7 +375,7 @@ public final class WorkspaceController: @unchecked Sendable {
         for (index, panelID) in victims {
             recordClosed(panelID: panelID,
                          groupID: groupID,
-                         regionID: regionID,
+                         slotID: slotID,
                          floatingWindowID: nil,
                          index: index)
         }
@@ -376,7 +386,7 @@ public final class WorkspaceController: @unchecked Sendable {
         group.pinnedPanelIDs = group.pinnedPanelIDs.filter { group.panels.contains($0) }
         document.groups[groupID] = group
         return WorkspaceTransactionResult(didChange: true,
-                                          changedRegions: [regionID],
+                                          changedSlots: [slotID],
                                           focusPanelID: keepPanelID,
                                           persistenceDirty: true)
     }
@@ -385,7 +395,7 @@ public final class WorkspaceController: @unchecked Sendable {
                                  of pivotPanelID: WorkspacePanelID) -> WorkspaceTransactionResult {
         guard var group = document.groups[groupID],
               let pivot = group.panels.firstIndex(of: pivotPanelID),
-              let regionID = document.regionContaining(groupID: groupID) else {
+              let slotID = document.slotContaining(groupID: groupID) else {
             return .unchanged
         }
         let victimPairs = group.panels.enumerated().filter { index, panelID in
@@ -395,7 +405,7 @@ public final class WorkspaceController: @unchecked Sendable {
         for (index, panelID) in victimPairs {
             recordClosed(panelID: panelID,
                          groupID: groupID,
-                         regionID: regionID,
+                         slotID: slotID,
                          floatingWindowID: nil,
                          index: index)
         }
@@ -407,7 +417,7 @@ public final class WorkspaceController: @unchecked Sendable {
         group.pinnedPanelIDs = group.pinnedPanelIDs.filter { group.panels.contains($0) }
         document.groups[groupID] = group
         return WorkspaceTransactionResult(didChange: true,
-                                          changedRegions: [regionID],
+                                          changedSlots: [slotID],
                                           focusPanelID: group.activePanelID,
                                           persistenceDirty: true)
     }
@@ -419,14 +429,14 @@ public final class WorkspaceController: @unchecked Sendable {
                 continue
             }
             let groupID: WorkspaceTabGroupID
-            let restoreRegion = closed.regionID ?? .center
+            let restoreSlot = closed.slotID ?? .center
             if document.groups[closed.groupID] != nil {
                 groupID = closed.groupID
-                ensureGroup(groupID, in: restoreRegion)
+                ensureGroup(groupID, in: restoreSlot)
             } else {
                 groupID = closed.groupID
                 document.groups[groupID] = WorkspaceTabGroup(id: groupID, panels: [])
-                ensureGroup(groupID, in: restoreRegion)
+                ensureGroup(groupID, in: restoreSlot)
             }
             var group = document.groups[groupID] ?? WorkspaceTabGroup(id: groupID, panels: [])
             insert(panelID: closed.panelID, into: &group, at: closed.index)
@@ -434,7 +444,7 @@ public final class WorkspaceController: @unchecked Sendable {
             group.isCollapsed = false
             document.groups[groupID] = group
             return WorkspaceTransactionResult(didChange: true,
-                                              changedRegions: [restoreRegion],
+                                              changedSlots: [restoreSlot],
                                               focusPanelID: closed.panelID,
                                               persistenceDirty: true)
         }
@@ -457,7 +467,7 @@ public final class WorkspaceController: @unchecked Sendable {
         group.panels.insert(panelID, at: max(0, min(group.panels.count, index)))
         document.groups[group.id] = group
         return WorkspaceTransactionResult(didChange: true,
-                                          changedRegions: [located.regionID].compactSet(),
+                                          changedSlots: [located.slotID].compactSet(),
                                           focusPanelID: panelID,
                                           persistenceDirty: true)
     }
@@ -468,12 +478,11 @@ public final class WorkspaceController: @unchecked Sendable {
         guard let group = document.groups[groupID],
               !group.panels.isEmpty,
               document.floatingWindowContaining(groupID: groupID) == nil,
-              let regionID = document.regionContaining(groupID: groupID) else {
+              let slotID = document.slotContaining(groupID: groupID) else {
             return .unchanged
         }
-        for index in document.regions.indices {
-            document.regions[index].layout = remove(groupID: groupID, from: document.regions[index].layout)
-        }
+        removeGroupFromAllSlots(groupID)
+        document.collapsed.removeAll { $0.groupID == groupID }
         let zIndex = nextFloatingZIndex()
         let title = group.activePanelID.flatMap { document.panels[$0]?.title }
             ?? group.panels.first.flatMap { document.panels[$0]?.title }
@@ -484,7 +493,7 @@ public final class WorkspaceController: @unchecked Sendable {
                                                                 frame: frame,
                                                                 zIndex: zIndex))
         return WorkspaceTransactionResult(didChange: true,
-                                          changedRegions: [regionID],
+                                          changedSlots: [slotID],
                                           focusPanelID: group.activePanelID,
                                           persistenceDirty: true)
     }
@@ -497,7 +506,7 @@ public final class WorkspaceController: @unchecked Sendable {
         let window = document.floatingWindows.remove(at: windowIndex)
         guard document.groups[window.groupID] != nil else {
             return WorkspaceTransactionResult(didChange: true,
-                                              changedRegions: [],
+                                              changedSlots: [],
                                               focusPanelID: nil,
                                               persistenceDirty: true)
         }
@@ -509,7 +518,7 @@ public final class WorkspaceController: @unchecked Sendable {
             document.groups[window.groupID] = group
         }
         return WorkspaceTransactionResult(didChange: true,
-                                          changedRegions: [destination.region],
+                                          changedSlots: [destination.slot],
                                           focusPanelID: document.groups[window.groupID]?.activePanelID,
                                           persistenceDirty: true)
     }
@@ -522,7 +531,7 @@ public final class WorkspaceController: @unchecked Sendable {
         }
         document.floatingWindows[index].frame = frame
         return WorkspaceTransactionResult(didChange: true,
-                                          changedRegions: [],
+                                          changedSlots: [],
                                           focusPanelID: document.groups[document.floatingWindows[index].groupID]?.activePanelID,
                                           persistenceDirty: true)
     }
@@ -536,13 +545,13 @@ public final class WorkspaceController: @unchecked Sendable {
         document.floatingWindows[index].zIndex = zIndex
         let groupID = document.floatingWindows[index].groupID
         return WorkspaceTransactionResult(didChange: true,
-                                          changedRegions: [],
+                                          changedSlots: [],
                                           focusPanelID: document.groups[groupID]?.activePanelID,
                                           persistenceDirty: true)
     }
 
     private struct Destination {
-        var region: WorkspaceRegionID
+        var slot: WorkspaceSlotID
         var anchorGroupID: WorkspaceTabGroupID?
         var placement: WorkspacePlacementKind
         var splitEdge: WorkspaceEdge?
@@ -551,11 +560,11 @@ public final class WorkspaceController: @unchecked Sendable {
     }
 
     private func destination(for target: WorkspaceTarget) -> Destination {
-        Destination(region: target.region,
+        Destination(slot: target.slot,
                     anchorGroupID: target.groupID,
                     placement: target.placement,
                     splitEdge: target.edge,
-                    insertionIndex: target.regionIndex,
+                    insertionIndex: target.slotIndex,
                     fraction: target.fraction)
     }
 
@@ -566,9 +575,8 @@ public final class WorkspaceController: @unchecked Sendable {
         group.pinnedPanelIDs.removeAll { $0 == panelID }
         if group.panels.isEmpty {
             document.groups.removeValue(forKey: groupID)
-            for index in document.regions.indices {
-                document.regions[index].layout = remove(groupID: groupID, from: document.regions[index].layout)
-            }
+            removeGroupFromAllSlots(groupID)
+            document.collapsed.removeAll { $0.groupID == groupID }
             document.floatingWindows.removeAll { $0.groupID == groupID }
             return
         }
@@ -579,20 +587,20 @@ public final class WorkspaceController: @unchecked Sendable {
     }
 
     private struct LocatedPanel {
-        var regionID: WorkspaceRegionID?
+        var slotID: WorkspaceSlotID?
         var floatingWindowID: WorkspaceFloatingWindowID?
         var group: WorkspaceTabGroup
         var index: Int
     }
 
     private func locate(panelID: WorkspacePanelID) -> LocatedPanel? {
-        for region in document.regions {
-            for groupID in region.layout?.leafGroupIDs ?? [] {
+        for slot in document.slots.values {
+            for groupID in slot.layout?.leafGroupIDs ?? [] {
                 guard let group = document.groups[groupID],
                       let index = group.panels.firstIndex(of: panelID) else {
                     continue
                 }
-                return LocatedPanel(regionID: region.id,
+                return LocatedPanel(slotID: slot.id,
                                     floatingWindowID: nil,
                                     group: group,
                                     index: index)
@@ -603,7 +611,7 @@ public final class WorkspaceController: @unchecked Sendable {
                   let index = group.panels.firstIndex(of: panelID) else {
                 continue
             }
-            return LocatedPanel(regionID: nil,
+            return LocatedPanel(slotID: nil,
                                 floatingWindowID: window.id,
                                 group: group,
                                 index: index)
@@ -622,13 +630,13 @@ public final class WorkspaceController: @unchecked Sendable {
 
     private func recordClosed(panelID: WorkspacePanelID,
                               groupID: WorkspaceTabGroupID,
-                              regionID: WorkspaceRegionID?,
+                              slotID: WorkspaceSlotID?,
                               floatingWindowID: WorkspaceFloatingWindowID?,
                               index: Int) {
         document.closedHistory.removeAll { $0.panelID == panelID }
         document.closedHistory.append(WorkspaceClosedPanel(panelID: panelID,
                                                            groupID: groupID,
-                                                           regionID: regionID,
+                                                           slotID: slotID,
                                                            floatingWindowID: floatingWindowID,
                                                            index: index))
         if document.closedHistory.count > 64 {
@@ -636,74 +644,73 @@ public final class WorkspaceController: @unchecked Sendable {
         }
     }
 
-    private func firstGroupID(in regionID: WorkspaceRegionID) -> WorkspaceTabGroupID? {
-        document.region(regionID).layout?.leafGroupIDs.first
+    private func firstGroupID(in slotID: WorkspaceSlotID) -> WorkspaceTabGroupID? {
+        document.slot(slotID).layout?.leafGroupIDs.first
     }
 
-    private func makeGroup(in regionID: WorkspaceRegionID,
+    private func makeGroup(in slotID: WorkspaceSlotID,
                            splitFrom anchorID: WorkspaceTabGroupID? = nil,
                            edge: WorkspaceEdge? = nil,
                            fraction: Float = 0.5) -> WorkspaceTabGroupID {
-        let id = WorkspaceTabGroupID(rawValue: "\(regionID.rawValue)-\(UUID().uuidString)")
+        let id = WorkspaceTabGroupID(rawValue: "\(slotID.rawValue)-\(UUID().uuidString)")
         document.groups[id] = WorkspaceTabGroup(id: id, panels: [])
-        insertGroup(id, in: regionID, splitFrom: anchorID, edge: edge, fraction: fraction)
+        insertGroup(id, in: slotID, splitFrom: anchorID, edge: edge, fraction: fraction)
         return id
     }
 
-    private func makePrimaryGroup(in regionID: WorkspaceRegionID) -> WorkspaceTabGroupID {
-        let id = WorkspaceTabGroupID(rawValue: regionID.rawValue)
+    private func makePrimaryGroup(in slotID: WorkspaceSlotID) -> WorkspaceTabGroupID {
+        let id = WorkspaceTabGroupID(rawValue: slotID.rawValue)
         guard document.groups[id] == nil else {
-            ensureGroup(id, in: regionID)
+            ensureGroup(id, in: slotID)
             return id
         }
         document.groups[id] = WorkspaceTabGroup(id: id, panels: [])
-        ensureGroup(id, in: regionID)
+        ensureGroup(id, in: slotID)
         return id
     }
 
-    private func ensureGroup(_ groupID: WorkspaceTabGroupID, in regionID: WorkspaceRegionID) {
-        var region = document.region(regionID)
-        guard !region.containsGroup(groupID) else { return }
-        region.layout = append(groupID: groupID, to: region.layout)
-        document.setRegion(region)
+    private func ensureGroup(_ groupID: WorkspaceTabGroupID, in slotID: WorkspaceSlotID) {
+        var slot = document.slot(slotID)
+        guard !slot.containsGroup(groupID) else { return }
+        slot.layout = append(groupID: groupID, to: slot.layout)
+        document.setSlot(slot)
     }
 
     private func insertGroup(_ groupID: WorkspaceTabGroupID,
-                             in regionID: WorkspaceRegionID,
+                             in slotID: WorkspaceSlotID,
                              splitFrom anchorID: WorkspaceTabGroupID?,
                              edge: WorkspaceEdge?,
                              fraction: Float) {
-        var region = document.region(regionID)
-        region.layout = remove(groupID: groupID, from: region.layout)
+        var slot = document.slot(slotID)
+        slot.layout = remove(groupID: groupID, from: slot.layout)
         if let anchorID,
            let edge,
-           contains(groupID: anchorID, in: region.layout) {
-            region.layout = split(anchorGroupID: anchorID,
+           contains(groupID: anchorID, in: slot.layout) {
+            slot.layout = split(anchorGroupID: anchorID,
                                   insertedGroupID: groupID,
                                   edge: edge,
                                   fraction: fraction,
-                                  in: region.layout)
+                                  in: slot.layout)
         } else {
-            region.layout = append(groupID: groupID, to: region.layout)
+            slot.layout = append(groupID: groupID, to: slot.layout)
         }
-        document.setRegion(region)
+        document.setSlot(slot)
     }
 
     private func insertExistingGroup(_ groupID: WorkspaceTabGroupID,
                                      destination: Destination) {
-        for index in document.regions.indices {
-            document.regions[index].layout = remove(groupID: groupID, from: document.regions[index].layout)
-        }
+        removeGroupFromAllSlots(groupID)
+        document.collapsed.removeAll { $0.groupID == groupID }
         if destination.placement == .split,
            let edge = destination.splitEdge {
             insertGroup(groupID,
-                        in: destination.region,
+                        in: destination.slot,
                         splitFrom: destination.anchorGroupID,
                         edge: edge,
                         fraction: destination.fraction)
         } else {
             insertGroup(groupID,
-                        in: destination.region,
+                        in: destination.slot,
                         splitFrom: nil,
                         edge: nil,
                         fraction: destination.fraction)
@@ -712,6 +719,13 @@ public final class WorkspaceController: @unchecked Sendable {
 
     private func nextFloatingZIndex() -> Int {
         (document.floatingWindows.map(\.zIndex).max() ?? 0) + 1
+    }
+
+    private func removeGroupFromAllSlots(_ groupID: WorkspaceTabGroupID) {
+        for slotID in Array(document.slots.keys) {
+            let layout = document.slots[slotID]?.layout
+            document.slots[slotID]?.layout = remove(groupID: groupID, from: layout)
+        }
     }
 
     private func contains(groupID: WorkspaceTabGroupID,
@@ -812,13 +826,29 @@ public final class WorkspaceController: @unchecked Sendable {
         }
         guard changed else { return .unchanged }
         return WorkspaceTransactionResult(didChange: true,
-                                          changedRegions: Set(WorkspaceRegionID.allCases),
+                                          changedSlots: Set(document.slots.keys),
                                           focusPanelID: nil,
                                           persistenceDirty: true)
     }
 
     private func activeCenterPanel() -> WorkspacePanelID? {
-        (document.region(.center).layout?.leafGroupIDs ?? []).lazy.compactMap { self.document.groups[$0]?.activePanelID }.first
+        (document.slot(.center).layout?.leafGroupIDs ?? []).lazy.compactMap { self.document.groups[$0]?.activePanelID }.first
+    }
+
+    private func collapsedEdge(for slotID: WorkspaceSlotID) -> WorkspaceEdge {
+        if case .chrome(let edge, _) = document.slot(slotID).kind {
+            return edge
+        }
+        switch slotID {
+        case .leading:
+            return .leading
+        case .trailing:
+            return .trailing
+        case .top:
+            return .top
+        default:
+            return .bottom
+        }
     }
 
     private func notifyChange() {
@@ -829,8 +859,8 @@ public final class WorkspaceController: @unchecked Sendable {
     }
 }
 
-private extension Array where Element == WorkspaceRegionID? {
-    func compactSet() -> Set<WorkspaceRegionID> {
+private extension Array where Element == WorkspaceSlotID? {
+    func compactSet() -> Set<WorkspaceSlotID> {
         Set(compactMap { $0 })
     }
 }
