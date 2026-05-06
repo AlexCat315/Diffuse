@@ -1,3 +1,4 @@
+import CoreGraphics
 import GuavaUICompose
 import GuavaUIRuntime
 
@@ -270,26 +271,14 @@ private struct _WorkspaceTabBar: View {
         }
         let tabButtons = group.panels.compactMap { panelID -> AnyView? in
             guard let panel = document.panels[panelID] else { return nil }
-            if panelID == group.activePanelID {
-                return AnyView(Button(tooltip: panel.title) {
-                    _ = controller.dispatch(.setActivePanel(groupID: group.id, panelID: panelID))
-                } label: {
-                    Text(panel.title)
-                        .font(.label)
-                }
-                .buttonStyle(.secondary)
+            return AnyView(_WorkspaceTabButton(groupID: group.id,
+                                               panelID: panelID,
+                                               title: panel.title,
+                                               isActive: panelID == group.activePanelID,
+                                               document: document,
+                                               controller: controller)
                 .semanticRole("workspace.tab")
                 .debugName("workspace-tab-\(panelID.rawValue)"))
-            }
-            return AnyView(Button(tooltip: panel.title) {
-                _ = controller.dispatch(.setActivePanel(groupID: group.id, panelID: panelID))
-            } label: {
-                Text(panel.title)
-                    .font(.label)
-            }
-            .buttonStyle(.ghost)
-            .semanticRole("workspace.tab")
-            .debugName("workspace-tab-\(panelID.rawValue)"))
         }
         Row(alignment: .center, spacing: 0) {
             tabButtons
@@ -310,6 +299,191 @@ private struct _WorkspaceTabBar: View {
         .background(.surfaceSunken)
         .frame(height: 30)
         .layoutRole("workspace-tab-bar")
+    }
+}
+
+private struct _WorkspaceTabButton: View {
+    let groupID: WorkspaceTabGroupID
+    let panelID: WorkspacePanelID
+    let title: String
+    let isActive: Bool
+    let document: WorkspaceDocument
+    let controller: WorkspaceController
+
+    @State private var isPressed = false
+    @State private var isHovered = false
+
+    var body: some View {
+        _WorkspaceTabButtonHost(groupID: groupID,
+                                panelID: panelID,
+                                title: title,
+                                isActive: isActive,
+                                isPressed: isPressed,
+                                isHovered: isHovered,
+                                document: document,
+                                controller: controller,
+                                onHoverChange: { hovered in
+                                    if isHovered != hovered {
+                                        isHovered = hovered
+                                    }
+                                },
+                                onDown: {
+                                    if !isPressed {
+                                        isPressed = true
+                                    }
+                                },
+                                onCancelPress: {
+                                    isPressed = false
+                                },
+                                onClick: {
+                                    isPressed = false
+                                    _ = controller.dispatch(.setActivePanel(groupID: groupID, panelID: panelID))
+                                },
+                                onDrop: { target in
+                                    isPressed = false
+                                    _ = controller.dispatch(.movePanel(panelID, to: target))
+                                })
+    }
+}
+
+private struct _WorkspaceTabButtonHost: _PrimitiveView {
+    let groupID: WorkspaceTabGroupID
+    let panelID: WorkspacePanelID
+    let title: String
+    let isActive: Bool
+    let isPressed: Bool
+    let isHovered: Bool
+    let document: WorkspaceDocument
+    let controller: WorkspaceController
+    let onHoverChange: (Bool) -> Void
+    let onDown: () -> Void
+    let onCancelPress: () -> Void
+    let onClick: () -> Void
+    let onDrop: (WorkspaceTarget) -> Void
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = true
+        node.isFocusable = true
+        return node
+    }
+
+    func _updateNode(_ node: Node) {
+        node.cursor = .pointer
+        guard let registry = InteractionRegistryHolder.current else {
+            InteractionRegistryHolder.current?.remove(node)
+            return
+        }
+
+        let hoverChange = onHoverChange
+        let down = onDown
+        let cancelPress = onCancelPress
+        let click = onClick
+        let drop = onDrop
+        let document = document
+        let groupID = groupID
+        let panelID = panelID
+
+        registry.setHover(node) { phase in
+            switch phase {
+            case .enter:
+                hoverChange(true)
+            case .leave:
+                hoverChange(false)
+            }
+        }
+        registry.setPointer(node, route: .dockDrag) { event, phase, _ in
+            guard event.button == .left else { return .ignored }
+            switch phase {
+            case .down:
+                guard document.panels[panelID]?.isDraggable != false else {
+                    return .ignored
+                }
+                node.attachments[Self.pressKey] = _WorkspaceTabPressState(downX: event.x,
+                                                                           downY: event.y,
+                                                                           lastX: event.x,
+                                                                           lastY: event.y,
+                                                                           didDrag: false)
+                PointerCaptureHolder.current?.acquire(node)
+                down()
+                return .handled
+            case .up:
+                let state = node.attachments[Self.pressKey] as? _WorkspaceTabPressState
+                node.attachments.removeValue(forKey: Self.pressKey)
+                if PointerCaptureHolder.current?.target === node {
+                    PointerCaptureHolder.current?.release()
+                }
+                guard let state else { return .ignored }
+                if state.didDrag {
+                    if let target = resolveWorkspaceDropTarget(x: event.x,
+                                                               y: event.y,
+                                                               sourceGroupID: groupID,
+                                                               sourcePanelID: panelID,
+                                                               document: document,
+                                                               from: node) {
+                        drop(target)
+                    } else {
+                        cancelPress()
+                    }
+                    return .handled
+                }
+                click()
+                return .handled
+            }
+        }
+        registry.setMotion(node, route: .dockDrag) { event, _ in
+            guard PointerCaptureHolder.current?.target === node,
+                  let state = node.attachments[Self.pressKey] as? _WorkspaceTabPressState else {
+                return .ignored
+            }
+            let dx = event.x - state.downX
+            let dy = event.y - state.downY
+            state.lastX = event.x
+            state.lastY = event.y
+            if !state.didDrag, max(abs(dx), abs(dy)) >= 4 {
+                state.didDrag = true
+                cancelPress()
+            }
+            return state.didDrag ? .handled : .ignored
+        }
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        layout.flexDirection = .row
+        layout.alignItems = .center
+        layout.justifyContent = .center
+        return layout
+    }
+
+    func _children(for node: Node) -> [any View] {
+        let style = isActive ? AnyButtonStyle(SecondaryButtonStyle()) : AnyButtonStyle(GhostButtonStyle())
+        let config = ButtonStyleConfiguration(label: AnyView(Text(title).font(.label)),
+                                              role: .normal,
+                                              isPressed: isPressed,
+                                              isHovered: isHovered,
+                                              isFocused: FocusChainHolder.current?.focused === node,
+                                              isEnabled: true,
+                                              theme: node.theme)
+        return [style.makeBody(config)]
+    }
+
+    static let pressKey = "__workspace_tab_press"
+}
+
+private final class _WorkspaceTabPressState {
+    let downX: Float
+    let downY: Float
+    var lastX: Float
+    var lastY: Float
+    var didDrag: Bool
+
+    init(downX: Float, downY: Float, lastX: Float, lastY: Float, didDrag: Bool) {
+        self.downX = downX
+        self.downY = downY
+        self.lastX = lastX
+        self.lastY = lastY
+        self.didDrag = didDrag
     }
 }
 
@@ -416,6 +590,7 @@ private struct _WorkspaceSideRailButtonStyle: ButtonStyle {
                 .foregroundColor(SemanticColorRef.onSurface)
         }
         .frame(width: 32)
+        .padding(horizontal: 4, vertical: 0)
         .background(bg)
         .cornerRadius(theme.radius.sm)
         .border(border, width: borderWidth)
@@ -437,7 +612,7 @@ private struct _WorkspaceVerticalTitle: View {
         Box(direction: .column, alignItems: .center, justifyContent: .center, spacing: 1) {
             glyphs
         }
-        .frame(width: 32, minHeight: max(72, Float(characters.count) * 13 + 16))
+        .frame(width: 24, minHeight: max(72, Float(characters.count) * 13 + 16))
     }
 
     private var characters: [String] {
@@ -473,6 +648,95 @@ private func railItems(group: WorkspaceTabGroup,
         guard let panel = document.panels[panelID] else { return nil }
         return RailItem(panelID: panelID, title: panel.title)
     }
+}
+
+private func resolveWorkspaceDropTarget(x: Float,
+                                        y: Float,
+                                        sourceGroupID: WorkspaceTabGroupID,
+                                        sourcePanelID: WorkspacePanelID,
+                                        document: WorkspaceDocument,
+                                        from node: Node) -> WorkspaceTarget? {
+    guard let root = workspaceRoot(from: node) else { return nil }
+    let point = CGPoint(x: CGFloat(x), y: CGFloat(y))
+
+    let visibleGroupIDs = document.regions.flatMap { region in
+        region.groupIDs.filter { document.groups[$0]?.isCollapsed == false }
+    }
+    for groupID in visibleGroupIDs {
+        guard let groupNode = firstNode(rootedAt: root,
+                                        debugName: "workspace-group-\(groupID.rawValue)") else {
+            continue
+        }
+        let frame = absoluteFrame(of: groupNode)
+        guard frame.contains(point) else { continue }
+        guard let regionID = document.regionContaining(groupID: groupID) else { continue }
+        let zone = dropZone(in: frame, point: point)
+        if groupID == sourceGroupID, zone == .tabGroup {
+            return WorkspaceTarget(region: regionID, groupID: groupID, zone: .tabGroup)
+        }
+        return WorkspaceTarget(region: regionID, groupID: groupID, zone: zone)
+    }
+
+    for regionID in WorkspaceRegionID.allCases {
+        guard regionID != .center || document.panels[sourcePanelID]?.isDraggable != false,
+              let regionNode = firstNode(rootedAt: root,
+                                         debugName: "workspace-region-\(regionID.rawValue)") else {
+            continue
+        }
+        let frame = absoluteFrame(of: regionNode)
+        guard frame.contains(point) else { continue }
+        let targetGroup = visibleGroups(in: regionID, document: document).first?.id
+        return WorkspaceTarget(region: regionID, groupID: targetGroup, zone: .region)
+    }
+
+    return nil
+}
+
+private func dropZone(in frame: CGRect, point: CGPoint) -> WorkspaceDropZone {
+    let localX = Float((point.x - frame.minX) / max(frame.width, 1))
+    let localY = Float((point.y - frame.minY) / max(frame.height, 1))
+    let edge: Float = 0.24
+    if localX < edge { return .left }
+    if localX > 1 - edge { return .right }
+    if localY < edge { return .top }
+    if localY > 1 - edge { return .bottom }
+    return .tabGroup
+}
+
+private func workspaceRoot(from node: Node) -> Node? {
+    var cursor: Node? = node
+    var fallback: Node?
+    while let current = cursor {
+        if (current.attachments[LayoutDebugAttachmentKey.debugName] as? String) == "workspace" {
+            return current
+        }
+        fallback = current
+        cursor = current.parent
+    }
+    return fallback
+}
+
+private func firstNode(rootedAt root: Node, debugName: String) -> Node? {
+    if (root.attachments[LayoutDebugAttachmentKey.debugName] as? String) == debugName {
+        return root
+    }
+    for child in root.children {
+        if let found = firstNode(rootedAt: child, debugName: debugName) {
+            return found
+        }
+    }
+    return nil
+}
+
+private func absoluteFrame(of node: Node) -> CGRect {
+    var frame = node.frame
+    var cursor = node.parent
+    while let current = cursor {
+        frame.origin.x += current.frame.origin.x
+        frame.origin.y += current.frame.origin.y
+        cursor = current.parent
+    }
+    return frame
 }
 
 private enum WorkspaceIcons {
