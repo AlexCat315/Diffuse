@@ -6,6 +6,7 @@ public struct WorkspaceView: View {
     public let content: (WorkspacePanelID) -> AnyView
 
     @State private var version: UInt64 = 0
+    @State private var subscriptionIdentity = WorkspaceSubscriptionIdentity()
 
     public init(controller: WorkspaceController,
                 content: @escaping (WorkspacePanelID) -> AnyView) {
@@ -17,7 +18,7 @@ public struct WorkspaceView: View {
         let _ = version
         let bind = $version
         let _ = WorkspaceControllerSubscription.acquire(controller: controller,
-                                                        tag: ObjectIdentifier(controller),
+                                                        tag: ObjectIdentifier(subscriptionIdentity),
                                                         bind: bind)
         _WorkspaceShell(document: controller.document,
                         controller: controller,
@@ -27,6 +28,8 @@ public struct WorkspaceView: View {
             .debugName("workspace")
     }
 }
+
+private final class WorkspaceSubscriptionIdentity {}
 
 private enum WorkspaceControllerSubscription {
     struct Key: Hashable {
@@ -40,11 +43,13 @@ private enum WorkspaceControllerSubscription {
                         tag: ObjectIdentifier,
                         bind: Binding<UInt64>) -> WorkspaceController.SubscriptionToken {
         let key = Key(controller: ObjectIdentifier(controller), tag: tag)
-        if let token = tokens[key] {
-            return token
+        if let existing = tokens[key] {
+            controller.unsubscribe(existing)
         }
         let token = controller.subscribe { workspace in
-            bind.wrappedValue = workspace.version
+            if bind.wrappedValue != workspace.version {
+                bind.wrappedValue = workspace.version
+            }
         }
         tokens[key] = token
         return token
@@ -61,64 +66,97 @@ private struct _WorkspaceShell: View {
         let leadingCollapsed = !collapsedGroups(in: .leading, document: document).isEmpty
         let trailingVisible = !visibleGroups(in: .trailing, document: document).isEmpty
         let trailingCollapsed = !collapsedGroups(in: .trailing, document: document).isEmpty
-        let bottomVisible = !visibleGroups(in: .bottom, document: document).isEmpty
-        let bottomCollapsed = !collapsedGroups(in: .bottom, document: document).isEmpty
+        let weights = WorkspaceShellWeights(document: document,
+                                            leadingVisible: leadingVisible,
+                                            trailingVisible: trailingVisible)
         Box(direction: .row, alignItems: .stretch, spacing: 0) {
             if leadingCollapsed {
                 _WorkspaceRail(regionID: .leading,
                                document: document,
                                controller: controller)
+                    .id("workspace-rail-leading")
             }
             if leadingVisible {
                 _WorkspaceSideRegion(regionID: .leading,
                                      document: document,
                                      controller: controller,
                                      content: content)
-                    .flex(document.splitFractions.leading, shrink: 1, basis: 0)
+                    .id("workspace-region-leading")
+                    .flex(weights.leading, shrink: 1, basis: 0)
             }
-            Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                Box(direction: .row, alignItems: .stretch, spacing: 0) {
-                    _WorkspaceRegionView(regionID: .center,
-                                         document: document,
-                                         controller: controller,
-                                         content: content)
-                        .flex(trailingVisible ? document.splitFractions.centerTrailing : 1,
-                              shrink: 1,
-                              basis: 0)
-                    if trailingVisible {
-                        Divider(axis: .vertical)
-                        _WorkspaceSideRegion(regionID: .trailing,
-                                             document: document,
-                                             controller: controller,
-                                             content: content)
-                            .flex(1 - document.splitFractions.centerTrailing,
-                                  shrink: 1,
-                                  basis: 0)
-                    }
-                }
-                .flex(bottomVisible ? document.splitFractions.topBottom : 1,
-                      shrink: 1,
-                      basis: 0)
-                if bottomVisible || bottomCollapsed {
-                    Divider()
-                    _WorkspaceBottomSlot(document: document,
-                                         controller: controller,
-                                         content: content)
-                        .flex(bottomVisible ? 1 - document.splitFractions.topBottom : 0,
-                              shrink: 1,
-                              basis: bottomVisible ? 0 : 40)
-                }
+            _WorkspaceCenterColumn(document: document,
+                                   controller: controller,
+                                   content: content)
+                .id("workspace-center-column")
+                .flex(weights.center, shrink: 1, basis: 0)
+            if trailingVisible {
+                Divider(axis: .vertical)
+                    .id("workspace-divider-trailing")
+                _WorkspaceSideRegion(regionID: .trailing,
+                                     document: document,
+                                     controller: controller,
+                                     content: content)
+                    .id("workspace-region-trailing")
+                    .flex(weights.trailing, shrink: 1, basis: 0)
             }
-            .flex(leadingVisible ? 1 - document.splitFractions.leading : 1,
-                  shrink: 1,
-                  basis: 0)
             if trailingCollapsed {
                 _WorkspaceRail(regionID: .trailing,
                                document: document,
                                controller: controller)
+                    .id("workspace-rail-trailing")
             }
         }
         .background(.surfaceSunken)
+        .flex()
+    }
+}
+
+private struct WorkspaceShellWeights {
+    var leading: Float
+    var center: Float
+    var trailing: Float
+
+    init(document: WorkspaceDocument,
+         leadingVisible: Bool,
+         trailingVisible: Bool) {
+        leading = leadingVisible ? document.splitFractions.leading : 0
+        let remaining = max(0.05, 1 - leading)
+        if trailingVisible {
+            center = remaining * document.splitFractions.centerTrailing
+            trailing = remaining * (1 - document.splitFractions.centerTrailing)
+        } else {
+            center = remaining
+            trailing = 0
+        }
+    }
+}
+
+private struct _WorkspaceCenterColumn: View {
+    let document: WorkspaceDocument
+    let controller: WorkspaceController
+    let content: (WorkspacePanelID) -> AnyView
+
+    var body: some View {
+        let bottomVisible = !visibleGroups(in: .bottom, document: document).isEmpty
+        let bottomCollapsed = !collapsedGroups(in: .bottom, document: document).isEmpty
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            _WorkspaceRegionView(regionID: .center,
+                                 document: document,
+                                 controller: controller,
+                                 content: content)
+                .flex(bottomVisible ? document.splitFractions.topBottom : 1,
+                      shrink: 1,
+                      basis: 0)
+            if bottomVisible || bottomCollapsed {
+                Divider()
+                _WorkspaceBottomSlot(document: document,
+                                     controller: controller,
+                                     content: content)
+                    .flex(bottomVisible ? 1 - document.splitFractions.topBottom : 0,
+                          shrink: 1,
+                          basis: bottomVisible ? 0 : 40)
+            }
+        }
         .flex()
     }
 }
@@ -151,12 +189,14 @@ private struct _WorkspaceBottomSlot: View {
                                      document: document,
                                      controller: controller,
                                      content: content)
+                    .id("workspace-region-bottom")
                     .flex()
             }
             if !collapsed.isEmpty {
                 _WorkspaceRail(regionID: .bottom,
                                document: document,
                                controller: controller)
+                    .id("workspace-rail-bottom")
             }
         }
         .layoutRole("workspace-bottom-slot")
@@ -285,7 +325,8 @@ private struct _WorkspaceRail: View {
                 AnyView(_WorkspaceRailButton(regionID: regionID,
                                              groupID: group.id,
                                              title: item.title,
-                                             controller: controller))
+                                             controller: controller)
+                    .id("workspace-restore-\(regionID.rawValue)-\(group.id.rawValue)-\(item.panelID.rawValue)"))
             }
         }
         if groups.isEmpty {
@@ -321,10 +362,10 @@ private struct _WorkspaceRailButton: View {
     let controller: WorkspaceController
 
     var body: some View {
-        Button(tooltip: title) {
-            _ = controller.dispatch(.expand(groupID))
-        } label: {
-            if regionID == .bottom {
+        if regionID == .bottom {
+            Button(tooltip: title) {
+                _ = controller.dispatch(.expand(groupID))
+            } label: {
                 Row(alignment: .center, spacing: 6) {
                     Image(resource: WorkspaceIcons.expandDown,
                           width: 10,
@@ -336,13 +377,50 @@ private struct _WorkspaceRailButton: View {
                         .font(.label)
                 }
                 .padding(horizontal: 8, vertical: 4)
-            } else {
+            }
+            .buttonStyle(.secondary)
+            .semanticRole("workspace.rail.restore")
+            .debugName("workspace-restore-\(groupID.rawValue)")
+        } else {
+            Button(tooltip: title) {
+                _ = controller.dispatch(.expand(groupID))
+            } label: {
                 _WorkspaceVerticalTitle(title: title)
             }
+            .buttonStyle(_WorkspaceSideRailButtonStyle())
+            .semanticRole("workspace.rail.restore")
+            .debugName("workspace-restore-\(groupID.rawValue)")
         }
-        .buttonStyle(.secondary)
-        .semanticRole("workspace.rail.restore")
-        .debugName("workspace-restore-\(groupID.rawValue)")
+    }
+}
+
+private struct _WorkspaceSideRailButtonStyle: ButtonStyle {
+    func makeBody(configuration: ButtonStyleConfiguration) -> some View {
+        let theme = configuration.theme
+        let bg: Color = {
+            if !configuration.isEnabled { return theme.colors.surfaceSunken }
+            let base = theme.colors.surfaceRaised
+            if configuration.isPressed { return base.composited(over: theme.colors.stateLayerPressed) }
+            if configuration.isHovered { return base.composited(over: theme.colors.stateLayerHover) }
+            return base
+        }()
+        let border = configuration.isFocused ? theme.colors.focusRing : theme.colors.border
+        let borderWidth: Float = configuration.isFocused ? 2 : 1
+
+        return Box(direction: .column,
+                   alignItems: .center,
+                   justifyContent: .center,
+                   spacing: 0) {
+            AnyView(configuration.label)
+                .font(SemanticFontRef.bodyStrong)
+                .foregroundColor(SemanticColorRef.onSurface)
+        }
+        .frame(width: 32)
+        .background(bg)
+        .cornerRadius(theme.radius.sm)
+        .border(border, width: borderWidth)
+        .opacity(configuration.isEnabled ? 1 : 0.55)
+        .animation(.semantic(.snappy, in: theme), value: configuration.interactionKey)
     }
 }
 

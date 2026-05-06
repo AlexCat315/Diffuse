@@ -366,12 +366,11 @@ public final class ViewGraph {
         }
 
         // Reorder layout siblings to match. Anchor nodes (user-view scopes,
-        // scope-applying modifiers) carry no LayoutNode and are simply absent
-        // from this subset; their relative order in `layoutParent.children`
-        // is unaffected because they were never there.
+        // scope-applying modifiers) carry no LayoutNode, so collect the
+        // top-level layout nodes they produced under this layout parent.
         if let layoutParent {
-            let orderedLayouts = orderedNodes.compactMap {
-                layoutOf[ObjectIdentifier($0)]
+            let orderedLayouts = orderedNodes.flatMap {
+                topLevelLayouts(for: $0)
             }
             if orderedLayouts.count == layoutParent.children.count {
                 layoutParent.reorderChildren(orderedLayouts)
@@ -584,6 +583,13 @@ public final class ViewGraph {
         }
         let nextParent = myLN ?? parentLayout
         for child in node.children { forgetSubtreeLayout(child, parentLayout: nextParent) }
+    }
+
+    private func topLevelLayouts(for node: Node) -> [LayoutNode] {
+        if let layout = layoutOf[ObjectIdentifier(node)] {
+            return [layout]
+        }
+        return node.children.flatMap { topLevelLayouts(for: $0) }
     }
 }
 
