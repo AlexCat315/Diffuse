@@ -52,6 +52,9 @@ final class WorkspaceViewTests: XCTestCase {
         let leadingRail = rig.frame(named: "workspace-rail-leading")
         let trailingRail = rig.frame(named: "workspace-rail-trailing")
         let bottomRail = rig.frame(named: "workspace-rail-bottom")
+        let leadingRestore = rig.frame(named: "workspace-restore-leading")
+        let trailingRestore = rig.frame(named: "workspace-restore-trailing")
+        let bottomRestore = rig.frame(named: "workspace-restore-bottom")
 
         XCTAssertNil(rig.optionalFrame(named: "workspace-region-leading"))
         XCTAssertNil(rig.optionalFrame(named: "workspace-region-trailing"))
@@ -65,6 +68,12 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertEqual(bottomRail.minX, leadingRail.maxX, accuracy: 1.0)
         XCTAssertEqual(bottomRail.maxX, trailingRail.minX, accuracy: 1.0)
         XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
+        XCTAssertGreaterThanOrEqual(leadingRestore.minX, leadingRail.minX)
+        XCTAssertLessThanOrEqual(leadingRestore.maxX, leadingRail.maxX)
+        XCTAssertGreaterThanOrEqual(trailingRestore.minX, trailingRail.minX)
+        XCTAssertLessThanOrEqual(trailingRestore.maxX, trailingRail.maxX)
+        XCTAssertGreaterThanOrEqual(bottomRestore.minX, bottomRail.minX)
+        XCTAssertLessThanOrEqual(bottomRestore.maxX, bottomRail.maxX)
     }
 
     func testClickingBottomCollapseKeepsRailInCenterBottomSlot() {
@@ -81,6 +90,52 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertEqual(bottomRail.minX, center.minX, accuracy: 1.0)
         XCTAssertEqual(bottomRail.maxX, center.maxX, accuracy: 1.0)
         XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
+    }
+
+    func testClickingLeftRightThenBottomCanCollapseAndRestoreInPlace() {
+        let rig = makeRigWithStatusBar(width: 1000, height: 640)
+
+        rig.click(rig.frame(named: "workspace-collapse-leading").center)
+        rig.click(rig.frame(named: "workspace-collapse-trailing").center)
+        rig.click(rig.frame(named: "workspace-collapse-bottom").center)
+
+        XCTAssertEqual(rig.controller.document.groups["leading"]?.isCollapsed, true)
+        XCTAssertEqual(rig.controller.document.groups["trailing"]?.isCollapsed, true)
+        XCTAssertEqual(rig.controller.document.groups["bottom"]?.isCollapsed, true)
+        XCTAssertNil(rig.optionalFrame(named: "workspace-region-leading"))
+        XCTAssertNil(rig.optionalFrame(named: "workspace-region-trailing"))
+        XCTAssertNil(rig.optionalFrame(named: "workspace-region-bottom"))
+
+        let collapsedStatusBar = rig.frame(named: "editor-status-bar")
+        let leadingRail = rig.frame(named: "workspace-rail-leading")
+        let trailingRail = rig.frame(named: "workspace-rail-trailing")
+        let bottomRail = rig.frame(named: "workspace-rail-bottom")
+        XCTAssertEqual(leadingRail.minX, 0, accuracy: 0.5)
+        XCTAssertEqual(trailingRail.maxX, 1000, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.minX, leadingRail.maxX, accuracy: 1.0)
+        XCTAssertEqual(bottomRail.maxX, trailingRail.minX, accuracy: 1.0)
+        XCTAssertEqual(bottomRail.maxY, collapsedStatusBar.minY, accuracy: 1.0)
+
+        rig.click(rig.frame(named: "workspace-restore-leading").center)
+        rig.click(rig.frame(named: "workspace-restore-trailing").center)
+        rig.click(rig.frame(named: "workspace-restore-bottom").center)
+
+        let leadingRegion = rig.frame(named: "workspace-region-leading")
+        let centerRegion = rig.frame(named: "workspace-region-center")
+        let trailingRegion = rig.frame(named: "workspace-region-trailing")
+        let bottomRegion = rig.frame(named: "workspace-region-bottom")
+        let restoredStatusBar = rig.frame(named: "editor-status-bar")
+
+        XCTAssertNil(rig.optionalFrame(named: "workspace-rail-leading"))
+        XCTAssertNil(rig.optionalFrame(named: "workspace-rail-trailing"))
+        XCTAssertNil(rig.optionalFrame(named: "workspace-rail-bottom"))
+        XCTAssertEqual(leadingRegion.minX, 0, accuracy: 0.5)
+        XCTAssertEqual(leadingRegion.maxX, centerRegion.minX, accuracy: 1.0)
+        XCTAssertLessThan(centerRegion.maxX, trailingRegion.minX)
+        XCTAssertEqual(bottomRegion.minX, centerRegion.minX, accuracy: 1.0)
+        XCTAssertEqual(bottomRegion.maxX, centerRegion.maxX, accuracy: 1.0)
+        XCTAssertEqual(restoredStatusBar.maxY, 640, accuracy: 0.5)
+        XCTAssertEqual(bottomRegion.maxY, restoredStatusBar.minY, accuracy: 1.0)
     }
 
     func testReinstalledWorkspaceWithSameControllerStillReceivesModelUpdates() {
