@@ -110,11 +110,15 @@ public final class EventDispatcher {
         if let captured = capture.target {
             let path = pathFromRoot(to: captured)
             _ = deliver(path: path, kind: .pointer(event, .up))
+            if capture.target == nil {
+                refreshHover(at: CGPoint(x: CGFloat(event.x), y: CGFloat(event.y)))
+            }
             return
         }
         let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
         guard let hit = hitTest(point: point) else { return }
         _ = deliver(path: hit.path, kind: .pointer(event, .up))
+        refreshHover(at: point)
     }
 
     private func dispatchMotion(_ event: MouseMotionEvent) {
@@ -132,6 +136,14 @@ public final class EventDispatcher {
         }
         updateHoverPath(to: hit.path)
         _ = deliver(path: hit.path, kind: .motion(event))
+    }
+
+    private func refreshHover(at point: CGPoint) {
+        if let hit = hitTest(point: point) {
+            updateHoverPath(to: hit.path)
+        } else {
+            updateHoverPath(to: [])
+        }
     }
 
     private func dispatchWheel(_ event: MouseWheelEvent) {

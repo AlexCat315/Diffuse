@@ -23,6 +23,22 @@ public struct ButtonStyleConfiguration {
     public let isFocused: Bool
     public let isEnabled: Bool
     public let theme: Theme
+
+    public init(label: any View,
+                role: ButtonRole,
+                isPressed: Bool,
+                isHovered: Bool,
+                isFocused: Bool,
+                isEnabled: Bool,
+                theme: Theme) {
+        self.label = label
+        self.role = role
+        self.isPressed = isPressed
+        self.isHovered = isHovered
+        self.isFocused = isFocused
+        self.isEnabled = isEnabled
+        self.theme = theme
+    }
 }
 
 /// Equatable snapshot of the interaction-driven flags of a
