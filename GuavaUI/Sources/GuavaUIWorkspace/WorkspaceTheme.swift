@@ -6,15 +6,18 @@ public struct WorkspaceTheme: Sendable {
     public var bottomRailHeight: Float
     public var tabBarHeight: Float
     public var splitDividerThickness: Float
+    public var splitDividerHitSlop: Float
 
     public init(sideRailWidth: Float = 40,
                 bottomRailHeight: Float = 40,
                 tabBarHeight: Float = 30,
-                splitDividerThickness: Float = 1) {
+                splitDividerThickness: Float = 1,
+                splitDividerHitSlop: Float = 4) {
         self.sideRailWidth = sideRailWidth
         self.bottomRailHeight = bottomRailHeight
         self.tabBarHeight = tabBarHeight
         self.splitDividerThickness = splitDividerThickness
+        self.splitDividerHitSlop = splitDividerHitSlop
     }
 }
 
@@ -31,4 +34,3 @@ public extension View {
 func resolveWorkspaceTheme(on node: Node) -> WorkspaceTheme {
     node.compositionValue(of: WorkspaceThemeEnvironment.key)
 }
-

@@ -1,9 +1,9 @@
 import Foundation
-import GuavaUICompose
+import GuavaUIWorkspace
 
-/// Disk persistence for the demo's `DockController` layout.
+/// Disk persistence for the demo's `WorkspaceController` layout.
 ///
-/// File path: `~/.guava/dock-demo.json`. The directory is created on first
+/// File path: `~/.guava/workspace-demo.json`. The directory is created on first
 /// save. Reads return `nil` when the file is missing or corrupt — callers
 /// should fall back to the built-in default layout.
 enum DemoLayoutPersistence {
@@ -11,10 +11,10 @@ enum DemoLayoutPersistence {
         let home = FileManager.default.homeDirectoryForCurrentUser
         return home
             .appendingPathComponent(".guava", isDirectory: true)
-            .appendingPathComponent("dock-demo.json", isDirectory: false)
+            .appendingPathComponent("workspace-demo.json", isDirectory: false)
     }
 
-    static func save(_ snapshot: DockLayoutSnapshot) throws {
+    static func save(_ document: WorkspaceDocument) throws {
         let url = path
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
@@ -22,17 +22,17 @@ enum DemoLayoutPersistence {
         )
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        let data = try encoder.encode(snapshot)
+        let data = try encoder.encode(document)
         try data.write(to: url, options: .atomic)
     }
 
-    static func load() -> DockLayoutSnapshot? {
+    static func load() -> WorkspaceDocument? {
         let url = path
         guard FileManager.default.fileExists(atPath: url.path),
               let data = try? Data(contentsOf: url) else {
             return nil
         }
-        return try? JSONDecoder().decode(DockLayoutSnapshot.self, from: data)
+        return try? JSONDecoder().decode(WorkspaceDocument.self, from: data)
     }
 
     @discardableResult
