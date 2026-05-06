@@ -346,8 +346,15 @@ enum EditorRootViewFactory {
 
         do {
             let data = try Data(contentsOf: layoutPath)
-            return try JSONDecoder().decode(WorkspaceDocument.self, from: data)
+            let document = try JSONDecoder().decode(WorkspaceDocument.self, from: data)
+            guard document.hasValidLayoutReferences else {
+                try? FileManager.default.removeItem(at: layoutPath)
+                fputs("[EditorRootViewFactory] discarded obsolete workspace layout: missing layout tree references\n", stderr)
+                return nil
+            }
+            return document
         } catch {
+            try? FileManager.default.removeItem(at: layoutPath)
             fputs("[EditorRootViewFactory] discarded invalid workspace layout: \(error)\n", stderr)
             return nil
         }
