@@ -77,7 +77,7 @@ private struct _WorkspaceShell: View {
         let topVisible = !visibleGroups(in: .top, document: document).isEmpty
         let topCollapsed = !collapsedGroups(in: .top, document: document).isEmpty
         let topChrome = chromeSlots(edge: .top, document: document)
-        let bottomChrome = chromeSlots(edge: .bottom, document: document)
+        let bottomChrome = visibleChromeSlots(edge: .bottom, document: document)
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             topChrome.map { slot in
                 AnyView(_WorkspaceChromeSlot(slot: slot, document: document, controller: controller)
@@ -402,7 +402,8 @@ private struct _WorkspaceCenterColumn: View {
 
     var body: some View {
         let bottomVisible = !visibleGroups(in: .bottom, document: document).isEmpty
-        let bottomCollapsed = !collapsedGroups(in: .bottom, document: document).isEmpty
+        let bottomCollapsed = !railGroups(in: .bottom, document: document).isEmpty
+        let bottomChrome = collapsedChromeSlot(edge: .bottom, document: document)
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             _WorkspaceSlotView(slotID: .center,
                                  document: document,
@@ -411,29 +412,25 @@ private struct _WorkspaceCenterColumn: View {
                 .flex(bottomVisible ? document.splitFractions.topBottom : 1,
                       shrink: 1,
                       basis: 0)
-            if bottomVisible || bottomCollapsed {
-                if bottomVisible {
-                    _WorkspaceSplitDivider(splitID: "topBottom",
-                                           axis: .horizontal,
-                                           controller: controller)
-                        .debugName("workspace-split-topBottom")
-                        .id("workspace-split-topBottom")
-                } else {
-                    Divider()
-                }
-                if bottomVisible {
-                    _WorkspaceBottomSlot(document: document,
-                                         controller: controller,
-                                         content: content)
+            if bottomVisible {
+                _WorkspaceSplitDivider(splitID: "topBottom",
+                                       axis: .horizontal,
+                                       controller: controller)
+                    .debugName("workspace-split-topBottom")
+                    .id("workspace-split-topBottom")
+                _WorkspaceBottomSlot(document: document,
+                                     controller: controller,
+                                     content: content)
                         .flex(1 - document.splitFractions.topBottom,
                               shrink: 1,
                               basis: 0)
-                } else {
-                    _WorkspaceBottomSlot(document: document,
-                                         controller: controller,
-                                         content: content)
-                        .frame(height: _WorkspaceMetrics.railThickness)
-                }
+            }
+            if bottomCollapsed, let bottomChrome {
+                Divider()
+                _WorkspaceChromeSlot(slot: bottomChrome,
+                                     document: document,
+                                     controller: controller)
+                    .id("workspace-chrome-\(bottomChrome.id.rawValue)")
             }
         }
         .flex()
@@ -492,22 +489,18 @@ private struct _WorkspaceChromeSlot: View {
     var body: some View {
         let thickness = chromeThickness(slot)
         let edge = chromeEdge(slot)
-        let railGroups = document.collapsed
-            .filter { $0.edge == edge && $0.slotID == slot.id }
-            .compactMap { document.groups[$0.groupID] }
-        Box(direction: edge.splitAxis == .horizontal ? .column : .row,
+        let horizontal = edge == .top || edge == .bottom
+        Box(direction: horizontal ? .row : .column,
             alignItems: .stretch,
             spacing: 0) {
-            railGroups.map { group in
-                AnyView(_WorkspaceRail(slotID: slot.id,
-                                       document: document,
-                                       controller: controller)
-                    .id("workspace-rail-\(slot.id.rawValue)-\(group.id.rawValue)"))
-            }
+            _WorkspaceRail(slotID: slot.id,
+                           document: document,
+                           controller: controller)
+                .id("workspace-rail-\(slot.id.rawValue)")
         }
         .background(.surfaceSunken)
-        .frame(width: edge.splitAxis == .horizontal ? thickness : nil,
-               height: edge.splitAxis == .vertical ? thickness : nil)
+        .frame(width: horizontal ? nil : thickness,
+               height: horizontal ? thickness : nil)
         .layoutRole("workspace-chrome-slot")
         .semanticRole("workspace.chrome.\(slot.id.rawValue)")
         .debugName("workspace-chrome-\(slot.id.rawValue)")
@@ -520,7 +513,6 @@ private struct _WorkspaceBottomSlot: View {
     let content: (WorkspacePanelID) -> AnyView
 
     var body: some View {
-        let collapsed = collapsedGroups(in: .bottom, document: document)
         let visible = visibleGroups(in: .bottom, document: document)
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             if !visible.isEmpty {
@@ -530,12 +522,6 @@ private struct _WorkspaceBottomSlot: View {
                                      content: content)
                     .id("workspace-region-bottom")
                     .flex()
-            }
-            if !collapsed.isEmpty {
-                _WorkspaceRail(slotID: .bottom,
-                               document: document,
-                               controller: controller)
-                    .id("workspace-rail-bottom")
             }
         }
         .layoutRole("workspace-bottom-slot")
@@ -1056,10 +1042,12 @@ private struct _WorkspaceRail: View {
     let controller: WorkspaceController
 
     var body: some View {
-        let groups = collapsedGroups(in: slotID, document: document)
+        let groups = railGroups(in: slotID, document: document)
+        let horizontal = isHorizontalRail(slotID: slotID, document: document)
         let railButtons = groups.flatMap { group in
             railItems(group: group, document: document).map { item in
                 AnyView(_WorkspaceRailButton(slotID: slotID,
+                                             isHorizontal: horizontal,
                                              groupID: group.id,
                                              title: item.title,
                                              controller: controller)
@@ -1068,13 +1056,14 @@ private struct _WorkspaceRail: View {
         }
         if groups.isEmpty {
             EmptyView()
-        } else if isHorizontalRail(slotID: slotID, document: document) {
+        } else if horizontal {
             Row(alignment: .center, spacing: 6) {
                 railButtons
             }
             .padding(horizontal: 4, vertical: 4)
             .background(.surfaceSunken)
-            .frame(height: _WorkspaceMetrics.railThickness)
+            .frame(width: .percent(100),
+                   height: .points(_WorkspaceMetrics.railThickness))
             .layoutRole("workspace-rail")
             .semanticRole("workspace.rail.bottom")
             .debugName("workspace-rail-bottom")
@@ -1094,12 +1083,13 @@ private struct _WorkspaceRail: View {
 
 private struct _WorkspaceRailButton: View {
     let slotID: WorkspaceSlotID
+    let isHorizontal: Bool
     let groupID: WorkspaceTabGroupID
     let title: String
     let controller: WorkspaceController
 
     var body: some View {
-        if slotID == .bottom || slotID == .top {
+        if isHorizontal {
             Button(tooltip: title) {
                 _ = controller.dispatch(.expand(groupID))
             } label: {
@@ -1239,6 +1229,18 @@ private func collapsedGroups(in slotID: WorkspaceSlotID,
         .filter(\.isCollapsed)
 }
 
+private func railGroups(in slotID: WorkspaceSlotID,
+                        document: WorkspaceDocument) -> [WorkspaceTabGroup] {
+    let slot = document.slot(slotID)
+    if case .chrome(let edge, _) = slot.kind {
+        return document.collapsed
+            .filter { $0.edge == edge }
+            .compactMap { document.groups[$0.groupID] }
+            .filter(\.isCollapsed)
+    }
+    return collapsedGroups(in: slotID, document: document)
+}
+
 private func railItems(group: WorkspaceTabGroup,
                        document: WorkspaceDocument) -> [RailItem] {
     group.panels.compactMap { panelID in
@@ -1249,15 +1251,38 @@ private func railItems(group: WorkspaceTabGroup,
 
 private func chromeSlots(edge: WorkspaceEdge,
                          document: WorkspaceDocument) -> [WorkspaceSlot] {
+    let collapsedOnEdge = document.collapsed.contains { $0.edge == edge }
+    let slots = document.slots.values
+        .filter { slot in
+            guard case .chrome(let slotEdge, _) = slot.kind,
+                  slotEdge == edge else {
+                return false
+            }
+            return slot.layout != nil || collapsedOnEdge
+        }
+        .sorted { $0.id.rawValue < $1.id.rawValue }
+    if collapsedOnEdge {
+        return Array(slots.prefix(1))
+    }
+    return slots
+}
+
+private func visibleChromeSlots(edge: WorkspaceEdge,
+                                document: WorkspaceDocument) -> [WorkspaceSlot] {
     document.slots.values
         .filter { slot in
             guard case .chrome(let slotEdge, _) = slot.kind,
                   slotEdge == edge else {
                 return false
             }
-            return slot.layout != nil || document.collapsed.contains { $0.slotID == slot.id }
+            return slot.layout != nil
         }
         .sorted { $0.id.rawValue < $1.id.rawValue }
+}
+
+private func collapsedChromeSlot(edge: WorkspaceEdge,
+                                 document: WorkspaceDocument) -> WorkspaceSlot? {
+    chromeSlots(edge: edge, document: document).first
 }
 
 private func chromeEdge(_ slot: WorkspaceSlot) -> WorkspaceEdge {
