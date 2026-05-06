@@ -43,11 +43,42 @@ public struct WorkspaceSplitID: Hashable, Sendable, Codable, RawRepresentable, E
     public var description: String { rawValue }
 }
 
+public struct WorkspaceFloatingWindowID: Hashable, Sendable, Codable, RawRepresentable, ExpressibleByStringLiteral, CustomStringConvertible {
+    public let rawValue: String
+
+    public init(rawValue: String) {
+        self.rawValue = rawValue
+    }
+
+    public init(stringLiteral value: String) {
+        self.rawValue = value
+    }
+
+    public var description: String { rawValue }
+}
+
 public enum WorkspaceRegionID: String, Sendable, Codable, CaseIterable {
     case leading
     case center
     case trailing
     case bottom
+}
+
+public struct WorkspaceRect: Sendable, Codable, Equatable {
+    public var x: Float
+    public var y: Float
+    public var width: Float
+    public var height: Float
+
+    public init(x: Float = 120,
+                y: Float = 80,
+                width: Float = 520,
+                height: Float = 420) {
+        self.x = x
+        self.y = y
+        self.width = max(160, width)
+        self.height = max(120, height)
+    }
 }
 
 public struct WorkspacePanel: Sendable, Codable, Equatable {
@@ -127,32 +158,41 @@ public struct WorkspaceSplitFractions: Sendable, Codable, Equatable {
 }
 
 public struct WorkspaceFloatingWindow: Sendable, Codable, Equatable {
-    public var id: String
+    public var id: WorkspaceFloatingWindowID
     public var groupID: WorkspaceTabGroupID
     public var title: String
+    public var frame: WorkspaceRect
+    public var zIndex: Int
 
-    public init(id: String = UUID().uuidString,
+    public init(id: WorkspaceFloatingWindowID = WorkspaceFloatingWindowID(rawValue: UUID().uuidString),
                 groupID: WorkspaceTabGroupID,
-                title: String) {
+                title: String,
+                frame: WorkspaceRect = WorkspaceRect(),
+                zIndex: Int = 0) {
         self.id = id
         self.groupID = groupID
         self.title = title
+        self.frame = frame
+        self.zIndex = zIndex
     }
 }
 
 public struct WorkspaceClosedPanel: Sendable, Codable, Equatable {
     public var panelID: WorkspacePanelID
     public var groupID: WorkspaceTabGroupID
-    public var regionID: WorkspaceRegionID
+    public var regionID: WorkspaceRegionID?
+    public var floatingWindowID: WorkspaceFloatingWindowID?
     public var index: Int
 
     public init(panelID: WorkspacePanelID,
                 groupID: WorkspaceTabGroupID,
-                regionID: WorkspaceRegionID,
+                regionID: WorkspaceRegionID?,
+                floatingWindowID: WorkspaceFloatingWindowID? = nil,
                 index: Int) {
         self.panelID = panelID
         self.groupID = groupID
         self.regionID = regionID
+        self.floatingWindowID = floatingWindowID
         self.index = index
     }
 }
@@ -207,6 +247,10 @@ public struct WorkspaceDocument: Sendable, Codable, Equatable {
 
     public func regionContaining(groupID: WorkspaceTabGroupID) -> WorkspaceRegionID? {
         regions.first { $0.groupIDs.contains(groupID) }?.id
+    }
+
+    public func floatingWindowContaining(groupID: WorkspaceTabGroupID) -> WorkspaceFloatingWindow? {
+        floatingWindows.first { $0.groupID == groupID }
     }
 }
 

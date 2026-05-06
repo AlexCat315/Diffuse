@@ -201,6 +201,94 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(controller.document.groups["center"]?.panels, ["viewport"])
     }
 
+    func testFloatGroupRemovesItFromRegionWithoutDestroyingTabs() {
+        let controller = WorkspaceController(document: makeDocument())
+
+        let result = controller.dispatch(.floatGroup("trailing",
+                                                     windowID: "inspector-window",
+                                                     frame: WorkspaceRect(x: 160, y: 120, width: 420, height: 320)))
+
+        XCTAssertTrue(result.didChange)
+        XCTAssertEqual(controller.document.region(.trailing).groupIDs, [])
+        XCTAssertEqual(controller.document.groups["trailing"]?.panels, ["inspector"])
+        XCTAssertEqual(controller.document.floatingWindows.first?.id, "inspector-window")
+        XCTAssertEqual(controller.document.floatingWindows.first?.groupID, "trailing")
+        XCTAssertEqual(controller.document.floatingWindows.first?.frame, WorkspaceRect(x: 160, y: 120, width: 420, height: 320))
+    }
+
+    func testRedockFloatingWindowRestoresGroupToTargetRegion() {
+        let controller = WorkspaceController(document: makeDocument())
+
+        _ = controller.dispatch(.floatGroup("trailing",
+                                            windowID: "inspector-window",
+                                            frame: WorkspaceRect(x: 160, y: 120, width: 420, height: 320)))
+        let result = controller.dispatch(.redockFloatingWindow("inspector-window",
+                                                               to: WorkspaceTarget(region: .leading,
+                                                                                   groupID: "leading",
+                                                                                   zone: .right)))
+
+        XCTAssertTrue(result.persistenceDirty)
+        XCTAssertTrue(controller.document.floatingWindows.isEmpty)
+        XCTAssertEqual(controller.document.region(.leading).groupIDs.count, 2)
+        XCTAssertEqual(controller.document.region(.leading).groupIDs.last, "trailing")
+        XCTAssertEqual(controller.document.groups["trailing"]?.panels, ["inspector"])
+    }
+
+    func testMovePanelOutOfFloatingGroupDoesNotDuplicatePanel() {
+        var document = makeDocument()
+        document.panels["debugger"] = WorkspacePanel(id: "debugger", title: "Debugger")
+        document.groups["trailing"]?.panels = ["inspector", "debugger"]
+        let controller = WorkspaceController(document: document)
+
+        _ = controller.dispatch(.floatGroup("trailing",
+                                            windowID: "inspector-window",
+                                            frame: WorkspaceRect()))
+        _ = controller.dispatch(.movePanel("inspector",
+                                           to: WorkspaceTarget(region: .center,
+                                                               groupID: "center",
+                                                               zone: .tabGroup)))
+
+        XCTAssertEqual(controller.document.groups["center"]?.panels, ["viewport", "inspector"])
+        XCTAssertEqual(controller.document.groups["trailing"]?.panels, ["debugger"])
+        XCTAssertEqual(controller.document.floatingWindows.first?.groupID, "trailing")
+        XCTAssertEqual(controller.document.groups.values.filter { $0.panels.contains("inspector") }.count, 1)
+    }
+
+    func testMovingLastPanelOutOfFloatingWindowClosesTheWindowRecord() {
+        let controller = WorkspaceController(document: makeDocument())
+
+        _ = controller.dispatch(.floatGroup("trailing",
+                                            windowID: "inspector-window",
+                                            frame: WorkspaceRect()))
+        _ = controller.dispatch(.movePanel("inspector",
+                                           to: WorkspaceTarget(region: .center,
+                                                               groupID: "center",
+                                                               zone: .tabGroup)))
+
+        XCTAssertTrue(controller.document.floatingWindows.isEmpty)
+        XCTAssertNil(controller.document.groups["trailing"])
+        XCTAssertEqual(controller.document.groups["center"]?.panels, ["viewport", "inspector"])
+    }
+
+    func testFloatingWindowMoveAndFocusUpdateFrameAndZOrder() {
+        let controller = WorkspaceController(document: makeDocument())
+
+        _ = controller.dispatch(.floatGroup("leading",
+                                            windowID: "hierarchy-window",
+                                            frame: WorkspaceRect(x: 20, y: 20, width: 300, height: 240)))
+        _ = controller.dispatch(.floatGroup("trailing",
+                                            windowID: "inspector-window",
+                                            frame: WorkspaceRect(x: 40, y: 40, width: 320, height: 260)))
+        _ = controller.dispatch(.moveFloatingWindow("hierarchy-window",
+                                                    frame: WorkspaceRect(x: 80, y: 90, width: 300, height: 240)))
+        _ = controller.dispatch(.focusFloatingWindow("hierarchy-window"))
+
+        let hierarchy = controller.document.floatingWindows.first { $0.id == "hierarchy-window" }
+        let inspector = controller.document.floatingWindows.first { $0.id == "inspector-window" }
+        XCTAssertEqual(hierarchy?.frame, WorkspaceRect(x: 80, y: 90, width: 300, height: 240))
+        XCTAssertGreaterThan(hierarchy?.zIndex ?? 0, inspector?.zIndex ?? 0)
+    }
+
     private func makeDocument() -> WorkspaceDocument {
         WorkspaceDocument(
             panels: [
