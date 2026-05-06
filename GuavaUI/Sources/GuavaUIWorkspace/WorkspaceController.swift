@@ -195,14 +195,42 @@ public final class WorkspaceController: @unchecked Sendable {
         if let sourceRegionID {
             changedRegions.insert(sourceRegionID)
         }
-        changedRegions.insert(target.region)
+
+        let destination = destination(for: target)
+        changedRegions.insert(destination.region)
+
+        if let sourceGroupID,
+           sourceGroupID == target.groupID,
+           destination.region == sourceRegionID,
+           !destination.requiresAdjacentGroup {
+            guard var group = document.groups[sourceGroupID] else { return .unchanged }
+            let didChange = group.activePanelID != panelID || group.isCollapsed
+            group.activePanelID = panelID
+            group.isCollapsed = false
+            document.groups[group.id] = group
+            guard didChange else { return .unchanged }
+            return WorkspaceTransactionResult(didChange: true,
+                                              changedRegions: changedRegions,
+                                              focusPanelID: panelID,
+                                              persistenceDirty: true)
+        }
 
         if let sourceGroupID {
             remove(panelID: panelID, from: sourceGroupID)
         }
 
-        let targetGroupID = target.groupID ?? firstGroupID(in: target.region) ?? makeGroup(in: target.region)
-        ensureGroup(targetGroupID, in: target.region)
+        let targetGroupID: WorkspaceTabGroupID
+        if destination.requiresAdjacentGroup {
+            targetGroupID = makeGroup(in: destination.region,
+                                      adjacentTo: destination.anchorGroupID,
+                                      after: destination.insertAfterAnchor)
+        } else if let groupID = destination.anchorGroupID,
+                  document.groups[groupID] != nil {
+            targetGroupID = groupID
+            ensureGroup(groupID, in: destination.region)
+        } else {
+            targetGroupID = firstGroupID(in: destination.region) ?? makePrimaryGroup(in: destination.region)
+        }
         var targetGroup = document.groups[targetGroupID] ?? WorkspaceTabGroup(id: targetGroupID, panels: [])
         if !targetGroup.panels.contains(panelID) {
             targetGroup.panels.append(panelID)
@@ -215,6 +243,61 @@ public final class WorkspaceController: @unchecked Sendable {
                                           changedRegions: changedRegions,
                                           focusPanelID: panelID,
                                           persistenceDirty: true)
+    }
+
+    private struct Destination {
+        var region: WorkspaceRegionID
+        var anchorGroupID: WorkspaceTabGroupID?
+        var requiresAdjacentGroup: Bool
+        var insertAfterAnchor: Bool
+    }
+
+    private func destination(for target: WorkspaceTarget) -> Destination {
+        switch target.zone {
+        case .tabGroup, .region:
+            return Destination(region: target.region,
+                               anchorGroupID: target.groupID,
+                               requiresAdjacentGroup: false,
+                               insertAfterAnchor: true)
+        case .left:
+            if target.region == .center {
+                return Destination(region: .leading,
+                                   anchorGroupID: nil,
+                                   requiresAdjacentGroup: false,
+                                   insertAfterAnchor: true)
+            }
+            return Destination(region: target.region,
+                               anchorGroupID: target.groupID,
+                               requiresAdjacentGroup: true,
+                               insertAfterAnchor: false)
+        case .right:
+            if target.region == .center {
+                return Destination(region: .trailing,
+                                   anchorGroupID: nil,
+                                   requiresAdjacentGroup: false,
+                                   insertAfterAnchor: true)
+            }
+            return Destination(region: target.region,
+                               anchorGroupID: target.groupID,
+                               requiresAdjacentGroup: true,
+                               insertAfterAnchor: true)
+        case .top:
+            return Destination(region: target.region,
+                               anchorGroupID: target.groupID,
+                               requiresAdjacentGroup: true,
+                               insertAfterAnchor: false)
+        case .bottom:
+            if target.region == .center {
+                return Destination(region: .bottom,
+                                   anchorGroupID: nil,
+                                   requiresAdjacentGroup: false,
+                                   insertAfterAnchor: true)
+            }
+            return Destination(region: target.region,
+                               anchorGroupID: target.groupID,
+                               requiresAdjacentGroup: true,
+                               insertAfterAnchor: true)
+        }
     }
 
     private func remove(panelID: WorkspacePanelID,
@@ -238,8 +321,21 @@ public final class WorkspaceController: @unchecked Sendable {
         document.region(regionID).groupIDs.first
     }
 
-    private func makeGroup(in regionID: WorkspaceRegionID) -> WorkspaceTabGroupID {
+    private func makeGroup(in regionID: WorkspaceRegionID,
+                           adjacentTo anchorID: WorkspaceTabGroupID? = nil,
+                           after: Bool = true) -> WorkspaceTabGroupID {
         let id = WorkspaceTabGroupID(rawValue: "\(regionID.rawValue)-\(UUID().uuidString)")
+        document.groups[id] = WorkspaceTabGroup(id: id, panels: [])
+        insertGroup(id, in: regionID, adjacentTo: anchorID, after: after)
+        return id
+    }
+
+    private func makePrimaryGroup(in regionID: WorkspaceRegionID) -> WorkspaceTabGroupID {
+        let id = WorkspaceTabGroupID(rawValue: regionID.rawValue)
+        guard document.groups[id] == nil else {
+            ensureGroup(id, in: regionID)
+            return id
+        }
         document.groups[id] = WorkspaceTabGroup(id: id, panels: [])
         ensureGroup(id, in: regionID)
         return id
@@ -249,6 +345,22 @@ public final class WorkspaceController: @unchecked Sendable {
         var region = document.region(regionID)
         guard !region.groupIDs.contains(groupID) else { return }
         region.groupIDs.append(groupID)
+        document.setRegion(region)
+    }
+
+    private func insertGroup(_ groupID: WorkspaceTabGroupID,
+                             in regionID: WorkspaceRegionID,
+                             adjacentTo anchorID: WorkspaceTabGroupID?,
+                             after: Bool) {
+        var region = document.region(regionID)
+        region.groupIDs.removeAll { $0 == groupID }
+        if let anchorID,
+           let anchorIndex = region.groupIDs.firstIndex(of: anchorID) {
+            let insertionIndex = after ? region.groupIDs.index(after: anchorIndex) : anchorIndex
+            region.groupIDs.insert(groupID, at: insertionIndex)
+        } else {
+            region.groupIDs.append(groupID)
+        }
         document.setRegion(region)
     }
 
