@@ -54,6 +54,51 @@ final class WorkspaceControllerTests: XCTestCase {
         XCTAssertEqual(controller.document.groups["trailing"]?.panels, ["inspector"])
     }
 
+    func testCenterEdgeDropsRouteToCanonicalRegions() {
+        let controller = WorkspaceController(document: makeDocument())
+
+        _ = controller.dispatch(.movePanel("inspector",
+                                           to: WorkspaceTarget(region: .center,
+                                                               groupID: "center",
+                                                               zone: .right)))
+        XCTAssertEqual(controller.document.region(.trailing).groupIDs, ["trailing"])
+        XCTAssertEqual(controller.document.groups["trailing"]?.panels, ["inspector"])
+        XCTAssertEqual(controller.document.groups["center"]?.panels, ["viewport"])
+
+        _ = controller.dispatch(.movePanel("hierarchy",
+                                           to: WorkspaceTarget(region: .center,
+                                                               groupID: "center",
+                                                               zone: .left)))
+        XCTAssertEqual(controller.document.region(.leading).groupIDs, ["leading"])
+        XCTAssertEqual(controller.document.groups["leading"]?.panels, ["hierarchy"])
+        XCTAssertEqual(controller.document.groups["center"]?.panels, ["viewport"])
+
+        _ = controller.dispatch(.movePanel("console",
+                                           to: WorkspaceTarget(region: .center,
+                                                               groupID: "center",
+                                                               zone: .bottom)))
+        XCTAssertEqual(controller.document.region(.bottom).groupIDs, ["bottom"])
+        XCTAssertEqual(controller.document.groups["bottom"]?.panels, ["console"])
+        XCTAssertEqual(controller.document.groups["center"]?.panels, ["viewport"])
+    }
+
+    func testEdgeDropInsideRegionCreatesAdjacentGroupInsteadOfMerging() {
+        let controller = WorkspaceController(document: makeDocument())
+
+        _ = controller.dispatch(.movePanel("inspector",
+                                           to: WorkspaceTarget(region: .leading,
+                                                               groupID: "leading",
+                                                               zone: .right)))
+
+        let leadingGroupIDs = controller.document.region(.leading).groupIDs
+        XCTAssertEqual(leadingGroupIDs.count, 2)
+        XCTAssertEqual(leadingGroupIDs.first, "leading")
+        let insertedGroupID = leadingGroupIDs[1]
+        XCTAssertEqual(controller.document.groups["leading"]?.panels, ["hierarchy"])
+        XCTAssertEqual(controller.document.groups[insertedGroupID]?.panels, ["inspector"])
+        XCTAssertEqual(controller.document.region(.trailing).groupIDs, [])
+    }
+
     func testCollapseRestoreKeepsActiveTabAndOrder() {
         var document = makeDocument()
         document.groups["bottom"]?.panels = ["console", "assets"]
