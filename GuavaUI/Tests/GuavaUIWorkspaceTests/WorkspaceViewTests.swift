@@ -33,8 +33,37 @@ final class WorkspaceViewTests: XCTestCase {
         let bottomRail = rig.frame(named: "workspace-rail-bottom")
         let statusBar = rig.frame(named: "editor-status-bar")
         XCTAssertEqual(statusBar.maxY, 640, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.minX, 0, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.maxX, 1000, accuracy: 0.5)
         XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
         XCTAssertLessThan(bottomRail.minY, statusBar.minY)
+    }
+
+    func testCollapsedRailsKeepBottomRailBetweenWorkspaceEdges() {
+        let rig = makeRigWithStatusBar(width: 1000, height: 640)
+
+        _ = rig.controller.dispatch(.collapse("leading"))
+        _ = rig.controller.dispatch(.collapse("trailing"))
+        _ = rig.controller.dispatch(.collapse("bottom"))
+        rig.pump()
+
+        let statusBar = rig.frame(named: "editor-status-bar")
+        let leadingRail = rig.frame(named: "workspace-rail-leading")
+        let trailingRail = rig.frame(named: "workspace-rail-trailing")
+        let bottomRail = rig.frame(named: "workspace-rail-bottom")
+
+        XCTAssertNil(rig.optionalFrame(named: "workspace-region-leading"))
+        XCTAssertNil(rig.optionalFrame(named: "workspace-region-trailing"))
+        XCTAssertNil(rig.optionalFrame(named: "workspace-region-bottom"))
+        XCTAssertEqual(leadingRail.minX, 0, accuracy: 0.5)
+        XCTAssertEqual(leadingRail.width, 40, accuracy: 0.5)
+        XCTAssertEqual(leadingRail.maxY, statusBar.minY, accuracy: 1.0)
+        XCTAssertEqual(trailingRail.maxX, 1000, accuracy: 0.5)
+        XCTAssertEqual(trailingRail.width, 40, accuracy: 0.5)
+        XCTAssertEqual(trailingRail.maxY, statusBar.minY, accuracy: 1.0)
+        XCTAssertEqual(bottomRail.minX, leadingRail.maxX, accuracy: 1.0)
+        XCTAssertEqual(bottomRail.maxX, trailingRail.minX, accuracy: 1.0)
+        XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
     }
 
     func testCenterGroupDoesNotExposeCollapseAffordance() {
