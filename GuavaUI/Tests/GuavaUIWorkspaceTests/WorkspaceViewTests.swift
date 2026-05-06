@@ -152,7 +152,7 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertFalse(rig.controller.document.groups.values.contains { group in
             group.id != "trailing" && group.panels.contains("hierarchy")
         })
-        XCTAssertEqual(rig.controller.document.region(.leading).groupIDs, [])
+        XCTAssertEqual(rig.controller.document.region(.leading).layout?.leafGroupIDs ?? [], [])
         XCTAssertEqual(rig.controller.document.groups["trailing"]?.panels.contains("hierarchy"), true)
         XCTAssertEqual(rig.controller.document.groups["trailing"]?.activePanelID, "hierarchy")
         let hierarchyPanel = rig.frame(named: "workspace-panel-hierarchy")
@@ -189,7 +189,7 @@ final class WorkspaceViewTests: XCTestCase {
 
         XCTAssertEqual(rig.controller.document.groups["bottom"]?.panels, ["assets"])
         XCTAssertEqual(rig.controller.document.groups["bottom"]?.activePanelID, "assets")
-        XCTAssertEqual(rig.controller.document.region(.bottom).groupIDs, ["bottom"])
+        XCTAssertEqual(rig.controller.document.region(.bottom).layout?.leafGroupIDs ?? [], ["bottom"])
         XCTAssertNil(rig.optionalFrame(named: "workspace-tab-console"))
         XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-bottom"))
     }
@@ -225,7 +225,7 @@ final class WorkspaceViewTests: XCTestCase {
         rig.pump()
 
         XCTAssertNil(rig.optionalFrame(named: "workspace-region-trailing"))
-        XCTAssertEqual(rig.controller.document.region(.trailing).groupIDs, [])
+        XCTAssertEqual(rig.controller.document.region(.trailing).layout?.leafGroupIDs ?? [], [])
         XCTAssertEqual(rig.frame(named: "workspace-region-center").maxX, 1000, accuracy: 0.5)
         let floating = rig.frame(named: "workspace-floating-window-inspector-window")
         XCTAssertEqual(floating.minX, 120, accuracy: 0.5)
@@ -266,7 +266,7 @@ final class WorkspaceViewTests: XCTestCase {
         rig.click(rig.frame(named: "workspace-floating-redock-inspector-window").center)
 
         XCTAssertTrue(rig.controller.document.floatingWindows.isEmpty)
-        XCTAssertEqual(rig.controller.document.region(.center).groupIDs, ["center", "trailing"])
+        XCTAssertEqual(rig.controller.document.region(.center).layout?.leafGroupIDs ?? [], ["center", "trailing"])
         XCTAssertEqual(rig.controller.document.groups["trailing"]?.panels, ["inspector"])
         XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-center"))
         XCTAssertNil(rig.optionalFrame(named: "workspace-floating-window-inspector-window"))
@@ -281,8 +281,8 @@ final class WorkspaceViewTests: XCTestCase {
         rig.drag(from: source, to: target)
 
         let trailingRegion = rig.controller.document.region(.trailing)
-        XCTAssertEqual(trailingRegion.groupIDs.count, 2)
-        let movedGroupID = trailingRegion.groupIDs.first
+        XCTAssertEqual((trailingRegion.layout?.leafGroupIDs ?? []).count, 2)
+        let movedGroupID = (trailingRegion.layout?.leafGroupIDs ?? []).first
         XCTAssertNotEqual(movedGroupID, "trailing")
         XCTAssertEqual(rig.controller.document.groups[movedGroupID ?? ""]?.panels, ["hierarchy"])
         XCTAssertEqual(rig.controller.document.groups[movedGroupID ?? ""]?.activePanelID, "hierarchy")
@@ -321,7 +321,7 @@ final class WorkspaceViewTests: XCTestCase {
         _ = rig.controller.dispatch(.movePanel("inspector",
                                                to: WorkspaceTarget(region: .center,
                                                                    groupID: "center",
-                                                                   zone: .tabGroup)))
+                                                                   placement: .tabGroup)))
         rig.pump()
 
         XCTAssertNil(rig.optionalFrame(named: "workspace-collapse-center"))
@@ -375,10 +375,10 @@ final class WorkspaceViewTests: XCTestCase {
                 "bottom": WorkspaceTabGroup(id: "bottom", panels: ["console"], activePanelID: "console"),
             ],
             regions: [
-                WorkspaceRegion(id: .leading, groupIDs: ["leading"]),
-                WorkspaceRegion(id: .center, groupIDs: ["center"]),
-                WorkspaceRegion(id: .trailing, groupIDs: ["trailing"]),
-                WorkspaceRegion(id: .bottom, groupIDs: ["bottom"]),
+                WorkspaceRegion(id: .leading, layout: .group("leading")),
+                WorkspaceRegion(id: .center, layout: .group("center")),
+                WorkspaceRegion(id: .trailing, layout: .group("trailing")),
+                WorkspaceRegion(id: .bottom, layout: .group("bottom")),
             ],
             splitFractions: WorkspaceSplitFractions(leading: 0.22,
                                                     centerTrailing: 0.78,
