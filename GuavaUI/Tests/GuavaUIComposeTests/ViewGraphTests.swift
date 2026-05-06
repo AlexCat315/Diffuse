@@ -79,6 +79,53 @@ struct ViewGraphTests {
         #expect(n?.frame.origin.y == 10)
         #expect(n?.isHitTestable == false)
     }
+
+    struct TransparentAnchorLeaf: View {
+        let name: String
+        let width: Float
+
+        var body: some View {
+            Box { EmptyView() }
+                .frame(width: width, height: 10)
+                .debugName(name)
+        }
+    }
+
+    struct TransparentAnchorReorderHarness: View {
+        @State var showLeading: Bool = false
+
+        var body: some View {
+            Row(alignment: .top, spacing: 0) {
+                if showLeading {
+                    TransparentAnchorLeaf(name: "leading", width: 40)
+                }
+                TransparentAnchorLeaf(name: "stable", width: 60)
+            }
+            .frame(width: 200, height: 10)
+        }
+    }
+
+    @Test("Reconcile reorders layout nodes produced by transparent user-view anchors")
+    func transparentAnchorLayoutReorder() {
+        let tree = NodeTree()
+        let recomp = Recomposer()
+        let graph = ViewGraph(tree: tree, recomposer: recomp)
+        let harness = TransparentAnchorReorderHarness()
+        graph.install(root: harness)
+        graph.computeLayout(width: 200, height: 20)
+
+        var stable = graph.layoutSnapshot().first { $0.debugName == "stable" }
+        #expect(stable?.absoluteFrame.minX == 0)
+
+        harness.$showLeading.wrappedValue = true
+        recomp.commitAll()
+        graph.computeLayout(width: 200, height: 20)
+
+        let leading = graph.layoutSnapshot().first { $0.debugName == "leading" }
+        stable = graph.layoutSnapshot().first { $0.debugName == "stable" }
+        #expect(leading?.absoluteFrame.minX == 0)
+        #expect(stable?.absoluteFrame.minX == 40)
+    }
 }
 
 @Suite("State + Recomposer wiring")
