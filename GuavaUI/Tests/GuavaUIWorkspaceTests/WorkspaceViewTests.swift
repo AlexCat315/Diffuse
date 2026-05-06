@@ -216,6 +216,62 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertLessThan(rig.controller.document.splitFractions.topBottom, topBottomBefore)
     }
 
+    func testFloatingGroupRendersAboveWorkspaceWithoutChangingMainRegionFrames() {
+        let rig = makeRigWithStatusBar(width: 1000, height: 640)
+
+        _ = rig.controller.dispatch(.floatGroup("trailing",
+                                                windowID: "inspector-window",
+                                                frame: WorkspaceRect(x: 120, y: 88, width: 360, height: 260)))
+        rig.pump()
+
+        XCTAssertNil(rig.optionalFrame(named: "workspace-region-trailing"))
+        XCTAssertEqual(rig.controller.document.region(.trailing).groupIDs, [])
+        XCTAssertEqual(rig.frame(named: "workspace-region-center").maxX, 1000, accuracy: 0.5)
+        let floating = rig.frame(named: "workspace-floating-window-inspector-window")
+        XCTAssertEqual(floating.minX, 120, accuracy: 0.5)
+        XCTAssertEqual(floating.minY, 88, accuracy: 0.5)
+        XCTAssertEqual(floating.width, 360, accuracy: 0.5)
+        XCTAssertEqual(floating.height, 260, accuracy: 0.5)
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-panel-inspector"))
+    }
+
+    func testDraggingFloatingWindowMovesOnlyFloatingFrame() {
+        let rig = makeRigWithStatusBar(width: 1000, height: 640)
+
+        _ = rig.controller.dispatch(.floatGroup("trailing",
+                                                windowID: "inspector-window",
+                                                frame: WorkspaceRect(x: 120, y: 88, width: 360, height: 260)))
+        rig.pump()
+        let centerBefore = rig.frame(named: "workspace-region-center")
+        let handle = rig.frame(named: "workspace-floating-drag-inspector-window")
+
+        rig.drag(from: handle.center,
+                 to: CGPoint(x: handle.center.x + 40, y: handle.center.y + 30))
+
+        let moved = rig.controller.document.floatingWindows.first?.frame
+        XCTAssertEqual(moved?.x ?? 0, 160, accuracy: 0.5)
+        XCTAssertEqual(moved?.y ?? 0, 118, accuracy: 0.5)
+        XCTAssertEqual(moved?.width ?? 0, 360, accuracy: 0.5)
+        XCTAssertEqual(moved?.height ?? 0, 260, accuracy: 0.5)
+        XCTAssertEqual(rig.frame(named: "workspace-region-center"), centerBefore)
+    }
+
+    func testRedockingFloatingWindowReturnsGroupToWorkspaceSlot() {
+        let rig = makeRigWithStatusBar(width: 1000, height: 640)
+
+        _ = rig.controller.dispatch(.floatGroup("trailing",
+                                                windowID: "inspector-window",
+                                                frame: WorkspaceRect(x: 120, y: 88, width: 360, height: 260)))
+        rig.pump()
+        rig.click(rig.frame(named: "workspace-floating-redock-inspector-window").center)
+
+        XCTAssertTrue(rig.controller.document.floatingWindows.isEmpty)
+        XCTAssertEqual(rig.controller.document.region(.center).groupIDs, ["center", "trailing"])
+        XCTAssertEqual(rig.controller.document.groups["trailing"]?.panels, ["inspector"])
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-center"))
+        XCTAssertNil(rig.optionalFrame(named: "workspace-floating-window-inspector-window"))
+    }
+
     func testDraggingTabToGroupEdgeCreatesAdjacentGroup() {
         let rig = makeRigWithStatusBar(width: 1000, height: 640)
 

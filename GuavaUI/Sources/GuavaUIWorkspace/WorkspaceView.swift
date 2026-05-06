@@ -21,9 +21,16 @@ public struct WorkspaceView: View {
         let _ = WorkspaceControllerSubscription.acquire(controller: controller,
                                                         tag: ObjectIdentifier(subscriptionIdentity),
                                                         bind: bind)
-        _WorkspaceShell(document: controller.document,
-                        controller: controller,
-                        content: content)
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            _WorkspaceShell(document: controller.document,
+                            controller: controller,
+                            content: content)
+                .flex()
+            _WorkspaceFloatingLayer(document: controller.document,
+                                    controller: controller,
+                                    content: content)
+        }
+            .flex()
             .layoutRole("workspace")
             .semanticRole("workspace")
             .debugName("workspace")
@@ -138,6 +145,213 @@ private struct WorkspaceShellWeights {
             center = remaining
             trailing = 0
         }
+    }
+}
+
+private struct _WorkspaceFloatingLayer: View {
+    let document: WorkspaceDocument
+    let controller: WorkspaceController
+    let content: (WorkspacePanelID) -> AnyView
+
+    var body: some View {
+        let windows = document.floatingWindows.sorted { lhs, rhs in
+            if lhs.zIndex == rhs.zIndex { return lhs.id.rawValue < rhs.id.rawValue }
+            return lhs.zIndex < rhs.zIndex
+        }.compactMap { window -> AnyView? in
+            guard let group = document.groups[window.groupID] else { return nil }
+            return AnyView(_WorkspaceFloatingWindowView(window: window,
+                                                        group: group,
+                                                        document: document,
+                                                        controller: controller,
+                                                        content: content)
+                .id("workspace-floating-\(window.id.rawValue)"))
+        }
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            windows
+        }
+        .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
+        .zIndex(10_000)
+        .layoutRole("workspace-floating-layer")
+        .debugName("workspace-floating-layer")
+    }
+}
+
+private struct _WorkspaceFloatingWindowView: View {
+    let window: WorkspaceFloatingWindow
+    let group: WorkspaceTabGroup
+    let document: WorkspaceDocument
+    let controller: WorkspaceController
+    let content: (WorkspacePanelID) -> AnyView
+
+    var body: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            Row(alignment: .center, spacing: 6) {
+                _WorkspaceFloatingDragHandle(window: window,
+                                             controller: controller)
+                    .semanticRole("workspace.floating.drag")
+                    .debugName("workspace-floating-drag-\(window.id.rawValue)")
+                    .flex()
+                IconButton(resource: WorkspaceIcons.expandDown,
+                           size: 11,
+                           tooltip: "Attach") {
+                    _ = controller.dispatch(.redockFloatingWindow(window.id,
+                                                                  to: WorkspaceTarget(region: .center,
+                                                                                      groupID: "center",
+                                                                                      zone: .tabGroup)))
+                }
+                .buttonStyle(.ghost)
+                .frame(width: 24, height: 24)
+                .semanticRole("workspace.floating.redock")
+                .debugName("workspace-floating-redock-\(window.id.rawValue)")
+            }
+            .padding(horizontal: 6, vertical: 3)
+            .background(.surfaceRaised)
+            .frame(height: 30)
+
+            _WorkspaceTabGroupView(group: group,
+                                   document: document,
+                                   controller: controller,
+                                   content: content)
+                .flex()
+        }
+        .background(.surface)
+        .border(.border, width: 1)
+        .cornerRadius(6)
+        .shadow(color: Color(red: 0, green: 0, blue: 0, alpha: 0x96),
+                offsetY: 12,
+                blur: 32)
+        .frame(width: window.frame.width, height: window.frame.height)
+        .absolutePosition(left: window.frame.x, top: window.frame.y)
+        .zIndex(Float(window.zIndex))
+        .modifier(_WorkspaceFloatingWindowDragModifier(window: window,
+                                                       controller: controller))
+        .layoutRole("workspace-floating-window")
+        .semanticRole("workspace.floating.window")
+        .debugName("workspace-floating-window-\(window.id.rawValue)")
+    }
+}
+
+private struct _WorkspaceFloatingWindowDragModifier: ViewModifier {
+    let window: WorkspaceFloatingWindow
+    let controller: WorkspaceController
+
+    func apply(node: Node) {
+        node.isHitTestable = true
+        guard let registry = InteractionRegistryHolder.current else { return }
+        let window = window
+        let controller = controller
+        let route = InputHandlerRoute(role: .workspace,
+                                      priority: .capture,
+                                      debugName: "workspace.floating.window.drag")
+        registry.setPointer(node, route: route) { event, phase, _ in
+            guard event.button == .left else { return .ignored }
+            switch phase {
+            case .down:
+                let point = CGPoint(x: CGFloat(event.x), y: CGFloat(event.y))
+                if let redockButton = firstNode(rootedAt: node,
+                                                debugName: "workspace-floating-redock-\(window.id.rawValue)"),
+                   absoluteFrame(of: redockButton).contains(point) {
+                    node.attachments[Self.redockKey] = true
+                    PointerCaptureHolder.current?.acquire(node)
+                    return .handled
+                }
+                let windowFrame = absoluteFrame(of: node)
+                let titleBarFrame = CGRect(x: windowFrame.minX,
+                                           y: windowFrame.minY,
+                                           width: windowFrame.width,
+                                           height: 30)
+                guard titleBarFrame.contains(point) else {
+                    return .ignored
+                }
+                node.attachments[Self.dragKey] = _WorkspaceFloatingDragState(startX: event.x,
+                                                                              startY: event.y,
+                                                                              frame: window.frame)
+                PointerCaptureHolder.current?.acquire(node)
+                return .handled
+            case .up:
+                if node.attachments[Self.redockKey] != nil {
+                    node.attachments.removeValue(forKey: Self.redockKey)
+                    if PointerCaptureHolder.current?.target === node {
+                        PointerCaptureHolder.current?.release()
+                    }
+                    _ = controller.dispatch(.redockFloatingWindow(window.id,
+                                                                  to: WorkspaceTarget(region: .center,
+                                                                                      groupID: "center",
+                                                                                      zone: .tabGroup)))
+                    return .handled
+                }
+                node.attachments.removeValue(forKey: Self.dragKey)
+                if PointerCaptureHolder.current?.target === node {
+                    PointerCaptureHolder.current?.release()
+                }
+                return .handled
+            }
+        }
+        registry.setMotion(node, route: route) { event, _ in
+            guard PointerCaptureHolder.current?.target === node,
+                  let state = node.attachments[Self.dragKey] as? _WorkspaceFloatingDragState else {
+                return .ignored
+            }
+            let next = WorkspaceRect(x: state.frame.x + event.x - state.startX,
+                                     y: state.frame.y + event.y - state.startY,
+                                     width: state.frame.width,
+                                     height: state.frame.height)
+            _ = controller.dispatch(.moveFloatingWindow(window.id, frame: next))
+            return .handled
+        }
+    }
+
+    func apply(layout: LayoutNode) {}
+
+    static let dragKey = "__workspace_floating_window_drag"
+    static let redockKey = "__workspace_floating_window_redock"
+}
+
+private struct _WorkspaceFloatingDragHandle: _PrimitiveView {
+    let window: WorkspaceFloatingWindow
+    let controller: WorkspaceController
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = false
+        return node
+    }
+
+    func _updateNode(_ node: Node) {
+        node.cursor = .move
+        InteractionRegistryHolder.current?.remove(node)
+    }
+
+    func _makeLayoutNode() -> LayoutNode? {
+        let layout = LayoutNode()
+        layout.flexGrow = 1
+        layout.alignItems = .center
+        return layout
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        layout.flexGrow = 1
+        layout.alignItems = .center
+    }
+
+    func _children(for node: Node) -> [any View] {
+        [Text(window.title)
+            .font(SemanticFontRef.label)
+            .foregroundColor(.onSurface)]
+    }
+}
+
+private final class _WorkspaceFloatingDragState {
+    let startX: Float
+    let startY: Float
+    let frame: WorkspaceRect
+
+    init(startX: Float,
+         startY: Float,
+         frame: WorkspaceRect) {
+        self.startX = startX
+        self.startY = startY
+        self.frame = frame
     }
 }
 
@@ -283,7 +497,7 @@ private struct _WorkspaceTabBar: View {
 
     var body: some View {
         let regionID = document.regionContaining(groupID: group.id)
-        let canCollapse = regionID != .center && group.panels.contains { panelID in
+        let canCollapse = regionID != nil && regionID != .center && group.panels.contains { panelID in
             document.panels[panelID]?.isCollapsible == true
         }
         let tabButtons = group.panels.compactMap { panelID -> AnyView? in
@@ -432,7 +646,7 @@ private struct _WorkspaceTabButtonHost: _PrimitiveView {
                 hoverChange(false)
             }
         }
-        let route = InputHandlerRoute(role: .dock,
+        let route = InputHandlerRoute(role: .workspace,
                                       priority: .capture,
                                       debugName: "workspace.tab.drag")
         registry.setPointer(node, route: route) { event, phase, _ in
@@ -574,7 +788,7 @@ private struct _WorkspaceSplitDivider: _PrimitiveView {
         let splitID = splitID
         let axis = axis
         guard let registry = InteractionRegistryHolder.current else { return }
-        let route = InputHandlerRoute(role: .dock,
+        let route = InputHandlerRoute(role: .workspace,
                                       priority: .capture,
                                       debugName: "workspace.split")
         registry.setPointer(node, route: route) { _, phase, _ in

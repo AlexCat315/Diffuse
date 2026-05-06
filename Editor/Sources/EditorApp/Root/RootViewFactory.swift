@@ -228,8 +228,10 @@ enum EditorRootViewFactory {
     }
 
     private static let workspaceLayoutPersistenceKey = "editor_workspace_document"
-    private static let legacyWorkspaceLayoutPersistencePrefix = "editor_workspace_layout"
-    private static let legacyDockLayoutPersistencePrefix = "editor_dock_layout"
+    private static let obsoleteLayoutPersistencePrefixes = [
+        "editor_workspace_layout",
+        "editor_dock_layout",
+    ]
     private static let shellStatePersistenceKey = "editor_shell_state"
 
     private static func localizedPanelTitle(for id: String) -> String {
@@ -281,6 +283,12 @@ enum EditorRootViewFactory {
             }
             next.groups[groupID] = group
         }
+        next.floatingWindows.removeAll { window in
+            next.groups[window.groupID] == nil
+        }
+        next.closedHistory.removeAll { closed in
+            !registeredIDs.contains(closed.panelID)
+        }
 
         for descriptor in registry.descriptors {
             next.panels[descriptor.id] = workspacePanel(for: descriptor)
@@ -304,7 +312,8 @@ enum EditorRootViewFactory {
                                  groups: next.groups,
                                  regions: next.regions,
                                  floatingWindows: next.floatingWindows,
-                                 splitFractions: next.splitFractions)
+                                 splitFractions: next.splitFractions,
+                                 closedHistory: next.closedHistory)
     }
 
     private static func workspacePanel(for descriptor: PanelDescriptor) -> WorkspacePanel {
@@ -368,8 +377,10 @@ enum EditorRootViewFactory {
                                                                           includingPropertiesForKeys: nil) else {
             return
         }
-        for url in contents where url.lastPathComponent.hasPrefix(legacyDockLayoutPersistencePrefix)
-            || url.lastPathComponent.hasPrefix(legacyWorkspaceLayoutPersistencePrefix) {
+        for url in contents {
+            guard obsoleteLayoutPersistencePrefixes.contains(where: { url.lastPathComponent.hasPrefix($0) }) else {
+                continue
+            }
             try? FileManager.default.removeItem(at: url)
         }
     }
