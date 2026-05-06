@@ -138,6 +138,42 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertEqual(bottomRegion.maxY, restoredStatusBar.minY, accuracy: 1.0)
     }
 
+    func testDraggingTabIntoAnotherGroupMovesPanel() {
+        let rig = makeRigWithStatusBar(width: 1000, height: 640)
+
+        let source = rig.frame(named: "workspace-tab-hierarchy").center
+        let target = rig.frame(named: "workspace-group-trailing").center
+        rig.drag(from: source, to: target)
+
+        XCTAssertFalse(rig.controller.document.groups.values.contains { group in
+            group.id != "trailing" && group.panels.contains("hierarchy")
+        })
+        XCTAssertEqual(rig.controller.document.region(.leading).groupIDs, [])
+        XCTAssertEqual(rig.controller.document.groups["trailing"]?.panels.contains("hierarchy"), true)
+        XCTAssertEqual(rig.controller.document.groups["trailing"]?.activePanelID, "hierarchy")
+        let hierarchyPanel = rig.frame(named: "workspace-panel-hierarchy")
+        let trailingRegion = rig.frame(named: "workspace-region-trailing")
+        XCTAssertGreaterThanOrEqual(hierarchyPanel.minX, trailingRegion.minX)
+        XCTAssertLessThanOrEqual(hierarchyPanel.maxX, trailingRegion.maxX)
+        XCTAssertEqual(rig.frame(named: "workspace-region-trailing").maxX, 1000, accuracy: 0.5)
+    }
+
+    func testDraggingTabToGroupEdgeCreatesAdjacentGroup() {
+        let rig = makeRigWithStatusBar(width: 1000, height: 640)
+
+        let source = rig.frame(named: "workspace-tab-hierarchy").center
+        let trailingGroup = rig.frame(named: "workspace-group-trailing")
+        let target = CGPoint(x: trailingGroup.minX + 8, y: trailingGroup.midY)
+        rig.drag(from: source, to: target)
+
+        let trailingRegion = rig.controller.document.region(.trailing)
+        XCTAssertEqual(trailingRegion.groupIDs.count, 2)
+        let movedGroupID = trailingRegion.groupIDs.first
+        XCTAssertNotEqual(movedGroupID, "trailing")
+        XCTAssertEqual(rig.controller.document.groups[movedGroupID ?? ""]?.panels, ["hierarchy"])
+        XCTAssertEqual(rig.controller.document.groups[movedGroupID ?? ""]?.activePanelID, "hierarchy")
+    }
+
     func testReinstalledWorkspaceWithSameControllerStillReceivesModelUpdates() {
         let controller = WorkspaceController(document: Self.makeDocument())
         var firstRig: WorkspaceViewRig? = WorkspaceViewRig(controller: controller,
@@ -298,6 +334,30 @@ private final class WorkspaceViewRig {
         dispatcher.dispatch(.mouseButtonUp(MouseButtonEvent(button: .left,
                                                             x: Float(point.x),
                                                             y: Float(point.y),
+                                                            clicks: 1)))
+        pump()
+    }
+
+    func drag(from start: CGPoint, to end: CGPoint) {
+        dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(button: .left,
+                                                              x: Float(start.x),
+                                                              y: Float(start.y),
+                                                              clicks: 1)))
+        pump()
+        let mid = CGPoint(x: (start.x + end.x) * 0.5, y: (start.y + end.y) * 0.5)
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(mid.x),
+                                                          y: Float(mid.y),
+                                                          deltaX: Float(mid.x - start.x),
+                                                          deltaY: Float(mid.y - start.y))))
+        pump()
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: Float(end.x),
+                                                          y: Float(end.y),
+                                                          deltaX: Float(end.x - mid.x),
+                                                          deltaY: Float(end.y - mid.y))))
+        pump()
+        dispatcher.dispatch(.mouseButtonUp(MouseButtonEvent(button: .left,
+                                                            x: Float(end.x),
+                                                            y: Float(end.y),
                                                             clicks: 1)))
         pump()
     }
