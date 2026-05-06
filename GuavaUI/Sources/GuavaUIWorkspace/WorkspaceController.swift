@@ -1,25 +1,61 @@
 import Foundation
 
-public enum WorkspaceDropZone: Sendable, Codable, Equatable {
+public enum WorkspacePlacementKind: String, Sendable, Codable, Equatable {
     case tabGroup
-    case left
-    case right
-    case top
-    case bottom
     case region
+    case split
 }
 
 public struct WorkspaceTarget: Sendable, Codable, Equatable {
     public var region: WorkspaceRegionID
     public var groupID: WorkspaceTabGroupID?
-    public var zone: WorkspaceDropZone
+    public var placement: WorkspacePlacementKind
+    public var edge: WorkspaceEdge?
+    public var tabIndex: Int?
+    public var regionIndex: Int?
+    public var fraction: Float
 
     public init(region: WorkspaceRegionID,
                 groupID: WorkspaceTabGroupID? = nil,
-                zone: WorkspaceDropZone = .tabGroup) {
+                placement: WorkspacePlacementKind = .tabGroup,
+                edge: WorkspaceEdge? = nil,
+                tabIndex: Int? = nil,
+                regionIndex: Int? = nil,
+                fraction: Float = 0.5) {
         self.region = region
         self.groupID = groupID
-        self.zone = zone
+        self.placement = placement
+        self.edge = edge
+        self.tabIndex = tabIndex
+        self.regionIndex = regionIndex
+        self.fraction = WorkspaceSplitFractions.clamp(fraction)
+    }
+
+    public static func tabGroup(region: WorkspaceRegionID,
+                                groupID: WorkspaceTabGroupID,
+                                tabIndex: Int? = nil) -> WorkspaceTarget {
+        WorkspaceTarget(region: region,
+                        groupID: groupID,
+                        placement: .tabGroup,
+                        tabIndex: tabIndex)
+    }
+
+    public static func region(_ region: WorkspaceRegionID,
+                              index: Int? = nil) -> WorkspaceTarget {
+        WorkspaceTarget(region: region,
+                        placement: .region,
+                        regionIndex: index)
+    }
+
+    public static func split(region: WorkspaceRegionID,
+                             anchorGroupID: WorkspaceTabGroupID,
+                             edge: WorkspaceEdge,
+                             fraction: Float = 0.5) -> WorkspaceTarget {
+        WorkspaceTarget(region: region,
+                        groupID: anchorGroupID,
+                        placement: .split,
+                        edge: edge,
+                        fraction: fraction)
     }
 }
 
@@ -27,16 +63,16 @@ public struct WorkspaceHitTarget: Sendable, Equatable {
     public var region: WorkspaceRegionID
     public var groupID: WorkspaceTabGroupID?
     public var panelID: WorkspacePanelID?
-    public var zone: WorkspaceDropZone
+    public var target: WorkspaceTarget
 
     public init(region: WorkspaceRegionID,
                 groupID: WorkspaceTabGroupID? = nil,
                 panelID: WorkspacePanelID? = nil,
-                zone: WorkspaceDropZone) {
+                target: WorkspaceTarget) {
         self.region = region
         self.groupID = groupID
         self.panelID = panelID
-        self.zone = zone
+        self.target = target
     }
 }
 
@@ -225,7 +261,7 @@ public final class WorkspaceController: @unchecked Sendable {
         if let sourceGroupID,
            sourceGroupID == target.groupID,
            destination.region == sourceRegionID,
-           !destination.requiresAdjacentGroup {
+           destination.placement == .tabGroup {
             guard var group = document.groups[sourceGroupID] else { return .unchanged }
             let didChange = group.activePanelID != panelID || group.isCollapsed
             group.activePanelID = panelID
@@ -243,10 +279,13 @@ public final class WorkspaceController: @unchecked Sendable {
         }
 
         let targetGroupID: WorkspaceTabGroupID
-        if destination.requiresAdjacentGroup {
+        if destination.placement == .split,
+           let edge = destination.splitEdge,
+           let anchorID = destination.anchorGroupID {
             targetGroupID = makeGroup(in: destination.region,
-                                      adjacentTo: destination.anchorGroupID,
-                                      after: destination.insertAfterAnchor)
+                                      splitFrom: anchorID,
+                                      edge: edge,
+                                      fraction: destination.fraction)
         } else if let groupID = destination.anchorGroupID,
                   document.groups[groupID] != nil {
             targetGroupID = groupID
@@ -433,7 +472,7 @@ public final class WorkspaceController: @unchecked Sendable {
             return .unchanged
         }
         for index in document.regions.indices {
-            document.regions[index].groupIDs.removeAll { $0 == groupID }
+            document.regions[index].layout = remove(groupID: groupID, from: document.regions[index].layout)
         }
         let zIndex = nextFloatingZIndex()
         let title = group.activePanelID.flatMap { document.panels[$0]?.title }
@@ -505,56 +544,19 @@ public final class WorkspaceController: @unchecked Sendable {
     private struct Destination {
         var region: WorkspaceRegionID
         var anchorGroupID: WorkspaceTabGroupID?
-        var requiresAdjacentGroup: Bool
-        var insertAfterAnchor: Bool
+        var placement: WorkspacePlacementKind
+        var splitEdge: WorkspaceEdge?
+        var insertionIndex: Int?
+        var fraction: Float
     }
 
     private func destination(for target: WorkspaceTarget) -> Destination {
-        switch target.zone {
-        case .tabGroup, .region:
-            return Destination(region: target.region,
-                               anchorGroupID: target.groupID,
-                               requiresAdjacentGroup: false,
-                               insertAfterAnchor: true)
-        case .left:
-            if target.region == .center {
-                return Destination(region: .leading,
-                                   anchorGroupID: nil,
-                                   requiresAdjacentGroup: false,
-                                   insertAfterAnchor: true)
-            }
-            return Destination(region: target.region,
-                               anchorGroupID: target.groupID,
-                               requiresAdjacentGroup: true,
-                               insertAfterAnchor: false)
-        case .right:
-            if target.region == .center {
-                return Destination(region: .trailing,
-                                   anchorGroupID: nil,
-                                   requiresAdjacentGroup: false,
-                                   insertAfterAnchor: true)
-            }
-            return Destination(region: target.region,
-                               anchorGroupID: target.groupID,
-                               requiresAdjacentGroup: true,
-                               insertAfterAnchor: true)
-        case .top:
-            return Destination(region: target.region,
-                               anchorGroupID: target.groupID,
-                               requiresAdjacentGroup: true,
-                               insertAfterAnchor: false)
-        case .bottom:
-            if target.region == .center {
-                return Destination(region: .bottom,
-                                   anchorGroupID: nil,
-                                   requiresAdjacentGroup: false,
-                                   insertAfterAnchor: true)
-            }
-            return Destination(region: target.region,
-                               anchorGroupID: target.groupID,
-                               requiresAdjacentGroup: true,
-                               insertAfterAnchor: true)
-        }
+        Destination(region: target.region,
+                    anchorGroupID: target.groupID,
+                    placement: target.placement,
+                    splitEdge: target.edge,
+                    insertionIndex: target.regionIndex,
+                    fraction: target.fraction)
     }
 
     private func remove(panelID: WorkspacePanelID,
@@ -565,7 +567,7 @@ public final class WorkspaceController: @unchecked Sendable {
         if group.panels.isEmpty {
             document.groups.removeValue(forKey: groupID)
             for index in document.regions.indices {
-                document.regions[index].groupIDs.removeAll { $0 == groupID }
+                document.regions[index].layout = remove(groupID: groupID, from: document.regions[index].layout)
             }
             document.floatingWindows.removeAll { $0.groupID == groupID }
             return
@@ -585,7 +587,7 @@ public final class WorkspaceController: @unchecked Sendable {
 
     private func locate(panelID: WorkspacePanelID) -> LocatedPanel? {
         for region in document.regions {
-            for groupID in region.groupIDs {
+            for groupID in region.layout?.leafGroupIDs ?? [] {
                 guard let group = document.groups[groupID],
                       let index = group.panels.firstIndex(of: panelID) else {
                     continue
@@ -635,15 +637,16 @@ public final class WorkspaceController: @unchecked Sendable {
     }
 
     private func firstGroupID(in regionID: WorkspaceRegionID) -> WorkspaceTabGroupID? {
-        document.region(regionID).groupIDs.first
+        document.region(regionID).layout?.leafGroupIDs.first
     }
 
     private func makeGroup(in regionID: WorkspaceRegionID,
-                           adjacentTo anchorID: WorkspaceTabGroupID? = nil,
-                           after: Bool = true) -> WorkspaceTabGroupID {
+                           splitFrom anchorID: WorkspaceTabGroupID? = nil,
+                           edge: WorkspaceEdge? = nil,
+                           fraction: Float = 0.5) -> WorkspaceTabGroupID {
         let id = WorkspaceTabGroupID(rawValue: "\(regionID.rawValue)-\(UUID().uuidString)")
         document.groups[id] = WorkspaceTabGroup(id: id, panels: [])
-        insertGroup(id, in: regionID, adjacentTo: anchorID, after: after)
+        insertGroup(id, in: regionID, splitFrom: anchorID, edge: edge, fraction: fraction)
         return id
     }
 
@@ -660,23 +663,28 @@ public final class WorkspaceController: @unchecked Sendable {
 
     private func ensureGroup(_ groupID: WorkspaceTabGroupID, in regionID: WorkspaceRegionID) {
         var region = document.region(regionID)
-        guard !region.groupIDs.contains(groupID) else { return }
-        region.groupIDs.append(groupID)
+        guard !region.containsGroup(groupID) else { return }
+        region.layout = append(groupID: groupID, to: region.layout)
         document.setRegion(region)
     }
 
     private func insertGroup(_ groupID: WorkspaceTabGroupID,
                              in regionID: WorkspaceRegionID,
-                             adjacentTo anchorID: WorkspaceTabGroupID?,
-                             after: Bool) {
+                             splitFrom anchorID: WorkspaceTabGroupID?,
+                             edge: WorkspaceEdge?,
+                             fraction: Float) {
         var region = document.region(regionID)
-        region.groupIDs.removeAll { $0 == groupID }
+        region.layout = remove(groupID: groupID, from: region.layout)
         if let anchorID,
-           let anchorIndex = region.groupIDs.firstIndex(of: anchorID) {
-            let insertionIndex = after ? region.groupIDs.index(after: anchorIndex) : anchorIndex
-            region.groupIDs.insert(groupID, at: insertionIndex)
+           let edge,
+           contains(groupID: anchorID, in: region.layout) {
+            region.layout = split(anchorGroupID: anchorID,
+                                  insertedGroupID: groupID,
+                                  edge: edge,
+                                  fraction: fraction,
+                                  in: region.layout)
         } else {
-            region.groupIDs.append(groupID)
+            region.layout = append(groupID: groupID, to: region.layout)
         }
         document.setRegion(region)
     }
@@ -684,23 +692,105 @@ public final class WorkspaceController: @unchecked Sendable {
     private func insertExistingGroup(_ groupID: WorkspaceTabGroupID,
                                      destination: Destination) {
         for index in document.regions.indices {
-            document.regions[index].groupIDs.removeAll { $0 == groupID }
+            document.regions[index].layout = remove(groupID: groupID, from: document.regions[index].layout)
         }
-        if destination.requiresAdjacentGroup {
+        if destination.placement == .split,
+           let edge = destination.splitEdge {
             insertGroup(groupID,
                         in: destination.region,
-                        adjacentTo: destination.anchorGroupID,
-                        after: destination.insertAfterAnchor)
+                        splitFrom: destination.anchorGroupID,
+                        edge: edge,
+                        fraction: destination.fraction)
         } else {
             insertGroup(groupID,
                         in: destination.region,
-                        adjacentTo: destination.anchorGroupID,
-                        after: true)
+                        splitFrom: nil,
+                        edge: nil,
+                        fraction: destination.fraction)
         }
     }
 
     private func nextFloatingZIndex() -> Int {
         (document.floatingWindows.map(\.zIndex).max() ?? 0) + 1
+    }
+
+    private func contains(groupID: WorkspaceTabGroupID,
+                          in node: WorkspaceLayoutNode?) -> Bool {
+        node?.contains(groupID: groupID) == true
+    }
+
+    private func append(groupID: WorkspaceTabGroupID,
+                        to node: WorkspaceLayoutNode?) -> WorkspaceLayoutNode {
+        guard let node else {
+            return .group(groupID)
+        }
+        return .split(axis: .vertical,
+                      fraction: 0.5,
+                      first: node,
+                      second: .group(groupID))
+    }
+
+    private func remove(groupID: WorkspaceTabGroupID,
+                        from node: WorkspaceLayoutNode?) -> WorkspaceLayoutNode? {
+        guard let node else { return nil }
+        switch node {
+        case .group(let current):
+            return current == groupID ? nil : node
+        case .split(let axis, let fraction, let first, let second):
+            let nextFirst = remove(groupID: groupID, from: first)
+            let nextSecond = remove(groupID: groupID, from: second)
+            switch (nextFirst, nextSecond) {
+            case (nil, nil):
+                return nil
+            case (let remaining?, nil), (nil, let remaining?):
+                return remaining
+            case (let nextFirst?, let nextSecond?):
+                return .split(axis: axis,
+                              fraction: fraction,
+                              first: nextFirst,
+                              second: nextSecond)
+            }
+        }
+    }
+
+    private func split(anchorGroupID: WorkspaceTabGroupID,
+                       insertedGroupID: WorkspaceTabGroupID,
+                       edge: WorkspaceEdge,
+                       fraction: Float,
+                       in node: WorkspaceLayoutNode?) -> WorkspaceLayoutNode {
+        guard let node else {
+            return .group(insertedGroupID)
+        }
+        switch node {
+        case .group(let current) where current == anchorGroupID:
+            let inserted = WorkspaceLayoutNode.group(insertedGroupID)
+            let anchor = WorkspaceLayoutNode.group(anchorGroupID)
+            if edge.insertsBeforeAnchor {
+                return .split(axis: edge.splitAxis,
+                              fraction: fraction,
+                              first: inserted,
+                              second: anchor)
+            }
+            return .split(axis: edge.splitAxis,
+                          fraction: 1 - fraction,
+                          first: anchor,
+                          second: inserted)
+        case .group:
+            return node
+        case .split(let axis, let currentFraction, let first, let second):
+            return .split(axis: axis,
+                          fraction: currentFraction,
+                          first: split(anchorGroupID: anchorGroupID,
+                                       insertedGroupID: insertedGroupID,
+                                       edge: edge,
+                                       fraction: fraction,
+                                       in: first),
+                          second: split(anchorGroupID: anchorGroupID,
+                                        insertedGroupID: insertedGroupID,
+                                        edge: edge,
+                                        fraction: fraction,
+                                        in: second))
+        }
     }
 
     private func resizeSplit(_ splitID: WorkspaceSplitID,
@@ -728,7 +818,7 @@ public final class WorkspaceController: @unchecked Sendable {
     }
 
     private func activeCenterPanel() -> WorkspacePanelID? {
-        document.region(.center).groupIDs.lazy.compactMap { self.document.groups[$0]?.activePanelID }.first
+        (document.region(.center).layout?.leafGroupIDs ?? []).lazy.compactMap { self.document.groups[$0]?.activePanelID }.first
     }
 
     private func notifyChange() {

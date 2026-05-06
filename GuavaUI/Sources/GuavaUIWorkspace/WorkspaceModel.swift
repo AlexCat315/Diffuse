@@ -64,6 +64,103 @@ public enum WorkspaceRegionID: String, Sendable, Codable, CaseIterable {
     case bottom
 }
 
+public enum WorkspaceSplitAxis: String, Sendable, Codable, Equatable {
+    case horizontal
+    case vertical
+}
+
+public enum WorkspaceEdge: String, Sendable, Codable, Equatable {
+    case leading
+    case trailing
+    case top
+    case bottom
+
+    public var splitAxis: WorkspaceSplitAxis {
+        switch self {
+        case .leading, .trailing:
+            return .horizontal
+        case .top, .bottom:
+            return .vertical
+        }
+    }
+
+    public var insertsBeforeAnchor: Bool {
+        switch self {
+        case .leading, .top:
+            return true
+        case .trailing, .bottom:
+            return false
+        }
+    }
+}
+
+public indirect enum WorkspaceLayoutNode: Sendable, Codable, Equatable {
+    case group(WorkspaceTabGroupID)
+    case split(axis: WorkspaceSplitAxis,
+               fraction: Float,
+               first: WorkspaceLayoutNode,
+               second: WorkspaceLayoutNode)
+
+    public var leafGroupIDs: [WorkspaceTabGroupID] {
+        switch self {
+        case .group(let groupID):
+            return [groupID]
+        case .split(_, _, let first, let second):
+            return first.leafGroupIDs + second.leafGroupIDs
+        }
+    }
+
+    public func contains(groupID: WorkspaceTabGroupID) -> Bool {
+        leafGroupIDs.contains(groupID)
+    }
+
+    public static func stacked(_ leafGroupIDs: [WorkspaceTabGroupID],
+                               axis: WorkspaceSplitAxis = .vertical,
+                               fraction: Float = 0.5) -> WorkspaceLayoutNode? {
+        var iterator = leafGroupIDs.makeIterator()
+        guard var root = iterator.next().map(WorkspaceLayoutNode.group) else {
+            return nil
+        }
+        while let next = iterator.next() {
+            root = .split(axis: axis,
+                          fraction: fraction,
+                          first: root,
+                          second: .group(next))
+        }
+        return root
+    }
+
+    public func appending(groupID: WorkspaceTabGroupID,
+                          axis: WorkspaceSplitAxis = .vertical,
+                          fraction: Float = 0.5) -> WorkspaceLayoutNode {
+        .split(axis: axis,
+               fraction: fraction,
+               first: self,
+               second: .group(groupID))
+    }
+
+    public func removing(groupID: WorkspaceTabGroupID) -> WorkspaceLayoutNode? {
+        switch self {
+        case .group(let current):
+            return current == groupID ? nil : self
+        case .split(let axis, let fraction, let first, let second):
+            let nextFirst = first.removing(groupID: groupID)
+            let nextSecond = second.removing(groupID: groupID)
+            switch (nextFirst, nextSecond) {
+            case (nil, nil):
+                return nil
+            case (let remaining?, nil), (nil, let remaining?):
+                return remaining
+            case (let nextFirst?, let nextSecond?):
+                return .split(axis: axis,
+                              fraction: fraction,
+                              first: nextFirst,
+                              second: nextSecond)
+            }
+        }
+    }
+}
+
 public struct WorkspaceRect: Sendable, Codable, Equatable {
     public var x: Float
     public var y: Float
@@ -130,12 +227,25 @@ public struct WorkspaceTabGroup: Sendable, Codable, Equatable {
 
 public struct WorkspaceRegion: Sendable, Codable, Equatable {
     public var id: WorkspaceRegionID
-    public var groupIDs: [WorkspaceTabGroupID]
+    public var layout: WorkspaceLayoutNode?
 
     public init(id: WorkspaceRegionID,
-                groupIDs: [WorkspaceTabGroupID] = []) {
+                layout: WorkspaceLayoutNode? = nil) {
         self.id = id
-        self.groupIDs = groupIDs
+        self.layout = layout
+    }
+
+    public func containsGroup(_ groupID: WorkspaceTabGroupID) -> Bool {
+        layout?.contains(groupID: groupID) == true
+    }
+
+    public mutating func appendGroup(_ groupID: WorkspaceTabGroupID) {
+        guard !containsGroup(groupID) else { return }
+        layout = layout?.appending(groupID: groupID) ?? .group(groupID)
+    }
+
+    public mutating func removeGroup(_ groupID: WorkspaceTabGroupID) {
+        layout = layout?.removing(groupID: groupID)
     }
 }
 
@@ -246,7 +356,7 @@ public struct WorkspaceDocument: Sendable, Codable, Equatable {
     }
 
     public func regionContaining(groupID: WorkspaceTabGroupID) -> WorkspaceRegionID? {
-        regions.first { $0.groupIDs.contains(groupID) }?.id
+        regions.first { $0.containsGroup(groupID) }?.id
     }
 
     public func floatingWindowContaining(groupID: WorkspaceTabGroupID) -> WorkspaceFloatingWindow? {

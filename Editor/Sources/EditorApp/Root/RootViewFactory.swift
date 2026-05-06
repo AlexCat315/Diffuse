@@ -272,7 +272,7 @@ enum EditorRootViewFactory {
             if group.panels.isEmpty {
                 next.groups.removeValue(forKey: groupID)
                 for index in next.regions.indices {
-                    next.regions[index].groupIDs.removeAll { $0 == groupID }
+                    next.regions[index].removeGroup(groupID)
                 }
                 continue
             }
@@ -302,8 +302,8 @@ enum EditorRootViewFactory {
             next.groups[groupID] = group
 
             var region = next.region(descriptor.preferredRegion)
-            if !region.groupIDs.contains(groupID) {
-                region.groupIDs.append(groupID)
+            if !region.containsGroup(groupID) {
+                region.appendGroup(groupID)
                 next.setRegion(region)
             }
         }
@@ -426,10 +426,10 @@ enum EditorWorkspaceDefaults {
             panels: panels,
             groups: groups,
             regions: [
-                WorkspaceRegion(id: .leading, groupIDs: ["leading"]),
-                WorkspaceRegion(id: .center, groupIDs: ["center"]),
-                WorkspaceRegion(id: .trailing, groupIDs: ["trailing"]),
-                WorkspaceRegion(id: .bottom, groupIDs: ["bottom"]),
+                WorkspaceRegion(id: .leading, layout: .group("leading")),
+                WorkspaceRegion(id: .center, layout: .group("center")),
+                WorkspaceRegion(id: .trailing, layout: .group("trailing")),
+                WorkspaceRegion(id: .bottom, layout: .group("bottom")),
             ],
             splitFractions: fractions
         )

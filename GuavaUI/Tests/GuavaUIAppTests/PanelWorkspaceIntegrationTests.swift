@@ -46,9 +46,9 @@ final class PanelWorkspaceIntegrationTests: XCTestCase {
             ],
             regions: [
                 WorkspaceRegion(id: .leading),
-                WorkspaceRegion(id: .center, groupIDs: ["center"]),
+                WorkspaceRegion(id: .center, layout: .group("center")),
                 WorkspaceRegion(id: .trailing),
-                WorkspaceRegion(id: .bottom, groupIDs: ["bottom"]),
+                WorkspaceRegion(id: .bottom, layout: .group("bottom")),
             ]
         ))
 
