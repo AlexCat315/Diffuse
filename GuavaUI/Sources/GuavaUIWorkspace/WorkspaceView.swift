@@ -69,32 +69,37 @@ private struct _WorkspaceShell: View {
                                document: document,
                                controller: controller)
             }
-            if leadingVisible {
-                _WorkspaceSideRegion(regionID: .leading,
-                                     document: document,
-                                     controller: controller,
-                                     content: content)
-                    .flex(document.splitFractions.leading, shrink: 1, basis: 0)
-            }
             Box(direction: .column, alignItems: .stretch, spacing: 0) {
                 Box(direction: .row, alignItems: .stretch, spacing: 0) {
-                    _WorkspaceRegionView(regionID: .center,
-                                         document: document,
-                                         controller: controller,
-                                         content: content)
-                        .flex(trailingVisible ? document.splitFractions.centerTrailing : 1,
-                              shrink: 1,
-                              basis: 0)
-                    if trailingVisible {
-                        Divider(axis: .vertical)
-                        _WorkspaceSideRegion(regionID: .trailing,
+                    if leadingVisible {
+                        _WorkspaceSideRegion(regionID: .leading,
                                              document: document,
                                              controller: controller,
                                              content: content)
-                            .flex(1 - document.splitFractions.centerTrailing,
+                            .flex(document.splitFractions.leading, shrink: 1, basis: 0)
+                    }
+                    Box(direction: .row, alignItems: .stretch, spacing: 0) {
+                        _WorkspaceRegionView(regionID: .center,
+                                             document: document,
+                                             controller: controller,
+                                             content: content)
+                            .flex(trailingVisible ? document.splitFractions.centerTrailing : 1,
                                   shrink: 1,
                                   basis: 0)
+                        if trailingVisible {
+                            Divider(axis: .vertical)
+                            _WorkspaceSideRegion(regionID: .trailing,
+                                                 document: document,
+                                                 controller: controller,
+                                                 content: content)
+                                .flex(1 - document.splitFractions.centerTrailing,
+                                      shrink: 1,
+                                      basis: 0)
+                        }
                     }
+                    .flex(leadingVisible ? 1 - document.splitFractions.leading : 1,
+                          shrink: 1,
+                          basis: 0)
                 }
                 .flex(bottomVisible ? document.splitFractions.topBottom : 1,
                       shrink: 1,
@@ -109,9 +114,7 @@ private struct _WorkspaceShell: View {
                               basis: bottomVisible ? 0 : 40)
                 }
             }
-            .flex(leadingVisible ? 1 - document.splitFractions.leading : 1,
-                  shrink: 1,
-                  basis: 0)
+            .flex()
             if trailingCollapsed {
                 _WorkspaceRail(regionID: .trailing,
                                document: document,
