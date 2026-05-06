@@ -31,10 +31,11 @@ final class WorkspaceViewTests: XCTestCase {
         rig.pump()
 
         let bottomRail = rig.frame(named: "workspace-rail-bottom")
+        let center = rig.frame(named: "workspace-region-center")
         let statusBar = rig.frame(named: "editor-status-bar")
         XCTAssertEqual(statusBar.maxY, 640, accuracy: 0.5)
-        XCTAssertEqual(bottomRail.minX, 0, accuracy: 0.5)
-        XCTAssertEqual(bottomRail.maxX, 1000, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.minX, center.minX, accuracy: 1.0)
+        XCTAssertEqual(bottomRail.maxX, center.maxX, accuracy: 1.0)
         XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
         XCTAssertLessThan(bottomRail.minY, statusBar.minY)
     }
@@ -66,6 +67,43 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
     }
 
+    func testClickingBottomCollapseKeepsRailInCenterBottomSlot() {
+        let rig = makeRigWithStatusBar(width: 1000, height: 640)
+        let collapseButton = rig.frame(named: "workspace-collapse-bottom")
+
+        rig.click(collapseButton.center)
+
+        XCTAssertEqual(rig.controller.document.groups["bottom"]?.isCollapsed, true)
+        XCTAssertNil(rig.optionalFrame(named: "workspace-region-bottom"))
+        let center = rig.frame(named: "workspace-region-center")
+        let bottomRail = rig.frame(named: "workspace-rail-bottom")
+        let statusBar = rig.frame(named: "editor-status-bar")
+        XCTAssertEqual(bottomRail.minX, center.minX, accuracy: 1.0)
+        XCTAssertEqual(bottomRail.maxX, center.maxX, accuracy: 1.0)
+        XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
+    }
+
+    func testReinstalledWorkspaceWithSameControllerStillReceivesModelUpdates() {
+        let controller = WorkspaceController(document: Self.makeDocument())
+        var firstRig: WorkspaceViewRig? = WorkspaceViewRig(controller: controller,
+                                                          width: 1000,
+                                                          height: 600,
+                                                          root: Self.makeWorkspaceRoot(controller: controller))
+        XCTAssertNotNil(firstRig?.optionalFrame(named: "workspace-region-bottom"))
+        firstRig = nil
+
+        let secondRig = WorkspaceViewRig(controller: controller,
+                                         width: 1000,
+                                         height: 600,
+                                         root: Self.makeWorkspaceRoot(controller: controller))
+
+        _ = controller.dispatch(.collapse("bottom"))
+        secondRig.pump()
+
+        XCTAssertNil(secondRig.optionalFrame(named: "workspace-region-bottom"))
+        XCTAssertNotNil(secondRig.optionalFrame(named: "workspace-rail-bottom"))
+    }
+
     func testCenterGroupDoesNotExposeCollapseAffordance() {
         let rig = makeRig(width: 1000, height: 600)
 
@@ -90,10 +128,7 @@ final class WorkspaceViewTests: XCTestCase {
         return WorkspaceViewRig(controller: controller,
                                 width: width,
                                 height: height,
-                                root: AnyView(WorkspaceView(controller: controller) { panelID in
-                                    AnyView(Box { Text(panelID.rawValue) }
-                                        .debugName("content-\(panelID.rawValue)"))
-                                }))
+                                root: Self.makeWorkspaceRoot(controller: controller))
     }
 
     private func makeRigWithStatusBar(width: Float,
@@ -144,6 +179,13 @@ final class WorkspaceViewTests: XCTestCase {
                                                     centerTrailing: 0.78,
                                                     topBottom: 0.74)
         )
+    }
+
+    private static func makeWorkspaceRoot(controller: WorkspaceController) -> AnyView {
+        AnyView(WorkspaceView(controller: controller) { panelID in
+            AnyView(Box { Text(panelID.rawValue) }
+                .debugName("content-\(panelID.rawValue)"))
+        })
     }
 }
 
