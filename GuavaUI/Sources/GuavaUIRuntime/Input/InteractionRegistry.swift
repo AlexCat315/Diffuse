@@ -41,7 +41,7 @@ public enum InputHandlerRole: Sendable, Equatable {
     case scrollChrome
     case textInput
     case viewport
-    case dock
+    case workspace
     case drag
     case shortcut
     case custom(String)
@@ -99,9 +99,9 @@ public struct InputHandlerRoute: Sendable, Equatable {
     public static let viewport = InputHandlerRoute(role: .viewport,
                                                    priority: .focused,
                                                    debugName: "viewport")
-    public static let dockDrag = InputHandlerRoute(role: .dock,
-                                                   priority: .capture,
-                                                   debugName: "dock.drag")
+    public static let workspaceDrag = InputHandlerRoute(role: .workspace,
+                                                        priority: .capture,
+                                                        debugName: "workspace.drag")
     public static let shortcut = InputHandlerRoute(role: .shortcut,
                                                    priority: .system,
                                                    debugName: "shortcut")
