@@ -3,6 +3,7 @@ import Foundation
 public struct CapabilitySymbolicArgument: Sendable, Equatable, Codable {
     public var name: String
     public var typeID: String
+    public var required: Bool
     public var unit: String?
     public var enumChoices: [String]
     public var description: String?
@@ -10,12 +11,14 @@ public struct CapabilitySymbolicArgument: Sendable, Equatable, Codable {
 
     public init(name: String,
                 typeID: String,
+                required: Bool = true,
                 unit: String? = nil,
                 enumChoices: [String] = [],
                 description: String? = nil,
                 llmHint: String? = nil) {
         self.name = name
         self.typeID = typeID
+        self.required = required
         self.unit = unit
         self.enumChoices = enumChoices
         self.description = description
@@ -25,6 +28,7 @@ public struct CapabilitySymbolicArgument: Sendable, Equatable, Codable {
     public init(_ argument: CapabilityArgumentSpec) {
         self.init(name: argument.name,
                   typeID: argument.typeID,
+                  required: argument.required,
                   unit: argument.unit,
                   enumChoices: argument.enumChoices,
                   description: argument.description,
@@ -34,6 +38,7 @@ public struct CapabilitySymbolicArgument: Sendable, Equatable, Codable {
     enum CodingKeys: String, CodingKey {
         case name
         case typeID = "type"
+        case required
         case unit
         case enumChoices = "enum_choices"
         case description
