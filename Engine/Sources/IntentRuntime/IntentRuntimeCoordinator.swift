@@ -53,6 +53,12 @@ private struct PendingCapabilityInvocation {
     var request: ConfirmationRequestBatch
 }
 
+/// Staged state for an AI-plan confirmation — does not require a `CapabilitySpec`.
+private struct PendingAIPlanInvocation {
+    var transaction: TransactionIR
+    var request: ConfirmationRequestBatch
+}
+
 public final class IntentRuntimeCoordinator: @unchecked Sendable {
     private let planner: CapabilityInvocationPlanner
     private let executor: TransactionExecutor
@@ -62,6 +68,8 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
     private let unresolvedQueue: UnresolvableIntentQueue
     private let lock = NSLock()
     private var pendingInvocation: PendingCapabilityInvocation?
+    /// Staged confirmation for AI-planner transactions (parallel to `pendingInvocation`).
+    private var pendingAIPlanInvocation: PendingAIPlanInvocation?
 
     public init(registry: CapabilityRegistry,
                 checker: PreconditionChecker = PreconditionChecker(),
@@ -91,9 +99,97 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
 
     public func pendingConfirmationRequest() -> ConfirmationRequestBatch? {
         lock.lock()
-        let request = pendingInvocation?.request
+        let request = pendingInvocation?.request ?? pendingAIPlanInvocation?.request
         lock.unlock()
         return request
+    }
+
+    // MARK: - AI plan submission (bypasses CapabilityInvocationPlanner)
+
+    /// Submits an AI-generated `TransactionIR` that has `intent: nil`, bypassing
+    /// the capability registry entirely. Confirmation is gated by the transaction's
+    /// `approvalPolicy` instead of a registered verb's `confirmationPolicy`.
+    ///
+    /// - If `approvalPolicy == .automatic`: applies immediately.
+    /// - If `approvalPolicy == .requiresApproval`: stages the transaction and returns
+    ///   `.confirmationRequested`. Call `resolvePlanConfirmation` to accept or discard.
+    /// - `.forbidden` is rejected with an error.
+    public func submitPlan(_ transaction: TransactionIR,
+                           executionContext: inout TransactionExecutionContext) throws -> CapabilityInvocationResult {
+        guard transaction.approvalPolicy != .forbidden else {
+            throw CapabilityInvocationPlannerError.approvalForbidden(transaction.id)
+        }
+
+        if transaction.approvalPolicy == .automatic {
+            let applyResult = try executor.apply(transaction, to: &executionContext)
+            return CapabilityInvocationResult(disposition: .applied,
+                                              transactionID: transaction.id,
+                                              applyResult: applyResult,
+                                              readAfterWrite: [],
+                                              warnings: [])
+        }
+
+        let stagedResult = try stagedStore.stage(transaction, from: executionContext)
+        let request = makeAIPlanConfirmationRequest(for: transaction)
+        do {
+            if let bus = executionContext.observationBus {
+                _ = try bus.publish(kind: .confirmationRequested,
+                                    streamID: executionContext.uiStreamID,
+                                    payload: .inline(aiPlanConfirmationPayload(request: request,
+                                                                               preview: stagedResult.preview)),
+                                    origin: executionContext.eventOrigin,
+                                    causationID: transaction.id,
+                                    correlationID: request.correlationID,
+                                    provenance: .authored)
+            }
+            lock.lock()
+            pendingAIPlanInvocation = PendingAIPlanInvocation(transaction: transaction, request: request)
+            lock.unlock()
+        } catch {
+            _ = try? stagedStore.discardStagedTransaction(using: executionContext)
+            throw error
+        }
+
+        return CapabilityInvocationResult(disposition: .confirmationRequested,
+                                          transactionID: transaction.id,
+                                          stagedResult: stagedResult,
+                                          confirmationRequest: request,
+                                          readAfterWrite: [],
+                                          warnings: [])
+    }
+
+    /// Resolves a pending confirmation created by `submitPlan`.
+    /// Mirrors `resolveConfirmation` but reads from `pendingAIPlanInvocation`.
+    public func resolvePlanConfirmation(_ resolution: ConfirmationResolution,
+                                        executionContext: inout TransactionExecutionContext) throws -> CapabilityInvocationResult {
+        let pending = try lockedPendingAIPlan(for: resolution.batchID)
+
+        if let bus = executionContext.observationBus {
+            _ = try bus.publish(kind: .confirmationResolved,
+                                streamID: executionContext.uiStreamID,
+                                payload: .inline(confirmationResolvedPayload(resolution: resolution,
+                                                                             transactionID: pending.transaction.id)),
+                                origin: executionContext.eventOrigin,
+                                causationID: pending.transaction.id,
+                                correlationID: resolution.correlationID,
+                                provenance: .authored)
+        }
+
+        if shouldApply(resolution) {
+            let applied = try stagedStore.applyStagedTransaction(to: &executionContext)
+            clearPendingAIPlan()
+            return CapabilityInvocationResult(disposition: .applied,
+                                              transactionID: pending.transaction.id,
+                                              applyResult: applied.applyResult,
+                                              readAfterWrite: [],
+                                              warnings: [])
+        }
+
+        _ = try stagedStore.discardStagedTransaction(using: executionContext)
+        clearPendingAIPlan()
+        return CapabilityInvocationResult(disposition: .discarded,
+                                          transactionID: pending.transaction.id,
+                                          warnings: [])
     }
 
     public func plan(_ transaction: TransactionIR,
@@ -262,6 +358,76 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         lock.lock()
         pendingInvocation = nil
         lock.unlock()
+    }
+
+    // MARK: - AI plan confirmation helpers
+
+    private func lockedPendingAIPlan(for batchID: String) throws -> PendingAIPlanInvocation {
+        lock.lock()
+        let pending = pendingAIPlanInvocation
+        lock.unlock()
+        guard let pending else {
+            throw IntentRuntimeCoordinatorError.noPendingConfirmation
+        }
+        guard pending.request.batchID == batchID else {
+            throw IntentRuntimeCoordinatorError.confirmationBatchMismatch(expected: pending.request.batchID,
+                                                                          actual: batchID)
+        }
+        return pending
+    }
+
+    private func clearPendingAIPlan() {
+        lock.lock()
+        pendingAIPlanInvocation = nil
+        lock.unlock()
+    }
+
+    private func makeAIPlanConfirmationRequest(for transaction: TransactionIR) -> ConfirmationRequestBatch {
+        let question = ConfirmationQuestion(
+            id: "ai_plan:\(transaction.id)",
+            kind: .approveDestructive,
+            promptShort: transaction.summary,
+            promptDetail: nil,
+            options: [
+                ConfirmationOption(id: "confirm",
+                                   labelShort: "Apply",
+                                   labelDetail: "Execute the AI-generated scene edit plan"),
+                ConfirmationOption(id: "skip",
+                                   labelShort: "Discard",
+                                   labelDetail: "Discard the staged plan without applying"),
+            ],
+            defaultOptionID: "confirm",
+            severity: .warn,
+            reversible: true,
+            ambiguityScore: 0.5,
+            sourceProposalIDs: [transaction.id]
+        )
+        return ConfirmationRequestBatch(
+            batchID: "ai_cfm:\(transaction.id)",
+            origin: "ai_runtime",
+            correlationID: transaction.id,
+            questions: [question]
+        )
+    }
+
+    private func aiPlanConfirmationPayload(request: ConfirmationRequestBatch,
+                                           preview: TransactionPreviewResult) -> EventPayloadRecord {
+        var payload: EventPayloadRecord = [
+            "batch_id": .string(request.batchID),
+            "origin": .string(request.origin),
+            "correlation_id": .string(request.correlationID),
+            "questions": .array(request.questions.map(questionPayload)),
+            "required_role": request.requiredRole.map { .string($0.rawValue) } ?? .null,
+            "preview": .object([
+                "changed_domains": .array(preview.changedDomains.map { .string($0.rawValue) }),
+                "created_entity_ids": .array(preview.createdEntityIDs.map { .integer(Int64($0)) }),
+                "deleted_entity_ids": .array(preview.deletedEntityIDs.map { .integer(Int64($0)) }),
+            ]),
+        ]
+        if let contextSnapshotURI = request.contextSnapshotURI {
+            payload["context_snapshot_uri"] = .string(contextSnapshotURI)
+        }
+        return payload
     }
 
     private func shouldApply(_ resolution: ConfirmationResolution) -> Bool {
