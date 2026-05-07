@@ -22,11 +22,27 @@ public struct NaturalLanguageIntent: Sendable, Equatable, Codable {
 
 public struct NaturalLanguageIntentContext: Sendable, Equatable, Codable {
     public var selectedObjectIDs: [String]
+    /// Human-readable names of selected entities, for LLM context ("Cube 01", "Camera").
+    public var selectedEntityLabels: [String]
+    /// Total number of entities currently in the scene.
+    public var entityCount: Int
+    /// Current workspace mode: "level", "modeling", or "animation".
+    public var workspaceMode: String?
+    /// VerbIDs of the last 3 successfully applied intents, for multi-step context.
+    public var recentVerbs: [String]
     public var localeIdentifier: String?
 
     public init(selectedObjectIDs: [String] = [],
+                selectedEntityLabels: [String] = [],
+                entityCount: Int = 0,
+                workspaceMode: String? = nil,
+                recentVerbs: [String] = [],
                 localeIdentifier: String? = nil) {
         self.selectedObjectIDs = selectedObjectIDs
+        self.selectedEntityLabels = selectedEntityLabels
+        self.entityCount = entityCount
+        self.workspaceMode = workspaceMode
+        self.recentVerbs = recentVerbs
         self.localeIdentifier = localeIdentifier
     }
 }
