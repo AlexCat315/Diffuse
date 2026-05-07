@@ -202,6 +202,125 @@ struct IntentRuntimeTests {
         #expect(registry.entriesSnapshot().map(\ .relativePath) == ["mesh.obj"])
     }
 
+    @Test("deterministic natural language resolver emits typed IntentIR for common scene verbs")
+    func naturalLanguageResolverEmitsTypedIntentIR() throws {
+        let resolver = NaturalLanguageIntentResolver()
+        let context = NaturalLanguageIntentContext(selectedObjectIDs: ["scene:42"])
+
+        let rename = resolver.resolve(NaturalLanguageIntent(text: #"rename selected to "Boss""#),
+                                      context: context)
+        let move = resolver.resolve(NaturalLanguageIntent(text: "move selection to 1 2 3"),
+                                    context: context)
+
+        let renameIntent = try #require(rename.intent)
+        let moveIntent = try #require(move.intent)
+
+        #expect(renameIntent.verb == "scene.set_name")
+        #expect(renameIntent.targetObjectIDs == ["scene:42"])
+        #expect(renameIntent.arguments["name"] == .string("Boss"))
+        #expect(renameIntent.confidence > 0)
+        #expect(renameIntent.evidence.first?.kind == "natural_language")
+
+        #expect(moveIntent.verb == "scene.set_transform")
+        #expect(moveIntent.arguments["translation"] == .vec3(IntentVector3(x: 1, y: 2, z: 3)))
+    }
+
+    @Test("IntentIR decodes legacy payloads without typed arguments")
+    func intentIRDecodesLegacyPayloads() throws {
+        let data = Data(#"{"verb":"scene.spawn_entity","summary":"Spawn","source":"human"}"#.utf8)
+
+        let intent = try JSONDecoder().decode(IntentIR.self, from: data)
+
+        #expect(intent.verb == "scene.spawn_entity")
+        #expect(intent.targetObjectIDs.isEmpty)
+        #expect(intent.arguments.isEmpty)
+        #expect(intent.confidence == 1.0)
+        #expect(intent.evidence.isEmpty)
+    }
+
+    @Test("natural language resolver returns actionable unresolved intents")
+    func naturalLanguageResolverReturnsUnresolvedIntents() throws {
+        let resolver = NaturalLanguageIntentResolver()
+
+        let missingTarget = resolver.resolve(NaturalLanguageIntent(text: "delete selected"))
+        let unsupported = resolver.resolve(NaturalLanguageIntent(text: "make it more cinematic"))
+
+        let targetIssue = try #require(missingTarget.unresolved)
+        let unsupportedIssue = try #require(unsupported.unresolved)
+
+        #expect(targetIssue.reason == .missingTarget)
+        #expect(targetIssue.candidateVerbIDs == ["scene.delete_entity"])
+        #expect(targetIssue.missingArguments == ["entity_id"])
+        #expect(unsupportedIssue.reason == .unsupportedVerb)
+    }
+
+    @Test("unresolved intent queue tracks open and dismissed items")
+    func unresolvedIntentQueueTracksLifecycle() throws {
+        let queue = UnresolvableIntentQueue()
+        let item = UnresolvableIntent(
+            naturalLanguageIntent: NaturalLanguageIntent(text: "delete selected"),
+            reason: .missingTarget,
+            message: "Select an entity before deleting it."
+        )
+
+        queue.append(item)
+        #expect(queue.snapshot().map(\.id) == [item.id])
+
+        queue.dismiss(id: item.id)
+        #expect(queue.snapshot().isEmpty)
+        #expect(queue.snapshot(includeClosed: true).first?.status == .dismissed)
+    }
+
+    @Test("IntentIR transaction builder converts typed intents to scene transactions")
+    func intentTransactionBuilderBuildsSceneTransactions() throws {
+        let builder = IntentTransactionBuilder()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(SceneNameComponent(value: "Hero"), for: entity)
+        _ = scene.setLocalTransform(LocalTransform(translation: .zero), for: entity)
+
+        let rename = IntentIR(verb: "scene.set_name",
+                              summary: "Rename selected entity",
+                              targetObjectIDs: ["scene:\(entity.rawValue)"],
+                              arguments: ["name": .string("Boss")],
+                              source: .human)
+        let move = IntentIR(verb: "scene.set_transform",
+                            summary: "Move selected entity",
+                            targetObjectIDs: ["scene:\(entity.rawValue)"],
+                            arguments: ["translation": .vec3(IntentVector3(x: 3, y: 4, z: 5))],
+                            source: .human)
+        let context = IntentTransactionBuildContext(sceneRuntime: scene,
+                                                    selectedEntityID: entity.rawValue,
+                                                    defaultSpawnMeshIndex: 7)
+
+        let renameTx = try builder.buildTransaction(from: rename, context: context)
+        let moveTx = try builder.buildTransaction(from: move, context: context)
+
+        #expect(renameTx.operations == [.scene(.setSceneName(entityID: entity.rawValue, value: "Boss"))])
+        guard case let .scene(.setLocalTransform(rawID, transform)) = moveTx.operations.first else {
+            Issue.record("Expected setLocalTransform scene mutation")
+            return
+        }
+        #expect(rawID == entity.rawValue)
+        #expect(transform.translation == SIMD3<Float>(3, 4, 5))
+    }
+
+    @Test("coordinator stores unresolvable natural language intents")
+    func coordinatorStoresUnresolvableNaturalLanguageIntents() throws {
+        let coordinator = try IntentRuntimeCoordinator.default()
+
+        let result = coordinator.resolveNaturalLanguageIntent(
+            NaturalLanguageIntent(text: "delete selected"),
+            context: NaturalLanguageIntentContext()
+        )
+
+        let unresolved = try #require(result.unresolved)
+        #expect(coordinator.unresolvedNaturalLanguageIntents().map(\.id) == [unresolved.id])
+
+        coordinator.dismissUnresolvedIntent(id: unresolved.id)
+        #expect(coordinator.unresolvedNaturalLanguageIntents().isEmpty)
+    }
+
     @Test("coordinator exposes prompt-safe symbolic capabilities from its registry")
     func coordinatorExposesPromptSafeSymbolicCapabilities() throws {
         let coordinator = try IntentRuntimeCoordinator.default()
