@@ -284,7 +284,13 @@ public struct AnthropicIntentResolverBackend: IntentResolverBackend {
             evidence: [IntentEvidence(kind: "ai_tool_use", summary: intent.text)],
             source: .ai
         )
-        return IntentResolutionResult(naturalLanguageIntent: intent, intent: ir)
+        return IntentResolutionResult(
+            naturalLanguageIntent: intent,
+            intent: ir,
+            candidates: [IntentResolutionCandidate(verbID: verbID,
+                                                    confidence: 0.92,
+                                                    reason: "ai_tool_use")]
+        )
     }
 
     private func decodeArgument(_ raw: Any, typeID: String) -> IntentArgumentValue? {

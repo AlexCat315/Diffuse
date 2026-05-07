@@ -21,7 +21,7 @@ import simd
 ///
 /// 自身不持有窗口 / wgpu surface — UI 渲染由 GuavaUIApp 接管，引擎仅负责
 /// 仿真与（未来的）离屏渲染。
-public final class EditorApplication {
+public final class EditorApplication: @unchecked Sendable {
     public let engine: EngineHost
     public let projectDirectory: String
     public let store: EditorStore
@@ -361,7 +361,12 @@ public final class EditorApplication {
         )
     }
 
+    /// Submits a free-text intent through the three-layer cascade:
+    /// Layer 1 (local classifier, <5 ms) → Layer 2 (AI backend, async) → keyword fallback.
+    /// Shows a "Resolving…" status during any async wait and updates it with the resolution source.
     public func submitNaturalLanguageIntent(_ text: String) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
         if store.state.pendingConfirmationRequest != nil {
             store.dispatch(.setAIStatusMessage("Resolve the pending confirmation before submitting another AI action."))
             return
@@ -370,16 +375,35 @@ public final class EditorApplication {
         let request = NaturalLanguageIntent(text: text,
                                             localeIdentifier: store.state.language.lprojName,
                                             source: .human)
-        let result = intentCoordinator.resolveNaturalLanguageIntent(request,
-                                                                    context: makeNaturalLanguageIntentContext())
-        refreshUnresolvedIntents()
+        let context = makeNaturalLanguageIntentContext()
+        let capabilityContext = CapabilityInvocationContext(role: .editor, releasePhase: .beta)
 
-        guard let intent = result.intent else {
-            let message = result.unresolved?.message ?? "Unable to resolve intent."
-            store.dispatch(.setAIStatusMessage(message))
-            return
+        store.dispatch(.setAIStatusMessage("Resolving…"))
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await self.intentCoordinator.resolveNaturalLanguageIntentAsync(
+                request,
+                context: context,
+                capabilityContext: capabilityContext
+            )
+            self.refreshUnresolvedIntents()
+
+            guard let intent = result.intent else {
+                let message = result.unresolved?.message ?? "Unable to resolve intent."
+                self.store.dispatch(.setAIStatusMessage(message))
+                return
+            }
+
+            let reason = result.candidates.first?.reason ?? ""
+            let layerLabel: String
+            if reason == "token_overlap"         { layerLabel = "local" }
+            else if reason == "ai_tool_use"      { layerLabel = "AI" }
+            else if reason.hasSuffix("keyword")  { layerLabel = "keyword" }
+            else                                 { layerLabel = "fallback" }
+            self.store.dispatch(.setAIStatusMessage("[\(layerLabel)] \(intent.verb)"))
+            self.submitResolvedIntent(intent)
         }
-        submitResolvedIntent(intent)
     }
 
     public func dismissUnresolvedIntent(id: String) {
