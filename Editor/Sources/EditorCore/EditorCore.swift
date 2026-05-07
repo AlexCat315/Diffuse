@@ -21,7 +21,7 @@ import simd
 ///
 /// 自身不持有窗口 / wgpu surface — UI 渲染由 GuavaUIApp 接管，引擎仅负责
 /// 仿真与（未来的）离屏渲染。
-public final class EditorApplication {
+public final class EditorApplication: @unchecked Sendable {
     public let engine: EngineHost
     public let projectDirectory: String
     public let store: EditorStore
@@ -39,6 +39,8 @@ public final class EditorApplication {
     private var openSettingsWindowHandler: (() -> Void)?
     private var displayInvalidationHandler: (() -> Void)?
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
+    private var pendingTrainingEntry: IntentTrainingLogger.Entry?
+    private var recentResolvedVerbs: [String] = []
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
     private var frameTiming = EditorFrameTiming()
@@ -46,7 +48,8 @@ public final class EditorApplication {
     public init(projectDirectory: String,
                 backendConfig: WGPUDeviceConfig? = nil,
                 backend: WGPUBackend? = nil,
-                events: PlatformEventBridge = PlatformEventBridge()) throws {
+                events: PlatformEventBridge = PlatformEventBridge(),
+                initialAISettings: EditorAISettings = .default) throws {
         var resolvedBackendConfig = backendConfig ?? .init()
         if resolvedBackendConfig.libraryPath == nil {
             resolvedBackendConfig.libraryPath = Self.locateWGPUDylib()
@@ -62,6 +65,12 @@ public final class EditorApplication {
                                                 withIntermediateDirectories: true)
         let observationBus = try ObservationBus(coldLogDirectory: observationDirectory.path)
         let intentCoordinator = try IntentRuntimeCoordinator.default()
+        // Restore the AI backend from the settings passed in at launch (loaded from
+        // EditorShellState by the caller) and the matching key in Keychain.
+        store.dispatch(.setAISettings(initialAISettings))
+        if let backend = EditorApplication.makeBackend(for: initialAISettings) {
+            intentCoordinator.setBackend(backend)
+        }
 
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.projectDirectory = projectDirectory
@@ -354,7 +363,35 @@ public final class EditorApplication {
         )
     }
 
+    /// Synchronous Layer 1 suggestions for `text` — safe to call on every keystroke (<5 ms).
+    /// Returns up to `maxCount` matches sorted by descending confidence.
+    public func localIntentSuggestions(
+        for text: String,
+        maxCount: Int = 3
+    ) -> [(verbID: String, summary: String, confidence: Double)] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        let intent = NaturalLanguageIntent(text: trimmed, source: .human)
+        let context = makeNaturalLanguageIntentContext()
+        let caps = intentCoordinator.promptCapabilitySymbolicViews(
+            for: CapabilityInvocationContext(role: .editor, releasePhase: .beta,
+                                             includeExperimental: false),
+            maxCount: 50
+        )
+        let classifier = LocalIntentClassifier(confidenceThreshold: 0.0)
+        return classifier.topMatches(intent, context: context, capabilities: caps,
+                                     maxCount: maxCount, minConfidence: 0.08)
+            .map { (verbID: $0.capability.verbID,
+                    summary: $0.capability.summary,
+                    confidence: $0.confidence) }
+    }
+
+    /// Submits a free-text intent through the three-layer cascade:
+    /// Layer 1 (local classifier, <5 ms) → Layer 2 (AI backend, async) → keyword fallback.
+    /// Shows a "Resolving…" status during any async wait and updates it with the resolution source.
     public func submitNaturalLanguageIntent(_ text: String) {
+        guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+
         if store.state.pendingConfirmationRequest != nil {
             store.dispatch(.setAIStatusMessage("Resolve the pending confirmation before submitting another AI action."))
             return
@@ -363,16 +400,49 @@ public final class EditorApplication {
         let request = NaturalLanguageIntent(text: text,
                                             localeIdentifier: store.state.language.lprojName,
                                             source: .human)
-        let result = intentCoordinator.resolveNaturalLanguageIntent(request,
-                                                                    context: makeNaturalLanguageIntentContext())
-        refreshUnresolvedIntents()
+        let context = makeNaturalLanguageIntentContext()
+        let capabilityContext = CapabilityInvocationContext(role: .editor, releasePhase: .beta)
 
-        guard let intent = result.intent else {
-            let message = result.unresolved?.message ?? "Unable to resolve intent."
-            store.dispatch(.setAIStatusMessage(message))
-            return
+        store.dispatch(.setAIStatusMessage("Resolving…"))
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let result = await self.intentCoordinator.resolveNaturalLanguageIntentAsync(
+                request,
+                context: context,
+                capabilityContext: capabilityContext
+            )
+            self.refreshUnresolvedIntents()
+
+            guard let intent = result.intent else {
+                let message = result.unresolved?.message ?? "Unable to resolve intent."
+                self.store.dispatch(.setAIStatusMessage(message))
+                IntentTrainingLogger.log(
+                    .init(text: text, verb: nil, layer: "unresolved",
+                          confidence: 0, outcome: "unresolved",
+                          locale: self.store.state.language.lprojName),
+                    projectDirectory: self.projectDirectory
+                )
+                return
+            }
+
+            let reason = result.candidates.first?.reason ?? ""
+            let layerLabel: String
+            if reason == "token_overlap"         { layerLabel = "local" }
+            else if reason == "ai_tool_use"      { layerLabel = "AI" }
+            else if reason.hasSuffix("keyword")  { layerLabel = "keyword" }
+            else                                 { layerLabel = "fallback" }
+            self.store.dispatch(.setAIStatusMessage("[\(layerLabel)] \(intent.verb)"))
+            self.pendingTrainingEntry = IntentTrainingLogger.Entry(
+                text: text,
+                verb: intent.verb,
+                layer: layerLabel,
+                confidence: intent.confidence,
+                outcome: "applied",
+                locale: self.store.state.language.lprojName
+            )
+            self.submitResolvedIntent(intent)
         }
-        submitResolvedIntent(intent)
     }
 
     public func dismissUnresolvedIntent(id: String) {
@@ -547,6 +617,40 @@ public final class EditorApplication {
         return "libwgpu_native.dylib"
     }
 
+    // MARK: - AI settings
+
+    /// Applies new AI settings: persists provider/model, writes the key to Keychain,
+    /// and hot-swaps the backend on the coordinator without restart.
+    public func applyAISettings(_ settings: EditorAISettings, apiKey: String) {
+        AIKeychain.save(key: apiKey, provider: settings.provider)
+        store.dispatch(.setAISettings(settings))
+        let backend = Self.makeBackend(for: settings)
+        intentCoordinator.setBackend(backend)
+    }
+
+    /// Removes the stored API key for the current provider and disables AI resolution.
+    public func clearAIKey() {
+        let provider = store.state.aiSettings.provider
+        AIKeychain.delete(provider: provider)
+        intentCoordinator.setBackend(nil)
+    }
+
+    /// Returns `true` if a non-empty API key is stored for the current provider.
+    public func hasStoredAIKey() -> Bool {
+        AIKeychain.hasKey(for: store.state.aiSettings.provider)
+    }
+
+    static func makeBackend(for settings: EditorAISettings) -> (any IntentResolverBackend)? {
+        switch settings.provider {
+        case .none:
+            return nil
+        case .anthropic:
+            guard let key = AIKeychain.load(provider: .anthropic) else { return nil }
+            let config = AnthropicIntentResolverBackendConfig(apiKey: key, model: settings.model)
+            return AnthropicIntentResolverBackend(config: config)
+        }
+    }
+
     private func submitIntentTransaction(_ transaction: TransactionIR) {
         if store.state.pendingConfirmationRequest != nil {
             store.dispatch(.setAIStatusMessage("Resolve the pending confirmation before submitting another AI action."))
@@ -568,6 +672,7 @@ public final class EditorApplication {
     }
 
     private func submitResolvedIntent(_ intent: IntentIR) {
+        recordRecentVerb(intent.verb)
         do {
             let transaction = try intentTransactionBuilder.buildTransaction(from: intent,
                                                                             context: makeIntentTransactionBuildContext())
@@ -579,9 +684,21 @@ public final class EditorApplication {
         }
     }
 
+    private func recordRecentVerb(_ verb: String) {
+        recentResolvedVerbs.removeAll { $0 == verb }
+        recentResolvedVerbs.insert(verb, at: 0)
+        if recentResolvedVerbs.count > 3 { recentResolvedVerbs.removeLast() }
+    }
+
     private func makeNaturalLanguageIntentContext() -> NaturalLanguageIntentContext {
-        NaturalLanguageIntentContext(
-            selectedObjectIDs: store.state.selectedEntityID.map { ["scene:\($0)"] } ?? [],
+        let selectedID = store.state.selectedEntityID
+        let selectedLabel = selectedID.flatMap { scene.entitySummary(id: $0)?.name }
+        return NaturalLanguageIntentContext(
+            selectedObjectIDs: selectedID.map { ["scene:\($0)"] } ?? [],
+            selectedEntityLabels: selectedLabel.map { [$0] } ?? [],
+            entityCount: scene.entityCount,
+            workspaceMode: store.state.workspaceMode.rawValue,
+            recentVerbs: recentResolvedVerbs,
             localeIdentifier: store.state.language.lprojName
         )
     }
@@ -609,6 +726,7 @@ public final class EditorApplication {
             store.dispatch(.setAIWarnings(result.warnings))
             updateSelection(after: result.applyResult)
             store.dispatch(.setAIStatusMessage("Applied \(result.transactionID)"))
+            flushTrainingLog(outcome: "applied")
         case .confirmationRequested:
             store.dispatch(.setPendingConfirmationRequest(result.confirmationRequest))
             store.dispatch(.setAIWarnings(result.warnings))
@@ -617,7 +735,15 @@ public final class EditorApplication {
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings(result.warnings))
             store.dispatch(.setAIStatusMessage("Discarded \(result.transactionID)"))
+            flushTrainingLog(outcome: "discarded")
         }
+    }
+
+    private func flushTrainingLog(outcome: String) {
+        guard var entry = pendingTrainingEntry else { return }
+        pendingTrainingEntry = nil
+        entry.outcome = outcome
+        IntentTrainingLogger.log(entry, projectDirectory: projectDirectory)
     }
 
     private func makeExecutionContext() -> TransactionExecutionContext {
