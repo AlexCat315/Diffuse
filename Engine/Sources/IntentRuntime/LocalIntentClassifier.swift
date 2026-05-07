@@ -289,6 +289,15 @@ private enum Synonyms {
         // Scene
         ["scene", "level", "world",
          "场景", "关卡", "世界"],
+        // Visibility / show / hide
+        ["visible", "invisible", "hide", "show", "visibility", "toggle",
+         "隐藏", "显示", "可见", "不可见", "显隐"],
+        // Reset / clear / origin
+        ["reset", "clear", "zero", "origin", "identity",
+         "归零", "重置", "初始化", "原点"],
+        // Snap / align / ground
+        ["snap", "align", "ground", "floor",
+         "贴地", "落地", "吸附", "对齐"],
     ]
 }
 

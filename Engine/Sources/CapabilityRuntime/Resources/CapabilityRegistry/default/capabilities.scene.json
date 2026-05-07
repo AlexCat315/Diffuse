@@ -889,6 +889,150 @@
     ]
   },
   {
+    "verb_id": "scene.set_visibility",
+    "summary": "Show or hide a scene entity",
+    "category": "scene",
+    "scope": "scene_instance",
+    "target_kind": "scene_instance_id",
+    "arguments": [
+      {
+        "name": "entity_id",
+        "type": "stable_id",
+        "required": true,
+        "llm_hint": "Entity to show or hide"
+      },
+      {
+        "name": "visible",
+        "type": "bool",
+        "required": true,
+        "llm_hint": "true to make the entity visible, false to hide it"
+      }
+    ],
+    "preconditions": [],
+    "effects": [
+      {
+        "id": "scene.write_visibility",
+        "kind": "write_field",
+        "target_kind": "scene_instance_id",
+        "field_path": "visible",
+        "value_origin": "argument"
+      }
+    ],
+    "reversible": true,
+    "preview_support": {
+      "mode": "ghost_world"
+    },
+    "confirmation_policy": {
+      "level": "auto"
+    },
+    "read_after_write": [
+      "scene.changed"
+    ],
+    "writes_documents": [
+      "SceneDocument"
+    ],
+    "writes_runtime": true,
+    "side_band_emits": [
+      "transaction.applied",
+      "scene.changed"
+    ],
+    "failure_modes": [],
+    "release_phase_gate": {
+      "prealpha": "allow",
+      "alpha": "allow",
+      "beta": "allow",
+      "rc": "allow",
+      "ship": "allow",
+      "hotfixException": false
+    },
+    "required_role": "editor",
+    "version": "0.1.0",
+    "status": "stable",
+    "deprecates": [],
+    "evidence_kinds": [
+      "instance"
+    ],
+    "audit_required": false,
+    "provenance_input_allowed": [
+      "authored",
+      "inferred",
+      "proposal"
+    ],
+    "provenance_output": "authored",
+    "policies": [
+      "default-scene-policy"
+    ]
+  },
+  {
+    "verb_id": "scene.reset_transform",
+    "summary": "Reset a scene entity transform to identity",
+    "category": "scene",
+    "scope": "scene_instance",
+    "target_kind": "scene_instance_id",
+    "arguments": [
+      {
+        "name": "entity_id",
+        "type": "stable_id",
+        "required": true,
+        "llm_hint": "Entity whose transform to reset to identity"
+      }
+    ],
+    "preconditions": [],
+    "effects": [
+      {
+        "id": "scene.write_transform",
+        "kind": "write_field",
+        "target_kind": "scene_instance_id",
+        "field_path": "transform",
+        "value_origin": "derived"
+      }
+    ],
+    "reversible": true,
+    "preview_support": {
+      "mode": "ghost_world"
+    },
+    "confirmation_policy": {
+      "level": "auto"
+    },
+    "read_after_write": [
+      "scene.changed"
+    ],
+    "writes_documents": [
+      "SceneDocument"
+    ],
+    "writes_runtime": true,
+    "side_band_emits": [
+      "transaction.applied",
+      "scene.changed"
+    ],
+    "failure_modes": [],
+    "release_phase_gate": {
+      "prealpha": "allow",
+      "alpha": "allow",
+      "beta": "allow",
+      "rc": "allow",
+      "ship": "allow",
+      "hotfixException": false
+    },
+    "required_role": "editor",
+    "version": "0.1.0",
+    "status": "stable",
+    "deprecates": [],
+    "evidence_kinds": [
+      "instance"
+    ],
+    "audit_required": false,
+    "provenance_input_allowed": [
+      "authored",
+      "inferred",
+      "proposal"
+    ],
+    "provenance_output": "authored",
+    "policies": [
+      "default-scene-policy"
+    ]
+  },
+  {
     "verb_id": "scene.snap_to_ground",
     "summary": "Snap the current instance to ground",
     "category": "scene",
