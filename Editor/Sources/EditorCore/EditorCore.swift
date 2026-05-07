@@ -40,6 +40,7 @@ public final class EditorApplication: @unchecked Sendable {
     private var displayInvalidationHandler: (() -> Void)?
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
     private var pendingTrainingEntry: IntentTrainingLogger.Entry?
+    private var recentResolvedVerbs: [String] = []
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
     private var frameTiming = EditorFrameTiming()
@@ -362,6 +363,29 @@ public final class EditorApplication: @unchecked Sendable {
         )
     }
 
+    /// Synchronous Layer 1 suggestions for `text` — safe to call on every keystroke (<5 ms).
+    /// Returns up to `maxCount` matches sorted by descending confidence.
+    public func localIntentSuggestions(
+        for text: String,
+        maxCount: Int = 3
+    ) -> [(verbID: String, summary: String, confidence: Double)] {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return [] }
+        let intent = NaturalLanguageIntent(text: trimmed, source: .human)
+        let context = makeNaturalLanguageIntentContext()
+        let caps = intentCoordinator.promptCapabilitySymbolicViews(
+            for: CapabilityInvocationContext(role: .editor, releasePhase: .beta,
+                                             includeExperimental: false),
+            maxCount: 50
+        )
+        let classifier = LocalIntentClassifier(confidenceThreshold: 0.0)
+        return classifier.topMatches(intent, context: context, capabilities: caps,
+                                     maxCount: maxCount, minConfidence: 0.08)
+            .map { (verbID: $0.capability.verbID,
+                    summary: $0.capability.summary,
+                    confidence: $0.confidence) }
+    }
+
     /// Submits a free-text intent through the three-layer cascade:
     /// Layer 1 (local classifier, <5 ms) → Layer 2 (AI backend, async) → keyword fallback.
     /// Shows a "Resolving…" status during any async wait and updates it with the resolution source.
@@ -648,6 +672,7 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     private func submitResolvedIntent(_ intent: IntentIR) {
+        recordRecentVerb(intent.verb)
         do {
             let transaction = try intentTransactionBuilder.buildTransaction(from: intent,
                                                                             context: makeIntentTransactionBuildContext())
@@ -659,9 +684,21 @@ public final class EditorApplication: @unchecked Sendable {
         }
     }
 
+    private func recordRecentVerb(_ verb: String) {
+        recentResolvedVerbs.removeAll { $0 == verb }
+        recentResolvedVerbs.insert(verb, at: 0)
+        if recentResolvedVerbs.count > 3 { recentResolvedVerbs.removeLast() }
+    }
+
     private func makeNaturalLanguageIntentContext() -> NaturalLanguageIntentContext {
-        NaturalLanguageIntentContext(
-            selectedObjectIDs: store.state.selectedEntityID.map { ["scene:\($0)"] } ?? [],
+        let selectedID = store.state.selectedEntityID
+        let selectedLabel = selectedID.flatMap { scene.entitySummary(id: $0)?.name }
+        return NaturalLanguageIntentContext(
+            selectedObjectIDs: selectedID.map { ["scene:\($0)"] } ?? [],
+            selectedEntityLabels: selectedLabel.map { [$0] } ?? [],
+            entityCount: scene.entityCount,
+            workspaceMode: store.state.workspaceMode.rawValue,
+            recentVerbs: recentResolvedVerbs,
             localeIdentifier: store.state.language.lprojName
         )
     }

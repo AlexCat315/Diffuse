@@ -82,6 +82,31 @@ public struct LocalIntentClassifier: Sendable {
         )
     }
 
+    /// Returns the top-N capabilities by score, sorted descending, above `minConfidence`.
+    /// Used for live suggestions as the user types — callers should pass a low `minConfidence`
+    /// (e.g. 0.1) so partially-typed queries surface results early.
+    public func topMatches(
+        _ intent: NaturalLanguageIntent,
+        context: NaturalLanguageIntentContext,
+        capabilities: [CapabilitySymbolicView],
+        maxCount: Int = 3,
+        minConfidence: Double = 0.1
+    ) -> [(capability: CapabilitySymbolicView, confidence: Double)] {
+        guard !capabilities.isEmpty else { return [] }
+        let queryTokens = expandedTokens(from: intent.text)
+        guard !queryTokens.isEmpty else { return [] }
+
+        return capabilities
+            .compactMap { cap -> (CapabilitySymbolicView, Double)? in
+                let s = score(queryTokens: queryTokens, capability: cap)
+                guard s >= minConfidence else { return nil }
+                return (cap, min(s, 1.0))
+            }
+            .sorted { $0.1 > $1.1 }
+            .prefix(maxCount)
+            .map { $0 }
+    }
+
     // MARK: - Scoring
 
     private func score(queryTokens: Set<String>, capability: CapabilitySymbolicView) -> Double {
