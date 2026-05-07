@@ -113,6 +113,14 @@
 "Offline" = "离线";
 "Ready" = "就绪";
 
+/* AI — Command palette */
+"AI Command" = "AI 指令";
+"Resolving…" = "解析中…";
+"Describe what you want to do…" = "描述你想执行的操作…";
+"Enter to submit · Escape to close · Cmd+K to reopen" = "回车提交 · Escape 关闭 · Cmd+K 重新打开";
+"keyword only" = "仅关键词";
+"Did you mean?" = "你是想要？";
+
 /* AI — Confirmation panel */
 "No pending confirmation" = "没有待确认项";
 "Warn, required, and destructive AI actions will appear here before they mutate the scene." = "警告、必需和破坏性 AI 操作会在修改场景前显示在这里。";

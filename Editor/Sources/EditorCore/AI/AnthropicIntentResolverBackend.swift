@@ -8,15 +8,19 @@ public struct AnthropicIntentResolverBackendConfig: Sendable {
     public var apiKey: String
     public var model: String
     public var maxTokens: Int
+    /// Seconds before the URLSession request is cancelled and the cascade falls through to Layer 3.
+    public var timeoutInterval: TimeInterval
 
     public static let defaultModel = "claude-sonnet-4-6"
 
     public init(apiKey: String,
                 model: String = defaultModel,
-                maxTokens: Int = 1024) {
+                maxTokens: Int = 1024,
+                timeoutInterval: TimeInterval = 15) {
         self.apiKey = apiKey
         self.model = model
         self.maxTokens = maxTokens
+        self.timeoutInterval = timeoutInterval
     }
 }
 
@@ -238,7 +242,7 @@ public struct AnthropicIntentResolverBackend: IntentResolverBackend {
     // MARK: - HTTP
 
     private func post(_ body: [String: Any]) async throws -> Data {
-        var request = URLRequest(url: Self.apiEndpoint)
+        var request = URLRequest(url: Self.apiEndpoint, timeoutInterval: config.timeoutInterval)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
