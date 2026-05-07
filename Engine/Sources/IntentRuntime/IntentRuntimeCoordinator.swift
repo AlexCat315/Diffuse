@@ -121,19 +121,45 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         return result
     }
 
-    /// AI-backed resolver. Delegates to the injected `IntentResolverBackend` with the full
-    /// capability graph as context. Falls back to the deterministic keyword resolver when no
-    /// backend was provided at init time, or when the backend call fails.
+    /// Three-layer intent resolution pipeline:
+    ///
+    /// **Layer 1 — Local classifier** (sync, <5 ms): `LocalIntentClassifier` scores the query
+    /// against the registered capability set using weighted token overlap and synonym expansion.
+    /// Returns immediately when confidence ≥ threshold; no network call is made.
+    ///
+    /// **Layer 2 — AI backend** (async, 0.5-2 s): Delegates to the injected
+    /// `IntentResolverBackend` with the full capability graph as LLM tool definitions.
+    /// Skipped when no backend is configured.
+    ///
+    /// **Fallback — Keyword resolver** (sync): Deterministic `NaturalLanguageIntentResolver`
+    /// used when Layer 1 is below threshold and no AI backend is available, or when the
+    /// backend call throws.
     public func resolveNaturalLanguageIntentAsync(
         _ naturalLanguageIntent: NaturalLanguageIntent,
         context: NaturalLanguageIntentContext = NaturalLanguageIntentContext(),
-        capabilityContext: CapabilityInvocationContext
+        capabilityContext: CapabilityInvocationContext,
+        classifierThreshold: Double = 0.32
     ) async -> IntentResolutionResult {
-        guard let backend = aiBackend else {
+        let capabilities = promptCapabilitySymbolicViews(for: capabilityContext)
+
+        // Layer 1: local classifier — synchronous, no network
+        let classifier = LocalIntentClassifier(confidenceThreshold: classifierThreshold)
+        if let l1Result = classifier.classify(naturalLanguageIntent,
+                                              context: context,
+                                              capabilities: capabilities) {
+            if let unresolved = l1Result.unresolved {
+                _ = unresolvedQueue.append(unresolved)
+            }
+            return l1Result
+        }
+
+        // Layer 2: AI backend — async, full capability graph
+        let backend = lock.withLock { aiBackend }
+
+        guard let backend else {
             return resolveNaturalLanguageIntent(naturalLanguageIntent, context: context)
         }
 
-        let capabilities = promptCapabilitySymbolicViews(for: capabilityContext)
         do {
             let result = try await backend.resolve(naturalLanguageIntent,
                                                    context: context,
