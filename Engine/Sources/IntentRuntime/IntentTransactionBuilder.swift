@@ -93,6 +93,29 @@ public struct IntentTransactionBuilder: Sendable {
             mutations = [.setLocalTransform(entityID: entityID, transform: transform)]
             summary = intent.summary.isEmpty ? "Set selected transform" : intent.summary
 
+        case "scene.snap_to_ground":
+            let entityID = try targetEntityID(for: intent, context: context)
+            let entity = entityIDFromRaw(entityID)
+            guard context.sceneRuntime.contains(entity) else {
+                throw IntentTransactionBuilderError.invalidTarget("scene:\(entityID)")
+            }
+            var transform = context.sceneRuntime.localTransform(for: entity) ?? LocalTransform()
+            transform.matrix.columns.3.y = 0
+            mutations = [.setLocalTransform(entityID: entityID, transform: transform)]
+            summary = "Snap entity to ground"
+
+        case "scene.set_camera_pose":
+            let entityID = try targetEntityID(for: intent, context: context)
+            let position = vec3Argument("position", in: intent) ?? .zero
+            let target = vec3Argument("target", in: intent) ?? SIMD3<Float>(0, 0, -1)
+            var transform = LocalTransform()
+            transform.matrix.columns.3 = SIMD4<Float>(position, 1)
+            mutations = [.setCameraPose(entityID: entityID,
+                                         localTransform: transform,
+                                         target: target,
+                                         up: nil)]
+            summary = "Set camera pose"
+
         default:
             throw IntentTransactionBuilderError.unsupportedVerb(intent.verb)
         }
