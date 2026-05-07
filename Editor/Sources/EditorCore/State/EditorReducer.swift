@@ -30,11 +30,13 @@ public enum EditorAction: Sendable {
     case endAssetDrag
     case setInspectorSectionCollapsed(id: String, isCollapsed: Bool)
     case setPendingConfirmationRequest(ConfirmationRequestBatch?)
+    case setAISettings(EditorAISettings)
     case setAIStatusMessage(String?)
     case setAIWarnings([String])
     case setUnresolvedIntents([UnresolvableIntent])
     case appendConsoleMessage(String, severity: EditorConsoleSeverity = .info, detail: String? = nil)
     case clearConsole
+    case setCommandPaletteVisible(Bool)
     case frameTimingUpdated
     /// Bump the viewport surface revision so only viewport subscribers pull
     /// the newest `currentViewportSurfaceState()`.
@@ -135,6 +137,8 @@ public enum EditorReducer {
             }
         case let .setPendingConfirmationRequest(request):
             state.pendingConfirmationRequest = request
+        case let .setAISettings(settings):
+            state.aiSettings = settings
         case let .setAIStatusMessage(message):
             state.aiStatusMessage = message
         case let .setAIWarnings(warnings):
@@ -156,6 +160,8 @@ public enum EditorReducer {
             }
         case .clearConsole:
             state.consoleEntries.removeAll(keepingCapacity: false)
+        case let .setCommandPaletteVisible(visible):
+            state.commandPaletteVisible = visible
         case .frameTimingUpdated:
             state.frameTimingRevision &+= 1
         case .viewportSurfaceUpdated:

@@ -58,6 +58,7 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
     private let executor: TransactionExecutor
     private let stagedStore: StagedTransactionStore
     private let naturalLanguageResolver: NaturalLanguageIntentResolver
+    private var aiBackend: (any IntentResolverBackend)?
     private let unresolvedQueue: UnresolvableIntentQueue
     private let lock = NSLock()
     private var pendingInvocation: PendingCapabilityInvocation?
@@ -66,16 +67,26 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
                 checker: PreconditionChecker = PreconditionChecker(),
                 executor: TransactionExecutor = TransactionExecutor(),
                 naturalLanguageResolver: NaturalLanguageIntentResolver = NaturalLanguageIntentResolver(),
+                aiBackend: (any IntentResolverBackend)? = nil,
                 unresolvedQueue: UnresolvableIntentQueue = UnresolvableIntentQueue()) {
         self.planner = CapabilityInvocationPlanner(registry: registry, checker: checker)
         self.executor = executor
         self.stagedStore = StagedTransactionStore(executor: executor)
         self.naturalLanguageResolver = naturalLanguageResolver
+        self.aiBackend = aiBackend
         self.unresolvedQueue = unresolvedQueue
     }
 
     public static func `default`() throws -> IntentRuntimeCoordinator {
         IntentRuntimeCoordinator(registry: try CapabilityRegistry.default())
+    }
+
+    /// Replaces the active AI backend at runtime. Pass `nil` to disable AI-backed resolution.
+    /// Thread-safe; the change is visible to the next call of `resolveNaturalLanguageIntentAsync`.
+    public func setBackend(_ backend: (any IntentResolverBackend)?) {
+        lock.lock()
+        aiBackend = backend
+        lock.unlock()
     }
 
     public func pendingConfirmationRequest() -> ConfirmationRequestBatch? {
@@ -99,6 +110,8 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         return planner.registry.promptSymbolicViews(for: query, maxCount: maxCount)
     }
 
+    /// Synchronous resolver — uses deterministic keyword matching.
+    /// Use `resolveNaturalLanguageIntentAsync` for LLM-backed resolution.
     public func resolveNaturalLanguageIntent(_ naturalLanguageIntent: NaturalLanguageIntent,
                                              context: NaturalLanguageIntentContext = NaturalLanguageIntentContext()) -> IntentResolutionResult {
         let result = naturalLanguageResolver.resolve(naturalLanguageIntent, context: context)
@@ -106,6 +119,58 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
             _ = unresolvedQueue.append(unresolved)
         }
         return result
+    }
+
+    /// Three-layer intent resolution pipeline:
+    ///
+    /// **Layer 1 — Local classifier** (sync, <5 ms): `LocalIntentClassifier` scores the query
+    /// against the registered capability set using weighted token overlap and synonym expansion.
+    /// Returns immediately when confidence ≥ threshold; no network call is made.
+    ///
+    /// **Layer 2 — AI backend** (async, 0.5-2 s): Delegates to the injected
+    /// `IntentResolverBackend` with the full capability graph as LLM tool definitions.
+    /// Skipped when no backend is configured.
+    ///
+    /// **Fallback — Keyword resolver** (sync): Deterministic `NaturalLanguageIntentResolver`
+    /// used when Layer 1 is below threshold and no AI backend is available, or when the
+    /// backend call throws.
+    public func resolveNaturalLanguageIntentAsync(
+        _ naturalLanguageIntent: NaturalLanguageIntent,
+        context: NaturalLanguageIntentContext = NaturalLanguageIntentContext(),
+        capabilityContext: CapabilityInvocationContext,
+        classifierThreshold: Double = 0.32
+    ) async -> IntentResolutionResult {
+        let capabilities = promptCapabilitySymbolicViews(for: capabilityContext)
+
+        // Layer 1: local classifier — synchronous, no network
+        let classifier = LocalIntentClassifier(confidenceThreshold: classifierThreshold)
+        if let l1Result = classifier.classify(naturalLanguageIntent,
+                                              context: context,
+                                              capabilities: capabilities) {
+            if let unresolved = l1Result.unresolved {
+                _ = unresolvedQueue.append(unresolved)
+            }
+            return l1Result
+        }
+
+        // Layer 2: AI backend — async, full capability graph
+        let backend = lock.withLock { aiBackend }
+
+        guard let backend else {
+            return resolveNaturalLanguageIntent(naturalLanguageIntent, context: context)
+        }
+
+        do {
+            let result = try await backend.resolve(naturalLanguageIntent,
+                                                   context: context,
+                                                   capabilities: capabilities)
+            if let unresolved = result.unresolved {
+                _ = unresolvedQueue.append(unresolved)
+            }
+            return result
+        } catch {
+            return resolveNaturalLanguageIntent(naturalLanguageIntent, context: context)
+        }
     }
 
     public func unresolvedNaturalLanguageIntents(includeClosed: Bool = false) -> [UnresolvableIntent] {

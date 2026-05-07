@@ -12,8 +12,9 @@ struct EditorRootView: View {
     let registry: PanelRegistry
 
     var body: some View {
-        let cb = EditorCallbacks(app: app, controller: controller, registry: registry)
         StoreScope(app.store) { store in
+            let cb = EditorCallbacks(app: app, controller: controller, registry: registry,
+                                     commandPaletteVisible: store.commandPaletteVisible)
             EditorPresentationBoundary(presentation: store.presentation) {
                 LayerRoot {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
@@ -40,6 +41,9 @@ struct EditorRootView: View {
                            minHeight: 0)
                 } portals: {
                     PortalHost()
+                    if store.commandPaletteVisible {
+                        CommandPaletteOverlay(app: app)
+                    }
                 }
             }
         }
@@ -49,29 +53,39 @@ struct EditorRootView: View {
 private struct EditorCallbacks {
     let handleShortcut: (KeyEvent) -> Bool
 
-    init(app: EditorApplication, controller: WorkspaceController, registry: PanelRegistry) {
+    init(app: EditorApplication,
+         controller: WorkspaceController,
+         registry: PanelRegistry,
+         commandPaletteVisible: Bool) {
         self.handleShortcut = { key in
             let s = app.store
-            return EditorShortcutHandler.handle(key,
-                                                 playbackState: s.state.playbackState,
-                                                 setPlaybackState: { next in if s.state.playbackState != next { s.dispatch(.setPlaybackState(next)) } },
-                                                 setWorkspaceMode: { next in
-                                                     guard s.state.workspaceMode != next else { return }
-                                                     let p = s.state.workspaceMode; let pp = s.state.activeLayoutPreset
-                                                     EditorRootViewFactory.saveWorkspaceLayout(controller, for: p, preset: pp)
-                                                     s.dispatch(.setWorkspaceMode(next))
-                                                     let np = s.state.activeLayoutPreset
-                                                     EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: np, registry: registry)
-                                                     EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, primarySelectBehavior: s.state.primarySelectBehavior)
-                                                 },
-                                                 resetLayout: {
-                                                     let m = s.state.workspaceMode; let p = s.state.activeLayoutPreset
-                                                     EditorRootViewFactory.resetLayout(into: controller, for: m, preset: p, registry: registry)
-                                                     EditorRootViewFactory.saveWorkspaceLayout(controller, for: m, preset: p)
-                                                     EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, primarySelectBehavior: s.state.primarySelectBehavior)
-                                                 },
-                                                 newScene: { app.resetPreviewScene() },
-                                                 openSettings: { app.openSettingsWindow() })
+            return EditorShortcutHandler.handle(
+                key,
+                playbackState: s.state.playbackState,
+                commandPaletteVisible: commandPaletteVisible,
+                setPlaybackState: { next in
+                    if s.state.playbackState != next { s.dispatch(.setPlaybackState(next)) }
+                },
+                setWorkspaceMode: { next in
+                    guard s.state.workspaceMode != next else { return }
+                    let p = s.state.workspaceMode; let pp = s.state.activeLayoutPreset
+                    EditorRootViewFactory.saveWorkspaceLayout(controller, for: p, preset: pp)
+                    s.dispatch(.setWorkspaceMode(next))
+                    let np = s.state.activeLayoutPreset
+                    EditorRootViewFactory.loadLayoutPreset(into: controller, for: next, preset: np, registry: registry)
+                    EditorRootViewFactory.saveShellState(mode: next, preset: np, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, primarySelectBehavior: s.state.primarySelectBehavior)
+                },
+                resetLayout: {
+                    let m = s.state.workspaceMode; let p = s.state.activeLayoutPreset
+                    EditorRootViewFactory.resetLayout(into: controller, for: m, preset: p, registry: registry)
+                    EditorRootViewFactory.saveWorkspaceLayout(controller, for: m, preset: p)
+                    EditorRootViewFactory.saveShellState(mode: m, preset: p, themeMode: s.state.themeMode, language: s.state.language, vsyncMode: s.state.vsyncMode, primarySelectBehavior: s.state.primarySelectBehavior)
+                },
+                newScene: { app.resetPreviewScene() },
+                openSettings: { app.openSettingsWindow() },
+                openCommandPalette: { s.dispatch(.setCommandPaletteVisible(true)) },
+                closeCommandPalette: { s.dispatch(.setCommandPaletteVisible(false)) }
+            )
         }
     }
 }

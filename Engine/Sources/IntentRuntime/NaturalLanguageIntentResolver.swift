@@ -22,11 +22,27 @@ public struct NaturalLanguageIntent: Sendable, Equatable, Codable {
 
 public struct NaturalLanguageIntentContext: Sendable, Equatable, Codable {
     public var selectedObjectIDs: [String]
+    /// Human-readable names of selected entities, for LLM context ("Cube 01", "Camera").
+    public var selectedEntityLabels: [String]
+    /// Total number of entities currently in the scene.
+    public var entityCount: Int
+    /// Current workspace mode: "level", "modeling", or "animation".
+    public var workspaceMode: String?
+    /// VerbIDs of the last 3 successfully applied intents, for multi-step context.
+    public var recentVerbs: [String]
     public var localeIdentifier: String?
 
     public init(selectedObjectIDs: [String] = [],
+                selectedEntityLabels: [String] = [],
+                entityCount: Int = 0,
+                workspaceMode: String? = nil,
+                recentVerbs: [String] = [],
                 localeIdentifier: String? = nil) {
         self.selectedObjectIDs = selectedObjectIDs
+        self.selectedEntityLabels = selectedEntityLabels
+        self.entityCount = entityCount
+        self.workspaceMode = workspaceMode
+        self.recentVerbs = recentVerbs
         self.localeIdentifier = localeIdentifier
     }
 }
@@ -233,6 +249,55 @@ public struct NaturalLanguageIntentResolver: Sendable {
                             confidence: candidate.confidence,
                             candidates: [candidate])
 
+        case "scene.set_visibility":
+            guard !selectedTargets.isEmpty else {
+                return unresolved(naturalLanguageIntent,
+                                  reason: .missingTarget,
+                                  message: "Select an entity before toggling its visibility.",
+                                  candidates: [candidate],
+                                  missingArguments: ["entity_id"])
+            }
+            let isHiding = containsAny(normalized, ["hide", "invisible", "隐藏", "不可见"])
+            return resolved(naturalLanguageIntent,
+                            verb: "scene.set_visibility",
+                            summary: isHiding ? "Hide selected entity" : "Show selected entity",
+                            targetObjectIDs: selectedTargets,
+                            arguments: ["visible": .bool(!isHiding)],
+                            confidence: candidate.confidence,
+                            candidates: [candidate])
+
+        case "scene.reset_transform":
+            guard !selectedTargets.isEmpty else {
+                return unresolved(naturalLanguageIntent,
+                                  reason: .missingTarget,
+                                  message: "Select an entity before resetting its transform.",
+                                  candidates: [candidate],
+                                  missingArguments: ["entity_id"])
+            }
+            return resolved(naturalLanguageIntent,
+                            verb: "scene.reset_transform",
+                            summary: "Reset selected entity transform",
+                            targetObjectIDs: selectedTargets,
+                            arguments: [:],
+                            confidence: candidate.confidence,
+                            candidates: [candidate])
+
+        case "scene.snap_to_ground":
+            guard !selectedTargets.isEmpty else {
+                return unresolved(naturalLanguageIntent,
+                                  reason: .missingTarget,
+                                  message: "Select an entity before snapping it to ground.",
+                                  candidates: [candidate],
+                                  missingArguments: ["entity_id"])
+            }
+            return resolved(naturalLanguageIntent,
+                            verb: "scene.snap_to_ground",
+                            summary: "Snap selected entity to ground",
+                            targetObjectIDs: selectedTargets,
+                            arguments: [:],
+                            confidence: candidate.confidence,
+                            candidates: [candidate])
+
         default:
             return unresolved(naturalLanguageIntent,
                               reason: .unsupportedVerb,
@@ -254,8 +319,18 @@ public struct NaturalLanguageIntentResolver: Sendable {
         if containsAny(text, ["delete", "remove", "删除", "移除"]) {
             return IntentResolutionCandidate(verbID: "scene.delete_entity", confidence: 0.74, reason: "delete keyword")
         }
-        if containsAny(text, ["move", "translate", "set transform", "position", "移动", "平移", "位置"]) {
+        if containsAny(text, ["move", "translate", "set transform", "set position", "移动", "平移", "设置位置"]) {
             return IntentResolutionCandidate(verbID: "scene.set_transform", confidence: 0.7, reason: "transform keyword")
+        }
+        if containsAny(text, ["hide", "show", "visible", "invisible", "visibility", "隐藏", "显示", "可见", "不可见"]) {
+            return IntentResolutionCandidate(verbID: "scene.set_visibility", confidence: 0.76, reason: "visibility keyword")
+        }
+        if containsAny(text, ["reset transform", "reset position", "reset rotation", "reset scale",
+                               "center transform", "归零", "重置变换", "重置位置", "重置旋转"]) {
+            return IntentResolutionCandidate(verbID: "scene.reset_transform", confidence: 0.74, reason: "reset keyword")
+        }
+        if containsAny(text, ["snap to ground", "snap ground", "贴地", "落地", "吸附到地面"]) {
+            return IntentResolutionCandidate(verbID: "scene.snap_to_ground", confidence: 0.74, reason: "snap keyword")
         }
         return nil
     }

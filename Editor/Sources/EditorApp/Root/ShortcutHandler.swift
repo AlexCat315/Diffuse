@@ -5,17 +5,32 @@ import GuavaUIRuntime
 enum EditorShortcutHandler {
     static func handle(_ key: KeyEvent,
                        playbackState: PlaybackState,
+                       commandPaletteVisible: Bool,
                        setPlaybackState: (PlaybackState) -> Void,
                        setWorkspaceMode: (EditorWorkspaceMode) -> Void,
                        resetLayout: () -> Void,
                        newScene: () -> Void,
-                       openSettings: () -> Void) -> Bool {
+                       openSettings: () -> Void,
+                       openCommandPalette: () -> Void,
+                       closeCommandPalette: () -> Void) -> Bool {
         guard !key.isRepeat else { return false }
+
+        // Escape — highest priority: dismiss any overlay first
+        if key.scancode == 41 {
+            if commandPaletteVisible {
+                closeCommandPalette()
+                return true
+            }
+            return false
+        }
 
         let commandLike = key.modifiers.contains(.gui) || key.modifiers.contains(.ctrl)
         guard commandLike else { return false }
 
         switch key.keycode {
+        case 0x6B:  // k
+            openCommandPalette()
+            return true
         case 0x6E:
             newScene()
             return true

@@ -43,10 +43,12 @@ public final class EditorStore: @unchecked Sendable {
         case activeAssetDrag
         case inspectorCollapsedSectionIDs
         case pendingConfirmationRequest
+        case aiSettings
         case aiStatusMessage
         case aiWarnings
         case unresolvedIntents
         case consoleEntries
+        case commandPaletteVisible
     }
 
     private var storage: EditorState
@@ -178,6 +180,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.pendingConfirmationRequest,
                  old.pendingConfirmationRequest,
                  new.pendingConfirmationRequest)
+        case .setAISettings:
+            mark(.aiSettings, old.aiSettings, new.aiSettings)
         case .setAIStatusMessage:
             mark(.aiStatusMessage, old.aiStatusMessage, new.aiStatusMessage)
         case .setAIWarnings:
@@ -186,6 +190,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.unresolvedIntents, old.unresolvedIntents, new.unresolvedIntents)
         case .appendConsoleMessage, .clearConsole:
             mark(.consoleEntries, old.consoleEntries, new.consoleEntries)
+        case .setCommandPaletteVisible:
+            mark(.commandPaletteVisible, old.commandPaletteVisible, new.commandPaletteVisible)
         case .frameTimingUpdated:
             mark(.frameTimingRevision, old.frameTimingRevision, new.frameTimingRevision)
         case .viewportSurfaceUpdated:
@@ -227,6 +233,7 @@ extension EditorStore {
     public var windowMinimized: Bool { read(.windowMinimized, storage.windowMinimized) }
     public var windowOccluded: Bool { read(.windowOccluded, storage.windowOccluded) }
     public var shouldRender: Bool { read(.shouldRender, storage.shouldRender) }
+    public var aiSettings: EditorAISettings { read(.aiSettings, storage.aiSettings) }
     public var aiStatusMessage: String? { read(.aiStatusMessage, storage.aiStatusMessage) }
     public var aiWarnings: [String] { read(.aiWarnings, storage.aiWarnings) }
     public var unresolvedIntents: [UnresolvableIntent] { read(.unresolvedIntents, storage.unresolvedIntents) }
@@ -255,4 +262,5 @@ extension EditorStore {
     public var pendingConfirmationRequest: ConfirmationRequestBatch? {
         read(.pendingConfirmationRequest, storage.pendingConfirmationRequest)
     }
+    public var commandPaletteVisible: Bool { read(.commandPaletteVisible, storage.commandPaletteVisible) }
 }
