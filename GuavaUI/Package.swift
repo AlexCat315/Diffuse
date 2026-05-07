@@ -150,6 +150,7 @@ let package = Package(
             dependencies: [
                 "GuavaUIRuntime",
                 "GuavaUICompose",
+                "GuavaUIWorkspace",
                 .product(name: "CardBattleRuntime", package: "Engine"),
             ]
         ),

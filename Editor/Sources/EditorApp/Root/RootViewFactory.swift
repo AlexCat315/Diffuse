@@ -130,43 +130,43 @@ enum EditorRootViewFactory {
         PanelRegistry([
             PanelDescriptor(id: "hierarchy",
                             title: localizedPanelTitle(for: "hierarchy"),
-                            preferredRegion: .leading) {
+                            preferredSlot: .leading) {
                 HierarchyPanel(store: app.store, scene: app.scene)
             },
             PanelDescriptor(id: "inspector",
                             title: localizedPanelTitle(for: "inspector"),
-                            preferredRegion: .trailing) {
+                            preferredSlot: .trailing) {
                 InspectorPanel(store: app.store, scene: app.scene)
             },
             PanelDescriptor(id: "viewport",
                             title: localizedPanelTitle(for: "viewport"),
                             closable: false,
-                            preferredRegion: .center) {
+                            preferredSlot: .center) {
                 ViewportPanel(app: app, scene: app.scene)
             },
             PanelDescriptor(id: "console",
                             title: localizedPanelTitle(for: "console"),
-                            preferredRegion: .bottom) {
+                            preferredSlot: .bottom) {
                 ConsolePanel(store: app.store)
             },
             PanelDescriptor(id: "assets",
                             title: localizedPanelTitle(for: "assets"),
-                            preferredRegion: .bottom) {
+                            preferredSlot: .bottom) {
                 AssetBrowserPanel(app: app)
             },
             PanelDescriptor(id: "intent-input",
                             title: localizedPanelTitle(for: "intent-input"),
-                            preferredRegion: .bottom) {
+                            preferredSlot: .bottom) {
                 IntentInputPanel(app: app)
             },
             PanelDescriptor(id: "confirmation-host",
                             title: localizedPanelTitle(for: "confirmation-host"),
-                            preferredRegion: .bottom) {
+                            preferredSlot: .bottom) {
                 ConfirmationHostPanel(app: app)
             },
             PanelDescriptor(id: "render-pipeline",
                             title: localizedPanelTitle(for: "render-pipeline"),
-                            preferredRegion: .bottom) {
+                            preferredSlot: .bottom) {
                 RenderPipelinePanel()
             },
         ])
@@ -228,8 +228,10 @@ enum EditorRootViewFactory {
     }
 
     private static let workspaceLayoutPersistenceKey = "editor_workspace_document"
-    private static let legacyWorkspaceLayoutPersistencePrefix = "editor_workspace_layout"
-    private static let legacyDockLayoutPersistencePrefix = "editor_dock_layout"
+    private static let obsoleteLayoutPersistencePrefixes = [
+        "editor_workspace_layout",
+        "editor_dock_layout",
+    ]
     private static let shellStatePersistenceKey = "editor_shell_state"
 
     private static func localizedPanelTitle(for id: String) -> String {
@@ -258,6 +260,7 @@ enum EditorRootViewFactory {
     private static func reconciledWorkspaceDocument(_ document: WorkspaceDocument,
                                                     registry: PanelRegistry) -> WorkspaceDocument {
         var next = document
+        next.ensureStandardEditorSlotSchema()
         let registeredIDs = Set(registry.ids)
 
         for staleID in next.panels.keys where !registeredIDs.contains(staleID) {
@@ -269,8 +272,8 @@ enum EditorRootViewFactory {
             group.panels.removeAll { !registeredIDs.contains($0) }
             if group.panels.isEmpty {
                 next.groups.removeValue(forKey: groupID)
-                for index in next.regions.indices {
-                    next.regions[index].groupIDs.removeAll { $0 == groupID }
+                for slotID in Array(next.slots.keys) {
+                    next.slots[slotID]?.removeGroup(groupID)
                 }
                 continue
             }
@@ -281,11 +284,17 @@ enum EditorRootViewFactory {
             }
             next.groups[groupID] = group
         }
+        next.floatingWindows.removeAll { window in
+            next.groups[window.groupID] == nil
+        }
+        next.closedHistory.removeAll { closed in
+            !registeredIDs.contains(closed.panelID)
+        }
 
         for descriptor in registry.descriptors {
             next.panels[descriptor.id] = workspacePanel(for: descriptor)
             guard next.groupContaining(panelID: descriptor.id) == nil else { continue }
-            let groupID = defaultGroupID(for: descriptor.preferredRegion)
+            let groupID = defaultGroupID(for: descriptor.preferredSlot)
             var group = next.groups[groupID] ?? WorkspaceTabGroup(id: groupID, panels: [])
             if !group.panels.contains(descriptor.id) {
                 group.panels.append(descriptor.id)
@@ -293,18 +302,21 @@ enum EditorRootViewFactory {
             group.activePanelID = group.activePanelID ?? descriptor.id
             next.groups[groupID] = group
 
-            var region = next.region(descriptor.preferredRegion)
-            if !region.groupIDs.contains(groupID) {
-                region.groupIDs.append(groupID)
-                next.setRegion(region)
+            var slot = next.slot(descriptor.preferredSlot)
+            if !slot.containsGroup(groupID) {
+                slot.appendGroup(groupID)
+                next.setSlot(slot)
             }
         }
 
         return WorkspaceDocument(panels: next.panels,
                                  groups: next.groups,
-                                 regions: next.regions,
+                                 slots: next.slots,
+                                 layoutTree: next.layoutTree,
+                                 collapsed: next.collapsed,
                                  floatingWindows: next.floatingWindows,
-                                 splitFractions: next.splitFractions)
+                                 splitFractions: next.splitFractions,
+                                 closedHistory: next.closedHistory)
     }
 
     private static func workspacePanel(for descriptor: PanelDescriptor) -> WorkspacePanel {
@@ -312,12 +324,12 @@ enum EditorRootViewFactory {
                        title: descriptor.title,
                        isClosable: descriptor.closable,
                        isDraggable: true,
-                       isCollapsible: descriptor.preferredRegion != .center,
+                       isCollapsible: descriptor.preferredSlot != .center,
                        iconAssetKey: descriptor.iconAssetKey)
     }
 
-    private static func defaultGroupID(for region: WorkspaceRegionID) -> WorkspaceTabGroupID {
-        WorkspaceTabGroupID(rawValue: region.rawValue)
+    private static func defaultGroupID(for slot: WorkspaceSlotID) -> WorkspaceTabGroupID {
+        WorkspaceTabGroupID(rawValue: slot.rawValue)
     }
 
     private static func layoutPersistenceKey(for mode: EditorWorkspaceMode,
@@ -337,8 +349,15 @@ enum EditorRootViewFactory {
 
         do {
             let data = try Data(contentsOf: layoutPath)
-            return try JSONDecoder().decode(WorkspaceDocument.self, from: data)
+            let document = try JSONDecoder().decode(WorkspaceDocument.self, from: data)
+            guard document.hasValidLayoutReferences else {
+                try? FileManager.default.removeItem(at: layoutPath)
+                fputs("[EditorRootViewFactory] discarded obsolete workspace layout: missing layout tree references\n", stderr)
+                return nil
+            }
+            return document
         } catch {
+            try? FileManager.default.removeItem(at: layoutPath)
             fputs("[EditorRootViewFactory] discarded invalid workspace layout: \(error)\n", stderr)
             return nil
         }
@@ -368,8 +387,10 @@ enum EditorRootViewFactory {
                                                                           includingPropertiesForKeys: nil) else {
             return
         }
-        for url in contents where url.lastPathComponent.hasPrefix(legacyDockLayoutPersistencePrefix)
-            || url.lastPathComponent.hasPrefix(legacyWorkspaceLayoutPersistencePrefix) {
+        for url in contents {
+            guard obsoleteLayoutPersistencePrefixes.contains(where: { url.lastPathComponent.hasPrefix($0) }) else {
+                continue
+            }
             try? FileManager.default.removeItem(at: url)
         }
     }
@@ -395,7 +416,7 @@ enum EditorWorkspaceDefaults {
                             title: descriptor.title,
                             isClosable: descriptor.closable,
                             isDraggable: true,
-                            isCollapsible: descriptor.preferredRegion != .center,
+                            isCollapsible: descriptor.preferredSlot != .center,
                             iconAssetKey: descriptor.iconAssetKey))
         })
         let fractions = defaultFractions(for: preset)
@@ -414,12 +435,11 @@ enum EditorWorkspaceDefaults {
         return WorkspaceDocument(
             panels: panels,
             groups: groups,
-            regions: [
-                WorkspaceRegion(id: .leading, groupIDs: ["leading"]),
-                WorkspaceRegion(id: .center, groupIDs: ["center"]),
-                WorkspaceRegion(id: .trailing, groupIDs: ["trailing"]),
-                WorkspaceRegion(id: .bottom, groupIDs: ["bottom"]),
-            ],
+            slots: WorkspaceSlot.standardEditorSlots(leading: .group("leading"),
+                                                     center: .group("center"),
+                                                     trailing: .group("trailing"),
+                                                     bottom: .group("bottom")),
+            layoutTree: .group("center"),
             splitFractions: fractions
         )
     }

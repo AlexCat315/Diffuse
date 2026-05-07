@@ -19,7 +19,7 @@ import RHIWGPU
 /// }
 /// ```
 ///
-/// 单窗口、单 wgpu surface。多窗口 / 卫星窗口走 `DockHostCoordinator` 路线，
+/// 单窗口、单 wgpu surface。多窗口 / 浮动工作区窗口走 GuavaUIWorkspace 路线，
 /// 后续在此层之上扩展，不要让调用方再下沉到 `SDL3PlatformHost.openWindow`。
 @MainActor
 public final class AppRuntime {
@@ -161,8 +161,8 @@ public final class AppRuntime {
             AssetDropRegistryHolder.current = previousAssetDropRegistry
         }
 
-        // 把进程级 holder 接到主窗口的 input context 上，使 Compose 层
-        // primitives（Button、TextField、Dock）能直接读到 interaction / focus /
+        // 把进程级 holder 接到主窗口的 input context 上，使 Compose / Workspace
+        // primitives 能直接读到 interaction / focus /
         // pointer-capture / clipboard。
         InteractionRegistryHolder.current = host.interactions
         FocusChainHolder.current = host.focusChain

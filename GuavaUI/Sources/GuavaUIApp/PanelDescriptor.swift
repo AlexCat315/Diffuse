@@ -3,14 +3,14 @@ import GuavaUIWorkspace
 
 /// Canonical top-level workspace region for a tool panel.
 public typealias PanelID = WorkspacePanelID
-public typealias PanelWorkspaceRegion = WorkspaceRegionID
+public typealias PanelWorkspaceSlot = WorkspaceSlotID
 
 /// 面板描述符：把面板的元数据与构建闭包合并为一份注册项。
 public struct PanelDescriptor {
     public let id: PanelID
     public var title: String
     public var closable: Bool
-    public var preferredRegion: PanelWorkspaceRegion
+    public var preferredSlot: PanelWorkspaceSlot
     public var iconAssetKey: String?
     /// 视图构建闭包。GuavaUIApp 在 `Recomposer.commitAll()` /
     /// `ViewGraph.materialise` 路径上同步调用它，调用线程与窗口主循环线程
@@ -20,13 +20,13 @@ public struct PanelDescriptor {
     public init(id: PanelID,
                 title: String,
                 closable: Bool = true,
-                preferredRegion: PanelWorkspaceRegion = .center,
+                preferredSlot: PanelWorkspaceSlot = .center,
                 iconAssetKey: String? = nil,
                 factory: @escaping () -> AnyView) {
         self.id = id
         self.title = title
         self.closable = closable
-        self.preferredRegion = preferredRegion
+        self.preferredSlot = preferredSlot
         self.iconAssetKey = iconAssetKey
         self.factory = factory
     }
@@ -35,13 +35,13 @@ public struct PanelDescriptor {
     public init<Content: View>(id: PanelID,
                                title: String,
                                closable: Bool = true,
-                               preferredRegion: PanelWorkspaceRegion = .center,
+                               preferredSlot: PanelWorkspaceSlot = .center,
                                iconAssetKey: String? = nil,
                                @ViewBuilder content: @escaping () -> Content) {
         self.init(id: id,
                   title: title,
                   closable: closable,
-                  preferredRegion: preferredRegion,
+                  preferredSlot: preferredSlot,
                   iconAssetKey: iconAssetKey,
                   factory: { AnyView(content()) })
     }
@@ -49,9 +49,9 @@ public struct PanelDescriptor {
     public var workspaceDescriptor: WorkspacePanelDescriptor {
         WorkspacePanelDescriptor(id: id,
                                  title: title,
-                                 defaultRegion: preferredRegion,
+                                 defaultSlot: preferredSlot,
                                  isClosable: closable,
-                                 isCollapsible: preferredRegion != .center,
+                                 isCollapsible: preferredSlot != .center,
                                  iconAssetKey: iconAssetKey,
                                  factory: factory)
     }

@@ -22,6 +22,7 @@ struct EditorRootView: View {
                         PanelWorkspace(controller: controller,
                                        registry: registry)
                             .flex()
+                            .frame(minWidth: 0, minHeight: 0)
                             .layoutRole("editor-workspace")
                             .debugName("editor-workspace")
 
@@ -33,6 +34,10 @@ struct EditorRootView: View {
                     }
                     .background(.background)
                     .flex()
+                    .frame(width: .percent(100),
+                           height: .percent(100),
+                           minWidth: 0,
+                           minHeight: 0)
                 } portals: {
                     PortalHost()
                 }
