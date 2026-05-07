@@ -103,15 +103,36 @@ public struct AnthropicIntentResolverBackend: IntentResolverBackend {
             """,
         ]
 
+        // Selection context
         if !context.selectedObjectIDs.isEmpty {
-            lines.append(
-                "Currently selected object IDs: \(context.selectedObjectIDs.joined(separator: ", ")). " +
-                "Use these as target_object_ids when the user says 'this', 'it', or 'the selected'."
-            )
+            var selectionParts: [String] = [
+                "Currently selected object IDs: \(context.selectedObjectIDs.joined(separator: ", "))."
+            ]
+            if !context.selectedEntityLabels.isEmpty {
+                selectionParts.append("Selected entity names: \(context.selectedEntityLabels.joined(separator: ", ")).")
+            }
+            selectionParts.append("Use these as target_object_ids when the user says 'this', 'it', or 'the selected'.")
+            lines.append(selectionParts.joined(separator: " "))
         } else {
             lines.append("No objects are currently selected.")
         }
 
+        // Scene state
+        if context.entityCount > 0 {
+            lines.append("The scene currently contains \(context.entityCount) entities.")
+        }
+
+        // Workspace mode
+        if let mode = context.workspaceMode, !mode.isEmpty {
+            lines.append("Current workspace mode: \(mode).")
+        }
+
+        // Multi-step context
+        if !context.recentVerbs.isEmpty {
+            lines.append("Recent operations (most recent first): \(context.recentVerbs.joined(separator: ", ")).")
+        }
+
+        // Locale
         if let locale = context.localeIdentifier, !locale.isEmpty {
             lines.append("User locale: \(locale).")
         }

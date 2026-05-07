@@ -10,6 +10,7 @@ struct CommandPaletteOverlay: View {
     let app: EditorApplication
 
     @State private var text: String = ""
+    @State private var suggestions: [(verbID: String, summary: String, confidence: Double)] = []
 
     init(app: EditorApplication) {
         self.app = app
@@ -26,7 +27,7 @@ struct CommandPaletteOverlay: View {
                     justifyContent: .flexStart,
                     spacing: 0) {
 
-                    // Palette card — stop click propagation by intercepting with inner Button(plain)
+                    // Palette card
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         // Header row
                         Row(alignment: .center, spacing: 8) {
@@ -58,9 +59,16 @@ struct CommandPaletteOverlay: View {
                             text: $text,
                             clearable: true,
                             onSubmit: { submitAndClose() },
-                            onClear: { text = "" }
+                            onChange: { updateSuggestions($0) },
+                            onClear: { text = ""; suggestions = [] }
                         )
                         .padding(horizontal: 14, vertical: 10)
+
+                        // Live suggestions
+                        if !suggestions.isEmpty && !isResolving {
+                            Divider()
+                            suggestionList
+                        }
 
                         Divider()
 
@@ -95,6 +103,21 @@ struct CommandPaletteOverlay: View {
         }
     }
 
+    @ViewBuilder
+    private var suggestionList: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            for match in suggestions {
+                SuggestionRow(summary: match.summary,
+                              shortVerb: verbLabel(match.verbID),
+                              onSelect: { text = match.summary; submitAndClose() })
+            }
+        }
+    }
+
+    private func updateSuggestions(_ newText: String) {
+        suggestions = app.localIntentSuggestions(for: newText, maxCount: 3)
+    }
+
     private func submitAndClose() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
@@ -105,5 +128,34 @@ struct CommandPaletteOverlay: View {
     private func dismiss() {
         app.store.dispatch(.setCommandPaletteVisible(false))
         text = ""
+        suggestions = []
+    }
+
+    private func verbLabel(_ verbID: String) -> String {
+        verbID.components(separatedBy: ".").last ?? verbID
+    }
+}
+
+// MARK: - Suggestion row
+
+private struct SuggestionRow: View {
+    let summary: String
+    let shortVerb: String
+    let onSelect: () -> Void
+
+    var body: some View {
+        Button(action: onSelect) {
+            Row(alignment: .center, spacing: 8) {
+                Text(summary)
+                    .font(.body)
+                    .foregroundColor(.onSurface)
+                    .flex()
+                Text(shortVerb)
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .padding(horizontal: 14, vertical: 7)
+        }
+        .buttonStyle(.plain)
     }
 }
