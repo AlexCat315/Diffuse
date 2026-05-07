@@ -39,6 +39,7 @@ public final class EditorApplication: @unchecked Sendable {
     private var openSettingsWindowHandler: (() -> Void)?
     private var displayInvalidationHandler: (() -> Void)?
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
+    private var pendingTrainingEntry: IntentTrainingLogger.Entry?
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
     private var frameTiming = EditorFrameTiming()
@@ -392,6 +393,12 @@ public final class EditorApplication: @unchecked Sendable {
             guard let intent = result.intent else {
                 let message = result.unresolved?.message ?? "Unable to resolve intent."
                 self.store.dispatch(.setAIStatusMessage(message))
+                IntentTrainingLogger.log(
+                    .init(text: text, verb: nil, layer: "unresolved",
+                          confidence: 0, outcome: "unresolved",
+                          locale: self.store.state.language.lprojName),
+                    projectDirectory: self.projectDirectory
+                )
                 return
             }
 
@@ -402,6 +409,14 @@ public final class EditorApplication: @unchecked Sendable {
             else if reason.hasSuffix("keyword")  { layerLabel = "keyword" }
             else                                 { layerLabel = "fallback" }
             self.store.dispatch(.setAIStatusMessage("[\(layerLabel)] \(intent.verb)"))
+            self.pendingTrainingEntry = IntentTrainingLogger.Entry(
+                text: text,
+                verb: intent.verb,
+                layer: layerLabel,
+                confidence: intent.confidence,
+                outcome: "applied",
+                locale: self.store.state.language.lprojName
+            )
             self.submitResolvedIntent(intent)
         }
     }
@@ -674,6 +689,7 @@ public final class EditorApplication: @unchecked Sendable {
             store.dispatch(.setAIWarnings(result.warnings))
             updateSelection(after: result.applyResult)
             store.dispatch(.setAIStatusMessage("Applied \(result.transactionID)"))
+            flushTrainingLog(outcome: "applied")
         case .confirmationRequested:
             store.dispatch(.setPendingConfirmationRequest(result.confirmationRequest))
             store.dispatch(.setAIWarnings(result.warnings))
@@ -682,7 +698,15 @@ public final class EditorApplication: @unchecked Sendable {
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings(result.warnings))
             store.dispatch(.setAIStatusMessage("Discarded \(result.transactionID)"))
+            flushTrainingLog(outcome: "discarded")
         }
+    }
+
+    private func flushTrainingLog(outcome: String) {
+        guard var entry = pendingTrainingEntry else { return }
+        pendingTrainingEntry = nil
+        entry.outcome = outcome
+        IntentTrainingLogger.log(entry, projectDirectory: projectDirectory)
     }
 
     private func makeExecutionContext() -> TransactionExecutionContext {

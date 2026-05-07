@@ -36,6 +36,7 @@ public enum EditorAction: Sendable {
     case setUnresolvedIntents([UnresolvableIntent])
     case appendConsoleMessage(String, severity: EditorConsoleSeverity = .info, detail: String? = nil)
     case clearConsole
+    case setCommandPaletteVisible(Bool)
     case frameTimingUpdated
     /// Bump the viewport surface revision so only viewport subscribers pull
     /// the newest `currentViewportSurfaceState()`.
@@ -159,6 +160,8 @@ public enum EditorReducer {
             }
         case .clearConsole:
             state.consoleEntries.removeAll(keepingCapacity: false)
+        case let .setCommandPaletteVisible(visible):
+            state.commandPaletteVisible = visible
         case .frameTimingUpdated:
             state.frameTimingRevision &+= 1
         case .viewportSurfaceUpdated:
