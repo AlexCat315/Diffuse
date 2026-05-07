@@ -58,7 +58,7 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
     private let executor: TransactionExecutor
     private let stagedStore: StagedTransactionStore
     private let naturalLanguageResolver: NaturalLanguageIntentResolver
-    private let aiBackend: (any IntentResolverBackend)?
+    private var aiBackend: (any IntentResolverBackend)?
     private let unresolvedQueue: UnresolvableIntentQueue
     private let lock = NSLock()
     private var pendingInvocation: PendingCapabilityInvocation?
@@ -79,6 +79,14 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
 
     public static func `default`() throws -> IntentRuntimeCoordinator {
         IntentRuntimeCoordinator(registry: try CapabilityRegistry.default())
+    }
+
+    /// Replaces the active AI backend at runtime. Pass `nil` to disable AI-backed resolution.
+    /// Thread-safe; the change is visible to the next call of `resolveNaturalLanguageIntentAsync`.
+    public func setBackend(_ backend: (any IntentResolverBackend)?) {
+        lock.lock()
+        aiBackend = backend
+        lock.unlock()
     }
 
     public func pendingConfirmationRequest() -> ConfirmationRequestBatch? {

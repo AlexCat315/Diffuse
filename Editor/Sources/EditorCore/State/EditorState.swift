@@ -216,6 +216,7 @@ public struct EditorState: Codable, Sendable {
     public var activeAssetDrag: EditorAssetDragPayload?
     public var inspectorCollapsedSectionIDs: Set<String>
     public var pendingConfirmationRequest: ConfirmationRequestBatch?
+    public var aiSettings: EditorAISettings
     public var aiStatusMessage: String?
     public var aiWarnings: [String]
     public var unresolvedIntents: [UnresolvableIntent]
@@ -250,6 +251,7 @@ public struct EditorState: Codable, Sendable {
         activeAssetDrag: EditorAssetDragPayload? = nil,
         inspectorCollapsedSectionIDs: Set<String> = [],
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
+        aiSettings: EditorAISettings = .default,
         aiStatusMessage: String? = nil,
         aiWarnings: [String] = [],
         unresolvedIntents: [UnresolvableIntent] = [],
@@ -282,6 +284,7 @@ public struct EditorState: Codable, Sendable {
         self.activeAssetDrag = activeAssetDrag
         self.inspectorCollapsedSectionIDs = inspectorCollapsedSectionIDs
         self.pendingConfirmationRequest = pendingConfirmationRequest
+        self.aiSettings = aiSettings
         self.aiStatusMessage = aiStatusMessage
         self.aiWarnings = aiWarnings
         self.unresolvedIntents = unresolvedIntents
