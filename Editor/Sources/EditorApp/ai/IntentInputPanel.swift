@@ -2,11 +2,13 @@ import EditorCore
 import GuavaUICompose
 import GuavaUIRuntime
 import CapabilityRuntime
+import IntentRuntime
 import simd
 
 struct IntentInputPanel: View {
     let app: EditorApplication
 
+    @State private var naturalLanguageText: String = ""
     @State private var spawnLabel: String = "AI Entity"
     @State private var renameValue: String = ""
     @State private var spawnX: Float = 0
@@ -25,6 +27,7 @@ struct IntentInputPanel: View {
             let _ = store.sceneRevision
             let selection = app.scene.entitySummary(id: store.selectedEntityID)
             let symbolicCapabilities = app.aiCapabilitySymbolicViews(maxCount: 8)
+            let unresolvedIntents = store.unresolvedIntents
 
             ScrollView(.vertical) {
                 Box(direction: .column, alignItems: .stretch, spacing: 6) {
@@ -38,6 +41,31 @@ struct IntentInputPanel: View {
                             Text(selection?.kind ?? "Select an entity for transform or delete actions.")
                                 .font(.caption)
                                 .foregroundColor(.onSurfaceMuted)
+                        }
+                    }
+
+                    AISection(title: "NaturalLanguageIntent") {
+                        Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                            TextField(text: $naturalLanguageText)
+                            Row(alignment: .center, spacing: 8) {
+                                Button(L("Submit Intent")) {
+                                    app.submitNaturalLanguageIntent(naturalLanguageText)
+                                }
+                                Button(L("Clear")) {
+                                    naturalLanguageText = ""
+                                }
+                                .buttonStyle(SecondaryButtonStyle())
+                            }
+                        }
+                    }
+
+                    if !unresolvedIntents.isEmpty {
+                        AISection(title: "unresolvable_intent") {
+                            Box(direction: .column, alignItems: .stretch, spacing: 6) {
+                                for intent in unresolvedIntents {
+                                    UnresolvedIntentRow(app: app, intent: intent)
+                                }
+                            }
                         }
                     }
 
@@ -116,6 +144,40 @@ struct IntentInputPanel: View {
             }
             .frame(minWidth: 320)
         }
+    }
+}
+
+private struct UnresolvedIntentRow: View {
+    let app: EditorApplication
+    let intent: UnresolvableIntent
+
+    init(app: EditorApplication, intent: UnresolvableIntent) {
+        self.app = app
+        self.intent = intent
+    }
+
+    var body: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 4) {
+            Row(alignment: .center, spacing: 6) {
+                Text(intent.reason.rawValue)
+                    .font(.mono)
+                    .foregroundColor(.warning)
+                    .flex()
+                Button(L("Dismiss")) {
+                    app.dismissUnresolvedIntent(id: intent.id)
+                }
+                .buttonStyle(SecondaryButtonStyle())
+            }
+            Text(intent.naturalLanguageIntent.text)
+                .font(.caption)
+                .foregroundColor(.onSurface)
+            Text(intent.message)
+                .font(.caption)
+                .foregroundColor(.onSurfaceMuted)
+        }
+        .padding(horizontal: 8, vertical: 6)
+        .background(.surfaceSunken)
+        .cornerRadius(2)
     }
 }
 
