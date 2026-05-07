@@ -57,15 +57,21 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
     private let planner: CapabilityInvocationPlanner
     private let executor: TransactionExecutor
     private let stagedStore: StagedTransactionStore
+    private let naturalLanguageResolver: NaturalLanguageIntentResolver
+    private let unresolvedQueue: UnresolvableIntentQueue
     private let lock = NSLock()
     private var pendingInvocation: PendingCapabilityInvocation?
 
     public init(registry: CapabilityRegistry,
                 checker: PreconditionChecker = PreconditionChecker(),
-                executor: TransactionExecutor = TransactionExecutor()) {
+                executor: TransactionExecutor = TransactionExecutor(),
+                naturalLanguageResolver: NaturalLanguageIntentResolver = NaturalLanguageIntentResolver(),
+                unresolvedQueue: UnresolvableIntentQueue = UnresolvableIntentQueue()) {
         self.planner = CapabilityInvocationPlanner(registry: registry, checker: checker)
         self.executor = executor
         self.stagedStore = StagedTransactionStore(executor: executor)
+        self.naturalLanguageResolver = naturalLanguageResolver
+        self.unresolvedQueue = unresolvedQueue
     }
 
     public static func `default`() throws -> IntentRuntimeCoordinator {
@@ -82,6 +88,36 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
     public func plan(_ transaction: TransactionIR,
                      capabilityContext: CapabilityInvocationContext) throws -> CapabilityInvocationPlan {
         try planner.plan(transaction, context: capabilityContext)
+    }
+
+    public func promptCapabilitySymbolicViews(for capabilityContext: CapabilityInvocationContext,
+                                              maxCount: Int? = nil) -> [CapabilitySymbolicView] {
+        let query = CapabilityQueryContext(role: capabilityContext.role,
+                                           phase: capabilityContext.releasePhase,
+                                           includeExperimental: capabilityContext.includeExperimental,
+                                           isHotfix: capabilityContext.isHotfix)
+        return planner.registry.promptSymbolicViews(for: query, maxCount: maxCount)
+    }
+
+    public func resolveNaturalLanguageIntent(_ naturalLanguageIntent: NaturalLanguageIntent,
+                                             context: NaturalLanguageIntentContext = NaturalLanguageIntentContext()) -> IntentResolutionResult {
+        let result = naturalLanguageResolver.resolve(naturalLanguageIntent, context: context)
+        if let unresolved = result.unresolved {
+            _ = unresolvedQueue.append(unresolved)
+        }
+        return result
+    }
+
+    public func unresolvedNaturalLanguageIntents(includeClosed: Bool = false) -> [UnresolvableIntent] {
+        unresolvedQueue.snapshot(includeClosed: includeClosed)
+    }
+
+    public func dismissUnresolvedIntent(id: String) {
+        unresolvedQueue.dismiss(id: id)
+    }
+
+    public func markUnresolvedIntentResolved(id: String) {
+        unresolvedQueue.markResolved(id: id)
     }
 
     public func submit(_ transaction: TransactionIR,

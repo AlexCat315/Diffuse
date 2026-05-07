@@ -218,6 +218,7 @@ public struct EditorState: Codable, Sendable {
     public var pendingConfirmationRequest: ConfirmationRequestBatch?
     public var aiStatusMessage: String?
     public var aiWarnings: [String]
+    public var unresolvedIntents: [UnresolvableIntent]
     public var consoleEntries: [EditorConsoleEntry]
     public var nextConsoleEntryID: UInt64
 
@@ -251,6 +252,7 @@ public struct EditorState: Codable, Sendable {
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
         aiStatusMessage: String? = nil,
         aiWarnings: [String] = [],
+        unresolvedIntents: [UnresolvableIntent] = [],
         consoleEntries: [EditorConsoleEntry] = [],
         nextConsoleEntryID: UInt64 = 1
     ) {
@@ -282,6 +284,7 @@ public struct EditorState: Codable, Sendable {
         self.pendingConfirmationRequest = pendingConfirmationRequest
         self.aiStatusMessage = aiStatusMessage
         self.aiWarnings = aiWarnings
+        self.unresolvedIntents = unresolvedIntents
         self.consoleEntries = consoleEntries
         self.nextConsoleEntryID = max(nextConsoleEntryID, (consoleEntries.map(\.id).max() ?? 0) &+ 1)
         self.frameIndex = frameIndex
@@ -334,6 +337,7 @@ public struct EditorState: Codable, Sendable {
         case pendingConfirmationRequest
         case aiStatusMessage
         case aiWarnings
+        case unresolvedIntents
         case consoleEntries
         case nextConsoleEntryID
     }
@@ -388,6 +392,7 @@ public struct EditorState: Codable, Sendable {
             pendingConfirmationRequest: try c.decodeIfPresent(ConfirmationRequestBatch.self, forKey: .pendingConfirmationRequest),
             aiStatusMessage: try c.decodeIfPresent(String.self, forKey: .aiStatusMessage),
             aiWarnings: try c.decodeIfPresent([String].self, forKey: .aiWarnings) ?? [],
+            unresolvedIntents: try c.decodeIfPresent([UnresolvableIntent].self, forKey: .unresolvedIntents) ?? [],
             consoleEntries: try c.decodeIfPresent([EditorConsoleEntry].self, forKey: .consoleEntries) ?? [],
             nextConsoleEntryID: try c.decodeIfPresent(UInt64.self, forKey: .nextConsoleEntryID) ?? 1
         )
@@ -425,6 +430,7 @@ public struct EditorState: Codable, Sendable {
         try c.encodeIfPresent(pendingConfirmationRequest, forKey: .pendingConfirmationRequest)
         try c.encodeIfPresent(aiStatusMessage, forKey: .aiStatusMessage)
         try c.encode(aiWarnings, forKey: .aiWarnings)
+        try c.encode(unresolvedIntents, forKey: .unresolvedIntents)
         try c.encode(consoleEntries, forKey: .consoleEntries)
         try c.encode(nextConsoleEntryID, forKey: .nextConsoleEntryID)
     }
