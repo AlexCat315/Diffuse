@@ -3,7 +3,7 @@ import Foundation
 
 // MARK: - Config
 
-public struct ClaudeIntentResolverConfig: Sendable {
+public struct AnthropicIntentResolverBackendConfig: Sendable {
     public var apiKey: String
     public var model: String
     public var maxTokens: Int
@@ -21,7 +21,7 @@ public struct ClaudeIntentResolverConfig: Sendable {
 
 // MARK: - Errors
 
-public enum ClaudeIntentResolverError: Error, CustomStringConvertible, Sendable {
+public enum AnthropicIntentResolverBackendError: Error, CustomStringConvertible, Sendable {
     case httpError(statusCode: Int, body: String?)
     case malformedResponse(detail: String)
     case noCapabilitiesAvailable
@@ -38,32 +38,33 @@ public enum ClaudeIntentResolverError: Error, CustomStringConvertible, Sendable 
     }
 }
 
-// MARK: - Resolver
+// MARK: - Backend
 
-/// Resolves natural-language intents by calling the Anthropic Messages API.
-/// Each `CapabilitySymbolicView` is presented as a Claude tool; the model
-/// picks the best match and returns a `tool_use` block that is decoded into
-/// an `IntentIR`.
-public struct ClaudeIntentResolver: Sendable {
-    private let config: ClaudeIntentResolverConfig
+/// `IntentResolverBackend` implementation backed by the Anthropic Messages API.
+///
+/// Each `CapabilitySymbolicView` is presented to the model as a tool definition.
+/// The model picks the best match and returns a `tool_use` block that is decoded
+/// into an `IntentIR`.
+public struct AnthropicIntentResolverBackend: IntentResolverBackend {
+    private let config: AnthropicIntentResolverBackendConfig
     private let session: URLSession
 
     private static let apiEndpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     private static let anthropicVersion = "2023-06-01"
 
-    public init(config: ClaudeIntentResolverConfig,
+    public init(config: AnthropicIntentResolverBackendConfig,
                 session: URLSession = .shared) {
         self.config = config
         self.session = session
     }
 
-    // MARK: - Public API
+    // MARK: - IntentResolverBackend
 
     public func resolve(_ intent: NaturalLanguageIntent,
                         context: NaturalLanguageIntentContext,
                         capabilities: [CapabilitySymbolicView]) async throws -> IntentResolutionResult {
         guard !capabilities.isEmpty else {
-            throw ClaudeIntentResolverError.noCapabilitiesAvailable
+            throw AnthropicIntentResolverBackendError.noCapabilitiesAvailable
         }
 
         let tools = capabilities.map(makeTool(from:))
@@ -225,7 +226,7 @@ public struct ClaudeIntentResolver: Sendable {
         let (data, response) = try await session.data(for: request)
 
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
-            throw ClaudeIntentResolverError.httpError(
+            throw AnthropicIntentResolverBackendError.httpError(
                 statusCode: http.statusCode,
                 body: String(data: data, encoding: .utf8)
             )
@@ -239,20 +240,24 @@ public struct ClaudeIntentResolver: Sendable {
                                 intent: NaturalLanguageIntent,
                                 capabilities: [CapabilitySymbolicView]) throws -> IntentResolutionResult {
         guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-            throw ClaudeIntentResolverError.malformedResponse(detail: "top-level JSON is not an object")
+            throw AnthropicIntentResolverBackendError.malformedResponse(
+                detail: "top-level JSON is not an object"
+            )
         }
 
         guard let stopReason = json["stop_reason"] as? String, stopReason == "tool_use" else {
             let reason = json["stop_reason"] as? String ?? "unknown"
             return makeUnresolved(intent, reason: .unsupportedVerb,
-                                  message: "Model stopped with reason '\(reason)' instead of tool_use.")
+                                  message: "Model stopped with '\(reason)' instead of tool_use.")
         }
 
         guard let content = json["content"] as? [[String: Any]],
               let toolUse = content.first(where: { $0["type"] as? String == "tool_use" }),
               let rawToolName = toolUse["name"] as? String,
               let toolInput = toolUse["input"] as? [String: Any] else {
-            throw ClaudeIntentResolverError.malformedResponse(detail: "missing tool_use block in content")
+            throw AnthropicIntentResolverBackendError.malformedResponse(
+                detail: "missing tool_use block in content"
+            )
         }
 
         let verbID = decodedVerbID(rawToolName)
@@ -275,7 +280,7 @@ public struct ClaudeIntentResolver: Sendable {
             targetObjectIDs: targetObjectIDs,
             arguments: arguments,
             confidence: 0.92,
-            evidence: [IntentEvidence(kind: "claude_tool_use", summary: intent.text)],
+            evidence: [IntentEvidence(kind: "ai_tool_use", summary: intent.text)],
             source: .ai
         )
         return IntentResolutionResult(naturalLanguageIntent: intent, intent: ir)
@@ -311,7 +316,7 @@ public struct ClaudeIntentResolver: Sendable {
 
     // MARK: - Naming helpers
 
-    /// Claude tool names must match `^[a-zA-Z0-9_-]{1,64}$` — replace dots with `__`.
+    /// Tool names must match `^[a-zA-Z0-9_-]{1,64}$` — replace dots with `__`.
     private func encodedToolName(_ verbID: String) -> String {
         verbID.replacingOccurrences(of: ".", with: "__")
     }
