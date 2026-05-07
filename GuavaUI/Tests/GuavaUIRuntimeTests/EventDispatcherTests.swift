@@ -127,6 +127,54 @@ struct EventDispatcherTests {
         #expect(box.recorder.target == ["leaf"])
     }
 
+    @Test("pointer up after capture release refreshes hover at current cursor")
+    func pointerUpAfterCaptureReleaseRefreshesHover() {
+        let tree = NodeTree()
+        let interactions = InteractionRegistry()
+        let capture = PointerCapture()
+        let focus = FocusChain()
+        let box = Box()
+
+        let root = makeNode(name: "root",
+                            frame: CGRect(x: 0, y: 0, width: 240, height: 120),
+                            interactions: interactions,
+                            box: box)
+        let left = makeNode(name: "left",
+                            frame: CGRect(x: 0, y: 0, width: 80, height: 80),
+                            interactions: interactions,
+                            box: box)
+        let right = makeNode(name: "right",
+                             frame: CGRect(x: 120, y: 0, width: 80, height: 80),
+                             interactions: interactions,
+                             box: box)
+        interactions.setPointer(left) { _, phase, _ in
+            switch phase {
+            case .down:
+                capture.acquire(left)
+                return .handled
+            case .up:
+                capture.release()
+                return .handled
+            }
+        }
+        root.addChild(left)
+        root.addChild(right)
+        tree.root = root
+
+        let dispatcher = EventDispatcher(tree: tree,
+                                         interactions: interactions,
+                                         capture: capture,
+                                         focusChain: focus)
+
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: 20, y: 20, deltaX: 0, deltaY: 0)))
+        box.recorder.hover = []
+        dispatcher.dispatch(.mouseButtonDown(MouseButtonEvent(button: .left, x: 20, y: 20, clicks: 1)))
+        dispatcher.dispatch(.mouseMotion(MouseMotionEvent(x: 140, y: 20, deltaX: 120, deltaY: 0)))
+        dispatcher.dispatch(.mouseButtonUp(MouseButtonEvent(button: .left, x: 140, y: 20, clicks: 1)))
+
+        #expect(box.recorder.hover == ["left:leave", "right:enter"])
+    }
+
     @Test("Auto-focus on click for focusable nodes")
     func autoFocus() {
         let (_, _, _, leaf, _, dispatcher, _) = setup()

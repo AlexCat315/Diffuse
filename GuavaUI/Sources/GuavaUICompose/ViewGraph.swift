@@ -457,6 +457,8 @@ public final class ViewGraph {
     /// Per-node bookkeeping cleanup, recursive.
     private func tearDownSubtreeBookkeeping(_ node: Node, parentLayout: LayoutNode?) {
         let id = ObjectIdentifier(node)
+        InteractionRegistryHolder.current?.remove(node)
+        TooltipOverlayRegistry.unregister(node)
         if let myLN = layoutOf.removeValue(forKey: id) {
             parentLayout?.removeChild(myLN)
         }
