@@ -12,19 +12,22 @@ enum EditorRootViewFactory {
         var language: EditorLanguage
         var vsyncMode: EditorVSyncMode
         var primarySelectBehavior: SelectionPrimaryModifierBehavior
+        var aiSettings: EditorAISettings
 
         init(workspaceMode: EditorWorkspaceMode,
              activeLayoutPreset: EditorLayoutPreset,
              themeMode: EditorThemeMode = .dark,
              language: EditorLanguage = .system,
              vsyncMode: EditorVSyncMode = .enabled,
-             primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract) {
+             primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract,
+             aiSettings: EditorAISettings = .default) {
             self.workspaceMode = workspaceMode
             self.activeLayoutPreset = activeLayoutPreset
             self.themeMode = themeMode
             self.language = language
             self.vsyncMode = vsyncMode
             self.primarySelectBehavior = primarySelectBehavior
+            self.aiSettings = aiSettings
         }
 
         enum CodingKeys: String, CodingKey {
@@ -34,6 +37,7 @@ enum EditorRootViewFactory {
             case language
             case vsyncMode
             case primarySelectBehavior
+            case aiSettings
         }
 
         func encode(to encoder: Encoder) throws {
@@ -44,6 +48,7 @@ enum EditorRootViewFactory {
             try values.encode(language, forKey: .language)
             try values.encode(vsyncMode, forKey: .vsyncMode)
             try values.encode(primarySelectBehavior, forKey: .primarySelectBehavior)
+            try values.encode(aiSettings, forKey: .aiSettings)
         }
 
         init(from decoder: Decoder) throws {
@@ -58,6 +63,7 @@ enum EditorRootViewFactory {
                 SelectionPrimaryModifierBehavior.self,
                 forKey: .primarySelectBehavior
             ) ?? .subtract
+            aiSettings = try values.decodeIfPresent(EditorAISettings.self, forKey: .aiSettings) ?? .default
         }
     }
 
@@ -189,14 +195,16 @@ enum EditorRootViewFactory {
                                themeMode: EditorThemeMode,
                                language: EditorLanguage,
                                vsyncMode: EditorVSyncMode,
-                               primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract) {
+                               primarySelectBehavior: SelectionPrimaryModifierBehavior = .subtract,
+                               aiSettings: EditorAISettings = .default) {
         guard let layoutDir = getLayoutPersistenceDirectory() else { return }
         let shell = EditorShellState(workspaceMode: mode,
                                      activeLayoutPreset: preset,
                                      themeMode: themeMode,
                                      language: language,
                                      vsyncMode: vsyncMode,
-                                     primarySelectBehavior: primarySelectBehavior)
+                                     primarySelectBehavior: primarySelectBehavior,
+                                     aiSettings: aiSettings)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
         do {

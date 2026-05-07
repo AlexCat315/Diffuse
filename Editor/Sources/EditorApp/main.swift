@@ -15,14 +15,16 @@ private func runEditor() throws {
     }
     let backend = WGPUBackend(config: resolvedBackendConfig)
     let events = PlatformEventBridge()
+    let shellState = EditorRootViewFactory.loadShellState()
     let app = try EditorApplication(projectDirectory: launchOptions.projectDirectory,
                                 backendConfig: launchOptions.backendConfig,
                                 backend: backend,
-                                events: events)
+                                events: events,
+                                initialAISettings: shellState?.aiSettings ?? .default)
     app.bootstrap()
     defer { app.shutdown() }
 
-    if let shellState = EditorRootViewFactory.loadShellState() {
+    if let shellState {
         app.store.dispatch(.setWorkspaceMode(shellState.workspaceMode))
         app.store.dispatch(.setActiveLayoutPreset(shellState.activeLayoutPreset))
         app.store.dispatch(.setThemeMode(shellState.themeMode))

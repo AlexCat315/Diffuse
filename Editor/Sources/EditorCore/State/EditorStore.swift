@@ -43,6 +43,7 @@ public final class EditorStore: @unchecked Sendable {
         case activeAssetDrag
         case inspectorCollapsedSectionIDs
         case pendingConfirmationRequest
+        case aiSettings
         case aiStatusMessage
         case aiWarnings
         case unresolvedIntents
@@ -178,6 +179,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.pendingConfirmationRequest,
                  old.pendingConfirmationRequest,
                  new.pendingConfirmationRequest)
+        case .setAISettings:
+            mark(.aiSettings, old.aiSettings, new.aiSettings)
         case .setAIStatusMessage:
             mark(.aiStatusMessage, old.aiStatusMessage, new.aiStatusMessage)
         case .setAIWarnings:
@@ -227,6 +230,7 @@ extension EditorStore {
     public var windowMinimized: Bool { read(.windowMinimized, storage.windowMinimized) }
     public var windowOccluded: Bool { read(.windowOccluded, storage.windowOccluded) }
     public var shouldRender: Bool { read(.shouldRender, storage.shouldRender) }
+    public var aiSettings: EditorAISettings { read(.aiSettings, storage.aiSettings) }
     public var aiStatusMessage: String? { read(.aiStatusMessage, storage.aiStatusMessage) }
     public var aiWarnings: [String] { read(.aiWarnings, storage.aiWarnings) }
     public var unresolvedIntents: [UnresolvableIntent] { read(.unresolvedIntents, storage.unresolvedIntents) }
