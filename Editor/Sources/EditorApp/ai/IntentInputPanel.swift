@@ -1,12 +1,14 @@
 import EditorCore
 import GuavaUICompose
 import GuavaUIRuntime
+import CapabilityRuntime
 import simd
 
 struct IntentInputPanel: View {
     let app: EditorApplication
 
     @State private var spawnLabel: String = "AI Entity"
+    @State private var renameValue: String = ""
     @State private var spawnX: Float = 0
     @State private var spawnY: Float = 0
     @State private var spawnZ: Float = 0
@@ -22,6 +24,7 @@ struct IntentInputPanel: View {
         StoreScope(app.store) { store in
             let _ = store.sceneRevision
             let selection = app.scene.entitySummary(id: store.selectedEntityID)
+            let symbolicCapabilities = app.aiCapabilitySymbolicViews(maxCount: 8)
 
             ScrollView(.vertical) {
                 Box(direction: .column, alignItems: .stretch, spacing: 6) {
@@ -35,6 +38,14 @@ struct IntentInputPanel: View {
                             Text(selection?.kind ?? "Select an entity for transform or delete actions.")
                                 .font(.caption)
                                 .foregroundColor(.onSurfaceMuted)
+                        }
+                    }
+
+                    AISection(title: "Capability Context") {
+                        Box(direction: .column, alignItems: .stretch, spacing: 4) {
+                            for capability in symbolicCapabilities {
+                                CapabilityRow(capability: capability)
+                            }
                         }
                     }
 
@@ -70,6 +81,24 @@ struct IntentInputPanel: View {
                         }
                     }
 
+                    AISection(title: "scene.set_name / scene.duplicate_entity") {
+                        Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                            TextField(text: $renameValue)
+                            Row(alignment: .center, spacing: 8) {
+                                Button(L("Use Selection"), isEnabled: selection != nil) {
+                                    renameValue = selection?.name ?? ""
+                                }
+                                .buttonStyle(SecondaryButtonStyle())
+                                Button(L("Rename"), isEnabled: selection != nil) {
+                                    app.submitRenameSelectedEntityIntent(name: renameValue)
+                                }
+                                Button(L("Duplicate"), isEnabled: selection != nil) {
+                                    app.submitDuplicateSelectedEntityIntent()
+                                }
+                            }
+                        }
+                    }
+
                     AISection(title: "scene.delete_entity") {
                         Box(direction: .column, alignItems: .stretch, spacing: 8) {
                             Text(L("Delete the current selection through IntentRuntime confirmation flow."))
@@ -86,6 +115,39 @@ struct IntentInputPanel: View {
                 .padding(8)
             }
             .frame(minWidth: 320)
+        }
+    }
+}
+
+private struct CapabilityRow: View {
+    let capability: CapabilitySymbolicView
+
+    init(capability: CapabilitySymbolicView) {
+        self.capability = capability
+    }
+
+    var body: some View {
+        Row(alignment: .center, spacing: 6) {
+            Text(capability.verbID)
+                .font(.mono)
+                .flex()
+            Text(capability.confirmationPolicy.level.rawValue)
+                .font(.caption)
+                .foregroundColor(confirmationColor)
+                .padding(horizontal: 5, vertical: 2)
+                .background(.surfaceSunken)
+                .cornerRadius(2)
+        }
+    }
+
+    private var confirmationColor: SemanticColorRef {
+        switch capability.confirmationPolicy.level {
+        case .auto:
+            return .success
+        case .warn:
+            return .warning
+        case .required, .destructiveRequired:
+            return .error
         }
     }
 }

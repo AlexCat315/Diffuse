@@ -74,6 +74,33 @@ struct CapabilityRuntimeTests {
         #expect(!promptVerbs.contains("scene.commit_inferred_draft"))
     }
 
+    @Test("symbolic prompt view filters release gates and redacts prompt-sensitive arguments")
+    func symbolicPromptViewFiltersAndRedacts() throws {
+        let registry = try CapabilityRegistry.default()
+        let defaultViews = registry.promptSymbolicViews(for: CapabilityQueryContext(role: .editor,
+                                                                                   phase: .beta))
+
+        #expect(defaultViews.contains { $0.verbID == "scene.set_transform" })
+        #expect(!defaultViews.contains { $0.verbID == "scene.commit_inferred_draft" })
+
+        let experimentalViews = registry.promptSymbolicViews(for: CapabilityQueryContext(role: .editor,
+                                                                                         phase: .beta,
+                                                                                         includeExperimental: true))
+        let draftCommit = try #require(experimentalViews.first { $0.verbID == "scene.commit_inferred_draft" })
+
+        #expect(!draftCommit.arguments.contains { $0.name == "confirm_phrase" })
+
+        let encoded = try JSONEncoder().encode(draftCommit)
+        let json = String(decoding: encoded, as: UTF8.self)
+
+        #expect(!json.contains("confirm_phrase"))
+        #expect(!json.contains("redact_in_prompt"))
+        #expect(!json.contains("effects"))
+        #expect(!json.contains("read_after_write"))
+        #expect(json.contains(#""verb_id":"scene.commit_inferred_draft""#))
+        #expect(json.contains(#""confirmation_policy""#))
+    }
+
     @Test("release phase gate denies ship-only restricted capabilities")
     func releasePhaseGateDeniesShipRestrictedCapabilities() throws {
         let registry = try CapabilityRegistry.default()

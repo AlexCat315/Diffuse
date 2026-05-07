@@ -343,6 +343,16 @@ public final class EditorApplication {
         return scene.scene.localTransform(for: entity)?.translation
     }
 
+    public func aiCapabilitySymbolicViews(includeExperimental: Bool = false,
+                                          maxCount: Int = 10) -> [CapabilitySymbolicView] {
+        intentCoordinator.promptCapabilitySymbolicViews(
+            for: CapabilityInvocationContext(role: .editor,
+                                             releasePhase: .beta,
+                                             includeExperimental: includeExperimental),
+            maxCount: maxCount
+        )
+    }
+
     public func submitSpawnEntityIntent(label: String,
                                         position: SIMD3<Float>) {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -357,6 +367,50 @@ public final class EditorApplication {
                                                                            meshIndex: defaultSpawnMeshIndex(),
                                                                            position: position))
                                         ],
+                                        baseRevisions: TransactionBaseRevisions(sceneRevision: scene.revision),
+                                        provenance: .authored)
+        submitIntentTransaction(transaction)
+    }
+
+    public func submitRenameSelectedEntityIntent(name: String) {
+        guard let selected = store.state.selectedEntityID,
+              scene.entitySummary(id: selected) != nil
+        else {
+            store.dispatch(.setAIStatusMessage("Select an entity before renaming it."))
+            return
+        }
+
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            store.dispatch(.setAIStatusMessage("Enter a name before renaming the selection."))
+            return
+        }
+
+        let transaction = TransactionIR(intent: IntentIR(verb: "scene.set_name",
+                                                         summary: "Rename selected entity",
+                                                         targetObjectIDs: ["scene:\(selected)"],
+                                                         source: .human),
+                                        summary: "Rename selected entity",
+                                        operations: [.scene(.setSceneName(entityID: selected, value: trimmed))],
+                                        baseRevisions: TransactionBaseRevisions(sceneRevision: scene.revision),
+                                        provenance: .authored)
+        submitIntentTransaction(transaction)
+    }
+
+    public func submitDuplicateSelectedEntityIntent() {
+        guard let selected = store.state.selectedEntityID,
+              let entity = scene.entitySummary(id: selected)
+        else {
+            store.dispatch(.setAIStatusMessage("Select an entity before duplicating it."))
+            return
+        }
+
+        let transaction = TransactionIR(intent: IntentIR(verb: "scene.duplicate_entity",
+                                                         summary: "Duplicate selected entity",
+                                                         targetObjectIDs: ["scene:\(selected)"],
+                                                         source: .human),
+                                        summary: "Duplicate \(entity.name)",
+                                        operations: [.scene(.duplicateEntity(entityID: selected))],
                                         baseRevisions: TransactionBaseRevisions(sceneRevision: scene.revision),
                                         provenance: .authored)
         submitIntentTransaction(transaction)

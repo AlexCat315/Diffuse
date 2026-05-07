@@ -84,6 +84,15 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         try planner.plan(transaction, context: capabilityContext)
     }
 
+    public func promptCapabilitySymbolicViews(for capabilityContext: CapabilityInvocationContext,
+                                              maxCount: Int? = nil) -> [CapabilitySymbolicView] {
+        let query = CapabilityQueryContext(role: capabilityContext.role,
+                                           phase: capabilityContext.releasePhase,
+                                           includeExperimental: capabilityContext.includeExperimental,
+                                           isHotfix: capabilityContext.isHotfix)
+        return planner.registry.promptSymbolicViews(for: query, maxCount: maxCount)
+    }
+
     public func submit(_ transaction: TransactionIR,
                        capabilityContext: CapabilityInvocationContext,
                        executionContext: inout TransactionExecutionContext) throws -> CapabilityInvocationResult {
