@@ -1,4 +1,5 @@
 import EditorCore
+import IntentRuntime
 import Testing
 
 @Suite("EditorReducer")
@@ -77,5 +78,19 @@ struct EditorReducerTests {
         #expect(state.consoleEntries.count == 200)
         #expect(state.consoleEntries.first?.message == "entry 5")
         #expect(state.consoleEntries.last?.message == "entry 204")
+    }
+
+    @Test("AI unresolved intent queue is stored in editor state")
+    func unresolvedIntentQueueIsStored() {
+        var state = EditorState()
+        let unresolved = UnresolvableIntent(
+            naturalLanguageIntent: NaturalLanguageIntent(text: "delete selected"),
+            reason: .missingTarget,
+            message: "Select an entity before deleting it."
+        )
+
+        EditorReducer.reduce(state: &state, action: .setUnresolvedIntents([unresolved]))
+
+        #expect(state.unresolvedIntents == [unresolved])
     }
 }

@@ -30,6 +30,7 @@ public final class EditorApplication {
 
     private let observationBus: ObservationBus
     private let intentCoordinator: IntentRuntimeCoordinator
+    private let intentTransactionBuilder = IntentTransactionBuilder()
     private let events: PlatformEventBridge
     private var eventToken: PlatformEventBridge.SubscriptionToken?
     private var pendingViewportEvents: [InputEvent] = []
@@ -343,62 +344,120 @@ public final class EditorApplication {
         return scene.scene.localTransform(for: entity)?.translation
     }
 
+    public func aiCapabilitySymbolicViews(includeExperimental: Bool = false,
+                                          maxCount: Int = 10) -> [CapabilitySymbolicView] {
+        intentCoordinator.promptCapabilitySymbolicViews(
+            for: CapabilityInvocationContext(role: .editor,
+                                             releasePhase: .beta,
+                                             includeExperimental: includeExperimental),
+            maxCount: maxCount
+        )
+    }
+
+    public func submitNaturalLanguageIntent(_ text: String) {
+        if store.state.pendingConfirmationRequest != nil {
+            store.dispatch(.setAIStatusMessage("Resolve the pending confirmation before submitting another AI action."))
+            return
+        }
+
+        let request = NaturalLanguageIntent(text: text,
+                                            localeIdentifier: store.state.language.lprojName,
+                                            source: .human)
+        let result = intentCoordinator.resolveNaturalLanguageIntent(request,
+                                                                    context: makeNaturalLanguageIntentContext())
+        refreshUnresolvedIntents()
+
+        guard let intent = result.intent else {
+            let message = result.unresolved?.message ?? "Unable to resolve intent."
+            store.dispatch(.setAIStatusMessage(message))
+            return
+        }
+        submitResolvedIntent(intent)
+    }
+
+    public func dismissUnresolvedIntent(id: String) {
+        intentCoordinator.dismissUnresolvedIntent(id: id)
+        refreshUnresolvedIntents()
+    }
+
     public func submitSpawnEntityIntent(label: String,
                                         position: SIMD3<Float>) {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)
         let resolvedLabel = trimmed.isEmpty ? "AI Entity" : trimmed
-        let transaction = TransactionIR(intent: IntentIR(verb: "scene.spawn_entity",
-                                                         summary: "Spawn scene entity",
-                                                         source: .human),
-                                        summary: "Spawn scene entity",
-                                        operations: [
-                                            .scene(.spawnImportedMeshEntity(label: resolvedLabel,
-                                                                           kindLabel: "Static Mesh",
-                                                                           meshIndex: defaultSpawnMeshIndex(),
-                                                                           position: position))
-                                        ],
-                                        baseRevisions: TransactionBaseRevisions(sceneRevision: scene.revision),
-                                        provenance: .authored)
-        submitIntentTransaction(transaction)
+        let intent = IntentIR(verb: "scene.spawn_entity",
+                              summary: "Spawn scene entity",
+                              arguments: [
+                                "label": .string(resolvedLabel),
+                                "position": .vec3(IntentVector3(position)),
+                              ],
+                              source: .human)
+        submitResolvedIntent(intent)
+    }
+
+    public func submitRenameSelectedEntityIntent(name: String) {
+        guard let selected = store.state.selectedEntityID,
+              scene.entitySummary(id: selected) != nil
+        else {
+            store.dispatch(.setAIStatusMessage("Select an entity before renaming it."))
+            return
+        }
+
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
+            store.dispatch(.setAIStatusMessage("Enter a name before renaming the selection."))
+            return
+        }
+
+        let intent = IntentIR(verb: "scene.set_name",
+                              summary: "Rename selected entity",
+                              targetObjectIDs: ["scene:\(selected)"],
+                              arguments: ["name": .string(trimmed)],
+                              source: .human)
+        submitResolvedIntent(intent)
+    }
+
+    public func submitDuplicateSelectedEntityIntent() {
+        guard let selected = store.state.selectedEntityID,
+              scene.entitySummary(id: selected) != nil
+        else {
+            store.dispatch(.setAIStatusMessage("Select an entity before duplicating it."))
+            return
+        }
+
+        let intent = IntentIR(verb: "scene.duplicate_entity",
+                              summary: "Duplicate selected entity",
+                              targetObjectIDs: ["scene:\(selected)"],
+                              source: .human)
+        submitResolvedIntent(intent)
     }
 
     public func submitDeleteSelectedEntityIntent() {
         guard let selected = store.state.selectedEntityID,
-              let entity = scene.entitySummary(id: selected)
+              scene.entitySummary(id: selected) != nil
         else {
             store.dispatch(.setAIStatusMessage("Select an entity before deleting it."))
             return
         }
-        let transaction = TransactionIR(intent: IntentIR(verb: "scene.delete_entity",
-                                                         summary: "Delete selected entity",
-                                                         targetObjectIDs: ["scene:\(selected)"],
-                                                         source: .human),
-                                        summary: "Delete \(entity.name)",
-                                        operations: [.scene(.deleteEntity(entityID: selected))],
-                                        baseRevisions: TransactionBaseRevisions(sceneRevision: scene.revision),
-                                        provenance: .authored)
-        submitIntentTransaction(transaction)
+        let intent = IntentIR(verb: "scene.delete_entity",
+                              summary: "Delete selected entity",
+                              targetObjectIDs: ["scene:\(selected)"],
+                              source: .human)
+        submitResolvedIntent(intent)
     }
 
     public func submitSetTransformIntent(translation: SIMD3<Float>) {
         guard let selected = store.state.selectedEntityID,
-              let entity = entityID(from: selected)
+              entityID(from: selected) != nil
         else {
             store.dispatch(.setAIStatusMessage("Select an entity before setting its transform."))
             return
         }
-        var transform = scene.scene.localTransform(for: entity) ?? LocalTransform()
-        transform.matrix.columns.3 = SIMD4<Float>(translation, 1)
-        let transaction = TransactionIR(intent: IntentIR(verb: "scene.set_transform",
-                                                         summary: "Set selected transform",
-                                                         targetObjectIDs: ["scene:\(selected)"],
-                                                         source: .human),
-                                        summary: "Set selected transform",
-                                        operations: [.scene(.setLocalTransform(entityID: selected,
-                                                                               transform: transform))],
-                                        baseRevisions: TransactionBaseRevisions(sceneRevision: scene.revision),
-                                        provenance: .authored)
-        submitIntentTransaction(transaction)
+        let intent = IntentIR(verb: "scene.set_transform",
+                              summary: "Set selected transform",
+                              targetObjectIDs: ["scene:\(selected)"],
+                              arguments: ["translation": .vec3(IntentVector3(translation))],
+                              source: .human)
+        submitResolvedIntent(intent)
     }
 
     public func resolvePendingConfirmation(pickedOptionID: String) {
@@ -506,6 +565,35 @@ public final class EditorApplication {
             store.dispatch(.setAIWarnings([]))
             store.dispatch(.setAIStatusMessage(String(describing: error)))
         }
+    }
+
+    private func submitResolvedIntent(_ intent: IntentIR) {
+        do {
+            let transaction = try intentTransactionBuilder.buildTransaction(from: intent,
+                                                                            context: makeIntentTransactionBuildContext())
+            submitIntentTransaction(transaction)
+        } catch {
+            store.dispatch(.setPendingConfirmationRequest(nil))
+            store.dispatch(.setAIWarnings([]))
+            store.dispatch(.setAIStatusMessage(String(describing: error)))
+        }
+    }
+
+    private func makeNaturalLanguageIntentContext() -> NaturalLanguageIntentContext {
+        NaturalLanguageIntentContext(
+            selectedObjectIDs: store.state.selectedEntityID.map { ["scene:\($0)"] } ?? [],
+            localeIdentifier: store.state.language.lprojName
+        )
+    }
+
+    private func makeIntentTransactionBuildContext() -> IntentTransactionBuildContext {
+        IntentTransactionBuildContext(sceneRuntime: scene.scene,
+                                      selectedEntityID: store.state.selectedEntityID,
+                                      defaultSpawnMeshIndex: defaultSpawnMeshIndex())
+    }
+
+    private func refreshUnresolvedIntents() {
+        store.dispatch(.setUnresolvedIntents(intentCoordinator.unresolvedNaturalLanguageIntents()))
     }
 
     private func applyInvocationResult(_ result: CapabilityInvocationResult,
