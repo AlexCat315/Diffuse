@@ -43,11 +43,6 @@ public struct WorkspaceView: View {
                             content: content)
                 .flex()
                 .frame(minWidth: 0, minHeight: 0)
-            _WorkspaceBottomRailOverlay(document: document,
-                                        controller: controller)
-                .absolutePosition(left: 0, top: 0, right: 0, bottom: 0)
-                .zIndex(9_000)
-                .id("workspace-bottom-rail-overlay")
             _WorkspaceFloatingLayer(document: document,
                                     controller: controller,
                                     content: content)
@@ -99,7 +94,6 @@ private struct _WorkspaceShell: View {
         let topVisible = !visibleGroups(in: .top, document: document).isEmpty
         let topCollapsed = !collapsedGroups(in: .top, document: document).isEmpty
         let topChrome = chromeRailSlots(edge: .top, document: document)
-        let bottomRail = railPlan(edge: .bottom, document: document)
         let bottomChrome = visibleChromeRailSlots(edge: .bottom, document: document)
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             topChrome.map { slot in
@@ -118,11 +112,6 @@ private struct _WorkspaceShell: View {
                               content: content)
                 .flex()
                 .frame(minWidth: 0, minHeight: 0)
-            if let bottomRail {
-                Divider()
-                _WorkspaceRailReserve(slot: bottomRail.slot)
-                    .id("workspace-rail-reserve-\(bottomRail.slot.edge.rawValue)")
-            }
             bottomChrome.map { slot in
                 AnyView(_WorkspaceChromeSlot(slot: slot, document: document, controller: controller)
                     .id("workspace-chrome-\(slot.id.rawValue)"))
@@ -131,29 +120,6 @@ private struct _WorkspaceShell: View {
         .background(.surfaceSunken)
         .flex()
         .frame(minWidth: 0, minHeight: 0)
-    }
-}
-
-private struct _WorkspaceBottomRailOverlay: View {
-    let document: WorkspaceDocument
-    let controller: WorkspaceController
-
-    var body: some View {
-        if let bottomRail = railPlan(edge: .bottom, document: document) {
-            Box(direction: .column, alignItems: .stretch, justifyContent: .flexEnd, spacing: 0) {
-                _WorkspaceChromeSlot(slot: bottomRail.slot,
-                                     groupsOverride: bottomRail.groups,
-                                     document: document,
-                                     controller: controller)
-                    .id("workspace-chrome-\(bottomRail.slot.id.rawValue)")
-            }
-            .frame(width: .percent(100), height: .percent(100), minWidth: 0, minHeight: 0)
-            .layoutRole("workspace-rail-overlay")
-            .semanticRole("workspace.rail.overlay.bottom")
-            .debugName("workspace-rail-overlay-bottom")
-        } else {
-            EmptyView()
-        }
     }
 }
 
@@ -465,6 +431,7 @@ private struct _WorkspaceCenterColumn: View {
 
     var body: some View {
         let bottomVisible = !visibleGroups(in: .bottom, document: document).isEmpty
+        let bottomRail = bottomVisible ? nil : railPlan(edge: .bottom, document: document)
         Box(direction: .column, alignItems: .stretch, spacing: 0) {
             _WorkspaceSlotView(slotID: .center,
                                  document: document,
@@ -487,6 +454,13 @@ private struct _WorkspaceCenterColumn: View {
                               shrink: 1,
                               basis: 0)
                         .frame(minWidth: 0, minHeight: 0)
+            } else if let bottomRail {
+                Divider()
+                _WorkspaceChromeSlot(slot: bottomRail.slot,
+                                     groupsOverride: bottomRail.groups,
+                                     document: document,
+                                     controller: controller)
+                    .id("workspace-chrome-\(bottomRail.slot.id.rawValue)")
             }
         }
         .flex()
