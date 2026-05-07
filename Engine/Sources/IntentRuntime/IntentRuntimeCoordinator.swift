@@ -58,6 +58,7 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
     private let executor: TransactionExecutor
     private let stagedStore: StagedTransactionStore
     private let naturalLanguageResolver: NaturalLanguageIntentResolver
+    private let claudeResolver: ClaudeIntentResolver?
     private let unresolvedQueue: UnresolvableIntentQueue
     private let lock = NSLock()
     private var pendingInvocation: PendingCapabilityInvocation?
@@ -66,11 +67,13 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
                 checker: PreconditionChecker = PreconditionChecker(),
                 executor: TransactionExecutor = TransactionExecutor(),
                 naturalLanguageResolver: NaturalLanguageIntentResolver = NaturalLanguageIntentResolver(),
+                claudeResolverConfig: ClaudeIntentResolverConfig? = nil,
                 unresolvedQueue: UnresolvableIntentQueue = UnresolvableIntentQueue()) {
         self.planner = CapabilityInvocationPlanner(registry: registry, checker: checker)
         self.executor = executor
         self.stagedStore = StagedTransactionStore(executor: executor)
         self.naturalLanguageResolver = naturalLanguageResolver
+        self.claudeResolver = claudeResolverConfig.map { ClaudeIntentResolver(config: $0) }
         self.unresolvedQueue = unresolvedQueue
     }
 
@@ -99,6 +102,8 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         return planner.registry.promptSymbolicViews(for: query, maxCount: maxCount)
     }
 
+    /// Synchronous resolver — uses deterministic keyword matching.
+    /// Use `resolveNaturalLanguageIntentAsync` for LLM-backed resolution.
     public func resolveNaturalLanguageIntent(_ naturalLanguageIntent: NaturalLanguageIntent,
                                              context: NaturalLanguageIntentContext = NaturalLanguageIntentContext()) -> IntentResolutionResult {
         let result = naturalLanguageResolver.resolve(naturalLanguageIntent, context: context)
@@ -106,6 +111,34 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
             _ = unresolvedQueue.append(unresolved)
         }
         return result
+    }
+
+    /// LLM-backed resolver. Calls Claude API with the full capability graph as tool definitions.
+    /// Falls back to the deterministic keyword resolver if no `ClaudeIntentResolverConfig` was
+    /// provided at init time, or if the API call fails.
+    public func resolveNaturalLanguageIntentAsync(
+        _ naturalLanguageIntent: NaturalLanguageIntent,
+        context: NaturalLanguageIntentContext = NaturalLanguageIntentContext(),
+        capabilityContext: CapabilityInvocationContext
+    ) async -> IntentResolutionResult {
+        guard let claude = claudeResolver else {
+            return resolveNaturalLanguageIntent(naturalLanguageIntent, context: context)
+        }
+
+        let capabilities = promptCapabilitySymbolicViews(for: capabilityContext)
+        do {
+            let result = try await claude.resolve(naturalLanguageIntent,
+                                                  context: context,
+                                                  capabilities: capabilities)
+            if let unresolved = result.unresolved {
+                _ = unresolvedQueue.append(unresolved)
+            }
+            return result
+        } catch {
+            // Degrade gracefully: log and fall back to keyword resolver.
+            let fallback = resolveNaturalLanguageIntent(naturalLanguageIntent, context: context)
+            return fallback
+        }
     }
 
     public func unresolvedNaturalLanguageIntents(includeClosed: Bool = false) -> [UnresolvableIntent] {
