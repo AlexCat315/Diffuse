@@ -44,14 +44,27 @@ struct IntentInputPanel: View {
                         }
                     }
 
-                    AISection(title: "NaturalLanguageIntent") {
+                    AISection(title: L("Natural Language")) {
                         Box(direction: .column, alignItems: .stretch, spacing: 8) {
-                            TextField(text: $naturalLanguageText)
-                            Row(alignment: .center, spacing: 8) {
-                                Button(L("Submit Intent")) {
+                            let isResolving = store.aiStatusMessage == "Resolving…"
+                            TextField(
+                                L("Describe what you want to do…"),
+                                text: $naturalLanguageText,
+                                clearable: true,
+                                onSubmit: {
                                     app.submitNaturalLanguageIntent(naturalLanguageText)
+                                    naturalLanguageText = ""
+                                },
+                                onClear: { naturalLanguageText = "" }
+                            )
+                            Row(alignment: .center, spacing: 8) {
+                                Button(isResolving ? L("Resolving…") : L("Submit"),
+                                       isEnabled: !naturalLanguageText.isEmpty && !isResolving) {
+                                    app.submitNaturalLanguageIntent(naturalLanguageText)
+                                    naturalLanguageText = ""
                                 }
-                                Button(L("Clear")) {
+                                Button(L("Clear"),
+                                       isEnabled: !naturalLanguageText.isEmpty) {
                                     naturalLanguageText = ""
                                 }
                                 .buttonStyle(SecondaryButtonStyle())
@@ -60,7 +73,7 @@ struct IntentInputPanel: View {
                     }
 
                     if !unresolvedIntents.isEmpty {
-                        AISection(title: "unresolvable_intent") {
+                        AISection(title: L("Unresolved Intents")) {
                             Box(direction: .column, alignItems: .stretch, spacing: 6) {
                                 for intent in unresolvedIntents {
                                     UnresolvedIntentRow(app: app, intent: intent)
