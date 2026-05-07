@@ -30,6 +30,7 @@ public enum EditorAction: Sendable {
     case endAssetDrag
     case setInspectorSectionCollapsed(id: String, isCollapsed: Bool)
     case setPendingConfirmationRequest(ConfirmationRequestBatch?)
+    case setAISettings(EditorAISettings)
     case setAIStatusMessage(String?)
     case setAIWarnings([String])
     case setUnresolvedIntents([UnresolvableIntent])
@@ -135,6 +136,8 @@ public enum EditorReducer {
             }
         case let .setPendingConfirmationRequest(request):
             state.pendingConfirmationRequest = request
+        case let .setAISettings(settings):
+            state.aiSettings = settings
         case let .setAIStatusMessage(message):
             state.aiStatusMessage = message
         case let .setAIWarnings(warnings):

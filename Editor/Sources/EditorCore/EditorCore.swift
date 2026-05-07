@@ -46,7 +46,8 @@ public final class EditorApplication {
     public init(projectDirectory: String,
                 backendConfig: WGPUDeviceConfig? = nil,
                 backend: WGPUBackend? = nil,
-                events: PlatformEventBridge = PlatformEventBridge()) throws {
+                events: PlatformEventBridge = PlatformEventBridge(),
+                initialAISettings: EditorAISettings = .default) throws {
         var resolvedBackendConfig = backendConfig ?? .init()
         if resolvedBackendConfig.libraryPath == nil {
             resolvedBackendConfig.libraryPath = Self.locateWGPUDylib()
@@ -62,6 +63,12 @@ public final class EditorApplication {
                                                 withIntermediateDirectories: true)
         let observationBus = try ObservationBus(coldLogDirectory: observationDirectory.path)
         let intentCoordinator = try IntentRuntimeCoordinator.default()
+        // Restore the AI backend from the settings passed in at launch (loaded from
+        // EditorShellState by the caller) and the matching key in Keychain.
+        store.dispatch(.setAISettings(initialAISettings))
+        if let backend = EditorApplication.makeBackend(for: initialAISettings) {
+            intentCoordinator.setBackend(backend)
+        }
 
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.projectDirectory = projectDirectory
@@ -545,6 +552,40 @@ public final class EditorApplication {
             return c
         }
         return "libwgpu_native.dylib"
+    }
+
+    // MARK: - AI settings
+
+    /// Applies new AI settings: persists provider/model, writes the key to Keychain,
+    /// and hot-swaps the backend on the coordinator without restart.
+    public func applyAISettings(_ settings: EditorAISettings, apiKey: String) {
+        AIKeychain.save(key: apiKey, provider: settings.provider)
+        store.dispatch(.setAISettings(settings))
+        let backend = Self.makeBackend(for: settings)
+        intentCoordinator.setBackend(backend)
+    }
+
+    /// Removes the stored API key for the current provider and disables AI resolution.
+    public func clearAIKey() {
+        let provider = store.state.aiSettings.provider
+        AIKeychain.delete(provider: provider)
+        intentCoordinator.setBackend(nil)
+    }
+
+    /// Returns `true` if a non-empty API key is stored for the current provider.
+    public func hasStoredAIKey() -> Bool {
+        AIKeychain.hasKey(for: store.state.aiSettings.provider)
+    }
+
+    static func makeBackend(for settings: EditorAISettings) -> (any IntentResolverBackend)? {
+        switch settings.provider {
+        case .none:
+            return nil
+        case .anthropic:
+            guard let key = AIKeychain.load(provider: .anthropic) else { return nil }
+            let config = AnthropicIntentResolverBackendConfig(apiKey: key, model: settings.model)
+            return AnthropicIntentResolverBackend(config: config)
+        }
     }
 
     private func submitIntentTransaction(_ transaction: TransactionIR) {
