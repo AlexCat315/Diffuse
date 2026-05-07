@@ -260,6 +260,7 @@ enum EditorRootViewFactory {
     private static func reconciledWorkspaceDocument(_ document: WorkspaceDocument,
                                                     registry: PanelRegistry) -> WorkspaceDocument {
         var next = document
+        next.ensureStandardEditorSlotSchema()
         let registeredIDs = Set(registry.ids)
 
         for staleID in next.panels.keys where !registeredIDs.contains(staleID) {
