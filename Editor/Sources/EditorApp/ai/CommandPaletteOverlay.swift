@@ -11,6 +11,8 @@ struct CommandPaletteOverlay: View {
 
     @State private var text: String = ""
     @State private var suggestions: [(verbID: String, summary: String, confidence: Double)] = []
+    /// Non-empty when the user submits with multiple borderline candidates — surfaces "Did you mean?" UI.
+    @State private var disambiguationCandidates: [(verbID: String, summary: String)] = []
 
     init(app: EditorApplication) {
         self.app = app
@@ -64,8 +66,14 @@ struct CommandPaletteOverlay: View {
                         )
                         .padding(horizontal: 14, vertical: 10)
 
+                        // Did you mean? — shown when submit produces borderline ties
+                        if !disambiguationCandidates.isEmpty && !isResolving {
+                            Divider()
+                            disambiguationList
+                        }
+
                         // Live suggestions
-                        if !suggestions.isEmpty && !isResolving {
+                        if !suggestions.isEmpty && !isResolving && disambiguationCandidates.isEmpty {
                             Divider()
                             suggestionList
                         }
@@ -114,6 +122,28 @@ struct CommandPaletteOverlay: View {
         }
     }
 
+    @ViewBuilder
+    private var disambiguationList: some View {
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            Row(alignment: .center, spacing: 0) {
+                Text(L("Did you mean?"))
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                    .padding(horizontal: 14, vertical: 6)
+                    .flex()
+            }
+            for candidate in disambiguationCandidates {
+                SuggestionRow(summary: candidate.summary,
+                              shortVerb: verbLabel(candidate.verbID),
+                              onSelect: {
+                                  disambiguationCandidates = []
+                                  text = candidate.summary
+                                  submitAndClose()
+                              })
+            }
+        }
+    }
+
     private func updateSuggestions(_ newText: String) {
         suggestions = app.localIntentSuggestions(for: newText, maxCount: 3)
     }
@@ -121,6 +151,21 @@ struct CommandPaletteOverlay: View {
     private func submitAndClose() {
         let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmed.isEmpty else { return }
+
+        // Check for borderline ties: two or more candidates within 0.08 of each other,
+        // all below the classifier threshold (0.32), to avoid a silent wrong-pick.
+        let allMatches = app.localIntentSuggestions(for: trimmed, maxCount: 5)
+        let borderline = allMatches.filter { $0.confidence < 0.32 }
+        if borderline.count >= 2 {
+            let top = borderline[0].confidence
+            let tied = borderline.filter { top - $0.confidence < 0.08 }
+            if tied.count >= 2 {
+                disambiguationCandidates = tied.map { (verbID: $0.verbID, summary: $0.summary) }
+                return
+            }
+        }
+
+        disambiguationCandidates = []
         app.submitNaturalLanguageIntent(trimmed)
         dismiss()
     }
@@ -129,6 +174,7 @@ struct CommandPaletteOverlay: View {
         app.store.dispatch(.setCommandPaletteVisible(false))
         text = ""
         suggestions = []
+        disambiguationCandidates = []
     }
 
     private func verbLabel(_ verbID: String) -> String {

@@ -113,6 +113,14 @@
 "Offline" = "Offline";
 "Ready" = "Ready";
 
+/* AI — Command palette */
+"AI Command" = "AI Command";
+"Resolving…" = "Resolving…";
+"Describe what you want to do…" = "Describe what you want to do…";
+"Enter to submit · Escape to close · Cmd+K to reopen" = "Enter to submit · Escape to close · Cmd+K to reopen";
+"keyword only" = "keyword only";
+"Did you mean?" = "Did you mean?";
+
 /* AI — Confirmation panel */
 "No pending confirmation" = "No pending confirmation";
 "Warn, required, and destructive AI actions will appear here before they mutate the scene." = "Warn, required, and destructive AI actions will appear here before they mutate the scene.";
