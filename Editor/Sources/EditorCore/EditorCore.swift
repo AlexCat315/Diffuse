@@ -1,3 +1,4 @@
+import AIRuntime
 import AssetPipeline
 import CapabilityRuntime
 import EngineCore
@@ -40,6 +41,7 @@ public final class EditorApplication: @unchecked Sendable {
     private var displayInvalidationHandler: (() -> Void)?
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
     private var pendingTrainingEntry: IntentTrainingLogger.Entry?
+    private var aiScenePlanner: AIScenePlanner?
     private var recentResolvedVerbs: [String] = []
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
@@ -71,6 +73,7 @@ public final class EditorApplication: @unchecked Sendable {
         if let backend = EditorApplication.makeBackend(for: initialAISettings) {
             intentCoordinator.setBackend(backend)
         }
+        aiScenePlanner = EditorApplication.makePlanner(for: initialAISettings)
 
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.projectDirectory = projectDirectory
@@ -386,14 +389,24 @@ public final class EditorApplication: @unchecked Sendable {
                     confidence: $0.confidence) }
     }
 
-    /// Submits a free-text intent through the three-layer cascade:
-    /// Layer 1 (local classifier, <5 ms) → Layer 2 (AI backend, async) → keyword fallback.
-    /// Shows a "Resolving…" status during any async wait and updates it with the resolution source.
+    /// Submits a free-text intent.
+    ///
+    /// When an `AIScenePlanner` is configured (API key present), routes through the semantic
+    /// scene-planner path: encodes the live scene → sends to Claude → receives a typed
+    /// multi-step `SceneEditPlan` → submits via `intentCoordinator.submitPlan`.
+    ///
+    /// Falls back to the three-layer capability cascade (local classifier → AI tool-use →
+    /// keyword resolver) when no planner is available.
     public func submitNaturalLanguageIntent(_ text: String) {
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
 
         if store.state.pendingConfirmationRequest != nil {
             store.dispatch(.setAIStatusMessage("Resolve the pending confirmation before submitting another AI action."))
+            return
+        }
+
+        if let planner = aiScenePlanner {
+            submitNaturalLanguageIntentWithPlanner(text, planner: planner)
             return
         }
 
@@ -442,6 +455,54 @@ public final class EditorApplication: @unchecked Sendable {
                 locale: self.store.state.language.lprojName
             )
             self.submitResolvedIntent(intent)
+        }
+    }
+
+    private func submitNaturalLanguageIntentWithPlanner(_ text: String, planner: AIScenePlanner) {
+        let snapshot = SceneSemanticEncoder().encode(
+            scene.scene,
+            selectedEntityID: store.state.selectedEntityID,
+            workspaceMode: store.state.workspaceMode.rawValue,
+            localeIdentifier: store.state.language.lprojName
+        )
+        let baseRevision = snapshot.sceneRevision
+
+        store.dispatch(.setAIStatusMessage("Planning…"))
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            do {
+                let editPlan = try await planner.plan(userRequest: text, snapshot: snapshot)
+                guard !editPlan.isEmpty else {
+                    self.store.dispatch(.setAIStatusMessage("No scene changes needed."))
+                    return
+                }
+                let transaction = try SceneEditPlanExecutor().buildTransaction(
+                    from: editPlan,
+                    scene: self.scene.scene,
+                    baseSceneRevision: baseRevision,
+                    approvalPolicy: .requiresApproval
+                )
+                self.submitPlanTransaction(transaction)
+            } catch {
+                self.store.dispatch(.setAIStatusMessage(String(describing: error)))
+            }
+        }
+    }
+
+    private func submitPlanTransaction(_ transaction: TransactionIR) {
+        if store.state.pendingConfirmationRequest != nil {
+            store.dispatch(.setAIStatusMessage("Resolve the pending confirmation before submitting another AI action."))
+            return
+        }
+        var context = makeExecutionContext()
+        do {
+            let result = try intentCoordinator.submitPlan(transaction, executionContext: &context)
+            applyInvocationResult(result, executionContext: &context)
+        } catch {
+            store.dispatch(.setPendingConfirmationRequest(nil))
+            store.dispatch(.setAIWarnings([]))
+            store.dispatch(.setAIStatusMessage(String(describing: error)))
         }
     }
 
@@ -550,8 +611,14 @@ public final class EditorApplication: @unchecked Sendable {
                                                 partial: false)
         var context = makeExecutionContext()
         do {
-            let result = try intentCoordinator.resolveConfirmation(resolution,
+            let result: CapabilityInvocationResult
+            if request.batchID.hasPrefix("ai_cfm:") {
+                result = try intentCoordinator.resolvePlanConfirmation(resolution,
+                                                                       executionContext: &context)
+            } else {
+                result = try intentCoordinator.resolveConfirmation(resolution,
                                                                    executionContext: &context)
+            }
             applyInvocationResult(result, executionContext: &context)
         } catch {
             store.dispatch(.setAIStatusMessage(String(describing: error)))
@@ -624,8 +691,8 @@ public final class EditorApplication: @unchecked Sendable {
     public func applyAISettings(_ settings: EditorAISettings, apiKey: String) {
         AIKeychain.save(key: apiKey, provider: settings.provider)
         store.dispatch(.setAISettings(settings))
-        let backend = Self.makeBackend(for: settings)
-        intentCoordinator.setBackend(backend)
+        intentCoordinator.setBackend(Self.makeBackend(for: settings))
+        aiScenePlanner = Self.makePlanner(for: settings)
     }
 
     /// Removes the stored API key for the current provider and disables AI resolution.
@@ -633,6 +700,7 @@ public final class EditorApplication: @unchecked Sendable {
         let provider = store.state.aiSettings.provider
         AIKeychain.delete(provider: provider)
         intentCoordinator.setBackend(nil)
+        aiScenePlanner = nil
     }
 
     /// Returns `true` if a non-empty API key is stored for the current provider.
@@ -648,6 +716,17 @@ public final class EditorApplication: @unchecked Sendable {
             guard let key = AIKeychain.load(provider: .anthropic) else { return nil }
             let config = AnthropicIntentResolverBackendConfig(apiKey: key, model: settings.model)
             return AnthropicIntentResolverBackend(config: config)
+        }
+    }
+
+    static func makePlanner(for settings: EditorAISettings) -> AIScenePlanner? {
+        switch settings.provider {
+        case .none:
+            return nil
+        case .anthropic:
+            guard let key = AIKeychain.load(provider: .anthropic) else { return nil }
+            let config = AIScenePlannerConfig(apiKey: key, model: settings.model)
+            return AIScenePlanner(config: config)
         }
     }
 
