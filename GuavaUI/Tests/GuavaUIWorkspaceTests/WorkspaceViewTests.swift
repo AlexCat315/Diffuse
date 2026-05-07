@@ -31,12 +31,11 @@ final class WorkspaceViewTests: XCTestCase {
         rig.pump()
 
         let bottomRail = rig.frame(named: "workspace-rail-bottom")
-        let center = rig.frame(named: "workspace-region-center")
         let statusBar = rig.frame(named: "editor-status-bar")
         let chrome = rig.frame(named: "workspace-chrome-chrome.bottom.rail")
         XCTAssertEqual(statusBar.maxY, 640, accuracy: 0.5)
-        XCTAssertEqual(bottomRail.minX, center.minX, accuracy: 1.0)
-        XCTAssertEqual(bottomRail.maxX, center.maxX, accuracy: 1.0)
+        XCTAssertEqual(bottomRail.minX, 0, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.maxX, 1000, accuracy: 0.5)
         XCTAssertEqual(chrome.height, 40, accuracy: 0.5)
         XCTAssertEqual(bottomRail.minY, chrome.minY, accuracy: 1.0)
         XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
@@ -70,7 +69,7 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertEqual(bottomChrome.maxY, 640, accuracy: 0.5)
     }
 
-    func testCollapsedRailsKeepBottomRailBetweenWorkspaceEdges() {
+    func testCollapsedRailsKeepBottomRailOnGlobalBottomEdge() {
         let rig = makeRigWithStatusBar(width: 1000, height: 640)
 
         _ = rig.controller.dispatch(.collapse("leading"))
@@ -91,12 +90,14 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertNil(rig.optionalFrame(named: "workspace-region-bottom"))
         XCTAssertEqual(leadingRail.minX, 0, accuracy: 0.5)
         XCTAssertEqual(leadingRail.width, 40, accuracy: 0.5)
-        XCTAssertEqual(leadingRail.maxY, statusBar.minY, accuracy: 1.0)
+        XCTAssertLessThanOrEqual(leadingRail.maxY, bottomRail.minY)
+        XCTAssertLessThanOrEqual(bottomRail.minY - leadingRail.maxY, 1.5)
         XCTAssertEqual(trailingRail.maxX, 1000, accuracy: 0.5)
         XCTAssertEqual(trailingRail.width, 40, accuracy: 0.5)
-        XCTAssertEqual(trailingRail.maxY, statusBar.minY, accuracy: 1.0)
-        XCTAssertEqual(bottomRail.minX, leadingRail.maxX, accuracy: 1.0)
-        XCTAssertEqual(bottomRail.maxX, trailingRail.minX, accuracy: 1.0)
+        XCTAssertLessThanOrEqual(trailingRail.maxY, bottomRail.minY)
+        XCTAssertLessThanOrEqual(bottomRail.minY - trailingRail.maxY, 1.5)
+        XCTAssertEqual(bottomRail.minX, 0, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.maxX, 1000, accuracy: 0.5)
         XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
         XCTAssertGreaterThanOrEqual(leadingRestore.minX, leadingRail.minX)
         XCTAssertLessThanOrEqual(leadingRestore.maxX, leadingRail.maxX)
@@ -106,7 +107,7 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertLessThanOrEqual(bottomRestore.maxX, bottomRail.maxX)
     }
 
-    func testClickingBottomCollapseKeepsRailInCenterBottomSlot() {
+    func testClickingBottomCollapseKeepsRailOnBottomEdge() {
         let rig = makeRigWithStatusBar(width: 1000, height: 640)
         let collapseButton = rig.frame(named: "workspace-collapse-bottom")
 
@@ -116,15 +117,14 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertNil(rig.optionalFrame(named: "workspace-region-bottom"))
         XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-leading"))
         XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-trailing"))
-        let center = rig.frame(named: "workspace-region-center")
         let bottomRail = rig.frame(named: "workspace-rail-bottom")
         let chrome = rig.frame(named: "workspace-chrome-chrome.bottom.rail")
         let statusBar = rig.frame(named: "editor-status-bar")
         XCTAssertNil(rig.optionalFrame(named: "workspace-bottom-slot"))
         XCTAssertEqual(chrome.height, 40, accuracy: 0.5)
         XCTAssertEqual(bottomRail.height, 40, accuracy: 0.5)
-        XCTAssertEqual(bottomRail.minX, center.minX, accuracy: 1.0)
-        XCTAssertEqual(bottomRail.maxX, center.maxX, accuracy: 1.0)
+        XCTAssertEqual(bottomRail.minX, 0, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.maxX, 1000, accuracy: 0.5)
         XCTAssertEqual(bottomRail.minY, chrome.minY, accuracy: 1.0)
         XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
     }
@@ -152,6 +152,150 @@ final class WorkspaceViewTests: XCTestCase {
         XCTAssertEqual(afterSideCollapseRail.maxY, statusBar.minY, accuracy: 1.0)
     }
 
+    func testBottomRailStaysVisibleWhenExpandedSidePanelsHaveTallContent() {
+        let controller = WorkspaceController(document: Self.makeDocument())
+        let root = AnyView(
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                WorkspaceView(controller: controller) { panelID in
+                    AnyView(Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                        Text(panelID.rawValue)
+                        Box { EmptyView() }
+                            .frame(height: 900)
+                            .background(.surfaceVariant)
+                    }
+                    .debugName("tall-content-\(panelID.rawValue)"))
+                }
+                .flex()
+                .frame(minWidth: 0, minHeight: 0)
+                Box { EmptyView() }
+                    .frame(height: 24)
+                    .debugName("editor-status-bar")
+            }
+            .frame(width: 1280, height: 720)
+        )
+        let rig = WorkspaceViewRig(controller: controller,
+                                   width: 1280,
+                                   height: 720,
+                                   root: root)
+
+        rig.click(rig.frame(named: "workspace-collapse-bottom").center)
+
+        let workspace = rig.frame(named: "workspace")
+        let statusBar = rig.frame(named: "editor-status-bar")
+        let bottomRail = rig.frame(named: "workspace-rail-bottom")
+        let bottomRestore = rig.frame(named: "workspace-restore-bottom")
+        XCTAssertEqual(workspace.maxY, statusBar.minY, accuracy: 1.0)
+        XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
+        XCTAssertLessThanOrEqual(bottomRail.maxY, 720.5)
+        XCTAssertLessThan(bottomRail.minY, 720)
+        XCTAssertGreaterThanOrEqual(bottomRestore.minX, bottomRail.minX)
+        XCTAssertLessThanOrEqual(bottomRestore.maxX, bottomRail.maxX)
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-leading"))
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-trailing"))
+    }
+
+    func testBottomRailRendersForLegacyDocumentWithoutChromeRailSlot() {
+        var document = Self.makeDocument()
+        document.slots.removeValue(forKey: .chromeBottomRail)
+        let controller = WorkspaceController(document: document)
+        let rig = WorkspaceViewRig(controller: controller,
+                                   width: 1000,
+                                   height: 640,
+                                   root: Self.makeWorkspaceRootWithStatusBar(controller: controller,
+                                                                             width: 1000,
+                                                                             height: 640))
+
+        rig.click(rig.frame(named: "workspace-collapse-bottom").center)
+
+        let bottomRail = rig.frame(named: "workspace-rail-bottom")
+        let chrome = rig.frame(named: "workspace-chrome-\(WorkspaceSlotID.chromeBottomRail.rawValue)")
+        let statusBar = rig.frame(named: "editor-status-bar")
+        XCTAssertNil(rig.optionalFrame(named: "workspace-region-bottom"))
+        XCTAssertNil(rig.controller.document.slots[.chromeBottomRail])
+        XCTAssertEqual(chrome.height, 40, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.minX, 0, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.maxX, 1000, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-leading"))
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-trailing"))
+    }
+
+    func testBottomRailUsesCollapsedEdgeWhenPersistedSlotIDIsStale() {
+        var document = Self.makeDocument()
+        document.groups["bottom"]?.isCollapsed = true
+        document.collapsed = [
+            WorkspaceCollapsedItem(groupID: "bottom",
+                                   slotID: .chromeBottomRail,
+                                   edge: .bottom),
+        ]
+        let controller = WorkspaceController(document: document)
+        let rig = WorkspaceViewRig(controller: controller,
+                                   width: 1000,
+                                   height: 640,
+                                   root: Self.makeWorkspaceRootWithStatusBar(controller: controller,
+                                                                             width: 1000,
+                                                                             height: 640))
+
+        let bottomRail = rig.frame(named: "workspace-rail-bottom")
+        let bottomRestore = rig.frame(named: "workspace-restore-bottom")
+        let statusBar = rig.frame(named: "editor-status-bar")
+        XCTAssertNil(rig.optionalFrame(named: "workspace-region-bottom"))
+        XCTAssertEqual(bottomRail.minX, 0, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.maxX, 1000, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.maxY, statusBar.minY, accuracy: 1.0)
+        XCTAssertGreaterThanOrEqual(bottomRestore.minX, bottomRail.minX)
+        XCTAssertLessThanOrEqual(bottomRestore.maxX, bottomRail.maxX)
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-leading"))
+        XCTAssertNotNil(rig.optionalFrame(named: "workspace-region-trailing"))
+    }
+
+    func testWorkspacePanelContentIsClippedToItsRegion() {
+        let controller = WorkspaceController(document: Self.makeDocument())
+        let root = AnyView(
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                WorkspaceView(controller: controller) { panelID in
+                    AnyView(Box {
+                        Box { EmptyView() }
+                            .frame(width: 2000, height: 2000)
+                            .background(Color.white)
+                            .absolutePosition(left: 0, top: 0)
+                    }
+                    .debugName("oversized-\(panelID.rawValue)"))
+                }
+                .flex()
+                Box { EmptyView() }
+                    .frame(height: 24)
+                    .debugName("editor-status-bar")
+            }
+            .frame(width: 1000, height: 640)
+        )
+        let rig = WorkspaceViewRig(controller: controller,
+                                   width: 1000,
+                                   height: 640,
+                                   root: root)
+
+        let panelNode = rig.node(named: "workspace-panel-viewport")
+        let panelFrame = rig.frame(named: "workspace-panel-viewport")
+        let statusBar = rig.frame(named: "editor-status-bar")
+        XCTAssertTrue(panelNode.clipsToBounds)
+        XCTAssertLessThanOrEqual(panelFrame.maxY, statusBar.minY + 1.0)
+
+        let list = DrawList()
+        guard let rootNode = rig.tree.root else {
+            XCTFail("missing root node")
+            return
+        }
+        NodeRenderer().render(root: rootNode, into: list)
+        let clippedBatch = list.batches.first { batch in
+            guard let scissor = batch.scissor else { return false }
+            return abs(scissor.x - Float(panelFrame.minX)) <= 0.5
+                && abs(scissor.y - Float(panelFrame.minY)) <= 0.5
+                && abs(scissor.width - Float(panelFrame.width)) <= 0.5
+                && abs(scissor.height - Float(panelFrame.height)) <= 0.5
+        }
+        XCTAssertNotNil(clippedBatch)
+    }
+
     func testClickingLeftRightThenBottomCanCollapseAndRestoreInPlace() {
         let rig = makeRigWithStatusBar(width: 1000, height: 640)
 
@@ -172,8 +316,8 @@ final class WorkspaceViewTests: XCTestCase {
         let bottomRail = rig.frame(named: "workspace-rail-bottom")
         XCTAssertEqual(leadingRail.minX, 0, accuracy: 0.5)
         XCTAssertEqual(trailingRail.maxX, 1000, accuracy: 0.5)
-        XCTAssertEqual(bottomRail.minX, leadingRail.maxX, accuracy: 1.0)
-        XCTAssertEqual(bottomRail.maxX, trailingRail.minX, accuracy: 1.0)
+        XCTAssertEqual(bottomRail.minX, 0, accuracy: 0.5)
+        XCTAssertEqual(bottomRail.maxX, 1000, accuracy: 0.5)
         XCTAssertEqual(bottomRail.maxY, collapsedStatusBar.minY, accuracy: 1.0)
 
         rig.click(rig.frame(named: "workspace-restore-leading").center)
@@ -402,19 +546,9 @@ final class WorkspaceViewTests: XCTestCase {
         return WorkspaceViewRig(controller: controller,
                                 width: width,
                                 height: height,
-                                root: AnyView(
-                                    Box(direction: .column, alignItems: .stretch, spacing: 0) {
-                                        WorkspaceView(controller: controller) { panelID in
-                                            AnyView(Box { Text(panelID.rawValue) }
-                                                .debugName("content-\(panelID.rawValue)"))
-                                        }
-                                        .flex()
-                                        Box { EmptyView() }
-                                            .frame(height: 24)
-                                            .debugName("editor-status-bar")
-                                    }
-                                    .frame(width: width, height: height)
-                                ))
+                                root: Self.makeWorkspaceRootWithStatusBar(controller: controller,
+                                                                          width: width,
+                                                                          height: height))
     }
 
     private static func makeDocument() -> WorkspaceDocument {
@@ -458,6 +592,24 @@ final class WorkspaceViewTests: XCTestCase {
             AnyView(Box { Text(panelID.rawValue) }
                 .debugName("content-\(panelID.rawValue)"))
         })
+    }
+
+    private static func makeWorkspaceRootWithStatusBar(controller: WorkspaceController,
+                                                       width: Float,
+                                                       height: Float) -> AnyView {
+        AnyView(
+            Box(direction: .column, alignItems: .stretch, spacing: 0) {
+                WorkspaceView(controller: controller) { panelID in
+                    AnyView(Box { Text(panelID.rawValue) }
+                        .debugName("content-\(panelID.rawValue)"))
+                }
+                .flex()
+                Box { EmptyView() }
+                    .frame(height: 24)
+                    .debugName("editor-status-bar")
+            }
+            .frame(width: width, height: height)
+        )
     }
 }
 
@@ -556,10 +708,35 @@ private final class WorkspaceViewRig {
         return frame
     }
 
+    func node(named debugName: String) -> Node {
+        guard let node = optionalNode(named: debugName) else {
+            XCTFail("missing node named \(debugName)")
+            return Node()
+        }
+        return node
+    }
+
+    func optionalNode(named debugName: String) -> Node? {
+        firstNode(in: tree.root, named: debugName)
+    }
+
     func optionalFrame(named debugName: String) -> CGRect? {
         graph.layoutSnapshot()
             .first { $0.debugName == debugName }?
             .absoluteFrame
+    }
+
+    private func firstNode(in node: Node?, named debugName: String) -> Node? {
+        guard let node else { return nil }
+        if (node.attachments[LayoutDebugAttachmentKey.debugName] as? String) == debugName {
+            return node
+        }
+        for child in node.children {
+            if let found = firstNode(in: child, named: debugName) {
+                return found
+            }
+        }
+        return nil
     }
 }
 

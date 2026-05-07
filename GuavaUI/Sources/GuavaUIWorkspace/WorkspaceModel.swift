@@ -112,6 +112,26 @@ public enum WorkspaceEdge: String, Sendable, Codable, Equatable {
     }
 }
 
+public extension WorkspaceSlotID {
+    static let chromeLeadingRail = WorkspaceSlotID(rawValue: "chrome.leading.rail")
+    static let chromeTrailingRail = WorkspaceSlotID(rawValue: "chrome.trailing.rail")
+    static let chromeTopRail = WorkspaceSlotID(rawValue: "chrome.top.rail")
+    static let chromeBottomRail = WorkspaceSlotID(rawValue: "chrome.bottom.rail")
+
+    static func chromeRail(for edge: WorkspaceEdge) -> WorkspaceSlotID {
+        switch edge {
+        case .leading:
+            return .chromeLeadingRail
+        case .trailing:
+            return .chromeTrailingRail
+        case .top:
+            return .chromeTopRail
+        case .bottom:
+            return .chromeBottomRail
+        }
+    }
+}
+
 public indirect enum WorkspaceLayoutNode: Sendable, Codable, Equatable {
     case group(WorkspaceTabGroupID)
     case split(axis: WorkspaceSplitAxis,
@@ -290,7 +310,7 @@ public struct WorkspaceSlot: Sendable, Codable, Equatable {
                                            center: WorkspaceLayoutNode? = nil,
                                            trailing: WorkspaceLayoutNode? = nil,
                                            bottom: WorkspaceLayoutNode? = nil) -> [WorkspaceSlotID: WorkspaceSlot] {
-        [
+        var slots: [WorkspaceSlotID: WorkspaceSlot] = [
             .leading: WorkspaceSlot(id: .leading,
                                     kind: .content,
                                     layout: leading),
@@ -303,14 +323,23 @@ public struct WorkspaceSlot: Sendable, Codable, Equatable {
             .bottom: WorkspaceSlot(id: .bottom,
                                    kind: .content,
                                    layout: bottom),
-            WorkspaceSlotID(rawValue: "chrome.leading.rail"): WorkspaceSlot(id: WorkspaceSlotID(rawValue: "chrome.leading.rail"),
-                                                                            kind: .chrome(edge: .leading, size: .fixed(40))),
-            WorkspaceSlotID(rawValue: "chrome.trailing.rail"): WorkspaceSlot(id: WorkspaceSlotID(rawValue: "chrome.trailing.rail"),
-                                                                             kind: .chrome(edge: .trailing, size: .fixed(40))),
-            WorkspaceSlotID(rawValue: "chrome.bottom.rail"): WorkspaceSlot(id: WorkspaceSlotID(rawValue: "chrome.bottom.rail"),
-                                                                           kind: .chrome(edge: .bottom, size: .fixed(40))),
             .overlay: WorkspaceSlot(id: .overlay, kind: .overlay),
             .floating: WorkspaceSlot(id: .floating, kind: .floating),
+        ]
+        for (slotID, slot) in standardEditorChromeRailSlots() {
+            slots[slotID] = slot
+        }
+        return slots
+    }
+
+    public static func standardEditorChromeRailSlots() -> [WorkspaceSlotID: WorkspaceSlot] {
+        [
+            .chromeLeadingRail: WorkspaceSlot(id: .chromeLeadingRail,
+                                             kind: .chrome(edge: .leading, size: .fixed(40))),
+            .chromeTrailingRail: WorkspaceSlot(id: .chromeTrailingRail,
+                                              kind: .chrome(edge: .trailing, size: .fixed(40))),
+            .chromeBottomRail: WorkspaceSlot(id: .chromeBottomRail,
+                                            kind: .chrome(edge: .bottom, size: .fixed(40))),
         ]
     }
 }
@@ -421,6 +450,12 @@ public struct WorkspaceDocument: Sendable, Codable, Equatable {
 
     public mutating func setSlot(_ slot: WorkspaceSlot) {
         slots[slot.id] = slot
+    }
+
+    public mutating func ensureStandardEditorSlotSchema() {
+        for (slotID, slot) in WorkspaceSlot.standardEditorSlots() where slots[slotID] == nil {
+            slots[slotID] = slot
+        }
     }
 
     public func group(_ id: WorkspaceTabGroupID) -> WorkspaceTabGroup? {

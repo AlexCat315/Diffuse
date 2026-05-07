@@ -4,16 +4,14 @@ import GuavaUIRuntime
 import EngineKernel
 @testable import GuavaUICompose
 
-/// Coverage for `IconButton` — verifies the texture-source path materialises
+/// Coverage for icon-only `Button` — verifies the texture-source path materialises
 /// a Button hierarchy with an Image child carrying the supplied texture
 /// id, and that pointer-driven activation invokes the action closure.
-@Suite("IconButton", .serialized)
-struct IconButtonTests: GuavaUIComposeSerializedSuite {
+@Suite("Button icon", .serialized)
+struct ButtonIconTests: GuavaUIComposeSerializedSuite {
 
     /// Walk the tree looking for the ButtonHost node — it's the only
-    /// node carrying the press attachment key, regardless of how many
-    /// wrapper levels (`IconButton` → `Button` → `_StatefulButton`)
-    /// sit above it.
+    /// node carrying the press attachment key.
     private func findButtonHost(_ root: Node) -> Node? {
         if root.attachments[ButtonHost.pressedKey] != nil { return root }
         for c in root.children {
@@ -22,7 +20,7 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
         return nil
     }
 
-    @Test("IconButton(textureID:) renders a button shell whose label is an Image")
+    @Test("Button(icon: .texture) renders a button shell whose label is an Image")
     func texturePathBuildsButton() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry
@@ -30,7 +28,7 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
-            IconButton(textureID: 7, size: 16) {}
+            Button(icon: .texture(7), size: 16) {}
         )
         graph.computeLayout(width: 60, height: 40)
 
@@ -51,7 +49,7 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
         #expect(sawIcon)
     } }
 
-    @Test("Click on IconButton invokes the action closure exactly once")
+    @Test("Click on icon Button invokes the action closure exactly once")
     func clickInvokesAction() { GlobalTestLock.locked {
         let registry = InteractionRegistry()
         InteractionRegistryHolder.current = registry
@@ -61,7 +59,7 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
         let recomp = Recomposer()
         let graph = ViewGraph(tree: tree, recomposer: recomp)
         graph.install(root:
-            IconButton(textureID: 7, size: 16) { fired += 1 }
+            Button(icon: .texture(7), size: 16) { fired += 1 }
         )
         graph.computeLayout(width: 60, height: 40)
 
@@ -79,7 +77,7 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
         #expect(fired == 1)
     } }
 
-    @Test("IconButton(file:) without a registry falls back to TextureID.none without crashing")
+    @Test("Button(icon: .file) without a registry falls back to TextureID.none without crashing")
     func fileFallbackWithoutRegistry() { GlobalTestLock.locked {
         // Make sure no registry is installed for this test.
         ImageAssetRegistryHolder.current = nil
@@ -90,7 +88,7 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
-            IconButton(file: "/this/path/does/not/exist.png", size: 14) {}
+            Button(icon: .file(path: "/this/path/does/not/exist.png"), size: 14) {}
         )
         graph.computeLayout(width: 60, height: 40)
 
@@ -101,26 +99,26 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
         #expect(host.isHitTestable == true)
     } }
 
-    @Test("IconButton default tint defers to semantic foreground")
+    @Test("ButtonIcon default tint defers to semantic foreground")
     func defaultTintIsSemantic() {
-        let button = IconButton(textureID: 1) {}
-        #expect(button.tint == nil)
+        let icon = ButtonIcon(.texture(1))
+        #expect(icon.tint == nil)
     }
 
-    @Test("IconButton explicit tint remains supported")
+    @Test("ButtonIcon explicit tint remains supported")
     func explicitTintStillWorks() {
         let custom = Color(r: 0.25, g: 0.5, b: 0.75, a: 1)
-        let button = IconButton(textureID: 1, tint: custom) {}
-        #expect(button.tint == custom)
+        let icon = ButtonIcon(.texture(1), tint: custom)
+        #expect(icon.tint == custom)
     }
 
-    @Test("IconButton tooltip value is preserved")
+    @Test("Icon Button tooltip value is preserved")
     func tooltipValueIsPreserved() {
-        let button = IconButton(textureID: 1, tooltip: "Close") {}
+        let button = Button(icon: .texture(1), tooltip: "Close") {}
         #expect(button.tooltip == "Close")
     }
 
-    @Test("IconButton tooltip installs host overlay draw")
+    @Test("Icon Button tooltip installs host overlay draw")
     func tooltipInstallsOverlayDraw() { GlobalTestLock.locked {
         TooltipOverlayRegistry.unregisterAll()
         defer { TooltipOverlayRegistry.unregisterAll() }
@@ -131,7 +129,7 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
         let tree = NodeTree()
         let graph = ViewGraph(tree: tree, recomposer: Recomposer())
         graph.install(root:
-            IconButton(textureID: 7, tooltip: "Pin") {}
+            Button(icon: .texture(7), tooltip: "Pin") {}
         )
         graph.computeLayout(width: 60, height: 40)
 
@@ -171,13 +169,13 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
         #expect(minY >= 30)
     } }
 
-    @Test("IconButton renders across style and theme combinations")
+    @Test("Icon Button renders across style and theme combinations")
     func rendersAcrossStyleThemeCombos() { GlobalTestLock.locked {
         let cases: [(Theme, AnyView)] = [
             (
                 .defaultLight,
                 AnyView(
-                    IconButton(textureID: 7, size: 16) {}
+                    Button(icon: .texture(7), size: 16) {}
                         .buttonStyle(.ghost)
                         .theme(.defaultLight)
                 )
@@ -185,7 +183,7 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
             (
                 .defaultDark,
                 AnyView(
-                    IconButton(textureID: 7, size: 16) {}
+                    Button(icon: .texture(7), size: 16) {}
                         .buttonStyle(.secondary)
                         .theme(.defaultDark)
                 )
@@ -193,7 +191,7 @@ struct IconButtonTests: GuavaUIComposeSerializedSuite {
             (
                 .defaultDark,
                 AnyView(
-                    IconButton(textureID: 7, size: 16, role: .destructive) {}
+                    Button(icon: .texture(7), size: 16, role: .destructive) {}
                         .buttonStyle(.destructive)
                         .theme(.defaultDark)
                 )

@@ -525,17 +525,17 @@ struct RootView: View {
                 }
             }
 
-             card("IconButton") {
+             card("Icon Button") {
                  Row(alignment: .center, spacing: 12) {
-                     IconButton(textureID: previewTextureID, size: 16, tooltip: "Primary Icon Button", action: { clickCount += 1 })
-                     IconButton(textureID: previewTextureID, size: 16, tooltip: "Secondary Icon Button", action: { clickCount += 1 })
+                     Button(icon: .texture(previewTextureID), size: 16, tooltip: "Primary Icon Button", action: { clickCount += 1 })
+                     Button(icon: .texture(previewTextureID), size: 16, tooltip: "Secondary Icon Button", action: { clickCount += 1 })
                          .buttonStyle(.secondary)
-                     IconButton(textureID: previewTextureID, size: 16, tooltip: "Ghost Icon Button", action: { clickCount += 1 })
+                     Button(icon: .texture(previewTextureID), size: 16, tooltip: "Ghost Icon Button", action: { clickCount += 1 })
                          .buttonStyle(.ghost)
-                     IconButton(textureID: previewTextureID, size: 16, role: .destructive, tooltip: "Destructive Icon Button", action: { clickCount += 1 })
-                     IconButton(textureID: previewTextureID, size: 20, tooltip: "Larger Icon Button", action: { clickCount += 1 })
+                     Button(icon: .texture(previewTextureID), size: 16, role: .destructive, tooltip: "Destructive Icon Button", action: { clickCount += 1 })
+                     Button(icon: .texture(previewTextureID), size: 20, tooltip: "Larger Icon Button", action: { clickCount += 1 })
                          .buttonStyle(.ghost)
-                     IconButton(textureID: previewTextureID, size: 16, isEnabled: false, tooltip: "Disabled Icon Button", action: {})
+                     Button(icon: .texture(previewTextureID), size: 16, isEnabled: false, tooltip: "Disabled Icon Button", action: {})
                          .buttonStyle(.ghost)
                      Text("count: \(clickCount)")
                          .font(.caption)
