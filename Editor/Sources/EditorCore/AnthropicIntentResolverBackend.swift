@@ -1,5 +1,6 @@
 import CapabilityRuntime
 import Foundation
+import IntentRuntime
 
 // MARK: - Config
 
