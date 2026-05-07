@@ -46,6 +46,54 @@ public struct Button<Label: View>: View {
     }
 }
 
+public struct ButtonIcon: View {
+    public enum Source {
+        /// Pre-registered texture, for callers that already own a renderer texture.
+        case texture(TextureID)
+        /// File on disk, resolved through `ImageAssetRegistryHolder.current`.
+        case file(path: String)
+        /// Bundle-packaged image resource resolved by the UI layer.
+        case resource(BundleImageResource)
+    }
+
+    public let source: Source
+    public let size: Float
+    public let tint: Color?
+
+    public init(_ source: Source,
+                size: Float = 16,
+                tint: Color? = nil) {
+        self.source = source
+        self.size = size
+        self.tint = tint
+    }
+
+    public var body: some View {
+        switch source {
+        case .texture(let id):
+            Image(textureID: id,
+                  width: size,
+                  height: size,
+                  tint: tint ?? .white,
+                  renderingMode: .alphaMask)
+        case .file(let path):
+            Image(file: path,
+                  width: size,
+                  height: size,
+                  tint: tint ?? .white,
+                  contentMode: .fit,
+                  renderingMode: .alphaMask)
+        case .resource(let resource):
+            Image(resource: resource,
+                  width: size,
+                  height: size,
+                  tint: tint ?? .white,
+                  contentMode: .fit,
+                  renderingMode: .alphaMask)
+        }
+    }
+}
+
 public extension Button where Label == Text {
     /// Title-only convenience initializer.
     init(_ title: String,
@@ -66,6 +114,22 @@ public extension Button where Label == Text {
          action: @escaping () -> Void) {
         self.init(role: role, isEnabled: isEnabled, tooltip: tooltip, action: action) {
             Text(key)
+        }
+    }
+}
+
+public extension Button where Label == ButtonIcon {
+    /// Icon-only convenience initializer. Use the regular `Button` style
+    /// pipeline; this only supplies a square image label.
+    init(icon source: ButtonIcon.Source,
+         size: Float = 16,
+         role: ButtonRole = .normal,
+         isEnabled: Bool = true,
+         tooltip: String? = nil,
+         tint: Color? = nil,
+         action: @escaping () -> Void) {
+        self.init(role: role, isEnabled: isEnabled, tooltip: tooltip, action: action) {
+            ButtonIcon(source, size: size, tint: tint)
         }
     }
 }
@@ -264,9 +328,8 @@ struct ButtonHost: _PrimitiveView {
         }
         registry.setPointer(node) { event, phase, _ in
             // Buttons handle the primary mouse button only. Right- and
-            // middle-clicks bubble so parents (e.g. a DockTab wrapping
-            // the close button) can surface their own context-menu /
-            // middle-click semantics.
+            // middle-clicks bubble so parent chrome can surface context-menu
+            // or middle-click semantics.
             if event.button != .left { return .ignored }
             switch phase {
             case .down:

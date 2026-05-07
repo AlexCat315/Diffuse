@@ -10,18 +10,18 @@ final class PanelWorkspaceIntegrationTests: XCTestCase {
         let registry = PanelRegistry([
             PanelDescriptor(id: "hierarchy",
                             title: "Hierarchy",
-                            preferredRegion: .leading,
+                            preferredSlot: .leading,
                             iconAssetKey: "hierarchy") { EmptyView() },
             PanelDescriptor(id: "inspector",
                             title: "Inspector",
-                            preferredRegion: .trailing,
+                            preferredSlot: .trailing,
                             iconAssetKey: "inspector") { EmptyView() },
         ])
 
         let workspaceRegistry = registry.workspaceRegistry
 
-        XCTAssertEqual(workspaceRegistry.descriptor(for: "hierarchy")?.defaultRegion, .leading)
-        XCTAssertEqual(workspaceRegistry.descriptor(for: "inspector")?.defaultRegion, .trailing)
+        XCTAssertEqual(workspaceRegistry.descriptor(for: "hierarchy")?.defaultSlot, .leading)
+        XCTAssertEqual(workspaceRegistry.descriptor(for: "inspector")?.defaultSlot, .trailing)
         XCTAssertEqual(workspaceRegistry.descriptor(for: "hierarchy")?.iconAssetKey, "hierarchy")
     }
 
@@ -30,10 +30,10 @@ final class PanelWorkspaceIntegrationTests: XCTestCase {
             PanelDescriptor(id: "viewport",
                             title: "Viewport",
                             closable: false,
-                            preferredRegion: .center) { Text("Viewport") },
+                            preferredSlot: .center) { Text("Viewport") },
             PanelDescriptor(id: "console",
                             title: "Console",
-                            preferredRegion: .bottom) { Text("Console") },
+                            preferredSlot: .bottom) { Text("Console") },
         ])
         let controller = WorkspaceController(document: WorkspaceDocument(
             panels: [
@@ -44,12 +44,9 @@ final class PanelWorkspaceIntegrationTests: XCTestCase {
                 "center": WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport"),
                 "bottom": WorkspaceTabGroup(id: "bottom", panels: ["console"], activePanelID: "console"),
             ],
-            regions: [
-                WorkspaceRegion(id: .leading),
-                WorkspaceRegion(id: .center, groupIDs: ["center"]),
-                WorkspaceRegion(id: .trailing),
-                WorkspaceRegion(id: .bottom, groupIDs: ["bottom"]),
-            ]
+            slots: WorkspaceSlot.standardEditorSlots(center: .group("center"),
+                                                     bottom: .group("bottom")),
+            layoutTree: .group("center")
         ))
 
         let graph = ViewGraph(tree: NodeTree(), recomposer: Recomposer())

@@ -1266,25 +1266,25 @@ private struct ViewportInfoBar: View {
     var body: some View {
         Box(direction: .column, alignItems: .flexStart, spacing: 4) {
             Row(alignment: .center, spacing: 5) {
-                IconButton(resource: ViewportToolbarIcon.cursor.resource,
+                Button(icon: .resource(ViewportToolbarIcon.cursor.resource),
                            size: 15,
                            tooltip: L("Pick")) {
                     onSelectGizmoMode(.none)
                 }
                 .toggleButtonStyle(gizmoMode == .none)
-                IconButton(resource: ViewportToolbarIcon.translate.resource,
+                Button(icon: .resource(ViewportToolbarIcon.translate.resource),
                            size: 15,
                            tooltip: L("Move")) {
                     onSelectGizmoMode(.translate)
                 }
                 .toggleButtonStyle(gizmoMode == .translate)
-                IconButton(resource: ViewportToolbarIcon.rotate.resource,
+                Button(icon: .resource(ViewportToolbarIcon.rotate.resource),
                            size: 15,
                            tooltip: L("Rotate")) {
                     onSelectGizmoMode(.rotate)
                 }
                 .toggleButtonStyle(gizmoMode == .rotate)
-                IconButton(resource: ViewportToolbarIcon.scale.resource,
+                Button(icon: .resource(ViewportToolbarIcon.scale.resource),
                            size: 15,
                            tooltip: L("Scale")) {
                     onSelectGizmoMode(.scale)
@@ -1298,13 +1298,13 @@ private struct ViewportInfoBar: View {
                     onSelectGizmoSpace(.world)
                 }
 
-                IconButton(resource: ViewportToolbarIcon.lit.resource,
+                Button(icon: .resource(ViewportToolbarIcon.lit.resource),
                            size: 15,
                            tooltip: L("Lit")) {
                     onSelectShadingMode(.lit)
                 }
                 .toggleButtonStyle(shadingMode == .lit)
-                IconButton(resource: ViewportToolbarIcon.wireframe.resource,
+                Button(icon: .resource(ViewportToolbarIcon.wireframe.resource),
                            size: 15,
                            tooltip: L("Wire")) {
                     onSelectShadingMode(.wireframe)
