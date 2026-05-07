@@ -202,6 +202,22 @@ struct IntentRuntimeTests {
         #expect(registry.entriesSnapshot().map(\ .relativePath) == ["mesh.obj"])
     }
 
+    @Test("coordinator exposes prompt-safe symbolic capabilities from its registry")
+    func coordinatorExposesPromptSafeSymbolicCapabilities() throws {
+        let coordinator = try IntentRuntimeCoordinator.default()
+        let views = coordinator.promptCapabilitySymbolicViews(
+            for: CapabilityInvocationContext(role: .editor,
+                                             releasePhase: .beta,
+                                             includeExperimental: true)
+        )
+
+        let spawn = try #require(views.first { $0.verbID == "scene.spawn_entity" })
+        let draftCommit = try #require(views.first { $0.verbID == "scene.commit_inferred_draft" })
+
+        #expect(spawn.arguments.contains { $0.name == "label" && $0.llmHint == "Entity label" })
+        #expect(!draftCommit.arguments.contains { $0.name == "confirm_phrase" })
+    }
+
     @Test("scene apply emits transaction and scene bus events")
     func sceneApplyEmitsBusEvents() throws {
         let root = FileManager.default.temporaryDirectory
