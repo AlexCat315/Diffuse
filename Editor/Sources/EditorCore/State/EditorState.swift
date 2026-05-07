@@ -216,11 +216,13 @@ public struct EditorState: Codable, Sendable {
     public var activeAssetDrag: EditorAssetDragPayload?
     public var inspectorCollapsedSectionIDs: Set<String>
     public var pendingConfirmationRequest: ConfirmationRequestBatch?
+    public var aiSettings: EditorAISettings
     public var aiStatusMessage: String?
     public var aiWarnings: [String]
     public var unresolvedIntents: [UnresolvableIntent]
     public var consoleEntries: [EditorConsoleEntry]
     public var nextConsoleEntryID: UInt64
+    public var commandPaletteVisible: Bool
 
     public init(
         connected: Bool = false,
@@ -250,11 +252,13 @@ public struct EditorState: Codable, Sendable {
         activeAssetDrag: EditorAssetDragPayload? = nil,
         inspectorCollapsedSectionIDs: Set<String> = [],
         pendingConfirmationRequest: ConfirmationRequestBatch? = nil,
+        aiSettings: EditorAISettings = .default,
         aiStatusMessage: String? = nil,
         aiWarnings: [String] = [],
         unresolvedIntents: [UnresolvableIntent] = [],
         consoleEntries: [EditorConsoleEntry] = [],
-        nextConsoleEntryID: UInt64 = 1
+        nextConsoleEntryID: UInt64 = 1,
+        commandPaletteVisible: Bool = false
     ) {
         self.connected = connected
         self.selectedEntityID = selectedEntityID
@@ -282,12 +286,14 @@ public struct EditorState: Codable, Sendable {
         self.activeAssetDrag = activeAssetDrag
         self.inspectorCollapsedSectionIDs = inspectorCollapsedSectionIDs
         self.pendingConfirmationRequest = pendingConfirmationRequest
+        self.aiSettings = aiSettings
         self.aiStatusMessage = aiStatusMessage
         self.aiWarnings = aiWarnings
         self.unresolvedIntents = unresolvedIntents
         self.consoleEntries = consoleEntries
         self.nextConsoleEntryID = max(nextConsoleEntryID, (consoleEntries.map(\.id).max() ?? 0) &+ 1)
         self.frameIndex = frameIndex
+        self.commandPaletteVisible = commandPaletteVisible
     }
 
     public var shouldRender: Bool {
