@@ -125,7 +125,7 @@ public final class ImageAssetRegistry: @unchecked Sendable {
 }
 
 /// TaskLocal slot exposing the active `ImageAssetRegistry` to compose-side
-/// helpers (`Image(file:)`, `IconButton(file:)`, etc.). Hosts set this
+/// helpers (`Image(file:)`, `Button(icon: .file(...))`, etc.). Hosts set this
 /// once at startup, mirroring how `InteractionRegistryHolder` and
 /// `TextEnvironmentHolder` are wired.
 public enum ImageAssetRegistryHolder {

@@ -63,6 +63,21 @@ final class WorkspaceControllerTests: XCTestCase {
         })
     }
 
+    func testStandardEditorSlotSchemaBackfillsMissingRailChromeSlots() {
+        var document = makeDocument()
+        document.slots.removeValue(forKey: .chromeBottomRail)
+        document.slots.removeValue(forKey: .chromeTrailingRail)
+
+        document.ensureStandardEditorSlotSchema()
+
+        XCTAssertEqual(document.slot(.chromeBottomRail).kind,
+                       .chrome(edge: .bottom, size: .fixed(40)))
+        XCTAssertEqual(document.slot(.chromeTrailingRail).kind,
+                       .chrome(edge: .trailing, size: .fixed(40)))
+        XCTAssertEqual(document.slot(.leading).layout?.leafGroupIDs ?? [], ["leading"])
+        XCTAssertEqual(document.slot(.bottom).layout?.leafGroupIDs ?? [], ["bottom"])
+    }
+
     func testMovePanelIntoAnotherGroupDoesNotRebuildSlots() {
         let controller = WorkspaceController(document: makeDocument())
 
