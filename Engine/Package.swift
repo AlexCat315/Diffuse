@@ -29,6 +29,7 @@ let package = Package(
         .library(name: "CinematicRenderer", targets: ["CinematicRenderer"]),
         .library(name: "CardBattleRuntime", targets: ["CardBattleRuntime"]),
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
+        .library(name: "AIRuntime", targets: ["AIRuntime"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
         .library(name: "EngineCore", targets: ["EngineCore"]),
         .executable(name: "SceneRuntimeBenchmarks", targets: ["SceneRuntimeBenchmarks"]),
@@ -179,6 +180,13 @@ let package = Package(
             ]
         ),
         .target(name: "CardBattleRuntime"),
+        .target(
+            name: "AIRuntime",
+            dependencies: [
+                "SceneRuntime",
+                "IntentRuntime",
+            ]
+        ),
         .target(
             name: "IntentRuntime",
             dependencies: [
