@@ -45,6 +45,7 @@ public final class EditorStore: @unchecked Sendable {
         case pendingConfirmationRequest
         case aiStatusMessage
         case aiWarnings
+        case unresolvedIntents
         case consoleEntries
     }
 
@@ -181,6 +182,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.aiStatusMessage, old.aiStatusMessage, new.aiStatusMessage)
         case .setAIWarnings:
             mark(.aiWarnings, old.aiWarnings, new.aiWarnings)
+        case .setUnresolvedIntents:
+            mark(.unresolvedIntents, old.unresolvedIntents, new.unresolvedIntents)
         case .appendConsoleMessage, .clearConsole:
             mark(.consoleEntries, old.consoleEntries, new.consoleEntries)
         case .frameTimingUpdated:
@@ -226,6 +229,7 @@ extension EditorStore {
     public var shouldRender: Bool { read(.shouldRender, storage.shouldRender) }
     public var aiStatusMessage: String? { read(.aiStatusMessage, storage.aiStatusMessage) }
     public var aiWarnings: [String] { read(.aiWarnings, storage.aiWarnings) }
+    public var unresolvedIntents: [UnresolvableIntent] { read(.unresolvedIntents, storage.unresolvedIntents) }
     public var consoleEntries: [EditorConsoleEntry] { read(.consoleEntries, storage.consoleEntries) }
     public var latestConsoleEntry: EditorConsoleEntry? { read(.consoleEntries, storage.consoleEntries.last) }
     public var playbackState: PlaybackState { read(.playbackState, storage.playbackState) }
