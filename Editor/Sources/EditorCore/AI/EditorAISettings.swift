@@ -7,11 +7,24 @@ import Security
 public enum EditorAIProvider: String, Codable, Sendable, Equatable, CaseIterable {
     case none
     case anthropic
+    case openai
+    case deepseek
 
     public var displayName: String {
         switch self {
-        case .none: return "None"
+        case .none:      return "None"
         case .anthropic: return "Anthropic"
+        case .openai:    return "OpenAI"
+        case .deepseek:  return "DeepSeek"
+        }
+    }
+
+    public var defaultModel: String {
+        switch self {
+        case .none:      return ""
+        case .anthropic: return SessionConfig.defaultAnthropicModel
+        case .openai:    return SessionConfig.defaultOpenAIModel
+        case .deepseek:  return SessionConfig.defaultDeepSeekModel
         }
     }
 }
@@ -24,11 +37,11 @@ public struct EditorAISettings: Codable, Sendable, Equatable {
 
     public static let `default` = EditorAISettings(
         provider: .none,
-        model: SessionConfig.defaultModel
+        model: SessionConfig.defaultAnthropicModel
     )
 
     public init(provider: EditorAIProvider = .none,
-                model: String = SessionConfig.defaultModel) {
+                model: String = SessionConfig.defaultAnthropicModel) {
         self.provider = provider
         self.model = model
     }
