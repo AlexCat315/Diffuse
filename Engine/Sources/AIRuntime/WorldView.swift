@@ -1,13 +1,48 @@
 import Foundation
 import IntentRuntime
 
+// MARK: - WorldPropertyValue helpers
+
+extension WorldPropertyValue {
+    /// Human-readable string used when storing a WorldPropertyValue as an InferredProperty.
+    var inferredDisplayValue: String {
+        switch self {
+        case let .string(s): return s
+        case let .float(f):  return String(format: "%.4g", f)
+        case let .bool(b):   return b ? "true" : "false"
+        case let .vec3(x, y, z): return "(\(x), \(y), \(z))"
+        }
+    }
+}
+
+// MARK: - InferredProperty
+
+/// An AI-inferred semantic annotation on an entity, tagged with confidence and optional source.
+///
+/// The `authored` layer can always override `inferred` — see architecture.md §World.
+public struct InferredProperty: Sendable, Equatable, Codable {
+    /// String representation of the inferred value (e.g. "hero_character", "dramatic", "patrol").
+    public var displayValue: String
+    /// Confidence score in [0, 1] from the producing pipeline or Session.
+    public var confidence: Double
+    /// Identifier of the pipeline or model that produced this annotation.
+    public var source: String?
+
+    public init(displayValue: String, confidence: Double, source: String? = nil) {
+        self.displayValue = displayValue
+        self.confidence = confidence
+        self.source = source
+    }
+}
+
 // MARK: - WorldEntityRecord
 
-/// An entity's authored state as maintained by Session's WorldView.
+/// An entity's full AI-visible state as maintained by Session's WorldView.
 ///
-/// The record captures the properties that matter most to AI planning: name, role,
-/// position, light/camera configuration, and physics motion type.
-/// Each field corresponds to an authored property that can change via WorldEvent.
+/// The three layers mirror architecture.md §World:
+/// - `authored` — explicit properties (typed fields below), permanent truth
+/// - `evaluated` — engine-computed derived values (world-space transform, etc.)
+/// - `inferred` — AI semantic annotations with confidence scores
 public struct WorldEntityRecord: Sendable, Equatable, Codable {
     public var ref: String
     public var name: String
@@ -31,12 +66,20 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     // Selection state (not authored — updated by selectionChanged events)
     public var isSelected: Bool
 
+    // Phase 5b layers
+    /// Engine-computed derived properties (e.g. "worldPosition", "worldScale").
+    public var evaluated: [String: WorldPropertyValue]
+    /// AI semantic annotations (e.g. "semanticRole": "hero_character").
+    public var inferred: [String: InferredProperty]
+
     public init(ref: String, name: String = "", kind: String? = nil) {
         self.ref = ref
         self.name = name
         self.kind = kind
         self.childRefs = []
         self.isSelected = false
+        self.evaluated = [:]
+        self.inferred = [:]
     }
 
     /// Applies a single authored property change from a WorldEvent.
@@ -141,6 +184,18 @@ public struct WorldView: Sendable {
             for key in entityIndex.keys {
                 entityIndex[key]?.isSelected = refs.contains(key)
             }
+
+        case let .entityEvaluatedChanged(ref, property, value):
+            entityIndex[ref, default: WorldEntityRecord(ref: ref)].evaluated[property] = value
+
+        case let .entityInferredUpdated(ref, property, value, confidence):
+            var record = entityIndex[ref, default: WorldEntityRecord(ref: ref)]
+            // Only update inferred if it doesn't shadow an authored property.
+            let inferred = InferredProperty(
+                displayValue: value.inferredDisplayValue,
+                confidence: confidence)
+            record.inferred[property] = inferred
+            entityIndex[ref] = record
         }
     }
 
