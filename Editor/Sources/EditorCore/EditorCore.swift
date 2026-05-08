@@ -42,6 +42,7 @@ public final class EditorApplication: @unchecked Sendable {
     private var session: Session?
     private var pendingSessionProposal: Proposal?
     private var pendingAssistantMessageID: String?
+    private let mcpBridge = MCPBridge()
     private let editLog: EditLog
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
@@ -101,6 +102,8 @@ public final class EditorApplication: @unchecked Sendable {
         if let selection = scene.defaultSelectionID {
             store.dispatch(.setSelectedEntity(selection))
         }
+
+        startMCPBridge()
     }
 
     public func bootstrap() {
@@ -815,6 +818,64 @@ public final class EditorApplication: @unchecked Sendable {
         guard let rawID else { return nil }
         return EntityID(index: UInt32(rawID & 0xFFFF_FFFF),
                         generation: UInt32(rawID >> 32))
+    }
+
+    // MARK: - MCP Bridge
+
+    private func startMCPBridge() {
+        mcpBridge.onCommand = { [weak self] action, params in
+            guard let self else { return ["ok": false, "error": "editor unavailable"] }
+            return self.handleMCPAction(action, params: params)
+        }
+        mcpBridge.start()
+    }
+
+    private func handleMCPAction(_ action: String, params: [String: Any]) -> [String: Any] {
+        switch action {
+        case "get_scene":
+            return mcpGetScene()
+        case "execute_plan":
+            return mcpExecutePlan(params: params)
+        case "get_selection":
+            let ref = store.state.selectedEntityID.map { "scene:\($0)" }
+            return ["ok": true, "selectedRef": ref as Any]
+        default:
+            return ["ok": false, "error": "unknown action '\(action)'"]
+        }
+    }
+
+    private func mcpGetScene() -> [String: Any] {
+        let snapshot = SceneSemanticEncoder().encode(
+            scene.scene,
+            selectedEntityID: store.state.selectedEntityID,
+            workspaceMode: store.state.workspaceMode.rawValue,
+            localeIdentifier: nil
+        )
+        let enc = JSONEncoder()
+        enc.outputFormatting = [.sortedKeys]
+        guard let data = try? enc.encode(snapshot),
+              let json = try? JSONSerialization.jsonObject(with: data)
+        else { return ["ok": false, "error": "scene encoding failed"] }
+        return ["ok": true, "scene": json]
+    }
+
+    private func mcpExecutePlan(params: [String: Any]) -> [String: Any] {
+        guard let planDict = params["plan"] as? [String: Any],
+              let planData = try? JSONSerialization.data(withJSONObject: planDict),
+              let plan = try? JSONDecoder().decode(SceneEditPlan.self, from: planData)
+        else { return ["ok": false, "error": "invalid plan"] }
+        do {
+            let transaction = try SceneEditPlanExecutor().buildTransaction(
+                from: plan,
+                scene: scene.scene,
+                baseSceneRevision: nil,
+                approvalPolicy: .automatic
+            )
+            submitPlanTransaction(transaction)
+            return ["ok": true, "summary": plan.summary]
+        } catch {
+            return ["ok": false, "error": error.localizedDescription]
+        }
     }
 
     private func recordFrameTiming(_ deltaTime: Double) -> Bool {
