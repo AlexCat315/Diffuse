@@ -32,9 +32,6 @@ public enum SessionError: Error, CustomStringConvertible, LocalizedError, Sendab
 /// ConversationHistory (multi-turn context). It receives Signals, runs inference,
 /// and produces Proposals. Inference is built-in — Session is the AI, not a
 /// dispatcher to an external backend.
-///
-/// Phase 2: NaturalLanguage signals trigger inference; other modalities update
-///          WorldView only. Phase 3 adds full multi-turn history to the API call.
 public actor Session {
     public let id: String
     public private(set) var worldView: WorldView
@@ -69,37 +66,35 @@ public actor Session {
     // MARK: - Signal processing
 
     /// Runs inference on a NaturalLanguage signal and returns a Proposal.
-    /// Use `observe()` for state-update signals; use `learn()` for UserCorrection.
+    /// Use `observe()` for state-update signals.
     public func process(_ signal: Signal) async throws -> Proposal {
         guard case let .naturalLanguage(text, _) = signal else {
             throw SessionError.unsupportedSignal(signal.kind)
         }
-        recordTurn(ConversationTurn(role: .user, content: text))
-        let proposal = try await infer(userRequest: text)
-        recordTurn(ConversationTurn(role: .assistant,
-                                    content: proposal.plan.summary,
-                                    proposalID: proposal.id))
-        return proposal
+        recordTurn(ConversationTurn(kind: .userText(text)))
+        let (plan, toolUseID, inputJSON) = try await infer()
+        recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
+                                                             name: "execute_edit_plan",
+                                                             inputJSON: inputJSON)))
+        return Proposal(
+            sessionID: id,
+            semanticIntent: text,
+            plan: plan,
+            baseSceneRevision: worldView.sceneRevision,
+            reasoning: plan.reasoning,
+            confidence: 0.85,
+            approvalPolicy: .requiresApproval,
+            toolUseID: toolUseID
+        )
     }
 
-    // MARK: - Learning
+    // MARK: - Outcome recording
 
-    /// Records a UserCorrection — called when the user accepts, rejects, or modifies a Proposal.
-    ///
-    /// Appended as a `.user` turn so the next inference call sees the correction in context.
-    /// Phase 4+: triggers preference learning / fine-tuning update.
-    public func learn(proposalID: String, acceptedStepIDs: [String], rejectedStepIDs: [String]) {
-        let content: String
-        if rejectedStepIDs.isEmpty {
-            let n = acceptedStepIDs.count
-            content = "I accepted your suggestion (\(n) step\(n == 1 ? "" : "s") applied)."
-        } else if acceptedStepIDs.isEmpty {
-            content = "I rejected your suggestion. Please try a different approach."
-        } else {
-            let total = acceptedStepIDs.count + rejectedStepIDs.count
-            content = "I partially accepted your suggestion: \(acceptedStepIDs.count) of \(total) steps applied; \(rejectedStepIDs.count) rejected."
-        }
-        recordTurn(ConversationTurn(role: .user, content: content, proposalID: proposalID))
+    /// Records the outcome of a tool call as a tool_result message.
+    /// Call after a Proposal is applied, discarded, or acknowledged.
+    public func recordOutcome(toolUseID: String, content: String, proposalID: String? = nil) {
+        recordTurn(ConversationTurn(kind: .toolResult(toolUseID: toolUseID, content: content),
+                                    proposalID: proposalID))
     }
 
     // MARK: - WorldView observation
@@ -135,22 +130,13 @@ public actor Session {
 
     // MARK: - Inference
 
-    private func infer(userRequest: String) async throws -> Proposal {
-        let body = requestBody(userRequest: userRequest)
+    private func infer() async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+        let body = requestBody()
         let data = try await post(body)
-        let plan = try parsePlan(from: data)
-        return Proposal(
-            sessionID: id,
-            semanticIntent: userRequest,
-            plan: plan,
-            baseSceneRevision: worldView.sceneRevision,
-            reasoning: plan.reasoning,
-            confidence: 0.85,
-            approvalPolicy: .requiresApproval
-        )
+        return try parseResponse(from: data)
     }
 
-    private func requestBody(userRequest: String) -> [String: Any] {
+    private func requestBody() -> [String: Any] {
         switch config.apiFormat {
         case .anthropic:
             return [
@@ -159,21 +145,59 @@ public actor Session {
                 "system": systemPrompt(),
                 "tools": [EditPlanTool.definition()],
                 "tool_choice": ["type": "any"],
-                "messages": [["role": "user", "content": userRequest]],
+                "messages": buildMessages(),
             ]
         case .openAICompatible:
+            var messages: [[String: Any]] = [["role": "system", "content": systemPrompt()]]
+            messages += buildMessages()
             return [
                 "model": config.model,
                 "max_tokens": config.maxTokens,
                 "tools": [EditPlanTool.openAIDefinition()],
                 "tool_choice": ["type": "function",
                                 "function": ["name": "execute_edit_plan"]],
-                "messages": [
-                    ["role": "system", "content": systemPrompt()],
-                    ["role": "user", "content": userRequest],
-                ],
+                "messages": messages,
             ]
         }
+    }
+
+    private func buildMessages() -> [[String: Any]] {
+        var messages: [[String: Any]] = []
+        for turn in conversationHistory {
+            switch turn.kind {
+            case let .userText(text):
+                messages.append(["role": "user", "content": text])
+
+            case let .assistantToolCall(toolUseID, name, inputJSON):
+                switch config.apiFormat {
+                case .anthropic:
+                    let inputObject = (try? JSONSerialization.jsonObject(
+                        with: Data(inputJSON.utf8))) ?? [String: Any]()
+                    messages.append(["role": "assistant", "content": [
+                        ["type": "tool_use", "id": toolUseID, "name": name, "input": inputObject]
+                    ]])
+                case .openAICompatible:
+                    messages.append([
+                        "role": "assistant",
+                        "content": NSNull(),
+                        "tool_calls": [["id": toolUseID,
+                                        "type": "function",
+                                        "function": ["name": name, "arguments": inputJSON]]],
+                    ])
+                }
+
+            case let .toolResult(toolUseID, content):
+                switch config.apiFormat {
+                case .anthropic:
+                    messages.append(["role": "user", "content": [
+                        ["type": "tool_result", "tool_use_id": toolUseID, "content": content]
+                    ]])
+                case .openAICompatible:
+                    messages.append(["role": "tool", "tool_call_id": toolUseID, "content": content])
+                }
+            }
+        }
+        return messages
     }
 
     private func systemPrompt() -> String {
@@ -198,14 +222,6 @@ public actor Session {
             parts.append("Currently selected: \(worldView.selectedEntityRefs.joined(separator: ", "))")
         }
 
-        if !conversationHistory.isEmpty {
-            let lines = conversationHistory.suffix(12).map { turn -> String in
-                let label = turn.role == .user ? "User" : "Assistant"
-                return "\(label): \(turn.content)"
-            }.joined(separator: "\n")
-            parts.append("Conversation so far (most recent last):\n\(lines)")
-        }
-
         parts.append("""
         Rules:
         - Only operate on entities that exist in the scene entities list above.
@@ -216,8 +232,7 @@ public actor Session {
         shows its actual world-space position — use it for spatial reasoning but set_transform \
         always writes local space.
         - For snap_to_ground, set Y position to 0.
-        - If the conversation history shows a correction (e.g. "I rejected your suggestion"), \
-        adjust your approach accordingly before proposing again.
+        - If the previous tool_result shows the user rejected your plan, adjust your approach.
         - If the user asks a general question (capabilities, greetings, clarifications) rather \
         than requesting a scene change, call the tool with an empty steps array and put your \
         conversational reply in the summary field.
@@ -262,41 +277,46 @@ public actor Session {
 
     // MARK: - Response parsing
 
-    private func parsePlan(from data: Data) throws -> SceneEditPlan {
+    private func parseResponse(from data: Data) throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
         switch config.apiFormat {
         case .anthropic:
-            return try parseAnthropicPlan(from: data)
+            return try parseAnthropicResponse(from: data)
         case .openAICompatible:
-            return try parseOpenAIPlan(from: data)
+            return try parseOpenAIResponse(from: data)
         }
     }
 
-    private func parseAnthropicPlan(from data: Data) throws -> SceneEditPlan {
+    private func parseAnthropicResponse(from data: Data) throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw SessionError.malformedResponse(detail: "top-level JSON is not an object")
         }
         guard let content = json["content"] as? [[String: Any]],
               let toolUse = content.first(where: { $0["type"] as? String == "tool_use" }),
+              let toolUseID = toolUse["id"] as? String,
               let toolInput = toolUse["input"] as? [String: Any]
         else {
             throw SessionError.noPlanInResponse
         }
-        guard let planData = try? JSONSerialization.data(withJSONObject: toolInput) else {
+        guard let planData = try? JSONSerialization.data(withJSONObject: toolInput),
+              let inputJSON = String(data: planData, encoding: .utf8)
+        else {
             throw SessionError.planDecodingFailed(detail: "could not re-serialize tool input")
         }
         do {
-            return try JSONDecoder().decode(SceneEditPlan.self, from: planData)
+            let plan = try JSONDecoder().decode(SceneEditPlan.self, from: planData)
+            return (plan, toolUseID, inputJSON)
         } catch {
             throw SessionError.planDecodingFailed(detail: String(describing: error))
         }
     }
 
-    private func parseOpenAIPlan(from data: Data) throws -> SceneEditPlan {
+    private func parseOpenAIResponse(from data: Data) throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let choices = json["choices"] as? [[String: Any]],
               let message = choices.first?["message"] as? [String: Any],
               let toolCalls = message["tool_calls"] as? [[String: Any]],
               let firstCall = toolCalls.first(where: { $0["type"] as? String == "function" }),
+              let toolUseID = firstCall["id"] as? String,
               let function = firstCall["function"] as? [String: Any],
               let argumentsString = function["arguments"] as? String
         else {
@@ -306,7 +326,8 @@ public actor Session {
             throw SessionError.planDecodingFailed(detail: "could not encode arguments as UTF-8")
         }
         do {
-            return try JSONDecoder().decode(SceneEditPlan.self, from: planData)
+            let plan = try JSONDecoder().decode(SceneEditPlan.self, from: planData)
+            return (plan, toolUseID, argumentsString)
         } catch {
             throw SessionError.planDecodingFailed(detail: String(describing: error))
         }
