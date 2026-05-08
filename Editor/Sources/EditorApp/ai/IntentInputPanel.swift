@@ -61,6 +61,8 @@ struct IntentInputPanel: View {
     }
 }
 
+// MARK: - Setup
+
 private struct AISetupView: View {
     let app: EditorApplication
     let store: EditorStore
@@ -68,58 +70,69 @@ private struct AISetupView: View {
     let onConnect: () -> Void
 
     var body: some View {
-        ScrollView(.vertical) {
-            Box(direction: .column, alignItems: .stretch, spacing: 20) {
-                Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                    Text(L("AI Assistant"))
-                        .font(.bodyStrong)
-                    Text(L("Describe scene changes in natural language."))
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                }
+        Box(direction: .column, alignItems: .stretch, spacing: 0) {
+            Box(direction: .column, alignItems: .stretch, spacing: 2) {
+                Text(L("AI Assistant"))
+                    .font(.bodyStrong)
+                Text(L("Edit the scene with natural language."))
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+            }
+            .padding(horizontal: 14, vertical: 14)
 
-                Box(direction: .column, alignItems: .stretch, spacing: 8) {
-                    Text(L("Provider"))
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                    Row(alignment: .center, spacing: 8) {
-                        for provider in [EditorAIProvider.anthropic, .openai, .deepseek] {
-                            SetupChoiceButton(
-                                title: provider.displayName,
-                                isActive: store.aiSettings.provider == provider
-                            ) {
-                                var s = store.aiSettings
-                                s.provider = provider
-                                s.model = provider.defaultModel
-                                store.dispatch(.setAISettings(s))
-                            }
-                        }
-                    }
-                }
+            SetupDivider()
 
-                if store.aiSettings.provider != .none {
-                    Box(direction: .column, alignItems: .stretch, spacing: 8) {
-                        Text(L("API Key"))
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
-                        TextField(L("Paste API key…"),
-                                  text: apiKeyInput,
-                                  clearable: true,
-                                  onSubmit: onConnect,
-                                  onClear: { apiKeyInput.wrappedValue = "" })
-                        Button(L("Connect"), isEnabled: !apiKeyInput.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
-                            onConnect()
+            Box(direction: .column, alignItems: .stretch, spacing: 10) {
+                Text(L("Provider"))
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
+                Row(alignment: .center, spacing: 6) {
+                    for provider in [EditorAIProvider.anthropic, .openai, .deepseek] {
+                        SetupChoiceButton(
+                            title: provider.displayName,
+                            isActive: store.aiSettings.provider == provider
+                        ) {
+                            var s = store.aiSettings
+                            s.provider = provider
+                            s.model = provider.defaultModel
+                            store.dispatch(.setAISettings(s))
                         }
-                        Text(L("Your key is stored in the system Keychain and never leaves your device."))
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
                     }
                 }
             }
-            .padding(16)
+            .padding(horizontal: 14, vertical: 14)
+
+            if store.aiSettings.provider != .none {
+                SetupDivider()
+
+                Box(direction: .column, alignItems: .stretch, spacing: 10) {
+                    Text(L("API Key"))
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                    TextField(L("Paste key and press Connect…"),
+                              text: apiKeyInput,
+                              clearable: true,
+                              onSubmit: onConnect,
+                              onClear: { apiKeyInput.wrappedValue = "" })
+                    Row(alignment: .center, spacing: 8) {
+                        Button(L("Connect"),
+                               isEnabled: !apiKeyInput.wrappedValue
+                                   .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty) {
+                            onConnect()
+                        }
+                        .flex()
+                    }
+                    Text(L("Stored in the system Keychain. Never leaves your device."))
+                        .font(.caption)
+                        .foregroundColor(.onSurfaceMuted)
+                }
+                .padding(horizontal: 14, vertical: 14)
+            }
         }
     }
 }
+
+// MARK: - Chat
 
 private struct AIChatView: View {
     let app: EditorApplication
@@ -130,7 +143,14 @@ private struct AIChatView: View {
 
     var body: some View {
         Box(direction: .column, alignItems: .stretch) {
-            Row(alignment: .center, spacing: 8) {
+            // Header
+            Row(alignment: .center, spacing: 6) {
+                Text(store.aiSettings.model)
+                    .font(.mono)
+                    .foregroundColor(.onSurfaceMuted)
+                Text("·")
+                    .font(.caption)
+                    .foregroundColor(.onSurfaceMuted)
                 Text(store.aiSettings.provider.displayName)
                     .font(.caption)
                     .foregroundColor(.onSurfaceMuted)
@@ -142,14 +162,21 @@ private struct AIChatView: View {
                 .frame(height: 24)
             }
             .padding(horizontal: 10, vertical: 6)
+            .background(.surfaceVariant)
 
+            // Messages
             ScrollView(.vertical) {
-                Box(direction: .column, alignItems: .stretch, spacing: 6) {
+                Box(direction: .column, alignItems: .stretch, spacing: 8) {
                     if store.chatMessages.isEmpty {
-                        Text(L("Describe what you'd like to do…"))
-                            .font(.caption)
-                            .foregroundColor(.onSurfaceMuted)
-                            .padding(horizontal: 8, vertical: 12)
+                        Box(direction: .column, alignItems: .stretch, spacing: 6) {
+                            Text(L("Ask me to edit the scene"))
+                                .font(.bodyStrong)
+                                .foregroundColor(.onSurface)
+                            Text(L("e.g. move Hero to X=5 · rename Ground to Floor · delete the camera"))
+                                .font(.caption)
+                                .foregroundColor(.onSurfaceMuted)
+                        }
+                        .padding(horizontal: 12, vertical: 14)
                     } else {
                         for msg in store.chatMessages {
                             ChatBubble(msg: msg, app: app)
@@ -160,29 +187,32 @@ private struct AIChatView: View {
             }
             .flex()
 
-            Box(direction: .column, alignItems: .stretch) {
-                Row(alignment: .center, spacing: 8) {
-                    let isWaiting = store.chatMessages.last?.assistantState == .thinking
-                        || store.pendingConfirmationRequest != nil
-                    TextField(L("Message…"), text: inputText, onSubmit: onSubmit)
-                        .flex()
-                    Button(L("Send"),
-                           isEnabled: !inputText.wrappedValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isWaiting) {
-                        onSubmit()
-                    }
+            // Input
+            SetupDivider()
+            Row(alignment: .center, spacing: 8) {
+                let isWaiting = store.chatMessages.last?.assistantState == .thinking
+                    || store.pendingConfirmationRequest != nil
+                TextField(L("Message…"), text: inputText, onSubmit: onSubmit)
+                    .flex()
+                Button(L("Send"),
+                       isEnabled: !inputText.wrappedValue
+                           .trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !isWaiting) {
+                    onSubmit()
                 }
-                .padding(horizontal: 8, vertical: 8)
             }
+            .padding(horizontal: 8, vertical: 8)
         }
     }
 }
+
+// MARK: - Chat bubble
 
 private struct ChatBubble: View {
     let msg: AIChatMessage
     let app: EditorApplication
 
     var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 4) {
+        Box(direction: .column, alignItems: .stretch, spacing: 5) {
             Text(msg.role == .user ? L("You") : L("AI"))
                 .font(.caption)
                 .foregroundColor(.onSurfaceMuted)
@@ -195,31 +225,49 @@ private struct ChatBubble: View {
 
             if let state = msg.assistantState {
                 if case .thinking = state {
-                    Text(L("Thinking…"))
-                        .font(.caption)
-                        .foregroundColor(.onSurfaceMuted)
-                } else if case .pendingConfirmation(let summary) = state {
-                    Box(direction: .column, alignItems: .stretch, spacing: 6) {
-                        Text(summary)
+                    Row(alignment: .center, spacing: 6) {
+                        Text(L("Thinking…"))
                             .font(.caption)
+                            .foregroundColor(.onSurfaceMuted)
+                    }
+                } else if case .replied(let text) = state {
+                    Text(text)
+                        .font(.body)
+                        .foregroundColor(.onSurface)
+                } else if case .pendingConfirmation(let summary) = state {
+                    Box(direction: .column, alignItems: .stretch, spacing: 8) {
+                        Text(summary)
+                            .font(.body)
                             .foregroundColor(.onSurface)
                         Row(alignment: .center, spacing: 8) {
                             Button(L("Apply")) {
                                 app.acceptPendingConfirmation()
                             }
+                            .flex()
                             Button(L("Skip")) {
                                 app.skipPendingConfirmation()
                             }
                             .buttonStyle(SecondaryButtonStyle())
+                            .flex()
                         }
                     }
-                    .padding(horizontal: 8, vertical: 6)
+                    .padding(horizontal: 10, vertical: 8)
                     .background(.surfaceSunken)
                     .cornerRadius(4)
                 } else if case .applied(let summary) = state {
-                    Text(summary)
-                        .font(.caption)
-                        .foregroundColor(.success)
+                    Row(alignment: .center, spacing: 6) {
+                        Text(L("Applied"))
+                            .font(.caption)
+                            .foregroundColor(.success)
+                        if !summary.isEmpty && summary != "Applied" {
+                            Text("·")
+                                .font(.caption)
+                                .foregroundColor(.onSurfaceMuted)
+                            Text(summary)
+                                .font(.caption)
+                                .foregroundColor(.onSurfaceMuted)
+                        }
+                    }
                 } else if case .discarded = state {
                     Text(L("Discarded"))
                         .font(.caption)
@@ -231,9 +279,17 @@ private struct ChatBubble: View {
                 }
             }
         }
-        .padding(horizontal: 8, vertical: 7)
+        .padding(horizontal: 10, vertical: 8)
         .background(msg.role == .user ? .surfaceSunken : .surfaceVariant)
-        .cornerRadius(4)
+        .cornerRadius(6)
+    }
+}
+
+// MARK: - Shared
+
+private struct SetupDivider: View {
+    var body: some View {
+        Text("").font(.caption).frame(height: 1).background(.surfaceSunken)
     }
 }
 
@@ -249,8 +305,8 @@ private struct SetupChoiceButton: View {
                     .font(.caption)
                     .foregroundColor(isActive ? .onAccent : .onSurface)
             }
-            .frame(height: 30, minWidth: 86)
-            .padding(horizontal: 10, vertical: 0)
+            .frame(height: 28, minWidth: 80)
+            .padding(horizontal: 8, vertical: 0)
             .background(isActive ? .accent : .surfaceSunken)
             .cornerRadius(4)
             .clipped()
