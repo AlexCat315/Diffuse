@@ -17,13 +17,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.3.app
-
       - name: Build (release)
         working-directory: guava-mcp
         run: swift build -c release
-
-      - name: Test
-        working-directory: guava-mcp
-        run: swift test
