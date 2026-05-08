@@ -1,0 +1,55 @@
+name: GuavaEngine CI
+
+on:
+  push:
+    branches: [main, guava-next]
+    paths:
+      - 'Engine/**'
+      - '.github/workflows/ci-engine.yml'
+  pull_request:
+    paths:
+      - 'Engine/**'
+
+jobs:
+  build:
+    name: Build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.3.app
+
+      - name: Install native dependencies
+        run: |
+          brew install sdl3 pkg-config opencolorio openexr imath
+
+      - name: Resolve packages
+        working-directory: Engine
+        run: swift package resolve
+
+      - name: Build pure-Swift targets
+        working-directory: Engine
+        run: |
+          swift build --target EngineKernel
+          swift build --target EngineMath
+          swift build --target ObservationBus
+          swift build --target SceneRuntime
+          swift build --target AssetPipeline
+          swift build --target SequenceRuntime
+          swift build --target CardBattleRuntime
+          swift build --target AIRuntime
+          swift build --target IntentRuntime
+          swift build --target ScriptRuntime
+
+      - name: Run pure-Swift tests
+        working-directory: Engine
+        run: |
+          swift test --filter EngineMathTests
+          swift test --filter ObservationBusTests
+          swift test --filter SceneRuntimeTests
+          swift test --filter ScriptRuntimeTests
+          swift test --filter AssetPipelineTests
+          swift test --filter SequenceRuntimeTests
+          swift test --filter CardBattleRuntimeTests
+          swift test --filter IntentRuntimeTests

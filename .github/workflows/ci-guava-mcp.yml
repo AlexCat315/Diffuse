@@ -1,0 +1,29 @@
+name: guava-mcp CI
+
+on:
+  push:
+    branches: [main, guava-next]
+    paths:
+      - 'guava-mcp/**'
+      - '.github/workflows/ci-guava-mcp.yml'
+  pull_request:
+    paths:
+      - 'guava-mcp/**'
+
+jobs:
+  build:
+    name: Build & Test
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.3.app
+
+      - name: Build (release)
+        working-directory: guava-mcp
+        run: swift build -c release
+
+      - name: Test
+        working-directory: guava-mcp
+        run: swift test
