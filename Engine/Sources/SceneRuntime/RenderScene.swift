@@ -7,10 +7,12 @@ import simd
 public struct RenderInstance: Sendable {
     public var meshIndex: Int
     public var transform: simd_float4x4
+    public var colorTint: SIMD3<Float>
 
-    public init(meshIndex: Int, transform: simd_float4x4) {
+    public init(meshIndex: Int, transform: simd_float4x4, colorTint: SIMD3<Float> = SIMD3<Float>(1, 1, 1)) {
         self.meshIndex = meshIndex
         self.transform = transform
+        self.colorTint = colorTint
     }
 }
 

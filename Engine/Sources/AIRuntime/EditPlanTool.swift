@@ -62,6 +62,10 @@ public enum EditPlanTool {
                     "type": "string",
                     "description": "Target entity in 'scene:<number>' format. Required for all ops except spawn_entity.",
                 ] as [String: Any],
+                "parent_id": [
+                    "type": "string",
+                    "description": "New parent entity in 'scene:<number>' format for reparent_entity. Omit to move the entity to the scene root.",
+                ] as [String: Any],
                 "label": [
                     "type": "string",
                     "description": "Entity display name for spawn_entity.",
@@ -96,7 +100,7 @@ public enum EditPlanTool {
                 ] as [String: Any],
                 "color": [
                     "type": "array", "items": ["type": "number"] as [String: Any],
-                    "description": "[r, g, b] linear 0–1 colour for set_light_color.",
+                    "description": "[r, g, b] linear 0–1 colour. Used by set_light_color and set_mesh_color. Common values: red=[1,0,0], green=[0,1,0], blue=[0,0,1], white=[1,1,1], black=[0,0,0], yellow=[1,1,0], orange=[1,0.4,0], purple=[0.5,0,0.5].",
                 ] as [String: Any],
                 "range": [
                     "type": "number",

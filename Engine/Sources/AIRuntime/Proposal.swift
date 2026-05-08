@@ -15,6 +15,7 @@ public struct Proposal: Sendable, Identifiable {
     public var confidence: Double
     public var approvalPolicy: TransactionApprovalPolicy
     public var createdAt: Date
+    public var toolUseID: String
 
     public init(id: String = UUID().uuidString,
                 sessionID: String,
@@ -24,7 +25,8 @@ public struct Proposal: Sendable, Identifiable {
                 reasoning: String? = nil,
                 confidence: Double = 0.85,
                 approvalPolicy: TransactionApprovalPolicy = .requiresApproval,
-                createdAt: Date = Date()) {
+                createdAt: Date = Date(),
+                toolUseID: String = "") {
         self.id = id
         self.sessionID = sessionID
         self.semanticIntent = semanticIntent
@@ -34,5 +36,6 @@ public struct Proposal: Sendable, Identifiable {
         self.confidence = confidence
         self.approvalPolicy = approvalPolicy
         self.createdAt = createdAt
+        self.toolUseID = toolUseID
     }
 }
