@@ -42,6 +42,7 @@ public final class EditorApplication: @unchecked Sendable {
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
     private var pendingTrainingEntry: IntentTrainingLogger.Entry?
     private var aiScenePlanner: AIScenePlanner?
+    private let editLog: EditLog
     private var recentResolvedVerbs: [String] = []
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
@@ -83,6 +84,7 @@ public final class EditorApplication: @unchecked Sendable {
         self.observationBus = observationBus
         self.intentCoordinator = intentCoordinator
         self.events = events
+        self.editLog = EditLog(projectDirectory: projectDirectory)
 
         scene.onRevisionChanged = { revision in
             store.dispatch(.setSceneRevision(revision))
@@ -877,6 +879,9 @@ public final class EditorApplication: @unchecked Sendable {
             store.dispatch(.setAIWarnings(result.warnings))
             updateSelection(after: result.applyResult)
             store.dispatch(.setAIStatusMessage("Applied \(result.transactionID)"))
+            if let edit = result.applyResult?.edit {
+                editLog.append(edit)
+            }
             flushTrainingLog(outcome: "applied")
         case .confirmationRequested:
             store.dispatch(.setPendingConfirmationRequest(result.confirmationRequest))
