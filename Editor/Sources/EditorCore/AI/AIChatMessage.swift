@@ -8,6 +8,7 @@ public struct AIChatMessage: Sendable, Equatable {
 
     public enum AssistantState: Sendable, Equatable {
         case thinking
+        case replied(String)
         case pendingConfirmation(summary: String)
         case applied(summary: String)
         case discarded

@@ -216,6 +216,9 @@ public actor Session {
         - For snap_to_ground, set Y position to 0.
         - If the conversation history shows a correction (e.g. "I rejected your suggestion"), \
         adjust your approach accordingly before proposing again.
+        - If the user asks a general question (capabilities, greetings, clarifications) rather \
+        than requesting a scene change, call the tool with an empty steps array and put your \
+        conversational reply in the summary field.
         """)
 
         return parts.joined(separator: "\n\n")
