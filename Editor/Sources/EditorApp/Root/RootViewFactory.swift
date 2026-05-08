@@ -235,11 +235,10 @@ enum EditorRootViewFactory {
         }
     }
 
-    private static let workspaceLayoutPersistenceKey = "editor_workspace_document_v2"
+    private static let workspaceLayoutPersistenceKey = "editor_workspace_document"
     private static let obsoleteLayoutPersistencePrefixes = [
         "editor_workspace_layout",
         "editor_dock_layout",
-        "editor_workspace_document",
     ]
     private static let shellStatePersistenceKey = "editor_shell_state"
 
