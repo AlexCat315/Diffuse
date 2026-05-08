@@ -1,8 +1,8 @@
-# SequenceDocument / Shot / Clip / Binding 详细设计
+# World 时间轴层：Shot / Clip / Binding 详细设计
 
-> 本文档是 `ai-native-scene-model-design.md` §4、§9、§11 的子设计。
-> 范围：定义影视与游戏 cinematic 共用的时间域 authoring 模型。
-> 引用：CapabilityGraph 实例见 `ai-native-capability-catalog.md` §3-§5、§6，影视工作流见 `ai-native-film-workflow-design.md`，UI 见 `ai-native-minimal-confirmation-ui-design.md`。
+> **定位**：本文档描述 World 的时间轴层，对应 `architecture.md` 中 `World.Timeline` 的详细设计。
+> 范围：定义影视与游戏 cinematic 共用的时间域 authoring 模型（Shot / Clip / Track / Binding）。
+> Session 在影视工作流上下文中通过时间轴层理解叙事结构；具体见 `ai-native-film-workflow-design.md`。
 
 ---
 
