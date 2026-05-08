@@ -84,6 +84,7 @@ public struct TransactionApplyResult: Sendable, Equatable {
     public var sceneRevision: UInt64?
     public var sequenceRevisionID: String?
     public var assetEntryCount: Int?
+    public var edit: Edit
 
     public init(transactionID: String,
                 changedDomains: [TransactionDomain],
@@ -91,7 +92,8 @@ public struct TransactionApplyResult: Sendable, Equatable {
                 deletedEntityIDs: [UInt64] = [],
                 sceneRevision: UInt64? = nil,
                 sequenceRevisionID: String? = nil,
-                assetEntryCount: Int? = nil) {
+                assetEntryCount: Int? = nil,
+                edit: Edit) {
         self.transactionID = transactionID
         self.changedDomains = changedDomains
         self.createdEntityIDs = createdEntityIDs
@@ -99,6 +101,7 @@ public struct TransactionApplyResult: Sendable, Equatable {
         self.sceneRevision = sceneRevision
         self.sequenceRevisionID = sequenceRevisionID
         self.assetEntryCount = assetEntryCount
+        self.edit = edit
     }
 }
 
@@ -129,6 +132,11 @@ public struct TransactionExecutor {
                       to context: inout TransactionExecutionContext) throws -> TransactionApplyResult {
         do {
             try validate(transaction, against: context)
+
+            let revisionBefore = WorldRevisionSnapshot(
+                sceneRevision: context.sceneRuntime?.snapshot.revision,
+                sequenceRevisionID: context.sequenceDocument?.revision.id
+            )
 
             var changedDomains: [TransactionDomain] = []
             var createdEntityIDs: [UInt64] = []
@@ -199,13 +207,27 @@ public struct TransactionExecutor {
                 changedDomains.append(.asset)
             }
 
+            let revisionAfter = WorldRevisionSnapshot(
+                sceneRevision: sceneRevision,
+                sequenceRevisionID: sequenceRevisionID
+            )
+            let edit = Edit(
+                transactionID: transaction.id,
+                summary: transaction.summary,
+                mutationSummaries: transaction.operations.map(operationSummary),
+                changedDomains: changedDomains.map(\.rawValue),
+                provenance: EditProvenance(authorKind: transaction.provenance.editAuthorKind),
+                revisionBefore: revisionBefore,
+                revisionAfter: revisionAfter
+            )
             let result = TransactionApplyResult(transactionID: transaction.id,
                                                 changedDomains: changedDomains,
                                                 createdEntityIDs: createdEntityIDs,
                                                 deletedEntityIDs: deletedEntityIDs,
                                                 sceneRevision: sceneRevision,
                                                 sequenceRevisionID: sequenceRevisionID,
-                                                assetEntryCount: assetEntryCount)
+                                                assetEntryCount: assetEntryCount,
+                                                edit: edit)
             try publishSuccessEvents(for: transaction,
                                      result: result,
                                      sceneOps: sceneOps,
@@ -818,5 +840,86 @@ public struct TransactionExecutor {
             }
         }
         return ids.sorted()
+    }
+
+    private func operationSummary(_ operation: TransactionOperation) -> String {
+        switch operation {
+        case let .scene(mutation):
+            return sceneMutationSummary(mutation)
+        case .sequence:
+            return "sequence:replace"
+        case let .asset(mutation):
+            switch mutation {
+            case let .scanProject(rootPath):
+                return "asset:scan:\(rootPath)"
+            }
+        }
+    }
+
+    private func sceneMutationSummary(_ mutation: SceneMutation) -> String {
+        switch mutation {
+        case let .spawnImportedMeshEntity(label, _, _, _):
+            return "scene:spawn:\(label)"
+        case let .deleteEntity(id):
+            return "scene:delete:\(id)"
+        case let .duplicateEntity(id):
+            return "scene:duplicate:\(id)"
+        case let .moveEntity(id, _, _):
+            return "scene:move:\(id)"
+        case let .setLocalTransform(id, _):
+            return "scene:transform:\(id)"
+        case let .setSceneName(id, name):
+            return "scene:rename:\(id):\(name)"
+        case let .setRigidBodyMotionType(id, _):
+            return "scene:rigidbody_motion:\(id)"
+        case let .setRigidBodyMass(id, _):
+            return "scene:rigidbody_mass:\(id)"
+        case let .setRigidBodyGravityScale(id, _):
+            return "scene:rigidbody_gravity:\(id)"
+        case let .setRigidBodyAllowSleep(id, _):
+            return "scene:rigidbody_sleep:\(id)"
+        case let .setCollider(id, _):
+            return "scene:collider_set:\(id)"
+        case let .setColliderTrigger(id, _):
+            return "scene:collider_trigger:\(id)"
+        case let .setColliderShapeType(id, _):
+            return "scene:collider_shape:\(id)"
+        case let .setColliderShapeBoxHalfExtents(id, _):
+            return "scene:collider_box:\(id)"
+        case let .setColliderShapeSphereRadius(id, _):
+            return "scene:collider_sphere:\(id)"
+        case let .setColliderShapeCapsuleRadius(id, _):
+            return "scene:collider_capsule_r:\(id)"
+        case let .setColliderShapeCapsuleHalfHeight(id, _):
+            return "scene:collider_capsule_h:\(id)"
+        case let .setColliderMaterialFriction(id, _):
+            return "scene:collider_friction:\(id)"
+        case let .setColliderMaterialRestitution(id, _):
+            return "scene:collider_restitution:\(id)"
+        case let .setColliderMaterialDensity(id, _):
+            return "scene:collider_density:\(id)"
+        case let .setColliderLayer(id, _):
+            return "scene:collider_layer:\(id)"
+        case let .setColliderLayerMask(id, _):
+            return "scene:collider_mask:\(id)"
+        case let .setConstraintEnabled(id, _):
+            return "scene:constraint:\(id)"
+        case let .setLightType(id, _):
+            return "scene:light_type:\(id)"
+        case let .setLightColor(id, _):
+            return "scene:light_color:\(id)"
+        case let .setLightIntensity(id, _):
+            return "scene:light_intensity:\(id)"
+        case let .setLightRange(id, _):
+            return "scene:light_range:\(id)"
+        case let .setLightSpotInnerAngle(id, _):
+            return "scene:light_spot_inner:\(id)"
+        case let .setLightSpotOuterAngle(id, _):
+            return "scene:light_spot_outer:\(id)"
+        case let .setScriptBindings(id, _):
+            return "scene:scripts:\(id)"
+        case let .setCameraPose(id, _, _, _):
+            return "scene:camera_pose:\(id)"
+        }
     }
 }
