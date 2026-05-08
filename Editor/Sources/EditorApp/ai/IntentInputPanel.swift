@@ -83,13 +83,16 @@ private struct AISetupView: View {
                         .font(.caption)
                         .foregroundColor(.onSurfaceMuted)
                     Row(alignment: .center, spacing: 8) {
-                        SetupChoiceButton(
-                            title: EditorAIProvider.anthropic.displayName,
-                            isActive: store.aiSettings.provider == .anthropic
-                        ) {
-                            var s = store.aiSettings
-                            s.provider = .anthropic
-                            store.dispatch(.setAISettings(s))
+                        for provider in [EditorAIProvider.anthropic, .openai, .deepseek] {
+                            SetupChoiceButton(
+                                title: provider.displayName,
+                                isActive: store.aiSettings.provider == provider
+                            ) {
+                                var s = store.aiSettings
+                                s.provider = provider
+                                s.model = provider.defaultModel
+                                store.dispatch(.setAISettings(s))
+                            }
                         }
                     }
                 }
