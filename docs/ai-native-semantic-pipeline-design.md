@@ -1,27 +1,19 @@
-# Phase B.5：语义生产流水线详细设计
+# 资产语义生产流水线
 
-> 本文档是 `ai-native-scene-model-design.md` 第 6.3、7、17 节的子设计。
-> 总纲负责定边界，本文档负责定模块、字段、接口与失败模式。
-> 适用范围：从导入资产到产出可被 `ModelDocument` 写入的 part / region / semantic tag 的全过程。
+> **定位**：本文档描述资产导入时填充 World `inferred` 层的流水线，对应 `architecture.md` 中 World.Assets.semantic 的生产过程。
+>
+> 流水线的输出写入 World 的 `inferred` 层（标记 confidence + source），不能覆盖 `authored` 层。Session 通过 World 的 `inferred` 层获得资产的语义理解，不依赖外挂文档。
 
 ---
 
 ## 0. 设计前提
 
-总纲里存在一个未解决的张力：
+两类资产对应不同的流水线路径：
 
-- 第 0、1 节要求 AI 在没有视觉模型参与时也能直接理解
-- 第 6.4、7 节承认低结构模型几何上不足以单独支撑功能语义
-- 第 13 节又把视觉降级为辅助
-
-本文档统一口径如下：
-
-1. **结构良好的资产**（有命名 / 分组 / 材质分区 / rig）：纯几何 + metadata 抽取就能产出可用语义，无需视觉
+1. **结构良好的资产**（有命名 / 分组 / 材质分区 / rig）：纯几何 + metadata 抽取就能产出可用语义，无需视觉模型
 2. **结构薄弱的资产**（单 mesh / 无命名 / 无 rig）：几何分析只能产出匿名 region，从 region 到功能语义必须依赖视觉后端或类别先验
-3. 视觉后端不是主理解面，但在低结构资产上是 `SemanticAnalyzer` 的事实主力实现之一
-4. 所有由视觉或推断得到的语义都标记为 `inferred`，不能覆盖 authored truth
 
-这一前提应同步写入总纲第 6 节和第 13 节。
+两类情况下，所有推断出的语义都标记为 `inferred`，不能覆盖 authored truth。
 
 ---
 
@@ -344,7 +336,7 @@ RegionSymbolicView {
 | 层 | 表征 | 消费者 |
 |----|------|--------|
 | 检索层 | 高维 float、谱哈希、CLIP embedding | KNN / 向量库 |
-| 符号层 | RegionSymbolicView 等结构化记录 | LLM、CapabilityGraph、Intent IR |
+| 符号层 | RegionSymbolicView 等结构化记录 | Session（写入 World inferred 层）、Validation 层 |
 | 视觉层 | turntable 渲染、region overlay、对比图 | 多模态视觉模型（其输出再回到符号层） |
 
 向量不跨层、图像不跨层，向 LLM 流动的永远是符号。
