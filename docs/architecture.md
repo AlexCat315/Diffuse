@@ -260,32 +260,41 @@ Session.process(Signal)
 
 严格按顺序，不破坏现有功能：
 
-### Phase 1：插桩（纯增量，不改任何现有逻辑）
+### Phase 1：插桩 ✅
 
-在 `TransactionExecutor.apply()` 里记录 Edit：
+`TransactionExecutor.apply()` 现在产出 `Edit` 并写入 `<project>/.guava/edit_log.jsonl`：
 
-```swift
-struct Edit {
-    var worldDelta: TransactionIR
-    var provenance: EditProvenance  // author, timestamp, from_proposal, correction_delta
-    var revisionBefore: UInt64
-    var revisionAfter: UInt64
-}
+```
+Engine/Sources/IntentRuntime/
+  Edit.swift          — WorldRevisionSnapshot, EditAuthorKind, EditProvenance, Edit
+  TransactionExecutor — apply() 构造 Edit，附到 TransactionApplyResult.edit
+
+Editor/Sources/EditorCore/AI/
+  EditLog.swift       — 追加写 JSONL，线程安全
+  EditorCore          — applyInvocationResult() 写 edit_log
 ```
 
-人类直接编辑也写 Edit，不只是 AI 发起的。
+### Phase 2：建 Session ✅
 
-**结果**：立刻开始积累真正的训练数据。
+`Session` 是 AI 的有状态参与者，替代 `AIScenePlanner` + 级联路由作为主路径：
 
-### Phase 2：建 Session
+```
+Engine/Sources/AIRuntime/
+  Signal.swift              — 统一输入模态枚举
+  WorldView.swift           — Session 对 World 的增量理解（Phase 2 仍基于 snapshot）
+  ConversationTurn.swift    — 多轮历史记录
+  Proposal.swift            — Session 产出，携带 SceneEditPlan + 元数据
+  SessionBackend.swift      — 协议：generateProposal(signal:worldView:history:sessionID:)
+  Session.swift             — Actor：维护 WorldView，调用 backend，记录 history
+  AnthropicEditPlanTool.swift — 共享工具 schema（原 AIScenePlanner 私有，现在共用）
 
-替代 `AIScenePlanner` 和三层级联：
+Editor/Sources/EditorCore/AI/
+  AnthropicSessionBackend.swift — 实现 SessionBackend，比 AIScenePlanner 上下文更丰富
+  EditorCore                    — Session 作为主 NL 路径；edit 应用后回传 observe()
+```
 
-- Session 订阅 World 变更流（ObservationBus），维护 WorldView
-- 所有输入模态统一进 Session.process()
-- 初期 WorldView 可以仍然基于 snapshot，逐步迁移到 delta
-
-两套并行运行，输出一致后删旧的。
+**并行运行策略**：有 API Key 时 Session 优先；AIScenePlanner 和级联路由保留不变。
+Phase 4 删除旧路径。
 
 ### Phase 3：接入 UserCorrection
 
