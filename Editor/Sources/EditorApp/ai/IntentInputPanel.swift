@@ -190,7 +190,9 @@ private struct AIChatView: View {
             // Input
             SetupDivider()
             Row(alignment: .center, spacing: 8) {
-                let isWaiting = store.chatMessages.last?.assistantState == .thinking
+                let lastState = store.chatMessages.last?.assistantState
+                let isWaiting = lastState == .thinking
+                    || { if case .streaming = lastState { return true }; return false }()
                     || store.pendingConfirmationRequest != nil
                 TextField(L("Message…"), text: inputText, onSubmit: onSubmit)
                     .flex()
@@ -230,6 +232,10 @@ private struct ChatBubble: View {
                             .font(.caption)
                             .foregroundColor(.onSurfaceMuted)
                     }
+                } else if case .streaming(let partial) = state {
+                    Text(partial + "…")
+                        .font(.body)
+                        .foregroundColor(.onSurfaceMuted)
                 } else if case .replied(let text) = state {
                     Text(text)
                         .font(.body)

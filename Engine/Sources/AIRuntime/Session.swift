@@ -67,12 +67,14 @@ public actor Session {
 
     /// Runs inference on a NaturalLanguage signal and returns a Proposal.
     /// Use `observe()` for state-update signals.
-    public func process(_ signal: Signal) async throws -> Proposal {
+    /// `onProgress` is called with partial summary text as it streams in — use it to animate the UI.
+    public func process(_ signal: Signal,
+                        onProgress: (@Sendable (String) -> Void)? = nil) async throws -> Proposal {
         guard case let .naturalLanguage(text, _) = signal else {
             throw SessionError.unsupportedSignal(signal.kind)
         }
         recordTurn(ConversationTurn(kind: .userText(text)))
-        let (plan, toolUseID, inputJSON) = try await infer()
+        let (plan, toolUseID, inputJSON) = try await infer(onProgress: onProgress)
         recordTurn(ConversationTurn(kind: .assistantToolCall(toolUseID: toolUseID,
                                                              name: "execute_edit_plan",
                                                              inputJSON: inputJSON)))
@@ -130,10 +132,116 @@ public actor Session {
 
     // MARK: - Inference
 
-    private func infer() async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+    private func infer(onProgress: (@Sendable (String) -> Void)? = nil) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+        if let onProgress {
+            return try await inferStreaming(onProgress: onProgress)
+        }
         let body = requestBody()
         let data = try await post(body)
         return try parseResponse(from: data)
+    }
+
+    private func inferStreaming(onProgress: @escaping @Sendable (String) -> Void) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+        var body = requestBody()
+        body["stream"] = true
+
+        var request = URLRequest(url: inferenceEndpoint, timeoutInterval: config.timeoutInterval)
+        request.httpMethod = "POST"
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        switch config.apiFormat {
+        case .anthropic:
+            request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
+            request.setValue(Self.anthropicAPIVersion, forHTTPHeaderField: "anthropic-version")
+        case .openAICompatible:
+            request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+        let (stream, response) = try await urlSession.bytes(for: request)
+        if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
+            var errData = Data()
+            for try await byte in stream { errData.append(byte) }
+            throw SessionError.httpError(statusCode: http.statusCode,
+                                         body: String(data: errData, encoding: .utf8))
+        }
+
+        var toolUseID = ""
+        var inputJSONAccumulator = ""
+        var lastReportedSummary = ""
+
+        for try await line in stream.lines {
+            guard line.hasPrefix("data: ") else { continue }
+            let payload = String(line.dropFirst("data: ".count))
+            guard payload != "[DONE]" else { break }
+            guard let eventData = payload.data(using: .utf8),
+                  let event = try? JSONSerialization.jsonObject(with: eventData) as? [String: Any]
+            else { continue }
+
+            switch config.apiFormat {
+            case .anthropic:
+                let type = event["type"] as? String ?? ""
+                if type == "content_block_start",
+                   let block = event["content_block"] as? [String: Any],
+                   block["type"] as? String == "tool_use",
+                   let id = block["id"] as? String {
+                    toolUseID = id
+                } else if type == "content_block_delta",
+                          let delta = event["delta"] as? [String: Any],
+                          delta["type"] as? String == "input_json_delta",
+                          let fragment = delta["partial_json"] as? String {
+                    inputJSONAccumulator += fragment
+                    if let partial = extractPartialSummary(from: inputJSONAccumulator),
+                       partial != lastReportedSummary {
+                        lastReportedSummary = partial
+                        onProgress(partial)
+                    }
+                }
+
+            case .openAICompatible:
+                if let choices = event["choices"] as? [[String: Any]],
+                   let delta = choices.first?["delta"] as? [String: Any],
+                   let toolCalls = delta["tool_calls"] as? [[String: Any]],
+                   let call = toolCalls.first {
+                    if let id = call["id"] as? String, !id.isEmpty {
+                        toolUseID = id
+                    }
+                    if let function = call["function"] as? [String: Any],
+                       let fragment = function["arguments"] as? String {
+                        inputJSONAccumulator += fragment
+                        if let partial = extractPartialSummary(from: inputJSONAccumulator),
+                           partial != lastReportedSummary {
+                            lastReportedSummary = partial
+                            onProgress(partial)
+                        }
+                    }
+                }
+            }
+        }
+
+        guard !toolUseID.isEmpty else { throw SessionError.noPlanInResponse }
+        guard let planData = inputJSONAccumulator.data(using: .utf8) else {
+            throw SessionError.planDecodingFailed(detail: "could not encode accumulated input as UTF-8")
+        }
+        do {
+            let plan = try JSONDecoder().decode(SceneEditPlan.self, from: planData)
+            return (plan, toolUseID, inputJSONAccumulator)
+        } catch {
+            throw SessionError.planDecodingFailed(detail: String(describing: error))
+        }
+    }
+
+    private func extractPartialSummary(from json: String) -> String? {
+        guard let keyRange = json.range(of: "\"summary\":\"") else { return nil }
+        let after = json[keyRange.upperBound...]
+        var result = ""
+        var skipNext = false
+        for ch in after {
+            if skipNext { result.append(ch); skipNext = false; continue }
+            if ch == "\\" { skipNext = true; continue }
+            if ch == "\"" { break }
+            result.append(ch)
+        }
+        return result.isEmpty ? nil : result
     }
 
     private func requestBody() -> [String: Any] {
