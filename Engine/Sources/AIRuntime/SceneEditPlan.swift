@@ -8,6 +8,7 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
     case deleteEntity      = "delete_entity"
     case duplicateEntity   = "duplicate_entity"
     case setName           = "set_name"
+    case reparentEntity    = "reparent_entity"
 
     // Spatial
     case setTransform      = "set_transform"
@@ -91,6 +92,9 @@ public struct SceneEditStep: Codable, Sendable {
     // set_constraint_enabled
     public var isEnabled: Bool?
 
+    // reparent_entity
+    public var parentRef: String?        // "scene:<id>" or nil to reparent to root
+
     enum CodingKeys: String, CodingKey {
         case op
         case entityRef          = "entity_id"
@@ -113,6 +117,7 @@ public struct SceneEditStep: Codable, Sendable {
         case gravityScale       = "gravity_scale"
         case isTrigger          = "is_trigger"
         case isEnabled          = "is_enabled"
+        case parentRef          = "parent_id"
     }
 }
 

@@ -400,11 +400,20 @@ public final class EditorApplication: @unchecked Sendable {
                                                         text: "",
                                                         assistantState: .thinking)))
 
+        let capturedAid = assistantID
+        let progressHandler: @Sendable (String) -> Void = { [weak self] partial in
+            Task { @MainActor [weak self] in
+                self?.store.dispatch(.updateChatMessage(id: capturedAid,
+                                                        assistantState: .streaming(partial)))
+            }
+        }
+
         Task { @MainActor [weak self] in
             guard let self else { return }
             do {
                 let proposal = try await session.process(
-                    .naturalLanguage(text: text, locale: locale ?? "en")
+                    .naturalLanguage(text: text, locale: locale ?? "en"),
+                    onProgress: progressHandler
                 )
                 let latencyMs = Int(Date().timeIntervalSince(t0) * 1000)
 
