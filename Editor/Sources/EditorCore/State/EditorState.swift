@@ -219,6 +219,7 @@ public struct EditorState: Codable, Sendable {
     public var aiSettings: EditorAISettings
     public var aiStatusMessage: String?
     public var aiWarnings: [String]
+    public var chatMessages: [AIChatMessage]
     public var consoleEntries: [EditorConsoleEntry]
     public var nextConsoleEntryID: UInt64
     public var commandPaletteVisible: Bool
@@ -254,6 +255,7 @@ public struct EditorState: Codable, Sendable {
         aiSettings: EditorAISettings = .default,
         aiStatusMessage: String? = nil,
         aiWarnings: [String] = [],
+        chatMessages: [AIChatMessage] = [],
         consoleEntries: [EditorConsoleEntry] = [],
         nextConsoleEntryID: UInt64 = 1,
         commandPaletteVisible: Bool = false
@@ -287,6 +289,7 @@ public struct EditorState: Codable, Sendable {
         self.aiSettings = aiSettings
         self.aiStatusMessage = aiStatusMessage
         self.aiWarnings = aiWarnings
+        self.chatMessages = chatMessages
         self.consoleEntries = consoleEntries
         self.nextConsoleEntryID = max(nextConsoleEntryID, (consoleEntries.map(\.id).max() ?? 0) &+ 1)
         self.frameIndex = frameIndex
