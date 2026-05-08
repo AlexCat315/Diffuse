@@ -57,25 +57,37 @@ public actor Session {
 
     // MARK: - Signal processing
 
-    /// Processes a Signal. NaturalLanguage signals trigger inference and return a Proposal.
-    /// Other signals update WorldView state and return nil when inference is not needed.
+    /// Runs inference on a NaturalLanguage signal and returns a Proposal.
+    /// Use `observe()` for state-update signals; use `learn()` for UserCorrection.
     public func process(_ signal: Signal) async throws -> Proposal {
-        switch signal {
-        case let .naturalLanguage(text, _):
-            recordTurn(ConversationTurn(role: .user, content: text))
-            let proposal = try await infer(userRequest: text)
-            recordTurn(ConversationTurn(role: .assistant,
-                                        content: proposal.plan.summary,
-                                        proposalID: proposal.id))
-            return proposal
-        case let .selectionChanged(refs):
-            worldView.apply(selectionChanged: refs)
-        case let .worldChanged(summary, revision):
-            worldView.apply(editSummary: summary, revision: revision)
-        case .userCorrection:
-            break
+        guard case let .naturalLanguage(text, _) = signal else {
+            throw SessionError.unsupportedSignal(signal.kind)
         }
-        throw SessionError.unsupportedSignal("non-NL signal does not produce a Proposal in Phase 2")
+        recordTurn(ConversationTurn(role: .user, content: text))
+        let proposal = try await infer(userRequest: text)
+        recordTurn(ConversationTurn(role: .assistant,
+                                    content: proposal.plan.summary,
+                                    proposalID: proposal.id))
+        return proposal
+    }
+
+    // MARK: - Learning
+
+    /// Records a UserCorrection — called when the user accepts, rejects, or modifies a Proposal.
+    ///
+    /// Phase 3: records outcome in ConversationHistory so the next request has correction context.
+    /// Phase 4+: triggers preference learning / fine-tuning update.
+    public func learn(proposalID: String, acceptedStepIDs: [String], rejectedStepIDs: [String]) {
+        let note: String
+        if rejectedStepIDs.isEmpty {
+            note = "proposal \(proposalID) accepted (\(acceptedStepIDs.count) steps)"
+        } else if acceptedStepIDs.isEmpty {
+            note = "proposal \(proposalID) rejected (\(rejectedStepIDs.count) steps)"
+        } else {
+            let total = acceptedStepIDs.count + rejectedStepIDs.count
+            note = "proposal \(proposalID) partially accepted (\(acceptedStepIDs.count)/\(total) steps)"
+        }
+        recordTurn(ConversationTurn(role: .assistant, content: note))
     }
 
     // MARK: - WorldView observation
