@@ -2,13 +2,21 @@ import RHIWGPU
 import SceneRuntime
 import simd
 
+private struct MeshInstanceUniforms {
+    var mvp: simd_float4x4
+    var colorTint: SIMD4<Float>
+}
+
 extension WGPURenderer {
     func writeInstanceUniforms(scene: RenderScene, viewProj: simd_float4x4) {
         if let dyn = dynamicInstanceResources {
             for (i, instance) in scene.instances.enumerated() {
-                var mvp = viewProj * instance.transform
+                var u = MeshInstanceUniforms(
+                    mvp: viewProj * instance.transform,
+                    colorTint: SIMD4<Float>(instance.colorTint, 1)
+                )
                 let offset = UInt64(i) * dyn.stride
-                withUnsafeBytes(of: &mvp) { raw in
+                withUnsafeBytes(of: &u) { raw in
                     if let base = raw.baseAddress {
                         backend.writeBuffer(
                             dyn.uniformBuffer, data: base, size: raw.count, offset: offset)
@@ -19,8 +27,11 @@ extension WGPURenderer {
         }
 
         for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
-            var mvp = viewProj * instance.transform
-            withUnsafeBytes(of: &mvp) { raw in
+            var u = MeshInstanceUniforms(
+                mvp: viewProj * instance.transform,
+                colorTint: SIMD4<Float>(instance.colorTint, 1)
+            )
+            withUnsafeBytes(of: &u) { raw in
                 if let base = raw.baseAddress {
                     backend.writeBuffer(instanceResources[i].uniformBuffer, data: base, size: raw.count)
                 }
@@ -73,7 +84,7 @@ extension WGPURenderer {
         instanceResources.removeAll(keepingCapacity: false)
         instanceResourceMeshIndices = meshIndices
         for meshIndex in meshIndices {
-            let uniformBuffer = try backend.createBuffer(size: 64, usage: [.uniform, .copyDst])
+            let uniformBuffer = try backend.createBuffer(size: 80, usage: [.uniform, .copyDst])
             let bindGroup = try backend.createBindGroup(
                 layout: bindGroupLayout,
                 entries: try meshBindGroupEntries(
@@ -98,7 +109,7 @@ extension WGPURenderer {
         }
         let textureView = baseColorTextureView ?? fallbackMeshTextureView
         return [
-            GPUBindGroupEntry(binding: 0, buffer: instanceUniformBuffer, offset: 0, size: 64),
+            GPUBindGroupEntry(binding: 0, buffer: instanceUniformBuffer, offset: 0, size: 80),
             GPUBindGroupEntry(
                 binding: 1,
                 buffer: stylizedCharacterUniformBuffer,

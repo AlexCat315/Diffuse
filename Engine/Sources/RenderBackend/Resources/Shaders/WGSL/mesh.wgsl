@@ -1,5 +1,6 @@
 struct Uniforms {
-    mvp : mat4x4<f32>,
+    mvp        : mat4x4<f32>,
+    color_tint : vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u : Uniforms;
@@ -43,7 +44,7 @@ fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
     let lambert = max(dot(normal, light_dir), 0.0);
     let rim = pow(1.0 - max(normal.z, 0.0), 2.0);
     let texel = textureSample(base_color_texture, base_color_sampler, in.uv);
-    let base = in.color * texel.rgb;
+    let base = in.color * texel.rgb * u.color_tint.rgb;
     let hdr = base * (0.22 + lambert * 1.15 + rim * 0.18);
     return vec4<f32>(hdr, texel.a);
 }

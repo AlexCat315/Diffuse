@@ -91,6 +91,11 @@ public struct SceneEditPlanExecutor: Sendable {
             let id = try resolveEntityID(step, scene: scene)
             return [.duplicateEntity(entityID: id)]
 
+        case .reparentEntity:
+            let id = try resolveEntityID(step, scene: scene)
+            let parentID = try resolveOptionalRef(step.parentRef, op: step.op, scene: scene)
+            return [.moveEntity(entityID: id, parentID: parentID, index: Int.max)]
+
         case .setName:
             let id = try resolveEntityID(step, scene: scene)
             guard let name = step.name, !name.isEmpty else {
@@ -144,6 +149,13 @@ public struct SceneEditPlanExecutor: Sendable {
                 throw SceneEditPlanExecutorError.missingField(op: step.op, field: "intensity")
             }
             return [.setLightIntensity(entityID: id, intensity: v)]
+
+        case .setMeshColor:
+            let id = try resolveEntityID(step, scene: scene)
+            guard let c = step.color, c.count == 3 else {
+                throw SceneEditPlanExecutorError.invalidColor(op: step.op)
+            }
+            return [.setMeshColorTint(entityID: id, color: SIMD3(c[0], c[1], c[2]))]
 
         case .setLightColor:
             let id = try resolveEntityID(step, scene: scene)
@@ -223,6 +235,18 @@ public struct SceneEditPlanExecutor: Sendable {
     }
 
     // MARK: - Entity ID resolution
+
+    private func resolveOptionalRef(_ ref: String?, op: SceneEditOp, scene: SceneRuntime) throws -> UInt64? {
+        guard let ref else { return nil }
+        guard ref.hasPrefix("scene:"), let raw = UInt64(ref.dropFirst("scene:".count)) else {
+            throw SceneEditPlanExecutorError.invalidEntityRef(ref)
+        }
+        let eid = entityID(fromRaw: raw)
+        guard scene.contains(eid) else {
+            throw SceneEditPlanExecutorError.entityNotFound(ref: ref)
+        }
+        return raw
+    }
 
     private func resolveEntityID(_ step: SceneEditStep, scene: SceneRuntime) throws -> UInt64 {
         guard let ref = step.entityRef else {
