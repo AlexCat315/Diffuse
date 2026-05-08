@@ -496,7 +496,6 @@ public struct CapabilityRegistryConfig: Sendable, Equatable, Codable {
     public var scopes: [String: CapabilityScopeSpec]
     public var targetKinds: [String: CapabilityTargetKindSpec]
     public var argumentTypes: [String: CapabilityArgumentTypeSpec]
-    public var effectKinds: [String: CapabilityEffectKindSpec]
     public var policies: [String: CapabilityPolicySpec]
     public var versions: CapabilityVersionTable
 
@@ -504,14 +503,12 @@ public struct CapabilityRegistryConfig: Sendable, Equatable, Codable {
                 scopes: [String: CapabilityScopeSpec] = [:],
                 targetKinds: [String: CapabilityTargetKindSpec] = [:],
                 argumentTypes: [String: CapabilityArgumentTypeSpec] = [:],
-                effectKinds: [String: CapabilityEffectKindSpec] = [:],
                 policies: [String: CapabilityPolicySpec] = [:],
                 versions: CapabilityVersionTable = CapabilityVersionTable()) {
         self.capabilities = capabilities
         self.scopes = scopes
         self.targetKinds = targetKinds
         self.argumentTypes = argumentTypes
-        self.effectKinds = effectKinds
         self.policies = policies
         self.versions = versions
     }
@@ -521,7 +518,6 @@ public struct CapabilityRegistryConfig: Sendable, Equatable, Codable {
         case scopes
         case targetKinds = "target_kinds"
         case argumentTypes = "argument_types"
-        case effectKinds = "effect_kinds"
         case policies
         case versions
     }
@@ -565,7 +561,6 @@ public enum CapabilityRegistryError: Error, CustomStringConvertible {
     case invalidResourceData(String)
     case unresolvedScope(verbID: String, scopeID: String)
     case unresolvedTargetKind(verbID: String, targetKindID: String)
-    case unresolvedEffectKind(verbID: String, effectKindID: String)
     case unresolvedPolicy(verbID: String, policyID: String)
     case unresolvedArgumentType(verbID: String, argument: String, typeID: String)
     case invalidReversibleEffect(verbID: String, effectID: String)
@@ -595,8 +590,6 @@ public enum CapabilityRegistryError: Error, CustomStringConvertible {
             return "capability \(verbID) references unresolved scope \(scopeID)"
         case let .unresolvedTargetKind(verbID, targetKindID):
             return "capability \(verbID) references unresolved target kind \(targetKindID)"
-        case let .unresolvedEffectKind(verbID, effectKindID):
-            return "capability \(verbID) references unresolved effect kind \(effectKindID)"
         case let .unresolvedPolicy(verbID, policyID):
             return "capability \(verbID) references unresolved policy \(policyID)"
         case let .unresolvedArgumentType(verbID, argument, typeID):
@@ -628,7 +621,7 @@ public struct CapabilityRegistry: Sendable {
 
     public init(config: CapabilityRegistryConfig,
                 eventKindRegistry: EventKindRegistry = .default) throws {
-        let analyzer = EffectAnalyzer(effectKinds: config.effectKinds)
+        let analyzer = EffectAnalyzer()
         var table: [String: CapabilitySpec] = [:]
 
         for capability in config.capabilities {
@@ -701,7 +694,6 @@ public struct CapabilityRegistry: Sendable {
         let scopes: [String: CapabilityScopeSpec] = try decodeSplitResource("scopes", ext: "json", bundle: bundle)
         let targetKinds: [String: CapabilityTargetKindSpec] = try decodeSplitResource("target_kinds", ext: "json", bundle: bundle)
         let argumentTypes: [String: CapabilityArgumentTypeSpec] = try decodeSplitResource("argument_types", ext: "json", bundle: bundle)
-        let effectKinds: [String: CapabilityEffectKindSpec] = try decodeSplitResource("effect_kinds", ext: "json", bundle: bundle)
         let policies: [String: CapabilityPolicySpec] = try decodeSplitResource("policies", ext: "json", bundle: bundle)
 
         let sceneCapabilities: [CapabilitySpec] = try decodeSplitResource("capabilities.scene", ext: "json", bundle: bundle)
@@ -714,7 +706,6 @@ public struct CapabilityRegistry: Sendable {
             scopes: scopes,
             targetKinds: targetKinds,
             argumentTypes: argumentTypes,
-            effectKinds: effectKinds,
             policies: policies,
             versions: versions
         )
