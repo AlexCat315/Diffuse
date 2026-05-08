@@ -76,19 +76,20 @@ public actor Session {
 
     /// Records a UserCorrection — called when the user accepts, rejects, or modifies a Proposal.
     ///
-    /// Phase 3: records outcome in ConversationHistory so the next request has correction context.
+    /// Appended as a `.user` turn so the next inference call sees the correction in context.
     /// Phase 4+: triggers preference learning / fine-tuning update.
     public func learn(proposalID: String, acceptedStepIDs: [String], rejectedStepIDs: [String]) {
-        let note: String
+        let content: String
         if rejectedStepIDs.isEmpty {
-            note = "proposal \(proposalID) accepted (\(acceptedStepIDs.count) steps)"
+            let n = acceptedStepIDs.count
+            content = "I accepted your suggestion (\(n) step\(n == 1 ? "" : "s") applied)."
         } else if acceptedStepIDs.isEmpty {
-            note = "proposal \(proposalID) rejected (\(rejectedStepIDs.count) steps)"
+            content = "I rejected your suggestion. Please try a different approach."
         } else {
             let total = acceptedStepIDs.count + rejectedStepIDs.count
-            note = "proposal \(proposalID) partially accepted (\(acceptedStepIDs.count)/\(total) steps)"
+            content = "I partially accepted your suggestion: \(acceptedStepIDs.count) of \(total) steps applied; \(rejectedStepIDs.count) rejected."
         }
-        recordTurn(ConversationTurn(role: .assistant, content: note))
+        recordTurn(ConversationTurn(role: .user, content: content, proposalID: proposalID))
     }
 
     // MARK: - WorldView observation
@@ -172,13 +173,26 @@ public actor Session {
             parts.append("Currently selected: \(worldView.selectedEntityRefs.joined(separator: ", "))")
         }
 
+        if !conversationHistory.isEmpty {
+            let lines = conversationHistory.suffix(12).map { turn -> String in
+                let label = turn.role == .user ? "User" : "Assistant"
+                return "\(label): \(turn.content)"
+            }.joined(separator: "\n")
+            parts.append("Conversation so far (most recent last):\n\(lines)")
+        }
+
         parts.append("""
         Rules:
         - Only operate on entities that exist in the scene entities list above.
         - Use the exact entity IDs from the list (format: "scene:<number>").
         - Prefer minimal plans — only include steps necessary to satisfy the request.
-        - For set_transform, read the current position from the entity list and only change what the user asked for.
+        - For set_transform, use the `position` field (local space) as the base and only change \
+        what the user asked for. When an entity is in a hierarchy, `evaluated.worldPosition` \
+        shows its actual world-space position — use it for spatial reasoning but set_transform \
+        always writes local space.
         - For snap_to_ground, set Y position to 0.
+        - If the conversation history shows a correction (e.g. "I rejected your suggestion"), \
+        adjust your approach accordingly before proposing again.
         """)
 
         return parts.joined(separator: "\n\n")

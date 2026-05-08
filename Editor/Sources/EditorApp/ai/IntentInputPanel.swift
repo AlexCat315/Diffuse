@@ -1,7 +1,6 @@
 import EditorCore
 import GuavaUICompose
 import GuavaUIRuntime
-import CapabilityRuntime
 import IntentRuntime
 import simd
 
@@ -26,8 +25,6 @@ struct IntentInputPanel: View {
         StoreScope(app.store) { store in
             let _ = store.sceneRevision
             let selection = app.scene.entitySummary(id: store.selectedEntityID)
-            let symbolicCapabilities = app.aiCapabilitySymbolicViews(maxCount: 8)
-            let unresolvedIntents = store.unresolvedIntents
 
             ScrollView(.vertical) {
                 Box(direction: .column, alignItems: .stretch, spacing: 6) {
@@ -68,24 +65,6 @@ struct IntentInputPanel: View {
                                     naturalLanguageText = ""
                                 }
                                 .buttonStyle(SecondaryButtonStyle())
-                            }
-                        }
-                    }
-
-                    if !unresolvedIntents.isEmpty {
-                        AISection(title: L("Unresolved Intents")) {
-                            Box(direction: .column, alignItems: .stretch, spacing: 6) {
-                                for intent in unresolvedIntents {
-                                    UnresolvedIntentRow(app: app, intent: intent)
-                                }
-                            }
-                        }
-                    }
-
-                    AISection(title: "Capability Context") {
-                        Box(direction: .column, alignItems: .stretch, spacing: 4) {
-                            for capability in symbolicCapabilities {
-                                CapabilityRow(capability: capability)
                             }
                         }
                     }
@@ -156,73 +135,6 @@ struct IntentInputPanel: View {
                 .padding(8)
             }
             .frame(minWidth: 320)
-        }
-    }
-}
-
-private struct UnresolvedIntentRow: View {
-    let app: EditorApplication
-    let intent: UnresolvableIntent
-
-    init(app: EditorApplication, intent: UnresolvableIntent) {
-        self.app = app
-        self.intent = intent
-    }
-
-    var body: some View {
-        Box(direction: .column, alignItems: .stretch, spacing: 4) {
-            Row(alignment: .center, spacing: 6) {
-                Text(intent.reason.rawValue)
-                    .font(.mono)
-                    .foregroundColor(.warning)
-                    .flex()
-                Button(L("Dismiss")) {
-                    app.dismissUnresolvedIntent(id: intent.id)
-                }
-                .buttonStyle(SecondaryButtonStyle())
-            }
-            Text(intent.naturalLanguageIntent.text)
-                .font(.caption)
-                .foregroundColor(.onSurface)
-            Text(intent.message)
-                .font(.caption)
-                .foregroundColor(.onSurfaceMuted)
-        }
-        .padding(horizontal: 8, vertical: 6)
-        .background(.surfaceSunken)
-        .cornerRadius(2)
-    }
-}
-
-private struct CapabilityRow: View {
-    let capability: CapabilitySymbolicView
-
-    init(capability: CapabilitySymbolicView) {
-        self.capability = capability
-    }
-
-    var body: some View {
-        Row(alignment: .center, spacing: 6) {
-            Text(capability.verbID)
-                .font(.mono)
-                .flex()
-            Text(capability.confirmationPolicy.level.rawValue)
-                .font(.caption)
-                .foregroundColor(confirmationColor)
-                .padding(horizontal: 5, vertical: 2)
-                .background(.surfaceSunken)
-                .cornerRadius(2)
-        }
-    }
-
-    private var confirmationColor: SemanticColorRef {
-        switch capability.confirmationPolicy.level {
-        case .auto:
-            return .success
-        case .warn:
-            return .warning
-        case .required, .destructiveRequired:
-            return .error
         }
     }
 }
