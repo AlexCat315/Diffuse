@@ -267,9 +267,9 @@ cd Engine && bash scripts/fetch-wgpu.sh
 | ImageIO | ⛔ 未启动 | M7 引入 OpenEXR multipart |
 | DenoiseBridge | ⛔ 未启动 | M8 引入 OIDN |
 | ObservationBus | ⛔ 未启动 | M7 引入，详细见 `ai-native-observation-bus-design.md` |
-| CapabilityRuntime | ⛔ 未启动 | M7 引入，schema 见 `ai-native-capability-graph-schema-design.md` |
-| IntentRuntime | ⛔ 未启动 | M7 引入；首版只支持人工构造 IntentIR |
-| ContextMemory | ⛔ 未启动 | M9 引入，详细见 `ai-native-context-memory-index-design.md` |
+| CapabilityRuntime | ⛔ 未启动 | M7 引入，定位见 `architecture.md` Validation 层 |
+| IntentRuntime | ⛔ 未启动 | M7 引入；重定位为 WorldDelta / Edit 执行层 |
+| Session | ⛔ 未启动 | M7 引入，架构见 `architecture.md` |
 | SemanticPipeline | ⛔ 未启动 | M9 引入，详细见 `ai-native-semantic-pipeline-design.md` |
 | SceneFromImage | ⛔ 未启动 | M10 引入，详细见 `ai-native-scene-from-image-design.md` |
 | AIAgentBridge | ⛔ 未启动 | M10 引入；与具体 LLM API 解耦 |

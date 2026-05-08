@@ -222,12 +222,12 @@ cd GuavaUI && swift build
 
 | 文档 | 路径 | 描述 |
 |------|------|------|
-| AI Native Capability Catalog | `docs/ai-native-capability-catalog.md` | AI 能力目录 |
+| AI 架构总纲 | `docs/architecture.md` | World / Session / Proposal / Edit / Signal |
+| Observation Bus | `docs/ai-native-observation-bus-design.md` | World 变更流技术实现 |
+| 语义生产流水线 | `docs/ai-native-semantic-pipeline-design.md` | Asset inferred 层生产 |
 | UI Blueprint | `docs/guava-ui-blueprint.md` | UI 架构蓝图 |
 | UI Design System | `docs/guava-ui-design-system.md` | UI 设计系统 |
 | Dock Component | `docs/components/dock.md` | 停靠组件 |
-| Scene Runtime Design | `docs/ai-native-scene-model-design.md` | 场景模型设计 |
-| Observation Bus Design | `docs/ai-native-observation-bus-design.md` | 观察者总线设计 |
 
 ---
 
