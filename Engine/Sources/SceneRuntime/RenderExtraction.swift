@@ -3,10 +3,12 @@ import simd
 public struct RenderMeshComponent: RuntimeComponent, Sendable, Equatable {
     public var meshIndex: Int
     public var isVisible: Bool
+    public var colorTint: SIMD3<Float>
 
-    public init(meshIndex: Int, isVisible: Bool = true) {
+    public init(meshIndex: Int, isVisible: Bool = true, colorTint: SIMD3<Float> = SIMD3<Float>(1, 1, 1)) {
         self.meshIndex = meshIndex
         self.isVisible = isVisible
+        self.colorTint = colorTint
     }
 }
 

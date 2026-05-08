@@ -598,6 +598,15 @@ public struct TransactionExecutor {
                                                                    type: "LightComponent")
                 }
 
+            case let .setMeshColorTint(entityID, color):
+                let entity = try requireEntity(entityID, in: scene)
+                guard scene.updateComponent(RenderMeshComponent.self, for: entity, {
+                    $0.colorTint = SIMD3(max(0, color.x), max(0, color.y), max(0, color.z))
+                }) else {
+                    throw TransactionExecutorError.missingComponent(entityID: entityID,
+                                                                   type: "RenderMeshComponent")
+                }
+
             case let .setScriptBindings(entityID, bindings):
                 let entity = try requireEntity(entityID, in: scene)
                 _ = scene.setComponent(ScriptComponent(bindings: bindings), for: entity)
@@ -928,6 +937,8 @@ public struct TransactionExecutor {
             return "scene:light_spot_inner:\(id)"
         case let .setLightSpotOuterAngle(id, _):
             return "scene:light_spot_outer:\(id)"
+        case let .setMeshColorTint(id, _):
+            return "scene:mesh_color:\(id)"
         case let .setScriptBindings(id, _):
             return "scene:scripts:\(id)"
         case let .setCameraPose(id, _, _, _):
@@ -1002,6 +1013,11 @@ public struct TransactionExecutor {
                 events.append(.entityAuthoredChanged(
                     ref: "scene:\(entityID)", property: "rigidBodyMotionType",
                     value: .string(value.rawValue)))
+
+            case let .setMeshColorTint(entityID, color):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "meshColor",
+                    value: .vec3(color.x, color.y, color.z)))
 
             case let .setLightType(entityID, type):
                 events.append(.entityAuthoredChanged(

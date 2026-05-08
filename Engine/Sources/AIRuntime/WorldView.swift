@@ -61,6 +61,8 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
     // Camera (authored)
     public var cameraFovYDegrees: Float?
     public var cameraIsActive: Bool?
+    // Mesh (authored)
+    public var meshColor: [Float]?           // [r, g, b] linear 0–1; nil = default white
     // Physics (authored)
     public var rigidBodyMotionType: String?
     // Selection state (not authored — updated by selectionChanged events)
@@ -109,6 +111,8 @@ public struct WorldEntityRecord: Sendable, Equatable, Codable {
             if case let .float(f) = value { cameraFovYDegrees = f }
         case "cameraIsActive":
             if case let .bool(b) = value { cameraIsActive = b }
+        case "meshColor":
+            if case let .vec3(r, g, b) = value { meshColor = [r, g, b] }
         case "rigidBodyMotionType":
             if case let .string(s) = value { rigidBodyMotionType = s }
         default:
@@ -217,6 +221,7 @@ public struct WorldView: Sendable {
             record.lightRange = e.lightRange
             record.cameraFovYDegrees = e.cameraFovYDegrees
             record.cameraIsActive = e.cameraIsActive
+            record.meshColor = e.meshColor
             record.rigidBodyMotionType = e.rigidBodyMotionType
             entityIndex[e.id] = record
         }

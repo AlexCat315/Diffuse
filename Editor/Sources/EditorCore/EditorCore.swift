@@ -400,11 +400,20 @@ public final class EditorApplication: @unchecked Sendable {
                                                         text: "",
                                                         assistantState: .thinking)))
 
+        let capturedAid = assistantID
+        let progressHandler: @Sendable (String) -> Void = { [weak self] partial in
+            Task { @MainActor [weak self] in
+                self?.store.dispatch(.updateChatMessage(id: capturedAid,
+                                                        assistantState: .streaming(partial)))
+            }
+        }
+
         Task { @MainActor [weak self] in
             guard let self else { return }
             do {
                 let proposal = try await session.process(
-                    .naturalLanguage(text: text, locale: locale ?? "en")
+                    .naturalLanguage(text: text, locale: locale ?? "en"),
+                    onProgress: progressHandler
                 )
                 let latencyMs = Int(Date().timeIntervalSince(t0) * 1000)
 
@@ -416,6 +425,9 @@ public final class EditorApplication: @unchecked Sendable {
                                                                assistantState: .replied(reply)))
                         self.pendingAssistantMessageID = nil
                     }
+                    Task { await session.recordOutcome(toolUseID: proposal.toolUseID,
+                                                       content: "Acknowledged.",
+                                                       proposalID: proposal.id) }
                     return
                 }
 
@@ -723,9 +735,11 @@ public final class EditorApplication: @unchecked Sendable {
                     let stepCount = proposal.plan.steps.count
                     let accepted = (0..<stepCount).map { "step_\($0)" }
                     if let session {
-                        Task { await session.learn(proposalID: proposal.id,
-                                                   acceptedStepIDs: accepted,
-                                                   rejectedStepIDs: []) }
+                        Task { await session.recordOutcome(
+                            toolUseID: proposal.toolUseID,
+                            content: "Plan applied successfully: \(proposal.plan.summary)",
+                            proposalID: proposal.id
+                        ) }
                     }
                     pendingSessionProposal = nil
                 }
@@ -757,9 +771,11 @@ public final class EditorApplication: @unchecked Sendable {
                 let stepCount = proposal.plan.steps.count
                 let rejected = (0..<stepCount).map { "step_\($0)" }
                 if let session {
-                    Task { await session.learn(proposalID: proposal.id,
-                                               acceptedStepIDs: [],
-                                               rejectedStepIDs: rejected) }
+                    Task { await session.recordOutcome(
+                        toolUseID: proposal.toolUseID,
+                        content: "User rejected this plan.",
+                        proposalID: proposal.id
+                    ) }
                 }
                 pendingSessionProposal = nil
             }
