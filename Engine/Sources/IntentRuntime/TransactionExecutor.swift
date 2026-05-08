@@ -951,10 +951,12 @@ public struct TransactionExecutor {
             switch op {
             case let .spawnImportedMeshEntity(label, kindLabel, _, position):
                 if createdIndex < createdEntityIDs.count {
-                    let ref = "scene:\(createdEntityIDs[createdIndex])"
+                    let rawID = createdEntityIDs[createdIndex]
+                    let ref = "scene:\(rawID)"
                     events.append(.entityAdded(ref: ref, name: label, kind: kindLabel))
                     events.append(.entityAuthoredChanged(ref: ref, property: "position",
                         value: .vec3(position.x, position.y, position.z)))
+                    if let ev = worldPositionEvent(for: rawID, in: scene) { events.append(ev) }
                     createdIndex += 1
                 }
 
@@ -974,6 +976,7 @@ public struct TransactionExecutor {
                         events.append(.entityAuthoredChanged(ref: ref, property: "position",
                             value: .vec3(t.x, t.y, t.z)))
                     }
+                    if let ev = worldPositionEvent(for: rawID, in: scene) { events.append(ev) }
                     createdIndex += 1
                 }
 
@@ -981,12 +984,14 @@ public struct TransactionExecutor {
                 events.append(.entityAuthoredChanged(
                     ref: "scene:\(entityID)", property: "parentRef",
                     value: .string(parentID.map { "scene:\($0)" } ?? "")))
+                if let ev = worldPositionEvent(for: entityID, in: scene) { events.append(ev) }
 
             case let .setLocalTransform(entityID, transform):
                 let t = transform.translation
                 events.append(.entityAuthoredChanged(
                     ref: "scene:\(entityID)", property: "position",
                     value: .vec3(t.x, t.y, t.z)))
+                if let ev = worldPositionEvent(for: entityID, in: scene) { events.append(ev) }
 
             case let .setSceneName(entityID, value):
                 events.append(.entityAuthoredChanged(
@@ -1033,6 +1038,7 @@ public struct TransactionExecutor {
                 events.append(.entityAuthoredChanged(
                     ref: "scene:\(entityID)", property: "position",
                     value: .vec3(t.x, t.y, t.z)))
+                if let ev = worldPositionEvent(for: entityID, in: scene) { events.append(ev) }
 
             default:
                 break
@@ -1042,5 +1048,17 @@ public struct TransactionExecutor {
         events.append(.editApplied(editID: edit.id, summary: edit.summary,
                                    revision: edit.revisionAfter.sceneRevision ?? 0))
         return events
+    }
+
+    /// Queries the post-propagation world-space position for an entity and returns an evaluated event.
+    /// Returns nil if the scene is unavailable or the entity has no world transform.
+    private func worldPositionEvent(for entityID: UInt64, in scene: SceneRuntime?) -> WorldEvent? {
+        guard let scene else { return nil }
+        let entity = EntityID(index: UInt32(entityID & 0xFFFF_FFFF),
+                              generation: UInt32(entityID >> 32))
+        guard let t = scene.worldTransform(for: entity)?.translation else { return nil }
+        return .entityEvaluatedChanged(ref: "scene:\(entityID)",
+                                       property: "worldPosition",
+                                       value: .vec3(t.x, t.y, t.z))
     }
 }
