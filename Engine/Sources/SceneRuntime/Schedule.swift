@@ -561,7 +561,8 @@ public struct RuntimeWorldSchedule {
                 entity: entity,
                 instance: RenderInstance(
                     meshIndex: renderMesh.meshIndex,
-                    transform: worldTransform.matrix
+                    transform: worldTransform.matrix,
+                    colorTint: renderMesh.colorTint
                 )
             )
         }

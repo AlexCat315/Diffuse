@@ -145,6 +145,13 @@ public struct SceneEditPlanExecutor: Sendable {
             }
             return [.setLightIntensity(entityID: id, intensity: v)]
 
+        case .setMeshColor:
+            let id = try resolveEntityID(step, scene: scene)
+            guard let c = step.color, c.count == 3 else {
+                throw SceneEditPlanExecutorError.invalidColor(op: step.op)
+            }
+            return [.setMeshColorTint(entityID: id, color: SIMD3(c[0], c[1], c[2]))]
+
         case .setLightColor:
             let id = try resolveEntityID(step, scene: scene)
             guard let c = step.color, c.count == 3 else {

@@ -62,6 +62,13 @@ public struct SceneSemanticEncoder: Sendable {
                 cameraIsActive = cam.isActive
             }
 
+            var meshColor: [Float]?
+            if let mesh = scene.component(RenderMeshComponent.self, for: entity) {
+                let c = mesh.colorTint
+                let isWhite = abs(c.x - 1) < 0.001 && abs(c.y - 1) < 0.001 && abs(c.z - 1) < 0.001
+                if !isWhite { meshColor = [c.x, c.y, c.z] }
+            }
+
             var rigidBodyMotionType: String?
             if let rb = scene.component(RigidBody.self, for: entity) {
                 rigidBodyMotionType = rb.motionType.rawValue
@@ -82,6 +89,7 @@ public struct SceneSemanticEncoder: Sendable {
                 lightRange: lightRange,
                 cameraFovYDegrees: cameraFovYDegrees,
                 cameraIsActive: cameraIsActive,
+                meshColor: meshColor,
                 rigidBodyMotionType: rigidBodyMotionType
             ))
         }

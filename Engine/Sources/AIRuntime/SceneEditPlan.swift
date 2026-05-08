@@ -23,6 +23,9 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
     // Camera
     case setCameraPose     = "set_camera_pose"
 
+    // Visual
+    case setMeshColor         = "set_mesh_color"
+
     // Physics
     case setRigidBodyMotion   = "set_rigidbody_motion"
     case setRigidBodyMass     = "set_rigidbody_mass"
