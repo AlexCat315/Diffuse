@@ -33,7 +33,6 @@ public enum EditorAction: Sendable {
     case setAISettings(EditorAISettings)
     case setAIStatusMessage(String?)
     case setAIWarnings([String])
-    case setUnresolvedIntents([UnresolvableIntent])
     case appendConsoleMessage(String, severity: EditorConsoleSeverity = .info, detail: String? = nil)
     case clearConsole
     case setCommandPaletteVisible(Bool)
@@ -143,8 +142,6 @@ public enum EditorReducer {
             state.aiStatusMessage = message
         case let .setAIWarnings(warnings):
             state.aiWarnings = warnings
-        case let .setUnresolvedIntents(intents):
-            state.unresolvedIntents = intents
         case let .appendConsoleMessage(message, severity, detail):
             let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }
