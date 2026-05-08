@@ -409,10 +409,11 @@ public final class EditorApplication: @unchecked Sendable {
                 let latencyMs = Int(Date().timeIntervalSince(t0) * 1000)
 
                 guard !proposal.plan.isEmpty else {
-                    self.store.dispatch(.setAIStatusMessage("No scene changes needed."))
+                    self.store.dispatch(.setAIStatusMessage("No scene changes."))
                     if let aid = self.pendingAssistantMessageID {
+                        let reply = proposal.plan.summary.isEmpty ? "No scene changes needed." : proposal.plan.summary
                         self.store.dispatch(.updateChatMessage(id: aid,
-                                                               assistantState: .applied(summary: "No changes needed")))
+                                                               assistantState: .replied(reply)))
                         self.pendingAssistantMessageID = nil
                     }
                     return
@@ -709,7 +710,9 @@ public final class EditorApplication: @unchecked Sendable {
             updateSelection(after: result.applyResult)
             store.dispatch(.setAIStatusMessage("Applied \(result.transactionID)"))
             if let aid = pendingAssistantMessageID {
-                store.dispatch(.updateChatMessage(id: aid, assistantState: .applied(summary: "Applied")))
+                let planSummary = pendingSessionProposal?.plan.summary ?? ""
+                let appliedSummary = planSummary.isEmpty ? "Applied" : planSummary
+                store.dispatch(.updateChatMessage(id: aid, assistantState: .applied(summary: appliedSummary)))
                 pendingAssistantMessageID = nil
             }
             if var edit = result.applyResult?.edit {
