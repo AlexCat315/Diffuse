@@ -52,6 +52,8 @@ public struct AIScenePlanner: Sendable {
     private static let apiEndpoint = URL(string: "https://api.anthropic.com/v1/messages")!
     private static let anthropicVersion = "2023-06-01"
 
+    public var modelID: String { config.model }
+
     public init(config: AIScenePlannerConfig, session: URLSession = .shared) {
         self.config = config
         self.session = session

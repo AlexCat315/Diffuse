@@ -416,6 +416,13 @@ public final class EditorApplication: @unchecked Sendable {
         let context = makeNaturalLanguageIntentContext()
         let capabilityContext = CapabilityInvocationContext(role: .editor, releasePhase: .beta)
 
+        // Capture scene context synchronously before entering the async Task.
+        let t0 = Date()
+        let locale = store.state.language.lprojName
+        let workspace = store.state.workspaceMode.rawValue
+        let entityCount = scene.entityCount
+        let selectedKind = store.state.selectedEntityID.flatMap { scene.entitySummary(id: $0)?.kind }
+
         store.dispatch(.setAIStatusMessage("Resolving…"))
 
         Task { @MainActor [weak self] in
@@ -425,15 +432,25 @@ public final class EditorApplication: @unchecked Sendable {
                 context: context,
                 capabilityContext: capabilityContext
             )
+            let latencyMs = Int(Date().timeIntervalSince(t0) * 1000)
             self.refreshUnresolvedIntents()
 
             guard let intent = result.intent else {
                 let message = result.unresolved?.message ?? "Unable to resolve intent."
                 self.store.dispatch(.setAIStatusMessage(message))
                 IntentTrainingLogger.log(
-                    .init(text: text, verb: nil, layer: "unresolved",
-                          confidence: 0, outcome: "unresolved",
-                          locale: self.store.state.language.lprojName),
+                    .init(text: text,
+                          locale: locale,
+                          layer: "unresolved",
+                          candidates: result.candidates.map {
+                              .init(verb: $0.verbID, confidence: $0.confidence, reason: $0.reason)
+                          },
+                          unresolvedReason: result.unresolved?.reason.rawValue,
+                          workspaceMode: workspace,
+                          sceneEntityCount: entityCount,
+                          selectedEntityKind: selectedKind,
+                          latencyMs: latencyMs,
+                          outcome: "unresolved"),
                     projectDirectory: self.projectDirectory
                 )
                 return
@@ -442,17 +459,28 @@ public final class EditorApplication: @unchecked Sendable {
             let reason = result.candidates.first?.reason ?? ""
             let layerLabel: String
             if reason == "token_overlap"         { layerLabel = "local" }
-            else if reason == "ai_tool_use"      { layerLabel = "AI" }
+            else if reason == "ai_tool_use"      { layerLabel = "ai_tool" }
             else if reason.hasSuffix("keyword")  { layerLabel = "keyword" }
             else                                 { layerLabel = "fallback" }
             self.store.dispatch(.setAIStatusMessage("[\(layerLabel)] \(intent.verb)"))
+
+            let args: [String: Any]? = intent.arguments.isEmpty ? nil
+                : intent.arguments.mapValues { $0.trainingLogPrimitive }
             self.pendingTrainingEntry = IntentTrainingLogger.Entry(
                 text: text,
-                verb: intent.verb,
+                locale: locale,
                 layer: layerLabel,
+                verb: intent.verb,
                 confidence: intent.confidence,
-                outcome: "applied",
-                locale: self.store.state.language.lprojName
+                arguments: args,
+                candidates: result.candidates.map {
+                    .init(verb: $0.verbID, confidence: $0.confidence, reason: $0.reason)
+                },
+                workspaceMode: workspace,
+                sceneEntityCount: entityCount,
+                selectedEntityKind: selectedKind,
+                latencyMs: latencyMs,
+                outcome: "applied"
             )
             self.submitResolvedIntent(intent)
         }
@@ -467,16 +495,47 @@ public final class EditorApplication: @unchecked Sendable {
         )
         let baseRevision = snapshot.sceneRevision
 
+        // Capture all training context synchronously before the async boundary.
+        let t0 = Date()
+        let locale = store.state.language.lprojName
+        let modelID = planner.modelID
+        let entityCount = snapshot.entityCount
+        let selectedKind = snapshot.entities.first(where: { $0.isSelected })?.kind
+        let workspaceMode = snapshot.workspaceMode
+
         store.dispatch(.setAIStatusMessage("Planning…"))
 
         Task { @MainActor [weak self] in
             guard let self else { return }
             do {
                 let editPlan = try await planner.plan(userRequest: text, snapshot: snapshot)
+                let latencyMs = Int(Date().timeIntervalSince(t0) * 1000)
+
                 guard !editPlan.isEmpty else {
                     self.store.dispatch(.setAIStatusMessage("No scene changes needed."))
                     return
                 }
+
+                // Serialise plan steps for the training log (Codable → [String: Any]).
+                let planStepsJSON: [[String: Any]]? = (try? JSONEncoder().encode(editPlan.steps))
+                    .flatMap { try? JSONSerialization.jsonObject(with: $0) as? [[String: Any]] }
+
+                self.pendingTrainingEntry = IntentTrainingLogger.Entry(
+                    text: text,
+                    locale: locale,
+                    layer: "ai_planner",
+                    planSummary: editPlan.summary,
+                    planReasoning: editPlan.reasoning,
+                    planStepCount: editPlan.steps.count,
+                    planSteps: planStepsJSON,
+                    modelID: modelID,
+                    workspaceMode: workspaceMode,
+                    sceneEntityCount: entityCount,
+                    selectedEntityKind: selectedKind,
+                    latencyMs: latencyMs,
+                    outcome: "applied"
+                )
+
                 let transaction = try SceneEditPlanExecutor().buildTransaction(
                     from: editPlan,
                     scene: self.scene.scene,
@@ -485,7 +544,20 @@ public final class EditorApplication: @unchecked Sendable {
                 )
                 self.submitPlanTransaction(transaction)
             } catch {
+                let latencyMs = Int(Date().timeIntervalSince(t0) * 1000)
                 self.store.dispatch(.setAIStatusMessage(String(describing: error)))
+                IntentTrainingLogger.log(
+                    .init(text: text,
+                          locale: locale,
+                          layer: "ai_planner",
+                          modelID: modelID,
+                          workspaceMode: workspaceMode,
+                          sceneEntityCount: entityCount,
+                          selectedEntityKind: selectedKind,
+                          latencyMs: latencyMs,
+                          outcome: "error"),
+                    projectDirectory: self.projectDirectory
+                )
             }
         }
     }
