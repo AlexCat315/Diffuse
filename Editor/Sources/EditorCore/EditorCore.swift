@@ -42,6 +42,7 @@ public final class EditorApplication: @unchecked Sendable {
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
     private var pendingTrainingEntry: IntentTrainingLogger.Entry?
     private var aiScenePlanner: AIScenePlanner?
+    private var session: Session?
     private let editLog: EditLog
     private var recentResolvedVerbs: [String] = []
     private var frameTimingAccumulator: Double = 0
@@ -75,6 +76,7 @@ public final class EditorApplication: @unchecked Sendable {
             intentCoordinator.setBackend(backend)
         }
         aiScenePlanner = EditorApplication.makePlanner(for: initialAISettings)
+        let initialSession = EditorApplication.makeSession(for: initialAISettings)
 
         self.engine = EngineHost(runtime: BridgedEngineRuntime(), wgpuBackend: resolvedBackend)
         self.projectDirectory = projectDirectory
@@ -85,6 +87,7 @@ public final class EditorApplication: @unchecked Sendable {
         self.intentCoordinator = intentCoordinator
         self.events = events
         self.editLog = EditLog(projectDirectory: projectDirectory)
+        self.session = initialSession
 
         scene.onRevisionChanged = { revision in
             store.dispatch(.setSceneRevision(revision))
@@ -407,6 +410,11 @@ public final class EditorApplication: @unchecked Sendable {
             return
         }
 
+        if let session {
+            submitNaturalLanguageIntentWithSession(text, session: session)
+            return
+        }
+
         if let planner = aiScenePlanner {
             submitNaturalLanguageIntentWithPlanner(text, planner: planner)
             return
@@ -485,6 +493,45 @@ public final class EditorApplication: @unchecked Sendable {
                 outcome: "applied"
             )
             self.submitResolvedIntent(intent)
+        }
+    }
+
+    private func submitNaturalLanguageIntentWithSession(_ text: String, session: Session) {
+        let snapshot = SceneSemanticEncoder().encode(
+            scene.scene,
+            selectedEntityID: store.state.selectedEntityID,
+            workspaceMode: store.state.workspaceMode.rawValue,
+            localeIdentifier: store.state.language.lprojName
+        )
+        let locale = store.state.language.lprojName
+        let t0 = Date()
+        store.dispatch(.setAIStatusMessage("Planning…"))
+
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            await session.observe(snapshot: snapshot)
+            do {
+                let proposal = try await session.process(
+                    .naturalLanguage(text: text, locale: locale ?? "en")
+                )
+                let latencyMs = Int(Date().timeIntervalSince(t0) * 1000)
+
+                guard !proposal.plan.isEmpty else {
+                    self.store.dispatch(.setAIStatusMessage("No scene changes needed."))
+                    return
+                }
+
+                let transaction = try SceneEditPlanExecutor().buildTransaction(
+                    from: proposal.plan,
+                    scene: self.scene.scene,
+                    baseSceneRevision: proposal.baseSceneRevision,
+                    approvalPolicy: proposal.approvalPolicy
+                )
+                _ = latencyMs
+                self.submitPlanTransaction(transaction)
+            } catch {
+                self.store.dispatch(.setAIStatusMessage(String(describing: error)))
+            }
         }
     }
 
@@ -767,6 +814,7 @@ public final class EditorApplication: @unchecked Sendable {
         store.dispatch(.setAISettings(settings))
         intentCoordinator.setBackend(Self.makeBackend(for: settings))
         aiScenePlanner = Self.makePlanner(for: settings)
+        session = Self.makeSession(for: settings)
     }
 
     /// Removes the stored API key for the current provider and disables AI resolution.
@@ -775,6 +823,7 @@ public final class EditorApplication: @unchecked Sendable {
         AIKeychain.delete(provider: provider)
         intentCoordinator.setBackend(nil)
         aiScenePlanner = nil
+        session = nil
     }
 
     /// Returns `true` if a non-empty API key is stored for the current provider.
@@ -801,6 +850,18 @@ public final class EditorApplication: @unchecked Sendable {
             guard let key = AIKeychain.load(provider: .anthropic) else { return nil }
             let config = AIScenePlannerConfig(apiKey: key, model: settings.model)
             return AIScenePlanner(config: config)
+        }
+    }
+
+    static func makeSession(for settings: EditorAISettings) -> Session? {
+        switch settings.provider {
+        case .none:
+            return nil
+        case .anthropic:
+            guard let key = AIKeychain.load(provider: .anthropic) else { return nil }
+            let config = AIScenePlannerConfig(apiKey: key, model: settings.model)
+            let backend = AnthropicSessionBackend(config: config)
+            return Session(backend: backend)
         }
     }
 
@@ -881,6 +942,11 @@ public final class EditorApplication: @unchecked Sendable {
             store.dispatch(.setAIStatusMessage("Applied \(result.transactionID)"))
             if let edit = result.applyResult?.edit {
                 editLog.append(edit)
+                let summary = edit.summary
+                let revision = result.applyResult?.sceneRevision ?? 0
+                if let session {
+                    Task { await session.observe(editSummary: summary, revision: revision) }
+                }
             }
             flushTrainingLog(outcome: "applied")
         case .confirmationRequested:
