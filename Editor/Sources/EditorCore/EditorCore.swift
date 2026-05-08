@@ -859,9 +859,8 @@ public final class EditorApplication: @unchecked Sendable {
             return nil
         case .anthropic:
             guard let key = AIKeychain.load(provider: .anthropic) else { return nil }
-            let config = AIScenePlannerConfig(apiKey: key, model: settings.model)
-            let backend = AnthropicSessionBackend(config: config)
-            return Session(backend: backend)
+            let config = SessionConfig(apiKey: key, model: settings.model)
+            return Session(config: config)
         }
     }
 

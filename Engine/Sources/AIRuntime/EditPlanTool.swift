@@ -1,8 +1,8 @@
 import Foundation
 
-/// Anthropic tool definition for the `execute_edit_plan` tool.
-/// Shared by all Anthropic-backed scene-editing callers (AIScenePlanner, AnthropicSessionBackend).
-public enum AnthropicEditPlanTool {
+/// Tool definition for the `execute_edit_plan` tool, used in Messages API requests.
+/// Schema is derived from `SceneEditOp` — the canonical set of atomic scene mutations.
+public enum EditPlanTool {
     public static func definition() -> [String: Any] {
         [
             "name": "execute_edit_plan",
