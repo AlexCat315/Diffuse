@@ -1,17 +1,29 @@
 import AIRuntime
 import Foundation
-import Security
 
 // MARK: - Provider
 
 public enum EditorAIProvider: String, Codable, Sendable, Equatable, CaseIterable {
     case none
     case anthropic
+    case openai
+    case deepseek
 
     public var displayName: String {
         switch self {
-        case .none: return "None"
+        case .none:      return "None"
         case .anthropic: return "Anthropic"
+        case .openai:    return "OpenAI"
+        case .deepseek:  return "DeepSeek"
+        }
+    }
+
+    public var defaultModel: String {
+        switch self {
+        case .none:      return ""
+        case .anthropic: return SessionConfig.defaultAnthropicModel
+        case .openai:    return SessionConfig.defaultOpenAIModel
+        case .deepseek:  return SessionConfig.defaultDeepSeekModel
         }
     }
 }
@@ -24,64 +36,64 @@ public struct EditorAISettings: Codable, Sendable, Equatable {
 
     public static let `default` = EditorAISettings(
         provider: .none,
-        model: SessionConfig.defaultModel
+        model: SessionConfig.defaultAnthropicModel
     )
 
     public init(provider: EditorAIProvider = .none,
-                model: String = SessionConfig.defaultModel) {
+                model: String = SessionConfig.defaultAnthropicModel) {
         self.provider = provider
         self.model = model
     }
 }
 
-// MARK: - Keychain
+// MARK: - Key store
 
-/// Stores provider API keys in the system Keychain under the Guava service name.
-/// Keys are indexed by provider raw value so each provider has an independent slot.
+/// Stores provider API keys as a JSON file in Application Support.
+/// Avoids Keychain permission dialogs that occur when the binary identity
+/// changes on every `swift build` during development.
 public enum AIKeychain {
-    private static let service = "dev.guava.editor.ai"
+    private static var keysFileURL: URL? {
+        FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)
+            .first?
+            .appendingPathComponent("Guava", isDirectory: true)
+            .appendingPathComponent("ai_keys.json")
+    }
+
+    private static func loadAll() -> [String: String] {
+        guard let url = keysFileURL,
+              let data = try? Data(contentsOf: url),
+              let dict = try? JSONDecoder().decode([String: String].self, from: data)
+        else { return [:] }
+        return dict
+    }
+
+    private static func saveAll(_ dict: [String: String]) {
+        guard let url = keysFileURL else { return }
+        try? FileManager.default.createDirectory(at: url.deletingLastPathComponent(),
+                                                  withIntermediateDirectories: true)
+        guard let data = try? JSONEncoder().encode(dict) else { return }
+        try? data.write(to: url, options: [.atomic])
+    }
 
     public static func save(key: String, provider: EditorAIProvider) {
         guard !key.isEmpty else {
             delete(provider: provider)
             return
         }
-        let data = Data(key.utf8)
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: provider.rawValue,
-            kSecValueData: data,
-        ]
-        SecItemDelete(query as CFDictionary)
-        SecItemAdd(query as CFDictionary, nil)
+        var all = loadAll()
+        all[provider.rawValue] = key
+        saveAll(all)
     }
 
     public static func load(provider: EditorAIProvider) -> String? {
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: provider.rawValue,
-            kSecReturnData: true,
-            kSecMatchLimit: kSecMatchLimitOne,
-        ]
-        var result: AnyObject?
-        guard SecItemCopyMatching(query as CFDictionary, &result) == errSecSuccess,
-              let data = result as? Data,
-              let key = String(data: data, encoding: .utf8),
-              !key.isEmpty else {
-            return nil
-        }
+        guard let key = loadAll()[provider.rawValue], !key.isEmpty else { return nil }
         return key
     }
 
     public static func delete(provider: EditorAIProvider) {
-        let query: [CFString: Any] = [
-            kSecClass: kSecClassGenericPassword,
-            kSecAttrService: service,
-            kSecAttrAccount: provider.rawValue,
-        ]
-        SecItemDelete(query as CFDictionary)
+        var all = loadAll()
+        all.removeValue(forKey: provider.rawValue)
+        saveAll(all)
     }
 
     public static func hasKey(for provider: EditorAIProvider) -> Bool {

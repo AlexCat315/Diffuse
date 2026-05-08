@@ -1,7 +1,7 @@
 import Foundation
 import IntentRuntime
 
-public enum SessionError: Error, CustomStringConvertible, Sendable {
+public enum SessionError: Error, CustomStringConvertible, LocalizedError, Sendable {
     case unsupportedSignal(String)
     case httpError(statusCode: Int, body: String?)
     case malformedResponse(detail: String)
@@ -22,6 +22,8 @@ public enum SessionError: Error, CustomStringConvertible, Sendable {
             return "Session: plan decoding failed — \(detail)"
         }
     }
+
+    public var errorDescription: String? { description }
 }
 
 /// Per-project persistent AI participant.
@@ -41,8 +43,16 @@ public actor Session {
     private let urlSession: URLSession
     private let maxHistoryTurns: Int
 
-    private static let inferenceEndpoint = URL(string: "https://api.anthropic.com/v1/messages")!
-    private static let apiVersion = "2023-06-01"
+    private static let anthropicAPIVersion = "2023-06-01"
+
+    private var inferenceEndpoint: URL {
+        switch config.apiFormat {
+        case .anthropic:
+            return config.baseURL.appendingPathComponent("v1/messages")
+        case .openAICompatible:
+            return config.baseURL.appendingPathComponent("v1/chat/completions")
+        }
+    }
 
     public init(id: String = UUID().uuidString,
                 config: SessionConfig,
@@ -141,14 +151,29 @@ public actor Session {
     }
 
     private func requestBody(userRequest: String) -> [String: Any] {
-        [
-            "model": config.model,
-            "max_tokens": config.maxTokens,
-            "system": systemPrompt(),
-            "tools": [EditPlanTool.definition()],
-            "tool_choice": ["type": "any"],
-            "messages": [["role": "user", "content": userRequest]],
-        ]
+        switch config.apiFormat {
+        case .anthropic:
+            return [
+                "model": config.model,
+                "max_tokens": config.maxTokens,
+                "system": systemPrompt(),
+                "tools": [EditPlanTool.definition()],
+                "tool_choice": ["type": "any"],
+                "messages": [["role": "user", "content": userRequest]],
+            ]
+        case .openAICompatible:
+            return [
+                "model": config.model,
+                "max_tokens": config.maxTokens,
+                "tools": [EditPlanTool.openAIDefinition()],
+                "tool_choice": ["type": "function",
+                                "function": ["name": "execute_edit_plan"]],
+                "messages": [
+                    ["role": "system", "content": systemPrompt()],
+                    ["role": "user", "content": userRequest],
+                ],
+            ]
+        }
     }
 
     private func systemPrompt() -> String {
@@ -193,6 +218,9 @@ public actor Session {
         - For snap_to_ground, set Y position to 0.
         - If the conversation history shows a correction (e.g. "I rejected your suggestion"), \
         adjust your approach accordingly before proposing again.
+        - If the user asks a general question (capabilities, greetings, clarifications) rather \
+        than requesting a scene change, call the tool with an empty steps array and put your \
+        conversational reply in the summary field.
         """)
 
         return parts.joined(separator: "\n\n")
@@ -212,12 +240,17 @@ public actor Session {
     // MARK: - HTTP
 
     private func post(_ body: [String: Any]) async throws -> Data {
-        var request = URLRequest(url: Self.inferenceEndpoint,
+        var request = URLRequest(url: inferenceEndpoint,
                                  timeoutInterval: config.timeoutInterval)
         request.httpMethod = "POST"
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
-        request.setValue(Self.apiVersion, forHTTPHeaderField: "anthropic-version")
+        switch config.apiFormat {
+        case .anthropic:
+            request.setValue(config.apiKey, forHTTPHeaderField: "x-api-key")
+            request.setValue(Self.anthropicAPIVersion, forHTTPHeaderField: "anthropic-version")
+        case .openAICompatible:
+            request.setValue("Bearer \(config.apiKey)", forHTTPHeaderField: "Authorization")
+        }
         request.httpBody = try JSONSerialization.data(withJSONObject: body)
         let (data, response) = try await urlSession.data(for: request)
         if let http = response as? HTTPURLResponse, !(200..<300).contains(http.statusCode) {
@@ -230,6 +263,15 @@ public actor Session {
     // MARK: - Response parsing
 
     private func parsePlan(from data: Data) throws -> SceneEditPlan {
+        switch config.apiFormat {
+        case .anthropic:
+            return try parseAnthropicPlan(from: data)
+        case .openAICompatible:
+            return try parseOpenAIPlan(from: data)
+        }
+    }
+
+    private func parseAnthropicPlan(from data: Data) throws -> SceneEditPlan {
         guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
             throw SessionError.malformedResponse(detail: "top-level JSON is not an object")
         }
@@ -241,6 +283,27 @@ public actor Session {
         }
         guard let planData = try? JSONSerialization.data(withJSONObject: toolInput) else {
             throw SessionError.planDecodingFailed(detail: "could not re-serialize tool input")
+        }
+        do {
+            return try JSONDecoder().decode(SceneEditPlan.self, from: planData)
+        } catch {
+            throw SessionError.planDecodingFailed(detail: String(describing: error))
+        }
+    }
+
+    private func parseOpenAIPlan(from data: Data) throws -> SceneEditPlan {
+        guard let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+              let choices = json["choices"] as? [[String: Any]],
+              let message = choices.first?["message"] as? [String: Any],
+              let toolCalls = message["tool_calls"] as? [[String: Any]],
+              let firstCall = toolCalls.first(where: { $0["type"] as? String == "function" }),
+              let function = firstCall["function"] as? [String: Any],
+              let argumentsString = function["arguments"] as? String
+        else {
+            throw SessionError.noPlanInResponse
+        }
+        guard let planData = argumentsString.data(using: .utf8) else {
+            throw SessionError.planDecodingFailed(detail: "could not encode arguments as UTF-8")
         }
         do {
             return try JSONDecoder().decode(SceneEditPlan.self, from: planData)
