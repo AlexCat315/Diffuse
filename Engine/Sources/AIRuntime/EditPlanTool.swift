@@ -62,6 +62,10 @@ public enum EditPlanTool {
                     "type": "string",
                     "description": "Target entity in 'scene:<number>' format. Required for all ops except spawn_entity.",
                 ] as [String: Any],
+                "parent_id": [
+                    "type": "string",
+                    "description": "New parent entity in 'scene:<number>' format for reparent_entity. Omit to move the entity to the scene root.",
+                ] as [String: Any],
                 "label": [
                     "type": "string",
                     "description": "Entity display name for spawn_entity.",
