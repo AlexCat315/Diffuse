@@ -1,3 +1,4 @@
+import AIRuntime
 import Foundation
 import Security
 
@@ -23,11 +24,11 @@ public struct EditorAISettings: Codable, Sendable, Equatable {
 
     public static let `default` = EditorAISettings(
         provider: .none,
-        model: AnthropicIntentResolverBackendConfig.defaultModel
+        model: SessionConfig.defaultModel
     )
 
     public init(provider: EditorAIProvider = .none,
-                model: String = AnthropicIntentResolverBackendConfig.defaultModel) {
+                model: String = SessionConfig.defaultModel) {
         self.provider = provider
         self.model = model
     }

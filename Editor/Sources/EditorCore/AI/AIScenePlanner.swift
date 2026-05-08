@@ -111,7 +111,7 @@ public struct AIScenePlanner: Sendable {
     }
 
     private func editPlanTool() -> [String: Any] {
-        AnthropicEditPlanTool.definition()
+        EditPlanTool.definition()
     }
 
     // MARK: - Snapshot serialisation
