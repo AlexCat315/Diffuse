@@ -232,13 +232,14 @@ verbID 中的 `.` 编码为 `__`（Anthropic 工具名不允许含 `.`）。
 
 ### 解析来源标记
 
-`candidates.first?.reason` 指示路由层：
+`candidates.first?.reason` 决定训练日志的 `layer` 字段：
 
-| `reason` | 来源 |
-|---------|------|
-| `"token_overlap"` | Layer 1 本地分类器 |
-| `"ai_tool_use"` | Layer 2 Anthropic 后端 |
-| `"* keyword"` | Fallback 关键词匹配 |
+| `candidates.first?.reason` | 训练日志 `layer` | 来源 |
+|---------------------------|-----------------|------|
+| `"token_overlap"` | `"local"` | Layer 1 本地分类器 |
+| `"ai_tool_use"` | `"ai_tool"` | Layer 2 Anthropic 后端 |
+| `"* keyword"`（后缀） | `"keyword"` | Fallback 关键词匹配 |
+| 其他 | `"fallback"` | 其他回退逻辑 |
 
 ---
 
@@ -272,15 +273,129 @@ Engine/Sources/CapabilityRuntime/Resources/CapabilityRegistry/default/
 
 ## 训练数据收集
 
-每条 NL 意图解析记录自动追加至 `<project>/.guava/intent_training.jsonl`：
+每条 NL 意图解析记录自动追加至 `<project>/.guava/intent_training.jsonl`（JSONL，每行独立 JSON 对象）。
+
+**两种不同的记录结构**，根据路径区分：
+
+### 级联回退路径记录（`layer` ∈ `"local"` `"ai_tool"` `"keyword"` `"fallback"`）
 
 ```json
-{"ts":"2026-05-07T12:00:00Z","locale":"zh-Hans","text":"把这个灯变成点光源","verb":"scene.set_light_type","layer":"AI","confidence":0.92,"outcome":"applied"}
-{"ts":"2026-05-07T12:01:00Z","locale":"zh-Hans","text":"删掉这个","verb":"scene.delete_entity","layer":"local","confidence":0.87,"outcome":"discarded"}
-{"ts":"2026-05-07T12:02:00Z","locale":"en","text":"make it glow","verb":null,"layer":"unresolved","confidence":0,"outcome":"unresolved"}
+{
+  "ts": "2026-05-08T09:12:34Z",
+  "text": "把这个灯变成点光源",
+  "locale": "zh-Hans",
+  "layer": "local",
+  "verb": "scene.set_light_type",
+  "confidence": 0.87,
+  "arguments": {"light_type": "point"},
+  "candidates": [
+    {"verb": "scene.set_light_type",      "confidence": 0.87, "reason": "token_overlap"},
+    {"verb": "scene.set_light_intensity", "confidence": 0.31, "reason": "token_overlap"}
+  ],
+  "workspace": "level",
+  "scene_entity_count": 8,
+  "selected_entity_kind": "Point Light",
+  "latency_ms": 3,
+  "outcome": "applied"
+}
 ```
 
-> **注意**：AI 场景规划器路径（主路径）目前不写训练日志，因为产出是多步计划而非单个 verb。训练日志仅由三层级联回退路径写入。
+### AI 规划器路径记录（`layer == "ai_planner"`）
+
+```json
+{
+  "ts": "2026-05-08T09:15:02Z",
+  "text": "把所有点光源的强度调低一半",
+  "locale": "zh-Hans",
+  "layer": "ai_planner",
+  "model": "claude-sonnet-4-6",
+  "plan_summary": "Reduce all point light intensities by 50%",
+  "plan_reasoning": "User wants dimmer lighting overall; halving each current value",
+  "plan_step_count": 3,
+  "plan_steps": [
+    {"op": "set_light_intensity", "entity_id": "scene:1", "intensity": 500},
+    {"op": "set_light_intensity", "entity_id": "scene:4", "intensity": 250},
+    {"op": "set_light_intensity", "entity_id": "scene:7", "intensity": 125}
+  ],
+  "workspace": "level",
+  "scene_entity_count": 12,
+  "selected_entity_kind": "Point Light",
+  "latency_ms": 2340,
+  "outcome": "applied"
+}
+```
+
+### 未解析记录（`layer == "unresolved"`）
+
+```json
+{
+  "ts": "2026-05-08T09:16:11Z",
+  "text": "make it glow",
+  "locale": "en",
+  "layer": "unresolved",
+  "candidates": [
+    {"verb": "scene.set_light_intensity", "confidence": 0.12, "reason": "token_overlap"}
+  ],
+  "unresolved_reason": "missing_target",
+  "workspace": "level",
+  "scene_entity_count": 12,
+  "latency_ms": 4,
+  "outcome": "unresolved"
+}
+```
+
+### 字段参考
+
+| 字段 | 出现路径 | 说明 |
+|------|----------|------|
+| `ts` | 所有 | ISO 8601 UTC 时间戳 |
+| `text` | 所有 | 用户原始 NL 输入 |
+| `locale` | 所有 | 语言标识，如 `"zh-Hans"` `"en"` |
+| `layer` | 所有 | `"local"` `"ai_tool"` `"keyword"` `"fallback"` `"ai_planner"` `"unresolved"` |
+| `outcome` | 所有 | `"applied"` `"discarded"` `"unresolved"` `"error"` |
+| `verb` | 级联路径 | 解析到的 capability verb ID |
+| `confidence` | 级联路径 | 解析置信度（0–1） |
+| `arguments` | 级联路径 | 解析到的参数键值对，vec3 序列化为 `[x,y,z]` |
+| `candidates` | 级联 + unresolved | 前 N 个候选（含获胜者），用于边界分析 |
+| `unresolved_reason` | unresolved | `"empty_input"` `"unsupported_verb"` `"missing_target"` `"missing_argument"` |
+| `model` | ai_planner | Anthropic model ID |
+| `plan_summary` | ai_planner | Claude 的一行计划描述 |
+| `plan_reasoning` | ai_planner | Claude 的推理链（调试与训练用） |
+| `plan_step_count` | ai_planner | 计划步骤总数 |
+| `plan_steps` | ai_planner | 完整步骤列表，字段同 `SceneEditStep.CodingKeys` |
+| `workspace` | 所有 | `"level"` `"modeling"` `"animation"` |
+| `scene_entity_count` | 所有 | 提交时场景实体数量 |
+| `selected_entity_kind` | 所有（如有选中）| 选中实体的 kind 标签 |
+| `latency_ms` | 所有 | 从提交到解析完成的毫秒数 |
+
+### 离线处理示例
+
+```sh
+# 所有 AI 规划器路径的已应用记录（用于 SFT）
+jq 'select(.layer == "ai_planner" and .outcome == "applied")' intent_training.jsonl
+
+# 有近似候选但未解析的记录（找 classifier 盲区）
+jq 'select(.layer == "unresolved" and (.candidates | length) > 0)' intent_training.jsonl
+
+# 按 layer 统计 outcome 分布
+jq -n '[inputs] | group_by(.layer) | map({layer: .[0].layer, total: length, applied: [.[] | select(.outcome=="applied")] | length})' intent_training.jsonl
+
+# AI 规划器平均延迟（ms）
+jq '[select(.layer == "ai_planner") | .latency_ms] | add / length' intent_training.jsonl
+
+# 提取可直接用于 SFT 的 (text, plan_steps) 对
+jq '{input: .text, output: .plan_steps}' \
+   <(jq 'select(.layer == "ai_planner" and .outcome == "applied")' intent_training.jsonl)
+```
+
+### 写入时机
+
+| 事件 | 写入时机 |
+|------|----------|
+| 级联路径·未解析 | `resolveNaturalLanguageIntentAsync` 返回后立即写 |
+| 级联路径·待确认 | 解析完成后暂存 `pendingTrainingEntry`；确认/拒绝后由 `flushTrainingLog` 写入 |
+| AI 规划器·待确认 | `planner.plan` 返回后暂存；确认/拒绝后写入 |
+| AI 规划器·错误 | `planner.plan` 抛出异常时立即写（`outcome: "error"`） |
 
 ---
 
