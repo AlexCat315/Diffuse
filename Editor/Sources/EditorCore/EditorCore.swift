@@ -41,6 +41,7 @@ public final class EditorApplication: @unchecked Sendable {
     private var vsyncModeHandler: ((EditorVSyncMode) -> Void)?
     private var session: Session?
     private var pendingSessionProposal: Proposal?
+    private var pendingAssistantMessageID: String?
     private let editLog: EditLog
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
@@ -391,6 +392,13 @@ public final class EditorApplication: @unchecked Sendable {
         let locale = store.state.language.lprojName
         let t0 = Date()
         store.dispatch(.setAIStatusMessage("Planning…"))
+        store.dispatch(.appendChatMessage(AIChatMessage(role: .user, text: text)))
+        let assistantID = UUID().uuidString
+        pendingAssistantMessageID = assistantID
+        store.dispatch(.appendChatMessage(AIChatMessage(id: assistantID,
+                                                        role: .assistant,
+                                                        text: "",
+                                                        assistantState: .thinking)))
 
         Task { @MainActor [weak self] in
             guard let self else { return }
@@ -402,6 +410,11 @@ public final class EditorApplication: @unchecked Sendable {
 
                 guard !proposal.plan.isEmpty else {
                     self.store.dispatch(.setAIStatusMessage("No scene changes needed."))
+                    if let aid = self.pendingAssistantMessageID {
+                        self.store.dispatch(.updateChatMessage(id: aid,
+                                                               assistantState: .applied(summary: "No changes needed")))
+                        self.pendingAssistantMessageID = nil
+                    }
                     return
                 }
 
@@ -416,6 +429,11 @@ public final class EditorApplication: @unchecked Sendable {
                 self.submitPlanTransaction(transaction)
             } catch {
                 self.store.dispatch(.setAIStatusMessage(String(describing: error)))
+                if let aid = self.pendingAssistantMessageID {
+                    self.store.dispatch(.updateChatMessage(id: aid,
+                                                           assistantState: .failed(String(describing: error))))
+                    self.pendingAssistantMessageID = nil
+                }
             }
         }
     }
@@ -612,6 +630,8 @@ public final class EditorApplication: @unchecked Sendable {
     public func applyAISettings(_ settings: EditorAISettings, apiKey: String) {
         AIKeychain.save(key: apiKey, provider: settings.provider)
         store.dispatch(.setAISettings(settings))
+        store.dispatch(.clearChatHistory)
+        pendingAssistantMessageID = nil
         let newSession = Self.makeSession(for: settings)
         if let newSession {
             let snapshot = SceneSemanticEncoder().encode(
@@ -629,6 +649,11 @@ public final class EditorApplication: @unchecked Sendable {
     public func clearAIKey() {
         AIKeychain.delete(provider: store.state.aiSettings.provider)
         session = nil
+        store.dispatch(.clearChatHistory)
+        pendingAssistantMessageID = nil
+        var settings = store.state.aiSettings
+        settings.provider = .none
+        store.dispatch(.setAISettings(settings))
     }
 
     /// Returns `true` if a non-empty API key is stored for the current provider.
@@ -678,6 +703,10 @@ public final class EditorApplication: @unchecked Sendable {
             store.dispatch(.setAIWarnings(result.warnings))
             updateSelection(after: result.applyResult)
             store.dispatch(.setAIStatusMessage("Applied \(result.transactionID)"))
+            if let aid = pendingAssistantMessageID {
+                store.dispatch(.updateChatMessage(id: aid, assistantState: .applied(summary: "Applied")))
+                pendingAssistantMessageID = nil
+            }
             if var edit = result.applyResult?.edit {
                 // Enrich provenance with the proposal that generated this edit.
                 if let proposal = pendingSessionProposal {
@@ -703,10 +732,18 @@ public final class EditorApplication: @unchecked Sendable {
             store.dispatch(.setPendingConfirmationRequest(result.confirmationRequest))
             store.dispatch(.setAIWarnings(result.warnings))
             store.dispatch(.setAIStatusMessage("Confirmation required for \(result.transactionID)"))
+            if let aid = pendingAssistantMessageID {
+                let prompt = result.confirmationRequest?.questions.first?.promptShort ?? "Confirmation required"
+                store.dispatch(.updateChatMessage(id: aid, assistantState: .pendingConfirmation(summary: prompt)))
+            }
         case .discarded:
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings(result.warnings))
             store.dispatch(.setAIStatusMessage("Discarded \(result.transactionID)"))
+            if let aid = pendingAssistantMessageID {
+                store.dispatch(.updateChatMessage(id: aid, assistantState: .discarded))
+                pendingAssistantMessageID = nil
+            }
             if let proposal = pendingSessionProposal {
                 let stepCount = proposal.plan.steps.count
                 let rejected = (0..<stepCount).map { "step_\($0)" }
