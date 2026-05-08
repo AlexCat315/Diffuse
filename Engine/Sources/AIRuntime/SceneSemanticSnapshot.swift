@@ -45,6 +45,9 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var cameraFovYDegrees: Float?
         public var cameraIsActive: Bool?
 
+        // Mesh extras — non-nil only when `"mesh"` ∈ components and color is non-default
+        public var meshColor: [Float]?         // [r, g, b] linear 0–1; nil = default white
+
         // Physics extras — non-nil only when `"rigidbody"` ∈ components
         public var rigidBodyMotionType: String? // "static" | "dynamic" | "kinematic"
     }

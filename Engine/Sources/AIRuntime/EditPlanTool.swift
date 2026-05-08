@@ -96,7 +96,7 @@ public enum EditPlanTool {
                 ] as [String: Any],
                 "color": [
                     "type": "array", "items": ["type": "number"] as [String: Any],
-                    "description": "[r, g, b] linear 0–1 colour for set_light_color.",
+                    "description": "[r, g, b] linear 0–1 colour. Used by set_light_color and set_mesh_color. Common values: red=[1,0,0], green=[0,1,0], blue=[0,0,1], white=[1,1,1], black=[0,0,0], yellow=[1,1,0], orange=[1,0.4,0], purple=[0.5,0,0.5].",
                 ] as [String: Any],
                 "range": [
                     "type": "number",
