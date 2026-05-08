@@ -8,4 +8,13 @@ public enum Signal: Sendable {
     case userCorrection(proposalID: String,
                         acceptedStepIDs: [String],
                         rejectedStepIDs: [String])
+
+    public var kind: String {
+        switch self {
+        case .naturalLanguage:  return "naturalLanguage"
+        case .selectionChanged: return "selectionChanged"
+        case .worldChanged:     return "worldChanged"
+        case .userCorrection:   return "userCorrection"
+        }
+    }
 }
