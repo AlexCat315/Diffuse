@@ -46,6 +46,7 @@ public final class EditorStore: @unchecked Sendable {
         case aiSettings
         case aiStatusMessage
         case aiWarnings
+        case chatMessages
         case consoleEntries
         case commandPaletteVisible
     }
@@ -185,6 +186,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.aiStatusMessage, old.aiStatusMessage, new.aiStatusMessage)
         case .setAIWarnings:
             mark(.aiWarnings, old.aiWarnings, new.aiWarnings)
+        case .appendChatMessage, .updateChatMessage, .clearChatHistory:
+            mark(.chatMessages, old.chatMessages, new.chatMessages)
         case .appendConsoleMessage, .clearConsole:
             mark(.consoleEntries, old.consoleEntries, new.consoleEntries)
         case .setCommandPaletteVisible:
@@ -259,4 +262,5 @@ extension EditorStore {
         read(.pendingConfirmationRequest, storage.pendingConfirmationRequest)
     }
     public var commandPaletteVisible: Bool { read(.commandPaletteVisible, storage.commandPaletteVisible) }
+    public var chatMessages: [AIChatMessage] { read(.chatMessages, storage.chatMessages) }
 }

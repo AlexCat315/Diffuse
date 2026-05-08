@@ -162,7 +162,7 @@ enum EditorRootViewFactory {
             },
             PanelDescriptor(id: "intent-input",
                             title: localizedPanelTitle(for: "intent-input"),
-                            preferredSlot: .bottom) {
+                            preferredSlot: .trailing) {
                 IntentInputPanel(app: app)
             },
             PanelDescriptor(id: "confirmation-host",
@@ -255,7 +255,7 @@ enum EditorRootViewFactory {
         case "assets":
             return L("Assets")
         case "intent-input":
-            return L("AI Intent")
+            return L("AI")
         case "confirmation-host":
             return L("Confirmations")
         case "render-pipeline":
@@ -431,11 +431,12 @@ enum EditorWorkspaceDefaults {
         let groups: [WorkspaceTabGroupID: WorkspaceTabGroup] = [
             "leading": WorkspaceTabGroup(id: "leading", panels: ["hierarchy"], activePanelID: "hierarchy"),
             "center": WorkspaceTabGroup(id: "center", panels: ["viewport"], activePanelID: "viewport"),
-            "trailing": WorkspaceTabGroup(id: "trailing", panels: ["inspector"], activePanelID: "inspector"),
+            "trailing": WorkspaceTabGroup(id: "trailing",
+                                         panels: ["intent-input", "inspector"],
+                                         activePanelID: "intent-input"),
             "bottom": WorkspaceTabGroup(id: "bottom",
                                         panels: ["assets",
                                                  "console",
-                                                 "intent-input",
                                                  "confirmation-host",
                                                  "render-pipeline"],
                                         activePanelID: defaultBottomPanelID(for: preset))
@@ -476,7 +477,7 @@ enum EditorWorkspaceDefaults {
         case .modelingDefault, .modelingSculpt:
             return "console"
         case .animationDefault, .animationSequencer:
-            return "intent-input"
+            return "assets"
         }
     }
 }

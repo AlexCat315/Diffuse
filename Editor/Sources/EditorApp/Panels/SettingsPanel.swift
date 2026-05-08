@@ -4,76 +4,11 @@ import GuavaUIRuntime
 
 struct SettingsPanel: View {
     let app: EditorApplication
-    @State var aiKeyInput: String = ""
 
     var body: some View {
         StoreScope(app.store) { store in
             ScrollView(.vertical) {
                 Box(direction: .column, alignItems: .stretch, spacing: 14) {
-                    SettingsSection(title: L("AI")) {
-                        Box(direction: .column, alignItems: .stretch, spacing: 8) {
-                            Row(alignment: .center, spacing: 8) {
-                                SettingsChoiceButton(
-                                    title: EditorAIProvider.none.displayName,
-                                    isActive: store.aiSettings.provider == .none
-                                ) {
-                                    var updated = store.aiSettings
-                                    updated.provider = .none
-                                    store.dispatch(.setAISettings(updated))
-                                    persistShell(store)
-                                }
-                                SettingsChoiceButton(
-                                    title: EditorAIProvider.anthropic.displayName,
-                                    isActive: store.aiSettings.provider == .anthropic
-                                ) {
-                                    var updated = store.aiSettings
-                                    updated.provider = .anthropic
-                                    store.dispatch(.setAISettings(updated))
-                                    persistShell(store)
-                                }
-                            }
-
-                            if store.aiSettings.provider != .none {
-                                Row(alignment: .center, spacing: 8) {
-                                    TextField(
-                                        app.hasStoredAIKey() ? L("API key saved") : L("Paste API key"),
-                                        text: $aiKeyInput,
-                                        clearable: true,
-                                        onSubmit: { saveAIKey(store) },
-                                        onClear: {
-                                            aiKeyInput = ""
-                                            app.clearAIKey()
-                                            persistShell(store)
-                                        }
-                                    )
-                                    .flex()
-
-                                    Button(action: { saveAIKey(store) }) {
-                                        Text(L("Save"))
-                                            .font(.caption)
-                                            .foregroundColor(.onAccent)
-                                    }
-                                    .buttonStyle(.plain)
-                                    .frame(height: 30, minWidth: 54)
-                                    .padding(horizontal: 10, vertical: 0)
-                                    .background(.accent)
-                                    .cornerRadius(4)
-                                    .clipped()
-                                }
-
-                                if app.hasStoredAIKey() {
-                                    Text(L("Key saved — AI resolution active"))
-                                        .font(.caption)
-                                        .foregroundColor(.onSurfaceMuted)
-                                } else {
-                                    Text(L("No key — using keyword fallback"))
-                                        .font(.caption)
-                                        .foregroundColor(.onSurfaceMuted)
-                                }
-                            }
-                        }
-                    }
-
                     SettingsSection(title: L("Appearance")) {
                         Row(alignment: .center, spacing: 8) {
                             SettingsChoiceButton(title: L("Dark"),
@@ -143,14 +78,6 @@ struct SettingsPanel: View {
             .flex()
             .frame(minWidth: 220)
         }
-    }
-
-    private func saveAIKey(_ store: EditorStore) {
-        let trimmed = aiKeyInput.trimmingCharacters(in: .whitespacesAndNewlines)
-        app.applyAISettings(store.aiSettings, apiKey: trimmed)
-        aiKeyInput = ""
-        persistShell(store)
-        app.requestDisplayRefresh()
     }
 
     private func applySettingsChange(_ store: EditorStore) {
