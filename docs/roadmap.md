@@ -2,7 +2,7 @@
 
 > 单一入口文档。描述三个包的推进顺序、并行关系和交付里程碑。
 > 各包详细技术设计见 [engine-swift-wgpu-rewrite-blueprint.md](engine-swift-wgpu-rewrite-blueprint.md)、[guava-ui-blueprint.md](guava-ui-blueprint.md)、[editor-blueprint.md](editor-blueprint.md)。
-> AI 原生与影视生产相关的设计文档总入口见 [ai-native-scene-model-design.md](ai-native-scene-model-design.md) §17。
+> AI 原生架构总入口见 [architecture.md](architecture.md)。
 >
 > 文档分四类：
 > - **基础三包**（Engine / GuavaUI / Editor）：M0–M6
@@ -483,7 +483,7 @@ Engine/Sources/ObservationBus/
 └── ColdLog.swift
 
 Engine/Sources/CapabilityRuntime/
-├── CapabilityRegistry.swift     # 见 ai-native-capability-graph-schema-design.md
+├── CapabilityRegistry.swift     # Validation 层约束来源，见 architecture.md
 ├── PreconditionChecker.swift
 ├── EffectAnalyzer.swift
 └── ReleasePhaseGate.swift
@@ -605,7 +605,7 @@ Engine/Sources/SemanticPipeline/
     └── VisionBackend.swift         # 留接口；视觉模型按 m9.5 引入
 
 Engine/Sources/ContextMemory/
-├── EntryKindRegistry.swift         # 见 ai-native-context-memory-index-design.md
+├── EntryKindRegistry.swift         # Session.WorldView 内部状态，见 architecture.md
 ├── Reducers.swift
 ├── MemoryStore.swift
 └── SnapshotProvider.swift
@@ -623,7 +623,7 @@ Engine/Sources/Bridge/CFingerprintBridge/   # 几何指纹 SIMD 加速
 | cinematic | `render.shot` / `render.range` / `aov.toggle` / `lookdev.swap_hdri` |
 | diagnostics | `issue.dismiss` / `issue.resolve` |
 
-详细 schema 走 `ai-native-capability-graph-schema-design.md` 注册流程。
+详细约束定义见 `architecture.md` Validation 层。
 
 **验收**：
 
