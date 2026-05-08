@@ -21,9 +21,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Select Xcode
-        run: sudo xcode-select -s /Applications/Xcode_16.3.app
-
       - name: Install native dependencies
         run: |
           brew install sdl3 pkg-config opencolorio openexr imath
