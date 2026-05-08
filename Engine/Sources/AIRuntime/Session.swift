@@ -1,4 +1,5 @@
 import Foundation
+import IntentRuntime
 
 public enum SessionError: Error, CustomStringConvertible, Sendable {
     case unsupportedSignal(String)
@@ -92,8 +93,15 @@ public actor Session {
 
     // MARK: - WorldView observation
 
+    /// Seeds the entity index from a full snapshot. Call once at session creation;
+    /// ongoing changes arrive as WorldEvents via observe(event:).
     public func observe(snapshot: SceneSemanticSnapshot) {
         worldView.apply(snapshot: snapshot)
+    }
+
+    /// Applies a fine-grained WorldEvent to the entity index (Phase 5 delta path).
+    public func observe(event: WorldEvent) {
+        worldView.apply(event: event)
     }
 
     public func observe(editSummary: String, revision: UInt64) {
@@ -117,8 +125,7 @@ public actor Session {
     // MARK: - Inference
 
     private func infer(userRequest: String) async throws -> Proposal {
-        let snapshotJSON = worldView.sceneSnapshot.map(encodeSnapshot) ?? "{}"
-        let body = requestBody(userRequest: userRequest, snapshotJSON: snapshotJSON)
+        let body = requestBody(userRequest: userRequest)
         let data = try await post(body)
         let plan = try parsePlan(from: data)
         return Proposal(
@@ -132,18 +139,18 @@ public actor Session {
         )
     }
 
-    private func requestBody(userRequest: String, snapshotJSON: String) -> [String: Any] {
+    private func requestBody(userRequest: String) -> [String: Any] {
         [
             "model": config.model,
             "max_tokens": config.maxTokens,
-            "system": systemPrompt(snapshotJSON: snapshotJSON),
+            "system": systemPrompt(),
             "tools": [EditPlanTool.definition()],
             "tool_choice": ["type": "any"],
             "messages": [["role": "user", "content": userRequest]],
         ]
     }
 
-    private func systemPrompt(snapshotJSON: String) -> String {
+    private func systemPrompt() -> String {
         var parts: [String] = []
 
         parts.append("""
@@ -152,7 +159,7 @@ public actor Session {
         by calling the `execute_edit_plan` tool. Always call the tool — never respond with plain text.
         """)
 
-        parts.append("Scene state (JSON):\n\(snapshotJSON)")
+        parts.append("Scene entities (JSON):\n\(entityIndexJSON())")
 
         if !worldView.recentEdits.isEmpty {
             let lines = worldView.recentEdits.suffix(10)
@@ -167,14 +174,25 @@ public actor Session {
 
         parts.append("""
         Rules:
-        - Only operate on entities that exist in the scene snapshot above.
-        - Use the exact entity IDs from the snapshot (format: "scene:<number>").
+        - Only operate on entities that exist in the scene entities list above.
+        - Use the exact entity IDs from the list (format: "scene:<number>").
         - Prefer minimal plans — only include steps necessary to satisfy the request.
-        - For set_transform, read the current values from the snapshot and only change what the user asked for.
+        - For set_transform, read the current position from the entity list and only change what the user asked for.
         - For snap_to_ground, set Y position to 0.
         """)
 
         return parts.joined(separator: "\n\n")
+    }
+
+    private func entityIndexJSON() -> String {
+        guard !worldView.entityIndex.isEmpty else { return "[]" }
+        let entities = worldView.entityIndex.values.sorted { $0.ref < $1.ref }
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        guard let data = try? encoder.encode(entities),
+              let str = String(data: data, encoding: .utf8)
+        else { return "[]" }
+        return str
     }
 
     // MARK: - HTTP
@@ -215,17 +233,6 @@ public actor Session {
         } catch {
             throw SessionError.planDecodingFailed(detail: String(describing: error))
         }
-    }
-
-    // MARK: - Snapshot serialisation
-
-    private func encodeSnapshot(_ snapshot: SceneSemanticSnapshot) -> String {
-        let encoder = JSONEncoder()
-        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-        guard let data = try? encoder.encode(snapshot),
-              let str = String(data: data, encoding: .utf8)
-        else { return "{}" }
-        return str
     }
 
     // MARK: - History
