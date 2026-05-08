@@ -22,6 +22,7 @@ let package = Package(
         .target(
             name: "EditorCore",
             dependencies: [
+                .product(name: "AIRuntime", package: "Engine"),
                 .product(name: "AssetPipeline", package: "Engine"),
                 .product(name: "CapabilityRuntime", package: "Engine"),
                 .product(name: "EngineCore", package: "Engine"),

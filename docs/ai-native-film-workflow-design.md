@@ -1,392 +1,294 @@
-# AI 原生影视创作工作流设计
+# AI 原生影视工作流设计
 
-> 本文档是 `ai-native-scene-model-design.md` 的子设计。
-> 范围：从剧本 / 分镜到可交付镜头序列的 AI 协作工作流，覆盖分镜规划、镜头语言、表演驱动、光照设计、渲染编排、Review。
-> 引用：CapabilityGraph 实例见 `ai-native-capability-catalog.md`，资产语义见 `ai-native-semantic-pipeline-design.md`，参考图驱动场景生成见 `ai-native-scene-from-image-design.md`。
-
----
-
-## 0. 设计前提
-
-1. 影视创作的本质循环是 **plan → block → light → render → review**，是迭代式精修，不是一次性生成
-2. 影视的"作品"主体是 `SequenceDocument`（Sequence + Shot + Clip + Binding），不是 SceneDocument
-3. 影视场景与游戏场景在引擎中可共享 SceneDocument，但 cinematic light / camera / cut 仅活在 SequenceDocument 的 shot_override 层
-4. AI 的所有写入仍走 Transaction IR，渲染提交除外（不可撤销，但可 cancel）
-5. 复用 B.5 的语义、F 的场景生成、Game 工作流的 capability 边界与 Playtest-style review 思路（这里叫 Dailies）
+> 本文档隶属于 `architecture.md`，描述 Session 在影视工作流上下文（film WorkflowContext）中的行为模式。
+> 时间轴层（Shot / Clip / Binding）的数据结构详见 `ai-native-sequence-document-design.md`。
+> 本文档不描述"AI 调用能力序列"——它描述 Session 对叙事意图的持续理解，以及它如何通过 Signal / Proposal 参与影视创作。
 
 ---
 
-## 1. 工作流总览
+## 1. 概述：影视语境中的 Session
 
-```mermaid
-flowchart LR
-    Script[剧本 / 分镜] --> Plan[ShotPlanning]
-    Plan --> Block[Blocking<br/>角色 + 镜头位]
-    Block --> Perf[Performance<br/>mocap / facial / audio]
-    Perf --> Cam[Camera Language]
-    Cam --> Light[Lighting Design]
-    Light --> Layout[Layout 锁定]
-    Layout --> Render[Render Orchestration]
-    Render --> Dailies[Dailies / Review]
-    Dailies --> Notes[Notes & Annotations]
-    Notes --> Plan
-    Notes --> Cam
-    Notes --> Light
-    Notes --> Render
+Session 是 AI 在 World 中的持续存在，不是请求处理器。当项目的 WorkflowContext 为影视模式时，Session 理解以下事实：
+
+**它在创作一部叙事性作品。** 它知道：
+
+- **镜头结构**：当前 WorldView 中哪个 Shot 是活跃的，它在 Sequence 中的位置，与前后镜头的叙事关系
+- **表演意图**：角色此刻的情感状态，对白节奏，肢体语言的叙事功能
+- **镜头语言**：景别、运镜、构图规则不是孤立参数，是导演陈述叙事立场的语法
+- **光照设计意图**：灯光不是亮度数值，是情绪、时间、空间的表达手段
+- **叙事阶段**：当前处于 blocking、performance、lighting 还是 review 阶段，不同阶段的 Proposal 粒度不同
+
+Session 不区分"NL 路径"和"规划器路径"。无论输入来自自然语言、参考图、直接操作还是 WorldEvent，都进入同一推理过程，结合 WorldView 和 ConversationHistory 产出 Proposal。
+
+---
+
+## 2. Film WorkflowContext
+
+Session 的 `WorkflowContext` 在影视模式下包含以下状态：
+
+```
+FilmWorkflowContext
+├── active_sequence: SequenceID        // 当前编辑的 Sequence
+├── active_shot: ShotID?               // 当前焦点镜头（可为空，表示在 Sequence 级操作）
+├── narrative_phase
+│   ├── blocking                       // 角色位置、镜头位摆放
+│   ├── performance                    // 表演、mocap、lip-sync
+│   ├── camera_language               // 景别、运镜、构图
+│   ├── lighting                       // 光照设计
+│   └── review                         // Dailies / 批注回灌
+├── director_intent: String?           // 本次会话开始时导演陈述的意图，自然语言
+├── reference_anchors: [ReferenceAnchor]
+│   // 本次工作阶段累积的参考图及其语义摘要，Session 持续引用
+└── locked_shots: [ShotID]             // 已锁定不允许 Session 主动修改的镜头
 ```
 
-各阶段对应文档章节：
+`director_intent` 由导演在会话开始时（或任意时刻）通过 NaturalLanguage Signal 设定，Session 将其保存在 ConversationHistory 并在后续所有 Proposal 的 `reasoning` 中引用。
 
-- §2 ShotPlanning（剧本 → ShotList → SequenceDocument 草稿）
-- §3 Blocking（角色与镜头位摆放）
-- §4 Camera Language（镜头语言 capability）
-- §5 Performance（mocap / facial / lip-sync）
-- §6 Lighting Design（cinematic 光照与 shot override）
-- §7 Render Orchestration（本地 / 农场 / 版本树）
-- §8 Dailies & Review（A/B 比对、annotation、Notes 回灌）
-- §9 与游戏工作流的边界
+`narrative_phase` 影响 Proposal 的 `approval_policy`：
+- `blocking` 阶段：Session 可以批量提议位置变更，`approval_policy = RequiresApproval`
+- `lighting` 阶段：每盏非 key-light 的新增灯具必须单独 `approval_policy = RequiresApproval`
+- `review` 阶段：Session 只提议，不允许 `approval_policy = Automatic`
 
 ---
 
-## 2. ShotPlanning
+## 3. 典型 Signal 模式
 
-让 AI 把剧本片段转成 ShotList，再生成 SequenceDocument 草稿。
+### 3.1 NaturalLanguage：叙事语言转化为多维度 Proposal
 
-### 2.1 输入
+**场景**：导演口述对镜头的感受，Session 同时推理摄影、光照、表演三个维度。
 
-- 剧本（场景 / 对白 / 动作描述）
-- 可选分镜参考图（每镜一张或多张）
-- 项目元信息（aspect_ratio、fps、镜头时长偏好）
+```
+Signal.NaturalLanguage {
+  text: "这个镜头需要更紧张的感觉，现在太平静了",
+  locale: zh-CN
+}
+```
 
-### 2.2 ScriptParser
+Session 查询 WorldView，得知：
+- active_shot 是 Shot-07，景别为 MS（中景），主角正面朝镜头
+- key light 色温 5600K，强度适中
+- 当前没有摄像机运动
 
-```text
-ScriptScene {
-  scene_id, slug, location, time_of_day,
-  characters: [name],
-  beats: [
-    { kind: action | dialog | transition,
-      character?: name, text?, duration_hint_s? }
+Session 不会把"紧张感"拆解为固定功能调用，而是推理：紧张感可以通过更紧的景别（CU）压迫观众空间、稍硬的侧光强化阴影、轻微手持感产生不稳定性。Session 产出一个 Proposal，包含三组 steps，每组可独立接受或拒绝：
+
+```
+Proposal {
+  id: "prop-shot07-tension-001",
+  author: AI(session_id),
+  semantic_intent: "通过景别收紧、光照戏剧化、运镜不稳定性增强 Shot-07 的紧张感",
+  confidence: 0.78,
+  approval_policy: RequiresApproval,
+  reasoning: "导演的意图是'紧张'。紧张感的镜头语言通常包括：(1) 景别压缩减少呼吸空间，(2)
+              高对比侧光让面部产生强烈明暗分割，(3) 轻微手持增加视觉不稳定性。三者叠加但
+              不宜同时最大化，建议分步确认。",
+  steps: [
+    WorldDelta {
+      step_id: "step-01-framing",
+      description: "景别从 MS 收为 CU",
+      target: Shot-07.camera_binding,
+      change: camera.frame_subject(subject=角色A, framing=CU, composition_rule=rule_of_thirds)
+    },
+    WorldDelta {
+      step_id: "step-02-light",
+      description: "key light 向侧移 35°，色温降至 4200K 增加冷硬感",
+      target: Shot-07.shot_override.key_light,
+      change: {
+        transform.azimuth: +35°,
+        color_temperature: 4200,
+        intensity_multiplier: 1.2
+      }
+    },
+    WorldDelta {
+      step_id: "step-03-movement",
+      description: "摄像机添加轻微手持模拟",
+      target: Shot-07.camera_binding.movement,
+      change: camera.set_movement(kind=handheld, amplitude=0.3)
+    }
   ]
 }
 ```
 
-约束：
+用户接受 step-01 和 step-02，拒绝 step-03（认为手持感不符合这部片的风格），则产生：
 
-- 不让 LLM 直接输出 SequenceDocument，输出中间 `ScriptScene` 草稿
-- ScriptScene 的字段闭集，未识别 beat 类型丢弃 + diagnostics
-
-### 2.3 ShotListPlanner
-
-把 `ScriptScene` 拆为 ShotList：
-
-```text
-ShotIntent {
-  shot_id, scene_id, beat_range,
-  duration_hint_s,
-  framing: ECU | CU | MS | FS | LS | EWS | OTS | POV,
-  movement: static | pan | tilt | dolly | track | crane | handheld,
-  subject_focus: character_id | object_id | env_area_id,
-  composition_rule: rule_of_thirds | center | symmetry | leading_lines | golden_ratio,
-  reference_image?: uri
+```
+UserCorrection {
+  proposed: prop-shot07-tension-001,
+  actual: WorldDelta{ step-01 + step-02 },
+  accepted_steps: ["step-01-framing", "step-02-light"]
 }
 ```
 
-### 2.4 SequenceDraftWriter
-
-把 ShotIntent 转成 SequenceDocument 草稿：
-
-- `sequence.create` + `sequence.add_shot`
-- `shot.set_range` 按 duration_hint
-- `shot.set_camera_binding` 绑定到自动新建的 cine_camera asset
-- `composition.apply_rule` 写入 shot_override
-- 所有 verb 标 `provenance = inferred`
-
-### 2.5 失败与降级
-
-| 场景 | 策略 |
-|------|------|
-| 剧本含未知角色 | 标 `unbound_character`，等 Casting 阶段绑定 |
-| beat 时长冲突 | 优先取分镜 hint，否则按对白音节估算，标 `estimated` |
-| 参考图与剧本冲突 | 双轨保留，提交用户裁决 |
+Session 从这个 UserCorrection 学习：该项目倾向于通过景别和光照传递紧张感，而不是摄像机不稳定性。这个偏好写入 ConversationHistory，影响后续同类 Proposal。
 
 ---
 
-## 3. Blocking
+### 3.2 ReferenceImage：参考剧照驱动光照提议
 
-把角色与镜头位放进场景，准备表演。
+**场景**：导演拖入一张参考剧照，希望复现其光影风格。
 
-### 3.1 输入
-
-- SequenceDraft
-- SceneDocument（场景资产已就绪，可由 Phase F 提供）
-- 角色 ModelDocument
-
-### 3.2 模块
-
-```text
-StagingPlanner       -> 放 character placeholder + camera anchor
-CameraAnchorSolver   -> 根据 framing/movement 求 camera transform
-BlockingValidator    -> 检测穿插 / 出框 / 越轴
 ```
-
-### 3.3 越轴检测
-
-`BlockingValidator` 必须显式检测 180° 线（screen direction）违反，违反时不阻断但写 diagnostics，由用户决定是否容忍（特殊语言）。
-
-### 3.4 capability 边界
-
-- Blocking 阶段允许大量 `scene.set_transform`（angel scope = scene_instance）
-- 不允许触碰 SceneDocument 中标记为 `gameplay_critical` 的 instance
-- 所有 cinematic 摄像机 transform 都写入 shot 层，不污染 SceneDocument
-
----
-
-## 4. Camera Language
-
-镜头语言必须可被 AI 表达且可被审美评价。
-
-### 4.1 镜头参数 capability（来自目录 §4）
-
-- `camera.set_focal_length` / `set_aperture` / `set_focus_distance`
-- `camera.move_*` 系列
-- `camera.frame_subject`（subject_id + 目标 framing → 自动调位姿与焦距）
-- `composition.apply_rule`（闭集规则）
-
-### 4.2 自动 framing solver
-
-`camera.frame_subject` 内部由 solver 实现：
-
-```text
-FramingSolveInput {
-  subject_bbox_3d, framing_target: CU | MS | ...,
-  composition_rule, screen_position_hint?: vec2,
-  must_include_objects?: [id]
-}
-FramingSolveOutput {
-  camera_transform, focal_length_mm, focus_distance_m,
-  predicted_screen_layout: { subject_bbox_2d, headroom_ratio }
+Signal.ReferenceImage {
+  image: <剧照图像数据>,
+  intent: "参考这张剧照的光影，特别是窗口逆光的处理方式"
 }
 ```
 
-### 4.3 切换语法（cuts / transitions）
+Session 分析参考图，提取：
+- 主光源来自画面右侧高位，推断为窗口自然光
+- 人物轮廓有明显 rim light，与背景分离
+- 阴影面保留了少量 fill，整体对比约 4:1
 
-- `cut.add` / `cut.remove`
-- transition 类型闭集：`hard_cut | dissolve | fade_in | fade_out | wipe(directional)`
-- 不允许 AI 自定义未注册的 transition shader
+Session 产出：
 
-### 4.4 视觉反馈层
-
-镜头语言审美判断走 §13.4 的双层工作流：
-
-- 语义控制层：调 capability
-- 视觉反馈层：渲染 thumbnail，多模态模型给"是否更接近 reference"的反馈
-- 反馈结果**不直接 apply**，作为新的 ShotIntent 候选进入 review
-
----
-
-## 5. Performance
-
-### 5.1 来源
-
-- mocap（动捕系统导入）
-- facial（面部捕捉）
-- audio-driven lip sync
-- 手 K（authored）
-
-### 5.2 流水线
-
-```text
-PerformanceClipImport
-  -> PerformanceRetarget   (perf.retarget)
-  -> PerformanceLayer      (additive / override layer)
-  -> SequenceBinding       (binding.bind to character in shot)
 ```
-
-### 5.3 PerformanceClipDocument
-
-```text
-PerformanceClipDocument {
-  clip_id, source_kind: mocap | facial | mixed | synth,
-  duration_s, sample_rate,
-  skeleton_target: skeleton_id,
-  tracks: [{ kind: bone | blendshape | curve, target, samples }],
-  audio_ref?: uri,
-  provenance: authored | mocap | inferred,
-  retarget_history: [...]
+Proposal {
+  id: "prop-refimg-window-backlight-001",
+  author: AI(session_id),
+  semantic_intent: "复现参考图的窗口逆光结构：高位侧逆 key + 柔和 fill + rim 边缘光",
+  confidence: 0.71,
+  approval_policy: RequiresApproval,
+  reasoning: "参考图的光源动机是室内窗光（高位、侧逆方向），面部阴影面有明显信息保留，
+              判断 fill ratio 约 1:4。rim light 用于人物与背景分离。当前场景的 key
+              方向与此差异 ~110°，需要大幅重置。",
+  steps: [
+    WorldDelta { description: "重置 key light 为高位右侧逆光 (azimuth=145°, elevation=55°)",
+                 target: Shot-active.shot_override.key_light, ... },
+    WorldDelta { description: "添加左侧柔 fill (intensity = key * 0.25)",
+                 target: Shot-active.shot_override, change: lighting.add_fill(...) },
+    WorldDelta { description: "添加逆光 rim (azimuth=310°, elevation=20°, intensity=0.6)",
+                 target: Shot-active.shot_override, change: lighting.add_rim(...) }
+  ]
 }
 ```
 
-### 5.4 lip-sync from audio
-
-- 输入对白音频 + 角色 visme 集
-- 输出 blendshape track，标 inferred
-- 必须经用户预览（required cfm），不允许直接 apply 到 shot
-
-### 5.5 表演 layering
-
-- 多 PerformanceClip 通过 additive layer 叠加（`perf.layer_additive`）
-- 层间冲突由 layer order + weight 决定
-- AI 提议 layer 时必须给出"为什么叠这层"的依据（diagnostics-style）
+这个参考图被存入 `WorkflowContext.reference_anchors`，Session 在后续同场景的镜头中会主动引用它作为光照一致性基准。
 
 ---
 
-## 6. Lighting Design
+### 3.3 DirectManipulation：用户直接操作教会 Session 构图偏好
 
-### 6.1 cinematic vs gameplay
+**场景**：用户在视口中手动拖动摄像机，重新框定构图。
 
-- `lighting.add_light` 的 `usage_kind` 必填
-- cinematic 光默认绑定到 shot_override，仅在 sequencer 渲染启用
-- gameplay 光绑定 SceneDocument，runtime 始终启用
-- 同一物理灯具可同时存在两套版本，互不污染
-
-### 6.2 LightingPlanner
-
-输入：`ShotIntent` + Blocking 结果 + 参考图（可选）
-
-输出：`LightingProposal`（与 Phase F §2.10 同 schema，扩展 cinematic 字段）：
-
-```text
-CinematicLightingProposal {
-  three_point: { key, fill, rim }       // 各自包含 transform / intensity / color / softness
-  practicals: [...]                     // 场景中"道具灯"
-  global: { env_intensity_override?, fog?, atmospheric? }
-  motivation_notes: string              // 仅记录，不写运行时
+```
+Signal.DirectManipulation {
+  entity: Shot-09.camera_binding,
+  delta: PropertyDelta {
+    transform: { position: Δ(-0.8, 0.2, 0), rotation: Δ(0°, -12°, 0°) },
+    focal_length_mm: 50 → 85
+  }
 }
 ```
 
-### 6.3 多光设计的歧义
+这个 Signal 不需要 Session 产出 Proposal（用户已直接 apply），但 Session 更新 WorldView 并从中学习：
 
-LightingEstimator（Phase F）单图通常给不出多光精确解。在 Cinematic 场景下：
+- 用户把焦距从 50mm 推到 85mm，构图更压缩
+- 用户略微下移并左转摄像机，让主体更偏左、头顶留白减少
 
-- 默认仅产出 key + env，其余强制走用户确认
-- AI 可以根据 reference 一致性自动加 fill / rim，但每加一个光必须 cfm = warn
+Session 将这次操作记录为 `Edit`（provenance.author = Human），并推断：该导演倾向于**更长焦、更少头顶留白的构图风格**。后续涉及 `camera.frame_subject` 的 Proposal 将自动偏向 85mm 以上焦段，减少构图中的头顶 headroom。
 
-### 6.4 烘焙
-
-`bake.lighting_gi` 在 cinematic 中可逐 shot 烘焙，烘焙结果 provenance = baked，不能被 inferred 覆盖。
+这就是 UserCorrection 的变体：用户没有接受/拒绝任何 Proposal，但直接操作本身就是最强的偏好信号。
 
 ---
 
-## 7. Render Orchestration
+### 3.4 WorldEvent：时间轴位置变化更新叙事上下文
 
-### 7.1 RenderJobDocument
+**场景**：编辑在时间轴上跳转，Session 感知到当前焦点镜头变化。
 
-```text
-RenderJobDocument {
-  job_id, sequence_id, shot_filter: [shot_id] | all,
-  quality_preset: draft | preview | final,
-  resolution, frame_range, codec, color_space, denoiser?,
-  output_uri,
-  submitted_at?, submitter, status: planned | queued | running | done | failed | canceled,
-  artifacts: [{ kind: frames | exr | proxy | thumbnails, uri }],
-  cost_estimate?, actual_cost?
+```
+Signal.WorldEvent {
+  event: WorldEvent.timeline.changed(shot_id: Shot-03)
 }
 ```
 
-### 7.2 提交策略
+Session 更新 `WorkflowContext.active_shot = Shot-03`，查询 WorldView：
+- Shot-03 是一个确立镜头（EWS），位于序列开头，用于建立空间关系
+- Shot-03 的 shot_override 中尚无 cinematic light（继承 scene default）
 
-- `render.submit_local`：本地机，快但占用编辑器
-- `render.submit_farm`：渲染农场，required confirmation（避免误烧资源）
-- 所有 final 渲染默认走 farm
-
-### 7.3 版本树
-
-- 每次 submit 生成 RenderJobDocument 的新版本，旧版本不删除
-- `render.diff_versions` 在 Dailies 阶段使用
-- 引擎维护 LRU 策略清理超期 artifact，但 RenderJobDocument 元信息永存
-
-### 7.4 失败与降级
-
-| 场景 | 策略 |
-|------|------|
-| Farm 不可用 | 自动建议 local，超大 job 拒绝并请用户裁决 |
-| 单帧失败 | 标 frame-level 失败，自动重试 N 次，仍失败标 `partial` |
-| 编码后处理失败 | 保留 raw 帧，重试编码 |
+Session 不主动发出 Proposal，但更新 `active_context`，准备在下一个 Signal 到来时，以 Shot-03 的叙事位置（序列开场确立镜头）为基准推理。如果下一条 Signal 是 NaturalLanguage "灯光感觉不对"，Session 会知道这指的是 Shot-03 的 scene-level light，而不是某个 shot override。
 
 ---
 
-## 8. Dailies & Review
+## 4. 典型 Proposal 模式
 
-类比游戏 Playtest 的反馈环。
+### 4.1 多镜头光照一致性 Proposal
 
-### 8.1 ReviewDocument
+当 `narrative_phase = lighting` 时，Session 可以跨镜头提议光照一致性：
 
-```text
-ReviewDocument {
-  review_id, sequence_id, base_render_job_id,
-  compare_render_job_id?,
-  annotations: [
-    { id, shot_id, frame, region_2d?, author, kind: note | request_change | approve, text, ts }
-  ],
-  status: open | resolved
+```
+Proposal {
+  id: "prop-lighting-consistency-scene03",
+  semantic_intent: "统一 Scene-03 内 Shot-05 到 Shot-09 的 key light 方向，保持画面内太阳方位一致",
+  confidence: 0.85,
+  approval_policy: RequiresApproval,
+  reasoning: "Session 检测到 Shot-05 的 key 方向（azimuth=220°）与 Shot-07（azimuth=155°）
+              差异 65°，超过合理误差。两镜头在叙事上连续（同一地点同一时段），不应有此差异。
+              Shot-06 方向居中，推断为编辑操作时未同步更新。",
+  steps: [
+    WorldDelta { description: "Shot-06 key light azimuth 对齐至 220°", target: Shot-06... },
+    WorldDelta { description: "Shot-07 key light azimuth 对齐至 220°", target: Shot-07... }
+  ]
 }
 ```
 
-### 8.2 Notes 回灌
+### 4.2 表演与镜头语言协同 Proposal
 
-- AI 解析 annotation text，映射到具体 capability 调用候选
-- 例："这镜太暗" → 候选 `lighting.shot_override(key.intensity *= 1.4)`
-- 候选不直接 apply，进 Transaction IR preview
-
-### 8.3 A/B 比对
-
-- `render.diff_versions` 在 viewport 双联，时间轴同步
-- annotation 可以 attach 到具体版本，便于追踪"自这版后变差"
-
-### 8.4 不允许
-
-- AI 自动 resolve 用户的 annotation
-- 跨 ReviewDocument 共享 annotation（每个 review 独立闭环）
-
----
-
-## 9. 与游戏工作流的边界
-
-| 维度 | 游戏 | 影视 |
-|------|------|------|
-| 主文档 | SceneDocument + GameplayScript | SequenceDocument + Shot/Clip/Binding |
-| 反馈环 | Playtest + Telemetry | Dailies + Annotation |
-| 时态 | runtime simulation | timeline-driven evaluation |
-| 光照 | gameplay light | cinematic light（shot override） |
-| 摄像机 | gameplay camera（player-driven） | cine camera（shot-bound） |
-| 关键 capability | gameplay.* / level.* / playtest.* | sequence.* / shot.* / camera.* / cut.* / render.* / review.* |
-| Ship | release_phase 收紧 | delivery checklist 与 RenderJob 锁定 |
-
-同一项目可同时承载两类工作流，引擎按文档归属与 capability 过滤区分。
+```
+Proposal {
+  id: "prop-perf-camera-sync-shot11",
+  semantic_intent: "当角色转身的动作峰值（第 847 帧）与镜头推进同步，强化情绪节拍",
+  confidence: 0.66,
+  approval_policy: RequiresApproval,
+  reasoning: "当前摄像机推进开始于第 820 帧，角色转身峰值在第 847 帧，两者错位 27 帧导致
+              视觉重心分散。将摄像机推进延迟到第 840 帧开始，使推进高潮（+7 帧）与转身
+              峰值对齐，产生'镜头跟着情绪走'的感觉。",
+  steps: [
+    WorldDelta {
+      description: "摄像机 dolly-in 起始帧从 820 移至 840",
+      target: Shot-11.camera_binding.movement_keyframes,
+      change: { start_frame: 820 → 840 }
+    }
+  ]
+}
+```
 
 ---
 
-## 10. 验收标准
+## 5. 学习信号：UserCorrection 在影视语境中的含义
 
-下列条件全部满足，本工作流视为可交付：
+每次用户对 Proposal 的 `modify` 操作都产生 `UserCorrection`，Session 将其解读为导演审美偏好的具体表达。
 
-1. 给一段剧本（≤ 2 页），AI 能在 30 分钟内产出 SequenceDocument 草稿，含 ShotList + 初步 Blocking + key light
-2. `camera.frame_subject` 自动 framing 在 80% 常见场景达到可接受构图（headroom / 主体面积比例）
-3. lip-sync from audio 在常见英 / 中对白上能产出可用 viseme track（细节由用户调整）
-4. cinematic light 与 gameplay light 不会互相污染（两套场景同 instance 各自渲染均通过对照测试）
-5. Dailies 中的 annotation 100% 能被映射到候选 capability 调用，未识别 annotation 进入 review 队列
-6. RenderJob 即使局部失败，元信息与已完成 artifact 仍可访问
-7. 任一外部依赖（farm / mocap / lip-sync 后端）不可用时仍能 degrade 到可继续
+**典型学习场景：**
 
----
+| UserCorrection 内容 | Session 学习到的偏好 |
+|---------------------|----------------------|
+| 拒绝手持摄像机运动 | 该项目倾向稳定机位，避免 handheld |
+| 把 fill ratio 从 1:4 改为 1:6 | 导演喜欢更高对比度，更戏剧化的阴影 |
+| 把 CU 景别改回 MS | 这段叙事需要保留演员肢体语言，不宜过紧 |
+| 把色温从 4200K 改为 3800K | 该场景的情绪色语言比 Session 预期的更冷 |
+| 把 dolly-in 改为 static | 导演不希望用摄像机运动强调这个情绪节拍 |
 
-## 11. 不在范围
+这些 UserCorrection 不是错误修正，是导演美学语言的真实样本。Session 持续积累后，在同一项目后续镜头的 Proposal 中自动反映这些偏好，无需导演重复陈述。
 
-- VFX 合成（Nuke / Fusion 类，单独子文档）
-- DI / 调色（DaVinci 类，单独子文档）
-- 杜比 / 全景声混音
-- 实时虚拟制片的 LED 墙同步（单独子文档）
-- 影视级布料 / 毛发模拟（共用通用 bake.* capability，参数细节单独）
+**重要约束**：Session 学习的偏好存在 `ConversationHistory` 和 `WorldView`，不跨项目迁移——每个项目有自己的美学语言。
 
 ---
 
-## 12. 后续待办
+## 6. 与 World 时间轴层的关系
 
-- ScriptParser 的多语言支持与剧本格式扩展
-- ShotListPlanner 的风格模板库（动作 / 对话 / 蒙太奇 / 长镜头）
-- 自动 framing solver 的可调权重与镜头语法库
-- LightingPlanner 的 reference-driven 学习样本库
-- Dailies annotation → capability 映射的训练 / 评测集
-- RenderJob 与外部农场调度器（OpenCue / Deadline / Tractor）的适配
-- DI / 调色阶段的 capability 化封装边界
+影视工作流中，Session 操作的对象主要是 World 的时间轴层。核心数据结构详见 `ai-native-sequence-document-design.md`，此处只说明与 Session 行为直接相关的边界：
+
+**Session 读取时间轴层的方式：**
+
+Session 通过 `WorldView.entity_index` 查询当前 Sequence 中所有 Shot 的语义角色（确立镜头、反应镜头、插入镜头等），以及每个 Shot 的 `shot_override` 状态（是否有 cinematic light、camera binding 是否已设置等）。这让 Session 知道哪些镜头已完善，哪些处于空白状态。
+
+**Session 提议时间轴变更的方式：**
+
+所有对 Shot / Clip / Binding 的变更都通过 `WorldDelta` 表达，进入 Proposal 的 `steps` 列表。Session 不直接写入时间轴，只提议。
+
+**shot_override 层的重要性：**
+
+cinematic light、cine camera transform、角色临时位置覆盖，全部写在 `shot_override` 层，不污染 World 的 `authored` 层（SceneDocument 主体）。Session 始终优先写 `shot_override`，只有导演明确要求时才提议修改 `authored` 层。
+
+**Session 不处理的内容：**
+
+帧级别的渲染调度（RenderJob 提交）和烘焙结果（`provenance = baked`）不经过 Session 的 Proposal 流程，由渲染系统直接操作。Session 可以感知这些状态（通过 `WorldEvent`），但不提议修改已烘焙的结果。
