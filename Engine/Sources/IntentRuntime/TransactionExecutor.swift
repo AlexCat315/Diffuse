@@ -85,6 +85,9 @@ public struct TransactionApplyResult: Sendable, Equatable {
     public var sequenceRevisionID: String?
     public var assetEntryCount: Int?
     public var edit: Edit
+    /// Fine-grained authored-state changes produced by this transaction.
+    /// Session feeds these into WorldView to maintain an incremental entity index.
+    public var worldEvents: [WorldEvent]
 
     public init(transactionID: String,
                 changedDomains: [TransactionDomain],
@@ -93,7 +96,8 @@ public struct TransactionApplyResult: Sendable, Equatable {
                 sceneRevision: UInt64? = nil,
                 sequenceRevisionID: String? = nil,
                 assetEntryCount: Int? = nil,
-                edit: Edit) {
+                edit: Edit,
+                worldEvents: [WorldEvent] = []) {
         self.transactionID = transactionID
         self.changedDomains = changedDomains
         self.createdEntityIDs = createdEntityIDs
@@ -102,6 +106,7 @@ public struct TransactionApplyResult: Sendable, Equatable {
         self.sequenceRevisionID = sequenceRevisionID
         self.assetEntryCount = assetEntryCount
         self.edit = edit
+        self.worldEvents = worldEvents
     }
 }
 
@@ -220,6 +225,12 @@ public struct TransactionExecutor {
                 revisionBefore: revisionBefore,
                 revisionAfter: revisionAfter
             )
+            let derivedWorldEvents = deriveWorldEvents(
+                from: sceneOps,
+                createdEntityIDs: createdEntityIDs,
+                scene: context.sceneRuntime,
+                edit: edit
+            )
             let result = TransactionApplyResult(transactionID: transaction.id,
                                                 changedDomains: changedDomains,
                                                 createdEntityIDs: createdEntityIDs,
@@ -227,7 +238,8 @@ public struct TransactionExecutor {
                                                 sceneRevision: sceneRevision,
                                                 sequenceRevisionID: sequenceRevisionID,
                                                 assetEntryCount: assetEntryCount,
-                                                edit: edit)
+                                                edit: edit,
+                                                worldEvents: derivedWorldEvents)
             try publishSuccessEvents(for: transaction,
                                      result: result,
                                      sceneOps: sceneOps,
@@ -921,5 +933,114 @@ public struct TransactionExecutor {
         case let .setCameraPose(id, _, _, _):
             return "scene:camera_pose:\(id)"
         }
+    }
+
+    // MARK: - WorldEvent derivation
+
+    /// Derives WorldEvents from applied SceneMutations without re-querying the scene
+    /// for most mutations. Spawn and duplicate operations query the post-apply scene
+    /// to retrieve the created entity's properties by ID.
+    private func deriveWorldEvents(from sceneOps: [SceneMutation],
+                                   createdEntityIDs: [UInt64],
+                                   scene: SceneRuntime?,
+                                   edit: Edit) -> [WorldEvent] {
+        var events: [WorldEvent] = []
+        var createdIndex = 0
+
+        for op in sceneOps {
+            switch op {
+            case let .spawnImportedMeshEntity(label, kindLabel, _, position):
+                if createdIndex < createdEntityIDs.count {
+                    let ref = "scene:\(createdEntityIDs[createdIndex])"
+                    events.append(.entityAdded(ref: ref, name: label, kind: kindLabel))
+                    events.append(.entityAuthoredChanged(ref: ref, property: "position",
+                        value: .vec3(position.x, position.y, position.z)))
+                    createdIndex += 1
+                }
+
+            case let .deleteEntity(entityID):
+                events.append(.entityRemoved(ref: "scene:\(entityID)"))
+
+            case .duplicateEntity:
+                if createdIndex < createdEntityIDs.count, let scene {
+                    let rawID = createdEntityIDs[createdIndex]
+                    let ref = "scene:\(rawID)"
+                    let entity = EntityID(index: UInt32(rawID & 0xFFFF_FFFF),
+                                          generation: UInt32(rawID >> 32))
+                    let name = scene.component(SceneNameComponent.self, for: entity)?.value ?? ""
+                    let kind = scene.component(SceneKindComponent.self, for: entity)?.value
+                    events.append(.entityAdded(ref: ref, name: name, kind: kind))
+                    if let t = scene.localTransform(for: entity)?.translation {
+                        events.append(.entityAuthoredChanged(ref: ref, property: "position",
+                            value: .vec3(t.x, t.y, t.z)))
+                    }
+                    createdIndex += 1
+                }
+
+            case let .moveEntity(entityID, parentID, _):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "parentRef",
+                    value: .string(parentID.map { "scene:\($0)" } ?? "")))
+
+            case let .setLocalTransform(entityID, transform):
+                let t = transform.translation
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "position",
+                    value: .vec3(t.x, t.y, t.z)))
+
+            case let .setSceneName(entityID, value):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "name",
+                    value: .string(value)))
+
+            case let .setRigidBodyMotionType(entityID, value):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "rigidBodyMotionType",
+                    value: .string(value.rawValue)))
+
+            case let .setLightType(entityID, type):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "lightType",
+                    value: .string(type.rawValue)))
+
+            case let .setLightColor(entityID, color):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "lightColor",
+                    value: .vec3(color.x, color.y, color.z)))
+
+            case let .setLightIntensity(entityID, intensity):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "lightIntensity",
+                    value: .float(max(0, intensity))))
+
+            case let .setLightRange(entityID, range):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "lightRange",
+                    value: .float(max(0, range))))
+
+            case let .setLightSpotInnerAngle(entityID, angle):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "lightSpotInner",
+                    value: .float(max(0, min(179, angle)))))
+
+            case let .setLightSpotOuterAngle(entityID, angle):
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "lightSpotOuter",
+                    value: .float(max(1, min(179, angle)))))
+
+            case let .setCameraPose(entityID, localTransform, _, _):
+                let t = localTransform.translation
+                events.append(.entityAuthoredChanged(
+                    ref: "scene:\(entityID)", property: "position",
+                    value: .vec3(t.x, t.y, t.z)))
+
+            default:
+                break
+            }
+        }
+
+        events.append(.editApplied(editID: edit.id, summary: edit.summary,
+                                   revision: edit.revisionAfter.sceneRevision ?? 0))
+        return events
     }
 }

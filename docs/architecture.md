@@ -306,9 +306,31 @@ Phase 4 删除旧路径。
 
 Session 稳定后删除：`LocalIntentClassifier`、CapabilityRegistry 路由、NL pipeline、`SceneSemanticSnapshot`、`IntentTrainingLogger`。
 
-### Phase 5：World 统一
+### Phase 5：World 统一 ✅
 
 World 的 authored / evaluated / inferred 三层逐步取代 ECS 直接暴露给上层的模式。ECS 降级为运行时执行后端。
+
+Phase 5a（已完成）— delta 驱动的 WorldView：
+
+```
+Engine/Sources/IntentRuntime/
+  WorldEvent.swift        — WorldPropertyValue, WorldEvent（5 种事件类型）
+  TransactionExecutor     — apply() 产出 worldEvents: [WorldEvent]，附到 TransactionApplyResult
+
+Engine/Sources/AIRuntime/
+  WorldView.swift         — WorldEntityRecord（authored 层实体记录，Codable）
+                            entityIndex: [String: WorldEntityRecord] 替代 sceneSnapshot
+                            apply(event:) — O(1) 增量更新，apply(snapshot:) 保留作为 bootstrap
+  Session.swift           — observe(event:) 接收 delta；systemPrompt() 从 entityIndex 构建
+                            entityIndexJSON() 替代 encodeSnapshot()
+
+Editor/Sources/EditorCore/
+  EditorCore              — bootstrap session 于创建/设置更新时
+                            applyInvocationResult() 将 worldEvents 传入 session.observe(event:)
+                            移除每次 NL 请求前的全量快照编码
+```
+
+下一阶段：Phase 5b — evaluated 和 inferred 层（引擎求值结果、AI 推断属性）。
 
 ---
 

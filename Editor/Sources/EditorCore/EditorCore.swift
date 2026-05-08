@@ -83,6 +83,17 @@ public final class EditorApplication: @unchecked Sendable {
         self.editLog = EditLog(projectDirectory: projectDirectory)
         self.session = initialSession
 
+        // Bootstrap the session's entity index from the live scene.
+        if let initialSession {
+            let snapshot = SceneSemanticEncoder().encode(
+                scene.scene,
+                selectedEntityID: store.state.selectedEntityID,
+                workspaceMode: store.state.workspaceMode.rawValue,
+                localeIdentifier: nil
+            )
+            Task { await initialSession.observe(snapshot: snapshot) }
+        }
+
         scene.onRevisionChanged = { revision in
             store.dispatch(.setSceneRevision(revision))
         }
@@ -388,19 +399,12 @@ public final class EditorApplication: @unchecked Sendable {
     }
 
     private func submitNaturalLanguageIntentWithSession(_ text: String, session: Session) {
-        let snapshot = SceneSemanticEncoder().encode(
-            scene.scene,
-            selectedEntityID: store.state.selectedEntityID,
-            workspaceMode: store.state.workspaceMode.rawValue,
-            localeIdentifier: store.state.language.lprojName
-        )
         let locale = store.state.language.lprojName
         let t0 = Date()
         store.dispatch(.setAIStatusMessage("Planning…"))
 
         Task { @MainActor [weak self] in
             guard let self else { return }
-            await session.observe(snapshot: snapshot)
             do {
                 let proposal = try await session.process(
                     .naturalLanguage(text: text, locale: locale ?? "en")
@@ -625,7 +629,17 @@ public final class EditorApplication: @unchecked Sendable {
     public func applyAISettings(_ settings: EditorAISettings, apiKey: String) {
         AIKeychain.save(key: apiKey, provider: settings.provider)
         store.dispatch(.setAISettings(settings))
-        session = Self.makeSession(for: settings)
+        let newSession = Self.makeSession(for: settings)
+        if let newSession {
+            let snapshot = SceneSemanticEncoder().encode(
+                scene.scene,
+                selectedEntityID: store.state.selectedEntityID,
+                workspaceMode: store.state.workspaceMode.rawValue,
+                localeIdentifier: store.state.language.lprojName
+            )
+            Task { await newSession.observe(snapshot: snapshot) }
+        }
+        session = newSession
     }
 
     /// Removes the stored API key for the current provider and disables AI.
@@ -715,10 +729,11 @@ public final class EditorApplication: @unchecked Sendable {
                     pendingSessionProposal = nil
                 }
                 editLog.append(edit)
-                let summary = edit.summary
-                let revision = result.applyResult?.sceneRevision ?? 0
-                if let session {
-                    Task { await session.observe(editSummary: summary, revision: revision) }
+                // Feed WorldEvents to keep Session's entity index current (Phase 5 delta path).
+                if let session, let events = result.applyResult?.worldEvents, !events.isEmpty {
+                    Task {
+                        for event in events { await session.observe(event: event) }
+                    }
                 }
             }
         case .confirmationRequested:
