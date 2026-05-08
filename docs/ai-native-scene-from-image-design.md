@@ -1,8 +1,8 @@
-# Phase F：场景图到 SceneDocument 流水线详细设计
+# ReferenceImage Signal：场景草稿生成流水线
 
-> 本文档是 `ai-native-scene-model-design.md` 的子设计，对应 Phase F。
-> 适用范围：从一张或多张参考图（手稿、照片、风格图、概念图）到一份可编辑的 `SceneDocument` 提案。
-> 本文档不承诺像素级 3D 重建，承诺的是产出可编辑、可预演、可逐对象替换的场景草稿。
+> **定位**：本文档描述 `Signal.ReferenceImage` 的处理流水线，对应 `architecture.md` 中 Session 接收参考图输入后生成 Proposal 的过程。
+> 适用范围：从一张或多张参考图（手稿、照片、风格图、概念图）到一份可编辑的场景草稿 Proposal。
+> 本文档不承诺像素级 3D 重建，承诺的是产出可编辑、可预演、可逐对象替换的场景 Proposal。
 
 ---
 

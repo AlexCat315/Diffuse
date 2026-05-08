@@ -1,8 +1,10 @@
 # Observation Bus 详细设计
 
-> 本文是总纲 `ai-native-scene-model-design.md` §12 的落地。范围限定为：事件类型注册、事件信封、订阅与过滤、背压与节流、跨进程边界、持久化与回放、与 Context Memory Index / CapabilityGraph / MinimalConfirmationUI 的对接。
-> 本文不重复定义 Capability schema、Transaction IR 字段、Memory 条目结构；这些分别在
-> `ai-native-capability-graph-schema-design.md`、总纲 §11、待写的 `ai-native-context-memory-index-design.md`。
+> **定位**：本文档描述 World 变更流的技术实现，对应 `architecture.md` 中 World 的 WorldEvent 机制。
+>
+> Observation Bus 是 World 向所有订阅者广播变更的基础设施。Session 通过订阅 Observation Bus 增量维护 WorldView，而非轮询或全量快照。
+>
+> 本文不重复定义 Session、Proposal、Edit 结构；这些见 `architecture.md`。
 
 ---
 
@@ -372,7 +374,7 @@ Memory 不是 Bus 的订阅者之一就行；二者关系强约束：
 3. Memory 不能凭事件构造 authored / baked provenance；它只承载 envelope 携带的 provenance。
 4. Memory 写入必须是 envelope 的下游，而不是平行写入业务库——避免与 outbox 路径打架。
 
-Memory 详细 schema 见 `ai-native-context-memory-index-design.md`（待落地）。
+Memory 是 Session.WorldView 的内部状态，见 `architecture.md`。
 
 ---
 
@@ -457,38 +459,37 @@ SymbolicEvent {
 6. BridgeNode（editor ↔ agent in-proc 桥优先；跨机延后）
 7. SymbolicView 与 LLM agent 对接
 8. Dead-letter 与诊断面板
-9. CapabilityGraph 校验勾连（side_band_emits / read_after_write）
+9. Session 订阅与 WorldView 增量更新的端到端验证
 
 ---
 
 ## 17. 验收标准
 
 1. 任何 publish 都能在 envelope 上回放出 origin / provenance / causation_id。
-2. EventKindRegistry 与 CapabilityGraph 在 CI 完成双向校验，未声明 kind / 域错位均阻断。
+2. EventKindRegistry 在 CI 完成完整性校验，未声明 kind / 域错位均阻断。
 3. transaction.applied 与对应 SceneStore 写入在崩溃-恢复后保持原子（outbox 重放不重复也不漏）。
 4. 单 subscriber 卡死不影响其他订阅者的延迟分布。
 5. 高频 stream 在订阅侧按 buffer_policy 表现可观测（合并 / 丢弃 / 限速 计数公开为 metric）。
 6. Resync 流程能从冷启动恢复到与发布端一致的状态，不依赖人工对账。
 7. LLM 视图中不出现任何 vector / image bytes / 渲染图 handle 之外的二进制。
 8. 跨机 bridge 断连后重连，订阅者状态完整恢复，无重复消费。
-9. Confirmation 流程的 requested → resolved 关联可追溯到 originating IntentTx。
+9. Confirmation 流程的 requested → resolved 关联可追溯到 originating Proposal，并正确生成 UserCorrection。
 
 ---
 
 ## 18. 不在范围
 
-- IntentIR / TransactionIR 字段定义（属 §11 的待办）
-- Context Memory Index 条目 schema（属下一份子文档）
+- WorldDelta / Edit 字段定义（见 `architecture.md`）
+- Session.WorldView 内部结构（Session 实现细节）
 - 跨机协议字节级编码选型（待 Phase D 实施时定）
 - Audit log / 合规导出格式（后续单独文档）
-- 训练数据采集格式（cold_log 的下游消费，独立讨论）
 
 ---
 
 ## 19. 后续待办
 
-- 与 Context Memory Index 文档对齐字段命名（cursor / event_id / causation 三者关系）
 - 给出 EventKindRegistry 的初始全集（与 §2.1 各 domain 的具体 noun 闭集）
 - 跨机 bridge 协议的具体二进制选型与版本协商
+- Session 订阅端的 resync 协议与 WorldView 初始化流程
 - replay 模式下哪些副作用订阅者是"必须屏蔽"、哪些是"可重入"，做一份分类表
 - 与渲染 farm 的 metric 协议对齐（runtime.metric.sampled 的 payload schema）
