@@ -1,6 +1,5 @@
 import AIRuntime
 import AssetPipeline
-import CapabilityRuntime
 import EngineCore
 import EngineKernel
 import IntentRuntime
@@ -66,7 +65,7 @@ public final class EditorApplication: @unchecked Sendable {
         try FileManager.default.createDirectory(at: observationDirectory,
                                                 withIntermediateDirectories: true)
         let observationBus = try ObservationBus(coldLogDirectory: observationDirectory.path)
-        let intentCoordinator = try IntentRuntimeCoordinator.default()
+        let intentCoordinator = IntentRuntimeCoordinator()
         // Restore the AI backend from the settings passed in at launch (loaded from
         // EditorShellState by the caller) and the matching key in Keychain.
         store.dispatch(.setAISettings(initialAISettings))
@@ -366,16 +365,6 @@ public final class EditorApplication: @unchecked Sendable {
         return scene.scene.localTransform(for: entity)?.translation
     }
 
-    public func aiCapabilitySymbolicViews(includeExperimental: Bool = false,
-                                          maxCount: Int = 10) -> [CapabilitySymbolicView] {
-        intentCoordinator.promptCapabilitySymbolicViews(
-            for: CapabilityInvocationContext(role: .editor,
-                                             releasePhase: .beta,
-                                             includeExperimental: includeExperimental),
-            maxCount: maxCount
-        )
-    }
-
     /// Session-era stub: returns empty — Session handles NL inference.
     public func localIntentSuggestions(
         for text: String,
@@ -549,14 +538,8 @@ public final class EditorApplication: @unchecked Sendable {
                                                 partial: false)
         var context = makeExecutionContext()
         do {
-            let result: CapabilityInvocationResult
-            if request.batchID.hasPrefix("ai_cfm:") {
-                result = try intentCoordinator.resolvePlanConfirmation(resolution,
+            let result = try intentCoordinator.resolvePlanConfirmation(resolution,
                                                                        executionContext: &context)
-            } else {
-                result = try intentCoordinator.resolveConfirmation(resolution,
-                                                                   executionContext: &context)
-            }
             applyInvocationResult(result, executionContext: &context)
         } catch {
             store.dispatch(.setAIStatusMessage(String(describing: error)))
@@ -664,31 +647,11 @@ public final class EditorApplication: @unchecked Sendable {
         }
     }
 
-    private func submitIntentTransaction(_ transaction: TransactionIR) {
-        if store.state.pendingConfirmationRequest != nil {
-            store.dispatch(.setAIStatusMessage("Resolve the pending confirmation before submitting another AI action."))
-            return
-        }
-
-        var context = makeExecutionContext()
-        do {
-            let result = try intentCoordinator.submit(transaction,
-                                                      capabilityContext: CapabilityInvocationContext(role: .editor,
-                                                                                                     releasePhase: .beta),
-                                                      executionContext: &context)
-            applyInvocationResult(result, executionContext: &context)
-        } catch {
-            store.dispatch(.setPendingConfirmationRequest(nil))
-            store.dispatch(.setAIWarnings([]))
-            store.dispatch(.setAIStatusMessage(String(describing: error)))
-        }
-    }
-
     private func submitResolvedIntent(_ intent: IntentIR) {
         do {
             let transaction = try intentTransactionBuilder.buildTransaction(from: intent,
                                                                             context: makeIntentTransactionBuildContext())
-            submitIntentTransaction(transaction)
+            submitPlanTransaction(transaction)
         } catch {
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings([]))

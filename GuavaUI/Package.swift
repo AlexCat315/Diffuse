@@ -10,7 +10,7 @@ let harfbuzzLibDir = "\(packageDir)/vendor/harfbuzz/lib"
 let package = Package(
     name: "GuavaUI",
     platforms: [
-        .macOS(.v14)
+        .macOS(.v14),
     ],
     products: [
         .executable(name: "GuavaUIDemo", targets: ["GuavaUIDemo"]),
