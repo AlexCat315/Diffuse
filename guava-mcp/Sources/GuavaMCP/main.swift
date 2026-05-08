@@ -1,12 +1,60 @@
 import Foundation
+
+#if canImport(Darwin)
 import Darwin
+#elseif canImport(Glibc)
+import Glibc
+#elseif os(Windows)
+import WinSDK
+#endif
 
 // MARK: - IPC (TCP → Guava.app on localhost:9898)
 
 func editorCall(_ request: [String: Any]) -> [String: Any] {
+    guard var payload = try? JSONSerialization.data(withJSONObject: request) else {
+        return ["ok": false, "error": "serialization error"]
+    }
+    payload.append(UInt8(ascii: "\n"))
+
+#if os(Windows)
+    var wsaData = WSADATA()
+    guard WSAStartup(MAKEWORD(2, 2), &wsaData) == 0 else {
+        return ["ok": false, "error": "WSAStartup failed"]
+    }
+    defer { WSACleanup() }
+
+    let sock = WinSDK.socket(AF_INET, SOCK_STREAM, IPPROTO_TCP)
+    guard sock != INVALID_SOCKET else { return ["ok": false, "error": "socket() failed"] }
+    defer { closesocket(sock) }
+
+    var addr = sockaddr_in()
+    addr.sin_family = ADDRESS_FAMILY(AF_INET)
+    addr.sin_port = UInt16(9898).bigEndian
+    addr.sin_addr.s_addr = inet_addr("127.0.0.1")
+    let connected = withUnsafePointer(to: &addr) {
+        $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
+            WinSDK.connect(sock, $0, Int32(MemoryLayout<sockaddr_in>.size))
+        }
+    }
+    guard connected == 0 else {
+        return ["ok": false, "error": "Guava is not running (could not connect to localhost:9898)"]
+    }
+
+    let sent = payload.withUnsafeBytes {
+        send(sock, $0.baseAddress!.assumingMemoryBound(to: CChar.self), Int32($0.count), 0)
+    }
+    guard sent == Int32(payload.count) else { return ["ok": false, "error": "write error"] }
+
+    var responseData = Data()
+    var byte: CChar = 0
+    while recv(sock, &byte, 1, 0) == 1 {
+        if byte == CChar(bitPattern: UInt8(ascii: "\n")) { break }
+        responseData.append(UInt8(bitPattern: byte))
+    }
+#else
     let sock = socket(AF_INET, SOCK_STREAM, 0)
     guard sock >= 0 else { return ["ok": false, "error": "socket() failed"] }
-    defer { Darwin.close(sock) }
+    defer { close(sock) }
 
     var addr = sockaddr_in()
     addr.sin_family = sa_family_t(AF_INET)
@@ -14,27 +62,24 @@ func editorCall(_ request: [String: Any]) -> [String: Any] {
     addr.sin_addr.s_addr = inet_addr("127.0.0.1")
     let connected = withUnsafePointer(to: &addr) {
         $0.withMemoryRebound(to: sockaddr.self, capacity: 1) {
-            Darwin.connect(sock, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
+            connect(sock, $0, socklen_t(MemoryLayout<sockaddr_in>.size))
         }
     }
     guard connected == 0 else {
         return ["ok": false, "error": "Guava is not running (could not connect to localhost:9898)"]
     }
 
-    guard var payload = try? JSONSerialization.data(withJSONObject: request) else {
-        return ["ok": false, "error": "serialization error"]
-    }
-    payload.append(UInt8(ascii: "\n"))
-    let sent = payload.withUnsafeBytes { Darwin.write(sock, $0.baseAddress, $0.count) }
+    let sent = payload.withUnsafeBytes { write(sock, $0.baseAddress, $0.count) }
     guard sent == payload.count else { return ["ok": false, "error": "write error"] }
 
-    // Read response until newline
     var responseData = Data()
     var byte = [UInt8](repeating: 0, count: 1)
-    while Darwin.read(sock, &byte, 1) == 1 {
+    while read(sock, &byte, 1) == 1 {
         if byte[0] == UInt8(ascii: "\n") { break }
         responseData.append(byte[0])
     }
+#endif
+
     guard let json = try? JSONSerialization.jsonObject(with: responseData) as? [String: Any] else {
         return ["ok": false, "error": "invalid response from editor"]
     }
@@ -113,7 +158,7 @@ func writeResponse(_ obj: [String: Any]) {
     guard let data = try? JSONSerialization.data(withJSONObject: obj) else { return }
     var out = data
     out.append(UInt8(ascii: "\n"))
-    out.withUnsafeBytes { _ = Darwin.write(STDOUT_FILENO, $0.baseAddress, $0.count) }
+    FileHandle.standardOutput.write(out)
 }
 
 func toolResult(id: Any, text: String, isError: Bool = false) {
@@ -153,7 +198,7 @@ func handle(_ msg: [String: Any]) {
             "result": [
                 "protocolVersion": "2024-11-05",
                 "capabilities": ["tools": [:] as [String: Any]] as [String: Any],
-                "serverInfo": ["name": "guava", "version": "0.1.0"] as [String: Any],
+                "serverInfo": ["name": "guava", "version": "0.0.1"] as [String: Any],
             ] as [String: Any],
         ])
 

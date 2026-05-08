@@ -4,7 +4,6 @@ import PackageDescription
 
 let package = Package(
     name: "guava-mcp",
-    platforms: [.macOS(.v14)],
     targets: [
         .executableTarget(
             name: "GuavaMCP",
