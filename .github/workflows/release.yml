@@ -5,9 +5,21 @@ on:
     types: [created]
 
 jobs:
+  # ── Create the GitHub Release first ──────────────────────────────────────
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Create GitHub Release
+        run: gh release create ${{ github.ref_name }} --title "${{ github.ref_name }}" --generate-notes
+        env:
+          GH_TOKEN: ${{ github.token }}
+
   # ── macOS: arm64 + x86_64 + universal ────────────────────────────────────
   build-macos:
     name: macOS
+    needs: create-release
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +53,7 @@ jobs:
       - name: Upload
         working-directory: guava-mcp
         run: |
-          gh release upload ${{ github.event.release.tag_name }} \
+          gh release upload ${{ github.ref_name }} \
             guava-mcp-macos-arm64.zip \
             guava-mcp-macos-x86_64.zip \
             guava-mcp-macos-universal.zip
@@ -51,6 +63,7 @@ jobs:
   # ── Linux x86_64 ─────────────────────────────────────────────────────────
   build-linux-x86:
     name: Linux (x86_64)
+    needs: create-release
     runs-on: ubuntu-22.04
     steps:
       - uses: actions/checkout@v4
@@ -72,13 +85,14 @@ jobs:
 
       - name: Upload
         working-directory: guava-mcp
-        run: gh release upload ${{ github.event.release.tag_name }} guava-mcp-linux-x86_64.tar.gz
+        run: gh release upload ${{ github.ref_name }} guava-mcp-linux-x86_64.tar.gz
         env:
           GH_TOKEN: ${{ github.token }}
 
   # ── Linux arm64 ──────────────────────────────────────────────────────────
   build-linux-arm64:
     name: Linux (arm64)
+    needs: create-release
     runs-on: ubuntu-22.04-arm
     steps:
       - uses: actions/checkout@v4
@@ -100,13 +114,14 @@ jobs:
 
       - name: Upload
         working-directory: guava-mcp
-        run: gh release upload ${{ github.event.release.tag_name }} guava-mcp-linux-arm64.tar.gz
+        run: gh release upload ${{ github.ref_name }} guava-mcp-linux-arm64.tar.gz
         env:
           GH_TOKEN: ${{ github.token }}
 
   # ── Windows x86_64 ───────────────────────────────────────────────────────
   build-windows:
     name: Windows (x86_64)
+    needs: create-release
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
@@ -131,6 +146,6 @@ jobs:
       - name: Upload
         working-directory: guava-mcp
         shell: pwsh
-        run: gh release upload ${{ github.event.release.tag_name }} guava-mcp-windows-x86_64.zip
+        run: gh release upload ${{ github.ref_name }} guava-mcp-windows-x86_64.zip
         env:
           GH_TOKEN: ${{ github.token }}
