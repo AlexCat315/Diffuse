@@ -33,6 +33,9 @@ public enum EditorAction: Sendable {
     case setAISettings(EditorAISettings)
     case setAIStatusMessage(String?)
     case setAIWarnings([String])
+    case appendChatMessage(AIChatMessage)
+    case updateChatMessage(id: String, assistantState: AIChatMessage.AssistantState)
+    case clearChatHistory
     case appendConsoleMessage(String, severity: EditorConsoleSeverity = .info, detail: String? = nil)
     case clearConsole
     case setCommandPaletteVisible(Bool)
@@ -142,6 +145,14 @@ public enum EditorReducer {
             state.aiStatusMessage = message
         case let .setAIWarnings(warnings):
             state.aiWarnings = warnings
+        case let .appendChatMessage(message):
+            state.chatMessages.append(message)
+        case let .updateChatMessage(id, assistantState):
+            if let idx = state.chatMessages.firstIndex(where: { $0.id == id }) {
+                state.chatMessages[idx].assistantState = assistantState
+            }
+        case .clearChatHistory:
+            state.chatMessages.removeAll()
         case let .appendConsoleMessage(message, severity, detail):
             let trimmed = message.trimmingCharacters(in: .whitespacesAndNewlines)
             guard !trimmed.isEmpty else { return }

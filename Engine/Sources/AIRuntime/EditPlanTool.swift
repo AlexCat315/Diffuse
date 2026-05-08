@@ -3,11 +3,24 @@ import Foundation
 /// Tool definition for the `execute_edit_plan` tool, used in Messages API requests.
 /// Schema is derived from `SceneEditOp` — the canonical set of atomic scene mutations.
 public enum EditPlanTool {
+    /// Anthropic Messages API format.
     public static func definition() -> [String: Any] {
         [
             "name": "execute_edit_plan",
             "description": "Execute a multi-step scene edit plan. Each step atomically mutates one aspect of the scene.",
             "input_schema": schema(),
+        ]
+    }
+
+    /// OpenAI / DeepSeek chat-completions format.
+    public static func openAIDefinition() -> [String: Any] {
+        [
+            "type": "function",
+            "function": [
+                "name": "execute_edit_plan",
+                "description": "Execute a multi-step scene edit plan. Each step atomically mutates one aspect of the scene.",
+                "parameters": schema(),
+            ] as [String: Any],
         ]
     }
 
