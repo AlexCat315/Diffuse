@@ -1,7 +1,7 @@
 import Foundation
 import IntentRuntime
 
-public enum SessionError: Error, CustomStringConvertible, Sendable {
+public enum SessionError: Error, CustomStringConvertible, LocalizedError, Sendable {
     case unsupportedSignal(String)
     case httpError(statusCode: Int, body: String?)
     case malformedResponse(detail: String)
@@ -22,6 +22,8 @@ public enum SessionError: Error, CustomStringConvertible, Sendable {
             return "Session: plan decoding failed — \(detail)"
         }
     }
+
+    public var errorDescription: String? { description }
 }
 
 /// Per-project persistent AI participant.
