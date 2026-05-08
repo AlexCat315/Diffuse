@@ -23,7 +23,7 @@ public struct SessionConfig: Sendable {
     public init(apiKey: String,
                 model: String,
                 maxTokens: Int = 2048,
-                timeoutInterval: TimeInterval = 30,
+                timeoutInterval: TimeInterval = 90,
                 baseURL: URL,
                 apiFormat: SessionAPIFormat) {
         self.apiKey = apiKey
@@ -37,7 +37,7 @@ public struct SessionConfig: Sendable {
     public static func anthropic(apiKey: String,
                                   model: String = defaultAnthropicModel,
                                   maxTokens: Int = 2048,
-                                  timeoutInterval: TimeInterval = 30) -> SessionConfig {
+                                  timeoutInterval: TimeInterval = 90) -> SessionConfig {
         SessionConfig(apiKey: apiKey,
                       model: model,
                       maxTokens: maxTokens,
@@ -49,7 +49,7 @@ public struct SessionConfig: Sendable {
     public static func openAI(apiKey: String,
                                model: String = defaultOpenAIModel,
                                maxTokens: Int = 2048,
-                               timeoutInterval: TimeInterval = 30) -> SessionConfig {
+                               timeoutInterval: TimeInterval = 90) -> SessionConfig {
         SessionConfig(apiKey: apiKey,
                       model: model,
                       maxTokens: maxTokens,
@@ -61,7 +61,7 @@ public struct SessionConfig: Sendable {
     public static func deepSeek(apiKey: String,
                                  model: String = defaultDeepSeekModel,
                                  maxTokens: Int = 2048,
-                                 timeoutInterval: TimeInterval = 30) -> SessionConfig {
+                                 timeoutInterval: TimeInterval = 90) -> SessionConfig {
         SessionConfig(apiKey: apiKey,
                       model: model,
                       maxTokens: maxTokens,

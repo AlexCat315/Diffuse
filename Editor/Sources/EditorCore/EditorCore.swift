@@ -429,10 +429,11 @@ public final class EditorApplication: @unchecked Sendable {
                 self.pendingSessionProposal = proposal
                 self.submitPlanTransaction(transaction)
             } catch {
-                self.store.dispatch(.setAIStatusMessage(String(describing: error)))
+                let message = error.localizedDescription
+                self.store.dispatch(.setAIStatusMessage(message))
                 if let aid = self.pendingAssistantMessageID {
                     self.store.dispatch(.updateChatMessage(id: aid,
-                                                           assistantState: .failed(String(describing: error))))
+                                                           assistantState: .failed(message)))
                     self.pendingAssistantMessageID = nil
                 }
             }
@@ -451,7 +452,7 @@ public final class EditorApplication: @unchecked Sendable {
         } catch {
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings([]))
-            store.dispatch(.setAIStatusMessage(String(describing: error)))
+            store.dispatch(.setAIStatusMessage(error.localizedDescription))
         }
     }
 
@@ -561,7 +562,7 @@ public final class EditorApplication: @unchecked Sendable {
                                                                        executionContext: &context)
             applyInvocationResult(result, executionContext: &context)
         } catch {
-            store.dispatch(.setAIStatusMessage(String(describing: error)))
+            store.dispatch(.setAIStatusMessage(error.localizedDescription))
         }
     }
 
@@ -686,7 +687,7 @@ public final class EditorApplication: @unchecked Sendable {
         } catch {
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings([]))
-            store.dispatch(.setAIStatusMessage(String(describing: error)))
+            store.dispatch(.setAIStatusMessage(error.localizedDescription))
         }
     }
 
