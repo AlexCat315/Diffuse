@@ -330,7 +330,28 @@ Editor/Sources/EditorCore/
                             移除每次 NL 请求前的全量快照编码
 ```
 
-下一阶段：Phase 5b — evaluated 和 inferred 层（引擎求值结果、AI 推断属性）。
+Phase 5b（已完成）— evaluated 和 inferred 层：
+
+```
+Engine/Sources/IntentRuntime/
+  WorldEvent.swift        — WorldPropertyValue 加 Codable；新增 entityEvaluatedChanged /
+                            entityInferredUpdated 两种事件类型
+  TransactionExecutor     — deriveWorldEvents() 对 transform 操作追加 entityEvaluatedChanged
+                            (worldPosition)，在 propagateTransforms() 后查询世界坐标
+
+Engine/Sources/AIRuntime/
+  WorldView.swift         — WorldEntityRecord 加 evaluated / inferred 两层字典；
+                            InferredProperty（displayValue, confidence, source）
+                            apply(event:) 处理 Phase 5b 事件
+  Session.swift           — systemPrompt() 将 evaluated / inferred 数据自动序列化进实体 JSON；
+                            Rules 说明 worldPosition 用于空间推理，set_transform 写 local space
+                            conversationHistory 加入 system prompt；learn() 改为 .user turn
+```
+
+下一阶段：Phase 5c — 语义生产流水线填充 inferred 层（asset 导入时标注 semanticRole 等）。
+
+**Phase 3：接入 UserCorrection** — accept / discard 路径已接线（见 EditorCore.applyInvocationResult）；
+"modify" 分支（最有价值的训练信号）待实现：需要在 UI 确认流中捕获用户实际变更的 delta。
 
 ---
 
