@@ -1,5 +1,4 @@
 import AssetPipeline
-import CapabilityRuntime
 import Foundation
 import IntentRuntime
 import ObservationBus
@@ -202,29 +201,6 @@ struct IntentRuntimeTests {
         #expect(registry.entriesSnapshot().map(\ .relativePath) == ["mesh.obj"])
     }
 
-    @Test("deterministic natural language resolver emits typed IntentIR for common scene verbs")
-    func naturalLanguageResolverEmitsTypedIntentIR() throws {
-        let resolver = NaturalLanguageIntentResolver()
-        let context = NaturalLanguageIntentContext(selectedObjectIDs: ["scene:42"])
-
-        let rename = resolver.resolve(NaturalLanguageIntent(text: #"rename selected to "Boss""#),
-                                      context: context)
-        let move = resolver.resolve(NaturalLanguageIntent(text: "move selection to 1 2 3"),
-                                    context: context)
-
-        let renameIntent = try #require(rename.intent)
-        let moveIntent = try #require(move.intent)
-
-        #expect(renameIntent.verb == "scene.set_name")
-        #expect(renameIntent.targetObjectIDs == ["scene:42"])
-        #expect(renameIntent.arguments["name"] == .string("Boss"))
-        #expect(renameIntent.confidence > 0)
-        #expect(renameIntent.evidence.first?.kind == "natural_language")
-
-        #expect(moveIntent.verb == "scene.set_transform")
-        #expect(moveIntent.arguments["translation"] == .vec3(IntentVector3(x: 1, y: 2, z: 3)))
-    }
-
     @Test("IntentIR decodes legacy payloads without typed arguments")
     func intentIRDecodesLegacyPayloads() throws {
         let data = Data(#"{"verb":"scene.spawn_entity","summary":"Spawn","source":"human"}"#.utf8)
@@ -236,39 +212,6 @@ struct IntentRuntimeTests {
         #expect(intent.arguments.isEmpty)
         #expect(intent.confidence == 1.0)
         #expect(intent.evidence.isEmpty)
-    }
-
-    @Test("natural language resolver returns actionable unresolved intents")
-    func naturalLanguageResolverReturnsUnresolvedIntents() throws {
-        let resolver = NaturalLanguageIntentResolver()
-
-        let missingTarget = resolver.resolve(NaturalLanguageIntent(text: "delete selected"))
-        let unsupported = resolver.resolve(NaturalLanguageIntent(text: "make it more cinematic"))
-
-        let targetIssue = try #require(missingTarget.unresolved)
-        let unsupportedIssue = try #require(unsupported.unresolved)
-
-        #expect(targetIssue.reason == .missingTarget)
-        #expect(targetIssue.candidateVerbIDs == ["scene.delete_entity"])
-        #expect(targetIssue.missingArguments == ["entity_id"])
-        #expect(unsupportedIssue.reason == .unsupportedVerb)
-    }
-
-    @Test("unresolved intent queue tracks open and dismissed items")
-    func unresolvedIntentQueueTracksLifecycle() throws {
-        let queue = UnresolvableIntentQueue()
-        let item = UnresolvableIntent(
-            naturalLanguageIntent: NaturalLanguageIntent(text: "delete selected"),
-            reason: .missingTarget,
-            message: "Select an entity before deleting it."
-        )
-
-        queue.append(item)
-        #expect(queue.snapshot().map(\.id) == [item.id])
-
-        queue.dismiss(id: item.id)
-        #expect(queue.snapshot().isEmpty)
-        #expect(queue.snapshot(includeClosed: true).first?.status == .dismissed)
     }
 
     @Test("IntentIR transaction builder converts typed intents to scene transactions")
@@ -303,38 +246,6 @@ struct IntentRuntimeTests {
         }
         #expect(rawID == entity.rawValue)
         #expect(transform.translation == SIMD3<Float>(3, 4, 5))
-    }
-
-    @Test("coordinator stores unresolvable natural language intents")
-    func coordinatorStoresUnresolvableNaturalLanguageIntents() throws {
-        let coordinator = try IntentRuntimeCoordinator.default()
-
-        let result = coordinator.resolveNaturalLanguageIntent(
-            NaturalLanguageIntent(text: "delete selected"),
-            context: NaturalLanguageIntentContext()
-        )
-
-        let unresolved = try #require(result.unresolved)
-        #expect(coordinator.unresolvedNaturalLanguageIntents().map(\.id) == [unresolved.id])
-
-        coordinator.dismissUnresolvedIntent(id: unresolved.id)
-        #expect(coordinator.unresolvedNaturalLanguageIntents().isEmpty)
-    }
-
-    @Test("coordinator exposes prompt-safe symbolic capabilities from its registry")
-    func coordinatorExposesPromptSafeSymbolicCapabilities() throws {
-        let coordinator = try IntentRuntimeCoordinator.default()
-        let views = coordinator.promptCapabilitySymbolicViews(
-            for: CapabilityInvocationContext(role: .editor,
-                                             releasePhase: .beta,
-                                             includeExperimental: true)
-        )
-
-        let spawn = try #require(views.first { $0.verbID == "scene.spawn_entity" })
-        let draftCommit = try #require(views.first { $0.verbID == "scene.commit_inferred_draft" })
-
-        #expect(spawn.arguments.contains { $0.name == "label" && $0.llmHint == "Entity label" })
-        #expect(!draftCommit.arguments.contains { $0.name == "confirm_phrase" })
     }
 
     @Test("scene apply emits transaction and scene bus events")
@@ -469,9 +380,9 @@ struct IntentRuntimeTests {
         #expect(discardedEvents.map(\ .kind) == [.transactionDiscarded])
     }
 
-    @Test("capability invocation applies auto-confirm transactions immediately")
-    func capabilityInvocationAppliesAutoConfirmTransactionsImmediately() throws {
-        let coordinator = try IntentRuntimeCoordinator.default()
+    @Test("submitPlan applies automatic transactions immediately")
+    func submitPlanAppliesAutomaticTransactionsImmediately() throws {
+        let coordinator = IntentRuntimeCoordinator()
         let transaction = TransactionIR(intent: IntentIR(verb: "scene.spawn_entity",
                                                          summary: "Spawn imported mesh",
                                                          source: .human),
@@ -483,29 +394,26 @@ struct IntentRuntimeTests {
                                                                            position: SIMD3<Float>(0, 1, 0)))
                                         ],
                                         baseRevisions: TransactionBaseRevisions(sceneRevision: 0),
+                                        approvalPolicy: .automatic,
                                         provenance: .authored)
         var context = TransactionExecutionContext(sceneRuntime: SceneRuntime())
 
-        let result = try coordinator.submit(transaction,
-                                            capabilityContext: CapabilityInvocationContext(role: .editor,
-                                                                                           releasePhase: .beta),
-                                            executionContext: &context)
+        let result = try coordinator.submitPlan(transaction, executionContext: &context)
 
         #expect(result.disposition == .applied)
-        #expect(result.readAfterWrite == [.sceneChanged])
         #expect(result.applyResult?.createdEntityIDs.count == 1)
         #expect(context.sceneRuntime?.snapshot.entityCount == 1)
     }
 
-    @Test("capability invocation stages warn-level transactions and emits confirmation requests")
-    func capabilityInvocationStagesWarnLevelTransactions() throws {
+    @Test("submitPlan stages requiresApproval transactions and emits confirmation requests")
+    func submitPlanStagesRequiresApprovalTransactions() throws {
         let root = FileManager.default.temporaryDirectory
             .appendingPathComponent(UUID().uuidString, isDirectory: true)
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: root) }
 
         let bus = try ObservationBus(coldLogDirectory: root.path)
-        let coordinator = try IntentRuntimeCoordinator.default()
+        let coordinator = IntentRuntimeCoordinator()
         var scene = SceneRuntime()
         let entity = scene.createEntity()
         let transactionSubscription = bus.subscribe(spec: SubscriptionSpec(filter: .kindIn([.transactionStaged]),
@@ -521,6 +429,7 @@ struct IntentRuntimeTests {
                                         summary: "Delete selected entity",
                                         operations: [.scene(.deleteEntity(entityID: entity.rawValue))],
                                         baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+                                        approvalPolicy: .requiresApproval,
                                         provenance: .authored)
         var context = TransactionExecutionContext(sceneRuntime: scene,
                                                   observationBus: bus,
@@ -528,10 +437,7 @@ struct IntentRuntimeTests {
                                                                            host: "test-host",
                                                                            user: "alex"))
 
-        let result = try coordinator.submit(transaction,
-                                            capabilityContext: CapabilityInvocationContext(role: .editor,
-                                                                                           releasePhase: .beta),
-                                            executionContext: &context)
+        let result = try coordinator.submitPlan(transaction, executionContext: &context)
         let stagedEvents = transactionSubscription.drain()
         let confirmationEvents = confirmationSubscription.drain()
 
@@ -542,8 +448,6 @@ struct IntentRuntimeTests {
         #expect(confirmationEvents.map(\ .kind) == [.confirmationRequested])
         let payload = try #require(confirmationEvents.first?.payloadRef.inlineRecord)
         #expect(payload["batch_id"] == .string("cfm:\(transaction.id)"))
-        #expect(payload["required_role"] == .string("editor"))
-        #expect(result.readAfterWrite == [.sceneChanged])
     }
 
     @Test("confirmation resolution applies staged transactions and publishes UI resolution")
@@ -554,7 +458,7 @@ struct IntentRuntimeTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let bus = try ObservationBus(coldLogDirectory: root.path)
-        let coordinator = try IntentRuntimeCoordinator.default()
+        let coordinator = IntentRuntimeCoordinator()
         var scene = SceneRuntime()
         let entity = scene.createEntity()
         let confirmationResolvedSubscription = bus.subscribe(spec: SubscriptionSpec(filter: .kindIn([.confirmationResolved]),
@@ -570,6 +474,7 @@ struct IntentRuntimeTests {
                                         summary: "Delete selected entity",
                                         operations: [.scene(.deleteEntity(entityID: entity.rawValue))],
                                         baseRevisions: TransactionBaseRevisions(sceneRevision: scene.snapshot.revision),
+                                        approvalPolicy: .requiresApproval,
                                         provenance: .authored)
         var context = TransactionExecutionContext(sceneRuntime: scene,
                                                   observationBus: bus,
@@ -577,10 +482,7 @@ struct IntentRuntimeTests {
                                                                            host: "test-host",
                                                                            user: "alex"))
 
-        let staged = try coordinator.submit(transaction,
-                                            capabilityContext: CapabilityInvocationContext(role: .editor,
-                                                                                           releasePhase: .beta),
-                                            executionContext: &context)
+        let staged = try coordinator.submitPlan(transaction, executionContext: &context)
         let request = try #require(staged.confirmationRequest)
         let resolution = ConfirmationResolution(batchID: request.batchID,
                                                 correlationID: request.correlationID,
@@ -590,155 +492,14 @@ struct IntentRuntimeTests {
                                                 userID: "alex",
                                                 partial: false)
 
-        let applied = try coordinator.resolveConfirmation(resolution, executionContext: &context)
+        let applied = try coordinator.resolvePlanConfirmation(resolution, executionContext: &context)
         let confirmationEvents = confirmationResolvedSubscription.drain()
         let sceneEvents = sceneSubscription.drain()
 
         #expect(applied.disposition == .applied)
         #expect(context.sceneRuntime?.snapshot.entityCount == 0)
-        #expect(applied.readAfterWrite == [.sceneChanged])
         #expect(confirmationEvents.map(\ .kind) == [.confirmationResolved])
         #expect(sceneEvents.map(\ .kind) == [.sceneChanged])
-    }
-
-    @Test("capability invocation rejects insufficient roles before staging or apply")
-    func capabilityInvocationRejectsInsufficientRoles() {
-        let coordinator = try! IntentRuntimeCoordinator.default()
-        let transaction = TransactionIR(intent: IntentIR(verb: "scene.spawn_entity",
-                                                         summary: "Spawn imported mesh",
-                                                         source: .human),
-                                        summary: "Spawn imported mesh",
-                                        operations: [
-                                            .scene(.spawnImportedMeshEntity(label: "Hero",
-                                                                           kindLabel: "Static Mesh",
-                                                                           meshIndex: 9,
-                                                                           position: .zero))
-                                        ],
-                                        baseRevisions: TransactionBaseRevisions(sceneRevision: 0),
-                                        provenance: .authored)
-        var context = TransactionExecutionContext(sceneRuntime: SceneRuntime())
-
-        #expect(throws: CapabilityRegistryError.self) {
-            try coordinator.submit(transaction,
-                                   capabilityContext: CapabilityInvocationContext(role: .viewer,
-                                                                                  releasePhase: .beta),
-                                   executionContext: &context)
-        }
-        #expect(context.sceneRuntime?.snapshot.entityCount == 0)
-    }
-
-    @Test("capability invocation blocks transactions with failing preconditions")
-    func capabilityInvocationBlocksFailingPreconditions() throws {
-        let capability = CapabilitySpec(verbID: "scene.preconditioned_spawn",
-                                        summary: "Spawn when selection exists",
-                                        category: "scene",
-                                        scope: .sceneInstance,
-                                        targetKind: "scene_instance_id",
-                                        preconditions: [
-                                            Precondition(id: "selection",
-                                                         kind: .targetState,
-                                                         expr: .exists("editor.selection"),
-                                                         message: "Selection required",
-                                                         severity: .block)
-                                        ],
-                                        reversible: true,
-                                        previewSupport: CapabilityPreviewSupport(mode: .ghostWorld),
-                                        confirmationPolicy: CapabilityConfirmationPolicy(level: .auto),
-                                        readAfterWrite: [.sceneChanged],
-                                        sideBandEmits: [.transactionApplied, .sceneChanged, .sceneEntityAdded],
-                                        requiredRole: .editor,
-                                        status: .stable)
-        let registry = try CapabilityRegistry(capabilities: [capability])
-        let coordinator = IntentRuntimeCoordinator(registry: registry)
-        let transaction = TransactionIR(intent: IntentIR(verb: "scene.preconditioned_spawn",
-                                                         summary: "Spawn imported mesh",
-                                                         source: .human),
-                                        summary: "Spawn imported mesh",
-                                        operations: [
-                                            .scene(.spawnImportedMeshEntity(label: "Hero",
-                                                                           kindLabel: "Static Mesh",
-                                                                           meshIndex: 9,
-                                                                           position: .zero))
-                                        ],
-                                        baseRevisions: TransactionBaseRevisions(sceneRevision: 0),
-                                        provenance: .authored)
-        var context = TransactionExecutionContext(sceneRuntime: SceneRuntime())
-
-        #expect(throws: CapabilityInvocationPlannerError.self) {
-            try coordinator.submit(transaction,
-                                   capabilityContext: CapabilityInvocationContext(role: .editor,
-                                                                                  releasePhase: .beta),
-                                   executionContext: &context)
-        }
-        #expect(context.sceneRuntime?.snapshot.entityCount == 0)
-    }
-
-    @Test("capability invocation rejects release-gated verbs before staging")
-    func capabilityInvocationRejectsReleaseGatedVerbs() {
-        let coordinator = try! IntentRuntimeCoordinator.default()
-        let transaction = TransactionIR(intent: IntentIR(verb: "scene.commit_inferred_draft",
-                                                         summary: "Commit inferred draft",
-                                                         source: .ai),
-                                        summary: "Commit inferred draft",
-                                        operations: [
-                                            .scene(.spawnImportedMeshEntity(label: "Draft",
-                                                                           kindLabel: "Static Mesh",
-                                                                           meshIndex: 4,
-                                                                           position: .zero))
-                                        ],
-                                        provenance: .inferred)
-        var context = TransactionExecutionContext(sceneRuntime: SceneRuntime())
-
-        #expect(throws: CapabilityRegistryError.self) {
-            try coordinator.submit(transaction,
-                                   capabilityContext: CapabilityInvocationContext(role: .editor,
-                                                                                  releasePhase: .ship,
-                                                                                  includeExperimental: true),
-                                   executionContext: &context)
-        }
-    }
-
-    @Test("capability invocation rejects unsupported provenance before staging")
-    func capabilityInvocationRejectsUnsupportedProvenance() throws {
-        let capability = CapabilitySpec(verbID: "scene.authored_only",
-                                        summary: "Only authored inputs are allowed",
-                                        category: "scene",
-                                        scope: .sceneInstance,
-                                        targetKind: "scene_instance_id",
-                                        reversible: true,
-                                        previewSupport: CapabilityPreviewSupport(mode: .ghostWorld),
-                                        confirmationPolicy: CapabilityConfirmationPolicy(level: .auto),
-                                        readAfterWrite: [.sceneChanged],
-                                        sideBandEmits: [.transactionApplied, .sceneChanged],
-                                        requiredRole: .editor,
-                                        status: .stable,
-                                        provenanceInputAllowed: [.authored])
-        let registry = try CapabilityRegistry(config: CapabilityRegistryConfig(
-            capabilities: [capability],
-            scopes: ["scene_instance": CapabilityScopeSpec(scopeID: "scene_instance")],
-            targetKinds: ["scene_instance_id": CapabilityTargetKindSpec(targetKindID: "scene_instance_id")]
-        ))
-        let coordinator = IntentRuntimeCoordinator(registry: registry)
-        let transaction = TransactionIR(intent: IntentIR(verb: "scene.authored_only",
-                                                         summary: "Try inferred mutation",
-                                                         source: .ai),
-                                        summary: "Try inferred mutation",
-                                        operations: [
-                                            .scene(.spawnImportedMeshEntity(label: "Draft",
-                                                                           kindLabel: "Static Mesh",
-                                                                           meshIndex: 1,
-                                                                           position: .zero))
-                                        ],
-                                        provenance: .inferred)
-        var context = TransactionExecutionContext(sceneRuntime: SceneRuntime())
-
-        #expect(throws: CapabilityInvocationPlannerError.self) {
-            try coordinator.submit(transaction,
-                                   capabilityContext: CapabilityInvocationContext(role: .editor,
-                                                                                  releasePhase: .beta),
-                                   executionContext: &context)
-        }
-        #expect(context.sceneRuntime?.snapshot.entityCount == 0)
     }
 
     private func entityID(from rawID: UInt64) -> EntityID {
@@ -932,7 +693,7 @@ struct IntentRuntimeEndToEndTests {
         defer { try? FileManager.default.removeItem(at: root) }
 
         let bus = try ObservationBus(coldLogDirectory: root.path)
-        let coordinator = try IntentRuntimeCoordinator.default()
+        let coordinator = IntentRuntimeCoordinator()
         let sceneSubscription = bus.subscribe(spec: SubscriptionSpec(
             filter: .kindIn([.transactionApplied, .sceneChanged]),
             startFrom: .latest,
@@ -954,12 +715,10 @@ struct IntentRuntimeEndToEndTests {
                                                meshIndex: 5,
                                                position: .zero))
             ],
+            approvalPolicy: .automatic,
             provenance: .authored)
 
-        let result = try coordinator.submit(
-            tx,
-            capabilityContext: CapabilityInvocationContext(role: .editor, releasePhase: .beta),
-            executionContext: &context)
+        let result = try coordinator.submitPlan(tx, executionContext: &context)
 
         #expect(result.disposition == .applied)
         #expect(context.sceneRuntime?.snapshot.entityCount == 1)

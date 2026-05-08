@@ -46,7 +46,6 @@ public final class EditorStore: @unchecked Sendable {
         case aiSettings
         case aiStatusMessage
         case aiWarnings
-        case unresolvedIntents
         case consoleEntries
         case commandPaletteVisible
     }
@@ -186,8 +185,6 @@ public final class EditorStore: @unchecked Sendable {
             mark(.aiStatusMessage, old.aiStatusMessage, new.aiStatusMessage)
         case .setAIWarnings:
             mark(.aiWarnings, old.aiWarnings, new.aiWarnings)
-        case .setUnresolvedIntents:
-            mark(.unresolvedIntents, old.unresolvedIntents, new.unresolvedIntents)
         case .appendConsoleMessage, .clearConsole:
             mark(.consoleEntries, old.consoleEntries, new.consoleEntries)
         case .setCommandPaletteVisible:
@@ -236,7 +233,6 @@ extension EditorStore {
     public var aiSettings: EditorAISettings { read(.aiSettings, storage.aiSettings) }
     public var aiStatusMessage: String? { read(.aiStatusMessage, storage.aiStatusMessage) }
     public var aiWarnings: [String] { read(.aiWarnings, storage.aiWarnings) }
-    public var unresolvedIntents: [UnresolvableIntent] { read(.unresolvedIntents, storage.unresolvedIntents) }
     public var consoleEntries: [EditorConsoleEntry] { read(.consoleEntries, storage.consoleEntries) }
     public var latestConsoleEntry: EditorConsoleEntry? { read(.consoleEntries, storage.consoleEntries.last) }
     public var playbackState: PlaybackState { read(.playbackState, storage.playbackState) }
