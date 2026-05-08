@@ -85,7 +85,6 @@ test_*
 # Backup directories
 assets_backup_*/
 .zig-global-cache/
-.github/
 .cache/
 # Generated code
 packages/engine/src/engine/generated/
