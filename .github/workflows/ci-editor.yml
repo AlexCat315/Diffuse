@@ -1,0 +1,41 @@
+name: GuavaEditor CI
+
+on:
+  push:
+    branches: [main, guava-next]
+    paths:
+      - 'Editor/**'
+      - 'Engine/**'
+      - 'GuavaUI/**'
+      - '.github/workflows/ci-editor.yml'
+  pull_request:
+    paths:
+      - 'Editor/**'
+      - 'Engine/**'
+      - 'GuavaUI/**'
+
+jobs:
+  build:
+    name: Build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.3.app
+
+      - name: Install native dependencies
+        run: |
+          brew install sdl3 pkg-config opencolorio openexr imath
+
+      - name: Resolve packages
+        working-directory: Editor
+        run: swift package resolve
+
+      - name: Build EditorCore
+        working-directory: Editor
+        run: swift build --target EditorCore
+
+      - name: Run tests
+        working-directory: Editor
+        run: swift test --filter EditorCoreTests

@@ -1,4 +1,5 @@
 // swift-tools-version: 6.0
+// GuavaEditor 0.0.1
 import PackageDescription
 
 let package = Package(
