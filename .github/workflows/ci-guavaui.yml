@@ -1,0 +1,47 @@
+name: GuavaUI CI
+
+on:
+  push:
+    branches: [main, guava-next]
+    paths:
+      - 'GuavaUI/**'
+      - 'Engine/**'
+      - '.github/workflows/ci-guavaui.yml'
+  pull_request:
+    paths:
+      - 'GuavaUI/**'
+      - 'Engine/**'
+
+jobs:
+  build:
+    name: Build
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode_16.3.app
+
+      - name: Install native dependencies
+        run: |
+          brew install sdl3 pkg-config opencolorio openexr imath
+
+      - name: Resolve packages
+        working-directory: GuavaUI
+        run: swift package resolve
+
+      - name: Build pure-Swift targets
+        working-directory: GuavaUI
+        run: |
+          swift build --target GuavaUIRuntime
+          swift build --target GuavaUICompose
+          swift build --target GuavaUIWorkspace
+          swift build --target GuavaUIDevTools
+
+      - name: Run tests
+        working-directory: GuavaUI
+        run: |
+          swift test --filter GuavaUIRuntimeTests
+          swift test --filter GuavaUIComposeTests
+          swift test --filter GuavaUIWorkspaceTests
+          swift test --filter GuavaUIDevToolsTests
