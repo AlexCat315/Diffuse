@@ -12,24 +12,6 @@ public enum CapabilityEffectKind: String, Sendable, Equatable, Codable {
     case submitExternalJob = "submit_external_job"
 }
 
-public struct CapabilityEffectKindSpec: Sendable, Equatable, Codable {
-    public var effectID: String
-    public var kind: CapabilityEffectKind
-    public var summary: String?
-
-    public init(effectID: String, kind: CapabilityEffectKind, summary: String? = nil) {
-        self.effectID = effectID
-        self.kind = kind
-        self.summary = summary
-    }
-
-    enum CodingKeys: String, CodingKey {
-        case effectID = "effect_id"
-        case kind
-        case summary
-    }
-}
-
 public struct CapabilityEffect: Sendable, Equatable, Codable {
     public var id: String
     public var kind: CapabilityEffectKind
@@ -63,19 +45,10 @@ public struct CapabilityEffect: Sendable, Equatable, Codable {
 }
 
 public struct EffectAnalyzer: Sendable {
-    private let effectKinds: [String: CapabilityEffectKindSpec]
-
-    public init(effectKinds: [String: CapabilityEffectKindSpec] = [:]) {
-        self.effectKinds = effectKinds
-    }
+    public init() {}
 
     public func validate(capability: CapabilitySpec) throws {
         for effect in capability.effects {
-            if !effectKinds.isEmpty, effectKinds[effect.id] == nil {
-                throw CapabilityRegistryError.unresolvedEffectKind(verbID: capability.verbID,
-                                                                   effectKindID: effect.id)
-            }
-
             guard capability.reversible else { continue }
             switch effect.kind {
             case .submitExternalJob:
