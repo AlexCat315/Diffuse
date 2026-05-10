@@ -21,10 +21,10 @@ jobs:
 
       - name: Build native deps via CMake (SDL3 + Imath + OpenEXR)
         run: |
-          cmake -S third-party -B build/native -DCMAKE_BUILD_TYPE=Release
-          cmake --build build/native --parallel --target SDL3-static
-          cmake --install build/native
-          cmake --build build/native --parallel --target stage_ocio_openexr
+          cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
+          cmake --build Engine/build/native --parallel --target SDL3-static
+          cmake --install Engine/build/native
+          cmake --build Engine/build/native --parallel --target stage_ocio_openexr
 
       - name: Resolve packages
         working-directory: Engine

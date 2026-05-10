@@ -109,14 +109,13 @@ Editor/.build/
 
 # CMake build trees
 /build/
+**/build/native/
 /packages/*/build/
 /CMakeFiles/
 
-# CMake-produced third-party artifacts (built locally per-platform from third-party/CMakeLists.txt)
-Engine/vendor/SDL3.artifactbundle/
-Engine/vendor/SDL3.xcframework/
-Engine/vendor/wgpu_native.artifactbundle/
-Engine/vendor/ocio_openexr/
+# CMake-produced third-party artifacts (per-package, built locally)
+Engine/vendor/
+GuavaUI/vendor/
 
 *.o
 
