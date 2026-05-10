@@ -1,0 +1,4 @@
+module CHarfBuzz {
+    header "CHarfBuzz.h"
+    export *
+}

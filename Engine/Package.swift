@@ -114,8 +114,7 @@ let package = Package(
                     "-lIex-3_4",
                     "-lIlmThread-3_4",
                     "-lImath-3_2",
-                    // Embed absolute rpath to Engine's vendor/ so consumers (Editor, tests)
-                    // resolve dylibs regardless of executable location.
+                    "-lopenjph",
                     "-Xlinker", "-rpath", "-Xlinker", ocioOpenEXRLibDir,
                 ], .when(platforms: [.macOS]))
             ]
