@@ -23,12 +23,18 @@ jobs:
         with:
           submodules: recursive
 
-      - name: Build native deps via CMake (SDL3 + Imath + OpenEXR)
+      - name: Build Engine native deps via CMake (SDL3 + Imath + OpenEXR + wgpu)
         run: |
-          cmake -S third-party -B build/native -DCMAKE_BUILD_TYPE=Release
-          cmake --build build/native --parallel --target SDL3-static
-          cmake --install build/native
-          cmake --build build/native --parallel --target stage_ocio_openexr
+          cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
+          cmake --build Engine/build/native --parallel --target SDL3-static
+          cmake --install Engine/build/native
+          cmake --build Engine/build/native --parallel --target stage_ocio_openexr
+
+      - name: Build GuavaUI native deps via CMake (Yoga + FreeType + HarfBuzz)
+        run: |
+          cmake -S GuavaUI/third-party -B GuavaUI/build/native -DCMAKE_BUILD_TYPE=Release
+          cmake --build GuavaUI/build/native --parallel
+          cmake --install GuavaUI/build/native
 
       - name: Resolve packages
         working-directory: Editor
