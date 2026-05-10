@@ -16,10 +16,15 @@ jobs:
     runs-on: macos-15
     steps:
       - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
-      - name: Install native dependencies
+      - name: Build native deps via CMake (SDL3 + Imath + OpenEXR)
         run: |
-          brew install sdl3 pkg-config opencolorio openexr imath
+          cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
+          cmake --build Engine/build/native --parallel --target SDL3-static
+          cmake --install Engine/build/native
+          cmake --build Engine/build/native --parallel --target stage_ocio_openexr
 
       - name: Resolve packages
         working-directory: Engine

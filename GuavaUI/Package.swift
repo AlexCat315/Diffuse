@@ -1,12 +1,6 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 // GuavaUI 0.0.1
 import PackageDescription
-import Foundation
-
-let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
-let yogaLibDir = "\(packageDir)/vendor/yoga/lib"
-let freetypeLibDir = "\(packageDir)/vendor/freetype/lib"
-let harfbuzzLibDir = "\(packageDir)/vendor/harfbuzz/lib"
 
 let package = Package(
     name: "GuavaUI",
@@ -26,41 +20,18 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
     ],
     targets: [
-        // MARK: - Yoga C bridge (vendored static lib)
-        .target(
-            name: "CYoga",
-            path: "Sources/CYoga",
-            publicHeadersPath: "include",
-            linkerSettings: [
-                .unsafeFlags(["-L", yogaLibDir]),
-                .linkedLibrary("yoga"),
-                .linkedLibrary("c++"),   // Yoga is compiled as C++
-            ]
+        // MARK: - Native deps (built by GuavaUI/third-party/CMakeLists.txt)
+        .binaryTarget(
+            name: "yoga",
+            path: "vendor/yoga.artifactbundle"
         ),
-
-        // MARK: - FreeType C bridge (vendored static lib)
-        .target(
+        .binaryTarget(
             name: "CFreeType",
-            path: "Sources/CFreeType",
-            publicHeadersPath: "include",
-            linkerSettings: [
-                .unsafeFlags(["-L", freetypeLibDir]),
-                .linkedLibrary("freetype"),
-                .linkedLibrary("z"),
-            ]
+            path: "vendor/CFreeType.artifactbundle"
         ),
-
-        // MARK: - HarfBuzz C bridge (vendored static lib)
-        .target(
+        .binaryTarget(
             name: "CHarfBuzz",
-            dependencies: ["CFreeType"],
-            path: "Sources/CHarfBuzz",
-            publicHeadersPath: "include",
-            linkerSettings: [
-                .unsafeFlags(["-L", harfbuzzLibDir]),
-                .linkedLibrary("harfbuzz"),
-                .linkedLibrary("c++"),
-            ]
+            path: "vendor/CHarfBuzz.artifactbundle"
         ),
 
         // MARK: - Runtime
@@ -69,7 +40,7 @@ let package = Package(
         .target(
             name: "GuavaUIRuntime",
             dependencies: [
-                "CYoga",
+                "yoga",
                 "CFreeType",
                 "CHarfBuzz",
                 .product(name: "RHIWGPU", package: "Engine"),

@@ -1,5 +1,0 @@
-module CYoga {
-    umbrella "yoga"
-    module * { export * }
-    export *
-}
