@@ -1,4 +1,4 @@
-import CYoga
+import yoga
 import CoreGraphics
 
 /// Wraps a `YGNodeRef` and owns its lifetime.

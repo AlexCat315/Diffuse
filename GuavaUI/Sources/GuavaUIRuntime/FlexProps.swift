@@ -1,4 +1,4 @@
-import CYoga
+import yoga
 
 /// Flex layout direction (maps to `YGFlexDirection`).
 public enum FlexDirection {

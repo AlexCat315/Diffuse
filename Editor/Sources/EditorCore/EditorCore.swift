@@ -53,10 +53,7 @@ public final class EditorApplication: @unchecked Sendable {
                 backend: WGPUBackend? = nil,
                 events: PlatformEventBridge = PlatformEventBridge(),
                 initialAISettings: EditorAISettings = .default) throws {
-        var resolvedBackendConfig = backendConfig ?? .init()
-        if resolvedBackendConfig.libraryPath == nil {
-            resolvedBackendConfig.libraryPath = Self.locateWGPUDylib()
-        }
+        let resolvedBackendConfig = backendConfig ?? .init()
         let resolvedBackend = backend ?? WGPUBackend(config: resolvedBackendConfig)
         _ = try EditorAssetCatalog.loadProject(at: projectDirectory)
         let store = EditorStore()
@@ -623,21 +620,6 @@ public final class EditorApplication: @unchecked Sendable {
         default:
             break
         }
-    }
-
-    public static func locateWGPUDylib() -> String {
-        let fm = FileManager.default
-        let cwd = fm.currentDirectoryPath
-        let candidates = [
-            "\(cwd)/Engine/vendor/wgpu/lib/libwgpu_native.dylib",
-            "\(cwd)/Engine/vendor/wgpu/libwgpu_native.dylib",
-            "\(cwd)/vendor/wgpu/lib/libwgpu_native.dylib",
-            "\(cwd)/vendor/wgpu/libwgpu_native.dylib",
-        ]
-        for c in candidates where fm.fileExists(atPath: c) {
-            return c
-        }
-        return "libwgpu_native.dylib"
     }
 
     // MARK: - AI settings

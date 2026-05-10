@@ -1,13 +1,13 @@
-// swift-tools-version: 6.0
+// swift-tools-version: 6.1
 // GuavaEngine 0.0.1
 import PackageDescription
 import Foundation
 
-// Resolve the absolute path to the Engine package directory so that linker
-// search paths work correctly whether this package is built standalone or as
-// a dependency of Editor / other packages.
+// Engine package's absolute path — needed for linkerSettings.unsafeFlags so that
+// Editor / GuavaUI can find vendored dylibs even when this package is consumed
+// from a different working directory.
 let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
-let wgpuLibDir = "\(packageDir)/vendor/wgpu/lib"
+let ocioOpenEXRLibDir = "\(packageDir)/vendor/ocio_openexr/macos-arm64/lib"
 
 let package = Package(
     name: "GuavaEngine",
@@ -41,12 +41,32 @@ let package = Package(
     ],
     targets: [
         // MARK: - C Bridges
-        .systemLibrary(
+        .binaryTarget(
+            name: "SDL3",
+            path: "vendor/SDL3.artifactbundle"
+        ),
+        .target(
             name: "CSDL3",
+            dependencies: ["SDL3"],
             path: "Sources/Bridge/CSDL3",
-            pkgConfig: "sdl3",
-            providers: [
-                .brew(["sdl3", "pkg-config"])
+            publicHeadersPath: "include",
+            linkerSettings: [
+                // SDL3 static needs these macOS frameworks pulled at link time.
+                .linkedFramework("AVFoundation", .when(platforms: [.macOS])),
+                .linkedFramework("AudioToolbox", .when(platforms: [.macOS])),
+                .linkedFramework("Carbon", .when(platforms: [.macOS])),
+                .linkedFramework("Cocoa", .when(platforms: [.macOS])),
+                .linkedFramework("CoreAudio", .when(platforms: [.macOS])),
+                .linkedFramework("CoreFoundation", .when(platforms: [.macOS])),
+                .linkedFramework("CoreGraphics", .when(platforms: [.macOS])),
+                .linkedFramework("CoreHaptics", .when(platforms: [.macOS])),
+                .linkedFramework("CoreMedia", .when(platforms: [.macOS])),
+                .linkedFramework("CoreVideo", .when(platforms: [.macOS])),
+                .linkedFramework("ForceFeedback", .when(platforms: [.macOS])),
+                .linkedFramework("GameController", .when(platforms: [.macOS])),
+                .linkedFramework("IOKit", .when(platforms: [.macOS])),
+                .linkedFramework("Metal", .when(platforms: [.macOS])),
+                .linkedFramework("UniformTypeIdentifiers", .when(platforms: [.macOS])),
             ]
         ),
         .target(
@@ -54,22 +74,21 @@ let package = Package(
             path: "Sources/Bridge/CEngineBridge",
             publicHeadersPath: "include"
         ),
+        .binaryTarget(
+            name: "wgpu_native",
+            path: "vendor/wgpu_native.artifactbundle"
+        ),
         .target(
             name: "CWGPUBridge",
+            dependencies: ["wgpu_native"],
             path: "Sources/Bridge/CWGPUBridge",
             publicHeadersPath: "include",
-            cSettings: [
-                .headerSearchPath("../../../vendor/wgpu/include")
-            ],
             linkerSettings: [
-                .unsafeFlags([
-                    "-L", wgpuLibDir,
-                    "-lwgpu_native",
-                    "-Xlinker", "-rpath", "-Xlinker", wgpuLibDir,
-                    "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../../../../vendor/wgpu/lib",
-                    "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../../vendor/wgpu/lib",
-                    "-Xlinker", "-rpath", "-Xlinker", "@executable_path/../../../vendor/wgpu/lib",
-                ])
+                // wgpu_native (static) needs platform graphics frameworks linked at the app level.
+                .linkedFramework("Metal", .when(platforms: [.macOS])),
+                .linkedFramework("QuartzCore", .when(platforms: [.macOS])),
+                .linkedFramework("IOKit", .when(platforms: [.macOS])),
+                .linkedFramework("IOSurface", .when(platforms: [.macOS])),
             ]
         ),
         .target(
@@ -78,43 +97,26 @@ let package = Package(
             publicHeadersPath: "include"
         ),
         .target(
-            name: "COCIOBridge",
-            path: "Sources/Bridge/COCIOBridge",
-            publicHeadersPath: "include",
-            cxxSettings: [
-                .unsafeFlags(["-I/opt/homebrew/include"]),
-            ],
-            linkerSettings: [
-                .unsafeFlags([
-                    "-L/opt/homebrew/lib",
-                    "-lOpenColorIO",
-                    "-Xlinker", "-rpath", "-Xlinker", "/opt/homebrew/lib",
-                ])
-            ]
-        ),
-        .target(
             name: "COpenEXRBridge",
             path: "Sources/Bridge/COpenEXRBridge",
             publicHeadersPath: "include",
             cxxSettings: [
-                .unsafeFlags([
-                    "-I/opt/homebrew/include",
-                    "-I/opt/homebrew/include/OpenEXR",
-                    "-I/opt/homebrew/include/Imath",
-                ]),
+                .headerSearchPath("../../../vendor/ocio_openexr/macos-arm64/include"),
+                .headerSearchPath("../../../vendor/ocio_openexr/macos-arm64/include/OpenEXR"),
+                .headerSearchPath("../../../vendor/ocio_openexr/macos-arm64/include/Imath"),
             ],
             linkerSettings: [
                 .unsafeFlags([
-                    "-L/opt/homebrew/lib",
+                    "-L\(ocioOpenEXRLibDir)",
                     "-lOpenEXR-3_4",
                     "-lOpenEXRUtil-3_4",
                     "-lOpenEXRCore-3_4",
                     "-lIex-3_4",
                     "-lIlmThread-3_4",
-                    "-L/opt/homebrew/Cellar/imath/3.2.2/lib",
                     "-lImath-3_2",
-                    "-Xlinker", "-rpath", "-Xlinker", "/opt/homebrew/lib",
-                ])
+                    "-lopenjph",
+                    "-Xlinker", "-rpath", "-Xlinker", ocioOpenEXRLibDir,
+                ], .when(platforms: [.macOS]))
             ]
         ),
 
@@ -153,10 +155,7 @@ let package = Package(
         .target(name: "AssetPipeline"),
         .target(name: "SequenceRuntime"),
         .target(
-            name: "ColorPipeline",
-            dependencies: [
-                "COCIOBridge",
-            ]
+            name: "ColorPipeline"
         ),
         .target(
             name: "EXRIO",

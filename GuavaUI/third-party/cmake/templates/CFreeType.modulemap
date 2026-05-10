@@ -1,0 +1,4 @@
+module CFreeType {
+    header "CFreeType.h"
+    export *
+}
