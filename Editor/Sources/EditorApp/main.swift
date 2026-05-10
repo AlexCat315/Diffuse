@@ -9,11 +9,7 @@ import RHIWGPU
 @MainActor
 private func runEditor() throws {
     let launchOptions = try EditorAppLaunchOptions.load()
-    var resolvedBackendConfig = launchOptions.backendConfig
-    if resolvedBackendConfig.libraryPath == nil {
-        resolvedBackendConfig.libraryPath = EditorApplication.locateWGPUDylib()
-    }
-    let backend = WGPUBackend(config: resolvedBackendConfig)
+    let backend = WGPUBackend(config: launchOptions.backendConfig)
     let events = PlatformEventBridge()
     let shellState = EditorRootViewFactory.loadShellState()
     let app = try EditorApplication(projectDirectory: launchOptions.projectDirectory,

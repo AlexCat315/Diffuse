@@ -1,12 +1,6 @@
 // swift-tools-version: 6.0
 // GuavaUI 0.0.1
 import PackageDescription
-import Foundation
-
-let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
-let yogaLibDir = "\(packageDir)/vendor/yoga/lib"
-let freetypeLibDir = "\(packageDir)/vendor/freetype/lib"
-let harfbuzzLibDir = "\(packageDir)/vendor/harfbuzz/lib"
 
 let package = Package(
     name: "GuavaUI",
@@ -23,43 +17,123 @@ let package = Package(
     ],
     dependencies: [
         .package(path: "../Engine"),
+        .package(name: "yoga", path: "Sources/CYoga/upstream"),
         .package(url: "https://github.com/apple/swift-log.git", from: "1.6.0"),
     ],
     targets: [
-        // MARK: - Yoga C bridge (vendored static lib)
-        .target(
-            name: "CYoga",
-            path: "Sources/CYoga",
-            publicHeadersPath: "include",
-            linkerSettings: [
-                .unsafeFlags(["-L", yogaLibDir]),
-                .linkedLibrary("yoga"),
-                .linkedLibrary("c++"),   // Yoga is compiled as C++
-            ]
-        ),
-
-        // MARK: - FreeType C bridge (vendored static lib)
+        // MARK: - FreeType (built from source via submodule at Sources/CFreeType/upstream)
         .target(
             name: "CFreeType",
             path: "Sources/CFreeType",
+            exclude: [
+                "upstream/.github",
+                "upstream/CMakeLists.txt",
+                "upstream/Makefile",
+                "upstream/configure",
+                "upstream/autogen.sh",
+                "upstream/MSBuild.rsp",
+                "upstream/MSBuild.sln",
+                "upstream/README",
+                "upstream/README.git",
+                "upstream/builds",
+                "upstream/devel",
+                "upstream/docs",
+                "upstream/objs",
+                "upstream/subprojects",
+                "upstream/vms_make.com",
+                "upstream/meson.build",
+                "upstream/meson_options.txt",
+                "upstream/src/tools",
+                "upstream/src/dlg",
+            ],
+            sources: [
+                "upstream/src/base/ftsystem.c",
+                "upstream/src/base/ftinit.c",
+                "upstream/src/base/ftdebug.c",
+                "upstream/src/base/ftbase.c",
+                "upstream/src/base/ftbbox.c",
+                "upstream/src/base/ftbitmap.c",
+                "upstream/src/base/ftcid.c",
+                "upstream/src/base/ftfstype.c",
+                "upstream/src/base/ftgasp.c",
+                "upstream/src/base/ftglyph.c",
+                "upstream/src/base/ftgxval.c",
+                "upstream/src/base/ftmm.c",
+                "upstream/src/base/ftotval.c",
+                "upstream/src/base/ftpatent.c",
+                "upstream/src/base/ftpfr.c",
+                "upstream/src/base/ftstroke.c",
+                "upstream/src/base/ftsynth.c",
+                "upstream/src/base/fttype1.c",
+                "upstream/src/base/ftwinfnt.c",
+                "upstream/src/autofit/autofit.c",
+                "upstream/src/bdf/bdf.c",
+                "upstream/src/bzip2/ftbzip2.c",
+                "upstream/src/cache/ftcache.c",
+                "upstream/src/cff/cff.c",
+                "upstream/src/cid/type1cid.c",
+                "upstream/src/gzip/ftgzip.c",
+                "upstream/src/gxvalid/gxvalid.c",
+                "upstream/src/lzw/ftlzw.c",
+                "upstream/src/otvalid/otvalid.c",
+                "upstream/src/pcf/pcf.c",
+                "upstream/src/pfr/pfr.c",
+                "upstream/src/psaux/psaux.c",
+                "upstream/src/pshinter/pshinter.c",
+                "upstream/src/psnames/psnames.c",
+                "upstream/src/raster/raster.c",
+                "upstream/src/sdf/sdf.c",
+                "upstream/src/sfnt/sfnt.c",
+                "upstream/src/smooth/smooth.c",
+                "upstream/src/svg/svg.c",
+                "upstream/src/truetype/truetype.c",
+                "upstream/src/type1/type1.c",
+                "upstream/src/type42/type42.c",
+                "upstream/src/winfonts/winfnt.c",
+            ],
             publicHeadersPath: "include",
-            linkerSettings: [
-                .unsafeFlags(["-L", freetypeLibDir]),
-                .linkedLibrary("freetype"),
-                .linkedLibrary("z"),
+            cSettings: [
+                .define("FT2_BUILD_LIBRARY"),
+                .headerSearchPath("upstream/include"),
             ]
         ),
 
-        // MARK: - HarfBuzz C bridge (vendored static lib)
+        // MARK: - HarfBuzz (built from source via submodule at Sources/CHarfBuzz/upstream)
         .target(
             name: "CHarfBuzz",
             dependencies: ["CFreeType"],
             path: "Sources/CHarfBuzz",
+            exclude: [
+                "upstream/.github",
+                "upstream/AUTHORS",
+                "upstream/BUILD.md",
+                "upstream/CMakeLists.txt",
+                "upstream/CONFIG.md",
+                "upstream/COPYING",
+                "upstream/NEWS",
+                "upstream/README.md",
+                "upstream/README.mingw.md",
+                "upstream/README.python.md",
+                "upstream/RELEASING.md",
+                "upstream/SECURITY.md",
+                "upstream/TESTING.md",
+                "upstream/THANKS",
+                "upstream/docs",
+                "upstream/harfbuzz.doap",
+                "upstream/meson.build",
+                "upstream/meson_options.txt",
+                "upstream/perf",
+                "upstream/replace-enum-strings.cmake",
+                "upstream/subprojects",
+                "upstream/test",
+                "upstream/util",
+                "upstream/xkcd.png",
+            ],
+            sources: ["upstream/src/harfbuzz.cc"],
             publicHeadersPath: "include",
-            linkerSettings: [
-                .unsafeFlags(["-L", harfbuzzLibDir]),
-                .linkedLibrary("harfbuzz"),
-                .linkedLibrary("c++"),
+            cxxSettings: [
+                .define("HAVE_FREETYPE"),
+                .headerSearchPath("upstream/src"),
             ]
         ),
 
@@ -69,7 +143,7 @@ let package = Package(
         .target(
             name: "GuavaUIRuntime",
             dependencies: [
-                "CYoga",
+                .product(name: "yoga", package: "yoga"),
                 "CFreeType",
                 "CHarfBuzz",
                 .product(name: "RHIWGPU", package: "Engine"),
@@ -196,5 +270,6 @@ let package = Package(
                 "GuavaUIRuntime",
             ]
         ),
-    ]
+    ],
+    cxxLanguageStandard: .cxx20
 )
