@@ -1,0 +1,18 @@
+[submodule "GuavaUI/Sources/CYoga/upstream"]
+	path = GuavaUI/Sources/CYoga/upstream
+	url = https://github.com/facebook/yoga.git
+[submodule "GuavaUI/Sources/CFreeType/upstream"]
+	path = GuavaUI/Sources/CFreeType/upstream
+	url = https://github.com/freetype/freetype.git
+[submodule "GuavaUI/Sources/CHarfBuzz/upstream"]
+	path = GuavaUI/Sources/CHarfBuzz/upstream
+	url = https://github.com/harfbuzz/harfbuzz.git
+[submodule "third-party/sdl3"]
+	path = third-party/sdl3
+	url = https://github.com/libsdl-org/SDL.git
+[submodule "third-party/imath"]
+	path = third-party/imath
+	url = https://github.com/AcademySoftwareFoundation/Imath.git
+[submodule "third-party/openexr"]
+	path = third-party/openexr
+	url = https://github.com/AcademySoftwareFoundation/openexr.git

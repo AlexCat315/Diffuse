@@ -107,14 +107,18 @@ Engine/.build/
 GuavaUI/.build/
 Editor/.build/
 
-# wgpu native dylib (fetched by scripts/fetch-wgpu.sh, not committed)
-Engine/vendor/wgpu/lib/*.dylib
-Engine/vendor/wgpu/lib/*.a
-
-*.o
+# CMake build trees
 /build/
 /packages/*/build/
 /CMakeFiles/
+
+# CMake-produced third-party artifacts (built locally per-platform from third-party/CMakeLists.txt)
+Engine/vendor/SDL3.artifactbundle/
+Engine/vendor/SDL3.xcframework/
+Engine/vendor/wgpu_native.artifactbundle/
+Engine/vendor/ocio_openexr/
+
+*.o
 
 # Allow build/development scripts in engine package
 !legacy/zig-engine/build/merge_compile_commands.py
