@@ -1,498 +1,466 @@
 #include "jolt_bridge.h"
 
-#include <algorithm>
-#include <cmath>
-#include <new>
+// Jolt requires this single-include guard pattern.
+#include <Jolt/Jolt.h>
+
+#include <Jolt/RegisterTypes.h>
+#include <Jolt/Core/Factory.h>
+#include <Jolt/Core/TempAllocator.h>
+#include <Jolt/Core/JobSystemThreadPool.h>
+#include <Jolt/Physics/PhysicsSettings.h>
+#include <Jolt/Physics/PhysicsSystem.h>
+#include <Jolt/Physics/Collision/Shape/BoxShape.h>
+#include <Jolt/Physics/Collision/Shape/SphereShape.h>
+#include <Jolt/Physics/Collision/Shape/CapsuleShape.h>
+#include <Jolt/Physics/Collision/Shape/MeshShape.h>
+#include <Jolt/Physics/Collision/Shape/ConvexHullShape.h>
+#include <Jolt/Physics/Body/BodyCreationSettings.h>
+#include <Jolt/Physics/Body/BodyInterface.h>
+#include <Jolt/Physics/Constraints/PointConstraint.h>
+#include <Jolt/Physics/Constraints/SliderConstraint.h>
+#include <Jolt/Physics/Constraints/DistanceConstraint.h>
+
+#include <atomic>
+#include <memory>
+#include <mutex>
 #include <unordered_map>
 #include <vector>
 
 namespace {
 
+// Bridge flag constants (must match Swift `JoltPhysicsBackend`).
+constexpr uint32_t kColliderHasBoxFlag     = 1u << 0;
+constexpr uint32_t kColliderHasSphereFlag  = 1u << 1;
+constexpr uint32_t kColliderHasMeshFlag    = 1u << 2;
+constexpr uint32_t kColliderIsTriggerFlag  = 1u << 3;
 constexpr uint32_t kRigidBodyAllowSleepFlag = 1u << 4;
-constexpr uint32_t kMotionDynamic = 1u;
+constexpr uint32_t kColliderHasCapsuleFlag = 1u << 5;
+constexpr uint32_t kColliderHasConvexFlag  = 1u << 6;
+
+constexpr uint32_t kMotionStatic    = 0u;
+constexpr uint32_t kMotionDynamic   = 1u;
 constexpr uint32_t kMotionKinematic = 2u;
+
 constexpr uint8_t kConstraintPointToPoint = 0u;
-constexpr uint8_t kConstraintSlider = 2u;
-constexpr uint8_t kConstraintDistance = 3u;
+constexpr uint8_t kConstraintSlider       = 2u;
+constexpr uint8_t kConstraintDistance     = 3u;
 
-struct BodyRecord {
-    GuavaJoltBodyDesc desc {};
-    GuavaJoltBodyState state {};
+// Layer setup — minimal two-layer scheme (non-moving + moving).
+namespace Layers {
+    static constexpr JPH::ObjectLayer NON_MOVING = 0;
+    static constexpr JPH::ObjectLayer MOVING     = 1;
+    static constexpr JPH::ObjectLayer NUM_LAYERS = 2;
+}
+
+namespace BPLayers {
+    static constexpr JPH::BroadPhaseLayer NON_MOVING { 0 };
+    static constexpr JPH::BroadPhaseLayer MOVING     { 1 };
+    static constexpr JPH::uint NUM_LAYERS = 2;
+}
+
+class BPLayerInterfaceImpl final : public JPH::BroadPhaseLayerInterface {
+public:
+    BPLayerInterfaceImpl() {
+        mMap[Layers::NON_MOVING] = BPLayers::NON_MOVING;
+        mMap[Layers::MOVING]     = BPLayers::MOVING;
+    }
+    JPH::uint GetNumBroadPhaseLayers() const override { return BPLayers::NUM_LAYERS; }
+    JPH::BroadPhaseLayer GetBroadPhaseLayer(JPH::ObjectLayer inLayer) const override {
+        return mMap[inLayer];
+    }
+#if defined(JPH_EXTERNAL_PROFILE) || defined(JPH_PROFILE_ENABLED)
+    const char* GetBroadPhaseLayerName(JPH::BroadPhaseLayer) const override { return "?"; }
+#endif
+private:
+    JPH::BroadPhaseLayer mMap[Layers::NUM_LAYERS];
 };
 
-struct Quat {
-    float x;
-    float y;
-    float z;
-    float w;
+class ObjectVsBPLayerFilterImpl final : public JPH::ObjectVsBroadPhaseLayerFilter {
+public:
+    bool ShouldCollide(JPH::ObjectLayer inObject, JPH::BroadPhaseLayer inBroad) const override {
+        if (inObject == Layers::NON_MOVING) return inBroad == BPLayers::MOVING;
+        return true;
+    }
 };
 
-struct Vec3 {
-    float x;
-    float y;
-    float z;
+class ObjectLayerPairFilterImpl final : public JPH::ObjectLayerPairFilter {
+public:
+    bool ShouldCollide(JPH::ObjectLayer a, JPH::ObjectLayer b) const override {
+        if (a == Layers::NON_MOVING) return b == Layers::MOVING;
+        return true;
+    }
 };
 
-static GuavaJoltBodyState make_body_state(const GuavaJoltBodyDesc& desc) {
-    GuavaJoltBodyState state {};
-    state.entity_id = desc.entity_id;
-    state.position_x = desc.position_x;
-    state.position_y = desc.position_y;
-    state.position_z = desc.position_z;
-    state.rotation_x = desc.rotation_x;
-    state.rotation_y = desc.rotation_y;
-    state.rotation_z = desc.rotation_z;
-    state.rotation_w = desc.rotation_w;
-    state.linear_velocity_x = desc.linear_velocity_x;
-    state.linear_velocity_y = desc.linear_velocity_y;
-    state.linear_velocity_z = desc.linear_velocity_z;
-    state.angular_velocity_x = desc.angular_velocity_x;
-    state.angular_velocity_y = desc.angular_velocity_y;
-    state.angular_velocity_z = desc.angular_velocity_z;
-    state.is_sleeping = desc.is_sleeping;
+// Process-wide initialization (Factory + Types) — called lazily and exactly once.
+std::once_flag g_jolt_init;
+void ensure_jolt_initialized() {
+    std::call_once(g_jolt_init, []() {
+        JPH::RegisterDefaultAllocator();
+        JPH::Factory::sInstance = new JPH::Factory();
+        JPH::RegisterTypes();
+    });
+}
+
+JPH::EMotionType to_motion_type(uint32_t raw) {
+    if (raw == kMotionDynamic)   return JPH::EMotionType::Dynamic;
+    if (raw == kMotionKinematic) return JPH::EMotionType::Kinematic;
+    return JPH::EMotionType::Static;
+}
+
+JPH::ObjectLayer object_layer_for(JPH::EMotionType m) {
+    return (m == JPH::EMotionType::Static) ? Layers::NON_MOVING : Layers::MOVING;
+}
+
+// Build a Shape from the descriptor's flag+geom fields. Returns null if unsupported.
+JPH::ShapeRefC build_shape(const GuavaJoltBodyDesc& desc,
+                            const float* mesh_vertices, uint32_t mesh_vertex_count,
+                            const uint32_t* mesh_indices, uint32_t mesh_index_count) {
+    if (desc.flags & kColliderHasBoxFlag) {
+        JPH::BoxShapeSettings settings(JPH::Vec3(
+            desc.box_half_extent_x, desc.box_half_extent_y, desc.box_half_extent_z));
+        settings.SetEmbedded();
+        JPH::ShapeSettings::ShapeResult r = settings.Create();
+        if (r.IsValid()) return r.Get();
+    }
+    if (desc.flags & kColliderHasSphereFlag) {
+        JPH::SphereShapeSettings settings(desc.sphere_radius);
+        settings.SetEmbedded();
+        JPH::ShapeSettings::ShapeResult r = settings.Create();
+        if (r.IsValid()) return r.Get();
+    }
+    if (desc.flags & kColliderHasCapsuleFlag) {
+        JPH::CapsuleShapeSettings settings(desc.capsule_half_height, desc.capsule_radius);
+        settings.SetEmbedded();
+        JPH::ShapeSettings::ShapeResult r = settings.Create();
+        if (r.IsValid()) return r.Get();
+    }
+    if ((desc.flags & kColliderHasMeshFlag) && mesh_vertices && mesh_vertex_count > 0
+        && mesh_indices && mesh_index_count >= 3) {
+        JPH::TriangleList triangles;
+        triangles.reserve(mesh_index_count / 3);
+        for (uint32_t i = 0; i + 2 < mesh_index_count; i += 3) {
+            uint32_t ia = mesh_indices[i + 0];
+            uint32_t ib = mesh_indices[i + 1];
+            uint32_t ic = mesh_indices[i + 2];
+            if (ia >= mesh_vertex_count || ib >= mesh_vertex_count || ic >= mesh_vertex_count) continue;
+            JPH::Float3 va(mesh_vertices[ia*3+0], mesh_vertices[ia*3+1], mesh_vertices[ia*3+2]);
+            JPH::Float3 vb(mesh_vertices[ib*3+0], mesh_vertices[ib*3+1], mesh_vertices[ib*3+2]);
+            JPH::Float3 vc(mesh_vertices[ic*3+0], mesh_vertices[ic*3+1], mesh_vertices[ic*3+2]);
+            triangles.push_back(JPH::Triangle(va, vb, vc));
+        }
+        if (triangles.empty()) return nullptr;
+        JPH::MeshShapeSettings settings(std::move(triangles));
+        settings.SetEmbedded();
+        JPH::ShapeSettings::ShapeResult r = settings.Create();
+        if (r.IsValid()) return r.Get();
+    }
+    if ((desc.flags & kColliderHasConvexFlag) && mesh_vertices && mesh_vertex_count > 0) {
+        JPH::Array<JPH::Vec3> points;
+        points.reserve(mesh_vertex_count);
+        for (uint32_t i = 0; i < mesh_vertex_count; ++i) {
+            points.emplace_back(mesh_vertices[i*3+0], mesh_vertices[i*3+1], mesh_vertices[i*3+2]);
+        }
+        JPH::ConvexHullShapeSettings settings(points);
+        settings.SetEmbedded();
+        JPH::ShapeSettings::ShapeResult r = settings.Create();
+        if (r.IsValid()) return r.Get();
+    }
+    return nullptr;
+}
+
+void fill_state_from_body(GuavaJoltBodyState& state, uint64_t entity_id,
+                          JPH::BodyInterface& bi, const JPH::BodyID& id) {
+    JPH::RVec3 pos = bi.GetPosition(id);
+    JPH::Quat rot = bi.GetRotation(id);
+    JPH::Vec3 lv = bi.GetLinearVelocity(id);
+    JPH::Vec3 av = bi.GetAngularVelocity(id);
+    state.entity_id = entity_id;
+    state.position_x = pos.GetX(); state.position_y = pos.GetY(); state.position_z = pos.GetZ();
+    state.rotation_x = rot.GetX(); state.rotation_y = rot.GetY();
+    state.rotation_z = rot.GetZ(); state.rotation_w = rot.GetW();
+    state.linear_velocity_x = lv.GetX(); state.linear_velocity_y = lv.GetY(); state.linear_velocity_z = lv.GetZ();
+    state.angular_velocity_x = av.GetX(); state.angular_velocity_y = av.GetY(); state.angular_velocity_z = av.GetZ();
+    state.is_sleeping = bi.IsActive(id) ? 0u : 1u;
     state.reserved0 = 0;
     state.reserved1 = 0;
-    return state;
-}
-
-static float damping_factor(float damping, float delta_seconds) {
-    const float factor = 1.0f - damping * delta_seconds;
-    return std::max(0.0f, std::min(1.0f, factor));
-}
-
-static float length_squared(float x, float y, float z) {
-    return (x * x) + (y * y) + (z * z);
-}
-
-static Vec3 make_vec3(float x, float y, float z) {
-    return Vec3 {x, y, z};
-}
-
-static Vec3 add_vec3(const Vec3& lhs, const Vec3& rhs) {
-    return make_vec3(lhs.x + rhs.x, lhs.y + rhs.y, lhs.z + rhs.z);
-}
-
-static Vec3 sub_vec3(const Vec3& lhs, const Vec3& rhs) {
-    return make_vec3(lhs.x - rhs.x, lhs.y - rhs.y, lhs.z - rhs.z);
-}
-
-static Vec3 scale_vec3(const Vec3& vector, float scalar) {
-    return make_vec3(vector.x * scalar, vector.y * scalar, vector.z * scalar);
-}
-
-static float dot_vec3(const Vec3& lhs, const Vec3& rhs) {
-    return lhs.x * rhs.x + lhs.y * rhs.y + lhs.z * rhs.z;
-}
-
-static float length_vec3(const Vec3& vector) {
-    return std::sqrt(length_squared(vector.x, vector.y, vector.z));
-}
-
-static Vec3 normalize_vec3(const Vec3& vector) {
-    const float magnitude = length_vec3(vector);
-    if (magnitude <= 0.000001f) {
-        return make_vec3(1.0f, 0.0f, 0.0f);
-    }
-    return scale_vec3(vector, 1.0f / magnitude);
-}
-
-static Vec3 body_position(const GuavaJoltBodyState& state) {
-    return make_vec3(state.position_x, state.position_y, state.position_z);
-}
-
-static void set_body_position(GuavaJoltBodyState& state, const Vec3& position) {
-    state.position_x = position.x;
-    state.position_y = position.y;
-    state.position_z = position.z;
-}
-
-static Vec3 body_linear_velocity(const BodyRecord& body) {
-    return make_vec3(
-        body.state.linear_velocity_x,
-        body.state.linear_velocity_y,
-        body.state.linear_velocity_z
-    );
-}
-
-static void set_body_linear_velocity(BodyRecord& body, const Vec3& velocity) {
-    body.state.linear_velocity_x = velocity.x;
-    body.state.linear_velocity_y = velocity.y;
-    body.state.linear_velocity_z = velocity.z;
-}
-
-static bool body_is_dynamic(const BodyRecord& body) {
-    return body.desc.motion_type == kMotionDynamic;
-}
-
-static float inverse_mass(const BodyRecord& body) {
-    if (!body_is_dynamic(body)) {
-        return 0.0f;
-    }
-    if (body.desc.mass <= 0.000001f) {
-        return 1.0f;
-    }
-    return 1.0f / body.desc.mass;
-}
-
-static void damp_velocity_along_axis(BodyRecord& body, const Vec3& axis) {
-    if (!body_is_dynamic(body)) {
-        return;
-    }
-
-    const float along = body.state.linear_velocity_x * axis.x
-        + body.state.linear_velocity_y * axis.y
-        + body.state.linear_velocity_z * axis.z;
-    if (along == 0.0f) {
-        return;
-    }
-
-    body.state.linear_velocity_x -= axis.x * along;
-    body.state.linear_velocity_y -= axis.y * along;
-    body.state.linear_velocity_z -= axis.z * along;
-}
-
-static bool apply_position_correction(BodyRecord& bodyA,
-                                      BodyRecord& bodyB,
-                                      const Vec3& correction) {
-    const float correctionMagnitudeSq = length_squared(correction.x, correction.y, correction.z);
-    if (correctionMagnitudeSq <= 0.000001f) {
-        return false;
-    }
-
-    const float inverseMassA = inverse_mass(bodyA);
-    const float inverseMassB = inverse_mass(bodyB);
-    const float inverseMassTotal = inverseMassA + inverseMassB;
-    if (inverseMassTotal <= 0.000001f) {
-        return false;
-    }
-
-    const float weightA = inverseMassA / inverseMassTotal;
-    const float weightB = inverseMassB / inverseMassTotal;
-    if (inverseMassA > 0.0f) {
-        set_body_position(bodyA.state,
-                          add_vec3(body_position(bodyA.state), scale_vec3(correction, weightA)));
-    }
-    if (inverseMassB > 0.0f) {
-        set_body_position(bodyB.state,
-                          sub_vec3(body_position(bodyB.state), scale_vec3(correction, weightB)));
-    }
-    return true;
-}
-
-static bool apply_velocity_correction(BodyRecord& bodyA,
-                                      BodyRecord& bodyB,
-                                      const Vec3& relativeVelocityToRemove) {
-    const float velocityMagnitudeSq = length_squared(
-        relativeVelocityToRemove.x,
-        relativeVelocityToRemove.y,
-        relativeVelocityToRemove.z
-    );
-    if (velocityMagnitudeSq <= 0.000001f) {
-        return false;
-    }
-
-    const float inverseMassA = inverse_mass(bodyA);
-    const float inverseMassB = inverse_mass(bodyB);
-    const float inverseMassTotal = inverseMassA + inverseMassB;
-    if (inverseMassTotal <= 0.000001f) {
-        return false;
-    }
-
-    const float weightA = inverseMassA / inverseMassTotal;
-    const float weightB = inverseMassB / inverseMassTotal;
-    if (inverseMassA > 0.0f) {
-        set_body_linear_velocity(bodyA,
-                                 add_vec3(body_linear_velocity(bodyA),
-                                          scale_vec3(relativeVelocityToRemove, weightA)));
-    }
-    if (inverseMassB > 0.0f) {
-        set_body_linear_velocity(bodyB,
-                                 sub_vec3(body_linear_velocity(bodyB),
-                                          scale_vec3(relativeVelocityToRemove, weightB)));
-    }
-    return true;
-}
-
-static Quat normalize_quat(Quat quat) {
-    const float magnitude = std::sqrt(
-        quat.x * quat.x + quat.y * quat.y + quat.z * quat.z + quat.w * quat.w
-    );
-    if (magnitude <= 0.000001f) {
-        return Quat {0.0f, 0.0f, 0.0f, 1.0f};
-    }
-
-    const float inverseMagnitude = 1.0f / magnitude;
-    return Quat {
-        quat.x * inverseMagnitude,
-        quat.y * inverseMagnitude,
-        quat.z * inverseMagnitude,
-        quat.w * inverseMagnitude,
-    };
-}
-
-static Quat multiply_quat(const Quat& lhs, const Quat& rhs) {
-    return Quat {
-        lhs.w * rhs.x + lhs.x * rhs.w + lhs.y * rhs.z - lhs.z * rhs.y,
-        lhs.w * rhs.y - lhs.x * rhs.z + lhs.y * rhs.w + lhs.z * rhs.x,
-        lhs.w * rhs.z + lhs.x * rhs.y - lhs.y * rhs.x + lhs.z * rhs.w,
-        lhs.w * rhs.w - lhs.x * rhs.x - lhs.y * rhs.y - lhs.z * rhs.z,
-    };
-}
-
-static void integrate_rotation(GuavaJoltBodyState& state, float delta_seconds) {
-    const float angularSpeed = std::sqrt(length_squared(
-        state.angular_velocity_x,
-        state.angular_velocity_y,
-        state.angular_velocity_z
-    ));
-    if (angularSpeed <= 0.000001f) {
-        return;
-    }
-
-    const float angle = angularSpeed * delta_seconds;
-    const float inverseSpeed = 1.0f / angularSpeed;
-    const float halfAngle = 0.5f * angle;
-    const float sinHalf = std::sin(halfAngle);
-    const Quat delta = Quat {
-        state.angular_velocity_x * inverseSpeed * sinHalf,
-        state.angular_velocity_y * inverseSpeed * sinHalf,
-        state.angular_velocity_z * inverseSpeed * sinHalf,
-        std::cos(halfAngle),
-    };
-    const Quat current = Quat {
-        state.rotation_x,
-        state.rotation_y,
-        state.rotation_z,
-        state.rotation_w,
-    };
-    const Quat integrated = normalize_quat(multiply_quat(delta, current));
-    state.rotation_x = integrated.x;
-    state.rotation_y = integrated.y;
-    state.rotation_z = integrated.z;
-    state.rotation_w = integrated.w;
-}
-
-static void integrate_body(BodyRecord& body, const GuavaJoltStepConfig& config) {
-    if (body.desc.motion_type == kMotionDynamic) {
-        if (body.state.is_sleeping != 0) {
-            return;
-        }
-
-        body.state.linear_velocity_x += config.gravity_x * body.desc.gravity_scale * config.delta_seconds;
-        body.state.linear_velocity_y += config.gravity_y * body.desc.gravity_scale * config.delta_seconds;
-        body.state.linear_velocity_z += config.gravity_z * body.desc.gravity_scale * config.delta_seconds;
-
-        const float inverseMass = inverse_mass(body);
-        body.state.linear_velocity_x += body.desc.accumulated_force_x * inverseMass * config.delta_seconds;
-        body.state.linear_velocity_y += body.desc.accumulated_force_y * inverseMass * config.delta_seconds;
-        body.state.linear_velocity_z += body.desc.accumulated_force_z * inverseMass * config.delta_seconds;
-        body.state.angular_velocity_x += body.desc.accumulated_torque_x * inverseMass * config.delta_seconds;
-        body.state.angular_velocity_y += body.desc.accumulated_torque_y * inverseMass * config.delta_seconds;
-        body.state.angular_velocity_z += body.desc.accumulated_torque_z * inverseMass * config.delta_seconds;
-
-        const float linearDamping = damping_factor(body.desc.linear_damping, config.delta_seconds);
-        const float angularDamping = damping_factor(body.desc.angular_damping, config.delta_seconds);
-        body.state.linear_velocity_x *= linearDamping;
-        body.state.linear_velocity_y *= linearDamping;
-        body.state.linear_velocity_z *= linearDamping;
-        body.state.angular_velocity_x *= angularDamping;
-        body.state.angular_velocity_y *= angularDamping;
-        body.state.angular_velocity_z *= angularDamping;
-
-        body.state.position_x += body.state.linear_velocity_x * config.delta_seconds;
-        body.state.position_y += body.state.linear_velocity_y * config.delta_seconds;
-        body.state.position_z += body.state.linear_velocity_z * config.delta_seconds;
-        integrate_rotation(body.state, config.delta_seconds);
-
-        const bool canSleep = config.allow_sleep != 0 && (body.desc.flags & kRigidBodyAllowSleepFlag) != 0;
-        if (canSleep) {
-            const float linearSpeedSq = length_squared(
-                body.state.linear_velocity_x,
-                body.state.linear_velocity_y,
-                body.state.linear_velocity_z
-            );
-            const float angularSpeedSq = length_squared(
-                body.state.angular_velocity_x,
-                body.state.angular_velocity_y,
-                body.state.angular_velocity_z
-            );
-            body.state.is_sleeping = (linearSpeedSq < 0.0001f && angularSpeedSq < 0.0001f) ? 1 : 0;
-        } else {
-            body.state.is_sleeping = 0;
-        }
-        return;
-    }
-
-    if (body.desc.motion_type == kMotionKinematic) {
-        body.state.position_x += body.state.linear_velocity_x * config.delta_seconds;
-        body.state.position_y += body.state.linear_velocity_y * config.delta_seconds;
-        body.state.position_z += body.state.linear_velocity_z * config.delta_seconds;
-        integrate_rotation(body.state, config.delta_seconds);
-        body.state.is_sleeping = 0;
-    }
-}
-
-static bool solve_distance_constraint(BodyRecord& bodyA,
-                                      BodyRecord& bodyB,
-                                      const GuavaJoltConstraintDesc& constraint) {
-    if (constraint.is_enabled == 0) {
-        return false;
-    }
-    if (constraint.constraint_type != kConstraintDistance) {
-        return false;
-    }
-
-    const Vec3 anchorA = add_vec3(body_position(bodyA.state), make_vec3(
-        constraint.pivot_a_x,
-        constraint.pivot_a_y,
-        constraint.pivot_a_z
-    ));
-    const Vec3 anchorB = add_vec3(body_position(bodyB.state), make_vec3(
-        constraint.pivot_b_x,
-        constraint.pivot_b_y,
-        constraint.pivot_b_z
-    ));
-    const Vec3 delta = sub_vec3(anchorB, anchorA);
-    const float distance = length_vec3(delta);
-    const float minLimit = std::max(0.0f, constraint.min_limit);
-    const float maxLimit = constraint.max_limit >= minLimit ? constraint.max_limit : minLimit;
-
-    float clampedDistance = distance;
-    if (distance < minLimit) {
-        clampedDistance = minLimit;
-    } else if (distance > maxLimit) {
-        clampedDistance = maxLimit;
-    } else {
-        return false;
-    }
-
-    const Vec3 axis = normalize_vec3(delta);
-    const Vec3 correction = scale_vec3(axis, distance - clampedDistance);
-    const bool positionSolved = apply_position_correction(bodyA, bodyB, correction);
-
-    const float relativeAlongAxis = dot_vec3(sub_vec3(body_linear_velocity(bodyB), body_linear_velocity(bodyA)), axis);
-    const bool velocityShouldClamp = positionSolved
-        || (distance <= minLimit + 0.000001f && relativeAlongAxis < 0.0f)
-        || (distance >= maxLimit - 0.000001f && relativeAlongAxis > 0.0f);
-    const bool velocitySolved = velocityShouldClamp
-        ? apply_velocity_correction(bodyA, bodyB, scale_vec3(axis, relativeAlongAxis))
-        : false;
-
-    return positionSolved || velocitySolved;
-}
-
-static bool solve_point_to_point_constraint(BodyRecord& bodyA,
-                                            BodyRecord& bodyB,
-                                            const GuavaJoltConstraintDesc& constraint) {
-    if (constraint.is_enabled == 0 || constraint.constraint_type != kConstraintPointToPoint) {
-        return false;
-    }
-
-    const Vec3 anchorA = add_vec3(body_position(bodyA.state), make_vec3(
-        constraint.pivot_a_x,
-        constraint.pivot_a_y,
-        constraint.pivot_a_z
-    ));
-    const Vec3 anchorB = add_vec3(body_position(bodyB.state), make_vec3(
-        constraint.pivot_b_x,
-        constraint.pivot_b_y,
-        constraint.pivot_b_z
-    ));
-    const bool positionSolved = apply_position_correction(bodyA, bodyB, sub_vec3(anchorB, anchorA));
-    const bool velocitySolved = apply_velocity_correction(bodyA,
-                                                          bodyB,
-                                                          sub_vec3(body_linear_velocity(bodyB), body_linear_velocity(bodyA)));
-    return positionSolved || velocitySolved;
-}
-
-static Vec3 resolve_slider_axis(const GuavaJoltConstraintDesc& constraint) {
-    const Vec3 axisA = normalize_vec3(make_vec3(constraint.axis_a_x, constraint.axis_a_y, constraint.axis_a_z));
-    const Vec3 axisB = normalize_vec3(make_vec3(constraint.axis_b_x, constraint.axis_b_y, constraint.axis_b_z));
-    const Vec3 combined = add_vec3(axisA, axisB);
-    return normalize_vec3(combined);
-}
-
-static bool solve_slider_constraint(BodyRecord& bodyA,
-                                    BodyRecord& bodyB,
-                                    const GuavaJoltConstraintDesc& constraint) {
-    if (constraint.is_enabled == 0 || constraint.constraint_type != kConstraintSlider) {
-        return false;
-    }
-
-    const Vec3 sliderAxis = resolve_slider_axis(constraint);
-    const Vec3 anchorA = add_vec3(body_position(bodyA.state), make_vec3(
-        constraint.pivot_a_x,
-        constraint.pivot_a_y,
-        constraint.pivot_a_z
-    ));
-    const Vec3 anchorB = add_vec3(body_position(bodyB.state), make_vec3(
-        constraint.pivot_b_x,
-        constraint.pivot_b_y,
-        constraint.pivot_b_z
-    ));
-    const Vec3 delta = sub_vec3(anchorB, anchorA);
-    const float projection = dot_vec3(delta, sliderAxis);
-    const float minLimit = std::min(constraint.min_limit, constraint.max_limit);
-    const float maxLimit = std::max(constraint.min_limit, constraint.max_limit);
-    const float clampedProjection = std::max(minLimit, std::min(maxLimit, projection));
-    const float axisProjectionError = projection - clampedProjection;
-    const Vec3 parallel = scale_vec3(sliderAxis, projection);
-    const Vec3 perpendicular = sub_vec3(delta, parallel);
-    const Vec3 correction = add_vec3(perpendicular,
-                                     scale_vec3(sliderAxis, axisProjectionError));
-    const bool positionSolved = apply_position_correction(bodyA, bodyB, correction);
-
-    const Vec3 relativeVelocity = sub_vec3(body_linear_velocity(bodyB), body_linear_velocity(bodyA));
-    const float relativeAlongAxis = dot_vec3(relativeVelocity, sliderAxis);
-    const Vec3 relativePerpendicular = sub_vec3(relativeVelocity, scale_vec3(sliderAxis, relativeAlongAxis));
-    const bool perpendicularVelocitySolved = apply_velocity_correction(bodyA, bodyB, relativePerpendicular);
-    const bool axisVelocityShouldClamp = std::abs(axisProjectionError) > 0.000001f
-        || (projection <= minLimit + 0.000001f && relativeAlongAxis < 0.0f)
-        || (projection >= maxLimit - 0.000001f && relativeAlongAxis > 0.0f);
-    const bool axisVelocitySolved = axisVelocityShouldClamp
-        ? apply_velocity_correction(bodyA, bodyB, scale_vec3(sliderAxis, relativeAlongAxis))
-        : false;
-    return positionSolved || perpendicularVelocitySolved || axisVelocitySolved;
 }
 
 }  // namespace
-
-struct MeshGeometryRecord {
-    std::vector<float> vertices;
-    std::vector<uint32_t> indices;
-};
 
 struct GuavaJoltContextImpl {
-    std::unordered_map<uint64_t, BodyRecord> bodies;
-    std::unordered_map<uint64_t, GuavaJoltConstraintDesc> constraints;
-    std::unordered_map<uint64_t, MeshGeometryRecord> meshGeometries;
-};
+    BPLayerInterfaceImpl bp_layer_interface;
+    ObjectVsBPLayerFilterImpl object_vs_bp_filter;
+    ObjectLayerPairFilterImpl object_layer_filter;
+    JPH::PhysicsSystem physics_system;
+    std::unique_ptr<JPH::TempAllocatorImpl> temp_allocator;
+    std::unique_ptr<JPH::JobSystemThreadPool> job_system;
 
-namespace {
+    std::unordered_map<uint64_t, JPH::BodyID> body_ids;            // entity → Jolt body
+    std::unordered_map<uint64_t, JPH::Ref<JPH::Constraint>> constraints; // entity → constraint
+    std::unordered_map<uint64_t, std::vector<float>>    mesh_vertices;
+    std::unordered_map<uint64_t, std::vector<uint32_t>> mesh_indices;
 
-static uint32_t solve_constraints(GuavaJoltContextImpl& context) {
-    uint32_t solvedCount = 0;
-    for (std::unordered_map<uint64_t, GuavaJoltConstraintDesc>::const_iterator it = context.constraints.begin();
-         it != context.constraints.end();
-         ++it) {
-        const GuavaJoltConstraintDesc& constraint = it->second;
-        std::unordered_map<uint64_t, BodyRecord>::iterator bodyA = context.bodies.find(constraint.entity_a);
-        std::unordered_map<uint64_t, BodyRecord>::iterator bodyB = context.bodies.find(constraint.entity_b);
-        if (bodyA == context.bodies.end() || bodyB == context.bodies.end()) {
-            continue;
+    GuavaJoltContextImpl() {
+        const JPH::uint cMaxBodies            = 65536;
+        const JPH::uint cNumBodyMutexes       = 0;
+        const JPH::uint cMaxBodyPairs         = 65536;
+        const JPH::uint cMaxContactConstraints = 10240;
+        physics_system.Init(cMaxBodies, cNumBodyMutexes, cMaxBodyPairs, cMaxContactConstraints,
+                            bp_layer_interface, object_vs_bp_filter, object_layer_filter);
+        temp_allocator = std::make_unique<JPH::TempAllocatorImpl>(10 * 1024 * 1024);
+        job_system = std::make_unique<JPH::JobSystemThreadPool>(
+            JPH::cMaxPhysicsJobs, JPH::cMaxPhysicsBarriers, 1);
+    }
+
+    ~GuavaJoltContextImpl() {
+        // Remove all bodies and constraints before destruction.
+        JPH::BodyInterface& bi = physics_system.GetBodyInterface();
+        for (auto& kv : body_ids) {
+            bi.RemoveBody(kv.second);
+            bi.DestroyBody(kv.second);
         }
-        if (solve_point_to_point_constraint(bodyA->second, bodyB->second, constraint)
-            || solve_distance_constraint(bodyA->second, bodyB->second, constraint)
-            || solve_slider_constraint(bodyA->second, bodyB->second, constraint)) {
-            ++solvedCount;
+        for (auto& kv : constraints) {
+            if (kv.second) physics_system.RemoveConstraint(kv.second);
         }
     }
-    return solvedCount;
-}
 
-}  // namespace
+    void clear_all() {
+        JPH::BodyInterface& bi = physics_system.GetBodyInterface();
+        for (auto& kv : constraints) {
+            if (kv.second) physics_system.RemoveConstraint(kv.second);
+        }
+        constraints.clear();
+        for (auto& kv : body_ids) {
+            bi.RemoveBody(kv.second);
+            bi.DestroyBody(kv.second);
+        }
+        body_ids.clear();
+        mesh_vertices.clear();
+        mesh_indices.clear();
+    }
+
+    bool prepare(const GuavaJoltBodyDesc* bodies, size_t body_count,
+                 const GuavaJoltConstraintDesc* constraints_in, size_t constraint_count,
+                 const GuavaJoltMeshGeometry* meshes, size_t mesh_count,
+                 GuavaJoltPrepareStats* out_stats) {
+        // Capture mesh geometry keyed by entity_id (deep-copy so pointers stay valid).
+        std::unordered_map<uint64_t, std::pair<const float*, std::pair<uint32_t, std::pair<const uint32_t*, uint32_t>>>> mesh_lookup;
+        mesh_vertices.clear();
+        mesh_indices.clear();
+        if (meshes) {
+            for (size_t i = 0; i < mesh_count; ++i) {
+                const auto& m = meshes[i];
+                if (m.vertices && m.vertex_count > 0) {
+                    mesh_vertices[m.entity_id].assign(m.vertices, m.vertices + m.vertex_count * 3);
+                }
+                if (m.indices && m.index_count > 0) {
+                    mesh_indices[m.entity_id].assign(m.indices, m.indices + m.index_count);
+                }
+            }
+        }
+
+        JPH::BodyInterface& bi = physics_system.GetBodyInterface();
+
+        // Track which entities are present this frame.
+        std::unordered_map<uint64_t, const GuavaJoltBodyDesc*> incoming;
+        if (bodies) {
+            for (size_t i = 0; i < body_count; ++i) incoming[bodies[i].entity_id] = &bodies[i];
+        }
+
+        // Remove bodies no longer present.
+        uint32_t removed_bodies = 0;
+        for (auto it = body_ids.begin(); it != body_ids.end(); ) {
+            if (incoming.find(it->first) == incoming.end()) {
+                bi.RemoveBody(it->second);
+                bi.DestroyBody(it->second);
+                it = body_ids.erase(it);
+                ++removed_bodies;
+            } else {
+                ++it;
+            }
+        }
+
+        // Add / refresh bodies in incoming.
+        for (auto& kv : incoming) {
+            const uint64_t entity = kv.first;
+            const GuavaJoltBodyDesc& desc = *kv.second;
+            auto existing = body_ids.find(entity);
+            if (existing != body_ids.end()) {
+                // Body already exists — Swift treats the desc as the authoritative
+                // pre-step state each frame (it round-trips state through the engine
+                // every tick). Sync transform/velocity, then queue forces/torques.
+                bi.SetPositionAndRotation(
+                    existing->second,
+                    JPH::RVec3(desc.position_x, desc.position_y, desc.position_z),
+                    JPH::Quat(desc.rotation_x, desc.rotation_y, desc.rotation_z, desc.rotation_w),
+                    JPH::EActivation::Activate);
+                bi.SetLinearVelocity(existing->second,
+                    JPH::Vec3(desc.linear_velocity_x, desc.linear_velocity_y, desc.linear_velocity_z));
+                bi.SetAngularVelocity(existing->second,
+                    JPH::Vec3(desc.angular_velocity_x, desc.angular_velocity_y, desc.angular_velocity_z));
+                if (desc.motion_type == kMotionDynamic) {
+                    bi.AddForce(existing->second, JPH::Vec3(
+                        desc.accumulated_force_x, desc.accumulated_force_y, desc.accumulated_force_z));
+                    bi.AddTorque(existing->second, JPH::Vec3(
+                        desc.accumulated_torque_x, desc.accumulated_torque_y, desc.accumulated_torque_z));
+                }
+                continue;
+            }
+
+            // Build shape using stored mesh data if needed.
+            const std::vector<float>* mv = nullptr;
+            const std::vector<uint32_t>* mi = nullptr;
+            auto mv_it = mesh_vertices.find(entity);
+            auto mi_it = mesh_indices.find(entity);
+            if (mv_it != mesh_vertices.end()) mv = &mv_it->second;
+            if (mi_it != mesh_indices.end()) mi = &mi_it->second;
+            JPH::ShapeRefC shape = build_shape(
+                desc,
+                mv ? mv->data() : nullptr,
+                mv ? static_cast<uint32_t>(mv->size() / 3) : 0u,
+                mi ? mi->data() : nullptr,
+                mi ? static_cast<uint32_t>(mi->size()) : 0u);
+            if (!shape) {
+                // Default to a tiny box for unsupported / unspecified shapes so the
+                // body still exists and tracks transform.
+                JPH::BoxShapeSettings settings(JPH::Vec3(0.05f, 0.05f, 0.05f));
+                settings.SetEmbedded();
+                shape = settings.Create().Get();
+            }
+
+            JPH::EMotionType motion = to_motion_type(desc.motion_type);
+            JPH::ObjectLayer layer = object_layer_for(motion);
+
+            JPH::BodyCreationSettings settings(
+                shape,
+                JPH::RVec3(desc.position_x, desc.position_y, desc.position_z),
+                JPH::Quat(desc.rotation_x, desc.rotation_y, desc.rotation_z, desc.rotation_w),
+                motion, layer);
+            settings.mLinearVelocity = JPH::Vec3(
+                desc.linear_velocity_x, desc.linear_velocity_y, desc.linear_velocity_z);
+            settings.mAngularVelocity = JPH::Vec3(
+                desc.angular_velocity_x, desc.angular_velocity_y, desc.angular_velocity_z);
+            settings.mLinearDamping = desc.linear_damping;
+            settings.mAngularDamping = desc.angular_damping;
+            settings.mGravityFactor = desc.gravity_scale;
+            settings.mIsSensor = (desc.flags & kColliderIsTriggerFlag) != 0;
+            settings.mAllowSleeping = (desc.flags & kRigidBodyAllowSleepFlag) != 0;
+            if (motion == JPH::EMotionType::Dynamic) {
+                settings.mOverrideMassProperties = JPH::EOverrideMassProperties::CalculateInertia;
+                settings.mMassPropertiesOverride.mMass = desc.mass > 0.0f ? desc.mass : 1.0f;
+            }
+
+            JPH::Body* body = bi.CreateBody(settings);
+            if (body) {
+                bi.AddBody(body->GetID(), JPH::EActivation::Activate);
+                body_ids[entity] = body->GetID();
+                if (motion == JPH::EMotionType::Dynamic) {
+                    bi.AddForce(body->GetID(), JPH::Vec3(
+                        desc.accumulated_force_x, desc.accumulated_force_y, desc.accumulated_force_z));
+                    bi.AddTorque(body->GetID(), JPH::Vec3(
+                        desc.accumulated_torque_x, desc.accumulated_torque_y, desc.accumulated_torque_z));
+                }
+            }
+        }
+
+        // Re-sync constraints (drop existing, recreate from incoming).
+        uint32_t removed_constraints = static_cast<uint32_t>(constraints.size());
+        for (auto& kv : constraints) {
+            if (kv.second) physics_system.RemoveConstraint(kv.second);
+        }
+        constraints.clear();
+
+        if (constraints_in) {
+            for (size_t i = 0; i < constraint_count; ++i) {
+                const auto& c = constraints_in[i];
+                if (!c.is_enabled) continue;
+                auto it_a = body_ids.find(c.entity_a);
+                auto it_b = body_ids.find(c.entity_b);
+                if (it_a == body_ids.end() || it_b == body_ids.end()) continue;
+                JPH::Body* body_a = physics_system.GetBodyLockInterfaceNoLock().TryGetBody(it_a->second);
+                JPH::Body* body_b = physics_system.GetBodyLockInterfaceNoLock().TryGetBody(it_b->second);
+                if (!body_a || !body_b) continue;
+
+                JPH::Ref<JPH::Constraint> jc;
+                if (c.constraint_type == kConstraintPointToPoint) {
+                    JPH::PointConstraintSettings s;
+                    s.mPoint1 = JPH::RVec3(c.pivot_a_x, c.pivot_a_y, c.pivot_a_z);
+                    s.mPoint2 = JPH::RVec3(c.pivot_b_x, c.pivot_b_y, c.pivot_b_z);
+                    s.mSpace = JPH::EConstraintSpace::LocalToBodyCOM;
+                    jc = s.Create(*body_a, *body_b);
+                } else if (c.constraint_type == kConstraintSlider) {
+                    JPH::SliderConstraintSettings s;
+                    s.mPoint1 = JPH::RVec3(c.pivot_a_x, c.pivot_a_y, c.pivot_a_z);
+                    s.mPoint2 = JPH::RVec3(c.pivot_b_x, c.pivot_b_y, c.pivot_b_z);
+                    s.mSliderAxis1 = JPH::Vec3(c.axis_a_x, c.axis_a_y, c.axis_a_z).Normalized();
+                    s.mSliderAxis2 = JPH::Vec3(c.axis_b_x, c.axis_b_y, c.axis_b_z).Normalized();
+                    s.mLimitsMin = c.min_limit;
+                    s.mLimitsMax = c.max_limit;
+                    s.mSpace = JPH::EConstraintSpace::LocalToBodyCOM;
+                    jc = s.Create(*body_a, *body_b);
+                } else if (c.constraint_type == kConstraintDistance) {
+                    JPH::DistanceConstraintSettings s;
+                    s.mPoint1 = JPH::RVec3(c.pivot_a_x, c.pivot_a_y, c.pivot_a_z);
+                    s.mPoint2 = JPH::RVec3(c.pivot_b_x, c.pivot_b_y, c.pivot_b_z);
+                    s.mMinDistance = c.min_limit;
+                    s.mMaxDistance = c.max_limit;
+                    s.mSpace = JPH::EConstraintSpace::LocalToBodyCOM;
+                    jc = s.Create(*body_a, *body_b);
+                }
+                if (jc) {
+                    physics_system.AddConstraint(jc);
+                    constraints[c.entity_id] = jc;
+                }
+            }
+        }
+
+        if (out_stats) {
+            out_stats->synchronized_bodies = static_cast<uint32_t>(body_ids.size());
+            out_stats->synchronized_constraints = static_cast<uint32_t>(constraints.size());
+            out_stats->removed_bodies = removed_bodies;
+            out_stats->removed_constraints = removed_constraints;
+        }
+        return true;
+    }
+
+    bool step(const GuavaJoltStepConfig* config, GuavaJoltBodyState* states, size_t state_count,
+              GuavaJoltStepStats* out_stats) {
+        if (!config || !out_stats) return false;
+        physics_system.SetGravity(JPH::Vec3(config->gravity_x, config->gravity_y, config->gravity_z));
+
+        const int collision_steps = 1;
+        physics_system.Update(config->delta_seconds, collision_steps,
+                              temp_allocator.get(), job_system.get());
+
+        // Write back states in deterministic entity_id order (matches existing semantics).
+        std::vector<uint64_t> ids;
+        ids.reserve(body_ids.size());
+        for (auto& kv : body_ids) ids.push_back(kv.first);
+        std::sort(ids.begin(), ids.end());
+
+        JPH::BodyInterface& bi = physics_system.GetBodyInterface();
+        size_t written = 0;
+        for (uint64_t entity : ids) {
+            if (written >= state_count) break;
+            fill_state_from_body(states[written], entity, bi, body_ids[entity]);
+            ++written;
+        }
+
+        out_stats->body_count = static_cast<uint32_t>(body_ids.size());
+        out_stats->constraint_count = static_cast<uint32_t>(constraints.size());
+        out_stats->contact_count = 0; // not surfaced from Jolt's public API here
+        out_stats->state_count = static_cast<uint32_t>(written);
+        out_stats->success = 1;
+        out_stats->reserved0 = 0;
+        out_stats->reserved1 = 0;
+        return true;
+    }
+};
+
+extern "C" {
 
 GuavaJoltContext guava_jolt_context_create(void) {
+    ensure_jolt_initialized();
     return new (std::nothrow) GuavaJoltContextImpl();
 }
 
@@ -501,161 +469,37 @@ void guava_jolt_context_destroy(GuavaJoltContext context) {
 }
 
 void guava_jolt_context_reset(GuavaJoltContext context) {
-    if (context == nullptr) {
-        return;
-    }
-    context->bodies.clear();
-    context->constraints.clear();
-    context->meshGeometries.clear();
+    if (!context) return;
+    context->clear_all();
 }
 
 bool guava_jolt_context_prepare(GuavaJoltContext context,
-                                const GuavaJoltBodyDesc* bodies,
-                                size_t body_count,
+                                const GuavaJoltBodyDesc* bodies, size_t body_count,
                                 const GuavaJoltConstraintDesc* constraints,
                                 size_t constraint_count,
                                 GuavaJoltPrepareStats* out_stats) {
-    if (context == nullptr || out_stats == nullptr) {
-        return false;
-    }
-
-    std::unordered_map<uint64_t, BodyRecord> nextBodies;
-    if (bodies != nullptr) {
-        nextBodies.reserve(body_count);
-        for (size_t index = 0; index < body_count; ++index) {
-            const GuavaJoltBodyDesc& desc = bodies[index];
-            nextBodies[desc.entity_id] = BodyRecord {
-                .desc = desc,
-                .state = make_body_state(desc),
-            };
-        }
-    }
-
-    std::unordered_map<uint64_t, GuavaJoltConstraintDesc> nextConstraints;
-    if (constraints != nullptr) {
-        nextConstraints.reserve(constraint_count);
-        for (size_t index = 0; index < constraint_count; ++index) {
-            const GuavaJoltConstraintDesc& desc = constraints[index];
-            nextConstraints[desc.entity_id] = desc;
-        }
-    }
-
-    uint32_t removedBodies = 0;
-    for (std::unordered_map<uint64_t, BodyRecord>::const_iterator it = context->bodies.begin();
-         it != context->bodies.end();
-         ++it) {
-        if (nextBodies.find(it->first) == nextBodies.end()) {
-            ++removedBodies;
-        }
-    }
-
-    uint32_t removedConstraints = 0;
-    for (std::unordered_map<uint64_t, GuavaJoltConstraintDesc>::const_iterator it = context->constraints.begin();
-         it != context->constraints.end();
-         ++it) {
-        if (nextConstraints.find(it->first) == nextConstraints.end()) {
-            ++removedConstraints;
-        }
-    }
-
-    context->bodies.swap(nextBodies);
-    context->constraints.swap(nextConstraints);
-
-    out_stats->synchronized_bodies = static_cast<uint32_t>(context->bodies.size());
-    out_stats->synchronized_constraints = static_cast<uint32_t>(context->constraints.size());
-    out_stats->removed_bodies = removedBodies;
-    out_stats->removed_constraints = removedConstraints;
-    return true;
+    if (!context || !out_stats) return false;
+    return context->prepare(bodies, body_count, constraints, constraint_count,
+                            nullptr, 0, out_stats);
 }
 
-bool guava_jolt_context_prepare_with_meshes(
-    GuavaJoltContext context,
-    const GuavaJoltBodyDesc* bodies,
-    size_t body_count,
-    const GuavaJoltConstraintDesc* constraints,
-    size_t constraint_count,
-    const GuavaJoltMeshGeometry* meshes,
-    size_t mesh_count,
-    GuavaJoltPrepareStats* out_stats) {
-    if (context == nullptr || out_stats == nullptr) {
-        return false;
-    }
-
-    // Delegate body/constraint sync to the base prepare path.
-    if (!guava_jolt_context_prepare(context, bodies, body_count,
-                                   constraints, constraint_count,
-                                   out_stats)) {
-        return false;
-    }
-
-    // Store mesh geometry snapshots.
-    context->meshGeometries.clear();
-    if (meshes != nullptr && mesh_count > 0) {
-        context->meshGeometries.reserve(mesh_count);
-        for (size_t i = 0; i < mesh_count; ++i) {
-            const GuavaJoltMeshGeometry& src = meshes[i];
-            MeshGeometryRecord record;
-            if (src.vertices != nullptr && src.vertex_count > 0) {
-                record.vertices.assign(src.vertices,
-                                       src.vertices + src.vertex_count * 3);
-            }
-            if (src.indices != nullptr && src.index_count > 0) {
-                record.indices.assign(src.indices,
-                                      src.indices + src.index_count);
-            }
-            context->meshGeometries[src.entity_id] = std::move(record);
-        }
-    }
-
-    return true;
+bool guava_jolt_context_prepare_with_meshes(GuavaJoltContext context,
+                                            const GuavaJoltBodyDesc* bodies, size_t body_count,
+                                            const GuavaJoltConstraintDesc* constraints,
+                                            size_t constraint_count,
+                                            const GuavaJoltMeshGeometry* meshes, size_t mesh_count,
+                                            GuavaJoltPrepareStats* out_stats) {
+    if (!context || !out_stats) return false;
+    return context->prepare(bodies, body_count, constraints, constraint_count,
+                            meshes, mesh_count, out_stats);
 }
 
-bool guava_jolt_context_step(GuavaJoltContext context,
-                             const GuavaJoltStepConfig* config,
-                             GuavaJoltBodyState* states,
-                             size_t state_count,
+bool guava_jolt_context_step(GuavaJoltContext context, const GuavaJoltStepConfig* config,
+                             GuavaJoltBodyState* states, size_t state_count,
                              GuavaJoltStepStats* out_stats) {
-    if (context == nullptr || config == nullptr || out_stats == nullptr) {
-        return false;
-    }
-
-    if (states == nullptr && state_count > 0) {
-        return false;
-    }
-
-    std::vector<uint64_t> entityIDs;
-    entityIDs.reserve(context->bodies.size());
-    for (std::unordered_map<uint64_t, BodyRecord>::const_iterator it = context->bodies.begin();
-         it != context->bodies.end();
-         ++it) {
-        entityIDs.push_back(it->first);
-    }
-    std::sort(entityIDs.begin(), entityIDs.end());
-
-    size_t writtenStates = 0;
-    for (uint64_t entityID : entityIDs) {
-        BodyRecord& body = context->bodies.at(entityID);
-        integrate_body(body, *config);
-    }
-
-    const uint32_t solvedConstraints = solve_constraints(*context);
-
-    for (std::vector<uint64_t>::const_iterator it = entityIDs.begin();
-         it != entityIDs.end();
-         ++it) {
-        BodyRecord& body = context->bodies.at(*it);
-        if (writtenStates < state_count) {
-            states[writtenStates] = body.state;
-            ++writtenStates;
-        }
-    }
-
-    out_stats->body_count = static_cast<uint32_t>(context->bodies.size());
-    out_stats->constraint_count = static_cast<uint32_t>(context->constraints.size());
-    out_stats->contact_count = solvedConstraints;
-    out_stats->state_count = static_cast<uint32_t>(writtenStates);
-    out_stats->success = 1;
-    out_stats->reserved0 = 0;
-    out_stats->reserved1 = 0;
-    return true;
+    if (!context) return false;
+    if (state_count > 0 && !states) return false;
+    return context->step(config, states, state_count, out_stats);
 }
+
+}  // extern "C"

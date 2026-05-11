@@ -49,3 +49,8 @@ include(${CMAKE_SOURCE_DIR}/cmake/BuildSDL3.cmake)
 # OpenEXR + Imath
 # ============================================================================
 include(${CMAKE_SOURCE_DIR}/cmake/BuildOpenEXRStack.cmake)
+
+# ============================================================================
+# Jolt Physics
+# ============================================================================
+include(${CMAKE_SOURCE_DIR}/cmake/BuildJolt.cmake)
