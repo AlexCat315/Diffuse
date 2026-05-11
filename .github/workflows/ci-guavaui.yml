@@ -25,6 +25,7 @@ jobs:
         run: |
           cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
           cmake --build Engine/build/native --parallel --target SDL3-static
+          cmake --build Engine/build/native --parallel --target stage_jolt
           cmake --install Engine/build/native
           cmake --build Engine/build/native --parallel --target stage_ocio_openexr
 
