@@ -91,10 +91,24 @@ let package = Package(
                 .linkedFramework("IOSurface", .when(platforms: [.macOS])),
             ]
         ),
+        .binaryTarget(
+            name: "Jolt",
+            path: "vendor/Jolt.artifactbundle"
+        ),
         .target(
             name: "CJoltBridge",
+            dependencies: ["Jolt"],
             path: "Sources/Bridge/CJoltBridge",
-            publicHeadersPath: "include"
+            publicHeadersPath: "include",
+            cxxSettings: [
+                // Must match Jolt's PUBLIC INTERFACE_COMPILE_DEFINITIONS from
+                // JoltConfig.cmake (Release config). Mismatches cause undef
+                // symbols at link or crashes at runtime.
+                .define("NDEBUG"),
+                .define("JPH_PROFILE_ENABLED"),
+                .define("JPH_OBJECT_STREAM"),
+                .define("JPH_OBJECT_LAYER_BITS", to: "16"),
+            ]
         ),
         .target(
             name: "COpenEXRBridge",

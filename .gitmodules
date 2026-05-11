@@ -16,3 +16,6 @@
 [submodule "Engine/third-party/openexr"]
 	path = Engine/third-party/openexr
 	url = https://github.com/AcademySoftwareFoundation/openexr.git
+[submodule "Engine/third-party/jolt"]
+	path = Engine/third-party/jolt
+	url = https://github.com/jrouwe/JoltPhysics.git
