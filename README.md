@@ -26,6 +26,7 @@ git submodule update --init --recursive
 # 构建 Engine native 第三方依赖（SDL3 / OpenEXR / Imath 从源码编译；wgpu-native 从上游 release 下载）
 cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
 cmake --build Engine/build/native --parallel --target SDL3-static
+cmake --build Engine/build/native --parallel --target stage_jolt
 cmake --install Engine/build/native
 cmake --build Engine/build/native --parallel --target stage_ocio_openexr
 
@@ -50,6 +51,7 @@ cd Editor && swift build
 | SDL3 | CMake 源码编译 → `.artifactbundle` | submodule `Engine/third-party/sdl3` |
 | Imath | CMake 源码编译 | submodule `Engine/third-party/imath` |
 | OpenEXR | CMake 源码编译 | submodule `Engine/third-party/openexr` |
+| JoltPhysics | CMake 源码编译 → `.artifactbundle` | submodule `Engine/third-party/jolt` |
 | wgpu-native | 配置时从 gfx-rs 公开 release 下载 | 无 submodule（Rust 项目，CMake 无法源码编译） |
 
 构建模式：每个 SPM 包的 native 依赖都在自己的 `<package>/third-party/` 下，CMake 编译产物落到 `<package>/vendor/`（gitignored），SPM 通过 `.binaryTarget(path:)` 消费。统一模式，跨平台一致。
