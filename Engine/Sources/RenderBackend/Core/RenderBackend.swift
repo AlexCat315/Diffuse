@@ -532,7 +532,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 entries: [
                     GPUBindGroupLayoutEntry(
                         binding: 0,
-                        visibility: .vertex,
+                        visibility: [.vertex, .fragment],
                         type: .uniformBuffer,
                         hasDynamicOffset: true
                     ),
@@ -607,7 +607,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 entries: [
                     GPUBindGroupLayoutEntry(
                         binding: 0,
-                        visibility: .vertex,
+                        visibility: [.vertex, .fragment],
                         type: .uniformBuffer,
                         hasDynamicOffset: true
                     ),
