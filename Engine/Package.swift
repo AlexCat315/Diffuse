@@ -343,5 +343,6 @@ let package = Package(
                 "CinematicRenderer",
             ]
         ),
-    ]
+    ],
+    cxxLanguageStandard: .cxx17
 )
