@@ -18,6 +18,11 @@ struct InstanceResources {
 
 extension InstanceResources: @unchecked Sendable {}
 
+struct InstanceResourceKey: Equatable, Sendable {
+    let meshIndex: Int
+    let baseColorTextureIndex: Int?
+}
+
 /// Shared uniform-buffer path using dynamic bind offsets.
 struct DynamicInstanceResources {
     let uniformBuffer: GPUBuffer

@@ -50,7 +50,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var meshes: [GPUMesh] = []
     var meshTextureResources: [Int: [Int: GPUMeshTextureResource]] = [:]
     var instanceResources: [InstanceResources] = []
-    var instanceResourceMeshIndices: [Int] = []
+    var instanceResourceKeys: [InstanceResourceKey] = []
     var dynamicInstanceResources: DynamicInstanceResources?
     var linearSampler: GPUSampler?
     private var nearestSampler: GPUSampler?
