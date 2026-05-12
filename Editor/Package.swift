@@ -67,5 +67,6 @@ let package = Package(
                 "EditorCore",
             ]
         ),
-    ]
+    ],
+    cxxLanguageStandard: .cxx17
 )
