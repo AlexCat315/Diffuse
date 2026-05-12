@@ -13,7 +13,7 @@ extension WGPURenderer {
             for (i, instance) in scene.instances.enumerated() {
                 var u = MeshInstanceUniforms(
                     mvp: viewProj * instance.transform,
-                    colorTint: SIMD4<Float>(instance.colorTint, 1)
+                    colorTint: effectiveBaseColor(for: instance)
                 )
                 let offset = UInt64(i) * dyn.stride
                 withUnsafeBytes(of: &u) { raw in
@@ -29,7 +29,7 @@ extension WGPURenderer {
         for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
             var u = MeshInstanceUniforms(
                 mvp: viewProj * instance.transform,
-                colorTint: SIMD4<Float>(instance.colorTint, 1)
+                colorTint: effectiveBaseColor(for: instance)
             )
             withUnsafeBytes(of: &u) { raw in
                 if let base = raw.baseAddress {
@@ -41,7 +41,10 @@ extension WGPURenderer {
 
     func ensureInstanceResources(scene: RenderScene, pipeline: GPURenderPipeline) throws {
         let instanceCount = scene.instances.count
-        let meshIndices = scene.instances.map(\.meshIndex)
+        let resourceKeys = scene.instances.map {
+            InstanceResourceKey(meshIndex: $0.meshIndex,
+                                baseColorTextureIndex: $0.material.baseColorTextureIndex)
+        }
 
         let useDynamicOffsets = instanceCount > dynamicOffsetThreshold
         let bindGroupLayout: GPUBindGroupLayout
@@ -53,11 +56,11 @@ extension WGPURenderer {
 
         if useDynamicOffsets {
             if let dyn = dynamicInstanceResources, dyn.capacity >= instanceCount {
-                instanceResourceMeshIndices = meshIndices
+                instanceResourceKeys = resourceKeys
                 return
             }
             instanceResources.removeAll(keepingCapacity: false)
-            instanceResourceMeshIndices = meshIndices
+            instanceResourceKeys = resourceKeys
 
             let totalSize = UInt64(max(instanceCount, 1)) * dynamicUniformStride
             let uniformBuffer = try backend.createBuffer(size: totalSize, usage: [.uniform, .copyDst])
@@ -76,20 +79,20 @@ extension WGPURenderer {
 
         if dynamicInstanceResources == nil
             && instanceResources.count == instanceCount
-            && instanceResourceMeshIndices == meshIndices {
+            && instanceResourceKeys == resourceKeys {
             return
         }
 
         dynamicInstanceResources = nil
         instanceResources.removeAll(keepingCapacity: false)
-        instanceResourceMeshIndices = meshIndices
-        for meshIndex in meshIndices {
+        instanceResourceKeys = resourceKeys
+        for instance in scene.instances {
             let uniformBuffer = try backend.createBuffer(size: 80, usage: [.uniform, .copyDst])
             let bindGroup = try backend.createBindGroup(
                 layout: bindGroupLayout,
                 entries: try meshBindGroupEntries(
                     instanceUniformBuffer: uniformBuffer,
-                    baseColorTextureView: baseColorTextureView(for: meshIndex)
+                    baseColorTextureView: baseColorTextureView(for: instance)
                 )
             )
             instanceResources.append(
@@ -121,13 +124,27 @@ extension WGPURenderer {
         ]
     }
 
-    func baseColorTextureView(for meshIndex: Int) -> GPUTextureView? {
+    func baseColorTextureView(for instance: RenderInstance) -> GPUTextureView? {
+        let meshIndex = instance.meshIndex
+        if let textureIndex = instance.material.baseColorTextureIndex {
+            return meshTextureResources[meshIndex]?[textureIndex]?.view
+        }
         guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
               let textureIndex = materialSet.materials.compactMap(\.baseColorTextureIndex).first
         else {
             return nil
         }
         return meshTextureResources[meshIndex]?[textureIndex]?.view
+    }
+
+    func effectiveBaseColor(for instance: RenderInstance) -> SIMD4<Float> {
+        let materialColor = instance.material.baseColorFactor
+        return SIMD4<Float>(
+            instance.colorTint.x * materialColor.x,
+            instance.colorTint.y * materialColor.y,
+            instance.colorTint.z * materialColor.z,
+            materialColor.w
+        )
     }
 
     func ensureStylizedCharacterUniformBuffer() throws {
