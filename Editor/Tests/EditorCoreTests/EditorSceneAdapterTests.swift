@@ -61,6 +61,61 @@ struct EditorSceneAdapterTests {
         }
     }
 
+    @Test("Scene manifest round-trips the renderable scene contract")
+    func sceneManifestRoundTripsRenderableSceneContract() {
+        let source = EditorSceneAdapter()
+        guard let hero = flatten(source.roots).first(where: { $0.name == "Hero" }) else {
+            Issue.record("Expected preview scene hero")
+            return
+        }
+        let heroID = entityID(hero.id)
+        _ = source.scene.setComponent(
+            RenderMeshComponent(meshIndex: 12,
+                                isVisible: true,
+                                colorTint: SIMD3<Float>(0.4, 0.5, 0.6),
+                                assetID: "hero.asset"),
+            for: heroID
+        )
+        _ = source.scene.setComponent(
+            RenderMaterialComponent(baseColorFactor: SIMD4<Float>(0.8, 0.7, 0.6, 0.9),
+                                    baseColorTextureIndex: 2,
+                                    normalTextureIndex: 4,
+                                    metallicFactor: 0.3,
+                                    roughnessFactor: 0.65,
+                                    emissiveFactor: SIMD3<Float>(0.1, 0.2, 0.3)),
+            for: heroID
+        )
+
+        let manifest = source.manifest(selectedEntityID: hero.id)
+        let manifestHero = findNode(in: manifest.roots, id: hero.id)
+
+        #expect(manifestHero?.renderMesh?.meshIndex == 12)
+        #expect(manifestHero?.renderMesh?.assetID == "hero.asset")
+        #expect(manifestHero?.renderMesh?.colorTint?.simdValue == SIMD3<Float>(0.4, 0.5, 0.6))
+        #expect(manifestHero?.renderMaterial?.baseColorFactor.simdValue == SIMD4<Float>(0.8, 0.7, 0.6, 0.9))
+        #expect(manifestHero?.renderMaterial?.baseColorTextureIndex == 2)
+        #expect(manifestHero?.renderMaterial?.normalTextureIndex == 4)
+
+        let restored = EditorSceneAdapter()
+        let result = restored.load(manifest: manifest)
+        guard let restoredHeroID = result.selectedEntityID.map(entityID) else {
+            Issue.record("Expected restored hero selection")
+            return
+        }
+
+        let restoredMesh = restored.scene.component(RenderMeshComponent.self, for: restoredHeroID)
+        let restoredMaterial = restored.scene.component(RenderMaterialComponent.self, for: restoredHeroID)
+        #expect(restoredMesh?.meshIndex == 12)
+        #expect(restoredMesh?.assetID == "hero.asset")
+        #expect(restoredMesh?.colorTint == SIMD3<Float>(0.4, 0.5, 0.6))
+        #expect(restoredMaterial?.baseColorFactor == SIMD4<Float>(0.8, 0.7, 0.6, 0.9))
+        #expect(restoredMaterial?.baseColorTextureIndex == 2)
+        #expect(restoredMaterial?.normalTextureIndex == 4)
+        #expect(restoredMaterial?.metallicFactor == 0.3)
+        #expect(restoredMaterial?.roughnessFactor == 0.65)
+        #expect(restoredMaterial?.emissiveFactor == SIMD3<Float>(0.1, 0.2, 0.3))
+    }
+
     @Test("Resetting preview scene publishes a new revision")
     func resetPreviewScenePublishesRevision() {
         let scene = EditorSceneAdapter()
@@ -131,6 +186,18 @@ struct EditorSceneAdapterTests {
 
 private func flatten(_ nodes: [EditorSceneNode]) -> [EditorSceneNode] {
     nodes.flatMap { [$0] + flatten($0.children) }
+}
+
+private func findNode(in nodes: [EditorSceneManifestNode], id: UInt64) -> EditorSceneManifestNode? {
+    for node in nodes {
+        if node.id == id {
+            return node
+        }
+        if let found = findNode(in: node.children, id: id) {
+            return found
+        }
+    }
+    return nil
 }
 
 private func entityID(_ rawValue: UInt64) -> EntityID {

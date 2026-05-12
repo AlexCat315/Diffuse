@@ -4,11 +4,54 @@ public struct RenderMeshComponent: RuntimeComponent, Sendable, Equatable {
     public var meshIndex: Int
     public var isVisible: Bool
     public var colorTint: SIMD3<Float>
+    public var assetID: String?
 
-    public init(meshIndex: Int, isVisible: Bool = true, colorTint: SIMD3<Float> = SIMD3<Float>(1, 1, 1)) {
+    public init(meshIndex: Int,
+                isVisible: Bool = true,
+                colorTint: SIMD3<Float> = SIMD3<Float>(1, 1, 1),
+                assetID: String? = nil) {
         self.meshIndex = meshIndex
         self.isVisible = isVisible
         self.colorTint = colorTint
+        self.assetID = assetID
+    }
+}
+
+public struct RenderMaterialComponent: RuntimeComponent, Sendable, Equatable {
+    public var baseColorFactor: SIMD4<Float>
+    public var baseColorTextureIndex: Int?
+    public var normalTextureIndex: Int?
+    public var metallicFactor: Float
+    public var roughnessFactor: Float
+    public var emissiveFactor: SIMD3<Float>
+
+    public init(baseColorFactor: SIMD4<Float> = SIMD4<Float>(1, 1, 1, 1),
+                baseColorTextureIndex: Int? = nil,
+                normalTextureIndex: Int? = nil,
+                metallicFactor: Float = 0,
+                roughnessFactor: Float = 1,
+                emissiveFactor: SIMD3<Float> = .zero) {
+        let material = RenderMaterial(baseColorFactor: baseColorFactor,
+                                      baseColorTextureIndex: baseColorTextureIndex,
+                                      normalTextureIndex: normalTextureIndex,
+                                      metallicFactor: metallicFactor,
+                                      roughnessFactor: roughnessFactor,
+                                      emissiveFactor: emissiveFactor)
+        self.baseColorFactor = material.baseColorFactor
+        self.baseColorTextureIndex = material.baseColorTextureIndex
+        self.normalTextureIndex = material.normalTextureIndex
+        self.metallicFactor = material.metallicFactor
+        self.roughnessFactor = material.roughnessFactor
+        self.emissiveFactor = material.emissiveFactor
+    }
+
+    public var renderMaterial: RenderMaterial {
+        RenderMaterial(baseColorFactor: baseColorFactor,
+                       baseColorTextureIndex: baseColorTextureIndex,
+                       normalTextureIndex: normalTextureIndex,
+                       metallicFactor: metallicFactor,
+                       roughnessFactor: roughnessFactor,
+                       emissiveFactor: emissiveFactor)
     }
 }
 
@@ -70,15 +113,18 @@ public struct ExtractedRenderSceneResource: Sendable {
     public var scene: RenderScene
     public var activeCameraEntity: EntityID?
     public var instanceEntities: [EntityID]
+    public var lightEntities: [EntityID]
     public var sourceRevision: UInt64
 
     public init(scene: RenderScene = .empty,
                 activeCameraEntity: EntityID? = nil,
                 instanceEntities: [EntityID] = [],
+                lightEntities: [EntityID] = [],
                 sourceRevision: UInt64 = 0) {
         self.scene = scene
         self.activeCameraEntity = activeCameraEntity
         self.instanceEntities = instanceEntities
+        self.lightEntities = lightEntities
         self.sourceRevision = sourceRevision
     }
 }

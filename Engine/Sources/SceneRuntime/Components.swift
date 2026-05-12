@@ -41,6 +41,9 @@ public enum ComponentCatalog {
 
         // Rendering
         ComponentTypeID(RenderMeshComponent.self),
+        ComponentTypeID(RenderMaterialComponent.self),
+        ComponentTypeID(CameraComponent.self),
+        ComponentTypeID(LightComponent.self),
     ]
 
     /// Number of registered component types.
