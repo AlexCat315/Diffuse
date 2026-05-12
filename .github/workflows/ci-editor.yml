@@ -23,6 +23,12 @@ jobs:
         with:
           submodules: recursive
 
+      - name: Select Xcode 26.3
+        run: |
+          sudo xcode-select -s /Applications/Xcode_26.3.app
+          xcodebuild -version
+          swift --version
+
       - name: Build Engine native deps via CMake (SDL3 + Imath + OpenEXR + wgpu)
         run: |
           cmake -S Engine/third-party -B Engine/build/native -DCMAKE_BUILD_TYPE=Release
