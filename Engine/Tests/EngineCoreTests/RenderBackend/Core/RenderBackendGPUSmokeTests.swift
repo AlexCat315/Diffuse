@@ -1,0 +1,226 @@
+import Foundation
+import RHIWGPU
+import SceneRuntime
+import Testing
+import simd
+@testable import RenderBackend
+
+private let gpuSmokeEnabled = ProcessInfo.processInfo.environment["GUAVA_RUN_GPU_SMOKE_TESTS"] == "1"
+
+@Suite("RenderBackendGPUSmoke", .serialized)
+struct RenderBackendGPUSmokeTests {
+    @Test("renders the scene contract into a readable WGPU framebuffer",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU smoke test"))
+    func rendersSceneContractIntoFramebuffer() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let width: UInt32 = 64
+        let height: UInt32 = 64
+        let packet = RenderPacket(
+            frameIndex: 0,
+            deltaTime: 1.0 / 60.0,
+            drawableSize: RenderDrawableSize(width: width, height: height),
+            scene: Self.makeSmokeScene(),
+            sceneSnapshot: SceneRuntimeSnapshot(entityCount: 1, revision: 1),
+            renderSettings: RenderSettings(
+                stage: .r3ViewportInterop,
+                enableOffscreenViewport: true
+            ),
+            simulationTimeSeconds: 0
+        )
+
+        renderer.render(packet: packet)
+
+        let stats = renderer.currentFrameStats()
+        #expect(stats.activePasses.contains(.basePass))
+        #expect(stats.activePasses.contains(.viewportResolve))
+        #expect(stats.drawCallCount == 1)
+
+        let viewport = renderer.currentViewportSurfaceState()
+        #expect(viewport.isValid)
+        #expect(viewport.width == width)
+        #expect(viewport.height == height)
+
+        guard let texture = renderer.offscreenColorTexture else {
+            Issue.record("expected renderer to retain an offscreen color texture")
+            return
+        }
+
+        let pixels = try readbackBGRA8(
+            texture: texture,
+            width: width,
+            height: height,
+            backend: backend
+        )
+        try writeDebugPPMIfRequested(pixels: pixels, width: width, height: height)
+
+        let background = BGRAPixel(
+            r: UInt8(0.05 * 255.0),
+            g: UInt8(0.06 * 255.0),
+            b: UInt8(0.08 * 255.0),
+            a: 255
+        )
+        let center = pixels[Int(height / 2) * Int(width) + Int(width / 2)]
+        #expect(center.distance(from: background) > 48)
+
+        let coveredPixels = pixels.count { pixel in
+            pixel.a > 0 && pixel.distance(from: background) > 48
+        }
+        #expect(coveredPixels > Int(width * height) / 32)
+    }
+
+    private static func makeSmokeScene() -> RenderScene {
+        RenderScene(
+            camera: RenderCamera(
+                eye: SIMD3<Float>(0, 0, 3.2),
+                target: .zero,
+                up: SIMD3<Float>(0, 1, 0),
+                fovYRadians: .pi / 4,
+                near: 0.1,
+                far: 20
+            ),
+            instances: [
+                RenderInstance(
+                    meshIndex: 0,
+                    transform: matrix_identity_float4x4,
+                    colorTint: SIMD3<Float>(1.0, 0.72, 0.55),
+                    material: RenderMaterial(
+                        baseColorFactor: SIMD4<Float>(1.0, 0.82, 0.72, 1.0),
+                        roughnessFactor: 0.65
+                    )
+                )
+            ],
+            lights: [
+                RenderLight(
+                    type: .directional,
+                    direction: SIMD3<Float>(0, 0, -1),
+                    color: SIMD3<Float>(1.0, 0.96, 0.90),
+                    intensity: 1.25
+                )
+            ],
+            environment: RenderEnvironment(
+                ambientColor: SIMD3<Float>(0.12, 0.14, 0.18),
+                ambientIntensity: 0.18,
+                exposure: 1
+            )
+        )
+    }
+}
+
+private struct BGRAPixel: Equatable {
+    var r: UInt8
+    var g: UInt8
+    var b: UInt8
+    var a: UInt8
+
+    func distance(from other: BGRAPixel) -> Int {
+        abs(Int(r) - Int(other.r))
+            + abs(Int(g) - Int(other.g))
+            + abs(Int(b) - Int(other.b))
+    }
+}
+
+private func readbackBGRA8(
+    texture: GPUTexture,
+    width: UInt32,
+    height: UInt32,
+    backend: WGPUBackend
+) throws -> [BGRAPixel] {
+    let bytesPerPixel: UInt32 = 4
+    let unpaddedBytesPerRow = width * bytesPerPixel
+    let bytesPerRow = alignedCopyBytesPerRow(unpaddedBytesPerRow)
+    let bufferSize = UInt64(bytesPerRow * height)
+    let readback = try backend.createBuffer(
+        size: bufferSize,
+        usage: [.copyDst, .mapRead]
+    )
+
+    let encoder = try backend.createCommandEncoder()
+    encoder.copyTextureToBuffer(
+        source: texture,
+        destination: readback,
+        bytesPerRow: bytesPerRow,
+        rowsPerImage: height,
+        width: width,
+        height: height
+    )
+    let commandBuffer = try encoder.finish()
+    backend.submit(commandBuffer)
+
+    try backend.bufferMapSync(readback, size: bufferSize)
+    defer { readback.unmap() }
+
+    guard let mapped = readback.getMappedRange(size: bufferSize) else {
+        Issue.record("readback buffer mapping returned nil")
+        return []
+    }
+
+    let bytes = UnsafeRawBufferPointer(
+        start: mapped,
+        count: Int(bufferSize)
+    )
+    var pixels: [BGRAPixel] = []
+    pixels.reserveCapacity(Int(width * height))
+
+    for y in 0..<Int(height) {
+        let rowStart = y * Int(bytesPerRow)
+        for x in 0..<Int(width) {
+            let offset = rowStart + x * Int(bytesPerPixel)
+            pixels.append(
+                BGRAPixel(
+                    r: bytes[offset + 2],
+                    g: bytes[offset + 1],
+                    b: bytes[offset + 0],
+                    a: bytes[offset + 3]
+                )
+            )
+        }
+    }
+
+    return pixels
+}
+
+private func alignedCopyBytesPerRow(_ bytesPerRow: UInt32) -> UInt32 {
+    let alignment: UInt32 = 256
+    return ((bytesPerRow + alignment - 1) / alignment) * alignment
+}
+
+private func writeDebugPPMIfRequested(
+    pixels: [BGRAPixel],
+    width: UInt32,
+    height: UInt32
+) throws {
+    guard let output = ProcessInfo.processInfo.environment["GUAVA_GPU_SMOKE_OUTPUT"],
+          !output.isEmpty
+    else {
+        return
+    }
+
+    var data = Data("P6\n\(width) \(height)\n255\n".utf8)
+    data.reserveCapacity(data.count + pixels.count * 3)
+    for pixel in pixels {
+        data.append(pixel.r)
+        data.append(pixel.g)
+        data.append(pixel.b)
+    }
+    try data.write(to: URL(fileURLWithPath: output))
+}
