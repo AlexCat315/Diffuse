@@ -59,6 +59,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var skyboxUniformBuffer: GPUBuffer?
     private var tonemapUniformBuffer: GPUBuffer?
     private var bloomUniformBuffer: GPUBuffer?
+    var sceneLightUniformBuffer: GPUBuffer?
     private var ssrUniformBuffer: GPUBuffer?
     private var taaUniformBuffer: GPUBuffer?
     private var ssaoUniformBuffer: GPUBuffer?
@@ -145,6 +146,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             let meshPipeline = try ensureMeshPipeline(hdr: usesHDRFrameGraph)
             try ensureStylizedCharacterUniformBuffer()
             writeStylizedCharacterUniforms()
+            try ensureSceneLightUniformBuffer()
+            writeSceneLightUniforms(scene: packet.scene)
             try ensureInstanceResources(scene: packet.scene, pipeline: meshPipeline)
             writeInstanceUniforms(scene: packet.scene, viewProj: cameraMatrices.viewProjection)
 
@@ -550,6 +553,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         binding: 3,
                         visibility: .fragment,
                         type: .sampledTexture
+                    ),
+                    GPUBindGroupLayoutEntry(
+                        binding: 4,
+                        visibility: .fragment,
+                        type: .uniformBuffer
                     )
                 ]
             )
@@ -625,6 +633,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         binding: 3,
                         visibility: .fragment,
                         type: .sampledTexture
+                    ),
+                    GPUBindGroupLayoutEntry(
+                        binding: 4,
+                        visibility: .fragment,
+                        type: .uniformBuffer
                     )
                 ]
             )
@@ -783,7 +796,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 width: width,
                 height: height,
                 format: format,
-                usage: [.renderAttachment, .textureBinding]
+                usage: [.renderAttachment, .textureBinding, .copySrc]
             )
             offscreenColorView = try color.createView()
             offscreenColorTexture = color
