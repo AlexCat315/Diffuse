@@ -4,6 +4,7 @@ import simd
 
 private struct MeshInstanceUniforms {
     var mvp: simd_float4x4
+    var model: simd_float4x4
     var colorTint: SIMD4<Float>
 }
 
@@ -13,6 +14,7 @@ extension WGPURenderer {
             for (i, instance) in scene.instances.enumerated() {
                 var u = MeshInstanceUniforms(
                     mvp: viewProj * instance.transform,
+                    model: instance.transform,
                     colorTint: effectiveBaseColor(for: instance)
                 )
                 let offset = UInt64(i) * dyn.stride
@@ -29,6 +31,7 @@ extension WGPURenderer {
         for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
             var u = MeshInstanceUniforms(
                 mvp: viewProj * instance.transform,
+                model: instance.transform,
                 colorTint: effectiveBaseColor(for: instance)
             )
             withUnsafeBytes(of: &u) { raw in
@@ -87,7 +90,10 @@ extension WGPURenderer {
         instanceResources.removeAll(keepingCapacity: false)
         instanceResourceKeys = resourceKeys
         for instance in scene.instances {
-            let uniformBuffer = try backend.createBuffer(size: 80, usage: [.uniform, .copyDst])
+            let uniformBuffer = try backend.createBuffer(
+                size: UInt64(MemoryLayout<MeshInstanceUniforms>.stride),
+                usage: [.uniform, .copyDst]
+            )
             let bindGroup = try backend.createBindGroup(
                 layout: bindGroupLayout,
                 entries: try meshBindGroupEntries(
@@ -104,15 +110,22 @@ extension WGPURenderer {
                               baseColorTextureView: GPUTextureView? = nil) throws -> [GPUBindGroupEntry] {
         try ensureStylizedCharacterUniformBuffer()
         try ensureMeshSamplingFallbackResources()
+        try ensureSceneLightUniformBuffer()
         guard let stylizedCharacterUniformBuffer,
               let linearSampler,
-              let fallbackMeshTextureView
+              let fallbackMeshTextureView,
+              let sceneLightUniformBuffer
         else {
             throw WGPUBackendError.initFailed("mesh bind group resources missing")
         }
         let textureView = baseColorTextureView ?? fallbackMeshTextureView
         return [
-            GPUBindGroupEntry(binding: 0, buffer: instanceUniformBuffer, offset: 0, size: 80),
+            GPUBindGroupEntry(
+                binding: 0,
+                buffer: instanceUniformBuffer,
+                offset: 0,
+                size: UInt64(MemoryLayout<MeshInstanceUniforms>.stride)
+            ),
             GPUBindGroupEntry(
                 binding: 1,
                 buffer: stylizedCharacterUniformBuffer,
@@ -121,6 +134,12 @@ extension WGPURenderer {
             ),
             GPUBindGroupEntry(binding: 2, sampler: linearSampler),
             GPUBindGroupEntry(binding: 3, textureView: textureView),
+            GPUBindGroupEntry(
+                binding: 4,
+                buffer: sceneLightUniformBuffer,
+                offset: 0,
+                size: SceneLightUniforms.byteSize
+            ),
         ]
     }
 
@@ -174,6 +193,18 @@ extension WGPURenderer {
                                     size: raw.count)
             }
         }
+    }
+
+    func ensureSceneLightUniformBuffer() throws {
+        guard backend.rawDevice != nil else { return }
+        if sceneLightUniformBuffer != nil { return }
+        sceneLightUniformBuffer = try backend.createBuffer(size: SceneLightUniforms.byteSize, usage: [.uniform, .copyDst])
+    }
+
+    func writeSceneLightUniforms(scene: RenderScene) {
+        guard let sceneLightUniformBuffer else { return }
+        var uniforms = SceneLightUniforms(scene: scene)
+        writeUniform(&uniforms, buffer: sceneLightUniformBuffer)
     }
 
     func ensureMeshSamplingFallbackResources() throws {
