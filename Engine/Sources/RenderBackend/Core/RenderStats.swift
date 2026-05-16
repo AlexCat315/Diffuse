@@ -8,7 +8,10 @@ public struct RenderFrameStats: Sendable {
     public var renderBundleCount: Int
     public var renderBundleParallelJobs: Int
     public var shadowedLightCount: Int
+    public var shadowTileCount: Int
+    public var shadowCascadeCount: Int
     public var shadowMapResolution: UInt32
+    public var shadowAtlasResolution: UInt32
     public var activePasses: [RenderPassKind]
     public var settingsGeneration: UInt64
     public var cpuPrepareNS: UInt64
@@ -28,7 +31,10 @@ public struct RenderFrameStats: Sendable {
         renderBundleCount: Int = 0,
         renderBundleParallelJobs: Int = 0,
         shadowedLightCount: Int = 0,
+        shadowTileCount: Int = 0,
+        shadowCascadeCount: Int = 0,
         shadowMapResolution: UInt32 = 0,
+        shadowAtlasResolution: UInt32 = 0,
         activePasses: [RenderPassKind] = [],
         settingsGeneration: UInt64 = 0,
         cpuPrepareNS: UInt64 = 0,
@@ -47,7 +53,10 @@ public struct RenderFrameStats: Sendable {
         self.renderBundleCount = renderBundleCount
         self.renderBundleParallelJobs = renderBundleParallelJobs
         self.shadowedLightCount = shadowedLightCount
+        self.shadowTileCount = shadowTileCount
+        self.shadowCascadeCount = shadowCascadeCount
         self.shadowMapResolution = shadowMapResolution
+        self.shadowAtlasResolution = shadowAtlasResolution
         self.activePasses = activePasses
         self.settingsGeneration = settingsGeneration
         self.cpuPrepareNS = cpuPrepareNS
