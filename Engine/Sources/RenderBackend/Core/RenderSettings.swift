@@ -39,6 +39,8 @@ public struct RenderShadowSettings: Sendable, Equatable {
     public var depthBias: Float
     public var strength: Float
     public var maxShadowedDirectionalLights: Int
+    public var directionalCascadeCount: Int
+    public var directionalCascadeSplitLambda: Float
     public var directionalLightSelection: DirectionalLightSelection
 
     public init(
@@ -47,6 +49,8 @@ public struct RenderShadowSettings: Sendable, Equatable {
         depthBias: Float = 0.006,
         strength: Float = 0.62,
         maxShadowedDirectionalLights: Int = 1,
+        directionalCascadeCount: Int = 1,
+        directionalCascadeSplitLambda: Float = 0.55,
         directionalLightSelection: DirectionalLightSelection = .brightest
     ) {
         self.enabled = enabled
@@ -54,6 +58,8 @@ public struct RenderShadowSettings: Sendable, Equatable {
         self.depthBias = max(depthBias, 0)
         self.strength = min(max(strength, 0), 1)
         self.maxShadowedDirectionalLights = max(0, maxShadowedDirectionalLights)
+        self.directionalCascadeCount = Self.sanitizedDirectionalCascadeCount(directionalCascadeCount)
+        self.directionalCascadeSplitLambda = min(max(directionalCascadeSplitLambda, 0), 1)
         self.directionalLightSelection = directionalLightSelection
     }
 
@@ -62,6 +68,10 @@ public struct RenderShadowSettings: Sendable, Equatable {
 
     public static func sanitizedMapResolution(_ value: UInt32) -> UInt32 {
         min(max(value, 128), 4096)
+    }
+
+    public static func sanitizedDirectionalCascadeCount(_ value: Int) -> Int {
+        min(max(value, 1), 4)
     }
 }
 

@@ -36,6 +36,8 @@ struct ShaderCatalogTests {
         #expect(meshModule.contains("fn shadow_depth_lit"))
         #expect(meshModule.contains("fn shadow_matrix"))
         #expect(meshModule.contains("fn shadow_params"))
+        #expect(meshModule.contains("fn shadow_cascade_index"))
+        #expect(meshModule.contains("shadow.cascade_splits"))
         #expect(meshModule.contains("textureSample(base_color_texture"))
         #expect(meshModule.contains("textureSample(shadow_texture"))
         #expect(meshModule.contains("shadow.atlas_params.w"))
@@ -98,7 +100,9 @@ struct ShaderCatalogTests {
             mapResolution: 99,
             depthBias: -0.5,
             strength: 2.0,
-            maxShadowedDirectionalLights: -4
+            maxShadowedDirectionalLights: -4,
+            directionalCascadeCount: 99,
+            directionalCascadeSplitLambda: -1
         )
 
         #expect(settings.enabled)
@@ -106,6 +110,8 @@ struct ShaderCatalogTests {
         #expect(settings.depthBias == 0)
         #expect(settings.strength == 1)
         #expect(settings.maxShadowedDirectionalLights == 0)
+        #expect(settings.directionalCascadeCount == 4)
+        #expect(settings.directionalCascadeSplitLambda == 0)
 
         var renderSettings = RenderSettings(
             stage: .r4LightingPBRShadow,

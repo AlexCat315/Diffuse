@@ -161,12 +161,13 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             try ensureShadowResources(settings: activeRenderSettings.shadowSettings)
             let shadowPlan = writeShadowUniforms(
                 scene: packet.scene,
+                drawableSize: packet.drawableSize,
                 enabled: framePlan.passes.contains(.shadowPass),
                 settings: activeRenderSettings.shadowSettings
             )
             writeSceneLightUniforms(
                 scene: packet.scene,
-                shadowSlotsByLightIndex: shadowPlan.shadowSlotsByLightIndex
+                shadowBindingsByLightIndex: shadowPlan.shadowBindingsByLightIndex
             )
             try ensureInstanceResources(scene: packet.scene, pipeline: meshPipeline)
             writeInstanceUniforms(scene: packet.scene, viewProj: cameraMatrices.viewProjection)
@@ -461,10 +462,19 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 renderBundleCount: renderBundleCount,
                 renderBundleParallelJobs: renderBundleParallelJobs,
                 shadowedLightCount: shadowPlan.uniforms.isEnabled
-                    ? shadowPlan.lights.count
+                    ? shadowPlan.shadowedLightCount
+                    : 0,
+                shadowTileCount: shadowPlan.uniforms.isEnabled
+                    ? shadowPlan.shadowTileCount
+                    : 0,
+                shadowCascadeCount: shadowPlan.uniforms.isEnabled
+                    ? shadowPlan.cascadeCount
                     : 0,
                 shadowMapResolution: shadowPlan.uniforms.isEnabled
                     ? shadowPlan.tileSize
+                    : 0,
+                shadowAtlasResolution: shadowPlan.uniforms.isEnabled
+                    ? shadowPlan.atlasSize
                     : 0,
                 activePasses: framePlan.passes,
                 settingsGeneration: settingsGeneration,
@@ -492,7 +502,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     return "\(passKind.rawValue):\(count)"
                 }.joined(separator: ",")
                 Logger.renderer.debug(
-                    "frame_cpu_timing frame=\(packet.frameIndex) prepare_ns=\(cpuPrepareNS) encode_ns=\(cpuEncodeNS) submit_ns=\(cpuSubmitNS) total_ns=\(cpuFrameTotalNS) draw_calls=\(drawCallCount) bundle_record_ns=\(bundleRecordNS) bundles=\(renderBundleCount) bundle_jobs=\(renderBundleParallelJobs) shadowed_lights=\(lastFrameStats.shadowedLightCount) shadow_map=\(lastFrameStats.shadowMapResolution) pass_draws=[\(orderedPassDrawStats)] pass_encode_ns=[\(orderedPassStats)]"
+                    "frame_cpu_timing frame=\(packet.frameIndex) prepare_ns=\(cpuPrepareNS) encode_ns=\(cpuEncodeNS) submit_ns=\(cpuSubmitNS) total_ns=\(cpuFrameTotalNS) draw_calls=\(drawCallCount) bundle_record_ns=\(bundleRecordNS) bundles=\(renderBundleCount) bundle_jobs=\(renderBundleParallelJobs) shadowed_lights=\(lastFrameStats.shadowedLightCount) shadow_tiles=\(lastFrameStats.shadowTileCount) shadow_cascades=\(lastFrameStats.shadowCascadeCount) shadow_map=\(lastFrameStats.shadowMapResolution) shadow_atlas=\(lastFrameStats.shadowAtlasResolution) pass_draws=[\(orderedPassDrawStats)] pass_encode_ns=[\(orderedPassStats)]"
                 )
             }
         } catch {
