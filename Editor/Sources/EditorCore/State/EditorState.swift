@@ -207,6 +207,7 @@ public struct EditorState: Codable, Sendable {
     public var gizmoMode: EditorGizmoMode
     public var gizmoSpace: EditorGizmoSpace
     public var viewportShadingMode: EditorViewportShadingMode
+    public var viewportShadowsEnabled: Bool
     public var translateSnapEnabled: Bool
     public var rotateSnapEnabled: Bool
     public var scaleSnapEnabled: Bool
@@ -241,6 +242,7 @@ public struct EditorState: Codable, Sendable {
         gizmoMode: EditorGizmoMode = .translate,
         gizmoSpace: EditorGizmoSpace = .local,
         viewportShadingMode: EditorViewportShadingMode = .lit,
+        viewportShadowsEnabled: Bool = false,
         translateSnapEnabled: Bool = false,
         rotateSnapEnabled: Bool = false,
         scaleSnapEnabled: Bool = false,
@@ -275,6 +277,7 @@ public struct EditorState: Codable, Sendable {
         self.gizmoMode = gizmoMode
         self.gizmoSpace = gizmoSpace
         self.viewportShadingMode = viewportShadingMode
+        self.viewportShadowsEnabled = viewportShadowsEnabled
         self.translateSnapEnabled = translateSnapEnabled
         self.rotateSnapEnabled = rotateSnapEnabled
         self.scaleSnapEnabled = scaleSnapEnabled
@@ -329,6 +332,7 @@ public struct EditorState: Codable, Sendable {
         case gizmoMode
         case gizmoSpace
         case viewportShadingMode
+        case viewportShadowsEnabled
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
@@ -384,6 +388,7 @@ public struct EditorState: Codable, Sendable {
             gizmoMode: try c.decodeIfPresent(EditorGizmoMode.self, forKey: .gizmoMode) ?? .translate,
             gizmoSpace: try c.decodeIfPresent(EditorGizmoSpace.self, forKey: .gizmoSpace) ?? .local,
             viewportShadingMode: try c.decodeIfPresent(EditorViewportShadingMode.self, forKey: .viewportShadingMode) ?? .lit,
+            viewportShadowsEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportShadowsEnabled) ?? false,
             translateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .translateSnapEnabled) ?? false,
             rotateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .rotateSnapEnabled) ?? false,
             scaleSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .scaleSnapEnabled) ?? false,
@@ -420,6 +425,7 @@ public struct EditorState: Codable, Sendable {
         try c.encode(gizmoMode, forKey: .gizmoMode)
         try c.encode(gizmoSpace, forKey: .gizmoSpace)
         try c.encode(viewportShadingMode, forKey: .viewportShadingMode)
+        try c.encode(viewportShadowsEnabled, forKey: .viewportShadowsEnabled)
         try c.encode(translateSnapEnabled, forKey: .translateSnapEnabled)
         try c.encode(rotateSnapEnabled, forKey: .rotateSnapEnabled)
         try c.encode(scaleSnapEnabled, forKey: .scaleSnapEnabled)
