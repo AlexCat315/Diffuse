@@ -4,8 +4,9 @@ import SceneRuntime
 import simd
 
 extension WGPURenderer {
-    func ensureShadowResources() throws {
+    func ensureShadowResources(settings: RenderShadowSettings) throws {
         guard backend.rawDevice != nil else { return }
+        let mapResolution = RenderShadowSettings.sanitizedMapResolution(settings.mapResolution)
         if shadowUniformBuffer == nil {
             shadowUniformBuffer = try backend.createBuffer(
                 size: UInt64(MemoryLayout<ShadowUniforms>.stride),
@@ -23,17 +24,20 @@ extension WGPURenderer {
                 )
             )
         }
-        if shadowMapTarget != nil { return }
+        if let shadowMapTarget,
+           shadowMapTarget.size == mapResolution {
+            return
+        }
 
         let color = try backend.createTexture(
-            width: shadowMapResolution,
-            height: shadowMapResolution,
+            width: mapResolution,
+            height: mapResolution,
             format: hdrFormat,
             usage: [.renderAttachment, .textureBinding, .copySrc]
         )
         let depth = try backend.createTexture(
-            width: shadowMapResolution,
-            height: shadowMapResolution,
+            width: mapResolution,
+            height: mapResolution,
             format: depthFormat,
             usage: [.renderAttachment]
         )
@@ -42,22 +46,27 @@ extension WGPURenderer {
             colorView: try color.createView(),
             depthTexture: depth,
             depthView: try depth.createView(),
-            size: shadowMapResolution
+            size: mapResolution
         )
+        shadowResourceGeneration &+= 1
     }
 
-    func writeShadowUniforms(scene: RenderScene, enabled: Bool) -> ShadowUniforms {
-        guard let shadowUniformBuffer else { return .disabled }
-        var uniforms = makeShadowUniforms(scene: scene, enabled: enabled)
+    func writeShadowUniforms(scene: RenderScene, enabled: Bool, settings: RenderShadowSettings) -> ShadowUniforms {
+        let mapResolution = RenderShadowSettings.sanitizedMapResolution(settings.mapResolution)
+        guard let shadowUniformBuffer else { return .disabled(mapResolution: mapResolution) }
+        var uniforms = makeShadowUniforms(scene: scene, enabled: enabled, settings: settings)
         writeUniform(&uniforms, buffer: shadowUniformBuffer)
         return uniforms
     }
 
-    func makeShadowUniforms(scene: RenderScene, enabled: Bool) -> ShadowUniforms {
+    func makeShadowUniforms(scene: RenderScene, enabled: Bool, settings: RenderShadowSettings) -> ShadowUniforms {
+        let mapResolution = RenderShadowSettings.sanitizedMapResolution(settings.mapResolution)
         guard enabled,
-              let light = primaryDirectionalShadowLight(in: scene)
+              settings.enabled,
+              settings.maxShadowedDirectionalLights > 0,
+              let light = primaryDirectionalShadowLight(in: scene, selection: settings.directionalLightSelection)
         else {
-            return .disabled
+            return .disabled(mapResolution: mapResolution)
         }
 
         let sceneBounds = worldBounds(for: scene)
@@ -95,16 +104,32 @@ extension WGPURenderer {
             lightViewProjection: projection * view,
             params: SIMD4<Float>(
                 1,
-                0.006,
-                0.62,
-                Float(shadowMapResolution)
+                settings.depthBias,
+                settings.strength,
+                Float(mapResolution)
             )
         )
     }
 
-    private func primaryDirectionalShadowLight(in scene: RenderScene) -> RenderLight? {
-        scene.lights.first { light in
+    func shadowedDirectionalLightCount(scene: RenderScene, settings: RenderShadowSettings) -> Int {
+        guard settings.enabled,
+              settings.maxShadowedDirectionalLights > 0
+        else { return 0 }
+        return primaryDirectionalShadowLight(in: scene, selection: settings.directionalLightSelection) == nil ? 0 : 1
+    }
+
+    private func primaryDirectionalShadowLight(
+        in scene: RenderScene,
+        selection: RenderShadowSettings.DirectionalLightSelection
+    ) -> RenderLight? {
+        let candidates = scene.lights.filter { light in
             light.type == .directional && light.intensity > 0
+        }
+        switch selection {
+        case .brightest:
+            return candidates.max { lhs, rhs in
+                lhs.intensity < rhs.intensity
+            }
         }
     }
 

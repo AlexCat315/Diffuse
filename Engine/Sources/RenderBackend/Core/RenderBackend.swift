@@ -68,6 +68,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     var shadowUniformBuffer: GPUBuffer?
     var shadowSampler: GPUSampler?
     var shadowMapTarget: ShadowMapTarget?
+    var shadowResourceGeneration: UInt64 = 0
+    var instanceResourceShadowGeneration: UInt64 = 0
     private var ssrUniformBuffer: GPUBuffer?
     private var taaUniformBuffer: GPUBuffer?
     private var ssaoUniformBuffer: GPUBuffer?
@@ -156,10 +158,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             writeStylizedCharacterUniforms()
             try ensureSceneLightUniformBuffer()
             writeSceneLightUniforms(scene: packet.scene)
-            try ensureShadowResources()
+            try ensureShadowResources(settings: activeRenderSettings.shadowSettings)
             let shadowUniforms = writeShadowUniforms(
                 scene: packet.scene,
-                enabled: framePlan.passes.contains(.shadowPass)
+                enabled: framePlan.passes.contains(.shadowPass),
+                settings: activeRenderSettings.shadowSettings
             )
             try ensureInstanceResources(scene: packet.scene, pipeline: meshPipeline)
             writeInstanceUniforms(scene: packet.scene, viewProj: cameraMatrices.viewProjection)
@@ -202,6 +205,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             let prepareDoneNS = DispatchTime.now().uptimeNanoseconds
 
             var drawCallCount = 0
+            var passDrawCallCounts: [RenderPassKind: Int] = [:]
             var renderBundleCount = 0
             var renderBundleParallelJobs = 0
             var bundleRecordNS: UInt64 = 0
@@ -218,10 +222,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
             for passKind in framePlan.passes {
                 let passStartNS = DispatchTime.now().uptimeNanoseconds
+                var passDrawCallCount = 0
                 switch passKind {
                     case .depthPrepass:
                         let pipeline = try ensureDepthPrepassPipeline(hdr: usesHDRFrameGraph)
-                        _ = try encodeDepthPrepass(
+                        passDrawCallCount = try encodeDepthPrepass(
                             encoder: encoder,
                             colorView: usesHDRFrameGraph ? sceneColorTarget?.view ?? colorTarget.view : colorTarget.view,
                             depthView: depthView,
@@ -237,7 +242,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
                             break
                         }
-                        _ = try encodeShadowPass(
+                        passDrawCallCount = try encodeShadowPass(
                             encoder: encoder,
                             pipeline: shadowPipeline,
                             scene: packet.scene
@@ -255,6 +260,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             viewProj: cameraMatrices.viewProjection,
                             depthLoadOp: depthPrepassEncoded ? .load : .clear
                         )
+                        passDrawCallCount = 1
                         skyboxEncoded = true
 
                     case .basePass:
@@ -268,14 +274,14 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             colorLoadOp: skyboxEncoded ? .load : .clear,
                             depthLoadOp: skyboxEncoded || depthPrepassEncoded ? .load : .clear
                         )
-                        drawCallCount += report.drawCallCount
+                        passDrawCallCount = report.drawCallCount
                         renderBundleCount += report.renderBundleCount
                         renderBundleParallelJobs += report.parallelJobCount
                         bundleRecordNS &+= report.bundleRecordNS
 
                     case .outline:
                         let outlinePipeline = try ensureOutlinePipeline(hdr: usesHDRFrameGraph)
-                        drawCallCount += try encodeOutlinePass(
+                        passDrawCallCount = try encodeOutlinePass(
                             encoder: encoder,
                             colorView: usesHDRFrameGraph ? sceneColorTarget?.view ?? colorTarget.view : colorTarget.view,
                             depthView: depthView,
@@ -299,6 +305,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             pipeline: inkPaperPostPipeline
                         )
                         hdrCurrent = output
+                        passDrawCallCount = 1
 
                     case .ssao:
                         guard let input = hdrCurrent,
@@ -315,6 +322,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             projection: cameraMatrices.projection
                         )
                         hdrCurrent = output
+                        passDrawCallCount = 1
 
                     case .ssr:
                         guard let input = hdrCurrent,
@@ -331,6 +339,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             projection: cameraMatrices.projection
                         )
                         hdrCurrent = output
+                        passDrawCallCount = 1
 
                     case .taa:
                         guard let input = hdrCurrent,
@@ -345,6 +354,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             pipeline: taaPipeline
                         )
                         hdrCurrent = output
+                        passDrawCallCount = 1
 
                     case .bloom:
                         guard let input = hdrCurrent,
@@ -358,6 +368,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             pipeline: bloomPipeline
                         )
                         bloomTarget = output
+                        passDrawCallCount = 1
 
                     case .tonemap:
                         guard let input = hdrCurrent,
@@ -370,6 +381,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             outputView: activeRenderSettings.enableFXAA ? ldrPostProcessTarget?.view ?? colorTarget.view : colorTarget.view,
                             pipeline: tonemapPipeline
                         )
+                        passDrawCallCount = 1
                         if activeRenderSettings.enableTAA,
                            let historyTarget {
                             encoder.copyTextureToTexture(
@@ -393,6 +405,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             output: colorTarget,
                             pipeline: fxaaPipeline
                         )
+                        passDrawCallCount = 1
 
                     case .viewportResolve:
                         registerViewportSurface(texture: colorTarget.texture, size: packet.drawableSize)
@@ -400,6 +413,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 }
 
                 let passElapsedNS = DispatchTime.now().uptimeNanoseconds - passStartNS
+                if passDrawCallCount > 0 {
+                    passDrawCallCounts[passKind, default: 0] += passDrawCallCount
+                    drawCallCount += passDrawCallCount
+                }
                 passEncodeNS[passKind, default: 0] &+= passElapsedNS
                 switch passKind {
                 case .skybox:
@@ -435,8 +452,15 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 frameIndex: packet.frameIndex,
                 passCount: framePlan.passes.count,
                 drawCallCount: drawCallCount,
+                passDrawCallCounts: passDrawCallCounts,
                 renderBundleCount: renderBundleCount,
                 renderBundleParallelJobs: renderBundleParallelJobs,
+                shadowedLightCount: shadowUniforms.isEnabled
+                    ? shadowedDirectionalLightCount(scene: packet.scene, settings: activeRenderSettings.shadowSettings)
+                    : 0,
+                shadowMapResolution: shadowUniforms.isEnabled
+                    ? RenderShadowSettings.sanitizedMapResolution(activeRenderSettings.shadowSettings.mapResolution)
+                    : 0,
                 activePasses: framePlan.passes,
                 settingsGeneration: settingsGeneration,
                 cpuPrepareNS: cpuPrepareNS,
@@ -458,8 +482,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     seenPasses.insert(passKind)
                     return "\(passKind.rawValue):\(passEncodeNS[passKind, default: 0])"
                 }.joined(separator: ",")
+                let orderedPassDrawStats = framePlan.passes.compactMap { passKind -> String? in
+                    guard let count = passDrawCallCounts[passKind] else { return nil }
+                    return "\(passKind.rawValue):\(count)"
+                }.joined(separator: ",")
                 Logger.renderer.debug(
-                    "frame_cpu_timing frame=\(packet.frameIndex) prepare_ns=\(cpuPrepareNS) encode_ns=\(cpuEncodeNS) submit_ns=\(cpuSubmitNS) total_ns=\(cpuFrameTotalNS) bundle_record_ns=\(bundleRecordNS) bundles=\(renderBundleCount) bundle_jobs=\(renderBundleParallelJobs) pass_encode_ns=[\(orderedPassStats)]"
+                    "frame_cpu_timing frame=\(packet.frameIndex) prepare_ns=\(cpuPrepareNS) encode_ns=\(cpuEncodeNS) submit_ns=\(cpuSubmitNS) total_ns=\(cpuFrameTotalNS) draw_calls=\(drawCallCount) bundle_record_ns=\(bundleRecordNS) bundles=\(renderBundleCount) bundle_jobs=\(renderBundleParallelJobs) shadowed_lights=\(lastFrameStats.shadowedLightCount) shadow_map=\(lastFrameStats.shadowMapResolution) pass_draws=[\(orderedPassDrawStats)] pass_encode_ns=[\(orderedPassStats)]"
                 )
             }
         } catch {

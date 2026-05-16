@@ -110,10 +110,7 @@ public final class EditorApplication: @unchecked Sendable {
         engine.start(renderSurface: nil, enableViewportSurface: true)
         // 默认启用离屏渲染，让引擎渲染到一个 viewport 纹理交给编辑器显示。
         // 不开启 viewportResolve 时 UI 会一直停在 "Waiting for first render packet"。
-        engine.queueRenderSettings(
-            RenderSettings(stage: .r3ViewportInterop,
-                           enableOffscreenViewport: true)
-        )
+        engine.queueRenderSettings(makeViewportRenderSettings(shadowsEnabled: store.state.viewportShadowsEnabled))
         store.dispatch(.setConnected(true))
         logConsole("Editor connected to runtime")
     }
@@ -274,6 +271,22 @@ public final class EditorApplication: @unchecked Sendable {
 
     public func queueViewportRenderSettings(_ settings: RenderSettings) {
         engine.queueRenderSettings(settings)
+    }
+
+    public func setViewportShadowsEnabled(_ enabled: Bool) {
+        if store.state.viewportShadowsEnabled != enabled {
+            store.dispatch(.setViewportShadowsEnabled(enabled))
+        }
+        engine.queueRenderSettings(makeViewportRenderSettings(shadowsEnabled: enabled))
+        logConsole(enabled ? "Viewport shadows enabled" : "Viewport shadows disabled")
+    }
+
+    private func makeViewportRenderSettings(shadowsEnabled: Bool) -> RenderSettings {
+        RenderSettings(
+            stage: .r4LightingPBRShadow,
+            shadowSettings: RenderShadowSettings(enabled: shadowsEnabled),
+            enableOffscreenViewport: true
+        )
     }
 
     public func resetPreviewScene() {

@@ -26,7 +26,7 @@ struct InstanceResourceKey: Equatable, Sendable {
 }
 
 let maxSceneLightUniformCount = 8
-let shadowMapResolution: UInt32 = 1024
+let defaultShadowMapResolution: UInt32 = 1024
 
 struct SceneLightUniform: Equatable, Sendable {
     var positionAndType: SIMD4<Float>
@@ -113,8 +113,15 @@ struct ShadowUniforms: Equatable, Sendable {
 
     static let disabled = ShadowUniforms(
         lightViewProjection: matrix_identity_float4x4,
-        params: SIMD4<Float>(0, 0.004, 0.55, Float(shadowMapResolution))
+        params: SIMD4<Float>(0, 0.004, 0.55, Float(defaultShadowMapResolution))
     )
+
+    static func disabled(mapResolution: UInt32) -> ShadowUniforms {
+        ShadowUniforms(
+            lightViewProjection: matrix_identity_float4x4,
+            params: SIMD4<Float>(0, 0.004, 0.55, Float(mapResolution))
+        )
+    }
 
     var isEnabled: Bool {
         params.x > 0.5

@@ -24,6 +24,7 @@ struct ViewportPanel: View {
             let gizmoMode = store.gizmoMode
             let gizmoSpace = store.gizmoSpace
             let shadingMode = store.viewportShadingMode
+            let shadowsEnabled = store.viewportShadowsEnabled
 
             // 推送 gizmo 控制器所需的快照（摄像机 / 视口矩形 / 实体世界坐标）。
             let _: Void = updateGizmoSnapshot(selectedID: selectedEntityID,
@@ -66,6 +67,7 @@ struct ViewportPanel: View {
                                         gizmoMode: gizmoMode,
                                         gizmoSpace: gizmoSpace,
                                         shadingMode: shadingMode,
+                                        shadowsEnabled: shadowsEnabled,
                                         onSelectGizmoMode: { mode in
                                             if gizmoMode != mode {
                                                 store.dispatch(.setGizmoMode(mode))
@@ -80,6 +82,9 @@ struct ViewportPanel: View {
                                             if shadingMode != mode {
                                                 store.dispatch(.setViewportShadingMode(mode))
                                             }
+                                        },
+                                        onToggleShadows: {
+                                            app.setViewportShadowsEnabled(!shadowsEnabled)
                                         })
                     }
                         .absolutePosition(left: 10, top: 10)
@@ -1259,9 +1264,11 @@ private struct ViewportInfoBar: View {
     let gizmoMode: EditorGizmoMode
     let gizmoSpace: EditorGizmoSpace
     let shadingMode: EditorViewportShadingMode
+    let shadowsEnabled: Bool
     let onSelectGizmoMode: (EditorGizmoMode) -> Void
     let onSelectGizmoSpace: (EditorGizmoSpace) -> Void
     let onSelectShadingMode: (EditorViewportShadingMode) -> Void
+    let onToggleShadows: () -> Void
 
     var body: some View {
         Box(direction: .column, alignItems: .flexStart, spacing: 4) {
@@ -1310,6 +1317,12 @@ private struct ViewportInfoBar: View {
                     onSelectShadingMode(.wireframe)
                 }
                 .toggleButtonStyle(shadingMode == .wireframe)
+                Button(icon: .resource(ViewportToolbarIcon.shadows.resource),
+                           size: 15,
+                           tooltip: L("Shadows")) {
+                    onToggleShadows()
+                }
+                .toggleButtonStyle(shadowsEnabled)
             }
         }
         .padding(3)
@@ -1348,11 +1361,12 @@ private enum ViewportToolbarIcon: String {
     case scale = "arrows-pointing-out"
     case lit = "toolbar-eye"
     case wireframe = "grid-pattern"
+    case shadows = "light-bulb"
 
     var resource: BundleImageResource {
         .svg(named: rawValue,
              in: .module,
-             subdirectory: "ToolbarIcons")
+             subdirectory: self == .shadows ? "HierarchyIcons" : "ToolbarIcons")
     }
 }
 

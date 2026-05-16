@@ -119,12 +119,23 @@ fn shadow_visibility(world_pos : vec3<f32>) -> f32 {
         return 1.0;
     }
 
-    let occluder_depth = textureSample(shadow_texture, shadow_sampler, uv).r;
     let current_depth = ndc.z;
     let bias = shadow.params.y;
     let strength = clamp(shadow.params.z, 0.0, 1.0);
+    let texel = 1.0 / max(shadow.params.w, 1.0);
+    var lit = shadow_depth_lit(uv, current_depth, bias);
+    lit = lit + shadow_depth_lit(uv + vec2<f32>(texel, 0.0), current_depth, bias);
+    lit = lit + shadow_depth_lit(uv + vec2<f32>(-texel, 0.0), current_depth, bias);
+    lit = lit + shadow_depth_lit(uv + vec2<f32>(0.0, texel), current_depth, bias);
+    lit = lit + shadow_depth_lit(uv + vec2<f32>(0.0, -texel), current_depth, bias);
+    lit = lit / 5.0;
+    return 1.0 - strength * (1.0 - lit);
+}
+
+fn shadow_depth_lit(uv : vec2<f32>, current_depth : f32, bias : f32) -> f32 {
+    let occluder_depth = textureSample(shadow_texture, shadow_sampler, uv).r;
     if current_depth - bias > occluder_depth {
-        return 1.0 - strength;
+        return 0.0;
     }
     return 1.0;
 }
