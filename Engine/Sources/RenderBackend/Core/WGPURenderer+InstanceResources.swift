@@ -218,9 +218,9 @@ extension WGPURenderer {
         sceneLightUniformBuffer = try backend.createBuffer(size: SceneLightUniforms.byteSize, usage: [.uniform, .copyDst])
     }
 
-    func writeSceneLightUniforms(scene: RenderScene) {
+    func writeSceneLightUniforms(scene: RenderScene, shadowSlotsByLightIndex: [Int: Int] = [:]) {
         guard let sceneLightUniformBuffer else { return }
-        var uniforms = SceneLightUniforms(scene: scene)
+        var uniforms = SceneLightUniforms(scene: scene, shadowSlotsByLightIndex: shadowSlotsByLightIndex)
         writeUniform(&uniforms, buffer: sceneLightUniformBuffer)
     }
 

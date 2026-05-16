@@ -4,13 +4,12 @@ struct Uniforms {
     color_tint : vec4<f32>,
 };
 
-struct ShadowUniforms {
+struct ShadowRenderUniforms {
     light_view_projection : mat4x4<f32>,
-    params : vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u : Uniforms;
-@group(0) @binding(5) var<uniform> shadow : ShadowUniforms;
+@group(0) @binding(5) var<uniform> shadow_render : ShadowRenderUniforms;
 
 struct VsIn {
     @location(0) pos : vec3<f32>,
@@ -27,7 +26,7 @@ struct VsOut {
 fn vs_main(in : VsIn) -> VsOut {
     var out : VsOut;
     let world = u.model * vec4<f32>(in.pos, 1.0);
-    out.position = shadow.light_view_projection * world;
+    out.position = shadow_render.light_view_projection * world;
     out.depth = clamp(out.position.z / max(out.position.w, 0.00001), 0.0, 1.0);
     return out;
 }
