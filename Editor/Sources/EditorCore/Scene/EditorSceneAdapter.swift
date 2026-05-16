@@ -42,6 +42,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let localTransform: EditorSceneManifestMatrix?
     public let asset: EditorSceneManifestAssetReference?
     public let renderMesh: EditorSceneManifestRenderMesh?
+    public let renderMaterial: EditorSceneManifestRenderMaterial?
     public let camera: EditorSceneManifestCamera?
     public let light: EditorSceneManifestLight?
     public let rigidBody: EditorSceneManifestRigidBody?
@@ -56,6 +57,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
                 localTransform: EditorSceneManifestMatrix? = nil,
                 asset: EditorSceneManifestAssetReference? = nil,
                 renderMesh: EditorSceneManifestRenderMesh? = nil,
+                renderMaterial: EditorSceneManifestRenderMaterial? = nil,
                 camera: EditorSceneManifestCamera? = nil,
                 light: EditorSceneManifestLight? = nil,
                 rigidBody: EditorSceneManifestRigidBody? = nil,
@@ -69,6 +71,7 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.localTransform = localTransform
         self.asset = asset
         self.renderMesh = renderMesh
+        self.renderMaterial = renderMaterial
         self.camera = camera
         self.light = light
         self.rigidBody = rigidBody
@@ -170,6 +173,28 @@ public struct EditorSceneManifestVector3: Codable, Sendable, Equatable {
     }
 }
 
+public struct EditorSceneManifestVector4: Codable, Sendable, Equatable {
+    public let x: Float
+    public let y: Float
+    public let z: Float
+    public let w: Float
+
+    public init(x: Float, y: Float, z: Float, w: Float) {
+        self.x = x
+        self.y = y
+        self.z = z
+        self.w = w
+    }
+
+    public init(_ value: SIMD4<Float>) {
+        self.init(x: value.x, y: value.y, z: value.z, w: value.w)
+    }
+
+    var simdValue: SIMD4<Float> {
+        SIMD4<Float>(x, y, z, w)
+    }
+}
+
 public struct EditorSceneManifestMatrix: Codable, Sendable, Equatable {
     public let rows: [Float]
 
@@ -249,18 +274,72 @@ public struct EditorSceneManifestAssetReference: Codable, Sendable, Equatable {
 public struct EditorSceneManifestRenderMesh: Codable, Sendable, Equatable {
     public let meshIndex: Int
     public let isVisible: Bool
+    public let colorTint: EditorSceneManifestVector3?
+    public let assetID: String?
 
-    public init(meshIndex: Int, isVisible: Bool) {
+    public init(meshIndex: Int,
+                isVisible: Bool,
+                colorTint: EditorSceneManifestVector3? = nil,
+                assetID: String? = nil) {
         self.meshIndex = meshIndex
         self.isVisible = isVisible
+        self.colorTint = colorTint
+        self.assetID = assetID
     }
 
     public init(_ component: RenderMeshComponent) {
-        self.init(meshIndex: component.meshIndex, isVisible: component.isVisible)
+        self.init(meshIndex: component.meshIndex,
+                  isVisible: component.isVisible,
+                  colorTint: EditorSceneManifestVector3(component.colorTint),
+                  assetID: component.assetID)
     }
 
     var component: RenderMeshComponent {
-        RenderMeshComponent(meshIndex: meshIndex, isVisible: isVisible)
+        RenderMeshComponent(meshIndex: meshIndex,
+                            isVisible: isVisible,
+                            colorTint: colorTint?.simdValue ?? SIMD3<Float>(1, 1, 1),
+                            assetID: assetID)
+    }
+}
+
+public struct EditorSceneManifestRenderMaterial: Codable, Sendable, Equatable {
+    public let baseColorFactor: EditorSceneManifestVector4
+    public let baseColorTextureIndex: Int?
+    public let normalTextureIndex: Int?
+    public let metallicFactor: Float
+    public let roughnessFactor: Float
+    public let emissiveFactor: EditorSceneManifestVector3
+
+    public init(baseColorFactor: EditorSceneManifestVector4,
+                baseColorTextureIndex: Int? = nil,
+                normalTextureIndex: Int? = nil,
+                metallicFactor: Float,
+                roughnessFactor: Float,
+                emissiveFactor: EditorSceneManifestVector3) {
+        self.baseColorFactor = baseColorFactor
+        self.baseColorTextureIndex = baseColorTextureIndex
+        self.normalTextureIndex = normalTextureIndex
+        self.metallicFactor = metallicFactor
+        self.roughnessFactor = roughnessFactor
+        self.emissiveFactor = emissiveFactor
+    }
+
+    public init(_ component: RenderMaterialComponent) {
+        self.init(baseColorFactor: EditorSceneManifestVector4(component.baseColorFactor),
+                  baseColorTextureIndex: component.baseColorTextureIndex,
+                  normalTextureIndex: component.normalTextureIndex,
+                  metallicFactor: component.metallicFactor,
+                  roughnessFactor: component.roughnessFactor,
+                  emissiveFactor: EditorSceneManifestVector3(component.emissiveFactor))
+    }
+
+    var component: RenderMaterialComponent {
+        RenderMaterialComponent(baseColorFactor: baseColorFactor.simdValue,
+                                baseColorTextureIndex: baseColorTextureIndex,
+                                normalTextureIndex: normalTextureIndex,
+                                metallicFactor: metallicFactor,
+                                roughnessFactor: roughnessFactor,
+                                emissiveFactor: emissiveFactor.simdValue)
     }
 }
 
@@ -693,6 +772,9 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             if let renderMesh = node.renderMesh {
                 _ = restoredScene.setComponent(renderMesh.component, for: entity)
             }
+            if let renderMaterial = node.renderMaterial {
+                _ = restoredScene.setComponent(renderMaterial.component, for: entity)
+            }
             if let camera = node.camera {
                 _ = restoredScene.setComponent(camera.component, for: entity)
             }
@@ -822,6 +904,8 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 .map(EditorSceneManifestAssetReference.init),
             renderMesh: scene.component(RenderMeshComponent.self, for: entity)
                 .map(EditorSceneManifestRenderMesh.init),
+            renderMaterial: scene.component(RenderMaterialComponent.self, for: entity)
+                .map(EditorSceneManifestRenderMaterial.init),
             camera: scene.component(CameraComponent.self, for: entity)
                 .map(EditorSceneManifestCamera.init),
             light: scene.component(LightComponent.self, for: entity)

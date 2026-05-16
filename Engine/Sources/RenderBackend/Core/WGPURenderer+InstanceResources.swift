@@ -4,6 +4,7 @@ import simd
 
 private struct MeshInstanceUniforms {
     var mvp: simd_float4x4
+    var model: simd_float4x4
     var colorTint: SIMD4<Float>
 }
 
@@ -13,7 +14,8 @@ extension WGPURenderer {
             for (i, instance) in scene.instances.enumerated() {
                 var u = MeshInstanceUniforms(
                     mvp: viewProj * instance.transform,
-                    colorTint: SIMD4<Float>(instance.colorTint, 1)
+                    model: instance.transform,
+                    colorTint: effectiveBaseColor(for: instance)
                 )
                 let offset = UInt64(i) * dyn.stride
                 withUnsafeBytes(of: &u) { raw in
@@ -29,7 +31,8 @@ extension WGPURenderer {
         for (i, instance) in scene.instances.enumerated() where i < instanceResources.count {
             var u = MeshInstanceUniforms(
                 mvp: viewProj * instance.transform,
-                colorTint: SIMD4<Float>(instance.colorTint, 1)
+                model: instance.transform,
+                colorTint: effectiveBaseColor(for: instance)
             )
             withUnsafeBytes(of: &u) { raw in
                 if let base = raw.baseAddress {
@@ -41,7 +44,10 @@ extension WGPURenderer {
 
     func ensureInstanceResources(scene: RenderScene, pipeline: GPURenderPipeline) throws {
         let instanceCount = scene.instances.count
-        let meshIndices = scene.instances.map(\.meshIndex)
+        let resourceKeys = scene.instances.map {
+            InstanceResourceKey(meshIndex: $0.meshIndex,
+                                baseColorTextureIndex: $0.material.baseColorTextureIndex)
+        }
 
         let useDynamicOffsets = instanceCount > dynamicOffsetThreshold
         let bindGroupLayout: GPUBindGroupLayout
@@ -53,11 +59,11 @@ extension WGPURenderer {
 
         if useDynamicOffsets {
             if let dyn = dynamicInstanceResources, dyn.capacity >= instanceCount {
-                instanceResourceMeshIndices = meshIndices
+                instanceResourceKeys = resourceKeys
                 return
             }
             instanceResources.removeAll(keepingCapacity: false)
-            instanceResourceMeshIndices = meshIndices
+            instanceResourceKeys = resourceKeys
 
             let totalSize = UInt64(max(instanceCount, 1)) * dynamicUniformStride
             let uniformBuffer = try backend.createBuffer(size: totalSize, usage: [.uniform, .copyDst])
@@ -76,20 +82,23 @@ extension WGPURenderer {
 
         if dynamicInstanceResources == nil
             && instanceResources.count == instanceCount
-            && instanceResourceMeshIndices == meshIndices {
+            && instanceResourceKeys == resourceKeys {
             return
         }
 
         dynamicInstanceResources = nil
         instanceResources.removeAll(keepingCapacity: false)
-        instanceResourceMeshIndices = meshIndices
-        for meshIndex in meshIndices {
-            let uniformBuffer = try backend.createBuffer(size: 80, usage: [.uniform, .copyDst])
+        instanceResourceKeys = resourceKeys
+        for instance in scene.instances {
+            let uniformBuffer = try backend.createBuffer(
+                size: UInt64(MemoryLayout<MeshInstanceUniforms>.stride),
+                usage: [.uniform, .copyDst]
+            )
             let bindGroup = try backend.createBindGroup(
                 layout: bindGroupLayout,
                 entries: try meshBindGroupEntries(
                     instanceUniformBuffer: uniformBuffer,
-                    baseColorTextureView: baseColorTextureView(for: meshIndex)
+                    baseColorTextureView: baseColorTextureView(for: instance)
                 )
             )
             instanceResources.append(
@@ -101,15 +110,26 @@ extension WGPURenderer {
                               baseColorTextureView: GPUTextureView? = nil) throws -> [GPUBindGroupEntry] {
         try ensureStylizedCharacterUniformBuffer()
         try ensureMeshSamplingFallbackResources()
+        try ensureSceneLightUniformBuffer()
+        try ensureShadowResources()
         guard let stylizedCharacterUniformBuffer,
               let linearSampler,
-              let fallbackMeshTextureView
+              let fallbackMeshTextureView,
+              let sceneLightUniformBuffer,
+              let shadowUniformBuffer,
+              let shadowSampler,
+              let shadowMapTarget
         else {
             throw WGPUBackendError.initFailed("mesh bind group resources missing")
         }
         let textureView = baseColorTextureView ?? fallbackMeshTextureView
         return [
-            GPUBindGroupEntry(binding: 0, buffer: instanceUniformBuffer, offset: 0, size: 80),
+            GPUBindGroupEntry(
+                binding: 0,
+                buffer: instanceUniformBuffer,
+                offset: 0,
+                size: UInt64(MemoryLayout<MeshInstanceUniforms>.stride)
+            ),
             GPUBindGroupEntry(
                 binding: 1,
                 buffer: stylizedCharacterUniformBuffer,
@@ -118,16 +138,44 @@ extension WGPURenderer {
             ),
             GPUBindGroupEntry(binding: 2, sampler: linearSampler),
             GPUBindGroupEntry(binding: 3, textureView: textureView),
+            GPUBindGroupEntry(
+                binding: 4,
+                buffer: sceneLightUniformBuffer,
+                offset: 0,
+                size: SceneLightUniforms.byteSize
+            ),
+            GPUBindGroupEntry(
+                binding: 5,
+                buffer: shadowUniformBuffer,
+                offset: 0,
+                size: UInt64(MemoryLayout<ShadowUniforms>.stride)
+            ),
+            GPUBindGroupEntry(binding: 6, sampler: shadowSampler),
+            GPUBindGroupEntry(binding: 7, textureView: shadowMapTarget.colorView),
         ]
     }
 
-    func baseColorTextureView(for meshIndex: Int) -> GPUTextureView? {
+    func baseColorTextureView(for instance: RenderInstance) -> GPUTextureView? {
+        let meshIndex = instance.meshIndex
+        if let textureIndex = instance.material.baseColorTextureIndex {
+            return meshTextureResources[meshIndex]?[textureIndex]?.view
+        }
         guard let materialSet = MeshMaterialRegistry.shared.materials(for: meshIndex),
               let textureIndex = materialSet.materials.compactMap(\.baseColorTextureIndex).first
         else {
             return nil
         }
         return meshTextureResources[meshIndex]?[textureIndex]?.view
+    }
+
+    func effectiveBaseColor(for instance: RenderInstance) -> SIMD4<Float> {
+        let materialColor = instance.material.baseColorFactor
+        return SIMD4<Float>(
+            instance.colorTint.x * materialColor.x,
+            instance.colorTint.y * materialColor.y,
+            instance.colorTint.z * materialColor.z,
+            materialColor.w
+        )
     }
 
     func ensureStylizedCharacterUniformBuffer() throws {
@@ -157,6 +205,18 @@ extension WGPURenderer {
                                     size: raw.count)
             }
         }
+    }
+
+    func ensureSceneLightUniformBuffer() throws {
+        guard backend.rawDevice != nil else { return }
+        if sceneLightUniformBuffer != nil { return }
+        sceneLightUniformBuffer = try backend.createBuffer(size: SceneLightUniforms.byteSize, usage: [.uniform, .copyDst])
+    }
+
+    func writeSceneLightUniforms(scene: RenderScene) {
+        guard let sceneLightUniformBuffer else { return }
+        var uniforms = SceneLightUniforms(scene: scene)
+        writeUniform(&uniforms, buffer: sceneLightUniformBuffer)
     }
 
     func ensureMeshSamplingFallbackResources() throws {

@@ -51,6 +51,10 @@ extension EditorSceneAdapter {
                                     meshIndex: asset.meshIndex),
             for: entity
         )
+        if var renderMesh = scene.component(RenderMeshComponent.self, for: entity) {
+            renderMesh.assetID = asset.id
+            _ = scene.setComponent(renderMesh, for: entity)
+        }
         notifyRevisionChanged()
     }
 
