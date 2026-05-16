@@ -17,10 +17,18 @@ struct SceneLights {
     lights                  : array<SceneLight, 8>,
 };
 
+struct ShadowUniforms {
+    light_view_projection : mat4x4<f32>,
+    params : vec4<f32>,
+};
+
 @group(0) @binding(0) var<uniform> u : Uniforms;
 @group(0) @binding(2) var base_color_sampler : sampler;
 @group(0) @binding(3) var base_color_texture : texture_2d<f32>;
 @group(0) @binding(4) var<uniform> scene_lights : SceneLights;
+@group(0) @binding(5) var<uniform> shadow : ShadowUniforms;
+@group(0) @binding(6) var shadow_sampler : sampler;
+@group(0) @binding(7) var shadow_texture : texture_2d<f32>;
 
 struct VsIn {
     @location(0) pos            : vec3<f32>,
@@ -91,7 +99,34 @@ fn light_contribution(light : SceneLight, normal : vec3<f32>, world_pos : vec3<f
     }
 
     let lambert = max(dot(normal, to_light), 0.0);
-    return light_color * intensity * attenuation * lambert;
+    var visibility = 1.0;
+    if light_type < 0.5 {
+        visibility = shadow_visibility(world_pos);
+    }
+    return light_color * intensity * attenuation * lambert * visibility;
+}
+
+fn shadow_visibility(world_pos : vec3<f32>) -> f32 {
+    if shadow.params.x < 0.5 {
+        return 1.0;
+    }
+
+    let clip = shadow.light_view_projection * vec4<f32>(world_pos, 1.0);
+    let inv_w = 1.0 / max(abs(clip.w), 0.00001);
+    let ndc = clip.xyz * inv_w;
+    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    if uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || ndc.z < 0.0 || ndc.z > 1.0 {
+        return 1.0;
+    }
+
+    let occluder_depth = textureSample(shadow_texture, shadow_sampler, uv).r;
+    let current_depth = ndc.z;
+    let bias = shadow.params.y;
+    let strength = clamp(shadow.params.z, 0.0, 1.0);
+    if current_depth - bias > occluder_depth {
+        return 1.0 - strength;
+    }
+    return 1.0;
 }
 
 fn scene_lighting(normal : vec3<f32>, world_pos : vec3<f32>) -> vec3<f32> {
