@@ -50,9 +50,17 @@ struct SceneLightUniformTests {
             ]
         )
 
-        let uniforms = SceneLightUniforms(scene: scene, shadowSlotsByLightIndex: [0: 1, 1: 0])
+        let uniforms = SceneLightUniforms(
+            scene: scene,
+            shadowBindingsByLightIndex: [
+                0: ShadowLightBinding(baseSlot: 1, cascadeCount: 3),
+                1: ShadowLightBinding(baseSlot: 0, cascadeCount: 1),
+            ]
+        )
 
         #expect(uniforms.light0.spotAnglesAndPadding.z == 2)
+        #expect(uniforms.light0.spotAnglesAndPadding.w == 3)
         #expect(uniforms.light1.spotAnglesAndPadding.z == 1)
+        #expect(uniforms.light1.spotAnglesAndPadding.w == 1)
     }
 }
