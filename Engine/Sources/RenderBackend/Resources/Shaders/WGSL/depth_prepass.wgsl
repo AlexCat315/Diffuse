@@ -25,6 +25,6 @@ fn vs_main(in : VsIn) -> VsOut {
 
 @fragment
 fn fs_main(in : VsOut) -> @location(0) vec4<f32> {
-    let depth = clamp(in.depth * 0.5 + 0.5, 0.0, 1.0);
+    let depth = clamp(in.depth, 0.0, 1.0);
     return vec4<f32>(vec3<f32>(depth), 1.0);
 }

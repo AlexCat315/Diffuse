@@ -88,6 +88,84 @@ struct RenderBackendGPUSmokeTests {
         #expect(coveredPixels > Int(width * height) / 32)
     }
 
+    @Test("directional shadow pass darkens occluded framebuffer pixels",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU shadow smoke test"))
+    func directionalShadowPassDarkensOccludedPixels() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let width: UInt32 = 96
+        let height: UInt32 = 96
+        let scene = Self.makeShadowScene()
+        let noShadowPixels = try renderPixels(
+            renderer: renderer,
+            backend: backend,
+            scene: scene,
+            settings: RenderSettings(
+                stage: .r4LightingPBRShadow,
+                enableShadows: false,
+                enableOffscreenViewport: true
+            ),
+            frameIndex: 0,
+            width: width,
+            height: height
+        )
+        let shadowPixels = try renderPixels(
+            renderer: renderer,
+            backend: backend,
+            scene: scene,
+            settings: RenderSettings(
+                stage: .r4LightingPBRShadow,
+                enableShadows: true,
+                enableOffscreenViewport: true
+            ),
+            frameIndex: 1,
+            width: width,
+            height: height
+        )
+        try writeDebugPPMIfRequested(
+            pixels: shadowPixels,
+            width: width,
+            height: height,
+            environmentKey: "GUAVA_GPU_SHADOW_OUTPUT"
+        )
+
+        let stats = renderer.currentFrameStats()
+        #expect(stats.activePasses.contains(.depthPrepass))
+        #expect(stats.activePasses.contains(.shadowPass))
+        #expect(stats.activePasses.contains(.basePass))
+        #expect(stats.activePasses.contains(.tonemap))
+        #expect(stats.passEncodeNS.keys.contains(.depthPrepass))
+        #expect(stats.passEncodeNS.keys.contains(.shadowPass))
+
+        let darkerPixels = zip(noShadowPixels, shadowPixels).filter { before, after in
+            after.luminance + 10 < before.luminance
+        }.count
+        let noShadowAverage = averageLuminance(noShadowPixels)
+        let shadowAverage = averageLuminance(shadowPixels)
+
+        #expect(darkerPixels > Int(width * height) / 64)
+        #expect(shadowAverage + 1.0 < noShadowAverage)
+    }
+
     private static func makeSmokeScene() -> RenderScene {
         RenderScene(
             camera: RenderCamera(
@@ -124,6 +202,52 @@ struct RenderBackendGPUSmokeTests {
             )
         )
     }
+
+    private static func makeShadowScene() -> RenderScene {
+        RenderScene(
+            camera: RenderCamera(
+                eye: SIMD3<Float>(2.4, 1.6, 3.0),
+                target: SIMD3<Float>(0, -0.35, 0),
+                up: SIMD3<Float>(0, 1, 0),
+                fovYRadians: .pi / 4,
+                near: 0.1,
+                far: 30
+            ),
+            instances: [
+                RenderInstance(
+                    meshIndex: 0,
+                    transform: translation(SIMD3<Float>(0, -0.65, 0))
+                        * scale(SIMD3<Float>(4.5, 0.08, 4.5)),
+                    colorTint: SIMD3<Float>(0.96, 0.94, 0.88),
+                    material: RenderMaterial(
+                        baseColorFactor: SIMD4<Float>(0.96, 0.94, 0.88, 1)
+                    )
+                ),
+                RenderInstance(
+                    meshIndex: 0,
+                    transform: translation(SIMD3<Float>(-0.15, -0.10, 0.05))
+                        * scale(SIMD3<Float>(0.85, 0.85, 0.85)),
+                    colorTint: SIMD3<Float>(1.0, 0.45, 0.23),
+                    material: RenderMaterial(
+                        baseColorFactor: SIMD4<Float>(1.0, 0.45, 0.23, 1)
+                    )
+                ),
+            ],
+            lights: [
+                RenderLight(
+                    type: .directional,
+                    direction: SIMD3<Float>(0.45, -1.0, -0.35),
+                    color: SIMD3<Float>(1.0, 0.96, 0.88),
+                    intensity: 1.8
+                )
+            ],
+            environment: RenderEnvironment(
+                ambientColor: SIMD3<Float>(0.20, 0.22, 0.26),
+                ambientIntensity: 0.16,
+                exposure: 1
+            )
+        )
+    }
 }
 
 private struct BGRAPixel: Equatable {
@@ -137,6 +261,42 @@ private struct BGRAPixel: Equatable {
             + abs(Int(g) - Int(other.g))
             + abs(Int(b) - Int(other.b))
     }
+
+    var luminance: Double {
+        0.2126 * Double(r) + 0.7152 * Double(g) + 0.0722 * Double(b)
+    }
+}
+
+private func renderPixels(
+    renderer: WGPURenderer,
+    backend: WGPUBackend,
+    scene: RenderScene,
+    settings: RenderSettings,
+    frameIndex: Int,
+    width: UInt32,
+    height: UInt32
+) throws -> [BGRAPixel] {
+    let packet = RenderPacket(
+        frameIndex: frameIndex,
+        deltaTime: 1.0 / 60.0,
+        drawableSize: RenderDrawableSize(width: width, height: height),
+        scene: scene,
+        sceneSnapshot: SceneRuntimeSnapshot(entityCount: scene.instances.count, revision: UInt64(frameIndex + 1)),
+        renderSettings: settings,
+        simulationTimeSeconds: Double(frameIndex) / 60.0
+    )
+    renderer.render(packet: packet)
+
+    guard let texture = renderer.offscreenColorTexture else {
+        Issue.record("expected renderer to retain an offscreen color texture")
+        return []
+    }
+    return try readbackBGRA8(
+        texture: texture,
+        width: width,
+        height: height,
+        backend: backend
+    )
 }
 
 private func readbackBGRA8(
@@ -207,9 +367,10 @@ private func alignedCopyBytesPerRow(_ bytesPerRow: UInt32) -> UInt32 {
 private func writeDebugPPMIfRequested(
     pixels: [BGRAPixel],
     width: UInt32,
-    height: UInt32
+    height: UInt32,
+    environmentKey: String = "GUAVA_GPU_SMOKE_OUTPUT"
 ) throws {
-    guard let output = ProcessInfo.processInfo.environment["GUAVA_GPU_SMOKE_OUTPUT"],
+    guard let output = ProcessInfo.processInfo.environment[environmentKey],
           !output.isEmpty
     else {
         return
@@ -223,4 +384,27 @@ private func writeDebugPPMIfRequested(
         data.append(pixel.b)
     }
     try data.write(to: URL(fileURLWithPath: output))
+}
+
+private func averageLuminance(_ pixels: [BGRAPixel]) -> Double {
+    guard !pixels.isEmpty else { return 0 }
+    return pixels.reduce(0) { $0 + $1.luminance } / Double(pixels.count)
+}
+
+private func translation(_ value: SIMD3<Float>) -> simd_float4x4 {
+    simd_float4x4(rows: [
+        SIMD4<Float>(1, 0, 0, value.x),
+        SIMD4<Float>(0, 1, 0, value.y),
+        SIMD4<Float>(0, 0, 1, value.z),
+        SIMD4<Float>(0, 0, 0, 1),
+    ])
+}
+
+private func scale(_ value: SIMD3<Float>) -> simd_float4x4 {
+    simd_float4x4(rows: [
+        SIMD4<Float>(value.x, 0, 0, 0),
+        SIMD4<Float>(0, value.y, 0, 0),
+        SIMD4<Float>(0, 0, value.z, 0),
+        SIMD4<Float>(0, 0, 0, 1),
+    ])
 }
