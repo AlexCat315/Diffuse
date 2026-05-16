@@ -44,6 +44,7 @@
 "S Snap" = "缩放吸附";
 "Lit" = "光照";
 "Wire" = "线框";
+"Shadows" = "阴影";
 
 /* Viewport overlays */
 "Viewport idle" = "视口空闲";

@@ -33,8 +33,10 @@ struct ShaderCatalogTests {
         #expect(meshModule.contains("@group(0) @binding(7) var shadow_texture"))
         #expect(meshModule.contains("fn scene_lighting"))
         #expect(meshModule.contains("fn shadow_visibility"))
+        #expect(meshModule.contains("fn shadow_depth_lit"))
         #expect(meshModule.contains("textureSample(base_color_texture"))
         #expect(meshModule.contains("textureSample(shadow_texture"))
+        #expect(meshModule.contains("shadow.params.w"))
         let depthPrepassModule = try catalog.loadWGSLRenderModule(named: "depth_prepass")
         #expect(depthPrepassModule.contains("out.position = u.mvp"))
         #expect(depthPrepassModule.contains("clamp(in.depth, 0.0, 1.0)"))
@@ -85,6 +87,32 @@ struct ShaderCatalogTests {
 
         #expect(r4.passes == expectedR4)
         #expect(r5.passes == expectedR5)
+    }
+
+    @Test("shadow settings define the renderer shadow contract")
+    func shadowSettingsDefineContract() {
+        let settings = RenderShadowSettings(
+            enabled: true,
+            mapResolution: 99,
+            depthBias: -0.5,
+            strength: 2.0,
+            maxShadowedDirectionalLights: -4
+        )
+
+        #expect(settings.enabled)
+        #expect(settings.mapResolution == 128)
+        #expect(settings.depthBias == 0)
+        #expect(settings.strength == 1)
+        #expect(settings.maxShadowedDirectionalLights == 0)
+
+        var renderSettings = RenderSettings(
+            stage: .r4LightingPBRShadow,
+            shadowSettings: .directionalPreview
+        )
+        #expect(renderSettings.enableShadows)
+        renderSettings.enableShadows = false
+        #expect(!renderSettings.shadowSettings.enabled)
+        #expect(RenderFramePlanner.makePlan(settings: renderSettings).passes == [.depthPrepass, .skybox, .basePass, .tonemap])
     }
 
     @Test("stylized character shading schedules outline after base pass")

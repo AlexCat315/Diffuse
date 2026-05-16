@@ -53,7 +53,9 @@ struct RenderBackendGPUSmokeTests {
         let stats = renderer.currentFrameStats()
         #expect(stats.activePasses.contains(.basePass))
         #expect(stats.activePasses.contains(.viewportResolve))
-        #expect(stats.drawCallCount == 1)
+        #expect(stats.drawCallCount == 2)
+        #expect(stats.passDrawCallCounts[.depthPrepass] == 1)
+        #expect(stats.passDrawCallCounts[.basePass] == 1)
 
         let viewport = renderer.currentViewportSurfaceState()
         #expect(viewport.isValid)
@@ -155,6 +157,11 @@ struct RenderBackendGPUSmokeTests {
         #expect(stats.activePasses.contains(.tonemap))
         #expect(stats.passEncodeNS.keys.contains(.depthPrepass))
         #expect(stats.passEncodeNS.keys.contains(.shadowPass))
+        #expect(stats.passDrawCallCounts[.depthPrepass] == 2)
+        #expect(stats.passDrawCallCounts[.shadowPass] == 2)
+        #expect(stats.passDrawCallCounts[.basePass] == 2)
+        #expect(stats.shadowedLightCount == 1)
+        #expect(stats.shadowMapResolution == RenderShadowSettings.directionalPreview.mapResolution)
 
         let darkerPixels = zip(noShadowPixels, shadowPixels).filter { before, after in
             after.luminance + 10 < before.luminance
