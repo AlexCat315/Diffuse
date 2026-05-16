@@ -111,10 +111,14 @@ extension WGPURenderer {
         try ensureStylizedCharacterUniformBuffer()
         try ensureMeshSamplingFallbackResources()
         try ensureSceneLightUniformBuffer()
+        try ensureShadowResources()
         guard let stylizedCharacterUniformBuffer,
               let linearSampler,
               let fallbackMeshTextureView,
-              let sceneLightUniformBuffer
+              let sceneLightUniformBuffer,
+              let shadowUniformBuffer,
+              let shadowSampler,
+              let shadowMapTarget
         else {
             throw WGPUBackendError.initFailed("mesh bind group resources missing")
         }
@@ -140,6 +144,14 @@ extension WGPURenderer {
                 offset: 0,
                 size: SceneLightUniforms.byteSize
             ),
+            GPUBindGroupEntry(
+                binding: 5,
+                buffer: shadowUniformBuffer,
+                offset: 0,
+                size: UInt64(MemoryLayout<ShadowUniforms>.stride)
+            ),
+            GPUBindGroupEntry(binding: 6, sampler: shadowSampler),
+            GPUBindGroupEntry(binding: 7, textureView: shadowMapTarget.colorView),
         ]
     }
 

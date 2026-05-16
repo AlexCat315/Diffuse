@@ -26,6 +26,7 @@ struct InstanceResourceKey: Equatable, Sendable {
 }
 
 let maxSceneLightUniformCount = 8
+let shadowMapResolution: UInt32 = 1024
 
 struct SceneLightUniform: Equatable, Sendable {
     var positionAndType: SIMD4<Float>
@@ -106,6 +107,20 @@ struct SceneLightUniforms: Equatable, Sendable {
     }
 }
 
+struct ShadowUniforms: Equatable, Sendable {
+    var lightViewProjection: simd_float4x4
+    var params: SIMD4<Float>
+
+    static let disabled = ShadowUniforms(
+        lightViewProjection: matrix_identity_float4x4,
+        params: SIMD4<Float>(0, 0.004, 0.55, Float(shadowMapResolution))
+    )
+
+    var isEnabled: Bool {
+        params.x > 0.5
+    }
+}
+
 /// Shared uniform-buffer path using dynamic bind offsets.
 struct DynamicInstanceResources {
     let uniformBuffer: GPUBuffer
@@ -119,6 +134,14 @@ extension DynamicInstanceResources: @unchecked Sendable {}
 struct RenderTextureTarget {
     let texture: GPUTexture
     let view: GPUTextureView
+}
+
+struct ShadowMapTarget {
+    let colorTexture: GPUTexture
+    let colorView: GPUTextureView
+    let depthTexture: GPUTexture
+    let depthView: GPUTextureView
+    let size: UInt32
 }
 
 struct GPUMeshTextureResource {
