@@ -18,8 +18,15 @@ struct SceneLights {
 };
 
 struct ShadowUniforms {
-    light_view_projection : mat4x4<f32>,
-    params : vec4<f32>,
+    light_view_projection0 : mat4x4<f32>,
+    light_view_projection1 : mat4x4<f32>,
+    light_view_projection2 : mat4x4<f32>,
+    light_view_projection3 : mat4x4<f32>,
+    params0 : vec4<f32>,
+    params1 : vec4<f32>,
+    params2 : vec4<f32>,
+    params3 : vec4<f32>,
+    atlas_params : vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u : Uniforms;
@@ -71,7 +78,7 @@ fn safe_normalize(v : vec3<f32>) -> vec3<f32> {
     return v * inverseSqrt(len2);
 }
 
-fn light_contribution(light : SceneLight, normal : vec3<f32>, world_pos : vec3<f32>) -> vec3<f32> {
+fn light_contribution(light : SceneLight, normal : vec3<f32>, world_pos : vec3<f32>, shadow_slot : i32) -> vec3<f32> {
     let light_type = light.position_and_type.w;
     let light_color = light.color_and_intensity.rgb;
     let intensity = light.color_and_intensity.a;
@@ -100,29 +107,32 @@ fn light_contribution(light : SceneLight, normal : vec3<f32>, world_pos : vec3<f
 
     let lambert = max(dot(normal, to_light), 0.0);
     var visibility = 1.0;
-    if light_type < 0.5 {
-        visibility = shadow_visibility(world_pos);
+    if light_type < 0.5 && shadow_slot >= 0 {
+        visibility = shadow_visibility(world_pos, u32(shadow_slot));
     }
     return light_color * intensity * attenuation * lambert * visibility;
 }
 
-fn shadow_visibility(world_pos : vec3<f32>) -> f32 {
-    if shadow.params.x < 0.5 {
+fn shadow_visibility(world_pos : vec3<f32>, slot : u32) -> f32 {
+    if shadow.atlas_params.x < 0.5 || f32(slot) >= shadow.atlas_params.y {
         return 1.0;
     }
 
-    let clip = shadow.light_view_projection * vec4<f32>(world_pos, 1.0);
+    let clip = shadow_matrix(slot) * vec4<f32>(world_pos, 1.0);
     let inv_w = 1.0 / max(abs(clip.w), 0.00001);
     let ndc = clip.xyz * inv_w;
-    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-    if uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || ndc.z < 0.0 || ndc.z > 1.0 {
+    let local_uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    if local_uv.x < 0.0 || local_uv.x > 1.0 || local_uv.y < 0.0 || local_uv.y > 1.0 || ndc.z < 0.0 || ndc.z > 1.0 {
         return 1.0;
     }
 
+    let params = shadow_params(slot);
+    let tile_scale = shadow.atlas_params.z / max(shadow.atlas_params.w, 1.0);
+    let uv = params.zw + local_uv * tile_scale;
     let current_depth = ndc.z;
-    let bias = shadow.params.y;
-    let strength = clamp(shadow.params.z, 0.0, 1.0);
-    let texel = 1.0 / max(shadow.params.w, 1.0);
+    let bias = params.x;
+    let strength = clamp(params.y, 0.0, 1.0);
+    let texel = 1.0 / max(shadow.atlas_params.w, 1.0);
     var lit = shadow_depth_lit(uv, current_depth, bias);
     lit = lit + shadow_depth_lit(uv + vec2<f32>(texel, 0.0), current_depth, bias);
     lit = lit + shadow_depth_lit(uv + vec2<f32>(-texel, 0.0), current_depth, bias);
@@ -140,6 +150,32 @@ fn shadow_depth_lit(uv : vec2<f32>, current_depth : f32, bias : f32) -> f32 {
     return 1.0;
 }
 
+fn shadow_matrix(slot : u32) -> mat4x4<f32> {
+    if slot == 1u {
+        return shadow.light_view_projection1;
+    }
+    if slot == 2u {
+        return shadow.light_view_projection2;
+    }
+    if slot == 3u {
+        return shadow.light_view_projection3;
+    }
+    return shadow.light_view_projection0;
+}
+
+fn shadow_params(slot : u32) -> vec4<f32> {
+    if slot == 1u {
+        return shadow.params1;
+    }
+    if slot == 2u {
+        return shadow.params2;
+    }
+    if slot == 3u {
+        return shadow.params3;
+    }
+    return shadow.params0;
+}
+
 fn scene_lighting(normal : vec3<f32>, world_pos : vec3<f32>) -> vec3<f32> {
     var lighting = scene_lights.ambient_color_intensity.rgb * scene_lights.ambient_color_intensity.a;
     let count = min(u32(scene_lights.exposure_light_count.y), 8u);
@@ -147,7 +183,8 @@ fn scene_lighting(normal : vec3<f32>, world_pos : vec3<f32>) -> vec3<f32> {
         if i >= count {
             continue;
         }
-        lighting = lighting + light_contribution(scene_lights.lights[i], normal, world_pos);
+        let shadow_slot = i32(scene_lights.lights[i].spot_angles_and_padding.z) - 1;
+        lighting = lighting + light_contribution(scene_lights.lights[i], normal, world_pos, shadow_slot);
     }
     return max(lighting, vec3<f32>(0.0));
 }

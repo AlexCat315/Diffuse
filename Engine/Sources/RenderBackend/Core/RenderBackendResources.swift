@@ -26,6 +26,7 @@ struct InstanceResourceKey: Equatable, Sendable {
 }
 
 let maxSceneLightUniformCount = 8
+let maxShadowedDirectionalLightCount = 4
 let defaultShadowMapResolution: UInt32 = 1024
 
 struct SceneLightUniform: Equatable, Sendable {
@@ -51,7 +52,7 @@ struct SceneLightUniform: Equatable, Sendable {
         self.spotAnglesAndPadding = spotAnglesAndPadding
     }
 
-    init(_ light: RenderLight) {
+    init(_ light: RenderLight, shadowSlot: Int? = nil) {
         self.init(
             positionAndType: SIMD4<Float>(light.position, light.type.uniformCode),
             directionAndRange: SIMD4<Float>(normalized(light.direction), light.range),
@@ -59,7 +60,7 @@ struct SceneLightUniform: Equatable, Sendable {
             spotAnglesAndPadding: SIMD4<Float>(
                 light.spotInnerAngleRadians,
                 light.spotOuterAngleRadians,
-                0,
+                shadowSlot.map { Float($0 + 1) } ?? 0,
                 0
             )
         )
@@ -80,8 +81,10 @@ struct SceneLightUniforms: Equatable, Sendable {
 
     static let byteSize = UInt64(MemoryLayout<SceneLightUniforms>.stride)
 
-    init(scene: RenderScene) {
-        let packedLights = scene.lights.prefix(maxSceneLightUniformCount).map(SceneLightUniform.init)
+    init(scene: RenderScene, shadowSlotsByLightIndex: [Int: Int] = [:]) {
+        let packedLights = scene.lights.prefix(maxSceneLightUniformCount).enumerated().map { index, light in
+            SceneLightUniform(light, shadowSlot: shadowSlotsByLightIndex[index])
+        }
         self.ambientColorAndIntensity = SIMD4<Float>(
             scene.environment.ambientColor,
             scene.environment.ambientIntensity
@@ -108,23 +111,68 @@ struct SceneLightUniforms: Equatable, Sendable {
 }
 
 struct ShadowUniforms: Equatable, Sendable {
-    var lightViewProjection: simd_float4x4
-    var params: SIMD4<Float>
+    var lightViewProjection0: simd_float4x4
+    var lightViewProjection1: simd_float4x4
+    var lightViewProjection2: simd_float4x4
+    var lightViewProjection3: simd_float4x4
+    var params0: SIMD4<Float>
+    var params1: SIMD4<Float>
+    var params2: SIMD4<Float>
+    var params3: SIMD4<Float>
+    var atlasParams: SIMD4<Float>
 
     static let disabled = ShadowUniforms(
-        lightViewProjection: matrix_identity_float4x4,
-        params: SIMD4<Float>(0, 0.004, 0.55, Float(defaultShadowMapResolution))
+        lightViewProjection0: matrix_identity_float4x4,
+        lightViewProjection1: matrix_identity_float4x4,
+        lightViewProjection2: matrix_identity_float4x4,
+        lightViewProjection3: matrix_identity_float4x4,
+        params0: SIMD4<Float>(0.004, 0.55, 0, 0),
+        params1: SIMD4<Float>(0.004, 0.55, 0, 0),
+        params2: SIMD4<Float>(0.004, 0.55, 0, 0),
+        params3: SIMD4<Float>(0.004, 0.55, 0, 0),
+        atlasParams: SIMD4<Float>(0, 0, Float(defaultShadowMapResolution), Float(defaultShadowMapResolution))
     )
 
     static func disabled(mapResolution: UInt32) -> ShadowUniforms {
         ShadowUniforms(
-            lightViewProjection: matrix_identity_float4x4,
-            params: SIMD4<Float>(0, 0.004, 0.55, Float(mapResolution))
+            lightViewProjection0: matrix_identity_float4x4,
+            lightViewProjection1: matrix_identity_float4x4,
+            lightViewProjection2: matrix_identity_float4x4,
+            lightViewProjection3: matrix_identity_float4x4,
+            params0: SIMD4<Float>(0.004, 0.55, 0, 0),
+            params1: SIMD4<Float>(0.004, 0.55, 0, 0),
+            params2: SIMD4<Float>(0.004, 0.55, 0, 0),
+            params3: SIMD4<Float>(0.004, 0.55, 0, 0),
+            atlasParams: SIMD4<Float>(0, 0, Float(mapResolution), Float(mapResolution))
         )
     }
 
     var isEnabled: Bool {
-        params.x > 0.5
+        atlasParams.x > 0.5 && atlasParams.y > 0.5
+    }
+}
+
+struct ShadowRenderUniforms: Equatable, Sendable {
+    var lightViewProjection: simd_float4x4
+}
+
+struct ShadowAtlasLight: Equatable, Sendable {
+    let sceneLightIndex: Int
+    let slot: Int
+    let tileX: UInt32
+    let tileY: UInt32
+    let lightViewProjection: simd_float4x4
+}
+
+struct ShadowAtlasPlan: Equatable, Sendable {
+    let uniforms: ShadowUniforms
+    let lights: [ShadowAtlasLight]
+    let tileSize: UInt32
+    let atlasSize: UInt32
+    let gridDimension: UInt32
+
+    var shadowSlotsByLightIndex: [Int: Int] {
+        Dictionary(uniqueKeysWithValues: lights.map { ($0.sceneLightIndex, $0.slot) })
     }
 }
 
@@ -148,6 +196,9 @@ struct ShadowMapTarget {
     let colorView: GPUTextureView
     let depthTexture: GPUTexture
     let depthView: GPUTextureView
+    let tileSize: UInt32
+    let gridDimension: UInt32
+    let capacity: Int
     let size: UInt32
 }
 

@@ -6,11 +6,22 @@ import simd
 extension WGPURenderer {
     func ensureShadowResources(settings: RenderShadowSettings) throws {
         guard backend.rawDevice != nil else { return }
-        let mapResolution = RenderShadowSettings.sanitizedMapResolution(settings.mapResolution)
+        let tileSize = RenderShadowSettings.sanitizedMapResolution(settings.mapResolution)
+        let capacity = shadowAtlasCapacity(settings: settings)
+        let gridDimension = shadowAtlasGridDimension(capacity: capacity)
+        let atlasSize = tileSize * gridDimension
         if shadowUniformBuffer == nil {
             shadowUniformBuffer = try backend.createBuffer(
                 size: UInt64(MemoryLayout<ShadowUniforms>.stride),
                 usage: [.uniform, .copyDst]
+            )
+        }
+        while shadowRenderUniformBuffers.count < capacity {
+            shadowRenderUniformBuffers.append(
+                try backend.createBuffer(
+                    size: UInt64(MemoryLayout<ShadowRenderUniforms>.stride),
+                    usage: [.uniform, .copyDst]
+                )
             )
         }
         if shadowSampler == nil {
@@ -25,19 +36,22 @@ extension WGPURenderer {
             )
         }
         if let shadowMapTarget,
-           shadowMapTarget.size == mapResolution {
+           shadowMapTarget.tileSize == tileSize,
+           shadowMapTarget.gridDimension == gridDimension,
+           shadowMapTarget.capacity == capacity,
+           shadowMapTarget.size == atlasSize {
             return
         }
 
         let color = try backend.createTexture(
-            width: mapResolution,
-            height: mapResolution,
+            width: atlasSize,
+            height: atlasSize,
             format: hdrFormat,
             usage: [.renderAttachment, .textureBinding, .copySrc]
         )
         let depth = try backend.createTexture(
-            width: mapResolution,
-            height: mapResolution,
+            width: atlasSize,
+            height: atlasSize,
             format: depthFormat,
             usage: [.renderAttachment]
         )
@@ -46,30 +60,147 @@ extension WGPURenderer {
             colorView: try color.createView(),
             depthTexture: depth,
             depthView: try depth.createView(),
-            size: mapResolution
+            tileSize: tileSize,
+            gridDimension: gridDimension,
+            capacity: capacity,
+            size: atlasSize
         )
         shadowResourceGeneration &+= 1
     }
 
-    func writeShadowUniforms(scene: RenderScene, enabled: Bool, settings: RenderShadowSettings) -> ShadowUniforms {
-        let mapResolution = RenderShadowSettings.sanitizedMapResolution(settings.mapResolution)
-        guard let shadowUniformBuffer else { return .disabled(mapResolution: mapResolution) }
-        var uniforms = makeShadowUniforms(scene: scene, enabled: enabled, settings: settings)
+    func writeShadowUniforms(scene: RenderScene, enabled: Bool, settings: RenderShadowSettings) -> ShadowAtlasPlan {
+        let plan = makeShadowAtlasPlan(scene: scene, enabled: enabled, settings: settings)
+        guard let shadowUniformBuffer else { return plan }
+        var uniforms = plan.uniforms
         writeUniform(&uniforms, buffer: shadowUniformBuffer)
-        return uniforms
+        return plan
     }
 
-    func makeShadowUniforms(scene: RenderScene, enabled: Bool, settings: RenderShadowSettings) -> ShadowUniforms {
-        let mapResolution = RenderShadowSettings.sanitizedMapResolution(settings.mapResolution)
+    func makeShadowAtlasPlan(scene: RenderScene, enabled: Bool, settings: RenderShadowSettings) -> ShadowAtlasPlan {
+        let tileSize = RenderShadowSettings.sanitizedMapResolution(settings.mapResolution)
+        let capacity = shadowAtlasCapacity(settings: settings)
+        let gridDimension = shadowAtlasGridDimension(capacity: capacity)
+        let atlasSize = tileSize * gridDimension
         guard enabled,
               settings.enabled,
-              settings.maxShadowedDirectionalLights > 0,
-              let light = primaryDirectionalShadowLight(in: scene, selection: settings.directionalLightSelection)
+              settings.maxShadowedDirectionalLights > 0
         else {
-            return .disabled(mapResolution: mapResolution)
+            return ShadowAtlasPlan(
+                uniforms: .disabled(mapResolution: tileSize),
+                lights: [],
+                tileSize: tileSize,
+                atlasSize: atlasSize,
+                gridDimension: gridDimension
+            )
         }
 
+        let selectedLights = selectedDirectionalShadowLights(in: scene, settings: settings)
+        guard !selectedLights.isEmpty else {
+            return ShadowAtlasPlan(
+                uniforms: .disabled(mapResolution: tileSize),
+                lights: [],
+                tileSize: tileSize,
+                atlasSize: atlasSize,
+                gridDimension: gridDimension
+            )
+        }
         let sceneBounds = worldBounds(for: scene)
+        var lights: [ShadowAtlasLight] = []
+        lights.reserveCapacity(selectedLights.count)
+        var params = Array(repeating: SIMD4<Float>(settings.depthBias, settings.strength, 0, 0),
+                           count: maxShadowedDirectionalLightCount)
+        var matrices = Array(repeating: matrix_identity_float4x4,
+                             count: maxShadowedDirectionalLightCount)
+
+        for (slot, selected) in selectedLights.enumerated() {
+            let tileX = UInt32(slot) % gridDimension
+            let tileY = UInt32(slot) / gridDimension
+            let matrix = lightViewProjection(for: selected.light, sceneBounds: sceneBounds)
+            matrices[slot] = matrix
+            let atlasOrigin = SIMD2<Float>(
+                Float(tileX * tileSize) / Float(atlasSize),
+                Float(tileY * tileSize) / Float(atlasSize)
+            )
+            params[slot] = SIMD4<Float>(
+                settings.depthBias,
+                settings.strength,
+                atlasOrigin.x,
+                atlasOrigin.y
+            )
+            lights.append(
+                ShadowAtlasLight(
+                    sceneLightIndex: selected.sceneIndex,
+                    slot: slot,
+                    tileX: tileX,
+                    tileY: tileY,
+                    lightViewProjection: matrix
+                )
+            )
+        }
+
+        let uniforms = ShadowUniforms(
+            lightViewProjection0: matrices[0],
+            lightViewProjection1: matrices[1],
+            lightViewProjection2: matrices[2],
+            lightViewProjection3: matrices[3],
+            params0: params[0],
+            params1: params[1],
+            params2: params[2],
+            params3: params[3],
+            atlasParams: SIMD4<Float>(
+                1,
+                Float(lights.count),
+                Float(tileSize),
+                Float(atlasSize)
+            )
+        )
+        return ShadowAtlasPlan(
+            uniforms: uniforms,
+            lights: lights,
+            tileSize: tileSize,
+            atlasSize: atlasSize,
+            gridDimension: gridDimension
+        )
+    }
+
+    func shadowedDirectionalLightCount(scene: RenderScene, settings: RenderShadowSettings) -> Int {
+        guard settings.enabled,
+              settings.maxShadowedDirectionalLights > 0
+        else { return 0 }
+        return selectedDirectionalShadowLights(in: scene, settings: settings).count
+    }
+
+    private func selectedDirectionalShadowLights(
+        in scene: RenderScene,
+        settings: RenderShadowSettings
+    ) -> [(sceneIndex: Int, light: RenderLight)] {
+        let limit = min(
+            shadowAtlasCapacity(settings: settings),
+            maxShadowedDirectionalLightCount
+        )
+        guard limit > 0 else { return [] }
+        let candidates = scene.lights.enumerated().compactMap { index, light -> (sceneIndex: Int, light: RenderLight)? in
+            guard light.type == .directional && light.intensity > 0 else { return nil }
+            return (index, light)
+        }
+        switch settings.directionalLightSelection {
+        case .brightest:
+            return candidates
+                .sorted { lhs, rhs in
+                    if lhs.light.intensity == rhs.light.intensity {
+                        return lhs.sceneIndex < rhs.sceneIndex
+                    }
+                    return lhs.light.intensity > rhs.light.intensity
+                }
+                .prefix(limit)
+                .map { $0 }
+        }
+    }
+
+    private func lightViewProjection(
+        for light: RenderLight,
+        sceneBounds: (min: SIMD3<Float>, max: SIMD3<Float>)
+    ) -> simd_float4x4 {
         let center = (sceneBounds.min + sceneBounds.max) * 0.5
         let diagonal = sceneBounds.max - sceneBounds.min
         let radius = max(simd_length(diagonal) * 0.5, 1.0)
@@ -99,38 +230,7 @@ extension WGPURenderer {
             near: near,
             far: far
         )
-
-        return ShadowUniforms(
-            lightViewProjection: projection * view,
-            params: SIMD4<Float>(
-                1,
-                settings.depthBias,
-                settings.strength,
-                Float(mapResolution)
-            )
-        )
-    }
-
-    func shadowedDirectionalLightCount(scene: RenderScene, settings: RenderShadowSettings) -> Int {
-        guard settings.enabled,
-              settings.maxShadowedDirectionalLights > 0
-        else { return 0 }
-        return primaryDirectionalShadowLight(in: scene, selection: settings.directionalLightSelection) == nil ? 0 : 1
-    }
-
-    private func primaryDirectionalShadowLight(
-        in scene: RenderScene,
-        selection: RenderShadowSettings.DirectionalLightSelection
-    ) -> RenderLight? {
-        let candidates = scene.lights.filter { light in
-            light.type == .directional && light.intensity > 0
-        }
-        switch selection {
-        case .brightest:
-            return candidates.max { lhs, rhs in
-                lhs.intensity < rhs.intensity
-            }
-        }
+        return projection * view
     }
 
     private func worldBounds(for scene: RenderScene) -> (min: SIMD3<Float>, max: SIMD3<Float>) {
@@ -157,6 +257,19 @@ private func normalized(_ value: SIMD3<Float>, fallback: SIMD3<Float>) -> SIMD3<
     let lengthSquared = simd_length_squared(value)
     guard lengthSquared > Float.ulpOfOne else { return fallback }
     return value / sqrt(lengthSquared)
+}
+
+private func shadowAtlasCapacity(settings: RenderShadowSettings) -> Int {
+    max(1, min(settings.maxShadowedDirectionalLights, maxShadowedDirectionalLightCount))
+}
+
+private func shadowAtlasGridDimension(capacity: Int) -> UInt32 {
+    let clamped = max(1, min(capacity, maxShadowedDirectionalLightCount))
+    var dimension = 1
+    while dimension * dimension < clamped {
+        dimension += 1
+    }
+    return UInt32(dimension)
 }
 
 private func transformPoint(_ point: SIMD3<Float>, by matrix: simd_float4x4) -> SIMD3<Float> {

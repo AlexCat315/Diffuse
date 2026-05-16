@@ -66,6 +66,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var bloomUniformBuffer: GPUBuffer?
     var sceneLightUniformBuffer: GPUBuffer?
     var shadowUniformBuffer: GPUBuffer?
+    var shadowRenderUniformBuffers: [GPUBuffer] = []
     var shadowSampler: GPUSampler?
     var shadowMapTarget: ShadowMapTarget?
     var shadowResourceGeneration: UInt64 = 0
@@ -157,12 +158,15 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             try ensureStylizedCharacterUniformBuffer()
             writeStylizedCharacterUniforms()
             try ensureSceneLightUniformBuffer()
-            writeSceneLightUniforms(scene: packet.scene)
             try ensureShadowResources(settings: activeRenderSettings.shadowSettings)
-            let shadowUniforms = writeShadowUniforms(
+            let shadowPlan = writeShadowUniforms(
                 scene: packet.scene,
                 enabled: framePlan.passes.contains(.shadowPass),
                 settings: activeRenderSettings.shadowSettings
+            )
+            writeSceneLightUniforms(
+                scene: packet.scene,
+                shadowSlotsByLightIndex: shadowPlan.shadowSlotsByLightIndex
             )
             try ensureInstanceResources(scene: packet.scene, pipeline: meshPipeline)
             writeInstanceUniforms(scene: packet.scene, viewProj: cameraMatrices.viewProjection)
@@ -236,7 +240,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         depthPrepassEncoded = true
 
                     case .shadowPass:
-                        guard shadowUniforms.isEnabled,
+                        guard shadowPlan.uniforms.isEnabled,
                               let shadowPipeline
                         else {
                             emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
@@ -245,7 +249,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         passDrawCallCount = try encodeShadowPass(
                             encoder: encoder,
                             pipeline: shadowPipeline,
-                            scene: packet.scene
+                            scene: packet.scene,
+                            plan: shadowPlan
                         )
 
                     case .skybox:
@@ -455,11 +460,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 passDrawCallCounts: passDrawCallCounts,
                 renderBundleCount: renderBundleCount,
                 renderBundleParallelJobs: renderBundleParallelJobs,
-                shadowedLightCount: shadowUniforms.isEnabled
-                    ? shadowedDirectionalLightCount(scene: packet.scene, settings: activeRenderSettings.shadowSettings)
+                shadowedLightCount: shadowPlan.uniforms.isEnabled
+                    ? shadowPlan.lights.count
                     : 0,
-                shadowMapResolution: shadowUniforms.isEnabled
-                    ? RenderShadowSettings.sanitizedMapResolution(activeRenderSettings.shadowSettings.mapResolution)
+                shadowMapResolution: shadowPlan.uniforms.isEnabled
+                    ? shadowPlan.tileSize
                     : 0,
                 activePasses: framePlan.passes,
                 settingsGeneration: settingsGeneration,
@@ -1092,10 +1097,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private func encodeShadowPass(
         encoder: GPUCommandEncoder,
         pipeline: GPURenderPipeline,
-        scene: RenderScene
+        scene: RenderScene,
+        plan: ShadowAtlasPlan
     ) throws -> Int {
         guard let shadowMapTarget,
-              let shadowUniformBuffer
+              !plan.lights.isEmpty
         else { return 0 }
         let bindGroupLayout = try ensureShadowBindGroupLayout()
         let drawOrder = makeBasePassDrawOrder(scene: scene)
@@ -1111,68 +1117,88 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         )
         pass.setPipeline(pipeline)
         var retainedBindGroups: [GPUBindGroup] = []
-        retainedBindGroups.reserveCapacity(dynamicInstanceResources == nil ? drawOrder.count : 1)
+        retainedBindGroups.reserveCapacity((dynamicInstanceResources == nil ? drawOrder.count : 1) * plan.lights.count)
         var drawCallCount = 0
-        if let dyn = dynamicInstanceResources {
-            let bindGroup = try backend.createBindGroup(
-                layout: bindGroupLayout,
-                entries: [
-                    GPUBindGroupEntry(
-                        binding: 0,
-                        buffer: dyn.uniformBuffer,
-                        offset: 0,
-                        size: dyn.stride
-                    ),
-                    GPUBindGroupEntry(
-                        binding: 5,
-                        buffer: shadowUniformBuffer,
-                        offset: 0,
-                        size: UInt64(MemoryLayout<ShadowUniforms>.stride)
-                    ),
-                ]
+        for light in plan.lights {
+            guard shadowRenderUniformBuffers.indices.contains(light.slot) else { continue }
+            let renderUniformBuffer = shadowRenderUniformBuffers[light.slot]
+            var renderUniforms = ShadowRenderUniforms(lightViewProjection: light.lightViewProjection)
+            writeUniform(&renderUniforms, buffer: renderUniformBuffer)
+            let tileX = light.tileX * plan.tileSize
+            let tileY = light.tileY * plan.tileSize
+            pass.setViewport(
+                x: Float(tileX),
+                y: Float(tileY),
+                width: Float(plan.tileSize),
+                height: Float(plan.tileSize)
             )
-            retainedBindGroups.append(bindGroup)
-            for i in drawOrder {
-                let instance = scene.instances[i]
-                guard meshes.indices.contains(instance.meshIndex) else { continue }
-                let mesh = meshes[instance.meshIndex]
-                let drawOffset = UInt64(i) * dyn.stride
-                guard drawOffset <= UInt64(UInt32.max) else { continue }
-                pass.setBindGroup(bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
-                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
-                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
-                pass.drawIndexed(indexCount: mesh.indexCount)
-                drawCallCount += 1
-            }
-        } else {
-            for i in drawOrder where i < instanceResources.count {
-                let instance = scene.instances[i]
-                guard meshes.indices.contains(instance.meshIndex) else { continue }
-                let mesh = meshes[instance.meshIndex]
-                let uniformBuffer = instanceResources[i].uniformBuffer
+            pass.setScissorRect(
+                x: tileX,
+                y: tileY,
+                width: plan.tileSize,
+                height: plan.tileSize
+            )
+            if let dyn = dynamicInstanceResources {
                 let bindGroup = try backend.createBindGroup(
                     layout: bindGroupLayout,
                     entries: [
                         GPUBindGroupEntry(
                             binding: 0,
-                            buffer: uniformBuffer,
+                            buffer: dyn.uniformBuffer,
                             offset: 0,
-                            size: uniformBuffer.size
+                            size: dyn.stride
                         ),
                         GPUBindGroupEntry(
                             binding: 5,
-                            buffer: shadowUniformBuffer,
+                            buffer: renderUniformBuffer,
                             offset: 0,
-                            size: UInt64(MemoryLayout<ShadowUniforms>.stride)
+                            size: UInt64(MemoryLayout<ShadowRenderUniforms>.stride)
                         ),
                     ]
                 )
                 retainedBindGroups.append(bindGroup)
-                pass.setBindGroup(bindGroup, index: 0, dynamicOffsets: [0])
-                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
-                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
-                pass.drawIndexed(indexCount: mesh.indexCount)
-                drawCallCount += 1
+                for i in drawOrder {
+                    let instance = scene.instances[i]
+                    guard meshes.indices.contains(instance.meshIndex) else { continue }
+                    let mesh = meshes[instance.meshIndex]
+                    let drawOffset = UInt64(i) * dyn.stride
+                    guard drawOffset <= UInt64(UInt32.max) else { continue }
+                    pass.setBindGroup(bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
+                    pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                    pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                    pass.drawIndexed(indexCount: mesh.indexCount)
+                    drawCallCount += 1
+                }
+            } else {
+                for i in drawOrder where i < instanceResources.count {
+                    let instance = scene.instances[i]
+                    guard meshes.indices.contains(instance.meshIndex) else { continue }
+                    let mesh = meshes[instance.meshIndex]
+                    let uniformBuffer = instanceResources[i].uniformBuffer
+                    let bindGroup = try backend.createBindGroup(
+                        layout: bindGroupLayout,
+                        entries: [
+                            GPUBindGroupEntry(
+                                binding: 0,
+                                buffer: uniformBuffer,
+                                offset: 0,
+                                size: uniformBuffer.size
+                            ),
+                            GPUBindGroupEntry(
+                                binding: 5,
+                                buffer: renderUniformBuffer,
+                                offset: 0,
+                                size: UInt64(MemoryLayout<ShadowRenderUniforms>.stride)
+                            ),
+                        ]
+                    )
+                    retainedBindGroups.append(bindGroup)
+                    pass.setBindGroup(bindGroup, index: 0, dynamicOffsets: [0])
+                    pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                    pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                    pass.drawIndexed(indexCount: mesh.indexCount)
+                    drawCallCount += 1
+                }
             }
         }
         pass.end()
