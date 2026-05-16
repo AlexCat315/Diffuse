@@ -1,4 +1,5 @@
 import EngineKernel
+import simd
 
 public enum RuntimeSystemPhase: String, CaseIterable, Sendable {
     case commandApply
@@ -120,6 +121,11 @@ public struct RuntimeWorldSchedule {
         var instance: RenderInstance
     }
 
+    private struct ExtractedRenderLight {
+        var entity: EntityID
+        var light: RenderLight
+    }
+
     private struct PhysicsSyncCache {
         var bodies: [EntityID: PhysicsBodyDescriptor] = [:]
         var constraints: [EntityID: PhysicsConstraintDescriptor] = [:]
@@ -140,6 +146,9 @@ public struct RuntimeWorldSchedule {
         var worldTransforms: [EntityID: WorldTransform]
         var cameras: [EntityID: CameraComponent]
         var renderMeshes: [EntityID: RenderMeshComponent]
+        var renderMaterials: [EntityID: RenderMaterialComponent]
+        var lights: [EntityID: LightComponent]
+        var assetReferences: [EntityID: AssetReferenceComponent]
     }
 
     private var physicsBackend: any PhysicsBackend = NullPhysicsBackend()
@@ -498,18 +507,22 @@ public struct RuntimeWorldSchedule {
         let view = buildRenderReadView(in: world)
         let cameraSelection = selectRenderCamera(from: view)
         let instanceCollection = collectRenderInstances(from: view)
+        let lightCollection = collectRenderLights(from: view)
         let instances = instanceCollection.instances
+        let lights = lightCollection.lights
         return (
             ExtractedRenderSceneResource(
                 scene: RenderScene(
                     camera: cameraSelection.camera,
-                    instances: instances.map(\ .instance)
+                    instances: instances.map(\.instance),
+                    lights: lights.map(\.light)
                 ),
                 activeCameraEntity: cameraSelection.entity,
-                instanceEntities: instances.map(\ .entity),
+                instanceEntities: instances.map(\.entity),
+                lightEntities: lights.map(\.entity),
                 sourceRevision: world.revision
             ),
-            mergeDispatchReports([cameraSelection.report, instanceCollection.report])
+            mergeDispatchReports([cameraSelection.report, instanceCollection.report, lightCollection.report])
         )
     }
 
@@ -560,9 +573,38 @@ public struct RuntimeWorldSchedule {
             return ExtractedRenderInstance(
                 entity: entity,
                 instance: RenderInstance(
-                    meshIndex: renderMesh.meshIndex,
+                    mesh: RenderMeshHandle(meshIndex: renderMesh.meshIndex,
+                                           assetID: renderMesh.assetID ?? view.assetReferences[entity]?.assetID),
                     transform: worldTransform.matrix,
-                    colorTint: renderMesh.colorTint
+                    colorTint: renderMesh.colorTint,
+                    material: view.renderMaterials[entity]?.renderMaterial ?? .fallback,
+                    entity: entity
+                )
+            )
+        }
+        return (result.0, result.1)
+    }
+
+    private func collectRenderLights(
+        from view: RuntimeRenderReadView
+    ) -> (lights: [ExtractedRenderLight], report: JobDispatchReport) {
+        let result = jobSystem.parallelCompactMap(items: view.entities) { entity -> ExtractedRenderLight? in
+            guard let component = view.lights[entity] else {
+                return nil
+            }
+            let worldTransform = view.worldTransforms[entity] ?? .identity
+            return ExtractedRenderLight(
+                entity: entity,
+                light: RenderLight(
+                    type: component.renderLightType,
+                    position: worldTransform.translation,
+                    direction: renderForwardDirection(from: worldTransform.matrix),
+                    color: component.color,
+                    intensity: component.intensity,
+                    range: component.range,
+                    spotInnerAngleRadians: degreesToRadians(component.spotInnerAngleDegrees),
+                    spotOuterAngleRadians: degreesToRadians(component.spotOuterAngleDegrees),
+                    entity: entity
                 )
             )
         }
@@ -575,7 +617,10 @@ public struct RuntimeWorldSchedule {
             entities: entities,
             worldTransforms: world.worldTransformSnapshot(matching: entities),
             cameras: world.componentSnapshot(CameraComponent.self, matching: entities),
-            renderMeshes: world.componentSnapshot(RenderMeshComponent.self, matching: entities)
+            renderMeshes: world.componentSnapshot(RenderMeshComponent.self, matching: entities),
+            renderMaterials: world.componentSnapshot(RenderMaterialComponent.self, matching: entities),
+            lights: world.componentSnapshot(LightComponent.self, matching: entities),
+            assetReferences: world.componentSnapshot(AssetReferenceComponent.self, matching: entities)
         )
     }
 
@@ -604,4 +649,30 @@ public struct RuntimeWorldSchedule {
     private func mergeDispatchReports(_ reports: [JobDispatchReport]) -> JobDispatchReport {
         JobDispatchReport.merged(reports, workerCount: jobSystem.workerCount)
     }
+}
+
+private extension LightComponent {
+    var renderLightType: RenderLightType {
+        switch type {
+        case .directional:
+            return .directional
+        case .point:
+            return .point
+        case .spot:
+            return .spot
+        }
+    }
+}
+
+private func degreesToRadians(_ degrees: Float) -> Float {
+    degrees * .pi / 180
+}
+
+private func renderForwardDirection(from matrix: simd_float4x4) -> SIMD3<Float> {
+    let forward = -SIMD3<Float>(matrix.columns.2.x, matrix.columns.2.y, matrix.columns.2.z)
+    let lengthSquared = simd_length_squared(forward)
+    guard lengthSquared > 0.000001 else {
+        return SIMD3<Float>(0, 0, -1)
+    }
+    return forward / sqrt(lengthSquared)
 }

@@ -19,10 +19,15 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var meshPipelineHDR: GPURenderPipeline?
     private var stylizedMeshPipelineLDR: GPURenderPipeline?
     private var stylizedMeshPipelineHDR: GPURenderPipeline?
+    private var depthPrepassPipelineLDR: GPURenderPipeline?
+    private var depthPrepassPipelineHDR: GPURenderPipeline?
+    private var shadowPipeline: GPURenderPipeline?
     private var outlinePipelineLDR: GPURenderPipeline?
     private var outlinePipelineHDR: GPURenderPipeline?
     var meshBindGroupLayout: GPUBindGroupLayout?
     private var meshPipelineLayout: GPUPipelineLayout?
+    private var shadowBindGroupLayout: GPUBindGroupLayout?
+    private var shadowPipelineLayout: GPUPipelineLayout?
     var skyboxPipeline: GPURenderPipeline?
     var tonemapPipeline: GPURenderPipeline?
     var bloomPipeline: GPURenderPipeline?
@@ -50,7 +55,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var meshes: [GPUMesh] = []
     var meshTextureResources: [Int: [Int: GPUMeshTextureResource]] = [:]
     var instanceResources: [InstanceResources] = []
-    var instanceResourceMeshIndices: [Int] = []
+    var instanceResourceKeys: [InstanceResourceKey] = []
     var dynamicInstanceResources: DynamicInstanceResources?
     var linearSampler: GPUSampler?
     private var nearestSampler: GPUSampler?
@@ -59,6 +64,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var skyboxUniformBuffer: GPUBuffer?
     private var tonemapUniformBuffer: GPUBuffer?
     private var bloomUniformBuffer: GPUBuffer?
+    var sceneLightUniformBuffer: GPUBuffer?
+    var shadowUniformBuffer: GPUBuffer?
+    var shadowSampler: GPUSampler?
+    var shadowMapTarget: ShadowMapTarget?
     private var ssrUniformBuffer: GPUBuffer?
     private var taaUniformBuffer: GPUBuffer?
     private var ssaoUniformBuffer: GPUBuffer?
@@ -145,9 +154,22 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             let meshPipeline = try ensureMeshPipeline(hdr: usesHDRFrameGraph)
             try ensureStylizedCharacterUniformBuffer()
             writeStylizedCharacterUniforms()
+            try ensureSceneLightUniformBuffer()
+            writeSceneLightUniforms(scene: packet.scene)
+            try ensureShadowResources()
+            let shadowUniforms = writeShadowUniforms(
+                scene: packet.scene,
+                enabled: framePlan.passes.contains(.shadowPass)
+            )
             try ensureInstanceResources(scene: packet.scene, pipeline: meshPipeline)
             writeInstanceUniforms(scene: packet.scene, viewProj: cameraMatrices.viewProjection)
 
+            if framePlan.passes.contains(.depthPrepass) {
+                _ = try ensureDepthPrepassPipeline(hdr: usesHDRFrameGraph)
+            }
+            if framePlan.passes.contains(.shadowPass) {
+                _ = try ensureShadowPipeline()
+            }
             if framePlan.passes.contains(.skybox) {
                 try ensureSkyboxPipeline()
             }
@@ -189,6 +211,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             var cpuPostProcessEncodeNS: UInt64 = 0
             var viewportResolved = false
             var skyboxEncoded = false
+            var depthPrepassEncoded = false
             var hdrCurrent = sceneColorTarget
             var bloomTarget = sceneColorTarget
             let encoder = try backend.createCommandEncoder()
@@ -196,6 +219,30 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             for passKind in framePlan.passes {
                 let passStartNS = DispatchTime.now().uptimeNanoseconds
                 switch passKind {
+                    case .depthPrepass:
+                        let pipeline = try ensureDepthPrepassPipeline(hdr: usesHDRFrameGraph)
+                        _ = try encodeDepthPrepass(
+                            encoder: encoder,
+                            colorView: usesHDRFrameGraph ? sceneColorTarget?.view ?? colorTarget.view : colorTarget.view,
+                            depthView: depthView,
+                            pipeline: pipeline,
+                            scene: packet.scene
+                        )
+                        depthPrepassEncoded = true
+
+                    case .shadowPass:
+                        guard shadowUniforms.isEnabled,
+                              let shadowPipeline
+                        else {
+                            emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
+                            break
+                        }
+                        _ = try encodeShadowPass(
+                            encoder: encoder,
+                            pipeline: shadowPipeline,
+                            scene: packet.scene
+                        )
+
                     case .skybox:
                         guard let target = sceneColorTarget,
                               let skyboxPipeline
@@ -205,7 +252,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             colorView: target.view,
                             depthView: depthView,
                             pipeline: skyboxPipeline,
-                            viewProj: cameraMatrices.viewProjection
+                            viewProj: cameraMatrices.viewProjection,
+                            depthLoadOp: depthPrepassEncoded ? .load : .clear
                         )
                         skyboxEncoded = true
 
@@ -218,7 +266,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             scene: packet.scene,
                             colorFormat: usesHDRFrameGraph ? hdrFormat : format,
                             colorLoadOp: skyboxEncoded ? .load : .clear,
-                            depthLoadOp: skyboxEncoded ? .load : .clear
+                            depthLoadOp: skyboxEncoded || depthPrepassEncoded ? .load : .clear
                         )
                         drawCallCount += report.drawCallCount
                         renderBundleCount += report.renderBundleCount
@@ -345,10 +393,6 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             output: colorTarget,
                             pipeline: fxaaPipeline
                         )
-
-                    case .depthPrepass,
-                         .shadowPass:
-                        emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
 
                     case .viewportResolve:
                         registerViewportSurface(texture: colorTarget.texture, size: packet.drawableSize)
@@ -508,6 +552,94 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         )
     }
 
+    private func ensureMeshBindGroupLayout() throws -> GPUBindGroupLayout {
+        if let meshBindGroupLayout { return meshBindGroupLayout }
+        let layout = try backend.createBindGroupLayout(
+            entries: [
+                GPUBindGroupLayoutEntry(
+                    binding: 0,
+                    visibility: [.vertex, .fragment],
+                    type: .uniformBuffer,
+                    hasDynamicOffset: true
+                ),
+                GPUBindGroupLayoutEntry(
+                    binding: 1,
+                    visibility: [.vertex, .fragment],
+                    type: .uniformBuffer
+                ),
+                GPUBindGroupLayoutEntry(
+                    binding: 2,
+                    visibility: .fragment,
+                    type: .sampler
+                ),
+                GPUBindGroupLayoutEntry(
+                    binding: 3,
+                    visibility: .fragment,
+                    type: .sampledTexture
+                ),
+                GPUBindGroupLayoutEntry(
+                    binding: 4,
+                    visibility: .fragment,
+                    type: .uniformBuffer
+                ),
+                GPUBindGroupLayoutEntry(
+                    binding: 5,
+                    visibility: [.vertex, .fragment],
+                    type: .uniformBuffer
+                ),
+                GPUBindGroupLayoutEntry(
+                    binding: 6,
+                    visibility: .fragment,
+                    type: .sampler
+                ),
+                GPUBindGroupLayoutEntry(
+                    binding: 7,
+                    visibility: .fragment,
+                    type: .sampledTexture
+                ),
+            ]
+        )
+        meshBindGroupLayout = layout
+        return layout
+    }
+
+    private func ensureMeshPipelineLayout() throws -> GPUPipelineLayout {
+        if let meshPipelineLayout { return meshPipelineLayout }
+        let bindGroupLayout = try ensureMeshBindGroupLayout()
+        let layout = try backend.createPipelineLayout(bindGroupLayouts: [bindGroupLayout])
+        meshPipelineLayout = layout
+        return layout
+    }
+
+    private func ensureShadowBindGroupLayout() throws -> GPUBindGroupLayout {
+        if let shadowBindGroupLayout { return shadowBindGroupLayout }
+        let layout = try backend.createBindGroupLayout(
+            entries: [
+                GPUBindGroupLayoutEntry(
+                    binding: 0,
+                    visibility: .vertex,
+                    type: .uniformBuffer,
+                    hasDynamicOffset: true
+                ),
+                GPUBindGroupLayoutEntry(
+                    binding: 5,
+                    visibility: .vertex,
+                    type: .uniformBuffer
+                ),
+            ]
+        )
+        shadowBindGroupLayout = layout
+        return layout
+    }
+
+    private func ensureShadowPipelineLayout() throws -> GPUPipelineLayout {
+        if let shadowPipelineLayout { return shadowPipelineLayout }
+        let bindGroupLayout = try ensureShadowBindGroupLayout()
+        let layout = try backend.createPipelineLayout(bindGroupLayouts: [bindGroupLayout])
+        shadowPipelineLayout = layout
+        return layout
+    }
+
     private func ensureMeshPipeline(hdr: Bool) throws -> GPURenderPipeline {
         try ensureMeshAssetsUploaded()
         let stylized = activeRenderSettings.enableStylizedCharacterShading
@@ -527,48 +659,17 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             label: stylized ? "stylized_character" : "mesh"
         )
 
-        if meshBindGroupLayout == nil {
-            meshBindGroupLayout = try backend.createBindGroupLayout(
-                entries: [
-                    GPUBindGroupLayoutEntry(
-                        binding: 0,
-                        visibility: [.vertex, .fragment],
-                        type: .uniformBuffer,
-                        hasDynamicOffset: true
-                    ),
-                    GPUBindGroupLayoutEntry(
-                        binding: 1,
-                        visibility: [.vertex, .fragment],
-                        type: .uniformBuffer
-                    ),
-                    GPUBindGroupLayoutEntry(
-                        binding: 2,
-                        visibility: .fragment,
-                        type: .sampler
-                    ),
-                    GPUBindGroupLayoutEntry(
-                        binding: 3,
-                        visibility: .fragment,
-                        type: .sampledTexture
-                    )
-                ]
-            )
-        }
-        if meshPipelineLayout == nil, let meshBindGroupLayout {
-            meshPipelineLayout = try backend.createPipelineLayout(bindGroupLayouts: [meshBindGroupLayout])
-        }
-
         let pipeline = try backend.createRenderPipeline(
             desc: GPURenderPipelineDescriptor(
                 shaderModule: module,
-                pipelineLayout: meshPipelineLayout,
+                pipelineLayout: try ensureMeshPipelineLayout(),
                 colorFormat: hdr ? hdrFormat : format,
                 cullMode: .back,
                 vertexBuffers: [makeMeshVertexLayout()],
                 depthStencil: GPUDepthStencilPipelineState(
                     format: depthFormat,
                     depthWriteEnabled: true,
-                    depthCompare: .less
+                    depthCompare: .lessEqual
                 )
             )
         )
@@ -589,6 +690,70 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         return pipeline
     }
 
+    private func ensureDepthPrepassPipeline(hdr: Bool) throws -> GPURenderPipeline {
+        try ensureMeshAssetsUploaded()
+        if hdr, let depthPrepassPipelineHDR { return depthPrepassPipelineHDR }
+        if !hdr, let depthPrepassPipelineLDR { return depthPrepassPipelineLDR }
+        guard backend.rawDevice != nil else {
+            throw WGPUBackendError.initFailed("device not ready")
+        }
+
+        let module = try backend.createShaderModule(
+            wgsl: try Self.loadShaderSource(named: "depth_prepass"),
+            label: "depth_prepass"
+        )
+        let pipeline = try backend.createRenderPipeline(
+            desc: GPURenderPipelineDescriptor(
+                shaderModule: module,
+                pipelineLayout: try ensureMeshPipelineLayout(),
+                colorFormat: hdr ? hdrFormat : format,
+                cullMode: .back,
+                vertexBuffers: [makeMeshVertexLayout()],
+                depthStencil: GPUDepthStencilPipelineState(
+                    format: depthFormat,
+                    depthWriteEnabled: true,
+                    depthCompare: .less
+                )
+            )
+        )
+
+        if hdr {
+            depthPrepassPipelineHDR = pipeline
+        } else {
+            depthPrepassPipelineLDR = pipeline
+        }
+        return pipeline
+    }
+
+    private func ensureShadowPipeline() throws -> GPURenderPipeline {
+        try ensureMeshAssetsUploaded()
+        if let shadowPipeline { return shadowPipeline }
+        guard backend.rawDevice != nil else {
+            throw WGPUBackendError.initFailed("device not ready")
+        }
+
+        let module = try backend.createShaderModule(
+            wgsl: try Self.loadShaderSource(named: "shadow_pass"),
+            label: "shadow_pass"
+        )
+        let pipeline = try backend.createRenderPipeline(
+            desc: GPURenderPipelineDescriptor(
+                shaderModule: module,
+                pipelineLayout: try ensureShadowPipelineLayout(),
+                colorFormat: hdrFormat,
+                cullMode: .back,
+                vertexBuffers: [makeMeshVertexLayout()],
+                depthStencil: GPUDepthStencilPipelineState(
+                    format: depthFormat,
+                    depthWriteEnabled: true,
+                    depthCompare: .less
+                )
+            )
+        )
+        shadowPipeline = pipeline
+        return pipeline
+    }
+
     private func ensureOutlinePipeline(hdr: Bool) throws -> GPURenderPipeline {
         try ensureMeshAssetsUploaded()
         if hdr, let outlinePipelineHDR { return outlinePipelineHDR }
@@ -602,41 +767,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             label: "outline"
         )
 
-        if meshBindGroupLayout == nil {
-            meshBindGroupLayout = try backend.createBindGroupLayout(
-                entries: [
-                    GPUBindGroupLayoutEntry(
-                        binding: 0,
-                        visibility: [.vertex, .fragment],
-                        type: .uniformBuffer,
-                        hasDynamicOffset: true
-                    ),
-                    GPUBindGroupLayoutEntry(
-                        binding: 1,
-                        visibility: [.vertex, .fragment],
-                        type: .uniformBuffer
-                    ),
-                    GPUBindGroupLayoutEntry(
-                        binding: 2,
-                        visibility: .fragment,
-                        type: .sampler
-                    ),
-                    GPUBindGroupLayoutEntry(
-                        binding: 3,
-                        visibility: .fragment,
-                        type: .sampledTexture
-                    )
-                ]
-            )
-        }
-        if meshPipelineLayout == nil, let meshBindGroupLayout {
-            meshPipelineLayout = try backend.createPipelineLayout(bindGroupLayouts: [meshBindGroupLayout])
-        }
-
         let pipeline = try backend.createRenderPipeline(
             desc: GPURenderPipelineDescriptor(
                 shaderModule: module,
-                pipelineLayout: meshPipelineLayout,
+                pipelineLayout: try ensureMeshPipelineLayout(),
                 colorFormat: hdr ? hdrFormat : format,
                 cullMode: .front,
                 vertexBuffers: [makeMeshVertexLayout()],
@@ -783,7 +917,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 width: width,
                 height: height,
                 format: format,
-                usage: [.renderAttachment, .textureBinding]
+                usage: [.renderAttachment, .textureBinding, .copySrc]
             )
             offscreenColorView = try color.createView()
             offscreenColorTexture = color
@@ -867,7 +1001,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         colorView: GPUTextureView,
         depthView: GPUTextureView,
         pipeline: GPURenderPipeline,
-        viewProj: simd_float4x4
+        viewProj: simd_float4x4,
+        depthLoadOp: GPULoadOp = .clear
     ) throws {
         guard let skyboxUniformBuffer else { return }
         var uniforms = SkyboxUniforms(
@@ -888,7 +1023,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             storeOp: .store,
             clearColor: GPUColor(r: 0.01, g: 0.01, b: 0.02, a: 1.0),
             depthView: depthView,
-            depthLoadOp: .clear,
+            depthLoadOp: depthLoadOp,
             depthStoreOp: .store,
             depthClearValue: 1.0
         )
@@ -896,6 +1031,158 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         pass.setBindGroup(bindGroup, index: 0)
         pass.draw(vertexCount: 3)
         pass.end()
+    }
+
+    private func encodeDepthPrepass(
+        encoder: GPUCommandEncoder,
+        colorView: GPUTextureView,
+        depthView: GPUTextureView,
+        pipeline: GPURenderPipeline,
+        scene: RenderScene
+    ) throws -> Int {
+        let drawOrder = makeBasePassDrawOrder(scene: scene)
+        let pass = try encoder.beginRenderPass(
+            colorView: colorView,
+            loadOp: .clear,
+            storeOp: .discard,
+            clearColor: GPUColor(r: 0, g: 0, b: 0, a: 1),
+            depthView: depthView,
+            depthLoadOp: .clear,
+            depthStoreOp: .store,
+            depthClearValue: 1.0
+        )
+        pass.setPipeline(pipeline)
+        let drawCallCount = encodeInstanceDraws(
+            pass: pass,
+            scene: scene,
+            drawOrder: drawOrder
+        )
+        pass.end()
+        return drawCallCount
+    }
+
+    private func encodeShadowPass(
+        encoder: GPUCommandEncoder,
+        pipeline: GPURenderPipeline,
+        scene: RenderScene
+    ) throws -> Int {
+        guard let shadowMapTarget,
+              let shadowUniformBuffer
+        else { return 0 }
+        let bindGroupLayout = try ensureShadowBindGroupLayout()
+        let drawOrder = makeBasePassDrawOrder(scene: scene)
+        let pass = try encoder.beginRenderPass(
+            colorView: shadowMapTarget.colorView,
+            loadOp: .clear,
+            storeOp: .store,
+            clearColor: GPUColor(r: 1, g: 1, b: 1, a: 1),
+            depthView: shadowMapTarget.depthView,
+            depthLoadOp: .clear,
+            depthStoreOp: .store,
+            depthClearValue: 1.0
+        )
+        pass.setPipeline(pipeline)
+        var retainedBindGroups: [GPUBindGroup] = []
+        retainedBindGroups.reserveCapacity(dynamicInstanceResources == nil ? drawOrder.count : 1)
+        var drawCallCount = 0
+        if let dyn = dynamicInstanceResources {
+            let bindGroup = try backend.createBindGroup(
+                layout: bindGroupLayout,
+                entries: [
+                    GPUBindGroupEntry(
+                        binding: 0,
+                        buffer: dyn.uniformBuffer,
+                        offset: 0,
+                        size: dyn.stride
+                    ),
+                    GPUBindGroupEntry(
+                        binding: 5,
+                        buffer: shadowUniformBuffer,
+                        offset: 0,
+                        size: UInt64(MemoryLayout<ShadowUniforms>.stride)
+                    ),
+                ]
+            )
+            retainedBindGroups.append(bindGroup)
+            for i in drawOrder {
+                let instance = scene.instances[i]
+                guard meshes.indices.contains(instance.meshIndex) else { continue }
+                let mesh = meshes[instance.meshIndex]
+                let drawOffset = UInt64(i) * dyn.stride
+                guard drawOffset <= UInt64(UInt32.max) else { continue }
+                pass.setBindGroup(bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
+                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                pass.drawIndexed(indexCount: mesh.indexCount)
+                drawCallCount += 1
+            }
+        } else {
+            for i in drawOrder where i < instanceResources.count {
+                let instance = scene.instances[i]
+                guard meshes.indices.contains(instance.meshIndex) else { continue }
+                let mesh = meshes[instance.meshIndex]
+                let uniformBuffer = instanceResources[i].uniformBuffer
+                let bindGroup = try backend.createBindGroup(
+                    layout: bindGroupLayout,
+                    entries: [
+                        GPUBindGroupEntry(
+                            binding: 0,
+                            buffer: uniformBuffer,
+                            offset: 0,
+                            size: uniformBuffer.size
+                        ),
+                        GPUBindGroupEntry(
+                            binding: 5,
+                            buffer: shadowUniformBuffer,
+                            offset: 0,
+                            size: UInt64(MemoryLayout<ShadowUniforms>.stride)
+                        ),
+                    ]
+                )
+                retainedBindGroups.append(bindGroup)
+                pass.setBindGroup(bindGroup, index: 0, dynamicOffsets: [0])
+                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                pass.drawIndexed(indexCount: mesh.indexCount)
+                drawCallCount += 1
+            }
+        }
+        pass.end()
+        return drawCallCount
+    }
+
+    private func encodeInstanceDraws(
+        pass: GPURenderPassEncoder,
+        scene: RenderScene,
+        drawOrder: [Int]
+    ) -> Int {
+        var drawCallCount = 0
+        if let dyn = dynamicInstanceResources {
+            for i in drawOrder {
+                let instance = scene.instances[i]
+                guard meshes.indices.contains(instance.meshIndex) else { continue }
+                let mesh = meshes[instance.meshIndex]
+                let drawOffset = UInt64(i) * dyn.stride
+                guard drawOffset <= UInt64(UInt32.max) else { continue }
+                pass.setBindGroup(dyn.bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
+                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                pass.drawIndexed(indexCount: mesh.indexCount)
+                drawCallCount += 1
+            }
+        } else {
+            for i in drawOrder where i < instanceResources.count {
+                let instance = scene.instances[i]
+                guard meshes.indices.contains(instance.meshIndex) else { continue }
+                let mesh = meshes[instance.meshIndex]
+                pass.setBindGroup(instanceResources[i].bindGroup, index: 0, dynamicOffsets: [0])
+                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                pass.drawIndexed(indexCount: mesh.indexCount)
+                drawCallCount += 1
+            }
+        }
+        return drawCallCount
     }
 
     private func encodeBasePass(
