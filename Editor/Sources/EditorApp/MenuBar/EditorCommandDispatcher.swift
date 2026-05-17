@@ -47,9 +47,7 @@ enum EditorCommandDispatcher {
             EditorRootViewFactory.saveWorkspaceLayout(controller, for: mode, preset: preset)
             saveShellState(app)
         case let .setPlaybackState(next):
-            if store.state.playbackState != next {
-                store.dispatch(.setPlaybackState(next))
-            }
+            app.applyPlaybackState(next)
         case .openSettings:
             app.openSettingsWindow()
         case .toggleTheme:
