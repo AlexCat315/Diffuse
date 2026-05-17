@@ -27,10 +27,22 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
     // Visual
     case setMeshColor         = "set_mesh_color"
 
-    // Physics
+    // Physics — rigidbody
     case setRigidBodyMotion   = "set_rigidbody_motion"
     case setRigidBodyMass     = "set_rigidbody_mass"
     case setRigidBodyGravity  = "set_rigidbody_gravity"
+    case setRigidBodyAllowSleep = "set_rigidbody_allow_sleep"
+
+    // Physics — collider shape
+    case setColliderShape        = "set_collider_shape"
+    case setColliderBoxExtents   = "set_collider_box_extents"
+    case setColliderSphereRadius = "set_collider_sphere_radius"
+    case setColliderCapsule      = "set_collider_capsule"
+
+    // Physics — collider material
+    case setColliderMaterial  = "set_collider_material"
+
+    // Physics — misc
     case setColliderTrigger   = "set_collider_trigger"
     case setConstraintEnabled = "set_constraint_enabled"
 }
@@ -86,6 +98,26 @@ public struct SceneEditStep: Codable, Sendable {
     // set_rigidbody_gravity
     public var gravityScale: Float?
 
+    // set_rigidbody_allow_sleep
+    public var allowSleep: Bool?
+
+    // set_collider_shape
+    public var colliderShape: String?   // "box" | "sphere" | "capsule" | "mesh" | "convex"
+
+    // set_collider_box_extents
+    public var halfExtents: [Float]?    // [x, y, z] half-sizes
+
+    // set_collider_sphere_radius / set_collider_capsule
+    public var radius: Float?
+
+    // set_collider_capsule
+    public var halfHeight: Float?
+
+    // set_collider_material
+    public var friction: Float?
+    public var restitution: Float?
+    public var density: Float?
+
     // set_collider_trigger
     public var isTrigger: Bool?
 
@@ -115,6 +147,14 @@ public struct SceneEditStep: Codable, Sendable {
         case motionType         = "motion_type"
         case mass
         case gravityScale       = "gravity_scale"
+        case allowSleep         = "allow_sleep"
+        case colliderShape      = "collider_shape"
+        case halfExtents        = "half_extents"
+        case radius
+        case halfHeight         = "half_height"
+        case friction
+        case restitution
+        case density
         case isTrigger          = "is_trigger"
         case isEnabled          = "is_enabled"
         case parentRef          = "parent_id"

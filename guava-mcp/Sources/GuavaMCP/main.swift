@@ -112,7 +112,11 @@ let toolExecuteEditPlan: [String: Any] = [
                                         "set_light_range","set_light_spot_angles",
                                         "set_camera_pose",
                                         "set_rigidbody_motion","set_rigidbody_mass","set_rigidbody_gravity",
-                                        "set_collider_trigger","set_constraint_enabled"],
+                                        "set_rigidbody_allow_sleep",
+                                        "set_collider_trigger","set_constraint_enabled",
+                                        "set_collider_shape",
+                                        "set_collider_box_extents","set_collider_sphere_radius","set_collider_capsule",
+                                        "set_collider_material"],
                                "description": "The mutation op to perform."] as [String: Any],
                         "entity_id": ["type": "string", "description": "Target entity 'scene:<number>'. Required for all ops except spawn_entity."] as [String: Any],
                         "parent_id": ["type": "string", "description": "New parent 'scene:<number>' for reparent_entity. Omit for root."] as [String: Any],
@@ -131,6 +135,16 @@ let toolExecuteEditPlan: [String: Any] = [
                         "motion_type": ["type": "string", "enum": ["static","dynamic","kinematic"]] as [String: Any],
                         "mass": ["type": "number"] as [String: Any],
                         "gravity_scale": ["type": "number"] as [String: Any],
+                        "allow_sleep": ["type": "boolean", "description": "Whether the rigidbody can go to sleep when at rest."] as [String: Any],
+                        "collider_shape": ["type": "string", "enum": ["box","sphere","capsule","mesh","convex"],
+                                           "description": "Shape kind for set_collider_shape."] as [String: Any],
+                        "half_extents": ["type": "array", "items": ["type": "number"] as [String: Any],
+                                         "description": "[x,y,z] box half-sizes for set_collider_box_extents."] as [String: Any],
+                        "radius": ["type": "number", "description": "Sphere/capsule radius for set_collider_sphere_radius or set_collider_capsule."] as [String: Any],
+                        "half_height": ["type": "number", "description": "Capsule half-height for set_collider_capsule."] as [String: Any],
+                        "friction": ["type": "number", "description": "Collider surface friction (0–1) for set_collider_material."] as [String: Any],
+                        "restitution": ["type": "number", "description": "Collider bounciness (0–1) for set_collider_material."] as [String: Any],
+                        "density": ["type": "number", "description": "Collider material density for set_collider_material."] as [String: Any],
                         "is_trigger": ["type": "boolean"] as [String: Any],
                         "is_enabled": ["type": "boolean"] as [String: Any],
                     ] as [String: Any],
@@ -150,6 +164,20 @@ let toolGetSelection: [String: Any] = [
     "name": "get_selection",
     "description": "Returns the entity ref of the currently selected object in the Guava editor, or null if nothing is selected.",
     "inputSchema": ["type": "object", "properties": [:] as [String: Any]] as [String: Any],
+]
+
+let toolSetPlaybackState: [String: Any] = [
+    "name": "set_playback_state",
+    "description": "Controls the physics simulation playback state in the Guava editor. 'playing' starts the simulation (snapshots the scene first), 'paused' freezes it without losing state, 'stopped' stops and restores the original scene.",
+    "inputSchema": [
+        "type": "object",
+        "required": ["state"],
+        "properties": [
+            "state": ["type": "string",
+                      "enum": ["playing", "paused", "stopped"],
+                      "description": "Target playback state."] as [String: Any],
+        ] as [String: Any],
+    ] as [String: Any],
 ]
 
 // MARK: - MCP stdio protocol
@@ -206,7 +234,7 @@ func handle(_ msg: [String: Any]) {
         writeResponse([
             "jsonrpc": "2.0",
             "id": id as Any,
-            "result": ["tools": [toolGetScene, toolGetSelection, toolExecuteEditPlan]] as [String: Any],
+            "result": ["tools": [toolGetScene, toolGetSelection, toolExecuteEditPlan, toolSetPlaybackState]] as [String: Any],
         ])
 
     case "tools/call":
@@ -237,6 +265,15 @@ func handle(_ msg: [String: Any]) {
             if let ok = res["ok"] as? Bool, ok {
                 let summary = res["summary"] as? String ?? "Done"
                 toolResult(id: id as Any, text: "Applied: \(summary)")
+            } else {
+                toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
+            }
+
+        case "set_playback_state":
+            let res = editorCall(["action": "set_playback_state", "state": args["state"] as Any])
+            if let ok = res["ok"] as? Bool, ok {
+                let state = res["state"] as? String ?? "unknown"
+                toolResult(id: id as Any, text: "Playback state set to '\(state)'")
             } else {
                 toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
             }

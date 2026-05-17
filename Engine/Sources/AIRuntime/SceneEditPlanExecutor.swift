@@ -11,6 +11,7 @@ public enum SceneEditPlanExecutorError: Error, CustomStringConvertible, Sendable
     case invalidColor(op: SceneEditOp)
     case unknownLightType(String)
     case unknownMotionType(String)
+    case unknownColliderShape(String)
 
     public var description: String {
         switch self {
@@ -28,6 +29,8 @@ public enum SceneEditPlanExecutorError: Error, CustomStringConvertible, Sendable
             return "unknown light type '\(s)' — expected 'directional', 'point', or 'spot'"
         case let .unknownMotionType(s):
             return "unknown motion type '\(s)' — expected 'static', 'dynamic', or 'kinematic'"
+        case let .unknownColliderShape(s):
+            return "unknown collider shape '\(s)' — expected 'box', 'sphere', 'capsule', 'mesh', or 'convex'"
         }
     }
 }
@@ -191,7 +194,7 @@ public struct SceneEditPlanExecutor: Sendable {
             let pos = simd3(step.position) ?? .zero
             let target = simd3(step.cameraTarget) ?? SIMD3<Float>(0, 0, -1)
             let up = simd3(step.cameraUp) ?? SIMD3<Float>(0, 1, 0)
-            var transform = LocalTransform(translation: pos)
+            let transform = LocalTransform(translation: pos)
             return [.setCameraPose(entityID: id, localTransform: transform, target: target, up: up)]
 
         case .setRigidBodyMotion:
@@ -231,6 +234,64 @@ public struct SceneEditPlanExecutor: Sendable {
                 throw SceneEditPlanExecutorError.missingField(op: step.op, field: "is_enabled")
             }
             return [.setConstraintEnabled(entityID: id, value: v)]
+
+        case .setRigidBodyAllowSleep:
+            let id = try resolveEntityID(step, scene: scene)
+            guard let v = step.allowSleep else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "allow_sleep")
+            }
+            return [.setRigidBodyAllowSleep(entityID: id, value: v)]
+
+        case .setColliderShape:
+            let id = try resolveEntityID(step, scene: scene)
+            guard let shapeStr = step.colliderShape else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "collider_shape")
+            }
+            guard let kind = ColliderShapeKind(rawValue: shapeStr) else {
+                throw SceneEditPlanExecutorError.unknownColliderShape(shapeStr)
+            }
+            return [.setColliderShapeType(entityID: id, kind: kind)]
+
+        case .setColliderBoxExtents:
+            let id = try resolveEntityID(step, scene: scene)
+            guard let ext = simd3(step.halfExtents) else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "half_extents")
+            }
+            return [.setColliderShapeBoxHalfExtents(entityID: id, halfExtents: ext)]
+
+        case .setColliderSphereRadius:
+            let id = try resolveEntityID(step, scene: scene)
+            guard let r = step.radius else {
+                throw SceneEditPlanExecutorError.missingField(op: step.op, field: "radius")
+            }
+            return [.setColliderShapeSphereRadius(entityID: id, radius: r)]
+
+        case .setColliderCapsule:
+            let id = try resolveEntityID(step, scene: scene)
+            var result: [SceneMutation] = []
+            if let r = step.radius {
+                result.append(.setColliderShapeCapsuleRadius(entityID: id, radius: r))
+            }
+            if let hh = step.halfHeight {
+                result.append(.setColliderShapeCapsuleHalfHeight(entityID: id, halfHeight: hh))
+            }
+            if result.isEmpty {
+                throw SceneEditPlanExecutorError.missingField(op: step.op,
+                                                               field: "radius or half_height")
+            }
+            return result
+
+        case .setColliderMaterial:
+            let id = try resolveEntityID(step, scene: scene)
+            var result: [SceneMutation] = []
+            if let f = step.friction    { result.append(.setColliderMaterialFriction(entityID: id, value: f)) }
+            if let r = step.restitution { result.append(.setColliderMaterialRestitution(entityID: id, value: r)) }
+            if let d = step.density     { result.append(.setColliderMaterialDensity(entityID: id, value: d)) }
+            if result.isEmpty {
+                throw SceneEditPlanExecutorError.missingField(op: step.op,
+                                                               field: "friction, restitution, or density")
+            }
+            return result
         }
     }
 
