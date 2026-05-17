@@ -44,6 +44,7 @@
 "S Snap" = "S Snap";
 "Lit" = "Lit";
 "Wire" = "Wire";
+"Shadows" = "Shadows";
 
 /* Viewport overlays */
 "Viewport idle" = "Viewport idle";

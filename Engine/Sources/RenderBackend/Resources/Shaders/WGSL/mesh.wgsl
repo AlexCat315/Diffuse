@@ -18,8 +18,18 @@ struct SceneLights {
 };
 
 struct ShadowUniforms {
-    light_view_projection : mat4x4<f32>,
-    params : vec4<f32>,
+    light_view_projection0 : mat4x4<f32>,
+    light_view_projection1 : mat4x4<f32>,
+    light_view_projection2 : mat4x4<f32>,
+    light_view_projection3 : mat4x4<f32>,
+    params0 : vec4<f32>,
+    params1 : vec4<f32>,
+    params2 : vec4<f32>,
+    params3 : vec4<f32>,
+    atlas_params : vec4<f32>,
+    cascade_splits : vec4<f32>,
+    camera_position_and_padding : vec4<f32>,
+    camera_forward_and_padding : vec4<f32>,
 };
 
 @group(0) @binding(0) var<uniform> u : Uniforms;
@@ -71,7 +81,7 @@ fn safe_normalize(v : vec3<f32>) -> vec3<f32> {
     return v * inverseSqrt(len2);
 }
 
-fn light_contribution(light : SceneLight, normal : vec3<f32>, world_pos : vec3<f32>) -> vec3<f32> {
+fn light_contribution(light : SceneLight, normal : vec3<f32>, world_pos : vec3<f32>, shadow_base_slot : i32, shadow_cascade_count : i32) -> vec3<f32> {
     let light_type = light.position_and_type.w;
     let light_color = light.color_and_intensity.rgb;
     let intensity = light.color_and_intensity.a;
@@ -100,33 +110,91 @@ fn light_contribution(light : SceneLight, normal : vec3<f32>, world_pos : vec3<f
 
     let lambert = max(dot(normal, to_light), 0.0);
     var visibility = 1.0;
-    if light_type < 0.5 {
-        visibility = shadow_visibility(world_pos);
+    if light_type < 0.5 && shadow_base_slot >= 0 {
+        visibility = shadow_visibility(world_pos, u32(shadow_base_slot), u32(max(shadow_cascade_count, 1)));
     }
     return light_color * intensity * attenuation * lambert * visibility;
 }
 
-fn shadow_visibility(world_pos : vec3<f32>) -> f32 {
-    if shadow.params.x < 0.5 {
+fn shadow_visibility(world_pos : vec3<f32>, base_slot : u32, cascade_count : u32) -> f32 {
+    let slot = base_slot + shadow_cascade_index(world_pos, cascade_count);
+    if shadow.atlas_params.x < 0.5 || f32(slot) >= shadow.atlas_params.y {
         return 1.0;
     }
 
-    let clip = shadow.light_view_projection * vec4<f32>(world_pos, 1.0);
+    let clip = shadow_matrix(slot) * vec4<f32>(world_pos, 1.0);
     let inv_w = 1.0 / max(abs(clip.w), 0.00001);
     let ndc = clip.xyz * inv_w;
-    let uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
-    if uv.x < 0.0 || uv.x > 1.0 || uv.y < 0.0 || uv.y > 1.0 || ndc.z < 0.0 || ndc.z > 1.0 {
+    let local_uv = vec2<f32>(ndc.x * 0.5 + 0.5, 0.5 - ndc.y * 0.5);
+    if local_uv.x < 0.0 || local_uv.x > 1.0 || local_uv.y < 0.0 || local_uv.y > 1.0 || ndc.z < 0.0 || ndc.z > 1.0 {
         return 1.0;
     }
 
-    let occluder_depth = textureSample(shadow_texture, shadow_sampler, uv).r;
+    let params = shadow_params(slot);
+    let tile_scale = shadow.atlas_params.z / max(shadow.atlas_params.w, 1.0);
+    let uv = params.zw + local_uv * tile_scale;
     let current_depth = ndc.z;
-    let bias = shadow.params.y;
-    let strength = clamp(shadow.params.z, 0.0, 1.0);
+    let bias = params.x;
+    let strength = clamp(params.y, 0.0, 1.0);
+    let texel = 1.0 / max(shadow.atlas_params.w, 1.0);
+    var lit = shadow_depth_lit(uv, current_depth, bias);
+    lit = lit + shadow_depth_lit(uv + vec2<f32>(texel, 0.0), current_depth, bias);
+    lit = lit + shadow_depth_lit(uv + vec2<f32>(-texel, 0.0), current_depth, bias);
+    lit = lit + shadow_depth_lit(uv + vec2<f32>(0.0, texel), current_depth, bias);
+    lit = lit + shadow_depth_lit(uv + vec2<f32>(0.0, -texel), current_depth, bias);
+    lit = lit / 5.0;
+    return 1.0 - strength * (1.0 - lit);
+}
+
+fn shadow_cascade_index(world_pos : vec3<f32>, cascade_count : u32) -> u32 {
+    if cascade_count <= 1u {
+        return 0u;
+    }
+    let view_depth = dot(world_pos - shadow.camera_position_and_padding.xyz, shadow.camera_forward_and_padding.xyz);
+    if view_depth <= shadow.cascade_splits.x {
+        return 0u;
+    }
+    if cascade_count <= 2u || view_depth <= shadow.cascade_splits.y {
+        return 1u;
+    }
+    if cascade_count <= 3u || view_depth <= shadow.cascade_splits.z {
+        return 2u;
+    }
+    return 3u;
+}
+
+fn shadow_depth_lit(uv : vec2<f32>, current_depth : f32, bias : f32) -> f32 {
+    let occluder_depth = textureSample(shadow_texture, shadow_sampler, uv).r;
     if current_depth - bias > occluder_depth {
-        return 1.0 - strength;
+        return 0.0;
     }
     return 1.0;
+}
+
+fn shadow_matrix(slot : u32) -> mat4x4<f32> {
+    if slot == 1u {
+        return shadow.light_view_projection1;
+    }
+    if slot == 2u {
+        return shadow.light_view_projection2;
+    }
+    if slot == 3u {
+        return shadow.light_view_projection3;
+    }
+    return shadow.light_view_projection0;
+}
+
+fn shadow_params(slot : u32) -> vec4<f32> {
+    if slot == 1u {
+        return shadow.params1;
+    }
+    if slot == 2u {
+        return shadow.params2;
+    }
+    if slot == 3u {
+        return shadow.params3;
+    }
+    return shadow.params0;
 }
 
 fn scene_lighting(normal : vec3<f32>, world_pos : vec3<f32>) -> vec3<f32> {
@@ -136,7 +204,15 @@ fn scene_lighting(normal : vec3<f32>, world_pos : vec3<f32>) -> vec3<f32> {
         if i >= count {
             continue;
         }
-        lighting = lighting + light_contribution(scene_lights.lights[i], normal, world_pos);
+        let shadow_base_slot = i32(scene_lights.lights[i].spot_angles_and_padding.z) - 1;
+        let shadow_cascade_count = i32(max(scene_lights.lights[i].spot_angles_and_padding.w, 1.0));
+        lighting = lighting + light_contribution(
+            scene_lights.lights[i],
+            normal,
+            world_pos,
+            shadow_base_slot,
+            shadow_cascade_count
+        );
     }
     return max(lighting, vec3<f32>(0.0));
 }

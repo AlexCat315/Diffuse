@@ -46,7 +46,7 @@ enum RenderFramePlanner {
 
             case .r4LightingPBRShadow:
                 passes.append(.depthPrepass)
-                if settings.enableShadows {
+                if settings.shadowSettings.enabled && settings.shadowSettings.maxShadowedDirectionalLights > 0 {
                     passes.append(.shadowPass)
                 }
                 passes.append(contentsOf: [.skybox, .basePass])
@@ -58,7 +58,7 @@ enum RenderFramePlanner {
 
             case .r5PostProcess:
                 passes.append(.depthPrepass)
-                if settings.enableShadows {
+                if settings.shadowSettings.enabled && settings.shadowSettings.maxShadowedDirectionalLights > 0 {
                     passes.append(.shadowPass)
                 }
                 passes.append(contentsOf: [.skybox, .basePass])

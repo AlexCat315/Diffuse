@@ -89,6 +89,11 @@ public enum EditorViewportShadingMode: String, Codable, Sendable, Hashable {
     case wireframe
 }
 
+public enum EditorViewportShadowDebugMode: String, Codable, Sendable, CaseIterable, Hashable {
+    case off
+    case cascadeBands
+}
+
 public enum SelectionPrimaryModifierBehavior: String, Codable, Sendable, Hashable {
     case subtract
     case toggle
@@ -207,6 +212,12 @@ public struct EditorState: Codable, Sendable {
     public var gizmoMode: EditorGizmoMode
     public var gizmoSpace: EditorGizmoSpace
     public var viewportShadingMode: EditorViewportShadingMode
+    public var viewportShadowsEnabled: Bool
+    public var viewportShadowMapResolution: UInt32
+    public var viewportMaxShadowedDirectionalLights: Int
+    public var viewportDirectionalCascadeCount: Int
+    public var viewportDirectionalCascadeSplitLambda: Float
+    public var viewportShadowDebugMode: EditorViewportShadowDebugMode
     public var translateSnapEnabled: Bool
     public var rotateSnapEnabled: Bool
     public var scaleSnapEnabled: Bool
@@ -241,6 +252,12 @@ public struct EditorState: Codable, Sendable {
         gizmoMode: EditorGizmoMode = .translate,
         gizmoSpace: EditorGizmoSpace = .local,
         viewportShadingMode: EditorViewportShadingMode = .lit,
+        viewportShadowsEnabled: Bool = false,
+        viewportShadowMapResolution: UInt32 = 1024,
+        viewportMaxShadowedDirectionalLights: Int = 1,
+        viewportDirectionalCascadeCount: Int = 1,
+        viewportDirectionalCascadeSplitLambda: Float = 0.55,
+        viewportShadowDebugMode: EditorViewportShadowDebugMode = .off,
         translateSnapEnabled: Bool = false,
         rotateSnapEnabled: Bool = false,
         scaleSnapEnabled: Bool = false,
@@ -275,6 +292,12 @@ public struct EditorState: Codable, Sendable {
         self.gizmoMode = gizmoMode
         self.gizmoSpace = gizmoSpace
         self.viewportShadingMode = viewportShadingMode
+        self.viewportShadowsEnabled = viewportShadowsEnabled
+        self.viewportShadowMapResolution = Self.sanitizedShadowMapResolution(viewportShadowMapResolution)
+        self.viewportMaxShadowedDirectionalLights = Self.sanitizedMaxShadowedDirectionalLights(viewportMaxShadowedDirectionalLights)
+        self.viewportDirectionalCascadeCount = Self.sanitizedDirectionalCascadeCount(viewportDirectionalCascadeCount)
+        self.viewportDirectionalCascadeSplitLambda = Self.sanitizedDirectionalCascadeSplitLambda(viewportDirectionalCascadeSplitLambda)
+        self.viewportShadowDebugMode = viewportShadowDebugMode
         self.translateSnapEnabled = translateSnapEnabled
         self.rotateSnapEnabled = rotateSnapEnabled
         self.scaleSnapEnabled = scaleSnapEnabled
@@ -329,6 +352,12 @@ public struct EditorState: Codable, Sendable {
         case gizmoMode
         case gizmoSpace
         case viewportShadingMode
+        case viewportShadowsEnabled
+        case viewportShadowMapResolution
+        case viewportMaxShadowedDirectionalLights
+        case viewportDirectionalCascadeCount
+        case viewportDirectionalCascadeSplitLambda
+        case viewportShadowDebugMode
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
@@ -384,6 +413,12 @@ public struct EditorState: Codable, Sendable {
             gizmoMode: try c.decodeIfPresent(EditorGizmoMode.self, forKey: .gizmoMode) ?? .translate,
             gizmoSpace: try c.decodeIfPresent(EditorGizmoSpace.self, forKey: .gizmoSpace) ?? .local,
             viewportShadingMode: try c.decodeIfPresent(EditorViewportShadingMode.self, forKey: .viewportShadingMode) ?? .lit,
+            viewportShadowsEnabled: try c.decodeIfPresent(Bool.self, forKey: .viewportShadowsEnabled) ?? false,
+            viewportShadowMapResolution: try c.decodeIfPresent(UInt32.self, forKey: .viewportShadowMapResolution) ?? 1024,
+            viewportMaxShadowedDirectionalLights: try c.decodeIfPresent(Int.self, forKey: .viewportMaxShadowedDirectionalLights) ?? 1,
+            viewportDirectionalCascadeCount: try c.decodeIfPresent(Int.self, forKey: .viewportDirectionalCascadeCount) ?? 1,
+            viewportDirectionalCascadeSplitLambda: try c.decodeIfPresent(Float.self, forKey: .viewportDirectionalCascadeSplitLambda) ?? 0.55,
+            viewportShadowDebugMode: try c.decodeIfPresent(EditorViewportShadowDebugMode.self, forKey: .viewportShadowDebugMode) ?? .off,
             translateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .translateSnapEnabled) ?? false,
             rotateSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .rotateSnapEnabled) ?? false,
             scaleSnapEnabled: try c.decodeIfPresent(Bool.self, forKey: .scaleSnapEnabled) ?? false,
@@ -420,6 +455,12 @@ public struct EditorState: Codable, Sendable {
         try c.encode(gizmoMode, forKey: .gizmoMode)
         try c.encode(gizmoSpace, forKey: .gizmoSpace)
         try c.encode(viewportShadingMode, forKey: .viewportShadingMode)
+        try c.encode(viewportShadowsEnabled, forKey: .viewportShadowsEnabled)
+        try c.encode(viewportShadowMapResolution, forKey: .viewportShadowMapResolution)
+        try c.encode(viewportMaxShadowedDirectionalLights, forKey: .viewportMaxShadowedDirectionalLights)
+        try c.encode(viewportDirectionalCascadeCount, forKey: .viewportDirectionalCascadeCount)
+        try c.encode(viewportDirectionalCascadeSplitLambda, forKey: .viewportDirectionalCascadeSplitLambda)
+        try c.encode(viewportShadowDebugMode, forKey: .viewportShadowDebugMode)
         try c.encode(translateSnapEnabled, forKey: .translateSnapEnabled)
         try c.encode(rotateSnapEnabled, forKey: .rotateSnapEnabled)
         try c.encode(scaleSnapEnabled, forKey: .scaleSnapEnabled)
@@ -436,5 +477,21 @@ public struct EditorState: Codable, Sendable {
         try c.encode(aiWarnings, forKey: .aiWarnings)
         try c.encode(consoleEntries, forKey: .consoleEntries)
         try c.encode(nextConsoleEntryID, forKey: .nextConsoleEntryID)
+    }
+
+    public static func sanitizedShadowMapResolution(_ value: UInt32) -> UInt32 {
+        min(max(value, 128), 4096)
+    }
+
+    public static func sanitizedMaxShadowedDirectionalLights(_ value: Int) -> Int {
+        min(max(value, 0), 4)
+    }
+
+    public static func sanitizedDirectionalCascadeCount(_ value: Int) -> Int {
+        min(max(value, 1), 4)
+    }
+
+    public static func sanitizedDirectionalCascadeSplitLambda(_ value: Float) -> Float {
+        min(max(value, 0), 1)
     }
 }

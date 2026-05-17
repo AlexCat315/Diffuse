@@ -31,6 +31,7 @@ public final class EditorStore: @unchecked Sendable {
         case gizmoMode
         case gizmoSpace
         case viewportShadingMode
+        case viewportShadowsEnabled
         case translateSnapEnabled
         case rotateSnapEnabled
         case scaleSnapEnabled
@@ -147,6 +148,8 @@ public final class EditorStore: @unchecked Sendable {
             mark(.gizmoSpace, old.gizmoSpace, new.gizmoSpace)
         case .setViewportShadingMode:
             mark(.viewportShadingMode, old.viewportShadingMode, new.viewportShadingMode)
+        case .setViewportShadowsEnabled:
+            mark(.viewportShadowsEnabled, old.viewportShadowsEnabled, new.viewportShadowsEnabled)
         case .setTranslateSnapEnabled:
             mark(.translateSnapEnabled, old.translateSnapEnabled, new.translateSnapEnabled)
         case .setRotateSnapEnabled:
@@ -244,6 +247,7 @@ extension EditorStore {
     public var gizmoMode: EditorGizmoMode { read(.gizmoMode, storage.gizmoMode) }
     public var gizmoSpace: EditorGizmoSpace { read(.gizmoSpace, storage.gizmoSpace) }
     public var viewportShadingMode: EditorViewportShadingMode { read(.viewportShadingMode, storage.viewportShadingMode) }
+    public var viewportShadowsEnabled: Bool { read(.viewportShadowsEnabled, storage.viewportShadowsEnabled) }
     public var translateSnapEnabled: Bool { read(.translateSnapEnabled, storage.translateSnapEnabled) }
     public var rotateSnapEnabled: Bool { read(.rotateSnapEnabled, storage.rotateSnapEnabled) }
     public var scaleSnapEnabled: Bool { read(.scaleSnapEnabled, storage.scaleSnapEnabled) }
