@@ -70,8 +70,27 @@ public struct SceneSemanticEncoder: Sendable {
             }
 
             var rigidBodyMotionType: String?
+            var rigidBodyMass: Float?
+            var rigidBodyGravityScale: Float?
+            var rigidBodyAllowSleep: Bool?
             if let rb = scene.component(RigidBody.self, for: entity) {
                 rigidBodyMotionType = rb.motionType.rawValue
+                rigidBodyMass = rb.mass
+                rigidBodyGravityScale = rb.gravityScale
+                rigidBodyAllowSleep = rb.allowSleep
+            }
+
+            var colliderShape: String?
+            var colliderIsTrigger: Bool?
+            var colliderFriction: Float?
+            var colliderRestitution: Float?
+            var colliderDensity: Float?
+            if let col = scene.component(Collider.self, for: entity) {
+                colliderShape = col.shape.kind.rawValue
+                colliderIsTrigger = col.isTrigger
+                colliderFriction = col.material.friction
+                colliderRestitution = col.material.restitution
+                colliderDensity = col.material.density
             }
 
             records.append(SceneSemanticSnapshot.Entity(
@@ -90,7 +109,15 @@ public struct SceneSemanticEncoder: Sendable {
                 cameraFovYDegrees: cameraFovYDegrees,
                 cameraIsActive: cameraIsActive,
                 meshColor: meshColor,
-                rigidBodyMotionType: rigidBodyMotionType
+                rigidBodyMotionType: rigidBodyMotionType,
+                rigidBodyMass: rigidBodyMass,
+                rigidBodyGravityScale: rigidBodyGravityScale,
+                rigidBodyAllowSleep: rigidBodyAllowSleep,
+                colliderShape: colliderShape,
+                colliderIsTrigger: colliderIsTrigger,
+                colliderFriction: colliderFriction,
+                colliderRestitution: colliderRestitution,
+                colliderDensity: colliderDensity
             ))
         }
 

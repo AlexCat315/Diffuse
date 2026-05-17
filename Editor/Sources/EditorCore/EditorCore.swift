@@ -44,6 +44,7 @@ public final class EditorApplication: @unchecked Sendable {
     private var pendingAssistantMessageID: String?
     private let mcpBridge = MCPBridge()
     private let editLog: EditLog
+    private var physicsPlaySnapshot: SceneRuntime?
     private var frameTimingAccumulator: Double = 0
     private var frameTimingCount: Int = 0
     private var frameTiming = EditorFrameTiming()
@@ -279,6 +280,49 @@ public final class EditorApplication: @unchecked Sendable {
         }
         engine.queueRenderSettings(makeViewportRenderSettings(shadowsEnabled: enabled))
         logConsole(enabled ? "Viewport shadows enabled" : "Viewport shadows disabled")
+    }
+
+    /// Transitions to a new playback state.
+    /// - On `.playing`: snapshots the current scene, enables Jolt physics simulation.
+    /// - On `.paused`: freezes physics (mode → off) without restoring the scene.
+    /// - On `.stopped`: restores the pre-play scene snapshot and disables physics.
+    public func applyPlaybackState(_ next: PlaybackState) {
+        let current = store.state.playbackState
+        guard current != next else { return }
+
+        switch next {
+        case .playing:
+            if physicsPlaySnapshot == nil {
+                physicsPlaySnapshot = scene.scene
+            }
+            var settings = scene.scene.physicsSettings
+            settings.simulationMode = .play
+            settings.backendKind = .jolt
+            scene.scene.setPhysicsSettings(settings)
+            store.dispatch(.setPlaybackState(.playing))
+            logConsole("Physics simulation started")
+
+        case .paused:
+            var settings = scene.scene.physicsSettings
+            settings.simulationMode = .off
+            scene.scene.setPhysicsSettings(settings)
+            store.dispatch(.setPlaybackState(.paused))
+            logConsole("Physics simulation paused")
+
+        case .stopped:
+            if let snapshot = physicsPlaySnapshot {
+                scene.scene = snapshot
+                scene.notifyRevisionChanged()
+                physicsPlaySnapshot = nil
+                store.dispatch(.setSceneRevision(scene.revision))
+            }
+            var settings = scene.scene.physicsSettings
+            settings.simulationMode = .off
+            settings.backendKind = .none
+            scene.scene.setPhysicsSettings(settings)
+            store.dispatch(.setPlaybackState(.stopped))
+            logConsole("Physics simulation stopped")
+        }
     }
 
     private func makeViewportRenderSettings(shadowsEnabled: Bool) -> RenderSettings {
@@ -834,9 +878,22 @@ public final class EditorApplication: @unchecked Sendable {
         case "get_selection":
             let ref = store.state.selectedEntityID.map { "scene:\($0)" }
             return ["ok": true, "selectedRef": ref as Any]
+        case "set_playback_state":
+            return mcpSetPlaybackState(params: params)
         default:
             return ["ok": false, "error": "unknown action '\(action)'"]
         }
+    }
+
+    private func mcpSetPlaybackState(params: [String: Any]) -> [String: Any] {
+        guard let stateStr = params["state"] as? String else {
+            return ["ok": false, "error": "missing 'state' field (playing|paused|stopped)"]
+        }
+        guard let next = PlaybackState(rawValue: stateStr) else {
+            return ["ok": false, "error": "unknown state '\(stateStr)' — expected 'playing', 'paused', or 'stopped'"]
+        }
+        applyPlaybackState(next)
+        return ["ok": true, "state": next.rawValue]
     }
 
     private func mcpGetScene() -> [String: Any] {
