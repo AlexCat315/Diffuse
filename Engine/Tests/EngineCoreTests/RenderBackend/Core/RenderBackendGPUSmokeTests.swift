@@ -53,7 +53,9 @@ struct RenderBackendGPUSmokeTests {
         let stats = renderer.currentFrameStats()
         #expect(stats.activePasses.contains(.basePass))
         #expect(stats.activePasses.contains(.viewportResolve))
-        #expect(stats.drawCallCount == 1)
+        #expect(stats.drawCallCount == 2)
+        #expect(stats.passDrawCallCounts[.depthPrepass] == 1)
+        #expect(stats.passDrawCallCounts[.basePass] == 1)
 
         let viewport = renderer.currentViewportSurfaceState()
         #expect(viewport.isValid)
@@ -155,6 +157,11 @@ struct RenderBackendGPUSmokeTests {
         #expect(stats.activePasses.contains(.tonemap))
         #expect(stats.passEncodeNS.keys.contains(.depthPrepass))
         #expect(stats.passEncodeNS.keys.contains(.shadowPass))
+        #expect(stats.passDrawCallCounts[.depthPrepass] == 2)
+        #expect(stats.passDrawCallCounts[.shadowPass] == 2)
+        #expect(stats.passDrawCallCounts[.basePass] == 2)
+        #expect(stats.shadowedLightCount == 1)
+        #expect(stats.shadowMapResolution == RenderShadowSettings.directionalPreview.mapResolution)
 
         let darkerPixels = zip(noShadowPixels, shadowPixels).filter { before, after in
             after.luminance + 10 < before.luminance
@@ -164,6 +171,156 @@ struct RenderBackendGPUSmokeTests {
 
         #expect(darkerPixels > Int(width * height) / 64)
         #expect(shadowAverage + 1.0 < noShadowAverage)
+    }
+
+    @Test("multi directional shadow atlas encodes one tile per selected light",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU shadow atlas smoke test"))
+    func multiDirectionalShadowAtlasEncodesOneTilePerLight() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        var scene = Self.makeShadowScene()
+        scene.lights.append(
+            RenderLight(
+                type: .directional,
+                direction: SIMD3<Float>(-0.60, -1.0, 0.42),
+                color: SIMD3<Float>(0.78, 0.84, 1.0),
+                intensity: 1.4
+            )
+        )
+
+        let width: UInt32 = 96
+        let height: UInt32 = 96
+        let noShadowPixels = try renderPixels(
+            renderer: renderer,
+            backend: backend,
+            scene: scene,
+            settings: RenderSettings(
+                stage: .r4LightingPBRShadow,
+                enableShadows: false,
+                enableOffscreenViewport: true
+            ),
+            frameIndex: 10,
+            width: width,
+            height: height
+        )
+        let shadowPixels = try renderPixels(
+            renderer: renderer,
+            backend: backend,
+            scene: scene,
+            settings: RenderSettings(
+                stage: .r4LightingPBRShadow,
+                shadowSettings: RenderShadowSettings(
+                    enabled: true,
+                    maxShadowedDirectionalLights: 2
+                ),
+                enableOffscreenViewport: true
+            ),
+            frameIndex: 11,
+            width: width,
+            height: height
+        )
+
+        let stats = renderer.currentFrameStats()
+        #expect(stats.shadowedLightCount == 2)
+        #expect(stats.shadowMapResolution == RenderShadowSettings.directionalPreview.mapResolution)
+        #expect(stats.passDrawCallCounts[.shadowPass] == scene.instances.count * 2)
+        #expect(stats.passDrawCallCounts[.basePass] == scene.instances.count)
+
+        let darkerPixels = zip(noShadowPixels, shadowPixels).filter { before, after in
+            after.luminance + 8 < before.luminance
+        }.count
+        #expect(darkerPixels > Int(width * height) / 80)
+    }
+
+    @Test("directional cascades encode one atlas tile per cascade",
+          .enabled(if: gpuSmokeEnabled, "set GUAVA_RUN_GPU_SMOKE_TESTS=1 to run the real GPU cascaded shadow smoke test"))
+    func directionalCascadesEncodeOneAtlasTilePerCascade() throws {
+        let backend = WGPUBackend(
+            config: WGPUDeviceConfig(
+                validationEnabled: true,
+                preferredBackends: WGPUBackendPreference.platformDefaultOrder
+            )
+        )
+        try backend.initialize()
+
+        var renderer: WGPURenderer? = WGPURenderer(backend: backend)
+        defer {
+            renderer = nil
+            try? backend.shutdown()
+        }
+
+        guard let renderer else {
+            Issue.record("renderer was not created")
+            return
+        }
+
+        renderer.initialize()
+
+        let scene = Self.makeShadowScene()
+        let width: UInt32 = 96
+        let height: UInt32 = 96
+        let noShadowPixels = try renderPixels(
+            renderer: renderer,
+            backend: backend,
+            scene: scene,
+            settings: RenderSettings(
+                stage: .r4LightingPBRShadow,
+                enableShadows: false,
+                enableOffscreenViewport: true
+            ),
+            frameIndex: 20,
+            width: width,
+            height: height
+        )
+        let shadowPixels = try renderPixels(
+            renderer: renderer,
+            backend: backend,
+            scene: scene,
+            settings: RenderSettings(
+                stage: .r4LightingPBRShadow,
+                shadowSettings: RenderShadowSettings(
+                    enabled: true,
+                    maxShadowedDirectionalLights: 1,
+                    directionalCascadeCount: 3
+                ),
+                enableOffscreenViewport: true
+            ),
+            frameIndex: 21,
+            width: width,
+            height: height
+        )
+
+        let stats = renderer.currentFrameStats()
+        #expect(stats.shadowedLightCount == 1)
+        #expect(stats.shadowTileCount == 3)
+        #expect(stats.shadowCascadeCount == 3)
+        #expect(stats.shadowMapResolution == RenderShadowSettings.directionalPreview.mapResolution)
+        #expect(stats.shadowAtlasResolution == RenderShadowSettings.directionalPreview.mapResolution * 2)
+        #expect(stats.passDrawCallCounts[.shadowPass] == scene.instances.count * 3)
+
+        let darkerPixels = zip(noShadowPixels, shadowPixels).filter { before, after in
+            after.luminance + 8 < before.luminance
+        }.count
+        #expect(darkerPixels > Int(width * height) / 80)
     }
 
     private static func makeSmokeScene() -> RenderScene {

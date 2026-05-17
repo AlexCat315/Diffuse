@@ -58,7 +58,9 @@ extension WGPURenderer {
         }
 
         if useDynamicOffsets {
-            if let dyn = dynamicInstanceResources, dyn.capacity >= instanceCount {
+            if let dyn = dynamicInstanceResources,
+               dyn.capacity >= instanceCount,
+               instanceResourceShadowGeneration == shadowResourceGeneration {
                 instanceResourceKeys = resourceKeys
                 return
             }
@@ -77,12 +79,14 @@ extension WGPURenderer {
                 stride: dynamicUniformStride,
                 capacity: instanceCount
             )
+            instanceResourceShadowGeneration = shadowResourceGeneration
             return
         }
 
         if dynamicInstanceResources == nil
             && instanceResources.count == instanceCount
-            && instanceResourceKeys == resourceKeys {
+            && instanceResourceKeys == resourceKeys
+            && instanceResourceShadowGeneration == shadowResourceGeneration {
             return
         }
 
@@ -104,6 +108,7 @@ extension WGPURenderer {
             instanceResources.append(
                 InstanceResources(uniformBuffer: uniformBuffer, bindGroup: bindGroup))
         }
+        instanceResourceShadowGeneration = shadowResourceGeneration
     }
 
     func meshBindGroupEntries(instanceUniformBuffer: GPUBuffer,
@@ -111,7 +116,7 @@ extension WGPURenderer {
         try ensureStylizedCharacterUniformBuffer()
         try ensureMeshSamplingFallbackResources()
         try ensureSceneLightUniformBuffer()
-        try ensureShadowResources()
+        try ensureShadowResources(settings: activeRenderSettings.shadowSettings)
         guard let stylizedCharacterUniformBuffer,
               let linearSampler,
               let fallbackMeshTextureView,
@@ -213,9 +218,15 @@ extension WGPURenderer {
         sceneLightUniformBuffer = try backend.createBuffer(size: SceneLightUniforms.byteSize, usage: [.uniform, .copyDst])
     }
 
-    func writeSceneLightUniforms(scene: RenderScene) {
+    func writeSceneLightUniforms(
+        scene: RenderScene,
+        shadowBindingsByLightIndex: [Int: ShadowLightBinding] = [:]
+    ) {
         guard let sceneLightUniformBuffer else { return }
-        var uniforms = SceneLightUniforms(scene: scene)
+        var uniforms = SceneLightUniforms(
+            scene: scene,
+            shadowBindingsByLightIndex: shadowBindingsByLightIndex
+        )
         writeUniform(&uniforms, buffer: sceneLightUniformBuffer)
     }
 
