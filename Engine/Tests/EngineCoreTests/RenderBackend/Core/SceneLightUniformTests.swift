@@ -35,4 +35,32 @@ struct SceneLightUniformTests {
         #expect(uniforms.light0.spotAnglesAndPadding == SIMD4<Float>(0.25, 0.75, 0, 0))
         #expect(uniforms.light1 == .zero)
     }
+
+    @Test("packs directional shadow slots into light uniforms")
+    func packsDirectionalShadowSlots() {
+        let scene = RenderScene(
+            camera: RenderCamera(eye: SIMD3<Float>(0, 0, 5)),
+            lights: [
+                RenderLight(type: .directional,
+                            direction: SIMD3<Float>(0, -1, 0),
+                            intensity: 1),
+                RenderLight(type: .directional,
+                            direction: SIMD3<Float>(1, -1, 0),
+                            intensity: 2),
+            ]
+        )
+
+        let uniforms = SceneLightUniforms(
+            scene: scene,
+            shadowBindingsByLightIndex: [
+                0: ShadowLightBinding(baseSlot: 1, cascadeCount: 3),
+                1: ShadowLightBinding(baseSlot: 0, cascadeCount: 1),
+            ]
+        )
+
+        #expect(uniforms.light0.spotAnglesAndPadding.z == 2)
+        #expect(uniforms.light0.spotAnglesAndPadding.w == 3)
+        #expect(uniforms.light1.spotAnglesAndPadding.z == 1)
+        #expect(uniforms.light1.spotAnglesAndPadding.w == 1)
+    }
 }

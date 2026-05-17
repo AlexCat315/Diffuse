@@ -66,8 +66,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var bloomUniformBuffer: GPUBuffer?
     var sceneLightUniformBuffer: GPUBuffer?
     var shadowUniformBuffer: GPUBuffer?
+    var shadowRenderUniformBuffers: [GPUBuffer] = []
     var shadowSampler: GPUSampler?
     var shadowMapTarget: ShadowMapTarget?
+    var shadowResourceGeneration: UInt64 = 0
+    var instanceResourceShadowGeneration: UInt64 = 0
     private var ssrUniformBuffer: GPUBuffer?
     private var taaUniformBuffer: GPUBuffer?
     private var ssaoUniformBuffer: GPUBuffer?
@@ -155,11 +158,16 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             try ensureStylizedCharacterUniformBuffer()
             writeStylizedCharacterUniforms()
             try ensureSceneLightUniformBuffer()
-            writeSceneLightUniforms(scene: packet.scene)
-            try ensureShadowResources()
-            let shadowUniforms = writeShadowUniforms(
+            try ensureShadowResources(settings: activeRenderSettings.shadowSettings)
+            let shadowPlan = writeShadowUniforms(
                 scene: packet.scene,
-                enabled: framePlan.passes.contains(.shadowPass)
+                drawableSize: packet.drawableSize,
+                enabled: framePlan.passes.contains(.shadowPass),
+                settings: activeRenderSettings.shadowSettings
+            )
+            writeSceneLightUniforms(
+                scene: packet.scene,
+                shadowBindingsByLightIndex: shadowPlan.shadowBindingsByLightIndex
             )
             try ensureInstanceResources(scene: packet.scene, pipeline: meshPipeline)
             writeInstanceUniforms(scene: packet.scene, viewProj: cameraMatrices.viewProjection)
@@ -202,6 +210,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
             let prepareDoneNS = DispatchTime.now().uptimeNanoseconds
 
             var drawCallCount = 0
+            var passDrawCallCounts: [RenderPassKind: Int] = [:]
             var renderBundleCount = 0
             var renderBundleParallelJobs = 0
             var bundleRecordNS: UInt64 = 0
@@ -218,10 +227,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
             for passKind in framePlan.passes {
                 let passStartNS = DispatchTime.now().uptimeNanoseconds
+                var passDrawCallCount = 0
                 switch passKind {
                     case .depthPrepass:
                         let pipeline = try ensureDepthPrepassPipeline(hdr: usesHDRFrameGraph)
-                        _ = try encodeDepthPrepass(
+                        passDrawCallCount = try encodeDepthPrepass(
                             encoder: encoder,
                             colorView: usesHDRFrameGraph ? sceneColorTarget?.view ?? colorTarget.view : colorTarget.view,
                             depthView: depthView,
@@ -231,16 +241,17 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                         depthPrepassEncoded = true
 
                     case .shadowPass:
-                        guard shadowUniforms.isEnabled,
+                        guard shadowPlan.uniforms.isEnabled,
                               let shadowPipeline
                         else {
                             emitPlannedPassLog(passKind, frameIndex: packet.frameIndex)
                             break
                         }
-                        _ = try encodeShadowPass(
+                        passDrawCallCount = try encodeShadowPass(
                             encoder: encoder,
                             pipeline: shadowPipeline,
-                            scene: packet.scene
+                            scene: packet.scene,
+                            plan: shadowPlan
                         )
 
                     case .skybox:
@@ -255,6 +266,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             viewProj: cameraMatrices.viewProjection,
                             depthLoadOp: depthPrepassEncoded ? .load : .clear
                         )
+                        passDrawCallCount = 1
                         skyboxEncoded = true
 
                     case .basePass:
@@ -268,14 +280,14 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             colorLoadOp: skyboxEncoded ? .load : .clear,
                             depthLoadOp: skyboxEncoded || depthPrepassEncoded ? .load : .clear
                         )
-                        drawCallCount += report.drawCallCount
+                        passDrawCallCount = report.drawCallCount
                         renderBundleCount += report.renderBundleCount
                         renderBundleParallelJobs += report.parallelJobCount
                         bundleRecordNS &+= report.bundleRecordNS
 
                     case .outline:
                         let outlinePipeline = try ensureOutlinePipeline(hdr: usesHDRFrameGraph)
-                        drawCallCount += try encodeOutlinePass(
+                        passDrawCallCount = try encodeOutlinePass(
                             encoder: encoder,
                             colorView: usesHDRFrameGraph ? sceneColorTarget?.view ?? colorTarget.view : colorTarget.view,
                             depthView: depthView,
@@ -299,6 +311,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             pipeline: inkPaperPostPipeline
                         )
                         hdrCurrent = output
+                        passDrawCallCount = 1
 
                     case .ssao:
                         guard let input = hdrCurrent,
@@ -315,6 +328,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             projection: cameraMatrices.projection
                         )
                         hdrCurrent = output
+                        passDrawCallCount = 1
 
                     case .ssr:
                         guard let input = hdrCurrent,
@@ -331,6 +345,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             projection: cameraMatrices.projection
                         )
                         hdrCurrent = output
+                        passDrawCallCount = 1
 
                     case .taa:
                         guard let input = hdrCurrent,
@@ -345,6 +360,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             pipeline: taaPipeline
                         )
                         hdrCurrent = output
+                        passDrawCallCount = 1
 
                     case .bloom:
                         guard let input = hdrCurrent,
@@ -358,6 +374,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             pipeline: bloomPipeline
                         )
                         bloomTarget = output
+                        passDrawCallCount = 1
 
                     case .tonemap:
                         guard let input = hdrCurrent,
@@ -370,6 +387,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             outputView: activeRenderSettings.enableFXAA ? ldrPostProcessTarget?.view ?? colorTarget.view : colorTarget.view,
                             pipeline: tonemapPipeline
                         )
+                        passDrawCallCount = 1
                         if activeRenderSettings.enableTAA,
                            let historyTarget {
                             encoder.copyTextureToTexture(
@@ -393,6 +411,7 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                             output: colorTarget,
                             pipeline: fxaaPipeline
                         )
+                        passDrawCallCount = 1
 
                     case .viewportResolve:
                         registerViewportSurface(texture: colorTarget.texture, size: packet.drawableSize)
@@ -400,6 +419,10 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 }
 
                 let passElapsedNS = DispatchTime.now().uptimeNanoseconds - passStartNS
+                if passDrawCallCount > 0 {
+                    passDrawCallCounts[passKind, default: 0] += passDrawCallCount
+                    drawCallCount += passDrawCallCount
+                }
                 passEncodeNS[passKind, default: 0] &+= passElapsedNS
                 switch passKind {
                 case .skybox:
@@ -435,8 +458,24 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 frameIndex: packet.frameIndex,
                 passCount: framePlan.passes.count,
                 drawCallCount: drawCallCount,
+                passDrawCallCounts: passDrawCallCounts,
                 renderBundleCount: renderBundleCount,
                 renderBundleParallelJobs: renderBundleParallelJobs,
+                shadowedLightCount: shadowPlan.uniforms.isEnabled
+                    ? shadowPlan.shadowedLightCount
+                    : 0,
+                shadowTileCount: shadowPlan.uniforms.isEnabled
+                    ? shadowPlan.shadowTileCount
+                    : 0,
+                shadowCascadeCount: shadowPlan.uniforms.isEnabled
+                    ? shadowPlan.cascadeCount
+                    : 0,
+                shadowMapResolution: shadowPlan.uniforms.isEnabled
+                    ? shadowPlan.tileSize
+                    : 0,
+                shadowAtlasResolution: shadowPlan.uniforms.isEnabled
+                    ? shadowPlan.atlasSize
+                    : 0,
                 activePasses: framePlan.passes,
                 settingsGeneration: settingsGeneration,
                 cpuPrepareNS: cpuPrepareNS,
@@ -458,8 +497,12 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     seenPasses.insert(passKind)
                     return "\(passKind.rawValue):\(passEncodeNS[passKind, default: 0])"
                 }.joined(separator: ",")
+                let orderedPassDrawStats = framePlan.passes.compactMap { passKind -> String? in
+                    guard let count = passDrawCallCounts[passKind] else { return nil }
+                    return "\(passKind.rawValue):\(count)"
+                }.joined(separator: ",")
                 Logger.renderer.debug(
-                    "frame_cpu_timing frame=\(packet.frameIndex) prepare_ns=\(cpuPrepareNS) encode_ns=\(cpuEncodeNS) submit_ns=\(cpuSubmitNS) total_ns=\(cpuFrameTotalNS) bundle_record_ns=\(bundleRecordNS) bundles=\(renderBundleCount) bundle_jobs=\(renderBundleParallelJobs) pass_encode_ns=[\(orderedPassStats)]"
+                    "frame_cpu_timing frame=\(packet.frameIndex) prepare_ns=\(cpuPrepareNS) encode_ns=\(cpuEncodeNS) submit_ns=\(cpuSubmitNS) total_ns=\(cpuFrameTotalNS) draw_calls=\(drawCallCount) bundle_record_ns=\(bundleRecordNS) bundles=\(renderBundleCount) bundle_jobs=\(renderBundleParallelJobs) shadowed_lights=\(lastFrameStats.shadowedLightCount) shadow_tiles=\(lastFrameStats.shadowTileCount) shadow_cascades=\(lastFrameStats.shadowCascadeCount) shadow_map=\(lastFrameStats.shadowMapResolution) shadow_atlas=\(lastFrameStats.shadowAtlasResolution) pass_draws=[\(orderedPassDrawStats)] pass_encode_ns=[\(orderedPassStats)]"
                 )
             }
         } catch {
@@ -1064,10 +1107,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private func encodeShadowPass(
         encoder: GPUCommandEncoder,
         pipeline: GPURenderPipeline,
-        scene: RenderScene
+        scene: RenderScene,
+        plan: ShadowAtlasPlan
     ) throws -> Int {
         guard let shadowMapTarget,
-              let shadowUniformBuffer
+              !plan.lights.isEmpty
         else { return 0 }
         let bindGroupLayout = try ensureShadowBindGroupLayout()
         let drawOrder = makeBasePassDrawOrder(scene: scene)
@@ -1083,68 +1127,88 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
         )
         pass.setPipeline(pipeline)
         var retainedBindGroups: [GPUBindGroup] = []
-        retainedBindGroups.reserveCapacity(dynamicInstanceResources == nil ? drawOrder.count : 1)
+        retainedBindGroups.reserveCapacity((dynamicInstanceResources == nil ? drawOrder.count : 1) * plan.lights.count)
         var drawCallCount = 0
-        if let dyn = dynamicInstanceResources {
-            let bindGroup = try backend.createBindGroup(
-                layout: bindGroupLayout,
-                entries: [
-                    GPUBindGroupEntry(
-                        binding: 0,
-                        buffer: dyn.uniformBuffer,
-                        offset: 0,
-                        size: dyn.stride
-                    ),
-                    GPUBindGroupEntry(
-                        binding: 5,
-                        buffer: shadowUniformBuffer,
-                        offset: 0,
-                        size: UInt64(MemoryLayout<ShadowUniforms>.stride)
-                    ),
-                ]
+        for light in plan.lights {
+            guard shadowRenderUniformBuffers.indices.contains(light.slot) else { continue }
+            let renderUniformBuffer = shadowRenderUniformBuffers[light.slot]
+            var renderUniforms = ShadowRenderUniforms(lightViewProjection: light.lightViewProjection)
+            writeUniform(&renderUniforms, buffer: renderUniformBuffer)
+            let tileX = light.tileX * plan.tileSize
+            let tileY = light.tileY * plan.tileSize
+            pass.setViewport(
+                x: Float(tileX),
+                y: Float(tileY),
+                width: Float(plan.tileSize),
+                height: Float(plan.tileSize)
             )
-            retainedBindGroups.append(bindGroup)
-            for i in drawOrder {
-                let instance = scene.instances[i]
-                guard meshes.indices.contains(instance.meshIndex) else { continue }
-                let mesh = meshes[instance.meshIndex]
-                let drawOffset = UInt64(i) * dyn.stride
-                guard drawOffset <= UInt64(UInt32.max) else { continue }
-                pass.setBindGroup(bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
-                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
-                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
-                pass.drawIndexed(indexCount: mesh.indexCount)
-                drawCallCount += 1
-            }
-        } else {
-            for i in drawOrder where i < instanceResources.count {
-                let instance = scene.instances[i]
-                guard meshes.indices.contains(instance.meshIndex) else { continue }
-                let mesh = meshes[instance.meshIndex]
-                let uniformBuffer = instanceResources[i].uniformBuffer
+            pass.setScissorRect(
+                x: tileX,
+                y: tileY,
+                width: plan.tileSize,
+                height: plan.tileSize
+            )
+            if let dyn = dynamicInstanceResources {
                 let bindGroup = try backend.createBindGroup(
                     layout: bindGroupLayout,
                     entries: [
                         GPUBindGroupEntry(
                             binding: 0,
-                            buffer: uniformBuffer,
+                            buffer: dyn.uniformBuffer,
                             offset: 0,
-                            size: uniformBuffer.size
+                            size: dyn.stride
                         ),
                         GPUBindGroupEntry(
                             binding: 5,
-                            buffer: shadowUniformBuffer,
+                            buffer: renderUniformBuffer,
                             offset: 0,
-                            size: UInt64(MemoryLayout<ShadowUniforms>.stride)
+                            size: UInt64(MemoryLayout<ShadowRenderUniforms>.stride)
                         ),
                     ]
                 )
                 retainedBindGroups.append(bindGroup)
-                pass.setBindGroup(bindGroup, index: 0, dynamicOffsets: [0])
-                pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
-                pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
-                pass.drawIndexed(indexCount: mesh.indexCount)
-                drawCallCount += 1
+                for i in drawOrder {
+                    let instance = scene.instances[i]
+                    guard meshes.indices.contains(instance.meshIndex) else { continue }
+                    let mesh = meshes[instance.meshIndex]
+                    let drawOffset = UInt64(i) * dyn.stride
+                    guard drawOffset <= UInt64(UInt32.max) else { continue }
+                    pass.setBindGroup(bindGroup, index: 0, dynamicOffsets: [UInt32(drawOffset)])
+                    pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                    pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                    pass.drawIndexed(indexCount: mesh.indexCount)
+                    drawCallCount += 1
+                }
+            } else {
+                for i in drawOrder where i < instanceResources.count {
+                    let instance = scene.instances[i]
+                    guard meshes.indices.contains(instance.meshIndex) else { continue }
+                    let mesh = meshes[instance.meshIndex]
+                    let uniformBuffer = instanceResources[i].uniformBuffer
+                    let bindGroup = try backend.createBindGroup(
+                        layout: bindGroupLayout,
+                        entries: [
+                            GPUBindGroupEntry(
+                                binding: 0,
+                                buffer: uniformBuffer,
+                                offset: 0,
+                                size: uniformBuffer.size
+                            ),
+                            GPUBindGroupEntry(
+                                binding: 5,
+                                buffer: renderUniformBuffer,
+                                offset: 0,
+                                size: UInt64(MemoryLayout<ShadowRenderUniforms>.stride)
+                            ),
+                        ]
+                    )
+                    retainedBindGroups.append(bindGroup)
+                    pass.setBindGroup(bindGroup, index: 0, dynamicOffsets: [0])
+                    pass.setVertexBuffer(mesh.vertexBuffer, slot: 0)
+                    pass.setIndexBuffer(mesh.indexBuffer, format: .uint32)
+                    pass.drawIndexed(indexCount: mesh.indexCount)
+                    drawCallCount += 1
+                }
             }
         }
         pass.end()

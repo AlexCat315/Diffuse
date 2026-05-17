@@ -17,6 +17,7 @@ public enum EditorAction: Sendable {
     case setGizmoMode(EditorGizmoMode)
     case setGizmoSpace(EditorGizmoSpace)
     case setViewportShadingMode(EditorViewportShadingMode)
+    case setViewportShadowsEnabled(Bool)
     case setTranslateSnapEnabled(Bool)
     case setRotateSnapEnabled(Bool)
     case setScaleSnapEnabled(Bool)
@@ -103,6 +104,9 @@ public enum EditorReducer {
 
         case let .setViewportShadingMode(mode):
             state.viewportShadingMode = mode
+
+        case let .setViewportShadowsEnabled(enabled):
+            state.viewportShadowsEnabled = enabled
 
         case let .setTranslateSnapEnabled(enabled):
             state.translateSnapEnabled = enabled
