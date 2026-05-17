@@ -50,6 +50,16 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
 
         // Physics extras — non-nil only when `"rigidbody"` ∈ components
         public var rigidBodyMotionType: String? // "static" | "dynamic" | "kinematic"
+        public var rigidBodyMass: Float?
+        public var rigidBodyGravityScale: Float?
+        public var rigidBodyAllowSleep: Bool?
+
+        // Collider extras — non-nil only when `"collider"` ∈ components
+        public var colliderShape: String?       // "box" | "sphere" | "capsule" | "mesh" | "convex"
+        public var colliderIsTrigger: Bool?
+        public var colliderFriction: Float?
+        public var colliderRestitution: Float?
+        public var colliderDensity: Float?
     }
 
     // MARK: - Snapshot root
