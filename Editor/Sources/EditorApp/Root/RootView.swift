@@ -64,7 +64,7 @@ private struct EditorCallbacks {
                 playbackState: s.state.playbackState,
                 commandPaletteVisible: commandPaletteVisible,
                 setPlaybackState: { next in
-                    if s.state.playbackState != next { s.dispatch(.setPlaybackState(next)) }
+                    app.applyPlaybackState(next)
                 },
                 setWorkspaceMode: { next in
                     guard s.state.workspaceMode != next else { return }

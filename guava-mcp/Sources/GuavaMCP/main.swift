@@ -166,6 +166,20 @@ let toolGetSelection: [String: Any] = [
     "inputSchema": ["type": "object", "properties": [:] as [String: Any]] as [String: Any],
 ]
 
+let toolSetPlaybackState: [String: Any] = [
+    "name": "set_playback_state",
+    "description": "Controls the physics simulation playback state in the Guava editor. 'playing' starts the simulation (snapshots the scene first), 'paused' freezes it without losing state, 'stopped' stops and restores the original scene.",
+    "inputSchema": [
+        "type": "object",
+        "required": ["state"],
+        "properties": [
+            "state": ["type": "string",
+                      "enum": ["playing", "paused", "stopped"],
+                      "description": "Target playback state."] as [String: Any],
+        ] as [String: Any],
+    ] as [String: Any],
+]
+
 // MARK: - MCP stdio protocol
 
 func writeResponse(_ obj: [String: Any]) {
@@ -220,7 +234,7 @@ func handle(_ msg: [String: Any]) {
         writeResponse([
             "jsonrpc": "2.0",
             "id": id as Any,
-            "result": ["tools": [toolGetScene, toolGetSelection, toolExecuteEditPlan]] as [String: Any],
+            "result": ["tools": [toolGetScene, toolGetSelection, toolExecuteEditPlan, toolSetPlaybackState]] as [String: Any],
         ])
 
     case "tools/call":
@@ -251,6 +265,15 @@ func handle(_ msg: [String: Any]) {
             if let ok = res["ok"] as? Bool, ok {
                 let summary = res["summary"] as? String ?? "Done"
                 toolResult(id: id as Any, text: "Applied: \(summary)")
+            } else {
+                toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
+            }
+
+        case "set_playback_state":
+            let res = editorCall(["action": "set_playback_state", "state": args["state"] as Any])
+            if let ok = res["ok"] as? Bool, ok {
+                let state = res["state"] as? String ?? "unknown"
+                toolResult(id: id as Any, text: "Playback state set to '\(state)'")
             } else {
                 toolResult(id: id as Any, text: res["error"] as? String ?? "unknown error", isError: true)
             }

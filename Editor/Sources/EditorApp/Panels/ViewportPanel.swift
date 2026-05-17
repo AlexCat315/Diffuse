@@ -25,6 +25,7 @@ struct ViewportPanel: View {
             let gizmoSpace = store.gizmoSpace
             let shadingMode = store.viewportShadingMode
             let shadowsEnabled = store.viewportShadowsEnabled
+            let playbackState = store.playbackState
 
             // 推送 gizmo 控制器所需的快照（摄像机 / 视口矩形 / 实体世界坐标）。
             let _: Void = updateGizmoSnapshot(selectedID: selectedEntityID,
@@ -68,6 +69,7 @@ struct ViewportPanel: View {
                                         gizmoSpace: gizmoSpace,
                                         shadingMode: shadingMode,
                                         shadowsEnabled: shadowsEnabled,
+                                        playbackState: playbackState,
                                         onSelectGizmoMode: { mode in
                                             if gizmoMode != mode {
                                                 store.dispatch(.setGizmoMode(mode))
@@ -85,7 +87,10 @@ struct ViewportPanel: View {
                                         },
                                         onToggleShadows: {
                                             app.setViewportShadowsEnabled(!shadowsEnabled)
-                                        })
+                                        },
+                                        onPlay: { app.applyPlaybackState(.playing) },
+                                        onPause: { app.applyPlaybackState(.paused) },
+                                        onStop: { app.applyPlaybackState(.stopped) })
                     }
                         .absolutePosition(left: 10, top: 10)
 
@@ -1265,10 +1270,14 @@ private struct ViewportInfoBar: View {
     let gizmoSpace: EditorGizmoSpace
     let shadingMode: EditorViewportShadingMode
     let shadowsEnabled: Bool
+    let playbackState: PlaybackState
     let onSelectGizmoMode: (EditorGizmoMode) -> Void
     let onSelectGizmoSpace: (EditorGizmoSpace) -> Void
     let onSelectShadingMode: (EditorViewportShadingMode) -> Void
     let onToggleShadows: () -> Void
+    let onPlay: () -> Void
+    let onPause: () -> Void
+    let onStop: () -> Void
 
     var body: some View {
         Box(direction: .column, alignItems: .flexStart, spacing: 4) {
@@ -1323,6 +1332,31 @@ private struct ViewportInfoBar: View {
                     onToggleShadows()
                 }
                 .toggleButtonStyle(shadowsEnabled)
+
+                Divider()
+                    .frame(width: 1, height: 16)
+                    .foregroundColor(Color(r: 0, g: 0, b: 0, a: 0.4))
+
+                Button(isEnabled: playbackState != .playing,
+                       tooltip: L("Play physics simulation"),
+                       action: onPlay) {
+                    Text("▶").font(SemanticFontRef.label)
+                }
+                .toggleButtonStyle(playbackState == .playing)
+
+                Button(isEnabled: playbackState != .stopped,
+                       tooltip: L("Pause physics simulation"),
+                       action: onPause) {
+                    Text("⏸").font(SemanticFontRef.label)
+                }
+                .toggleButtonStyle(playbackState == .paused)
+
+                Button(isEnabled: playbackState != .stopped,
+                       tooltip: L("Stop physics simulation"),
+                       action: onStop) {
+                    Text("⏹").font(SemanticFontRef.label)
+                }
+                .toggleButtonStyle(false)
             }
         }
         .padding(3)
