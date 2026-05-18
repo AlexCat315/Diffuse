@@ -20,6 +20,11 @@ private func runEditor() throws {
     app.bootstrap()
     defer { app.shutdown() }
 
+    // Set up full GuavaUI in-game UI host. The render thread reads snapshots via
+    // InGameUIRegistry; the main thread drives the ViewGraph via host.tick().
+    let inGameUIHost = InGameUIHost(backend: backend)
+    InGameUIRegistry.shared.provider = inGameUIHost
+
     if let shellState {
         app.store.dispatch(.setWorkspaceMode(shellState.workspaceMode))
         app.store.dispatch(.setActiveLayoutPreset(shellState.activeLayoutPreset))
@@ -108,7 +113,11 @@ private func runEditor() throws {
                           titleBarStyle: .standard),
         backend: backend,
         events: events,
-        onTick: { dt in app.tick(deltaTime: dt) },
+        onTick: { dt in
+            app.tick(deltaTime: dt)
+            let size = app.viewportDrawableSize
+            inGameUIHost.tick(width: Int(size.width), height: Int(size.height))
+        },
         onDisplayReady: { display in
             displayHandle = display
             installNativeMenu(on: display)
