@@ -28,6 +28,10 @@ public struct RuntimeScriptPhaseContext {
         worldPointer.pointee.entities()
     }
 
+    public func entities<Component: RuntimeComponent>(with type: Component.Type) -> [EntityID] {
+        worldPointer.pointee.entities(with: type)
+    }
+
     public func contains(_ entity: EntityID) -> Bool {
         worldPointer.pointee.contains(entity)
     }

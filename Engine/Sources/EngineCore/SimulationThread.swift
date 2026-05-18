@@ -1,4 +1,5 @@
 import AssetPipeline
+import AudioRuntime
 import EngineKernel
 import Foundation
 import RenderBackend
@@ -105,6 +106,7 @@ final class SimulationThread: @unchecked Sendable {
             frameIndex: UInt64(request.frameIndex),
             inputEvents: request.inputEvents
         )
+        AudioEngine.shared.tick(scene: sceneRuntime)
         simulationTimeSeconds += request.deltaTime
         simulationSeconds = CFAbsoluteTimeGetCurrent() - begin
 
@@ -116,6 +118,7 @@ final class SimulationThread: @unchecked Sendable {
 
         if request.shouldRender {
             let scene = request.renderSceneOverride ?? sceneRuntime.renderScene
+            let paletteMap = sceneRuntime.resource(JointPaletteMap.self) ?? JointPaletteMap()
             let packet = RenderPacket(
                 frameIndex: request.frameIndex,
                 deltaTime: request.deltaTime,
@@ -123,7 +126,8 @@ final class SimulationThread: @unchecked Sendable {
                 scene: scene,
                 sceneSnapshot: sceneRuntime.snapshot,
                 renderSettings: request.renderSettings,
-                simulationTimeSeconds: simulationTimeSeconds
+                simulationTimeSeconds: simulationTimeSeconds,
+                jointPaletteMap: paletteMap
             )
             ringBuffer.publish(packet)
             onPacketPublished()

@@ -39,6 +39,7 @@ struct ShadowUniforms {
 @group(0) @binding(5) var<uniform> shadow : ShadowUniforms;
 @group(0) @binding(6) var shadow_sampler : sampler;
 @group(0) @binding(7) var shadow_texture : texture_2d<f32>;
+@group(0) @binding(8) var<storage, read> joint_palette : array<mat4x4<f32>>;
 
 struct VsIn {
     @location(0) pos            : vec3<f32>,
@@ -63,10 +64,25 @@ struct VsOut {
 @vertex
 fn vs_main(in : VsIn) -> VsOut {
     var out : VsOut;
-    let world = u.model * vec4<f32>(in.pos, 1.0);
-    out.position = u.mvp * vec4<f32>(in.pos, 1.0);
+
+    // Apply skeletal skinning when joint weights are non-zero.
+    let total_weight = in.weights.x + in.weights.y + in.weights.z + in.weights.w;
+    var model = u.model;
+    if total_weight > 0.0001 && arrayLength(&joint_palette) > 0u {
+        let j = vec4<u32>(u32(in.joints.x), u32(in.joints.y), u32(in.joints.z), u32(in.joints.w));
+        let count = arrayLength(&joint_palette);
+        let m0 = select(mat4x4<f32>(), joint_palette[j.x], j.x < count);
+        let m1 = select(mat4x4<f32>(), joint_palette[j.y], j.y < count);
+        let m2 = select(mat4x4<f32>(), joint_palette[j.z], j.z < count);
+        let m3 = select(mat4x4<f32>(), joint_palette[j.w], j.w < count);
+        let skin = m0 * in.weights.x + m1 * in.weights.y + m2 * in.weights.z + m3 * in.weights.w;
+        model = u.model * skin;
+    }
+
+    let world = model * vec4<f32>(in.pos, 1.0);
+    out.position = u.mvp * (model * vec4<f32>(in.pos, 1.0));
     out.color = in.color;
-    out.normal = safe_normalize((u.model * vec4<f32>(in.normal, 0.0)).xyz);
+    out.normal = safe_normalize((model * vec4<f32>(in.normal, 0.0)).xyz);
     out.uv = in.uv;
     out.material_index = in.material_index;
     out.world_pos = world.xyz;

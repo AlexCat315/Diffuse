@@ -211,6 +211,12 @@ public final class ScriptContext {
         phaseContext.setResource(resource)
     }
 
+    /// Per-frame input state derived from the scene's `InputActionMap`.
+    /// Always returns a valid (possibly empty) state even if no map is set.
+    public var input: InputFrameState {
+        phaseContext.resource(InputFrameState.self) ?? InputFrameState()
+    }
+
     @discardableResult
     public func updateResource<Resource: Sendable>(
         _ type: Resource.Type,
