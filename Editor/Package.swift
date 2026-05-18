@@ -25,6 +25,7 @@ let package = Package(
             dependencies: [
                 .product(name: "AIRuntime", package: "Engine"),
                 .product(name: "AssetPipeline", package: "Engine"),
+                .product(name: "AudioRuntime", package: "Engine"),
                 .product(name: "EngineCore", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "IntentRuntime", package: "Engine"),

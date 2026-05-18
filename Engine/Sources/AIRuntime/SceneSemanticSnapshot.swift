@@ -60,6 +60,12 @@ public struct SceneSemanticSnapshot: Codable, Sendable, Equatable {
         public var colliderFriction: Float?
         public var colliderRestitution: Float?
         public var colliderDensity: Float?
+
+        // Audio extras — non-nil only when `"audio_source"` ∈ components
+        public var audioClip: String?
+        public var audioVolume: Float?
+        public var audioLoop: Bool?
+        public var audioPlayOnAwake: Bool?
     }
 
     // MARK: - Snapshot root

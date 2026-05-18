@@ -4,7 +4,7 @@
 ///   - `pos`   : `float32x2` at offset 0  (screen-space pixels, top-left origin)
 ///   - `uv`    : `float32x2` at offset 8  (atlas UV in 0..1; sentinel `(-1, mode)` for non-textured shapes)
 ///   - `color` : `unorm8x4`  at offset 16 (premultiplied RGBA)
-public struct UIVertex {
+public struct UIVertex: Sendable {
     public var posX: Float
     public var posY: Float
     public var u: Float

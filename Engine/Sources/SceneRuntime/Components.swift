@@ -44,6 +44,12 @@ public enum ComponentCatalog {
         ComponentTypeID(RenderMaterialComponent.self),
         ComponentTypeID(CameraComponent.self),
         ComponentTypeID(LightComponent.self),
+
+        // Audio
+        ComponentTypeID(AudioSource.self),
+
+        // Animation
+        ComponentTypeID(AnimationPlayer.self),
     ]
 
     /// Number of registered component types.
