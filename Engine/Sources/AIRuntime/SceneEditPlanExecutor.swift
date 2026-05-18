@@ -292,6 +292,18 @@ public struct SceneEditPlanExecutor: Sendable {
                                                                field: "friction, restitution, or density")
             }
             return result
+
+        case .setAudioSource:
+            let id = try resolveEntityID(step, scene: scene)
+            let eid = entityID(fromRaw: id)
+            var source = scene.component(AudioSource.self, for: eid) ?? AudioSource()
+            if let clip  = step.audioClip        { source.clipName = clip }
+            if let vol   = step.audioVolume       { source.volume = vol }
+            if let pitch = step.audioPitch        { source.pitch = pitch }
+            if let loop  = step.audioLoop         { source.loop = loop }
+            if let poa   = step.audioPlayOnAwake  { source.playOnAwake = poa }
+            if let blend = step.audioSpatialBlend { source.spatialBlend = blend }
+            return [.setAudioSource(entityID: id, source: source)]
         }
     }
 

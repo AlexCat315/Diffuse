@@ -1,3 +1,4 @@
+import EngineKernel
 import SceneRuntime
 
 private struct RegisteredScript: Sendable {
@@ -15,6 +16,8 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
     private var nextHandleRawValue: UInt64 = 1
     private var registeredScripts: [ScriptHandle: RegisteredScript] = [:]
     private var activeInstances: Set<ScriptInstanceKey> = []
+    private let inputProcessor = InputStateProcessor()
+    private let animationRuntime = AnimationRuntime()
 
     public init() {}
 
@@ -42,9 +45,13 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
 
     public func reset() {
         activeInstances.removeAll(keepingCapacity: true)
+        inputProcessor.reset()
     }
 
     public func run(context: inout RuntimeScriptPhaseContext) {
+        context.setResource(InGameCanvas())
+        inputProcessor.process(context: &context)
+        animationRuntime.tick(context: &context, deltaTime: context.deltaTimeSeconds)
         let entities = context.entities()
         var liveInstances: Set<ScriptInstanceKey> = []
 

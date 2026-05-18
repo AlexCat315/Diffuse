@@ -43,6 +43,7 @@ public struct SceneSemanticEncoder: Sendable {
             if scene.hasComponent(CameraComponent.self, for: entity)     { components.append("camera") }
             if scene.hasComponent(RigidBody.self, for: entity)           { components.append("rigidbody") }
             if scene.hasComponent(Collider.self, for: entity)            { components.append("collider") }
+            if scene.hasComponent(AudioSource.self, for: entity)         { components.append("audio_source") }
 
             var lightType: String?
             var lightIntensity: Float?
@@ -93,6 +94,17 @@ public struct SceneSemanticEncoder: Sendable {
                 colliderDensity = col.material.density
             }
 
+            var audioClip: String?
+            var audioVolume: Float?
+            var audioLoop: Bool?
+            var audioPlayOnAwake: Bool?
+            if let src = scene.component(AudioSource.self, for: entity) {
+                audioClip = src.clipName.isEmpty ? nil : src.clipName
+                audioVolume = src.volume
+                audioLoop = src.loop
+                audioPlayOnAwake = src.playOnAwake
+            }
+
             records.append(SceneSemanticSnapshot.Entity(
                 id: ref,
                 name: name,
@@ -117,7 +129,11 @@ public struct SceneSemanticEncoder: Sendable {
                 colliderIsTrigger: colliderIsTrigger,
                 colliderFriction: colliderFriction,
                 colliderRestitution: colliderRestitution,
-                colliderDensity: colliderDensity
+                colliderDensity: colliderDensity,
+                audioClip: audioClip,
+                audioVolume: audioVolume,
+                audioLoop: audioLoop,
+                audioPlayOnAwake: audioPlayOnAwake
             ))
         }
 

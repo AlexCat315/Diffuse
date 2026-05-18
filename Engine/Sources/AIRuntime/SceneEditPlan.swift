@@ -45,6 +45,9 @@ public enum SceneEditOp: String, Codable, Sendable, CaseIterable {
     // Physics — misc
     case setColliderTrigger   = "set_collider_trigger"
     case setConstraintEnabled = "set_constraint_enabled"
+
+    // Audio
+    case setAudioSource       = "set_audio_source"
 }
 
 /// One atomic mutation step in a `SceneEditPlan`.
@@ -127,6 +130,14 @@ public struct SceneEditStep: Codable, Sendable {
     // reparent_entity
     public var parentRef: String?        // "scene:<id>" or nil to reparent to root
 
+    // set_audio_source
+    public var audioClip: String?
+    public var audioVolume: Float?
+    public var audioPitch: Float?
+    public var audioLoop: Bool?
+    public var audioPlayOnAwake: Bool?
+    public var audioSpatialBlend: Float?
+
     enum CodingKeys: String, CodingKey {
         case op
         case entityRef          = "entity_id"
@@ -158,6 +169,12 @@ public struct SceneEditStep: Codable, Sendable {
         case isTrigger          = "is_trigger"
         case isEnabled          = "is_enabled"
         case parentRef          = "parent_id"
+        case audioClip          = "audio_clip"
+        case audioVolume        = "audio_volume"
+        case audioPitch         = "audio_pitch"
+        case audioLoop          = "audio_loop"
+        case audioPlayOnAwake   = "audio_play_on_awake"
+        case audioSpatialBlend  = "audio_spatial_blend"
     }
 }
 
