@@ -75,6 +75,8 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
     private var taaUniformBuffer: GPUBuffer?
     private var ssaoUniformBuffer: GPUBuffer?
     var stylizedCharacterUniformBuffer: GPUBuffer?
+    var fallbackJointPaletteBuffer: GPUBuffer?
+    var jointPaletteBuffers: [EntityID: GPUBuffer] = [:]
     var historyValid = false
 
     let dynamicOffsetThreshold = 64
@@ -169,7 +171,9 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                 scene: packet.scene,
                 shadowBindingsByLightIndex: shadowPlan.shadowBindingsByLightIndex
             )
-            try ensureInstanceResources(scene: packet.scene, pipeline: meshPipeline)
+            try ensureJointPaletteBuffers(from: packet.jointPaletteMap)
+            writeJointPaletteBuffers(from: packet.jointPaletteMap)
+            try ensureInstanceResources(scene: packet.scene, pipeline: meshPipeline, jointPaletteMap: packet.jointPaletteMap)
             writeInstanceUniforms(scene: packet.scene, viewProj: cameraMatrices.viewProjection)
 
             if framePlan.passes.contains(.depthPrepass) {
@@ -639,6 +643,11 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
                     binding: 7,
                     visibility: .fragment,
                     type: .sampledTexture
+                ),
+                GPUBindGroupLayoutEntry(
+                    binding: 8,
+                    visibility: .vertex,
+                    type: .readOnlyStorageBuffer
                 ),
             ]
         )

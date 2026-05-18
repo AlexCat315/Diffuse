@@ -42,7 +42,7 @@ extension WGPURenderer {
         }
     }
 
-    func ensureInstanceResources(scene: RenderScene, pipeline: GPURenderPipeline) throws {
+    func ensureInstanceResources(scene: RenderScene, pipeline: GPURenderPipeline, jointPaletteMap: JointPaletteMap = JointPaletteMap()) throws {
         let instanceCount = scene.instances.count
         let resourceKeys = scene.instances.map {
             InstanceResourceKey(meshIndex: $0.meshIndex,
@@ -98,11 +98,13 @@ extension WGPURenderer {
                 size: UInt64(MemoryLayout<MeshInstanceUniforms>.stride),
                 usage: [.uniform, .copyDst]
             )
+            let paletteBuffer = instance.entity.flatMap { jointPaletteBuffers[$0] } ?? fallbackJointPaletteBuffer
             let bindGroup = try backend.createBindGroup(
                 layout: bindGroupLayout,
                 entries: try meshBindGroupEntries(
                     instanceUniformBuffer: uniformBuffer,
-                    baseColorTextureView: baseColorTextureView(for: instance)
+                    baseColorTextureView: baseColorTextureView(for: instance),
+                    jointPaletteBuffer: paletteBuffer
                 )
             )
             instanceResources.append(
@@ -112,22 +114,26 @@ extension WGPURenderer {
     }
 
     func meshBindGroupEntries(instanceUniformBuffer: GPUBuffer,
-                              baseColorTextureView: GPUTextureView? = nil) throws -> [GPUBindGroupEntry] {
+                              baseColorTextureView: GPUTextureView? = nil,
+                              jointPaletteBuffer: GPUBuffer? = nil) throws -> [GPUBindGroupEntry] {
         try ensureStylizedCharacterUniformBuffer()
         try ensureMeshSamplingFallbackResources()
         try ensureSceneLightUniformBuffer()
         try ensureShadowResources(settings: activeRenderSettings.shadowSettings)
+        try ensureFallbackJointPaletteBuffer()
         guard let stylizedCharacterUniformBuffer,
               let linearSampler,
               let fallbackMeshTextureView,
               let sceneLightUniformBuffer,
               let shadowUniformBuffer,
               let shadowSampler,
-              let shadowMapTarget
+              let shadowMapTarget,
+              let fallbackJointPaletteBuffer
         else {
             throw WGPUBackendError.initFailed("mesh bind group resources missing")
         }
         let textureView = baseColorTextureView ?? fallbackMeshTextureView
+        let paletteBuffer = jointPaletteBuffer ?? fallbackJointPaletteBuffer
         return [
             GPUBindGroupEntry(
                 binding: 0,
@@ -157,6 +163,12 @@ extension WGPURenderer {
             ),
             GPUBindGroupEntry(binding: 6, sampler: shadowSampler),
             GPUBindGroupEntry(binding: 7, textureView: shadowMapTarget.colorView),
+            GPUBindGroupEntry(
+                binding: 8,
+                buffer: paletteBuffer,
+                offset: 0,
+                size: paletteBuffer.size
+            ),
         ]
     }
 
@@ -228,6 +240,39 @@ extension WGPURenderer {
             shadowBindingsByLightIndex: shadowBindingsByLightIndex
         )
         writeUniform(&uniforms, buffer: sceneLightUniformBuffer)
+    }
+
+    func ensureFallbackJointPaletteBuffer() throws {
+        guard backend.rawDevice != nil else { return }
+        if fallbackJointPaletteBuffer != nil { return }
+        let size = UInt64(MemoryLayout<simd_float4x4>.stride)
+        let buf = try backend.createBuffer(size: size, usage: [.storage, .copyDst])
+        var identity = matrix_identity_float4x4
+        withUnsafeBytes(of: &identity) { raw in
+            if let base = raw.baseAddress {
+                backend.writeBuffer(buf, data: base, size: raw.count)
+            }
+        }
+        fallbackJointPaletteBuffer = buf
+    }
+
+    func ensureJointPaletteBuffers(from paletteMap: JointPaletteMap) throws {
+        for (entityID, palette) in paletteMap.palettes {
+            let required = UInt64(max(palette.matrices.count, 1)) * UInt64(MemoryLayout<simd_float4x4>.stride)
+            if let existing = jointPaletteBuffers[entityID], existing.size >= required { continue }
+            jointPaletteBuffers[entityID] = try backend.createBuffer(size: required, usage: [.storage, .copyDst])
+        }
+    }
+
+    func writeJointPaletteBuffers(from paletteMap: JointPaletteMap) {
+        for (entityID, palette) in paletteMap.palettes {
+            guard let buffer = jointPaletteBuffers[entityID], !palette.matrices.isEmpty else { continue }
+            palette.matrices.withUnsafeBufferPointer { ptr in
+                let raw = UnsafeRawPointer(ptr.baseAddress!)
+                let size = ptr.count * MemoryLayout<simd_float4x4>.stride
+                backend.writeBuffer(buffer, data: raw, size: size)
+            }
+        }
     }
 
     func ensureMeshSamplingFallbackResources() throws {

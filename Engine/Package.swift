@@ -28,6 +28,7 @@ let package = Package(
         .library(name: "EXRIO", targets: ["EXRIO"]),
         .library(name: "CinematicRenderer", targets: ["CinematicRenderer"]),
         .library(name: "CardBattleRuntime", targets: ["CardBattleRuntime"]),
+        .library(name: "AudioRuntime", targets: ["AudioRuntime"]),
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
         .library(name: "AIRuntime", targets: ["AIRuntime"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
@@ -185,6 +186,15 @@ let package = Package(
         ),
         .target(name: "CardBattleRuntime"),
         .target(
+            name: "AudioRuntime",
+            dependencies: ["SceneRuntime"],
+            linkerSettings: [
+                .linkedFramework("AVFoundation", .when(platforms: [.macOS])),
+                .linkedFramework("AudioToolbox", .when(platforms: [.macOS])),
+                .linkedFramework("CoreAudio", .when(platforms: [.macOS])),
+            ]
+        ),
+        .target(
             name: "AIRuntime",
             dependencies: [
                 "SceneRuntime",
@@ -204,6 +214,7 @@ let package = Package(
         .target(
             name: "ScriptRuntime",
             dependencies: [
+                "AssetPipeline",
                 "SceneRuntime",
             ]
         ),
@@ -232,6 +243,7 @@ let package = Package(
                 "RenderBackend",
                 "SceneRuntime",
                 "AssetPipeline",
+                "AudioRuntime",
                 "ScriptRuntime",
             ]
         ),
