@@ -1,3 +1,4 @@
+import EngineKernel
 import SceneRuntime
 
 private struct RegisteredScript: Sendable {
@@ -48,6 +49,7 @@ public final class ScriptRuntime: RuntimeScriptDriver, @unchecked Sendable {
     }
 
     public func run(context: inout RuntimeScriptPhaseContext) {
+        context.setResource(InGameCanvas())
         inputProcessor.process(context: &context)
         animationRuntime.tick(context: &context, deltaTime: context.deltaTimeSeconds)
         let entities = context.entities()

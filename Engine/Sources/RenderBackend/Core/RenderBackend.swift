@@ -1,4 +1,5 @@
 import AssetPipeline
+import EngineKernel
 import Foundation
 import Logging
 import RHIWGPU
@@ -444,6 +445,25 @@ public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {
 
             if !viewportResolved {
                 viewportSurfaceState = .init()
+            }
+
+            if let uiProvider = InGameUIRegistry.shared.provider,
+               !packet.inGameCanvas.commands.isEmpty {
+                let formatHint: String
+                switch format {
+                case .rgba16Float: formatHint = "rgba16Float"
+                case .rgba8Unorm:  formatHint = "rgba8Unorm"
+                default:           formatHint = "bgra8Unorm"
+                }
+                try uiProvider.renderInGameUI(
+                    canvas: packet.inGameCanvas,
+                    commandEncoder: encoder,
+                    colorView: colorTarget.view,
+                    formatHint: formatHint,
+                    width: Int(packet.drawableSize.width),
+                    height: Int(packet.drawableSize.height),
+                    deltaTime: packet.deltaTime
+                )
             }
 
             let cmd = try encoder.finish()

@@ -1,3 +1,4 @@
+import EngineKernel
 import Foundation
 import SceneRuntime
 
@@ -27,6 +28,7 @@ public struct RenderPacket: Sendable {
     public var renderSettings: RenderSettings
     public var simulationTimeSeconds: Double
     public var jointPaletteMap: JointPaletteMap
+    public var inGameCanvas: InGameCanvas
 
     public init(
         frameIndex: Int,
@@ -36,7 +38,8 @@ public struct RenderPacket: Sendable {
         sceneSnapshot: SceneRuntimeSnapshot,
         renderSettings: RenderSettings,
         simulationTimeSeconds: Double,
-        jointPaletteMap: JointPaletteMap = JointPaletteMap()
+        jointPaletteMap: JointPaletteMap = JointPaletteMap(),
+        inGameCanvas: InGameCanvas = InGameCanvas()
     ) {
         self.frameIndex = frameIndex
         self.deltaTime = deltaTime
@@ -46,6 +49,7 @@ public struct RenderPacket: Sendable {
         self.renderSettings = renderSettings
         self.simulationTimeSeconds = simulationTimeSeconds
         self.jointPaletteMap = jointPaletteMap
+        self.inGameCanvas = inGameCanvas
     }
 }
 
