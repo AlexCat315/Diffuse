@@ -12,7 +12,7 @@ public extension TextureID {
 }
 
 /// One contiguous draw call, all sharing the same texture and scissor rect.
-public struct DrawBatch: Equatable {
+public struct DrawBatch: Equatable, Sendable {
     public var indexOffset: UInt32
     public var indexCount: UInt32
     public var textureID: TextureID
@@ -68,6 +68,18 @@ public final class DrawList {
     }
 
     public var currentClip: UIRect? { clipStack.last }
+
+    // MARK: - Snapshot restore
+
+    /// Replace the draw list contents with pre-built data from a `DrawListSnapshot`.
+    /// Used by the render thread to reconstruct a frame without re-walking the node tree.
+    public func load(vertices: [UIVertex], indices: [UInt32], batches: [DrawBatch]) {
+        self.vertices = vertices
+        self.indices = indices
+        self.batches = batches
+        clipStack.removeAll(keepingCapacity: true)
+        viewportBounds = nil
+    }
 
     // MARK: - Composite (Phase 4b)
 
