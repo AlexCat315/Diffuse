@@ -35,7 +35,7 @@ public final class EditorApplication: @unchecked Sendable {
     private let events: PlatformEventBridge
     private var eventToken: PlatformEventBridge.SubscriptionToken?
     private var pendingViewportEvents: [InputEvent] = []
-    private var viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
+    private var _viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
     private var lastViewportSurfaceState = ViewportSurfaceState()
     private var openSettingsWindowHandler: (() -> Void)?
     private var displayInvalidationHandler: (() -> Void)?
@@ -110,7 +110,6 @@ public final class EditorApplication: @unchecked Sendable {
             self?.handlePlatformEvent(event)
         }
         engine.start(renderSurface: nil, enableViewportSurface: true)
-        InGameUIRegistry.shared.provider = InGameUIRuntime(backend: engine.wgpuBackend)
         // 默认启用离屏渲染，让引擎渲染到一个 viewport 纹理交给编辑器显示。
         // 不开启 viewportResolve 时 UI 会一直停在 "Waiting for first render packet"。
         engine.queueRenderSettings(makeViewportRenderSettings(shadowsEnabled: store.state.viewportShadowsEnabled))
@@ -128,7 +127,7 @@ public final class EditorApplication: @unchecked Sendable {
         engine.tick(
             deltaTime: deltaTime,
             inputEvents: inputEvents,
-            drawableSize: viewportDrawableSize,
+            drawableSize: _viewportDrawableSize,
             shouldRender: store.state.shouldRender,
             renderSceneOverride: scene.currentRenderScene()
         )
@@ -156,9 +155,11 @@ public final class EditorApplication: @unchecked Sendable {
         pendingViewportEvents.append(event)
     }
 
+    public var viewportDrawableSize: RenderDrawableSize { _viewportDrawableSize }
+
     public func setViewportDrawableSize(_ size: RenderDrawableSize) {
-        guard viewportDrawableSize != size else { return }
-        viewportDrawableSize = size
+        guard _viewportDrawableSize != size else { return }
+        _viewportDrawableSize = size
     }
 
     public func setViewportRenderCompletionHandler(_ handler: (@Sendable (ViewportSurfaceState) -> Void)?) {
