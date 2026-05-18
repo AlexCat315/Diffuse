@@ -119,6 +119,7 @@ final class SimulationThread: @unchecked Sendable {
         if request.shouldRender {
             let scene = request.renderSceneOverride ?? sceneRuntime.renderScene
             let paletteMap = sceneRuntime.resource(JointPaletteMap.self) ?? JointPaletteMap()
+            let canvas = sceneRuntime.resource(InGameCanvas.self) ?? InGameCanvas()
             let packet = RenderPacket(
                 frameIndex: request.frameIndex,
                 deltaTime: request.deltaTime,
@@ -127,7 +128,8 @@ final class SimulationThread: @unchecked Sendable {
                 sceneSnapshot: sceneRuntime.snapshot,
                 renderSettings: request.renderSettings,
                 simulationTimeSeconds: simulationTimeSeconds,
-                jointPaletteMap: paletteMap
+                jointPaletteMap: paletteMap,
+                inGameCanvas: canvas
             )
             ringBuffer.publish(packet)
             onPacketPublished()

@@ -1,3 +1,4 @@
+import EngineKernel
 import SceneRuntime
 import simd
 
@@ -215,6 +216,19 @@ public final class ScriptContext {
     /// Always returns a valid (possibly empty) state even if no map is set.
     public var input: InputFrameState {
         phaseContext.resource(InputFrameState.self) ?? InputFrameState()
+    }
+
+    /// Appends 2D overlay UI commands to this frame's in-game canvas.
+    ///
+    /// Usage:
+    /// ```swift
+    /// ctx.drawUI { canvas in
+    ///     canvas.label("Score: \(score)", x: 10, y: 10)
+    ///     canvas.progressBar(x: 10, y: 40, w: 200, h: 20, value: health, maxValue: 100)
+    /// }
+    /// ```
+    public func drawUI(_ body: (inout InGameCanvas) -> Void) {
+        phaseContext.updateResource(InGameCanvas.self) { body(&$0) }
     }
 
     @discardableResult

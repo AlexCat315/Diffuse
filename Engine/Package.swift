@@ -214,6 +214,7 @@ let package = Package(
         .target(
             name: "ScriptRuntime",
             dependencies: [
+                "EngineKernel",
                 "AssetPipeline",
                 "SceneRuntime",
             ]
@@ -221,6 +222,7 @@ let package = Package(
         .target(
             name: "RenderBackend",
             dependencies: [
+                "EngineKernel",
                 "EngineMath",
                 "RHIWGPU",
                 "AssetPipeline",
