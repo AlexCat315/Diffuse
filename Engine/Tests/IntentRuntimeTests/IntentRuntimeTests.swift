@@ -1,4 +1,5 @@
 import AssetPipeline
+import CapabilityRuntime
 import Foundation
 import IntentRuntime
 import ObservationBus
@@ -246,6 +247,90 @@ struct IntentRuntimeTests {
         }
         #expect(rawID == entity.rawValue)
         #expect(transform.translation == SIMD3<Float>(3, 4, 5))
+    }
+
+    @Test("AmbiguityScorer treats fully specified human intents as clear")
+    func ambiguityScorerTreatsFullySpecifiedHumanIntentsAsClear() throws {
+        let descriptor = try #require(CapabilityRegistry.default.descriptor(for: "scene.set_name"))
+        let intent = IntentIR(
+            verb: "scene.set_name",
+            summary: "Rename selected entity",
+            targetObjectIDs: ["scene:42"],
+            arguments: ["name": .string("Boss")],
+            source: .human
+        )
+
+        let score = AmbiguityScorer().score(
+            intent,
+            context: AmbiguityScoringContext(descriptor: descriptor)
+        )
+
+        #expect(score.score == 0)
+        #expect(score.level == .clear)
+        #expect(score.signals.isEmpty)
+    }
+
+    @Test("AmbiguityScorer does not require a target for spawn capabilities")
+    func ambiguityScorerDoesNotRequireTargetForSpawnCapabilities() throws {
+        let descriptor = try #require(CapabilityRegistry.default.descriptor(for: "scene.spawn_entity"))
+        let intent = IntentIR(
+            verb: "scene.spawn_entity",
+            summary: "Spawn entity",
+            source: .human
+        )
+
+        let score = AmbiguityScorer().score(
+            intent,
+            context: AmbiguityScoringContext(descriptor: descriptor)
+        )
+
+        #expect(score.score == 0)
+        #expect(score.level == .clear)
+    }
+
+    @Test("AmbiguityScorer raises high ambiguity for underspecified AI target edits")
+    func ambiguityScorerRaisesHighForUnderspecifiedAITargetEdits() throws {
+        let descriptor = try #require(CapabilityRegistry.default.descriptor(for: "scene.set_name"))
+        let intent = IntentIR(
+            verb: "scene.set_name",
+            summary: "Rename it",
+            confidence: 0.4,
+            source: .ai
+        )
+
+        let score = AmbiguityScorer().score(
+            intent,
+            context: AmbiguityScoringContext(descriptor: descriptor)
+        )
+        let signalKinds = Set(score.signals.map(\.kind))
+
+        #expect(score.level == .high)
+        #expect(signalKinds.contains(.aiLowConfidence))
+        #expect(signalKinds.contains(.noTarget))
+        #expect(signalKinds.contains(.missingRequiredArgument))
+        #expect(signalKinds.contains(.noEvidence))
+    }
+
+    @Test("AmbiguityScorer builds destructive confirmation questions")
+    func ambiguityScorerBuildsDestructiveConfirmationQuestions() throws {
+        let descriptor = try #require(CapabilityRegistry.default.descriptor(for: "scene.delete_entity"))
+        let intent = IntentIR(
+            id: "delete-42",
+            verb: "scene.delete_entity",
+            summary: "Delete selected entity",
+            targetObjectIDs: ["scene:42"],
+            source: .human
+        )
+        let scorer = AmbiguityScorer()
+        let score = scorer.score(intent, context: AmbiguityScoringContext(descriptor: descriptor))
+
+        let question = try #require(scorer.makeQuestion(for: intent, score: score))
+
+        #expect(score.level == .low)
+        #expect(question.id == "ambiguity:delete-42")
+        #expect(question.kind == .approveDestructive)
+        #expect(question.severity == .destructive)
+        #expect(question.ambiguityScore == score.score)
     }
 
     @Test("scene apply emits transaction and scene bus events")
