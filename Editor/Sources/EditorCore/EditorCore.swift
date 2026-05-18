@@ -1,5 +1,6 @@
 import AIRuntime
 import AssetPipeline
+import AudioRuntime
 import EngineCore
 import EngineKernel
 import IntentRuntime
@@ -34,7 +35,7 @@ public final class EditorApplication: @unchecked Sendable {
     private let events: PlatformEventBridge
     private var eventToken: PlatformEventBridge.SubscriptionToken?
     private var pendingViewportEvents: [InputEvent] = []
-    private var viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
+    private var _viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
     private var lastViewportSurfaceState = ViewportSurfaceState()
     private var openSettingsWindowHandler: (() -> Void)?
     private var displayInvalidationHandler: (() -> Void)?
@@ -126,7 +127,7 @@ public final class EditorApplication: @unchecked Sendable {
         engine.tick(
             deltaTime: deltaTime,
             inputEvents: inputEvents,
-            drawableSize: viewportDrawableSize,
+            drawableSize: _viewportDrawableSize,
             shouldRender: store.state.shouldRender,
             renderSceneOverride: scene.currentRenderScene()
         )
@@ -154,9 +155,11 @@ public final class EditorApplication: @unchecked Sendable {
         pendingViewportEvents.append(event)
     }
 
+    public var viewportDrawableSize: RenderDrawableSize { _viewportDrawableSize }
+
     public func setViewportDrawableSize(_ size: RenderDrawableSize) {
-        guard viewportDrawableSize != size else { return }
-        viewportDrawableSize = size
+        guard _viewportDrawableSize != size else { return }
+        _viewportDrawableSize = size
     }
 
     public func setViewportRenderCompletionHandler(_ handler: (@Sendable (ViewportSurfaceState) -> Void)?) {
@@ -310,6 +313,7 @@ public final class EditorApplication: @unchecked Sendable {
             logConsole("Physics simulation paused")
 
         case .stopped:
+            AudioEngine.shared.resetPlaybackState()
             if let snapshot = physicsPlaySnapshot {
                 scene.scene = snapshot
                 scene.notifyRevisionChanged()

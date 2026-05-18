@@ -541,11 +541,58 @@ private struct MeshBuilder {
             indices: indices,
             materials: document.meshMaterials(),
             textures: document.meshTextures(buffers: buffers),
+            nodes: meshNodes(),
             skins: try meshSkins(),
             animations: try meshAnimations()
         )
         MeshNormalTools.fillMissingNormals(vertices: &mesh.vertices, indices: mesh.indices)
         return (mesh, topologies)
+    }
+
+    func meshNodes() -> [MeshNode] {
+        guard let gltfNodes = document.nodes, !gltfNodes.isEmpty else { return [] }
+        // Build parent lookup: child → parent index
+        var parentOf = [Int: Int]()
+        for (i, node) in gltfNodes.enumerated() {
+            for child in node.children ?? [] {
+                parentOf[child] = i
+            }
+        }
+        return gltfNodes.enumerated().map { (i, node) in
+            let t: SIMD3<Float>
+            let r: SIMD4<Float>
+            let s: SIMD3<Float>
+            if let m = node.matrix, m.count == 16 {
+                // Decompose column-major matrix
+                let col0 = SIMD3<Float>(m[0], m[1], m[2])
+                let col1 = SIMD3<Float>(m[4], m[5], m[6])
+                let col2 = SIMD3<Float>(m[8], m[9], m[10])
+                t = SIMD3<Float>(m[12], m[13], m[14])
+                s = SIMD3<Float>(simd_length(col0), simd_length(col1), simd_length(col2))
+                let rx = col0 / max(s.x, 1e-6)
+                let ry = col1 / max(s.y, 1e-6)
+                let rz = col2 / max(s.z, 1e-6)
+                let q = simd_quatf(simd_float3x3(columns: (rx, ry, rz)))
+                r = SIMD4<Float>(q.imag.x, q.imag.y, q.imag.z, q.real)
+            } else {
+                if let tr = node.translation, tr.count == 3 {
+                    t = SIMD3<Float>(tr[0], tr[1], tr[2])
+                } else { t = .zero }
+                if let ro = node.rotation, ro.count == 4 {
+                    r = SIMD4<Float>(ro[0], ro[1], ro[2], ro[3])
+                } else { r = SIMD4<Float>(0, 0, 0, 1) }
+                if let sc = node.scale, sc.count == 3 {
+                    s = SIMD3<Float>(sc[0], sc[1], sc[2])
+                } else { s = .one }
+            }
+            return MeshNode(
+                name: node.name,
+                parentIndex: parentOf[i],
+                localTranslation: t,
+                localRotation: r,
+                localScale: s
+            )
+        }
     }
 
     func meshSkins() throws -> [MeshSkin] {
