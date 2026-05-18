@@ -11,10 +11,27 @@ import Foundation
 ///
 /// 这样彻底消除循环依赖。
 public protocol InGameUIProviding: AnyObject, Sendable {
-    /// 每帧由引擎调用，用于提交游戏内 UI 绘制命令。
-    func renderInGameUI(deltaTime: Double)
+    /// Called after each 3D render pass with canvas commands and opaque GPU handles.
+    ///
+    /// - Parameters:
+    ///   - canvas: Draw commands accumulated by scripts this frame.
+    ///   - commandEncoder: Opaque `GPUCommandEncoder` — cast internally by the implementor.
+    ///   - colorView: Opaque `GPUTextureView` for the final surface — render UI on top with loadOp=.load.
+    ///   - formatHint: Surface texture format name ("bgra8Unorm", "rgba16Float", etc.).
+    ///   - width: Drawable width in pixels.
+    ///   - height: Drawable height in pixels.
+    ///   - deltaTime: Frame delta time in seconds.
+    func renderInGameUI(
+        canvas: InGameCanvas,
+        commandEncoder: AnyObject,
+        colorView: AnyObject,
+        formatHint: String,
+        width: Int,
+        height: Int,
+        deltaTime: Double
+    )
 
-    /// 通知 UI 层窗口尺寸变化。
+    /// Notifies the UI layer of a viewport resize.
     func notifyResize(width: Int, height: Int)
 }
 
