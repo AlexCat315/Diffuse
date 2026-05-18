@@ -1,5 +1,6 @@
 import AIRuntime
 import AssetPipeline
+import AudioRuntime
 import EngineCore
 import EngineKernel
 import IntentRuntime
@@ -310,6 +311,7 @@ public final class EditorApplication: @unchecked Sendable {
             logConsole("Physics simulation paused")
 
         case .stopped:
+            AudioEngine.shared.resetPlaybackState()
             if let snapshot = physicsPlaySnapshot {
                 scene.scene = snapshot
                 scene.notifyRevisionChanged()

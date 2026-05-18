@@ -625,6 +625,10 @@ public struct TransactionExecutor {
                     throw TransactionExecutorError.missingComponent(entityID: entityID,
                                                                    type: "CameraComponent")
                 }
+
+            case let .setAudioSource(entityID, source):
+                let entity = try requireEntity(entityID, in: scene)
+                _ = scene.setComponent(source, for: entity)
             }
         }
 
@@ -943,6 +947,8 @@ public struct TransactionExecutor {
             return "scene:scripts:\(id)"
         case let .setCameraPose(id, _, _, _):
             return "scene:camera_pose:\(id)"
+        case let .setAudioSource(id, _):
+            return "scene:audio_source:\(id)"
         }
     }
 

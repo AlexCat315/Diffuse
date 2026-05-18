@@ -67,6 +67,57 @@ public struct MeshMaterial: Sendable, Equatable {
     public static let fallback = MeshMaterial()
 }
 
+/// One node from the GLTF node hierarchy.
+///
+/// Stores the node's local TRS so `AnimationRuntime` can override the transform
+/// of individual joints at runtime without re-importing the asset.
+public struct MeshNode: Sendable, Equatable {
+    public var name: String?
+    public var parentIndex: Int?         // nil = root
+    public var localTranslation: SIMD3<Float>
+    public var localRotation: SIMD4<Float>   // quaternion xyzw
+    public var localScale: SIMD3<Float>
+
+    public init(name: String? = nil,
+                parentIndex: Int? = nil,
+                localTranslation: SIMD3<Float> = .zero,
+                localRotation: SIMD4<Float> = SIMD4<Float>(0, 0, 0, 1),
+                localScale: SIMD3<Float> = .one) {
+        self.name = name
+        self.parentIndex = parentIndex
+        self.localTranslation = localTranslation
+        self.localRotation = localRotation
+        self.localScale = localScale
+    }
+
+    /// Compose the node's local TRS into a 4×4 matrix.
+    public var localMatrix: simd_float4x4 {
+        let t = simd_float4x4(rows: [
+            SIMD4<Float>(1, 0, 0, localTranslation.x),
+            SIMD4<Float>(0, 1, 0, localTranslation.y),
+            SIMD4<Float>(0, 0, 1, localTranslation.z),
+            SIMD4<Float>(0, 0, 0, 1),
+        ])
+        let q = localRotation
+        let x2 = q.x*q.x, y2 = q.y*q.y, z2 = q.z*q.z
+        let xy = q.x*q.y, xz = q.x*q.z, yz = q.y*q.z
+        let wx = q.w*q.x, wy = q.w*q.y, wz = q.w*q.z
+        let r = simd_float4x4(rows: [
+            SIMD4<Float>(1-2*(y2+z2), 2*(xy-wz),   2*(xz+wy),   0),
+            SIMD4<Float>(2*(xy+wz),   1-2*(x2+z2), 2*(yz-wx),   0),
+            SIMD4<Float>(2*(xz-wy),   2*(yz+wx),   1-2*(x2+y2), 0),
+            SIMD4<Float>(0,           0,           0,            1),
+        ])
+        let s = simd_float4x4(rows: [
+            SIMD4<Float>(localScale.x, 0, 0, 0),
+            SIMD4<Float>(0, localScale.y, 0, 0),
+            SIMD4<Float>(0, 0, localScale.z, 0),
+            SIMD4<Float>(0, 0, 0, 1),
+        ])
+        return t * r * s
+    }
+}
+
 public struct MeshSkin: Sendable, Equatable {
     public var name: String?
     public var jointNodeIndices: [Int]
@@ -164,6 +215,7 @@ public struct MeshAsset: Sendable {
     public var name: String
     public var materials: [MeshMaterial]
     public var textures: [MeshTexture]
+    public var nodes: [MeshNode]
     public var skins: [MeshSkin]
     public var animations: [MeshAnimation]
 
@@ -172,6 +224,7 @@ public struct MeshAsset: Sendable {
                 indices: [UInt32],
                 materials: [MeshMaterial] = [MeshMaterial.fallback],
                 textures: [MeshTexture] = [],
+                nodes: [MeshNode] = [],
                 skins: [MeshSkin] = [],
                 animations: [MeshAnimation] = []) {
         self.name = name
@@ -179,6 +232,7 @@ public struct MeshAsset: Sendable {
         self.indices = indices
         self.materials = materials.isEmpty ? [MeshMaterial.fallback] : materials
         self.textures = textures
+        self.nodes = nodes
         self.skins = skins
         self.animations = animations
     }

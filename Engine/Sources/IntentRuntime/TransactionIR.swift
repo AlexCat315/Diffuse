@@ -100,6 +100,7 @@ public enum SceneMutation: Sendable, Equatable {
                        localTransform: LocalTransform,
                        target: SIMD3<Float>,
                        up: SIMD3<Float>?)
+    case setAudioSource(entityID: UInt64, source: AudioSource)
 
     /// The primary entity targeted by this mutation, if any.
     /// `spawnImportedMeshEntity` returns `nil` because it creates entities
@@ -138,7 +139,8 @@ public enum SceneMutation: Sendable, Equatable {
              let .setLightSpotOuterAngle(id, _),
              let .setMeshColorTint(id, _),
              let .setScriptBindings(id, _),
-             let .setCameraPose(id, _, _, _):
+             let .setCameraPose(id, _, _, _),
+             let .setAudioSource(id, _):
             return id
         }
     }
