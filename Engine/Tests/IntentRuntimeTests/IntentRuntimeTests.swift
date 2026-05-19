@@ -333,6 +333,101 @@ struct IntentRuntimeTests {
         #expect(question.ambiguityScore == score.score)
     }
 
+    @Test("capability planning escalates automatic destructive transactions to confirmation")
+    func capabilityPlanningEscalatesDestructiveTransactions() throws {
+        let coordinator = IntentRuntimeCoordinator()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let transaction = TransactionIR(
+            intent: IntentIR(verb: "scene.delete_entity",
+                             summary: "Delete selected entity",
+                             targetObjectIDs: ["scene:\(entity.rawValue)"],
+                             source: .human),
+            summary: "Delete selected entity",
+            operations: [.scene(.deleteEntity(entityID: entity.rawValue))],
+            approvalPolicy: .automatic,
+            provenance: .authored
+        )
+        var executionContext = TransactionExecutionContext(sceneRuntime: scene)
+        let capabilityContext = CapabilityInvocationContext(sceneRuntime: scene,
+                                                            defaultSource: .human)
+
+        let result = try coordinator.submitPlan(transaction,
+                                                executionContext: &executionContext,
+                                                capabilityContext: capabilityContext)
+
+        #expect(result.disposition == .confirmationRequested)
+        #expect(result.confirmationRequest?.questions.first?.severity == .destructive)
+        #expect(executionContext.sceneRuntime?.snapshot.entityCount == 1)
+    }
+
+    @Test("capability planning blocks operations when required components are absent")
+    func capabilityPlanningBlocksMissingComponents() throws {
+        let coordinator = IntentRuntimeCoordinator()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let transaction = TransactionIR(
+            summary: "Set light color",
+            operations: [.scene(.setLightColor(entityID: entity.rawValue,
+                                               color: SIMD3<Float>(1, 0, 0)))],
+            approvalPolicy: .automatic,
+            provenance: .proposal
+        )
+        var executionContext = TransactionExecutionContext(sceneRuntime: scene)
+        let capabilityContext = CapabilityInvocationContext(sceneRuntime: scene,
+                                                            defaultSource: .ai,
+                                                            defaultConfidence: 0.9)
+
+        let error = try #require(
+            { () throws -> CapabilityInvocationPlannerError? in
+                do {
+                    _ = try coordinator.submitPlan(transaction,
+                                                   executionContext: &executionContext,
+                                                   capabilityContext: capabilityContext)
+                    return nil
+                } catch let error as CapabilityInvocationPlannerError {
+                    return error
+                }
+            }()
+        )
+
+        guard case let .capabilityDenied(failures) = error else {
+            Issue.record("expected capabilityDenied, got \(error)")
+            return
+        }
+        #expect(failures.count == 1)
+        #expect(failures[0].verb == "scene.set_light_color")
+        #expect(failures[0].reason.contains("LightComponent"))
+    }
+
+    @Test("capability planning escalates low-confidence AI plans")
+    func capabilityPlanningEscalatesLowConfidenceAIPlans() throws {
+        let coordinator = IntentRuntimeCoordinator()
+        let transaction = TransactionIR(
+            summary: "Spawn entity",
+            operations: [
+                .scene(.spawnImportedMeshEntity(label: "AI Entity",
+                                                kindLabel: "Static Mesh",
+                                                meshIndex: 0,
+                                                position: .zero)),
+            ],
+            approvalPolicy: .automatic,
+            provenance: .proposal
+        )
+        var executionContext = TransactionExecutionContext(sceneRuntime: SceneRuntime())
+        let capabilityContext = CapabilityInvocationContext(sceneRuntime: SceneRuntime(),
+                                                            defaultSource: .ai,
+                                                            defaultConfidence: 0.4)
+
+        let result = try coordinator.submitPlan(transaction,
+                                                executionContext: &executionContext,
+                                                capabilityContext: capabilityContext)
+
+        #expect(result.disposition == .confirmationRequested)
+        #expect(result.confirmationRequest?.questions.first?.ambiguityScore ?? 0 > 0)
+        #expect(result.warnings.contains { $0.contains("AI confidence") })
+    }
+
     @Test("scene apply emits transaction and scene bus events")
     func sceneApplyEmitsBusEvents() throws {
         let root = FileManager.default.temporaryDirectory

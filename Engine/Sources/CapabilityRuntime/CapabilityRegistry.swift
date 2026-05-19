@@ -58,6 +58,12 @@ public struct CapabilityRegistry: Sendable {
         let editable = CapabilityPreconditionSpec(kind: .sceneEditable)
         let entityExists = CapabilityPreconditionSpec(kind: .entityExists)
         let selectionRequired = CapabilityPreconditionSpec(kind: .selectionRequired)
+        let rigidBody = CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "RigidBody")
+        let collider = CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "Collider")
+        let constraint = CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "Constraint")
+        let light = CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "LightComponent")
+        let camera = CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "CameraComponent")
+        let renderMesh = CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "RenderMeshComponent")
 
         return CapabilityRegistry(capabilities: [
 
@@ -89,6 +95,17 @@ public struct CapabilityRegistry: Sendable {
             // MARK: Duplicate
             CapabilityDescriptor(
                 verb: "scene.duplicate_entity",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists]
+            ),
+
+            // MARK: Reparent
+            CapabilityDescriptor(
+                verb: "scene.reparent_entity",
+                aliases: ["scene.move_entity"],
                 releasePhase: .stable,
                 requiresConfirmation: false,
                 isDestructive: false,
@@ -138,7 +155,7 @@ public struct CapabilityRegistry: Sendable {
                 preconditions: [
                     editable,
                     entityExists,
-                    CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "CameraComponent"),
+                    camera,
                 ]
             ),
 
@@ -152,7 +169,7 @@ public struct CapabilityRegistry: Sendable {
                 preconditions: [
                     editable,
                     entityExists,
-                    CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "RigidBody"),
+                    rigidBody,
                 ]
             ),
             CapabilityDescriptor(
@@ -164,8 +181,104 @@ public struct CapabilityRegistry: Sendable {
                 preconditions: [
                     editable,
                     entityExists,
-                    CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "RigidBody"),
+                    rigidBody,
                 ]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_rigid_body_gravity_scale",
+                aliases: ["scene.set_rigidbody_gravity_scale", "scene.set_rigidbody_gravity"],
+                releasePhase: .beta,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, rigidBody]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_rigid_body_allow_sleep",
+                aliases: ["scene.set_rigidbody_allow_sleep"],
+                releasePhase: .beta,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, rigidBody]
+            ),
+
+            // MARK: Collider
+            CapabilityDescriptor(
+                verb: "scene.set_collider",
+                releasePhase: .beta,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_collider_trigger",
+                releasePhase: .beta,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, collider]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_collider_shape",
+                aliases: ["scene.set_collider_shape_type"],
+                releasePhase: .beta,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, collider]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_collider_box_extents",
+                releasePhase: .beta,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, collider]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_collider_sphere_radius",
+                releasePhase: .beta,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, collider]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_collider_capsule",
+                aliases: ["scene.set_collider_capsule_radius", "scene.set_collider_capsule_half_height"],
+                releasePhase: .beta,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, collider]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_collider_material",
+                aliases: ["scene.set_collider_friction", "scene.set_collider_restitution", "scene.set_collider_density"],
+                releasePhase: .beta,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, collider]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_collider_layer",
+                aliases: ["scene.set_collider_layer_mask"],
+                releasePhase: .beta,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, collider]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_constraint_enabled",
+                releasePhase: .beta,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, constraint]
             ),
 
             // MARK: Light
@@ -178,7 +291,7 @@ public struct CapabilityRegistry: Sendable {
                 preconditions: [
                     editable,
                     entityExists,
-                    CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "LightComponent"),
+                    light,
                 ]
             ),
             CapabilityDescriptor(
@@ -190,7 +303,7 @@ public struct CapabilityRegistry: Sendable {
                 preconditions: [
                     editable,
                     entityExists,
-                    CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "LightComponent"),
+                    light,
                 ]
             ),
             CapabilityDescriptor(
@@ -202,8 +315,59 @@ public struct CapabilityRegistry: Sendable {
                 preconditions: [
                     editable,
                     entityExists,
-                    CapabilityPreconditionSpec(kind: .entityHasComponent, componentType: "LightComponent"),
+                    light,
                 ]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_light_range",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, light]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_light_spot_inner_angle",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, light]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_light_spot_outer_angle",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, light]
+            ),
+
+            // MARK: Render/script/audio
+            CapabilityDescriptor(
+                verb: "scene.set_mesh_color",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists, renderMesh]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_script_bindings",
+                aliases: ["scene.set_script_enabled", "scene.set_script_parameters"],
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists]
+            ),
+            CapabilityDescriptor(
+                verb: "scene.set_audio_source",
+                releasePhase: .stable,
+                requiresConfirmation: false,
+                isDestructive: false,
+                domain: "scene",
+                preconditions: [editable, entityExists]
             ),
 
             // MARK: Sequence
