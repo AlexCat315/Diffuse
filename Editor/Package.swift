@@ -11,6 +11,8 @@ let package = Package(
     products: [
         .executable(name: "EditorApp", targets: ["EditorApp"]),
         .library(name: "EditorCore", targets: ["EditorCore"]),
+        .library(name: "GameRuntime", targets: ["GameRuntime"]),
+        .executable(name: "GuavaPlayer", targets: ["GuavaPlayer"]),
     ],
     dependencies: [
         .package(path: "../Engine"),
@@ -63,6 +65,33 @@ let package = Package(
                 .process("Resources")
             ]
         ),
+        // MARK: - Game Runtime (simulation host, no Editor UI)
+        // 独立游戏播放器的引擎宿主层。依赖 EditorCore（场景加载）和
+        // EngineCore（引擎宿主），但不依赖任何编辑器 UI 模块。
+        .target(
+            name: "GameRuntime",
+            dependencies: [
+                "EditorCore",
+                .product(name: "EngineCore", package: "Engine"),
+                .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "RenderBackend", package: "Engine"),
+                .product(name: "RHIWGPU", package: "Engine"),
+            ]
+        ),
+
+        // MARK: - Standalone Game Player
+        .executableTarget(
+            name: "GuavaPlayer",
+            dependencies: [
+                "GameRuntime",
+                .product(name: "GuavaUIApp", package: "GuavaUI"),
+                .product(name: "GuavaUICompose", package: "GuavaUI"),
+                .product(name: "GuavaUIRuntime", package: "GuavaUI"),
+                .product(name: "EngineKernel", package: "Engine"),
+                .product(name: "RHIWGPU", package: "Engine"),
+            ]
+        ),
+
         .testTarget(
             name: "EditorCoreTests",
             dependencies: [
