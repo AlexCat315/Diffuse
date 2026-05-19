@@ -500,7 +500,13 @@ public final class EditorApplication: @unchecked Sendable {
                 )
                 _ = latencyMs
                 self.pendingSessionProposal = proposal
-                self.submitPlanTransaction(transaction)
+                self.submitPlanTransaction(
+                    transaction,
+                    capabilityContext: self.makeCapabilityInvocationContext(
+                        defaultSource: .ai,
+                        defaultConfidence: proposal.confidence
+                    )
+                )
             } catch {
                 let message = error.localizedDescription
                 self.store.dispatch(.setAIStatusMessage(message))
@@ -513,20 +519,30 @@ public final class EditorApplication: @unchecked Sendable {
         }
     }
 
-    private func submitPlanTransaction(_ transaction: TransactionIR) {
+    private func submitPlanTransaction(_ transaction: TransactionIR,
+                                       capabilityContext: CapabilityInvocationContext? = nil) {
         if store.state.pendingConfirmationRequest != nil {
             store.dispatch(.setAIStatusMessage("Resolve the pending confirmation before submitting another AI action."))
             return
         }
-        var context = makeExecutionContext()
         do {
-            let result = try intentCoordinator.submitPlan(transaction, executionContext: &context)
-            applyInvocationResult(result, executionContext: &context)
+            _ = try runPlanTransaction(transaction, capabilityContext: capabilityContext)
         } catch {
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings([]))
             store.dispatch(.setAIStatusMessage(error.localizedDescription))
         }
+    }
+
+    @discardableResult
+    private func runPlanTransaction(_ transaction: TransactionIR,
+                                    capabilityContext: CapabilityInvocationContext? = nil) throws -> CapabilityInvocationResult {
+        var context = makeExecutionContext()
+        let result = try intentCoordinator.submitPlan(transaction,
+                                                      executionContext: &context,
+                                                      capabilityContext: capabilityContext)
+        applyInvocationResult(result, executionContext: &context)
+        return result
     }
 
     public func dismissUnresolvedIntent(id: String) {}
@@ -741,7 +757,14 @@ public final class EditorApplication: @unchecked Sendable {
         do {
             let transaction = try intentTransactionBuilder.buildTransaction(from: intent,
                                                                             context: makeIntentTransactionBuildContext())
-            submitPlanTransaction(transaction)
+            submitPlanTransaction(
+                transaction,
+                capabilityContext: makeCapabilityInvocationContext(
+                    defaultSource: intent.source,
+                    defaultConfidence: intent.confidence,
+                    defaultEvidence: intent.evidence
+                )
+            )
         } catch {
             store.dispatch(.setPendingConfirmationRequest(nil))
             store.dispatch(.setAIWarnings([]))
@@ -753,6 +776,17 @@ public final class EditorApplication: @unchecked Sendable {
         IntentTransactionBuildContext(sceneRuntime: scene.scene,
                                       selectedEntityID: store.state.selectedEntityID,
                                       defaultSpawnMeshIndex: defaultSpawnMeshIndex())
+    }
+
+    private func makeCapabilityInvocationContext(defaultSource: IntentSource = .system,
+                                                 defaultConfidence: Double = 1.0,
+                                                 defaultEvidence: [IntentEvidence] = []) -> CapabilityInvocationContext {
+        CapabilityInvocationContext(sceneRuntime: scene.scene,
+                                    selectedEntityID: store.state.selectedEntityID,
+                                    isSceneEditable: store.state.playbackState != .playing,
+                                    defaultSource: defaultSource,
+                                    defaultConfidence: defaultConfidence,
+                                    defaultEvidence: defaultEvidence)
     }
 
     private func applyInvocationResult(_ result: CapabilityInvocationResult,
@@ -927,8 +961,15 @@ public final class EditorApplication: @unchecked Sendable {
                 baseSceneRevision: nil,
                 approvalPolicy: .automatic
             )
-            submitPlanTransaction(transaction)
-            return ["ok": true, "summary": plan.summary]
+            let result = try runPlanTransaction(
+                transaction,
+                capabilityContext: makeCapabilityInvocationContext(defaultSource: .system)
+            )
+            return [
+                "ok": true,
+                "summary": plan.summary,
+                "disposition": result.disposition.rawValue,
+            ]
         } catch {
             return ["ok": false, "error": error.localizedDescription]
         }
