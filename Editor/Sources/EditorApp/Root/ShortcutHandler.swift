@@ -12,7 +12,9 @@ enum EditorShortcutHandler {
                        newScene: () -> Void,
                        openSettings: () -> Void,
                        openCommandPalette: () -> Void,
-                       closeCommandPalette: () -> Void) -> Bool {
+                       closeCommandPalette: () -> Void,
+                       undo: () -> Void,
+                       redo: () -> Void) -> Bool {
         guard !key.isRepeat else { return false }
 
         // Escape — highest priority: dismiss any overlay first
@@ -26,6 +28,16 @@ enum EditorShortcutHandler {
 
         let commandLike = key.modifiers.contains(.gui) || key.modifiers.contains(.ctrl)
         guard commandLike else { return false }
+
+        // Undo / Redo — Cmd+Z / Cmd+Shift+Z
+        if key.keycode == 0x7A {  // z
+            if key.modifiers.contains(.shift) {
+                redo()
+            } else {
+                undo()
+            }
+            return true
+        }
 
         switch key.keycode {
         case 0x6B:  // k

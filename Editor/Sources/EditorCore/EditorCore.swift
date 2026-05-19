@@ -547,6 +547,33 @@ public final class EditorApplication: @unchecked Sendable {
 
     public func dismissUnresolvedIntent(id: String) {}
 
+    // MARK: - Undo / Redo
+
+    public var canUndo: Bool { intentCoordinator.undoStack.canUndo }
+    public var canRedo: Bool { intentCoordinator.undoStack.canRedo }
+
+    public func undo() {
+        var context = makeExecutionContext()
+        guard intentCoordinator.undo(executionContext: &context) else { return }
+        if let updatedScene = context.sceneRuntime {
+            scene.scene = updatedScene
+            scene.notifyRevisionChanged()
+        }
+        store.dispatch(.setAIStatusMessage("Undone"))
+        logConsole("Undo applied", severity: .info)
+    }
+
+    public func redo() {
+        var context = makeExecutionContext()
+        guard intentCoordinator.redo(executionContext: &context) else { return }
+        if let updatedScene = context.sceneRuntime {
+            scene.scene = updatedScene
+            scene.notifyRevisionChanged()
+        }
+        store.dispatch(.setAIStatusMessage("Redone"))
+        logConsole("Redo applied", severity: .info)
+    }
+
     public func submitSpawnEntityIntent(label: String,
                                         position: SIMD3<Float>) {
         let trimmed = label.trimmingCharacters(in: .whitespacesAndNewlines)

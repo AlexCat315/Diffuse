@@ -84,7 +84,9 @@ private struct EditorCallbacks {
                 newScene: { app.resetPreviewScene() },
                 openSettings: { app.openSettingsWindow() },
                 openCommandPalette: { s.dispatch(.setCommandPaletteVisible(true)) },
-                closeCommandPalette: { s.dispatch(.setCommandPaletteVisible(false)) }
+                closeCommandPalette: { s.dispatch(.setCommandPaletteVisible(false)) },
+                undo: { app.undo() },
+                redo: { app.redo() }
             )
         }
     }
