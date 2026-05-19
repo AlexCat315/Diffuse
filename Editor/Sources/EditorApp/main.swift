@@ -5,6 +5,7 @@ import GuavaUIApp
 import GuavaUIRuntime
 import GuavaUIWorkspace
 import RHIWGPU
+import CardBattleRuntime
 
 @MainActor
 private func runEditor() throws {
@@ -24,6 +25,21 @@ private func runEditor() throws {
     // InGameUIRegistry; the main thread drives the ViewGraph via host.tick().
     let inGameUIHost = InGameUIHost(backend: backend)
     InGameUIRegistry.shared.provider = inGameUIHost
+
+    // Bootstrap the in-game battle HUD with a demo battle state and install it
+    // as the ViewGraph root so the HUD is visible over the 3D viewport.
+    let initialBattleState = BattleStateMachine.reduce(
+        BattleSampleFactory.makeThreeKingdomsDuel(),
+        command: .startPlayerTurn(drawCount: 4)
+    )
+    let hudModel = BattleHUDModel(
+        snapshot: BattleHUDSnapshot.make(from: initialBattleState, playerID: .player)
+            ?? BattleHUDSnapshot(phase: .setup, turn: 0, energy: 0, maxEnergy: 0,
+                                 health: 0, maxHealth: 0,
+                                 opponentHealth: 0, opponentMaxHealth: 0,
+                                 hand: [], skills: [])
+    )
+    inGameUIHost.setRootView(InGameBattleHUDView(model: hudModel))
 
     if let shellState {
         app.store.dispatch(.setWorkspaceMode(shellState.workspaceMode))

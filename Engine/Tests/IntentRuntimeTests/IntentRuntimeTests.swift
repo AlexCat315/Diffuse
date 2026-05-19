@@ -1,4 +1,5 @@
 import AssetPipeline
+import CapabilityRuntime
 import Foundation
 import IntentRuntime
 import ObservationBus
@@ -246,6 +247,185 @@ struct IntentRuntimeTests {
         }
         #expect(rawID == entity.rawValue)
         #expect(transform.translation == SIMD3<Float>(3, 4, 5))
+    }
+
+    @Test("AmbiguityScorer treats fully specified human intents as clear")
+    func ambiguityScorerTreatsFullySpecifiedHumanIntentsAsClear() throws {
+        let descriptor = try #require(CapabilityRegistry.default.descriptor(for: "scene.set_name"))
+        let intent = IntentIR(
+            verb: "scene.set_name",
+            summary: "Rename selected entity",
+            targetObjectIDs: ["scene:42"],
+            arguments: ["name": .string("Boss")],
+            source: .human
+        )
+
+        let score = AmbiguityScorer().score(
+            intent,
+            context: AmbiguityScoringContext(descriptor: descriptor)
+        )
+
+        #expect(score.score == 0)
+        #expect(score.level == .clear)
+        #expect(score.signals.isEmpty)
+    }
+
+    @Test("AmbiguityScorer does not require a target for spawn capabilities")
+    func ambiguityScorerDoesNotRequireTargetForSpawnCapabilities() throws {
+        let descriptor = try #require(CapabilityRegistry.default.descriptor(for: "scene.spawn_entity"))
+        let intent = IntentIR(
+            verb: "scene.spawn_entity",
+            summary: "Spawn entity",
+            source: .human
+        )
+
+        let score = AmbiguityScorer().score(
+            intent,
+            context: AmbiguityScoringContext(descriptor: descriptor)
+        )
+
+        #expect(score.score == 0)
+        #expect(score.level == .clear)
+    }
+
+    @Test("AmbiguityScorer raises high ambiguity for underspecified AI target edits")
+    func ambiguityScorerRaisesHighForUnderspecifiedAITargetEdits() throws {
+        let descriptor = try #require(CapabilityRegistry.default.descriptor(for: "scene.set_name"))
+        let intent = IntentIR(
+            verb: "scene.set_name",
+            summary: "Rename it",
+            confidence: 0.4,
+            source: .ai
+        )
+
+        let score = AmbiguityScorer().score(
+            intent,
+            context: AmbiguityScoringContext(descriptor: descriptor)
+        )
+        let signalKinds = Set(score.signals.map(\.kind))
+
+        #expect(score.level == .high)
+        #expect(signalKinds.contains(.aiLowConfidence))
+        #expect(signalKinds.contains(.noTarget))
+        #expect(signalKinds.contains(.missingRequiredArgument))
+        #expect(signalKinds.contains(.noEvidence))
+    }
+
+    @Test("AmbiguityScorer builds destructive confirmation questions")
+    func ambiguityScorerBuildsDestructiveConfirmationQuestions() throws {
+        let descriptor = try #require(CapabilityRegistry.default.descriptor(for: "scene.delete_entity"))
+        let intent = IntentIR(
+            id: "delete-42",
+            verb: "scene.delete_entity",
+            summary: "Delete selected entity",
+            targetObjectIDs: ["scene:42"],
+            source: .human
+        )
+        let scorer = AmbiguityScorer()
+        let score = scorer.score(intent, context: AmbiguityScoringContext(descriptor: descriptor))
+
+        let question = try #require(scorer.makeQuestion(for: intent, score: score))
+
+        #expect(score.level == .low)
+        #expect(question.id == "ambiguity:delete-42")
+        #expect(question.kind == .approveDestructive)
+        #expect(question.severity == .destructive)
+        #expect(question.ambiguityScore == score.score)
+    }
+
+    @Test("capability planning escalates automatic destructive transactions to confirmation")
+    func capabilityPlanningEscalatesDestructiveTransactions() throws {
+        let coordinator = IntentRuntimeCoordinator()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let transaction = TransactionIR(
+            intent: IntentIR(verb: "scene.delete_entity",
+                             summary: "Delete selected entity",
+                             targetObjectIDs: ["scene:\(entity.rawValue)"],
+                             source: .human),
+            summary: "Delete selected entity",
+            operations: [.scene(.deleteEntity(entityID: entity.rawValue))],
+            approvalPolicy: .automatic,
+            provenance: .authored
+        )
+        var executionContext = TransactionExecutionContext(sceneRuntime: scene)
+        let capabilityContext = CapabilityInvocationContext(sceneRuntime: scene,
+                                                            defaultSource: .human)
+
+        let result = try coordinator.submitPlan(transaction,
+                                                executionContext: &executionContext,
+                                                capabilityContext: capabilityContext)
+
+        #expect(result.disposition == .confirmationRequested)
+        #expect(result.confirmationRequest?.questions.first?.severity == .destructive)
+        #expect(executionContext.sceneRuntime?.snapshot.entityCount == 1)
+    }
+
+    @Test("capability planning blocks operations when required components are absent")
+    func capabilityPlanningBlocksMissingComponents() throws {
+        let coordinator = IntentRuntimeCoordinator()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        let transaction = TransactionIR(
+            summary: "Set light color",
+            operations: [.scene(.setLightColor(entityID: entity.rawValue,
+                                               color: SIMD3<Float>(1, 0, 0)))],
+            approvalPolicy: .automatic,
+            provenance: .proposal
+        )
+        var executionContext = TransactionExecutionContext(sceneRuntime: scene)
+        let capabilityContext = CapabilityInvocationContext(sceneRuntime: scene,
+                                                            defaultSource: .ai,
+                                                            defaultConfidence: 0.9)
+
+        let error = try #require(
+            { () throws -> CapabilityInvocationPlannerError? in
+                do {
+                    _ = try coordinator.submitPlan(transaction,
+                                                   executionContext: &executionContext,
+                                                   capabilityContext: capabilityContext)
+                    return nil
+                } catch let error as CapabilityInvocationPlannerError {
+                    return error
+                }
+            }()
+        )
+
+        guard case let .capabilityDenied(failures) = error else {
+            Issue.record("expected capabilityDenied, got \(error)")
+            return
+        }
+        #expect(failures.count == 1)
+        #expect(failures[0].verb == "scene.set_light_color")
+        #expect(failures[0].reason.contains("LightComponent"))
+    }
+
+    @Test("capability planning escalates low-confidence AI plans")
+    func capabilityPlanningEscalatesLowConfidenceAIPlans() throws {
+        let coordinator = IntentRuntimeCoordinator()
+        let transaction = TransactionIR(
+            summary: "Spawn entity",
+            operations: [
+                .scene(.spawnImportedMeshEntity(label: "AI Entity",
+                                                kindLabel: "Static Mesh",
+                                                meshIndex: 0,
+                                                position: .zero)),
+            ],
+            approvalPolicy: .automatic,
+            provenance: .proposal
+        )
+        var executionContext = TransactionExecutionContext(sceneRuntime: SceneRuntime())
+        let capabilityContext = CapabilityInvocationContext(sceneRuntime: SceneRuntime(),
+                                                            defaultSource: .ai,
+                                                            defaultConfidence: 0.4)
+
+        let result = try coordinator.submitPlan(transaction,
+                                                executionContext: &executionContext,
+                                                capabilityContext: capabilityContext)
+
+        #expect(result.disposition == .confirmationRequested)
+        #expect(result.confirmationRequest?.questions.first?.ambiguityScore ?? 0 > 0)
+        #expect(result.warnings.contains { $0.contains("AI confidence") })
     }
 
     @Test("scene apply emits transaction and scene bus events")
@@ -731,5 +911,117 @@ struct IntentRuntimeEndToEndTests {
         let kinds = Set(events.map(\.kind))
         #expect(kinds.contains(.transactionApplied))
         #expect(kinds.contains(.sceneChanged))
+    }
+}
+
+@Suite("UndoStack")
+struct UndoStackTests {
+    private func makeSpawnTransaction(revision: UInt64 = 0, label: String = "Entity") -> TransactionIR {
+        TransactionIR(intent: IntentIR(verb: "scene.spawn_entity",
+                                        summary: "Spawn \(label)",
+                                        source: .human),
+                      summary: "Spawn \(label)",
+                      operations: [
+                          .scene(.spawnImportedMeshEntity(label: label,
+                                                         kindLabel: "Mesh",
+                                                         meshIndex: 0,
+                                                         position: .zero))
+                      ],
+                      baseRevisions: TransactionBaseRevisions(sceneRevision: revision),
+                      provenance: .authored)
+    }
+
+    @Test("push / undo / redo round-trip restores snapshots in correct order")
+    func pushUndoRedoRoundTrip() throws {
+        let coordinator = IntentRuntimeCoordinator()
+        var ctx = TransactionExecutionContext(sceneRuntime: SceneRuntime())
+
+        let r0 = ctx.sceneRuntime!.snapshot.revision
+
+        // Apply two transactions — each pushes a snapshot
+        _ = try coordinator.submitPlan(makeSpawnTransaction(revision: r0), executionContext: &ctx)
+        let r1 = ctx.sceneRuntime!.snapshot.revision
+
+        _ = try coordinator.submitPlan(makeSpawnTransaction(revision: r1), executionContext: &ctx)
+        let r2 = ctx.sceneRuntime!.snapshot.revision
+
+        #expect(coordinator.undoStack.undoDepth == 2)
+        #expect(coordinator.undoStack.canUndo)
+        #expect(!coordinator.undoStack.canRedo)
+
+        // Undo once — scene should go back to r1
+        let didUndo = coordinator.undo(executionContext: &ctx)
+        #expect(didUndo)
+        #expect(ctx.sceneRuntime?.snapshot.revision == r1)
+        #expect(coordinator.undoStack.undoDepth == 1)
+        #expect(coordinator.undoStack.redoDepth == 1)
+
+        // Undo again — scene should go back to r0
+        coordinator.undo(executionContext: &ctx)
+        #expect(ctx.sceneRuntime?.snapshot.revision == r0)
+        #expect(coordinator.undoStack.undoDepth == 0)
+        #expect(coordinator.undoStack.redoDepth == 2)
+
+        // Redo once — back to r1
+        coordinator.redo(executionContext: &ctx)
+        #expect(ctx.sceneRuntime?.snapshot.revision == r1)
+
+        // Redo again — back to r2
+        coordinator.redo(executionContext: &ctx)
+        #expect(ctx.sceneRuntime?.snapshot.revision == r2)
+        #expect(coordinator.undoStack.redoDepth == 0)
+    }
+
+    @Test("push clears the redo stack")
+    func pushClearsRedoStack() throws {
+        let coordinator = IntentRuntimeCoordinator()
+        var ctx = TransactionExecutionContext(sceneRuntime: SceneRuntime())
+
+        let r0 = ctx.sceneRuntime!.snapshot.revision
+        _ = try coordinator.submitPlan(makeSpawnTransaction(revision: r0), executionContext: &ctx)
+        let r1 = ctx.sceneRuntime!.snapshot.revision
+
+        coordinator.undo(executionContext: &ctx)
+        #expect(coordinator.undoStack.canRedo)
+
+        // New transaction clears redo
+        _ = try coordinator.submitPlan(makeSpawnTransaction(revision: r0), executionContext: &ctx)
+        #expect(!coordinator.undoStack.canRedo, "New push must clear redo stack")
+        _ = r1
+    }
+
+    @Test("undo on empty stack returns false without modifying context")
+    func undoOnEmptyStackReturnsFalse() throws {
+        let coordinator = IntentRuntimeCoordinator()
+        var ctx = TransactionExecutionContext(sceneRuntime: SceneRuntime())
+        let revisionBefore = ctx.sceneRuntime!.snapshot.revision
+
+        let result = coordinator.undo(executionContext: &ctx)
+        #expect(!result)
+        #expect(ctx.sceneRuntime?.snapshot.revision == revisionBefore)
+    }
+
+    @Test("ring buffer discards oldest entry when capacity is exceeded")
+    func ringBufferEvictsOldest() {
+        let stack = UndoStack(capacity: 3)
+        var scenes: [SceneRuntime] = (0..<4).map { _ in SceneRuntime() }
+
+        stack.push(scenes[0])
+        stack.push(scenes[1])
+        stack.push(scenes[2])
+        // Exceeds capacity — scenes[0] should be evicted
+        stack.push(scenes[3])
+
+        #expect(stack.undoDepth == 3)
+        // Undo three times and verify oldest available is scenes[1]
+        let popped1 = stack.undo(current: SceneRuntime())
+        let popped2 = stack.undo(current: SceneRuntime())
+        let popped3 = stack.undo(current: SceneRuntime())
+        // popped1 = scenes[3], popped2 = scenes[2], popped3 = scenes[1]
+        #expect(popped1 != nil)
+        #expect(popped2 != nil)
+        #expect(popped3 != nil)
+        #expect(stack.undoDepth == 0)
+        _ = scenes
     }
 }

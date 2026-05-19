@@ -29,6 +29,7 @@ let package = Package(
         .library(name: "CinematicRenderer", targets: ["CinematicRenderer"]),
         .library(name: "CardBattleRuntime", targets: ["CardBattleRuntime"]),
         .library(name: "AudioRuntime", targets: ["AudioRuntime"]),
+        .library(name: "CapabilityRuntime", targets: ["CapabilityRuntime"]),
         .library(name: "IntentRuntime", targets: ["IntentRuntime"]),
         .library(name: "AIRuntime", targets: ["AIRuntime"]),
         .library(name: "ScriptRuntime", targets: ["ScriptRuntime"]),
@@ -202,9 +203,13 @@ let package = Package(
             ]
         ),
         .target(
+            name: "CapabilityRuntime"
+        ),
+        .target(
             name: "IntentRuntime",
             dependencies: [
                 "AssetPipeline",
+                "CapabilityRuntime",
                 "ObservationBus",
                 "SceneRuntime",
                 "SequenceRuntime",
@@ -329,10 +334,17 @@ let package = Package(
             ]
         ),
         .testTarget(
+            name: "CapabilityRuntimeTests",
+            dependencies: [
+                "CapabilityRuntime",
+            ]
+        ),
+        .testTarget(
             name: "IntentRuntimeTests",
             dependencies: [
                 "IntentRuntime",
                 "AssetPipeline",
+                "CapabilityRuntime",
                 "ObservationBus",
                 "SceneRuntime",
                 "ScriptRuntime",

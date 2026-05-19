@@ -136,6 +136,7 @@ public struct ConfirmationResolution: Sendable, Equatable, Codable {
 public enum CapabilityInvocationPlannerError: Error, CustomStringConvertible {
     case missingIntent
     case approvalForbidden(String)
+    case capabilityDenied([CapabilityValidationFailure])
 
     public var description: String {
         switch self {
@@ -143,6 +144,13 @@ public enum CapabilityInvocationPlannerError: Error, CustomStringConvertible {
             return "transaction is missing IntentIR"
         case let .approvalForbidden(transactionID):
             return "transaction \(transactionID) is forbidden by approval policy"
+        case let .capabilityDenied(failures):
+            let details = failures.map { "\($0.verb): \($0.reason)" }.joined(separator: "; ")
+            return "capability validation failed: \(details)"
         }
     }
+}
+
+extension CapabilityInvocationPlannerError: LocalizedError {
+    public var errorDescription: String? { description }
 }
