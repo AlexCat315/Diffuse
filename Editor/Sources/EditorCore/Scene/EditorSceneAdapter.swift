@@ -49,6 +49,8 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
     public let collider: EditorSceneManifestCollider?
     public let constraint: EditorSceneManifestConstraint?
     public let script: EditorSceneManifestScript?
+    public let audioSource: EditorSceneManifestAudioSource?
+    public let animationPlayer: EditorSceneManifestAnimationPlayer?
     public let children: [EditorSceneManifestNode]
 
     public init(id: UInt64,
@@ -64,6 +66,8 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
                 collider: EditorSceneManifestCollider? = nil,
                 constraint: EditorSceneManifestConstraint? = nil,
                 script: EditorSceneManifestScript? = nil,
+                audioSource: EditorSceneManifestAudioSource? = nil,
+                animationPlayer: EditorSceneManifestAnimationPlayer? = nil,
                 children: [EditorSceneManifestNode] = []) {
         self.id = id
         self.name = name
@@ -78,6 +82,8 @@ public struct EditorSceneManifestNode: Codable, Sendable, Equatable {
         self.collider = collider
         self.constraint = constraint
         self.script = script
+        self.audioSource = audioSource
+        self.animationPlayer = animationPlayer
         self.children = children
     }
 }
@@ -122,7 +128,7 @@ public struct EditorSceneManifest: Codable, Sendable, Equatable {
     public let lastModifiedAt: String?
     public let roots: [EditorSceneManifestNode]
 
-    public init(schemaVersion: Int = 3,
+    public init(schemaVersion: Int = 4,
                 revision: UInt64,
                 entityCount: Int,
                 selectedEntityID: UInt64? = nil,
@@ -648,6 +654,50 @@ public struct EditorSceneManifestScript: Codable, Sendable, Equatable {
     }
 }
 
+public struct EditorSceneManifestAudioSource: Codable, Sendable, Equatable {
+    public let clipName: String
+    public let volume: Float
+    public let pitch: Float
+    public let loop: Bool
+    public let playOnAwake: Bool
+    public let spatialBlend: Float
+
+    public init(_ component: AudioSource) {
+        self.clipName = component.clipName
+        self.volume = component.volume
+        self.pitch = component.pitch
+        self.loop = component.loop
+        self.playOnAwake = component.playOnAwake
+        self.spatialBlend = component.spatialBlend
+    }
+
+    var component: AudioSource {
+        AudioSource(clipName: clipName, volume: volume, pitch: pitch,
+                    loop: loop, playOnAwake: playOnAwake, spatialBlend: spatialBlend)
+    }
+}
+
+public struct EditorSceneManifestAnimationPlayer: Codable, Sendable, Equatable {
+    public let clipName: String?
+    public let speed: Float
+    public let loop: Bool
+    public let isPlaying: Bool
+    public let time: Double
+
+    public init(_ component: AnimationPlayer) {
+        self.clipName = component.clipName
+        self.speed = component.speed
+        self.loop = component.loop
+        self.isPlaying = component.isPlaying
+        self.time = component.time
+    }
+
+    var component: AnimationPlayer {
+        AnimationPlayer(clipName: clipName, speed: speed, loop: loop,
+                        isPlaying: isPlaying, time: time)
+    }
+}
+
 public struct EditorInspectorSection {
     public let id: String
     public let title: String
@@ -790,6 +840,12 @@ public final class EditorSceneAdapter: @unchecked Sendable {
             if let script = node.script {
                 _ = restoredScene.setComponent(script.component, for: entity)
             }
+            if let audioSource = node.audioSource {
+                _ = restoredScene.setComponent(audioSource.component, for: entity)
+            }
+            if let animationPlayer = node.animationPlayer {
+                _ = restoredScene.setComponent(animationPlayer.component, for: entity)
+            }
             for child in node.children {
                 let childEntity = restoreNode(child)
                 _ = restoredScene.setParent(entity, for: childEntity)
@@ -918,6 +974,10 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 .map(EditorSceneManifestConstraint.init),
             script: scene.component(ScriptComponent.self, for: entity)
                 .map(EditorSceneManifestScript.init),
+            audioSource: scene.component(AudioSource.self, for: entity)
+                .map(EditorSceneManifestAudioSource.init),
+            animationPlayer: scene.component(AnimationPlayer.self, for: entity)
+                .map(EditorSceneManifestAnimationPlayer.init),
             children: scene.children(of: entity).map(manifestNode)
         )
     }
