@@ -59,11 +59,15 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
     private let lock = NSLock()
     private var pending: PendingInvocation?
 
+    public let undoStack: UndoStack
+
     public init(executor: TransactionExecutor = TransactionExecutor(),
-                capabilityPlanner: CapabilityInvocationPlanner = CapabilityInvocationPlanner()) {
+                capabilityPlanner: CapabilityInvocationPlanner = CapabilityInvocationPlanner(),
+                undoStack: UndoStack = UndoStack()) {
         self.executor = executor
         self.stagedStore = StagedTransactionStore(executor: executor)
         self.capabilityPlanner = capabilityPlanner
+        self.undoStack = undoStack
     }
 
     public func pendingConfirmationRequest() -> ConfirmationRequestBatch? {
@@ -106,6 +110,7 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         }
 
         if transaction.approvalPolicy == .automatic {
+            if let scene = executionContext.sceneRuntime { undoStack.push(scene) }
             let applyResult = try executor.apply(transaction, to: &executionContext)
             return CapabilityInvocationResult(disposition: .applied,
                                               transactionID: transaction.id,
@@ -140,6 +145,26 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
                                           warnings: warnings)
     }
 
+    // MARK: - Undo / Redo
+
+    /// Restores the previous scene snapshot. Returns `true` if a snapshot was available.
+    @discardableResult
+    public func undo(executionContext: inout TransactionExecutionContext) -> Bool {
+        guard let current = executionContext.sceneRuntime,
+              let snapshot = undoStack.undo(current: current) else { return false }
+        executionContext.sceneRuntime = snapshot
+        return true
+    }
+
+    /// Re-applies the most recently undone snapshot. Returns `true` if a snapshot was available.
+    @discardableResult
+    public func redo(executionContext: inout TransactionExecutionContext) -> Bool {
+        guard let current = executionContext.sceneRuntime,
+              let snapshot = undoStack.redo(current: current) else { return false }
+        executionContext.sceneRuntime = snapshot
+        return true
+    }
+
     public func resolvePlanConfirmation(_ resolution: ConfirmationResolution,
                                         executionContext: inout TransactionExecutionContext) throws -> CapabilityInvocationResult {
         let p = try lockedPending(for: resolution.batchID)
@@ -156,6 +181,7 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         }
 
         if shouldApply(resolution) {
+            if let scene = executionContext.sceneRuntime { undoStack.push(scene) }
             let applied = try stagedStore.applyStagedTransaction(to: &executionContext)
             lock.withLock { pending = nil }
             return CapabilityInvocationResult(disposition: .applied,

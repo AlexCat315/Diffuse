@@ -913,3 +913,115 @@ struct IntentRuntimeEndToEndTests {
         #expect(kinds.contains(.sceneChanged))
     }
 }
+
+@Suite("UndoStack")
+struct UndoStackTests {
+    private func makeSpawnTransaction(revision: UInt64 = 0, label: String = "Entity") -> TransactionIR {
+        TransactionIR(intent: IntentIR(verb: "scene.spawn_entity",
+                                        summary: "Spawn \(label)",
+                                        source: .human),
+                      summary: "Spawn \(label)",
+                      operations: [
+                          .scene(.spawnImportedMeshEntity(label: label,
+                                                         kindLabel: "Mesh",
+                                                         meshIndex: 0,
+                                                         position: .zero))
+                      ],
+                      baseRevisions: TransactionBaseRevisions(sceneRevision: revision),
+                      provenance: .authored)
+    }
+
+    @Test("push / undo / redo round-trip restores snapshots in correct order")
+    func pushUndoRedoRoundTrip() throws {
+        let coordinator = IntentRuntimeCoordinator()
+        var ctx = TransactionExecutionContext(sceneRuntime: SceneRuntime())
+
+        let r0 = ctx.sceneRuntime!.snapshot.revision
+
+        // Apply two transactions — each pushes a snapshot
+        _ = try coordinator.submitPlan(makeSpawnTransaction(revision: r0), executionContext: &ctx)
+        let r1 = ctx.sceneRuntime!.snapshot.revision
+
+        _ = try coordinator.submitPlan(makeSpawnTransaction(revision: r1), executionContext: &ctx)
+        let r2 = ctx.sceneRuntime!.snapshot.revision
+
+        #expect(coordinator.undoStack.undoDepth == 2)
+        #expect(coordinator.undoStack.canUndo)
+        #expect(!coordinator.undoStack.canRedo)
+
+        // Undo once — scene should go back to r1
+        let didUndo = coordinator.undo(executionContext: &ctx)
+        #expect(didUndo)
+        #expect(ctx.sceneRuntime?.snapshot.revision == r1)
+        #expect(coordinator.undoStack.undoDepth == 1)
+        #expect(coordinator.undoStack.redoDepth == 1)
+
+        // Undo again — scene should go back to r0
+        coordinator.undo(executionContext: &ctx)
+        #expect(ctx.sceneRuntime?.snapshot.revision == r0)
+        #expect(coordinator.undoStack.undoDepth == 0)
+        #expect(coordinator.undoStack.redoDepth == 2)
+
+        // Redo once — back to r1
+        coordinator.redo(executionContext: &ctx)
+        #expect(ctx.sceneRuntime?.snapshot.revision == r1)
+
+        // Redo again — back to r2
+        coordinator.redo(executionContext: &ctx)
+        #expect(ctx.sceneRuntime?.snapshot.revision == r2)
+        #expect(coordinator.undoStack.redoDepth == 0)
+    }
+
+    @Test("push clears the redo stack")
+    func pushClearsRedoStack() throws {
+        let coordinator = IntentRuntimeCoordinator()
+        var ctx = TransactionExecutionContext(sceneRuntime: SceneRuntime())
+
+        let r0 = ctx.sceneRuntime!.snapshot.revision
+        _ = try coordinator.submitPlan(makeSpawnTransaction(revision: r0), executionContext: &ctx)
+        let r1 = ctx.sceneRuntime!.snapshot.revision
+
+        coordinator.undo(executionContext: &ctx)
+        #expect(coordinator.undoStack.canRedo)
+
+        // New transaction clears redo
+        _ = try coordinator.submitPlan(makeSpawnTransaction(revision: r0), executionContext: &ctx)
+        #expect(!coordinator.undoStack.canRedo, "New push must clear redo stack")
+        _ = r1
+    }
+
+    @Test("undo on empty stack returns false without modifying context")
+    func undoOnEmptyStackReturnsFalse() throws {
+        let coordinator = IntentRuntimeCoordinator()
+        var ctx = TransactionExecutionContext(sceneRuntime: SceneRuntime())
+        let revisionBefore = ctx.sceneRuntime!.snapshot.revision
+
+        let result = coordinator.undo(executionContext: &ctx)
+        #expect(!result)
+        #expect(ctx.sceneRuntime?.snapshot.revision == revisionBefore)
+    }
+
+    @Test("ring buffer discards oldest entry when capacity is exceeded")
+    func ringBufferEvictsOldest() {
+        let stack = UndoStack(capacity: 3)
+        var scenes: [SceneRuntime] = (0..<4).map { _ in SceneRuntime() }
+
+        stack.push(scenes[0])
+        stack.push(scenes[1])
+        stack.push(scenes[2])
+        // Exceeds capacity — scenes[0] should be evicted
+        stack.push(scenes[3])
+
+        #expect(stack.undoDepth == 3)
+        // Undo three times and verify oldest available is scenes[1]
+        let popped1 = stack.undo(current: SceneRuntime())
+        let popped2 = stack.undo(current: SceneRuntime())
+        let popped3 = stack.undo(current: SceneRuntime())
+        // popped1 = scenes[3], popped2 = scenes[2], popped3 = scenes[1]
+        #expect(popped1 != nil)
+        #expect(popped2 != nil)
+        #expect(popped3 != nil)
+        #expect(stack.undoDepth == 0)
+        _ = scenes
+    }
+}

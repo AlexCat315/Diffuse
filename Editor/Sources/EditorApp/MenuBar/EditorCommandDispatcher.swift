@@ -20,9 +20,9 @@ enum EditorCommandDispatcher {
         case .importAssets:
             _ = app.reloadAssets()
         case .undo:
-            app.logConsole("Undo is not available for this command path yet", severity: .warning)
+            app.undo()
         case .redo:
-            app.logConsole("Redo is not available for this command path yet", severity: .warning)
+            app.redo()
         case let .setWorkspaceMode(next):
             guard store.state.workspaceMode != next else { return }
             let previousMode = store.state.workspaceMode
