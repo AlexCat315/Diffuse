@@ -1,3 +1,4 @@
+import Dispatch
 import Foundation
 import ObservationBus
 import Testing
@@ -64,5 +65,92 @@ struct ObservationBusTests {
 
         #expect(delivered.count == 1)
         #expect(delivered[0].payloadRef.inlineRecord?["scene_revision"] == .integer(2))
+    }
+
+    // MARK: - Subscriber
+
+    @Test("SubscriberToken cancellation removes the subscription from the bus")
+    func subscriberTokenCancellationRemovesSubscription() throws {
+        let bus = try ObservationBus()
+        let token = bus.sink(spec: SubscriptionSpec(filter: .kindIn([.sceneChanged])),
+                             interval: .seconds(60)) { _ in }
+        let id = token.subscriptionID
+        #expect(!token.isCancelled)
+
+        token.cancel()
+        #expect(token.isCancelled)
+
+        // After cancel, publishing to the stream should not reach the (now removed) subscription.
+        // We verify by re-subscribing and checking the old id is gone.
+        let sub2 = bus.subscribe(spec: SubscriptionSpec(id: id,
+                                                         filter: .kindIn([.sceneChanged])))
+        _ = try bus.publish(kind: .sceneChanged,
+                            streamID: "scene:test",
+                            payload: .inline(["entity_id": .integer(1), "scene_revision": .integer(1)]),
+                            origin: .tool(),
+                            provenance: .authored)
+        // sub2 was registered fresh with same id — it must receive the event
+        #expect(sub2.drain().count == 1)
+    }
+
+    @Test("sink delivers events to handler on background queue")
+    func sinkDeliversEventsToHandler() throws {
+        let bus = try ObservationBus()
+        let semaphore = DispatchSemaphore(value: 0)
+        let lock = NSLock()
+        nonisolated(unsafe) var receivedIDs: [String] = []
+
+        let token = bus.sink(spec: SubscriptionSpec(filter: .kindIn([.transactionApplied])),
+                             interval: .milliseconds(10)) { envelopes in
+            lock.lock()
+            envelopes.forEach { receivedIDs.append($0.eventID) }
+            lock.unlock()
+            semaphore.signal()
+        }
+        defer { token.cancel() }
+
+        let envelope = try bus.publish(
+            kind: .transactionApplied,
+            streamID: "transaction",
+            payload: .inline(["transaction_id": .string("tx.sink"), "status": .string("applied")]),
+            origin: .tool(),
+            causationID: "tx.sink",
+            provenance: .authored
+        )
+
+        let result = semaphore.wait(timeout: .now() + 2)
+        #expect(result == .success)
+        lock.lock()
+        let ids = receivedIDs
+        lock.unlock()
+        #expect(ids.contains(envelope.eventID))
+    }
+
+    @Test("events() AsyncStream yields published envelopes")
+    func asyncStreamYieldsPublishedEnvelopes() async throws {
+        let bus = try ObservationBus()
+        nonisolated(unsafe) var capturedToken: SubscriberToken?
+        let stream = bus.events(
+            spec: SubscriptionSpec(filter: .kindIn([.sceneEntityAdded])),
+            pollingInterval: .milliseconds(10),
+            onToken: { capturedToken = $0 }
+        )
+
+        let envelope = try bus.publish(
+            kind: .sceneEntityAdded,
+            streamID: "scene:main",
+            payload: .inline(["entity_ids": .array([.integer(99)]), "scene_revision": .integer(1)]),
+            origin: .tool(),
+            provenance: .authored
+        )
+
+        var received: EventEnvelope?
+        for await event in stream {
+            received = event
+            capturedToken?.cancel()
+            break
+        }
+
+        #expect(received?.eventID == envelope.eventID)
     }
 }

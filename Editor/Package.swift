@@ -54,6 +54,7 @@ let package = Package(
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "RenderBackend", package: "Engine"),
                 .product(name: "SceneRuntime", package: "Engine"),
+                .product(name: "CardBattleRuntime", package: "Engine"),
                 .product(name: "CinematicRenderer", package: "Engine"),
                 .product(name: "ColorPipeline", package: "Engine"),
                 .product(name: "EXRIO", package: "Engine"),
