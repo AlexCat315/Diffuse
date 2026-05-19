@@ -279,7 +279,7 @@ public struct AmbiguityScorer: Sendable {
             promptShort: intent.summary.isEmpty ? "Confirm: \(intent.verb)" : intent.summary,
             promptDetail: promptDetail,
             options: options.isEmpty ? defaultOptions(for: intent) : options,
-            defaultOptionID: "apply",
+            defaultOptionID: "confirm",
             severity: hasDestructiveSignal ? .destructive : (score.level >= .high ? .warn : .info),
             reversible: true,
             ambiguityScore: score.score,
@@ -289,10 +289,10 @@ public struct AmbiguityScorer: Sendable {
 
     private func defaultOptions(for intent: IntentIR) -> [ConfirmationOption] {
         [
-            ConfirmationOption(id: "apply",
+            ConfirmationOption(id: "confirm",
                                labelShort: "Apply",
                                labelDetail: "Proceed with '\(intent.verb)'"),
-            ConfirmationOption(id: "reject",
+            ConfirmationOption(id: "skip",
                                labelShort: "Reject",
                                labelDetail: "Discard this intent"),
         ]

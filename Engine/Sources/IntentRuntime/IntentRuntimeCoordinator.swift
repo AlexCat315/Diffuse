@@ -55,12 +55,15 @@ private struct PendingInvocation {
 public final class IntentRuntimeCoordinator: @unchecked Sendable {
     private let executor: TransactionExecutor
     private let stagedStore: StagedTransactionStore
+    private let capabilityPlanner: CapabilityInvocationPlanner
     private let lock = NSLock()
     private var pending: PendingInvocation?
 
-    public init(executor: TransactionExecutor = TransactionExecutor()) {
+    public init(executor: TransactionExecutor = TransactionExecutor(),
+                capabilityPlanner: CapabilityInvocationPlanner = CapabilityInvocationPlanner()) {
         self.executor = executor
         self.stagedStore = StagedTransactionStore(executor: executor)
+        self.capabilityPlanner = capabilityPlanner
     }
 
     public func pendingConfirmationRequest() -> ConfirmationRequestBatch? {
@@ -74,7 +77,30 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
     /// - `.requiresApproval` → stages and returns `.confirmationRequested`
     /// - `.forbidden` → throws
     public func submitPlan(_ transaction: TransactionIR,
-                           executionContext: inout TransactionExecutionContext) throws -> CapabilityInvocationResult {
+                           executionContext: inout TransactionExecutionContext,
+                           capabilityContext: CapabilityInvocationContext? = nil) throws -> CapabilityInvocationResult {
+        var plannedTransaction = transaction
+        var plannedQuestions: [ConfirmationQuestion] = []
+        var warnings: [String] = []
+
+        if let capabilityContext {
+            let plan = try capabilityPlanner.plan(transaction: plannedTransaction,
+                                                  context: capabilityContext)
+            plannedTransaction.approvalPolicy = plan.approvalPolicy
+            plannedQuestions = plan.questions
+            warnings = plan.warnings
+        }
+
+        return try submitPlannedTransaction(plannedTransaction,
+                                            plannedQuestions: plannedQuestions,
+                                            warnings: warnings,
+                                            executionContext: &executionContext)
+    }
+
+    private func submitPlannedTransaction(_ transaction: TransactionIR,
+                                          plannedQuestions: [ConfirmationQuestion],
+                                          warnings: [String],
+                                           executionContext: inout TransactionExecutionContext) throws -> CapabilityInvocationResult {
         guard transaction.approvalPolicy != .forbidden else {
             throw CapabilityInvocationPlannerError.approvalForbidden(transaction.id)
         }
@@ -83,11 +109,13 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
             let applyResult = try executor.apply(transaction, to: &executionContext)
             return CapabilityInvocationResult(disposition: .applied,
                                               transactionID: transaction.id,
-                                              applyResult: applyResult)
+                                              applyResult: applyResult,
+                                              warnings: warnings)
         }
 
         let stagedResult = try stagedStore.stage(transaction, from: executionContext)
-        let request = makeConfirmationRequest(for: transaction)
+        let request = makeConfirmationRequest(for: transaction,
+                                              plannedQuestions: plannedQuestions)
         do {
             if let bus = executionContext.observationBus {
                 _ = try bus.publish(kind: .confirmationRequested,
@@ -108,7 +136,8 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         return CapabilityInvocationResult(disposition: .confirmationRequested,
                                           transactionID: transaction.id,
                                           stagedResult: stagedResult,
-                                          confirmationRequest: request)
+                                          confirmationRequest: request,
+                                          warnings: warnings)
     }
 
     public func resolvePlanConfirmation(_ resolution: ConfirmationResolution,
@@ -152,7 +181,8 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         return p
     }
 
-    private func makeConfirmationRequest(for transaction: TransactionIR) -> ConfirmationRequestBatch {
+    private func makeConfirmationRequest(for transaction: TransactionIR,
+                                         plannedQuestions: [ConfirmationQuestion] = []) -> ConfirmationRequestBatch {
         let question = ConfirmationQuestion(
             id: "plan:\(transaction.id)",
             kind: .approveDestructive,
@@ -176,7 +206,7 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
             batchID: "cfm:\(transaction.id)",
             origin: "intent_runtime",
             correlationID: transaction.id,
-            questions: [question]
+            questions: plannedQuestions.isEmpty ? [question] : plannedQuestions
         )
     }
 
