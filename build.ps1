@@ -51,23 +51,39 @@ function Import-VSDevEnvironment {
     }
 }
 
+function Invoke-Bootstrap([string[]]$ExtraArgs) {
+    & swift package --package-path (Join-Path $root "Engine") `
+        --allow-writing-to-package-directory build-native-deps @ExtraArgs
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+    & swift package --package-path (Join-Path $root "GuavaUI") `
+        --allow-writing-to-package-directory build-native-deps @ExtraArgs
+    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+}
+
+function Test-NeedsBootstrap {
+    $e = Join-Path $root "Engine/vendor/SDL3.artifactbundle"
+    $g = Join-Path $root "GuavaUI/vendor/yoga.artifactbundle"
+    return (-not (Test-Path $e)) -or (-not (Test-Path $g))
+}
+
 Import-VSDevEnvironment
 $env:MIMALLOC_DISABLE_REDIRECT = "1"
 
-# ── bootstrap: compile C/C++ native deps via SPM plugin ─────────────────────
+# ── explicit bootstrap (supports extra args like --force) ────────────────────
 if ($Bootstrap) {
-    & swift package --package-path (Join-Path $root "Engine") `
-        --allow-writing-to-package-directory build-native-deps @SwiftBuildArgs
-    if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-    & swift package --package-path (Join-Path $root "GuavaUI") `
-        --allow-writing-to-package-directory build-native-deps @SwiftBuildArgs
-    exit $LASTEXITCODE
+    Invoke-Bootstrap $SwiftBuildArgs
+    exit 0
 }
 
-# ── swift build ──────────────────────────────────────────────────────────────
+# ── swift build (auto-bootstrap if vendor is missing) ────────────────────────
 $packagePath = switch ($Package) {
     "engine" { Join-Path $root "Engine" }
     "editor" { Join-Path $root "Editor" }
+}
+
+if (Test-NeedsBootstrap) {
+    Write-Host "vendor/ missing — running bootstrap first..."
+    Invoke-Bootstrap @()
 }
 
 $swiftBuild = Get-Command swift-build -ErrorAction SilentlyContinue
