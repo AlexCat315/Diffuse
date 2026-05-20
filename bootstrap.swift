@@ -90,13 +90,20 @@ guard let cmake = which("cmake") else {
 let engineSrc = root.appendingPathComponent("Engine/third-party").path
 let engineBld = root.appendingPathComponent("Engine/build/native").path
 
+// Temp prefix for cmake --install: SDL3/Jolt write to absolute vendor/ paths (unaffected),
+// but FetchContent sub-projects (plutovg etc.) have system install rules that need
+// redirecting away from /usr/local to avoid permission errors.
+let installPrefix = FileManager.default.temporaryDirectory
+    .appendingPathComponent("guava-native-install").path
+
 print("\n── Engine ───────────────────────────────────────────────────────────")
 shell(cmake, "-S", engineSrc, "-B", engineBld, "-DCMAKE_BUILD_TYPE=Release")
-shell(cmake, "--build", engineBld, "--parallel", "--target", "SDL3-static")
-shell(cmake, "--build", engineBld, "--parallel", "--target", "stage_jolt")
-// Install before stage_ocio_openexr: OpenEXR's cmake needs the installed Imath headers.
-shell(cmake, "--install", engineBld)
-shell(cmake, "--build", engineBld, "--parallel", "--target", "stage_ocio_openexr")
+// Build all targets — cmake's dependency graph handles ordering:
+// wgpu download → SDL3 → Jolt → image decode → Imath → OpenEXR → stage targets.
+shell(cmake, "--build", engineBld, "--parallel")
+// cmake --install writes SDL3/Jolt info.json to absolute vendor/ paths (unaffected by prefix).
+// --prefix redirects FetchContent sub-project system install rules to a temp dir.
+shell(cmake, "--install", engineBld, "--prefix", installPrefix)
 
 // ── GuavaUI ───────────────────────────────────────────────────────────────────
 
@@ -106,7 +113,7 @@ let guavaBld = root.appendingPathComponent("GuavaUI/build/native").path
 print("\n── GuavaUI ──────────────────────────────────────────────────────────")
 shell(cmake, "-S", guavaSrc, "-B", guavaBld, "-DCMAKE_BUILD_TYPE=Release")
 shell(cmake, "--build", guavaBld, "--parallel")
-shell(cmake, "--install", guavaBld)
+shell(cmake, "--install", guavaBld, "--prefix", installPrefix)
 
 print("\nDone. Run: swift build --package-path Editor")
 
