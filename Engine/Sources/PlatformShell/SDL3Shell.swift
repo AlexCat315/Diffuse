@@ -391,7 +391,8 @@ public final class SDL3Shell: Shell {
             let sz = "\(handle.drawableSize.width)x\(handle.drawableSize.height)"
             let lz = "\(handle.logicalSize.width)x\(handle.logicalSize.height)"
             let csf = handle.contentScaleFactor
-            Logger.platform.info("SDL3 window ready, id=\(handle.id), drawable=\(sz), logical=\(lz), contentScaleFactor=\(csf)")
+            let hz = displayRefreshRate(windowID: handle.id).map { String(format: "%.2fHz", $0) } ?? "unknown"
+            Logger.platform.info("SDL3 window ready, id=\(handle.id), drawable=\(sz), logical=\(lz), contentScaleFactor=\(csf), displayRefreshRate=\(hz)")
             return handle
         } catch {
 #if os(macOS)
