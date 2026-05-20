@@ -57,17 +57,20 @@ public struct WindowChromeHitTest: Sendable, Equatable {
     public var draggableTrailingInset: Float
     public var resizeBorderWidth: Float
     public var draggableRects: [Rect]
+    public var usesExplicitDragRects: Bool
 
     public init(titleBarHeight: Float,
                 draggableLeadingInset: Float = 0,
                 draggableTrailingInset: Float = 0,
                 resizeBorderWidth: Float = 6,
-                draggableRects: [Rect] = []) {
+                draggableRects: [Rect] = [],
+                usesExplicitDragRects: Bool = false) {
         self.titleBarHeight = max(0, titleBarHeight)
         self.draggableLeadingInset = max(0, draggableLeadingInset)
         self.draggableTrailingInset = max(0, draggableTrailingInset)
         self.resizeBorderWidth = max(0, resizeBorderWidth)
         self.draggableRects = draggableRects
+        self.usesExplicitDragRects = usesExplicitDragRects
     }
 }
 

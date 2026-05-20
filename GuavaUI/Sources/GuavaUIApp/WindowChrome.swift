@@ -50,7 +50,8 @@ public struct ImmersiveWindowTitleBar<Leading: View>: View {
         _WindowChromeHitTestInstaller(
             hitTest: WindowChromeHitTest(
                 titleBarHeight: height,
-                resizeBorderWidth: Self.platformResizeBorderWidth(resizeBorderWidth)
+                resizeBorderWidth: Self.platformResizeBorderWidth(resizeBorderWidth),
+                usesExplicitDragRects: true
             )
         )
 

@@ -870,7 +870,7 @@ private let _sdl3ChromeHitTest: @convention(c) (OpaquePointer?, UnsafePointer<SD
             if right { return SDL_HITTEST_RESIZE_RIGHT }
         }
 
-        if !config.draggableRects.isEmpty {
+        if config.usesExplicitDragRects {
             for rect in config.draggableRects where rect.contains(x: x, y: y) {
                 return SDL_HITTEST_DRAGGABLE
             }
