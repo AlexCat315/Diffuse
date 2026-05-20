@@ -8,6 +8,12 @@ set(OCIO_OPENEXR_BUNDLE ${GUAVA_VENDOR_DIR}/ocio_openexr)
 set(OCIO_OPENEXR_VARIANT ${OCIO_OPENEXR_BUNDLE}/${GUAVA_TRIPLE})
 set(IMATH_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/imath-install)
 
+if(WIN32)
+    set(OPENEXR_MSVC_RUNTIME_ARG -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL)
+else()
+    set(OPENEXR_MSVC_RUNTIME_ARG "")
+endif()
+
 ExternalProject_Add(imath_ep
     SOURCE_DIR ${CMAKE_SOURCE_DIR}/imath
     PREFIX ${CMAKE_BINARY_DIR}/imath-ep
@@ -21,6 +27,7 @@ ExternalProject_Add(imath_ep
         -DIMATH_BUILD_TESTING=OFF
         -DIMATH_INSTALL=ON
         -DIMATH_INSTALL_PKG_CONFIG=OFF
+        ${OPENEXR_MSVC_RUNTIME_ARG}
 )
 
 ExternalProject_Add(openexr_ep
@@ -34,6 +41,7 @@ ExternalProject_Add(openexr_ep
         -DCMAKE_PREFIX_PATH=${IMATH_INSTALL_PREFIX}
         -DCMAKE_POSITION_INDEPENDENT_CODE=ON
         -DBUILD_SHARED_LIBS=OFF
+        ${OPENEXR_MSVC_RUNTIME_ARG}
         -DBUILD_TESTING=OFF
         -DOPENEXR_INSTALL=ON
         -DOPENEXR_INSTALL_TOOLS=OFF
@@ -46,6 +54,8 @@ ExternalProject_Add(openexr_ep
         -DOPENEXR_FORCE_INTERNAL_DEFLATE=ON
         -DOPENEXR_FORCE_INTERNAL_OPENJPH=ON
         -DOPENEXR_INSTALL_PKG_CONFIG=OFF
+        # Disable backward-compat symlinks — requires symlink privilege on Windows.
+        -DOPENEXR_INSTALL_COMPAT_HEADERS=OFF
 )
 
 # Stage all built artifacts into the SPM-friendly layout via a custom target

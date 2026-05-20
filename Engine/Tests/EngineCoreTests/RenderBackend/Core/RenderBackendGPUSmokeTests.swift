@@ -1,8 +1,8 @@
-import Foundation
+﻿import Foundation
 import RHIWGPU
 import SceneRuntime
 import Testing
-import simd
+import SIMDCompat
 @testable import RenderBackend
 
 private let gpuSmokeEnabled = ProcessInfo.processInfo.environment["GUAVA_RUN_GPU_SMOKE_TESTS"] == "1"

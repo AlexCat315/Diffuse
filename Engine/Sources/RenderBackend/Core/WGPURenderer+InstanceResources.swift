@@ -1,6 +1,6 @@
-import RHIWGPU
+﻿import RHIWGPU
 import SceneRuntime
-import simd
+import SIMDCompat
 
 private struct MeshInstanceUniforms {
     var mvp: simd_float4x4

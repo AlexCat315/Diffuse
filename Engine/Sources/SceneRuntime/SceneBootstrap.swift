@@ -1,4 +1,4 @@
-import simd
+﻿import SIMDCompat
 
 public struct SceneNameComponent: RuntimeComponent, Sendable, Equatable {
     public var value: String

@@ -209,7 +209,7 @@ public final class SDL3Shell: Shell {
             case .resizeNESW:       id = Int32(GUAVA_SDL_SYSTEM_CURSOR_NESW_RESIZE)
             }
 
-            guard let created = SDL_CreateSystemCursor(SDL_SystemCursor(rawValue: UInt32(id))) else {
+            guard let created = SDL_CreateSystemCursor(SDL_SystemCursor(rawValue: SDL_SystemCursor.RawValue(id))) else {
                 return nil
             }
             cursorCache[cursor] = created

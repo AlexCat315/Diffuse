@@ -1,6 +1,4 @@
-import CoreGraphics
 import Foundation
-import ImageIO
 
 public struct DecodedTextureAsset: Sendable, Equatable {
     public var pixels: [UInt8]
@@ -19,65 +17,78 @@ public enum ImageAssetDecoderError: Error, CustomStringConvertible {
     case imageMissing(String)
     case invalidDimensions(String)
     case contextCreationFailed(String)
+    case platformNotSupported(String)
 
     public var description: String {
         switch self {
-        case let .sourceUnreadable(path):
-            return "image source unreadable: \(path)"
-        case let .imageMissing(path):
-            return "image missing first frame: \(path)"
-        case let .invalidDimensions(path):
-            return "image has invalid dimensions: \(path)"
-        case let .contextCreationFailed(path):
-            return "rgba context creation failed: \(path)"
+        case let .sourceUnreadable(path): return "image source unreadable: \(path)"
+        case let .imageMissing(path): return "image missing first frame: \(path)"
+        case let .invalidDimensions(path): return "image has invalid dimensions: \(path)"
+        case let .contextCreationFailed(path): return "rgba context creation failed: \(path)"
+        case let .platformNotSupported(msg): return "image decoding not supported on this platform: \(msg)"
         }
     }
 }
 
 public enum ImageAssetDecoder {
+#if canImport(CoreGraphics) && canImport(ImageIO)
     public static func decodeRGBA8(path: String) throws -> DecodedTextureAsset {
-        let url = URL(fileURLWithPath: path)
-        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
-            throw ImageAssetDecoderError.sourceUnreadable(path)
-        }
-        return try decodeRGBA8(source: source, label: path)
+        try _decodeRGBA8CoreGraphics(path: path)
     }
 
     public static func decodeRGBA8(data: Data, label: String = "<memory>") throws -> DecodedTextureAsset {
-        guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
-            throw ImageAssetDecoderError.sourceUnreadable(label)
-        }
-        return try decodeRGBA8(source: source, label: label)
+        try _decodeRGBA8CoreGraphics(data: data, label: label)
+    }
+#else
+    public static func decodeRGBA8(path: String) throws -> DecodedTextureAsset {
+        throw ImageAssetDecoderError.platformNotSupported(path)
     }
 
-    private static func decodeRGBA8(source: CGImageSource, label: String) throws -> DecodedTextureAsset {
-        guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
-            throw ImageAssetDecoderError.imageMissing(label)
-        }
-
-        let width = image.width
-        let height = image.height
-        guard width > 0, height > 0 else {
-            throw ImageAssetDecoderError.invalidDimensions(label)
-        }
-
-        var pixels = [UInt8](repeating: 0, count: width * height * 4)
-        let colorSpace = CGColorSpaceCreateDeviceRGB()
-        let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue
-            | CGBitmapInfo.byteOrder32Big.rawValue
-        guard let context = CGContext(
-            data: &pixels,
-            width: width,
-            height: height,
-            bitsPerComponent: 8,
-            bytesPerRow: width * 4,
-            space: colorSpace,
-            bitmapInfo: bitmapInfo
-        ) else {
-            throw ImageAssetDecoderError.contextCreationFailed(label)
-        }
-
-        context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
-        return DecodedTextureAsset(pixels: pixels, width: width, height: height)
+    public static func decodeRGBA8(data: Data, label: String = "<memory>") throws -> DecodedTextureAsset {
+        throw ImageAssetDecoderError.platformNotSupported(label)
     }
+#endif
 }
+
+#if canImport(CoreGraphics) && canImport(ImageIO)
+import CoreGraphics
+import ImageIO
+
+private func _decodeRGBA8CoreGraphics(path: String) throws -> DecodedTextureAsset {
+    let url = URL(fileURLWithPath: path)
+    guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else {
+        throw ImageAssetDecoderError.sourceUnreadable(path)
+    }
+    return try _decodeRGBA8CoreGraphics(source: source, label: path)
+}
+
+private func _decodeRGBA8CoreGraphics(data: Data, label: String) throws -> DecodedTextureAsset {
+    guard let source = CGImageSourceCreateWithData(data as CFData, nil) else {
+        throw ImageAssetDecoderError.sourceUnreadable(label)
+    }
+    return try _decodeRGBA8CoreGraphics(source: source, label: label)
+}
+
+private func _decodeRGBA8CoreGraphics(source: CGImageSource, label: String) throws -> DecodedTextureAsset {
+    guard let image = CGImageSourceCreateImageAtIndex(source, 0, nil) else {
+        throw ImageAssetDecoderError.imageMissing(label)
+    }
+    let width = image.width
+    let height = image.height
+    guard width > 0, height > 0 else {
+        throw ImageAssetDecoderError.invalidDimensions(label)
+    }
+    var pixels = [UInt8](repeating: 0, count: width * height * 4)
+    let colorSpace = CGColorSpaceCreateDeviceRGB()
+    let bitmapInfo = CGImageAlphaInfo.premultipliedLast.rawValue | CGBitmapInfo.byteOrder32Big.rawValue
+    guard let context = CGContext(
+        data: &pixels, width: width, height: height,
+        bitsPerComponent: 8, bytesPerRow: width * 4,
+        space: colorSpace, bitmapInfo: bitmapInfo
+    ) else {
+        throw ImageAssetDecoderError.contextCreationFailed(label)
+    }
+    context.draw(image, in: CGRect(x: 0, y: 0, width: width, height: height))
+    return DecodedTextureAsset(pixels: pixels, width: width, height: height)
+}
+#endif

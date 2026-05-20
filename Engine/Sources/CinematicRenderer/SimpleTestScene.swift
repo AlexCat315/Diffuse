@@ -1,8 +1,8 @@
-import Foundation
-import simd
+﻿import Foundation
+import SIMDCompat
 
 /// A minimal test scene with a ground plane and a sphere for validating
-/// the PathTracer → ColorPipeline → ImageIO pipeline end-to-end.
+/// the PathTracer 鈫?ColorPipeline 鈫?ImageIO pipeline end-to-end.
 public struct SimpleTestScene: SceneGeometry, @unchecked Sendable {
     private let sphereRadius: Float
     private let sphereCenter: SIMD3<Float>

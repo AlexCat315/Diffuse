@@ -1,10 +1,10 @@
-import EngineKernel
+﻿import EngineKernel
 import Foundation
-import simd
+import SIMDCompat
 
-/// 视口相机拖拽 / 选择状态的全局持有者。
-/// `ViewportPanel.handleViewportInput` 是值类型 view body 里的临时方法，
-/// 没法持有状态；这里用单例承接跨事件的轻量上下文。
+/// 瑙嗗彛鐩告満鎷栨嫿 / 閫夋嫨鐘舵€佺殑鍏ㄥ眬鎸佹湁鑰呫€?
+/// `ViewportPanel.handleViewportInput` 鏄€肩被鍨?view body 閲岀殑涓存椂鏂规硶锛?
+/// 娌℃硶鎸佹湁鐘舵€侊紱杩欓噷鐢ㄥ崟渚嬫壙鎺ヨ法浜嬩欢鐨勮交閲忎笂涓嬫枃銆?
 public final class EditorViewportInputController: @unchecked Sendable {
     public static let shared = EditorViewportInputController()
     private init() {}
@@ -36,7 +36,7 @@ public final class EditorViewportInputController: @unchecked Sendable {
     public var activeInteraction: ActiveInteraction?
     public var lastCursor: (x: Float, y: Float)?
 
-    /// 鼠标按下时记录起点，以便释放时判断是否算 "click" 触发拾取。
+    /// 榧犳爣鎸変笅鏃惰褰曡捣鐐癸紝浠ヤ究閲婃斁鏃跺垽鏂槸鍚︾畻 "click" 瑙﹀彂鎷惧彇銆?
     public var leftDownAt: (x: Float, y: Float)?
     public var marqueeStart: (x: Float, y: Float)?
     public var marqueeCurrent: (x: Float, y: Float)?

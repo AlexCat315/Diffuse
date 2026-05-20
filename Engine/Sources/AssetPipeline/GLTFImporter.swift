@@ -1,5 +1,5 @@
-import Foundation
-import simd
+﻿import Foundation
+import SIMDCompat
 
 /// Per-primitive topology using shared vertex pool with optional index remap.
 public struct PrimitiveMeshTopology: Sendable {
@@ -551,7 +551,7 @@ private struct MeshBuilder {
 
     func meshNodes() -> [MeshNode] {
         guard let gltfNodes = document.nodes, !gltfNodes.isEmpty else { return [] }
-        // Build parent lookup: child → parent index
+        // Build parent lookup: child 鈫?parent index
         var parentOf = [Int: Int]()
         for (i, node) in gltfNodes.enumerated() {
             for child in node.children ?? [] {

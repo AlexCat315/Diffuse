@@ -1,19 +1,13 @@
-import AVFoundation
 import Foundation
 import SceneRuntime
 
+#if canImport(AVFoundation)
+import AVFoundation
+
 /// Lightweight audio engine backed by AVAudioEngine.
-///
-/// Owns a pool of player nodes (SFX) and a dedicated BGM node.
-/// Call `tick(scene:listenerPosition:)` each frame to drive playOnAwake
-/// and spatial positioning.
 public final class AudioEngine: @unchecked Sendable {
 
-    // MARK: - Public
-
     public static let shared = AudioEngine()
-
-    // MARK: - Private state
 
     private let engine = AVAudioEngine()
     private let bgmNode = AVAudioPlayerNode()
@@ -26,41 +20,25 @@ public final class AudioEngine: @unchecked Sendable {
 
     private let sfxPoolSize = 16
     private var sfxPool: [PlayerSlot] = []
-
     private var clips: [String: AudioClipResource] = [:]
     private var searchURLs: [URL] = []
-
-    // Track which entities are already playing so playOnAwake only fires once.
     private var awakened: Set<EntityID> = []
-    // Track playing state so we can stop when component is removed.
-    private var playing: [EntityID: Int] = [:]   // entityID → pool index
-
-    // MARK: - Init
+    private var playing: [EntityID: Int] = [:]
 
     private init() {
         engine.attach(bgmNode)
         engine.connect(bgmNode, to: engine.mainMixerNode, format: nil)
-
         for _ in 0..<sfxPoolSize {
             let node = AVAudioPlayerNode()
             engine.attach(node)
             engine.connect(node, to: engine.mainMixerNode, format: nil)
             sfxPool.append(PlayerSlot(node: node))
         }
-
-        do { try engine.start() } catch {
-            // Audio not critical; editor continues without sound.
-        }
+        do { try engine.start() } catch {}
     }
 
-    // MARK: - Asset management
+    public func addSearchURL(_ url: URL) { searchURLs.append(url) }
 
-    /// Register directories to search for audio files.
-    public func addSearchURL(_ url: URL) {
-        searchURLs.append(url)
-    }
-
-    /// Preload a clip by name. Safe to call multiple times.
     @discardableResult
     public func preload(_ name: String) -> AudioClipResource? {
         if let existing = clips[name] { return existing }
@@ -77,9 +55,6 @@ public final class AudioEngine: @unchecked Sendable {
         return nil
     }
 
-    // MARK: - Immediate API (non-spatial)
-
-    /// Play a one-shot sound effect immediately, no entity binding.
     public func playSFX(_ clipName: String, volume: Float = 1, pitch: Float = 1) {
         guard let clip = preload(clipName) else { return }
         guard let idx = freeSlotIndex() else { return }
@@ -90,7 +65,6 @@ public final class AudioEngine: @unchecked Sendable {
         node.play()
     }
 
-    /// Play background music (loops by default).
     public func playBGM(_ clipName: String, volume: Float = 1, loop: Bool = true) {
         guard let clip = preload(clipName) else { return }
         bgmNode.stop()
@@ -102,41 +76,29 @@ public final class AudioEngine: @unchecked Sendable {
 
     public func stopBGM() { bgmNode.stop() }
 
-    // MARK: - Scene-driven tick
-
-    /// Called each frame by EngineCore to drive `playOnAwake` and spatial audio.
     public func tick(scene: SceneRuntime, listenerPosition: SIMD3<Float> = .zero) {
         let entities = scene.entities(with: AudioSource.self)
-
         var activeIDs: Set<EntityID> = []
         for id in entities {
             guard let source = scene.component(AudioSource.self, for: id) else { continue }
             guard !source.clipName.isEmpty else { continue }
             activeIDs.insert(id)
-
             if source.playOnAwake && !awakened.contains(id) {
                 awakened.insert(id)
                 playEntity(id: id, source: source, scene: scene, listenerPosition: listenerPosition)
             }
         }
-
-        // Stop nodes whose entity no longer has an AudioSource or left scene.
         let stale = playing.keys.filter { !activeIDs.contains($0) }
         for id in stale { stopEntity(id: id) }
     }
 
-    // MARK: - Entity play / stop
-
     public func playEntity(id: EntityID, source: AudioSource, scene: SceneRuntime,
                            listenerPosition: SIMD3<Float> = .zero) {
         guard let clip = preload(source.clipName) else { return }
-        if let idx = playing[id] {
-            sfxPool[idx].node.stop()
-        }
+        if let idx = playing[id] { sfxPool[idx].node.stop() }
         guard let idx = freeSlotIndex() else { return }
         sfxPool[idx].entityID = id
         sfxPool[idx].clipName = source.clipName
-
         let node = sfxPool[idx].node
         node.volume = attenuatedVolume(source: source, entityID: id, scene: scene,
                                        listenerPosition: listenerPosition)
@@ -155,15 +117,12 @@ public final class AudioEngine: @unchecked Sendable {
         awakened.remove(id)
     }
 
-    /// Reset awakened state (called when play mode stops so clips re-fire on next play).
     public func resetPlaybackState() {
         for i in sfxPool.indices { sfxPool[i].node.stop() }
         bgmNode.stop()
         awakened.removeAll()
         playing.removeAll()
     }
-
-    // MARK: - Helpers
 
     private func freeSlotIndex() -> Int? {
         for i in sfxPool.indices {
@@ -182,10 +141,29 @@ public final class AudioEngine: @unchecked Sendable {
             return source.volume
         }
         let dist = simd_length(wt.translation - listenerPosition)
-        // Simple inverse-distance falloff starting at 1 m, full at 0, silent at 50 m.
         let falloff = max(0, 1 - dist / 50)
         let spatial = source.volume * falloff
         let flat = source.volume * (1 - source.spatialBlend)
         return flat + spatial * source.spatialBlend
     }
 }
+
+#else
+
+/// No-op audio engine stub for platforms without AVFoundation.
+public final class AudioEngine: @unchecked Sendable {
+    public static let shared = AudioEngine()
+    private init() {}
+    public func addSearchURL(_ url: URL) {}
+    @discardableResult public func preload(_ name: String) -> AudioClipResource? { nil }
+    public func playSFX(_ clipName: String, volume: Float = 1, pitch: Float = 1) {}
+    public func playBGM(_ clipName: String, volume: Float = 1, loop: Bool = true) {}
+    public func stopBGM() {}
+    public func tick(scene: SceneRuntime, listenerPosition: SIMD3<Float> = .zero) {}
+    public func playEntity(id: EntityID, source: AudioSource, scene: SceneRuntime,
+                           listenerPosition: SIMD3<Float> = .zero) {}
+    public func stopEntity(id: EntityID) {}
+    public func resetPlaybackState() {}
+}
+
+#endif

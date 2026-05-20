@@ -1,4 +1,4 @@
-import simd
+﻿import SIMDCompat
 
 public struct Plane3D: Sendable, Equatable {
     public var normal: SIMD3<Float>

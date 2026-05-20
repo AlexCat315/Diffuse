@@ -1,9 +1,9 @@
-import AssetPipeline
+﻿import AssetPipeline
 @testable import EditorCore
 import Foundation
 import RenderBackend
 import SceneRuntime
-import simd
+import SIMDCompat
 import Testing
 
 @Suite("EditorSceneAdapter", .serialized)

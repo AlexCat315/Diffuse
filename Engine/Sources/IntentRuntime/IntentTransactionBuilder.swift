@@ -1,6 +1,6 @@
-import Foundation
+﻿import Foundation
 import SceneRuntime
-import simd
+import SIMDCompat
 
 public struct IntentTransactionBuildContext {
     public var sceneRuntime: SceneRuntime

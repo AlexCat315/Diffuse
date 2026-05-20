@@ -1,5 +1,5 @@
-import CJoltBridge
-import simd
+﻿import CJoltBridge
+import SIMDCompat
 
 public final class JoltPhysicsBackend: PhysicsBackend, @unchecked Sendable {
     private static let colliderHasBoxFlag: UInt32 = 1 << 0

@@ -1,4 +1,6 @@
+﻿#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import GuavaUIRuntime
 
 private enum _ScrollViewDragAxis {

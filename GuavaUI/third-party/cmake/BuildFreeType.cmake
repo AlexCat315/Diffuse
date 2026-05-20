@@ -23,14 +23,20 @@ ExternalProject_Add(freetype_ep
         -DFT_DISABLE_BROTLI=ON
 )
 
+if(WIN32)
+    set(FREETYPE_LIB_FILENAME "freetype.lib")
+else()
+    set(FREETYPE_LIB_FILENAME "libfreetype.a")
+endif()
+
 add_custom_target(stage_freetype ALL
     DEPENDS freetype_ep
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${FREETYPE_VARIANT}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${FREETYPE_VARIANT}/lib
     COMMAND ${CMAKE_COMMAND} -E make_directory ${FREETYPE_VARIANT}/include
     COMMAND ${CMAKE_COMMAND} -E copy
-        ${FREETYPE_INSTALL_PREFIX}/lib/libfreetype.a
-        ${FREETYPE_VARIANT}/lib/libfreetype.a
+        ${FREETYPE_INSTALL_PREFIX}/lib/${FREETYPE_LIB_FILENAME}
+        ${FREETYPE_VARIANT}/lib/${FREETYPE_LIB_FILENAME}
     COMMAND ${CMAKE_COMMAND} -E copy_directory
         ${FREETYPE_INSTALL_PREFIX}/include/freetype2 ${FREETYPE_VARIANT}/include
     COMMAND ${CMAKE_COMMAND} -E copy
@@ -42,4 +48,4 @@ add_custom_target(stage_freetype ALL
     COMMENT "Staging FreeType into ${FREETYPE_VARIANT}"
 )
 
-write_artifactbundle_info(${FREETYPE_BUNDLE} "CFreeType" "${GUAVA_TRIPLE}/lib/libfreetype.a")
+write_artifactbundle_info(${FREETYPE_BUNDLE} "CFreeType" "${GUAVA_TRIPLE}/lib/${FREETYPE_LIB_FILENAME}")

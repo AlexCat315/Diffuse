@@ -1,6 +1,6 @@
-import EngineKernel
+﻿import EngineKernel
 import SceneRuntime
-import simd
+import SIMDCompat
 
 public final class ScriptContext {
     private let phaseContext: RuntimeScriptPhaseContext

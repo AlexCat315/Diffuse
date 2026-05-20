@@ -27,14 +27,20 @@ ExternalProject_Add(harfbuzz_ep
         -DHB_HAVE_CORETEXT=OFF
 )
 
+if(WIN32)
+    set(HARFBUZZ_LIB_FILENAME "harfbuzz.lib")
+else()
+    set(HARFBUZZ_LIB_FILENAME "libharfbuzz.a")
+endif()
+
 add_custom_target(stage_harfbuzz ALL
     DEPENDS harfbuzz_ep
     COMMAND ${CMAKE_COMMAND} -E rm -rf ${HARFBUZZ_VARIANT}
     COMMAND ${CMAKE_COMMAND} -E make_directory ${HARFBUZZ_VARIANT}/lib
     COMMAND ${CMAKE_COMMAND} -E make_directory ${HARFBUZZ_VARIANT}/include
     COMMAND ${CMAKE_COMMAND} -E copy
-        ${HARFBUZZ_INSTALL_PREFIX}/lib/libharfbuzz.a
-        ${HARFBUZZ_VARIANT}/lib/libharfbuzz.a
+        ${HARFBUZZ_INSTALL_PREFIX}/lib/${HARFBUZZ_LIB_FILENAME}
+        ${HARFBUZZ_VARIANT}/lib/${HARFBUZZ_LIB_FILENAME}
     # HarfBuzz installs headers under include/harfbuzz/. Flatten into include/
     # so consumers do `#include "hb.h"` directly (matches existing Swift code).
     COMMAND ${CMAKE_COMMAND} -E copy_directory
@@ -48,4 +54,4 @@ add_custom_target(stage_harfbuzz ALL
     COMMENT "Staging HarfBuzz into ${HARFBUZZ_VARIANT}"
 )
 
-write_artifactbundle_info(${HARFBUZZ_BUNDLE} "CHarfBuzz" "${GUAVA_TRIPLE}/lib/libharfbuzz.a")
+write_artifactbundle_info(${HARFBUZZ_BUNDLE} "CHarfBuzz" "${GUAVA_TRIPLE}/lib/${HARFBUZZ_LIB_FILENAME}")

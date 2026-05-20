@@ -1,10 +1,10 @@
-import AssetPipeline
+﻿import AssetPipeline
 import Foundation
 import ObservationBus
 import SceneRuntime
 import SequenceRuntime
 import ScriptRuntime
-import simd
+import SIMDCompat
 
 public struct TransactionExecutionContext {
     public var sceneRuntime: SceneRuntime?

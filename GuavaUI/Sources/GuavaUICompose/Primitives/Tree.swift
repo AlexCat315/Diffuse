@@ -1,5 +1,7 @@
-import EngineKernel
+﻿import EngineKernel
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import GuavaUIRuntime
 
 public enum TreeSearchFilterPolicy: Sendable {

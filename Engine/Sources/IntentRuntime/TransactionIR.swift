@@ -1,9 +1,9 @@
-import AssetPipeline
+﻿import AssetPipeline
 import Foundation
 import SceneRuntime
 import SequenceRuntime
 import ScriptRuntime
-import simd
+import SIMDCompat
 
 public enum TransactionDomain: String, Sendable, Equatable {
     case scene

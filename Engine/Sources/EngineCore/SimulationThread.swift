@@ -5,7 +5,7 @@ import Foundation
 import RenderBackend
 import SceneRuntime
 import ScriptRuntime
-import simd
+import SIMDCompat
 
 struct SimulationFrameRequest: Sendable {
     let frameIndex: Int
@@ -93,12 +93,12 @@ final class SimulationThread: @unchecked Sendable {
             inputEvents: request.inputEvents
         )
 
-        var begin = CFAbsoluteTimeGetCurrent()
+        var begin = Date().timeIntervalSinceReferenceDate
         onKernelPhase(.input, frameContext)
         runtime.tickInput(deltaTime: request.deltaTime, inputEvents: request.inputEvents)
-        inputSeconds = CFAbsoluteTimeGetCurrent() - begin
+        inputSeconds = Date().timeIntervalSinceReferenceDate - begin
 
-        begin = CFAbsoluteTimeGetCurrent()
+        begin = Date().timeIntervalSinceReferenceDate
         onKernelPhase(.simulation, frameContext)
         runtime.tickSimulation(deltaTime: request.deltaTime)
         sceneRuntime.tick(
@@ -108,13 +108,13 @@ final class SimulationThread: @unchecked Sendable {
         )
         AudioEngine.shared.tick(scene: sceneRuntime)
         simulationTimeSeconds += request.deltaTime
-        simulationSeconds = CFAbsoluteTimeGetCurrent() - begin
+        simulationSeconds = Date().timeIntervalSinceReferenceDate - begin
 
-        begin = CFAbsoluteTimeGetCurrent()
+        begin = Date().timeIntervalSinceReferenceDate
         onKernelPhase(.renderPrepare, frameContext)
         runtime.tickRenderPrepare(deltaTime: request.deltaTime)
         _ = assetPipeline.validatePath("Content")
-        renderPrepareSeconds = CFAbsoluteTimeGetCurrent() - begin
+        renderPrepareSeconds = Date().timeIntervalSinceReferenceDate - begin
 
         if request.shouldRender {
             let scene = request.renderSceneOverride ?? sceneRuntime.renderScene

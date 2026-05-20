@@ -1,5 +1,5 @@
-import Foundation
-import simd
+﻿import Foundation
+import SIMDCompat
 
 public enum IntentSource: String, Sendable, Equatable, Codable {
     case human

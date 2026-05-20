@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(FoundationNetworking)
+import FoundationNetworking
+#endif
 import IntentRuntime
 
 public enum SessionError: Error, CustomStringConvertible, LocalizedError, Sendable {
@@ -133,14 +136,17 @@ public actor Session {
     // MARK: - Inference
 
     private func infer(onProgress: (@Sendable (String) -> Void)? = nil) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
+#if canImport(ObjectiveC)
         if let onProgress {
             return try await inferStreaming(onProgress: onProgress)
         }
+#endif
         let body = requestBody()
         let data = try await post(body)
         return try parseResponse(from: data)
     }
 
+#if canImport(ObjectiveC)
     private func inferStreaming(onProgress: @escaping @Sendable (String) -> Void) async throws -> (SceneEditPlan, toolUseID: String, inputJSON: String) {
         var body = requestBody()
         body["stream"] = true
@@ -229,6 +235,7 @@ public actor Session {
             throw SessionError.planDecodingFailed(detail: String(describing: error))
         }
     }
+#endif
 
     private func extractPartialSummary(from json: String) -> String? {
         guard let keyRange = json.range(of: "\"summary\":\"") else { return nil }

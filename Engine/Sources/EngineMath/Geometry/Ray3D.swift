@@ -1,4 +1,4 @@
-import simd
+﻿import SIMDCompat
 
 public struct Ray3D: Sendable, Equatable {
     public var origin: SIMD3<Float>

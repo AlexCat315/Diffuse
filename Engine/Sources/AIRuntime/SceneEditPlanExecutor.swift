@@ -1,7 +1,7 @@
-import Foundation
+﻿import Foundation
 import SceneRuntime
 import IntentRuntime
-import simd
+import SIMDCompat
 
 public enum SceneEditPlanExecutorError: Error, CustomStringConvertible, Sendable {
     case invalidEntityRef(String)
@@ -16,7 +16,7 @@ public enum SceneEditPlanExecutorError: Error, CustomStringConvertible, Sendable
     public var description: String {
         switch self {
         case let .invalidEntityRef(ref):
-            return "invalid entity reference: '\(ref)' — expected format 'scene:<uint64>'"
+            return "invalid entity reference: '\(ref)' 鈥?expected format 'scene:<uint64>'"
         case let .missingEntityRef(op):
             return "op '\(op.rawValue)' requires entity_id"
         case let .entityNotFound(ref):
@@ -26,11 +26,11 @@ public enum SceneEditPlanExecutorError: Error, CustomStringConvertible, Sendable
         case let .invalidColor(op):
             return "op '\(op.rawValue)' color must be [r, g, b] with 3 elements"
         case let .unknownLightType(s):
-            return "unknown light type '\(s)' — expected 'directional', 'point', or 'spot'"
+            return "unknown light type '\(s)' 鈥?expected 'directional', 'point', or 'spot'"
         case let .unknownMotionType(s):
-            return "unknown motion type '\(s)' — expected 'static', 'dynamic', or 'kinematic'"
+            return "unknown motion type '\(s)' 鈥?expected 'static', 'dynamic', or 'kinematic'"
         case let .unknownColliderShape(s):
-            return "unknown collider shape '\(s)' — expected 'box', 'sphere', 'capsule', 'mesh', or 'convex'"
+            return "unknown collider shape '\(s)' 鈥?expected 'box', 'sphere', 'capsule', 'mesh', or 'convex'"
         }
     }
 }
@@ -47,7 +47,7 @@ public struct SceneEditPlanExecutor: Sendable {
     ///
     /// - Parameters:
     ///   - plan: Decoded AI plan.
-    ///   - scene: Live scene runtime — used to read current transforms and validate entity IDs.
+    ///   - scene: Live scene runtime 鈥?used to read current transforms and validate entity IDs.
     ///   - baseSceneRevision: Revision at which the AI generated the plan. Passing the
     ///     snapshot's revision prevents applying a plan against a scene that changed while
     ///     the API call was in flight. Pass `nil` to skip the revision check.
@@ -347,7 +347,7 @@ public struct SceneEditPlanExecutor: Sendable {
         return SIMD3(a[0], a[1], a[2])
     }
 
-    /// Builds a 4×4 rotation matrix from XYZ intrinsic Euler angles (degrees).
+    /// Builds a 4脳4 rotation matrix from XYZ intrinsic Euler angles (degrees).
     private func rotationMatrix(eulerXYZDegrees e: SIMD3<Float>) -> simd_float4x4 {
         let toRad: Float = .pi / 180
         let rx = simd_float4x4(simd_quatf(angle: e.x * toRad, axis: SIMD3(1, 0, 0)))

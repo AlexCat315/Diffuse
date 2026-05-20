@@ -1,5 +1,7 @@
-import Foundation
+﻿import Foundation
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import EngineKernel
 import PlatformShell
 

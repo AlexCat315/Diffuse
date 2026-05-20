@@ -1,20 +1,20 @@
-import Foundation
+﻿import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
 import EngineKernel
 import IntentRuntime
 import RenderBackend
 import SceneRuntime
-import simd
+import SIMDCompat
 
 extension EditorSceneAdapter {
 
     // MARK: - Picking
 
-    /// 把视口光标坐标投成世界射线，对所有有渲染实例的实体做 OBB 命中测试，
-    /// 取最近命中。OBB 用「unit cube ([-1,1]^3) × 实例 world transform」近似，
-    /// 与渲染端 mesh 归一化保持一致；不依赖 collider，纯渲染网格也能选中。
-    /// 若没有命中渲染实例，再回退到 collider raycast 兜底（带 collider 的隐藏体）。
+    /// 鎶婅鍙ｅ厜鏍囧潗鏍囨姇鎴愪笘鐣屽皠绾匡紝瀵规墍鏈夋湁娓叉煋瀹炰緥鐨勫疄浣撳仛 OBB 鍛戒腑娴嬭瘯锛?
+    /// 鍙栨渶杩戝懡涓€侽BB 鐢ㄣ€寀nit cube ([-1,1]^3) 脳 瀹炰緥 world transform銆嶈繎浼硷紝
+    /// 涓庢覆鏌撶 mesh 褰掍竴鍖栦繚鎸佷竴鑷达紱涓嶄緷璧?collider锛岀函娓叉煋缃戞牸涔熻兘閫変腑銆?
+    /// 鑻ユ病鏈夊懡涓覆鏌撳疄渚嬶紝鍐嶅洖閫€鍒?collider raycast 鍏滃簳锛堝甫 collider 鐨勯殣钘忎綋锛夈€?
     public func pickEntity(cursorX: Float,
                            cursorY: Float,
                            in frame: ViewportScreenFrame) -> UInt64? {
@@ -56,7 +56,7 @@ extension EditorSceneAdapter {
         return bestEntity?.rawValue
     }
 
-    /// 返回与屏幕矩形相交的实体集合。用于视口框选。
+    /// 杩斿洖涓庡睆骞曠煩褰㈢浉浜ょ殑瀹炰綋闆嗗悎銆傜敤浜庤鍙ｆ閫夈€?
     public func pickEntities(in screenRect: UIRect,
                              frame: ViewportScreenFrame) -> Set<UInt64> {
         guard let extracted = scene.extractedRenderScene else { return [] }
@@ -97,7 +97,7 @@ extension EditorSceneAdapter {
         return hits
     }
 
-    /// 返回渲染实例世界 AABB，供 wireframe overlay 绘制。
+    /// 杩斿洖娓叉煋瀹炰緥涓栫晫 AABB锛屼緵 wireframe overlay 缁樺埗銆?
     public func viewportWorldBounds() -> [(entityID: UInt64, min: SIMD3<Float>, max: SIMD3<Float>)] {
         guard let extracted = scene.extractedRenderScene else { return [] }
         return extracted.instanceEntities.enumerated().map { idx, entity in
@@ -112,7 +112,7 @@ extension EditorSceneAdapter {
         }
     }
 
-    /// 返回真实 mesh 边线（已变换到世界空间），用于 viewport wireframe overlay。
+    /// 杩斿洖鐪熷疄 mesh 杈圭嚎锛堝凡鍙樻崲鍒颁笘鐣岀┖闂达級锛岀敤浜?viewport wireframe overlay銆?
     public func viewportWireframeLines(maxEdgesPerMesh: Int = 2_048)
         -> [(entityID: UInt64, a: SIMD3<Float>, b: SIMD3<Float>)] {
         guard let extracted = scene.extractedRenderScene else { return [] }
@@ -287,8 +287,8 @@ extension EditorSceneAdapter {
 
     // MARK: - Selection helpers
 
-    /// 让活动相机绕选中实体世界坐标重新构图：保持 eye-target 方向 / 距离不变，
-    /// 把 target 放到实体上、平移 eye 同距离。距离过近时按合理范围回退。
+    /// 璁╂椿鍔ㄧ浉鏈虹粫閫変腑瀹炰綋涓栫晫鍧愭爣閲嶆柊鏋勫浘锛氫繚鎸?eye-target 鏂瑰悜 / 璺濈涓嶅彉锛?
+    /// 鎶?target 鏀惧埌瀹炰綋涓娿€佸钩绉?eye 鍚岃窛绂汇€傝窛绂昏繃杩戞椂鎸夊悎鐞嗚寖鍥村洖閫€銆?
     public func frameEntity(_ rawID: UInt64) {
         guard let target = entityWorldPosition(rawID) else { return }
         guard let camID = activeCameraEntityRaw() else { return }
@@ -307,7 +307,7 @@ extension EditorSceneAdapter {
 
     // MARK: - Entity ops
 
-    /// 直接销毁实体；选择状态由调用方负责清理。
+    /// 鐩存帴閿€姣佸疄浣擄紱閫夋嫨鐘舵€佺敱璋冪敤鏂硅礋璐ｆ竻鐞嗐€?
     @discardableResult
     public func deleteEntity(_ rawID: UInt64) -> Bool {
         guard makeEntityID(rawID) != nil else { return false }
@@ -317,8 +317,8 @@ extension EditorSceneAdapter {
                                      mutations: [.deleteEntity(entityID: rawID)]) != nil
     }
 
-    /// 浅复制：复制名字 / kind / 本地矩阵 / 渲染网格 / collider / rigid body / camera。
-    /// 不复制子节点；新实体附在原父节点下。返回新实体 raw ID。
+    /// 娴呭鍒讹細澶嶅埗鍚嶅瓧 / kind / 鏈湴鐭╅樀 / 娓叉煋缃戞牸 / collider / rigid body / camera銆?
+    /// 涓嶅鍒跺瓙鑺傜偣锛涙柊瀹炰綋闄勫湪鍘熺埗鑺傜偣涓嬨€傝繑鍥炴柊瀹炰綋 raw ID銆?
     @discardableResult
     public func duplicateEntity(_ rawID: UInt64) -> UInt64? {
         guard let src = makeEntityID(rawID), scene.contains(src) else { return nil }
@@ -331,8 +331,8 @@ extension EditorSceneAdapter {
 
     // MARK: - Camera control
 
-    /// 用屏幕像素 delta 控制活动相机绕 target 球面旋转。
-    /// 与旧 Editor backend 一致：delta 直接乘 `orbit_sensitivity = 0.01`。
+    /// 鐢ㄥ睆骞曞儚绱?delta 鎺у埗娲诲姩鐩告満缁?target 鐞冮潰鏃嬭浆銆?
+    /// 涓庢棫 Editor backend 涓€鑷达細delta 鐩存帴涔?`orbit_sensitivity = 0.01`銆?
     public func orbitCamera(deltaScreenX dx: Float,
                             deltaScreenY dy: Float,
                             in frame: ViewportScreenFrame) {
@@ -354,8 +354,8 @@ extension EditorSceneAdapter {
         _ = frame
     }
 
-    /// 在相机右 / 上方向上平移 eye 与 target，保持视线方向不变。
-    /// dx / dy 是屏幕像素，距离越远平移越快，与 Blender / Unity 行为一致。
+    /// 鍦ㄧ浉鏈哄彸 / 涓婃柟鍚戜笂骞崇Щ eye 涓?target锛屼繚鎸佽绾挎柟鍚戜笉鍙樸€?
+    /// dx / dy 鏄睆骞曞儚绱狅紝璺濈瓒婅繙骞崇Щ瓒婂揩锛屼笌 Blender / Unity 琛屼负涓€鑷淬€?
     public func panCamera(deltaScreenX dx: Float,
                           deltaScreenY dy: Float,
                           in frame: ViewportScreenFrame) {
@@ -433,7 +433,7 @@ extension EditorSceneAdapter {
         setCameraEye(camID, eye: newEye, target: newTarget, up: up)
     }
 
-    /// 滚轮缩放：factor < 1 拉近，> 1 推远。把 eye 沿 (eye - target) 方向缩放。
+    /// 婊氳疆缂╂斁锛歠actor < 1 鎷夎繎锛? 1 鎺ㄨ繙銆傛妸 eye 娌?(eye - target) 鏂瑰悜缂╂斁銆?
     public func zoomCamera(factor: Float) {
         guard let camID = activeCameraEntityRaw() else { return }
         let cam = currentRenderCamera()
@@ -464,8 +464,8 @@ extension EditorSceneAdapter {
         scene.extractedRenderScene?.activeCameraEntity
     }
 
-    /// 直接覆盖相机实体的 eye（写入 LocalTransform 的平移列）和 CameraComponent.target。
-    /// 保持原 LocalTransform 的旋转 / 缩放部分，因为相机的方向由 target 单独表达。
+    /// 鐩存帴瑕嗙洊鐩告満瀹炰綋鐨?eye锛堝啓鍏?LocalTransform 鐨勫钩绉诲垪锛夊拰 CameraComponent.target銆?
+    /// 淇濇寔鍘?LocalTransform 鐨勬棆杞?/ 缂╂斁閮ㄥ垎锛屽洜涓虹浉鏈虹殑鏂瑰悜鐢?target 鍗曠嫭琛ㄨ揪銆?
     private func setCameraEye(_ entity: EntityID,
                               eye: SIMD3<Float>,
                               target: SIMD3<Float>,

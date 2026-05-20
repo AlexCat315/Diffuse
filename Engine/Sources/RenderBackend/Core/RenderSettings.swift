@@ -1,5 +1,5 @@
-import Foundation
-import simd
+﻿import Foundation
+import SIMDCompat
 
 public struct StylizedCharacterStyle: Sendable, Equatable {
     public var toonThresholds: SIMD4<Float>

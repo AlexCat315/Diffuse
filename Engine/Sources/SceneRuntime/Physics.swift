@@ -1,4 +1,4 @@
-import simd
+﻿import SIMDCompat
 
 public enum PhysicsSimulationMode: String, Sendable, Equatable {
     case off

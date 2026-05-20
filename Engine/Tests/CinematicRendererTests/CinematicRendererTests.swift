@@ -1,6 +1,6 @@
-import CinematicRenderer
+﻿import CinematicRenderer
 import Foundation
-import simd
+import SIMDCompat
 import Testing
 
 @Suite("CinematicRenderer")

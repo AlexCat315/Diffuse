@@ -1,4 +1,6 @@
+﻿#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import GuavaUIRuntime
 
 extension TextField {

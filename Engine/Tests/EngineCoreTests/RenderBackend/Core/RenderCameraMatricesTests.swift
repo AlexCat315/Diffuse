@@ -1,6 +1,6 @@
-@testable import RenderBackend
+﻿@testable import RenderBackend
 import SceneRuntime
-import simd
+import SIMDCompat
 import Testing
 
 @Suite("RenderCameraMatrices")
