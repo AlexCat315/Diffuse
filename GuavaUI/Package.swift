@@ -169,19 +169,5 @@ let package = Package(
                 "GuavaUIRuntime",
             ]
         ),
-
-        // MARK: - Plugins
-        .plugin(
-            name: "BuildNativeDeps",
-            capability: .command(
-                intent: .custom(
-                    verb: "build-native-deps",
-                    description: "Build GuavaUI C/C++ dependencies (Yoga, FreeType, HarfBuzz) via CMake"
-                ),
-                permissions: [
-                    .writeToPackageDirectory(reason: "Writes compiled artifact bundles to vendor/")
-                ]
-            )
-        ),
     ]
 )
