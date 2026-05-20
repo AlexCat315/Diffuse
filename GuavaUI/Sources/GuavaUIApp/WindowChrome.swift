@@ -20,16 +20,29 @@ public struct AppWindowChromeContext: Sendable {
     }
 }
 
+public enum ImmersiveWindowControlStyle: Sendable, Equatable {
+    case automatic
+    case native
+    case custom
+    case hidden
+}
+
 public struct ImmersiveWindowTitleBar<Leading: View>: View {
     public let height: Float
     public let resizeBorderWidth: Float
+    public let controlStyle: ImmersiveWindowControlStyle
+    public let nativeControlsLeadingInset: Float
     public let leading: Leading
 
     public init(height: Float = 34,
                 resizeBorderWidth: Float = 6,
+                controlStyle: ImmersiveWindowControlStyle = .automatic,
+                nativeControlsLeadingInset: Float = 76,
                 @ViewBuilder leading: () -> Leading) {
         self.height = height
         self.resizeBorderWidth = resizeBorderWidth
+        self.controlStyle = controlStyle
+        self.nativeControlsLeadingInset = nativeControlsLeadingInset
         self.leading = leading()
     }
 
@@ -37,15 +50,20 @@ public struct ImmersiveWindowTitleBar<Leading: View>: View {
         _WindowChromeHitTestInstaller(
             hitTest: WindowChromeHitTest(
                 titleBarHeight: height,
-                resizeBorderWidth: resizeBorderWidth
+                resizeBorderWidth: Self.platformResizeBorderWidth(resizeBorderWidth)
             )
         )
 
         Row(alignment: .center, spacing: 0) {
+            if resolvedControlStyle == .native {
+                WindowChromeFixedSpace(width: nativeControlsLeadingInset)
+            }
             leading
             WindowDragRegion()
                 .frame(height: height)
-            WindowControlStrip()
+            if resolvedControlStyle == .custom {
+                WindowControlStrip()
+            }
         }
         .padding(horizontal: 6, vertical: 3)
         .frame(height: height)
@@ -53,6 +71,54 @@ public struct ImmersiveWindowTitleBar<Leading: View>: View {
         .zIndex(20_000)
         .layoutRole("app-window-title-bar")
         .debugName("app-window-title-bar")
+    }
+
+    private var resolvedControlStyle: ImmersiveWindowControlStyle {
+        switch controlStyle {
+        case .automatic:
+            return Self.automaticControlStyle
+        case .native, .custom, .hidden:
+            return controlStyle
+        }
+    }
+
+    private static var automaticControlStyle: ImmersiveWindowControlStyle {
+        #if os(macOS)
+        return .native
+        #else
+        return .custom
+        #endif
+    }
+
+    private static func platformResizeBorderWidth(_ value: Float) -> Float {
+        #if os(macOS)
+        // macOS keeps the native resizable NSWindow frame when using
+        // `.hiddenInset`, so we avoid synthetic resize hit-test regions there.
+        return 0
+        #else
+        return value
+        #endif
+    }
+}
+
+private struct WindowChromeFixedSpace: _PrimitiveView {
+    let width: Float
+
+    func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = false
+        return node
+    }
+
+    func _updateNode(_ node: Node) {}
+
+    func _makeLayoutNode() -> LayoutNode? {
+        LayoutNode()
+    }
+
+    func _updateLayout(_ layout: LayoutNode) {
+        layout.width = width
+        layout.height = 1
     }
 }
 

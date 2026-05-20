@@ -491,11 +491,13 @@ public final class SDL3Shell: Shell {
             case UInt32(GUAVA_SDL_EVENT_KEY_DOWN):
                 let windowID = WindowID(event.key.windowID)
                 guard let handle = windows[windowID] else { continue }
+#if os(Windows)
                 if event.key.scancode.rawValue == 44,
                    event.key.mod & (UInt16(GUAVA_SDL_KMOD_LALT) | UInt16(GUAVA_SDL_KMOD_RALT)) != 0 {
                     _ = SDL_ShowWindowSystemMenu(handle.window, 0, 0)
                     continue
                 }
+#endif
                 collected.append(WindowInputEvent(windowID: windowID,
                                                   event: .keyDown(makeKeyEvent(from: event))))
 
