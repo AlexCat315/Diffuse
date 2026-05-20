@@ -1,4 +1,4 @@
-import AIRuntime
+﻿import AIRuntime
 import AssetPipeline
 import AudioRuntime
 import CapabilityRuntime
@@ -12,17 +12,17 @@ import SceneRuntime
 import GuavaUICompose
 import GuavaUIRuntime
 import Foundation
-import simd
+import SIMDCompat
 
-/// 编辑器应用域：把 `EngineHost`、`EditorStore` 与 `InputState` 汇总成一个对象。
+/// 缂栬緫鍣ㄥ簲鐢ㄥ煙锛氭妸 `EngineHost`銆乣EditorStore` 涓?`InputState` 姹囨€绘垚涓€涓璞°€?
 ///
-/// 与 GuavaUIApp 配合使用：
-///   1. 启动时由调用方实例化 `EditorApplication`；
-///   2. 在 `AppRuntime.run` 的 `onTick` 回调里调用 `tick(deltaTime:)` 推进引擎；
-///   3. 退出主循环后调用 `shutdown()` 清理引擎资源。
+/// 涓?GuavaUIApp 閰嶅悎浣跨敤锛?
+///   1. 鍚姩鏃剁敱璋冪敤鏂瑰疄渚嬪寲 `EditorApplication`锛?
+///   2. 鍦?`AppRuntime.run` 鐨?`onTick` 鍥炶皟閲岃皟鐢?`tick(deltaTime:)` 鎺ㄨ繘寮曟搸锛?
+///   3. 閫€鍑轰富寰幆鍚庤皟鐢?`shutdown()` 娓呯悊寮曟搸璧勬簮銆?
 ///
-/// 自身不持有窗口 / wgpu surface — UI 渲染由 GuavaUIApp 接管，引擎仅负责
-/// 仿真与（未来的）离屏渲染。
+/// 鑷韩涓嶆寔鏈夌獥鍙?/ wgpu surface 鈥?UI 娓叉煋鐢?GuavaUIApp 鎺ョ锛屽紩鎿庝粎璐熻矗
+/// 浠跨湡涓庯紙鏈潵鐨勶級绂诲睆娓叉煋銆?
 public final class EditorApplication: @unchecked Sendable {
     public let engine: EngineHost
     public let projectDirectory: String
@@ -115,8 +115,8 @@ public final class EditorApplication: @unchecked Sendable {
             self?.handlePlatformEvent(event)
         }
         engine.start(renderSurface: nil, enableViewportSurface: true)
-        // 默认启用离屏渲染，让引擎渲染到一个 viewport 纹理交给编辑器显示。
-        // 不开启 viewportResolve 时 UI 会一直停在 "Waiting for first render packet"。
+        // 榛樿鍚敤绂诲睆娓叉煋锛岃寮曟搸娓叉煋鍒颁竴涓?viewport 绾圭悊浜ょ粰缂栬緫鍣ㄦ樉绀恒€?
+        // 涓嶅紑鍚?viewportResolve 鏃?UI 浼氫竴鐩村仠鍦?"Waiting for first render packet"銆?
         engine.queueRenderSettings(makeViewportRenderSettings(shadowsEnabled: store.state.viewportShadowsEnabled))
         store.dispatch(.setConnected(true))
         logConsole("Editor connected to runtime")
@@ -203,7 +203,7 @@ public final class EditorApplication: @unchecked Sendable {
         vsyncModeHandler?(mode)
     }
 
-    /// 把资产生成到场景中，并把新实体设为当前选中。
+    /// 鎶婅祫浜х敓鎴愬埌鍦烘櫙涓紝骞舵妸鏂板疄浣撹涓哄綋鍓嶉€変腑銆?
     @discardableResult
     public func spawnAsset(_ asset: EditorAsset, at position: SIMD3<Float> = .zero) -> UInt64? {
         guard let id = scene.spawnEntity(from: asset, at: position) else {
@@ -215,8 +215,8 @@ public final class EditorApplication: @unchecked Sendable {
         return id
     }
 
-    /// 处理 AssetBrowser 在视口内放下资产的事件。如果当前光标坐标
-    /// 落在视口矩形内则生成实体，否则只是清掉拖动状态。
+    /// 澶勭悊 AssetBrowser 鍦ㄨ鍙ｅ唴鏀句笅璧勪骇鐨勪簨浠躲€傚鏋滃綋鍓嶅厜鏍囧潗鏍?
+    /// 钀藉湪瑙嗗彛鐭╁舰鍐呭垯鐢熸垚瀹炰綋锛屽惁鍒欏彧鏄竻鎺夋嫋鍔ㄧ姸鎬併€?
     @discardableResult
     public func handleAssetDrop(at cursorX: Float, cursorY: Float) -> Bool {
         guard let payload = store.state.activeAssetDrag else { return false }
@@ -243,8 +243,8 @@ public final class EditorApplication: @unchecked Sendable {
         return true
     }
 
-    /// 把视口内光标坐标投到世界 y=0 平面，作为资产落点。
-    /// 摄像机指向上方或与平面平行时退化为 (0,0,0)。
+    /// 鎶婅鍙ｅ唴鍏夋爣鍧愭爣鎶曞埌涓栫晫 y=0 骞抽潰锛屼綔涓鸿祫浜ц惤鐐广€?
+    /// 鎽勫儚鏈烘寚鍚戜笂鏂规垨涓庡钩闈㈠钩琛屾椂閫€鍖栦负 (0,0,0)銆?
     private func dropWorldPosition(cursorX: Float,
                                    cursorY: Float,
                                    frame: ViewportScreenFrame) -> SIMD3<Float> {
@@ -269,7 +269,7 @@ public final class EditorApplication: @unchecked Sendable {
                                  + right * (ndcX * aspect * tanHalfFov)
                                  + up * (ndcY * tanHalfFov))
 
-        // 与 y = 0 平面相交。摄像机在平面下方或视线指向上方时退化。
+        // 涓?y = 0 骞抽潰鐩镐氦銆傛憚鍍忔満鍦ㄥ钩闈笅鏂规垨瑙嗙嚎鎸囧悜涓婃柟鏃堕€€鍖栥€?
         if abs(dir.y) < 1e-4 { return .zero }
         let t = -camera.eye.y / dir.y
         if t <= 0 || t > 1_000 { return .zero }
@@ -292,7 +292,7 @@ public final class EditorApplication: @unchecked Sendable {
 
     /// Transitions to a new playback state.
     /// - On `.playing`: snapshots the current scene, enables Jolt physics simulation.
-    /// - On `.paused`: freezes physics (mode → off) without restoring the scene.
+    /// - On `.paused`: freezes physics (mode 鈫?off) without restoring the scene.
     /// - On `.stopped`: restores the pre-play scene snapshot and disables physics.
     public func applyPlaybackState(_ next: PlaybackState) {
         let current = store.state.playbackState
@@ -535,7 +535,7 @@ public final class EditorApplication: @unchecked Sendable {
         return scene.scene.localTransform(for: entity)?.translation
     }
 
-    /// Session-era stub: returns empty — Session handles NL inference.
+    /// Session-era stub: returns empty 鈥?Session handles NL inference.
     public func localIntentSuggestions(
         for text: String,
         maxCount: Int = 3
@@ -560,7 +560,7 @@ public final class EditorApplication: @unchecked Sendable {
     private func submitNaturalLanguageIntentWithSession(_ text: String, session: Session) {
         let locale = store.state.language.lprojName
         let t0 = Date()
-        store.dispatch(.setAIStatusMessage("Planning…"))
+        store.dispatch(.setAIStatusMessage("Planning..."))
         store.dispatch(.appendChatMessage(AIChatMessage(role: .user, text: text)))
         let assistantID = UUID().uuidString
         pendingAssistantMessageID = assistantID
@@ -1072,7 +1072,7 @@ public final class EditorApplication: @unchecked Sendable {
             return ["ok": false, "error": "missing 'state' field (playing|paused|stopped)"]
         }
         guard let next = PlaybackState(rawValue: stateStr) else {
-            return ["ok": false, "error": "unknown state '\(stateStr)' — expected 'playing', 'paused', or 'stopped'"]
+            return ["ok": false, "error": "unknown state '\(stateStr)' 鈥?expected 'playing', 'paused', or 'stopped'"]
         }
         applyPlaybackState(next)
         return ["ok": true, "state": next.rawValue]

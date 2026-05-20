@@ -1,12 +1,14 @@
-import EditorCore
+﻿import EditorCore
 import EngineKernel
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
 import RenderBackend
 import SceneRuntime
-import simd
+import SIMDCompat
 
 struct ViewportPanel: View {
     let app: EditorApplication
@@ -27,7 +29,7 @@ struct ViewportPanel: View {
             let shadowsEnabled = store.viewportShadowsEnabled
             let playbackState = store.playbackState
 
-            // 推送 gizmo 控制器所需的快照（摄像机 / 视口矩形 / 实体世界坐标）。
+            // 鎺ㄩ€?gizmo 鎺у埗鍣ㄦ墍闇€鐨勫揩鐓э紙鎽勫儚鏈?/ 瑙嗗彛鐭╁舰 / 瀹炰綋涓栫晫鍧愭爣锛夈€?
             let _: Void = updateGizmoSnapshot(selectedID: selectedEntityID,
                                               gizmoMode: gizmoMode,
                                               gizmoSpace: gizmoSpace,
@@ -303,7 +305,7 @@ struct ViewportPanel: View {
                !isInsideViewport(mx, my) {
                 return
             }
-            // wheel.y > 0 表示向上滚（拉近）。每格缩放系数 ~0.9 / 1.1。
+            // wheel.y > 0 琛ㄧず鍚戜笂婊氾紙鎷夎繎锛夈€傛瘡鏍肩缉鏀剧郴鏁?~0.9 / 1.1銆?
             let step = wheel.y
             if abs(step) > 0 {
                 let factor = wheelZoomRatio(step)
@@ -398,7 +400,7 @@ struct ViewportPanel: View {
         }
         let camera = scene.currentRenderCamera()
         let dist = simd_length(world - camera.eye)
-        // 距离自适应，与旧引擎 gizmo_pass.scaleForSelection 保持一致。
+        // 璺濈鑷€傚簲锛屼笌鏃у紩鎿?gizmo_pass.scaleForSelection 淇濇寔涓€鑷淬€?
         let axisLength = max(0.7, min(3.4, dist * 0.2))
         let parentWorld = scene.entityParentWorldMatrix(id)
         EditorGizmoController.shared.updateSnapshot(
@@ -590,7 +592,7 @@ struct ViewportPanel: View {
         }
     }
 
-    /// 三个 XY/YZ/ZX 平面手柄：在每个平面上画一个半透明矩形 + 描边。
+    /// 涓変釜 XY/YZ/ZX 骞抽潰鎵嬫焺锛氬湪姣忎釜骞抽潰涓婄敾涓€涓崐閫忔槑鐭╁舰 + 鎻忚竟銆?
     private func drawPlaneHandles(list: DrawList,
                                   projector: ScreenProjector,
                                   snap: EditorGizmoController.Snapshot) {
@@ -625,7 +627,7 @@ struct ViewportPanel: View {
             let fill = Color(r: baseColor.x, g: baseColor.y, b: baseColor.z, a: fillAlpha)
             let stroke = Color(r: baseColor.x, g: baseColor.y, b: baseColor.z, a: strokeAlpha)
 
-            // 屏幕空间 AABB 近似填充（便宜的视觉提示，避免引入三角形 fill）。
+            // 灞忓箷绌洪棿 AABB 杩戜技濉厖锛堜究瀹滅殑瑙嗚鎻愮ず锛岄伩鍏嶅紩鍏ヤ笁瑙掑舰 fill锛夈€?
             var minX = Float.infinity, minY = Float.infinity
             var maxX = -Float.infinity, maxY = -Float.infinity
             for s in screenCorners {
@@ -636,7 +638,7 @@ struct ViewportPanel: View {
                                 width: maxX - minX, height: maxY - minY),
                          color: fill)
 
-            // 真实四边形描边。
+            // 鐪熷疄鍥涜竟褰㈡弿杈广€?
             let thickness: Float = isActive ? 2.5 : 1.5
             for i in 0..<4 {
                 let a = screenCorners[i]
@@ -984,8 +986,8 @@ struct ViewportPanel: View {
     }
 
     private func gizmoMode(for key: KeyEvent) -> EditorGizmoMode? {
-        // 优先用 scancode（与键位物理位置绑定、与键盘布局无关），
-        // 避免非 US 布局下 keycode 不匹配。SDL3 scancode：Q=20 W=26 E=8 R=21。
+        // 浼樺厛鐢?scancode锛堜笌閿綅鐗╃悊浣嶇疆缁戝畾銆佷笌閿洏甯冨眬鏃犲叧锛夛紝
+        // 閬垮厤闈?US 甯冨眬涓?keycode 涓嶅尮閰嶃€係DL3 scancode锛歈=20 W=26 E=8 R=21銆?
         switch key.scancode {
         case 20: return EditorGizmoMode.none   // Q
         case 26: return .translate              // W
@@ -993,7 +995,7 @@ struct ViewportPanel: View {
         case 21: return .scale                  // R
         default: break
         }
-        // Fallback：同时看 keycode。
+        // Fallback锛氬悓鏃剁湅 keycode銆?
         switch key.keycode {
         case 0x71: return EditorGizmoMode.none
         case 0x77: return .translate
@@ -1340,21 +1342,21 @@ private struct ViewportInfoBar: View {
                 Button(isEnabled: playbackState != .playing,
                        tooltip: L("Play physics simulation"),
                        action: onPlay) {
-                    Text("▶").font(SemanticFontRef.label)
+                    Text("Play").font(SemanticFontRef.label)
                 }
                 .toggleButtonStyle(playbackState == .playing)
 
                 Button(isEnabled: playbackState != .stopped,
                        tooltip: L("Pause physics simulation"),
                        action: onPause) {
-                    Text("⏸").font(SemanticFontRef.label)
+                    Text("Pause").font(SemanticFontRef.label)
                 }
                 .toggleButtonStyle(playbackState == .paused)
 
                 Button(isEnabled: playbackState != .stopped,
                        tooltip: L("Stop physics simulation"),
                        action: onStop) {
-                    Text("⏹").font(SemanticFontRef.label)
+                    Text("Stop").font(SemanticFontRef.label)
                 }
                 .toggleButtonStyle(false)
             }
@@ -1466,7 +1468,7 @@ private struct GizmoHUD: View {
                               color: Color(r: 0.34, g: 0.58, b: 0.95, a: 1))
             }
 
-            Text("Mode: \(modeLabel(mode))  ·  Q/W/E/R to switch")
+            Text("Mode: \(modeLabel(mode))  路  Q/W/E/R to switch")
                 .font(.caption)
                 .foregroundColor(.onSurfaceVariant)
         }
@@ -1488,9 +1490,9 @@ private struct GizmoHUD: View {
     private func gizmoLabel(for mode: EditorGizmoMode, axis: String) -> String {
         switch mode {
         case .none: return axis
-        case .translate: return "→\(axis)"
-        case .rotate: return "↻\(axis)"
-        case .scale: return "■\(axis)"
+        case .translate: return "鈫抃(axis)"
+        case .rotate: return "鈫籠(axis)"
+        case .scale: return "鈻燶(axis)"
         }
     }
 }

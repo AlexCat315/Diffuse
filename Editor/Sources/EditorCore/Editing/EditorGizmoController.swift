@@ -1,15 +1,15 @@
-import Foundation
+﻿import Foundation
 import GuavaUICompose
 import RenderBackend
 import SceneRuntime
-import simd
+import SIMDCompat
 
-/// 视口内 3D 操纵器（gizmo）的拖动状态与命中测试，覆盖
-/// translate / rotate / scale 三种模式。
+/// 瑙嗗彛鍐?3D 鎿嶇旱鍣紙gizmo锛夌殑鎷栧姩鐘舵€佷笌鍛戒腑娴嬭瘯锛岃鐩?
+/// translate / rotate / scale 涓夌妯″紡銆?
 ///
-/// ViewportPanel 每帧调用 `updateSnapshot` 写入摄像机、屏幕矩形、
-/// 选中实体世界位置与本地矩阵；指针/绘制回调通过
-/// `EditorGizmoController.shared` 命中测试并产出新的 LocalTransform。
+/// ViewportPanel 姣忓抚璋冪敤 `updateSnapshot` 鍐欏叆鎽勫儚鏈恒€佸睆骞曠煩褰€?
+/// 閫変腑瀹炰綋涓栫晫浣嶇疆涓庢湰鍦扮煩闃碉紱鎸囬拡/缁樺埗鍥炶皟閫氳繃
+/// `EditorGizmoController.shared` 鍛戒腑娴嬭瘯骞朵骇鍑烘柊鐨?LocalTransform銆?
 public final class EditorGizmoController: @unchecked Sendable {
 
     public static let shared = EditorGizmoController()
@@ -20,9 +20,9 @@ public final class EditorGizmoController: @unchecked Sendable {
         case scale
     }
 
-    /// Gizmo 轴向空间：
-    /// - `.local`：三轴随物体旋转（Maya/Blender/Unity 默认）。
-    /// - `.world`：三轴始终对齐世界轴。
+    /// Gizmo 杞村悜绌洪棿锛?
+    /// - `.local`锛氫笁杞撮殢鐗╀綋鏃嬭浆锛圡aya/Blender/Unity 榛樿锛夈€?
+    /// - `.world`锛氫笁杞村缁堝榻愪笘鐣岃酱銆?
     public enum GizmoSpace: Sendable {
         case local
         case world
@@ -49,8 +49,8 @@ public final class EditorGizmoController: @unchecked Sendable {
             }
         }
 
-        /// 在该轴对应的旋转平面（即垂直于该轴的平面）里的两个正交基向量，
-        /// 用来在世界空间画圆 / 计算角度。
+        /// 鍦ㄨ杞村搴旂殑鏃嬭浆骞抽潰锛堝嵆鍨傜洿浜庤杞寸殑骞抽潰锛夐噷鐨勪袱涓浜ゅ熀鍚戦噺锛?
+        /// 鐢ㄦ潵鍦ㄤ笘鐣岀┖闂寸敾鍦?/ 璁＄畻瑙掑害銆?
         public var planeBasis: (SIMD3<Float>, SIMD3<Float>) {
             switch self {
             case .x: return (SIMD3<Float>(0, 1, 0), SIMD3<Float>(0, 0, 1))
@@ -63,7 +63,7 @@ public final class EditorGizmoController: @unchecked Sendable {
     public enum Plane: Sendable, CaseIterable {
         case xy, yz, zx
 
-        /// 平面里的两个正交世界基向量（U, V）。
+        /// 骞抽潰閲岀殑涓や釜姝ｄ氦涓栫晫鍩哄悜閲忥紙U, V锛夈€?
         public var basis: (SIMD3<Float>, SIMD3<Float>) {
             switch self {
             case .xy: return (SIMD3<Float>(1, 0, 0), SIMD3<Float>(0, 1, 0))
@@ -72,7 +72,7 @@ public final class EditorGizmoController: @unchecked Sendable {
             }
         }
 
-        /// 平面法向量（指向另一根世界轴）。
+        /// 骞抽潰娉曞悜閲忥紙鎸囧悜鍙︿竴鏍逛笘鐣岃酱锛夈€?
         public var normal: SIMD3<Float> {
             switch self {
             case .xy: return SIMD3<Float>(0, 0, 1)
@@ -81,7 +81,7 @@ public final class EditorGizmoController: @unchecked Sendable {
             }
         }
 
-        /// 平面手柄的填充色：取另一根世界轴的颜色，便于和轴线区分。
+        /// 骞抽潰鎵嬫焺鐨勫～鍏呰壊锛氬彇鍙︿竴鏍逛笘鐣岃酱鐨勯鑹诧紝渚夸簬鍜岃酱绾垮尯鍒嗐€?
         public var color: SIMD4<Float> {
             switch self {
             case .xy: return Axis.z.color
@@ -131,8 +131,8 @@ public final class EditorGizmoController: @unchecked Sendable {
             self.axisLength = axisLength
         }
 
-        /// 当前 gizmo 轴在世界空间里的单位向量。`.local` 下从实体世界矩阵取列并归一化，
-        /// `.world` 下返回原始世界轴。
+        /// 褰撳墠 gizmo 杞村湪涓栫晫绌洪棿閲岀殑鍗曚綅鍚戦噺銆俙.local` 涓嬩粠瀹炰綋涓栫晫鐭╅樀鍙栧垪骞跺綊涓€鍖栵紝
+        /// `.world` 涓嬭繑鍥炲師濮嬩笘鐣岃酱銆?
         public func axisWorld(_ axis: Axis) -> SIMD3<Float> {
             switch space {
             case .world:
@@ -150,7 +150,7 @@ public final class EditorGizmoController: @unchecked Sendable {
             }
         }
 
-        /// 为“以 axis 为法线”的平面（用于旋转环）提供两个世界空间正交基向量。
+        /// 涓衡€滀互 axis 涓烘硶绾库€濈殑骞抽潰锛堢敤浜庢棆杞幆锛夋彁渚涗袱涓笘鐣岀┖闂存浜ゅ熀鍚戦噺銆?
         public func planeBasis(forRotateAxis axis: Axis) -> (SIMD3<Float>, SIMD3<Float>) {
             let n = axisWorld(axis)
             let other: Axis = axis == .x ? .y : .x
@@ -165,7 +165,7 @@ public final class EditorGizmoController: @unchecked Sendable {
             return (u, v)
         }
 
-        /// 平面手柄的两轴 + 法线。
+        /// 骞抽潰鎵嬫焺鐨勪袱杞?+ 娉曠嚎銆?
         public func planeAxes(_ plane: Plane) -> (basisU: SIMD3<Float>, basisV: SIMD3<Float>, normal: SIMD3<Float>) {
             switch plane {
             case .xy: return (axisWorld(.x), axisWorld(.y), axisWorld(.z))
@@ -174,7 +174,7 @@ public final class EditorGizmoController: @unchecked Sendable {
             }
         }
 
-        /// 摄像机 forward 向量（从 eye 指向 target，已归一化）。
+        /// 鎽勫儚鏈?forward 鍚戦噺锛堜粠 eye 鎸囧悜 target锛屽凡褰掍竴鍖栵級銆?
         public var cameraForward: SIMD3<Float> {
             let raw = camera.target - camera.eye
             let len = simd_length(raw)
@@ -192,22 +192,22 @@ public final class EditorGizmoController: @unchecked Sendable {
         public var startEntityWorldMatrix: simd_float4x4
         public var parentWorldMatrix: simd_float4x4
         public var parentInverseMatrix: simd_float4x4
-        // 拖拽时使用的“有效轴世界向量”（考虑 gizmoSpace）。
+        // 鎷栨嫿鏃朵娇鐢ㄧ殑鈥滄湁鏁堣酱涓栫晫鍚戦噺鈥濓紙鑰冭檻 gizmoSpace锛夈€?
         public var axisWorld: SIMD3<Float>
-        // 所有拖拽数学都基于“射线-平面相交”：
-        // - translate axis: plane = 含 axis 并尽量面向摄像机（axis × (forward × axis)）。
-        // - translate plane: plane normal = 平面手柄法线。
-        // - rotate: plane normal = handle axis。
-        // - scale axis: 同 translate axis。
+        // 鎵€鏈夋嫋鎷芥暟瀛﹂兘鍩轰簬鈥滃皠绾?骞抽潰鐩镐氦鈥濓細
+        // - translate axis: plane = 鍚?axis 骞跺敖閲忛潰鍚戞憚鍍忔満锛坅xis 脳 (forward 脳 axis)锛夈€?
+        // - translate plane: plane normal = 骞抽潰鎵嬫焺娉曠嚎銆?
+        // - rotate: plane normal = handle axis銆?
+        // - scale axis: 鍚?translate axis銆?
         public var planeOrigin: SIMD3<Float>
         public var planeNormal: SIMD3<Float>
         public var startPlaneHit: SIMD3<Float>
-        // rotate: 起始径向向量（在 plane 上，已归一化）
+        // rotate: 璧峰寰勫悜鍚戦噺锛堝湪 plane 涓婏紝宸插綊涓€鍖栵級
         public var startRadial: SIMD3<Float>
         // free center handles use the camera-facing plane rather than a single axis.
         public var isFree: Bool
         public var uniformScaleStartDistance: Float
-        // 拖拽时的 gizmo 远近 reference 长度（用于 scale 升压）
+        // 鎷栨嫿鏃剁殑 gizmo 杩滆繎 reference 闀垮害锛堢敤浜?scale 鍗囧帇锛?
         public var referenceLength: Float
     }
 
@@ -239,8 +239,8 @@ public final class EditorGizmoController: @unchecked Sendable {
         _activeDrag = nil
     }
 
-    /// 统一构造 ActiveDrag，把 parent / world 矩阵、起始世界矩阵、平面参数一次性算好，
-    /// 便于后续 update 把世界变换换算回本地空间。
+    /// 缁熶竴鏋勯€?ActiveDrag锛屾妸 parent / world 鐭╅樀銆佽捣濮嬩笘鐣岀煩闃点€佸钩闈㈠弬鏁颁竴娆℃€х畻濂斤紝
+    /// 渚夸簬鍚庣画 update 鎶婁笘鐣屽彉鎹㈡崲绠楀洖鏈湴绌洪棿銆?
     private func makeDrag(snap: Snapshot,
                           axis: Axis,
                           plane: Plane?,
@@ -275,8 +275,8 @@ public final class EditorGizmoController: @unchecked Sendable {
         )
     }
 
-    /// 命中测试：在屏幕坐标 `(x, y)` 处尝试命中某个轴。命中阈值
-    /// `screenTolerance` 单位为像素（rotate 模式下在圆周附近的容差）。
+    /// 鍛戒腑娴嬭瘯锛氬湪灞忓箷鍧愭爣 `(x, y)` 澶勫皾璇曞懡涓煇涓酱銆傚懡涓槇鍊?
+    /// `screenTolerance` 鍗曚綅涓哄儚绱狅紙rotate 妯″紡涓嬪湪鍦嗗懆闄勮繎鐨勫宸級銆?
     public func beginDrag(cursorX: Float,
                           cursorY: Float,
                           screenTolerance: Float = 8) -> ActiveDrag? {
@@ -320,8 +320,8 @@ public final class EditorGizmoController: @unchecked Sendable {
         }
     }
 
-    /// 拖动中：根据当前光标位置返回新的 LocalTransform 矩阵。
-    /// 返回 `nil` 表示当前光标不再可解（例如视线与轴近平行）。
+    /// 鎷栧姩涓細鏍规嵁褰撳墠鍏夋爣浣嶇疆杩斿洖鏂扮殑 LocalTransform 鐭╅樀銆?
+    /// 杩斿洖 `nil` 琛ㄧず褰撳墠鍏夋爣涓嶅啀鍙В锛堜緥濡傝绾夸笌杞磋繎骞宠锛夈€?
     public func updateDrag(cursorX: Float, cursorY: Float) -> simd_float4x4? {
         lock.lock()
         let snapshotCopy = _snapshot
@@ -411,7 +411,7 @@ public final class EditorGizmoController: @unchecked Sendable {
             worldMatrix.columns.3 = SIMD4<Float>(drag.startEntityWorldPosition + deltaWorld, 1)
             return drag.parentInverseMatrix * worldMatrix
         }
-        // 在拖拽平面上的偏移投影到轴向，得到沏平移。
+        // 鍦ㄦ嫋鎷藉钩闈笂鐨勫亸绉绘姇褰卞埌杞村悜锛屽緱鍒版矎骞崇Щ銆?
         let deltaWorld = curHit - drag.startPlaneHit
         let along = simd_dot(deltaWorld, drag.axisWorld)
         let newWorldPos = drag.startEntityWorldPosition + drag.axisWorld * along
@@ -446,8 +446,8 @@ public final class EditorGizmoController: @unchecked Sendable {
             let along = simd_dot(curHit - drag.startPlaneHit, drag.axisWorld)
             factor = max(0.05, 1 + along / drag.referenceLength)
         }
-        // 以 startEntityWorldPosition 为中心、沿世界轴做非均匀缩放：
-        // 只缩放世界矩阵的三个基底列，保持平移不变，避免以世界原点为中心缩放。
+        // 浠?startEntityWorldPosition 涓轰腑蹇冦€佹部涓栫晫杞村仛闈炲潎鍖€缂╂斁锛?
+        // 鍙缉鏀句笘鐣岀煩闃电殑涓変釜鍩哄簳鍒楋紝淇濇寔骞崇Щ涓嶅彉锛岄伩鍏嶄互涓栫晫鍘熺偣涓轰腑蹇冪缉鏀俱€?
         let m = drag.startEntityWorldMatrix
         let c0 = SIMD3<Float>(m.columns.0.x, m.columns.0.y, m.columns.0.z)
         let c1 = SIMD3<Float>(m.columns.1.x, m.columns.1.y, m.columns.1.z)
@@ -461,11 +461,11 @@ public final class EditorGizmoController: @unchecked Sendable {
             n2 = c2 * factor
         } else {
             let s = scaleAlongAxisMatrix(factor: factor, axis: drag.axisWorld)
-            let s3 = simd_float3x3(
+            let s3 = simd_float3x3(columns: (
                 SIMD3<Float>(s.columns.0.x, s.columns.0.y, s.columns.0.z),
                 SIMD3<Float>(s.columns.1.x, s.columns.1.y, s.columns.1.z),
                 SIMD3<Float>(s.columns.2.x, s.columns.2.y, s.columns.2.z)
-            )
+            ))
             n0 = s3 * c0
             n1 = s3 * c1
             n2 = s3 * c2
@@ -474,7 +474,7 @@ public final class EditorGizmoController: @unchecked Sendable {
         worldMatrix.columns.0 = SIMD4<Float>(n0, 0)
         worldMatrix.columns.1 = SIMD4<Float>(n1, 0)
         worldMatrix.columns.2 = SIMD4<Float>(n2, 0)
-        // worldMatrix.columns.3 保留原始平移。
+        // worldMatrix.columns.3 淇濈暀鍘熷骞崇Щ銆?
         return drag.parentInverseMatrix * worldMatrix
     }
 
@@ -513,8 +513,8 @@ public final class EditorGizmoController: @unchecked Sendable {
         return drag
     }
 
-    /// 平面手柄在世界空间的几何范围：以原点为起点沿 (basisU, basisV) 方向
-    /// 各取 `axisLength * 0.15 .. axisLength * 0.45` 形成一个矩形。
+    /// 骞抽潰鎵嬫焺鍦ㄤ笘鐣岀┖闂寸殑鍑犱綍鑼冨洿锛氫互鍘熺偣涓鸿捣鐐规部 (basisU, basisV) 鏂瑰悜
+    /// 鍚勫彇 `axisLength * 0.15 .. axisLength * 0.45` 褰㈡垚涓€涓煩褰€?
     private func planeQuadCorners(snap: Snapshot, plane: Plane) -> [SIMD3<Float>] {
         let axes = snap.planeAxes(plane)
         let lo = snap.axisLength * 0.15
@@ -534,7 +534,7 @@ public final class EditorGizmoController: @unchecked Sendable {
                                          cursorY: Float) -> ActiveDrag? {
         for plane in Plane.allCases {
             let corners = planeQuadCorners(snap: snap, plane: plane)
-            // 世界空间四点投到屏幕，做凸四边形点-在-多边形测试。
+            // 涓栫晫绌洪棿鍥涚偣鎶曞埌灞忓箷锛屽仛鍑稿洓杈瑰舰鐐?鍦?澶氳竟褰㈡祴璇曘€?
             var screenCorners: [(Float, Float)] = []
             screenCorners.reserveCapacity(4)
             for c in corners {
@@ -544,7 +544,7 @@ public final class EditorGizmoController: @unchecked Sendable {
             guard screenCorners.count == 4 else { continue }
             guard pointInQuad(px: cursorX, py: cursorY, quad: screenCorners) else { continue }
 
-            // 命中：用 ray-plane 求交得到起始世界点。
+            // 鍛戒腑锛氱敤 ray-plane 姹備氦寰楀埌璧峰涓栫晫鐐广€?
             guard let ray = projector.cursorRay(x: cursorX, y: cursorY) else { return nil }
             let axes = snap.planeAxes(plane)
             guard let hit = rayPlaneIntersect(
@@ -592,7 +592,7 @@ public final class EditorGizmoController: @unchecked Sendable {
                                  projector: ScreenProjector,
                                  cursorX: Float, cursorY: Float,
                                  screenTolerance: Float) -> ActiveDrag? {
-        // 在三个旋转圆里挑命中的：每个圆采样 N 个点，先在屏幕上找最近点距离。
+        // 鍦ㄤ笁涓棆杞渾閲屾寫鍛戒腑鐨勶細姣忎釜鍦嗛噰鏍?N 涓偣锛屽厛鍦ㄥ睆骞曚笂鎵炬渶杩戠偣璺濈銆?
         struct Candidate { var axis: Axis; var screenDistance: Float }
         var best: Candidate?
 
@@ -627,7 +627,7 @@ public final class EditorGizmoController: @unchecked Sendable {
             return nil
         }
 
-        // 用真实 ray-平面求交得到更准的起始径向。
+        // 鐢ㄧ湡瀹?ray-骞抽潰姹備氦寰楀埌鏇村噯鐨勮捣濮嬪緞鍚戙€?
         guard let ray = projector.cursorRay(x: cursorX, y: cursorY) else { return nil }
         let axis = candidate.axis
         let axisWorld = snap.axisWorld(axis)
@@ -668,8 +668,8 @@ public final class EditorGizmoController: @unchecked Sendable {
         let deltaAngle = signedAngleBetween(from: drag.startRadial,
                                             to: curRadial,
                                             axis: drag.axisWorld)
-        // 以实体 startEntityWorldPosition 为轴心，只旋转世界矩阵的三个基底列，
-        // 保持平移列不变，避免以世界原点为中心的轨道式旋转。
+        // 浠ュ疄浣?startEntityWorldPosition 涓鸿酱蹇冿紝鍙棆杞笘鐣岀煩闃电殑涓変釜鍩哄簳鍒楋紝
+        // 淇濇寔骞崇Щ鍒椾笉鍙橈紝閬垮厤浠ヤ笘鐣屽師鐐逛负涓績鐨勮建閬撳紡鏃嬭浆銆?
         let r3 = rotationMatrix(angle: deltaAngle, axis: drag.axisWorld)
         let m = drag.startEntityWorldMatrix
         let c0 = SIMD3<Float>(m.columns.0.x, m.columns.0.y, m.columns.0.z)
@@ -795,7 +795,7 @@ private func pointToSegmentDistance(px: Float, py: Float,
     return (ex * ex + ey * ey).squareRoot()
 }
 
-/// 为一根世界轴选拖拽平面法线：平面含 axis、尽量面向摄像机，避免视线与轴近平行时的数值不稳。
+/// 涓轰竴鏍逛笘鐣岃酱閫夋嫋鎷藉钩闈㈡硶绾匡細骞抽潰鍚?axis銆佸敖閲忛潰鍚戞憚鍍忔満锛岄伩鍏嶈绾夸笌杞磋繎骞宠鏃剁殑鏁板€间笉绋炽€?
 private func axisDragPlaneNormal(axisWorld: SIMD3<Float>,
                                  cameraForward: SIMD3<Float>,
                                  cameraUp: SIMD3<Float>) -> SIMD3<Float> {
@@ -811,7 +811,7 @@ private func axisDragPlaneNormal(axisWorld: SIMD3<Float>,
     return len > 1e-5 ? normal / len : cameraForward
 }
 
-/// 从 `from` 到 `to` 绕 `axis` 的有符号夹角，范围 [-π, π]。避免极角 atan2 的 ±π 跳变。
+/// 浠?`from` 鍒?`to` 缁?`axis` 鐨勬湁绗﹀彿澶硅锛岃寖鍥?[-蟺, 蟺]銆傞伩鍏嶆瀬瑙?atan2 鐨?卤蟺 璺冲彉銆?
 private func signedAngleBetween(from: SIMD3<Float>,
                                 to: SIMD3<Float>,
                                 axis: SIMD3<Float>) -> Float {
@@ -833,7 +833,7 @@ private func rayPlaneIntersect(rayOrigin: SIMD3<Float>,
     return rayOrigin + rayDir * t
 }
 
-/// 屏幕空间凸四边形点-在-多边形测试（按顺序遍历四条边的叉积同号即可）。
+/// 灞忓箷绌洪棿鍑稿洓杈瑰舰鐐?鍦?澶氳竟褰㈡祴璇曪紙鎸夐『搴忛亶鍘嗗洓鏉¤竟鐨勫弶绉悓鍙峰嵆鍙級銆?
 private func pointInQuad(px: Float, py: Float, quad: [(Float, Float)]) -> Bool {
     guard quad.count == 4 else { return false }
     var lastSign: Float = 0
@@ -858,11 +858,11 @@ private func rotationMatrix(angle: Float, axis: SIMD3<Float>) -> simd_float3x3 {
     let t = 1 - c
     let n = simd_normalize(axis)
     let x = n.x, y = n.y, z = n.z
-    return simd_float3x3(
+    return simd_float3x3(columns: (
         SIMD3<Float>(t * x * x + c,     t * x * y + s * z, t * x * z - s * y),
         SIMD3<Float>(t * x * y - s * z, t * y * y + c,     t * y * z + s * x),
         SIMD3<Float>(t * x * z + s * y, t * y * z - s * x, t * z * z + c)
-    )
+    ))
 }
 
 private func rotation4x4(angle: Float, axis: SIMD3<Float>) -> simd_float4x4 {
@@ -874,7 +874,7 @@ private func rotation4x4(angle: Float, axis: SIMD3<Float>) -> simd_float4x4 {
     return m
 }
 
-/// 沿世界轴 a 做非均匀缩放（factor）：S = I + (factor - 1) * a * aᵀ
+/// 娌夸笘鐣岃酱 a 鍋氶潪鍧囧寑缂╂斁锛坒actor锛夛細S = I + (factor - 1) * a * a岬€
 private func scaleAlongAxisMatrix(factor: Float, axis: SIMD3<Float>) -> simd_float4x4 {
     let a = simd_normalize(axis)
     let k = factor - 1

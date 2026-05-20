@@ -1,5 +1,7 @@
-import Foundation
+﻿import Foundation
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 
 /// Linearly-blendable values. `t` is clamped to `[0, 1]` by callers; the
 /// scheduler always passes pre-clamped progress, so implementations may

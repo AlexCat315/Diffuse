@@ -1,8 +1,8 @@
-import CinematicRenderer
+﻿import CinematicRenderer
 import ColorPipeline
 import Foundation
 import EXRIO
-import simd
+import SIMDCompat
 
 final class RenderPipelineRunner: @unchecked Sendable {
 
@@ -11,7 +11,9 @@ final class RenderPipelineRunner: @unchecked Sendable {
         var height: Int = 480
         var samplesPerPixel: Int = 64
         var maxBounces: Int = 4
-        var outputPath: String = "/tmp/guava_render.exr"
+        var outputPath: String = FileManager.default.temporaryDirectory
+            .appendingPathComponent("guava_render.exr")
+            .path
     }
 
     struct Progress: Sendable {

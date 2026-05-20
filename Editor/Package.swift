@@ -5,9 +5,6 @@ import PackageDescription
 let package = Package(
     name: "GuavaEditor",
     defaultLocalization: "en",
-    platforms: [
-        .macOS(.v14)
-    ],
     products: [
         .executable(name: "EditorApp", targets: ["EditorApp"]),
         .library(name: "EditorCore", targets: ["EditorCore"]),
@@ -25,6 +22,7 @@ let package = Package(
         .target(
             name: "EditorCore",
             dependencies: [
+                .product(name: "SIMDCompat", package: "Engine"),
                 .product(name: "AIRuntime", package: "Engine"),
                 .product(name: "AssetPipeline", package: "Engine"),
                 .product(name: "AudioRuntime", package: "Engine"),
@@ -50,6 +48,7 @@ let package = Package(
             name: "EditorApp",
             dependencies: [
                 "EditorCore",
+                .product(name: "SIMDCompat", package: "Engine"),
                 .product(name: "GuavaUIApp", package: "GuavaUI"),
                 .product(name: "GuavaUICompose", package: "GuavaUI"),
                 .product(name: "GuavaUIWorkspace", package: "GuavaUI"),
@@ -98,6 +97,7 @@ let package = Package(
             name: "EditorCoreTests",
             dependencies: [
                 "EditorCore",
+                .product(name: "SIMDCompat", package: "Engine"),
             ]
         ),
     ],
