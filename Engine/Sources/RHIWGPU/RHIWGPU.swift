@@ -42,7 +42,9 @@ public enum WGPUBackendPreference: String, Sendable, CaseIterable {
 #if os(macOS)
         return [.metal, .automatic]
 #elseif os(Windows)
-        return [.d3d12, .vulkan, .automatic]
+        // wgpu-native currently validates Win32 surfaces more reliably through Vulkan.
+        // Keep D3D12 as a fallback for systems without Vulkan support.
+        return [.vulkan, .d3d12, .automatic]
 #elseif os(Linux)
         return [.vulkan, .automatic]
 #else
