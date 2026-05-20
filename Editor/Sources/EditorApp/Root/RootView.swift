@@ -20,6 +20,17 @@ struct EditorRootView: View {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         ShortcutHost(onKeyDown: cb.handleShortcut)
 
+                        #if os(Windows)
+                        EditorApplicationMenuBar(
+                            workspaceMode: store.workspaceMode,
+                            activeLayoutPreset: store.activeLayoutPreset,
+                            playbackState: store.playbackState,
+                            onCommand: cb.handleMenuCommand
+                        )
+
+                        Divider()
+                        #endif
+
                         PanelWorkspace(controller: controller,
                                        registry: registry)
                             .flex()
@@ -52,11 +63,15 @@ struct EditorRootView: View {
 
 private struct EditorCallbacks {
     let handleShortcut: (KeyEvent) -> Bool
+    let handleMenuCommand: (EditorMenuCommand) -> Void
 
     init(app: EditorApplication,
          controller: WorkspaceController,
          registry: PanelRegistry,
          commandPaletteVisible: Bool) {
+        self.handleMenuCommand = { command in
+            EditorCommandDispatcher.handle(command, app: app, controller: controller, registry: registry)
+        }
         self.handleShortcut = { key in
             let s = app.store
             return EditorShortcutHandler.handle(
