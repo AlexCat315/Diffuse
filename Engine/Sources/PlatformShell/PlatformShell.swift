@@ -34,19 +34,40 @@ public enum WindowTitleBarStyle: String, Sendable, Equatable {
 }
 
 public struct WindowChromeHitTest: Sendable, Equatable {
+    public struct Rect: Sendable, Equatable {
+        public var x: Float
+        public var y: Float
+        public var width: Float
+        public var height: Float
+
+        public init(x: Float, y: Float, width: Float, height: Float) {
+            self.x = x
+            self.y = y
+            self.width = max(0, width)
+            self.height = max(0, height)
+        }
+
+        public func contains(x px: Float, y py: Float) -> Bool {
+            px >= x && py >= y && px < x + width && py < y + height
+        }
+    }
+
     public var titleBarHeight: Float
     public var draggableLeadingInset: Float
     public var draggableTrailingInset: Float
     public var resizeBorderWidth: Float
+    public var draggableRects: [Rect]
 
     public init(titleBarHeight: Float,
                 draggableLeadingInset: Float = 0,
                 draggableTrailingInset: Float = 0,
-                resizeBorderWidth: Float = 6) {
+                resizeBorderWidth: Float = 6,
+                draggableRects: [Rect] = []) {
         self.titleBarHeight = max(0, titleBarHeight)
         self.draggableLeadingInset = max(0, draggableLeadingInset)
         self.draggableTrailingInset = max(0, draggableTrailingInset)
         self.resizeBorderWidth = max(0, resizeBorderWidth)
+        self.draggableRects = draggableRects
     }
 }
 

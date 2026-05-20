@@ -9,19 +9,13 @@ public enum AppDisplayHandleHolder {
 
 public struct ImmersiveWindowTitleBar<Leading: View>: View {
     public let height: Float
-    public let draggableLeadingInset: Float
-    public let draggableTrailingInset: Float
     public let resizeBorderWidth: Float
     public let leading: Leading
 
     public init(height: Float = 34,
-                draggableLeadingInset: Float = 0,
-                draggableTrailingInset: Float = 112,
                 resizeBorderWidth: Float = 6,
                 @ViewBuilder leading: () -> Leading) {
         self.height = height
-        self.draggableLeadingInset = draggableLeadingInset
-        self.draggableTrailingInset = draggableTrailingInset
         self.resizeBorderWidth = resizeBorderWidth
         self.leading = leading()
     }
@@ -30,15 +24,14 @@ public struct ImmersiveWindowTitleBar<Leading: View>: View {
         _WindowChromeHitTestInstaller(
             hitTest: WindowChromeHitTest(
                 titleBarHeight: height,
-                draggableLeadingInset: draggableLeadingInset,
-                draggableTrailingInset: draggableTrailingInset,
                 resizeBorderWidth: resizeBorderWidth
             )
         )
 
         Row(alignment: .center, spacing: 0) {
             leading
-            Spacer()
+            WindowDragRegion()
+                .frame(height: height)
             WindowControlStrip()
         }
         .padding(horizontal: 6, vertical: 3)
@@ -47,6 +40,35 @@ public struct ImmersiveWindowTitleBar<Leading: View>: View {
         .zIndex(20_000)
         .layoutRole("app-window-title-bar")
         .debugName("app-window-title-bar")
+    }
+}
+
+public struct WindowDragRegion: _PrimitiveView {
+    public let minLength: Float
+
+    public init(minLength: Float = 0) {
+        self.minLength = minLength
+    }
+
+    public func _makeNode() -> Node {
+        let node = Node()
+        node.isHitTestable = false
+        return node
+    }
+
+    public func _updateNode(_ node: Node) {
+        node.attachments[WindowChromeAttachmentKey.dragRegion] = true
+    }
+
+    public func _makeLayoutNode() -> LayoutNode? {
+        LayoutNode()
+    }
+
+    public func _updateLayout(_ layout: LayoutNode) {
+        layout.flexGrow = 1
+        if minLength > 0 {
+            layout.setFlexBasis(minLength)
+        }
     }
 }
 
@@ -119,9 +141,7 @@ private struct _WindowChromeHitTestInstaller: _PrimitiveView {
     }
 
     func _updateNode(_ node: Node) {
-        withAppDisplayHandle { handle in
-            handle.setWindowChromeHitTest(hitTest)
-        }
+        node.attachments[WindowChromeAttachmentKey.configuration] = hitTest
     }
 
     func _makeLayoutNode() -> LayoutNode? {
@@ -135,4 +155,9 @@ private struct _WindowChromeHitTestInstaller: _PrimitiveView {
         layout.width = 0
         layout.height = 0
     }
+}
+
+enum WindowChromeAttachmentKey {
+    static let configuration = "GuavaUIApp.windowChrome.configuration"
+    static let dragRegion = "GuavaUIApp.windowChrome.dragRegion"
 }
