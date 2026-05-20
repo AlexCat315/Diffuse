@@ -152,8 +152,13 @@ public struct WindowDragRegion: _PrimitiveView {
 }
 
 private struct WindowControlStrip: View {
+    @State private var isMaximized: Bool = false
+
     var body: some View {
         let windowID = AppWindowChromeContextHolder.current?.windowID
+        let resolvedIsMaximized = isMaximized || isWindowMaximizedForChrome(windowID)
+        let maximizeIcon = resolvedIsMaximized ? WindowChromeIcons.restore : WindowChromeIcons.maximize
+        let maximizeTooltip = resolvedIsMaximized ? "Restore" : "Maximize"
         Row(alignment: .center, spacing: 2) {
             WindowControlButton(icon: WindowChromeIcons.minimize, tooltip: "Minimize") {
                 withAppDisplayHandle { handle in
@@ -164,12 +169,14 @@ private struct WindowControlStrip: View {
                     }
                 }
             }
-            WindowControlButton(icon: WindowChromeIcons.maximize, tooltip: "Maximize") {
+            WindowControlButton(icon: maximizeIcon, tooltip: maximizeTooltip) {
                 withAppDisplayHandle { handle in
                     if let windowID {
                         handle.toggleMaximizeWindow(windowID)
+                        isMaximized = handle.isWindowMaximized(windowID)
                     } else {
                         handle.toggleMaximizeWindow()
+                        isMaximized = handle.isWindowMaximized()
                     }
                 }
             }
@@ -211,9 +218,22 @@ private enum WindowChromeIcons {
     static let maximize = BundleImageResource.svg(named: "maximize",
                                                   in: .module,
                                                   subdirectory: "WindowChromeIcons")
+    static let restore = BundleImageResource.svg(named: "restore",
+                                                 in: .module,
+                                                 subdirectory: "WindowChromeIcons")
     static let close = BundleImageResource.svg(named: "close",
                                                in: .module,
                                                subdirectory: "WindowChromeIcons")
+}
+
+private func isWindowMaximizedForChrome(_ windowID: WindowID?) -> Bool {
+    MainActor.assumeIsolated {
+        guard let handle = AppDisplayHandleHolder.current else { return false }
+        if let windowID {
+            return handle.isWindowMaximized(windowID)
+        }
+        return handle.isWindowMaximized()
+    }
 }
 
 private func withAppDisplayHandle(_ body: @MainActor (AppDisplayHandle) -> Void) {
