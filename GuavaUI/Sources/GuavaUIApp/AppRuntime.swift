@@ -243,6 +243,25 @@ public final class AppRuntime {
                 guard let id = self?.host.mainSession?.id else { return false }
                 return self?.host.isWindowMaximized(id) ?? false
             },
+            minimizeWindowByID: { [weak self] id in
+                self?.host.minimizeWindow(id)
+            },
+            maximizeWindowByID: { [weak self] id in
+                self?.host.maximizeWindow(id)
+            },
+            restoreWindowByID: { [weak self] id in
+                self?.host.restoreWindow(id)
+            },
+            closeWindowByID: { [weak self] id in
+                self?.auxiliaryWindows.removeValue(forKey: id)
+                self?.host.closeWindow(id)
+            },
+            isWindowMaximizedByID: { [weak self] id in
+                self?.host.isWindowMaximized(id) ?? false
+            },
+            showWindowSystemMenu: { [weak self] id, x, y in
+                self?.host.showWindowSystemMenu(id, x: x, y: y)
+            },
             setWindowChromeHitTest: { [weak self] hitTest in
                 guard let id = self?.host.mainSession?.id else { return }
                 self?.host.setWindowChromeHitTest(id, hitTest)
@@ -280,7 +299,9 @@ public final class AppRuntime {
         configureTextEnvironment(scale: host.contentScaleFactor)
 
         if !didInstallRoot {
-            graph.install(root: rootView)
+            withWindowChromeContext(host.mainSession?.id) {
+                graph.install(root: rootView)
+            }
             graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
             syncMainWindowChromeHitTest()
             // Phase 5b: hand the input mirror to the session's dispatcher
@@ -609,7 +630,9 @@ public final class AppRuntime {
                 tree: tree,
                 recomposer: recomposer,
                 inputContext: inputContext,
-                options: WindowOptions(width: request.width, height: request.height)
+                options: WindowOptions(width: request.width,
+                                       height: request.height,
+                                       titleBarStyle: config.titleBarStyle.platformStyle)
             )
             let window = AuxiliaryAppWindow(session: session,
                                             rootView: request.rootView,
@@ -617,7 +640,10 @@ public final class AppRuntime {
                                             renderer: renderer,
                                             config: config,
                                             presentMode: currentPresentMode,
-                                            useLegacyRenderer: useLegacyRenderer)
+                                            useLegacyRenderer: useLegacyRenderer,
+                                            setWindowChromeHitTest: { [weak self] id, hitTest in
+                                                self?.host.setWindowChromeHitTest(id, hitTest)
+                                            })
             auxiliaryWindows[session.id] = window
 
             session.onInit = { [weak self, weak window] native, widthPx, heightPx in
@@ -694,6 +720,48 @@ private extension AppWindowTitleBarStyle {
 }
 
 @MainActor
+private func withWindowChromeContext<R>(_ windowID: WindowID?, _ body: () throws -> R) rethrows -> R {
+    let previous = AppWindowChromeContextHolder.current
+    if let windowID {
+        AppWindowChromeContextHolder.current = AppWindowChromeContext(windowID: windowID)
+    }
+    defer {
+        AppWindowChromeContextHolder.current = previous
+    }
+    return try body()
+}
+
+private func collectWindowChrome(node: Node,
+                                 parentOrigin: CGPoint,
+                                 config: inout WindowChromeHitTest?,
+                                 dragRects: inout [WindowChromeHitTest.Rect]) {
+    let origin = CGPoint(x: parentOrigin.x + node.frame.origin.x,
+                         y: parentOrigin.y + node.frame.origin.y)
+
+    if let chrome = node.attachments[WindowChromeAttachmentKey.configuration] as? WindowChromeHitTest {
+        config = chrome
+    }
+
+    if node.attachments[WindowChromeAttachmentKey.dragRegion] as? Bool == true,
+       node.frame.width > 0,
+       node.frame.height > 0 {
+        dragRects.append(WindowChromeHitTest.Rect(x: Float(origin.x),
+                                                  y: Float(origin.y),
+                                                  width: Float(node.frame.width),
+                                                  height: Float(node.frame.height)))
+    }
+
+    let childOrigin = CGPoint(x: origin.x - node.contentOffset.x,
+                              y: origin.y - node.contentOffset.y)
+    for child in node.children {
+        collectWindowChrome(node: child,
+                            parentOrigin: childOrigin,
+                            config: &config,
+                            dragRects: &dragRects)
+    }
+}
+
+@MainActor
 private final class AuxiliaryAppWindow {
     private let session: PlatformWindowSession
     private let graph: ViewGraph
@@ -718,6 +786,8 @@ private final class AuxiliaryAppWindow {
     private var logicalW: UInt32 = 0
     private var logicalH: UInt32 = 0
     private var didInstallRoot = false
+    private var lastWindowChromeHitTest: WindowChromeHitTest?
+    private let setWindowChromeHitTest: (WindowID, WindowChromeHitTest?) -> Void
 
     init(session: PlatformWindowSession,
          rootView: AnyView,
@@ -725,7 +795,8 @@ private final class AuxiliaryAppWindow {
          renderer: DrawListRenderer,
          config: AppConfig,
          presentMode: GPUPresentMode,
-         useLegacyRenderer: Bool) {
+         useLegacyRenderer: Bool,
+         setWindowChromeHitTest: @escaping (WindowID, WindowChromeHitTest?) -> Void) {
         self.session = session
         self.rootView = rootView
         self.backend = backend
@@ -733,6 +804,7 @@ private final class AuxiliaryAppWindow {
         self.config = config
         self.presentMode = presentMode
         self.useLegacyRenderer = useLegacyRenderer
+        self.setWindowChromeHitTest = setWindowChromeHitTest
         self.graph = ViewGraph(tree: session.tree, recomposer: session.recomposer)
     }
 
@@ -760,8 +832,11 @@ private final class AuxiliaryAppWindow {
         try session.withCurrent {
             configureTextEnvironment(session.contentScaleFactor)
             if !didInstallRoot {
-                graph.install(root: rootView)
+                withWindowChromeContext(session.id) {
+                    graph.install(root: rootView)
+                }
                 graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
+                syncWindowChromeHitTest()
                 session.attachInputScene(graph.inputScene)
                 didInstallRoot = true
             }
@@ -819,6 +894,30 @@ private final class AuxiliaryAppWindow {
         }
     }
 
+    private func syncWindowChromeHitTest() {
+        guard let root = session.tree.root else { return }
+
+        var config: WindowChromeHitTest?
+        var dragRects: [WindowChromeHitTest.Rect] = []
+        collectWindowChrome(node: root,
+                            parentOrigin: .zero,
+                            config: &config,
+                            dragRects: &dragRects)
+
+        guard var next = config else {
+            if lastWindowChromeHitTest != nil {
+                setWindowChromeHitTest(session.id, nil)
+                lastWindowChromeHitTest = nil
+            }
+            return
+        }
+
+        next.draggableRects = dragRects
+        guard next != lastWindowChromeHitTest else { return }
+        setWindowChromeHitTest(session.id, next)
+        lastWindowChromeHitTest = next
+    }
+
     func handleFrame(configureTextEnvironment: (Float) -> Void,
                      uploadAtlasIfNeeded: (Bool) throws -> Void) -> Bool {
         guard configuredSurface,
@@ -830,6 +929,7 @@ private final class AuxiliaryAppWindow {
         session.withCurrent {
             configureTextEnvironment(session.contentScaleFactor)
             _ = graph.computeLayoutIfNeeded(width: Float(logicalW), height: Float(logicalH))
+            syncWindowChromeHitTest()
             drawList.reset()
             if useLegacyRenderer {
                 nodeRenderer.render(root: root, into: drawList)

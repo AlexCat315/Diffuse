@@ -1,10 +1,23 @@
 import Foundation
+import EngineKernel
 import GuavaUICompose
 import GuavaUIRuntime
 import PlatformShell
 
 public enum AppDisplayHandleHolder {
     nonisolated(unsafe) public static var current: AppDisplayHandle?
+}
+
+public enum AppWindowChromeContextHolder {
+    nonisolated(unsafe) public static var current: AppWindowChromeContext?
+}
+
+public struct AppWindowChromeContext: Sendable {
+    public var windowID: WindowID
+
+    public init(windowID: WindowID) {
+        self.windowID = windowID
+    }
 }
 
 public struct ImmersiveWindowTitleBar<Leading: View>: View {
@@ -74,20 +87,33 @@ public struct WindowDragRegion: _PrimitiveView {
 
 private struct WindowControlStrip: View {
     var body: some View {
+        let windowID = AppWindowChromeContextHolder.current?.windowID
         Row(alignment: .center, spacing: 2) {
             WindowControlButton(icon: WindowChromeIcons.minimize, tooltip: "Minimize") {
                 withAppDisplayHandle { handle in
-                    handle.minimizeWindow()
+                    if let windowID {
+                        handle.minimizeWindow(windowID)
+                    } else {
+                        handle.minimizeWindow()
+                    }
                 }
             }
             WindowControlButton(icon: WindowChromeIcons.maximize, tooltip: "Maximize") {
                 withAppDisplayHandle { handle in
-                    handle.toggleMaximizeWindow()
+                    if let windowID {
+                        handle.toggleMaximizeWindow(windowID)
+                    } else {
+                        handle.toggleMaximizeWindow()
+                    }
                 }
             }
             WindowControlButton(icon: WindowChromeIcons.close, tooltip: "Close", isClose: true) {
                 withAppDisplayHandle { handle in
-                    handle.closeMainWindow()
+                    if let windowID {
+                        handle.closeWindow(windowID)
+                    } else {
+                        handle.closeMainWindow()
+                    }
                 }
             }
         }
