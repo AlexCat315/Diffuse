@@ -1,22 +1,20 @@
-import CoreText
 import Foundation
 import CFreeType
 import CHarfBuzz
+import GuavaUIBundledFonts
+#if canImport(CoreText)
+import CoreText
+#endif
 
-/// A font loaded via CoreText, with FreeType face and HarfBuzz font ready for use.
+/// A font loaded via FreeType, with HarfBuzz font ready for use.
 public final class ManagedFont {
-    /// Unique identifier within the owning FontProvider.
     public let id: Int
-    /// PostScript name (e.g. ".SFNS-Regular", "PingFangSC-Regular").
     public let postScriptName: String
-    /// Point size used when the FreeType face was configured.
     public let pointSize: Float
     public let rasterScale: Float
     internal let ftFace: FT_Face
     internal let hbFont: OpaquePointer  // hb_font_t*
 
-    /// Underlying FreeType face — exposed for callers that need to bind a
-    /// `TextShaper` directly (e.g. the Compose `Text` primitive).
     public var rawFace: FT_Face { ftFace }
 
     // Pinned buffer — must stay alive as long as ftFace.
@@ -45,18 +43,15 @@ public final class ManagedFont {
 
 /// A contiguous text segment that should be shaped with a specific font.
 public struct FontRun {
-    /// Font for this segment.
     public let font: ManagedFont
-    /// The text substring.
     public let text: String
-    /// Byte offset of this segment in the original string's UTF-8 representation.
     public let utf8Offset: Int
 }
 
-/// Resolves fonts via CoreText and provides automatic fallback for any script.
+/// Resolves fonts and provides shaping for text runs.
 ///
-/// CoreText determines which system font covers each character range,
-/// then loads the corresponding FreeType face and HarfBuzz font for shaping.
+/// On Apple platforms: uses CoreText for font discovery and fallback.
+/// On Windows/Linux: loads fonts directly from file paths using FreeType.
 public final class FontProvider {
     private let ftLibrary: FT_Library
     private var fonts: [String: ManagedFont] = [:]
@@ -64,9 +59,11 @@ public final class FontProvider {
     private let size: Float
     private let rasterScale: Float
     private var primaryPSName: String?
-    private var primaryCTFont: CTFont?
 
-    /// Creates a FontProvider with the given font size.
+#if canImport(CoreText)
+    private var primaryCTFont: CTFont?
+#endif
+
     public init(size: Float, rasterScale: Float = 1, idBase: Int = 0) {
         var lib: FT_Library?
         let err = FT_Init_FreeType(&lib)
@@ -82,16 +79,13 @@ public final class FontProvider {
         FT_Done_FreeType(ftLibrary)
     }
 
-    /// The primary font, if loaded.
     public var primaryFont: ManagedFont? {
         guard let name = primaryPSName else { return nil }
         return fonts[name]
     }
 
-    /// All currently loaded fonts.
     public var allFonts: [ManagedFont] { Array(fonts.values) }
 
-    /// Registers all loaded fonts into the given atlas for multi-font rasterization.
     public func registerAllFonts(in atlas: FontAtlas) {
         for font in fonts.values {
             atlas.registerFace(
@@ -103,10 +97,10 @@ public final class FontProvider {
         }
     }
 
-    /// Loads the primary font by family name or PostScript name.
     @discardableResult
     public func loadPrimaryFont(name: String,
                                 weight: FontWeight = .regular) -> ManagedFont? {
+#if canImport(CoreText)
         let ctFont = configuredCTFont(named: name, weight: weight)
         let font = loadFont(ctFont)
         if let font {
@@ -114,16 +108,16 @@ public final class FontProvider {
             primaryCTFont = ctFont
         }
         return font
+#else
+        return loadPrimaryFontDirect(name: name)
+#endif
     }
 
     // MARK: - Font fallback
 
-    /// Splits text into runs, each assigned the system font that can render it.
-    ///
-    /// Uses CoreText's typographic layout engine to determine font coverage.
-    /// Fallback fonts (e.g. PingFang SC for CJK, Apple Color Emoji for emoji)
-    /// are loaded into FreeType automatically on first encounter.
+    /// Splits text into runs, each assigned the font that can render it.
     public func resolveRuns(text: String) -> [FontRun] {
+#if canImport(CoreText)
         guard !text.isEmpty, let ctPrimary = primaryCTFont else { return [] }
         var result: [FontRun] = []
 
@@ -167,14 +161,15 @@ public final class FontProvider {
         flushCurrentRun()
 
         return result
+#else
+        // On non-Apple platforms, return a single run with the primary font.
+        guard !text.isEmpty, let name = primaryPSName, let font = fonts[name] else { return [] }
+        return [FontRun(font: font, text: text, utf8Offset: 0)]
+#endif
     }
 
     // MARK: - Shaping
 
-    /// Shapes a font run using HarfBuzz with auto-detected script/language.
-    ///
-    /// Cluster values in the returned glyphs are adjusted by the run's `utf8Offset`
-    /// so they map back to the original (pre-split) string.
     public func shapeRun(_ run: FontRun) -> [ShapedGlyph] {
         guard let buf = hb_buffer_create() else { return [] }
         defer { hb_buffer_destroy(buf) }
@@ -211,12 +206,85 @@ public final class FontProvider {
         return result
     }
 
-    // MARK: - Private
+    // MARK: - Direct file loading (non-Apple)
 
-    private func loadFontByName(_ name: String,
-                                weight: FontWeight = .regular) -> ManagedFont? {
-        let ctFont = configuredCTFont(named: name, weight: weight)
-        return loadFont(ctFont)
+#if !canImport(CoreText)
+    private func loadPrimaryFontDirect(name: String) -> ManagedFont? {
+        // Try bundled Inter font first
+        if let url = BundledFonts.bundledFontURL,
+           let data = try? Data(contentsOf: url) {
+            let psName = name.isEmpty ? "Inter-Regular" : name
+            return loadFontFromData(data, psName: psName, faceIndex: 0)
+        }
+        // Fallback: try common system font directories
+        let extensions = ["ttc", "ttf", "otf"]
+        let systemDirs = [
+            "C:\\Windows\\Fonts\\",
+            "/usr/share/fonts/",
+            "/usr/local/share/fonts/",
+        ]
+        for dir in systemDirs {
+            for ext in extensions {
+                let path = dir + name + "." + ext
+                if let data = try? Data(contentsOf: URL(fileURLWithPath: path)) {
+                    return loadFontFromData(data, psName: name, faceIndex: 0)
+                }
+            }
+        }
+        return nil
+    }
+
+    private func loadFontFromData(_ data: Data, psName: String, faceIndex: Int) -> ManagedFont? {
+        if let existing = fonts[psName] { return existing }
+
+        let buffer = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)
+        data.copyBytes(to: buffer, count: data.count)
+
+        var face: FT_Face?
+        let err = FT_New_Memory_Face(ftLibrary, buffer, FT_Long(data.count), FT_Long(faceIndex), &face)
+        guard err == 0, let ftFace = face else {
+            buffer.deallocate()
+            return nil
+        }
+
+        _ = FT_Select_Charmap(ftFace, FT_ENCODING_UNICODE)
+        FT_Set_Char_Size(ftFace, 0, FT_F26Dot6(size * rasterScale * 64), 72, 72)
+
+        guard let hbFont = hb_ft_font_create_referenced(ftFace) else {
+            FT_Done_Face(ftFace)
+            buffer.deallocate()
+            return nil
+        }
+
+        let id = nextFontID
+        nextFontID += 1
+
+        let resolvedPSName: String
+        if let namePtr = FT_Get_Postscript_Name(ftFace) {
+            resolvedPSName = String(cString: namePtr)
+        } else {
+            resolvedPSName = psName
+        }
+
+        let managed = ManagedFont(
+            id: id, postScriptName: resolvedPSName, pointSize: size, rasterScale: rasterScale,
+            ftFace: ftFace, hbFont: hbFont,
+            buffer: buffer, bufferSize: data.count
+        )
+        fonts[resolvedPSName] = managed
+        fonts[psName] = managed
+        if primaryPSName == nil { primaryPSName = resolvedPSName }
+        return managed
+    }
+#endif
+
+    // MARK: - Apple CoreText-based loading
+
+#if canImport(CoreText)
+    private func loadFont(_ ctFont: CTFont) -> ManagedFont? {
+        let psName = CTFontCopyPostScriptName(ctFont) as String
+        if let existing = fonts[psName] { return existing }
+        return loadFontFromCTFont(ctFont, psName: psName)
     }
 
     private func coveringManagedFont(for substring: String,
@@ -251,34 +319,6 @@ public final class FontProvider {
         return text.unicodeScalars.allSatisfy { scalar in
             FT_Get_Char_Index(font.ftFace, FT_ULong(scalar.value)) != 0
         }
-    }
-
-    private func loadFont(_ ctFont: CTFont) -> ManagedFont? {
-        let psName = CTFontCopyPostScriptName(ctFont) as String
-        if let existing = fonts[psName] { return existing }
-        return loadFontFromCTFont(ctFont, psName: psName)
-    }
-
-    private func configuredCTFont(named name: String,
-                                  weight: FontWeight) -> CTFont {
-        let scaledSize = CGFloat(size * rasterScale)
-        let base: CTFont
-        if name == ".AppleSystemUIFont" {
-            base = CTFontCreateUIFontForLanguage(.system, scaledSize, nil)
-                ?? CTFontCreateWithName("Helvetica Neue" as CFString, scaledSize, nil)
-        } else {
-            base = CTFontCreateWithName(name as CFString, scaledSize, nil)
-        }
-        guard weight != .regular else { return base }
-
-        let attrs: [CFString: Any] = [
-            kCTFontTraitsAttribute: [kCTFontWeightTrait: weight.coreTextWeight]
-        ]
-        let descriptor = CTFontDescriptorCreateCopyWithAttributes(
-            CTFontCopyFontDescriptor(base),
-            attrs as CFDictionary
-        )
-        return CTFontCreateWithFontDescriptor(descriptor, scaledSize, nil)
     }
 
     private func loadFontFromCTFont(_ ctFont: CTFont, psName: String) -> ManagedFont? {
@@ -335,10 +375,6 @@ public final class FontProvider {
             return nil
         }
 
-        // Reserved system UI containers can open successfully at face 0 even
-        // when CoreText asked for a different PostScript face. Treat that as a
-        // miss so the caller can retry a normalized public alias instead of
-        // caching a TTC face that shapes every CJK glyph as .notdef.
         if resolvedFaceIndex == nil,
            let loadedNamePtr = FT_Get_Postscript_Name(ftFace) {
             let loadedPSName = String(cString: loadedNamePtr)
@@ -370,6 +406,28 @@ public final class FontProvider {
             fonts[alias] = managed
         }
         return managed
+    }
+
+    private func configuredCTFont(named name: String,
+                                  weight: FontWeight) -> CTFont {
+        let scaledSize = CGFloat(size * rasterScale)
+        let base: CTFont
+        if name == ".AppleSystemUIFont" {
+            base = CTFontCreateUIFontForLanguage(.system, scaledSize, nil)
+                ?? CTFontCreateWithName("Helvetica Neue" as CFString, scaledSize, nil)
+        } else {
+            base = CTFontCreateWithName(name as CFString, scaledSize, nil)
+        }
+        guard weight != .regular else { return base }
+
+        let attrs: [CFString: Any] = [
+            kCTFontTraitsAttribute: [kCTFontWeightTrait: weight.coreTextWeight]
+        ]
+        let descriptor = CTFontDescriptorCreateCopyWithAttributes(
+            CTFontCopyFontDescriptor(base),
+            attrs as CFDictionary
+        )
+        return CTFontCreateWithFontDescriptor(descriptor, scaledSize, nil)
     }
 
     private func fallbackPostScriptCandidates(for ctFont: CTFont,
@@ -428,6 +486,9 @@ public final class FontProvider {
             (CTFontDescriptorCopyAttribute($0, kCTFontNameAttribute) as? String) == targetPSName
         })
     }
+#endif
+
+    // MARK: - FreeType utilities (shared)
 
     private func findFaceIndex(in data: Data, targetPSName: String) -> Int? {
         let probe = UnsafeMutablePointer<UInt8>.allocate(capacity: data.count)

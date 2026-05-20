@@ -1,5 +1,8 @@
-import yoga
+﻿import yoga
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
+import Foundation
 
 /// Wraps a `YGNodeRef` and owns its lifetime.
 ///
@@ -307,9 +310,9 @@ public final class LayoutNode: @unchecked Sendable {
 
         init(_ ygMode: YGMeasureMode) {
             switch ygMode {
-            case YGMeasureMode.exactly: self = .exactly
-            case YGMeasureMode.atMost:  self = .atMost
-            default:                    self = .undefined
+            case YGMeasureModeExactly: self = .exactly
+            case YGMeasureModeAtMost:  self = .atMost
+            default:                   self = .undefined
             }
         }
     }

@@ -1,10 +1,10 @@
-import Foundation
+﻿import Foundation
 import AssetPipeline
 import GuavaUIRuntime
 import IntentRuntime
 import SceneRuntime
 import ScriptRuntime
-import simd
+import SIMDCompat
 
 public struct EditorSceneNode: Identifiable {
     public let id: UInt64
@@ -736,8 +736,8 @@ public enum EditorInspectorFieldValue {
     case colliderShapeKind(Binding<ColliderShapeKind>)
 }
 
-/// 主线程约定的编辑器场景适配层。底层数据来自 Swift `SceneRuntime`，
-/// 面板只读取这里导出的树与属性 schema，不再依赖 stub 列表。
+/// 涓荤嚎绋嬬害瀹氱殑缂栬緫鍣ㄥ満鏅€傞厤灞傘€傚簳灞傛暟鎹潵鑷?Swift `SceneRuntime`锛?
+/// 闈㈡澘鍙鍙栬繖閲屽鍑虹殑鏍戜笌灞炴€?schema锛屼笉鍐嶄緷璧?stub 鍒楄〃銆?
 public final class EditorSceneAdapter: @unchecked Sendable {
     var scene = SceneRuntime()
     let transactionExecutor = TransactionExecutor()
@@ -1420,7 +1420,7 @@ public final class EditorSceneAdapter: @unchecked Sendable {
                 EditorInspectorField(
                     id: "spot-cone-hint",
                     label: L("Cone"),
-                    value: .readOnly("\(format(light.spotInnerAngleDegrees))° -> \(format(light.spotOuterAngleDegrees))°")
+                    value: .readOnly("\(format(light.spotInnerAngleDegrees))掳 -> \(format(light.spotOuterAngleDegrees))掳")
                 )
             )
         }
@@ -2128,8 +2128,8 @@ private extension EntityID {
 
 // MARK: - Transform decompose / compose
 
-/// 把 4x4 本地矩阵分解成纯旋转 3x3 + per-axis 缩放向量。
-/// 假设矩阵不含切变；如果有切变，缩放只取列长度近似。
+/// 鎶?4x4 鏈湴鐭╅樀鍒嗚В鎴愮函鏃嬭浆 3x3 + per-axis 缂╂斁鍚戦噺銆?
+/// 鍋囪鐭╅樀涓嶅惈鍒囧彉锛涘鏋滄湁鍒囧彉锛岀缉鏀惧彧鍙栧垪闀垮害杩戜技銆?
 private func decomposeRotationScale(_ m: simd_float4x4) -> (simd_float3x3, SIMD3<Float>) {
     let c0 = SIMD3<Float>(m.columns.0.x, m.columns.0.y, m.columns.0.z)
     let c1 = SIMD3<Float>(m.columns.1.x, m.columns.1.y, m.columns.1.z)
@@ -2140,7 +2140,7 @@ private func decomposeRotationScale(_ m: simd_float4x4) -> (simd_float3x3, SIMD3
     let r0 = sx > 1e-5 ? c0 / sx : SIMD3<Float>(1, 0, 0)
     let r1 = sy > 1e-5 ? c1 / sy : SIMD3<Float>(0, 1, 0)
     let r2 = sz > 1e-5 ? c2 / sz : SIMD3<Float>(0, 0, 1)
-    return (simd_float3x3(r0, r1, r2), SIMD3<Float>(sx, sy, sz))
+    return (simd_float3x3(columns: (r0, r1, r2)), SIMD3<Float>(sx, sy, sz))
 }
 
 private func composeMatrix(translation: SIMD3<Float>,
@@ -2172,8 +2172,8 @@ private func isValidJSONDocument(_ text: String) -> Bool {
     }
 }
 
-/// 从 3x3 旋转矩阵提取 Euler XYZ（intrinsic 顺序：R = Rx * Ry * Rz）。
-/// 这里 simd 是 column-major：m[c][r] 等价数学约定 R[r][c]。
+/// 浠?3x3 鏃嬭浆鐭╅樀鎻愬彇 Euler XYZ锛坕ntrinsic 椤哄簭锛歊 = Rx * Ry * Rz锛夈€?
+/// 杩欓噷 simd 鏄?column-major锛歮[c][r] 绛変环鏁板绾﹀畾 R[r][c]銆?
 private func eulerXYZFromMatrix(_ m: simd_float3x3) -> SIMD3<Float> {
     // R[r][c] = m.columns[c][r]
     let r02 = m.columns.2.x // R[0][2]
@@ -2191,21 +2191,21 @@ private func eulerXYZFromMatrix(_ m: simd_float3x3) -> SIMD3<Float> {
         x = atan2f(-r12, r22)
         z = atan2f(-r01, r00)
     } else {
-        // gimbal lock: 让 z = 0 解 x。
+        // gimbal lock: 璁?z = 0 瑙?x銆?
         x = atan2f(m.columns.0.y, m.columns.1.y) // atan2(R[1][0], R[1][1])
         z = 0
     }
     return SIMD3<Float>(x, y, z)
 }
 
-/// 从 Euler XYZ（弧度，intrinsic）合成 3x3 旋转矩阵：R = Rx * Ry * Rz。
+/// 浠?Euler XYZ锛堝姬搴︼紝intrinsic锛夊悎鎴?3x3 鏃嬭浆鐭╅樀锛歊 = Rx * Ry * Rz銆?
 private func matrixFromEulerXYZ(_ e: SIMD3<Float>) -> simd_float3x3 {
     let cx = cosf(e.x), sx = sinf(e.x)
     let cy = cosf(e.y), sy = sinf(e.y)
     let cz = cosf(e.z), sz = sinf(e.z)
 
     // R = Rx * Ry * Rz
-    // 逐项展开
+    // 閫愰」灞曞紑
     let r00 = cy * cz
     let r01 = -cy * sz
     let r02 = sy
@@ -2217,9 +2217,9 @@ private func matrixFromEulerXYZ(_ e: SIMD3<Float>) -> simd_float3x3 {
     let r22 = cx * cy
 
     // simd column-major: columns[c][r] = R[r][c]
-    return simd_float3x3(
+    return simd_float3x3(columns: (
         SIMD3<Float>(r00, r10, r20),
         SIMD3<Float>(r01, r11, r21),
         SIMD3<Float>(r02, r12, r22)
-    )
+    ))
 }

@@ -1,4 +1,7 @@
+﻿#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
+import Foundation
 
 /// Phase 4b. RenderTree-aware renderer that records each layer-root subtree
 /// into its own cached `DrawList`, then composites cached layer slices into

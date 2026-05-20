@@ -7,14 +7,32 @@ import Foundation
 // Editor / GuavaUI can find vendored dylibs even when this package is consumed
 // from a different working directory.
 let packageDir = URL(fileURLWithPath: #filePath).deletingLastPathComponent().path
-let ocioOpenEXRLibDir = "\(packageDir)/vendor/ocio_openexr/macos-arm64/lib"
+
+#if os(macOS)
+  #if arch(arm64)
+  let guavaTriple = "macos-arm64"
+  #else
+  let guavaTriple = "macos-x86_64"
+  #endif
+#elseif os(Windows)
+let guavaTriple = "windows-x86_64"
+#elseif os(Linux)
+  #if arch(arm64)
+  let guavaTriple = "linux-aarch64"
+  #else
+  let guavaTriple = "linux-x86_64"
+  #endif
+#else
+let guavaTriple = "unknown"
+#endif
+
+let ocioOpenEXRLibDir = "\(packageDir)/vendor/ocio_openexr/\(guavaTriple)/lib"
+let ocioOpenEXRIncDir = "\(packageDir)/vendor/ocio_openexr/\(guavaTriple)/include"
 
 let package = Package(
     name: "GuavaEngine",
-    platforms: [
-        .macOS(.v14)
-    ],
     products: [
+        .library(name: "SIMDCompat", targets: ["SIMDCompat"]),
         .library(name: "EngineKernel", targets: ["EngineKernel"]),
         .library(name: "EngineMath", targets: ["EngineMath"]),
         .library(name: "RHIWGPU", targets: ["RHIWGPU"]),
@@ -69,6 +87,21 @@ let package = Package(
                 .linkedFramework("IOKit", .when(platforms: [.macOS])),
                 .linkedFramework("Metal", .when(platforms: [.macOS])),
                 .linkedFramework("UniformTypeIdentifiers", .when(platforms: [.macOS])),
+                // SDL3 static needs these Win32 system libraries at link time.
+                .linkedLibrary("winmm", .when(platforms: [.windows])),
+                .linkedLibrary("setupapi", .when(platforms: [.windows])),
+                .linkedLibrary("imm32", .when(platforms: [.windows])),
+                .linkedLibrary("version", .when(platforms: [.windows])),
+                .linkedLibrary("ole32", .when(platforms: [.windows])),
+                .linkedLibrary("oleaut32", .when(platforms: [.windows])),
+                .linkedLibrary("uuid", .when(platforms: [.windows])),
+                .linkedLibrary("advapi32", .when(platforms: [.windows])),
+                .linkedLibrary("shell32", .when(platforms: [.windows])),
+                .linkedLibrary("user32", .when(platforms: [.windows])),
+                .linkedLibrary("gdi32", .when(platforms: [.windows])),
+                .linkedLibrary("dxgi", .when(platforms: [.windows])),
+                .linkedLibrary("d3d11", .when(platforms: [.windows])),
+                .linkedLibrary("d3d12", .when(platforms: [.windows])),
             ]
         ),
         .target(
@@ -91,6 +124,17 @@ let package = Package(
                 .linkedFramework("QuartzCore", .when(platforms: [.macOS])),
                 .linkedFramework("IOKit", .when(platforms: [.macOS])),
                 .linkedFramework("IOSurface", .when(platforms: [.macOS])),
+                // wgpu_native (static) needs these Win32 system libraries.
+                .linkedLibrary("d3d12", .when(platforms: [.windows])),
+                .linkedLibrary("d3d11", .when(platforms: [.windows])),
+                .linkedLibrary("dxgi", .when(platforms: [.windows])),
+                .linkedLibrary("dxguid", .when(platforms: [.windows])),
+                .linkedLibrary("userenv", .when(platforms: [.windows])),
+                .linkedLibrary("ws2_32", .when(platforms: [.windows])),
+                .linkedLibrary("bcrypt", .when(platforms: [.windows])),
+                .linkedLibrary("ntdll", .when(platforms: [.windows])),
+                .linkedLibrary("opengl32", .when(platforms: [.windows])),
+                .linkedLibrary("propsys", .when(platforms: [.windows])),
             ]
         ),
         .binaryTarget(
@@ -117,9 +161,9 @@ let package = Package(
             path: "Sources/Bridge/COpenEXRBridge",
             publicHeadersPath: "include",
             cxxSettings: [
-                .headerSearchPath("../../../vendor/ocio_openexr/macos-arm64/include"),
-                .headerSearchPath("../../../vendor/ocio_openexr/macos-arm64/include/OpenEXR"),
-                .headerSearchPath("../../../vendor/ocio_openexr/macos-arm64/include/Imath"),
+                .headerSearchPath("../../../vendor/ocio_openexr/\(guavaTriple)/include"),
+                .headerSearchPath("../../../vendor/ocio_openexr/\(guavaTriple)/include/OpenEXR"),
+                .headerSearchPath("../../../vendor/ocio_openexr/\(guavaTriple)/include/Imath"),
             ],
             linkerSettings: [
                 .unsafeFlags([
@@ -132,13 +176,36 @@ let package = Package(
                     "-lImath-3_2",
                     "-lopenjph",
                     "-Xlinker", "-rpath", "-Xlinker", ocioOpenEXRLibDir,
-                ], .when(platforms: [.macOS]))
+                ], .when(platforms: [.macOS])),
+                .unsafeFlags([
+                    "\(ocioOpenEXRLibDir)/OpenEXR-3_4.lib",
+                    "\(ocioOpenEXRLibDir)/OpenEXRUtil-3_4.lib",
+                    "\(ocioOpenEXRLibDir)/OpenEXRCore-3_4.lib",
+                    "\(ocioOpenEXRLibDir)/Iex-3_4.lib",
+                    "\(ocioOpenEXRLibDir)/IlmThread-3_4.lib",
+                    "\(ocioOpenEXRLibDir)/Imath-3_2.lib",
+                    "\(ocioOpenEXRLibDir)/openjph.0.24.lib",
+                    "-Xlinker", "/NODEFAULTLIB:openjph.lib",
+                ], .when(platforms: [.windows])),
+                .unsafeFlags([
+                    "-L\(ocioOpenEXRLibDir)",
+                    "-lOpenEXR-3_4",
+                    "-lOpenEXRUtil-3_4",
+                    "-lOpenEXRCore-3_4",
+                    "-lIex-3_4",
+                    "-lIlmThread-3_4",
+                    "-lImath-3_2",
+                    "-lopenjph",
+                ], .when(platforms: [.linux])),
             ]
         ),
 
+        // MARK: - SIMD compatibility shim (re-exports Apple simd on macOS, implements on other platforms)
+        .target(name: "SIMDCompat"),
+
         // MARK: - Core Kernel (no deps, pure Swift protocols and types)
         .target(name: "EngineKernel"),
-        .target(name: "EngineMath"),
+        .target(name: "EngineMath", dependencies: ["SIMDCompat"]),
 
         // MARK: - Rendering
         .target(
@@ -164,14 +231,16 @@ let package = Package(
         .target(
             name: "SceneRuntime",
             dependencies: [
+                "SIMDCompat",
                 "EngineKernel",
                 "CJoltBridge",
             ]
         ),
-        .target(name: "AssetPipeline"),
+        .target(name: "AssetPipeline", dependencies: ["SIMDCompat"]),
         .target(name: "SequenceRuntime"),
         .target(
-            name: "ColorPipeline"
+            name: "ColorPipeline",
+            dependencies: ["SIMDCompat"]
         ),
         .target(
             name: "EXRIO",
@@ -182,6 +251,7 @@ let package = Package(
         .target(
             name: "CinematicRenderer",
             dependencies: [
+                "SIMDCompat",
                 "SceneRuntime",
             ]
         ),
@@ -198,6 +268,7 @@ let package = Package(
         .target(
             name: "AIRuntime",
             dependencies: [
+                "SIMDCompat",
                 "SceneRuntime",
                 "IntentRuntime",
             ]
@@ -208,6 +279,7 @@ let package = Package(
         .target(
             name: "IntentRuntime",
             dependencies: [
+                "SIMDCompat",
                 "AssetPipeline",
                 "CapabilityRuntime",
                 "ObservationBus",
@@ -219,6 +291,7 @@ let package = Package(
         .target(
             name: "ScriptRuntime",
             dependencies: [
+                "SIMDCompat",
                 "EngineKernel",
                 "AssetPipeline",
                 "SceneRuntime",
@@ -227,6 +300,7 @@ let package = Package(
         .target(
             name: "RenderBackend",
             dependencies: [
+                "SIMDCompat",
                 "EngineKernel",
                 "EngineMath",
                 "RHIWGPU",
@@ -257,6 +331,7 @@ let package = Package(
         .executableTarget(
             name: "SceneRuntimeBenchmarks",
             dependencies: [
+                "SIMDCompat",
                 "SceneRuntime",
             ],
             path: "Benchmarks/SceneRuntimeBenchmarks"
@@ -264,6 +339,7 @@ let package = Package(
         .executableTarget(
             name: "RenderBackendBenchmarks",
             dependencies: [
+                "SIMDCompat",
                 "RenderBackend",
                 "RHIWGPU",
                 "SceneRuntime",
@@ -273,6 +349,7 @@ let package = Package(
         .executableTarget(
             name: "StylizedCharacterPreviewDemo",
             dependencies: [
+                "SIMDCompat",
                 "RenderBackend",
                 "RHIWGPU",
                 "SceneRuntime",
@@ -282,6 +359,7 @@ let package = Package(
         .testTarget(
             name: "EngineCoreTests",
             dependencies: [
+                "SIMDCompat",
                 "EngineCore",
                 "EngineKernel",
                 "EngineMath",
@@ -292,6 +370,7 @@ let package = Package(
         .testTarget(
             name: "EngineMathTests",
             dependencies: [
+                "SIMDCompat",
                 "EngineMath",
             ]
         ),
@@ -304,6 +383,7 @@ let package = Package(
         .testTarget(
             name: "SceneRuntimeTests",
             dependencies: [
+                "SIMDCompat",
                 "EngineKernel",
                 "SceneRuntime",
             ]
@@ -311,6 +391,7 @@ let package = Package(
         .testTarget(
             name: "ScriptRuntimeTests",
             dependencies: [
+                "SIMDCompat",
                 "ScriptRuntime",
                 "SceneRuntime",
             ]
@@ -318,6 +399,7 @@ let package = Package(
         .testTarget(
             name: "AssetPipelineTests",
             dependencies: [
+                "SIMDCompat",
                 "AssetPipeline",
             ]
         ),
@@ -342,6 +424,7 @@ let package = Package(
         .testTarget(
             name: "IntentRuntimeTests",
             dependencies: [
+                "SIMDCompat",
                 "IntentRuntime",
                 "AssetPipeline",
                 "CapabilityRuntime",
@@ -366,6 +449,7 @@ let package = Package(
         .testTarget(
             name: "CinematicRendererTests",
             dependencies: [
+                "SIMDCompat",
                 "CinematicRenderer",
             ]
         ),
