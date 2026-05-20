@@ -16,15 +16,23 @@ import RenderBackend
 /// ```swift
 /// let app = try GameApplication(projectDirectory: "/path/to/project")
 /// app.bootstrap()
-/// try AppRuntime.run(..., onTick: { dt in app.tick(deltaTime: dt) }) { EmptyView() }
+/// try AppRuntime.run(..., onTick: { dt in app.tick(deltaTime: dt) }) {
+///     GamePlayerRootView(app: app)
+/// }
 /// app.shutdown()
 /// ```
-@MainActor
 public final class GameApplication: @unchecked Sendable {
     public let engine: EngineHost
     public let scene: EditorSceneAdapter
 
     private var _viewportDrawableSize: RenderDrawableSize = .init(width: 1280, height: 720)
+    private var _lastViewportSurface: ViewportSurfaceState = .init()
+    private var _pendingInputEvents: [InputEvent] = []
+
+    /// Called on the main thread whenever the engine publishes a new viewport
+    /// surface (i.e. a new rendered frame is ready). Used by the root view to
+    /// trigger recomposition.
+    public var onViewportSurfaceChanged: ((ViewportSurfaceState) -> Void)?
 
     public init(projectDirectory: String? = nil, backend: WGPUBackend? = nil) throws {
         let resolvedBackend = backend ?? WGPUBackend()
@@ -48,8 +56,14 @@ public final class GameApplication: @unchecked Sendable {
         _viewportDrawableSize = size
     }
 
-    public func setRenderCompletionHandler(_ handler: (@Sendable (EngineRenderCompletion) -> Void)?) {
-        engine.setRenderCompletionHandler(handler)
+    /// Enqueue a platform input event to be forwarded to the engine on the
+    /// next `tick`. Call from the `onInputEvent` closure of `ViewportHost`.
+    public func enqueueInput(_ event: InputEvent) {
+        _pendingInputEvents.append(event)
+    }
+
+    public func currentViewportSurfaceState() -> ViewportSurfaceState {
+        engine.currentViewportSurfaceState()
     }
 
     public func bootstrap() {
@@ -62,14 +76,23 @@ public final class GameApplication: @unchecked Sendable {
     }
 
     public func tick(deltaTime: Double) {
+        let events = _pendingInputEvents
+        _pendingInputEvents.removeAll(keepingCapacity: true)
+
         scene.tickScene(deltaTime: deltaTime)
         engine.tick(
             deltaTime: deltaTime,
-            inputEvents: [],
+            inputEvents: events,
             drawableSize: _viewportDrawableSize,
             shouldRender: true,
             renderSceneOverride: scene.currentRenderScene()
         )
+
+        let surface = engine.currentViewportSurfaceState()
+        if surface != _lastViewportSurface {
+            _lastViewportSurface = surface
+            onViewportSurfaceChanged?(surface)
+        }
     }
 
     public func shutdown() {
