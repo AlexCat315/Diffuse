@@ -2,6 +2,19 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+
+# ── bootstrap: compile C/C++ native deps via SPM plugin ─────────────────────
+if [ "$#" -gt 0 ] && [ "$1" = "bootstrap" ]; then
+    shift
+    export MIMALLOC_DISABLE_REDIRECT=1
+    swift package --package-path "$ROOT/Engine" \
+        --allow-writing-to-package-directory build-native-deps "$@"
+    swift package --package-path "$ROOT/GuavaUI" \
+        --allow-writing-to-package-directory build-native-deps "$@"
+    exit 0
+fi
+
+# ── swift build ──────────────────────────────────────────────────────────────
 PACKAGE=editor
 
 if [ "$#" -gt 0 ]; then
@@ -12,14 +25,6 @@ if [ "$#" -gt 0 ]; then
       ;;
   esac
 fi
-
-case "$PACKAGE" in
-  engine|editor)
-    ;;
-  *)
-    PACKAGE=editor
-    ;;
-esac
 
 case "$PACKAGE" in
   engine) PACKAGE_PATH="$ROOT/Engine" ;;
