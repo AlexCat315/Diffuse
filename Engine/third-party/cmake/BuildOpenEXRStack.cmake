@@ -7,6 +7,8 @@ include(ExternalProject)
 set(OCIO_OPENEXR_BUNDLE ${GUAVA_VENDOR_DIR}/ocio_openexr)
 set(OCIO_OPENEXR_VARIANT ${OCIO_OPENEXR_BUNDLE}/${GUAVA_TRIPLE})
 set(IMATH_INSTALL_PREFIX ${CMAKE_BINARY_DIR}/imath-install)
+set(OPENEXR_EP_SOURCE_DIR ${CMAKE_BINARY_DIR}/openexr-src)
+set(OPENEXR_PATCH_SCRIPT ${CMAKE_CURRENT_LIST_DIR}/PatchOpenEXRSetup.cmake)
 
 if(WIN32)
     set(OPENEXR_MSVC_RUNTIME_ARG -DCMAKE_MSVC_RUNTIME_LIBRARY=MultiThreadedDLL)
@@ -31,10 +33,20 @@ ExternalProject_Add(imath_ep
 )
 
 ExternalProject_Add(openexr_ep
-    SOURCE_DIR ${CMAKE_SOURCE_DIR}/openexr
+    SOURCE_DIR ${OPENEXR_EP_SOURCE_DIR}
+    BINARY_DIR ${CMAKE_BINARY_DIR}/openexr-build
     PREFIX ${CMAKE_BINARY_DIR}/openexr-ep
     INSTALL_DIR ${CMAKE_BINARY_DIR}/openexr-install
     DEPENDS imath_ep
+    DOWNLOAD_COMMAND
+        ${CMAKE_COMMAND} -E rm -rf ${OPENEXR_EP_SOURCE_DIR}
+        COMMAND ${CMAKE_COMMAND} -E copy_directory
+            ${CMAKE_SOURCE_DIR}/openexr ${OPENEXR_EP_SOURCE_DIR}
+    UPDATE_COMMAND ""
+    PATCH_COMMAND
+        ${CMAKE_COMMAND}
+            -DOPENEXR_SOURCE_DIR=${OPENEXR_EP_SOURCE_DIR}
+            -P ${OPENEXR_PATCH_SCRIPT}
     CMAKE_ARGS
         -DCMAKE_INSTALL_PREFIX=${CMAKE_BINARY_DIR}/openexr-install
         -DCMAKE_BUILD_TYPE=${CMAKE_BUILD_TYPE}
