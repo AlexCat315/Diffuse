@@ -20,7 +20,7 @@ struct EditorRootView: View {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         ShortcutHost(onKeyDown: cb.handleShortcut)
 
-                        ImmersiveWindowTitleBar(draggableLeadingInset: 330) {
+                        ImmersiveWindowTitleBar {
                             EditorApplicationMenuBar(
                                 workspaceMode: store.workspaceMode,
                                 activeLayoutPreset: store.activeLayoutPreset,
