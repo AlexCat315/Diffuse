@@ -2,7 +2,6 @@ import EditorCore
 import GuavaUIApp
 import GuavaUIWorkspace
 
-@MainActor
 enum EditorCommandDispatcher {
     static func handle(_ command: EditorMenuCommand,
                        app: EditorApplication,
