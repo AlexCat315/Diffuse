@@ -71,10 +71,10 @@ fn vs_main(in : VsIn) -> VsOut {
     if total_weight > 0.0001 && arrayLength(&joint_palette) > 0u {
         let j = vec4<u32>(u32(in.joints.x), u32(in.joints.y), u32(in.joints.z), u32(in.joints.w));
         let count = arrayLength(&joint_palette);
-        let m0 = select(mat4x4<f32>(), joint_palette[j.x], j.x < count);
-        let m1 = select(mat4x4<f32>(), joint_palette[j.y], j.y < count);
-        let m2 = select(mat4x4<f32>(), joint_palette[j.z], j.z < count);
-        let m3 = select(mat4x4<f32>(), joint_palette[j.w], j.w < count);
+        let m0 = joint_matrix(j.x, count);
+        let m1 = joint_matrix(j.y, count);
+        let m2 = joint_matrix(j.z, count);
+        let m3 = joint_matrix(j.w, count);
         let skin = m0 * in.weights.x + m1 * in.weights.y + m2 * in.weights.z + m3 * in.weights.w;
         model = u.model * skin;
     }
@@ -87,6 +87,13 @@ fn vs_main(in : VsIn) -> VsOut {
     out.material_index = in.material_index;
     out.world_pos = world.xyz;
     return out;
+}
+
+fn joint_matrix(index : u32, count : u32) -> mat4x4<f32> {
+    if index < count {
+        return joint_palette[index];
+    }
+    return mat4x4<f32>();
 }
 
 fn safe_normalize(v : vec3<f32>) -> vec3<f32> {
