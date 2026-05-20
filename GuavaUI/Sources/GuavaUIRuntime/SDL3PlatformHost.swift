@@ -18,15 +18,11 @@ public final class PlatformWindowSession {
 
     public private(set) var drawableSize: (width: UInt32, height: UInt32)
     public private(set) var logicalSize: (width: UInt32, height: UInt32)
+    public private(set) var contentScaleFactor: Float
 
     public var interactions: InteractionRegistry { inputContext.interactions }
     public var pointerCapture: PointerCapture { inputContext.pointerCapture }
     public var focusChain: FocusChain { inputContext.focusChain }
-
-    public var contentScaleFactor: Float {
-        SDL3PlatformHost.quantizedContentScale(drawableSize: drawableSize,
-                                               logicalSize: logicalSize)
-    }
 
     public var onFrame: (@MainActor (NativeRenderSurface) -> Bool)?
     public var onInit: (@MainActor (NativeRenderSurface, _ widthPx: UInt32, _ heightPx: UInt32) -> Void)?
@@ -38,13 +34,15 @@ public final class PlatformWindowSession {
                      recomposer: Recomposer,
                      inputContext: PlatformInputContext,
                      drawableSize: (width: UInt32, height: UInt32),
-                     logicalSize: (width: UInt32, height: UInt32)) {
+                     logicalSize: (width: UInt32, height: UInt32),
+                     contentScaleFactor: Float) {
         self.id = id
         self.tree = tree
         self.recomposer = recomposer
         self.inputContext = inputContext
         self.drawableSize = drawableSize
         self.logicalSize = logicalSize
+        self.contentScaleFactor = contentScaleFactor
         self.dispatcher = EventDispatcher(
             tree: tree,
             interactions: inputContext.interactions,
@@ -85,11 +83,13 @@ public final class PlatformWindowSession {
     fileprivate func updateMetrics(from handle: any WindowHandle) -> Bool {
         let nextDrawable = handle.drawableSize
         let nextLogical = handle.logicalSize
-        guard nextDrawable != drawableSize || nextLogical != logicalSize else {
+        let nextScale = handle.contentScaleFactor
+        guard nextDrawable != drawableSize || nextLogical != logicalSize || nextScale != contentScaleFactor else {
             return false
         }
         drawableSize = nextDrawable
         logicalSize = nextLogical
+        contentScaleFactor = nextScale
         return true
     }
 }
@@ -136,12 +136,9 @@ public final class SDL3PlatformHost: PlatformHost {
 
     public private(set) var drawableSize: (width: UInt32, height: UInt32) = (1, 1)
     public private(set) var logicalSize: (width: UInt32, height: UInt32) = (1, 1)
+    public private(set) var contentScaleFactor: Float = 1
 
     public var isRunning: Bool { _isRunning }
-    public var contentScaleFactor: Float {
-        Self.quantizedContentScale(drawableSize: drawableSize,
-                                   logicalSize: logicalSize)
-    }
 
     public var onFrame: (@MainActor (NativeRenderSurface) -> Bool)?
     public var onInit: (@MainActor (NativeRenderSurface, _ widthPx: UInt32, _ heightPx: UInt32) -> Void)?
@@ -530,7 +527,8 @@ public final class SDL3PlatformHost: PlatformHost {
             recomposer: recomposer,
             inputContext: inputContext,
             drawableSize: handle.drawableSize,
-            logicalSize: handle.logicalSize
+            logicalSize: handle.logicalSize,
+            contentScaleFactor: handle.contentScaleFactor
         )
         session.dispatcher.cursorSink = { [weak self] cursor in
             self?.shell?.setCursor(windowID: handle.id, cursor)
@@ -544,6 +542,7 @@ public final class SDL3PlatformHost: PlatformHost {
             mainWindowID = handle.id
             drawableSize = handle.drawableSize
             logicalSize = handle.logicalSize
+            contentScaleFactor = handle.contentScaleFactor
         }
 
         return session
@@ -560,9 +559,11 @@ public final class SDL3PlatformHost: PlatformHost {
                 if let replacement = mainWindowID.flatMap({ sessions[$0] }) {
                     drawableSize = replacement.drawableSize
                     logicalSize = replacement.logicalSize
+                    contentScaleFactor = replacement.contentScaleFactor
                 } else {
                     drawableSize = (1, 1)
                     logicalSize = (1, 1)
+                    contentScaleFactor = 1
                 }
             }
         }
@@ -596,14 +597,4 @@ public final class SDL3PlatformHost: PlatformHost {
         session.needsDisplay = true
     }
 
-    fileprivate static func quantizedContentScale(drawableSize: (width: UInt32, height: UInt32),
-                                                  logicalSize: (width: UInt32, height: UInt32)) -> Float {
-        let logicalWidth = max(logicalSize.width, 1)
-        let raw = Float(drawableSize.width) / Float(logicalWidth)
-        guard raw > 1 else { return 1 }
-        // Quantize to 0.25 steps to match Windows DPI presets (125 %, 150 %,
-        // 175 %, 200 %). Rounding to the nearest integer would collapse 1.25
-        // and 1.50 down to 1.0, making the UI appear tiny on most HiDPI screens.
-        return max(1, (raw * 4).rounded() / 4)
-    }
 }

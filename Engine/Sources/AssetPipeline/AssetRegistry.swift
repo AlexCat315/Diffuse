@@ -1,4 +1,5 @@
 ﻿import Foundation
+import Logging
 import SIMDCompat
 
 public enum AssetRegistryError: Error, CustomStringConvertible {
@@ -92,7 +93,13 @@ public final class AssetRegistry: @unchecked Sendable {
 
         for candidate in candidates {
             let kind = candidate.kind
-            let imported = try importMesh(at: candidate.url, kind: kind)
+            let imported: (mesh: MeshAsset, topologySlices: [MeshTopologySlice]?)
+            do {
+                imported = try importMesh(at: candidate.url, kind: kind)
+            } catch {
+                Logger(label: "com.guava.engine.assets").warning("AssetRegistry: skipping \(candidate.url.lastPathComponent) — \(error)")
+                continue
+            }
             var mesh = imported.mesh
             mesh.normalizeToUnitBounds(targetSize: 2.0)
 
@@ -186,8 +193,10 @@ public final class AssetRegistry: @unchecked Sendable {
         lock.unlock()
     }
 
+    private static let buildDirectoryNames: Set<String> = ["build", ".build", "node_modules", ".gradle"]
+
     private func findImportableAssets(in rootURL: URL) throws -> [(url: URL, kind: ImportableAssetKind)] {
-        let properties: [URLResourceKey] = [.isRegularFileKey, .isHiddenKey]
+        let properties: [URLResourceKey] = [.isRegularFileKey, .isHiddenKey, .isDirectoryKey]
         guard let enumerator = FileManager.default.enumerator(at: rootURL,
                                                               includingPropertiesForKeys: properties,
                                                               options: [.skipsHiddenFiles, .skipsPackageDescendants]) else {
@@ -197,6 +206,12 @@ public final class AssetRegistry: @unchecked Sendable {
         var results: [(url: URL, kind: ImportableAssetKind)] = []
         for case let url as URL in enumerator {
             let values = try url.resourceValues(forKeys: Set(properties))
+            if values.isDirectory == true {
+                if Self.buildDirectoryNames.contains(url.lastPathComponent) {
+                    enumerator.skipDescendants()
+                }
+                continue
+            }
             guard values.isRegularFile == true else { continue }
             switch url.pathExtension.lowercased() {
             case "gltf":
