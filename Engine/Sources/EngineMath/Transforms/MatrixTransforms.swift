@@ -1,4 +1,4 @@
-import simd
+﻿import SIMDCompat
 
 public enum MatrixTransforms {
     public static func translation(_ value: SIMD3<Float>) -> simd_float4x4 {

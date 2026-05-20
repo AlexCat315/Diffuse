@@ -1,4 +1,4 @@
-import simd
+﻿import SIMDCompat
 
 public enum CameraMatrices {
     public static func perspectiveRH_ZO(fovYRadians: Float,

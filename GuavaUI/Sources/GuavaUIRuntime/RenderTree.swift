@@ -1,5 +1,7 @@
-import Foundation
+﻿import Foundation
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 
 /// Phase 4a foundation. A `RenderObject` is the per-`Node` retained record
 /// that a future per-layer DrawList cache will hang state off.

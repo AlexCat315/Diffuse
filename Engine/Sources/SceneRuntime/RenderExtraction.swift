@@ -1,4 +1,4 @@
-import simd
+﻿import SIMDCompat
 
 public struct RenderMeshComponent: RuntimeComponent, Sendable, Equatable {
     public var meshIndex: Int

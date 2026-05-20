@@ -1,6 +1,6 @@
-import EngineMath
+﻿import EngineMath
 import SceneRuntime
-import simd
+import SIMDCompat
 
 struct RenderCameraMatrices: Sendable, Equatable {
     var projection: simd_float4x4

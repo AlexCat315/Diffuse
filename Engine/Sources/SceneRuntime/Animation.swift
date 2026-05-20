@@ -1,5 +1,5 @@
-import EngineKernel
-import simd
+﻿import EngineKernel
+import SIMDCompat
 
 /// Drives clip playback on an entity that has an `AssetReferenceComponent`.
 public struct AnimationPlayer: RuntimeComponent, Sendable, Equatable {
@@ -28,7 +28,7 @@ public struct AnimationPlayer: RuntimeComponent, Sendable, Equatable {
 
 /// Per-entity skinning matrix palette ready for the GPU vertex shader.
 ///
-/// Index i = joint_palette[i] = nodeWorldMatrix[jointNodeIndex[i]] × inverseBindMatrix[i]
+/// Index i = joint_palette[i] = nodeWorldMatrix[jointNodeIndex[i]] 脳 inverseBindMatrix[i]
 public struct JointPalette: Sendable {
     public var matrices: [simd_float4x4]
 
@@ -41,7 +41,7 @@ public struct JointPalette: Sendable {
     }
 }
 
-/// Scene-level resource mapping entity → JointPalette.
+/// Scene-level resource mapping entity 鈫?JointPalette.
 ///
 /// Written by `AnimationRuntime` each frame; read by the render backend when
 /// building per-instance bind groups for skinned meshes.

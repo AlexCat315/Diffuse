@@ -1,12 +1,18 @@
 import Foundation
+#if canImport(CoreGraphics)
 import CoreGraphics
-import ImageIO
+#endif
+#if canImport(Logging)
 import Logging
+#endif
 #if canImport(UniformTypeIdentifiers)
 import UniformTypeIdentifiers
 #endif
 import RHIWGPU
 import GuavaUIRuntime
+
+#if canImport(ImageIO)
+import ImageIO
 
 /// Captures a copy of each rendered frame into an offscreen texture, reads it
 /// back into a CPU buffer, JPEG-encodes it via ImageIO and pushes the result
@@ -50,7 +56,9 @@ public final class FrameTap {
     private var msaaTextureView: GPUTextureView?
     private var readback: GPUBuffer?
 
+    #if canImport(Logging)
     private let log = Logger(label: "guava.devtools.frameTap")
+    #endif
     /// Counts consecutive capture failures to throttle warning spam.
     private var consecutiveErrors: Int = 0
     private var capturesSinceStart: Int = 0
@@ -72,12 +80,16 @@ public final class FrameTap {
         self.consecutiveErrors = 0
         self.capturesSinceStart = 0
         print("[guava.devtools.frameTap] start fps=\(clampedFps) quality=\(self.quality)")
+        #if canImport(Logging)
         log.info("mirror start fps=\(clampedFps) quality=\(self.quality)")
+        #endif
     }
 
     public func stop() {
         enabled = false
+        #if canImport(Logging)
         log.info("mirror stop after \(capturesSinceStart) captures, errors=\(consecutiveErrors)")
+        #endif
         // Drop GPU resources so the next start() picks up the latest size.
         texture = nil
         textureView = nil
@@ -112,7 +124,9 @@ public final class FrameTap {
         guard sink.deliver != nil else {
             if capturesSinceStart == 0, consecutiveErrors == 0 {
                 print("[guava.devtools.frameTap] enabled but sink.deliver is nil")
+                #if canImport(Logging)
                 log.warning("mirror enabled but sink.deliver is nil; broadcaster not wired")
+                #endif
                 consecutiveErrors = 1
             }
             return
@@ -120,7 +134,9 @@ public final class FrameTap {
         guard widthPx > 0, heightPx > 0 else {
             if capturesSinceStart == 0, consecutiveErrors == 0 {
                 print("[guava.devtools.frameTap] zero-sized drawable \(widthPx)x\(heightPx)")
+                #if canImport(Logging)
                 log.warning("mirror capture skipped: zero-sized drawable \(widthPx)x\(heightPx)")
+                #endif
                 consecutiveErrors = 1
             }
             return
@@ -206,7 +222,9 @@ public final class FrameTap {
             // flooding the host log when wgpu is in a permanently bad state.
             if consecutiveErrors <= 3 || consecutiveErrors % 60 == 0 {
                 print("[guava.devtools.frameTap] capture failed (#\(consecutiveErrors)): \(error)")
+                #if canImport(Logging)
                 log.warning("mirror capture failed (#\(consecutiveErrors)): \(error)")
+                #endif
             }
         }
     }
@@ -325,3 +343,27 @@ public final class FrameTap {
         return outData as Data
     }
 }
+
+#else
+
+/// Stub FrameTap for platforms without ImageIO (Windows, Linux).
+/// Frame mirroring is not supported on these platforms.
+@MainActor
+public final class FrameTap {
+    public final class Sink: @unchecked Sendable {
+        public init() {}
+        public var deliver: ((MirrorFramePayload) -> Void)?
+    }
+
+    public var isActive: Bool { false }
+
+    public init(sink: Sink, backend: WGPUBackend, renderer: DrawListRenderer) {}
+    public func start(fps: Double, quality: Double) {}
+    public func stop() {}
+    public func capture(drawList: DrawList,
+                        widthPx: UInt32,
+                        heightPx: UInt32,
+                        logical: (width: Float, height: Float)) {}
+}
+
+#endif

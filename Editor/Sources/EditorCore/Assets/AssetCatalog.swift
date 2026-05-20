@@ -1,7 +1,7 @@
-import AssetPipeline
+﻿import AssetPipeline
 import Foundation
 import GuavaUICompose
-import simd
+import SIMDCompat
 
 public struct EditorAsset: Identifiable, Sendable, Equatable {
     public let id: String
@@ -56,9 +56,9 @@ public enum EditorAssetCatalog {
     }
 }
 
-/// 进程内的视口落点矩形。AssetBrowser 行在指针抬起时通过它判断
-/// 当前光标是否落在视口内。值由 ViewportPanel 在每一帧通过
-/// `ViewportHost.onScreenFrameChange` 更新，不处于多线程读写环境。
+/// 杩涚▼鍐呯殑瑙嗗彛钀界偣鐭╁舰銆侫ssetBrowser 琛屽湪鎸囬拡鎶捣鏃堕€氳繃瀹冨垽鏂?
+/// 褰撳墠鍏夋爣鏄惁钀藉湪瑙嗗彛鍐呫€傚€肩敱 ViewportPanel 鍦ㄦ瘡涓€甯ч€氳繃
+/// `ViewportHost.onScreenFrameChange` 鏇存柊锛屼笉澶勪簬澶氱嚎绋嬭鍐欑幆澧冦€?
 public enum EditorViewportDropTarget {
     nonisolated(unsafe) public static var frame: ViewportScreenFrame?
 }

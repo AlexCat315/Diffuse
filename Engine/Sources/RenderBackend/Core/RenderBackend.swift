@@ -1,10 +1,10 @@
-import AssetPipeline
+﻿import AssetPipeline
 import EngineKernel
 import Foundation
 import Logging
 import RHIWGPU
 import SceneRuntime
-import simd
+import SIMDCompat
 
 ///  RHIWGPU renderer: scene of multiple instances drawn through one shared pipeline.
 public final class WGPURenderer: RenderPacketConsumer, @unchecked Sendable {

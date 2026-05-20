@@ -1,5 +1,7 @@
-import Foundation
+﻿import Foundation
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 import GuavaUIRuntime
 
 /// Process-wide text rendering context. The Compose layer asks the host to

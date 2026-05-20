@@ -1,5 +1,5 @@
-import EngineKernel
-import simd
+﻿import EngineKernel
+import SIMDCompat
 
 public struct SceneRuntimeSnapshot: Sendable, Equatable {
     public var entityCount: Int

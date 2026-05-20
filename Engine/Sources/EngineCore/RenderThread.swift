@@ -105,14 +105,14 @@ final class RenderThread: @unchecked Sendable {
                 return
             }
 
-            let begin = CFAbsoluteTimeGetCurrent()
+            let begin = Date().timeIntervalSinceReferenceDate
             onKernelPhase(
                 .renderSubmit,
                 EngineKernelPhaseContext(frameIndex: UInt64(packet.frameIndex), deltaTime: packet.deltaTime)
             )
             runtime.tickRenderSubmit(deltaTime: packet.deltaTime)
             consumer.render(packet: packet)
-            let renderSubmitSeconds = CFAbsoluteTimeGetCurrent() - begin
+            let renderSubmitSeconds = Date().timeIntervalSinceReferenceDate - begin
 
             onFrameRendered(
                 RenderThreadReport(

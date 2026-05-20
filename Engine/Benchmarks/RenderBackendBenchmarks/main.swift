@@ -1,8 +1,8 @@
-import Foundation
+﻿import Foundation
 import RenderBackend
 import RHIWGPU
 import SceneRuntime
-import simd
+import SIMDCompat
 
 struct BenchmarkConfig {
     var instanceCounts: [Int] = [5_000, 20_000, 80_000]

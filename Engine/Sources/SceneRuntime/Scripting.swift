@@ -1,4 +1,4 @@
-import simd
+﻿import SIMDCompat
 
 public protocol RuntimeScriptDriver: AnyObject, Sendable {
     func run(context: inout RuntimeScriptPhaseContext)

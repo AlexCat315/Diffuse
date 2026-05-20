@@ -1,10 +1,10 @@
-import AssetPipeline
+﻿import AssetPipeline
 import CoreGraphics
 import Foundation
 import ImageIO
 import Testing
 import UniformTypeIdentifiers
-import simd
+import SIMDCompat
 
 @Suite("GLTFImporter")
 struct GLTFImporterTests {

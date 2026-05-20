@@ -1,5 +1,5 @@
-import Foundation
-import simd
+﻿import Foundation
+import SIMDCompat
 
 /// Renderer-facing scene description extracted from `SceneRuntime`.
 /// `RenderScene` is the complete data contract handed from SceneRuntime to

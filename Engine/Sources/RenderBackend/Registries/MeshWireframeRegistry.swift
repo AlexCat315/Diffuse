@@ -1,6 +1,6 @@
-import AssetPipeline
+﻿import AssetPipeline
 import Foundation
-import simd
+import SIMDCompat
 
 public struct MeshWireframeEdge: Sendable {
     public var a: SIMD3<Float>
@@ -12,11 +12,11 @@ public struct MeshWireframeEdge: Sendable {
     }
 }
 
-/// 可注册的线框拓扑描述。
-/// - `positions`：顶点位置池（local space）。
-/// - `triangleIndices`：按三角形组织的索引（3 的倍数）。
-/// - `indexRemap`：可选。用于 glTF 多子网格拆分等场景，把局部 primitive
-///   的索引重映射到共享位置池。
+/// 鍙敞鍐岀殑绾挎鎷撴墤鎻忚堪銆?
+/// - `positions`锛氶《鐐逛綅缃睜锛坙ocal space锛夈€?
+/// - `triangleIndices`锛氭寜涓夎褰㈢粍缁囩殑绱㈠紩锛? 鐨勫€嶆暟锛夈€?
+/// - `indexRemap`锛氬彲閫夈€傜敤浜?glTF 澶氬瓙缃戞牸鎷嗗垎绛夊満鏅紝鎶婂眬閮?primitive
+///   鐨勭储寮曢噸鏄犲皠鍒板叡浜綅缃睜銆?
 public struct MeshWireframeTopology: Sendable {
     public var positions: [SIMD3<Float>]
     public var triangleIndices: [UInt32]
@@ -31,8 +31,8 @@ public struct MeshWireframeTopology: Sendable {
     }
 }
 
-/// 进程级 mesh 线框拓扑缓存。把 mesh 的三角面去重为边线，
-/// 编辑器可按 meshIndex 读取真实线框而不是 AABB 近似。
+/// 杩涚▼绾?mesh 绾挎鎷撴墤缂撳瓨銆傛妸 mesh 鐨勪笁瑙掗潰鍘婚噸涓鸿竟绾匡紝
+/// 缂栬緫鍣ㄥ彲鎸?meshIndex 璇诲彇鐪熷疄绾挎鑰屼笉鏄?AABB 杩戜技銆?
 public final class MeshWireframeRegistry: @unchecked Sendable {
     public static let shared = MeshWireframeRegistry()
 
@@ -48,7 +48,7 @@ public final class MeshWireframeRegistry: @unchecked Sendable {
         lock.unlock()
     }
 
-    /// 注册单个拓扑来源（可带 index remap）。
+    /// 娉ㄥ唽鍗曚釜鎷撴墤鏉ユ簮锛堝彲甯?index remap锛夈€?
     public func register(meshIndex: Int, topology: MeshWireframeTopology) {
         let edges = Self.extractWireframeEdges(from: topology)
         lock.lock()
@@ -56,7 +56,7 @@ public final class MeshWireframeRegistry: @unchecked Sendable {
         lock.unlock()
     }
 
-    /// 注册多个子网格拓扑并合并去重边线。
+    /// 娉ㄥ唽澶氫釜瀛愮綉鏍兼嫇鎵戝苟鍚堝苟鍘婚噸杈圭嚎銆?
     public func register(meshIndex: Int, submeshes: [MeshWireframeTopology]) {
         var merged: [MeshWireframeEdge] = []
         merged.reserveCapacity(submeshes.reduce(0) { $0 + $1.triangleIndices.count })

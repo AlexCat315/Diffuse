@@ -1,8 +1,8 @@
-import Foundation
+﻿import Foundation
 import EngineMath
 import RHIWGPU
 import SceneRuntime
-import simd
+import SIMDCompat
 
 extension WGPURenderer {
     func ensureShadowResources(settings: RenderShadowSettings) throws {
@@ -543,8 +543,8 @@ private func bounds(of points: [SIMD3<Float>]) -> (min: SIMD3<Float>, max: SIMD3
     }
     var maxPoint = minPoint
     for point in points.dropFirst() {
-        minPoint = simd.min(minPoint, point)
-        maxPoint = simd.max(maxPoint, point)
+        minPoint = simd_min(minPoint, point)
+        maxPoint = simd_max(maxPoint, point)
     }
     return (minPoint, maxPoint)
 }

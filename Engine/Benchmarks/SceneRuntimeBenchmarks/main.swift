@@ -1,6 +1,6 @@
-import Foundation
+﻿import Foundation
 import SceneRuntime
-import simd
+import SIMDCompat
 
 struct BenchmarkConfig {
     var entityCount: Int = 5000
@@ -78,11 +78,11 @@ private func benchmarkRaycast(runtime: SceneRuntime, queryCount: Int) {
           " avg_node_visits=\(fmtAvg(nodeVisits, queryCount))" +
           " avg_leaf_tests=\(fmtAvg(leafTests, queryCount))" +
           " avg_narrow_phase=\(fmtAvg(narrowPhaseTests, queryCount))" +
-          " p50=\(fmtUs(p50))µs p95=\(fmtUs(p95))µs p99=\(fmtUs(p99))µs")
+          " p50=\(fmtUs(p50))碌s p95=\(fmtUs(p95))碌s p99=\(fmtUs(p99))碌s")
 }
 
 private func benchmarkOverlap(runtime: SceneRuntime, queryCount: Int, maxResults: Int = .max) {
-    let scratch = SpatialQueryScratch()  // reused across all queries — no per-query allocation
+    let scratch = SpatialQueryScratch()  // reused across all queries 鈥?no per-query allocation
     var nodeVisits = 0
     var leafTests = 0
     var narrowPhaseTests = 0
@@ -116,7 +116,7 @@ private func benchmarkOverlap(runtime: SceneRuntime, queryCount: Int, maxResults
           " avg_node_visits=\(fmtAvg(nodeVisits, queryCount))" +
           " avg_leaf_tests=\(fmtAvg(leafTests, queryCount))" +
           " avg_narrow_phase=\(fmtAvg(narrowPhaseTests, queryCount))" +
-          " p50=\(fmtUs(p50))µs p95=\(fmtUs(p95))µs p99=\(fmtUs(p99))µs")
+          " p50=\(fmtUs(p50))碌s p95=\(fmtUs(p95))碌s p99=\(fmtUs(p99))碌s")
 }
 
 private func benchmarkSweep(runtime: SceneRuntime, queryCount: Int) {
@@ -151,7 +151,7 @@ private func benchmarkSweep(runtime: SceneRuntime, queryCount: Int) {
           " avg_node_visits=\(fmtAvg(nodeVisits, queryCount))" +
           " avg_leaf_tests=\(fmtAvg(leafTests, queryCount))" +
           " avg_narrow_phase=\(fmtAvg(narrowPhaseTests, queryCount))" +
-          " p50=\(fmtUs(p50))µs p95=\(fmtUs(p95))µs p99=\(fmtUs(p99))µs")
+          " p50=\(fmtUs(p50))碌s p95=\(fmtUs(p95))碌s p99=\(fmtUs(p99))碌s")
 }
 
 let config = BenchmarkConfig()

@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(Network)
 import Network
+#endif
 import GuavaUIRuntime
 #if canImport(Logging)
 import Logging
@@ -40,6 +42,8 @@ public typealias SceneSnapshotProvider = @MainActor () -> TreeSnapshotPayload
 /// Closure invoked when the client requests `select.node`. The host
 /// runtime decides what "selecting" means (e.g. drawing an overlay).
 public typealias NodeSelectionHandler = @MainActor (_ id: String) -> Void
+
+#if canImport(Network)
 
 /// Lightweight WebSocket server that exposes the GuavaUI DevTools
 /// protocol. Built on `Network.framework` so it has no third-party
@@ -438,3 +442,30 @@ private func decodePayload<T: Decodable>(_ type: T.Type, from value: JSONValue?)
         return nil
     }
 }
+
+#else
+
+/// Stub DevServer for platforms without Network.framework (Windows, Linux).
+/// All methods are no-ops; the DevTools WebSocket server is not available.
+public final class DevServer: @unchecked Sendable {
+    public var snapshotProvider: SceneSnapshotProvider?
+    public var selectionHandler: NodeSelectionHandler?
+    public var mirrorStartHandler: (@MainActor (MirrorStartPayload) -> Void)?
+    public var mirrorStopHandler: (@MainActor () -> Void)?
+    public var mirrorInputHandler: (@MainActor (MirrorInputPayload) -> Void)?
+    public var stateCheckpointHandler: (@MainActor () -> [String: String])?
+    public var stateRestoreHandler: (@MainActor ([String: String]) -> Void)?
+
+    public init(config: DevToolsConfig) {}
+    public func start() throws {}
+    public func stop() {}
+
+    @MainActor
+    public func broadcastTreeDelta() {}
+    public func broadcastLog(_ entry: LogEntryPayload) {}
+    public func broadcastTiming(_ frame: TimingFramePayload) {}
+    public func broadcastMirrorFrame(_ frame: MirrorFramePayload) {}
+    public func broadcastMirrorStopped(reason: String) {}
+}
+
+#endif

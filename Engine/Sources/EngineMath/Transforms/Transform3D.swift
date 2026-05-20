@@ -1,4 +1,4 @@
-import simd
+﻿import SIMDCompat
 
 public struct Transform3D: Sendable, Equatable {
     public var translation: SIMD3<Float>

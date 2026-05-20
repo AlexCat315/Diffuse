@@ -1,9 +1,9 @@
-import Foundation
+﻿import Foundation
 import EngineKernel
 import RenderBackend
 import SceneRuntime
 import Testing
-import simd
+import SIMDCompat
 @testable import EngineCore
 
 @Suite("SimulationThread")

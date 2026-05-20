@@ -1,4 +1,4 @@
-import simd
+﻿import SIMDCompat
 
 public struct Bounds3D: Sendable, Equatable {
     public var min: SIMD3<Float>

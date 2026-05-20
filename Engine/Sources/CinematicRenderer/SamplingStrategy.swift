@@ -1,5 +1,5 @@
-import Foundation
-import simd
+﻿import Foundation
+import SIMDCompat
 
 public protocol SamplingStrategy: Sendable {
     func sample2D(_ index: Int, sample: Int) -> SIMD2<Float>

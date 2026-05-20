@@ -1,5 +1,5 @@
-import EngineMath
-import simd
+﻿import EngineMath
+import SIMDCompat
 import Testing
 
 @Suite("Transform3D")

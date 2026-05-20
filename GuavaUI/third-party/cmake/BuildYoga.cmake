@@ -8,6 +8,11 @@ set(YG_ENABLE_REFLECTION OFF CACHE BOOL "" FORCE)
 # only the yoga/ subdir — bypasses Yoga's root CMakeLists which unconditionally
 # adds tests/ that drag in googletest with broken install rules.
 include(${CMAKE_SOURCE_DIR}/yoga/cmake/project-defaults.cmake)
+# On MSVC, source files may contain non-ASCII characters that trigger C4819.
+# Use /utf-8 to treat all source and execution charsets as UTF-8.
+if(MSVC)
+    add_compile_options(/utf-8)
+endif()
 add_subdirectory(${CMAKE_SOURCE_DIR}/yoga/yoga yoga-build)
 
 install(TARGETS yogacore
@@ -25,4 +30,10 @@ install(DIRECTORY ${CMAKE_SOURCE_DIR}/yoga/yoga/
     PATTERN "module.modulemap"
 )
 
-write_artifactbundle_info(${YOGA_BUNDLE} "yoga" "${GUAVA_TRIPLE}/lib/libyogacore.a")
+if(WIN32)
+    set(YOGA_LIB_FILENAME "yogacore.lib")
+else()
+    set(YOGA_LIB_FILENAME "libyogacore.a")
+endif()
+
+write_artifactbundle_info(${YOGA_BUNDLE} "yoga" "${GUAVA_TRIPLE}/lib/${YOGA_LIB_FILENAME}")

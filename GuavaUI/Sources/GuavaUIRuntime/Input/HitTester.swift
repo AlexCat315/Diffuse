@@ -1,5 +1,7 @@
-import Foundation
+﻿import Foundation
+#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
 
 /// Result of a hit test — the deepest hit-testable node containing the point,
 /// plus the chain from root → node for capture/bubble traversal.

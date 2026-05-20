@@ -1,4 +1,4 @@
-import simd
+﻿import SIMDCompat
 
 public struct Frustum3D: Sendable, Equatable {
     public var planes: [Plane3D]

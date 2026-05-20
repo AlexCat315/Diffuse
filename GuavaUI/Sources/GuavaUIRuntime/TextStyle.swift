@@ -1,5 +1,7 @@
-import CoreText
 import Foundation
+#if canImport(CoreText)
+import CoreText
+#endif
 
 public enum FontWeight: Hashable, Sendable {
     case regular
@@ -48,6 +50,7 @@ public enum SystemFontDefaults {
 
     public static let primaryFontName: String = resolvePrimaryFontName()
 
+#if canImport(CoreText)
     private static func resolvePrimaryFontName() -> String {
         for name in fontStack {
             if isInstalled(family: name) {
@@ -76,6 +79,12 @@ public enum SystemFontDefaults {
         let resolved = CTFontCopyFamilyName(font) as String
         return resolved.compare(name, options: .caseInsensitive) == .orderedSame
     }
+#else
+    private static func resolvePrimaryFontName() -> String {
+        // On non-Apple platforms, use the bundled Inter font directly.
+        return "Inter"
+    }
+#endif
 }
 
 /// Lazily creates sized/weighted `FontProvider`s that share a single atlas.
