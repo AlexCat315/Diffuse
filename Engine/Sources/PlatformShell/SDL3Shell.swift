@@ -331,8 +331,11 @@ public final class SDL3Shell: Shell {
         let windowFlags = SDL_WindowFlags(
             GUAVA_SDL_WINDOW_RESIZABLE | GUAVA_SDL_WINDOW_HIGH_PIXEL_DENSITY | GUAVA_SDL_WINDOW_METAL)
 #else
-        let windowFlags = SDL_WindowFlags(
-            GUAVA_SDL_WINDOW_RESIZABLE | GUAVA_SDL_WINDOW_HIGH_PIXEL_DENSITY)
+        var rawWindowFlags = GUAVA_SDL_WINDOW_RESIZABLE | GUAVA_SDL_WINDOW_HIGH_PIXEL_DENSITY
+        if options.titleBarStyle == .hiddenInset {
+            rawWindowFlags |= GUAVA_SDL_WINDOW_BORDERLESS
+        }
+        let windowFlags = SDL_WindowFlags(rawWindowFlags)
 #endif
 
         // On Windows with DPI awareness enabled, SDL_CreateWindow coordinates are

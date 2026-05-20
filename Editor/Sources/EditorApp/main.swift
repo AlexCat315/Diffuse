@@ -101,7 +101,7 @@ private func runEditor() throws {
     try AppRuntime.run(
         config: AppConfig(title: "GuavaNext Editor",
                           backendConfig: launchOptions.backendConfig,
-                          titleBarStyle: .standard),
+                          titleBarStyle: .hiddenInset),
         backend: backend,
         events: events,
         onTick: { dt in
