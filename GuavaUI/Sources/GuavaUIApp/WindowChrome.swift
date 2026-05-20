@@ -1,3 +1,4 @@
+import Foundation
 import GuavaUICompose
 import GuavaUIRuntime
 import PlatformShell
@@ -52,17 +53,17 @@ public struct ImmersiveWindowTitleBar<Leading: View>: View {
 private struct WindowControlStrip: View {
     var body: some View {
         Row(alignment: .center, spacing: 2) {
-            WindowControlButton(label: "_", tooltip: "Minimize") {
+            WindowControlButton(icon: WindowChromeIcons.minimize, tooltip: "Minimize") {
                 withAppDisplayHandle { handle in
                     handle.minimizeWindow()
                 }
             }
-            WindowControlButton(label: "[]", tooltip: "Maximize") {
+            WindowControlButton(icon: WindowChromeIcons.maximize, tooltip: "Maximize") {
                 withAppDisplayHandle { handle in
                     handle.toggleMaximizeWindow()
                 }
             }
-            WindowControlButton(label: "x", tooltip: "Close", isClose: true) {
+            WindowControlButton(icon: WindowChromeIcons.close, tooltip: "Close", isClose: true) {
                 withAppDisplayHandle { handle in
                     handle.closeMainWindow()
                 }
@@ -72,22 +73,33 @@ private struct WindowControlStrip: View {
 }
 
 private struct WindowControlButton: View {
-    let label: String
+    let icon: BundleImageResource
     let tooltip: String
     var isClose: Bool = false
     let action: () -> Void
 
     var body: some View {
-        Button(role: isClose ? .destructive : .normal,
+        Button(icon: .resource(icon),
+               size: 12,
+               role: isClose ? .destructive : .normal,
                tooltip: tooltip,
-               action: action) {
-            Text(label)
-                .font(.body)
-                .foregroundColor(.onSurface)
-                .frame(width: 32, height: 24)
-        }
-        .buttonStyle(.ghost)
+               tint: .white,
+               action: action)
+            .buttonStyle(.ghost)
+            .frame(width: 32, height: 24)
     }
+}
+
+private enum WindowChromeIcons {
+    static let minimize = BundleImageResource.svg(named: "minimize",
+                                                  in: .module,
+                                                  subdirectory: "WindowChromeIcons")
+    static let maximize = BundleImageResource.svg(named: "maximize",
+                                                  in: .module,
+                                                  subdirectory: "WindowChromeIcons")
+    static let close = BundleImageResource.svg(named: "close",
+                                               in: .module,
+                                               subdirectory: "WindowChromeIcons")
 }
 
 private func withAppDisplayHandle(_ body: @MainActor (AppDisplayHandle) -> Void) {
