@@ -225,6 +225,27 @@ public final class SDL3Shell: Shell {
             window.makeKeyAndOrderFront(nil)
             NSApplication.shared.activate(ignoringOtherApps: true)
         }
+
+        func performNativeWindowShortcut(scancode: UInt32, modifiers: UInt16) -> Bool {
+            guard let window = cocoaWindow else { return false }
+            let command = modifiers & (UInt16(GUAVA_SDL_KMOD_LGUI) | UInt16(GUAVA_SDL_KMOD_RGUI)) != 0
+            let control = modifiers & (UInt16(GUAVA_SDL_KMOD_LCTRL) | UInt16(GUAVA_SDL_KMOD_RCTRL)) != 0
+            guard command else { return false }
+
+            switch scancode {
+            case 16: // M
+                window.performMiniaturize(nil)
+                return true
+            case 26: // W
+                window.performClose(nil)
+                return true
+            case 9 where control: // F
+                window.toggleFullScreen(nil)
+                return true
+            default:
+                return false
+            }
+        }
 #endif
 
         private func resolveCursor(_ cursor: SystemCursor) -> OpaquePointer? {
@@ -491,6 +512,12 @@ public final class SDL3Shell: Shell {
             case UInt32(GUAVA_SDL_EVENT_KEY_DOWN):
                 let windowID = WindowID(event.key.windowID)
                 guard let handle = windows[windowID] else { continue }
+#if os(macOS)
+                if handle.performNativeWindowShortcut(scancode: UInt32(event.key.scancode.rawValue),
+                                                      modifiers: event.key.mod) {
+                    continue
+                }
+#endif
 #if os(Windows)
                 if event.key.scancode.rawValue == 44,
                    event.key.mod & (UInt16(GUAVA_SDL_KMOD_LALT) | UInt16(GUAVA_SDL_KMOD_RALT)) != 0 {
