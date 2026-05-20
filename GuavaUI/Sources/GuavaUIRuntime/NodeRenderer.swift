@@ -1,4 +1,7 @@
+﻿#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
+import Foundation
 
 /// Walks a `Node` tree post-layout and emits draw commands into a `DrawList`.
 ///

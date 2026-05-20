@@ -4,9 +4,6 @@ import PackageDescription
 
 let package = Package(
     name: "GuavaUI",
-    platforms: [
-        .macOS(.v14),
-    ],
     products: [
         .executable(name: "GuavaUIDemo", targets: ["GuavaUIDemo"]),
         .library(name: "GuavaUIRuntime", targets: ["GuavaUIRuntime"]),
@@ -43,6 +40,7 @@ let package = Package(
                 "yoga",
                 "CFreeType",
                 "CHarfBuzz",
+                "GuavaUIBundledFonts",
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "PlatformShell", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),

@@ -1,5 +1,7 @@
 import Foundation
+#if canImport(Network)
 import Network
+#endif
 
 /// Embedded TCP server on 127.0.0.1:9898.
 /// Receives newline-delimited JSON commands from the guava-mcp CLI and
@@ -10,26 +12,33 @@ public final class MCPBridge: @unchecked Sendable {
     /// Called on the main queue: (action, params) → response dict.
     public var onCommand: ((String, [String: Any]) -> [String: Any])?
 
+    #if canImport(Network)
     private var listener: NWListener?
     private var connection: NWConnection?
     private var receiveBuffer = Data()
     private let queue = DispatchQueue.main
+    #endif
 
     public init() {}
 
     public func start() {
+        #if canImport(Network)
         queue.async { [weak self] in self?._start() }
+        #endif
     }
 
     public func stop() {
+        #if canImport(Network)
         queue.async { [weak self] in
             self?.connection?.cancel()
             self?.listener?.cancel()
             self?.connection = nil
             self?.listener = nil
         }
+        #endif
     }
 
+    #if canImport(Network)
     private func _start() {
         guard listener == nil else { return }
         let params = NWParameters.tcp
@@ -80,4 +89,5 @@ public final class MCPBridge: @unchecked Sendable {
             conn.send(content: responseData, completion: .idempotent)
         }
     }
+    #endif
 }

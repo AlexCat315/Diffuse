@@ -1,4 +1,7 @@
+﻿#if canImport(CoreGraphics)
 import CoreGraphics
+#endif
+import Foundation
 import EngineKernel
 
 /// Shared attachment keys for focused text-input primitives.
