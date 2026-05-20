@@ -484,6 +484,20 @@ let package = Package(
                 "CinematicRenderer",
             ]
         ),
+
+        // MARK: - Plugins
+        .plugin(
+            name: "BuildNativeDeps",
+            capability: .command(
+                intent: .custom(
+                    verb: "build-native-deps",
+                    description: "Build Engine C/C++ dependencies (SDL3, Jolt, OpenEXR/Imath) via CMake"
+                ),
+                permissions: [
+                    .writeToPackageDirectory(reason: "Writes compiled artifact bundles to vendor/")
+                ]
+            )
+        ),
     ],
     cxxLanguageStandard: .cxx17
 )
