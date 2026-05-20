@@ -20,7 +20,6 @@ struct EditorRootView: View {
                     Box(direction: .column, alignItems: .stretch, spacing: 0) {
                         ShortcutHost(onKeyDown: cb.handleShortcut)
 
-                        #if os(Windows)
                         EditorApplicationMenuBar(
                             workspaceMode: store.workspaceMode,
                             activeLayoutPreset: store.activeLayoutPreset,
@@ -29,7 +28,6 @@ struct EditorRootView: View {
                         )
 
                         Divider()
-                        #endif
 
                         PanelWorkspace(controller: controller,
                                        registry: registry)
