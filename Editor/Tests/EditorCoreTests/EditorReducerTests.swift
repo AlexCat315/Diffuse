@@ -80,4 +80,13 @@ struct EditorReducerTests {
         #expect(state.consoleEntries.last?.message == "entry 204")
     }
 
+    @Test("Capability settings update release gate state")
+    func capabilitySettingsUpdateReleaseGateState() {
+        var state = EditorState()
+
+        EditorReducer.reduce(state: &state,
+                             action: .setCapabilitySettings(EditorCapabilitySettings(releasePhase: .beta)))
+
+        #expect(state.capabilitySettings.releasePhase == .beta)
+    }
 }

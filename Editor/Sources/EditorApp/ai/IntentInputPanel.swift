@@ -57,7 +57,8 @@ struct IntentInputPanel: View {
                                              language: store.language,
                                              vsyncMode: store.vsyncMode,
                                              primarySelectBehavior: store.primarySelectBehavior,
-                                             aiSettings: store.aiSettings)
+                                             aiSettings: store.aiSettings,
+                                             capabilitySettings: store.capabilitySettings)
     }
 }
 

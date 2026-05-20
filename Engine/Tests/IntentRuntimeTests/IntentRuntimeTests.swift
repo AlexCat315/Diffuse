@@ -428,6 +428,54 @@ struct IntentRuntimeTests {
         #expect(result.warnings.contains { $0.contains("AI confidence") })
     }
 
+    @Test("capability planning can be reconfigured for beta capabilities")
+    func capabilityPlanningCanBeReconfiguredForBetaCapabilities() throws {
+        let coordinator = IntentRuntimeCoordinator()
+        var scene = SceneRuntime()
+        let entity = scene.createEntity()
+        _ = scene.setComponent(RigidBody(motionType: .dynamic, mass: 1), for: entity)
+        let transaction = TransactionIR(
+            summary: "Update rigid body mass",
+            operations: [.scene(.setRigidBodyMass(entityID: entity.rawValue, value: 12))],
+            approvalPolicy: .automatic,
+            provenance: .authored
+        )
+        let capabilityContext = CapabilityInvocationContext(sceneRuntime: scene,
+                                                            defaultSource: .human)
+        var stableContext = TransactionExecutionContext(sceneRuntime: scene)
+
+        let stableError = try #require(
+            { () throws -> CapabilityInvocationPlannerError? in
+                do {
+                    _ = try coordinator.submitPlan(transaction,
+                                                   executionContext: &stableContext,
+                                                   capabilityContext: capabilityContext)
+                    return nil
+                } catch let error as CapabilityInvocationPlannerError {
+                    return error
+                }
+            }()
+        )
+        guard case let .capabilityDenied(stableFailures) = stableError else {
+            Issue.record("expected capabilityDenied, got \(stableError)")
+            return
+        }
+        #expect(stableFailures.first?.reason.contains("beta") == true)
+
+        coordinator.configureCapabilityPlanner(
+            CapabilityInvocationPlanner(gate: ReleasePhaseGate(activePhase: .beta))
+        )
+        var betaContext = TransactionExecutionContext(sceneRuntime: scene)
+
+        let result = try coordinator.submitPlan(transaction,
+                                                executionContext: &betaContext,
+                                                capabilityContext: capabilityContext)
+        let updated = try #require(betaContext.sceneRuntime?.component(RigidBody.self, for: entity))
+
+        #expect(result.disposition == .applied)
+        #expect(updated.mass == 12)
+    }
+
     @Test("scene apply emits transaction and scene bus events")
     func sceneApplyEmitsBusEvents() throws {
         let root = FileManager.default.temporaryDirectory
