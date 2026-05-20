@@ -1,6 +1,7 @@
 import EngineKernel
 import GuavaUICompose
 import GuavaUIRuntime
+import PlatformShell
 import Foundation
 
 struct AppAuxiliaryWindowRequest {
@@ -39,6 +40,12 @@ public final class AppDisplayHandle: @unchecked Sendable {
     private var setRuntimeVSyncEnabled: (@MainActor (Bool) -> Void)?
     private var currentRuntimeDisplayRefreshRate: (@MainActor () -> Double?)?
     private var installRuntimeNativeMenuBar: (@MainActor (NativeMenuBar) -> Void)?
+    private var minimizeMainWindowAction: (@MainActor () -> Void)?
+    private var maximizeMainWindowAction: (@MainActor () -> Void)?
+    private var restoreMainWindowAction: (@MainActor () -> Void)?
+    private var closeMainWindowAction: (@MainActor () -> Void)?
+    private var mainWindowMaximizedQuery: (@MainActor () -> Bool)?
+    private var setMainWindowChromeHitTestAction: (@MainActor (WindowChromeHitTest?) -> Void)?
 
     public init() {}
 
@@ -72,6 +79,41 @@ public final class AppDisplayHandle: @unchecked Sendable {
     @MainActor
     public func installNativeMenuBar(_ menuBar: NativeMenuBar) {
         installRuntimeNativeMenuBar?(menuBar)
+    }
+
+    @MainActor
+    public func minimizeWindow() {
+        minimizeMainWindowAction?()
+    }
+
+    @MainActor
+    public func maximizeWindow() {
+        maximizeMainWindowAction?()
+    }
+
+    @MainActor
+    public func restoreWindow() {
+        restoreMainWindowAction?()
+    }
+
+    @MainActor
+    public func toggleMaximizeWindow() {
+        isWindowMaximized() ? restoreWindow() : maximizeWindow()
+    }
+
+    @MainActor
+    public func closeMainWindow() {
+        closeMainWindowAction?()
+    }
+
+    @MainActor
+    public func isWindowMaximized() -> Bool {
+        mainWindowMaximizedQuery?() ?? false
+    }
+
+    @MainActor
+    public func setWindowChromeHitTest(_ hitTest: WindowChromeHitTest?) {
+        setMainWindowChromeHitTestAction?(hitTest)
     }
 
     @MainActor
@@ -113,11 +155,23 @@ public final class AppDisplayHandle: @unchecked Sendable {
                                 setFrameRateMode: @escaping @MainActor (PlatformFrameRateMode) -> Void,
                                 setVSyncEnabled: @escaping @MainActor (Bool) -> Void,
                                 currentDisplayRefreshRate: @escaping @MainActor () -> Double?,
-                                installNativeMenuBar: @escaping @MainActor (NativeMenuBar) -> Void) {
+                                installNativeMenuBar: @escaping @MainActor (NativeMenuBar) -> Void,
+                                minimizeWindow: @escaping @MainActor () -> Void,
+                                maximizeWindow: @escaping @MainActor () -> Void,
+                                restoreWindow: @escaping @MainActor () -> Void,
+                                closeWindow: @escaping @MainActor () -> Void,
+                                isWindowMaximized: @escaping @MainActor () -> Bool,
+                                setWindowChromeHitTest: @escaping @MainActor (WindowChromeHitTest?) -> Void) {
         setRuntimeTargetFrameRate = setTargetFrameRate
         setRuntimeFrameRateMode = setFrameRateMode
         setRuntimeVSyncEnabled = setVSyncEnabled
         currentRuntimeDisplayRefreshRate = currentDisplayRefreshRate
         installRuntimeNativeMenuBar = installNativeMenuBar
+        minimizeMainWindowAction = minimizeWindow
+        maximizeMainWindowAction = maximizeWindow
+        restoreMainWindowAction = restoreWindow
+        closeMainWindowAction = closeWindow
+        mainWindowMaximizedQuery = isWindowMaximized
+        setMainWindowChromeHitTestAction = setWindowChromeHitTest
     }
 }

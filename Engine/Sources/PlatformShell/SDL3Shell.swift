@@ -22,6 +22,7 @@ public final class SDL3Shell: Shell {
         private var lastTextInputArea: TextInputArea?
         private var cursorCache: [SystemCursor: OpaquePointer] = [:]
         private var activeCursor: SystemCursor = .arrow
+        private var chromeHitTestState: SDL3ChromeHitTestState?
 
         var isFocused: Bool = true
         var isMinimized: Bool = false
@@ -170,6 +171,8 @@ public final class SDL3Shell: Shell {
         }
 
         func shutdown() {
+            setChromeHitTest(nil)
+
 #if os(macOS)
             metalLayer = nil
             if let metalView {
@@ -185,6 +188,20 @@ public final class SDL3Shell: Shell {
             cursorCache.removeAll()
             activeCursor = .arrow
             lastTextInputArea = nil
+        }
+
+        func setChromeHitTest(_ hitTest: WindowChromeHitTest?) {
+            guard let hitTest else {
+                _ = SDL_SetWindowHitTest(window, nil, nil)
+                chromeHitTestState = nil
+                return
+            }
+
+            let state = chromeHitTestState ?? SDL3ChromeHitTestState(config: hitTest)
+            state.config = hitTest
+            chromeHitTestState = state
+            let raw = Unmanaged.passUnretained(state).toOpaque()
+            _ = SDL_SetWindowHitTest(window, _sdl3ChromeHitTest, raw)
         }
 
 #if os(macOS)
@@ -609,6 +626,30 @@ public final class SDL3Shell: Shell {
         _ = SDL_RaiseWindow(handle.window)
     }
 
+    public func minimizeWindow(_ windowID: WindowID) {
+        guard let handle = windows[windowID] else { return }
+        _ = SDL_MinimizeWindow(handle.window)
+    }
+
+    public func maximizeWindow(_ windowID: WindowID) {
+        guard let handle = windows[windowID] else { return }
+        _ = SDL_MaximizeWindow(handle.window)
+    }
+
+    public func restoreWindow(_ windowID: WindowID) {
+        guard let handle = windows[windowID] else { return }
+        _ = SDL_RestoreWindow(handle.window)
+    }
+
+    public func isWindowMaximized(_ windowID: WindowID) -> Bool {
+        guard let handle = windows[windowID] else { return false }
+        return (SDL_GetWindowFlags(handle.window) & SDL_WindowFlags(GUAVA_SDL_WINDOW_MAXIMIZED)) != 0
+    }
+
+    public func setWindowChromeHitTest(_ windowID: WindowID, _ hitTest: WindowChromeHitTest?) {
+        windows[windowID]?.setChromeHitTest(hitTest)
+    }
+
     public func displayRefreshRate(windowID: WindowID? = nil) -> Double? {
         guard didInitializeSDL else { return nil }
 
@@ -737,3 +778,57 @@ public final class SDL3Shell: Shell {
         return String(cString: message)
     }
 }
+
+private final class SDL3ChromeHitTestState {
+    var config: WindowChromeHitTest
+
+    init(config: WindowChromeHitTest) {
+        self.config = config
+    }
+}
+
+private let _sdl3ChromeHitTest: @convention(c) (OpaquePointer?, UnsafePointer<SDL_Point>?, UnsafeMutableRawPointer?) -> SDL_HitTestResult
+    = { window, point, rawState in
+        guard let window, let point, let rawState else {
+            return SDL_HITTEST_NORMAL
+        }
+
+        let config = Unmanaged<SDL3ChromeHitTestState>
+            .fromOpaque(rawState)
+            .takeUnretainedValue()
+            .config
+
+        let x = Float(point.pointee.x)
+        let y = Float(point.pointee.y)
+        var width: Int32 = 0
+        var height: Int32 = 0
+        _ = SDL_GetWindowSize(window, &width, &height)
+        let w = Float(max(0, width))
+        let h = Float(max(0, height))
+        let border = config.resizeBorderWidth
+
+        if border > 0, w > 0, h > 0 {
+            let left = x < border
+            let right = x >= w - border
+            let top = y < border
+            let bottom = y >= h - border
+
+            if top && left { return SDL_HITTEST_RESIZE_TOPLEFT }
+            if top && right { return SDL_HITTEST_RESIZE_TOPRIGHT }
+            if bottom && left { return SDL_HITTEST_RESIZE_BOTTOMLEFT }
+            if bottom && right { return SDL_HITTEST_RESIZE_BOTTOMRIGHT }
+            if top { return SDL_HITTEST_RESIZE_TOP }
+            if bottom { return SDL_HITTEST_RESIZE_BOTTOM }
+            if left { return SDL_HITTEST_RESIZE_LEFT }
+            if right { return SDL_HITTEST_RESIZE_RIGHT }
+        }
+
+        if y >= 0,
+           y < config.titleBarHeight,
+           x >= config.draggableLeadingInset,
+           x < w - config.draggableTrailingInset {
+            return SDL_HITTEST_DRAGGABLE
+        }
+
+        return SDL_HITTEST_NORMAL
+    }
