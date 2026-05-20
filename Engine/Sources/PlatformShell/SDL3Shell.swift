@@ -606,6 +606,12 @@ public final class SDL3Shell: Shell {
 
     private func ensureSDLInitialized() throws {
         guard !didInitializeSDL else { return }
+#if os(Windows)
+        // Request Per-Monitor v2 DPI awareness before SDL_Init so that
+        // SDL_GetWindowSize / SDL_GetWindowSizeInPixels report correct
+        // logical vs. physical dimensions on high-DPI displays.
+        _ = SDL_SetHint("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2")
+#endif
         guard SDL_Init(SDL_INIT_VIDEO) else {
             throw ShellError.initializationFailed(Self.lastSDLError())
         }

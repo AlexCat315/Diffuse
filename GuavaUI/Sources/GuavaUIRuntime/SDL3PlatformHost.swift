@@ -601,6 +601,9 @@ public final class SDL3PlatformHost: PlatformHost {
         let logicalWidth = max(logicalSize.width, 1)
         let raw = Float(drawableSize.width) / Float(logicalWidth)
         guard raw > 1 else { return 1 }
-        return max(1, raw.rounded())
+        // Quantize to 0.25 steps to match Windows DPI presets (125 %, 150 %,
+        // 175 %, 200 %). Rounding to the nearest integer would collapse 1.25
+        // and 1.50 down to 1.0, making the UI appear tiny on most HiDPI screens.
+        return max(1, (raw * 4).rounded() / 4)
     }
 }
