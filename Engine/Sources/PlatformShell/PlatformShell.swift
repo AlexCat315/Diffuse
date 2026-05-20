@@ -168,6 +168,7 @@ public protocol Shell: AnyObject {
     func maximizeWindow(_ windowID: WindowID)
     func restoreWindow(_ windowID: WindowID)
     func isWindowMaximized(_ windowID: WindowID) -> Bool
+    func showWindowSystemMenu(_ windowID: WindowID, x: Float, y: Float)
     func setWindowChromeHitTest(_ windowID: WindowID, _ hitTest: WindowChromeHitTest?)
 
     /// Refresh rate of the display currently containing `windowID`.
@@ -235,6 +236,7 @@ public extension Shell {
     func maximizeWindow(_ windowID: WindowID) {}
     func restoreWindow(_ windowID: WindowID) {}
     func isWindowMaximized(_ windowID: WindowID) -> Bool { false }
+    func showWindowSystemMenu(_ windowID: WindowID, x: Float, y: Float) {}
     func setWindowChromeHitTest(_ windowID: WindowID, _ hitTest: WindowChromeHitTest?) {}
     func displayRefreshRate(windowID: WindowID? = nil) -> Double? { nil }
 }
