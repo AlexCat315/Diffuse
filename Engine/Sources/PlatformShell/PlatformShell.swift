@@ -271,7 +271,7 @@ public final class AppKitShell: Shell {
         var drawableSize: (width: UInt32, height: UInt32) { shell?.drawableSize ?? (1, 1) }
         var logicalSize: (width: UInt32, height: UInt32) { shell?.logicalSize ?? (1, 1) }
         var isFocused: Bool { shell?.isRunning ?? false }
-        var isMinimized: Bool { false }
+        var isMinimized: Bool { shell?.window?.isMiniaturized ?? false }
         var isOccluded: Bool { false }
     }
 
@@ -392,6 +392,34 @@ public final class AppKitShell: Shell {
     public func setCursor(windowID: WindowID, _ cursor: SystemCursor) {
         guard windowID == .main else { return }
         setCursor(cursor)
+    }
+
+    public func minimizeWindow(_ windowID: WindowID) {
+        guard windowID == .main else { return }
+        window?.performMiniaturize(nil)
+    }
+
+    public func maximizeWindow(_ windowID: WindowID) {
+        guard windowID == .main, let window else { return }
+        if !window.isZoomed {
+            window.performZoom(nil)
+        }
+    }
+
+    public func restoreWindow(_ windowID: WindowID) {
+        guard windowID == .main, let window else { return }
+        if window.isMiniaturized {
+            window.deminiaturize(nil)
+        } else if window.isZoomed {
+            window.performZoom(nil)
+        } else if window.styleMask.contains(.fullScreen) {
+            window.toggleFullScreen(nil)
+        }
+    }
+
+    public func isWindowMaximized(_ windowID: WindowID) -> Bool {
+        guard windowID == .main, let window else { return false }
+        return window.isZoomed || window.styleMask.contains(.fullScreen)
     }
 
     public func shutdown() {
