@@ -55,7 +55,7 @@ private struct PendingInvocation {
 public final class IntentRuntimeCoordinator: @unchecked Sendable {
     private let executor: TransactionExecutor
     private let stagedStore: StagedTransactionStore
-    private let capabilityPlanner: CapabilityInvocationPlanner
+    private var capabilityPlanner: CapabilityInvocationPlanner
     private let lock = NSLock()
     private var pending: PendingInvocation?
 
@@ -74,6 +74,10 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         lock.withLock { pending?.request }
     }
 
+    public func configureCapabilityPlanner(_ planner: CapabilityInvocationPlanner) {
+        lock.withLock { capabilityPlanner = planner }
+    }
+
     // MARK: - Plan submission
 
     /// Submits a `TransactionIR`. Confirmation is gated by `transaction.approvalPolicy`:
@@ -88,8 +92,9 @@ public final class IntentRuntimeCoordinator: @unchecked Sendable {
         var warnings: [String] = []
 
         if let capabilityContext {
-            let plan = try capabilityPlanner.plan(transaction: plannedTransaction,
-                                                  context: capabilityContext)
+            let planner = lock.withLock { capabilityPlanner }
+            let plan = try planner.plan(transaction: plannedTransaction,
+                                        context: capabilityContext)
             plannedTransaction.approvalPolicy = plan.approvalPolicy
             plannedQuestions = plan.questions
             warnings = plan.warnings

@@ -72,6 +72,17 @@ struct SettingsPanel: View {
                             }
                         }
                     }
+
+                    SettingsSection(title: L("Capability Gate")) {
+                        Row(alignment: .center, spacing: 8) {
+                            for phase in EditorCapabilityReleasePhase.allCases {
+                                SettingsChoiceButton(title: L(phase.displayName),
+                                                     isActive: store.capabilitySettings.releasePhase == phase) {
+                                    applyCapabilityReleasePhase(phase, store: store)
+                                }
+                            }
+                        }
+                    }
                 }
                 .padding(12)
             }
@@ -92,13 +103,20 @@ struct SettingsPanel: View {
                                              language: store.language,
                                              vsyncMode: store.vsyncMode,
                                              primarySelectBehavior: store.primarySelectBehavior,
-                                             aiSettings: store.aiSettings)
+                                             aiSettings: store.aiSettings,
+                                             capabilitySettings: store.capabilitySettings)
     }
 
     private func applyVSyncMode(_ mode: EditorVSyncMode, store: EditorStore) {
         guard store.vsyncMode != mode else { return }
         store.dispatch(.setVSyncMode(mode))
         app.applyVSyncMode(mode)
+        applySettingsChange(store)
+    }
+
+    private func applyCapabilityReleasePhase(_ phase: EditorCapabilityReleasePhase, store: EditorStore) {
+        guard store.capabilitySettings.releasePhase != phase else { return }
+        app.applyCapabilitySettings(EditorCapabilitySettings(releasePhase: phase))
         applySettingsChange(store)
     }
 }
