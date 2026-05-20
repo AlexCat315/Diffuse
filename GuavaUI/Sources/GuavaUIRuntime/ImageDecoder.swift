@@ -1,4 +1,7 @@
 import Foundation
+#if canImport(CImageDecodeBridge)
+import CImageDecodeBridge
+#endif
 #if canImport(AppKit)
 import AppKit
 #endif
@@ -44,8 +47,8 @@ public struct DecodedImage: Sendable {
 }
 
 /// File → RGBA decoder. Bitmap formats (PNG/JPEG/GIF/HEIC/BMP/TIFF) flow
-/// through `ImageIO`; vector formats (SVG/PDF) go through `NSImage` which
-/// rasterises at the requested target size.
+/// PNG/JPEG/WebP/SVG flow through the cross-platform native bridge; Apple-only
+/// formats such as PDF keep using the ImageIO/AppKit fallback.
 ///
 /// The renderer uses straight-alpha blending (`srcAlpha * src + (1-srcAlpha) * dst`),
 /// so this decoder un-premultiplies the bytes that CoreGraphics produces.
@@ -67,8 +70,14 @@ public enum ImageDecoder {
             throw ImageDecodeError.fileNotFound(url)
         }
         let ext = url.pathExtension.lowercased()
+        #if canImport(CImageDecodeBridge)
+        if Self.nativeSupportedExtensions.contains(ext) {
+            return try decodeNative(url: url, extension: ext, targetSize: targetSize)
+        }
+        #endif
+
         #if canImport(AppKit) && canImport(CoreGraphics) && canImport(ImageIO)
-        if ext == "svg" || ext == "pdf" {
+        if ext == "pdf" {
             return try decodeVector(url: url, targetSize: targetSize)
         }
         return try decodeBitmap(url: url, targetSize: targetSize)
@@ -91,6 +100,46 @@ public enum ImageDecoder {
         throw ImageDecodeError.unsupportedFormat("data decode requires CoreGraphics")
         #endif
     }
+
+    #if canImport(CImageDecodeBridge)
+
+    private static let nativeSupportedExtensions: Set<String> = [
+        "png", "jpg", "jpeg", "webp", "svg"
+    ]
+
+    private static func decodeNative(url: URL,
+                                     extension ext: String,
+                                     targetSize: (Int, Int)?) throws -> DecodedImage {
+        let data = try Data(contentsOf: url)
+        var result = GuavaImageDecodeResult()
+        let ok = data.withUnsafeBytes { rawBuffer in
+            guard let base = rawBuffer.bindMemory(to: UInt8.self).baseAddress else {
+                return false
+            }
+            return ext.withCString { extCString in
+                guava_image_decode_memory(
+                    base,
+                    data.count,
+                    extCString,
+                    Int32(targetSize?.0 ?? 0),
+                    Int32(targetSize?.1 ?? 0),
+                    &result
+                )
+            }
+        }
+        defer { guava_image_decode_free(&result) }
+        guard ok, let pixels = result.pixels, result.width > 0, result.height > 0 else {
+            let message = result.error_message.map { String(cString: $0) } ?? "native image decoder failed"
+            throw ImageDecodeError.decodeFailure("\(url.lastPathComponent): \(message)")
+        }
+        let byteCount = Int(result.width) * Int(result.height) * 4
+        let buffer = UnsafeBufferPointer(start: pixels, count: byteCount)
+        return DecodedImage(pixels: Array(buffer),
+                            width: Int(result.width),
+                            height: Int(result.height))
+    }
+
+    #endif
 
     #if canImport(AppKit) && canImport(CoreGraphics) && canImport(ImageIO)
 

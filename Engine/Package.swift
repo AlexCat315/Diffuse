@@ -37,6 +37,7 @@ let package = Package(
         .library(name: "EngineMath", targets: ["EngineMath"]),
         .library(name: "RHIWGPU", targets: ["RHIWGPU"]),
         .library(name: "PlatformShell", targets: ["PlatformShell"]),
+        .library(name: "ImageDecodeBridge", targets: ["CImageDecodeBridge"]),
         .library(name: "RenderBackend", targets: ["RenderBackend"]),
         .library(name: "ObservationBus", targets: ["ObservationBus"]),
         .library(name: "SceneRuntime", targets: ["SceneRuntime"]),
@@ -197,6 +198,36 @@ let package = Package(
                     "-lImath-3_2",
                     "-lopenjph",
                 ], .when(platforms: [.linux])),
+            ]
+        ),
+        .binaryTarget(
+            name: "lunasvg",
+            path: "vendor/lunasvg.artifactbundle"
+        ),
+        .binaryTarget(
+            name: "plutovg",
+            path: "vendor/plutovg.artifactbundle"
+        ),
+        .binaryTarget(
+            name: "webp",
+            path: "vendor/webp.artifactbundle"
+        ),
+        .binaryTarget(
+            name: "sharpyuv",
+            path: "vendor/sharpyuv.artifactbundle"
+        ),
+        .target(
+            name: "CImageDecodeBridge",
+            dependencies: [
+                "lunasvg",
+                "plutovg",
+                "webp",
+                "sharpyuv",
+            ],
+            path: "Sources/Bridge/CImageDecodeBridge",
+            publicHeadersPath: "include",
+            cxxSettings: [
+                .define("LUNASVG_BUILD_STATIC"),
             ]
         ),
 

@@ -1,0 +1,4 @@
+module CImageDecodeBridge {
+    header "image_decode_bridge.h"
+    export *
+}

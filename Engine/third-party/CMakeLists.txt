@@ -54,3 +54,8 @@ include(${CMAKE_SOURCE_DIR}/cmake/BuildOpenEXRStack.cmake)
 # Jolt Physics
 # ============================================================================
 include(${CMAKE_SOURCE_DIR}/cmake/BuildJolt.cmake)
+
+# ============================================================================
+# Unified image decoding dependencies (SVG/WebP)
+# ============================================================================
+include(${CMAKE_SOURCE_DIR}/cmake/BuildImageDecode.cmake)
