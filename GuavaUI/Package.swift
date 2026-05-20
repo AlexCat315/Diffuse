@@ -99,6 +99,9 @@ let package = Package(
                 .product(name: "RHIWGPU", package: "Engine"),
                 .product(name: "EngineKernel", package: "Engine"),
                 .product(name: "Logging", package: "swift-log"),
+            ],
+            resources: [
+                .process("Resources"),
             ]
         ),
 
