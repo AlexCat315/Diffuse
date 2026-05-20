@@ -1,7 +1,6 @@
 import EditorCore
 import GuavaUIApp
 
-@MainActor
 enum EditorNativeMenuBuilder {
     static func make(appName: String = "GuavaNext Editor",
                      workspaceMode: EditorWorkspaceMode,

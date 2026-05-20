@@ -143,6 +143,15 @@ private extension NativeMenuKeyModifiers {
         return flags
     }
 }
+#elseif os(Windows)
+@MainActor
+enum NativeMenuInstaller {
+    static func install(_ menuBar: NativeMenuBar) {
+        // Windows uses the in-client EditorApplicationMenuBar to avoid the
+        // extra light Win32 menu strip below the native title bar.
+    }
+}
+
 #else
 @MainActor
 enum NativeMenuInstaller {
