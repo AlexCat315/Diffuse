@@ -90,6 +90,7 @@ public final class AppRuntime {
     private var lastFrameTime: Double = 0
     private var auxiliaryWindows: [WindowID: AuxiliaryAppWindow] = [:]
     private var isVSyncEnabled = true
+    private var lastMainWindowChromeHitTest: WindowChromeHitTest?
 
     private var currentPresentMode: GPUPresentMode {
         isVSyncEnabled ? .fifo : .immediate
@@ -281,6 +282,7 @@ public final class AppRuntime {
         if !didInstallRoot {
             graph.install(root: rootView)
             graph.computeLayout(width: Float(logicalW), height: Float(logicalH))
+            syncMainWindowChromeHitTest()
             // Phase 5b: hand the input mirror to the session's dispatcher
             // so subsequent events hit-test through `InputScene` rather
             // than re-walking the live Node tree.
@@ -349,6 +351,61 @@ public final class AppRuntime {
         }
     }
 
+    private func syncMainWindowChromeHitTest() {
+        guard let root = tree.root,
+              let id = host.mainSession?.id else { return }
+
+        var config: WindowChromeHitTest?
+        var dragRects: [WindowChromeHitTest.Rect] = []
+        collectWindowChrome(node: root,
+                            parentOrigin: .zero,
+                            config: &config,
+                            dragRects: &dragRects)
+
+        guard var next = config else {
+            if lastMainWindowChromeHitTest != nil {
+                host.setWindowChromeHitTest(id, nil)
+                lastMainWindowChromeHitTest = nil
+            }
+            return
+        }
+
+        next.draggableRects = dragRects
+        guard next != lastMainWindowChromeHitTest else { return }
+        host.setWindowChromeHitTest(id, next)
+        lastMainWindowChromeHitTest = next
+    }
+
+    private func collectWindowChrome(node: Node,
+                                     parentOrigin: CGPoint,
+                                     config: inout WindowChromeHitTest?,
+                                     dragRects: inout [WindowChromeHitTest.Rect]) {
+        let origin = CGPoint(x: parentOrigin.x + node.frame.origin.x,
+                             y: parentOrigin.y + node.frame.origin.y)
+
+        if let chrome = node.attachments[WindowChromeAttachmentKey.configuration] as? WindowChromeHitTest {
+            config = chrome
+        }
+
+        if node.attachments[WindowChromeAttachmentKey.dragRegion] as? Bool == true,
+           node.frame.width > 0,
+           node.frame.height > 0 {
+            dragRects.append(WindowChromeHitTest.Rect(x: Float(origin.x),
+                                                      y: Float(origin.y),
+                                                      width: Float(node.frame.width),
+                                                      height: Float(node.frame.height)))
+        }
+
+        let childOrigin = CGPoint(x: origin.x - node.contentOffset.x,
+                                  y: origin.y - node.contentOffset.y)
+        for child in node.children {
+            collectWindowChrome(node: child,
+                                parentOrigin: childOrigin,
+                                config: &config,
+                                dragRects: &dragRects)
+        }
+    }
+
     private func handleFrame() -> Bool {
         guard configuredSurface, let surface, let root = tree.root else { return false }
 
@@ -357,6 +414,7 @@ public final class AppRuntime {
         configureTextEnvironment(scale: host.contentScaleFactor)
         let layoutStart = ProcessInfo.processInfo.systemUptime
         _ = graph.computeLayoutIfNeeded(width: Float(logicalW), height: Float(logicalH))
+        syncMainWindowChromeHitTest()
         let layoutEnd = ProcessInfo.processInfo.systemUptime
 
         drawList.reset()

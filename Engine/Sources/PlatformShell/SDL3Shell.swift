@@ -798,14 +798,22 @@ private let _sdl3ChromeHitTest: @convention(c) (OpaquePointer?, UnsafePointer<SD
             .takeUnretainedValue()
             .config
 
-        let x = Float(point.pointee.x)
-        let y = Float(point.pointee.y)
+        let coordinateScale: Float
+#if os(Windows)
+        let displayScale = SDL_GetWindowDisplayScale(window)
+        coordinateScale = (displayScale > 0 && displayScale.isFinite) ? displayScale : 1
+#else
+        coordinateScale = 1
+#endif
+        let x = Float(point.pointee.x) / coordinateScale
+        let y = Float(point.pointee.y) / coordinateScale
         var width: Int32 = 0
         var height: Int32 = 0
         _ = SDL_GetWindowSize(window, &width, &height)
-        let w = Float(max(0, width))
-        let h = Float(max(0, height))
-        let border = config.resizeBorderWidth
+        let w = Float(max(0, width)) / coordinateScale
+        let h = Float(max(0, height)) / coordinateScale
+        let isMaximized = (SDL_GetWindowFlags(window) & SDL_WindowFlags(GUAVA_SDL_WINDOW_MAXIMIZED)) != 0
+        let border = isMaximized ? 0 : config.resizeBorderWidth
 
         if border > 0, w > 0, h > 0 {
             let left = x < border
@@ -821,6 +829,13 @@ private let _sdl3ChromeHitTest: @convention(c) (OpaquePointer?, UnsafePointer<SD
             if bottom { return SDL_HITTEST_RESIZE_BOTTOM }
             if left { return SDL_HITTEST_RESIZE_LEFT }
             if right { return SDL_HITTEST_RESIZE_RIGHT }
+        }
+
+        if !config.draggableRects.isEmpty {
+            for rect in config.draggableRects where rect.contains(x: x, y: y) {
+                return SDL_HITTEST_DRAGGABLE
+            }
+            return SDL_HITTEST_NORMAL
         }
 
         if y >= 0,
