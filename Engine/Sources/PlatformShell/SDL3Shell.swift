@@ -85,10 +85,30 @@ public final class SDL3Shell: Shell {
         }
 
         var logicalSize: (width: UInt32, height: UInt32) {
-            var width: Int32 = 1
-            var height: Int32 = 1
-            _ = SDL_GetWindowSize(window, &width, &height)
-            return (UInt32(max(1, width)), UInt32(max(1, height)))
+            // Derive logical size from physical drawable ÷ display scale so the
+            // computation stays consistent whether SDL reports DPI-scaled or
+            // unscaled coordinates from SDL_GetWindowSize.
+            let phys = drawableSize
+            let scale = max(1.0, SDL_GetWindowDisplayScale(window))
+            return (UInt32(max(1, (Float(phys.width) / scale).rounded())),
+                    UInt32(max(1, (Float(phys.height) / scale).rounded())))
+        }
+
+        var contentScaleFactor: Float {
+            // SDL_GetWindowDisplayScale returns the ratio between physical
+            // pixels and DIP for the display the window lives on, computed
+            // by SDL3 using the platform DPI APIs.  This is the correct
+            // SDL3 source of truth and works on all platforms.
+            let scale = SDL_GetWindowDisplayScale(window)
+            if scale > 0 && scale.isFinite {
+                // Quantize to 0.25 steps (100 %, 125 %, 150 %, 175 %, 200 %).
+                return max(1, (scale * 4).rounded() / 4)
+            }
+            // Fallback: drawable / logical pixel ratio.
+            let logicalWidth = max(logicalSize.width, 1)
+            let raw = Float(drawableSize.width) / Float(logicalWidth)
+            guard raw > 1 else { return 1 }
+            return max(1, (raw * 4).rounded() / 4)
         }
 
         func setTextInputArea(_ area: TextInputArea?) {
@@ -315,8 +335,25 @@ public final class SDL3Shell: Shell {
             GUAVA_SDL_WINDOW_RESIZABLE | GUAVA_SDL_WINDOW_HIGH_PIXEL_DENSITY)
 #endif
 
+        // On Windows with DPI awareness enabled, SDL_CreateWindow coordinates are
+        // physical pixels. Multiply by the primary display scale so the window
+        // occupies the correct logical size on screen.
+#if os(Windows)
+        let primaryDisplay = SDL_GetPrimaryDisplay()
+        let displayContentScale: Float = {
+            guard primaryDisplay != 0 else { return 1 }
+            let s = SDL_GetDisplayContentScale(primaryDisplay)
+            return (s > 0 && s.isFinite) ? max(1, (s * 4).rounded() / 4) : 1
+        }()
+        let createWidth  = Int32((Float(options.width)  * displayContentScale).rounded())
+        let createHeight = Int32((Float(options.height) * displayContentScale).rounded())
+#else
+        let createWidth  = options.width
+        let createHeight = options.height
+#endif
+
         let createdWindow = title.withCString { rawTitle in
-            SDL_CreateWindow(rawTitle, options.width, options.height, windowFlags)
+            SDL_CreateWindow(rawTitle, createWidth, createHeight, windowFlags)
         }
         guard let createdWindow else {
             throw ShellError.initializationFailed(Self.lastSDLError())
@@ -352,7 +389,9 @@ public final class SDL3Shell: Shell {
             windowOrder.removeAll { $0 == handle.id }
             windowOrder.append(handle.id)
             let sz = "\(handle.drawableSize.width)x\(handle.drawableSize.height)"
-            Logger.platform.info("SDL3 window ready, id=\(handle.id), drawable=\(sz)")
+            let lz = "\(handle.logicalSize.width)x\(handle.logicalSize.height)"
+            let csf = handle.contentScaleFactor
+            Logger.platform.info("SDL3 window ready, id=\(handle.id), drawable=\(sz), logical=\(lz), contentScaleFactor=\(csf)")
             return handle
         } catch {
 #if os(macOS)
@@ -607,10 +646,11 @@ public final class SDL3Shell: Shell {
     private func ensureSDLInitialized() throws {
         guard !didInitializeSDL else { return }
 #if os(Windows)
-        // Request Per-Monitor v2 DPI awareness before SDL_Init so that
-        // SDL_GetWindowSize / SDL_GetWindowSizeInPixels report correct
-        // logical vs. physical dimensions on high-DPI displays.
-        _ = SDL_SetHint("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2")
+        // Must be set before SDL_Init so SDL3 creates windows in physical-pixel
+        // coordinate space, which lets SDL_GetWindowSizeInPixels return the true
+        // physical drawable size rather than the logical size.
+        let hintOk = SDL_SetHint("SDL_WINDOWS_DPI_AWARENESS", "permonitorv2")
+        Logger.platform.info("SDL_SetHint(DPI_AWARENESS=permonitorv2) -> \(hintOk)")
 #endif
         guard SDL_Init(SDL_INIT_VIDEO) else {
             throw ShellError.initializationFailed(Self.lastSDLError())

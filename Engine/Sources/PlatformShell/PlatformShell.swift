@@ -67,9 +67,19 @@ public protocol WindowHandle: AnyObject {
     var renderSurface: NativeRenderSurface? { get }
     var drawableSize: (width: UInt32, height: UInt32) { get }
     var logicalSize: (width: UInt32, height: UInt32) { get }
+    var contentScaleFactor: Float { get }
     var isFocused: Bool { get }
     var isMinimized: Bool { get }
     var isOccluded: Bool { get }
+}
+
+public extension WindowHandle {
+    var contentScaleFactor: Float {
+        let logicalWidth = max(logicalSize.width, 1)
+        let raw = Float(drawableSize.width) / Float(logicalWidth)
+        guard raw > 1 else { return 1 }
+        return max(1, (raw * 4).rounded() / 4)
+    }
 }
 
 @MainActor
